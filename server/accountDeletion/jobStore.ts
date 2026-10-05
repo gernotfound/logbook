@@ -13,6 +13,8 @@ import {
 
 const PAGE_SIZE = 400;
 const RECEIPT_PATTERN = /^[A-Za-z0-9_-]{43,128}$/;
+const RECEIPT_HASH_PATTERN = /^[a-f0-9]{64}$/;
+const MAX_ACCEPTED_RECEIPTS = 16;
 const JOB_COLLECTION = 'account_deletions';
 
 export class NonRetryableDeletionError extends Error {
@@ -65,10 +67,37 @@ export function hashReceipt(receipt: string): string {
 }
 
 function receiptMatches(receipt: string, expectedHash: unknown): boolean {
-  if (typeof expectedHash !== 'string' || !/^[a-f0-9]{64}$/.test(expectedHash)) return false;
+  if (typeof expectedHash !== 'string' || !RECEIPT_HASH_PATTERN.test(expectedHash)) return false;
   const actual = Buffer.from(hashReceipt(receipt), 'hex');
   const expected = Buffer.from(expectedHash, 'hex');
   return actual.length === expected.length && timingSafeEqual(actual, expected);
+}
+
+function acceptedReceiptHashes(job: Pick<AccountDeletionJob, 'receiptHash' | 'receiptHashes'>): string[] {
+  const primary = typeof job.receiptHash === 'string' && RECEIPT_HASH_PATTERN.test(job.receiptHash)
+    ? job.receiptHash
+    : null;
+  const additional = Array.isArray(job.receiptHashes)
+    ? job.receiptHashes.filter((value): value is string => typeof value === 'string' && RECEIPT_HASH_PATTERN.test(value))
+    : [];
+  return [...new Set([...(primary ? [primary] : []), ...additional])].slice(0, MAX_ACCEPTED_RECEIPTS);
+}
+
+function appendAcceptedReceipt(job: Pick<AccountDeletionJob, 'receiptHash' | 'receiptHashes'>, nextHash: string): {
+  receiptHash: string;
+  receiptHashes: string[];
+} {
+  const current = acceptedReceiptHashes(job);
+  const primary = current[0] ?? nextHash;
+  const additional = [...current.slice(1).filter(hash => hash !== nextHash), ...(nextHash === primary ? [] : [nextHash])];
+  return {
+    receiptHash: primary,
+    receiptHashes: additional.slice(-(MAX_ACCEPTED_RECEIPTS - 1)),
+  };
+}
+
+function receiptMatchesJob(receipt: string, job: Pick<AccountDeletionJob, 'receiptHash' | 'receiptHashes'>): boolean {
+  return acceptedReceiptHashes(job).some(hash => receiptMatches(receipt, hash));
 }
 
 export async function createOrRefreshDeletionJob(uidValue: string, receiptValue: string): Promise<void> {
@@ -88,15 +117,17 @@ export async function createOrRefreshDeletionJob(uidValue: string, receiptValue:
         cursor: { phase: 'requested' },
         attempts: 0,
         receiptHash,
+        receiptHashes: [],
       };
       transaction.create(ref, job);
       return;
     }
 
     const existing = snapshot.data() as AccountDeletionJob;
+    const acceptedReceipts = appendAcceptedReceipt(existing, receiptHash);
     if (existing.status === 'failed' && existing.retryable !== false) {
       transaction.update(ref, {
-        receiptHash,
+        ...acceptedReceipts,
         updatedAt: now,
         status: 'requested',
         cursor: { phase: 'requested' },
@@ -108,7 +139,7 @@ export async function createOrRefreshDeletionJob(uidValue: string, receiptValue:
       return;
     }
 
-    transaction.update(ref, { receiptHash, updatedAt: now });
+    transaction.update(ref, { ...acceptedReceipts, updatedAt: now });
   });
 }
 
@@ -118,7 +149,7 @@ export async function readAuthorizedDeletionJob(uidValue: string, receiptValue: 
   const snapshot = await jobRef(uid).get();
   if (!snapshot.exists) return null;
   const job = snapshot.data() as AccountDeletionJob;
-  return receiptMatches(receipt, job.receiptHash) ? job : null;
+  return receiptMatchesJob(receipt, job) ? job : null;
 }
 
 export async function acquireDeletionLease(uidValue: string, leaseOwner: string, deadlineMs: number): Promise<boolean> {
@@ -326,7 +357,7 @@ export async function readDeletionStatus(uidValue: string, receiptValue: string)
   const snapshot = await jobRef(uid).get();
   if (!snapshot.exists) return null;
   const job = snapshot.data() as AccountDeletionJob;
-  if (!receiptMatches(receipt, job.receiptHash)) return null;
+  if (!receiptMatchesJob(receipt, job)) return null;
 
   return publicStatus(job);
 }

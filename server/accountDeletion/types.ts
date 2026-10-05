@@ -24,6 +24,7 @@ export interface AccountDeletionJob {
   cursor?: AccountDeletionCursor;
   attempts: number;
   receiptHash: string;
+  receiptHashes?: string[];
   purgeAfter?: unknown;
   retryable?: boolean;
   leaseOwner?: string;

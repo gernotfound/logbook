@@ -7,6 +7,7 @@ const firebase = JSON.parse(readFileSync('firebase.json', 'utf8'));
 const hostingWorkflow = readFileSync('.github/workflows/firebase-hosting-production.yml', 'utf8');
 const firestoreWorkflow = readFileSync('.github/workflows/firebase-firestore-production.yml', 'utf8');
 const firestoreVerifier = readFileSync('scripts/verify-firestore-production.mjs', 'utf8');
+const firestoreIndexes = JSON.parse(readFileSync('firestore.indexes.json', 'utf8'));
 const vite = readFileSync('vite.config.ts', 'utf8');
 const swSource = readFileSync('src/sw.ts', 'utf8');
 const accountApi = readFileSync('api/account-deletion.ts', 'utf8');
@@ -190,8 +191,18 @@ if (!firestoreVerifier.includes("process.exit(10)") || !firestoreVerifier.includ
 if (!firestoreVerifier.includes('releases/cloud.firestore') || !firestoreVerifier.includes('/indexes') || !firestoreVerifier.includes('Authorization:')) {
   failures.push('Firestore Production verifier must read back authenticated live Rules and composite indexes');
 }
-if (!firestoreVerifier.includes("fieldOverrides.length !== 0")) {
-  failures.push('Firestore Production verifier must fail closed until fieldOverrides verification is explicitly supported');
+if (!firestoreVerifier.includes('/fields') || !firestoreVerifier.includes('indexConfig.usesAncestorConfig:false') || !firestoreVerifier.includes('mismatchedFieldOverrides')) {
+  failures.push('Firestore Production verifier must read back and compare explicit field exemptions');
+}
+const requiredIndexExemptions = ['users', 'history_months', 'nutrition_months', 'sync_control', 'global_catalog'];
+for (const collectionGroup of requiredIndexExemptions) {
+  const exemption = firestoreIndexes.fieldOverrides?.find(item =>
+    item.collectionGroup === collectionGroup
+    && item.fieldPath === '*'
+    && Array.isArray(item.indexes)
+    && item.indexes.length === 0
+  );
+  if (!exemption) failures.push(`Firestore automatic-index exemption missing for path-read collection group: ${collectionGroup}`);
 }
 if (!firestoreVerifier.includes("status.state !== 'READY'")) {
   failures.push('Firestore Production verifier must require desired composite indexes to be READY');

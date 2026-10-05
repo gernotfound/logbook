@@ -1,7 +1,7 @@
 import equal from 'fast-deep-equal';
 import { auth, getDb, ensureAppCheck, waitForPendingWrites } from '../firebase';
 import type { UserData, SyncResult } from '../../types';
-import { readLocal, acknowledgeThrough, markReplicaCheckpointRequired } from './localRepository';
+import { readLocal, acknowledgeThrough, ensureBoundedPendingSequences, markReplicaCheckpointRequired } from './localRepository';
 import { captureSession, isCurrentSession } from './session';
 import { applyRemoteDocuments } from './documentProjection';
 import { applyDocumentChanges } from './transactionWriter';
@@ -11,6 +11,7 @@ import { isAccountDeletionPending } from './accountGate';
 import type { SemanticOperation } from './semanticProjection';
 import { classifySyncFailure } from './syncFailure';
 import { ReplicaFencedError } from './replicaProtocol';
+import { boundedPendingTransactionBatch, distinctDocumentCount, MAX_SYNC_DOCUMENTS_PER_TRANSACTION } from './syncBatching';
 
 class DurableAcknowledgementPendingError extends Error {
     constructor(cause: unknown) {
@@ -85,19 +86,32 @@ async function drain(session: ReturnType<typeof captureSession>, deliveryState: 
     await waitForPendingWrites(getDb());
     const catalog = await getCachedCatalog();
     while (current()) {
-        const envelope = await readLocal(session.owner);
+        let envelope = await readLocal(session.owner);
         if (!current()) throw new Error('Sessione cambiata');
         if (!envelope) throw new Error('Archivio locale non disponibile');
         if (!envelope.pending?.length) return;
         if (!envelope.replica) throw new ReplicaFencedError('Replica non registrata: attendi il checkpoint cloud completo.');
-        if (envelope.actorId !== envelope.replica.slot || envelope.pending.some(operation => operation.actorId !== envelope.replica!.slot)) {
+        const replica = envelope.replica;
+        if (envelope.actorId !== replica.slot || envelope.pending.some(operation => operation.actorId !== replica.slot)) {
             throw new ReplicaFencedError('Journal appartenente a una replica precedente: checkpoint completo richiesto.');
         }
-        if (envelope.replica.leaseUntilMs < Date.now()) {
+        if (replica.leaseUntilMs < Date.now()) {
             throw new ReplicaFencedError('Lease replica scaduta: checkpoint completo richiesto.');
         }
 
-        const delivered = structuredClone(envelope.pending);
+        envelope = await ensureBoundedPendingSequences(session.owner, replica.slot);
+        if (!current()) throw new Error('Sessione cambiata');
+        if (!envelope) throw new Error('Archivio locale non disponibile');
+        if (!envelope.pending?.length) return;
+        if (!envelope.replica || envelope.actorId !== envelope.replica.slot) {
+            throw new ReplicaFencedError('Replica cambiata durante la preparazione del journal.');
+        }
+
+        const delivered = structuredClone(boundedPendingTransactionBatch(envelope.pending));
+        if (!delivered.length) return;
+        if (distinctDocumentCount(delivered) > MAX_SYNC_DOCUMENTS_PER_TRANSACTION) {
+            throw new ReplicaFencedError('Gruppo causale troppo grande: checkpoint completo richiesto.');
+        }
         deliveryState.delivered = delivered;
 
         let outcome: Awaited<ReturnType<typeof applyDocumentChanges>>;

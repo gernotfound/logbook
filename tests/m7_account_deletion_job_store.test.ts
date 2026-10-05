@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const state = vi.hoisted(() => ({
   docs: new Set<string>(),
+  jobData: new Map<string, any>(),
   batchSizes: [] as number[],
   jobUpdates: [] as unknown[],
   deleteUser: vi.fn(),
@@ -14,13 +15,14 @@ function fakeDocument(path: string): any {
     path,
     id: path.split('/').at(-1),
     async get() {
-      return { exists: state.docs.has(path), data: () => ({}) };
+      return { exists: state.docs.has(path), data: () => state.jobData.get(path) ?? {} };
     },
     async delete() {
       state.docs.delete(path);
     },
     async update(data: unknown) {
       state.jobUpdates.push(data);
+      state.jobData.set(path, { ...(state.jobData.get(path) ?? {}), ...(data as Record<string, unknown>) });
     },
     collection(name: string) {
       return fakeCollection(`${path}/${name}`);
@@ -78,6 +80,19 @@ const fakeDb = vi.hoisted(() => ({
   collection(name: string) {
     return fakeCollection(name);
   },
+  async runTransaction(work: (transaction: any) => Promise<any>) {
+    return work({
+      get: (ref: any) => ref.get(),
+      create: (ref: any, data: unknown) => {
+        state.docs.add(ref.path);
+        state.jobData.set(ref.path, data);
+      },
+      update: (ref: any, data: unknown) => {
+        state.jobUpdates.push(data);
+        state.jobData.set(ref.path, { ...(state.jobData.get(ref.path) ?? {}), ...(data as Record<string, unknown>) });
+      },
+    });
+  },
   batch() {
     const deletes: string[] = [];
     return {
@@ -105,10 +120,13 @@ vi.mock('../server/accountDeletion/firebaseAdmin', () => ({
 
 import {
   NonRetryableDeletionError,
+  createOrRefreshDeletionJob,
   deleteAuthUserLast,
   deletePrivateCollectionPage,
   hashReceipt,
   markDeletionComplete,
+  readAuthorizedDeletionJob,
+  readDeletionStatus,
   validateReceipt,
   verifyNoAccountResidue,
 } from '../server/accountDeletion/jobStore';
@@ -117,6 +135,7 @@ import { ACCOUNT_DELETION_COMPLETED_RETENTION_MS } from '../server/accountDeleti
 describe('M7 native deletion job store', () => {
   beforeEach(() => {
     state.docs.clear();
+    state.jobData.clear();
     state.batchSizes.length = 0;
     state.jobUpdates.length = 0;
     state.projectedQueries.length = 0;
@@ -149,6 +168,7 @@ describe('M7 native deletion job store', () => {
     expect(state.projectedQueries).toContain('users');
     expect(state.projectedQueries).toContain('users/u/history_months');
     expect(state.projectedQueries).toContain('users/u/nutrition_months');
+    expect(state.projectedQueries).toContain('users/u/sync_control');
     expect(state.projectedQueries).toContain('users/u/telemetry_errors');
     expect(state.projectedQueries).toContain('users/u/telemetry_events');
     expect(state.projectedQueries).toContain('users/u/telemetry_anomalies');
@@ -184,6 +204,39 @@ describe('M7 native deletion job store', () => {
     expect(hashReceipt(receipt)).toMatch(/^[a-f0-9]{64}$/);
     expect(hashReceipt(receipt)).not.toContain(receipt);
     expect(() => validateReceipt('short')).toThrow('Ricevuta di cancellazione non valida.');
+  });
+
+  it('keeps independently issued deletion receipts valid for the same in-flight job', async () => {
+    const receiptA = 'A'.repeat(43);
+    const receiptB = 'B'.repeat(43);
+
+    await createOrRefreshDeletionJob('u', receiptA);
+    await createOrRefreshDeletionJob('u', receiptB);
+
+    expect(await readAuthorizedDeletionJob('u', receiptA)).toMatchObject({ uid: 'u', status: 'requested' });
+    expect(await readAuthorizedDeletionJob('u', receiptB)).toMatchObject({ uid: 'u', status: 'requested' });
+    expect(await readDeletionStatus('u', receiptA)).toMatchObject({ uid: 'u', status: 'requested' });
+    expect(await readDeletionStatus('u', receiptB)).toMatchObject({ uid: 'u', status: 'requested' });
+
+    const stored = state.jobData.get('account_deletions/u') as { receiptHash: string; receiptHashes?: string[] };
+    expect(stored.receiptHash).toBe(hashReceipt(receiptA));
+    expect(stored.receiptHashes).toContain(hashReceipt(receiptB));
+    expect(JSON.stringify(stored)).not.toContain(receiptA);
+    expect(JSON.stringify(stored)).not.toContain(receiptB);
+  });
+
+  it('keeps the original receipt stable while bounding additional recovery proofs', async () => {
+    const receipts = Array.from({ length: 24 }, (_, index) =>
+      String.fromCharCode(65 + (index % 26)).repeat(42) + String(index % 10)
+    );
+
+    for (const receipt of receipts) await createOrRefreshDeletionJob('u', receipt);
+
+    const stored = state.jobData.get('account_deletions/u') as { receiptHash: string; receiptHashes?: string[] };
+    expect(stored.receiptHash).toBe(hashReceipt(receipts[0]));
+    expect(stored.receiptHashes?.length ?? 0).toBeLessThanOrEqual(15);
+    expect(await readAuthorizedDeletionJob('u', receipts[0])).not.toBeNull();
+    expect(await readAuthorizedDeletionJob('u', receipts.at(-1)!)).not.toBeNull();
   });
 
   it('starts the 30-day tombstone retention window only after deletion is complete', async () => {

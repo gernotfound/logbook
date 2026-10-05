@@ -111,7 +111,7 @@ service cloud.firestore {
 
     function isAuthorizedSyncWrite(userId, docData) {
       return (
-          !syncControlExists(userId)
+          !syncControlExistsAfter(userId)
           && (
             !('_sync' in docData)
             || docData._sync.protocolVersion == 1
@@ -129,7 +129,7 @@ service cloud.firestore {
       // crossed the Protocol 3 control barrier. After cutover, client sync persists
       // an empty fenced shell instead, so every causal state transition is attributable
       // to an exact replica id/generation through _sync.writer.
-      return !syncControlExists(userId);
+      return !syncControlExistsAfter(userId);
     }
 
     function isValidReplicaEntry(entry) {

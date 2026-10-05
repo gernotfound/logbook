@@ -21,6 +21,10 @@ import {
     CURRENT_SYNC_PROTOCOL,
     normalizeLocalEnvelopeRecord,
 } from '../schemaEvolution';
+import {
+    resequencePendingOperationsForBoundedTransactions,
+    sequenceOperationsForBoundedTransactions,
+} from './syncBatching';
 
 export interface LocalEnvelopeV5 {
     version: typeof CURRENT_LOCAL_ENVELOPE;
@@ -164,6 +168,50 @@ export async function readLocal(owner: string): Promise<LocalEnvelope | undefine
     return validate(await get<any>(keyFor(owner)), owner);
 }
 
+export async function ensureBoundedPendingSequences(owner: string, expectedActorId: string): Promise<LocalEnvelope | undefined> {
+    owner = normalizeStorageOwner(owner);
+    const observed = await readLocal(owner);
+    if (!observed || observed.actorId !== expectedActorId) return observed;
+
+    const initial = resequencePendingOperationsForBoundedTransactions(
+        observed.pending,
+        expectedActorId,
+        observed.actorSeq,
+        observed.clock,
+    );
+    if (!initial.changed) return observed;
+
+    let saved: LocalEnvelope | undefined;
+    await update<any>(keyFor(owner), raw => {
+        const current = validate(raw, owner);
+        if (!current || current.actorId !== expectedActorId) {
+            saved = current;
+            return current;
+        }
+
+        const bounded = resequencePendingOperationsForBoundedTransactions(
+            current.pending,
+            expectedActorId,
+            current.actorSeq,
+            current.clock,
+        );
+        if (!bounded.changed) {
+            saved = current;
+            return current;
+        }
+
+        saved = {
+            ...current,
+            pending: bounded.operations,
+            actorSeq: bounded.actorSeq,
+            clock: bounded.clock,
+            revision: current.revision + 1,
+        };
+        return saved;
+    });
+    return saved;
+}
+
 export async function commitLocal(owner: string, data: UserData, initialBase: UserData, guard?: LocalWriteGuard, expectedRevision?: number): Promise<SemanticOperation[]> {
     owner = normalizeStorageOwner(owner);
     const desired = structuredClone(parse(data));
@@ -184,16 +232,26 @@ export async function commitLocal(owner: string, data: UserData, initialBase: Us
         const baseDocs = projectDocuments(callerBase, catalog);
         const desiredDocs = projectDocuments(desired, catalog);
         const actorId = current?.replica?.slot ?? current?.actorId ?? generateId('actor');
-        const nextSeq = (current?.actorSeq ?? 0) + 1;
-        const testClock = { ...(current?.clock ?? {}) };
-        testClock[actorId] = nextSeq;
-        operations = diffDocuments(baseDocs, desiredDocs, actorId, nextSeq, testClock);
-        operations = enforceMonthlyEntityTombstones(baseDocs, desiredDocs, operations, actorId, nextSeq, testClock);
+        const baseSeq = current?.actorSeq ?? 0;
+        const provisionalSeq = baseSeq + 1;
+        const provisionalClock = { ...(current?.clock ?? {}), [actorId]: provisionalSeq };
+        operations = diffDocuments(baseDocs, desiredDocs, actorId, provisionalSeq, provisionalClock);
+        operations = enforceMonthlyEntityTombstones(baseDocs, desiredDocs, operations, actorId, provisionalSeq, provisionalClock);
 
         if (operations.length === 0) {
             const stableData = current?.data ?? desired;
             return { ...(current ?? { completeMonths: [], replica: null }), ...currentEnvelopeVersions(), owner, actorId, actorSeq: current?.actorSeq ?? 0, clock: current?.clock ?? {}, data: stableData, baseline: current?.baseline ?? callerBase, completeMonths: current?.completeMonths ?? [], pending: current?.pending ?? [], syncMetaByDocument: current?.syncMetaByDocument ?? {}, replica: current?.replica ?? null, revision: current?.revision ?? 0 };
         }
+
+        const sequenced = sequenceOperationsForBoundedTransactions(
+            operations,
+            actorId,
+            baseSeq,
+            current?.clock ?? {},
+        );
+        operations = sequenced.operations;
+        const nextSeq = sequenced.actorSeq;
+        const testClock = sequenced.clock;
 
         // Snapshot boundaries express intent relative to the caller's observed base.
         // Replay only that delta over the latest durable envelope so concurrent changes
@@ -224,13 +282,15 @@ export async function commitDomainOperations(owner: string, batch: DomainOperati
         const base = current?.data ?? fallback;
         const desired = applyDomainOperations(base, domainOperations);
         const actorId = current?.replica?.slot ?? current?.actorId ?? generateId('actor');
-        const nextSeq = (current?.actorSeq ?? 0) + 1;
-        const nextClock = { ...(current?.clock ?? {}) };
-        nextClock[actorId] = nextSeq;
-        operations = compileDomainOperations(base, desired, domainOperations, catalog, actorId, nextSeq, nextClock);
+        const baseSeq = current?.actorSeq ?? 0;
+        const provisionalSeq = baseSeq + 1;
+        const provisionalClock = { ...(current?.clock ?? {}), [actorId]: provisionalSeq };
+        operations = compileDomainOperations(base, desired, domainOperations, catalog, actorId, provisionalSeq, provisionalClock);
         savedData = desired;
         if (operations.length === 0) return { ...(current ?? { completeMonths: [], replica: null }), ...currentEnvelopeVersions(), owner, actorId, actorSeq: current?.actorSeq ?? 0, clock: current?.clock ?? {}, data: desired, baseline: current?.baseline ?? fallback, completeMonths: current?.completeMonths ?? [], pending: current?.pending ?? [], syncMetaByDocument: current?.syncMetaByDocument ?? {}, replica: current?.replica ?? null, revision: current?.revision ?? 0 };
-        return { ...(current ?? { completeMonths: [], replica: null }), ...currentEnvelopeVersions(), owner, actorId, actorSeq: nextSeq, clock: nextClock, data: desired, baseline: current?.baseline ?? fallback, completeMonths: current?.completeMonths ?? [], pending: owner === 'guest' ? [] : [...(current?.pending ?? []), ...operations], syncMetaByDocument: current?.syncMetaByDocument ?? {}, replica: current?.replica ?? null, revision: (current?.revision ?? 0) + 1 };
+        const sequenced = sequenceOperationsForBoundedTransactions(operations, actorId, baseSeq, current?.clock ?? {});
+        operations = sequenced.operations;
+        return { ...(current ?? { completeMonths: [], replica: null }), ...currentEnvelopeVersions(), owner, actorId, actorSeq: sequenced.actorSeq, clock: sequenced.clock, data: desired, baseline: current?.baseline ?? fallback, completeMonths: current?.completeMonths ?? [], pending: owner === 'guest' ? [] : [...(current?.pending ?? []), ...operations], syncMetaByDocument: current?.syncMetaByDocument ?? {}, replica: current?.replica ?? null, revision: (current?.revision ?? 0) + 1 };
     });
     return { operations, data: savedData };
 }
@@ -297,17 +357,23 @@ export async function adoptReplicaCheckpoint(
         const baseDocs = projectDocuments(baseline, catalog);
         const desiredDocs = projectDocuments(desired, catalog);
         const actorId = claim.identity.slot;
-        const nextSeq = claim.baseSeq + 1;
-        const nextClock: VectorClock = { ...checkpoint.clock, [actorId]: nextSeq };
+        const provisionalSeq = claim.baseSeq + 1;
+        const provisionalClock: VectorClock = { ...checkpoint.clock, [actorId]: provisionalSeq };
 
-        let operations = diffDocuments(baseDocs, desiredDocs, actorId, nextSeq, nextClock);
-        operations = enforceMonthlyEntityTombstones(baseDocs, desiredDocs, operations, actorId, nextSeq, nextClock);
+        let operations = diffDocuments(baseDocs, desiredDocs, actorId, provisionalSeq, provisionalClock);
+        operations = enforceMonthlyEntityTombstones(baseDocs, desiredDocs, operations, actorId, provisionalSeq, provisionalClock);
+        const sequenced = sequenceOperationsForBoundedTransactions(
+            operations,
+            actorId,
+            claim.baseSeq,
+            checkpoint.clock,
+        );
+        operations = sequenced.operations;
 
-        const actorSeq = operations.length ? nextSeq : claim.baseSeq;
-        const clock: VectorClock = {
-            ...checkpoint.clock,
-            ...(actorSeq > 0 ? { [actorId]: Math.max(checkpoint.clock[actorId] ?? 0, actorSeq) } : {}),
-        };
+        const actorSeq = operations.length ? sequenced.actorSeq : claim.baseSeq;
+        const clock: VectorClock = operations.length
+            ? sequenced.clock
+            : { ...checkpoint.clock };
 
         saved = {
             ...current,

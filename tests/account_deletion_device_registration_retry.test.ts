@@ -101,4 +101,50 @@ describe('account deletion recovery device registration retries', () => {
     expect(fetchMock).not.toHaveBeenCalled();
     dispose();
   });
+
+  it('routes a completed device proof through the caller finalizer even while another account is authenticated', async () => {
+    const { recoverDeletedAccountOnThisDevice } = await loadSubject();
+    localStorage.setItem('logbook_deletion_recovery_devices_v1', JSON.stringify([
+      { uid: 'user-a', token: 'A'.repeat(43) },
+    ]));
+    firebase.auth.currentUser = user('user-b');
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ status: 'complete' }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+    const finalize = vi.fn(async () => ({
+      status: 'pending' as const,
+      message: 'Altra identità attiva',
+    }));
+
+    await expect(recoverDeletedAccountOnThisDevice(finalize)).resolves.toEqual({
+      status: 'pending',
+      message: 'Altra identità attiva',
+    });
+
+    expect(finalize).toHaveBeenCalledWith('user-a');
+    expect(localStorage.getItem('logbook_deletion_recovery_devices_v1')).not.toBeNull();
+  });
+
+  it('reports complete only after the shared local finalizer confirms completion', async () => {
+    const { recoverDeletedAccountOnThisDevice, removeDeletionRecoveryCredential } = await loadSubject();
+    localStorage.setItem('logbook_deletion_recovery_devices_v1', JSON.stringify([
+      { uid: 'user-a', token: 'A'.repeat(43) },
+    ]));
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ status: 'complete' }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+    const finalize = vi.fn(async (uid: string) => {
+      removeDeletionRecoveryCredential(uid);
+      return { status: 'complete' as const };
+    });
+
+    await expect(recoverDeletedAccountOnThisDevice(finalize)).resolves.toEqual({ status: 'complete' });
+
+    expect(finalize).toHaveBeenCalledWith('user-a');
+    expect(localStorage.getItem('logbook_deletion_recovery_devices_v1')).toBeNull();
+  });
 });

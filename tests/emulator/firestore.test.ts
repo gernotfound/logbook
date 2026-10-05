@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { afterAll, beforeAll, beforeEach, expect, it } from 'vitest';
 import { initializeTestEnvironment, assertFails, assertSucceeds, type RulesTestEnvironment } from '@firebase/rules-unit-testing';
-import { doc, setDoc, getDoc, deleteDoc, writeBatch } from 'firebase/firestore';
+import { doc, setDoc, getDoc, deleteDoc, updateDoc, writeBatch } from 'firebase/firestore';
 import { CURRENT_SYNC_PROTOCOL } from '../../src/lib/schemaEvolution';
 import { registerReplica } from './replicaHarness';
 
@@ -19,6 +19,25 @@ const telemetryContext = {
     displayMode: 'browser',
     online: true,
 };
+
+function protocol3Registration() {
+    const now = Date.now();
+    return {
+        protocolVersion: CURRENT_SYNC_PROTOCOL,
+        replicas: {
+            s00: {
+                replicaId: 'replica-s00',
+                generation: 1,
+                status: 'active',
+                lastSeq: 0,
+                checkpointAtMs: now,
+                leaseUntilMs: now + 360 * 24 * 60 * 60 * 1000,
+                checkpointClock: {},
+            },
+        },
+        mutation: { slot: 's00', action: 'register' },
+    };
+}
 
 it('allows the owner to create, read and update their profile but denies direct root deletion', async () => {
     const ref = doc(env.authenticatedContext('a').firestore(), 'users/a');
@@ -73,6 +92,54 @@ it('allows legacy monthly physical deletion only before the Protocol 3 account c
     expect((await getDoc(monthRef)).exists()).toBe(true);
 });
 
+it.each(['history_months', 'nutrition_months'])(
+    'denies Protocol 3 registration combined with a legacy physical delete from %s in the same batch',
+    async collectionName => {
+        const db = env.authenticatedContext('a').firestore();
+        const monthRef = doc(db, `users/a/${collectionName}/2026-09`);
+        const controlRef = doc(db, 'users/a/sync_control/state');
+        await assertSucceeds(setDoc(monthRef, { _schemaVersion: 1 }));
+
+        const batch = writeBatch(db);
+        batch.set(controlRef, protocol3Registration());
+        batch.delete(monthRef);
+
+        await assertFails(batch.commit());
+        expect((await getDoc(monthRef)).exists()).toBe(true);
+        expect((await getDoc(controlRef)).exists()).toBe(false);
+    },
+);
+
+it.each([
+    ['root', 'users/a', { profile: { name: 'legacy' }, _schemaVersion: 1, _sync: { protocolVersion: 1, clock: {}, fields: {} } }],
+    ['history month', 'users/a/history_months/2026-09', { _schemaVersion: 1, _sync: { protocolVersion: 1, clock: {}, fields: {} } }],
+    ['nutrition month', 'users/a/nutrition_months/2026-09', { _schemaVersion: 1, _sync: { protocolVersion: 1, clock: {}, fields: {} } }],
+])(
+    'denies Protocol 3 registration combined with a legacy %s write in the same batch',
+    async (_label, path, legacyDocument) => {
+        const db = env.authenticatedContext('a').firestore();
+        const controlRef = doc(db, 'users/a/sync_control/state');
+        const targetRef = doc(db, path);
+
+        const batch = writeBatch(db);
+        batch.set(controlRef, protocol3Registration());
+        batch.set(targetRef, legacyDocument);
+
+        await assertFails(batch.commit());
+        expect((await getDoc(controlRef)).exists()).toBe(false);
+        expect((await getDoc(targetRef)).exists()).toBe(false);
+    },
+);
+
+it('continues to allow legacy writes when Protocol 3 remains absent before and after the request', async () => {
+    const db = env.authenticatedContext('a').firestore();
+    const legacySync = { protocolVersion: 1, clock: {}, fields: {} };
+    await assertSucceeds(setDoc(doc(db, 'users/a'), { profile: { name: 'legacy' }, _schemaVersion: 1, _sync: legacySync }));
+    await assertSucceeds(setDoc(doc(db, 'users/a/history_months/2026-09'), { _schemaVersion: 1, _sync: legacySync }));
+    await assertSucceeds(setDoc(doc(db, 'users/a/nutrition_months/2026-09'), { _schemaVersion: 1, _sync: legacySync }));
+    expect((await getDoc(doc(db, 'users/a/sync_control/state'))).exists()).toBe(false);
+});
+
 it.each(['anonymous', 'b'])('denies %s all operations on another user and their private collections', async identity => {
     const db = identity === 'anonymous' ? env.unauthenticatedContext().firestore() : env.authenticatedContext(identity).firestore();
     for (const path of ['users/a', 'users/a/history_months/2026-09', 'users/a/nutrition_months/2026-09', 'users/a/telemetry_events/e', 'users/a/telemetry_errors/e', 'users/a/telemetry_anomalies/e']) {
@@ -119,6 +186,29 @@ it('makes account_deletions server-only and immediately blocks the owner on ever
         await deleteDoc(doc(context.firestore(), 'account_deletions/a'));
     });
     await assertSucceeds(getDoc(doc(ownerDb, 'users/a')));
+});
+
+it.each([
+    ['anonymous', null],
+    ['owner', 'a'],
+    ['other user', 'b'],
+])('keeps account_deletion_devices server-only for %s clients', async (_label, uid) => {
+    const db = uid === null ? env.unauthenticatedContext().firestore() : env.authenticatedContext(uid).firestore();
+    await env.withSecurityRulesDisabled(async context => {
+        await setDoc(doc(context.firestore(), 'account_deletion_devices/a'), {
+            uid: 'a',
+            tokenHashes: ['0'.repeat(64)],
+            registeredAt: new Date(),
+            updatedAt: new Date(),
+        });
+    });
+
+    const existingRef = doc(db, 'account_deletion_devices/a');
+    const createRef = doc(db, 'account_deletion_devices/new-device');
+    await assertFails(getDoc(existingRef));
+    await assertFails(setDoc(createRef, { uid: 'new-device', tokenHashes: [] }));
+    await assertFails(updateDoc(existingRef, { updatedAt: new Date() }));
+    await assertFails(deleteDoc(existingRef));
 });
 
 it('rejects unknown root fields, invalid origin and malformed month paths', async () => {
