@@ -16,6 +16,7 @@ import {
     stableFrontierFromControl,
     type ReplicaIdentity,
 } from './replicaProtocol';
+import { distinctDocumentCount, MAX_SYNC_DOCUMENTS_PER_TRANSACTION } from './syncBatching';
 
 function normalizeRemote(path: string, raw: DocumentData): DocumentData {
     if (path === '') return rootDocument(UserDataSchema.parse(raw) as unknown as UserData);
@@ -109,6 +110,10 @@ export async function applyDocumentChanges(
     if (!uid || uid.includes('/')) throw new Error('Identità non valida');
     if (!isCurrent()) throw new Error('Sessione cambiata');
     if (!ops.length) return { documents: new Map(), syncMeta: {} };
+    const documentCount = distinctDocumentCount(ops);
+    if (documentCount > MAX_SYNC_DOCUMENTS_PER_TRANSACTION) {
+        throw new Error(`Transazione sync troppo grande: ${documentCount} documenti, massimo ${MAX_SYNC_DOCUMENTS_PER_TRANSACTION}.`);
+    }
 
     return runTransaction(db, async transaction => {
         if (!isCurrent()) throw new Error('Sessione cambiata');
