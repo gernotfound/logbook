@@ -4,6 +4,7 @@ import { TestDB as DB } from './testUtils';
 import * as idb from 'idb-keyval';
 import { useAppStore } from '../src/store/useAppStore';
 import { storageOwner } from '../src/lib/sync/session';
+import { localStorageMock } from './setup';
 
 vi.mock('idb-keyval', () => ({
     get: vi.fn(),
@@ -119,6 +120,69 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
 
         localStorage.removeItem = originalRemoveItem;
         consoleWarnSpy.mockRestore();
+    });
+
+    it('purgeAllLocalUserData verifies the postcondition after concurrent key compaction', async () => {
+        const owner = 'user:test-user-id';
+        const first = `logbook:v2:${owner}:draft:a`;
+        const second = `logbook:v2:${owner}:draft:b`;
+        localStorage.setItem(first, 'a');
+        localStorage.setItem(second, 'b');
+
+        const originalKey = localStorageMock.key.getMockImplementation()!;
+        let compacted = false;
+        localStorageMock.key.mockImplementation((index: number) => {
+            const storageKey = originalKey(index);
+            if (!compacted && index === 0 && storageKey === first) {
+                compacted = true;
+                localStorage.removeItem(first);
+            }
+            return storageKey;
+        });
+
+        await DB.purgeAllLocalUserData(owner);
+
+        expect(localStorage.getItem(first)).toBeNull();
+        expect(localStorage.getItem(second)).toBeNull();
+    });
+
+    it('purgeAllLocalUserData removes owner keys added concurrently during cleanup', async () => {
+        const owner = 'user:test-user-id';
+        const initial = `logbook:v2:${owner}:draft:a`;
+        const concurrent = `logbook:v2:${owner}:draft:b`;
+        localStorage.setItem(initial, 'a');
+
+        const originalRemove = localStorageMock.removeItem.getMockImplementation()!;
+        let added = false;
+        localStorageMock.removeItem.mockImplementation((storageKey: string) => {
+            originalRemove(storageKey);
+            if (!added && storageKey === initial) {
+                added = true;
+                localStorage.setItem(concurrent, 'b');
+            }
+        });
+
+        await DB.purgeAllLocalUserData(owner);
+
+        expect(localStorage.getItem(initial)).toBeNull();
+        expect(localStorage.getItem(concurrent)).toBeNull();
+    });
+
+    it('purgeAllLocalUserData rejects when an owner-scoped survivor cannot be removed', async () => {
+        const owner = 'user:test-user-id';
+        const survivor = `logbook:v2:${owner}:draft:survivor`;
+        const otherOwner = 'logbook:v2:user:other-user:draft:keep';
+        localStorage.setItem(survivor, 'private');
+        localStorage.setItem(otherOwner, 'other');
+
+        const originalRemove = localStorageMock.removeItem.getMockImplementation()!;
+        localStorageMock.removeItem.mockImplementation((storageKey: string) => {
+            if (storageKey !== survivor) originalRemove(storageKey);
+        });
+
+        await expect(DB.purgeAllLocalUserData(owner)).rejects.toThrow('Pulizia locale incompleta');
+        expect(localStorage.getItem(survivor)).toBe('private');
+        expect(localStorage.getItem(otherOwner)).toBe('other');
     });
 
     it('purgeAllLocalUserData is idempotent (safe to call twice)', async () => {
