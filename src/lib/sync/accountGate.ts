@@ -15,21 +15,37 @@ export interface AccountDeletionMarker {
     serverAcceptedAt?: number;
 }
 
+export class AccountDeletionMarkerCorruptError extends Error {
+    readonly code = 'account-deletion-marker-corrupt';
+
+    constructor(owner: string, cause?: unknown) {
+        super('Stato locale della cancellazione account non leggibile. Copia locale conservata fino alla riconciliazione.', { cause });
+        this.name = 'AccountDeletionMarkerCorruptError';
+        void owner;
+    }
+}
+
 function parse(owner: string, raw: string | null): AccountDeletionMarker | null {
-    if (!raw || !owner.startsWith('user:')) return null;
+    if (raw === null) return null;
+    if (!owner.startsWith('user:')) throw new AccountDeletionMarkerCorruptError(owner);
     try {
         const value = JSON.parse(raw) as Partial<AccountDeletionMarker>;
         const startedAt = Number(value.startedAt);
-        if (!Number.isFinite(startedAt) || startedAt <= 0) return null;
+        if (!Number.isFinite(startedAt) || startedAt <= 0) throw new Error('startedAt non valido');
+        const expectedUid = owner.slice(5);
+        if (typeof value.uid === 'string' && value.uid && value.uid !== expectedUid) {
+            throw new Error('UID marker non coerente con owner');
+        }
         return {
             owner,
-            uid: typeof value.uid === 'string' && value.uid ? value.uid : owner.slice(5),
+            uid: expectedUid,
             startedAt,
             receiptToken: typeof value.receiptToken === 'string' ? value.receiptToken : undefined,
             serverAcceptedAt: Number.isFinite(Number(value.serverAcceptedAt)) ? Number(value.serverAcceptedAt) : undefined,
         };
-    } catch {
-        return null;
+    } catch (error) {
+        if (error instanceof AccountDeletionMarkerCorruptError) throw error;
+        throw new AccountDeletionMarkerCorruptError(owner, error);
     }
 }
 
@@ -51,13 +67,8 @@ export function isAccountDeletionPending(owner: string): boolean {
 
 export function markAccountDeletion(owner: string, values?: Partial<Pick<AccountDeletionMarker, 'receiptToken' | 'serverAcceptedAt'>>): AccountDeletionMarker {
     if (!owner.startsWith('user:')) throw new Error('La cancellazione server richiede un account autenticato.');
-    let existing: AccountDeletionMarker | null = null;
-    try {
-        existing = readAccountDeletionMarker(owner);
-    } catch {
-        // We can still attempt to persist a fresh marker. The strict write below
-        // is the authority: if storage is unavailable the deletion flow stops.
-    }
+    // Corrupt/unreadable recovery evidence is a hard gate. Never overwrite it.
+    const existing = readAccountDeletionMarker(owner);
     const marker: AccountDeletionMarker = {
         owner,
         uid: owner.slice(5),

@@ -35,6 +35,42 @@ type ServerDeletionStatus = {
     error?: string;
 };
 
+const LOCAL_PURGE_MAX_PASSES = 4;
+
+function collectLocalPurgeKeys(owner: string): Set<string> {
+    const keys = new Set([
+        'logbook_local_workout', 'logbook_timer_state', 'logbook_timer_start', 'logbook_timer_accumulated',
+        'draft_measurement', 'draft_exercise', 'draft_routine', 'logbook_awaiting_redirect',
+        'logbook_telemetry_queue', 'logbook_storage_marker', 'logbook_storage_anomaly_reported',
+        'guest_migration_policy', 'logbook_guest_migration_intent'
+    ]);
+    const ownerUid = owner.startsWith('user:') ? owner.slice('user:'.length) : null;
+    if (ownerUid && localStorage.getItem('logbook_guest_migration_sync_recovery') === ownerUid) {
+        keys.add('logbook_guest_migration_sync_recovery');
+    }
+    const prefix = 'logbook:v2:' + owner + ':';
+    const snapshot: string[] = [];
+    for (let index = 0; index < localStorage.length; index++) {
+        const candidate = localStorage.key(index);
+        if (candidate) snapshot.push(candidate);
+    }
+    for (const candidate of snapshot) {
+        if (candidate.startsWith(prefix) && !candidate.endsWith(':account-deletion')) keys.add(candidate);
+    }
+    if (owner === 'guest') keys.add('logbook_is_guest');
+    return keys;
+}
+
+function remainingOwnerScopedKeys(owner: string): string[] {
+    const prefix = 'logbook:v2:' + owner + ':';
+    const remaining: string[] = [];
+    for (let index = 0; index < localStorage.length; index++) {
+        const candidate = localStorage.key(index);
+        if (candidate?.startsWith(prefix) && !candidate.endsWith(':account-deletion')) remaining.push(candidate);
+    }
+    return remaining;
+}
+
 export async function purgeAllLocalUserData(owner = storageOwner()) {
     const failures: unknown[] = [];
     const results = await Promise.allSettled([
@@ -42,27 +78,31 @@ export async function purgeAllLocalUserData(owner = storageOwner()) {
         del('pending_sync_token'), del('pending_sync_payload'), del('sync_failed')
     ]);
     for (const result of results) if (result.status === 'rejected') failures.push(result.reason);
-    const keys = new Set([
-        'logbook_local_workout', 'logbook_timer_state', 'logbook_timer_start', 'logbook_timer_accumulated',
-        'draft_measurement', 'draft_exercise', 'draft_routine', 'logbook_awaiting_redirect',
-        'logbook_telemetry_queue', 'logbook_storage_marker', 'logbook_storage_anomaly_reported', 'guest_migration_policy'
-    ]);
-    try {
-        const ownerUid = owner.startsWith('user:') ? owner.slice('user:'.length) : null;
-        if (ownerUid && localStorage.getItem('logbook_guest_migration_sync_recovery') === ownerUid) {
-            keys.add('logbook_guest_migration_sync_recovery');
+
+    for (let pass = 0; pass < LOCAL_PURGE_MAX_PASSES && failures.length === 0; pass++) {
+        let keys: Set<string>;
+        try {
+            keys = collectLocalPurgeKeys(owner);
+        } catch (error) {
+            failures.push(error);
+            break;
         }
-        const prefix = 'logbook:v2:' + owner + ':';
-        for (let index = 0; index < localStorage.length; index++) {
-            const key = localStorage.key(index);
-            if (key?.startsWith(prefix) && !key.endsWith(':account-deletion')) keys.add(key);
+        for (const storageKey of keys) {
+            try { localStorage.removeItem(storageKey); }
+            catch (error) { failures.push(error); }
         }
-        if (owner === 'guest') keys.add('logbook_is_guest');
-    } catch (error) { failures.push(error); }
-    for (const key of keys) {
-        try { localStorage.removeItem(key); }
-        catch (error) { failures.push(error); }
+        if (failures.length) break;
+        try {
+            const survivors = remainingOwnerScopedKeys(owner);
+            if (survivors.length === 0) break;
+            if (pass === LOCAL_PURGE_MAX_PASSES - 1) {
+                failures.push(new Error('Chiavi owner-scoped ancora presenti dopo la verifica finale.'));
+            }
+        } catch (error) {
+            failures.push(error);
+        }
     }
+
     if (failures.length) throw new AggregateError(failures, 'Pulizia locale incompleta. Alcuni dati sono ancora presenti su questo dispositivo.');
 }
 

@@ -64,8 +64,13 @@ function relevantDeletionPending(): boolean {
     if (guestOptIn) return false;
 
     const owner = captureSession().owner;
-    if (owner.startsWith('user:')) return readAccountDeletionMarker(owner) !== null;
-    return findPendingAccountDeletion() !== null;
+    try {
+        if (owner.startsWith('user:')) return readAccountDeletionMarker(owner) !== null;
+        return findPendingAccountDeletion() !== null;
+    } catch {
+        // Corrupt or unreadable deletion state is not proof of absence.
+        return true;
+    }
 }
 
 export function clearSyncTimers() {
@@ -269,9 +274,12 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
             const userData = get().userData;
             if (!userData) throw new Error('Dati utente non caricati');
 
+            const session = captureSession();
+            if (get().dataOwner !== session.owner) {
+                throw new Error('Dati locali non ancora allineati con l’account corrente. Attendi il completamento dell’accesso e riprova.');
+            }
             const data = applyDomainOperations(userData, operation);
             const generation = get().syncGeneration + 1;
-            const session = captureSession();
             const operations = Array.isArray(operation) ? operation : [operation];
             const syncPresentation: SyncPresentation = operations.length > 0 && operations.every(item => item.type === 'active-workout.set')
                 ? 'quiet-workout'
