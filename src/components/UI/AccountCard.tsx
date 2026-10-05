@@ -153,7 +153,7 @@ export const AccountCard = () => {
         }
         setLoadingAction('guestRegister');
         try {
-            await registerWithEmail(newEmailInput, newPasswordInput);
+            await registerWithEmail(newEmailInput, newPasswordInput, 'merge');
             // La migrazione avviene automaticamente in onAuthStateChanged. Un hard
             // reload è consentito solo dopo che la barriera ha verificato la copia locale.
             await reloadAfterAccountChange();
@@ -173,7 +173,7 @@ export const AccountCard = () => {
                     Stai usando TheLogBook senza un account. I tuoi dati sono salvati solo su questo dispositivo.
                 </p>
                 <div style={{ display: "flex", flexDirection: "column", gap: "0.625rem" }}>
-                    <button className="btn btn-primary" onClick={linkGoogleAccount}>
+                    <button className="btn btn-primary" onClick={() => void linkGoogleAccount('merge')}>
                         Crea account con Google
                     </button>
                     <button className="btn ui-account-card-3"  onClick={() => setShowReauthModal('guestRegister')}>
