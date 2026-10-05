@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { useSettings } from '../../hooks/useSettings';
 import { useDialogStore } from '../../store/useDialogStore';
-import { provider, linkWithPopup, linkWithCredential, updateEmail, updatePassword, EmailAuthProvider } from '../../lib/firebase';
+import { provider, linkWithPopup, linkWithCredential, verifyBeforeUpdateEmail, updatePassword, EmailAuthProvider } from '../../lib/firebase';
 import { isSensitiveReauthCancellation, reauthenticateForSensitiveAction } from '../../lib/auth/recentAuth';
 import { safeHardReload } from '../../lib/sync/safeReload';
 import { Eye, EyeOff } from 'lucide-react';
@@ -81,8 +81,8 @@ export const AccountCard = () => {
                     setLoadingAction(null);
                     return;
                 }
-                await updateEmail(currentUser, newEmailInput);
-                await showAlert("Email aggiornata con successo.");
+                await verifyBeforeUpdateEmail(currentUser, newEmailInput);
+                await showAlert("Verifica il nuovo indirizzo tramite il link che Firebase ti ha inviato. L’email cambierà solo dopo la verifica.");
             } else if (showReauthModal === 'password' || showReauthModal === 'linkEmail') {
                 const weakError = checkPasswordStrength(newPasswordInput);
                 if (weakError) {
