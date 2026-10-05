@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import { Logic } from '../../lib/logic';
 import { captureSession, isCurrentSession } from '../../lib/sync/session';
-import { readDeviceValue, writeDeviceValue } from '../../lib/sync/deviceStorage';
+import { readDeviceValueStrict, writeDeviceValue } from '../../lib/sync/deviceStorage';
 import { requiredUpdateRecoveryRegistry } from '../../lib/sync/requiredUpdateRecovery';
 import { draftRegistry } from '../../lib/utils/draftRegistry';
 import type { WorkoutReadiness } from '../../types';
@@ -35,19 +35,31 @@ function formatSleep(value: string | number | undefined): string | null {
 }
 
 function parseReadinessDraft(raw: string | null): ReadinessDraft {
-    if (!raw) return {};
-    try {
-        const parsed = JSON.parse(raw);
-        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
-        const result: ReadinessDraft = {};
-        for (const key of ['energy', 'stress', 'motivation', 'muscleRecovery'] as const) {
-            const value = (parsed as Record<string, unknown>)[key];
-            if (typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 5) result[key] = value;
-        }
-        return result;
-    } catch {
-        return {};
+    if (raw === null) return {};
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        throw new Error('Bozza check-in locale non valida.');
     }
+    const result: ReadinessDraft = {};
+    for (const key of ['energy', 'stress', 'motivation', 'muscleRecovery'] as const) {
+        const value = (parsed as Record<string, unknown>)[key];
+        if (value === undefined) continue;
+        if (typeof value !== 'number' || !Number.isInteger(value) || value < 1 || value > 5) {
+            throw new Error('Bozza check-in locale corrotta.');
+        }
+        result[key] = value;
+    }
+    return result;
+}
+
+function blockReadinessPersistence(error: unknown): void {
+    console.error('Persistenza check-in pre-sessione non disponibile:', error);
+    useAppStore.setState({
+        localPersistenceBlocked: true,
+        syncHealth: 'failed',
+        syncPresentation: 'normal',
+        saveError: 'Bozza del check-in non salvata sul dispositivo. Le modifiche sono bloccate finché lo storage non torna disponibile.',
+    });
 }
 
 export default function PreSessionCheckIn({ workoutId, routineName, date, onStart, onCancel }: PreSessionCheckInProps) {
@@ -55,10 +67,17 @@ export default function PreSessionCheckIn({ workoutId, routineName, date, onStar
     const activePains = useAppStore(state => state.userData?.activePains || []);
     const session = useRef(captureSession());
     const recoveryName = useRef(`draft:pre-session:${workoutId}`);
-    const recovered = useRef(parseReadinessDraft(readDeviceValue(recoveryName.current, session.current.owner)));
-    const [values, setValues] = useState<ReadinessDraft>(recovered.current);
-    const valuesRef = useRef<ReadinessDraft>(recovered.current);
-    const dirtyRef = useRef(Object.keys(recovered.current).length > 0);
+    const [recovered] = useState<ReadinessDraft>(() => {
+        try {
+            return parseReadinessDraft(readDeviceValueStrict(recoveryName.current, session.current.owner));
+        } catch (error) {
+            blockReadinessPersistence(error);
+            return {};
+        }
+    });
+    const [values, setValues] = useState<ReadinessDraft>(recovered);
+    const valuesRef = useRef<ReadinessDraft>(recovered);
+    const dirtyRef = useRef(Object.keys(recovered).length > 0);
     const [starting, setStarting] = useState(false);
     const sessionDate = date || Logic.getLocalDateString();
     const sleep = formatSleep(nutrition?.[sessionDate]?.sleepHours);
@@ -85,12 +104,16 @@ export default function PreSessionCheckIn({ workoutId, routineName, date, onStar
     }, [persistDraft]);
 
     const setMetric = (key: ReadinessKey, value: number) => {
-        setValues(current => {
-            const next = { ...current, [key]: current[key] === value ? undefined : value };
-            valuesRef.current = next;
-            dirtyRef.current = true;
-            return next;
-        });
+        const current = valuesRef.current;
+        const next = { ...current, [key]: current[key] === value ? undefined : value };
+        valuesRef.current = next;
+        dirtyRef.current = true;
+        setValues(next);
+        try {
+            persistDraft();
+        } catch (error) {
+            blockReadinessPersistence(error);
+        }
     };
 
     const start = async (includeReadiness: boolean) => {
