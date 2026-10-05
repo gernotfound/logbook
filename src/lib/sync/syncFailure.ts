@@ -4,9 +4,15 @@ import { SyncTimeoutError } from '../db/db_core';
 export type SyncFailureResult = Exclude<SyncResult, { ok: true }>;
 
 export function getSyncErrorCode(error: unknown): string | undefined {
-    if (!error || typeof error !== 'object' || !('code' in error)) return undefined;
-    const code = (error as { code?: unknown }).code;
-    return typeof code === 'string' ? code : undefined;
+    let current = error;
+    const seen = new Set<unknown>();
+    for (let depth = 0; depth < 4 && current && typeof current === 'object' && !seen.has(current); depth++) {
+        seen.add(current);
+        const candidate = current as { code?: unknown; cause?: unknown };
+        if (typeof candidate.code === 'string') return candidate.code;
+        current = candidate.cause;
+    }
+    return undefined;
 }
 
 /**
@@ -22,7 +28,8 @@ export function classifySyncFailure(error: unknown, options?: { retryable?: bool
         || error instanceof SyncTimeoutError
         || code === 'unavailable'
         || code === 'deadline-exceeded'
-        || code === 'app-check-unavailable'
+        || (code === 'app-check-unavailable'
+            && (error as { phase?: unknown } | null)?.phase === 'token-error')
     ) {
         return { ok: false, status: 'local-pending', error };
     }
