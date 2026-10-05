@@ -67,11 +67,13 @@ ensureAppCheckProvider(firebaseApp);
 export class AppCheckUnavailableError extends Error {
     readonly code = 'app-check-unavailable';
     readonly phase: AppCheckResult['phase'];
+    readonly retryable: boolean;
 
     constructor(result: AppCheckResult) {
         super(result.reason ?? result.tokenError ?? `App Check non disponibile (${result.phase})`);
         this.name = 'AppCheckUnavailableError';
         this.phase = result.phase;
+        this.retryable = result.retryable;
     }
 }
 

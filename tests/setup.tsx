@@ -287,7 +287,8 @@ vi.mock('firebase/auth', () => ({
 vi.mock('firebase/app-check', () => ({
   initializeAppCheck: vi.fn(() => ({})),
   ReCaptchaEnterpriseProvider: vi.fn(),
-  getToken: vi.fn().mockResolvedValue({ token: 'mock-token', expireTimeMillis: Date.now() + 3600000 }),
+  getToken: vi.fn().mockResolvedValue({ token: 'mock-token' }),
+  getLimitedUseToken: vi.fn().mockResolvedValue({ token: 'mock-limited-use-token' }),
   isSupported: vi.fn().mockResolvedValue(true),
 }));
 

@@ -151,9 +151,18 @@ describe('AUDIT 01-04 remediation invariants', () => {
         expect(merged.pendingConflicts?.nutritionPlanning).toMatchObject({ onDaysCount: 4, totalKcal: 2400 });
     });
 
-    it('treats App Check unavailability as durable local-pending rather than failed', () => {
-        const error = Object.assign(new Error('App Check unavailable'), { code: 'app-check-unavailable' });
-        expect(classifySyncFailure(error).status).toBe('local-pending');
+    it('keeps App Check pending only when the provider failure is explicitly retryable', () => {
+        const transient = Object.assign(new Error('App Check network unavailable'), {
+            code: 'app-check-unavailable',
+            retryable: true,
+        });
+        const structural = Object.assign(new Error('App Check unsupported'), {
+            code: 'app-check-unavailable',
+            retryable: false,
+        });
+
+        expect(classifySyncFailure(transient).status).toBe('local-pending');
+        expect(classifySyncFailure(structural).status).toBe('failed');
     });
 
     it('recovers the device workout synchronously from the durable envelope shadow when device storage is missing', () => {

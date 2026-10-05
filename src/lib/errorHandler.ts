@@ -57,18 +57,38 @@ export function toSentenceCase(str: string): string {
  */
 export function mapFirebaseErrorCode(error: unknown): FormattedSyncError {
   let rawCode = '';
-  let rawMessage = '';
+  let fallbackName = '';
+  const fragments: string[] = [];
+  const seen = new Set<unknown>();
+  let current: unknown = error;
 
-  if (typeof error === 'string') {
-    rawCode = error;
-    rawMessage = error;
-  } else if (error && typeof error === 'object') {
-    const errObj = error as Record<string, any>;
-    rawCode = String(errObj.code || errObj.name || '');
-    rawMessage = String(errObj.message || '');
+  for (let depth = 0; depth < 5 && current != null && !seen.has(current); depth += 1) {
+    seen.add(current);
+    if (typeof current === 'string') {
+      fragments.push(current);
+      if (!rawCode) rawCode = current;
+      break;
+    }
+    if (typeof current !== 'object') break;
+
+    const errObj = current as Record<string, unknown>;
+    const code = typeof errObj.code === 'string' ? errObj.code : '';
+    const name = typeof errObj.name === 'string' ? errObj.name : '';
+    const message = typeof errObj.message === 'string' ? errObj.message : '';
+    const phase = typeof errObj.phase === 'string' ? errObj.phase : '';
+
+    if (!rawCode && code) rawCode = code;
+    if (!fallbackName && name) fallbackName = name;
+    if (code) fragments.push(code);
+    if (name) fragments.push(name);
+    if (message) fragments.push(message);
+    if (phase) fragments.push(phase);
+
+    current = 'cause' in errObj ? errObj.cause : null;
   }
 
-  const combined = `${rawCode} ${rawMessage}`.toLowerCase();
+  if (!rawCode) rawCode = fallbackName;
+  const combined = fragments.join(' ').toLowerCase();
 
   // 1. Auth network error (must precede generic network check)
   if (
@@ -112,7 +132,8 @@ export function mapFirebaseErrorCode(error: unknown): FormattedSyncError {
   if (
     combined.includes('app-check-unsupported') ||
     combined.includes('appcheck/unsupported') ||
-    combined.includes('err_app_check_unsupported')
+    combined.includes('err_app_check_unsupported') ||
+    (combined.includes('app-check-unavailable') && combined.includes('unsupported'))
   ) {
     return {
       code: 'ERR_APP_CHECK_UNSUPPORTED',
@@ -121,7 +142,7 @@ export function mapFirebaseErrorCode(error: unknown): FormattedSyncError {
       title: 'Verifica di sicurezza non supportata',
       message:
         'Il browser o la modalità di navigazione attuale non supportano i controlli di sicurezza necessari per la sincronizzazione cloud. TheLogBook continuerà a funzionare regolarmente in modalità locale offline sul tuo dispositivo.',
-      isOfflineSafe: true,
+      isOfflineSafe: false,
       canRetry: false,
     };
   }
@@ -131,7 +152,8 @@ export function mapFirebaseErrorCode(error: unknown): FormattedSyncError {
     combined.includes('app-check-blocked') ||
     combined.includes('appcheck/fetch-status-error') ||
     combined.includes('appcheck/invalid-token') ||
-    combined.includes('err_app_check_blocked')
+    combined.includes('err_app_check_blocked') ||
+    combined.includes('app-check-unavailable')
   ) {
     return {
       code: 'ERR_APP_CHECK_BLOCKED',
@@ -140,7 +162,7 @@ export function mapFirebaseErrorCode(error: unknown): FormattedSyncError {
       title: 'Verifica di sicurezza non superata',
       message:
         'La verifica di integrità di sicurezza non è andata a buon fine. La sincronizzazione con il cloud è stata temporaneamente sospesa. I dati rimangono al sicuro sul dispositivo.',
-      isOfflineSafe: true,
+      isOfflineSafe: false,
       canRetry: true,
     };
   }
@@ -228,10 +250,10 @@ export function mapFirebaseErrorCode(error: unknown): FormattedSyncError {
       code: 'ERR_FIRESTORE_PERMISSION',
       rawCode,
       category: 'permission',
-      title: 'Limite dati superato',
+      title: 'Sincronizzazione rifiutata',
       message:
-        'L\'operazione non può essere sincronizzata nel cloud perché supera i limiti consentiti per il tuo account. Verifica i dati inseriti o riduci il numero di elementi prima di riprovare. I dati rimangono comunque disponibili sul dispositivo.',
-      isOfflineSafe: true,
+        'Il server ha rifiutato l’operazione. I dati locali restano preservati, ma la causa può dipendere da autorizzazione, regole o verifica di sicurezza.',
+      isOfflineSafe: false,
       canRetry: false,
     };
   }
@@ -283,8 +305,8 @@ export function mapFirebaseErrorCode(error: unknown): FormattedSyncError {
     title: 'Errore di sincronizzazione',
     message:
       'Si è verificato un errore imprevisto durante la sincronizzazione cloud. I tuoi dati locali sono preservati.',
-    isOfflineSafe: true,
-    canRetry: true,
+    isOfflineSafe: false,
+    canRetry: false,
   };
 }
 

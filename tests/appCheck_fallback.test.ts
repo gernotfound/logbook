@@ -6,6 +6,7 @@ import {
   isAppCheckActive,
   getAppCheckStatus,
   getAppCheckToken,
+  getLimitedUseAppCheckToken,
   resetAppCheckStateForTesting,
   setAppCheckFallbackOffline
 } from '../src/lib/appCheck';
@@ -62,8 +63,7 @@ describe('AppCheck Initialization & Fallback Behavior', () => {
     const mockAppCheckInstance = { app: dummyApp };
     vi.spyOn(appCheckSdk, 'initializeAppCheck').mockReturnValue(mockAppCheckInstance as any);
     vi.spyOn(appCheckSdk, 'getToken').mockResolvedValue({
-      token: 'valid-test-app-check-token',
-      expireTimeMillis: Date.now() + 3600000
+      token: 'valid-test-app-check-token'
     });
 
     const result = await initAppCheck(dummyApp, { siteKey: 'enterprise-site-key' });
@@ -129,6 +129,63 @@ describe('AppCheck Initialization & Fallback Behavior', () => {
     expect(second.tokenAvailable).toBe(true);
     expect(appCheckSdk.initializeAppCheck).toHaveBeenCalledOnce();
     expect(appCheckSdk.getToken).toHaveBeenCalledTimes(2);
+    expect(isAppCheckActive()).toBe(true);
+  });
+
+  it('delegates token freshness to the Firebase SDK on every readiness check', async () => {
+    const mockAppCheckInstance = { app: dummyApp };
+    vi.spyOn(appCheckSdk, 'initializeAppCheck').mockReturnValue(mockAppCheckInstance as any);
+    vi.spyOn(appCheckSdk, 'getToken')
+      .mockResolvedValueOnce({ token: 'first-token' })
+      .mockResolvedValueOnce({ token: 'sdk-refreshed-token' });
+
+    const first = await initAppCheck(dummyApp, { siteKey: 'enterprise-site-key' });
+    const second = await initAppCheck(dummyApp, { siteKey: 'enterprise-site-key' });
+
+    expect(first.success).toBe(true);
+    expect(second.success).toBe(true);
+    expect(second.phase).toBe('token-ready');
+    expect(second.tokenAvailable).toBe(true);
+    expect(appCheckSdk.getToken).toHaveBeenCalledTimes(2);
+  });
+
+  it('marks token acquisition network failures retryable but structural provider states terminal', async () => {
+    const mockAppCheckInstance = { app: dummyApp };
+    vi.spyOn(appCheckSdk, 'initializeAppCheck').mockReturnValue(mockAppCheckInstance as any);
+    vi.spyOn(appCheckSdk, 'getToken').mockRejectedValueOnce(
+      Object.assign(new Error('network unavailable'), { code: 'appCheck/fetch-network-error' }),
+    );
+
+    const transient = await initAppCheck(dummyApp, { siteKey: 'enterprise-site-key' });
+    expect(transient.phase).toBe('token-error');
+    expect(transient.retryable).toBe(true);
+
+    resetAppCheckStateForTesting();
+    const originalCrypto = window.crypto;
+    Object.defineProperty(window, 'crypto', { value: undefined, configurable: true });
+    try {
+      const unsupported = await initAppCheck(dummyApp, { siteKey: 'enterprise-site-key' });
+      expect(unsupported.phase).toBe('unsupported');
+      expect(unsupported.retryable).toBe(false);
+    } finally {
+      Object.defineProperty(window, 'crypto', { value: originalCrypto, configurable: true });
+    }
+  });
+
+  it('keeps standard token readiness intact when a limited-use token request fails', async () => {
+    const mockAppCheckInstance = { app: dummyApp };
+    vi.spyOn(appCheckSdk, 'initializeAppCheck').mockReturnValue(mockAppCheckInstance as any);
+    vi.spyOn(appCheckSdk, 'getToken').mockResolvedValue({
+      token: 'standard-token',
+    });
+    vi.spyOn(appCheckSdk, 'getLimitedUseToken').mockRejectedValueOnce(new Error('limited-use failure'));
+
+    await initAppCheck(dummyApp, { siteKey: 'enterprise-site-key' });
+    await expect(getLimitedUseAppCheckToken()).resolves.toBeNull();
+
+    const status = getAppCheckStatus();
+    expect(status.phase).toBe('token-ready');
+    expect(status.tokenAvailable).toBe(true);
     expect(isAppCheckActive()).toBe(true);
   });
 
