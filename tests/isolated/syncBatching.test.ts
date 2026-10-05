@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { SemanticOperation } from '../../src/lib/sync/semanticProjection';
 import {
     distinctDocumentCount,
-    firstPendingSequenceBatch,
+    boundedPendingTransactionBatch,
     MAX_SYNC_DOCUMENTS_PER_TRANSACTION,
     resequencePendingOperationsForBoundedTransactions,
     sequenceOperationsForBoundedTransactions,
@@ -76,17 +76,31 @@ describe('bounded causal sync batching', () => {
         expect(seq7[0].docPath).toBe('nutrition_months/2026-01');
     });
 
-    it('selects one complete earliest sequence for progressive acknowledgement', () => {
+    it('coalesces complete consecutive sequences while the transaction stays within the document ceiling', () => {
         const pending = [
             operation('history_months/2026-09', 3),
-            operation('nutrition_months/2026-09', 4),
             { ...operation('users-root-placeholder', 3), path: ['profile', 'name'] },
+            operation('nutrition_months/2026-09', 4),
+            { ...operation('users-root-placeholder', 5), path: ['profile', 'height'] },
         ];
 
-        const first = firstPendingSequenceBatch(pending);
+        const batch = boundedPendingTransactionBatch(pending);
 
-        expect(first).toHaveLength(2);
-        expect(first.every(item => item.seq === 3)).toBe(true);
-        expect(first.map(item => item.docPath)).toEqual(['history_months/2026-09', 'users-root-placeholder']);
+        expect(batch).toHaveLength(4);
+        expect(new Set(batch.map(item => item.seq))).toEqual(new Set([3, 4, 5]));
+        expect(distinctDocumentCount(batch)).toBe(3);
+    });
+
+    it('stops before a later complete sequence would exceed the document ceiling', () => {
+        const firstSequence = Array.from({ length: MAX_SYNC_DOCUMENTS_PER_TRANSACTION }, (_, index) =>
+            operation(`history_months/2026-${String(index + 1).padStart(2, '0')}`, 3),
+        );
+        const laterSequence = [operation('nutrition_months/2026-12', 4)];
+
+        const batch = boundedPendingTransactionBatch([...firstSequence, ...laterSequence]);
+
+        expect(batch).toHaveLength(MAX_SYNC_DOCUMENTS_PER_TRANSACTION);
+        expect(batch.every(item => item.seq === 3)).toBe(true);
+        expect(distinctDocumentCount(batch)).toBe(MAX_SYNC_DOCUMENTS_PER_TRANSACTION);
     });
 });
