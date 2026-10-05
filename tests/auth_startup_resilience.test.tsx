@@ -31,6 +31,13 @@ describe('PWA & iPhone Startup Resilience Tests', () => {
       window.__INITIAL_USER_DATA__ = null;
     }
     useAppStore.getState().resetStore();
+    (auth as any).currentUser = {
+      uid: 'test-user-id',
+      email: 'test@example.com',
+      emailVerified: true,
+      providerData: [{ providerId: 'password' }],
+      getIdToken: vi.fn().mockResolvedValue('test-token'),
+    };
     vi.clearAllMocks();
   });
 
