@@ -10,6 +10,7 @@ export interface AuthContextType {
     loading: boolean;
     isGuest: boolean;
     guestMigrationStatus: GuestMigrationStatus;
+    emailVerificationRequired: boolean;
     login: (guestPolicy?: GuestMigrationPolicy) => Promise<void>;
     loginAsGuest: () => Promise<void>;
     linkGoogleAccount: (guestPolicy?: GuestMigrationPolicy) => Promise<void>;
@@ -17,6 +18,8 @@ export interface AuthContextType {
     logout: (options?: LogoutOptions) => Promise<void>;
     loginWithEmail: (email: string, pass: string, guestPolicy?: GuestMigrationPolicy) => Promise<void>;
     registerWithEmail: (email: string, pass: string, guestPolicy?: GuestMigrationPolicy) => Promise<void>;
+    resendEmailVerification: () => Promise<void>;
+    refreshEmailVerification: () => Promise<void>;
 }
 
 export const defaultAuthContext: AuthContextType = {
@@ -24,13 +27,16 @@ export const defaultAuthContext: AuthContextType = {
     loading: false,
     isGuest: false,
     guestMigrationStatus: 'idle',
+    emailVerificationRequired: false,
     login: async () => {},
     loginAsGuest: async () => {},
     linkGoogleAccount: async () => {},
     retryGuestMigration: async () => {},
     logout: async () => {},
     loginWithEmail: async () => {},
-    registerWithEmail: async () => {}
+    registerWithEmail: async () => {},
+    resendEmailVerification: async () => {},
+    refreshEmailVerification: async () => {}
 };
 
 export const AuthContext = createContext<AuthContextType>(defaultAuthContext);
