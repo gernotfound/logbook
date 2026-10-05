@@ -23,6 +23,9 @@ export function useWakeLock(enabled: boolean): void {
             return;
         }
 
+        let spontaneousRetryUsed = false;
+        let retryTimer: ReturnType<typeof setTimeout> | null = null;
+
         const acquire = async () => {
             // Non acquisire se disabilitato o documento non visibile
             if (!enabled || document.visibilityState !== 'visible') return;
@@ -38,11 +41,15 @@ export function useWakeLock(enabled: boolean): void {
 
                 sentinelRef.current = sentinel;
 
-                // Ascolta il rilascio spontaneo dell'OS (policy energetica, ecc.)
+                // Ascolta il rilascio spontaneo dell'OS. Concedi un solo tentativo
+                // di riacquisizione per periodo visibile, evitando retry loop se
+                // il sistema sta deliberatamente negando il Wake Lock.
                 sentinel.addEventListener('release', () => {
-                    // Solo se siamo ancora al sentinel corrente, azzera il ref
-                    if (sentinelRef.current === sentinel) {
-                        sentinelRef.current = null;
+                    if (sentinelRef.current !== sentinel) return;
+                    sentinelRef.current = null;
+                    if (!cancelledRef.current && enabled && document.visibilityState === 'visible' && !spontaneousRetryUsed) {
+                        spontaneousRetryUsed = true;
+                        retryTimer = setTimeout(() => { void acquire(); }, 1000);
                     }
                 });
             } catch {
@@ -59,8 +66,13 @@ export function useWakeLock(enabled: boolean): void {
 
         const handleVisibilityChange = () => {
             if (document.visibilityState === 'visible' && enabled) {
+                spontaneousRetryUsed = false;
                 acquire();
             } else {
+                if (retryTimer) {
+                    clearTimeout(retryTimer);
+                    retryTimer = null;
+                }
                 release();
             }
         };
@@ -77,6 +89,7 @@ export function useWakeLock(enabled: boolean): void {
             // Segnala che qualsiasi Promise pendente è obsoleta
             cancelledRef.current = true;
             document.removeEventListener('visibilitychange', handleVisibilityChange);
+            if (retryTimer) clearTimeout(retryTimer);
             release();
         };
     }, [enabled]);
