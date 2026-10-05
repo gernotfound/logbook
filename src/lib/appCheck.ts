@@ -73,52 +73,6 @@ let lastTokenError: string | null = null;
 let lastTokenRetryable = false;
 let appCheckPhase: AppCheckPhase = 'uninitialized';
 
-const TOKEN_FRESHNESS_MARGIN_MS = 60_000;
-
-function isFreshToken(token: AppCheckTokenResult | null): token is AppCheckTokenResult {
-    return Boolean(
-        token?.token
-        && Number.isFinite(token.expireTimeMillis)
-        && token.expireTimeMillis - Date.now() > TOKEN_FRESHNESS_MARGIN_MS
-    );
-}
-
-function appCheckErrorText(error: unknown): string {
-    if (!error || typeof error !== 'object') return String(error ?? '');
-    const candidate = error as { code?: unknown; message?: unknown; status?: unknown };
-    return [
-        typeof candidate.code === 'string' ? candidate.code : '',
-        typeof candidate.message === 'string' ? candidate.message : '',
-        typeof candidate.status === 'number' ? String(candidate.status) : '',
-    ].filter(Boolean).join(' ').toLowerCase();
-}
-
-function isRetryableTokenError(error: unknown): boolean {
-    if (typeof navigator !== 'undefined' && navigator.onLine === false) return true;
-    const text = appCheckErrorText(error);
-    if (!text) return false;
-    return [
-        'network',
-        'failed to fetch',
-        'timeout',
-        'timed out',
-        'unavailable',
-        'deadline-exceeded',
-        'throttled',
-        'too-many-requests',
-        '429',
-        '500',
-        '502',
-        '503',
-        '504',
-    ].some(marker => text.includes(marker));
-}
-
-function effectivePhase(): AppCheckPhase {
-    if (appCheckPhase === 'token-ready' && !isFreshToken(lastToken)) return 'provider-ready';
-    return appCheckPhase;
-}
-
 function resolveSiteKey(options?: AppCheckInitOptions): string | undefined {
     return options?.siteKey
         || import.meta.env.VITE_RECAPTCHA_ENTERPRISE_SITE_KEY;
@@ -130,19 +84,18 @@ function runtimeSupportsAppCheck(): boolean {
 }
 
 function currentResult(reason?: string): AppCheckResult {
-    const phase = effectivePhase();
-    const tokenAvailable = isFreshToken(lastToken);
+    const tokenAvailable = Boolean(lastToken?.token);
     return {
-        success: phase === 'token-ready' && tokenAvailable,
+        success: appCheckPhase === 'token-ready' && tokenAvailable,
         appCheck: appCheckInstance,
         isFallbackOffline: isFallbackOfflineMode,
-        disabled: phase === 'disabled',
+        disabled: appCheckPhase === 'disabled',
         reason,
-        phase,
+        phase: appCheckPhase,
         providerInitialized: appCheckInstance !== null,
         tokenAvailable,
         tokenError: lastTokenError ?? undefined,
-        retryable: phase === 'token-error' && lastTokenRetryable,
+        retryable: appCheckPhase === 'token-error' && lastTokenRetryable,
     };
 }
 
@@ -230,24 +183,12 @@ export async function initAppCheck(
 ): Promise<AppCheckResult> {
     const providerResult = ensureAppCheckProvider(app, options);
     if (!providerResult.providerInitialized) return providerResult;
-    if (isFreshToken(lastToken)) {
-        appCheckPhase = 'token-ready';
-        isFallbackOfflineMode = false;
-        lastTokenRetryable = false;
-        return currentResult();
-    }
-    lastToken = null;
 
     try {
-        let tokenResult = await getToken(appCheckInstance!, false);
-        if (!isFreshToken(tokenResult)) {
-            tokenResult = await getToken(appCheckInstance!, true);
-        }
-        if (!isFreshToken(tokenResult)) {
-            throw Object.assign(new Error('Token App Check scaduto o troppo vicino alla scadenza.'), {
-                code: 'app-check-token-expired',
-            });
-        }
+        // Firebase App Check owns token caching and freshness. Always ask the SDK
+        // for the current valid token instead of treating a token obtained by this
+        // module in the past as proof that App Check is still ready.
+        const tokenResult = await getToken(appCheckInstance!, false);
         lastToken = tokenResult;
         lastTokenError = null;
         lastTokenRetryable = false;
@@ -271,7 +212,7 @@ export function getAppCheckInstance(): AppCheck | null {
 }
 
 export function isAppCheckActive(): boolean {
-    return appCheckInstance !== null && isFreshToken(lastToken) && !isFallbackOfflineMode;
+    return appCheckInstance !== null && Boolean(lastToken?.token) && !isFallbackOfflineMode;
 }
 
 export function isAppCheckFallbackOffline(): boolean {
@@ -285,15 +226,7 @@ export function setAppCheckFallbackOffline(fallback: boolean): void {
 export async function getAppCheckToken(forceRefresh = false): Promise<string | null> {
     if (!appCheckInstance) return null;
     try {
-        let tokenResult = await getToken(appCheckInstance, forceRefresh);
-        if (!forceRefresh && !isFreshToken(tokenResult)) {
-            tokenResult = await getToken(appCheckInstance, true);
-        }
-        if (!isFreshToken(tokenResult)) {
-            throw Object.assign(new Error('Token App Check scaduto o troppo vicino alla scadenza.'), {
-                code: 'app-check-token-expired',
-            });
-        }
+        const tokenResult = await getToken(appCheckInstance, forceRefresh);
         lastToken = tokenResult;
         lastTokenError = null;
         lastTokenRetryable = false;
@@ -327,7 +260,7 @@ export async function getLimitedUseAppCheckToken(): Promise<string | null> {
 }
 
 export function getAppCheckStatus(): AppCheckStatusDetails {
-    const tokenAvailable = isFreshToken(lastToken);
+    const tokenAvailable = Boolean(lastToken?.token);
     return {
         initialized: appCheckInstance !== null,
         providerInitialized: appCheckInstance !== null,
@@ -337,7 +270,7 @@ export function getAppCheckStatus(): AppCheckStatusDetails {
         tokenAvailable,
         tokenError: lastTokenError,
         provider: appCheckInstance ? 'ReCaptchaEnterpriseProvider' : 'none',
-        phase: effectivePhase(),
+        phase: appCheckPhase,
     };
 }
 
