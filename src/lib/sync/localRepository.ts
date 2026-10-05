@@ -170,6 +170,17 @@ export async function readLocal(owner: string): Promise<LocalEnvelope | undefine
 
 export async function ensureBoundedPendingSequences(owner: string, expectedActorId: string): Promise<LocalEnvelope | undefined> {
     owner = normalizeStorageOwner(owner);
+    const observed = await readLocal(owner);
+    if (!observed || observed.actorId !== expectedActorId) return observed;
+
+    const initial = resequencePendingOperationsForBoundedTransactions(
+        observed.pending,
+        expectedActorId,
+        observed.actorSeq,
+        observed.clock,
+    );
+    if (!initial.changed) return observed;
+
     let saved: LocalEnvelope | undefined;
     await update<any>(keyFor(owner), raw => {
         const current = validate(raw, owner);
