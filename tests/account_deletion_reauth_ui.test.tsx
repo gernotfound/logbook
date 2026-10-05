@@ -38,6 +38,7 @@ vi.mock('../src/store/useDialogStore', () => ({
 
 import { DB } from '../src/lib/db';
 import { useSettings } from '../src/hooks/useSettings';
+import { localStorageMock } from './setup';
 
 describe('account deletion recent authentication', () => {
   beforeEach(() => {
@@ -45,6 +46,20 @@ describe('account deletion recent authentication', () => {
     vi.clearAllMocks();
     dialog.showConfirm.mockResolvedValue(true);
     dialog.showAlert.mockResolvedValue(undefined);
+  });
+
+  it('releases the deletion busy guard when strict session capture fails', async () => {
+    localStorageMock.getItem.mockImplementationOnce(() => {
+      throw new DOMException('blocked', 'SecurityError');
+    });
+    dialog.showConfirm.mockResolvedValue(false);
+
+    const { result } = renderHook(() => useSettings());
+    await act(async () => result.current.handleDeleteAccount());
+    expect(dialog.showAlert).toHaveBeenCalledTimes(1);
+
+    await act(async () => result.current.handleDeleteAccount());
+    expect(dialog.showConfirm).toHaveBeenCalledTimes(1);
   });
 
   it('prompts password-only users and deletes only after successful reauthentication', async () => {
