@@ -1,25 +1,58 @@
-import { describe, expect, it } from 'vitest';
-import { checkPasswordStrength, PASSWORD_POLICY_SUMMARY } from './passwordPolicy';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const mocks = vi.hoisted(() => ({
+    validatePassword: vi.fn(),
+}));
+
+vi.mock('../firebase', () => ({
+    auth: {},
+    validatePassword: mocks.validatePassword,
+}));
+
+import { PASSWORD_POLICY_SUMMARY, validatePasswordAgainstPolicy } from './passwordPolicy';
+
+const policy = {
+    customStrengthOptions: {
+        minPasswordLength: 12,
+        maxPasswordLength: 128,
+        containsLowercaseLetter: true,
+        containsUppercaseLetter: true,
+        containsNumericCharacter: true,
+        containsNonAlphanumericCharacter: true,
+    },
+};
 
 describe('password policy', () => {
-    it('matches the Firebase Auth policy enforced in Production', () => {
-        expect(checkPasswordStrength('Password1!')).toBeNull();
-        expect(checkPasswordStrength('Abc1~def')).toBeNull();
-        expect(PASSWORD_POLICY_SUMMARY).toContain('almeno 8 caratteri');
+    beforeEach(() => vi.clearAllMocks());
+
+    it('accepts a password only when Firebase policy validation accepts it', async () => {
+        mocks.validatePassword.mockResolvedValue({
+            isValid: true,
+            passwordPolicy: policy,
+        });
+
+        await expect(validatePasswordAgainstPolicy('Anything')).resolves.toBeNull();
+        expect(mocks.validatePassword).toHaveBeenCalledTimes(1);
     });
 
-    it.each([
-        ['Short1!', 'almeno 8 caratteri'],
-        ['password!', 'almeno 1 numero'],
-        ['PASSWORD1!', 'almeno 1 lettera minuscola'],
-        ['password1!', 'almeno 1 lettera maiuscola'],
-        ['Password1', 'almeno 1 carattere speciale'],
-        ['Abc1 def', 'almeno 1 carattere speciale'],
-    ])('rejects %s', (password, expected) => {
-        expect(checkPasswordStrength(password)).toContain(expected);
+    it('reports the actual minimum returned by Firebase instead of a copied constant', async () => {
+        mocks.validatePassword.mockResolvedValue({
+            isValid: false,
+            meetsMinPasswordLength: false,
+            passwordPolicy: policy,
+        });
+
+        await expect(validatePasswordAgainstPolicy('Short1!')).resolves.toContain('almeno 12 caratteri');
     });
 
-    it('rejects values above the server maximum', () => {
-        expect(checkPasswordStrength(`A1!${'a'.repeat(4094)}`)).toBe('La password è troppo lunga.');
+    it('maps Firebase requirement failures to a useful message', async () => {
+        mocks.validatePassword.mockResolvedValue({
+            isValid: false,
+            containsNonAlphanumericCharacter: false,
+            passwordPolicy: policy,
+        });
+
+        await expect(validatePasswordAgainstPolicy('Password123')).resolves.toContain('carattere speciale');
+        expect(PASSWORD_POLICY_SUMMARY).not.toContain('8 caratteri');
     });
 });
