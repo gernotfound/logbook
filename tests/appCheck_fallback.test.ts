@@ -63,8 +63,7 @@ describe('AppCheck Initialization & Fallback Behavior', () => {
     const mockAppCheckInstance = { app: dummyApp };
     vi.spyOn(appCheckSdk, 'initializeAppCheck').mockReturnValue(mockAppCheckInstance as any);
     vi.spyOn(appCheckSdk, 'getToken').mockResolvedValue({
-      token: 'valid-test-app-check-token',
-      expireTimeMillis: Date.now() + 3600000
+      token: 'valid-test-app-check-token'
     });
 
     const result = await initAppCheck(dummyApp, { siteKey: 'enterprise-site-key' });
@@ -133,27 +132,21 @@ describe('AppCheck Initialization & Fallback Behavior', () => {
     expect(isAppCheckActive()).toBe(true);
   });
 
-  it('refreshes a cached token before it becomes stale instead of reporting a false token-ready state', async () => {
+  it('delegates token freshness to the Firebase SDK on every readiness check', async () => {
     const mockAppCheckInstance = { app: dummyApp };
-    const now = 1_800_000_000_000;
-    const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(now);
     vi.spyOn(appCheckSdk, 'initializeAppCheck').mockReturnValue(mockAppCheckInstance as any);
     vi.spyOn(appCheckSdk, 'getToken')
-      .mockResolvedValueOnce({ token: 'first-token', expireTimeMillis: now + 120_000 })
-      .mockResolvedValueOnce({ token: 'refreshed-token', expireTimeMillis: now + 3_600_000 });
+      .mockResolvedValueOnce({ token: 'first-token' })
+      .mockResolvedValueOnce({ token: 'sdk-refreshed-token' });
 
     const first = await initAppCheck(dummyApp, { siteKey: 'enterprise-site-key' });
-    expect(first.success).toBe(true);
-    expect(appCheckSdk.getToken).toHaveBeenCalledTimes(1);
-
-    nowSpy.mockReturnValue(now + 70_000);
     const second = await initAppCheck(dummyApp, { siteKey: 'enterprise-site-key' });
 
+    expect(first.success).toBe(true);
     expect(second.success).toBe(true);
     expect(second.phase).toBe('token-ready');
     expect(second.tokenAvailable).toBe(true);
     expect(appCheckSdk.getToken).toHaveBeenCalledTimes(2);
-    nowSpy.mockRestore();
   });
 
   it('marks token acquisition network failures retryable but structural provider states terminal', async () => {
@@ -184,7 +177,6 @@ describe('AppCheck Initialization & Fallback Behavior', () => {
     vi.spyOn(appCheckSdk, 'initializeAppCheck').mockReturnValue(mockAppCheckInstance as any);
     vi.spyOn(appCheckSdk, 'getToken').mockResolvedValue({
       token: 'standard-token',
-      expireTimeMillis: Date.now() + 3_600_000,
     });
     vi.spyOn(appCheckSdk, 'getLimitedUseToken').mockRejectedValueOnce(new Error('limited-use failure'));
 
