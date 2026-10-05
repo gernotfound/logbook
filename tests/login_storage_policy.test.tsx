@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { localStorageMock } from './setup';
+import { BrowserStorageError } from '../src/lib/sync/browserStorage';
 
 const authActions = vi.hoisted(() => ({
     login: vi.fn(),
@@ -39,12 +39,10 @@ describe('LoginBox guest migration storage boundary', () => {
         vi.restoreAllMocks();
     });
 
-    it('does not start authentication when the selected migration policy cannot be persisted', async () => {
-        localStorageMock.setItem.mockImplementationOnce((key: string) => {
-            if (key === 'guest_migration_policy') {
-                throw new DOMException('full', 'QuotaExceededError');
-            }
-        });
+    it('surfaces a strict guest-migration storage failure from the auth boundary', async () => {
+        authActions.loginWithEmail.mockRejectedValueOnce(
+            new BrowserStorageError('write', 'guest_migration_intent_v1', new DOMException('full', 'QuotaExceededError')),
+        );
 
         render(<LoginBox />);
         const emailInput = screen.getByPlaceholderText('La tua email');
@@ -55,7 +53,7 @@ describe('LoginBox guest migration storage boundary', () => {
         expect(form).not.toBeNull();
         fireEvent.submit(form!);
 
-        await waitFor(() => expect(ui.alert).toHaveBeenCalled());
-        expect(authActions.loginWithEmail).not.toHaveBeenCalled();
+        await waitFor(() => expect(ui.alert).toHaveBeenCalledWith(expect.stringContaining('scelta di trasferimento')));
+        expect(authActions.loginWithEmail).toHaveBeenCalledWith('user@example.com', 'Password1!', 'merge');
     });
 });
