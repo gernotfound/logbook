@@ -32,13 +32,19 @@ if (typeof window !== 'undefined') {
 if (typeof document !== 'undefined') {
     document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'hidden') {
-            draftRegistry.flushAll();
             const state = useAppStore.getState();
             const session = captureSession();
             try {
+                draftRegistry.flushAll({ strict: true });
                 persistOwnerBoundWorkoutSnapshot(session, state.dataOwner, state.localWorkout);
-            } catch (e) {
-                console.error("Errore salvataggio localWorkout su visibilitychange:", e);
+            } catch (error) {
+                console.error('Persistenza device-critical fallita durante visibilitychange:', error);
+                useAppStore.setState({
+                    localPersistenceBlocked: true,
+                    syncHealth: 'failed',
+                    syncPresentation: 'normal',
+                    saveError: 'Impossibile mettere al sicuro le ultime modifiche sul dispositivo. Riapri TheLogBook prima di continuare.',
+                });
             }
         }
     });
