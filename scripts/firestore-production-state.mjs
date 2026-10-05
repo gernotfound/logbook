@@ -62,16 +62,16 @@ export function classifyFieldOverride(desired, liveFields, operations) {
     pending,
     operationName: activeOperation?.name ?? null,
     operationState: metadata.state ?? null,
-    progressDocuments: metadata.progressDocuments ?? null,
-    progressBytes: metadata.progressBytes ?? null,
+    documentProgress: metadata.documentProgress ?? null,
+    bytesProgress: metadata.bytesProgress ?? null,
   };
 }
 
 export function progressSummary(status) {
   const operation = status.operationName ? ` operation=${status.operationName.split('/').at(-1)}` : '';
   const state = status.operationState ? ` state=${status.operationState}` : '';
-  const documentProgress = status.progressDocuments
-    ? ` docs=${status.progressDocuments.completedWork ?? '?'}/${status.progressDocuments.estimatedWork ?? '?'}`
+  const documentProgress = status.documentProgress
+    ? ` docs=${status.documentProgress.completedWork ?? '?'}/${status.documentProgress.estimatedWork ?? '?'}`
     : '';
   return `${operation}${state}${documentProgress}`;
 }
