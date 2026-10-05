@@ -6,6 +6,7 @@ import { AuthProvider } from '../src/contexts/AuthContext';
 import { useAuth } from '../src/hooks/useAuth';
 import { safeHardReload } from '../src/lib/sync/safeReload';
 import { localStorageMock } from './setup';
+import { useAppStore } from '../src/store/useAppStore';
 
 vi.mock('../src/lib/sync/safeReload', () => ({
   safeHardReload: vi.fn().mockResolvedValue(undefined),
@@ -50,6 +51,16 @@ describe('Google redirect lifecycle', () => {
     document.dispatchEvent(new Event('visibilitychange'));
     await act(async () => { await Promise.resolve(); });
     expect(safeHardReload).not.toHaveBeenCalled();
+  });
+
+  it('surfaces redirect resume failures instead of treating them as non-critical', async () => {
+    vi.mocked(getRedirectResult).mockRejectedValueOnce(Object.assign(new Error('redirect expired'), { code: 'auth/invalid-credential' }));
+
+    renderHook(() => useAuth(), { wrapper });
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+
+    expect(useAppStore.getState().saveError).toContain('Accesso Google non completato');
+    expect(localStorage.getItem(REDIRECT_KEY)).toBeNull();
   });
 
   it('blocca il reload spurio anche se la pulizia storage del marker fallisce', async () => {

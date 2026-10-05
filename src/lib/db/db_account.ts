@@ -41,7 +41,8 @@ function collectLocalPurgeKeys(owner: string): Set<string> {
     const keys = new Set([
         'logbook_local_workout', 'logbook_timer_state', 'logbook_timer_start', 'logbook_timer_accumulated',
         'draft_measurement', 'draft_exercise', 'draft_routine', 'logbook_awaiting_redirect',
-        'logbook_telemetry_queue', 'logbook_storage_marker', 'logbook_storage_anomaly_reported', 'guest_migration_policy'
+        'logbook_telemetry_queue', 'logbook_storage_marker', 'logbook_storage_anomaly_reported', 'guest_migration_policy',
+        'guest_migration_intent_v1'
     ]);
     const ownerUid = owner.startsWith('user:') ? owner.slice('user:'.length) : null;
     if (ownerUid && localStorage.getItem('logbook_guest_migration_sync_recovery') === ownerUid) {

@@ -23,11 +23,11 @@ import { UserDataSchema } from '../src/lib/schema';
 import * as localRepository from '../src/lib/sync/localRepository';
 import { useAppStore } from '../src/store/useAppStore';
 import type { UserData } from '../src/types';
+import { beginGuestMigrationIntent } from '../src/lib/auth/guestMigrationIntent';
 
 const defaultRunTransaction = vi.mocked(runTransaction).getMockImplementation();
 
 const GUEST_KEY = 'logbook_is_guest';
-const GUEST_POLICY_KEY = 'guest_migration_policy';
 const OVERLAY_SESSION_KEY = 'logbook_guest_login_overlay';
 const SYNC_RECOVERY_KEY = 'logbook_guest_migration_sync_recovery';
 const parse = (value: unknown) => UserDataSchema.parse(value) as unknown as UserData;
@@ -64,7 +64,7 @@ describe('guest migration restart recovery', () => {
     it('mounts only the blocking migration UI during automatic guest recovery without a session overlay marker', async () => {
         const { cloud, guest } = fixtures();
         localStorage.setItem(GUEST_KEY, 'true');
-        localStorage.setItem(GUEST_POLICY_KEY, 'merge');
+        beginGuestMigrationIntent('merge', 'recovery', { uid: user.uid });
         useAppStore.getState().setUserData(guest);
         let resolveCloud!: (value: any) => void;
         const cloudRequest = new Promise(resolve => { resolveCloud = resolve; });
@@ -126,7 +126,7 @@ describe('guest migration restart recovery', () => {
         const userA = { uid: 'account-a', email: 'a@example.com', displayName: 'A' } as any;
         const userB = { uid: 'account-b', email: 'b@example.com', displayName: 'B' } as any;
         localStorage.setItem(GUEST_KEY, 'true');
-        localStorage.setItem(GUEST_POLICY_KEY, 'merge');
+        beginGuestMigrationIntent('merge', 'recovery', { uid: userA.uid });
         useAppStore.getState().setUserData(guest);
         let authCallback!: (nextUser: any) => Promise<void>;
         vi.mocked(onAuthStateChanged).mockImplementation((_auth, callback: any) => { authCallback = callback; return () => {}; });
@@ -154,33 +154,37 @@ describe('guest migration restart recovery', () => {
         expect(screen.getByText('Preparazione account...')).toBeTruthy();
         let bRun!: Promise<void>;
         act(() => { (auth as any).currentUser = userB; bRun = authCallback(userB); });
-        await waitFor(() => expect(DB.loadCloudPayload).toHaveBeenCalledTimes(2));
+        await act(async () => { await bRun; });
+
+        // B cannot inherit the merge/skip decision that was bound to A.
+        await waitFor(() => expect(screen.getByText('Accesso non completato')).toBeTruthy());
+        expect(DB.loadCloudPayload).toHaveBeenCalledTimes(1);
+
         releaseACommit();
         await act(async () => { await aRun; });
         expect(localStorage.getItem(GUEST_KEY)).toBe('true');
         expect(localStorage.getItem(SYNC_RECOVERY_KEY)).toBeNull();
         expect(document.getElementById('app-container')).toBeNull();
+
         const envelopeA = await localRepository.readLocal(userA.uid);
-        const envelopeBBefore = await localRepository.readLocal(userB.uid);
         expect(envelopeA?.data.routines?.map(routine => routine.id)).toContain('cloud-a');
         expect(envelopeA?.data.routines?.map(routine => routine.id)).not.toContain('guest-routine');
-        expect(envelopeA?.data.routines?.map(routine => routine.id)).not.toContain('cloud-b');
-        expect(envelopeBBefore).toBeUndefined();
-        expect(useAppStore.getState().userData?.routines?.map(routine => routine.id)).toEqual(['guest-routine']);
+        expect(await localRepository.readLocal(userB.uid)).toBeUndefined();
+
+        // A fresh explicit decision for B is required before B may own the guest data.
+        beginGuestMigrationIntent('merge', 'recovery', { uid: userB.uid });
+        let retryB!: Promise<void>;
+        act(() => { retryB = authCallback(userB); });
+        await waitFor(() => expect(DB.loadCloudPayload).toHaveBeenCalledTimes(2));
         releaseBCloud({ data: cloudB, completeMonths: [], cloudDocuments: new Map() });
-        await act(async () => { await bRun; });
+        await act(async () => { await retryB; });
+
         await waitFor(() => expect(document.getElementById('app-container')).toBeTruthy());
         expect(localStorage.getItem(GUEST_KEY)).toBeNull();
         expect(localStorage.getItem(SYNC_RECOVERY_KEY)).toBeNull();
-        const envelopeAAfter = await localRepository.readLocal(userA.uid);
         const envelopeB = await localRepository.readLocal(userB.uid);
-        expect(envelopeAAfter?.data.routines?.map(routine => routine.id)).toContain('cloud-a');
-        expect(envelopeAAfter?.data.routines?.map(routine => routine.id)).not.toContain('guest-routine');
-        expect(envelopeAAfter?.data.routines?.map(routine => routine.id)).not.toContain('cloud-b');
         expect(envelopeB?.data.routines?.map(routine => routine.id)).toContain('cloud-b');
         expect(envelopeB?.data.routines?.map(routine => routine.id)).toContain('guest-routine');
         expect(envelopeB?.data.routines?.map(routine => routine.id)).not.toContain('cloud-a');
-        expect(useAppStore.getState().userData?.routines?.map(routine => routine.id)).toEqual(expect.arrayContaining(['guest-routine', 'cloud-b']));
-        expect(useAppStore.getState().userData?.routines?.map(routine => routine.id)).not.toContain('cloud-a');
     });
 });

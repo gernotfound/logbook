@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
     credential: vi.fn((email: string, password: string) => ({ email, password })),
     credentialReauth: vi.fn(),
     popupReauth: vi.fn(),
+    redirectReauth: vi.fn(),
 }));
 
 vi.mock('../firebase', () => ({
@@ -12,6 +13,7 @@ vi.mock('../firebase', () => ({
     provider: { providerId: 'google.com' },
     reauthenticateWithCredential: mocks.credentialReauth,
     reauthenticateWithPopup: mocks.popupReauth,
+    reauthenticateWithRedirect: mocks.redirectReauth,
 }));
 
 import { reauthenticateForSensitiveAction } from './recentAuth';
@@ -38,6 +40,15 @@ describe('reauthenticateForSensitiveAction', () => {
         const current = user(['google.com']);
         await expect(reauthenticateForSensitiveAction(current)).resolves.toBe('reauthenticated');
         expect(mocks.popupReauth).toHaveBeenCalledTimes(1);
+    });
+
+    it('falls back to redirect when Google popup reauthentication is blocked', async () => {
+        const current = user(['google.com']);
+        mocks.popupReauth.mockRejectedValueOnce(Object.assign(new Error('blocked'), { code: 'auth/popup-blocked' }));
+        mocks.redirectReauth.mockResolvedValueOnce(undefined);
+
+        await expect(reauthenticateForSensitiveAction(current)).resolves.toBe('redirect-started');
+        expect(mocks.redirectReauth).toHaveBeenCalledWith(current, expect.anything());
     });
 
     it('fails closed for unsupported provider sets', async () => {

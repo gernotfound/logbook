@@ -1,13 +1,15 @@
 import React from 'react';
 import { describe, test, expect, beforeEach, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import { AuthProvider } from '../src/contexts/AuthContext';
 import { useAuth } from '../src/hooks/useAuth';
 import { useAppStore } from '../src/store/useAppStore';
 import { DB } from '../src/lib/db';
+import { auth, onAuthStateChanged } from '../src/lib/firebase';
+import * as localRepository from '../src/lib/sync/localRepository';
 import type { UserData } from '../src/types';
 
-import { idbStore } from './setup';
+import { idbStore, localStorageMock } from './setup';
 
 const TestAuthConsumer = () => {
   const { currentUser, loading } = useAuth();
@@ -29,19 +31,136 @@ describe('PWA & iPhone Startup Resilience Tests', () => {
       window.__INITIAL_USER_DATA__ = null;
     }
     useAppStore.getState().resetStore();
+    (auth as any).currentUser = {
+      uid: 'test-user-id',
+      email: 'test@example.com',
+      emailVerified: true,
+      providerData: [{ providerId: 'password' }],
+      getIdToken: vi.fn().mockResolvedValue('test-token'),
+    };
     vi.clearAllMocks();
   });
 
-  test('Instant Auth State Transition: loading becomes READY immediately on auth state change', async () => {
+  test('auth becomes READY only after the authenticated owner has been hydrated', async () => {
     render(
       <AuthProvider>
         <TestAuthConsumer />
       </AuthProvider>
     );
 
-    // Initial state after onAuthStateChanged fired in setup mock
-    expect(screen.getByTestId('loading-state').textContent).toBe('READY');
+    await waitFor(() => expect(screen.getByTestId('loading-state').textContent).toBe('READY'));
     expect(screen.getByTestId('user-state').textContent).toBe('test@example.com');
+  });
+
+  test('fences the previous owner while a different authenticated owner is still hydrating', async () => {
+    const previousData = {
+      profile: { name: 'Account A' },
+      library: [],
+      routines: [],
+      history: [],
+      nutrition: {},
+      customFoods: [],
+      activeWorkout: null,
+      nutritionPlanning: {} as any,
+    } as UserData;
+    useAppStore.setState({ userData: previousData, dataOwner: 'user:account-a' });
+
+    const userB = {
+      uid: 'account-b',
+      email: 'b@example.com',
+      emailVerified: true,
+      providerData: [{ providerId: 'password' }],
+    } as any;
+    let authCallback!: (user: any) => Promise<void>;
+    vi.mocked(onAuthStateChanged).mockImplementationOnce((_auth, callback: any) => {
+      authCallback = callback;
+      return () => {};
+    });
+    (auth as any).currentUser = null;
+
+    const originalRead = localRepository.readLocal;
+    let releaseRead!: () => void;
+    const readGate = new Promise<void>(resolve => { releaseRead = resolve; });
+    vi.spyOn(localRepository, 'readLocal').mockImplementation(async owner => {
+      if (owner === 'user:account-b') {
+        await readGate;
+        return undefined;
+      }
+      return originalRead(owner);
+    });
+
+    render(
+      <AuthProvider>
+        <TestAuthConsumer />
+      </AuthProvider>
+    );
+
+    let authRun!: Promise<void>;
+    act(() => {
+      (auth as any).currentUser = userB;
+      authRun = authCallback(userB);
+    });
+
+    expect(screen.getByTestId('loading-state').textContent).toBe('LOADING');
+    expect(screen.getByTestId('user-state').textContent).toBe('b@example.com');
+    expect(screen.getByTestId('data-state').textContent).toBe('NO_DATA');
+    expect(useAppStore.getState().dataOwner).toBeNull();
+
+    releaseRead();
+    await act(async () => { await authRun; });
+    await waitFor(() => expect(screen.getByTestId('loading-state').textContent).toBe('READY'));
+    expect(useAppStore.getState().dataOwner).not.toBe('user:account-a');
+  });
+
+  test('fails closed if guest ownership storage becomes unreadable during an account transition', async () => {
+    const previousData = {
+      profile: { name: 'Account A' },
+      library: [],
+      routines: [],
+      history: [],
+      nutrition: {},
+      customFoods: [],
+      activeWorkout: null,
+      nutritionPlanning: {} as any,
+    } as UserData;
+    useAppStore.setState({ userData: previousData, dataOwner: 'user:account-a', localPersistenceBlocked: false });
+
+    let authCallback!: (user: any) => Promise<void>;
+    vi.mocked(onAuthStateChanged).mockImplementationOnce((_auth, callback: any) => {
+      authCallback = callback;
+      return () => {};
+    });
+    (auth as any).currentUser = null;
+
+    render(
+      <AuthProvider>
+        <TestAuthConsumer />
+      </AuthProvider>
+    );
+    await waitFor(() => expect(authCallback).toBeDefined());
+
+    localStorageMock.getItem.mockImplementationOnce((key: string) => {
+      if (key === 'logbook_is_guest') throw new DOMException('blocked', 'SecurityError');
+      return null;
+    });
+
+    const userB = {
+      uid: 'account-b',
+      email: 'b@example.com',
+      emailVerified: true,
+      providerData: [{ providerId: 'password' }],
+      getIdToken: vi.fn().mockResolvedValue('test-token'),
+    } as any;
+
+    await act(async () => {
+      (auth as any).currentUser = userB;
+      await authCallback(userB);
+    });
+
+    expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
+    expect(useAppStore.getState().userData).toBeNull();
+    expect(useAppStore.getState().dataOwner).toBeNull();
+    expect(useAppStore.getState().saveError).toContain('non può determinare in sicurezza');
   });
 
   test('IndexedDB Cache Snapshot: stores cached userData in IndexedDB for instant offline start', async () => {
@@ -97,8 +216,8 @@ describe('PWA & iPhone Startup Resilience Tests', () => {
       </AuthProvider>
     );
 
-    // App should still be in READY state without crashing
-    expect(screen.getByTestId('loading-state').textContent).toBe('READY');
+    // App should still become READY without crashing
+    await waitFor(() => expect(screen.getByTestId('loading-state').textContent).toBe('READY'));
 
     DB.loadUserData = originalLoad;
   });

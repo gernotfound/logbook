@@ -4,9 +4,10 @@ import {
     provider,
     reauthenticateWithCredential,
     reauthenticateWithPopup,
+    reauthenticateWithRedirect,
 } from '../firebase';
 
-export type SensitiveReauthResult = 'reauthenticated' | 'password-required' | 'unsupported';
+export type SensitiveReauthResult = 'reauthenticated' | 'redirect-started' | 'password-required' | 'unsupported';
 
 export async function reauthenticateForSensitiveAction(
     user: User,
@@ -21,8 +22,17 @@ export async function reauthenticateForSensitiveAction(
     }
 
     if (providerIds.has('google.com')) {
-        await reauthenticateWithPopup(user, provider);
-        return 'reauthenticated';
+        try {
+            await reauthenticateWithPopup(user, provider);
+            return 'reauthenticated';
+        } catch (error) {
+            const code = (error as { code?: unknown } | null)?.code;
+            if (code === 'auth/popup-blocked' || code === 'auth/operation-not-supported-in-this-environment') {
+                await reauthenticateWithRedirect(user, provider);
+                return 'redirect-started';
+            }
+            throw error;
+        }
     }
 
     if (providerIds.has('password')) return 'password-required';

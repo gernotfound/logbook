@@ -2,10 +2,10 @@ import React, { useId, useRef, useState } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { sendPasswordResetEmail, auth } from '../../lib/firebase';
 import { useDialogStore } from '../../store/useDialogStore';
-import { writeBrowserValue } from '../../lib/sync/browserStorage';
 import { Eye, EyeOff } from 'lucide-react';
 import { useModalFocusTrap } from '../../hooks/useModalFocusTrap';
-import { checkPasswordStrength } from '../../lib/auth/passwordPolicy';
+import { validatePasswordAgainstPolicy } from '../../lib/auth/passwordPolicy';
+import { BrowserStorageError } from '../../lib/sync/browserStorage';
 
 interface LoginBoxProps {
     onCancel?: () => void;
@@ -33,15 +33,15 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
     });
 
     const handleAuthAction = async (action: () => Promise<void>) => {
-        if (isGuest) {
-            try {
-                writeBrowserValue('guest_migration_policy', migrationPolicy);
-            } catch {
+        try {
+            await action();
+        } catch (error) {
+            if (isGuest && (error instanceof BrowserStorageError || (error instanceof Error && error.message.includes('trasferimento guest')))) {
                 await showAlert('Impossibile salvare la scelta di trasferimento sul dispositivo. Libera spazio o abilita l’archivio del browser e riprova.');
                 return;
             }
+            throw error;
         }
-        await action();
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -49,20 +49,20 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
         setLoading(true);
         try {
             if (mode === 'login') {
-                await handleAuthAction(() => loginWithEmail(email, password));
+                await handleAuthAction(() => loginWithEmail(email, password, isGuest ? migrationPolicy : undefined));
             } else if (mode === 'register') {
                 if (password !== confirmPassword) {
                     await showAlert("Le password non coincidono.");
                     setLoading(false);
                     return;
                 }
-                const weakError = checkPasswordStrength(password);
+                const weakError = await validatePasswordAgainstPolicy(password);
                 if (weakError) {
                     await showAlert(weakError);
                     setLoading(false);
                     return;
                 }
-                await handleAuthAction(() => registerWithEmail(email, password));
+                await handleAuthAction(() => registerWithEmail(email, password, isGuest ? migrationPolicy : undefined));
             } else if (mode === 'forgot') {
                 if (!email) {
                     await showAlert("Inserisci la tua email.");
@@ -148,7 +148,7 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
                         <input
                             type={showPassword ? "text" : "password"}
                             aria-label="Password"
-                            placeholder={mode === 'register' ? 'Password (min 8 car, A-a, num, spec)' : 'Password'}
+                            placeholder={mode === 'register' ? 'Scegli una password sicura' : 'Password'}
                             value={password}
                             onChange={e => setPassword(e.target.value)}
                             required
@@ -206,7 +206,7 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
                 <div className="ui-login-box-17" style={{ flex: 1, height: "1px" }} />
             </div>
 
-            <button id="btn-login-google" type="button" className="btn ui-login-box-18" style={{ padding: "0.75rem", width: "100%", marginBottom: "0.9375rem" }} onClick={() => handleAuthAction(isGuest ? linkGoogleAccount : login)}>
+            <button id="btn-login-google" type="button" className="btn ui-login-box-18" style={{ padding: "0.75rem", width: "100%", marginBottom: "0.9375rem" }} onClick={() => handleAuthAction(() => isGuest ? linkGoogleAccount(migrationPolicy) : login())}>
                 <svg style={{ width: "1.25rem", height: "1.25rem", marginRight: "0.625rem", fill: "currentColor", verticalAlign: "middle" }} viewBox="0 0 24 24">
                     <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
                     <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>

@@ -2,14 +2,16 @@ import { useState, useMemo } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { useSettings } from '../../hooks/useSettings';
 import { useDialogStore } from '../../store/useDialogStore';
-import { provider, linkWithPopup, linkWithCredential, updateEmail, updatePassword, EmailAuthProvider } from '../../lib/firebase';
+import { provider, linkWithPopup, linkWithRedirect, updatePassword } from '../../lib/firebase';
 import { isSensitiveReauthCancellation, reauthenticateForSensitiveAction } from '../../lib/auth/recentAuth';
 import { safeHardReload } from '../../lib/sync/safeReload';
 import { Eye, EyeOff } from 'lucide-react';
-import { checkPasswordStrength } from '../../lib/auth/passwordPolicy';
+import { validatePasswordAgainstPolicy } from '../../lib/auth/passwordPolicy';
+import { linkEmailPasswordWithEnumerationProtection, requestVerifiedEmailChange } from '../../lib/auth/accountEmail';
+import { classifyGooglePopupFailure } from '../../contexts/auth/googlePopup';
 
 export const AccountCard = () => {
-    const { currentUser, isGuest, linkGoogleAccount, registerWithEmail } = useAuth();
+    const { currentUser, isGuest, emailVerificationRequired, resendEmailVerification, refreshEmailVerification, linkGoogleAccount, registerWithEmail } = useAuth();
     const { handleLogout } = useSettings();
     const { showAlert } = useDialogStore();
 
@@ -50,6 +52,10 @@ export const AccountCard = () => {
                 hasPassword ? currentPasswordInput : undefined,
             );
             if (outcome === 'reauthenticated') return true;
+            if (outcome === 'redirect-started') {
+                await showAlert('Verifica Google avviata. Completa il passaggio con Google e poi ripeti l’operazione.');
+                return false;
+            }
             if (outcome === 'password-required') {
                 await showAlert("Inserisci la password attuale.");
                 return false;
@@ -75,16 +81,18 @@ export const AccountCard = () => {
         }
 
         try {
+            let shouldReload = true;
             if (showReauthModal === 'email') {
                 if (!newEmailInput || !newEmailInput.includes('@')) {
                     await showAlert("Email non valida.");
                     setLoadingAction(null);
                     return;
                 }
-                await updateEmail(currentUser, newEmailInput);
-                await showAlert("Email aggiornata con successo.");
+                await requestVerifiedEmailChange(currentUser, newEmailInput);
+                shouldReload = false;
+                await showAlert("Ti abbiamo inviato un link al nuovo indirizzo. L’email dell’account cambierà solo dopo la verifica.");
             } else if (showReauthModal === 'password' || showReauthModal === 'linkEmail') {
-                const weakError = checkPasswordStrength(newPasswordInput);
+                const weakError = await validatePasswordAgainstPolicy(newPasswordInput);
                 if (weakError) {
                     await showAlert(weakError);
                     setLoadingAction(null);
@@ -95,12 +103,16 @@ export const AccountCard = () => {
                     await updatePassword(currentUser, newPasswordInput);
                     await showAlert("Password aggiornata con successo.");
                 } else {
-                    const cred = EmailAuthProvider.credential(currentUser.email || '', newPasswordInput);
+                    if (!currentUser.email) {
+                        await showAlert("L’account non ha un indirizzo email utilizzabile.");
+                        setLoadingAction(null);
+                        return;
+                    }
                     try {
-                        await linkWithCredential(currentUser, cred);
+                        await linkEmailPasswordWithEnumerationProtection(currentUser, currentUser.email, newPasswordInput);
                         await showAlert("Email e password collegate con successo.");
                     } catch (linkError: any) {
-                        if (linkError.code === 'auth/credential-already-in-use') {
+                        if (linkError.code === 'auth/credential-already-in-use' || linkError.code === 'auth/email-already-in-use') {
                             await showAlert("Questa email è già associata a un altro account.");
                         } else {
                             throw linkError;
@@ -114,7 +126,7 @@ export const AccountCard = () => {
             setNewPasswordInput('');
             setShowCurrentPassword(false);
             setShowNewPassword(false);
-            await reloadAfterAccountChange();
+            if (shouldReload) await reloadAfterAccountChange();
         } catch (error: any) {
             console.error("Action error", error);
             await showAlert("Errore durante l'operazione: " + error.message);
@@ -127,13 +139,22 @@ export const AccountCard = () => {
         if (!currentUser) return;
         try {
             setLoadingAction('linkGoogle');
-            await linkWithPopup(currentUser, provider);
+            try {
+                await linkWithPopup(currentUser, provider);
+            } catch (error) {
+                const failure = classifyGooglePopupFailure(error);
+                if (failure === 'redirect') {
+                    await linkWithRedirect(currentUser, provider);
+                    return;
+                }
+                throw error;
+            }
             await showAlert("Account Google collegato con successo!");
             await reloadAfterAccountChange();
         } catch (error: any) {
             if (error.code === 'auth/credential-already-in-use') {
                 await showAlert("Questo account Google è già collegato a un altro utente.");
-            } else {
+            } else if (!isSensitiveReauthCancellation(error)) {
                 await showAlert("Errore durante il collegamento di Google.");
             }
         } finally {
@@ -142,7 +163,7 @@ export const AccountCard = () => {
     };
 
     const onGuestRegister = async () => {
-        const weakError = checkPasswordStrength(newPasswordInput);
+        const weakError = await validatePasswordAgainstPolicy(newPasswordInput);
         if (weakError) {
             await showAlert(weakError);
             return;
@@ -153,7 +174,7 @@ export const AccountCard = () => {
         }
         setLoadingAction('guestRegister');
         try {
-            await registerWithEmail(newEmailInput, newPasswordInput);
+            await registerWithEmail(newEmailInput, newPasswordInput, 'merge');
             // La migrazione avviene automaticamente in onAuthStateChanged. Un hard
             // reload è consentito solo dopo che la barriera ha verificato la copia locale.
             await reloadAfterAccountChange();
@@ -173,7 +194,7 @@ export const AccountCard = () => {
                     Stai usando TheLogBook senza un account. I tuoi dati sono salvati solo su questo dispositivo.
                 </p>
                 <div style={{ display: "flex", flexDirection: "column", gap: "0.625rem" }}>
-                    <button className="btn btn-primary" onClick={linkGoogleAccount}>
+                    <button className="btn btn-primary" onClick={() => { void linkGoogleAccount('merge'); }}>
                         Crea account con Google
                     </button>
                     <button className="btn ui-account-card-3"  onClick={() => setShowReauthModal('guestRegister')}>
@@ -229,6 +250,11 @@ export const AccountCard = () => {
                     <div>
                         <div style={{ fontWeight: "bold" }}>{currentUser.displayName || 'Utente TheLogBook'}</div>
                         <div className="ui-account-card-16" >{currentUser.email}</div>
+                        {emailVerificationRequired && (
+                            <div className="text-muted" style={{ marginTop: "0.25rem" }}>
+                                Email da verificare
+                            </div>
+                        )}
                     </div>
                 </div>
             )}
@@ -242,6 +268,51 @@ export const AccountCard = () => {
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: "0.625rem" }}>
+                {emailVerificationRequired && (
+                    <div className="ui-account-card-17" style={{ padding: "0.625rem", marginBottom: "0.3125rem" }}>
+                        <div style={{ marginBottom: "0.5rem" }}>
+                            Conferma l’indirizzo email tramite il link che ti abbiamo inviato.
+                        </div>
+                        <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                            <button
+                                className="btn"
+                                type="button"
+                                disabled={!!loadingAction}
+                                onClick={async () => {
+                                    setLoadingAction('verifyEmail');
+                                    try {
+                                        await refreshEmailVerification();
+                                    } catch (error: any) {
+                                        await showAlert(error?.message || 'Verifica email non riuscita.');
+                                    } finally {
+                                        setLoadingAction(null);
+                                    }
+                                }}
+                            >
+                                Ho verificato
+                            </button>
+                            <button
+                                className="btn"
+                                type="button"
+                                disabled={!!loadingAction}
+                                onClick={async () => {
+                                    setLoadingAction('verifyEmail');
+                                    try {
+                                        await resendEmailVerification();
+                                        await showAlert('Email di verifica inviata. Controlla anche la cartella spam.');
+                                    } catch (error: any) {
+                                        await showAlert(error?.message || 'Invio email non riuscito.');
+                                    } finally {
+                                        setLoadingAction(null);
+                                    }
+                                }}
+                            >
+                                Invia di nuovo
+                            </button>
+                        </div>
+                    </div>
+                )}
+
                 {hasPassword && (
                     <>
                         <button className="btn ui-account-card-21"  onClick={() => { setShowReauthModal('email'); setShowCurrentPassword(false); setShowNewPassword(false); }}>Cambia Indirizzo Email</button>
