@@ -9,7 +9,7 @@ import { auth, onAuthStateChanged } from '../src/lib/firebase';
 import * as localRepository from '../src/lib/sync/localRepository';
 import type { UserData } from '../src/types';
 
-import { idbStore } from './setup';
+import { idbStore, localStorageMock } from './setup';
 
 const TestAuthConsumer = () => {
   const { currentUser, loading } = useAuth();
@@ -110,6 +110,57 @@ describe('PWA & iPhone Startup Resilience Tests', () => {
     await act(async () => { await authRun; });
     await waitFor(() => expect(screen.getByTestId('loading-state').textContent).toBe('READY'));
     expect(useAppStore.getState().dataOwner).not.toBe('user:account-a');
+  });
+
+  test('fails closed if guest ownership storage becomes unreadable during an account transition', async () => {
+    const previousData = {
+      profile: { name: 'Account A' },
+      library: [],
+      routines: [],
+      history: [],
+      nutrition: {},
+      customFoods: [],
+      activeWorkout: null,
+      nutritionPlanning: {} as any,
+    } as UserData;
+    useAppStore.setState({ userData: previousData, dataOwner: 'user:account-a', localPersistenceBlocked: false });
+
+    let authCallback!: (user: any) => Promise<void>;
+    vi.mocked(onAuthStateChanged).mockImplementationOnce((_auth, callback: any) => {
+      authCallback = callback;
+      return () => {};
+    });
+    (auth as any).currentUser = null;
+
+    render(
+      <AuthProvider>
+        <TestAuthConsumer />
+      </AuthProvider>
+    );
+    await waitFor(() => expect(authCallback).toBeDefined());
+
+    localStorageMock.getItem.mockImplementation((key: string) => {
+      if (key === 'logbook_is_guest') throw new DOMException('blocked', 'SecurityError');
+      return null;
+    });
+
+    const userB = {
+      uid: 'account-b',
+      email: 'b@example.com',
+      emailVerified: true,
+      providerData: [{ providerId: 'password' }],
+      getIdToken: vi.fn().mockResolvedValue('test-token'),
+    } as any;
+
+    await act(async () => {
+      (auth as any).currentUser = userB;
+      await authCallback(userB);
+    });
+
+    expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
+    expect(useAppStore.getState().userData).toBeNull();
+    expect(useAppStore.getState().dataOwner).toBeNull();
+    expect(useAppStore.getState().saveError).toContain('non può determinare in sicurezza');
   });
 
   test('IndexedDB Cache Snapshot: stores cached userData in IndexedDB for instant offline start', async () => {
