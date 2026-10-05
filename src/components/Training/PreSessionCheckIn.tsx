@@ -85,12 +85,23 @@ export default function PreSessionCheckIn({ workoutId, routineName, date, onStar
     }, [persistDraft]);
 
     const setMetric = (key: ReadinessKey, value: number) => {
-        setValues(current => {
-            const next = { ...current, [key]: current[key] === value ? undefined : value };
-            valuesRef.current = next;
-            dirtyRef.current = true;
-            return next;
-        });
+        const current = valuesRef.current;
+        const next = { ...current, [key]: current[key] === value ? undefined : value };
+        try {
+            if (!isCurrentSession(session.current)) throw new Error('Sessione cambiata prima del salvataggio del check-in.');
+            writeDeviceValue(recoveryName.current, JSON.stringify(next), session.current.owner);
+        } catch (error) {
+            useAppStore.setState({
+                localPersistenceBlocked: true,
+                syncHealth: 'failed',
+                saveError: 'Impossibile salvare il check-in su questo dispositivo. Riprova dopo aver ripristinato l’archivio del browser.',
+            });
+            console.error('Persistenza check-in fallita:', error);
+            return;
+        }
+        valuesRef.current = next;
+        dirtyRef.current = true;
+        setValues(next);
     };
 
     const start = async (includeReadiness: boolean) => {
