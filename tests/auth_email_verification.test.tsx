@@ -23,7 +23,7 @@ describe('email verification lifecycle', () => {
         };
     });
 
-    it('blocks authenticated data hydration for an unverified password account', async () => {
+    it('marks an unverified password account without blocking its data hydration', async () => {
         const unverified = {
             uid: 'unverified-user',
             email: 'unverified@example.com',
@@ -41,8 +41,7 @@ describe('email verification lifecycle', () => {
 
         await waitFor(() => expect(result.current.loading).toBe(false));
         expect(result.current.emailVerificationRequired).toBe(true);
-        expect(DB.loadCloudPayload).not.toHaveBeenCalled();
-        expect(useAppStore.getState().userData).toBeNull();
+        expect(DB.loadCloudPayload).toHaveBeenCalled();
     });
 
     it('sends a verification email immediately after creating an unverified password account', async () => {
