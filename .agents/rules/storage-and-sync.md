@@ -97,8 +97,14 @@ La pipeline V4 mantiene debounce e protocollo causale delle milestone precedenti
 2. Il reducer puro calcola il nuovo `UserData`; `commitDomainOperations()` compila soltanto lo scope dichiarato in `SemanticOperation` e persiste business state + journal nello stesso update IndexedDB.
 3. `documentProjection.ts` proietta `UserData` in root + shard mensili; `semanticProjection.ts` è la fonte di merge policy, Vector Clock, tombstone, `$order` e active-workout guard.
 4. `transactionWriter.ts` legge i documenti Firestore toccati, normalizza data schema + sync protocol, valida `_sync`, confronta `FieldStamp` remoto e operation locale, quindi esegue al massimo una write per documento toccato.
-5. `replicateJournal.ts` drena lo stesso journal Envelope V5 verso Firestore. In assenza di rete o dopo timeout sicuro, le operation restano durevoli nel journal.
+5. `replicateJournal.ts` drena lo stesso journal Envelope V5 verso Firestore in gruppi causali completi e bounded. In assenza di rete o dopo timeout sicuro, le operation restano durevoli nel journal.
 6. `hydrateLocal()` assorbe il causal context remoto senza modificare gli stamp delle pending già esistenti e riproduce il journal localmente.
+
+**MUST:** una singola transazione sync può toccare al massimo 8 documenti business oltre a `sync_control/state`. Il limite è intenzionalmente conservativo rispetto al tetto Firestore di 10 MiB e al guardrail per-documento da 950.000 byte.
+
+**MUST:** il limite non si applica facendo slice arbitrari delle operation. Tutte le operation dello stesso documento restano nello stesso gruppo; se una mutazione bulk tocca più di 8 documenti, `commitLocal` / `commitDomainOperations` assegnano sequence causali successive e `replicateJournal` consegna e acknowledge una sequence completa per volta.
+
+**MUST:** journal locali creati da build precedenti con una singola sequence troppo ampia vengono resequenziati atomicamente in IndexedDB prima della prima consegna. Una sequence non può essere consegnata parzialmente con lo stesso numero causale.
 
 
 ### Sync Protocol 3 — causal core e replica fencing
