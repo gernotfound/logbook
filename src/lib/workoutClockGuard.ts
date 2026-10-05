@@ -90,8 +90,8 @@ export function assertWorkoutClockHealthy(
     startTime: number,
     endTime: number,
 ): void {
-    const state = guards.get(workoutId);
-    if (endTime + CLOCK_JUMP_TOLERANCE_MS < startTime || state?.anomalous) {
+    const sampled = sampleWorkoutClock(workoutId, startTime, endTime, monotonicNow());
+    if (endTime + CLOCK_JUMP_TOLERANCE_MS < startTime || sampled.anomalous) {
         throw new WorkoutClockAnomalyError();
     }
 }
