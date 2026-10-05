@@ -1,5 +1,10 @@
 import { readFileSync } from 'node:fs';
-import { classifyFieldOverride, progressSummary } from './firestore-production-state.mjs';
+import {
+  classifyFieldOverride,
+  FIELD_OVERRIDE_LIST_FILTER,
+  fieldOverrideListParent,
+  progressSummary,
+} from './firestore-production-state.mjs';
 
 const mode = process.argv[2] ?? 'verify';
 const projectId = process.env.FIREBASE_PROJECT_ID;
@@ -91,9 +96,9 @@ const loadLiveFieldOverrides = async () => {
     // Match firebase-tools' own readback boundary: collectionGroups/- lists explicit
     // field overrides across the database. Per-collection ListFields can omit the
     // special "*" collection-level exemption even though the override exists.
-    const parent = `projects/${projectId}/databases/(default)/collectionGroups/-`;
+    const parent = fieldOverrideListParent(projectId);
     const url = new URL(`https://firestore.googleapis.com/v1/${parent}/fields`);
-    url.searchParams.set('filter', 'indexConfig.usesAncestorConfig=false OR ttlConfig:*');
+    url.searchParams.set('filter', FIELD_OVERRIDE_LIST_FILTER);
     if (pageToken) url.searchParams.set('pageToken', pageToken);
 
     const payload = await requestJson(url.toString());
