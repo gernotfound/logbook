@@ -175,6 +175,10 @@ export function useSettings() {
                 reauth = await reauthenticateForSensitiveAction(user, password);
             }
             assertCurrent();
+            if (reauth === 'redirect-started') {
+                await showAlert('Verifica Google avviata. Completa il passaggio con Google e poi ripeti la cancellazione account.');
+                return;
+            }
             if (reauth !== 'reauthenticated') {
                 throw new Error('Nessun metodo di autenticazione disponibile per confermare la cancellazione.');
             }
