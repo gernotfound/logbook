@@ -312,21 +312,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             if (user) {
                 const wasGuest = isGuestRef.current || isStoredGuest();
                 const hasPasswordProvider = (user.providerData ?? []).some((item: { providerId?: string }) => item.providerId === 'password');
-                if (hasPasswordProvider && user.emailVerified === false) {
-                    if (wasGuest) {
-                        try {
-                            bindGuestMigrationIntentToUser(user);
-                        } catch (error) {
-                            console.error('Intento migrazione guest non determinabile durante verifica email:', error);
-                            setGuestMigrationStatus('failed');
-                            setSaveError('La scelta di trasferimento non è più valida. Dopo aver verificato l’email, avvia di nuovo l’accesso dalla modalità locale.');
-                        }
-                    }
-                    setEmailVerificationRequired(true);
-                    setLoading(false);
-                    return;
-                }
-                setEmailVerificationRequired(false);
+                setEmailVerificationRequired(hasPasswordProvider && user.emailVerified === false);
                 const recoveryUid = readGuestMigrationSyncRecovery();
 
                 if (recoveryUid === user.uid) {
@@ -468,6 +454,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                     console.error("Errore login redirect", redirectError);
                     setSaveError("Accesso fallito. Riprova.");
                 }
+            } else if (failure === 'cancelled') {
+                try { clearGuestMigrationIntent(); } catch { /* best effort: no successful auth occurred */ }
             } else if (failure === 'network') {
                 try { clearGuestMigrationIntent(); } catch { /* best effort: no successful auth occurred */ }
                 setSaveError("Connessione non disponibile. Riprova quando sei online.");
@@ -556,13 +544,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const user = auth.currentUser;
         if (!user) throw new Error('Sessione non disponibile.');
         await reload(user);
-        if (!user.emailVerified) {
-            setSaveError('Email non ancora verificata. Apri il link ricevuto e riprova.');
-            return;
-        }
-        setEmailVerificationRequired(false);
-        setSaveError(null);
-        await safeHardReload();
+        const pending = user.emailVerified === false;
+        setEmailVerificationRequired(pending);
+        setSaveError(
+            pending
+                ? 'Email non ancora verificata. Apri il link ricevuto e riprova.'
+                : 'Email verificata correttamente.'
+        );
     }, [setSaveError]);
 
     // Accesso guest: solo localStorage, zero Firebase
@@ -621,6 +609,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                     console.error("Errore collegamento redirect:", redirectError);
                     setSaveError("Accesso fallito. Riprova.");
                 }
+                return;
+            }
+            if (failure === 'cancelled') {
+                try { clearGuestMigrationIntent(); } catch { /* best effort */ }
                 return;
             }
             if (failure === 'network') {
