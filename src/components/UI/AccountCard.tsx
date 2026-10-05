@@ -243,6 +243,11 @@ export const AccountCard = () => {
                     <div>
                         <div style={{ fontWeight: "bold" }}>{currentUser.displayName || 'Utente TheLogBook'}</div>
                         <div className="ui-account-card-16" >{currentUser.email}</div>
+                        {hasPassword && currentUser.email && (
+                            <div className="text-muted" style={{ fontSize: '0.85rem' }}>
+                                {currentUser.emailVerified ? 'Email verificata' : 'Email da verificare'}
+                            </div>
+                        )}
                     </div>
                 </div>
             )}
@@ -256,6 +261,12 @@ export const AccountCard = () => {
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: "0.625rem" }}>
+                {hasPassword && currentUser && !currentUser.emailVerified && (
+                    <button className="btn" onClick={() => void resendVerification()} disabled={loadingAction === 'verifyEmail'}>
+                        {loadingAction === 'verifyEmail' ? 'Invio...' : 'Invia di nuovo email di verifica'}
+                    </button>
+                )}
+
                 {hasPassword && (
                     <>
                         <button className="btn ui-account-card-21"  onClick={() => { setShowReauthModal('email'); setShowCurrentPassword(false); setShowNewPassword(false); }}>Cambia Indirizzo Email</button>
