@@ -102,7 +102,7 @@ La pipeline V4 mantiene debounce e protocollo causale delle milestone precedenti
 
 **MUST:** una singola transazione sync può toccare al massimo 8 documenti business oltre a `sync_control/state`. Il limite è intenzionalmente conservativo rispetto al tetto Firestore di 10 MiB e al guardrail per-documento da 950.000 byte.
 
-**MUST:** il limite non si applica facendo slice arbitrari delle operation. Tutte le operation dello stesso documento restano nello stesso gruppo; se una mutazione bulk tocca più di 8 documenti, `commitLocal` / `commitDomainOperations` assegnano sequence causali successive e `replicateJournal` consegna e acknowledge una sequence completa per volta.
+**MUST:** il limite non si applica facendo slice arbitrari delle operation. Tutte le operation dello stesso documento restano nello stesso gruppo; se una mutazione bulk tocca più di 8 documenti, `commitLocal` / `commitDomainOperations` assegnano sequence causali successive. `replicateJournal` può coalescere più sequence complete nella stessa transazione finché l’unione resta entro 8 documenti, poi acknowledge fino all’ultima sequence effettivamente consegnata.
 
 **MUST:** journal locali creati da build precedenti con una singola sequence troppo ampia vengono resequenziati atomicamente in IndexedDB prima della prima consegna. Una sequence non può essere consegnata parzialmente con lo stesso numero causale.
 
