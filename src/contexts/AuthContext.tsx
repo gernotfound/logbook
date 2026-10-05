@@ -161,7 +161,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             });
             await drainCheckpointedJournal();
         }
-    }, [setSyncing, setUserData, setSaveError]);
+    }, [isGuestActiveStrict, setSyncing, setUserData, setSaveError]);
 
     useEffect(() => {
         if (!currentUser) return;
@@ -301,6 +301,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const unsubscribe = onAuthStateChanged(auth, async (user: any) => {
             if (!isMounted) return;
 
+            try {
             const nextUid = user?.uid ?? null;
             const previousUid = authUidRef.current;
             authUidRef.current = nextUid;
@@ -431,6 +432,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 }
                 if (isCurrentRun()) setLoading(false);
             }
+            } catch (error) {
+                if (error instanceof BrowserStorageError) return;
+                throw error;
+            }
         });
 
         let isReloading = false;
@@ -465,7 +470,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             document.removeEventListener('visibilitychange', handleVisibilityChange);
             window.removeEventListener('online', handleVisibilityChange);
         };
-    }, [loadData, setSyncing, setUserData, setSaveError]);
+    }, [isGuestActiveStrict, loadData, readGuestMigrationRecoveryStrict, setSyncing, setUserData, setSaveError]);
 
     // Login con Google (dalla schermata di login, nessun guest precedente)
     const login = useCallback(async (guestPolicy?: GuestMigrationPolicy) => {
@@ -496,7 +501,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 setSaveError("Errore di accesso: " + error.message);
             }
         }
-    }, [setSaveError, startGoogleRedirect]);
+    }, [isGuestActiveStrict, setSaveError, startGoogleRedirect]);
 
     const handleAuthError = useCallback((error: any) => {
         let msg = "Errore di autenticazione.";
@@ -527,7 +532,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             try { clearGuestMigrationIntent(); } catch { /* best effort */ }
             handleAuthError(error);
         }
-    }, [handleAuthError, setSaveError]);
+    }, [handleAuthError, isGuestActiveStrict, setSaveError]);
 
     const registerWithEmail = useCallback(async (email: string, pass: string, guestPolicy?: GuestMigrationPolicy) => {
         setSaveError(null);
@@ -562,7 +567,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 setSaveError('Account creato, ma non è stato possibile inviare la verifica email. Usa “Invia di nuovo” e riprova.');
             }
         }
-    }, [handleAuthError, setSaveError]);
+    }, [handleAuthError, isGuestActiveStrict, setSaveError]);
 
     const resendEmailVerification = useCallback(async () => {
         const user = auth.currentUser;
@@ -657,7 +662,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 setSaveError("Collegamento fallito. Riprova.");
             }
         }
-    }, [setSaveError, startGoogleRedirect]);
+    }, [isGuestActiveStrict, setSaveError, startGoogleRedirect]);
 
     const retryGuestMigration = useCallback(async (policy?: GuestMigrationPolicy) => {
         setSaveError(null);
@@ -719,7 +724,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         } finally {
             if (isCurrentRetry()) setSyncing(false);
         }
-    }, [setSaveError, setSyncing]);
+    }, [isGuestActiveStrict, setSaveError, setSyncing]);
 
     const logoutInFlightRef = useRef(false);
     const LOGOUT_SYNC_CHECK_TIMEOUT_MS = 5000;
