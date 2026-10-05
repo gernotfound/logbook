@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo, ReactNode } from 'react';
 import { User } from 'firebase/auth';
-import { auth, getDb, waitForPendingWrites, provider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword } from '../lib/firebase';
+import { auth, getDb, waitForPendingWrites, provider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendEmailVerification } from '../lib/firebase';
 import { DB } from '../lib/db';
 import { useAppStore } from '../store/useAppStore';
 import { UserData } from '../types';
@@ -521,7 +521,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         if (guestAttempt) writeGuestMigrationPolicyStrict(guestPolicy);
         migrationDataRef.current = useAppStore.getState().userData;
         try {
-            await createUserWithEmailAndPassword(auth, email, pass);
+            const credential = await createUserWithEmailAndPassword(auth, email, pass);
+            try {
+                await sendEmailVerification(credential.user);
+            } catch (verificationError) {
+                console.error('Invio verifica email non riuscito dopo la creazione account:', verificationError);
+                setSaveError('Account creato, ma l’email di verifica non è stata inviata. Puoi richiederne una nuova dalle impostazioni account.');
+            }
         } catch (error) {
             if (guestAttempt) clearGuestMigrationPolicy();
             handleAuthError(error);
