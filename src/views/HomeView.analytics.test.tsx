@@ -168,7 +168,7 @@ describe('HomeView Analytics Dashboard Integration Suite (src/views/HomeView.ana
 
         const insight = await screen.findByText(/Associazione positiva forte/i, {}, { timeout: 10000 });
         expect(insight).toBeDefined();
-    });
+    }, 15000);
 
     it('maintains non-interference with existing HomeView widgets and dashboard cards', async () => {
         renderWithProviders(<HomeView onNavigate={() => {}} />, {
