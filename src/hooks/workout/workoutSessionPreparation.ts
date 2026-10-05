@@ -1,5 +1,6 @@
 import { Logic } from '../../lib/logic';
 import type { UserData, WorkoutRoutine, WorkoutSession } from '../../types';
+import { assertWorkoutClockHealthy } from '../../lib/workoutClockGuard';
 
 export interface WorkoutCycleInfo {
     cycleId?: string;
@@ -278,6 +279,9 @@ export function prepareCompletedWorkout(
         ratingScale,
     );
     const startTime = normalizedWorkout.globalStartTime || endTime;
+    if (normalizedWorkout.globalStartTime && normalizedWorkout.id) {
+        assertWorkoutClockHealthy(String(normalizedWorkout.id), normalizedWorkout.globalStartTime, endTime);
+    }
     const diff = Math.max(0, Math.floor((endTime - startTime) / 1000));
     const durationStr = Logic.formatDuration(diff);
     const sessionPains = Array.isArray(normalizedWorkout.pains) ? normalizedWorkout.pains : [];
