@@ -91,14 +91,15 @@ async function drain(session: ReturnType<typeof captureSession>, deliveryState: 
         if (!envelope) throw new Error('Archivio locale non disponibile');
         if (!envelope.pending?.length) return;
         if (!envelope.replica) throw new ReplicaFencedError('Replica non registrata: attendi il checkpoint cloud completo.');
-        if (envelope.actorId !== envelope.replica.slot || envelope.pending.some(operation => operation.actorId !== envelope.replica!.slot)) {
+        const replica = envelope.replica;
+        if (envelope.actorId !== replica.slot || envelope.pending.some(operation => operation.actorId !== replica.slot)) {
             throw new ReplicaFencedError('Journal appartenente a una replica precedente: checkpoint completo richiesto.');
         }
-        if (envelope.replica.leaseUntilMs < Date.now()) {
+        if (replica.leaseUntilMs < Date.now()) {
             throw new ReplicaFencedError('Lease replica scaduta: checkpoint completo richiesto.');
         }
 
-        envelope = await ensureBoundedPendingSequences(session.owner, envelope.replica.slot);
+        envelope = await ensureBoundedPendingSequences(session.owner, replica.slot);
         if (!current()) throw new Error('Sessione cambiata');
         if (!envelope) throw new Error('Archivio locale non disponibile');
         if (!envelope.pending?.length) return;
