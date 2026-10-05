@@ -1,4 +1,4 @@
-import { readDeviceValue, writeDeviceValue } from '../sync/deviceStorage';
+import { readDeviceValueStrict, writeDeviceValue } from '../sync/deviceStorage';
 import { storageOwner } from '../sync/session';
 
 export type WorkoutTimerState = 'stopped' | 'running' | 'paused';
@@ -53,18 +53,31 @@ function purgeObsoleteTimerValues(owner: string): void {
     }
 }
 
+export class WorkoutTimerStorageCorruptError extends Error {
+    readonly code = 'workout-timer-storage-corrupt';
+
+    constructor(message = 'Snapshot timer locale non leggibile.') {
+        super(message);
+        this.name = 'WorkoutTimerStorageCorruptError';
+    }
+}
+
 export function readWorkoutTimerSnapshot(owner = storageOwner()): WorkoutTimerSnapshot {
-    const raw = readDeviceValue(TIMER_STORAGE_KEY, owner);
+    const raw = readDeviceValueStrict(TIMER_STORAGE_KEY, owner);
     if (raw === null) return stoppedWorkoutTimer();
 
+    let parsed: unknown;
     try {
-        const parsed = normalizeTimerSnapshot(JSON.parse(raw));
-        if (parsed) return parsed;
-        console.warn('Snapshot timer non valido. Il timer viene ripristinato in stato fermo.');
+        parsed = JSON.parse(raw);
     } catch (error) {
-        console.warn('Snapshot timer non leggibile. Il timer viene ripristinato in stato fermo:', error);
+        throw new WorkoutTimerStorageCorruptError(
+            error instanceof Error ? `Snapshot timer locale corrotto: ${error.message}` : undefined,
+        );
     }
-    return stoppedWorkoutTimer();
+
+    const normalized = normalizeTimerSnapshot(parsed);
+    if (!normalized) throw new WorkoutTimerStorageCorruptError('Snapshot timer locale non valido.');
+    return normalized;
 }
 
 export function writeWorkoutTimerSnapshot(snapshot: WorkoutTimerSnapshot, owner = storageOwner()): void {
