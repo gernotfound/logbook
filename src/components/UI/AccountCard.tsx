@@ -84,7 +84,7 @@ export const AccountCard = () => {
                 await verifyBeforeUpdateEmail(currentUser, newEmailInput);
                 await showAlert("Verifica il nuovo indirizzo tramite il link che Firebase ti ha inviato. L’email cambierà solo dopo la verifica.");
             } else if (showReauthModal === 'password' || showReauthModal === 'linkEmail') {
-                const weakError = checkPasswordStrength(newPasswordInput);
+                const weakError = await validatePasswordAgainstFirebase(newPasswordInput);
                 if (weakError) {
                     await showAlert(weakError);
                     setLoadingAction(null);
