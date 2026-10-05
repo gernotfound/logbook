@@ -20,7 +20,7 @@ vi.mock('../../src/lib/firebase', () => ({
 vi.mock('../../src/lib/appCheck', () => ({ getLimitedUseAppCheckToken: boundary.appCheck }));
 vi.mock('../../src/lib/sync/replicateJournal', () => ({ waitForJournalIdle: vi.fn() }));
 
-import { finalizeCompletedDeletionForUid, resumeAccountDeletion } from '../../src/lib/db/db_account';
+import { AccountDeletionReceiptNotFoundError, finalizeCompletedDeletionForUid, resumeAccountDeletion } from '../../src/lib/db/db_account';
 import { isAccountDeletionPending, markAccountDeletion } from '../../src/lib/sync/accountGate';
 
 let disk: Map<string, string>;
@@ -55,6 +55,21 @@ beforeEach(() => {
 });
 
 afterEach(() => { vi.unstubAllGlobals(); });
+
+it('classifies a missing receipt status as device-recovery eligible without purging local data', async () => {
+    boundary.auth.currentUser = null;
+    boundary.fetch.mockResolvedValueOnce(new Response(JSON.stringify({ error: 'Cancellazione non trovata.' }), {
+        status: 404,
+        headers: { 'content-type': 'application/json' },
+    }));
+
+    await expect(resumeAccountDeletion(context)).rejects.toBeInstanceOf(AccountDeletionReceiptNotFoundError);
+
+    expect(boundary.purge).not.toHaveBeenCalled();
+    expect(boundary.resetCache).not.toHaveBeenCalled();
+    expect(boundary.reset).not.toHaveBeenCalled();
+    expect(isAccountDeletionPending('user:a')).toBe(true);
+});
 
 it('does not sign out or purge account B when account A completes in background', async () => {
     boundary.auth.currentUser = { uid: 'b' };
