@@ -107,7 +107,12 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
 
     const clearPostSessionRecovery = useCallback(() => {
         if (!postSessionRecoveryName) return;
-        writeDeviceValue(postSessionRecoveryName, null, postSessionSessionRef.current.owner);
+        try {
+            writeDeviceValue(postSessionRecoveryName, null, postSessionSessionRef.current.owner);
+        } catch (error) {
+            console.warn('Workout salvato, ma la copia di recupero finale non è stata rimossa:', error);
+            useAppStore.getState().setSaveError('Workout salvato; impossibile rimuovere una copia di recupero locale obsoleta.');
+        }
     }, [postSessionRecoveryName]);
 
     useEffect(() => {
@@ -169,9 +174,13 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
             setPostSessionDraft(current);
         }
         const endTime = Date.now();
+        try {
+            persistPostSessionSnapshot(current, endTime);
+        } catch {
+            return;
+        }
         pendingEndTimeRef.current = endTime;
         setPendingEndTime(endTime);
-        persistPostSessionSnapshot(current, endTime);
     }, [activeWorkout, persistPostSessionSnapshot]);
 
     useEffect(() => {
@@ -197,7 +206,12 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
         );
 
         const finish = async () => {
-            draftRegistry.flushAll();
+            try {
+                draftRegistry.flushAll({ strict: true });
+            } catch (error) {
+                blockPostSessionPersistence(error);
+                return;
+            }
             const draft = postSessionDraftRef.current;
             if (!draft || draft.workoutId !== String(activeWorkout.id ?? '')) return;
             const completionDraft: WorkoutCompletionDraft = {
