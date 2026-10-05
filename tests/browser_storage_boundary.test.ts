@@ -6,7 +6,13 @@ import {
     writeBrowserJson,
     writeBrowserValue,
 } from '../src/lib/sync/browserStorage';
-import { isAccountDeletionPending, markAccountDeletion } from '../src/lib/sync/accountGate';
+import {
+    AccountDeletionMarkerCorruptError,
+    findPendingAccountDeletion,
+    isAccountDeletionPending,
+    markAccountDeletion,
+    readAccountDeletionMarker,
+} from '../src/lib/sync/accountGate';
 import { readDeviceValue, writeDeviceValue } from '../src/lib/sync/deviceStorage';
 import { removeDeletionRecoveryCredential } from '../src/lib/deletionDeviceRecovery';
 import { storageOwner } from '../src/lib/sync/session';
@@ -52,6 +58,23 @@ describe('browser storage boundary', () => {
         localStorageMock.getItem.mockImplementationOnce(storageFailure);
 
         expect(isAccountDeletionPending(OWNER)).toBe(true);
+    });
+
+    it('keeps a present but corrupt account-deletion marker fail-closed', () => {
+        localStorage.setItem('logbook:v2:' + OWNER + ':account-deletion', '{"startedAt":');
+
+        expect(isAccountDeletionPending(OWNER)).toBe(true);
+        expect(() => readAccountDeletionMarker(OWNER)).toThrow(AccountDeletionMarkerCorruptError);
+        expect(() => findPendingAccountDeletion()).toThrow(AccountDeletionMarkerCorruptError);
+    });
+
+    it('rejects an account-deletion marker whose UID does not match its owner key', () => {
+        localStorage.setItem('logbook:v2:' + OWNER + ':account-deletion', JSON.stringify({
+            uid: 'other-user',
+            startedAt: Date.now(),
+        }));
+
+        expect(() => readAccountDeletionMarker(OWNER)).toThrow(AccountDeletionMarkerCorruptError);
     });
 
     it('refuses to start account deletion when the durable local marker cannot be written', () => {
