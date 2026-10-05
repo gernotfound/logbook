@@ -1,6 +1,6 @@
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, renderHook, screen } from '@testing-library/react';
 import { useAppStore } from '../src/store/useAppStore';
 import { UserDataSchema } from '../src/lib/schema';
 import type { UserData, WorkoutSession } from '../src/types';
@@ -11,6 +11,7 @@ import { BrowserStorageError } from '../src/lib/sync/browserStorage';
 import { localStorageMock } from './setup';
 import { draftRegistry } from '../src/lib/utils/draftRegistry';
 import PreSessionCheckIn from '../src/components/Training/PreSessionCheckIn';
+import { useWorkoutSession } from '../src/hooks/useWorkoutSession';
 
 const parseUserData = (value: unknown): UserData => UserDataSchema.parse(value) as unknown as UserData;
 const OWNER = 'guest';
@@ -104,6 +105,33 @@ describe('Audit 18 device-critical persistence', () => {
         expect(() => readWorkoutTimerSnapshot(OWNER)).toThrow(BrowserStorageError);
         expect(localStorageMock.setItem).not.toHaveBeenCalled();
         expect(localStorageMock.removeItem).not.toHaveBeenCalled();
+    });
+
+    it('refuses to start a workout when the canonical timer snapshot cannot be written', async () => {
+        const pending = workout('w-start');
+        useAppStore.setState({
+            userData: parseUserData({ activeWorkout: pending }),
+            dataOwner: OWNER,
+            localWorkout: pending,
+            localPersistenceBlocked: false,
+            syncHealth: 'synced',
+            saveError: null,
+        });
+        const timerKey = deviceKey('timer', OWNER);
+        localStorageMock.setItem.mockImplementationOnce((writtenKey: string) => {
+            if (writtenKey === timerKey) throw new DOMException('full', 'QuotaExceededError');
+        });
+
+        const { result } = renderHook(() => useWorkoutSession());
+        let started = true;
+        await act(async () => {
+            started = await result.current.confirmWorkoutStart({ energy: 4 });
+        });
+
+        expect(started).toBe(false);
+        expect(useAppStore.getState().localWorkout?.globalStartTime).toBeUndefined();
+        expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
+        expect(useAppStore.getState().saveError).toContain('timer');
     });
 
     it('persists pre-session readiness synchronously on each edit', () => {
