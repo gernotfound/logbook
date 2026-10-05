@@ -17,6 +17,7 @@ import { mapFirebaseErrorCode } from '../lib/errorHandler';
 import type { WorkoutSession, WorkoutRoutine, Exercise, WorkoutReadiness } from '../types';
 import { auth } from '../lib/firebase';
 import { draftRegistry } from '../lib/utils/draftRegistry';
+import { isWorkoutClockAnomalyError, resetWorkoutClockGuard } from '../lib/workoutClockGuard';
 
 const EMPTY_ROUTINES: WorkoutRoutine[] = [];
 const EMPTY_LIBRARY: Exercise[] = [];
@@ -273,9 +274,16 @@ export function useWorkoutSession() {
             if (auth.currentUser?.uid !== expectedUid || useAppStore.getState().localWorkout?.id !== expectedId) return null;
             setLocalWorkout(null);
             resetGlobalWorkoutTimer();
+            resetWorkoutClockGuard(expectedId);
             return finishedWorkout;
-        } catch {
-            if (auth.currentUser?.uid === expectedUid) await showAlert("Errore durante il salvataggio della sessione.");
+        } catch (error) {
+            if (auth.currentUser?.uid === expectedUid) {
+                await showAlert(
+                    isWorkoutClockAnomalyError(error)
+                        ? 'L’orologio del dispositivo è cambiato durante l’allenamento. Correggi data e ora, riapri TheLogBook e poi termina la sessione.'
+                        : 'Errore durante il salvataggio della sessione.',
+                );
+            }
             return null;
         }
         } finally {
@@ -289,6 +297,8 @@ export function useWorkoutSession() {
             await dispatchDomainOperation({ type: 'active-workout.set', workout: null });
             setLocalWorkout(null);
             resetGlobalWorkoutTimer();
+            const deletedWorkoutId = useAppStore.getState().localWorkout?.id;
+            if (deletedWorkoutId) resetWorkoutClockGuard(String(deletedWorkoutId));
         } catch (err: any) {
             const formatted = mapFirebaseErrorCode(err);
             if (formatted.isOfflineSafe) {
