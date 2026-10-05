@@ -9,6 +9,7 @@ import { mergeUserData } from '../src/lib/merge';
 import { readLocal } from '../src/lib/sync/localRepository';
 import { useAppStore } from '../src/store/useAppStore';
 import type { UserData } from '../src/types';
+import { beginGuestMigrationIntent } from '../src/lib/auth/guestMigrationIntent';
 
 const parse = (value: unknown) => UserDataSchema.parse(value) as unknown as UserData;
 const user = { uid: 'a', email: 'a@example.com', displayName: 'A' } as any;
@@ -46,7 +47,7 @@ describe('guest -> account V3 migration', () => {
     it('stages SemanticOperations, drains the authenticated journal, and keeps cloud + guest data', async () => {
         const { cloud, guest, merged } = fixtures();
         localStorage.setItem('logbook_is_guest', 'true');
-        localStorage.setItem('guest_migration_policy', 'merge');
+        beginGuestMigrationIntent('merge', 'recovery', { uid: user.uid });
         useAppStore.getState().setUserData(guest);
 
         vi.mocked(DB.loadCloudPayload)
@@ -72,7 +73,7 @@ describe('guest -> account V3 migration', () => {
     it('keeps the merged authenticated envelope and pending journal if connectivity drops after hydration', async () => {
         const { cloud, guest } = fixtures();
         localStorage.setItem('logbook_is_guest', 'true');
-        localStorage.setItem('guest_migration_policy', 'merge');
+        beginGuestMigrationIntent('merge', 'recovery', { uid: user.uid });
         useAppStore.getState().setUserData(guest);
         onlineSpy = vi.spyOn(window.navigator, 'onLine', 'get').mockReturnValue(false);
 
