@@ -75,8 +75,8 @@ describe('Audit 18 device-critical persistence', () => {
     it('does not let a one-shot read failure replace a newer device workout with an older IndexedDB fallback', () => {
         const key = deviceKey('workout', OWNER);
         localStorage.setItem(key, JSON.stringify(workout('device-new', '10')));
+        localStorageMock.setItem.mockClear();
         const fallback = workout('envelope-old', '6');
-        const originalSetItem = localStorageMock.setItem.getMockImplementation();
 
         localStorageMock.getItem.mockImplementationOnce((readKey: string) => {
             if (readKey === key) throw new DOMException('blocked', 'SecurityError');
@@ -86,7 +86,6 @@ describe('Audit 18 device-critical persistence', () => {
         expect(() => getInitialLocalWorkout(OWNER, fallback)).toThrow(BrowserStorageError);
         expect(localStorageMock.setItem).not.toHaveBeenCalled();
 
-        if (originalSetItem) localStorageMock.setItem.mockImplementation(originalSetItem);
     });
 
     it('does not reinterpret an unreadable running timer as stopped', () => {
@@ -97,6 +96,8 @@ describe('Audit 18 device-critical persistence', () => {
             startTime: 1000,
             accumulated: 250,
         }));
+        localStorageMock.setItem.mockClear();
+        localStorageMock.removeItem.mockClear();
         localStorageMock.getItem.mockImplementationOnce((readKey: string) => {
             if (readKey === key) throw new DOMException('blocked', 'SecurityError');
             return null;
