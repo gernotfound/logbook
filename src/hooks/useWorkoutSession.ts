@@ -46,8 +46,11 @@ export function useWorkoutSession() {
             setLocalWorkout(workoutOrUpdater);
             return;
         }
-        // Input-level mutations remain non-blocking; syncHealth/saveError surface failures.
-        void setSyncedLocalWorkout(workoutOrUpdater).catch(() => {});
+        // Input-level mutations remain non-blocking, but device-critical failures
+        // are converted by the workout slice into a persistent fail-closed UI state.
+        void setSyncedLocalWorkout(workoutOrUpdater).catch(error => {
+            console.error('Mutazione workout non persistita sul dispositivo:', error);
+        });
     }, [setLocalWorkout, setSyncedLocalWorkout]);
     
     // Rating states derivati direttamente da activeWorkout per prevenire perdita di dati
