@@ -319,7 +319,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 const expectedOwner = userOwner(user.uid);
                 const current = useAppStore.getState();
                 const guestActiveBeforeAuth = isGuestActiveStrict();
-                if (current.userData && current.dataOwner !== expectedOwner && !guestActiveBeforeAuth) {
+                if (current.userData && current.dataOwner && current.dataOwner !== expectedOwner && !guestActiveBeforeAuth) {
                     useAppStore.setState({ userData: null, dataOwner: null, localWorkout: null });
                 }
                 try {
