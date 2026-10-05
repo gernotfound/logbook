@@ -109,7 +109,6 @@ const loadActiveFirestoreOperations = async () => {
     const parent = `projects/${projectId}/databases/(default)`;
     const url = new URL(`https://firestore.googleapis.com/v1/${parent}/operations`);
     url.searchParams.set('filter', 'done:false');
-    url.searchParams.set('pageSize', '100');
     if (pageToken) url.searchParams.set('pageToken', pageToken);
 
     const payload = await requestJson(url.toString());
