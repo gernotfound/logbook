@@ -247,6 +247,20 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
         expect(useAppStore.getState().syncing).toBe(false);
     });
 
+    it('resetStore preserves memory state when the active deletion marker is corrupt', () => {
+        const owner = storageOwner();
+        localStorage.setItem(`logbook:v2:${owner}:account-deletion`, '{"startedAt":');
+        useAppStore.setState({
+            userData: { profile: { name: 'Preserve me' } } as any,
+            dataOwner: owner,
+        });
+
+        useAppStore.getState().resetStore();
+
+        expect(useAppStore.getState().userData?.profile?.name).toBe('Preserve me');
+        expect(useAppStore.getState().saveError).toContain('Cancellazione account in verifica');
+    });
+
     it('resetStore clears memory state without manual storage deletion', () => {
         const store = useAppStore.getState();
         store.resetStore();
