@@ -3,7 +3,7 @@ import { readBrowserValueStrict, removeBrowserValue, writeBrowserJson } from '..
 import type { GuestMigrationPolicy } from '../../contexts/AuthContextDef';
 
 const KEY = 'guest_migration_intent_v1';
-const MAX_AGE_MS = 15 * 60 * 1000;
+const MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
 export type GuestMigrationMethod = 'email' | 'google' | 'recovery';
 
