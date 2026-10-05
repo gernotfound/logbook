@@ -12,6 +12,7 @@ import { captureSession, isCurrentSession } from '../../lib/sync/session';
 import { readDeviceValueStrict, writeDeviceValue } from '../../lib/sync/deviceStorage';
 import { requiredUpdateRecoveryRegistry } from '../../lib/sync/requiredUpdateRecovery';
 import type { WorkoutCompletionDraft } from '../../hooks/workout/workoutSessionPreparation';
+import { useAppStore } from '../../store/useAppStore';
 
 interface TrainingSessionProps {
     onNavigateToHistory?: () => void;
