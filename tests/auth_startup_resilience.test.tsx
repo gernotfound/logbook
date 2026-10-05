@@ -139,7 +139,7 @@ describe('PWA & iPhone Startup Resilience Tests', () => {
     );
     await waitFor(() => expect(authCallback).toBeDefined());
 
-    localStorageMock.getItem.mockImplementation((key: string) => {
+    localStorageMock.getItem.mockImplementationOnce((key: string) => {
       if (key === 'logbook_is_guest') throw new DOMException('blocked', 'SecurityError');
       return null;
     });
