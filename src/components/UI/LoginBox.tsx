@@ -4,7 +4,8 @@ import { sendPasswordResetEmail, auth } from '../../lib/firebase';
 import { useDialogStore } from '../../store/useDialogStore';
 import { Eye, EyeOff } from 'lucide-react';
 import { useModalFocusTrap } from '../../hooks/useModalFocusTrap';
-import { checkPasswordStrength } from '../../lib/auth/passwordPolicy';
+import { validatePasswordAgainstPolicy } from '../../lib/auth/passwordPolicy';
+import { BrowserStorageError } from '../../lib/sync/browserStorage';
 
 interface LoginBoxProps {
     onCancel?: () => void;
@@ -35,7 +36,7 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
         try {
             await action();
         } catch (error) {
-            if (isGuest && error instanceof Error && error.message.includes('trasferimento guest')) {
+            if (isGuest && (error instanceof BrowserStorageError || (error instanceof Error && error.message.includes('trasferimento guest')))) {
                 await showAlert('Impossibile salvare la scelta di trasferimento sul dispositivo. Libera spazio o abilita l’archivio del browser e riprova.');
                 return;
             }
@@ -55,7 +56,7 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
                     setLoading(false);
                     return;
                 }
-                const weakError = checkPasswordStrength(password);
+                const weakError = await validatePasswordAgainstPolicy(password);
                 if (weakError) {
                     await showAlert(weakError);
                     setLoading(false);
@@ -147,7 +148,7 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
                         <input
                             type={showPassword ? "text" : "password"}
                             aria-label="Password"
-                            placeholder={mode === 'register' ? 'Password (min 8 car, A-a, num, spec)' : 'Password'}
+                            placeholder={mode === 'register' ? 'Scegli una password sicura' : 'Password'}
                             value={password}
                             onChange={e => setPassword(e.target.value)}
                             required
