@@ -50,6 +50,17 @@ function readGuestMigrationPolicyStrict(): GuestMigrationPolicy {
     throw new Error('Scelta di trasferimento guest assente o non valida.');
 }
 
+function writeGuestMigrationPolicyStrict(policy: GuestMigrationPolicy | undefined): void {
+    if (policy !== 'merge' && policy !== 'skip') {
+        throw new Error('Scegli esplicitamente come gestire i dati locali prima di accedere.');
+    }
+    writeBrowserValue(GUEST_MIGRATION_POLICY_KEY, policy);
+}
+
+function clearGuestMigrationPolicy(): void {
+    tryRemoveBrowserValue(GUEST_MIGRATION_POLICY_KEY);
+}
+
 function markGuestMigrationSyncRecovery(uid: string): void {
     writeBrowserValue(GUEST_MIGRATION_SYNC_RECOVERY_KEY, uid);
 }
@@ -186,10 +197,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         };
         document.addEventListener('visibilitychange', handleAuthVisibilityChange);
 
-        getRedirectResult(auth).then(() => {
+        getRedirectResult(auth).then(result => {
             tryRemoveBrowserValue(AWAITING_REDIRECT_KEY);
+            if (result?.user) setCurrentUser(result.user);
         }).catch(err => {
-            console.warn("getRedirectResult error (non critico):", err);
+            tryRemoveBrowserValue(AWAITING_REDIRECT_KEY);
+            clearGuestMigrationPolicy();
+            console.error("getRedirectResult error:", err);
+            const code = (err as { code?: unknown })?.code;
+            setSaveError(code === 'auth/network-request-failed'
+                ? 'Accesso non completato: connessione non disponibile.'
+                : 'Accesso Google non completato. Riprova.');
         });
 
         const resumePersistedGuestMigration = async (user: User, isCurrentRun: () => boolean): Promise<boolean> => {
@@ -302,7 +320,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 }
             }
             setCurrentUser(user);
-            setLoading(false);
 
             if (user) {
                 const wasGuest = isGuestRef.current || isStoredGuest();
@@ -315,6 +332,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 }
 
                 if (wasGuest) {
+                    setLoading(false);
                     setGuestMigrationStatus('pending');
                     draftRegistry.flushAll();
 
@@ -370,9 +388,27 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                     }
                 } else {
                     setGuestMigrationStatus('idle');
-                    void loadData(user);
+                    const expectedOwner = userOwner(user.uid);
+                    const currentState = useAppStore.getState();
+                    const alreadyOwnerReady = currentState.dataOwner === expectedOwner
+                        && currentState.userData !== null
+                        && !currentState.localPersistenceBlocked;
+
+                    if (!alreadyOwnerReady) {
+                        useAppStore.setState({ userData: null, dataOwner: null, localWorkout: null });
+                        setLoading(true);
+                    } else {
+                        setLoading(false);
+                    }
+
+                    try {
+                        await loadData(user);
+                    } finally {
+                        if (isCurrentRun()) setLoading(false);
+                    }
                 }
             } else {
+                setLoading(false);
                 setGuestMigrationStatus('idle');
                 const isGuestActive = isGuestRef.current || isStoredGuest();
                 if (!isGuestActive) {
@@ -422,8 +458,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }, [loadData, setSyncing, setUserData, setSaveError]);
 
     // Login con Google (dalla schermata di login, nessun guest precedente)
-    const login = useCallback(async () => {
+    const login = useCallback(async (guestPolicy?: GuestMigrationPolicy) => {
         setSaveError(null);
+        const guestAttempt = isGuestRef.current || isStoredGuest();
+        if (guestAttempt) writeGuestMigrationPolicyStrict(guestPolicy);
         try {
             await signInWithPopup(auth, provider);
         } catch (error: any) {
@@ -436,8 +474,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                     setSaveError("Accesso fallito. Riprova.");
                 }
             } else if (failure === 'network') {
+                if (guestAttempt) clearGuestMigrationPolicy();
                 setSaveError("Connessione non disponibile. Riprova quando sei online.");
+            } else if (failure === 'cancelled') {
+                if (guestAttempt) clearGuestMigrationPolicy();
             } else if (failure === 'error') {
+                if (guestAttempt) clearGuestMigrationPolicy();
                 console.error("Errore di login", error);
                 setSaveError("Errore di accesso: " + error.message);
             }
@@ -461,21 +503,27 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         throw error;
     }, [setSaveError]);
 
-    const loginWithEmail = useCallback(async (email: string, pass: string) => {
+    const loginWithEmail = useCallback(async (email: string, pass: string, guestPolicy?: GuestMigrationPolicy) => {
         setSaveError(null);
+        const guestAttempt = isGuestRef.current || isStoredGuest();
+        if (guestAttempt) writeGuestMigrationPolicyStrict(guestPolicy);
         try {
             await signInWithEmailAndPassword(auth, email, pass);
         } catch (error) {
+            if (guestAttempt) clearGuestMigrationPolicy();
             handleAuthError(error);
         }
     }, [handleAuthError, setSaveError]);
 
-    const registerWithEmail = useCallback(async (email: string, pass: string) => {
+    const registerWithEmail = useCallback(async (email: string, pass: string, guestPolicy?: GuestMigrationPolicy) => {
         setSaveError(null);
+        const guestAttempt = isGuestRef.current || isStoredGuest();
+        if (guestAttempt) writeGuestMigrationPolicyStrict(guestPolicy);
         migrationDataRef.current = useAppStore.getState().userData;
         try {
             await createUserWithEmailAndPassword(auth, email, pass);
         } catch (error) {
+            if (guestAttempt) clearGuestMigrationPolicy();
             handleAuthError(error);
         }
     }, [handleAuthError, setSaveError]);
@@ -518,8 +566,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }, [setSaveError, setUserData]);
 
     // Collega account Google: migra i dati locali su Firestore
-    const linkGoogleAccount = useCallback(async () => {
+    const linkGoogleAccount = useCallback(async (guestPolicy?: GuestMigrationPolicy) => {
         setSaveError(null);
+        const guestAttempt = isGuestRef.current || isStoredGuest();
+        if (guestAttempt) writeGuestMigrationPolicyStrict(guestPolicy);
         migrationDataRef.current = useAppStore.getState().userData;
         try {
             await signInWithPopup(auth, provider);
@@ -535,10 +585,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 return;
             }
             if (failure === 'network') {
+                if (guestAttempt) clearGuestMigrationPolicy();
                 setSaveError("Connessione non disponibile. Riprova quando sei online.");
                 return;
             }
+            if (failure === 'cancelled') {
+                if (guestAttempt) clearGuestMigrationPolicy();
+                return;
+            }
             if (failure === 'error') {
+                if (guestAttempt) clearGuestMigrationPolicy();
                 console.error("Errore collegamento account Google:", error);
                 setSaveError("Collegamento fallito. Riprova.");
             }
