@@ -275,9 +275,14 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
             const userData = get().userData;
             if (!userData) throw new Error('Dati utente non caricati');
 
+            const session = captureSession();
+            const dataOwner = get().dataOwner;
+            if (dataOwner && dataOwner !== session.owner) {
+                throw new Error('Dati locali non allineati con la sessione corrente. Attendi il completamento dell’accesso.');
+            }
+
             const data = applyDomainOperations(userData, operation);
             const generation = get().syncGeneration + 1;
-            const session = captureSession();
             const operations = Array.isArray(operation) ? operation : [operation];
             const syncPresentation: SyncPresentation = operations.length > 0 && operations.every(item => item.type === 'active-workout.set')
                 ? 'quiet-workout'
