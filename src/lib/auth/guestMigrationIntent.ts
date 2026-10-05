@@ -1,5 +1,5 @@
 import type { User } from 'firebase/auth';
-import { readBrowserValueStrict, removeBrowserValue, writeBrowserJson, writeBrowserValue } from '../sync/browserStorage';
+import { readBrowserValueStrict, removeBrowserValue, tryWriteBrowserValue, writeBrowserJson } from '../sync/browserStorage';
 import type { GuestMigrationPolicy } from '../../contexts/AuthContextDef';
 
 const KEY = 'guest_migration_intent_v1';
@@ -86,7 +86,7 @@ export function beginGuestMigrationIntent(
     if (options.uid) intent.expectedUid = options.uid;
     writeBrowserJson(KEY, intent);
     // Compatibility only for an older in-flight client. New code never trusts this key as authority.
-    writeBrowserValue(LEGACY_POLICY_KEY, policy);
+    tryWriteBrowserValue(LEGACY_POLICY_KEY, policy);
     return intent;
 }
 
