@@ -49,12 +49,12 @@ describe('account deletion recent authentication', () => {
   });
 
   it('releases the deletion busy guard when strict session capture fails', async () => {
-    localStorageMock.getItem.mockImplementationOnce(() => {
-      throw new DOMException('blocked', 'SecurityError');
-    });
     dialog.showConfirm.mockResolvedValue(false);
 
     const { result } = renderHook(() => useSettings());
+    localStorageMock.getItem.mockImplementationOnce(() => {
+      throw new DOMException('blocked', 'SecurityError');
+    });
     await act(async () => result.current.handleDeleteAccount());
     expect(dialog.showAlert).toHaveBeenCalledTimes(1);
 
