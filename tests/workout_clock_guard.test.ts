@@ -6,6 +6,8 @@ import {
     sampleWorkoutClock,
     WorkoutClockAnomalyError,
 } from '../src/lib/workoutClockGuard';
+import { prepareCompletedWorkout } from '../src/hooks/workout/workoutSessionPreparation';
+import type { WorkoutSession } from '../src/types';
 
 describe('workout clock guard', () => {
     afterEach(() => {
@@ -53,6 +55,25 @@ describe('workout clock guard', () => {
 
         expect(resumed.anomalous).toBe(false);
         expect(() => assertWorkoutClockHealthy('w3', 1_000, 7_201_000)).not.toThrow();
+    });
+
+
+    it('prevents the business completion helper from saving a detected jump', () => {
+        Object.defineProperty(document, 'visibilityState', {
+            value: 'visible',
+            configurable: true,
+        });
+        sampleWorkoutClock('w-business', 1_000, 1_000, 10);
+        sampleWorkoutClock('w-business', 1_000, 7_201_000, 1_010);
+
+        const workout: WorkoutSession = {
+            id: 'w-business',
+            date: '2026-10-05',
+            globalStartTime: 1_000,
+            exercises: [],
+        };
+
+        expect(() => prepareCompletedWorkout(workout, 7_201_000)).toThrow(WorkoutClockAnomalyError);
     });
 
     it('fails completion when the end wall clock is materially before the start time', () => {
