@@ -32,13 +32,18 @@ if (typeof window !== 'undefined') {
 if (typeof document !== 'undefined') {
     document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'hidden') {
-            draftRegistry.flushAll();
-            const state = useAppStore.getState();
-            const session = captureSession();
             try {
+                draftRegistry.flushAll({ strict: true });
+                const state = useAppStore.getState();
+                const session = captureSession();
                 persistOwnerBoundWorkoutSnapshot(session, state.dataOwner, state.localWorkout);
-            } catch (e) {
-                console.error("Errore salvataggio localWorkout su visibilitychange:", e);
+            } catch (error) {
+                console.error("Persistenza device-critical fallita su visibilitychange:", error);
+                useAppStore.setState({
+                    localPersistenceBlocked: true,
+                    syncHealth: 'failed',
+                    saveError: 'Salvataggio locale non riuscito prima della sospensione. Le modifiche restano bloccate per sicurezza.',
+                });
             }
         }
     });
