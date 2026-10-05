@@ -58,9 +58,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const [currentUser, setCurrentUser] = useState<User | null>(null);
     const [loading, setLoading] = useState(true);
 
-    // isGuest è gestito con un ref (per uso nei callback) + state (per re-render)
-    const isGuestRef = useRef(isStoredGuest());
-    const [isGuest, setIsGuest] = useState(isGuestRef.current);
+    // Read persisted guest ownership only at mount. A useRef(initializer) expression
+    // is evaluated again on every render even though React ignores later values; a
+    // storage failure that appears after mount must be handled by the strict lifecycle
+    // gates below, not by throwing during an unrelated React render.
+    const [initialGuestMode] = useState(() => isStoredGuest());
+    const isGuestRef = useRef(initialGuestMode);
+    const [isGuest, setIsGuest] = useState(initialGuestMode);
     const [guestMigrationStatus, setGuestMigrationStatus] = useState<'idle' | 'pending' | 'failed'>('idle');
     const [emailVerificationRequired, setEmailVerificationRequired] = useState(false);
 
