@@ -29,5 +29,31 @@
       ]
     }
   ],
-  "fieldOverrides": []
+  "fieldOverrides": [
+    {
+      "collectionGroup": "users",
+      "fieldPath": "*",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "history_months",
+      "fieldPath": "*",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "nutrition_months",
+      "fieldPath": "*",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "sync_control",
+      "fieldPath": "*",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "global_catalog",
+      "fieldPath": "*",
+      "indexes": []
+    }
+  ]
 }
