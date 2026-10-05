@@ -286,7 +286,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 tryRemoveBrowserValue(AWAITING_REDIRECT_KEY);
                 const expectedOwner = userOwner(user.uid);
                 const current = useAppStore.getState();
-                if (current.userData && current.dataOwner && current.dataOwner !== expectedOwner) {
+                const guestActiveBeforeAuth = isGuestRef.current || isStoredGuest();
+                if (current.userData && current.dataOwner && current.dataOwner !== expectedOwner && !guestActiveBeforeAuth) {
                     useAppStore.setState({ userData: null, dataOwner: null, localWorkout: null });
                 }
                 try {
