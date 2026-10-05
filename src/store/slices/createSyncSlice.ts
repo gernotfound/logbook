@@ -277,7 +277,7 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
 
             const session = captureSession();
             const dataOwner = get().dataOwner;
-            if (dataOwner !== session.owner) {
+            if (dataOwner && dataOwner !== session.owner) {
                 throw new Error('Dati locali non allineati con la sessione corrente. Attendi il completamento dell’accesso.');
             }
 
