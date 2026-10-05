@@ -121,7 +121,16 @@ export const createWorkoutSlice: StateCreator<AppState, [], [], WorkoutSlice> = 
         if (persistedWorkout) assertWorkoutSessionIdentities(persistedWorkout, 'Allenamento attivo');
 
         // Device-critical durability precedes the optimistic in-memory update.
-        persistLocalWorkout(persistedWorkout);
+        try {
+            persistLocalWorkout(persistedWorkout);
+        } catch (error) {
+            set({
+                localPersistenceBlocked: true,
+                syncHealth: 'failed',
+                saveError: 'Impossibile salvare l’allenamento su questo dispositivo. Le modifiche sono bloccate finché l’archivio non torna disponibile.',
+            });
+            throw error;
+        }
         set({ localWorkout: persistedWorkout });
         return get().dispatchDomainOperation({ type: 'active-workout.set', workout: persistedWorkout });
     },
