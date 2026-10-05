@@ -192,8 +192,11 @@ if (!firestoreVerifier.includes("process.exit(10)") || !firestoreVerifier.includ
 if (!firestoreVerifier.includes('releases/cloud.firestore') || !firestoreVerifier.includes('/indexes') || !firestoreVerifier.includes('Authorization:')) {
   failures.push('Firestore Production verifier must read back authenticated live Rules and composite indexes');
 }
-if (!firestoreVerifier.includes('/fields') || !firestoreVerifier.includes('indexConfig.usesAncestorConfig:false') || !firestoreVerifier.includes('mismatchedFieldOverrides')) {
+if (!firestoreVerifier.includes('/fields') || !firestoreVerifier.includes('fieldOverrideListParent') || !firestoreVerifier.includes('mismatchedFieldOverrides')) {
   failures.push('Firestore Production verifier must read back and compare explicit field exemptions');
+}
+if (!firestoreProductionState.includes('collectionGroups/-') || !firestoreProductionState.includes('indexConfig.usesAncestorConfig=false OR ttlConfig:*')) {
+  failures.push('Firestore Production field exemption readback must use the database-wide explicit-override list scope');
 }
 if (!firestoreVerifier.includes('/operations') || !firestoreVerifier.includes("filter', 'done:false'") || !firestoreVerifier.includes('pendingFieldOverrides')) {
   failures.push('Firestore Production verifier must distinguish active field-index convergence from stable field exemption drift');
