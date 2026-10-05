@@ -29,7 +29,7 @@ export function classifySyncFailure(error: unknown, options?: { retryable?: bool
         || code === 'unavailable'
         || code === 'deadline-exceeded'
         || (code === 'app-check-unavailable'
-            && (error as { phase?: unknown } | null)?.phase === 'token-error')
+            && (error as { retryable?: unknown } | null)?.retryable === true)
     ) {
         return { ok: false, status: 'local-pending', error };
     }
