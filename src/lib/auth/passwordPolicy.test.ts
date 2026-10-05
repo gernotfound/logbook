@@ -1,15 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-
-const mocks = vi.hoisted(() => ({
-    validatePassword: vi.fn(),
-}));
-
-vi.mock('../firebase', () => ({
-    auth: {},
-    validatePassword: mocks.validatePassword,
-}));
-
+import { validatePassword } from '../firebase';
 import { PASSWORD_POLICY_SUMMARY, validatePasswordAgainstPolicy } from './passwordPolicy';
+
+const mockedValidatePassword = vi.mocked(validatePassword);
 
 const policy = {
     customStrengthOptions: {
@@ -23,34 +16,36 @@ const policy = {
 };
 
 describe('password policy', () => {
-    beforeEach(() => vi.clearAllMocks());
+    beforeEach(() => {
+        vi.clearAllMocks();
+    });
 
     it('accepts a password only when Firebase policy validation accepts it', async () => {
-        mocks.validatePassword.mockResolvedValue({
+        mockedValidatePassword.mockResolvedValueOnce({
             isValid: true,
             passwordPolicy: policy,
-        });
+        } as any);
 
         await expect(validatePasswordAgainstPolicy('Anything')).resolves.toBeNull();
-        expect(mocks.validatePassword).toHaveBeenCalledTimes(1);
+        expect(mockedValidatePassword).toHaveBeenCalledTimes(1);
     });
 
     it('reports the actual minimum returned by Firebase instead of a copied constant', async () => {
-        mocks.validatePassword.mockResolvedValue({
+        mockedValidatePassword.mockResolvedValueOnce({
             isValid: false,
             meetsMinPasswordLength: false,
             passwordPolicy: policy,
-        });
+        } as any);
 
         await expect(validatePasswordAgainstPolicy('Short1!')).resolves.toContain('almeno 12 caratteri');
     });
 
     it('maps Firebase requirement failures to a useful message', async () => {
-        mocks.validatePassword.mockResolvedValue({
+        mockedValidatePassword.mockResolvedValueOnce({
             isValid: false,
             containsNonAlphanumericCharacter: false,
             passwordPolicy: policy,
-        });
+        } as any);
 
         await expect(validatePasswordAgainstPolicy('Password123')).resolves.toContain('carattere speciale');
         expect(PASSWORD_POLICY_SUMMARY).not.toContain('8 caratteri');
