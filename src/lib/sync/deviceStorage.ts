@@ -1,4 +1,4 @@
-import { readBrowserValue, removeBrowserValue, writeBrowserValue } from './browserStorage';
+import { readBrowserValue, readBrowserValueStrict, removeBrowserValue, writeBrowserValue } from './browserStorage';
 import { storageOwner } from './session';
 
 export const deviceKey = (name: string, owner = storageOwner()) => `logbook:v2:${owner}:${name}`;
@@ -10,6 +10,11 @@ export function readDeviceValue(name: string, owner?: string): string | null {
         return null;
     }
 }
+export function readDeviceValueStrict(name: string, owner?: string): string | null {
+    const resolvedOwner = owner ?? storageOwner();
+    return readBrowserValueStrict(deviceKey(name, resolvedOwner));
+}
+
 export function writeDeviceValue(name: string, value: string | null, owner?: string): void {
     // Callers decide the UI feedback; failure must not be mistaken for a successful save.
     const resolvedOwner = owner ?? storageOwner();
