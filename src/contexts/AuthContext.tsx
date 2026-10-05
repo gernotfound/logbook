@@ -20,7 +20,6 @@ import { SyncTimeoutError } from '../lib/db/db_core';
 import {
     BrowserStorageError,
     readBrowserValue,
-    readBrowserValueStrict,
     removeBrowserValue,
     tryRemoveBrowserValue,
     writeBrowserValue,
@@ -226,7 +225,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 try {
                     if (!isCurrentRun()) return true;
                     removeBrowserValue(GUEST_KEY);
-                    tryRemoveBrowserValue(GUEST_MIGRATION_POLICY_KEY);
+                    try { clearGuestMigrationIntent(); } catch { /* recovery may predate the intent protocol */ }
                     isGuestRef.current = false;
                     setIsGuest(false);
                     migrationDataRef.current = null;
