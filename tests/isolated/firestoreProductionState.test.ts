@@ -69,7 +69,7 @@ describe('Firestore Production field exemption convergence', () => {
         field: fieldName,
         state: 'PROCESSING',
         indexConfigDeltas: [{ changeType: 'REMOVE' }],
-        progressDocuments: { completedWork: '50', estimatedWork: '100' },
+        documentProgress: { completedWork: '50', estimatedWork: '100' },
       },
     }]);
 
@@ -78,6 +78,7 @@ describe('Firestore Production field exemption convergence', () => {
       indexesDisabled: false,
       pending: true,
       operationState: 'PROCESSING',
+      documentProgress: { completedWork: '50', estimatedWork: '100' },
     });
   });
 
