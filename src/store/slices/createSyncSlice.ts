@@ -7,7 +7,7 @@ import { clearWorkoutTimer } from './createWorkoutSlice';
 import type { AppState } from '../useAppStore';
 import { captureSession, invalidateSession, isCurrentSession } from '../../lib/sync/session';
 import { commitDomainOperations, readLocal, revertRejectedConsent } from '../../lib/sync/localRepository';
-import { findPendingAccountDeletion, readAccountDeletionMarker } from '../../lib/sync/accountGate';
+import { findPendingAccountDeletion, isAccountDeletionPending } from '../../lib/sync/accountGate';
 import { UserDataSchema } from '../../lib/schema';
 import { isUpdateRequiredError } from '../../lib/schemaEvolution';
 import { applyDomainOperations, type DomainOperationBatch } from '../../lib/sync/domainOperations';
@@ -64,8 +64,14 @@ function relevantDeletionPending(): boolean {
     if (guestOptIn) return false;
 
     const owner = captureSession().owner;
-    if (owner.startsWith('user:')) return readAccountDeletionMarker(owner) !== null;
-    return findPendingAccountDeletion() !== null;
+    if (owner.startsWith('user:')) return isAccountDeletionPending(owner);
+    try {
+        return findPendingAccountDeletion() !== null;
+    } catch {
+        // A present-but-corrupt deletion marker is not proof that no deletion
+        // is in progress. Keep destructive resets blocked until recovery.
+        return true;
+    }
 }
 
 export function clearSyncTimers() {
