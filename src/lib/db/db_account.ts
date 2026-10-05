@@ -185,6 +185,7 @@ async function requestServerDeletion(marker: AccountDeletionMarker, idToken: str
         cache: 'no-store',
     });
     const body = await readJson(response);
+    if (response.status === 404) throw new AccountDeletionReceiptNotFoundError();
     if (!response.ok) {
         const message = typeof body.error === 'string' ? body.error : 'Impossibile avviare la cancellazione account.';
         const error = new Error(message) as Error & { definitiveRejection?: boolean };
