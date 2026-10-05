@@ -61,7 +61,7 @@ function persistGuestLoginOverlayState(visible: boolean): void {
 }
 
 function App() {
-  const { currentUser, loading, isGuest, guestMigrationStatus, retryGuestMigration } = useAuth();
+  const { currentUser, loading, isGuest, guestMigrationStatus, emailVerificationRequired, retryGuestMigration, resendEmailVerification, refreshEmailVerification } = useAuth();
   const syncing = useAppStore(state => state.syncing);
   const userData = useAppStore(state => state.userData);
   const saveError = useAppStore(state => state.saveError);
@@ -78,6 +78,7 @@ function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [requiredUpdateReloading, setRequiredUpdateReloading] = useState(false);
   const [requiredUpdateReloadError, setRequiredUpdateReloadError] = useState<string | null>(null);
+  const [emailVerificationBusy, setEmailVerificationBusy] = useState<'resend' | 'refresh' | null>(null);
 
   const [showGuestLogin, setShowGuestLogin] = useState(readGuestLoginOverlayState);
 
@@ -305,6 +306,54 @@ function App() {
     return (
       <div id="auth-overlay">
         <LoginBox />
+      </div>
+    );
+  }
+
+  if (emailVerificationRequired && currentUser) {
+    const runVerificationAction = async (action: 'resend' | 'refresh') => {
+      if (emailVerificationBusy) return;
+      setEmailVerificationBusy(action);
+      try {
+        if (action === 'resend') await resendEmailVerification();
+        else await refreshEmailVerification();
+      } catch (error) {
+        setSaveError(error instanceof Error ? error.message : 'Verifica email non riuscita. Riprova.');
+      } finally {
+        setEmailVerificationBusy(null);
+      }
+    };
+
+    return (
+      <div id="auth-overlay" role="status" aria-live="polite">
+        <div className="auth-panel">
+          <h1 className="text-primary mb-10">Verifica la tua email</h1>
+          <p style={{ lineHeight: 1.5 }}>
+            Prima di usare l’account devi confermare di avere accesso a {currentUser.email || 'questo indirizzo email'}.
+          </p>
+          <p className="text-muted">
+            Apri il link ricevuto via email, poi torna qui e premi “Ho verificato l’email”.
+          </p>
+          {saveError && <p role="alert" className="text-muted">{saveError}</p>}
+          <div style={{ display: 'grid', gap: '10px', marginTop: '16px' }}>
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={emailVerificationBusy !== null}
+              onClick={() => { void runVerificationAction('refresh'); }}
+            >
+              {emailVerificationBusy === 'refresh' ? 'Controllo…' : 'Ho verificato l’email'}
+            </button>
+            <button
+              type="button"
+              className="btn"
+              disabled={emailVerificationBusy !== null}
+              onClick={() => { void runVerificationAction('resend'); }}
+            >
+              {emailVerificationBusy === 'resend' ? 'Invio…' : 'Invia di nuovo'}
+            </button>
+          </div>
+        </div>
       </div>
     );
   }
