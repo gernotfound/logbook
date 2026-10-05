@@ -12,9 +12,10 @@ import { localStorageMock } from './setup';
 import { draftRegistry } from '../src/lib/utils/draftRegistry';
 import PreSessionCheckIn from '../src/components/Training/PreSessionCheckIn';
 import { useWorkoutSession } from '../src/hooks/useWorkoutSession';
+import { captureSession } from '../src/lib/sync/session';
 
 const parseUserData = (value: unknown): UserData => UserDataSchema.parse(value) as unknown as UserData;
-const OWNER = 'guest';
+let owner: string;
 
 function workout(id: string, reps = '8'): WorkoutSession {
     return {
@@ -34,9 +35,10 @@ describe('Audit 18 device-critical persistence', () => {
     beforeEach(() => {
         localStorage.clear();
         vi.clearAllMocks();
+        owner = captureSession().owner;
         useAppStore.setState({
             userData: parseUserData({ activeWorkout: workout('w-current') }),
-            dataOwner: OWNER,
+            dataOwner: owner,
             localWorkout: workout('w-current'),
             localPersistenceBlocked: false,
             syncing: false,
@@ -58,7 +60,7 @@ describe('Audit 18 device-critical persistence', () => {
         ['SecurityError', 'blocked'],
         ['QuotaExceededError', 'full'],
     ])('does not publish a workout edit when the device write fails with %s', async (name, message) => {
-        const key = deviceKey('workout', OWNER);
+        const key = deviceKey('workout', owner);
         localStorageMock.setItem.mockImplementationOnce((writtenKey: string) => {
             if (writtenKey === key) throw new DOMException(message, name);
         });
@@ -73,7 +75,7 @@ describe('Audit 18 device-critical persistence', () => {
     });
 
     it('does not let a one-shot read failure replace a newer device workout with an older IndexedDB fallback', () => {
-        const key = deviceKey('workout', OWNER);
+        const key = deviceKey('workout', owner);
         localStorage.setItem(key, JSON.stringify(workout('device-new', '10')));
         localStorageMock.setItem.mockClear();
         const fallback = workout('envelope-old', '6');
@@ -83,13 +85,13 @@ describe('Audit 18 device-critical persistence', () => {
             return null;
         });
 
-        expect(() => getInitialLocalWorkout(OWNER, fallback)).toThrow(BrowserStorageError);
+        expect(() => getInitialLocalWorkout(owner, fallback)).toThrow(BrowserStorageError);
         expect(localStorageMock.setItem).not.toHaveBeenCalled();
 
     });
 
     it('does not reinterpret an unreadable running timer as stopped', () => {
-        const key = deviceKey('timer', OWNER);
+        const key = deviceKey('timer', owner);
         localStorage.setItem(key, JSON.stringify({
             version: 1,
             state: 'running',
@@ -103,7 +105,7 @@ describe('Audit 18 device-critical persistence', () => {
             return null;
         });
 
-        expect(() => readWorkoutTimerSnapshot(OWNER)).toThrow(BrowserStorageError);
+        expect(() => readWorkoutTimerSnapshot(owner)).toThrow(BrowserStorageError);
         expect(localStorageMock.setItem).not.toHaveBeenCalled();
         expect(localStorageMock.removeItem).not.toHaveBeenCalled();
     });
@@ -112,13 +114,13 @@ describe('Audit 18 device-critical persistence', () => {
         const pending = workout('w-start');
         useAppStore.setState({
             userData: parseUserData({ activeWorkout: pending }),
-            dataOwner: OWNER,
+            dataOwner: owner,
             localWorkout: pending,
             localPersistenceBlocked: false,
             syncHealth: 'synced',
             saveError: null,
         });
-        const timerKey = deviceKey('timer', OWNER);
+        const timerKey = deviceKey('timer', owner);
         localStorageMock.setItem.mockImplementationOnce((writtenKey: string) => {
             if (writtenKey === timerKey) throw new DOMException('full', 'QuotaExceededError');
         });
@@ -147,7 +149,7 @@ describe('Audit 18 device-critical persistence', () => {
 
         fireEvent.click(screen.getByRole('button', { name: 'Energia: 4 su 5' }));
 
-        const key = deviceKey('draft:pre-session:w-current', OWNER);
+        const key = deviceKey('draft:pre-session:w-current', owner);
         expect(localStorageMock.setItem).toHaveBeenCalledWith(
             key,
             expect.stringContaining('"energy":4'),
@@ -155,7 +157,7 @@ describe('Audit 18 device-critical persistence', () => {
     });
 
     it('surfaces a pre-session draft write failure instead of waiting for a lifecycle event', () => {
-        const key = deviceKey('draft:pre-session:w-current', OWNER);
+        const key = deviceKey('draft:pre-session:w-current', owner);
         render(
             <PreSessionCheckIn
                 workoutId="w-current"
