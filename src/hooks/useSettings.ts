@@ -142,11 +142,12 @@ export function useSettings() {
     const handleDeleteAccount = async () => {
         if (deleteBusy.current) return;
         deleteBusy.current = true;
-        const session = captureSession();
-        const assertCurrent = () => {
-            if (!isCurrentSession(session)) throw new Error('Sessione cambiata: cancellazione annullata.');
-        };
+        let session: ReturnType<typeof captureSession> | null = null;
         try {
+            session = captureSession();
+            const assertCurrent = () => {
+                if (!session || !isCurrentSession(session)) throw new Error('Sessione cambiata: cancellazione annullata.');
+            };
             if (isGuest) {
                 if (!(await showConfirm('Eliminare permanentemente i dati ospite di questo dispositivo?'))) return;
                 assertCurrent();
@@ -189,7 +190,12 @@ export function useSettings() {
             const message = code === 'auth/wrong-password' || code === 'auth/invalid-credential'
                 ? 'Password attuale non corretta.'
                 : error instanceof Error ? error.message : 'Cancellazione non riuscita.';
-            if (captureSession().owner === session.owner) void showAlert(message);
+            let canShow = session === null;
+            if (session) {
+                try { canShow = captureSession().owner === session.owner; }
+                catch { canShow = true; }
+            }
+            if (canShow) void showAlert(message);
         } finally {
             deleteBusy.current = false;
             setDeletingAccount(false);
