@@ -20,6 +20,7 @@ import { SyncTimeoutError } from '../lib/db/db_core';
 import {
     BrowserStorageError,
     readBrowserValue,
+    readBrowserValueStrict,
     removeBrowserValue,
     tryRemoveBrowserValue,
     writeBrowserValue,
@@ -36,11 +37,11 @@ const GUEST_MIGRATION_SYNC_RECOVERY_KEY = 'logbook_guest_migration_sync_recovery
 const AWAITING_REDIRECT_KEY = 'logbook_awaiting_redirect';
 
 function isStoredGuest(): boolean {
-    return readBrowserValue(GUEST_KEY) === 'true';
+    return readBrowserValueStrict(GUEST_KEY) === 'true';
 }
 
 function readGuestMigrationSyncRecovery(): string | null {
-    return readBrowserValue(GUEST_MIGRATION_SYNC_RECOVERY_KEY);
+    return readBrowserValueStrict(GUEST_MIGRATION_SYNC_RECOVERY_KEY);
 }
 
 function markGuestMigrationSyncRecovery(uid: string): void {
@@ -48,8 +49,8 @@ function markGuestMigrationSyncRecovery(uid: string): void {
 }
 
 function clearGuestMigrationSyncRecovery(uid: string): void {
-    if (readBrowserValue(GUEST_MIGRATION_SYNC_RECOVERY_KEY) === uid) {
-        tryRemoveBrowserValue(GUEST_MIGRATION_SYNC_RECOVERY_KEY);
+    if (readBrowserValueStrict(GUEST_MIGRATION_SYNC_RECOVERY_KEY) === uid) {
+        removeBrowserValue(GUEST_MIGRATION_SYNC_RECOVERY_KEY);
     }
 }
 
@@ -73,6 +74,36 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const setSyncing = useAppStore(state => state.setSyncing);
     const setSaveError = useAppStore(state => state.setSaveError);
 
+    const blockUnreadableLifecycleStorage = useCallback((error: unknown): never => {
+        console.error('Lifecycle Auth bloccato: ownership storage non leggibile.', error);
+        useAppStore.setState({
+            userData: null,
+            dataOwner: null,
+            localWorkout: null,
+            localPersistenceBlocked: true,
+            syncHealth: 'failed',
+            saveError: 'Archivio del dispositivo non disponibile. TheLogBook non può determinare in sicurezza a chi appartengono i dati locali.',
+        });
+        setLoading(false);
+        throw error;
+    }, []);
+
+    const isGuestActiveStrict = useCallback((): boolean => {
+        try {
+            return isGuestRef.current || isStoredGuest();
+        } catch (error) {
+            return blockUnreadableLifecycleStorage(error);
+        }
+    }, [blockUnreadableLifecycleStorage]);
+
+    const readGuestMigrationRecoveryStrict = useCallback((): string | null => {
+        try {
+            return readGuestMigrationSyncRecovery();
+        } catch (error) {
+            return blockUnreadableLifecycleStorage(error);
+        }
+    }, [blockUnreadableLifecycleStorage]);
+
     const startGoogleRedirect = useCallback(async () => {
         redirectLaunchFailedRef.current = false;
         try {
@@ -94,14 +125,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const loadData = useCallback(async (user: User) => {
         await loadAuthenticatedData({
             user,
-            isGuestActive: () => isGuestRef.current || isStoredGuest(),
+            isGuestActive: () => isGuestActiveStrict(),
             setUserData,
             setSyncing,
             setSaveError,
         });
 
         if (typeof navigator !== 'undefined' && !navigator.onLine) return;
-        if (auth.currentUser?.uid !== user.uid || isGuestRef.current || isStoredGuest()) return;
+        if (auth.currentUser?.uid !== user.uid || isGuestActiveStrict()) return;
 
         const { readLocal } = await import('../lib/sync/localRepository');
         const drainCheckpointedJournal = async () => {
@@ -123,7 +154,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             // a current generation, rebases the journal, then the retry can be delivered.
             await loadAuthenticatedData({
                 user,
-                isGuestActive: () => isGuestRef.current || isStoredGuest(),
+                isGuestActive: () => isGuestActiveStrict(),
                 setUserData,
                 setSyncing,
                 setSaveError,
@@ -207,7 +238,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
             if (!isCurrentRun()) return true;
 
-            const guestStillActive = isGuestRef.current || isStoredGuest();
+            const guestStillActive = isGuestActiveStrict();
             if (!authenticatedEnvelope) {
                 if (guestStillActive) {
                     clearGuestMigrationSyncRecovery(user.uid);
@@ -286,7 +317,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 tryRemoveBrowserValue(AWAITING_REDIRECT_KEY);
                 const expectedOwner = userOwner(user.uid);
                 const current = useAppStore.getState();
-                const guestActiveBeforeAuth = isGuestRef.current || isStoredGuest();
+                const guestActiveBeforeAuth = isGuestActiveStrict();
                 if (current.userData && current.dataOwner && current.dataOwner !== expectedOwner && !guestActiveBeforeAuth) {
                     useAppStore.setState({ userData: null, dataOwner: null, localWorkout: null });
                 }
@@ -310,10 +341,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             setCurrentUser(user);
 
             if (user) {
-                const wasGuest = isGuestRef.current || isStoredGuest();
+                const wasGuest = isGuestActiveStrict();
                 const hasPasswordProvider = (user.providerData ?? []).some((item: { providerId?: string }) => item.providerId === 'password');
                 setEmailVerificationRequired(hasPasswordProvider && user.emailVerified === false);
-                const recoveryUid = readGuestMigrationSyncRecovery();
+                const recoveryUid = readGuestMigrationRecoveryStrict();
 
                 if (recoveryUid === user.uid) {
                     setLoading(false);
@@ -388,7 +419,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             } else {
                 setEmailVerificationRequired(false);
                 setGuestMigrationStatus('idle');
-                const isGuestActive = isGuestRef.current || isStoredGuest();
+                const isGuestActive = isGuestActiveStrict();
                 if (!isGuestActive) {
                     try {
                         clearAuthenticatedOwnerHint();
@@ -404,7 +435,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
         let isReloading = false;
         const handleVisibilityChange = async () => {
-            if (isGuestRef.current || isStoredGuest()) return;
+            if (isGuestActiveStrict()) return;
             if (document.visibilityState === 'visible' && auth.currentUser) {
                 if (useAppStore.getState().userData !== null && !useAppStore.getState().syncing && !isReloading) {
                     try {
@@ -439,7 +470,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     // Login con Google (dalla schermata di login, nessun guest precedente)
     const login = useCallback(async (guestPolicy?: GuestMigrationPolicy) => {
         setSaveError(null);
-        if (isGuestRef.current || isStoredGuest()) {
+        if (isGuestActiveStrict()) {
             if (!guestPolicy) throw new Error('Scelta di trasferimento guest richiesta.');
             beginGuestMigrationIntent(guestPolicy, 'google');
         }
@@ -486,7 +517,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     const loginWithEmail = useCallback(async (email: string, pass: string, guestPolicy?: GuestMigrationPolicy) => {
         setSaveError(null);
-        if (isGuestRef.current || isStoredGuest()) {
+        if (isGuestActiveStrict()) {
             if (!guestPolicy) throw new Error('Scelta di trasferimento guest richiesta.');
             beginGuestMigrationIntent(guestPolicy, 'email', { email });
         }
@@ -508,7 +539,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
 
         migrationDataRef.current = useAppStore.getState().userData;
-        if (isGuestRef.current || isStoredGuest()) {
+        if (isGuestActiveStrict()) {
             if (!guestPolicy) throw new Error('Scelta di trasferimento guest richiesta.');
             beginGuestMigrationIntent(guestPolicy, 'email', { email });
         }
@@ -594,7 +625,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const linkGoogleAccount = useCallback(async (guestPolicy?: GuestMigrationPolicy) => {
         setSaveError(null);
         migrationDataRef.current = useAppStore.getState().userData;
-        if (isGuestRef.current || isStoredGuest()) {
+        if (isGuestActiveStrict()) {
             if (!guestPolicy) throw new Error('Scelta di trasferimento guest richiesta.');
             beginGuestMigrationIntent(guestPolicy, 'google');
         }
@@ -631,7 +662,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const retryGuestMigration = useCallback(async (policy?: GuestMigrationPolicy) => {
         setSaveError(null);
 
-        if (isStoredGuest()) {
+        if (isGuestActiveStrict()) {
             try {
                 const uid = auth.currentUser?.uid;
                 if (!uid || !policy) throw new Error('Scegli esplicitamente se trasferire o non trasferire i dati locali.');
@@ -660,7 +691,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const isCurrentRetry = () => session.owner === expectedOwner
             && isCurrentSession(session)
             && auth.currentUser?.uid === initialUid
-            && !isStoredGuest();
+            && !isGuestActiveStrict();
 
         if (!isCurrentRetry()) return;
 
@@ -702,7 +733,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             const mode = options?.mode || 'normal';
             const initialUid = auth.currentUser?.uid;
 
-            if (isGuestRef.current || isStoredGuest()) {
+            if (isGuestActiveStrict()) {
                 if (!skipConfirm) {
                     const confirmed = await useDialogStore.getState().showConfirm(
                         "Sei in modalità locale. Se esci, i tuoi dati su questo dispositivo andranno persi definitivamente e non potranno essere recuperati.\n\nSei sicuro di voler continuare?"
