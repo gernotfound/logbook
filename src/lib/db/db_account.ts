@@ -215,21 +215,21 @@ export async function fetchAccountDeletionStatus(marker: AccountDeletionMarker, 
     return body as unknown as ServerDeletionStatus;
 }
 
-function anotherLocalIdentityIsActive(marker: AccountDeletionMarker): boolean {
+function anotherLocalIdentityIsActive(uid: string): boolean {
     if (readBrowserValueStrict('logbook_is_guest') === 'true') return true;
     const currentUid = auth.currentUser?.uid;
-    return Boolean(currentUid && currentUid !== marker.uid);
+    return Boolean(currentUid && currentUid !== uid);
 }
 
-async function finalizeCompletedDeletion(marker: AccountDeletionMarker, context: AccountDeletionCompletionContext): Promise<AccountDeletionOutcome> {
-    if (anotherLocalIdentityIsActive(marker)) {
+export async function finalizeCompletedDeletionForUid(uid: string, context: AccountDeletionCompletionContext): Promise<AccountDeletionOutcome> {
+    if (anotherLocalIdentityIsActive(uid)) {
         return {
             status: 'pending',
             message: 'La cancellazione cloud dell’account precedente è completa. La pulizia locale di quell’account resta sospesa finché è attiva un’altra sessione su questo dispositivo.',
         };
     }
 
-    if (auth.currentUser?.uid === marker.uid) {
+    if (auth.currentUser?.uid === uid) {
         try {
             await auth.signOut();
         } catch (error) {
@@ -238,10 +238,10 @@ async function finalizeCompletedDeletion(marker: AccountDeletionMarker, context:
     }
 
     try {
-        await context.purgeAllLocalUserData(marker.owner);
-        removeDeletionRecoveryCredential(marker.uid);
+        await context.purgeAllLocalUserData('user:' + uid);
+        removeDeletionRecoveryCredential(uid);
         context.resetCache();
-        clearAccountDeletion(marker.owner);
+        clearAccountDeletion('user:' + uid);
         context.resetStore();
         return { status: 'complete' };
     } catch (error) {
@@ -269,7 +269,7 @@ async function observeDeletion(marker: AccountDeletionMarker, context: AccountDe
             }
             throw error;
         }
-        if (status.status === 'complete') return finalizeCompletedDeletion(marker, context);
+        if (status.status === 'complete') return finalizeCompletedDeletionForUid(marker.uid, context);
         if (status.status === 'failed') {
             throw new Error(status.error ?? 'Cancellazione non completata: alcuni dati cloud potrebbero essere già eliminati. Copia locale conservata; riprendi l’operazione dalle impostazioni.');
         }
