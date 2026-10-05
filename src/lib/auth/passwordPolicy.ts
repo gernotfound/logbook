@@ -1,19 +1,30 @@
+import { auth, validatePassword } from '../firebase';
+
 export const PASSWORD_POLICY_SUMMARY =
-    'La password deve contenere almeno 8 caratteri, con almeno una lettera maiuscola, una minuscola, un numero e un carattere speciale.';
+    'La password non rispetta i requisiti di sicurezza configurati per l’account.';
 
-const FIREBASE_NON_ALPHANUMERIC_CHARACTERS = new Set([
-    '^', '$', '*', '.', '[', ']', '{', '}', '(', ')', '?', '"', '!', '@', '#',
-    '%', '&', '/', '\\', ',', '>', '<', "'", ':', ';', '|', '_', '~', '`',
-]);
+export async function validatePasswordAgainstPolicy(password: string): Promise<string | null> {
+    const status = await validatePassword(auth, password);
+    if (status.isValid) return null;
 
-export function checkPasswordStrength(password: string): string | null {
-    if (password.length < 8) return 'La password deve contenere almeno 8 caratteri.';
-    if (password.length > 4096) return 'La password è troppo lunga.';
-    if (!/\d/.test(password)) return 'La password deve contenere almeno 1 numero.';
-    if (!/[a-z]/.test(password)) return 'La password deve contenere almeno 1 lettera minuscola.';
-    if (!/[A-Z]/.test(password)) return 'La password deve contenere almeno 1 lettera maiuscola.';
-    if (![...password].some(char => FIREBASE_NON_ALPHANUMERIC_CHARACTERS.has(char))) {
+    const policy = status.passwordPolicy.customStrengthOptions;
+    if (status.meetsMinPasswordLength === false) {
+        return `La password deve contenere almeno ${policy.minPasswordLength ?? 6} caratteri.`;
+    }
+    if (status.meetsMaxPasswordLength === false) {
+        return `La password non può superare ${policy.maxPasswordLength ?? 4096} caratteri.`;
+    }
+    if (status.containsNumericCharacter === false) {
+        return 'La password deve contenere almeno 1 numero.';
+    }
+    if (status.containsLowercaseLetter === false) {
+        return 'La password deve contenere almeno 1 lettera minuscola.';
+    }
+    if (status.containsUppercaseLetter === false) {
+        return 'La password deve contenere almeno 1 lettera maiuscola.';
+    }
+    if (status.containsNonAlphanumericCharacter === false) {
         return 'La password deve contenere almeno 1 carattere speciale.';
     }
-    return null;
+    return PASSWORD_POLICY_SUMMARY;
 }
