@@ -73,6 +73,37 @@ let lastTokenError: string | null = null;
 let lastTokenRetryable = false;
 let appCheckPhase: AppCheckPhase = 'uninitialized';
 
+function appCheckErrorText(error: unknown): string {
+    if (!error || typeof error !== 'object') return String(error ?? '');
+    const candidate = error as { code?: unknown; message?: unknown; status?: unknown };
+    return [
+        typeof candidate.code === 'string' ? candidate.code : '',
+        typeof candidate.message === 'string' ? candidate.message : '',
+        typeof candidate.status === 'number' ? String(candidate.status) : '',
+    ].filter(Boolean).join(' ').toLowerCase();
+}
+
+function isRetryableTokenError(error: unknown): boolean {
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return true;
+    const text = appCheckErrorText(error);
+    if (!text) return false;
+    return [
+        'network',
+        'failed to fetch',
+        'timeout',
+        'timed out',
+        'unavailable',
+        'deadline-exceeded',
+        'throttled',
+        'too-many-requests',
+        '429',
+        '500',
+        '502',
+        '503',
+        '504',
+    ].some(marker => text.includes(marker));
+}
+
 function resolveSiteKey(options?: AppCheckInitOptions): string | undefined {
     return options?.siteKey
         || import.meta.env.VITE_RECAPTCHA_ENTERPRISE_SITE_KEY;
