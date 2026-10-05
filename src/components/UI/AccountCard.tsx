@@ -6,7 +6,7 @@ import { provider, linkWithPopup, linkWithCredential, verifyBeforeUpdateEmail, u
 import { isSensitiveReauthCancellation, reauthenticateForSensitiveAction } from '../../lib/auth/recentAuth';
 import { safeHardReload } from '../../lib/sync/safeReload';
 import { Eye, EyeOff } from 'lucide-react';
-import { checkPasswordStrength } from '../../lib/auth/passwordPolicy';
+import { validatePasswordAgainstFirebase } from '../../lib/auth/passwordPolicy';
 
 export const AccountCard = () => {
     const { currentUser, isGuest, linkGoogleAccount, registerWithEmail } = useAuth();
