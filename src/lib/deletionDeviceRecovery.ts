@@ -38,15 +38,14 @@ export function watchDeletionRecoveryDeviceRegistration(
  document.addEventListener('visibilitychange',handleVisibility);
  return()=>{disposed=true;window.removeEventListener('online',handleOnline);document.removeEventListener('visibilitychange',handleVisibility);};
 }
-export async function recoverDeletedAccountOnThisDevice(purge:(owner:string)=>Promise<void>):Promise<boolean>{
+export async function recoverDeletedAccountOnThisDevice(finalize:(uid:string)=>Promise<boolean>):Promise<boolean>{
  if(!API||!navigator.onLine||auth.currentUser)return false;
- let changed=false;const kept:Credential[]=[];
+ let changed=false;
  for(const cred of readAll()){
    const response=await fetch(API+'/api/account-deletion-device',{headers:{'x-firebase-appcheck':await appToken(),'x-account-deletion-uid':cred.uid,'x-account-deletion-device':cred.token},cache:'no-store'});
-   if(!response.ok){kept.push(cred);continue;}
+   if(!response.ok)continue;
    const body=await response.json() as {status?:string};
-   if(body.status==='complete'){await purge('user:'+cred.uid);changed=true;} else kept.push(cred);
+   if(body.status==='complete'&&await finalize(cred.uid))changed=true;
  }
- if(changed)writeAll(kept);
  return changed;
 }
