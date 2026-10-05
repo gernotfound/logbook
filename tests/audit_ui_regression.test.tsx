@@ -12,6 +12,8 @@ import { useDialogStore } from '../src/store/useDialogStore';
 import { GlobalDialog } from '../src/components/UI/GlobalDialog';
 import { clearSyncTimers } from '../src/store/slices/createSyncSlice';
 import { clearWorkoutTimer } from '../src/store/slices/createWorkoutSlice';
+import { draftRegistry } from '../src/lib/utils/draftRegistry';
+import { captureSession } from '../src/lib/sync/session';
 
 // Exercise the actual dialog store; Firebase remains mocked at the network boundary.
 vi.unmock('../src/store/useDialogStore');
@@ -20,7 +22,18 @@ const workout = { id: 'w-audit', date: '2026-09-10', routineName: 'Test', exerci
 beforeEach(() => {
     vi.useFakeTimers();
     localStorage.clear();
-    useAppStore.setState({ userData: { ...emptyUserData, history: [], activeWorkout: workout }, localWorkout: workout, syncing: false, syncHealth: 'synced' });
+    useAppStore.setState({
+        userData: { ...emptyUserData, history: [], activeWorkout: workout },
+        dataOwner: captureSession().owner,
+        localWorkout: workout,
+        syncing: false,
+        syncHealth: 'synced',
+        syncPresentation: 'normal',
+        localPersistenceBlocked: false,
+        compatibilityStatus: 'ok',
+        compatibilityError: null,
+        saveError: null,
+    });
     vi.mocked(DB.saveUserData).mockResolvedValue({ ok: true, status: 'synced' });
 });
 afterEach(() => {
@@ -97,6 +110,26 @@ describe('audit interaction regressions', () => {
         expect(await retry).toMatchObject({ id: workout.id });
         expect(useAppStore.getState().userData?.history.filter(item => item.id === workout.id)).toHaveLength(1);
         expect(useAppStore.getState().localWorkout).toBeNull();
+    });
+
+    it('blocks workout completion when a device-critical draft cannot flush', async () => {
+        vi.spyOn(useDialogStore.getState(), 'showAlert').mockResolvedValue();
+        const fail = () => { throw new Error('draft storage failed'); };
+        draftRegistry.register(fail);
+        try {
+            const { result } = renderHook(() => useWorkoutSession());
+            let completion!: Promise<unknown>;
+            await act(async () => {
+                completion = result.current.endWorkout(false, 2_000);
+            });
+
+            expect(await completion).toBeNull();
+            expect(useAppStore.getState().localWorkout?.id).toBe(workout.id);
+            expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
+            expect(useAppStore.getState().syncHealth).toBe('failed');
+        } finally {
+            draftRegistry.unregister(fail);
+        }
     });
 
     it('persists zero ON days through the planning form save', async () => {

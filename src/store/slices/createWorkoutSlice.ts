@@ -3,7 +3,7 @@ import { DomainParsers } from '../../lib/schema';
 import { Logic } from '../../lib/logic';
 import { normalizeBusinessId } from '../../lib/businessIdentity';
 import type { WorkoutSession, SyncResult } from '../../types';
-import { readDeviceValue, writeDeviceValue } from '../../lib/sync/deviceStorage';
+import { readDeviceValueStrict, writeDeviceValue } from '../../lib/sync/deviceStorage';
 import type { AppState } from '../useAppStore';
 import { assertWorkoutSessionIdentities } from '../../lib/sync/domainOperations/validation';
 
@@ -14,6 +14,27 @@ export interface WorkoutSlice {
 }
 
 export const clearWorkoutTimer = () => {};
+
+const DEVICE_WORKOUT_PERSISTENCE_MESSAGE = 'Impossibile salvare l’allenamento sul dispositivo. Le modifiche sono bloccate per evitare perdita di dati; libera spazio o riabilita lo storage e riapri TheLogBook.';
+
+export class DeviceWorkoutCorruptError extends Error {
+    readonly code = 'device-workout-corrupt';
+
+    constructor(message = 'Snapshot workout locale non leggibile.') {
+        super(message);
+        this.name = 'DeviceWorkoutCorruptError';
+    }
+}
+
+function blockWorkoutPersistence(set: (partial: Partial<AppState>) => void, error: unknown): void {
+    console.error('Persistenza device-critical del workout fallita:', error);
+    set({
+        localPersistenceBlocked: true,
+        syncHealth: 'failed',
+        syncPresentation: 'normal',
+        saveError: DEVICE_WORKOUT_PERSISTENCE_MESSAGE,
+    });
+}
 
 function persistLocalWorkout(workout: WorkoutSession | null, owner?: string): void {
     if (workout) writeDeviceValue('workout', JSON.stringify(workout), owner);
@@ -72,40 +93,54 @@ export const getInitialLocalWorkout = (owner?: string, fallback?: WorkoutSession
         if (!fallback) return null;
         const normalized = normalizeDeviceWorkout(fallback);
         const validated = normalized ? DomainParsers.parseActiveWorkout(normalized) as WorkoutSession | null : null;
-        if (validated) persistLocalWorkout(validated, owner);
-        return validated;
-    };
-    try {
-        const saved = readDeviceValue('workout', owner);
-        if (!saved) return recoverFallback();
-        const parsed = JSON.parse(saved);
-        if (!parsed || typeof parsed !== 'object') return recoverFallback();
-        const normalized = normalizeDeviceWorkout(parsed as WorkoutSession);
-        if (!normalized) return recoverFallback();
-        const validated = DomainParsers.parseActiveWorkout(normalized) as WorkoutSession | null;
-        if (!validated) return recoverFallback();
+        if (!validated) throw new DeviceWorkoutCorruptError('Fallback activeWorkout locale non valido.');
         persistLocalWorkout(validated, owner);
         return validated;
-    } catch {
-        return recoverFallback();
+    };
+
+    const saved = readDeviceValueStrict('workout', owner);
+    if (saved === null) return recoverFallback();
+
+    let parsed: unknown;
+    try {
+        parsed = JSON.parse(saved);
+    } catch (error) {
+        throw new DeviceWorkoutCorruptError(
+            error instanceof Error ? `Snapshot workout locale corrotto: ${error.message}` : undefined,
+        );
     }
+    if (!parsed || typeof parsed !== 'object') throw new DeviceWorkoutCorruptError();
+
+    const normalized = normalizeDeviceWorkout(parsed as WorkoutSession);
+    if (!normalized) throw new DeviceWorkoutCorruptError('Snapshot workout locale privo di identità valida.');
+    const validated = DomainParsers.parseActiveWorkout(normalized) as WorkoutSession | null;
+    if (!validated) throw new DeviceWorkoutCorruptError('Snapshot workout locale non valido.');
+    persistLocalWorkout(validated, owner);
+    return validated;
 };
 
 export const createWorkoutSlice: StateCreator<AppState, [], [], WorkoutSlice> = (set, get) => ({
-    // Inizializza il workout in bozza dal localStorage, se presente (con ID univoci garantiti)
-    localWorkout: getInitialLocalWorkout(),
+    // Ownership-aware bootstrap installs the device-critical workout only after
+    // the owner is known. Never guess an owner while constructing the global store.
+    localWorkout: null,
 
     setLocalWorkout: (workoutOrUpdater) => {
-        set((state) => {
-            const nextWorkout = typeof workoutOrUpdater === 'function'
-                ? (workoutOrUpdater as (prev: WorkoutSession | null) => WorkoutSession | null)(state.localWorkout)
-                : workoutOrUpdater;
+        const currentWorkout = get().localWorkout;
+        const nextWorkout = typeof workoutOrUpdater === 'function'
+            ? (workoutOrUpdater as (prev: WorkoutSession | null) => WorkoutSession | null)(currentWorkout)
+            : workoutOrUpdater;
+        try {
             persistLocalWorkout(nextWorkout);
-            return { localWorkout: nextWorkout };
-        });
+        } catch (error) {
+            blockWorkoutPersistence(set, error);
+            throw error;
+        }
+        set({ localWorkout: nextWorkout });
     },
 
     setSyncedLocalWorkout: async (workoutOrUpdater) => {
+        if (get().localPersistenceBlocked) throw new Error(DEVICE_WORKOUT_PERSISTENCE_MESSAGE);
+
         const currentWorkout = get().localWorkout;
         const nextWorkout = typeof workoutOrUpdater === 'function'
             ? (workoutOrUpdater as (prev: WorkoutSession | null) => WorkoutSession | null)(currentWorkout)
@@ -121,7 +156,12 @@ export const createWorkoutSlice: StateCreator<AppState, [], [], WorkoutSlice> = 
         if (persistedWorkout) assertWorkoutSessionIdentities(persistedWorkout, 'Allenamento attivo');
 
         // Device-critical durability precedes the optimistic in-memory update.
-        persistLocalWorkout(persistedWorkout);
+        try {
+            persistLocalWorkout(persistedWorkout);
+        } catch (error) {
+            blockWorkoutPersistence(set, error);
+            throw error;
+        }
         set({ localWorkout: persistedWorkout });
         return get().dispatchDomainOperation({ type: 'active-workout.set', workout: persistedWorkout });
     },

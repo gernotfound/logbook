@@ -9,9 +9,10 @@ import type { WorkoutSession } from '../../types';
 import { Logic } from '../../lib/logic';
 import { draftRegistry } from '../../lib/utils/draftRegistry';
 import { captureSession, isCurrentSession } from '../../lib/sync/session';
-import { readDeviceValue, writeDeviceValue } from '../../lib/sync/deviceStorage';
+import { readDeviceValueStrict, writeDeviceValue } from '../../lib/sync/deviceStorage';
 import { requiredUpdateRecoveryRegistry } from '../../lib/sync/requiredUpdateRecovery';
 import type { WorkoutCompletionDraft } from '../../hooks/workout/workoutSessionPreparation';
+import { useAppStore } from '../../store/useAppStore';
 
 interface TrainingSessionProps {
     onNavigateToHistory?: () => void;
@@ -34,36 +35,44 @@ function createPostSessionDraft(workout: WorkoutSession): PostSessionDraft {
 }
 
 function parsePostSessionRecovery(raw: string | null, workoutId: string): { pendingEndTime: number | null; draft: PostSessionDraft } | null {
-    if (!raw) return null;
-    try {
-        const parsed = JSON.parse(raw) as { pendingEndTime?: unknown; draft?: Partial<PostSessionDraft> };
-        const draft = parsed?.draft;
-        if (!draft || draft.workoutId !== workoutId) return null;
-        if (!Array.isArray(draft.pains) || draft.pains.some(value => typeof value !== 'string')) return null;
-        const mood = draft.mood;
-        const pump = draft.pump;
-        const fatigue = draft.fatigue;
-        const water = draft.water;
-        if (typeof mood !== 'string' || typeof pump !== 'string' || typeof fatigue !== 'string' || typeof water !== 'string') return null;
-        const pendingEndTime = parsed.pendingEndTime === null
-            ? null
-            : typeof parsed.pendingEndTime === 'number' && Number.isFinite(parsed.pendingEndTime)
-                ? parsed.pendingEndTime
-                : null;
-        return {
-            pendingEndTime,
-            draft: {
-                workoutId,
-                mood,
-                pump,
-                fatigue,
-                water,
-                pains: [...draft.pains],
-            },
-        };
-    } catch {
-        return null;
+    if (raw === null) return null;
+    const parsed = JSON.parse(raw) as { pendingEndTime?: unknown; draft?: Partial<PostSessionDraft> };
+    const draft = parsed?.draft;
+    if (!draft || draft.workoutId !== workoutId) throw new Error('Bozza finale appartiene a un workout diverso.');
+    if (!Array.isArray(draft.pains) || draft.pains.some(value => typeof value !== 'string')) throw new Error('Bozza finale corrotta.');
+    const mood = draft.mood;
+    const pump = draft.pump;
+    const fatigue = draft.fatigue;
+    const water = draft.water;
+    if (typeof mood !== 'string' || typeof pump !== 'string' || typeof fatigue !== 'string' || typeof water !== 'string') {
+        throw new Error('Bozza finale non valida.');
     }
+    const pendingEndTime = parsed.pendingEndTime === null || parsed.pendingEndTime === undefined
+        ? null
+        : typeof parsed.pendingEndTime === 'number' && Number.isFinite(parsed.pendingEndTime)
+            ? parsed.pendingEndTime
+            : (() => { throw new Error('Timestamp finale della bozza non valido.'); })();
+    return {
+        pendingEndTime,
+        draft: {
+            workoutId,
+            mood,
+            pump,
+            fatigue,
+            water,
+            pains: [...draft.pains],
+        },
+    };
+}
+
+function blockPostSessionPersistence(error: unknown): void {
+    console.error('Persistenza valutazione finale non disponibile:', error);
+    useAppStore.setState({
+        localPersistenceBlocked: true,
+        syncHealth: 'failed',
+        syncPresentation: 'normal',
+        saveError: 'Valutazione finale non salvata sul dispositivo. Riapri TheLogBook prima di terminare la sessione.',
+    });
 }
 
 const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: TrainingSessionProps) => {
@@ -84,16 +93,26 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
         if (!draft || !postSessionRecoveryName) return;
         const session = postSessionSessionRef.current;
         if (!isCurrentSession(session)) throw new Error('Sessione cambiata prima del salvataggio della valutazione finale.');
-        writeDeviceValue(
-            postSessionRecoveryName,
-            JSON.stringify({ pendingEndTime: endTime, draft }),
-            session.owner,
-        );
+        try {
+            writeDeviceValue(
+                postSessionRecoveryName,
+                JSON.stringify({ pendingEndTime: endTime, draft }),
+                session.owner,
+            );
+        } catch (error) {
+            blockPostSessionPersistence(error);
+            throw error;
+        }
     }, [postSessionRecoveryName]);
 
     const clearPostSessionRecovery = useCallback(() => {
         if (!postSessionRecoveryName) return;
-        writeDeviceValue(postSessionRecoveryName, null, postSessionSessionRef.current.owner);
+        try {
+            writeDeviceValue(postSessionRecoveryName, null, postSessionSessionRef.current.owner);
+        } catch (error) {
+            console.warn('Workout salvato, ma la copia di recupero finale non è stata rimossa:', error);
+            useAppStore.getState().setSaveError('Workout salvato; impossibile rimuovere una copia di recupero locale obsoleta.');
+        }
     }, [postSessionRecoveryName]);
 
     useEffect(() => {
@@ -101,10 +120,16 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
         if (!workoutId || activeWorkout?.isEditingHistory || !postSessionRecoveryName) return;
         const session = captureSession();
         postSessionSessionRef.current = session;
-        const recovered = parsePostSessionRecovery(
-            readDeviceValue(postSessionRecoveryName, session.owner),
-            workoutId,
-        );
+        let recovered: ReturnType<typeof parsePostSessionRecovery>;
+        try {
+            recovered = parsePostSessionRecovery(
+                readDeviceValueStrict(postSessionRecoveryName, session.owner),
+                workoutId,
+            );
+        } catch (error) {
+            blockPostSessionPersistence(error);
+            return;
+        }
         if (!recovered) return;
         postSessionDraftRef.current = recovered.draft;
         setPostSessionDraft(recovered.draft);
@@ -149,9 +174,13 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
             setPostSessionDraft(current);
         }
         const endTime = Date.now();
+        try {
+            persistPostSessionSnapshot(current, endTime);
+        } catch {
+            return;
+        }
         pendingEndTimeRef.current = endTime;
         setPendingEndTime(endTime);
-        persistPostSessionSnapshot(current, endTime);
     }, [activeWorkout, persistPostSessionSnapshot]);
 
     useEffect(() => {
@@ -177,7 +206,12 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
         );
 
         const finish = async () => {
-            draftRegistry.flushAll();
+            try {
+                draftRegistry.flushAll({ strict: true });
+            } catch (error) {
+                blockPostSessionPersistence(error);
+                return;
+            }
             const draft = postSessionDraftRef.current;
             if (!draft || draft.workoutId !== String(activeWorkout.id ?? '')) return;
             const completionDraft: WorkoutCompletionDraft = {

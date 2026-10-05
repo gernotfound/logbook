@@ -19,7 +19,22 @@ export default function WorkoutTimer() {
 }
 
 function OwnerWorkoutTimer({ owner }: { owner: string }) {
-    const [restTimer, setRestTimer] = useState<WorkoutTimerSnapshot>(() => readWorkoutTimerSnapshot(owner));
+    const [initialTimer] = useState(() => {
+        try {
+            return { snapshot: readWorkoutTimerSnapshot(owner), unreadable: false };
+        } catch (error) {
+            console.error('Timer device-critical non leggibile:', error);
+            useAppStore.setState({
+                localPersistenceBlocked: true,
+                syncHealth: 'failed',
+                syncPresentation: 'normal',
+                saveError: 'Timer locale non leggibile. Riapri TheLogBook prima di usare o sovrascrivere il cronometro.',
+            });
+            return { snapshot: stoppedWorkoutTimer(), unreadable: true };
+        }
+    });
+    const [restTimer, setRestTimer] = useState<WorkoutTimerSnapshot>(initialTimer.snapshot);
+    const [timerUnreadable, setTimerUnreadable] = useState(initialTimer.unreadable);
     const [displayNow, setDisplayNow] = useState(() => Date.now());
 
     const restDisplay = restTimer.state === 'running'
@@ -27,6 +42,7 @@ function OwnerWorkoutTimer({ owner }: { owner: string }) {
         : (restTimer.state === 'paused' ? formatTimerMs(restTimer.accumulated) : '00:00');
 
     const commitTimer = (next: WorkoutTimerSnapshot): boolean => {
+        if (timerUnreadable) return false;
         try {
             // Device-critical timer transitions are persisted synchronously before
             // the UI confirms them. A failed write therefore cannot look saved.
@@ -34,8 +50,15 @@ function OwnerWorkoutTimer({ owner }: { owner: string }) {
             setRestTimer(next);
             if (next.state === 'running') setDisplayNow(Date.now());
             return true;
-        } catch {
-            useAppStore.getState().setSaveError('Impossibile salvare il timer su questo dispositivo.');
+        } catch (error) {
+            console.error('Persistenza timer device-critical fallita:', error);
+            setTimerUnreadable(true);
+            useAppStore.setState({
+                localPersistenceBlocked: true,
+                syncHealth: 'failed',
+                syncPresentation: 'normal',
+                saveError: 'Impossibile salvare il timer su questo dispositivo. Riapri TheLogBook prima di continuare.',
+            });
             return false;
         }
     };
@@ -121,20 +144,23 @@ function OwnerWorkoutTimer({ owner }: { owner: string }) {
                     {restDisplay}
                 </output>
             </div>
+            {timerUnreadable && (
+                <p role="alert" className="text-muted">Timer non disponibile finché lo storage del dispositivo non viene riletto correttamente.</p>
+            )}
             <div className="timer-controls">
                 {restTimer.state !== 'running' ? (
-                    <button type="button" className="timer-btn play" onClick={startRest} aria-label="Avvia recupero" title="Avvia recupero">
+                    <button type="button" className="timer-btn play" onClick={startRest} disabled={timerUnreadable} aria-label="Avvia recupero" title="Avvia recupero">
                         <Play size={20} aria-hidden="true" />
                     </button>
                 ) : (
-                    <button type="button" className="timer-btn pause" onClick={pauseRest} aria-label="Pausa recupero" title="Pausa recupero">
+                    <button type="button" className="timer-btn pause" onClick={pauseRest} disabled={timerUnreadable} aria-label="Pausa recupero" title="Pausa recupero">
                         <Pause size={20} aria-hidden="true" />
                     </button>
                 )}
-                <button type="button" className="timer-btn reset" onClick={resetRest} aria-label="Riavvia recupero" title="Riavvia recupero">
+                <button type="button" className="timer-btn reset" onClick={resetRest} disabled={timerUnreadable} aria-label="Riavvia recupero" title="Riavvia recupero">
                     <RotateCcw size={20} aria-hidden="true" />
                 </button>
-                <button type="button" className="timer-btn stop" onClick={stopRest} aria-label="Ferma recupero" title="Ferma recupero">
+                <button type="button" className="timer-btn stop" onClick={stopRest} disabled={timerUnreadable} aria-label="Ferma recupero" title="Ferma recupero">
                     <Square size={20} aria-hidden="true" />
                 </button>
             </div>

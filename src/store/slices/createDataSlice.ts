@@ -101,8 +101,15 @@ export const createDataSlice: StateCreator<AppState, [], [], DataSlice> = (set, 
             try {
                 if (aligned.local) writeDeviceValue('workout', JSON.stringify(aligned.local), session.owner);
                 else writeDeviceValue('workout', null, session.owner);
-            } catch (e) {
-                console.error("Errore allineamento localWorkout in localStorage:", e);
+            } catch (error) {
+                console.error('Allineamento device-critical del workout fallito:', error);
+                set({
+                    localPersistenceBlocked: true,
+                    syncHealth: 'failed',
+                    syncPresentation: 'normal',
+                    saveError: 'Impossibile salvare l’allenamento sul dispositivo. I dati in memoria non vengono avanzati per evitare perdita o sovrascritture.',
+                });
+                return;
             }
         }
 

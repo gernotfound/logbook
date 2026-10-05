@@ -13,7 +13,7 @@ import { applyDomainOperations } from '../src/lib/sync/domainOperations';
 import { applyRemoteDocuments, projectDocuments } from '../src/lib/sync/documentProjection';
 import { initializeLocal, readLocal } from '../src/lib/sync/localRepository';
 import { deviceKey } from '../src/lib/sync/deviceStorage';
-import { getInitialLocalWorkout } from '../src/store/slices/createWorkoutSlice';
+import { DeviceWorkoutCorruptError, getInitialLocalWorkout } from '../src/store/slices/createWorkoutSlice';
 import { useAppStore } from '../src/store/useAppStore';
 
 const catalog: CachedGlobalCatalog = {
@@ -86,7 +86,7 @@ describe('F-006 active workout persisted business identity', () => {
         expect(envelope?.baseline.activeWorkout).toBeNull();
 
         localStorage.setItem(deviceKey('workout'), JSON.stringify({ date: '2026-09-29', exercises: [] }));
-        expect(getInitialLocalWorkout()).toBeNull();
+        expect(() => getInitialLocalWorkout()).toThrow(DeviceWorkoutCorruptError);
 
         localStorage.setItem(deviceKey('workout'), JSON.stringify(validWorkout));
         expect(getInitialLocalWorkout()).toMatchObject(validWorkout);

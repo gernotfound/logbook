@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
 import { draftRegistry } from '../../lib/utils/draftRegistry';
 import { captureSession, isCurrentSession } from '../../lib/sync/session';
-import { readDeviceValue, writeDeviceValue } from '../../lib/sync/deviceStorage';
+import { readDeviceValueStrict, writeDeviceValue } from '../../lib/sync/deviceStorage';
 import { requiredUpdateRecoveryRegistry } from '../../lib/sync/requiredUpdateRecovery';
 import { useAppStore } from '../../store/useAppStore';
 
@@ -18,12 +18,28 @@ function normalizeInputValue(value: string, type?: string, inputMode?: string) {
     return type === 'number' || inputMode === 'decimal' ? value.replace(',', '.') : value;
 }
 
+function readRecoveryStrict(key: string | null, owner: string): string | null {
+    if (!key) return null;
+    try {
+        return readDeviceValueStrict(key, owner);
+    } catch (error) {
+        console.error('Bozza bufferizzata non leggibile:', error);
+        useAppStore.setState({
+            localPersistenceBlocked: true,
+            syncHealth: 'failed',
+            syncPresentation: 'normal',
+            saveError: 'Una bozza del workout non è leggibile sul dispositivo. Riapri TheLogBook prima di continuare.',
+        });
+        return null;
+    }
+}
+
 export const BufferedInput = React.forwardRef<HTMLInputElement, BufferedInputProps>(
     ({ id, value, onChange, onBlur, onFocus, onKeyDown, type, inputMode, ...props }, ref) => {
         const initialSession = useRef(captureSession());
         const recoveryKey = useRef(recoveryName('input', id));
         const recovered = useRef(
-            recoveryKey.current ? readDeviceValue(recoveryKey.current, initialSession.current.owner) : null,
+            readRecoveryStrict(recoveryKey.current, initialSession.current.owner),
         );
         const initialValue = recovered.current ?? value ?? '';
         const [localValue, setLocalValue] = useState(initialValue);
@@ -159,7 +175,7 @@ export const BufferedTextarea = React.forwardRef<HTMLTextAreaElement, BufferedTe
         const initialSession = useRef(captureSession());
         const recoveryKey = useRef(recoveryName('textarea', id));
         const recovered = useRef(
-            recoveryKey.current ? readDeviceValue(recoveryKey.current, initialSession.current.owner) : null,
+            readRecoveryStrict(recoveryKey.current, initialSession.current.owner),
         );
         const initialValue = recovered.current ?? value ?? '';
         const [localValue, setLocalValue] = useState(initialValue);

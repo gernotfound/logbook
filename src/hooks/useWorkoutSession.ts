@@ -17,6 +17,7 @@ import { mapFirebaseErrorCode } from '../lib/errorHandler';
 import type { WorkoutSession, WorkoutRoutine, Exercise, WorkoutReadiness } from '../types';
 import { auth } from '../lib/firebase';
 import { draftRegistry } from '../lib/utils/draftRegistry';
+import { isWorkoutClockAnomalyError, resetWorkoutClockGuard } from '../lib/workoutClockGuard';
 
 const EMPTY_ROUTINES: WorkoutRoutine[] = [];
 const EMPTY_LIBRARY: Exercise[] = [];
@@ -46,8 +47,11 @@ export function useWorkoutSession() {
             setLocalWorkout(workoutOrUpdater);
             return;
         }
-        // Input-level mutations remain non-blocking; syncHealth/saveError surface failures.
-        void setSyncedLocalWorkout(workoutOrUpdater).catch(() => {});
+        // Input-level mutations remain non-blocking, but device-critical failures
+        // are converted by the workout slice into a persistent fail-closed UI state.
+        void setSyncedLocalWorkout(workoutOrUpdater).catch(error => {
+            console.error('Mutazione workout non persistita sul dispositivo:', error);
+        });
     }, [setLocalWorkout, setSyncedLocalWorkout]);
     
     // Rating states derivati direttamente da activeWorkout per prevenire perdita di dati
@@ -161,7 +165,16 @@ export function useWorkoutSession() {
             ...(hasReadiness ? { readiness: { capturedAt: startedAt, ...readiness } } : {}),
         };
 
-        resetGlobalWorkoutTimer();
+        if (!resetGlobalWorkoutTimer()) {
+            useAppStore.setState({
+                localPersistenceBlocked: true,
+                syncHealth: 'failed',
+                syncPresentation: 'normal',
+                saveError: 'Impossibile inizializzare il timer sul dispositivo. La sessione non verrà avviata.',
+            });
+            await showAlert('Impossibile iniziare la sessione: il timer locale non può essere salvato sul dispositivo.');
+            return false;
+        }
         try {
             const result = await setSyncedLocalWorkout(startedWorkout);
             return result.ok;
@@ -244,7 +257,20 @@ export function useWorkoutSession() {
         const expectedId = useAppStore.getState().localWorkout?.id;
         try {
         if (!expectedId || (confirmEnd && !(await showConfirm("Terminare l'allenamento?")))) return null;
-        draftRegistry.flushAll();
+        try {
+            draftRegistry.flushAll({ strict: true });
+        } catch (error) {
+            useAppStore.setState({
+                localPersistenceBlocked: true,
+                syncHealth: 'failed',
+                syncPresentation: 'normal',
+                saveError: 'Impossibile mettere al sicuro le ultime modifiche del workout. La sessione non verrà terminata.',
+            });
+            if (auth.currentUser?.uid === expectedUid) {
+                await showAlert('Le ultime modifiche non sono ancora al sicuro sul dispositivo. Riprova dopo aver risolto il problema di storage.');
+            }
+            return null;
+        }
         const currentWorkout = useAppStore.getState().localWorkout;
         if (!currentWorkout || currentWorkout.id !== expectedId || auth.currentUser?.uid !== expectedUid) return null;
 
@@ -270,9 +296,16 @@ export function useWorkoutSession() {
             if (auth.currentUser?.uid !== expectedUid || useAppStore.getState().localWorkout?.id !== expectedId) return null;
             setLocalWorkout(null);
             resetGlobalWorkoutTimer();
+            resetWorkoutClockGuard(expectedId);
             return finishedWorkout;
-        } catch {
-            if (auth.currentUser?.uid === expectedUid) await showAlert("Errore durante il salvataggio della sessione.");
+        } catch (error) {
+            if (auth.currentUser?.uid === expectedUid) {
+                await showAlert(
+                    isWorkoutClockAnomalyError(error)
+                        ? 'L’orologio del dispositivo è cambiato durante l’allenamento. Correggi data e ora, riapri TheLogBook e poi termina la sessione.'
+                        : 'Errore durante il salvataggio della sessione.',
+                );
+            }
             return null;
         }
         } finally {
@@ -282,10 +315,12 @@ export function useWorkoutSession() {
 
     const deleteWorkout = useCallback(async () => {
         if (!(await showConfirm("Sei sicuro di voler eliminare questa sessione in corso? Non verrà salvata."))) return;
+        const deletedWorkoutId = useAppStore.getState().localWorkout?.id;
         try {
             await dispatchDomainOperation({ type: 'active-workout.set', workout: null });
             setLocalWorkout(null);
             resetGlobalWorkoutTimer();
+            if (deletedWorkoutId) resetWorkoutClockGuard(String(deletedWorkoutId));
         } catch (err: any) {
             const formatted = mapFirebaseErrorCode(err);
             if (formatted.isOfflineSafe) {

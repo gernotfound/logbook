@@ -132,12 +132,32 @@ describe('useWakeLock', () => {
         await vi.waitFor(() => expect(lateSentinel.release).toHaveBeenCalled());
     });
 
-    it("l'evento 'release' del sentinel azzera il ref interno senza loop", async () => {
+    it("riacquisisce un Wake Lock rilasciato spontaneamente con budget limitato", async () => {
+        const second = makeSentinel();
+        const third = makeSentinel();
+        mockRequest
+            .mockResolvedValueOnce(sentinel)
+            .mockResolvedValueOnce(second)
+            .mockResolvedValueOnce(third);
+
         renderHook(() => useWakeLock(true));
-        await vi.waitFor(() => expect(mockRequest).toHaveBeenCalled());
-        // L'OS rilascia spontaneamente il sentinel
-        sentinel._emit('release');
-        // Non deve tentare una riacquisizione automatica
-        expect(mockRequest).toHaveBeenCalledTimes(1);
+        await vi.waitFor(() => expect(mockRequest).toHaveBeenCalledTimes(1));
+
+        vi.useFakeTimers();
+        try {
+            sentinel._emit('release');
+            await vi.advanceTimersByTimeAsync(500);
+            expect(mockRequest).toHaveBeenCalledTimes(2);
+
+            second._emit('release');
+            await vi.advanceTimersByTimeAsync(1000);
+            expect(mockRequest).toHaveBeenCalledTimes(3);
+
+            third._emit('release');
+            await vi.advanceTimersByTimeAsync(5000);
+            expect(mockRequest).toHaveBeenCalledTimes(3);
+        } finally {
+            vi.useRealTimers();
+        }
     });
 });
