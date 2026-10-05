@@ -12,6 +12,7 @@ import { useDialogStore } from '../src/store/useDialogStore';
 import { GlobalDialog } from '../src/components/UI/GlobalDialog';
 import { clearSyncTimers } from '../src/store/slices/createSyncSlice';
 import { clearWorkoutTimer } from '../src/store/slices/createWorkoutSlice';
+import { draftRegistry } from '../src/lib/utils/draftRegistry';
 
 // Exercise the actual dialog store; Firebase remains mocked at the network boundary.
 vi.unmock('../src/store/useDialogStore');
@@ -97,6 +98,26 @@ describe('audit interaction regressions', () => {
         expect(await retry).toMatchObject({ id: workout.id });
         expect(useAppStore.getState().userData?.history.filter(item => item.id === workout.id)).toHaveLength(1);
         expect(useAppStore.getState().localWorkout).toBeNull();
+    });
+
+    it('blocks workout completion when a device-critical draft cannot flush', async () => {
+        vi.spyOn(useDialogStore.getState(), 'showAlert').mockResolvedValue();
+        const fail = () => { throw new Error('draft storage failed'); };
+        draftRegistry.register(fail);
+        try {
+            const { result } = renderHook(() => useWorkoutSession());
+            let completion!: Promise<unknown>;
+            await act(async () => {
+                completion = result.current.endWorkout(false, 2_000);
+            });
+
+            expect(await completion).toBeNull();
+            expect(useAppStore.getState().localWorkout?.id).toBe(workout.id);
+            expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
+            expect(useAppStore.getState().syncHealth).toBe('failed');
+        } finally {
+            draftRegistry.unregister(fail);
+        }
     });
 
     it('persists zero ON days through the planning form save', async () => {
