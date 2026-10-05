@@ -293,11 +293,11 @@ export function useWorkoutSession() {
 
     const deleteWorkout = useCallback(async () => {
         if (!(await showConfirm("Sei sicuro di voler eliminare questa sessione in corso? Non verrà salvata."))) return;
+        const deletedWorkoutId = useAppStore.getState().localWorkout?.id;
         try {
             await dispatchDomainOperation({ type: 'active-workout.set', workout: null });
             setLocalWorkout(null);
             resetGlobalWorkoutTimer();
-            const deletedWorkoutId = useAppStore.getState().localWorkout?.id;
             if (deletedWorkoutId) resetWorkoutClockGuard(String(deletedWorkoutId));
         } catch (err: any) {
             const formatted = mapFirebaseErrorCode(err);
