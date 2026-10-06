@@ -136,9 +136,8 @@ describe('EMPIRICAL ADVERSARIAL SUITE — R1 (TDEE Calculation) & R2 (Workout Vo
             expect(res.tdee).toBe(2500);
         });
 
-        // 1.5 Adversarial Finding Demonstration: Unparseable date strings yield NaN in current implementation
-        it('R1.5: Adversarial edge case: unparseable date strings pass non-empty string check and produce NaN diffDays', () => {
-            // When 6 valid days and 1 unparseable date string is passed:
+        // 1.5 Invalid dates are excluded before arithmetic
+        it('R1.5: rejects unparseable dates instead of producing NaN TDEE values', () => {
             const dataWithBadDate = [
                 { date: 'INVALID_DATE_STRING', weight: 80, kcal: 2500 },
                 { date: '2026-06-10', weight: 80, kcal: 2500 },
@@ -149,12 +148,10 @@ describe('EMPIRICAL ADVERSARIAL SUITE — R1 (TDEE Calculation) & R2 (Workout Vo
                 { date: '2026-06-15', weight: 80, kcal: 2500 },
             ];
 
-            const res = calculateTDEE(dataWithBadDate);
-            // Empirically observes whether calculateTDEE produced NaN due to missing Date.parse validation
-            if (res.error === false && isNaN(res.tdee!)) {
-                // Confirms the unparseable date flaw
-                expect(isNaN(res.tdee!)).toBe(true);
-            }
+            expect(calculateTDEE(dataWithBadDate)).toEqual({
+                error: true,
+                message: 'Raccolta dati in corso... (6/7 giorni richiesti)'
+            });
         });
 
         // 1.6 Boundary test: 0, 1, 6 valid items vs exactly 7, 14, and 20 items (sliding 14-day window)

@@ -459,6 +459,23 @@ describe('Zod Schema Resilience & Defensive Catches', () => {
             expect(PartialMacroTargetSchema.parse({ kcal: '2200' })).toEqual({
                 kcal: 2200
             });
+
+            expect(MacroTargetSchema.parse({ kcal: -1, carbs: -2, pro: -3, fat: -4 })).toEqual({
+                kcal: 0,
+                carbs: 0,
+                pro: 0,
+                fat: 0
+            });
+            expect(MacroRatioSchema.parse({ carbsPerKg: -1, proPerKg: -2, fatPerKg: -3 })).toEqual({
+                carbsPerKg: 0,
+                proPerKg: 0,
+                fatPerKg: 0
+            });
+            expect(MacroBoostSchema.parse({ carbsPercent: -101, proPercent: -100, fatPercent: 25 })).toEqual({
+                carbsPercent: 0,
+                proPercent: -100,
+                fatPercent: 25
+            });
         });
 
         it('validates ExerciseSetSchema, RoutineExerciseSchema, SessionExerciseDropsetSchema, SessionExerciseIsometricSchema', () => {

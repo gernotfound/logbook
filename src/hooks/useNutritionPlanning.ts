@@ -5,6 +5,39 @@ import { Logic } from '../lib/logic';
 import type { NutritionPlanning } from '../types';
 import { normalizeOnDaysCount } from '../lib/nutritionDefaults';
 
+function numericInput(value: unknown, fallback = 0): number {
+    if (value === null || value === undefined || (typeof value === 'string' && value.trim() === '')) return fallback;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : Number.NaN;
+}
+
+function deriveMacroSplit(avgValue: unknown, boostPercentValue: unknown, onDaysCount: unknown) {
+    const avg = numericInput(avgValue);
+    const boostPercent = numericInput(boostPercentValue);
+    const onDays = normalizeOnDaysCount(onDaysCount);
+    if (!Number.isFinite(avg) || avg < 0 || !Number.isFinite(boostPercent) || boostPercent < -100) {
+        return { on: 0, off: 0, valid: false };
+    }
+
+    if (onDays === 0 || onDays === 7) {
+        return { on: avg, off: avg, valid: true };
+    }
+
+    const offDays = 7 - onDays;
+    const multiplier = 1 + (boostPercent / 100);
+    const denominator = (onDays * multiplier) + offDays;
+    if (!Number.isFinite(multiplier) || multiplier < 0 || !Number.isFinite(denominator) || denominator <= 0) {
+        return { on: 0, off: 0, valid: false };
+    }
+
+    const off = (7 * avg) / denominator;
+    const on = off * multiplier;
+    if (!Number.isFinite(on) || on < 0 || !Number.isFinite(off) || off < 0) {
+        return { on: 0, off: 0, valid: false };
+    }
+    return { on, off, valid: true };
+}
+
 export function useNutritionPlanning() {
     const storePlanning = useAppStore(state => state.userData?.nutritionPlanning);
     const nutritionMap = useAppStore(state => state.userData?.nutrition);
@@ -43,30 +76,27 @@ export function useNutritionPlanning() {
         normocalorica: basePlanning.normocalorica ? { ...defaultPlanning.normocalorica, ...basePlanning.normocalorica } : defaultPlanning.normocalorica,
     };
 
-    const N = planning.onDaysCount || 0;
-    const F = 7 - N;
+    const avgC = numericInput(planning.avgMacros!.carbsPerKg);
+    const avgP = numericInput(planning.avgMacros!.proPerKg);
+    const avgF = numericInput(planning.avgMacros!.fatPerKg);
+    const carbsSplit = deriveMacroSplit(avgC, planning.onBoost!.carbsPercent, planning.onDaysCount);
+    const proteinSplit = deriveMacroSplit(avgP, planning.onBoost!.proPercent, planning.onDaysCount);
+    const fatSplit = deriveMacroSplit(avgF, planning.onBoost!.fatPercent, planning.onDaysCount);
 
-    const avgC = planning.avgMacros!.carbsPerKg;
-    const bC = planning.onBoost!.carbsPercent / 100;
-    const offC = (N > 0 && N < 7) ? (7 * avgC) / (N * (1 + bC) + F) : avgC;
-    const onC = (N > 0 && N < 7) ? offC * (1 + bC) : avgC;
+    const currentOnMacros = {
+        carbsPerKg: carbsSplit.on,
+        proPerKg: proteinSplit.on,
+        fatPerKg: fatSplit.on,
+    };
+    const currentOffMacros = {
+        carbsPerKg: carbsSplit.off,
+        proPerKg: proteinSplit.off,
+        fatPerKg: fatSplit.off,
+    };
 
-    const avgP = planning.avgMacros!.proPerKg;
-    const bP = planning.onBoost!.proPercent / 100;
-    const offP = (N > 0 && N < 7) ? (7 * avgP) / (N * (1 + bP) + F) : avgP;
-    const onP = (N > 0 && N < 7) ? offP * (1 + bP) : avgP;
-
-    const avgF = planning.avgMacros!.fatPerKg;
-    const bF = planning.onBoost!.fatPercent / 100;
-    const offF = (N > 0 && N < 7) ? (7 * avgF) / (N * (1 + bF) + F) : avgF;
-    const onF = (N > 0 && N < 7) ? offF * (1 + bF) : avgF;
-
-    const currentOnMacros = { carbsPerKg: onC, proPerKg: onP, fatPerKg: onF };
-    const currentOffMacros = { carbsPerKg: offC, proPerKg: offP, fatPerKg: offF };
-
-    const w = planning.weight;
-    const onMacrosCalc = Logic.calculateMacrosFromKg(w, onC, onP, onF);
-    const offMacrosCalc = Logic.calculateMacrosFromKg(w, offC, offP, offF);
+    const w = numericInput(planning.weight, latestWeight);
+    const onMacrosCalc = Logic.calculateMacrosFromKg(w, currentOnMacros.carbsPerKg, currentOnMacros.proPerKg, currentOnMacros.fatPerKg);
+    const offMacrosCalc = Logic.calculateMacrosFromKg(w, currentOffMacros.carbsPerKg, currentOffMacros.proPerKg, currentOffMacros.fatPerKg);
     const avgMacrosCalc = Logic.calculateMacrosFromKg(w, avgC, avgP, avgF);
 
     const tdeeUserData = useMemo(() => ({
@@ -96,28 +126,55 @@ export function useNutritionPlanning() {
 
     const handleSave = async (e?: any) => {
         if (e) e.preventDefault();
-        const sanitizedNormo = {
-            kcal: parseFloat(planning.normocalorica?.kcal as any) || 0,
-            carbs: parseFloat(planning.normocalorica?.carbs as any) || 0,
-            pro: parseFloat(planning.normocalorica?.pro as any) || 0,
-            fat: parseFloat(planning.normocalorica?.fat as any) || 0
+
+        const weight = numericInput(planning.weight, latestWeight);
+        const avgMacros = {
+            carbsPerKg: numericInput(planning.avgMacros!.carbsPerKg),
+            proPerKg: numericInput(planning.avgMacros!.proPerKg),
+            fatPerKg: numericInput(planning.avgMacros!.fatPerKg),
         };
+        const onBoost = {
+            carbsPercent: numericInput(planning.onBoost!.carbsPercent),
+            proPercent: numericInput(planning.onBoost!.proPercent),
+            fatPercent: numericInput(planning.onBoost!.fatPercent),
+        };
+        const sanitizedNormo = {
+            kcal: numericInput(planning.normocalorica?.kcal),
+            carbs: numericInput(planning.normocalorica?.carbs),
+            pro: numericInput(planning.normocalorica?.pro),
+            fat: numericInput(planning.normocalorica?.fat),
+        };
+
+        const nonNegativeValues = [
+            ...Object.values(avgMacros),
+            ...Object.values(sanitizedNormo),
+        ];
+        const boostValues = Object.values(onBoost);
+        const splitValues = [
+            ...Object.values(currentOnMacros),
+            ...Object.values(currentOffMacros),
+        ];
+        const invalid = !Number.isFinite(weight)
+            || weight <= 0
+            || nonNegativeValues.some(value => !Number.isFinite(value) || value < 0)
+            || boostValues.some(value => !Number.isFinite(value) || value < -100)
+            || !carbsSplit.valid
+            || !proteinSplit.valid
+            || !fatSplit.valid
+            || splitValues.some(value => !Number.isFinite(value) || value < 0);
+
+        if (invalid) {
+            await showAlert('Controlla i valori della pianificazione: usa numeri validi, macro non negativi e variazioni ON non inferiori a -100%.');
+            return;
+        }
 
         const updatedPlanning: NutritionPlanning = {
             ...planning,
-            weight: parseFloat(planning.weight as any) || latestWeight,
+            weight,
             onDaysCount: normalizeOnDaysCount(planning.onDaysCount),
             normocalorica: sanitizedNormo,
-            avgMacros: {
-                carbsPerKg: parseFloat(planning.avgMacros!.carbsPerKg as any) || 0,
-                proPerKg: parseFloat(planning.avgMacros!.proPerKg as any) || 0,
-                fatPerKg: parseFloat(planning.avgMacros!.fatPerKg as any) || 0
-            },
-            onBoost: {
-                carbsPercent: parseFloat(planning.onBoost!.carbsPercent as any) || 0,
-                proPercent: parseFloat(planning.onBoost!.proPercent as any) || 0,
-                fatPercent: parseFloat(planning.onBoost!.fatPercent as any) || 0
-            },
+            avgMacros,
+            onBoost,
             onMacros: currentOnMacros,
             offMacros: currentOffMacros
         };

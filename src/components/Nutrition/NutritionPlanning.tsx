@@ -75,15 +75,15 @@ const NutritionPlanning = () => {
                     
                     <div className="input-row flex-between" style={{ marginBottom: '10px' }}>
                         <span style={{ color: 'var(--text-muted)' }}>Variazione pro (%)</span>
-                        <input type="number" step="1" value={planning.onBoost?.proPercent ?? ''} onChange={e => handleUpdateOnBoost('proPercent', e.target.value)} onFocus={e => e.target.select()} style={{ width: '80px', textAlign: 'right' }} />
+                        <input type="number" min="-100" step="1" value={planning.onBoost?.proPercent ?? ''} onChange={e => handleUpdateOnBoost('proPercent', e.target.value)} onFocus={e => e.target.select()} style={{ width: '80px', textAlign: 'right' }} />
                     </div>
                     <div className="input-row flex-between" style={{ marginBottom: '10px' }}>
                         <span style={{ color: 'var(--text-muted)' }}>Variazione carbo (%)</span>
-                        <input type="number" step="1" value={planning.onBoost?.carbsPercent ?? ''} onChange={e => handleUpdateOnBoost('carbsPercent', e.target.value)} onFocus={e => e.target.select()} style={{ width: '80px', textAlign: 'right' }} />
+                        <input type="number" min="-100" step="1" value={planning.onBoost?.carbsPercent ?? ''} onChange={e => handleUpdateOnBoost('carbsPercent', e.target.value)} onFocus={e => e.target.select()} style={{ width: '80px', textAlign: 'right' }} />
                     </div>
                     <div className="input-row flex-between" style={{ marginBottom: '15px' }}>
                         <span style={{ color: 'var(--text-muted)' }}>Variazione grassi (%)</span>
-                        <input type="number" step="1" value={planning.onBoost?.fatPercent ?? ''} onChange={e => handleUpdateOnBoost('fatPercent', e.target.value)} onFocus={e => e.target.select()} style={{ width: '80px', textAlign: 'right' }} />
+                        <input type="number" min="-100" step="1" value={planning.onBoost?.fatPercent ?? ''} onChange={e => handleUpdateOnBoost('fatPercent', e.target.value)} onFocus={e => e.target.select()} style={{ width: '80px', textAlign: 'right' }} />
                     </div>
                 </div>
 

@@ -29,15 +29,15 @@ const IPV6_REGEX = /(?<![0-9a-fA-F:])(?:(?:(?:::|(?:[0-9a-fA-F]{1,4}:)+|(?:[0-9a
 const BEARER_REGEX = /\b[Bb][Ee][Aa][Rr][Ee][Rr]\s+[A-Za-z0-9\-._~+/]+=*/g;
 const FIREBASE_API_KEY_REGEX = /\bAIza[0-9A-Za-z\-_]{35}\b/g;
 const JWT_REGEX = /\beyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+(?:\.[a-zA-Z0-9_-]*)?\b/g;
-const WIN_USER_PATH_REGEX = /[a-zA-Z]:[/\\](?:Users|users|Documents and Settings|documents and settings)[/\\][^\s"':<>,;]+/g;
-const UNIX_USER_PATH_REGEX = /(?:\/home|\/[Uu]sers)\/[a-zA-Z0-9_.-]+(?:\/[^\s"':<>,;]+)*/g;
-const SENSITIVE_KV_REGEX = /([?&"'])(password|token|secret|apiKey|auth|code|accessToken|refreshToken)=([^&"'\s]+)/gi;
+const WIN_USER_PATH_REGEX = /[a-zA-Z]:[/\\](?:Users|users|Documents and Settings|documents and settings)[/\\][^/\\\r\n"':<>,;]+(?:[/\\][^/\\\r\n"':<>,;]+)*/g;
+const UNIX_USER_PATH_REGEX = /(?:\/home|\/[Uu]sers)\/[^/\r\n"':<>,;]+(?:\/[^/\r\n"':<>,;]+)*/g;
+const SENSITIVE_KV_REGEX = /(^|[\s?&"',;])(password|token|secret|apiKey|auth|code|accessToken|refreshToken)=([^&"'\s,;]+)/gi;
 const SENSITIVE_JSON_KV_REGEX = /(["']?(?:password|token|secret|apiKey|auth|accessToken|refreshToken)["']?\s*:\s*["'])([^"'\r\n]+)(["'])/gi;
 
 const BEARER_TEST_REGEX = /bearer\s+/i;
 const IPV4_TEST_REGEX = /\b(?:\d{1,3}\.){3}\d{1,3}\b/;
 const IPV6_TEST_REGEX = /::|(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|(?:[0-9a-fA-F]{1,4}:){6}\d{1,3}\./;
-const SENSITIVE_KV_TEST_REGEX = /[?&"'](?:password|token|secret|apiKey|auth|code|accessToken|refreshToken)=/i;
+const SENSITIVE_KV_TEST_REGEX = /(?:^|[\s?&"',;])(?:password|token|secret|apiKey|auth|code|accessToken|refreshToken)=/i;
 const SENSITIVE_JSON_TEST_REGEX = /(?:password|token|secret|apiKey|auth|accessToken|refreshToken)/i;
 
 /**

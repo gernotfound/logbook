@@ -10,47 +10,59 @@ import {
     reportZodSchemaFallback 
 } from './schema_utils';
 
+const nonNegativeNumber = (defaultValue = 0) =>
+    safeNumber(defaultValue).pipe(z.number().nonnegative()).catch(defaultValue);
+
+const optionalNonNegativeNumber = () =>
+    safeOptionalNumber().pipe(z.number().nonnegative().optional()).catch(undefined);
+
+const optionalPositiveNumber = () =>
+    safeOptionalNumber().pipe(z.number().positive().optional()).catch(undefined);
+
+const macroBoostNumber = () =>
+    safeNumber(0).pipe(z.number().min(-100)).catch(0);
+
 export const MacroTargetSchema = z.object({
-    kcal: safeNumber(0),
-    carbs: safeNumber(0),
-    pro: safeNumber(0),
-    fat: safeNumber(0),
+    kcal: nonNegativeNumber(0),
+    carbs: nonNegativeNumber(0),
+    pro: nonNegativeNumber(0),
+    fat: nonNegativeNumber(0),
 }).passthrough().catch({ kcal: 0, carbs: 0, pro: 0, fat: 0 }).default({ kcal: 0, carbs: 0, pro: 0, fat: 0 });
 
 export const MacroRatioSchema = z.object({
-    carbsPerKg: safeNumber(0),
-    proPerKg: safeNumber(0),
-    fatPerKg: safeNumber(0),
+    carbsPerKg: nonNegativeNumber(0),
+    proPerKg: nonNegativeNumber(0),
+    fatPerKg: nonNegativeNumber(0),
 }).passthrough().catch({ carbsPerKg: 0, proPerKg: 0, fatPerKg: 0 }).default({ carbsPerKg: 0, proPerKg: 0, fatPerKg: 0 });
 
 export const MacroBoostSchema = z.object({
-    carbsPercent: safeNumber(0),
-    proPercent: safeNumber(0),
-    fatPercent: safeNumber(0),
+    carbsPercent: macroBoostNumber(),
+    proPercent: macroBoostNumber(),
+    fatPercent: macroBoostNumber(),
 }).passthrough().catch({ carbsPercent: 0, proPercent: 0, fatPercent: 0 }).default({ carbsPercent: 0, proPercent: 0, fatPercent: 0 });
 
 export const PartialMacroTargetSchema = z.object({
-    kcal: safeOptionalNumber(),
-    carbs: safeOptionalNumber(),
-    pro: safeOptionalNumber(),
-    fat: safeOptionalNumber(),
+    kcal: optionalNonNegativeNumber(),
+    carbs: optionalNonNegativeNumber(),
+    pro: optionalNonNegativeNumber(),
+    fat: optionalNonNegativeNumber(),
 }).passthrough().optional().catch(undefined);
 
 export const NutritionPlanningSchema = z.object({
-    weight: safeOptionalNumber(),
+    weight: optionalPositiveNumber(),
     onDaysCount: safeOptionalNumber(),
     avgMacros: MacroRatioSchema.optional().catch(undefined),
     onBoost: MacroBoostSchema.optional().catch(undefined),
     onMacros: MacroRatioSchema.optional().catch(undefined),
     offMacros: MacroRatioSchema.optional().catch(undefined),
     notes: safeOptionalString(),
-    carbsPerKg: safeOptionalNumber(),
-    proPerKg: safeOptionalNumber(),
-    fatPerKg: safeOptionalNumber(),
+    carbsPerKg: optionalNonNegativeNumber(),
+    proPerKg: optionalNonNegativeNumber(),
+    fatPerKg: optionalNonNegativeNumber(),
     lockedMacro: z.union([z.string(), z.null()]).optional().catch(undefined),
     chartPeriod: safeOptionalNumber(),
     normocalorica: PartialMacroTargetSchema.optional().catch(undefined),
-    totalKcal: safeOptionalNumber(),
+    totalKcal: optionalNonNegativeNumber(),
 }).passthrough().catch((ctx) => {
     reportZodSchemaFallback({
         schema: 'NutritionPlanningSchema',
