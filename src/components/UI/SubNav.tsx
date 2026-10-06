@@ -99,17 +99,13 @@ export default function SubNav<T extends string>({
             aria-controls={value === item.id ? `${id}-panel-${item.id}` : undefined}
             aria-selected={value === item.id}
             aria-label={item.label}
+            data-compact-label={item.compactLabel || undefined}
             tabIndex={value === item.id ? 0 : -1}
             className={`sub-nav-btn ${value === item.id ? 'active' : ''}`}
             onClick={() => onChange(item.id)}
             onKeyDown={event => onKeyDown(event, index)}
           >
-            {item.compactLabel ? (
-              <>
-                <span className="sub-nav-label-full">{item.label}</span>
-                <span className="sub-nav-label-compact" aria-hidden="true">{item.compactLabel}</span>
-              </>
-            ) : item.label}
+            {item.label}
           </button>
         ))}
       </div>
