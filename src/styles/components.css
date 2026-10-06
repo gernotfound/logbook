@@ -333,14 +333,6 @@ details[open] > .technique-summary::after {
     text-align: center;
 }
 
-.app-loading {
-    min-height: 70dvh;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-direction: column;
-}
-
 .sync-indicator {
     position: fixed;
     bottom: calc(var(--nav-height) + env(safe-area-inset-bottom, 0px) + 0.5rem);

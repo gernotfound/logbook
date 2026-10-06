@@ -24,6 +24,7 @@ import { requiredUpdateHardReload } from './lib/sync/safeReload';
 import { scheduleSequentialIdlePreload } from './lib/backgroundPreload';
 
 import ErrorBoundary from './components/UI/ErrorBoundary';
+import BrandLoadingScreen from './components/UI/BrandLoadingScreen';
 import BottomNav from './components/UI/BottomNav';
 import { GlobalDialog } from './components/UI/GlobalDialog';
 import { ConsentOverlay } from './components/UI/ConsentOverlay';
@@ -313,15 +314,7 @@ function App() {
   };
 
   if (loading) {
-    return (
-      <div id="auth-overlay">
-        <div id="auth-loading" className="auth-panel">
-            <h1 className="text-primary mb-10">TheLogBook</h1>
-            <div className="spinner auth-spinner"></div>
-            <p>Caricamento...</p>
-        </div>
-      </div>
-    );
+    return <BrandLoadingScreen label="Avvio di TheLogBook in corso" />;
   }
 
   if (compatibilityStatus === 'update-required') {
@@ -362,15 +355,7 @@ function App() {
   }
 
   if (guestLoginMigrationPending) {
-    return (
-      <div id="auth-overlay" style={{ zIndex: 10001 }} role="status" aria-live="polite">
-        <div id="auth-loading" className="auth-panel">
-          <h1 className="text-primary mb-10">TheLogBook</h1>
-          <div className="spinner auth-spinner"></div>
-          <p>Preparazione account...</p>
-        </div>
-      </div>
-    );
+    return <BrandLoadingScreen label="Preparazione account in corso" />;
   }
 
   if (guestLoginMigrationFailed) {
@@ -471,10 +456,7 @@ function App() {
       <main id="app-container">
         <ErrorBoundary key={isGuest ? 'guest' : currentUser?.uid}>
           <Suspense fallback={
-            <div className="app-loading">
-              <div className="spinner"></div>
-              <p style={{ color: 'var(--text-muted)' }}>Caricamento...</p>
-            </div>
+            <BrandLoadingScreen variant="content" label="Caricamento sezione in corso" />
           }>
             <div style={{ display: activeTab === 'home' ? 'block' : 'none' }}>
               {(visitedTabs.home || activeTab === 'home') && (

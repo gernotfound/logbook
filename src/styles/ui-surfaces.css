@@ -96,7 +96,6 @@
 .ui-account-card-6, .ui-account-card-27 { overflow-y: auto; padding: max(1rem, env(safe-area-inset-top, 0px)) 1rem max(1rem, env(safe-area-inset-bottom, 0px)); }
 .ui-account-card-7, .ui-account-card-28 { max-height: calc(100dvh - 2rem); overflow-y: auto; }
 
-.auth-spinner { margin: 1.25rem auto; }
 .btn-warning { background: var(--warning-color); border-color: var(--warning-color); color: var(--on-warning); }
 .dialog-overlay { padding: max(1rem,env(safe-area-inset-top,0px)) 1rem max(1rem,env(safe-area-inset-bottom,0px)); }
 @media (max-width: 380px) { .nav-item { font-size: var(--font-size-micro); } }
