@@ -764,25 +764,6 @@
 }
 
 
-/* Training sub-navigation follows the compact proposal rhythm without overlapping edge affordances. */
-#view-training > .sub-nav-shell .sub-nav {
-  scrollbar-width: none;
-}
-
-#view-training > .sub-nav-shell .sub-nav::-webkit-scrollbar {
-  display: none;
-}
-
-#view-training > .sub-nav-shell .sub-nav-btn {
-  padding-inline: .875rem;
-  font-size: var(--font-size-meta);
-  font-weight: 500;
-}
-
-#view-training > .sub-nav-shell .sub-nav-edge {
-  display: none;
-}
-
 /* Exercise library — proposal 5 */
 .exercise-library,
 .training-sub-view.active.exercise-library {
