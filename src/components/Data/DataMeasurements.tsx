@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Activity, ChevronDown, Pencil, Plus, Ruler, Save, UserRound, X } from 'lucide-react';
+import { Activity, ChevronDown, Pencil, Plus, Ruler, Save, Trash2, UserRound, X } from 'lucide-react';
 import { Logic } from '../../lib/logic';
 import { shiftDateString } from '../../lib/utils/date';
 import type { BodyFatProvenance } from '../../types';
@@ -37,6 +37,7 @@ interface DataMeasurementsProps {
     calves: string;
     setCalves: (val: string) => void;
     handleCancelEdit: () => void;
+    onDeleteMeasurement?: (date: string) => void | Promise<void>;
     calculateAndSave: (e?: any, bodyFatMode?: BodyFatMode) => Promise<unknown>;
     onOpenBiometry?: () => void;
 }
@@ -99,6 +100,7 @@ const DataMeasurements: React.FC<DataMeasurementsProps> = ({
     thighs, setThighs,
     calves, setCalves,
     handleCancelEdit,
+    onDeleteMeasurement,
     calculateAndSave,
     onOpenBiometry,
 }) => {
@@ -334,11 +336,15 @@ const DataMeasurements: React.FC<DataMeasurementsProps> = ({
                 </details>
 
                 <div className="data-action-row">
-                    {isEditing && (
+                    {editingDate ? (
                         <button type="button" className="btn" onClick={handleCancelEdit}>
                             Annulla
                         </button>
-                    )}
+                    ) : hasExistingData && onDeleteMeasurement ? (
+                        <button type="button" className="btn btn-danger" onClick={() => void onDeleteMeasurement(activeDateStr)}>
+                            <Trash2 size={16} aria-hidden="true" /> Elimina
+                        </button>
+                    ) : null}
                     <button
                         type="button"
                         className="btn btn-primary"

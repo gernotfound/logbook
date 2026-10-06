@@ -1222,10 +1222,14 @@
 #view-data .data-detail-sheet {
     position: relative;
     z-index: 1;
+    display: flex;
     width: min(100%, 37.5rem);
     max-height: 88vh;
+    max-height: 88dvh;
+    min-height: 0;
+    flex-direction: column;
     margin: 0 auto;
-    overflow-y: auto;
+    overflow: hidden;
     padding: 1rem 1rem calc(1rem + env(safe-area-inset-bottom, 0rem));
     border: 1px solid var(--glass-border);
     border-bottom: 0;
@@ -1256,6 +1260,20 @@
     margin: .25rem 0 0;
     color: var(--text-muted);
     font-size: var(--font-size-meta);
+}
+
+#view-data .data-detail-head,
+#view-data .data-detail-sheet > .data-action-row {
+    flex: 0 0 auto;
+}
+
+#view-data .data-detail-scroll {
+    min-height: 0;
+    flex: 1 1 auto;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y;
 }
 
 #view-data .data-detail-grid {

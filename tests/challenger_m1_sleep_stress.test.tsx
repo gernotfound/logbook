@@ -396,9 +396,7 @@ describe('Empirical Challenger: Sleep Format in HH:MM & State Integration Stress
                 await result.current.saveSleep();
             });
 
-            expect(showAlertSpy).toHaveBeenCalledWith(
-                expect.stringContaining('Dati sonno salvati per il ' + today + '!')
-            );
+            expect(showAlertSpy).not.toHaveBeenCalled();
 
             const day = useAppStore.getState().userData?.nutrition?.[today];
             expect(day?.sleepHours).toBe('07:30');

@@ -186,7 +186,6 @@ export function useNutritionPlanning() {
                 value: updatedPlanning,
                 origin: 'user-edited',
             });
-            await showAlert("Pianificazione salvata.");
         } catch {
             await showAlert("Errore durante il salvataggio della pianificazione.");
         }

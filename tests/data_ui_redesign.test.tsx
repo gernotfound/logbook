@@ -109,7 +109,9 @@ describe('Data UI redesign', () => {
         expect(screen.getByText('81,4 kg')).toBeDefined();
 
         fireEvent.click(screen.getByRole('button', { name: /Apri dettaglio/i }));
-        expect(screen.getByRole('dialog')).toBeDefined();
+        const detailDialog = screen.getByRole('dialog');
+        expect(detailDialog).toBeDefined();
+        expect(detailDialog.querySelector('.data-detail-scroll')).not.toBeNull();
         expect(screen.getAllByText('16,7%').length).toBeGreaterThan(0);
 
         fireEvent.click(screen.getByRole('button', { name: 'Chiudi' }));

@@ -85,7 +85,6 @@ export default function NutritionFoodArchive({ onEditFood }: NutritionFoodArchiv
             await dispatchDomainOperation({ type: 'food.upsert', food: { ...cleanData, id } as any });
             setShowModal(false);
             setEditingFoodId(null);
-            await showAlert(currentEditingId ? "Alimento aggiornato con successo!" : "Alimento creato e salvato!");
         } catch {
             await showAlert("Errore durante il salvataggio dell'alimento.");
         }
@@ -100,7 +99,6 @@ export default function NutritionFoodArchive({ onEditFood }: NutritionFoodArchiv
         };
         try {
             await dispatchDomainOperation({ type: 'food.upsert', food: duplicated });
-            await showAlert('Alimento duplicato con successo!');
         } catch {
             await showAlert('Errore durante la duplicazione.');
         }
@@ -137,7 +135,6 @@ export default function NutritionFoodArchive({ onEditFood }: NutritionFoodArchiv
 
         try {
             await dispatchDomainOperation({ type: 'nutrition-meal.upsert', date: todayDateStr, meal: addedItem });
-            await showAlert(`"${food.name}" aggiunto a ${mealType}!`);
         } catch {
             await showAlert("Errore durante l'aggiunta dell'alimento.");
         }

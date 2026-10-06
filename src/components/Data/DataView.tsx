@@ -88,6 +88,7 @@ const DataView: React.FC<DataViewProps> = ({
                         setThighs={measurementsHook.setThighs}
                         calves={measurementsHook.calves}
                         setCalves={measurementsHook.setCalves}
+                        onDeleteMeasurement={measurementsHook.handleDeleteMeasurement}
                         handleCancelEdit={() => {
                             const wasEditing = !!measurementsHook.editingDate;
                             measurementsHook.handleCancelEdit();

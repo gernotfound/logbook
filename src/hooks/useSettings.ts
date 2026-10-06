@@ -58,7 +58,6 @@ export function useSettings() {
         try {
             await dispatchDomainOperation({ type: 'profile.patch', patch: newProfile });
             setLocalProfile(null);
-            await showAlert("Profilo aggiornato!");
         } catch {
             await showAlert("Errore durante il salvataggio del profilo.");
         }

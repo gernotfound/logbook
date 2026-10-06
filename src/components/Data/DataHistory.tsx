@@ -384,7 +384,8 @@ const DataHistory: React.FC<DataHistoryProps> = ({
                                 <X size={20} aria-hidden="true" />
                             </button>
                         </div>
-                        <div className="data-detail-grid">
+                        <div className="data-detail-scroll">
+                            <div className="data-detail-grid">
                             {hasFiniteValue(detailDay.weight) && <div><strong>{formatDecimal(Number(detailDay.weight))} kg</strong><span>Peso</span></div>}
                             {hasFiniteValue(detailDay.bf) && <div><strong>{formatDecimal(Number(detailDay.bf))}%</strong><span>BF · {detailDay.bfProvenance?.method === 'manual' ? 'manuale' : detailDay.bfProvenance?.method === 'us_navy' ? 'US Navy' : 'origine n.d.'}</span></div>}
                             {hasFiniteValue(detailDay.waist) && <div><strong>{formatDecimal(Number(detailDay.waist))} cm</strong><span>Vita</span></div>}
@@ -396,6 +397,7 @@ const DataHistory: React.FC<DataHistoryProps> = ({
                             {hasFiniteValue(detailDay.thighs) && <div><strong>{formatDecimal(Number(detailDay.thighs))} cm</strong><span>Cosce</span></div>}
                             {hasFiniteValue(detailDay.calves) && <div><strong>{formatDecimal(Number(detailDay.calves))} cm</strong><span>Polpacci</span></div>}
                             {detailDay.sleepHours && <div><strong>{Logic.formatSleepTime(detailDay.sleepHours)}</strong><span>Sonno</span></div>}
+                            </div>
                         </div>
                         <div className="data-action-row">
                             <button type="button" className="btn" onClick={() => setDetailDay(null)}>Chiudi</button>
