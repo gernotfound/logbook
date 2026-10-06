@@ -16,26 +16,6 @@
     gap: .75rem;
 }
 
-#view-data > .sub-nav-shell .sub-nav {
-    display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-    gap: .3rem;
-    overflow: visible;
-    scrollbar-width: none;
-}
-
-#view-data > .sub-nav-shell .sub-nav-btn {
-    min-width: 0;
-    padding: .55rem .2rem;
-    overflow: hidden;
-    font-size: var(--font-size-micro);
-    text-overflow: ellipsis;
-}
-
-#view-data > .sub-nav-shell .sub-nav-edge {
-    display: none;
-}
-
 #view-data .section-divider,
 #view-data .section-divider-last,
 #view-data .data-panel {
@@ -1368,15 +1348,6 @@
 }
 
 @media (max-width: 22.5rem) {
-    #view-data > .sub-nav-shell .sub-nav-btn[data-compact-label="Misure"] {
-        font-size: 0;
-    }
-
-    #view-data > .sub-nav-shell .sub-nav-btn[data-compact-label="Misure"]::after {
-        content: attr(data-compact-label);
-        font-size: var(--font-size-micro);
-    }
-
     #view-data .section-divider,
     #view-data .section-divider-last,
     #view-data .data-panel,
@@ -1428,17 +1399,6 @@
     #view-data .history-record-open {
         gap: .5rem;
         padding-left: .625rem;
-    }
-}
-
-@media (max-width: 20.5rem) {
-    #view-data > .sub-nav-shell .sub-nav-btn[data-compact-label="Bio"] {
-        font-size: 0;
-    }
-
-    #view-data > .sub-nav-shell .sub-nav-btn[data-compact-label="Bio"]::after {
-        content: attr(data-compact-label);
-        font-size: var(--font-size-micro);
     }
 }
 

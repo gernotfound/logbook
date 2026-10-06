@@ -48,8 +48,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 
 button,
 .btn,
-.nav-item,
-.sub-nav-btn {
+.nav-item {
     -webkit-user-select: none;
     user-select: none;
 }
@@ -131,60 +130,6 @@ p {
     margin-bottom: 1.5rem;
     padding-bottom: 1.5rem;
 }
-
-.sub-nav-shell {
-    position: relative;
-    margin-bottom: 1.5rem;
-}
-
-.sub-nav {
-    display: flex;
-    gap: 0.5rem;
-    overflow-x: auto;
-    scrollbar-width: thin;
-    scrollbar-color: var(--border-strong) transparent;
-    padding: 0.25rem 0.125rem 0.625rem;
-    margin-bottom: 1.5rem;
-}
-
-.sub-nav-shell .sub-nav { margin-bottom: 0; }
-
-.sub-nav-btn {
-    flex: 0 0 auto;
-    min-width: 2.75rem;
-    min-height: 2.75rem;
-    background: var(--surface-color);
-    border: 1px solid var(--glass-border);
-    color: var(--text-muted);
-    padding: 0.625rem 1rem;
-    border-radius: var(--radius-control);
-    font-size: var(--font-size-secondary);
-    line-height: 1.25;
-    font-weight: 600;
-    white-space: nowrap;
-}
-
-.sub-nav-btn.active {
-    background: var(--primary-soft);
-    color: var(--primary-color);
-    border-color: var(--primary-color);
-    box-shadow: inset 0 -0.1875rem var(--primary-color);
-}
-
-.sub-nav-edge {
-    position: absolute;
-    top: 0.625rem;
-    width: 1rem;
-    height: 2rem;
-    display: grid;
-    place-items: center;
-    background: var(--bg-color);
-    color: var(--text-main);
-    pointer-events: none;
-}
-
-.sub-nav-edge-start { left: -0.5rem; }
-.sub-nav-edge-end { right: -0.5rem; }
 
 .training-sub-view,
 .nutrition-sub-view {
