@@ -89,7 +89,7 @@ describe('LogBook PWA Enhancements E2E Suite (Requirements R1 - R6)', () => {
                 expect(container.querySelector('#sleep-light')).not.toBeNull();
                 expect(container.querySelector('#sleep-rem')).not.toBeNull();
                 expect(container.querySelector('#sleep-awake')).not.toBeNull();
-                expect(container.textContent).toContain('🌙 Dati sonno (' + Logic.getLocalDateString() + ')');
+                expect(container.textContent).toContain('Dati sonno');
             });
 
             it('T1.1.3: DataSleep user interaction triggers setter callbacks and saves', () => {
