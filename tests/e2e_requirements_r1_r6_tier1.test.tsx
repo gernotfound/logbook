@@ -326,7 +326,7 @@ describe('TheLogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => 
                         calculateAndSave={vi.fn()}
                     />
                 );
-                expect(screen.queryByText('Fianchi (cm)')).toBeNull();
+                expect(screen.queryByText('Fianchi')).toBeNull();
 
                 rerender(
                     <DataMeasurements 
@@ -358,7 +358,7 @@ describe('TheLogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => 
                         calculateAndSave={vi.fn()}
                     />
                 );
-                expect(screen.getByText('Fianchi (cm)')).toBeDefined();
+                expect(screen.getByText('Fianchi')).toBeDefined();
             });
 
             it('T1.3.6: NutritionDaySchema validates weight, BF and circumference numbers', () => {
