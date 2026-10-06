@@ -1262,8 +1262,14 @@
     font-size: var(--font-size-meta);
 }
 
+#view-data .data-detail-head,
+#view-data .data-detail-sheet > .data-action-row {
+    flex: 0 0 auto;
+}
+
 #view-data .data-detail-scroll {
     min-height: 0;
+    flex: 1 1 auto;
     overflow-y: auto;
     overscroll-behavior-y: contain;
     -webkit-overflow-scrolling: touch;

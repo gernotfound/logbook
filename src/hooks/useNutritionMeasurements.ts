@@ -66,6 +66,7 @@ export function useNutritionMeasurements(selectedDate?: string) {
     };
     const handleDeleteMeasurement = async (dateStr: string) => {
         const session = captureSession();
+        const submittedDraft = dateStr === targetDateStr ? { ...draft.values } : undefined;
         const confirmed = await useDialogStore.getState().showConfirm(`Sei sicuro di voler eliminare la misurazione del ${Logic.formatItalianDate ? Logic.formatItalianDate(dateStr) : dateStr}?`);
         if (!confirmed || !isCurrentSession(session)) return;
         try {
@@ -89,6 +90,11 @@ export function useNutritionMeasurements(selectedDate?: string) {
             });
         } catch {
             if (isCurrentSession(session)) await showAlert("Errore durante l'eliminazione.");
+            return;
+        }
+        if (submittedDraft && isCurrentSession(session)) {
+            try { draft.clear(submittedDraft); }
+            catch { /* The shared draft hook exposes storage cleanup failure without misreporting the deletion. */ }
         }
     };
 

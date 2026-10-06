@@ -83,6 +83,26 @@ it('rejects invalid and nonfinite numbers without saving or deleting the draft',
     }
     expect(dispatch).not.toHaveBeenCalled();
 });
+it('clears the matching measurement draft after deletion without touching the rest of the day', async () => {
+    useAppStore.setState({
+        userData: data({
+            '2026-09-11': day('2026-09-11', { weight: 80, waist: 85, sleepHours: '07:30', kcal: 2100 }),
+        }),
+    });
+    vi.spyOn(useDialogStore.getState(), 'showConfirm').mockResolvedValue(true);
+    const hook = renderHook(() => useNutritionMeasurements('2026-09-11'));
+    act(() => hook.result.current.setWaist('84'));
+    expect(localStorage.getItem(deviceKey('draft:measurement:2026-09-11', storageOwner()))).toContain('84');
+
+    await act(async () => { await hook.result.current.handleDeleteMeasurement('2026-09-11'); });
+
+    expect(localStorage.getItem(deviceKey('draft:measurement:2026-09-11', storageOwner()))).toBeNull();
+    const persisted = useAppStore.getState().userData?.nutrition?.['2026-09-11'];
+    expect(persisted?.weight).toBeUndefined();
+    expect(persisted?.waist).toBeUndefined();
+    expect(persisted?.sleepHours).toBe('07:30');
+    expect(persisted?.kcal).toBe(2100);
+});
 it('does not execute deletion after the account changes while confirmation is open', async () => {
     let answer!: (value: boolean) => void;
     vi.spyOn(useDialogStore.getState(), 'showConfirm').mockReturnValue(new Promise(resolve => { answer = resolve; }));
