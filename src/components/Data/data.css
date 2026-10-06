@@ -36,10 +36,6 @@
     display: none;
 }
 
-#view-data .sub-nav-label-compact {
-    display: none;
-}
-
 #view-data .section-divider,
 #view-data .section-divider-last,
 #view-data .data-panel {
@@ -1360,12 +1356,13 @@
 }
 
 @media (max-width: 22.5rem) {
-    #view-data .sub-nav-label-full {
-        display: none;
+    #view-data > .sub-nav-shell .sub-nav-btn[data-compact-label] {
+        font-size: 0;
     }
 
-    #view-data .sub-nav-label-compact {
-        display: inline;
+    #view-data > .sub-nav-shell .sub-nav-btn[data-compact-label]::after {
+        content: attr(data-compact-label);
+        font-size: var(--font-size-micro);
     }
 
     #view-data .section-divider,
