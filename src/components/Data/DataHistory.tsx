@@ -390,6 +390,11 @@ const DataHistory: React.FC<DataHistoryProps> = ({
                             {hasFiniteValue(detailDay.waist) && <div><strong>{formatDecimal(Number(detailDay.waist))} cm</strong><span>Vita</span></div>}
                             {hasFiniteValue(detailDay.neck) && <div><strong>{formatDecimal(Number(detailDay.neck))} cm</strong><span>Collo</span></div>}
                             {hasFiniteValue(detailDay.hip) && <div><strong>{formatDecimal(Number(detailDay.hip))} cm</strong><span>Fianchi</span></div>}
+                            {hasFiniteValue(detailDay.chest) && <div><strong>{formatDecimal(Number(detailDay.chest))} cm</strong><span>Torace</span></div>}
+                            {hasFiniteValue(detailDay.shoulders) && <div><strong>{formatDecimal(Number(detailDay.shoulders))} cm</strong><span>Spalle</span></div>}
+                            {hasFiniteValue(detailDay.biceps) && <div><strong>{formatDecimal(Number(detailDay.biceps))} cm</strong><span>Braccia</span></div>}
+                            {hasFiniteValue(detailDay.thighs) && <div><strong>{formatDecimal(Number(detailDay.thighs))} cm</strong><span>Cosce</span></div>}
+                            {hasFiniteValue(detailDay.calves) && <div><strong>{formatDecimal(Number(detailDay.calves))} cm</strong><span>Polpacci</span></div>}
                             {detailDay.sleepHours && <div><strong>{Logic.formatSleepTime(detailDay.sleepHours)}</strong><span>Sonno</span></div>}
                         </div>
                         <div className="data-action-row">
