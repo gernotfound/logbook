@@ -144,39 +144,99 @@ body {
   place-items: center;
   padding: 1.5rem;
   box-sizing: border-box;
+  overflow: hidden;
+  background: #000000;
+  color: #ffffff;
 }
 
-.initial-loader-card {
-  color: var(--text-main);
+.initial-loader-brand {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.125rem;
   text-align: center;
-  max-width: 25rem;
+  transform: translateY(-2vh);
 }
 
-.initial-loader-card h1 {
-  margin: 0 0 0.75rem;
-  font-size: var(--font-size-display-2xl);
-  letter-spacing: -0.04em;
+.initial-loader-icon {
+  width: min(88vw, 28.75rem);
+  aspect-ratio: 1;
+  display: block;
+  object-fit: contain;
+  margin-inline: auto;
 }
 
-.initial-loader-card p {
-  color: var(--text-muted);
-  font-size: var(--font-size-control);
+.initial-wordmark {
+  position: relative;
+  isolation: isolate;
+  display: inline-block;
+  color: #ffffff;
+  font-size: clamp(1.875rem, 8.7vw, 2.625rem);
+  line-height: 1;
+  font-weight: 650;
+  letter-spacing: -0.035em;
+  white-space: nowrap;
 }
 
-.initial-spinner {
-  width: 2.5rem;
-  height: 2.5rem;
-  border: 0.2rem solid var(--glass-border);
-  border-top-color: var(--primary-color);
-  border-radius: 50%;
-  animation: initial-spin 1s linear infinite;
-  margin: 1.5rem auto;
+.initial-wordmark::before,
+.initial-wordmark::after {
+  content: attr(data-text);
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  color: transparent;
+  pointer-events: none;
+  -webkit-text-stroke: 1px #00e5ff;
 }
 
-@keyframes initial-spin {
-  to { transform: rotate(360deg); }
+.initial-wordmark::before {
+  opacity: 0.52;
+  filter: blur(1.1px);
+  text-shadow:
+    0 0 2px rgba(0, 229, 255, 0.52),
+    0 0 4.5px rgba(0, 229, 255, 0.52);
+  animation: initial-edge-pulse 1.9s ease-in-out infinite;
+}
+
+.initial-wordmark::after {
+  opacity: 0.18;
+  filter: blur(2.5px);
+  text-shadow:
+    0 0 5px rgba(0, 229, 255, 0.52),
+    0 0 10px rgba(0, 229, 255, 0.20),
+    0 0 15px rgba(0, 229, 255, 0.20);
+  animation: initial-bloom-pulse 1.9s ease-in-out infinite;
+}
+
+@keyframes initial-edge-pulse {
+  0%, 100% {
+    opacity: 0.32;
+    filter: blur(1px);
+  }
+
+  50% {
+    opacity: 0.62;
+    filter: blur(1.3px);
+  }
+}
+
+@keyframes initial-bloom-pulse {
+  0%, 100% {
+    opacity: 0.09;
+    transform: scale(0.9985);
+  }
+
+  50% {
+    opacity: 0.26;
+    transform: scale(1.0015);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .initial-spinner { animation: none; }
+  .initial-wordmark::before,
+  .initial-wordmark::after {
+    animation: none;
+  }
 }
