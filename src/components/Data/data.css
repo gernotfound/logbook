@@ -1368,11 +1368,11 @@
 }
 
 @media (max-width: 22.5rem) {
-    #view-data > .sub-nav-shell .sub-nav-btn[data-compact-label] {
+    #view-data > .sub-nav-shell .sub-nav-btn[data-compact-label="Misure"] {
         font-size: 0;
     }
 
-    #view-data > .sub-nav-shell .sub-nav-btn[data-compact-label]::after {
+    #view-data > .sub-nav-shell .sub-nav-btn[data-compact-label="Misure"]::after {
         content: attr(data-compact-label);
         font-size: var(--font-size-micro);
     }
@@ -1428,6 +1428,17 @@
     #view-data .history-record-open {
         gap: .5rem;
         padding-left: .625rem;
+    }
+}
+
+@media (max-width: 20.5rem) {
+    #view-data > .sub-nav-shell .sub-nav-btn[data-compact-label="Bio"] {
+        font-size: 0;
+    }
+
+    #view-data > .sub-nav-shell .sub-nav-btn[data-compact-label="Bio"]::after {
+        content: attr(data-compact-label);
+        font-size: var(--font-size-micro);
     }
 }
 
