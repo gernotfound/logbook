@@ -53,10 +53,14 @@ function hasMeasurementData(day: any): boolean {
         .some(key => day?.[key] !== undefined && day?.[key] !== null && day?.[key] !== '');
 }
 
+function hasFiniteValue(value: unknown): boolean {
+    return value !== undefined && value !== null && value !== '' && Number.isFinite(Number(value));
+}
+
 function finiteAverage(days: any[], key: string): number | null {
     const values = days
-        .map(day => Number(day?.[key]))
-        .filter(value => Number.isFinite(value));
+        .filter(day => hasFiniteValue(day?.[key]))
+        .map(day => Number(day[key]));
     if (values.length === 0) return null;
     return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
@@ -67,9 +71,9 @@ function formatDecimal(value: number): string {
 
 function recordSummary(day: any): string {
     const parts: string[] = [];
-    if (Number.isFinite(Number(day?.weight))) parts.push(`${formatDecimal(Number(day.weight))} kg`);
-    if (Number.isFinite(Number(day?.bf))) parts.push(`BF ${formatDecimal(Number(day.bf))}%`);
-    if (Number.isFinite(Number(day?.waist))) parts.push(`Vita ${formatDecimal(Number(day.waist))} cm`);
+    if (hasFiniteValue(day?.weight)) parts.push(`${formatDecimal(Number(day.weight))} kg`);
+    if (hasFiniteValue(day?.bf)) parts.push(`BF ${formatDecimal(Number(day.bf))}%`);
+    if (hasFiniteValue(day?.waist)) parts.push(`Vita ${formatDecimal(Number(day.waist))} cm`);
     if (day?.sleepHours) parts.push(`Sonno ${Logic.formatSleepTime(day.sleepHours)}`);
     return parts.join(' · ') || 'Dati registrati';
 }
@@ -370,7 +374,7 @@ const DataHistory: React.FC<DataHistoryProps> = ({
                     <section className="data-detail-sheet">
                         <div className="data-detail-head">
                             <div>
-                                <h2 id="data-detail-title">Dettaglio Dati</h2>
+                                <h2 id="data-detail-title">Dettaglio dati</h2>
                                 <p>
                                     {dayLabel(detailDay.date)}
                                     {detailDay.measurementTime ? ` · ${detailDay.measurementTime}` : ''}
@@ -381,11 +385,11 @@ const DataHistory: React.FC<DataHistoryProps> = ({
                             </button>
                         </div>
                         <div className="data-detail-grid">
-                            {Number.isFinite(Number(detailDay.weight)) && <div><strong>{formatDecimal(Number(detailDay.weight))} kg</strong><span>Peso</span></div>}
-                            {Number.isFinite(Number(detailDay.bf)) && <div><strong>{formatDecimal(Number(detailDay.bf))}%</strong><span>BF · {detailDay.bfProvenance?.method === 'manual' ? 'manuale' : detailDay.bfProvenance?.method === 'us_navy' ? 'US Navy' : 'origine n.d.'}</span></div>}
-                            {Number.isFinite(Number(detailDay.waist)) && <div><strong>{formatDecimal(Number(detailDay.waist))} cm</strong><span>Vita</span></div>}
-                            {Number.isFinite(Number(detailDay.neck)) && <div><strong>{formatDecimal(Number(detailDay.neck))} cm</strong><span>Collo</span></div>}
-                            {Number.isFinite(Number(detailDay.hip)) && <div><strong>{formatDecimal(Number(detailDay.hip))} cm</strong><span>Fianchi</span></div>}
+                            {hasFiniteValue(detailDay.weight) && <div><strong>{formatDecimal(Number(detailDay.weight))} kg</strong><span>Peso</span></div>}
+                            {hasFiniteValue(detailDay.bf) && <div><strong>{formatDecimal(Number(detailDay.bf))}%</strong><span>BF · {detailDay.bfProvenance?.method === 'manual' ? 'manuale' : detailDay.bfProvenance?.method === 'us_navy' ? 'US Navy' : 'origine n.d.'}</span></div>}
+                            {hasFiniteValue(detailDay.waist) && <div><strong>{formatDecimal(Number(detailDay.waist))} cm</strong><span>Vita</span></div>}
+                            {hasFiniteValue(detailDay.neck) && <div><strong>{formatDecimal(Number(detailDay.neck))} cm</strong><span>Collo</span></div>}
+                            {hasFiniteValue(detailDay.hip) && <div><strong>{formatDecimal(Number(detailDay.hip))} cm</strong><span>Fianchi</span></div>}
                             {detailDay.sleepHours && <div><strong>{Logic.formatSleepTime(detailDay.sleepHours)}</strong><span>Sonno</span></div>}
                         </div>
                         <div className="data-action-row">
