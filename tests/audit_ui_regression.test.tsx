@@ -144,4 +144,22 @@ describe('audit interaction regressions', () => {
         await save;
         expect(useAppStore.getState().userData?.nutritionPlanning?.onDaysCount).toBe(0);
     });
+
+    it('rejects invalid macro splits instead of persisting negative or non-finite planning values', async () => {
+        const showAlert = vi.spyOn(useDialogStore.getState(), 'showAlert').mockResolvedValue();
+        const dispatch = vi.spyOn(useAppStore.getState(), 'dispatchDomainOperation');
+        const { result } = renderHook(() => useNutritionPlanning());
+
+        act(() => result.current.handleUpdateOnBoost('carbsPercent', '-175'));
+
+        expect(Number.isFinite(result.current.currentOnMacros.carbsPerKg)).toBe(true);
+        expect(Number.isFinite(result.current.currentOffMacros.carbsPerKg)).toBe(true);
+
+        await act(async () => {
+            await result.current.handleSave();
+        });
+
+        expect(dispatch).not.toHaveBeenCalled();
+        expect(showAlert).toHaveBeenCalledWith(expect.stringMatching(/variazioni ON/i));
+    });
 });
