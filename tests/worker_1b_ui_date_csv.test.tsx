@@ -153,7 +153,7 @@ describe('Worker 1B: UI/UX, Date Navigation, CSV Export & PWA Fixes', () => {
             );
 
             // Click previous day from 2026-08-01 -> 2026-07-31
-            const prevBtn = screen.getByText('◀ Prec.');
+            const prevBtn = screen.getByRole('button', { name: 'Giorno precedente' });
             fireEvent.click(prevBtn);
             expect(setSelectedDate).toHaveBeenCalledWith('2026-07-31');
 
@@ -191,7 +191,7 @@ describe('Worker 1B: UI/UX, Date Navigation, CSV Export & PWA Fixes', () => {
             );
 
             // Click next day from 2026-07-31 -> 2026-08-01
-            const nextBtn = screen.getByText('Succ. ▶');
+            const nextBtn = screen.getByRole('button', { name: 'Giorno successivo' });
             fireEvent.click(nextBtn);
             expect(setSelectedDate).toHaveBeenCalledWith('2026-08-01');
         });
@@ -228,7 +228,7 @@ describe('Worker 1B: UI/UX, Date Navigation, CSV Export & PWA Fixes', () => {
             );
 
             // Click previous day from 2026-09-01 -> 2026-08-31
-            const prevBtn = screen.getByText('◀ Prec.');
+            const prevBtn = screen.getByRole('button', { name: 'Giorno precedente' });
             fireEvent.click(prevBtn);
             expect(setSelectedDate).toHaveBeenCalledWith('2026-08-31');
 
@@ -242,7 +242,7 @@ describe('Worker 1B: UI/UX, Date Navigation, CSV Export & PWA Fixes', () => {
             );
 
             // Click next day from 2026-08-31 -> 2026-09-01
-            const nextBtn = screen.getByText('Succ. ▶');
+            const nextBtn = screen.getByRole('button', { name: 'Giorno successivo' });
             fireEvent.click(nextBtn);
             expect(setSelectedDate).toHaveBeenCalledWith('2026-09-01');
         });
@@ -274,7 +274,7 @@ describe('Worker 1B: UI/UX, Date Navigation, CSV Export & PWA Fixes', () => {
     });
 
     describe('P3-1: Sentence Case Compliance', () => {
-        it('DataMeasurements renders (opzionali) in sentence case', () => {
+        it('DataMeasurements renders the approved optional-measurements disclosure', () => {
             render(
                 <DataMeasurements
                     profile={{ gender: 'M' }}
@@ -305,7 +305,7 @@ describe('Worker 1B: UI/UX, Date Navigation, CSV Export & PWA Fixes', () => {
                 />
             );
 
-            expect(screen.getByText('Misure circonferenze (opzionali)')).toBeDefined();
+            expect(screen.getByText('Altre misurazioni')).toBeDefined();
         });
 
         it('TrainingPlanning duplicates cycle with (copia) in sentence case', async () => {

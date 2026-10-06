@@ -82,16 +82,16 @@ describe('UI Alignments - R3 & R4', () => {
                 />
             );
 
-            expect(screen.getByText('◀ Prec.')).toBeDefined();
-            expect(screen.getByText('Succ. ▶')).toBeDefined();
+            expect(screen.getByRole('button', { name: 'Giorno precedente' })).toBeDefined();
+            expect(screen.getByRole('button', { name: 'Giorno successivo' })).toBeDefined();
             expect(screen.getByText('OGGI')).toBeDefined();
 
             // Next button is disabled when date is today
-            const nextBtn = screen.getByText('Succ. ▶') as HTMLButtonElement;
+            const nextBtn = screen.getByRole('button', { name: 'Giorno successivo' }) as HTMLButtonElement;
             expect(nextBtn.disabled).toBe(true);
 
             // Click previous button
-            const prevBtn = screen.getByText('◀ Prec.');
+            const prevBtn = screen.getByRole('button', { name: 'Giorno precedente' });
             fireEvent.click(prevBtn);
             expect(mockSetSelectedDate).toHaveBeenCalled();
         });
@@ -137,14 +137,14 @@ describe('UI Alignments - R3 & R4', () => {
             expect(screen.getByText(/Modifica misurazione/i)).toBeDefined();
             expect(screen.getByText(/Salva modifiche/i)).toBeDefined();
 
-            const nextBtn = screen.getByText('Succ. ▶') as HTMLButtonElement;
+            const nextBtn = screen.getByRole('button', { name: 'Giorno successivo' }) as HTMLButtonElement;
             expect(nextBtn.disabled).toBe(false);
 
             fireEvent.click(nextBtn);
             expect(mockSetSelectedDate).toHaveBeenCalled();
 
             // Click today center text
-            const centerDateBlock = screen.getByTitle('Torna a oggi');
+            const centerDateBlock = screen.getByRole('button', { name: 'Torna a oggi' });
             fireEvent.click(centerDateBlock);
             expect(mockSetSelectedDate).toHaveBeenCalledWith(Logic.getLocalDateString());
         });
@@ -152,8 +152,8 @@ describe('UI Alignments - R3 & R4', () => {
         it('DataView integrates selectedDate and renders DataMeasurements properly', () => {
             render(<DataView subTab="measurements" />);
             expect(screen.getByText('Misurazioni')).toBeDefined();
-            expect(screen.getByText('◀ Prec.')).toBeDefined();
-            expect(screen.getByText('Succ. ▶')).toBeDefined();
+            expect(screen.getByRole('button', { name: 'Giorno precedente' })).toBeDefined();
+            expect(screen.getByRole('button', { name: 'Giorno successivo' })).toBeDefined();
         });
 
         it('useNutritionMeasurements hook loads past day values when selectedDate is provided', () => {
@@ -185,6 +185,47 @@ describe('UI Alignments - R3 & R4', () => {
             expect(updatedNutrition?.['2026-08-05'].weight).toBe(75.2);
             expect(updatedNutrition?.['2026-08-05'].waist).toBe(80);
             expect(updatedNutrition?.['2026-08-05'].neck).toBe(37);
+        });
+
+        it('explicit calculate mode uses US Navy even when a manual BF draft is preserved', async () => {
+            const { result } = renderHook(() => useNutritionMeasurements('2026-08-06'));
+
+            act(() => {
+                result.current.setWeight('75');
+                result.current.setWaist('82');
+                result.current.setNeck('38');
+                result.current.setManualBf('19');
+            });
+
+            await act(async () => {
+                await result.current.calculateAndSave(undefined, 'calculate');
+            });
+
+            const day = useAppStore.getState().userData?.nutrition?.['2026-08-06'];
+            expect(day?.bf).toBeTypeOf('number');
+            expect(day?.bf).not.toBe(19);
+            expect(day?.bfProvenance?.method).toBe('us_navy');
+        });
+
+        it('explicit manual mode does not silently derive BF from circumference fields', async () => {
+            const { result } = renderHook(() => useNutritionMeasurements('2026-08-07'));
+
+            act(() => {
+                result.current.setWeight('75');
+                result.current.setWaist('82');
+                result.current.setNeck('38');
+            });
+
+            await act(async () => {
+                await result.current.calculateAndSave(undefined, 'manual');
+            });
+
+            const day = useAppStore.getState().userData?.nutrition?.['2026-08-07'];
+            expect(day?.weight).toBe(75);
+            expect(day?.waist).toBe(82);
+            expect(day?.neck).toBe(38);
+            expect(day?.bf).toBeUndefined();
+            expect(day?.bfProvenance).toBeUndefined();
         });
     });
 

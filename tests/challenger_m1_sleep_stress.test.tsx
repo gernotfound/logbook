@@ -1,10 +1,11 @@
 import React from 'react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { act, fireEvent, renderHook } from '@testing-library/react';
+import { act, fireEvent, renderHook, screen } from '@testing-library/react';
 import { renderWithProviders, emptyUserData } from './setup';
 import { useAppStore } from '../src/store/useAppStore';
 import { useDialogStore } from '../src/store/useDialogStore';
 import { Logic } from '../src/lib/logic';
+import { shiftDateString } from '../src/lib/utils/date';
 import { UserDataSchema } from '../src/lib/schema';
 import { useSleepMeasurements } from '../src/hooks/useSleepMeasurements';
 import DataSleep from '../src/components/Data/DataSleep';
@@ -26,7 +27,7 @@ const SleepIntegratedView: React.FC = () => {
 
     return (
         <div>
-            <DataSleep sleepHook={sleepHook} />
+            <DataSleep sleepHook={sleepHook} selectedDate={sleepHook.selectedDate} setSelectedDate={sleepHook.setSelectedDate} />
             <DataHistory 
                 measurementsHistory={measurementsHistory} 
                 editingDate={sleepHook.editingDate} 
@@ -84,7 +85,7 @@ describe('Empirical Challenger: Sleep Format in HH:MM & State Integration Stress
 
         it('switches between dates dynamically and synchronizes form values without stale data', async () => {
             const today = Logic.getLocalDateString();
-            const yesterday = '2026-08-19';
+            const yesterday = shiftDateString(today, -1);
 
             const customUserData = {
                 ...emptyUserData,
@@ -118,35 +119,25 @@ describe('Empirical Challenger: Sleep Format in HH:MM & State Integration Stress
             // Initially loaded with today's data
             expect(hoursInput.value).toBe('08:00');
             expect(deepInput.value).toBe('02:00');
-            expect(container.textContent).toContain('🌙 Dati sonno (' + today + ')');
+            expect(container.textContent).toContain('Dati sonno');
 
-            // Find history card for yesterday and click it
-            const historyCards = container.querySelectorAll('.card');
-            // The history cards start from index 1 (card 0 is the sleep-form-card)
-            const yesterdayCard = Array.from(historyCards).find(c => c.textContent?.includes('19/08/2026') || c.textContent?.includes(yesterday));
-            expect(yesterdayCard).toBeDefined();
-
+            // Use the redesigned date navigator to switch to the previous day.
             act(() => {
-                fireEvent.click(yesterdayCard!);
+                fireEvent.click(screen.getByRole('button', { name: 'Giorno precedente' }));
             });
 
-            // Form must update to yesterday's values
+            // Form must update to yesterday's values without stale data.
             expect(hoursInput.value).toBe('06:30');
             expect(deepInput.value).toBe('01:15');
-            expect(container.textContent).toContain('Modifica sonno (' + yesterday + ')');
 
-            // Click Cancel button
-            const cancelBtn = Array.from(container.querySelectorAll('button')).find(b => b.textContent?.includes('Annulla'));
-            expect(cancelBtn).toBeDefined();
-
+            // Return to today through the center date control.
             act(() => {
-                fireEvent.click(cancelBtn!);
+                fireEvent.click(screen.getByRole('button', { name: 'Torna a oggi' }));
             });
 
-            // Form must revert to today's values
             expect(hoursInput.value).toBe('08:00');
             expect(deepInput.value).toBe('02:00');
-            expect(container.textContent).toContain('🌙 Dati sonno (' + today + ')');
+            expect(container.textContent).toContain('Dati sonno');
         });
     });
 
@@ -441,22 +432,22 @@ describe('Empirical Challenger: Sleep Format in HH:MM & State Integration Stress
 
             const { container } = renderWithProviders(<SleepIntegratedView />, { userData: customUserData });
 
-            // Check history cards rendered
-            const historyText = container.textContent;
-            expect(historyText).toContain('08:15');
-            expect(historyText).toContain('07:15'); // Formatted from 7.25
+            // The selected day is shown as a focused record, like Training history.
+            expect(container.textContent).toContain('08:15');
 
-            // Find date2 card
-            const cards = container.querySelectorAll('.card');
-            const date2Card = Array.from(cards).find(c => c.textContent?.includes('19/08/2026') || c.textContent?.includes(date2));
-            expect(date2Card).toBeDefined();
-
+            const date2Button = screen.getByRole('button', { name: /19 agosto 2026, 1 rilevazione/i });
             act(() => {
-                fireEvent.click(date2Card!);
+                fireEvent.click(date2Button);
             });
 
-            // Form should be in edit mode for date2
-            expect(container.textContent).toContain('Modifica sonno (' + date2 + ')');
+            expect(container.textContent).toContain('07:15'); // Formatted from legacy 7.25
+
+            const optionsTrigger = screen.getByRole('button', { name: 'Opzioni' });
+            fireEvent.click(optionsTrigger);
+            fireEvent.click(screen.getByRole('menuitem', { name: 'Modifica misurazione' }));
+
+            // The existing edit callback still drives the real sleep draft in this integration harness.
+            expect(container.textContent).toContain('Modifica sonno');
             expect((container.querySelector('#sleep-hours') as HTMLInputElement).value).toBe('07:15');
         });
     });

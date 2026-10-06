@@ -89,7 +89,7 @@ describe('LogBook PWA Enhancements E2E Suite (Requirements R1 - R6)', () => {
                 expect(container.querySelector('#sleep-light')).not.toBeNull();
                 expect(container.querySelector('#sleep-rem')).not.toBeNull();
                 expect(container.querySelector('#sleep-awake')).not.toBeNull();
-                expect(container.textContent).toContain('🌙 Dati sonno (' + Logic.getLocalDateString() + ')');
+                expect(container.textContent).toContain('Dati sonno');
             });
 
             it('T1.1.3: DataSleep user interaction triggers setter callbacks and saves', () => {
@@ -135,18 +135,18 @@ describe('LogBook PWA Enhancements E2E Suite (Requirements R1 - R6)', () => {
                     />
                 );
 
-                expect(container.textContent).toContain('🌙 Sonno: 07:30');
-                expect(container.textContent).toContain('🌙 Sonno: 08:00');
+                // History focuses one selected day at a time, matching Training history.
+                expect(container.textContent).toContain('Sonno 08:00');
 
-                // Clicking 'Modifica' from ContextMenu invokes onSelectEdit
-                const optionsTriggers = screen.getAllByRole('button', { name: 'Opzioni' });
-                expect(optionsTriggers.length).toBeGreaterThan(0);
-                fireEvent.click(optionsTriggers[0]);
-                
-                const editItem = screen.getByRole('menuitem', { name: 'Modifica' });
+                fireEvent.click(screen.getByRole('button', { name: /10 agosto 2026, 1 rilevazione/i }));
+                expect(container.textContent).toContain('Sonno 07:30');
+
+                // The contextual edit action keeps using the real callback.
+                fireEvent.click(screen.getByRole('button', { name: 'Opzioni' }));
+                const editItem = screen.getByRole('menuitem', { name: 'Modifica misurazione' });
                 expect(editItem).not.toBeNull();
                 fireEvent.click(editItem);
-                
+
                 expect(onSelectEdit).toHaveBeenCalledWith(historyDays[0]);
             });
 

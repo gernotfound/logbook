@@ -4,7 +4,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 export interface SubNavProps<T extends string> {
   id: string;
   label: string;
-  items: readonly { id: T; label: string }[];
+  items: readonly { id: T; label: string; compactLabel?: string }[];
   value: T;
   onChange: (value: T) => void;
 }
@@ -98,6 +98,8 @@ export default function SubNav<T extends string>({
             role="tab"
             aria-controls={value === item.id ? `${id}-panel-${item.id}` : undefined}
             aria-selected={value === item.id}
+            aria-label={item.label}
+            data-compact-label={item.compactLabel || undefined}
             tabIndex={value === item.id ? 0 : -1}
             className={`sub-nav-btn ${value === item.id ? 'active' : ''}`}
             onClick={() => onChange(item.id)}

@@ -11,11 +11,11 @@ import { useLocalToday } from '../../hooks/useLocalToday';
 import SubNav from '../UI/SubNav';
 import './data.css';
 
-const DATA_TABS: ReadonlyArray<{ id: DataSubTab; label: string }> = [
-    { id: 'measurements', label: 'Misurazioni' },
+const DATA_TABS: ReadonlyArray<{ id: DataSubTab; label: string; compactLabel?: string }> = [
+    { id: 'measurements', label: 'Misurazioni', compactLabel: 'Misure' },
     { id: 'sleep', label: 'Sonno' },
     { id: 'activity', label: 'Attività' },
-    { id: 'biometry', label: 'Biometria' },
+    { id: 'biometry', label: 'Biometria', compactLabel: 'Bio' },
     { id: 'history', label: 'Storico' }
 ];
 
@@ -65,6 +65,7 @@ const DataView: React.FC<DataViewProps> = ({
                         targetDateStr={measurementsHook.targetDateStr}
                         editingDate={measurementsHook.editingDate}
                         hasExistingData={measurementsHook.hasExistingData}
+                        bfProvenance={measurementsHook.bfProvenance}
                         measureTime={measurementsHook.measureTime}
                         setMeasureTime={measurementsHook.setMeasureTime}
                         weight={measurementsHook.weight}
@@ -92,11 +93,12 @@ const DataView: React.FC<DataViewProps> = ({
                             measurementsHook.handleCancelEdit();
                             if (wasEditing) changeSubTab('history');
                         }}
-                        calculateAndSave={async (e) => {
+                        calculateAndSave={async (e, bodyFatMode) => {
                             const wasEditing = !!measurementsHook.editingDate;
-                            const saved = await measurementsHook.calculateAndSave(e);
+                            const saved = await measurementsHook.calculateAndSave(e, bodyFatMode);
                             if (wasEditing && saved) changeSubTab('history');
                         }}
+                        onOpenBiometry={() => changeSubTab('biometry')}
                     />
                 </div>
             )}
