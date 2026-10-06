@@ -166,14 +166,13 @@ describe('Empirical Adversarial Testing Challenger Suite - Telemetry & Sanitizer
       expect(scrubbedJson).not.toContain('tok789');
     });
 
-    it('demonstrates empirical limitation: unquoted space-separated KV tokens require [?&"\'] prefix', () => {
-      // In current implementation, SENSITIVE_KV_REGEX starts with ([?&"'])
+    it('redacts sensitive KV tokens at string start and after whitespace delimiters', () => {
       const inQuery = '?token=secret123';
       expect(scrubPII(inQuery)).toBe('?token=[REDACTED]');
 
-      const spaceSeparated = 'token=secret123';
-      // Documents that without leading ? or &, token= is unscrubbed unless matching Bearer or JWT
-      expect(scrubPII(spaceSeparated)).toBe('token=secret123');
+      expect(scrubPII('token=secret123')).toBe('token=[REDACTED]');
+      expect(scrubPII('Auth failed token=secret123 retry=false')).toBe('Auth failed token=[REDACTED] retry=false');
+      expect(scrubPII('code=oauth-code-123; status=denied')).toBe('code=[REDACTED]; status=denied');
     });
   });
 
@@ -215,11 +214,17 @@ describe('Empirical Adversarial Testing Challenger Suite - Telemetry & Sanitizer
       }
     });
 
-    it('demonstrates empirical limitation: paths containing whitespace in username are truncated at space', () => {
+    it('redacts user paths containing whitespace in usernames or path segments', () => {
       const winWithSpace = 'Crash at C:\\Users\\John Doe\\AppData\\Local\\main.tsx:10:5';
+      const macWithSpace = 'Crash at /Users/John Doe/Library/Application Support/logbook/main.js:12:3';
+
       const scrubbedWin = scrubPII(winWithSpace);
-      // Because WIN_USER_PATH_REGEX uses [^\s...]+, it stops at the space after "John"
-      expect(scrubbedWin).toBe('Crash at [REDACTED_PATH] Doe\\AppData\\Local\\main.tsx:10:5');
+      const scrubbedMac = scrubPII(macWithSpace);
+
+      expect(scrubbedWin).toBe('Crash at [REDACTED_PATH]:10:5');
+      expect(scrubbedWin).not.toContain('John Doe');
+      expect(scrubbedMac).toBe('Crash at [REDACTED_PATH]:12:3');
+      expect(scrubbedMac).not.toContain('John Doe');
     });
   });
 
