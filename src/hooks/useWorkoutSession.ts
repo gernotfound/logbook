@@ -221,7 +221,6 @@ export function useWorkoutSession() {
             ]);
             setLocalWorkout(null);
             resetGlobalWorkoutTimer();
-            await showAlert("Modifiche salvate con successo!");
             return true;
         } catch (err: any) {
             const formatted = mapFirebaseErrorCode(err);

@@ -81,7 +81,6 @@ export function useSleepMeasurements() {
             });
             if (!isCurrentSession(session)) return false;
             const cleared = draft.clear(submitted);
-            await showAlert(`Dati sonno salvati per il ${targetDate}!`);
             if (cleared && isCurrentSession(session)) setEditingDate(null);
             return cleared;
         } catch {

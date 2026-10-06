@@ -87,7 +87,6 @@ export function useNutritionMeasurements(selectedDate?: string) {
                     measurementTime: undefined,
                 },
             });
-            if (isCurrentSession(session)) await showAlert('Misurazione eliminata.');
         } catch {
             if (isCurrentSession(session)) await showAlert("Errore durante l'eliminazione.");
         }
@@ -199,11 +198,6 @@ export function useNutritionMeasurements(selectedDate?: string) {
                 });
                 if (!isCurrentSession(session)) return false;
                 const cleared = draft.clear(submitted);
-                if (bf !== null && !isNaN(bf)) {
-                    await showAlert(`Misurazione salvata! BF: ${Number(bf).toFixed(1)}%`);
-                } else {
-                    await showAlert(`Peso salvato correttamente!`);
-                }
                 if (cleared && isCurrentSession(session)) setEditingDate(null);
                 return cleared;
             } catch {

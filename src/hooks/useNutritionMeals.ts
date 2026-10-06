@@ -231,7 +231,6 @@ export function useNutritionMeals(dateStr?: string) {
                 setShowCustomModal(false);
                 setEditingFoodId(null);
                 setCfData({ name: '', brand: '', unit: 'g', pieceWeight: '', kcal: '', carbs: '', pro: '', fat: '' });
-                await showAlert(currentEditingId ? "Alimento aggiornato con successo!" : "Alimento salvato nei tuoi alimenti!");
             } catch {
                 await showAlert("Errore durante il salvataggio dell'alimento.");
             }

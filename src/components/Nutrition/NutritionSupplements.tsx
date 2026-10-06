@@ -96,7 +96,6 @@ export default function NutritionSupplements({ selectedDate, setSelectedDate }: 
         };
         try {
             await dispatchDomainOperation({ type: 'supplement.upsert', supplement: duplicated });
-            await showAlert('Integratore duplicato!');
         } catch {
             await showAlert('Errore durante la duplicazione.');
         }

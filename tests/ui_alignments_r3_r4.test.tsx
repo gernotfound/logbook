@@ -6,6 +6,7 @@ import DataView from '../src/components/Data/DataView';
 import SessionSetRow from '../src/components/Training/session/SessionSetRow';
 import { useNutritionMeasurements } from '../src/hooks/useNutritionMeasurements';
 import { useAppStore } from '../src/store/useAppStore';
+import { useDialogStore } from '../src/store/useDialogStore';
 import { Logic } from '../src/lib/logic';
 
 describe('UI Alignments - R3 & R4', () => {
@@ -96,8 +97,9 @@ describe('UI Alignments - R3 & R4', () => {
             expect(mockSetSelectedDate).toHaveBeenCalled();
         });
 
-        it('allows navigating forward when viewing a past date and shows "Modifica misurazione" when existing data is present', () => {
+        it('allows navigating forward on a past date and offers deletion instead of a meaningless cancel action', () => {
             const mockSetSelectedDate = vi.fn();
+            const onDeleteMeasurement = vi.fn();
             const pastDate = '2026-08-10';
 
             render(
@@ -130,12 +132,16 @@ describe('UI Alignments - R3 & R4', () => {
                     calves=""
                     setCalves={vi.fn()}
                     handleCancelEdit={vi.fn()}
+                    onDeleteMeasurement={onDeleteMeasurement}
                     calculateAndSave={vi.fn().mockResolvedValue(undefined)}
                 />
             );
 
             expect(screen.getByText(/Modifica misurazione/i)).toBeDefined();
             expect(screen.getByText(/Salva modifiche/i)).toBeDefined();
+            expect(screen.queryByRole('button', { name: 'Annulla' })).toBeNull();
+            fireEvent.click(screen.getByRole('button', { name: /Elimina/i }));
+            expect(onDeleteMeasurement).toHaveBeenCalledWith(pastDate);
 
             const nextBtn = screen.getByRole('button', { name: 'Giorno successivo' }) as HTMLButtonElement;
             expect(nextBtn.disabled).toBe(false);
@@ -167,7 +173,8 @@ describe('UI Alignments - R3 & R4', () => {
             expect(result.current.hasExistingData).toBe(true);
         });
 
-        it('useNutritionMeasurements saves to selectedDate in userData.nutrition', async () => {
+        it('useNutritionMeasurements saves to selectedDate without a blocking success dialog', async () => {
+            const showAlertSpy = vi.spyOn(useDialogStore.getState(), 'showAlert');
             const { result } = renderHook(() => useNutritionMeasurements('2026-08-05'));
             
             act(() => {
@@ -185,6 +192,7 @@ describe('UI Alignments - R3 & R4', () => {
             expect(updatedNutrition?.['2026-08-05'].weight).toBe(75.2);
             expect(updatedNutrition?.['2026-08-05'].waist).toBe(80);
             expect(updatedNutrition?.['2026-08-05'].neck).toBe(37);
+            expect(showAlertSpy).not.toHaveBeenCalled();
         });
 
         it('explicit calculate mode uses US Navy even when a manual BF draft is preserved', async () => {

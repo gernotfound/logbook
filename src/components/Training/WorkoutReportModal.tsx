@@ -136,7 +136,6 @@ const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, histor
             await dispatchDomainOperation({ type: 'routine.upsert', routine: newRoutine });
             
             setIsSavingAsRoutine(false);
-            showAlert("Scheda salvata con successo!");
         } catch (err: any) {
             const formatted = mapFirebaseErrorCode(err);
             if (formatted.isOfflineSafe) {

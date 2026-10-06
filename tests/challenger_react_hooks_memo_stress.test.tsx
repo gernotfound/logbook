@@ -232,7 +232,7 @@ describe('Empirical Challenger: React Hooks, Memoization & Re-render Loop Stress
                 await new Promise(r => setTimeout(r, 0));
             });
 
-            expect(showAlertSpy).toHaveBeenCalledWith('Pianificazione salvata.');
+            expect(showAlertSpy).not.toHaveBeenCalled();
             const updatedInStore = useAppStore.getState().userData?.nutritionPlanning;
             expect(updatedInStore?.weight).toBe(82.5);
             expect(updatedInStore?.normocalorica?.kcal).toBe(2600);
