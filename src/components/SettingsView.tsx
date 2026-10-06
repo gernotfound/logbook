@@ -49,6 +49,7 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
     const appearance = useAppearanceStore(state => state.preference);
     const setAppearance = useAppearanceStore(state => state.setPreference);
     const [appearanceNotSaved, setAppearanceNotSaved] = useState(false);
+    const [checkingForUpdate, setCheckingForUpdate] = useState(false);
     const [exportLibrary, setExportLibrary] = useState<ExportSelection>('all');
     const [exportRoutines, setExportRoutines] = useState<ExportSelection>('all');
     const [exportTrainingCycles, setExportTrainingCycles] = useState<ExportSelection>('all');
@@ -65,21 +66,33 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
     };
 
     const handleCheckUpdate = async () => {
-        if ('serviceWorker' in navigator) {
-            try {
-                const reg = await navigator.serviceWorker.getRegistration();
-                if (reg) {
-                    await reg.update();
-                    if (reg.waiting) window.dispatchEvent(new Event('logbook:pwa-update-waiting'));
-                    useDialogStore.getState().showAlert("Controllo aggiornamenti completato. Se è disponibile una nuova versione, il banner di aggiornamento comparirà in basso.");
-                } else {
-                    useDialogStore.getState().showAlert("Nessun Service Worker trovato. Assicurati che l'app sia installata correttamente.");
-                }
-            } catch {
-                useDialogStore.getState().showAlert("Errore durante il controllo degli aggiornamenti.");
+        if (checkingForUpdate) return;
+        if (!('serviceWorker' in navigator)) {
+            await useDialogStore.getState().showAlert("Il tuo browser non supporta gli aggiornamenti in background.");
+            return;
+        }
+
+        setCheckingForUpdate(true);
+        try {
+            const reg = await navigator.serviceWorker.getRegistration();
+            if (!reg) {
+                await useDialogStore.getState().showAlert("Nessun Service Worker trovato. Assicurati che l'app sia installata correttamente.");
+                return;
             }
-        } else {
-            useDialogStore.getState().showAlert("Il tuo browser non supporta gli aggiornamenti in background.");
+
+            await reg.update();
+
+            if (reg.waiting) {
+                window.dispatchEvent(new Event('logbook:pwa-update-waiting'));
+                await useDialogStore.getState().showAlert("Nuova versione trovata. Usa il banner in basso per aggiornare TheLogBook in sicurezza.");
+                return;
+            }
+
+            await useDialogStore.getState().showAlert("Controllo completato. TheLogBook è aggiornato.");
+        } catch {
+            await useDialogStore.getState().showAlert("Errore durante il controllo degli aggiornamenti.");
+        } finally {
+            setCheckingForUpdate(false);
         }
     };
 
@@ -201,8 +214,8 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
                     )}
 
                     <div className="settings-detail-list">
-                        <button type="button" className="settings-simple-row" onClick={handleCheckUpdate}>
-                            <span className="settings-row-copy"><strong>Cerca aggiornamenti</strong><small>Controlla se è disponibile una nuova versione</small></span>
+                        <button type="button" className="settings-simple-row" onClick={handleCheckUpdate} disabled={checkingForUpdate} aria-busy={checkingForUpdate}>
+                            <span className="settings-row-copy"><strong>{checkingForUpdate ? 'Controllo aggiornamenti…' : 'Cerca aggiornamenti'}</strong><small>{checkingForUpdate ? 'Verifica della nuova versione in corso' : 'Controlla se è disponibile una nuova versione'}</small></span>
                             <RefreshCw size={20} aria-hidden="true" />
                         </button>
                     </div>
