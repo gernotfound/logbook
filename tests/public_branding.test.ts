@@ -15,7 +15,7 @@ describe('public TheLogBook branding', () => {
     expect(indexHtml).toContain('name="apple-mobile-web-app-title" content="TheLogBook"');
     expect(indexHtml).toContain('class="initial-loader-icon"');
     expect(indexHtml).toContain('src="%BASE_URL%icon.svg?v=20261006-vector-master"');
-    expect(indexHtml).toContain('<h1 class="initial-wordmark" data-text="TheLogBook">TheLogBook</h1>');
+    expect(indexHtml).toContain('<div class="initial-wordmark" data-text="TheLogBook"><h1>TheLogBook</h1></div>');
     expect(indexHtml).not.toContain('initial-spinner');
     expect(indexHtml).not.toContain('Caricamento...');
     expect(appearanceCss).toContain('background: #000000;');
