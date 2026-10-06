@@ -10,6 +10,8 @@ import type { BodyFatProvenance } from '../types';
 const EMPTY_NUTRITION = {};
 const EMPTY_PROFILE = {};
 
+export type BodyFatMode = 'manual' | 'calculate';
+
 export function useNutritionMeasurements(selectedDate?: string) {
     const profile: any = useAppStore(state => state.userData?.profile || EMPTY_PROFILE);
     const nutrition = useAppStore(state => state.userData?.nutrition || EMPTY_NUTRITION);
@@ -87,7 +89,7 @@ export function useNutritionMeasurements(selectedDate?: string) {
         }
     };
 
-    const calculateAndSave = async (e?: any) => {
+    const calculateAndSave = async (e?: any, bodyFatMode?: BodyFatMode) => {
         if (e) e.preventDefault();
         if (saving.current) return false;
         saving.current = true;
@@ -109,41 +111,61 @@ export function useNutritionMeasurements(selectedDate?: string) {
             let bf: number | null = null;
             let bfProvenance: BodyFatProvenance | undefined;
 
-            if (manualBf && !isNaN(Number(manualBf))) {
+            const calculateUsNavy = async () => {
+                const female = profile.gender === 'F';
+                if (!waist || !neck || (female && !hip)) {
+                    await showAlert(female
+                        ? 'Per il calcolo US Navy inserisci vita, collo e fianchi.'
+                        : 'Per il calcolo US Navy inserisci vita e collo.');
+                    return false;
+                }
+                if (!Number.isFinite(height) || height <= 0) {
+                    await showAlert('Imposta la tua altezza nella sezione Biometria per calcolare la massa grassa.');
+                    return false;
+                }
+
+                bf = Logic.calculateBodyFatByMethod(female ? 'navy_female' : 'navy_male', {
+                    gender: profile.gender || 'M',
+                    height,
+                    weight: Number(weight),
+                    waist: Number(waist),
+                    neck: Number(neck),
+                    hip: hip ? Number(hip) : undefined
+                });
+                if (bf === null || !Number.isFinite(bf)) {
+                    await showAlert(female
+                        ? 'Impossibile calcolare la massa grassa. Verifica vita, collo e fianchi.'
+                        : 'Impossibile calcolare la massa grassa. Verifica che la vita sia maggiore del collo.');
+                    return false;
+                }
+                bfProvenance = {
+                    method: 'us_navy',
+                    inputs: {
+                        heightCm: height,
+                        waistCm: Number(waist),
+                        neckCm: Number(neck),
+                        ...(hip && female ? { hipCm: Number(hip) } : {}),
+                        gender: profile.gender || 'M',
+                    },
+                };
+                return true;
+            };
+
+            if (bodyFatMode === 'manual') {
+                if (manualBf && !isNaN(Number(manualBf))) {
+                    bf = Number(manualBf);
+                    bfProvenance = { method: 'manual' };
+                }
+            } else if (bodyFatMode === 'calculate') {
+                if (!(await calculateUsNavy())) return false;
+            } else if (manualBf && !isNaN(Number(manualBf))) {
                 bf = Number(manualBf);
                 bfProvenance = { method: 'manual' };
             } else if (targetDayData?.bf !== undefined && targetDayData?.bf !== null && !targetDayData?.bfProvenance) {
                 const legacyBf = Number(targetDayData.bf);
                 if (Number.isFinite(legacyBf)) bf = legacyBf;
             } else if (waist && neck && !isNaN(Number(waist)) && !isNaN(Number(neck))) {
-                if (Number.isFinite(height) && height > 0) {
-                    bf = Logic.calculateBodyFatByMethod(profile.gender === 'F' ? 'navy_female' : 'navy_male', {
-                        gender: profile.gender || 'M',
-                        height,
-                        weight: Number(weight),
-                        waist: Number(waist),
-                        neck: Number(neck),
-                        hip: hip ? Number(hip) : undefined
-                    });
-
-                    if (bf === null || !Number.isFinite(bf)) {
-                        await showAlert("Impossibile calcolare la massa grassa con i dati forniti. Verifica che vita > collo.");
-                        return;
-                    }
-                    bfProvenance = {
-                        method: 'us_navy',
-                        inputs: {
-                            heightCm: height,
-                            waistCm: Number(waist),
-                            neckCm: Number(neck),
-                            ...(hip && profile.gender === 'F' ? { hipCm: Number(hip) } : {}),
-                            gender: profile.gender || 'M',
-                        },
-                    };
-                } else {
-                    await showAlert("Attenzione: imposta la tua altezza nelle Impostazioni per calcolare la massa grassa dai perimetri corporei.");
-                    return;
-                }
+                if (!(await calculateUsNavy())) return false;
             }
 
             const targetDate = targetDateStr;
@@ -190,6 +212,7 @@ export function useNutritionMeasurements(selectedDate?: string) {
         editingDate,
         setEditingDate,
         hasExistingData,
+        bfProvenance: targetDayData?.bfProvenance as BodyFatProvenance | undefined,
         measureTime, setMeasureTime: (value: string) => draft.setField('measureTime', value),
         weight, setWeight: (value: string) => draft.setField('weight', value),
         waist, setWaist: (value: string) => draft.setField('waist', value),
