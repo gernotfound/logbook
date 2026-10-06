@@ -198,6 +198,9 @@ if (!firestoreVerifier.includes('/fields') || !firestoreVerifier.includes('field
 if (!firestoreProductionState.includes('collectionGroups/-') || !firestoreProductionState.includes('indexConfig.usesAncestorConfig=false OR ttlConfig:*')) {
   failures.push('Firestore Production field exemption readback must use the database-wide explicit-override list scope');
 }
+if (!firestoreProductionState.includes('usesAncestorConfig !== true')) {
+  failures.push('Firestore Production field exemption readback must tolerate omitted false protobuf booleans while rejecting inherited configs');
+}
 if (!firestoreVerifier.includes('/operations') || !firestoreVerifier.includes("filter', 'done:false'") || !firestoreVerifier.includes('pendingFieldOverrides')) {
   failures.push('Firestore Production verifier must distinguish active field-index convergence from stable field exemption drift');
 }
