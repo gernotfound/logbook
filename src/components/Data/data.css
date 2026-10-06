@@ -486,6 +486,12 @@
     background: transparent;
 }
 
+#view-data .data-disclosure > summary.data-disclosure-summary {
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+}
+
 #view-data .data-disclosure > summary::-webkit-details-marker {
     display: none;
 }
