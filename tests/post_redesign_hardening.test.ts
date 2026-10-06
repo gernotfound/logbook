@@ -8,6 +8,11 @@ const listTsxFiles = (dir: string): string[] => readdirSync(resolve(dir), { with
   if (entry.isDirectory()) return listTsxFiles(path);
   return entry.isFile() && entry.name.endsWith('.tsx') ? [path] : [];
 });
+const listCssFiles = (dir: string): string[] => readdirSync(resolve(dir), { withFileTypes: true }).flatMap(entry => {
+  const path = join(dir, entry.name);
+  if (entry.isDirectory()) return listCssFiles(path);
+  return entry.isFile() && entry.name.endsWith('.css') ? [path] : [];
+});
 
 const adaptiveSurfaceFiles = [
   'src/components/Data/DataMeasurements.tsx',
@@ -38,12 +43,20 @@ describe('post-redesign UI hardening', () => {
     expect(training).toMatch(/\.training-sub-view\.active\.exercise-library\s*\{[^}]*display:\s*grid/);
     expect(training).toMatch(/\.exercise-editor-close\s*\{[^}]*width:\s*auto[^}]*min-height:\s*2\.75rem/);
     expect(training).toMatch(/\.exercise-search-wrap > \.exercise-search-input,[\s\S]*?\.exercise-muscle-search-wrap > \.exercise-muscle-search-input\s*\{[^}]*margin:\s*0[^}]*padding:\s*\.625rem 2\.75rem \.625rem 2\.875rem/);
-    expect(training).toMatch(/#view-training > \.sub-nav-shell \.sub-nav-btn\s*\{[^}]*font-size:\s*var\(--font-size-meta\)/);
-    expect(training).toMatch(/#view-training > \.sub-nav-shell \.sub-nav-edge\s*\{[^}]*display:\s*none/);
     expect(training).toMatch(/\.session-routine-copy strong\s*\{[^}]*font-size:\s*var\(--font-size-control\)/);
     expect(training).toMatch(/\.session-advanced-segment-grid\.with-rest\s*\{[^}]*grid-template-columns:\s*4\.75rem minmax\(0, 1fr\) minmax\(0, 1fr\) 2\.75rem/);
     expect(training).toMatch(/\.session-exercise-shell\s*\{[^}]*overflow:\s*visible/);
     expect(training).toMatch(/@media \(max-width:\s*24\.375rem\)[\s\S]*?\.session-advanced-segment-grid\.with-rest,[\s\S]*?grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/);
+  });
+
+  it('keeps SubNav layout and horizontal scrolling in one shared stylesheet', () => {
+    const shared = read('src/styles/sub-nav.css');
+    expect(shared).toMatch(/\.sub-nav\s*\{[^}]*display:\s*flex[^}]*overflow-x:\s*auto/s);
+    expect(shared).toMatch(/\.sub-nav-btn\s*\{[^}]*flex:\s*0 0 auto/s);
+
+    for (const path of listCssFiles('src').filter(path => path !== 'src/styles/sub-nav.css')) {
+      expect(read(path), path).not.toMatch(/\.sub-nav(?:-shell|-btn|-edge(?:-start|-end)?)?\b/);
+    }
   });
 
   it('keeps Schede grid spacing active instead of being overridden by the generic sub-view rule', () => {
