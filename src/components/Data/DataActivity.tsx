@@ -1,7 +1,6 @@
 import { Footprints, HeartPulse, Pencil, Plus, Save, Trash2, X } from 'lucide-react';
 import { useActivityTracking } from '../../hooks/useActivityTracking';
 import { CARDIO_INTENSITIES, CARDIO_MODALITIES, CARDIO_STRUCTURES, cardioIntensityLabel, cardioModalityLabel } from '../../lib/activity';
-import { Logic } from '../../lib/logic';
 import { shiftDateString } from '../../lib/utils/date';
 import DataDateNavigator from './DataDateNavigator';
 
