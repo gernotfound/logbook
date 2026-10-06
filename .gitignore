@@ -14,13 +14,15 @@ vercel-backend-static
 *.local
 *.tsbuildinfo
 
-# Generated brand icon derivatives (public/icon-source.png is canonical)
+# Generated brand icon derivatives (assets/brand/thelogbook-icon-master.svg is canonical)
+/public/icon.svg
 /public/favicon.png
 /public/apple-touch-icon.png
 /public/icon-192.png
 /public/icon-512.png
 /public/icon-maskable-512.png
 /public/favicon.ico
+/public/social-share.png
 /public/social-share.jpg
 
 # Environment variables

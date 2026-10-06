@@ -43,9 +43,10 @@ export default defineConfig({
       srcDir: 'src',
       filename: 'sw.ts',
       registerType: 'prompt',
-      includeAssets: ['favicon.png', 'favicon.ico', 'apple-touch-icon.png', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'icons.svg'],
+      includeAssets: ['icon.svg', 'favicon.png', 'favicon.ico', 'apple-touch-icon.png', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'icons.svg'],
       injectManifest: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,webmanifest}'],
+        globIgnores: ['social-share.png'],
         maximumFileSizeToCacheInBytes: 3000000,
         buildPlugins: {
           vite: [pwaVite8OutputCompatibility()]
@@ -69,29 +70,35 @@ export default defineConfig({
             short_name: "Allenamento",
             description: "Vai alla sezione allenamento",
             url: "/?tab=training",
-            icons: [{ src: "icon-192.png?v=20260929-chef", sizes: "192x192", type: "image/png" }]
+            icons: [{ src: "icon-192.png?v=20261006-vector-master", sizes: "192x192", type: "image/png" }]
           },
           {
             name: "Alimentazione",
             short_name: "Alimentazione",
             description: "Vai alla sezione nutrizione",
             url: "/?tab=nutrition",
-            icons: [{ src: "icon-192.png?v=20260929-chef", sizes: "192x192", type: "image/png" }]
+            icons: [{ src: "icon-192.png?v=20261006-vector-master", sizes: "192x192", type: "image/png" }]
           }
         ],
         icons: [
           {
-            src: 'icon-192.png?v=20260929-chef',
+            src: 'icon-192.png?v=20261006-vector-master',
             sizes: '192x192',
             type: 'image/png'
           },
           {
-            src: 'icon-512.png?v=20260929-chef',
+            src: 'icon-512.png?v=20261006-vector-master',
             sizes: '512x512',
             type: 'image/png'
           },
           {
-            src: 'icon-maskable-512.png?v=20260929-chef',
+            src: 'icon.svg?v=20261006-vector-master',
+            sizes: 'any',
+            type: 'image/svg+xml',
+            purpose: 'any'
+          },
+          {
+            src: 'icon-maskable-512.png?v=20261006-vector-master',
             sizes: '512x512',
             type: 'image/png',
             purpose: 'maskable'

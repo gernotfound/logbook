@@ -10,6 +10,7 @@ const firestoreVerifier = readFileSync('scripts/verify-firestore-production.mjs'
 const firestoreProductionState = readFileSync('scripts/firestore-production-state.mjs', 'utf8');
 const firestoreIndexes = JSON.parse(readFileSync('firestore.indexes.json', 'utf8'));
 const vite = readFileSync('vite.config.ts', 'utf8');
+const iconGenerator = readFileSync('scripts/resize_icons.mjs', 'utf8');
 const swSource = readFileSync('src/sw.ts', 'utf8');
 const accountApi = readFileSync('api/account-deletion.ts', 'utf8');
 const accountClient = readFileSync('src/lib/db/db_account.ts', 'utf8');
@@ -18,6 +19,11 @@ const legacyServiceWorkerApi = readFileSync('api/legacy-service-worker.ts', 'utf
 const vercelBackendBuild = readFileSync('scripts/prepare-vercel-backend-static.mjs', 'utf8');
 
 const allDeps = { ...packageJson.dependencies, ...packageJson.devDependencies };
+if (!existsSync('assets/brand/thelogbook-icon-master.svg')) failures.push('missing canonical SVG brand master');
+if (existsSync('public/icon-source.png')) failures.push('legacy raster icon source must not remain canonical or tracked');
+if (!iconGenerator.includes("const source = 'assets/brand/thelogbook-icon-master.svg'")) failures.push('icon generator must consume the canonical SVG master');
+if (!iconGenerator.includes("const publicVectorOutput = 'public/icon.svg'")) failures.push('icon generator must publish the scalable browser/PWA icon');
+if (!iconGenerator.includes("const socialOutput = 'public/social-share.png'")) failures.push('social share card must be generated as lossless PNG');
 for (const forbidden of ['nitro', 'workflow']) {
   if (allDeps[forbidden]) failures.push(`forbidden M7 dependency present: ${forbidden}`);
 }
@@ -230,7 +236,7 @@ if (firestoreVerifier.includes("searchParams.set('pageSize'")) {
 if (!vite.includes("process.env.FIREBASE_HOSTING_DEPLOY === 'production'")) failures.push('Sentry production source-map build must be bound to Firebase Hosting production');
 if (vite.includes("process.env.VERCEL_ENV === 'production'")) failures.push('Vercel backend deployments must not trigger frontend Sentry source-map builds');
 
-for (const output of ['dist/sw.js', 'dist/manifest.webmanifest', 'dist/index.html', 'dist/favicon.ico', 'dist/social-share.jpg']) {
+for (const output of ['dist/sw.js', 'dist/manifest.webmanifest', 'dist/index.html', 'dist/icon.svg', 'dist/favicon.ico', 'dist/social-share.png']) {
   if (!existsSync(output)) failures.push(`PWA build artifact missing after verify:m6 build: ${output}`);
 }
 
@@ -240,7 +246,8 @@ if (existsSync('dist/sw.js')) {
   if (sw.includes('__WB_MANIFEST')) failures.push('generated service worker still contains raw __WB_MANIFEST placeholder');
   if (!sw.includes('index.html')) failures.push('generated service worker does not include index.html in its precache payload');
   if (!sw.includes('icon-maskable-512.png')) failures.push('generated service worker does not precache the dedicated maskable icon');
-  if (sw.includes('social-share.jpg')) failures.push('social share card should not be precached by the offline app shell');
+  if (!sw.includes('icon.svg')) failures.push('generated service worker does not precache the scalable icon');
+  if (sw.includes('social-share.png')) failures.push('social share card should not be precached by the offline app shell');
 }
 
 if (existsSync('dist/index.html')) {
@@ -261,11 +268,13 @@ if (existsSync('dist/index.html')) {
   for (const branding of requiredBranding) {
     if (!builtHtml.includes(branding)) failures.push(`built HTML missing canonical TheLogBook branding: ${branding}`);
   }
-  if (!builtHtml.includes('https://thelogbook.web.app/social-share.jpg?v=20260929-chef')) failures.push('built HTML must expose the revisioned social share card URL');
+  if (!builtHtml.includes('https://thelogbook.web.app/social-share.png?v=20261006-vector-master')) failures.push('built HTML must expose the revisioned social share card URL');
+  if (!builtHtml.includes('property="og:image:type" content="image/png"')) failures.push('built HTML must declare the lossless PNG social card type');
   if (!builtHtml.includes('name="twitter:card" content="summary_large_image"')) failures.push('built HTML must request a large Twitter/social preview card');
-  if (!builtHtml.includes('apple-touch-icon.png?v=20260929-chef')) failures.push('built HTML must revision the Apple touch icon URL');
-  if (!builtHtml.includes('favicon.png?v=20260929-chef')) failures.push('built HTML must revision the PNG favicon URL');
-  if (!builtHtml.includes('favicon.ico?v=20260929-chef')) failures.push('built HTML must expose the ICO favicon fallback');
+  if (!builtHtml.includes('apple-touch-icon.png?v=20261006-vector-master')) failures.push('built HTML must revision the Apple touch icon URL');
+  if (!builtHtml.includes('icon.svg?v=20261006-vector-master')) failures.push('built HTML must expose the scalable SVG favicon');
+  if (!builtHtml.includes('favicon.png?v=20261006-vector-master')) failures.push('built HTML must revision the PNG favicon URL');
+  if (!builtHtml.includes('favicon.ico?v=20261006-vector-master')) failures.push('built HTML must expose the ICO favicon fallback');
 }
 
 if (existsSync('dist/manifest.webmanifest')) {
@@ -280,11 +289,13 @@ if (existsSync('dist/manifest.webmanifest')) {
     if ('display_override' in manifest) failures.push('PWA manifest must not request desktop display overrides');
 
     const icons = Array.isArray(manifest.icons) ? manifest.icons : [];
-    const hasStandard192 = icons.some(icon => icon?.src === 'icon-192.png?v=20260929-chef' && icon?.sizes === '192x192' && icon?.type === 'image/png');
-    const standard512Icons = icons.filter(icon => icon?.src === 'icon-512.png?v=20260929-chef' && icon?.sizes === '512x512' && icon?.type === 'image/png' && icon?.purpose !== 'maskable');
-    const hasDedicatedMaskable = icons.some(icon => icon?.src === 'icon-maskable-512.png?v=20260929-chef' && icon?.sizes === '512x512' && icon?.type === 'image/png' && icon?.purpose === 'maskable');
+    const hasStandard192 = icons.some(icon => icon?.src === 'icon-192.png?v=20261006-vector-master' && icon?.sizes === '192x192' && icon?.type === 'image/png');
+    const standard512Icons = icons.filter(icon => icon?.src === 'icon-512.png?v=20261006-vector-master' && icon?.sizes === '512x512' && icon?.type === 'image/png' && icon?.purpose !== 'maskable');
+    const hasScalableIcon = icons.some(icon => icon?.src === 'icon.svg?v=20261006-vector-master' && icon?.sizes === 'any' && icon?.type === 'image/svg+xml' && icon?.purpose === 'any');
+    const hasDedicatedMaskable = icons.some(icon => icon?.src === 'icon-maskable-512.png?v=20261006-vector-master' && icon?.sizes === '512x512' && icon?.type === 'image/png' && icon?.purpose === 'maskable');
     if (!hasStandard192) failures.push('PWA manifest missing standard 192x192 PNG icon');
     if (standard512Icons.length !== 1) failures.push(`PWA manifest must contain exactly one standard 512x512 PNG icon; found ${standard512Icons.length}`);
+    if (!hasScalableIcon) failures.push('PWA manifest missing scalable SVG icon with sizes any');
     if (!hasDedicatedMaskable) failures.push('PWA manifest missing dedicated 512x512 maskable PNG icon');
   } catch (error) {
     failures.push(`PWA manifest is not valid JSON: ${error instanceof Error ? error.message : String(error)}`);
