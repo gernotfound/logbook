@@ -380,7 +380,7 @@ const DataHistory: React.FC<DataHistoryProps> = ({
                                     {detailDay.measurementTime ? ` · ${detailDay.measurementTime}` : ''}
                                 </p>
                             </div>
-                            <button type="button" className="data-icon-button" onClick={() => setDetailDay(null)} aria-label="Chiudi">
+                            <button type="button" className="data-icon-button" onClick={() => setDetailDay(null)} aria-label="Chiudi dettaglio">
                                 <X size={20} aria-hidden="true" />
                             </button>
                         </div>
