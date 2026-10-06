@@ -54,6 +54,7 @@ describe('post-redesign UI hardening', () => {
     expect(shared).toMatch(/\.sub-nav\s*\{[^}]*display:\s*flex[^}]*overflow-x:\s*auto/s);
     expect(shared).toMatch(/\.sub-nav-btn\s*\{[^}]*flex:\s*0 0 auto/s);
 
+    // global.css is the aggregation entrypoint; section/component styles must not own SubNav selectors.
     const nonCanonicalCss = [
       ...listCssFiles('src/components'),
       ...listCssFiles('src/styles').filter(path => !['src/styles/global.css', 'src/styles/sub-nav.css'].includes(path)),
