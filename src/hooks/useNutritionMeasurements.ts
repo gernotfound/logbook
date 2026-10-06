@@ -112,6 +112,10 @@ export function useNutritionMeasurements(selectedDate?: string) {
             let bfProvenance: BodyFatProvenance | undefined;
 
             const calculateUsNavy = async () => {
+                if (profile.gender !== 'M' && profile.gender !== 'F') {
+                    await showAlert('Imposta il sesso nella sezione Biometria per calcolare la massa grassa.');
+                    return false;
+                }
                 const female = profile.gender === 'F';
                 if (!waist || !neck || (female && !hip)) {
                     await showAlert(female
