@@ -65,6 +65,7 @@ const DataView: React.FC<DataViewProps> = ({
                         targetDateStr={measurementsHook.targetDateStr}
                         editingDate={measurementsHook.editingDate}
                         hasExistingData={measurementsHook.hasExistingData}
+                        bfProvenance={measurementsHook.bfProvenance}
                         measureTime={measurementsHook.measureTime}
                         setMeasureTime={measurementsHook.setMeasureTime}
                         weight={measurementsHook.weight}
@@ -92,11 +93,12 @@ const DataView: React.FC<DataViewProps> = ({
                             measurementsHook.handleCancelEdit();
                             if (wasEditing) changeSubTab('history');
                         }}
-                        calculateAndSave={async (e) => {
+                        calculateAndSave={async (e, bodyFatMode) => {
                             const wasEditing = !!measurementsHook.editingDate;
-                            const saved = await measurementsHook.calculateAndSave(e);
+                            const saved = await measurementsHook.calculateAndSave(e, bodyFatMode);
                             if (wasEditing && saved) changeSubTab('history');
                         }}
+                        onOpenBiometry={() => changeSubTab('biometry')}
                     />
                 </div>
             )}
