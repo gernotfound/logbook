@@ -1,33 +1,41 @@
 import Fuse from 'fuse.js';
 import { calculateBodyFat } from './bodyFat';
+import { parseDateInput } from '../utils/date';
 
 export function calculateTDEE(nutritionHistoryList: { date?: string; weight?: string | number; kcal?: string | number }[]) {
     if (!Array.isArray(nutritionHistoryList)) {
         return { error: true, message: "Dati non validi" };
     }
-    const validDays = nutritionHistoryList.filter((d): d is { date: string; weight: string | number; kcal: string | number } => {
-        if (!d || !d.date || typeof d.date !== 'string') return false;
+    const validDays = nutritionHistoryList.flatMap((d) => {
+        if (!d || typeof d.date !== 'string') return [];
+        const date = parseDateInput(d.date);
         const w = parseFloat(String(d.weight).replace(',', '.'));
         const k = parseFloat(String(d.kcal).replace(',', '.'));
-        return !isNaN(w) && w > 0 && !isNaN(k) && k > 0;
+        if (!date || !Number.isFinite(w) || w <= 0 || !Number.isFinite(k) || k <= 0) return [];
+        return [{ date, weight: d.weight as string | number, kcal: d.kcal as string | number }];
     });
 
-    const sortedValidDays = [...validDays].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    const dayOrdinal = (date: string) => {
+        const [year, month, day] = date.split('-').map(Number);
+        return Date.UTC(year, month - 1, day) / (1000 * 60 * 60 * 24);
+    };
+    const sortedValidDays = [...validDays].sort((a, b) => dayOrdinal(a.date) - dayOrdinal(b.date));
 
-    if (sortedValidDays.length < 7) { 
-        return { error: true, message: `Raccolta dati in corso... (${sortedValidDays.length}/7 giorni richiesti)` }; 
+    if (sortedValidDays.length < 7) {
+        return { error: true, message: `Raccolta dati in corso... (${sortedValidDays.length}/7 giorni richiesti)` };
     }
-    const recentDays = sortedValidDays.slice(-14); 
+    const recentDays = sortedValidDays.slice(-14);
     const wFirst = parseFloat(String(recentDays[0].weight).replace(',', '.'));
     const wLast = parseFloat(String(recentDays[recentDays.length - 1].weight).replace(',', '.'));
-    const firstDate = new Date(recentDays[0].date);
-    const lastDate = new Date(recentDays[recentDays.length - 1].date);
-    const diffDays = Math.ceil(Math.abs(lastDate.getTime() - firstDate.getTime()) / (1000 * 60 * 60 * 24));
+    const diffDays = Math.abs(dayOrdinal(recentDays[recentDays.length - 1].date) - dayOrdinal(recentDays[0].date));
     if (diffDays === 0) return { error: true, message: "Dati insufficienti (stesso giorno)" };
     const avgKcal = recentDays.reduce((sum, d) => sum + parseFloat(String(d.kcal).replace(',', '.')), 0) / recentDays.length;
     const weightDiff = wLast - wFirst;
     const dailySurplusKcal = (weightDiff / diffDays) * 7700;
     const estimatedTDEE = avgKcal - dailySurplusKcal;
+    if (!Number.isFinite(avgKcal) || !Number.isFinite(weightDiff) || !Number.isFinite(dailySurplusKcal) || !Number.isFinite(estimatedTDEE)) {
+        return { error: true, message: "Dati non validi" };
+    }
     return {
         error: false,
         tdee: Math.round(estimatedTDEE),
