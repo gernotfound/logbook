@@ -29,6 +29,10 @@ vi.mock('../server/accountDeletion/jobStore', () => store);
 vi.mock('../server/accountDeletion/runner', () => runner);
 
 import { GET, POST } from '../api/account-deletion';
+import {
+  ACCOUNT_DELETION_INTERACTIVE_BUDGET_MS,
+  ACCOUNT_DELETION_INTERACTIVE_SAFETY_BUFFER_MS,
+} from '../server/accountDeletion/budget';
 
 function request(method: 'GET' | 'POST', body?: unknown): Request {
   return new Request('https://example.test/api/account-deletion', {
@@ -109,18 +113,32 @@ describe('M7 native account deletion HTTP boundary', () => {
     const response = await POST(request('POST', { receiptToken: 'receipt' }));
     expect(response.status).toBe(202);
     expect(store.createOrRefreshDeletionJob).toHaveBeenCalledWith('u', 'receipt');
-    expect(runner.processAccountDeletion).toHaveBeenCalledWith('u', expect.any(Number));
+    expect(runner.processAccountDeletion).toHaveBeenCalledWith(
+      'u',
+      expect.any(Number),
+      { safetyBufferMs: ACCOUNT_DELETION_INTERACTIVE_SAFETY_BUFFER_MS },
+    );
     expect(await response.json()).toMatchObject({ uid: 'u', status: 'deleting' });
   });
 
-  it('bounds interactive POST and GET processing budgets to five seconds', async () => {
+  it('uses a five-second interactive budget with runner headroom smaller than that budget', async () => {
+    expect(ACCOUNT_DELETION_INTERACTIVE_SAFETY_BUFFER_MS).toBeLessThan(ACCOUNT_DELETION_INTERACTIVE_BUDGET_MS);
     const now = vi.spyOn(Date, 'now').mockReturnValue(100_000);
     try {
       await POST(request('POST', { receiptToken: 'receipt' }));
       await GET(request('GET'));
 
-      expect(runner.processAccountDeletion).toHaveBeenCalledWith('u', 105_000);
-      expect(runner.progressAndReadStatus).toHaveBeenCalledWith('u', 'receipt', 105_000);
+      expect(runner.processAccountDeletion).toHaveBeenCalledWith(
+        'u',
+        100_000 + ACCOUNT_DELETION_INTERACTIVE_BUDGET_MS,
+        { safetyBufferMs: ACCOUNT_DELETION_INTERACTIVE_SAFETY_BUFFER_MS },
+      );
+      expect(runner.progressAndReadStatus).toHaveBeenCalledWith(
+        'u',
+        'receipt',
+        100_000 + ACCOUNT_DELETION_INTERACTIVE_BUDGET_MS,
+        { safetyBufferMs: ACCOUNT_DELETION_INTERACTIVE_SAFETY_BUFFER_MS },
+      );
     } finally {
       now.mockRestore();
     }
@@ -131,6 +149,11 @@ describe('M7 native account deletion HTTP boundary', () => {
     expect(response.status).toBe(200);
     expect(auth.verifyStatusAppCheck).toHaveBeenCalledTimes(1);
     expect(store.readAuthorizedDeletionJob).toHaveBeenCalledWith('u', 'receipt');
-    expect(runner.progressAndReadStatus).toHaveBeenCalledWith('u', 'receipt', expect.any(Number));
+    expect(runner.progressAndReadStatus).toHaveBeenCalledWith(
+      'u',
+      'receipt',
+      expect.any(Number),
+      { safetyBufferMs: ACCOUNT_DELETION_INTERACTIVE_SAFETY_BUFFER_MS },
+    );
   });
 });

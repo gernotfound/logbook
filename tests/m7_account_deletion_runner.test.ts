@@ -25,6 +25,10 @@ const mocked = vi.hoisted(() => {
 
 vi.mock('../server/accountDeletion/jobStore', () => mocked);
 
+import {
+  ACCOUNT_DELETION_INTERACTIVE_BUDGET_MS,
+  ACCOUNT_DELETION_INTERACTIVE_SAFETY_BUFFER_MS,
+} from '../server/accountDeletion/budget';
 import { processAccountDeletion } from '../server/accountDeletion/runner';
 import { PRIVATE_ACCOUNT_COLLECTIONS } from '../server/accountDeletion/types';
 
@@ -62,7 +66,7 @@ describe('M7 native account deletion runner', () => {
     mocked.deleteAuthUserLast.mockImplementation(async () => { order.push('auth'); });
     mocked.markDeletionComplete.mockImplementation(async () => { order.push('complete'); });
 
-    await expect(processAccountDeletion('uid-a', Date.now() + 60_000, 'lease-a')).resolves.toBe('complete');
+    await expect(processAccountDeletion('uid-a', Date.now() + 60_000, { leaseOwner: 'lease-a' })).resolves.toBe('complete');
 
     expect(mocked.acquireDeletionLease).toHaveBeenCalledWith('uid-a', 'lease-a', expect.any(Number));
     for (const name of PRIVATE_ACCOUNT_COLLECTIONS) {
@@ -74,12 +78,36 @@ describe('M7 native account deletion runner', () => {
     expect(mocked.markDeletionFailed).not.toHaveBeenCalled();
   });
 
+  it('starts real cleanup with the canonical five-second interactive budget', async () => {
+    const now = vi.spyOn(Date, 'now').mockReturnValue(100_000);
+    try {
+      await expect(processAccountDeletion(
+        'uid-interactive',
+        100_000 + ACCOUNT_DELETION_INTERACTIVE_BUDGET_MS,
+        {
+          leaseOwner: 'lease-interactive',
+          safetyBufferMs: ACCOUNT_DELETION_INTERACTIVE_SAFETY_BUFFER_MS,
+        },
+      )).resolves.toBe('complete');
+
+      expect(mocked.acquireDeletionLease).toHaveBeenCalledWith(
+        'uid-interactive',
+        'lease-interactive',
+        100_000 + ACCOUNT_DELETION_INTERACTIVE_BUDGET_MS,
+      );
+      expect(mocked.revokeAccountAccess).toHaveBeenCalledWith('uid-interactive');
+      expect(mocked.markDeletionComplete).toHaveBeenCalledWith('uid-interactive');
+    } finally {
+      now.mockRestore();
+    }
+  });
+
   it('fails closed and never deletes Auth when unexpected private data is found', async () => {
     mocked.verifyNoAccountResidue.mockRejectedValueOnce(
       new mocked.NonRetryableDeletionError('Unexpected residual collection: legacy_private.'),
     );
 
-    await expect(processAccountDeletion('uid-b', Date.now() + 60_000, 'lease-b')).resolves.toBe('failed');
+    await expect(processAccountDeletion('uid-b', Date.now() + 60_000, { leaseOwner: 'lease-b' })).resolves.toBe('failed');
 
     expect(mocked.deleteAuthUserLast).not.toHaveBeenCalled();
     expect(mocked.markDeletionComplete).not.toHaveBeenCalled();
@@ -94,7 +122,7 @@ describe('M7 native account deletion runner', () => {
   it('marks transient collection failures retryable without advancing to root or Auth', async () => {
     mocked.deletePrivateCollectionPage.mockRejectedValueOnce(new Error('transient Firestore failure'));
 
-    await expect(processAccountDeletion('uid-c', Date.now() + 60_000, 'lease-c')).resolves.toBe('failed');
+    await expect(processAccountDeletion('uid-c', Date.now() + 60_000, { leaseOwner: 'lease-c' })).resolves.toBe('failed');
 
     expect(mocked.deleteUserRoot).not.toHaveBeenCalled();
     expect(mocked.deleteAuthUserLast).not.toHaveBeenCalled();
@@ -109,7 +137,7 @@ describe('M7 native account deletion runner', () => {
   it('does no destructive work when another invocation owns the lease', async () => {
     mocked.acquireDeletionLease.mockResolvedValueOnce(false);
 
-    await expect(processAccountDeletion('uid-d', Date.now() + 60_000, 'lease-d')).resolves.toBe('busy');
+    await expect(processAccountDeletion('uid-d', Date.now() + 60_000, { leaseOwner: 'lease-d' })).resolves.toBe('busy');
 
     expect(mocked.revokeAccountAccess).not.toHaveBeenCalled();
     expect(mocked.deletePrivateCollectionPage).not.toHaveBeenCalled();
@@ -117,7 +145,15 @@ describe('M7 native account deletion runner', () => {
   });
 
   it('refuses to start when the invocation budget is already inside the safety buffer', async () => {
-    await expect(processAccountDeletion('uid-e', Date.now() + 1_000, 'lease-e')).resolves.toBe('pending');
+    await expect(processAccountDeletion('uid-e', Date.now() + 1_000, { leaseOwner: 'lease-e' })).resolves.toBe('pending');
+    expect(mocked.acquireDeletionLease).not.toHaveBeenCalled();
+  });
+
+  it('rejects an invalid caller safety buffer before acquiring a destructive lease', async () => {
+    await expect(processAccountDeletion('uid-f', Date.now() + 60_000, {
+      leaseOwner: 'lease-f',
+      safetyBufferMs: Number.NaN,
+    })).rejects.toThrow('Invalid account deletion safety buffer.');
     expect(mocked.acquireDeletionLease).not.toHaveBeenCalled();
   });
 });

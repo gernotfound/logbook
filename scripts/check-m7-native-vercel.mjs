@@ -13,6 +13,8 @@ const vite = readFileSync('vite.config.ts', 'utf8');
 const iconGenerator = readFileSync('scripts/resize_icons.mjs', 'utf8');
 const swSource = readFileSync('src/sw.ts', 'utf8');
 const accountApi = readFileSync('api/account-deletion.ts', 'utf8');
+const accountDeletionBudget = readFileSync('server/accountDeletion/budget.ts', 'utf8');
+const accountDeletionRunner = readFileSync('server/accountDeletion/runner.ts', 'utf8');
 const accountClient = readFileSync('src/lib/db/db_account.ts', 'utf8');
 const cronApi = readFileSync('api/account-deletion-cron.ts', 'utf8');
 const legacyServiceWorkerApi = readFileSync('api/legacy-service-worker.ts', 'utf8');
@@ -99,8 +101,21 @@ const deletionCron = vercel.crons?.find(item => item.path === '/api/account-dele
 if (!deletionCron) failures.push('missing daily account deletion recovery cron');
 else if (deletionCron.schedule !== '0 3 * * *') failures.push('account deletion recovery cron must run once daily at 03:00 UTC');
 
-if (!accountApi.includes('const POST_BUDGET_MS = 5_000;')) failures.push('POST deletion budget must remain bounded to 5s for the interactive request');
-if (!accountApi.includes('const GET_PROGRESS_BUDGET_MS = 5_000;')) failures.push('GET deletion progress budget must remain bounded to 5s for the interactive request');
+const interactiveDeletionBudgetText = accountDeletionBudget.match(/ACCOUNT_DELETION_INTERACTIVE_BUDGET_MS\s*=\s*([0-9_]+)/)?.[1];
+const interactiveDeletionSafetyText = accountDeletionBudget.match(/ACCOUNT_DELETION_INTERACTIVE_SAFETY_BUFFER_MS\s*=\s*([0-9_]+)/)?.[1];
+const interactiveDeletionBudgetMs = interactiveDeletionBudgetText ? Number(interactiveDeletionBudgetText.replaceAll('_', '')) : NaN;
+const interactiveDeletionSafetyMs = interactiveDeletionSafetyText ? Number(interactiveDeletionSafetyText.replaceAll('_', '')) : NaN;
+if (interactiveDeletionBudgetMs !== 5_000) failures.push('interactive account deletion budget must remain bounded to 5s');
+if (!Number.isFinite(interactiveDeletionSafetyMs) || interactiveDeletionSafetyMs < 0 || interactiveDeletionSafetyMs >= interactiveDeletionBudgetMs) {
+  failures.push('interactive account deletion runner safety headroom must be non-negative and smaller than the 5s work budget');
+}
+if (!accountApi.includes('Date.now() + ACCOUNT_DELETION_INTERACTIVE_BUDGET_MS')
+  || !accountApi.includes('safetyBufferMs: ACCOUNT_DELETION_INTERACTIVE_SAFETY_BUFFER_MS')) {
+  failures.push('POST/GET account deletion must pass the canonical interactive work budget and runner headroom');
+}
+if (!accountDeletionRunner.includes('options.safetyBufferMs ?? ACCOUNT_DELETION_BACKGROUND_SAFETY_BUFFER_MS')) {
+  failures.push('account deletion runner must honor caller-specific safety headroom while retaining the background default');
+}
 if (!accountApi.includes('export async function POST') || !accountApi.includes('export async function GET')) failures.push('account deletion API must expose native POST and GET handlers');
 if (accountClient.includes("store/useAppStore")) failures.push('account deletion infrastructure must not import the Zustand store');
 if (!accountClient.includes('context.cancelPendingSyncs()') || !accountClient.includes('context.resetStore()')) {
