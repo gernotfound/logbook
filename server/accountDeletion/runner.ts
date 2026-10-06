@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { ACCOUNT_DELETION_BACKGROUND_SAFETY_BUFFER_MS } from './budget.js';
 import {
   acquireDeletionLease,
   deleteAuthUserLast,
@@ -15,26 +16,40 @@ import {
 } from './jobStore.js';
 import { PRIVATE_ACCOUNT_COLLECTIONS, type AccountDeletionPublicStatus } from './types.js';
 
-const SAFETY_BUFFER_MS = 8_000;
+export type DeletionRunOptions = {
+  leaseOwner?: string;
+  safetyBufferMs?: number;
+};
 
 export type DeletionRunResult = 'complete' | 'pending' | 'failed' | 'busy';
 
-function outOfBudget(deadlineMs: number): boolean {
-  return Date.now() + SAFETY_BUFFER_MS >= deadlineMs;
+function safetyBuffer(options: DeletionRunOptions): number {
+  const value = options.safetyBufferMs ?? ACCOUNT_DELETION_BACKGROUND_SAFETY_BUFFER_MS;
+  if (!Number.isFinite(value) || value < 0) {
+    throw new Error('Invalid account deletion safety buffer.');
+  }
+  return value;
+}
+
+function outOfBudget(deadlineMs: number, safetyBufferMs: number): boolean {
+  return Date.now() + safetyBufferMs >= deadlineMs;
 }
 
 export async function processAccountDeletion(
   uid: string,
   deadlineMs: number,
-  leaseOwner = randomUUID(),
+  options: DeletionRunOptions = {},
 ): Promise<DeletionRunResult> {
-  if (outOfBudget(deadlineMs)) return 'pending';
+  const safetyBufferMs = safetyBuffer(options);
+  if (outOfBudget(deadlineMs, safetyBufferMs)) return 'pending';
+
+  const leaseOwner = options.leaseOwner ?? randomUUID();
   const acquired = await acquireDeletionLease(uid, leaseOwner, deadlineMs);
   if (!acquired) return 'busy';
 
   let phase = 'revoking';
   try {
-    if (outOfBudget(deadlineMs)) {
+    if (outOfBudget(deadlineMs, safetyBufferMs)) {
       await parkDeletion(uid, 'deleting', { phase: 'revoking' });
       return 'pending';
     }
@@ -44,7 +59,7 @@ export async function processAccountDeletion(
       phase = `collection:${name}`;
       let deletedBatches = 0;
       for (;;) {
-        if (outOfBudget(deadlineMs)) {
+        if (outOfBudget(deadlineMs, safetyBufferMs)) {
           await parkDeletion(uid, 'deleting', { phase: 'collection', collection: name, deletedBatches });
           return 'pending';
         }
@@ -55,7 +70,7 @@ export async function processAccountDeletion(
     }
 
     phase = 'root';
-    if (outOfBudget(deadlineMs)) {
+    if (outOfBudget(deadlineMs, safetyBufferMs)) {
       await parkDeletion(uid, 'deleting', { phase: 'root' });
       return 'pending';
     }
@@ -63,14 +78,14 @@ export async function processAccountDeletion(
 
     phase = 'verification';
     await markVerifying(uid);
-    if (outOfBudget(deadlineMs)) {
+    if (outOfBudget(deadlineMs, safetyBufferMs)) {
       await parkDeletion(uid, 'verifying', { phase: 'verifying' });
       return 'pending';
     }
     await verifyNoAccountResidue(uid);
 
     phase = 'auth';
-    if (outOfBudget(deadlineMs)) {
+    if (outOfBudget(deadlineMs, safetyBufferMs)) {
       await parkDeletion(uid, 'verifying', { phase: 'auth' });
       return 'pending';
     }
@@ -92,11 +107,12 @@ export async function progressAndReadStatus(
   uid: string,
   receiptToken: string,
   deadlineMs: number,
+  options: DeletionRunOptions = {},
 ): Promise<AccountDeletionPublicStatus | null> {
   const before = await readDeletionStatus(uid, receiptToken);
   if (!before) return null;
   if (before.status === 'complete' || (before.status === 'failed' && before.retryable === false)) return before;
 
-  await processAccountDeletion(uid, deadlineMs);
+  await processAccountDeletion(uid, deadlineMs, options);
   return readDeletionStatus(uid, receiptToken);
 }

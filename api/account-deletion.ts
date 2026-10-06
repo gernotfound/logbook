@@ -6,13 +6,18 @@ import {
   validateReceipt,
   validateUid,
 } from '../server/accountDeletion/jobStore.js';
+import {
+  ACCOUNT_DELETION_INTERACTIVE_BUDGET_MS,
+  ACCOUNT_DELETION_INTERACTIVE_SAFETY_BUFFER_MS,
+} from '../server/accountDeletion/budget.js';
 import { processAccountDeletion, progressAndReadStatus } from '../server/accountDeletion/runner.js';
 import { accountDeletionCorsHeaders, requireAccountDeletionOrigin } from '../server/accountDeletion/cors.js';
 
 export const maxDuration = 300;
 
-const POST_BUDGET_MS = 5_000;
-const GET_PROGRESS_BUDGET_MS = 5_000;
+const INTERACTIVE_RUN_OPTIONS = {
+  safetyBufferMs: ACCOUNT_DELETION_INTERACTIVE_SAFETY_BUFFER_MS,
+} as const;
 const ALLOWED_HEADERS = 'authorization, content-type, x-firebase-appcheck, x-account-deletion-uid, x-account-deletion-receipt';
 
 function json(body: unknown, init: ResponseInit = {}, origin: string | null = null): Response {
@@ -77,7 +82,11 @@ export async function POST(request: Request): Promise<Response> {
     const receiptToken = validatedInput(() => validateReceipt(body.receiptToken));
 
     await createOrRefreshDeletionJob(uid, receiptToken);
-    await processAccountDeletion(uid, Date.now() + POST_BUDGET_MS);
+    await processAccountDeletion(
+      uid,
+      Date.now() + ACCOUNT_DELETION_INTERACTIVE_BUDGET_MS,
+      INTERACTIVE_RUN_OPTIONS,
+    );
     const status = await readDeletionStatus(uid, receiptToken);
     if (!status) return json({ error: 'Job di cancellazione non disponibile.' }, { status: 500 }, origin);
     return json(status, { status: status.status === 'complete' ? 200 : 202 }, origin);
@@ -97,7 +106,12 @@ export async function GET(request: Request): Promise<Response> {
     const authorized = await readAuthorizedDeletionJob(uid, receiptToken);
     if (!authorized) return json({ error: 'Cancellazione non trovata.' }, { status: 404 }, origin);
 
-    const status = await progressAndReadStatus(uid, receiptToken, Date.now() + GET_PROGRESS_BUDGET_MS);
+    const status = await progressAndReadStatus(
+      uid,
+      receiptToken,
+      Date.now() + ACCOUNT_DELETION_INTERACTIVE_BUDGET_MS,
+      INTERACTIVE_RUN_OPTIONS,
+    );
     if (!status) return json({ error: 'Cancellazione non trovata.' }, { status: 404 }, origin);
     return json(status, { status: 200 }, origin);
   } catch (error) {
