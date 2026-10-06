@@ -30,6 +30,11 @@ describe('public TheLogBook branding', () => {
     expect(app).not.toContain('className="app-loading"');
     expect(appearanceCss).toContain('background: #000000;');
     expect(appearanceCss).toContain('color: #ffffff;');
+    expect(appearanceCss).toContain('--brand-loading-scale: 0.72;');
+    expect(appearanceCss).toContain('transform: translateY(var(--brand-loading-offset-y)) scale(var(--brand-loading-scale));');
+    expect(appearanceCss).toContain('100dvh');
+    expect(appearanceCss).toContain('- var(--nav-height)');
+    expect(appearanceCss).not.toContain('.brand-loading-screen--content .brand-loading-screen__icon');
     expect(appearanceCss).toContain('animation: brand-loading-bloom-pulse 1.9s ease-in-out infinite;');
     expect(homeHeader).toContain('<h1>TheLogBook</h1>');
     expect(loginBox).toContain('>TheLogBook</h1>');
