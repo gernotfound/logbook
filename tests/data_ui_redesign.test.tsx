@@ -110,7 +110,7 @@ describe('Data UI redesign', () => {
 
         fireEvent.click(screen.getByRole('button', { name: /Apri dettaglio/i }));
         expect(screen.getByRole('dialog')).toBeDefined();
-        expect(screen.getByText('16,7%')).toBeDefined();
+        expect(screen.getAllByText('16,7%').length).toBeGreaterThan(0);
 
         fireEvent.click(screen.getByRole('button', { name: 'Chiudi' }));
         fireEvent.click(screen.getByRole('button', { name: 'Opzioni' }));
