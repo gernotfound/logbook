@@ -71,7 +71,7 @@
 .chart-period-control button { border:0; border-radius:.625rem; min-height:2.75rem; padding:.5rem .625rem; background:var(--surface-light); color:var(--text-muted); font-size: var(--font-size-meta); }
 .chart-period-control button[aria-pressed="true"] { background:var(--primary-color); color:var(--on-primary); font-weight:600; }
 .analytics-card { position:relative; margin:0; }
-.analytics-card[aria-busy="true"] .home-chart-canvas { opacity:.6; }
+.analytics-card[aria-busy="true"] .home-chart-canvas canvas { opacity:.6; }
 .analytics-stat-line { display:flex; flex-wrap:wrap; gap:.5rem; margin-top:.5rem; color:var(--text-muted); font-size: var(--font-size-secondary); }
 .analytics-stat-line strong { color:var(--text-main); }
 .analytics-change { font-variant-numeric:tabular-nums; color:var(--text-main); }

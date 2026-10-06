@@ -43,7 +43,9 @@ La parallelizzazione riguarda l'orchestrazione, non la semantica del gate. Unit,
 - MUST: `npm run verify:m8` resta il comando repository umbrella e continua a comporre integralmente `verify:m7`, quindi M6/M5 e i gate precedenti richiesti.
 - MUST: GitHub Actions può appiattire quella composizione in shard paralleli soltanto se `test:ci-contract` prova meccanicamente che il multiset dei leaf command della matrice è equivalente all'espansione corrente di `verify:m8`.
 - MUST: gli shard non invocano umbrella `verify:mN` seriali; eseguono leaf command per ottenere parallelismo reale.
-- MUST: `npm audit --audit-level=high` resta bloccante nella CI ma non appartiene alla semantica deterministica di `verify:m8`.
+- MUST: `npm audit --audit-level=high` e `test:security-static` (Gitleaks + zizmor) restano bloccanti nella CI ma non appartengono alla semantica deterministica di `verify:m8`, perché dipendono da registry/release esterni.
+- MUST: `test:dead-code` (Knip su file, dipendenze e import non dichiarati) è invece un leaf deterministico di `verify:m8`; gli unused export restano analisi advisory finché il rumore storico non è classificato.
+- MUST: `lint:a11y` blocca sulle regole JSX accessibility ad alta confidenza. `lint:type-aware` applica `typescript/no-floating-promises` con una soglia iniziale di 47 warning già classificati: la soglia non può aumentare e va ridotta man mano che il debito viene corretto con semantica esplicita, senza aggiungere `void` meccanicamente ai path di persistenza.
 - MUST: M8 aggiunge test Domain Operations V4 e il boundary checker che impedisce nuovi consumer UI/hook snapshot-based fuori dall'allowlist documentata.
 - MUST: workflow temporanei di migrazione non devono esistere nell'HEAD candidato.
 - MUST: workflow legacy che duplicano test/E2E non restano attivi in parallelo.
@@ -52,7 +54,7 @@ La parallelizzazione riguarda l'orchestrazione, non la semantica del gate. Unit,
 
 - MUST: la matrice usa `fail-fast: false` per raccogliere l'esito di tutti gli shard dello stesso SHA.
 - MUST: Java viene installato solo nello shard Firestore Rules salvo nuova dipendenza documentata.
-- MUST: Chromium Playwright viene installato solo nello shard E2E salvo nuova dipendenza documentata.
+- MUST: Chromium e il WebKit mirato per Mobile Safari vengono installati solo nello shard E2E salvo nuova dipendenza documentata; i test PWA/Service Worker restano Chromium-only e WebKit esegue soltanto suite esplicitamente selezionate.
 - MUST: suite intenzionalmente single-worker, incluse recovery/fuzz/GC/hardening dove configurato, mantengono i propri limiti interni; la CI parallelizza tra suite, non forza concorrenza dentro scenari che richiedono isolamento.
 - MUST: la suite Vitest standard può essere divisa per file con `--shard=i/N` soltanto se tutti gli indici `1..N` sono presenti esattamente una volta e il CI contract ricompone la coppia nell'unico leaf canonico `npm run test`.
 - MUST: il contract PWA M7 che legge `dist/` deve essere eseguito nello stesso shard che produce il build richiesto, oppure ricevere artefatti verificati dello stesso exact SHA.
@@ -64,7 +66,7 @@ La parallelizzazione riguarda l'orchestrazione, non la semantica del gate. Unit,
 - MUST: gli shard di verifica mantengono `permissions: contents: read`.
 - MUST: il solo job CodeQL può aggiungere `security-events: write`, limitato al caricamento dei risultati di code scanning; non estendere tale permesso agli shard applicativi.
 - MUST: nessun secret production è richiesto dal gate repository.
-- MUST: tutte le GitHub Actions di terze parti usate dal workflow canonico sono pin-nate a commit SHA completi e immutabili; il commento di versione serve alla manutenzione/Dependabot, non alla risoluzione runtime.
+- MUST: tutte le GitHub Actions di terze parti usate dal workflow canonico sono pin-nate a commit SHA completi e immutabili; il commento di versione serve alla manutenzione/Dependabot, non alla risoluzione runtime. I checkout impostano `persist-credentials: false` per non lasciare il token Git nel workspace.
 - MUST: i test M7 server continuano a mockare Firebase Admin.
 - MUST: il runner E2E usa esclusivamente configurazione Firebase dummy/test.
 - MUST: `FIREBASE_ADMIN_*` e `CRON_SECRET` restano configurazione runtime e non fixture CI.
@@ -113,6 +115,7 @@ ${{ matrix.command }} 2>&1 | tee "verification-${{ matrix.id }}.log"
 ## External checks
 
 - MUST: la copertura SAST bloccante non dipende da quote o disponibilità di un servizio terzo: CodeQL è parte del gate aggregato `Canonical Verification`.
+- MUST: il core shard esegue inoltre Gitleaks e zizmor con release versionate e checksum SHA-256 verificati. Gitleaks analizza il delta Git completo dell'evento con redazione totale dei valori rilevati; zizmor analizza i workflow. Questi controlli supplementari non sostituiscono CodeQL.
 - NOTE: eventuali check Snyk esterni restano supplementari. Un errore operativo come quota/limite raggiunto non equivale a una vulnerabilità rilevata e non sostituisce il risultato CodeQL.
 - NOTE: `npm audit --audit-level=high` è registry-dependent e può cambiare senza commit; resta bloccante nel workflow ma non fa parte della semantica deterministica del comando repository `verify:m8`.
 - VERIFY: required status checks/rulesets sono configurazione GitHub esterna; non dichiararli required senza leggere il ruleset effettivo.

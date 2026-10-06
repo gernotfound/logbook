@@ -1,7 +1,7 @@
 name: Firebase Firestore Production
 
 on:
-  workflow_run:
+  workflow_run: # zizmor: ignore[dangerous-triggers] Privileged job accepts only a successful gated main run and revalidates the exact current main SHA.
     workflows:
       - Milestone Verification
     types:
@@ -38,6 +38,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Verify exact main SHA
         shell: bash

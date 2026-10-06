@@ -94,12 +94,15 @@ requirePattern('matrix fail-fast disabled', workflow, /^      fail-fast: false\s
 requirePattern('Ubuntu 24.04 shard runner', workflow, /^    runs-on: ubuntu-24\.04\s*$/m);
 requirePattern('checkout action pin', workflow, /^        uses: actions\/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7\s*$/m);
 requirePattern('full checkout history', workflow, /^          fetch-depth: 0\s*$/m);
+const checkoutCredentialGuards = workflow.match(/^          persist-credentials: false\s*$/gm) ?? [];
+if (checkoutCredentialGuards.length !== 2) failures.push(`checkout credential persistence: expected two disabled checkout credentials, found ${checkoutCredentialGuards.length}`);
 requirePattern('Node setup action pin', workflow, /^        uses: actions\/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7\s*$/m);
 requirePattern('Node 24 runtime', workflow, /^          node-version: ['"]?24['"]?\s*$/m);
 requirePattern('npm cache', workflow, /^          cache: npm\s*$/m);
 requirePattern('dependency install', workflow, /^        run: npm ci\s*$/m);
 requirePattern('failure artifact action pin', workflow, /^        uses: actions\/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7\s*$/m);
 requirePattern('exact event SHA binding', workflow, /^      EXPECTED_SHA: \$\{\{ github\.event\.pull_request\.head\.sha \|\| github\.sha \}\}\s*$/m);
+requirePattern('Gitleaks event base binding', workflow, /^      GITLEAKS_BASE_SHA: \$\{\{ github\.event\.pull_request\.base\.sha \|\| github\.event\.before \}\}\s*$/m);
 requirePattern('exact checkout ref', workflow, /^          ref: \$\{\{ github\.event\.pull_request\.head\.sha \|\| github\.sha \}\}\s*$/m);
 requirePattern('runtime SHA read', workflow, /^          actual_sha="\$\(git rev-parse HEAD\)"\s*$/m);
 requirePattern('runtime SHA comparison', workflow, /^          if \[ "\$\{actual_sha\}" != "\$\{EXPECTED_SHA\}" \]; then\s*$/m);
@@ -110,7 +113,7 @@ requirePattern('Java setup action pin', workflow, /^        uses: actions\/setup
 requirePattern('Temurin distribution', workflow, /^          distribution: temurin\s*$/m);
 requirePattern('Java 21 runtime', workflow, /^          java-version: ['"]?21['"]?\s*$/m);
 requirePattern('conditional Playwright setup', workflow, /^        if: matrix\.playwright == true\s*$/m);
-requirePattern('Playwright Chromium install', workflow, /^        run: npx playwright install --with-deps chromium\s*$/m);
+requirePattern('Playwright Chromium and WebKit install', workflow, /^        run: npx playwright install --with-deps chromium webkit\s*$/m);
 requirePattern('matrix command execution', workflow, /^          \$\{\{ matrix\.command \}\} 2>&1 \| tee "verification-\$\{\{ matrix\.id \}\}\.log"\s*$/m);
 requirePattern('CodeQL job', workflow, /^  codeql:\s*$/m);
 requirePattern('CodeQL JavaScript-TypeScript language', workflow, /^          languages: javascript-typescript\s*$/m);
@@ -159,7 +162,7 @@ if (!includeMatch) {
       failures.push(`${shard.id}: shard must use leaf commands, not a serial milestone umbrella`);
     }
     for (const part of splitChain(shard.command)) {
-      if (part === 'npm audit --audit-level=high') continue;
+      if (part === 'npm audit --audit-level=high' || part === 'npm run test:security-static') continue;
       if (/^npm run test -- --shard=[12]\/2$/.test(part)) {
         unitShardCommands.push(part);
         continue;
@@ -204,6 +207,8 @@ if (!includeMatch) {
 
 const auditOccurrences = workflow.match(/npm audit --audit-level=high/g) ?? [];
 if (auditOccurrences.length !== 1) failures.push(`security audit: expected once, found ${auditOccurrences.length}`);
+const staticSecurityOccurrences = workflow.match(/npm run test:security-static/g) ?? [];
+if (staticSecurityOccurrences.length !== 1) failures.push(`static security scan: expected once, found ${staticSecurityOccurrences.length}`);
 
 const canonicalNames = workflow.match(/name: ["']Canonical Verification["']/g) ?? [];
 if (canonicalNames.length !== 1) failures.push(`canonical aggregate: expected one stable check name, found ${canonicalNames.length}`);
@@ -232,4 +237,4 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-console.log('M8 CI contract OK: exact-SHA parallel shards are leaf-equivalent to verify:m8, CodeQL security analysis is required, specialized dependencies stay isolated, and Canonical Verification remains the single aggregate gate.');
+console.log('M8 CI contract OK: exact-SHA parallel shards are leaf-equivalent to verify:m8, CodeQL plus the supplemental static-security gate are required, specialized dependencies stay isolated, and Canonical Verification remains the single aggregate gate.');

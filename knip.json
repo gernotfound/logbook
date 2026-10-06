@@ -1,0 +1,11 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "entry": [
+    "public/appearance.js",
+    "api/*.ts",
+    "scripts/prepare-vercel-backend-static.mjs",
+    "scripts/vercel-ignore-build.mjs",
+    "tests/emulator/setup.ts",
+    "vitest.emulator.config.ts"
+  ]
+}
