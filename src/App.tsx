@@ -21,6 +21,7 @@ import type {
   DataSubTab
 } from './types';
 import { requiredUpdateHardReload } from './lib/sync/safeReload';
+import { scheduleSequentialIdlePreload } from './lib/backgroundPreload';
 
 import ErrorBoundary from './components/UI/ErrorBoundary';
 import BottomNav from './components/UI/BottomNav';
@@ -30,11 +31,25 @@ import { needsLegalUpdate } from './lib/legalVersions';
 import { LoginBox } from './components/UI/LoginBox';
 import { AlertTriangle, X } from 'lucide-react';
 
-const HomeView = lazy(() => import('./components/Home/HomeView'));
-const TrainingView = lazy(() => import('./components/Training/TrainingView'));
-const NutritionView = lazy(() => import('./components/Nutrition/NutritionView'));
-const DataView = lazy(() => import('./components/Data/DataView'));
-const SettingsView = lazy(() => import('./components/SettingsView'));
+const loadHomeView = () => import('./components/Home/HomeView');
+const loadTrainingView = () => import('./components/Training/TrainingView');
+const loadNutritionView = () => import('./components/Nutrition/NutritionView');
+const loadDataView = () => import('./components/Data/DataView');
+const loadSettingsView = () => import('./components/SettingsView');
+
+const HomeView = lazy(loadHomeView);
+const TrainingView = lazy(loadTrainingView);
+const NutritionView = lazy(loadNutritionView);
+const DataView = lazy(loadDataView);
+const SettingsView = lazy(loadSettingsView);
+
+const BACKGROUND_VIEW_PRELOAD_ORDER = [
+  ['home', loadHomeView],
+  ['training', loadTrainingView],
+  ['nutrition', loadNutritionView],
+  ['data', loadDataView],
+  ['settings', loadSettingsView],
+] as const;
 
 const GUEST_LOGIN_OVERLAY_SESSION_KEY = 'logbook_guest_login_overlay';
 
@@ -81,6 +96,7 @@ function App() {
 
   const [showGuestLogin, setShowGuestLogin] = useState(readGuestLoginOverlayState);
 
+  const hasUserData = Boolean(userData);
   const showConsentOverlay = userData && needsLegalUpdate(userData.legalConsent);
   const guestLoginOverlayVisible = showGuestLogin && (!currentUser || (isGuest && guestMigrationStatus === 'idle'));
   const guestLoginMigrationPending = !!currentUser && guestMigrationStatus === 'pending';
@@ -149,6 +165,42 @@ function App() {
     window.addEventListener('online', handleOnline);
     return () => window.removeEventListener('online', handleOnline);
   }, [setSaveError]);
+
+  // Warm the remaining primary view modules only after startup/auth/sync settles.
+  // Importing code here does not mount hidden views or start their hooks.
+  useEffect(() => {
+    const appBlocked = loading
+      || syncing
+      || compatibilityStatus === 'update-required'
+      || !hasUserData
+      || (!currentUser && !isGuest)
+      || guestLoginMigrationPending
+      || guestLoginMigrationFailed
+      || Boolean(showConsentOverlay)
+      || guestLoginOverlayVisible
+      || settingsOpen;
+
+    if (appBlocked) return;
+
+    const preloadTasks = BACKGROUND_VIEW_PRELOAD_ORDER
+      .filter(([view]) => view !== activeTab)
+      .map(([, preload]) => preload);
+
+    return scheduleSequentialIdlePreload(preloadTasks);
+  }, [
+    activeTab,
+    compatibilityStatus,
+    currentUser,
+    guestLoginMigrationFailed,
+    guestLoginMigrationPending,
+    guestLoginOverlayVisible,
+    hasUserData,
+    isGuest,
+    loading,
+    settingsOpen,
+    showConsentOverlay,
+    syncing,
+  ]);
 
   // Track visited tabs for lazy Keep-Alive rendering
   const [visitedTabs, setVisitedTabs] = useState<Record<string, boolean>>(() => ({ [activeTab]: true }));
