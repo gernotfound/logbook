@@ -80,6 +80,36 @@ describe('account deletion recent authentication', () => {
       'Secret1!',
     );
     expect(deleteSpy).toHaveBeenCalledTimes(1);
+    expect(result.current.deletionPhase).toBe('idle');
+  });
+
+  it('exposes a deleting phase while the server deletion is in progress', async () => {
+    reauth.run.mockResolvedValue('reauthenticated');
+    let resolveDeletion: ((value: { status: 'complete' }) => void) | undefined;
+    vi.spyOn(DB, 'deleteAccount').mockImplementation(() => new Promise(resolve => {
+      resolveDeletion = resolve;
+    }));
+
+    const { result } = renderHook(() => useSettings());
+    let work: Promise<void>;
+    act(() => {
+      work = result.current.handleDeleteAccount();
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(result.current.deletingAccount).toBe(true);
+    expect(result.current.deletionPhase).toBe('deleting');
+
+    await act(async () => {
+      resolveDeletion?.({ status: 'complete' });
+      await work!;
+    });
+    expect(result.current.deletingAccount).toBe(false);
+    expect(result.current.deletionPhase).toBe('idle');
   });
 
   it('cancels safely when the password prompt is dismissed', async () => {

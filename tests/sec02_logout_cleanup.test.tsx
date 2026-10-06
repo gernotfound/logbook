@@ -261,6 +261,32 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
         expect(useAppStore.getState().saveError).toContain('Cancellazione account in verifica');
     });
 
+    it('blocks ordinary local writes while account deletion is pending', async () => {
+        localStorage.setItem('logbook_is_guest', 'false');
+        const owner = storageOwner();
+        const uid = owner.startsWith('user:') ? owner.slice(5) : 'unexpected-guest';
+        localStorage.setItem(`logbook:v2:${owner}:account-deletion`, JSON.stringify({
+            owner,
+            uid,
+            startedAt: Date.now(),
+            receiptToken: 'receipt-token',
+        }));
+        useAppStore.setState({
+            userData: {
+                ...useAppStore.getState().userData,
+                profile: { name: 'Before deletion' },
+            } as any,
+            dataOwner: owner,
+        });
+
+        await expect(useAppStore.getState().dispatchDomainOperation({
+            type: 'profile.patch',
+            patch: { name: 'Must not persist' },
+        } as any)).rejects.toThrow('Cancellazione account in corso');
+
+        expect(useAppStore.getState().userData?.profile?.name).toBe('Before deletion');
+    });
+
     it('resetStore clears memory state without manual storage deletion', () => {
         const store = useAppStore.getState();
         store.resetStore();

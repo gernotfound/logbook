@@ -68,3 +68,9 @@
   .settings-row-icon { width:2.5rem; height:2.5rem; flex-basis:2.5rem; }
   .settings-detail-card,.settings-system-card,.settings-toggle-card { padding:.875rem; }
 }
+
+.settings-account-deletion-progress { display:grid; min-height:calc(100dvh - 8rem); place-items:center; align-content:center; gap:1rem; padding:1.5rem; text-align:center; }
+.settings-account-deletion-progress .brand-loading-screen--content { min-height:12rem; }
+.settings-account-deletion-progress__copy { display:grid; max-width:24rem; gap:.5rem; }
+.settings-account-deletion-progress__copy h1 { margin:0; color:var(--text-main); font-size:var(--font-size-page); }
+.settings-account-deletion-progress__copy p { margin:0; color:var(--text-muted); font-size:var(--font-size-body); line-height:1.5; }

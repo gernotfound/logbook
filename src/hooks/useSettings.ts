@@ -42,6 +42,7 @@ export function useSettings() {
     const setHeight = (val: string) => setLocalProfile({ ...profile, height: val });
     const setGender = (val: string) => setLocalProfile({ ...profile, gender: val });
     const [deletingAccount, setDeletingAccount] = useState(false);
+    const [deletionPhase, setDeletionPhase] = useState<'idle' | 'verifying' | 'deleting'>('idle');
     const deleteBusy = useRef(false);
     const [importingData, setImportingData] = useState(false);
     const importBusy = useRef(false);
@@ -160,6 +161,7 @@ export function useSettings() {
             if (!(await showConfirm('Ultima conferma: eliminare definitivamente il tuo account TheLogBook?'))) return;
             assertCurrent();
             setDeletingAccount(true);
+            setDeletionPhase('verifying');
             const { auth } = await import('../lib/firebase');
             assertCurrent();
             const user = auth.currentUser;
@@ -184,6 +186,7 @@ export function useSettings() {
                 throw new Error('Nessun metodo di autenticazione disponibile per confermare la cancellazione.');
             }
 
+            setDeletionPhase('deleting');
             const outcome = await DB.deleteAccount({
                 cancelPendingSyncs: () => useAppStore.getState().cancelPendingSyncs(),
                 resetStore: () => useAppStore.getState().resetStore(),
@@ -208,6 +211,7 @@ export function useSettings() {
         } finally {
             deleteBusy.current = false;
             setDeletingAccount(false);
+            setDeletionPhase('idle');
         }
     };
     return {
@@ -216,6 +220,7 @@ export function useSettings() {
         height, setHeight,
         gender, setGender,
         deletingAccount,
+        deletionPhase,
         pendingAccountDeletion,
         importingData,
         exportingData,

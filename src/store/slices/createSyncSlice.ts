@@ -83,6 +83,7 @@ export function clearSyncTimers() {
 export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, get) => {
     const assertLocalPersistenceWritable = () => {
         if (get().localPersistenceBlocked) throw new Error(LOCAL_PERSISTENCE_BLOCKED_MESSAGE);
+        if (relevantDeletionPending()) throw new Error('Cancellazione account in corso. Le modifiche sono bloccate finché il server non conferma il completamento.');
     };
 
     const enterUpdateRequired = (error: unknown) => {
