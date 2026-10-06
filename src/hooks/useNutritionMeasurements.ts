@@ -47,8 +47,12 @@ export function useNutritionMeasurements(selectedDate?: string) {
     );
 
     const measurementsHistory = useMemo(() => {
+        const historyFields = [
+            'weight', 'bf', 'waist', 'neck', 'hip', 'chest', 'shoulders', 'biceps', 'thighs', 'calves',
+            'sleepHours', 'sleepDeep', 'sleepLight', 'sleepRem', 'sleepAwake',
+        ];
         return Object.values(nutrition)
-            .filter((day: any) => day && (day.weight || day.bf || day.sleepHours))
+            .filter((day: any) => day && historyFields.some(key => day[key] !== undefined && day[key] !== null && day[key] !== ''))
             .sort((a: any, b: any) => (b.date || '').localeCompare(a.date || ''));
     }, [nutrition]);
 
