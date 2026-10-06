@@ -61,6 +61,10 @@ describe('Empirical Challenger Suite: Edge Cases & Stress Verification', () => {
       expect(zeroRatios.carbsGrams).toBe(0);
       expect(zeroRatios.proGrams).toBe(0);
       expect(zeroRatios.fatGrams).toBe(0);
+
+      expect(Logic.calculateMacrosFromKg(80, Number.POSITIVE_INFINITY, 2, 1).totalKcal).toBe(0);
+      expect(Logic.calculateMacrosFromKg(Number.POSITIVE_INFINITY, 3.5, 2, 1).totalKcal).toBe(0);
+      expect(Logic.calculateMacrosFromKg(1e308, 1e308, 1, 1).totalKcal).toBe(0);
     });
 
     test('Logic.calculateBodyFat handles 0 weight and edge inputs safely', () => {
