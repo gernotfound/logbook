@@ -165,8 +165,8 @@ describe('LogBook PWA Enhancements E2E Suite (Requirements R1 - R6)', () => {
                 />
             );
 
-            expect(container.textContent).toContain('🌙 Sonno: 08:00');
-            expect(container.textContent).toContain('78.5 kg');
+            expect(container.textContent).toContain('Sonno 08:00');
+            expect(container.textContent).toContain('78,5 kg');
 
             // Export to CSV
             await Exporter.exportToCSV([], nutritionData, []);
