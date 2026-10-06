@@ -51,9 +51,12 @@ export function classifyFieldOverride(desired, liveFields, operations) {
   });
   const indexConfig = live?.indexConfig;
   const indexes = Array.isArray(indexConfig?.indexes) ? indexConfig.indexes : [];
-  const explicit = indexConfig?.usesAncestorConfig === false;
+  const explicit = Boolean(live) && indexConfig?.usesAncestorConfig !== true;
   const reverting = indexConfig?.reverting === true;
   const indexesDisabled = Boolean(live) && indexes.length === 0;
+  // Firestore's protobuf JSON may omit output-only booleans when their value is false.
+  // firebase-tools therefore matches field overrides by exact resource + index modes,
+  // not by requiring an explicit `usesAncestorConfig: false` property in the response.
   const matchesDesired = Boolean(live) && explicit && !reverting && indexesDisabled;
 
   const activeOperation = operations.find(operation => isActiveFieldIndexRemoval(operation, desired));
