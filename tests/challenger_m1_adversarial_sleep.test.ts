@@ -457,8 +457,8 @@ describe('Empirical Challenger: Sleep Format HH:MM Adversarial Stress Test Suite
             expect(sleepDeepInput.value).toBe('01:30');
 
             // Check Italian sentence case labels
-            expect(screen.getByText('Ore sonno (totali)')).toBeDefined();
-            expect(screen.getByText('Dettagli fasi (opzionali)')).toBeDefined();
+            expect(screen.getByText('Ore di sonno totali')).toBeDefined();
+            expect(screen.getByText('Dettagli fasi')).toBeDefined();
             expect(screen.getByText('Sonno profondo')).toBeDefined();
             expect(screen.getByText('Sonno leggero')).toBeDefined();
             expect(screen.getByText('Sonno REM')).toBeDefined();
