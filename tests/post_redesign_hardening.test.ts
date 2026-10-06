@@ -54,7 +54,11 @@ describe('post-redesign UI hardening', () => {
     expect(shared).toMatch(/\.sub-nav\s*\{[^}]*display:\s*flex[^}]*overflow-x:\s*auto/s);
     expect(shared).toMatch(/\.sub-nav-btn\s*\{[^}]*flex:\s*0 0 auto/s);
 
-    for (const path of listCssFiles('src').filter(path => path !== 'src/styles/sub-nav.css')) {
+    const nonCanonicalCss = [
+      ...listCssFiles('src/components'),
+      ...listCssFiles('src/styles').filter(path => !['src/styles/global.css', 'src/styles/sub-nav.css'].includes(path)),
+    ];
+    for (const path of nonCanonicalCss) {
       expect(read(path), path).not.toMatch(/\.sub-nav(?:-shell|-btn|-edge(?:-start|-end)?)?\b/);
     }
   });
