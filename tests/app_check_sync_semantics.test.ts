@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mapFirebaseErrorCode } from '../src/lib/errorHandler';
+import { formatAppCheckTelemetryMessage, mapFirebaseErrorCode } from '../src/lib/errorHandler';
 import { classifySyncFailure } from '../src/lib/sync/syncFailure';
 
 describe('Audit 21 App Check and rejected-sync semantics', () => {
@@ -45,6 +45,42 @@ describe('Audit 21 App Check and rejected-sync semantics', () => {
         expect(formatted.code).toBe('ERR_APP_CHECK_UNSUPPORTED');
         expect(formatted.isOfflineSafe).toBe(false);
         expect(formatted.canRetry).toBe(false);
+    });
+
+    it('maps limited-use and reCAPTCHA provider failures to App Check diagnostics', () => {
+        const limited = Object.assign(new Error('Token App Check limited-use non disponibile'), {
+            code: 'app-check-limited-use-unavailable',
+        });
+        const recaptcha = Object.assign(new Error('assessment rejected'), {
+            code: 'appCheck/recaptcha-error',
+        });
+
+        expect(mapFirebaseErrorCode(limited)).toMatchObject({
+            code: 'ERR_APP_CHECK_BLOCKED',
+            category: 'app_check',
+        });
+        expect(mapFirebaseErrorCode(recaptcha)).toMatchObject({
+            code: 'ERR_APP_CHECK_BLOCKED',
+            category: 'app_check',
+        });
+    });
+
+    it('builds privacy-safe App Check telemetry from a wrapped provider cause', () => {
+        const provider = Object.assign(new Error('provider detail that must not be copied'), {
+            code: 'appCheck/recaptcha-error',
+            status: 403,
+        });
+        const wrapped = Object.assign(new Error('Verifica App Check non disponibile.'), {
+            code: 'app-check-unavailable',
+            phase: 'token-error',
+            retryable: false,
+            cause: provider,
+        });
+
+        expect(formatAppCheckTelemetryMessage(wrapped)).toBe(
+            'App Check failure; code=appCheck/recaptcha-error; status=403; phase=token-error; retryable=false',
+        );
+        expect(formatAppCheckTelemetryMessage(new Error('ordinary failure'))).toBeUndefined();
     });
 
     it('keeps unknown cloud failures fail-closed in presentation', () => {

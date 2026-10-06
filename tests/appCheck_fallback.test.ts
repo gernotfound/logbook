@@ -7,6 +7,7 @@ import {
   getAppCheckStatus,
   getAppCheckToken,
   getLimitedUseAppCheckToken,
+  AppCheckLimitedUseTokenError,
   resetAppCheckStateForTesting,
   setAppCheckFallbackOffline
 } from '../src/lib/appCheck';
@@ -172,21 +173,52 @@ describe('AppCheck Initialization & Fallback Behavior', () => {
     }
   });
 
-  it('keeps standard token readiness intact when a limited-use token request fails', async () => {
+  it('preserves limited-use Firebase diagnostics without poisoning standard token readiness', async () => {
     const mockAppCheckInstance = { app: dummyApp };
     vi.spyOn(appCheckSdk, 'initializeAppCheck').mockReturnValue(mockAppCheckInstance as any);
     vi.spyOn(appCheckSdk, 'getToken').mockResolvedValue({
       token: 'standard-token',
     });
-    vi.spyOn(appCheckSdk, 'getLimitedUseToken').mockRejectedValueOnce(new Error('limited-use failure'));
+    const firebaseError = Object.assign(new Error('reCAPTCHA assessment failed'), {
+      code: 'appCheck/recaptcha-error',
+      status: 403,
+    });
+    vi.spyOn(appCheckSdk, 'getLimitedUseToken').mockRejectedValueOnce(firebaseError);
 
     await initAppCheck(dummyApp, { siteKey: 'enterprise-site-key' });
-    await expect(getLimitedUseAppCheckToken()).resolves.toBeNull();
+
+    let failure: unknown;
+    try {
+      await getLimitedUseAppCheckToken();
+    } catch (error) {
+      failure = error;
+    }
+    expect(failure).toBeInstanceOf(AppCheckLimitedUseTokenError);
+    expect(failure).toMatchObject({
+      code: 'app-check-limited-use-unavailable',
+      firebaseCode: 'appCheck/recaptcha-error',
+      status: 403,
+      retryable: false,
+      cause: firebaseError,
+    });
 
     const status = getAppCheckStatus();
     expect(status.phase).toBe('token-ready');
     expect(status.tokenAvailable).toBe(true);
     expect(isAppCheckActive()).toBe(true);
+  });
+
+  it('classifies Firebase initial App Check throttling as retryable', async () => {
+    const mockAppCheckInstance = { app: dummyApp };
+    vi.spyOn(appCheckSdk, 'initializeAppCheck').mockReturnValue(mockAppCheckInstance as any);
+    const firebaseError = Object.assign(new Error('initial throttle'), { code: 'appCheck/initial-throttle' });
+    vi.spyOn(appCheckSdk, 'getToken').mockRejectedValueOnce(firebaseError);
+
+    const result = await initAppCheck(dummyApp, { siteKey: 'enterprise-site-key' });
+
+    expect(result.phase).toBe('token-error');
+    expect(result.retryable).toBe(true);
+    expect(result.error).toBe(firebaseError);
   });
 
   it('activates fallback offline mode when site key is provided but environment is unsupported', async () => {

@@ -147,4 +147,76 @@ describe('account deletion recovery device registration retries', () => {
     expect(finalize).toHaveBeenCalledWith('user-a');
     expect(localStorage.getItem('logbook_deletion_recovery_devices_v1')).toBeNull();
   });
+
+  it('keeps unknown or expired recovery credentials silent on HTTP 404', async () => {
+    const { recoverDeletedAccountOnThisDevice } = await loadSubject();
+    localStorage.setItem('logbook_deletion_recovery_devices_v1', JSON.stringify([
+      { uid: 'user-a', token: 'A'.repeat(43) },
+    ]));
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', { status: 404 })));
+    const finalize = vi.fn();
+
+    await expect(recoverDeletedAccountOnThisDevice(finalize)).resolves.toEqual({ status: 'none' });
+
+    expect(finalize).not.toHaveBeenCalled();
+  });
+
+  it('does not hide backend recovery outages behind a successful none result', async () => {
+    const { recoverDeletedAccountOnThisDevice } = await loadSubject();
+    localStorage.setItem('logbook_deletion_recovery_devices_v1', JSON.stringify([
+      { uid: 'user-a', token: 'A'.repeat(43) },
+    ]));
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', { status: 503 })));
+
+    await expect(recoverDeletedAccountOnThisDevice(vi.fn())).rejects.toThrow('HTTP 503');
+  });
+
+  it('distinguishes verified remote deletion from routine background verification failure', async () => {
+    const { recoverDeletedAccountOnThisDevice, DeletionRecoveryFinalizationError } = await loadSubject();
+    localStorage.setItem('logbook_deletion_recovery_devices_v1', JSON.stringify([
+      { uid: 'user-a', token: 'A'.repeat(43) },
+    ]));
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ status: 'complete' }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    })));
+    const finalizeError = new Error('Pulizia locale incompleta');
+
+    let failure: unknown;
+    try {
+      await recoverDeletedAccountOnThisDevice(vi.fn(async () => { throw finalizeError; }));
+    } catch (error) {
+      failure = error;
+    }
+
+    expect(failure).toBeInstanceOf(DeletionRecoveryFinalizationError);
+    expect(failure).toMatchObject({
+      code: 'account-deletion-device-finalization-failed',
+      message: 'Pulizia locale incompleta',
+      cause: finalizeError,
+    });
+  });
+
+  it('retains the HTTP status when device registration is rejected', async () => {
+    const { registerDeletionRecoveryDevice } = await loadSubject();
+    const current = user();
+    firebase.auth.currentUser = current;
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', { status: 503 })));
+
+    await expect(registerDeletionRecoveryDevice(current)).rejects.toThrow('HTTP 503');
+  });
+
+  it('keeps limited-use App Check details out of the recovery message shown by callers', async () => {
+    const { registerDeletionRecoveryDevice } = await loadSubject();
+    const current = user();
+    firebase.auth.currentUser = current;
+    appCheck.getLimitedUseAppCheckToken.mockRejectedValueOnce(
+      Object.assign(new Error('technical provider detail'), { code: 'app-check-limited-use-unavailable' }),
+    );
+
+    await expect(registerDeletionRecoveryDevice(current)).rejects.toThrow(
+      'Verifica di sicurezza temporaneamente non disponibile.',
+    );
+  });
+
 });

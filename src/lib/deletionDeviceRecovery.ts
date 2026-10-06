@@ -1,24 +1,57 @@
 import type { User } from 'firebase/auth';
 import { auth, ensureAppCheck } from './firebase';
-import { readBrowserValue, removeBrowserValue, writeBrowserJson } from './sync/browserStorage';
+import { readBrowserValueStrict, removeBrowserValue, writeBrowserJson } from './sync/browserStorage';
 
 const KEY='logbook_deletion_recovery_devices_v1';
 const API=(import.meta.env.VITE_ACCOUNT_DELETION_API_ORIGIN || 'https://logbook-gnf.vercel.app').replace(/\/$/,'');
 const MAX_DEVICES=4;
 type Credential={uid:string;token:string};
 
+class DeletionRecoveryRequestError extends Error {
+ readonly code='account-deletion-device-request-failed';
+ constructor(message:string,readonly status:number){super(message+' (HTTP '+status+').');this.name='DeletionRecoveryRequestError';}
+}
+export class DeletionRecoveryFinalizationError extends Error {
+ readonly code='account-deletion-device-finalization-failed';
+ constructor(error:unknown){super(error instanceof Error?error.message:'Account eliminato dal cloud, ma la pulizia locale non è stata completata.',error instanceof Error?{cause:error}:undefined);this.name='DeletionRecoveryFinalizationError';}
+}
+
+export class DeletionRecoveryCredentialCorruptError extends Error {
+ readonly code='account-deletion-device-credential-corrupt';
+ constructor(error?:unknown){super('Credenziali locali di recovery account non leggibili.',error instanceof Error?{cause:error}:undefined);this.name='DeletionRecoveryCredentialCorruptError';}
+}
+
 function randomToken():string{const bytes=crypto.getRandomValues(new Uint8Array(32));let s='';for(const b of bytes)s+=String.fromCharCode(b);return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/g,'');}
-function readAll():Credential[]{try{const v=readBrowserValue(KEY);const p=v?JSON.parse(v):[];return Array.isArray(p)?p.filter(x=>typeof x?.uid==='string'&&typeof x?.token==='string').slice(-MAX_DEVICES):[];}catch{return [];}}
+function readAll():Credential[]{
+ const raw=readBrowserValueStrict(KEY);
+ if(!raw)return[];
+ let parsed:unknown;
+ try{parsed=JSON.parse(raw);}catch(error){throw new DeletionRecoveryCredentialCorruptError(error);}
+ if(!Array.isArray(parsed))throw new DeletionRecoveryCredentialCorruptError();
+ const credentials:Credential[]=[];
+ for(const item of parsed){
+   if(!item||typeof item!=='object')throw new DeletionRecoveryCredentialCorruptError();
+   const candidate=item as {uid?:unknown;token?:unknown};
+   if(typeof candidate.uid!=='string'||candidate.uid.length===0||typeof candidate.token!=='string'||candidate.token.length===0)throw new DeletionRecoveryCredentialCorruptError();
+   credentials.push({uid:candidate.uid,token:candidate.token});
+ }
+ return credentials.slice(-MAX_DEVICES);
+}
 function writeAll(v:Credential[]){const bounded=v.slice(-MAX_DEVICES);if(bounded.length===0)removeBrowserValue(KEY);else writeBrowserJson(KEY,bounded);}
 export function removeDeletionRecoveryCredential(uid:string):void{writeAll(readAll().filter(x=>x.uid!==uid));}
-async function appToken(){await ensureAppCheck();const {getLimitedUseAppCheckToken}=await import('./appCheck');const t=await getLimitedUseAppCheckToken();if(!t)throw new Error('App Check non disponibile.');return t;}
+async function appToken(){
+ await ensureAppCheck();
+ const {getLimitedUseAppCheckToken}=await import('./appCheck');
+ try{return await getLimitedUseAppCheckToken();}
+ catch(error){throw new Error('Verifica di sicurezza temporaneamente non disponibile. La copia locale resta conservata; il controllo verrà ripetuto automaticamente.',{cause:error});}
+}
 
 export async function registerDeletionRecoveryDevice(user:User):Promise<void>{
  if(!API||!navigator.onLine)return;
  const all=readAll();let cred=all.find(x=>x.uid===user.uid);
  if(!cred){cred={uid:user.uid,token:randomToken()};writeAll([...all.filter(x=>x.uid!==user.uid),cred]);}
  const response=await fetch(API+'/api/account-deletion-device',{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+await user.getIdToken(),'x-firebase-appcheck':await appToken()},body:JSON.stringify({deviceToken:cred.token}),cache:'no-store'});
- if(!response.ok)throw new Error('Registrazione recovery device non riuscita.');
+ if(!response.ok)throw new DeletionRecoveryRequestError('Registrazione recovery device non riuscita',response.status);
 }
 
 export function watchDeletionRecoveryDeviceRegistration(
@@ -42,16 +75,22 @@ type LocalDeletionCompletion={status:'complete'}|{status:'pending';message:strin
 export type DeviceDeletionRecoveryOutcome={status:'none'}|LocalDeletionCompletion;
 export async function recoverDeletedAccountOnThisDevice(finalize:(uid:string)=>Promise<LocalDeletionCompletion>):Promise<DeviceDeletionRecoveryOutcome>{
  if(!API||!navigator.onLine)return{status:'none'};
- let pendingMessage:string|undefined;let completed=false;
+ let pendingMessage:string|undefined;let completed=false;let firstRequestError:Error|undefined;
  for(const cred of readAll()){
    const response=await fetch(API+'/api/account-deletion-device',{headers:{'x-firebase-appcheck':await appToken(),'x-account-deletion-uid':cred.uid,'x-account-deletion-device':cred.token},cache:'no-store'});
-   if(!response.ok)continue;
+   if(!response.ok){
+     if(response.status!==404&&!firstRequestError)firstRequestError=new DeletionRecoveryRequestError('Verifica recovery device non riuscita',response.status);
+     continue;
+   }
    const body=await response.json() as {status?:string};
    if(body.status!=='complete')continue;
-   const outcome=await finalize(cred.uid);
+   let outcome:LocalDeletionCompletion;
+   try{outcome=await finalize(cred.uid);}catch(error){throw new DeletionRecoveryFinalizationError(error);}
    if(outcome.status==='complete')completed=true;
    else pendingMessage=outcome.message;
  }
  if(completed)return{status:'complete'};
- return pendingMessage?{status:'pending',message:pendingMessage}:{status:'none'};
+ if(pendingMessage)return{status:'pending',message:pendingMessage};
+ if(firstRequestError)throw firstRequestError;
+ return{status:'none'};
 }

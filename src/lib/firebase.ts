@@ -70,7 +70,10 @@ export class AppCheckUnavailableError extends Error {
     readonly retryable: boolean;
 
     constructor(result: AppCheckResult) {
-        super(result.reason ?? result.tokenError ?? `App Check non disponibile (${result.phase})`);
+        super(
+            result.reason ?? result.tokenError ?? `App Check non disponibile (${result.phase})`,
+            result.error !== undefined ? { cause: result.error } : undefined,
+        );
         this.name = 'AppCheckUnavailableError';
         this.phase = result.phase;
         this.retryable = result.retryable;
@@ -89,6 +92,9 @@ export const ensureAppCheck = (): Promise<AppCheckResult> => {
             const disabledOutsideProduction = result.disabled === true && !import.meta.env.PROD;
             if (!result.success && !disabledOutsideProduction) {
                 const error = new AppCheckUnavailableError(result);
+                void import('./errorHandler')
+                    .then(({ reportError }) => reportError(error, { source: 'app_check_readiness' }))
+                    .catch(() => {});
                 console.warn("App Check non pronto per il cloud:", result.reason ?? result.tokenError ?? result.phase);
                 throw error;
             }

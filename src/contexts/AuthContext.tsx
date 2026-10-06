@@ -29,6 +29,7 @@ import { safeHardReload } from '../lib/sync/safeReload';
 import { classifyGooglePopupFailure } from './auth/googlePopup';
 import { watchDeletionRecoveryDeviceRegistration } from '../lib/deletionDeviceRecovery';
 import { PASSWORD_POLICY_SUMMARY, validatePasswordAgainstPolicy } from '../lib/auth/passwordPolicy';
+import { reportError } from '../lib/errorHandler';
 import { clearAuthenticatedOwnerHint, rememberAuthenticatedOwner } from '../lib/sync/authOwnerHint';
 import { beginGuestMigrationIntent, bindGuestMigrationIntentToUser, clearGuestMigrationIntent } from '../lib/auth/guestMigrationIntent';
 
@@ -171,7 +172,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         if (!currentUser) return;
         return watchDeletionRecoveryDeviceRegistration(
             currentUser,
-            error => console.warn('Recovery device non registrato; nuovo tentativo al prossimo ritorno online/in primo piano.', error),
+            error => {
+                reportError(error, { source: 'account_deletion_device_registration' });
+                console.warn('Recovery device non registrato; nuovo tentativo al prossimo ritorno online/in primo piano.', error);
+            },
         );
     }, [currentUser]);
 

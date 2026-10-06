@@ -161,11 +161,15 @@ function createReceiptToken(): string {
 }
 
 async function appCheckToken(): Promise<string> {
-    await ensureAppCheck();
-    const { getLimitedUseAppCheckToken } = await import('../appCheck');
-    const token = await getLimitedUseAppCheckToken();
-    if (!token) throw new Error('Verifica App Check non disponibile. Cancellazione non avviata.');
-    return token;
+    try {
+        await ensureAppCheck();
+        const { getLimitedUseAppCheckToken } = await import('../appCheck');
+        const token = await getLimitedUseAppCheckToken();
+        if (!token) throw new Error('Token App Check limited-use assente.');
+        return token;
+    } catch (error) {
+        throw new Error('Verifica App Check non disponibile. Cancellazione non avviata.', { cause: error });
+    }
 }
 
 async function readJson(response: Response): Promise<Record<string, unknown>> {
