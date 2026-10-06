@@ -114,7 +114,7 @@ const DataMeasurements: React.FC<DataMeasurementsProps> = ({
     }, [activeDateStr, bfProvenance?.method]);
 
     const isFemale = profile?.gender === 'F';
-    const profileComplete = Boolean(profile?.gender && Number(profile?.height) > 0);
+    const profileComplete = Boolean((profile?.gender === 'M' || profile?.gender === 'F') && Number(profile?.height) > 0);
     const estimate = useMemo(() => {
         if (!profileComplete) {
             return {
