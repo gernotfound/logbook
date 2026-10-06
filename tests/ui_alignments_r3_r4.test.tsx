@@ -82,16 +82,16 @@ describe('UI Alignments - R3 & R4', () => {
                 />
             );
 
-            expect(screen.getByText('◀ Prec.')).toBeDefined();
-            expect(screen.getByText('Succ. ▶')).toBeDefined();
+            expect(screen.getByRole('button', { name: 'Giorno precedente' })).toBeDefined();
+            expect(screen.getByRole('button', { name: 'Giorno successivo' })).toBeDefined();
             expect(screen.getByText('OGGI')).toBeDefined();
 
             // Next button is disabled when date is today
-            const nextBtn = screen.getByText('Succ. ▶') as HTMLButtonElement;
+            const nextBtn = screen.getByRole('button', { name: 'Giorno successivo' }) as HTMLButtonElement;
             expect(nextBtn.disabled).toBe(true);
 
             // Click previous button
-            const prevBtn = screen.getByText('◀ Prec.');
+            const prevBtn = screen.getByRole('button', { name: 'Giorno precedente' });
             fireEvent.click(prevBtn);
             expect(mockSetSelectedDate).toHaveBeenCalled();
         });
@@ -137,14 +137,14 @@ describe('UI Alignments - R3 & R4', () => {
             expect(screen.getByText(/Modifica misurazione/i)).toBeDefined();
             expect(screen.getByText(/Salva modifiche/i)).toBeDefined();
 
-            const nextBtn = screen.getByText('Succ. ▶') as HTMLButtonElement;
+            const nextBtn = screen.getByRole('button', { name: 'Giorno successivo' }) as HTMLButtonElement;
             expect(nextBtn.disabled).toBe(false);
 
             fireEvent.click(nextBtn);
             expect(mockSetSelectedDate).toHaveBeenCalled();
 
             // Click today center text
-            const centerDateBlock = screen.getByTitle('Torna a oggi');
+            const centerDateBlock = screen.getByRole('button', { name: 'Torna a oggi' });
             fireEvent.click(centerDateBlock);
             expect(mockSetSelectedDate).toHaveBeenCalledWith(Logic.getLocalDateString());
         });
@@ -152,8 +152,8 @@ describe('UI Alignments - R3 & R4', () => {
         it('DataView integrates selectedDate and renders DataMeasurements properly', () => {
             render(<DataView subTab="measurements" />);
             expect(screen.getByText('Misurazioni')).toBeDefined();
-            expect(screen.getByText('◀ Prec.')).toBeDefined();
-            expect(screen.getByText('Succ. ▶')).toBeDefined();
+            expect(screen.getByRole('button', { name: 'Giorno precedente' })).toBeDefined();
+            expect(screen.getByRole('button', { name: 'Giorno successivo' })).toBeDefined();
         });
 
         it('useNutritionMeasurements hook loads past day values when selectedDate is provided', () => {
