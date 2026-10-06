@@ -55,7 +55,6 @@ describe('scala tipografica canonica', () => {
       'src/styles/tokens.css',
       'src/styles/components.css',
       'src/components/Home/widgets/ReadinessTrendCard.tsx',
-      'src/components/Home/widgets/HomeTdeeWidget.tsx',
       'src/components/Home/home.css',
       'src/components/Nutrition/NutritionPlanning.tsx',
       'src/components/Nutrition/TrackingViews.css',

@@ -476,15 +476,6 @@ export function createMockUserData(overrides?: Partial<UserData>): UserData {
   };
 }
 
-vi.mock('react-virtuoso', () => ({
-  Virtuoso: ({ data, itemContent }: any) => (
-    <div data-testid="virtuoso-mock">
-      {data?.map((item: any, i: number) => (
-        <div key={i}>{itemContent(i, item)}</div>
-      ))}
-    </div>
-  )
-}));
 
 export interface RenderOptions {
   userData?: any;

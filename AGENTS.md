@@ -53,7 +53,7 @@ Per task strutturali o CRITICAL preparare un piano di lavoro prima delle modific
 - **Icone UI:** `lucide-react`.
 - **PWA:** `vite-plugin-pwa`; asset applicativi generati dalla pipeline `scripts/resize_icons.mjs` a partire dalla sorgente approvata.
 - **Monitoring:** Sentry Error Monitoring per errori/anomalie tecniche. GA4/Firebase Analytics è analytics di utilizzo opzionale, lazy e provider-specific, attivato solo dopo opt-in esplicito; Vercel Analytics/Speed Insights sono ritirati dal frontend target. Le vecchie collection telemetriche Firestore restano solo per compatibilità/cleanup dei client precedenti.
-- **Testing:** Vitest + Testing Library, Playwright E2E, Firebase Emulator, oxlint; `npm audit` è un gate workflow separato dal comando canonico M8.
+- **Testing:** Vitest + Testing Library, Playwright E2E (Chromium + copertura Mobile Safari/WebKit mirata), `@axe-core/playwright`, Firebase Emulator, oxlint type-aware/JSX-a11y e Knip; `npm audit`, Gitleaks e zizmor sono gate workflow separati dal comando canonico M8.
 
 ## File canonici del modello dati
 
