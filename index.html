@@ -44,15 +44,15 @@
 </head>
 <body>
     <div id="root">
-      <div id="initial-loader" role="status" aria-label="TheLogBook in caricamento">
-        <div class="initial-loader-brand" aria-hidden="true">
+      <div id="initial-loader" class="brand-loading-screen" role="status" aria-live="polite" aria-busy="true" aria-label="Avvio di TheLogBook in corso">
+        <div class="brand-loading-screen__brand" aria-hidden="true">
           <img
-            class="initial-loader-icon"
+            class="brand-loading-screen__icon"
             src="%BASE_URL%icon.svg?v=20261006-vector-master"
             alt=""
             fetchpriority="high"
           >
-          <div class="initial-wordmark" data-text="TheLogBook"><h1>TheLogBook</h1></div>
+          <div class="brand-loading-screen__wordmark" data-text="TheLogBook"><h1>TheLogBook</h1></div>
         </div>
       </div>
     </div>

@@ -163,7 +163,7 @@ export const initApp = async () => {
       };
       window.__INITIAL_USER_DATA__ = cached;
       
-      // Yield al main thread per garantire che il browser disegni lo spinner HTML
+      // Yield al main thread per garantire che il browser disegni la splash HTML
       // prima che Zod congeli il thread con la validazione sincrona massiva
       await new Promise(resolve => setTimeout(resolve, 0));
       

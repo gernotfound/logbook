@@ -70,7 +70,7 @@ describe('guest migration restart recovery', () => {
         const cloudRequest = new Promise(resolve => { resolveCloud = resolve; });
         vi.mocked(DB.loadCloudPayload).mockImplementationOnce(() => cloudRequest as any);
         render(<AuthProvider><App /></AuthProvider>);
-        await waitFor(() => expect(screen.getByText('Preparazione account...')).toBeTruthy());
+        await waitFor(() => expect(screen.getByRole('status', { name: 'Preparazione account in corso' })).toBeTruthy());
         expect(sessionStorage.getItem(OVERLAY_SESSION_KEY)).toBeNull();
         expect(screen.queryByTestId('bottom-nav')).toBeNull();
         expect(screen.queryByTestId('guest-login-box')).toBeNull();
@@ -151,7 +151,7 @@ describe('guest migration restart recovery', () => {
         let aRun!: Promise<void>;
         act(() => { (auth as any).currentUser = userA; aRun = authCallback(userA); });
         await aCommitEntered;
-        expect(screen.getByText('Preparazione account...')).toBeTruthy();
+        expect(screen.getByRole('status', { name: 'Preparazione account in corso' })).toBeTruthy();
         let bRun!: Promise<void>;
         act(() => { (auth as any).currentUser = userB; bRun = authCallback(userB); });
         await act(async () => { await bRun; });

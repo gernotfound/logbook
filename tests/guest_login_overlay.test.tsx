@@ -103,7 +103,7 @@ describe('guest login overlay lifecycle', () => {
         });
 
         expect(screen.queryByTestId('guest-login-box')).toBeNull();
-        expect(screen.getByText('Preparazione account...')).toBeTruthy();
+        expect(screen.getByRole('status', { name: 'Preparazione account in corso' })).toBeTruthy();
         expect(screen.queryByTestId('bottom-nav')).toBeNull();
 
         authState.isGuest = false;
