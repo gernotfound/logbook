@@ -14,7 +14,10 @@ import {
     readAccountDeletionMarker,
 } from '../src/lib/sync/accountGate';
 import { readDeviceValue, writeDeviceValue } from '../src/lib/sync/deviceStorage';
-import { removeDeletionRecoveryCredential } from '../src/lib/deletionDeviceRecovery';
+import {
+    DeletionRecoveryCredentialCorruptError,
+    removeDeletionRecoveryCredential,
+} from '../src/lib/deletionDeviceRecovery';
 import { storageOwner } from '../src/lib/sync/session';
 import { localStorageMock } from './setup';
 
@@ -105,6 +108,18 @@ describe('browser storage boundary', () => {
 
         localStorageMock.removeItem.mockImplementationOnce(storageFailure);
         expect(() => writeDeviceValue('workout', null, OWNER)).toThrow(BrowserStorageError);
+    });
+
+    it('keeps deletion-recovery credential reads on the strict browser-storage boundary', () => {
+        localStorageMock.getItem.mockImplementationOnce(storageFailure);
+
+        expect(() => removeDeletionRecoveryCredential('test-user')).toThrow(BrowserStorageError);
+    });
+
+    it('does not treat corrupt deletion-recovery credentials as an empty registry', () => {
+        localStorage.setItem('logbook_deletion_recovery_devices_v1', '{"uid":');
+
+        expect(() => removeDeletionRecoveryCredential('test-user')).toThrow(DeletionRecoveryCredentialCorruptError);
     });
 
     it('keeps deletion-recovery credential writes on the strict browser-storage boundary', () => {

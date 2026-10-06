@@ -11,6 +11,7 @@ import {
     isSensitiveReauthCancellation,
     reauthenticateForSensitiveAction,
 } from '../lib/auth/recentAuth';
+import { reportError } from '../lib/errorHandler';
 
 export function useSettings() {
     const { currentUser, isGuest, logout } = useAuth();
@@ -191,7 +192,11 @@ export function useSettings() {
         } catch (error) {
             if (isSensitiveReauthCancellation(error)) return;
             const code = (error as { code?: unknown } | null)?.code;
-            const message = code === 'auth/wrong-password' || code === 'auth/invalid-credential'
+            const isCredentialMistake = code === 'auth/wrong-password' || code === 'auth/invalid-credential';
+            if (!isCredentialMistake) {
+                reportError(error, { source: 'account_deletion' });
+            }
+            const message = isCredentialMistake
                 ? 'Password attuale non corretta.'
                 : error instanceof Error ? error.message : 'Cancellazione non riuscita.';
             let canShow = session === null;
