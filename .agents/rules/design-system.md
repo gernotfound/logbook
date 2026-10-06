@@ -31,6 +31,7 @@ La tipografia applicativa usa una scala semantica unica definita in `src/styles/
 - **MUST:** la PWA non deve bloccare una singola orientazione dello schermo salvo una necessità essenziale documentata e testata; il manifest corrente lascia l'orientazione al dispositivo/utente.
 - **MUST:** input, select e textarea a `font-size: 16px !important` dove applicabile per evitare lo zoom automatico di iOS Safari.
 - **MUST:** usare nomi accessibili, stato e focus visibile per tab, menu, dialoghi, mappe interattive e pulsanti a icona. `SubNav<T>` fornisce il pattern condiviso dei tab.
+- **MUST:** layout, overflow orizzontale, indicatori di bordo e stile base di `SubNav<T>` vivono esclusivamente in `src/styles/sub-nav.css`; i CSS delle singole sezioni non devono ridefinire `.sub-nav*`. Questo mantiene identici scroll e comportamento fra Allenamento, Nutrizione, Dati e future sezioni.
 - **NOTE:** `@axe-core/playwright` protegge automaticamente stati rappresentativi e un progetto WebKit/Mobile Safari mirato, ma non sostituisce verifica manuale di tastiera, focus, screen reader e comportamento iOS reale.
 - **SHOULD:** usare classi e token per gli stili statici; lasciare inline solo valori realmente dinamici o codice legacy non ancora migrato. Preferire `rem` per le dimensioni che devono seguire le preferenze di carattere; il valore di 16 px degli input è un'eccezione intenzionale.
 - **SHOULD:** applicare `min-width: 0` ai figli di layout flex/grid soggetti a overflow e controllare le viewport da 320 px in su.
