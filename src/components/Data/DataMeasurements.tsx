@@ -61,7 +61,7 @@ function MeasurementField({
     return (
         <label className={`data-field${full ? ' data-field-full' : ''}`} style={{ minWidth: 0 }}>
             {label}
-            <span className="data-input-with-unit">
+            <span className="data-input-with-unit" style={{ minWidth: 0 }}>
                 <input
                     id={id}
                     type="number"
@@ -256,7 +256,7 @@ const DataMeasurements: React.FC<DataMeasurementsProps> = ({
                     <div className="data-form-grid">
                         <label className="data-field data-field-full" style={{ minWidth: 0 }}>
                             Massa grassa (BF)
-                            <span className="data-input-with-unit">
+                            <span className="data-input-with-unit" style={{ minWidth: 0 }}>
                                 <input
                                     id="measure-bf"
                                     type="number"
