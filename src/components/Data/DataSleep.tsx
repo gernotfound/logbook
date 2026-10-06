@@ -97,7 +97,7 @@ const DataSleep: React.FC<DataSleepProps> = ({ sleepHook, selectedDate, setSelec
                 </div>
 
                 <details className="data-disclosure">
-                    <summary>
+                    <summary className="disclosure-summary data-disclosure-summary">
                         <span className="data-icon-tile" aria-hidden="true"><Moon size={20} /></span>
                         <span className="data-disclosure-copy">
                             <strong>Dettagli fasi</strong>
