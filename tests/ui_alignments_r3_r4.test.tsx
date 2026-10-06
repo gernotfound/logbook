@@ -186,6 +186,47 @@ describe('UI Alignments - R3 & R4', () => {
             expect(updatedNutrition?.['2026-08-05'].waist).toBe(80);
             expect(updatedNutrition?.['2026-08-05'].neck).toBe(37);
         });
+
+        it('explicit calculate mode uses US Navy even when a manual BF draft is preserved', async () => {
+            const { result } = renderHook(() => useNutritionMeasurements('2026-08-06'));
+
+            act(() => {
+                result.current.setWeight('75');
+                result.current.setWaist('82');
+                result.current.setNeck('38');
+                result.current.setManualBf('19');
+            });
+
+            await act(async () => {
+                await result.current.calculateAndSave(undefined, 'calculate');
+            });
+
+            const day = useAppStore.getState().userData?.nutrition?.['2026-08-06'];
+            expect(day?.bf).toBeTypeOf('number');
+            expect(day?.bf).not.toBe(19);
+            expect(day?.bfProvenance?.method).toBe('us_navy');
+        });
+
+        it('explicit manual mode does not silently derive BF from circumference fields', async () => {
+            const { result } = renderHook(() => useNutritionMeasurements('2026-08-07'));
+
+            act(() => {
+                result.current.setWeight('75');
+                result.current.setWaist('82');
+                result.current.setNeck('38');
+            });
+
+            await act(async () => {
+                await result.current.calculateAndSave(undefined, 'manual');
+            });
+
+            const day = useAppStore.getState().userData?.nutrition?.['2026-08-07'];
+            expect(day?.weight).toBe(75);
+            expect(day?.waist).toBe(82);
+            expect(day?.neck).toBe(38);
+            expect(day?.bf).toBeUndefined();
+            expect(day?.bfProvenance).toBeUndefined();
+        });
     });
 
     describe('R4: SessionSetRow Vertical Centering', () => {
