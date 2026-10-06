@@ -3,6 +3,7 @@ import { useActivityTracking } from '../../hooks/useActivityTracking';
 import { CARDIO_INTENSITIES, CARDIO_MODALITIES, CARDIO_STRUCTURES, cardioIntensityLabel, cardioModalityLabel } from '../../lib/activity';
 import { Logic } from '../../lib/logic';
 import { shiftDateString } from '../../lib/utils/date';
+import DataDateNavigator from './DataDateNavigator';
 
 const integerFormatter = new Intl.NumberFormat('it-IT', { maximumFractionDigits: 0 });
 const decimalFormatter = new Intl.NumberFormat('it-IT', { maximumFractionDigits: 2 });
@@ -19,7 +20,16 @@ export default function DataActivity() {
     const nextDay = () => { if (!isToday) activity.setSelectedDate(shiftDateString(activeDate, 1)); };
 
     return (
-        <div className="activity-view">
+        <div className="activity-view data-page-grid">
+            <DataDateNavigator
+                date={activeDate}
+                today={activity.today}
+                onPrevious={previousDay}
+                onNext={nextDay}
+                onToday={() => activity.setSelectedDate(activity.today)}
+                disabled={dateNavigationLocked}
+                label="Giorno attività"
+            />
             <section className="section-divider activity-summary" aria-labelledby="activity-week-title">
                 <div className="activity-heading-row">
                     <div>
@@ -79,14 +89,7 @@ export default function DataActivity() {
                 </div>
             </section>
 
-            <nav className="activity-date-nav" aria-label="Giorno attività">
-                <button type="button" className="btn btn-small" onClick={previousDay} disabled={dateNavigationLocked}>◀ Prec.</button>
-                <button type="button" className="data-day-current" onClick={() => activity.setSelectedDate(activity.today)} aria-label="Torna a oggi" disabled={dateNavigationLocked}>
-                    <strong>{Logic.formatItalianDate(activeDate)}</strong>
-                    {isToday && <span>OGGI</span>}
-                </button>
-                <button type="button" className="btn btn-small" onClick={nextDay} disabled={isToday || dateNavigationLocked}>Succ. ▶</button>
-            </nav>            <section className="section-divider" aria-labelledby="daily-activity-title">
+            <section className="section-divider" aria-labelledby="daily-activity-title">
                 <div className="activity-heading-row">
                     <div>
                         <h2 id="daily-activity-title"><Footprints size={20} aria-hidden="true" /> Attività quotidiana</h2>
