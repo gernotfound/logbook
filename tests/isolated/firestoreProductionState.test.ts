@@ -63,6 +63,31 @@ describe('Firestore Production field exemption convergence', () => {
     });
   });
 
+  it('treats an omitted false usesAncestorConfig output as an explicit exemption', () => {
+    expect(classifyFieldOverride(desired, [{
+      name: fieldName,
+      indexConfig: { indexes: [] },
+    }], [])).toMatchObject({
+      found: true,
+      explicit: true,
+      reverting: false,
+      indexesDisabled: true,
+      pending: false,
+    });
+  });
+
+  it('does not accept an inherited empty config as an explicit exemption', () => {
+    expect(classifyFieldOverride(desired, [{
+      name: fieldName,
+      indexConfig: { usesAncestorConfig: true, indexes: [] },
+    }], [])).toMatchObject({
+      found: true,
+      explicit: false,
+      indexesDisabled: true,
+      pending: false,
+    });
+  });
+
   it('classifies a verified active removal as pending instead of redeploy-required', () => {
     const status = classifyFieldOverride(desired, [{
       name: fieldName,
