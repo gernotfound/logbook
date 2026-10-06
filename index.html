@@ -36,6 +36,7 @@
     <meta name="twitter:image" content="https://thelogbook.web.app/social-share.png?v=20261006-vector-master">
     <meta name="twitter:image:alt" content="Icona TheLogBook con stickman chef su sfondo nero">
 
+    <link rel="preload" as="image" href="%BASE_URL%icon.svg?v=20261006-vector-master" type="image/svg+xml">
     <link rel="apple-touch-icon" sizes="180x180" href="%BASE_URL%apple-touch-icon.png?v=20261006-vector-master">
     <link rel="icon" type="image/svg+xml" sizes="any" href="%BASE_URL%icon.svg?v=20261006-vector-master">
     <link rel="icon" type="image/x-icon" sizes="16x16 32x32" href="%BASE_URL%favicon.ico?v=20261006-vector-master">
@@ -43,11 +44,15 @@
 </head>
 <body>
     <div id="root">
-      <div id="initial-loader">
-        <div class="initial-loader-card">
-            <h1>TheLogBook</h1>
-            <div class="initial-spinner"></div>
-            <p role="status">Caricamento...</p>
+      <div id="initial-loader" role="status" aria-label="TheLogBook in caricamento">
+        <div class="initial-loader-brand" aria-hidden="true">
+          <img
+            class="initial-loader-icon"
+            src="%BASE_URL%icon.svg?v=20261006-vector-master"
+            alt=""
+            fetchpriority="high"
+          >
+          <div class="initial-wordmark" data-text="TheLogBook">TheLogBook</div>
         </div>
       </div>
     </div>
