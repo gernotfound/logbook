@@ -241,7 +241,7 @@ describe('LogBook PWA Enhancements E2E Suite (Requirements R1 - R6)', () => {
                 }
             });
 
-            // Verify DataHistory renders all 7 entries
+            // Verify the redesigned calendar marks all 7 days with recorded data.
             const { container } = renderWithProviders(
                 <DataHistory
                     measurementsHistory={Object.values(weekNutrition)}
@@ -250,7 +250,7 @@ describe('LogBook PWA Enhancements E2E Suite (Requirements R1 - R6)', () => {
                 />
             );
 
-            expect(container.querySelectorAll('.card').length).toBe(7);
+            expect(container.querySelectorAll('.history-day.has-data').length).toBe(7);
 
             // Export to CSV
             await Exporter.exportToCSV([], weekNutrition, []);
