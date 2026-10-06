@@ -1,5 +1,5 @@
+import { Save, UserRound } from 'lucide-react';
 import { useSettings } from '../../hooks/useSettings';
-import { Save } from 'lucide-react';
 
 const DataBiometry = () => {
     const {
@@ -10,62 +10,63 @@ const DataBiometry = () => {
     } = useSettings();
 
     return (
-        <div className="section-divider-last">
-            <h1 style={{marginTop: 0}}>Dati biometrici</h1>
-            <p style={{ fontSize: 'var(--font-size-body)', color: 'var(--text-muted)', marginBottom: '15px' }}>
-                I dati biometrici vengono utilizzati per calcolare accuratamente la percentuale di massa grassa (formula US Navy).
-            </p>
-            
-            <div className="mb-15" style={{ width: '100%', boxSizing: 'border-box' }}>
-                <label className="text-muted text-xs block mb-4" style={{ textAlign: 'center' }}>Data di nascita</label>
-                <div style={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
-                    <input 
-                        id="biometry-dob" 
-                        type="date" 
-                        value={dob} 
-                        onChange={e => setDob(e.target.value)} 
-                        style={{
-                            width: '100%',
-                            maxWidth: '100%',
-                            boxSizing: 'border-box',
-                            textAlign: 'center',
-                            margin: '0 auto',
-                            display: 'block'
-                        }}
-                    />
+        <div className="data-page-grid">
+            <section className="section-divider-last data-panel" aria-labelledby="biometry-title">
+                <div className="data-panel-head">
+                    <div>
+                        <h2 id="biometry-title" className="data-panel-title">Profilo biometrico</h2>
+                        <p>Informazioni usate per il calcolo della composizione corporea.</p>
+                    </div>
+                    <span className="data-icon-tile" aria-hidden="true"><UserRound size={20} /></span>
                 </div>
-            </div>
-            
-            <div className="input-row" style={{ marginBottom: '15px', display: 'flex', gap: '12px' }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                    <label style={{ fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textAlign: 'center' }}>Altezza (cm)</label>
-                    <input 
-                        id="biometry-height" 
-                        type="number" 
-                        placeholder="es. 180" 
-                        value={height} 
-                        onChange={e => setHeight(e.target.value)} 
-                        onFocus={e => e.target.select()}
-                        style={{ width: '100%', boxSizing: 'border-box', textAlign: 'center', margin: '0 auto' }}
-                    />
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                    <label style={{ fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textAlign: 'center' }}>Sesso</label>
-                    <select 
-                        value={gender} 
-                        onChange={e => setGender(e.target.value)}
-                        style={{ width: '100%', boxSizing: 'border-box', textAlign: 'center', margin: '0 auto' }}
-                    >
-                        <option value="">Non specificato</option>
-                        <option value="M">Uomo</option>
-                        <option value="F">Donna</option>
-                    </select>
-                </div>
-            </div>
 
-            <button className="btn btn-primary" style={{ width: '100%', marginTop: '10px' }} onClick={handleSaveProfile}>
-                <Save size={16} aria-hidden="true" /> Salva profilo biometrico
-            </button>
+                <div className="data-form-grid">
+                    <label className="data-field data-field-full" htmlFor="biometry-dob">
+                        Data di nascita
+                        <input
+                            id="biometry-dob"
+                            type="date"
+                            value={dob}
+                            onChange={event => setDob(event.target.value)}
+                        />
+                    </label>
+
+                    <label className="data-field" htmlFor="biometry-height">
+                        Altezza
+                        <span className="data-input-with-unit">
+                            <input
+                                id="biometry-height"
+                                type="number"
+                                inputMode="decimal"
+                                min="1"
+                                step="0.1"
+                                placeholder="Es. 180"
+                                value={height}
+                                onChange={event => setHeight(event.target.value)}
+                                onFocus={event => event.target.select()}
+                            />
+                            <span className="data-input-unit">cm</span>
+                        </span>
+                    </label>
+
+                    <label className="data-field" htmlFor="biometry-gender">
+                        Sesso
+                        <select
+                            id="biometry-gender"
+                            value={gender}
+                            onChange={event => setGender(event.target.value)}
+                        >
+                            <option value="">Non specificato</option>
+                            <option value="M">Uomo</option>
+                            <option value="F">Donna</option>
+                        </select>
+                    </label>
+                </div>
+
+                <button type="button" className="btn btn-primary data-full-action" onClick={handleSaveProfile}>
+                    <Save size={16} aria-hidden="true" /> Salva profilo biometrico
+                </button>
+            </section>
         </div>
     );
 };
