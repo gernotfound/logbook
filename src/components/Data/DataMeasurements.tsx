@@ -306,7 +306,7 @@ const DataMeasurements: React.FC<DataMeasurementsProps> = ({
                 )}
 
                 <details className="data-disclosure">
-                    <summary>
+                    <summary className="disclosure-summary data-disclosure-summary">
                         <span className="data-icon-tile" aria-hidden="true"><Activity size={20} /></span>
                         <span className="data-disclosure-copy">
                             <strong>Altre misurazioni</strong>
