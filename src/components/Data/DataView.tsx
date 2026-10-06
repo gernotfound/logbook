@@ -11,11 +11,11 @@ import { useLocalToday } from '../../hooks/useLocalToday';
 import SubNav from '../UI/SubNav';
 import './data.css';
 
-const DATA_TABS: ReadonlyArray<{ id: DataSubTab; label: string; compactLabel?: string }> = [
-    { id: 'measurements', label: 'Misurazioni', compactLabel: 'Misure' },
+const DATA_TABS: ReadonlyArray<{ id: DataSubTab; label: string }> = [
+    { id: 'measurements', label: 'Misurazioni' },
     { id: 'sleep', label: 'Sonno' },
     { id: 'activity', label: 'Attività' },
-    { id: 'biometry', label: 'Biometria', compactLabel: 'Bio' },
+    { id: 'biometry', label: 'Biometria' },
     { id: 'history', label: 'Storico' }
 ];
 
