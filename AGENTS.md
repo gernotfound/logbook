@@ -212,8 +212,8 @@ Distinguere due sistemi:
 ## PWA, Service Worker e icone
 
 - `vite-plugin-pwa` usa manifest e service worker alla radice `/`.
-- La sorgente raster approvata `public/icon-source.png` è canonica; `scripts/resize_icons.mjs` produce favicon, Apple touch, PNG PWA e la card social Open Graph senza convertire l'artwork in SVG. Quando cambia l'artwork, i riferimenti HTML/manifest devono cambiare revisione per invalidare le cache degli icon consumer.
-- Il manifest deve contenere gli asset standard 192×192 e 512×512 richiesti per l'installabilità Chromium e il dedicato `icon-maskable-512.png` per `purpose: maskable`; evitare duplicati semantici oltre queste varianti necessarie.
+- La sorgente vettoriale approvata `assets/brand/thelogbook-icon-master.svg` è canonica; `scripts/resize_icons.mjs` pubblica la copia scalabile `public/icon.svg` e genera direttamente dal master favicon, Apple touch, PNG PWA, variante maskable e card social PNG lossless. Quando cambia l'artwork, i riferimenti HTML/manifest devono cambiare revisione per invalidare le cache degli icon consumer.
+- Il manifest deve mantenere gli asset PNG standard 192×192 e 512×512 richiesti per la compatibilità/installabilità, la copia SVG scalabile `icon.svg` con `sizes: any` e il dedicato `icon-maskable-512.png` per `purpose: maskable`; evitare duplicati semantici oltre queste varianti necessarie.
 - **MUST:** una modifica all'icon pipeline va verificata attraverso build/gate, non solo guardando il file sorgente.
 - **MUST:** il reload/update della PWA rispetta il reload barrier di persistenza prima di applicare una nuova versione.
 

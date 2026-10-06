@@ -1,11 +1,12 @@
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFile, rm, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
 
-const source = 'public/icon-source.png';
+const source = 'assets/brand/thelogbook-icon-master.svg';
+const publicVectorOutput = 'public/icon.svg';
 const appBackground = '#000000';
 const pngTargets = [
-  { output: 'public/favicon.png', size: 64, opaque: false },
+  { output: 'public/favicon.png', size: 64, opaque: true },
   { output: 'public/apple-touch-icon.png', size: 180, opaque: true },
   { output: 'public/icon-192.png', size: 192, opaque: true },
   { output: 'public/icon-512.png', size: 512, opaque: true },
@@ -14,7 +15,8 @@ const faviconIcoOutput = 'public/favicon.ico';
 const maskableOutput = 'public/icon-maskable-512.png';
 const maskableSize = 512;
 const maskableArtworkScale = 0.72;
-const socialOutput = 'public/social-share.jpg';
+const socialOutput = 'public/social-share.png';
+const legacySocialOutput = 'public/social-share.jpg';
 
 async function validateRaster(output, width, height, format, { opaque = false } = {}) {
   const image = sharp(output);
@@ -31,8 +33,8 @@ async function validateRaster(output, width, height, format, { opaque = false } 
 
 async function validateSource(image) {
   const metadata = await sharp(image).metadata();
-  if (metadata.format !== 'png' || !metadata.width || !metadata.height || metadata.width !== metadata.height || metadata.width < 1024) {
-    throw new Error(`${source} must be a square PNG raster artwork at least 1024x1024.`);
+  if (metadata.format !== 'svg' || !metadata.width || !metadata.height || metadata.width !== metadata.height || metadata.width < 1024) {
+    throw new Error(`${source} must be a square SVG vector artwork at least 1024x1024 in its intrinsic canvas.`);
   }
 }
 
@@ -129,6 +131,7 @@ async function validateIco(output) {
 export async function generateIcons() {
   const image = await readFile(source);
   await validateSource(image);
+  await writeFile(publicVectorOutput, image);
 
   for (const { output, size, opaque } of pngTargets) {
     let pipeline = sharp(image).resize(size, size, { fit: 'contain', kernel: sharp.kernel.lanczos3 });
@@ -149,21 +152,22 @@ export async function generateIcons() {
   await writeFile(maskableOutput, maskableIcon);
   await validateRaster(maskableOutput, maskableSize, maskableSize, 'png', { opaque: true });
 
-  const socialIcon = await sharp(image).resize(430, 430, { fit: 'contain' }).png().toBuffer();
+  const socialIcon = await sharp(image).resize(430, 430, { fit: 'contain', kernel: sharp.kernel.lanczos3 }).png().toBuffer();
   await sharp({
     create: {
       width: 1200,
       height: 630,
-      channels: 3,
+      channels: 4,
       background: appBackground,
     },
   })
     .composite([{ input: socialIcon, gravity: 'centre' }])
-    .jpeg({ quality: 92, chromaSubsampling: '4:4:4' })
+    .png({ compressionLevel: 9 })
     .toFile(socialOutput);
-  await validateRaster(socialOutput, 1200, 630, 'jpeg', { opaque: true });
+  await validateRaster(socialOutput, 1200, 630, 'png', { opaque: true });
+  await rm(legacySocialOutput, { force: true });
 
-  console.log(`Generated and validated ${pngTargets.length + 3} branded assets from ${source}.`);
+  console.log(`Generated and validated ${pngTargets.length + 4} branded assets from vector master ${source}.`);
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) await generateIcons();
