@@ -231,7 +231,6 @@ const DataMeasurements: React.FC<DataMeasurementsProps> = ({
                             <span className="data-method-dot" aria-hidden="true" />
                             <span>
                                 <strong>BF manuale</strong>
-                                <small>Inserisco direttamente la percentuale</small>
                             </span>
                         </label>
                         <label className={`data-method-option${bfMode === 'calculate' ? ' selected' : ''}`}>
