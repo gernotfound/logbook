@@ -5,6 +5,7 @@ import { useSettings } from '../hooks/useSettings';
 import { usePWAInstall } from '../hooks/usePWAInstall';
 import { useAuth } from '../hooks/useAuth';
 import { useDialogStore } from '../store/useDialogStore';
+import BrandLoadingScreen from './UI/BrandLoadingScreen';
 import { PrivacyPolicy } from '../pages/PrivacyPolicy';
 import { TermsAndConditions } from '../pages/TermsAndConditions';
 import { getAnalyticsConsent, setAnalyticsConsent, subscribeAnalyticsConsent } from '../lib/analyticsConsent';
@@ -35,7 +36,7 @@ interface SettingsViewProps { onClose?: () => void; }
 
 const SettingsView = ({ onClose }: SettingsViewProps) => {
     const {
-        deletingAccount, pendingAccountDeletion,
+        deletingAccount, deletionPhase, pendingAccountDeletion,
         handleExportCSV, handleExportShare, handleExportBackup, handleImportFile, importingData, exportingData,
         handleDeleteAccount
     } = useSettings();
@@ -120,6 +121,25 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
     };
 
     const headerTitle = activeSection ? SECTION_TITLES[activeSection] : 'Impostazioni';
+
+    if (deletingAccount && deletionPhase !== 'idle') {
+        return (
+            <div className="settings-account-deletion-progress" role="status" aria-live="polite" aria-busy="true">
+                <BrandLoadingScreen
+                    variant="content"
+                    label={deletionPhase === 'verifying' ? 'Verifica identità in corso' : 'Eliminazione account in corso'}
+                />
+                <div className="settings-account-deletion-progress__copy">
+                    <h1>{deletionPhase === 'verifying' ? 'Verifica identità…' : 'Eliminazione account…'}</h1>
+                    <p>
+                        {deletionPhase === 'verifying'
+                            ? 'Stiamo completando la verifica di sicurezza.'
+                            : 'Stiamo eliminando il tuo account e i dati associati. Attendi qualche secondo e non chiudere TheLogBook.'}
+                    </p>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div id="view-settings" className="view-section active settings-view">
