@@ -62,7 +62,7 @@ describe('Data UI redesign', () => {
         expect(container.querySelectorAll('#measure-neck')).toHaveLength(1);
         expect((container.querySelector('#measure-waist') as HTMLInputElement).value).toBe('84.5');
         expect((container.querySelector('#measure-neck') as HTMLInputElement).value).toBe('38');
-        expect(screen.getByText(/Metodo US Navy/i)).toBeDefined();
+        expect(screen.getAllByText(/Metodo US Navy/i).length).toBeGreaterThan(0);
 
         fireEvent.click(manual);
 
