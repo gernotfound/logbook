@@ -110,7 +110,7 @@ service cloud.firestore {
         );
     }
 
-    function hasAuthorizedSyncDelete(userId) {
+    function hasAuthorizedSyncDelete() {
       // Current clients persist an empty fenced shell for terminal monthly state.
       // Physical deletion is reserved for the trusted account-deletion backend.
       return false;
@@ -512,7 +512,7 @@ service cloud.firestore {
 
       match /history_months/{monthId} {
         allow read: if isActiveOwner(userId);
-        allow delete: if isActiveOwner(userId) && hasAuthorizedSyncDelete(userId);
+        allow delete: if isActiveOwner(userId) && hasAuthorizedSyncDelete();
         allow create, update: if isActiveOwner(userId)
           && isValidMonthId(monthId)
           && incomingData() is map
@@ -526,7 +526,7 @@ service cloud.firestore {
 
       match /nutrition_months/{monthId} {
         allow read: if isActiveOwner(userId);
-        allow delete: if isActiveOwner(userId) && hasAuthorizedSyncDelete(userId);
+        allow delete: if isActiveOwner(userId) && hasAuthorizedSyncDelete();
         allow create, update: if isActiveOwner(userId)
           && isValidMonthId(monthId)
           && incomingData() is map
