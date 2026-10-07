@@ -35,6 +35,7 @@ it('fails closed instead of inferring an owner when userData is not owner-fenced
     expect(hook.result.current.weight).toBe('');
     expect(localStorage.getItem(deviceKey('draft:measurement:2026-09-11', owner))).toBeNull();
 });
+
 it('reads a new localStorage key before any write can copy the previous value over it', () => {
     localStorage.setItem('view-a', JSON.stringify('history')); localStorage.setItem('view-b', JSON.stringify('home'));
     const hook = renderHook(({ key }) => useLocalStorage(key, 'default'), { initialProps: { key: 'view-a' } });
