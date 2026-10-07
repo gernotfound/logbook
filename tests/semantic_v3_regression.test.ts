@@ -96,6 +96,18 @@ describe('Semantic Merge V3 regressions', () => {
         expect(() => parseSyncMeta({ protocolVersion: CURRENT_SYNC_PROTOCOL + 1, clock: {}, fields: {} })).toThrow('Unsupported protocolVersion');
         expect(() => parseSyncMeta({
             protocolVersion: CURRENT_SYNC_PROTOCOL,
+            clock: {},
+            fields: {},
+            writer: { slot: 's00', replicaId: 'replica', generation: 1, seq: 0, unexpected: true },
+        })).toThrow('Unsupported replica writer metadata');
+        expect(() => parseSyncMeta({
+            protocolVersion: CURRENT_SYNC_PROTOCOL,
+            clock: {},
+            fields: {},
+            writer: { slot: 's00', replicaId: 'r'.repeat(129), generation: 1, seq: 0 },
+        })).toThrow('Invalid replica writer id');
+        expect(() => parseSyncMeta({
+            protocolVersion: CURRENT_SYNC_PROTOCOL,
             clock: { A: 1 },
             fields: {
                 'profile/name': { actorId: 'A', seq: 1, clock: { A: 1 }, legacyClock: { A: 1 } },

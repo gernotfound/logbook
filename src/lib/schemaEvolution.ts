@@ -156,6 +156,10 @@ function assertCurrentCloudSyncEnvelope(sync: unknown, kind: string): Record<str
     if (!isRecord(sync.fields)) throw new Error(`${kind}: fields non valido.`);
     if (!isRecord(sync.writer)) throw new Error(`${kind}: writer obbligatorio.`);
     const writer = sync.writer;
+    const allowedWriterKeys = new Set(['slot', 'replicaId', 'generation', 'seq']);
+    if (Object.keys(writer).some(key => !allowedWriterKeys.has(key))) {
+        throw new Error(`${kind}: writer contiene campi non supportati.`);
+    }
     if (typeof writer.slot !== 'string' || !/^s(?:0[0-9]|1[0-5])$/.test(writer.slot)) {
         throw new Error(`${kind}: writer slot non valido.`);
     }
