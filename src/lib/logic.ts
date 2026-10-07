@@ -5,7 +5,6 @@ import {
     formatItalianDate, 
     parseDateInput, 
     calculateAge, 
-    formatTime, 
     formatDuration, 
     normalizeDuration, 
     getCalendarMonthGrid, 
@@ -16,7 +15,6 @@ import {
 import { isPlainObject, removeUndefinedValues } from './utils/object';
 import { generateUniqueName } from './utils/string';
 import { 
-    calculateUsNavyBodyFat, 
     calculateBodyFatByMethod, 
     calculateBodyFat, 
     calculateBodyComposition, 
@@ -66,7 +64,6 @@ export {
     formatItalianDate,
     parseDateInput,
     calculateAge,
-    formatTime,
     formatDuration,
     normalizeDuration,
     getCalendarMonthGrid,
@@ -76,7 +73,6 @@ export {
     isPlainObject,
     generateUniqueName,
     removeUndefinedValues,
-    calculateUsNavyBodyFat,
     calculateBodyFatByMethod,
     calculateBodyFat,
     calculateBodyComposition,

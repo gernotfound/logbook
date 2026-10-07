@@ -179,7 +179,7 @@ export function getDetailedMuscleCategory(mId: string): { key: string; label: st
     return { key: 'other', label: 'Altro' };
 }
 
-export interface ScheduledCycleSession {
+interface ScheduledCycleSession {
     globalSessionIndex: number; // 1, 2, 3...
     sessionInWeekIndex: number; // 1, 2, ...
     routineId: string;
@@ -188,7 +188,7 @@ export interface ScheduledCycleSession {
     positionInRotation: number; // 1, 2, ... N
 }
 
-export interface WeeklyCycleSchedule {
+interface WeeklyCycleSchedule {
     weekNumber: number;
     startDateStr?: string;
     endDateStr?: string;
