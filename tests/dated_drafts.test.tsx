@@ -15,6 +15,26 @@ const day = (date: string, fields = {}) => ({ date, kcal: 0, pro: 0, carbs: 0, f
 const storeItem = vi.mocked(localStorage.setItem).getMockImplementation()!;
 beforeEach(() => { vi.mocked(localStorage.setItem).mockImplementation(storeItem); localStorage.clear(); useAppStore.getState().resetStore(); useAppStore.setState({ userData: data(), dataOwner: storageOwner() }); });
 afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
+
+it('uses the fenced store owner without rereading lifecycle ownership on rerender', () => {
+    const getItem = vi.spyOn(localStorage, 'getItem');
+    const hook = renderHook(() => useNutritionMeasurements('2026-09-11'));
+    getItem.mockClear();
+
+    hook.rerender();
+
+    const lifecycleKeys = new Set(['logbook_is_guest', 'logbook_guest_migration_sync_recovery', 'logbook_authenticated_owner']);
+    expect(getItem.mock.calls.some(([key]) => lifecycleKeys.has(String(key)))).toBe(false);
+});
+
+it('fails closed instead of inferring an owner when userData is not owner-fenced', () => {
+    const owner = storageOwner();
+    useAppStore.setState({ dataOwner: null });
+    const hook = renderHook(() => useNutritionMeasurements('2026-09-11'));
+    act(() => hook.result.current.setWeight('75'));
+    expect(hook.result.current.weight).toBe('');
+    expect(localStorage.getItem(deviceKey('draft:measurement:2026-09-11', owner))).toBeNull();
+});
 it('reads a new localStorage key before any write can copy the previous value over it', () => {
     localStorage.setItem('view-a', JSON.stringify('history')); localStorage.setItem('view-b', JSON.stringify('home'));
     const hook = renderHook(({ key }) => useLocalStorage(key, 'default'), { initialProps: { key: 'view-a' } });
