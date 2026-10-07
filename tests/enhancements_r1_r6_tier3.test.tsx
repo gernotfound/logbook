@@ -3,6 +3,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
 import { renderWithProviders, emptyUserData } from './setup';
 import { useAppStore } from '../src/store/useAppStore';
+import { captureSession } from '../src/lib/sync/session';
 import { Logic } from '../src/lib/logic';
 import { Exporter } from '../src/lib/export';
 import { useSleepMeasurements } from '../src/hooks/useSleepMeasurements';
@@ -12,10 +13,11 @@ import DataHistory from '../src/components/Data/DataHistory';
 import TrainingSession from '../src/components/Training/TrainingSession';
 import type { WorkoutSession, WorkoutRoutine, TrainingCycle, Exercise } from '../src/types';
 
-describe('LogBook PWA Enhancements E2E Suite (Requirements R1 - R6)', () => {
+describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', () => {
     beforeEach(() => {
         window.localStorage.clear();
         useAppStore.getState().resetStore();
+        useAppStore.setState({ dataOwner: captureSession().owner });
         vi.clearAllMocks();
     });
 

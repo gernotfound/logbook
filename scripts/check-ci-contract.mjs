@@ -18,6 +18,15 @@ if (packageJson.engines?.npm !== '11.x') failures.push(`package engines.npm: exp
 if (packageJson.packageManager !== 'npm@11.21.0') failures.push(`packageManager: expected npm@11.21.0, got ${packageJson.packageManager ?? 'missing'}`);
 if (nvmrc !== '24') failures.push(`.nvmrc: expected 24, got ${nvmrc || 'missing'}`);
 if (nodeVersionFile !== '24') failures.push(`.node-version: expected 24, got ${nodeVersionFile || 'missing'}`);
+if (packageJson.scripts?.['lint:type-aware'] !== 'oxlint --config .oxlintrc.type-aware.json') {
+  failures.push('lint:type-aware must not use a warning-count threshold; lint:baseline owns reviewed warning drift');
+}
+if (packageJson.scripts?.['lint:baseline'] !== 'node scripts/check-lint-baseline.mjs') {
+  failures.push('lint:baseline: expected node scripts/check-lint-baseline.mjs');
+}
+if (!existsSync('config/lint-warning-baseline.json')) {
+  failures.push('lint warning baseline: missing config/lint-warning-baseline.json');
+}
 
 function requirePattern(label, source, pattern) {
   if (!pattern.test(source)) failures.push(`${label}: missing structure matching ${pattern}`);

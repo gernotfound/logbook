@@ -8,6 +8,7 @@ import { Logic } from '../src/lib/logic';
 import { shiftDateString } from '../src/lib/utils/date';
 import { UserDataSchema } from '../src/lib/schema';
 import { useSleepMeasurements } from '../src/hooks/useSleepMeasurements';
+import { storageOwner } from '../src/lib/sync/session';
 import DataSleep from '../src/components/Data/DataSleep';
 import DataHistory from '../src/components/Data/DataHistory';
 
@@ -42,6 +43,7 @@ describe('Empirical Challenger: Sleep Format in HH:MM & State Integration Stress
     beforeEach(() => {
         window.localStorage.clear();
         useAppStore.getState().resetStore();
+        useAppStore.setState({ dataOwner: storageOwner() });
         vi.clearAllMocks();
     });
 

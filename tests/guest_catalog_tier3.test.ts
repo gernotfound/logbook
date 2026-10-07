@@ -24,7 +24,7 @@ import type {
 } from '../src/types';
 import { idbStore } from './setup';
 
-describe('E2E Suite: Guest Mode & Global Catalog Resolution', () => {
+describe('Integration Suite: Guest Mode & Global Catalog Resolution', () => {
     beforeEach(async () => {
         vi.clearAllMocks();
         localStorage.clear();

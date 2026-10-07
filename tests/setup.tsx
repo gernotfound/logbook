@@ -70,6 +70,7 @@ export const localStorageMock = storageMocks.localStorageMock;
 export const sessionStorageMock = storageMocks.sessionStorageMock;
 
 import { deviceKey } from '../src/lib/sync/deviceStorage';
+import { storageOwner } from '../src/lib/sync/session';
 import React from 'react';
 import { render, act } from '@testing-library/react';
 import { AuthProvider } from '../src/contexts/AuthContext';
@@ -477,17 +478,25 @@ export function createMockUserData(overrides?: Partial<UserData>): UserData {
 }
 
 
+function setOwnerBoundUserData(userData: UserData | null, owner = storageOwner()): void {
+  useAppStore.setState({
+    userData,
+    dataOwner: userData ? owner : null,
+  });
+}
+
 export interface RenderOptions {
   userData?: any;
   localWorkout?: any;
+  dataOwner?: string;
 }
 
 export function renderWithProviders(ui: React.ReactElement, options: RenderOptions = {}) {
   const initialUserData = options.userData !== undefined ? options.userData : defaultMockUserData;
   const initialLocalWorkout = options.localWorkout !== undefined ? options.localWorkout : null;
+  setOwnerBoundUserData(initialUserData, options.dataOwner ?? storageOwner());
 
   useAppStore.setState({
-    userData: initialUserData,
     localWorkout: initialLocalWorkout,
     syncing: false,
     saveError: null,

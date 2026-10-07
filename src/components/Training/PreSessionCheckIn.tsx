@@ -62,35 +62,57 @@ function blockReadinessPersistence(error: unknown): void {
     });
 }
 
+type InitialReadinessRecovery = {
+    session: ReturnType<typeof captureSession> | null;
+    recoveryName: string;
+    recovered: ReadinessDraft;
+    error: unknown | null;
+};
+
+function createInitialReadinessRecovery(workoutId: string): InitialReadinessRecovery {
+    const recoveryName = 'draft:pre-session:' + workoutId;
+    try {
+        const session = captureSession();
+        return {
+            session,
+            recoveryName,
+            recovered: parseReadinessDraft(readDeviceValueStrict(recoveryName, session.owner)),
+            error: null,
+        };
+    } catch (error) {
+        return { session: null, recoveryName, recovered: {}, error };
+    }
+}
+
 export default function PreSessionCheckIn({ workoutId, routineName, date, onStart, onCancel }: PreSessionCheckInProps) {
     const nutrition = useAppStore(state => state.userData?.nutrition);
     const activePains = useAppStore(state => state.userData?.activePains || []);
-    const session = useRef(captureSession());
-    const recoveryName = useRef(`draft:pre-session:${workoutId}`);
-    const [recovered] = useState<ReadinessDraft>(() => {
-        try {
-            return parseReadinessDraft(readDeviceValueStrict(recoveryName.current, session.current.owner));
-        } catch (error) {
-            blockReadinessPersistence(error);
-            return {};
-        }
-    });
-    const [values, setValues] = useState<ReadinessDraft>(recovered);
-    const valuesRef = useRef<ReadinessDraft>(recovered);
-    const dirtyRef = useRef(Object.keys(recovered).length > 0);
+    const [initialRecovery] = useState(() => createInitialReadinessRecovery(workoutId));
+    const session = useRef(initialRecovery.session);
+    const recoveryName = useRef(initialRecovery.recoveryName);
+    const [values, setValues] = useState<ReadinessDraft>(initialRecovery.recovered);
+    const valuesRef = useRef<ReadinessDraft>(initialRecovery.recovered);
+    const dirtyRef = useRef(Object.keys(initialRecovery.recovered).length > 0);
     const [starting, setStarting] = useState(false);
     const sessionDate = date || Logic.getLocalDateString();
     const sleep = formatSleep(nutrition?.[sessionDate]?.sleepHours);
     const painNames = useMemo(() => activePains.map(id => Logic.getMuscleName(id) || id), [activePains]);
 
+    useEffect(() => {
+        if (initialRecovery.error) blockReadinessPersistence(initialRecovery.error);
+    }, [initialRecovery.error]);
+
     const persistDraft = useCallback(() => {
         if (!dirtyRef.current) return;
-        if (!isCurrentSession(session.current)) throw new Error('Sessione cambiata prima del salvataggio del check-in.');
-        writeDeviceValue(recoveryName.current, JSON.stringify(valuesRef.current), session.current.owner);
+        const activeSession = session.current;
+        if (!activeSession || !isCurrentSession(activeSession)) throw new Error('Sessione cambiata prima del salvataggio del check-in.');
+        writeDeviceValue(recoveryName.current, JSON.stringify(valuesRef.current), activeSession.owner);
     }, []);
 
     const clearDraft = useCallback(() => {
-        writeDeviceValue(recoveryName.current, null, session.current.owner);
+        const activeSession = session.current;
+        if (!activeSession || !isCurrentSession(activeSession)) throw new Error('Sessione cambiata prima della pulizia del check-in.');
+        writeDeviceValue(recoveryName.current, null, activeSession.owner);
         dirtyRef.current = false;
     }, []);
 

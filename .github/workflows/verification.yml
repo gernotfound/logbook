@@ -27,7 +27,7 @@ jobs:
         include:
           - id: core
             label: Static, isolated and recovery
-            command: "npm audit --audit-level=high && npm run test:security-static && npm run lint && npm run lint:a11y && npm run lint:type-aware && npm run test:typecheck:m5 && npm run test:quality:m5 && npm run test:repo-hygiene && npm run test:ci-contract && npm run test:dead-code && npm run test:no-skips && npm run test:isolated && npm run test:fuzz && npm run test:recovery && npm run test:gc"
+            command: "npm audit --audit-level=high && npm run test:security-static && npm run lint && npm run lint:a11y && npm run lint:type-aware && npm run lint:baseline && npm run test:typecheck:m5 && npm run test:quality:m5 && npm run test:repo-hygiene && npm run test:ci-contract && npm run test:dead-code && npm run test:no-skips && npm run test:isolated && npm run test:fuzz && npm run test:recovery && npm run test:gc"
             java: false
             playwright: false
           - id: unit-1

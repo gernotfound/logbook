@@ -19,6 +19,7 @@ export function useNutritionMeasurements(selectedDate?: string) {
     const showAlert = useDialogStore(state => state.showAlert);
 
     const [editingDate, setEditingDate] = useState<string | null>(null);
+    const [defaultMeasureTime] = useState(() => new Date().toTimeString().substring(0, 5));
     const saving = useRef(false);
     const todayDateStr = useLocalToday();
     const targetDateStr = selectedDate || editingDate || todayDateStr;
@@ -28,7 +29,7 @@ export function useNutritionMeasurements(selectedDate?: string) {
         weight: field('weight'), waist: field('waist'), neck: field('neck'), hip: field('hip'),
         manualBf: targetDayData?.bfProvenance?.method === 'manual' || (targetDayData?.bf != null && !targetDayData?.bfProvenance) ? field('bf') : '',
         chest: field('chest'), shoulders: field('shoulders'), biceps: field('biceps'),
-        thighs: field('thighs'), calves: field('calves'), measureTime: field('measurementTime') || new Date().toTimeString().substring(0, 5)
+        thighs: field('thighs'), calves: field('calves'), measureTime: field('measurementTime') || defaultMeasureTime
     });
     const { weight, waist, neck, hip, manualBf, chest, shoulders, biceps, thighs, calves, measureTime } = draft.values;
     const hasExistingData = Boolean(

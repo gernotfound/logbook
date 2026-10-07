@@ -11,6 +11,7 @@ M8 non annulla questi criteri di qualità: aggiorna però il production mutation
 ## Invarianti MUST
 
 - Un test normativo MUST chiamare il boundary production che pretende di verificare. Vietato reimplementare nel test logout, ricerca, calcolo o persistenza e poi verificare la propria reimplementazione.
+- Le fixture che esercitano storage o draft owner-scoped MUST rispettare lo stesso fencing del runtime: `userData` installato nello store deve essere accompagnato dal `dataOwner` della sessione. Uno stato intenzionalmente ownerless è ammesso solo nei test che verificano esplicitamente il transitorio pre-hydration/fail-safe e non va usato come fixture generica.
 - Un test normativo MUST avere almeno un'asserzione osservabile sul risultato, sullo stato persistito o su una collaborazione production significativa.
 - Sono vietati `it.skip`, `test.skip`, `describe.skip`, `.todo`, `.only` e assertion tautologiche nei file normativi M5.
 - I test guest login/logout MUST attraversare `AuthProvider` / `useAuth`.

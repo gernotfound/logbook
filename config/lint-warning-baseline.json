@@ -1,0 +1,778 @@
+[
+  {
+    "suite": "default",
+    "file": "src/App.tsx",
+    "code": "react-hooks(exhaustive-deps)",
+    "message": "React Hook useEffect has missing dependencies: 'setActiveTab', and 'handleTabChange'",
+    "source": "if (activeTab !== 'home') setActiveTab('home');",
+    "count": 1
+  },
+  {
+    "suite": "default",
+    "file": "src/App.tsx",
+    "code": "react(set-state-in-effect)",
+    "message": "Calling setState synchronously within an effect can trigger cascading renders",
+    "source": "setSettingsOpen(true);",
+    "count": 1
+  },
+  {
+    "suite": "default",
+    "file": "src/App.tsx",
+    "code": "react(set-state-in-effect)",
+    "message": "Calling setState synchronously within an effect can trigger cascading renders",
+    "source": "setShowGuestLogin(false);",
+    "count": 1
+  },
+  {
+    "suite": "default",
+    "file": "src/components/Data/DataMeasurements.tsx",
+    "code": "react(preserve-manual-memoization)",
+    "message": "Existing memoization could not be preserved",
+    "source": "}, [hip, isFemale, neck, profile?.gender, profile?.height, profileComplete, waist, weight]);",
+    "count": 2
+  },
+  {
+    "suite": "default",
+    "file": "src/components/Data/DataMeasurements.tsx",
+    "code": "react(set-state-in-effect)",
+    "message": "Calling setState synchronously within an effect can trigger cascading renders",
+    "source": "setBfMode(bfProvenance?.method === 'us_navy' ? 'calculate' : 'manual');",
+    "count": 1
+  },
+  {
+    "suite": "default",
+    "file": "src/components/Home/widgets/RecoveryBentoCard.tsx",
+    "code": "react(set-state-in-effect)",
+    "message": "Calling setState synchronously within an effect can trigger cascading renders",
+    "source": "if (activePains.length === 0) setIsExpanded(false);",
+    "count": 1
+  },
+  {
+    "suite": "default",
+    "file": "src/components/Training/planning/TrainingPlanning.tsx",
+    "code": "react(set-state-in-effect)",
+    "message": "Calling setState synchronously within an effect can trigger cascading renders",
+    "source": "useEffect(() => setIsDetailsOpen(false), [activeCycleId]);",
+    "count": 1
+  },
+  {
+    "suite": "default",
+    "file": "src/components/Training/planning/useCycleForm.ts",
+    "code": "react(set-state-in-effect)",
+    "message": "Calling setState synchronously within an effect can trigger cascading renders",
+    "source": "setName(initialCycle.name || '');",
+    "count": 1
+  },
+  {
+    "suite": "default",
+    "file": "src/components/Training/TrainingSession.tsx",
+    "code": "react(set-state-in-effect)",
+    "message": "Calling setState synchronously within an effect can trigger cascading renders",
+    "source": "setPostSessionDraft(recovered.draft);",
+    "count": 1
+  },
+  {
+    "suite": "default",
+    "file": "src/contexts/AuthContext.tsx",
+    "code": "react-hooks(exhaustive-deps)",
+    "message": "React Hook useCallback has a missing dependency: 'isGuestActiveStrict'",
+    "source": "if (isGuestActiveStrict()) {",
+    "count": 1
+  },
+  {
+    "suite": "default",
+    "file": "src/hooks/useAnalyticsWorker.ts",
+    "code": "react-hooks(exhaustive-deps)",
+    "message": "The ref's value `.current` is accessed directly in the effect cleanup function.",
+    "source": "const pending = Array.from(pendingPromises.current.entries());",
+    "count": 1
+  },
+  {
+    "suite": "default",
+    "file": "src/hooks/useAnalyticsWorker.ts",
+    "code": "react-hooks(exhaustive-deps)",
+    "message": "The ref's value `.current` is accessed directly in the effect cleanup function.",
+    "source": "pendingPromises.current.clear();",
+    "count": 1
+  },
+  {
+    "suite": "default",
+    "file": "src/hooks/useTrainingExercises.ts",
+    "code": "react(set-state-in-effect)",
+    "message": "Calling setState synchronously within an effect can trigger cascading renders",
+    "source": "if (parsed.name) setExName(parsed.name);",
+    "count": 1
+  },
+  {
+    "suite": "default",
+    "file": "src/hooks/useTrainingRoutines.ts",
+    "code": "react(set-state-in-effect)",
+    "message": "Calling setState synchronously within an effect can trigger cascading renders",
+    "source": "if (parsed.name) setRoutineName(parsed.name);",
+    "count": 1
+  },
+  {
+    "suite": "default",
+    "file": "src/hooks/useWorkoutSession.ts",
+    "code": "eslint(no-unused-vars)",
+    "message": "Catch parameter 'error' is caught but never used.",
+    "source": "} catch (error) {",
+    "count": 1
+  },
+  {
+    "suite": "default",
+    "file": "src/store/useAppStore.ts",
+    "code": "eslint(no-unused-vars)",
+    "message": "Catch parameter 'e' is caught but never used.",
+    "source": "} catch (e) {",
+    "count": 2
+  },
+  {
+    "suite": "default",
+    "file": "src/store/useAppStore.ts",
+    "code": "eslint(no-unused-vars)",
+    "message": "Catch parameter 'e' is caught but never used.",
+    "source": "} catch (e) {}",
+    "count": 2
+  },
+  {
+    "suite": "default",
+    "file": "tests/audit_01_04_remediation.test.ts",
+    "code": "eslint(no-unused-vars)",
+    "message": "Variable 'catalog' is declared but never used. Unused variables should start with a '_'.",
+    "source": "const catalog: CachedGlobalCatalog = {",
+    "count": 1
+  },
+  {
+    "suite": "default",
+    "file": "tests/audit_react_time_regression.test.tsx",
+    "code": "react(globals)",
+    "message": "Cannot reassign variables declared outside of the component/hook",
+    "source": "hookResult = useHomeView();",
+    "count": 1
+  },
+  {
+    "suite": "default",
+    "file": "tests/causal_protocol_v3_regression.test.ts",
+    "code": "eslint(no-unsafe-optional-chaining)",
+    "message": "Unsafe usage of optional chaining",
+    "source": "expect((descendantsFirst.documents.get(path)?.[date] as any).weight).toBe(82);",
+    "count": 1
+  },
+  {
+    "suite": "default",
+    "file": "tests/causal_protocol_v3_regression.test.ts",
+    "code": "eslint(no-unsafe-optional-chaining)",
+    "message": "Unsafe usage of optional chaining",
+    "source": "expect((left.documents.get('')?.activeWorkout as any).moodRating).toBe(6);",
+    "count": 1
+  },
+  {
+    "suite": "default",
+    "file": "tests/causal_protocol_v3_regression.test.ts",
+    "code": "eslint(no-unsafe-optional-chaining)",
+    "message": "Unsafe usage of optional chaining",
+    "source": "expect((outcomes[0].documents.get('')?.profile as any).name).toBe('X');",
+    "count": 1
+  },
+  {
+    "suite": "default",
+    "file": "tests/causal_protocol_v3_regression.test.ts",
+    "code": "eslint(no-unsafe-optional-chaining)",
+    "message": "Unsafe usage of optional chaining",
+    "source": "expect((recreateThenStale.documents.get(path)?.[date] as any).weight).toBe(82);",
+    "count": 1
+  },
+  {
+    "suite": "default",
+    "file": "tests/causal_protocol_v3_regression.test.ts",
+    "code": "eslint(no-unsafe-optional-chaining)",
+    "message": "Unsafe usage of optional chaining",
+    "source": "expect((together.documents.get('')?.routines as any[]).map(item => item.id)).toEqual(['r3', 'r2', 'r1']);",
+    "count": 1
+  },
+  {
+    "suite": "default",
+    "file": "tests/causalMerge.test.ts",
+    "code": "eslint(no-unsafe-optional-chaining)",
+    "message": "Unsafe usage of optional chaining",
+    "source": "const meal = (documents.get('nutrition_months/2026-09')?.['2026-09-13'] as any).meals[0];",
+    "count": 1
+  },
+  {
+    "suite": "default",
+    "file": "tests/causalMerge.test.ts",
+    "code": "eslint(no-unused-vars)",
+    "message": "Identifier 'normalizeDomainData' is imported but never used.",
+    "source": "import { applySemanticOperations, type SemanticOperation, type SyncMeta, normalizeDomainData } from '../src/lib/sync/semanticProjection';",
+    "count": 1
+  },
+  {
+    "suite": "default",
+    "file": "tests/causalMerge.test.ts",
+    "code": "eslint(no-unused-vars)",
+    "message": "Type 'SyncMeta' is imported but never used.",
+    "source": "import { applySemanticOperations, type SemanticOperation, type SyncMeta, normalizeDomainData } from '../src/lib/sync/semanticProjection';",
+    "count": 1
+  },
+  {
+    "suite": "default",
+    "file": "tests/challenger_react_hooks_memo_stress.test.tsx",
+    "code": "react(immutability)",
+    "message": "This value cannot be modified",
+    "source": "(window as any).__setHostExercises = setExercises;",
+    "count": 1
+  },
+  {
+    "suite": "default",
+    "file": "tests/challenger_react_hooks_memo_stress.test.tsx",
+    "code": "react(immutability)",
+    "message": "This value cannot be modified",
+    "source": "(window as any).__setHostSets = setSets;",
+    "count": 1
+  },
+  {
+    "suite": "default",
+    "file": "tests/emulator/transactionWriterIntegrity.test.ts",
+    "code": "eslint(no-unused-vars)",
+    "message": "Variable 'currentPersisted' is declared but never used. Unused variables should start with a '_'.",
+    "source": "const currentPersisted = (business: Record<string, unknown>) => ({",
+    "count": 1
+  },
+  {
+    "suite": "default",
+    "file": "tests/f004_history_identity_integrity.test.ts",
+    "code": "eslint(no-useless-escape)",
+    "message": "Unnecessary escape character '/'",
+    "source": "backup.userData = { history: [validWorkout, { ...validWorkout, id: 'bad\\/id' }] };",
+    "count": 1
+  },
+  {
+    "suite": "default",
+    "file": "tests/fnc_merge_01.test.ts",
+    "code": "eslint(no-unused-vars)",
+    "message": "Identifier 'isDefaultNutritionPlanning' is imported but never used.",
+    "source": "import { mergeUserData, isDefaultNutritionPlanning } from '../src/lib/merge';",
+    "count": 1
+  },
+  {
+    "suite": "default",
+    "file": "tests/fnc_merge_01.test.ts",
+    "code": "eslint(no-unused-vars)",
+    "message": "Variable 'mockUser' is declared but never used. Unused variables should start with a '_'.",
+    "source": "const mockUser = { uid: 'test-uid' } as any;",
+    "count": 1
+  },
+  {
+    "suite": "default",
+    "file": "tests/home_pain_persistence.test.tsx",
+    "code": "react(globals)",
+    "message": "Cannot reassign variables declared outside of the component/hook",
+    "source": "hookResult = useHomeView();",
+    "count": 1
+  },
+  {
+    "suite": "default",
+    "file": "tests/isolated/audit07_rootless_cloud_load.test.ts",
+    "code": "eslint(no-unused-vars)",
+    "message": "Variable 'currentCloudDoc' is declared but never used. Unused variables should start with a '_'.",
+    "source": "const currentCloudDoc = (business: Record<string, unknown>) => ({",
+    "count": 1
+  },
+  {
+    "suite": "default",
+    "file": "tests/m8_domain_operations.test.ts",
+    "code": "eslint(no-unsafe-optional-chaining)",
+    "message": "Unsafe usage of optional chaining",
+    "source": "expect((completed.replay.get('history_months/2026-09')?.['live-ready'] as WorkoutSession).exercises[0].sets[0].rir).toBe(0);",
+    "count": 1
+  },
+  {
+    "suite": "default",
+    "file": "tests/m8_domain_operations.test.ts",
+    "code": "eslint(no-unsafe-optional-chaining)",
+    "message": "Unsafe usage of optional chaining",
+    "source": "expect((projectDocuments(after, catalog).get('history_months/2026-09')?.['w-delete-regression'] as WorkoutSession).exercises[0].exId)",
+    "count": 1
+  },
+  {
+    "suite": "default",
+    "file": "tests/m8_domain_operations.test.ts",
+    "code": "eslint(no-unsafe-optional-chaining)",
+    "message": "Unsafe usage of optional chaining",
+    "source": "expect((replay.get('')?.profile as any).height).toBe('171');",
+    "count": 1
+  },
+  {
+    "suite": "default",
+    "file": "tests/m8_domain_operations.test.ts",
+    "code": "eslint(no-unsafe-optional-chaining)",
+    "message": "Unsafe usage of optional chaining",
+    "source": "expect((replay.get('history_months/2026-09')?.['w-1'] as any).date).toBe('2026-09-01');",
+    "count": 1
+  },
+  {
+    "suite": "default",
+    "file": "tests/m8_domain_operations.test.ts",
+    "code": "eslint(no-unsafe-optional-chaining)",
+    "message": "Unsafe usage of optional chaining",
+    "source": "expect((replay.get('history_months/2026-09')?.['w-2'] as any).globalEndTime).toBe(200);",
+    "count": 1
+  },
+  {
+    "suite": "default",
+    "file": "tests/m8_domain_operations.test.ts",
+    "code": "eslint(no-unsafe-optional-chaining)",
+    "message": "Unsafe usage of optional chaining",
+    "source": "expect((replay.get('nutrition_months/2026-09')?.['2026-09-15'] as any).kcal).toBe(350);",
+    "count": 1
+  },
+  {
+    "suite": "default",
+    "file": "tests/r1_r2_empirical_challenge.test.ts",
+    "code": "eslint(no-unused-vars)",
+    "message": "Identifier 'calculateEffectiveSetWeight' is imported but never used.",
+    "source": "import { calculateEffectiveSetWeight, calculateSetVolume, calculateWorkoutVolume } from '../src/lib/calc/workout';",
+    "count": 1
+  },
+  {
+    "suite": "default",
+    "file": "tests/r1_r2_empirical_challenge.test.ts",
+    "code": "eslint(no-unused-vars)",
+    "message": "Identifier 'calculateSetVolume' is imported but never used.",
+    "source": "import { calculateEffectiveSetWeight, calculateSetVolume, calculateWorkoutVolume } from '../src/lib/calc/workout';",
+    "count": 1
+  },
+  {
+    "suite": "default",
+    "file": "tests/r1_r2_empirical_challenge.test.ts",
+    "code": "eslint(no-unused-vars)",
+    "message": "Type 'SessionExercise' is imported but never used.",
+    "source": "import type { WorkoutSession, SessionExercise } from '../src/types';",
+    "count": 1
+  },
+  {
+    "suite": "default",
+    "file": "tests/sec01_csv_injection.test.tsx",
+    "code": "eslint(no-useless-escape)",
+    "message": "Unnecessary escape character '\\''",
+    "source": "expect(Exporter.formatCsvField('   =foo')).toBe(`\"\\'   =foo\"`); // leading spaces",
+    "count": 1
+  },
+  {
+    "suite": "default",
+    "file": "tests/sec01_csv_injection.test.tsx",
+    "code": "eslint(no-useless-escape)",
+    "message": "Unnecessary escape character '\\''",
+    "source": "expect(Exporter.formatCsvField('-1+2')).toBe(`\"\\'-1+2\"`); // stringa, non numero",
+    "count": 1
+  },
+  {
+    "suite": "default",
+    "file": "tests/sec01_csv_injection.test.tsx",
+    "code": "eslint(no-useless-escape)",
+    "message": "Unnecessary escape character '\\''",
+    "source": "expect(Exporter.formatCsvField('-cmd|\\' /C calc\\'!A0')).toBe(`\"\\'-cmd|\\' /C calc\\'!A0\"`);",
+    "count": 3
+  },
+  {
+    "suite": "default",
+    "file": "tests/sec01_csv_injection.test.tsx",
+    "code": "eslint(no-useless-escape)",
+    "message": "Unnecessary escape character '\\''",
+    "source": "expect(Exporter.formatCsvField('@foo')).toBe(`\"\\'@foo\"`);",
+    "count": 1
+  },
+  {
+    "suite": "default",
+    "file": "tests/sec01_csv_injection.test.tsx",
+    "code": "eslint(no-useless-escape)",
+    "message": "Unnecessary escape character '\\''",
+    "source": "expect(Exporter.formatCsvField('\\r=1+1')).toBe(`\"\\'\\r=1+1\"`);",
+    "count": 1
+  },
+  {
+    "suite": "default",
+    "file": "tests/sec01_csv_injection.test.tsx",
+    "code": "eslint(no-useless-escape)",
+    "message": "Unnecessary escape character '\\''",
+    "source": "expect(Exporter.formatCsvField('\\t=1+1')).toBe(`\"\\'\\t=1+1\"`);",
+    "count": 1
+  },
+  {
+    "suite": "default",
+    "file": "tests/sec01_csv_injection.test.tsx",
+    "code": "eslint(no-useless-escape)",
+    "message": "Unnecessary escape character '\\''",
+    "source": "expect(Exporter.formatCsvField('+SUM(A1:A10)')).toBe(`\"\\'+SUM(A1:A10)\"`);",
+    "count": 1
+  },
+  {
+    "suite": "default",
+    "file": "tests/sec01_csv_injection.test.tsx",
+    "code": "eslint(no-useless-escape)",
+    "message": "Unnecessary escape character '\\''",
+    "source": "expect(Exporter.formatCsvField('=1+1')).toBe(`\"\\'=1+1\"`);",
+    "count": 1
+  },
+  {
+    "suite": "default",
+    "file": "tests/sleep_format.test.ts",
+    "code": "eslint(no-unused-vars)",
+    "message": "Identifier 'UserDataSchema' is imported but never used.",
+    "source": "import { NutritionDaySchema, UserDataSchema } from '../src/lib/schema';",
+    "count": 1
+  },
+  {
+    "suite": "default",
+    "file": "tests/tab_validation.test.tsx",
+    "code": "eslint(no-unused-vars)",
+    "message": "Identifier 'act' is imported but never used.",
+    "source": "import { screen, act, renderHook, fireEvent } from '@testing-library/react';",
+    "count": 1
+  },
+  {
+    "suite": "default",
+    "file": "tests/transaction_contention.test.ts",
+    "code": "eslint(no-unused-vars)",
+    "message": "Identifier 'vi' is imported but never used.",
+    "source": "import { beforeEach, describe, expect, it, vi } from 'vitest';",
+    "count": 1
+  },
+  {
+    "suite": "default",
+    "file": "tests/workout_improvements.test.tsx",
+    "code": "react(globals)",
+    "message": "Cannot reassign variables declared outside of the component/hook",
+    "source": "hookResult = res;",
+    "count": 3
+  },
+  {
+    "suite": "type-aware",
+    "file": "src/components/Nutrition/meals/NutritionMealSection.tsx",
+    "code": "typescript(no-floating-promises)",
+    "message": "Promises must be awaited, add void operator to ignore.",
+    "source": "onRemoveFood(item.time ?? item.id);",
+    "count": 1
+  },
+  {
+    "suite": "type-aware",
+    "file": "src/components/Nutrition/NutritionView.tsx",
+    "code": "typescript(no-floating-promises)",
+    "message": "Promises must be awaited, add void operator to ignore.",
+    "source": "showAlert('Piano locale salvato, in attesa di connessione per la sincronizzazione cloud.', 'warning');",
+    "count": 1
+  },
+  {
+    "suite": "type-aware",
+    "file": "src/components/Nutrition/NutritionView.tsx",
+    "code": "typescript(no-floating-promises)",
+    "message": "Promises must be awaited, add void operator to ignore.",
+    "source": "showAlert(`Errore durante il salvataggio: ${result.error}`, 'error');",
+    "count": 1
+  },
+  {
+    "suite": "type-aware",
+    "file": "src/components/Nutrition/NutritionView.tsx",
+    "code": "typescript(no-floating-promises)",
+    "message": "Promises must be awaited, add void operator to ignore.",
+    "source": "showAlert(`Si è verificato un errore: ${e.message}`, 'error');",
+    "count": 1
+  },
+  {
+    "suite": "type-aware",
+    "file": "src/components/Training/ActiveWorkoutSession.tsx",
+    "code": "typescript(no-floating-promises)",
+    "message": "Promises must be awaited, add void operator to ignore.",
+    "source": "updateSetupNote(exId, note);",
+    "count": 1
+  },
+  {
+    "suite": "type-aware",
+    "file": "src/components/Training/WorkoutReportModal.tsx",
+    "code": "typescript(no-floating-promises)",
+    "message": "Promises must be awaited, add void operator to ignore.",
+    "source": "showAlert(\"Errore durante il salvataggio della scheda.\");",
+    "count": 1
+  },
+  {
+    "suite": "type-aware",
+    "file": "src/components/Training/WorkoutReportModal.tsx",
+    "code": "typescript(no-floating-promises)",
+    "message": "Promises must be awaited, add void operator to ignore.",
+    "source": "showAlert(\"Inserisci un nome per la scheda.\");",
+    "count": 1
+  },
+  {
+    "suite": "type-aware",
+    "file": "src/components/Training/WorkoutReportModal.tsx",
+    "code": "typescript(no-floating-promises)",
+    "message": "Promises must be awaited, add void operator to ignore.",
+    "source": "showAlert(\"Scheda salvata in locale (offline).\");",
+    "count": 1
+  },
+  {
+    "suite": "type-aware",
+    "file": "src/components/UI/ConsentOverlay.tsx",
+    "code": "typescript(no-floating-promises)",
+    "message": "Promises must be awaited, add void operator to ignore.",
+    "source": "useDialogStore.getState().showAlert(",
+    "count": 1
+  },
+  {
+    "suite": "type-aware",
+    "file": "src/hooks/useNutritionMeals.ts",
+    "code": "typescript(no-floating-promises)",
+    "message": "Promises must be awaited, add void operator to ignore.",
+    "source": "catch { showAlert(\"Errore durante il salvataggio dell'alimento.\"); }",
+    "count": 1
+  },
+  {
+    "suite": "type-aware",
+    "file": "src/hooks/useNutritionMeals.ts",
+    "code": "typescript(no-floating-promises)",
+    "message": "Promises must be awaited, add void operator to ignore.",
+    "source": "showAlert(\"Errore durante il salvataggio dell'alimento.\");",
+    "count": 1
+  },
+  {
+    "suite": "type-aware",
+    "file": "src/hooks/useNutritionMeals.ts",
+    "code": "typescript(no-floating-promises)",
+    "message": "Promises must be awaited, add void operator to ignore.",
+    "source": "showAlert(\"Errore durante il salvataggio.\");",
+    "count": 2
+  },
+  {
+    "suite": "type-aware",
+    "file": "src/hooks/useNutritionMeals.ts",
+    "code": "typescript(no-floating-promises)",
+    "message": "Promises must be awaited, add void operator to ignore.",
+    "source": "showAlert(\"Errore durante l'aggiornamento dell'alimento.\");",
+    "count": 1
+  },
+  {
+    "suite": "type-aware",
+    "file": "src/hooks/useNutritionMeals.ts",
+    "code": "typescript(no-floating-promises)",
+    "message": "Promises must be awaited, add void operator to ignore.",
+    "source": "showAlert(\"Errore durante la pulizia della giornata.\");",
+    "count": 1
+  },
+  {
+    "suite": "type-aware",
+    "file": "src/hooks/useNutritionMeals.ts",
+    "code": "typescript(no-floating-promises)",
+    "message": "Promises must be awaited, add void operator to ignore.",
+    "source": "showAlert(\"Errore durante la rimozione dell'alimento.\");",
+    "count": 1
+  },
+  {
+    "suite": "type-aware",
+    "file": "src/hooks/useSupplements.ts",
+    "code": "typescript(no-floating-promises)",
+    "message": "Promises must be awaited, add void operator to ignore.",
+    "source": "showAlert(\"Errore durante il salvataggio dell'integratore.\");",
+    "count": 1
+  },
+  {
+    "suite": "type-aware",
+    "file": "src/hooks/useSupplements.ts",
+    "code": "typescript(no-floating-promises)",
+    "message": "Promises must be awaited, add void operator to ignore.",
+    "source": "showAlert(\"Errore durante l'aggiunta dell'assunzione.\");",
+    "count": 1
+  },
+  {
+    "suite": "type-aware",
+    "file": "src/hooks/useSupplements.ts",
+    "code": "typescript(no-floating-promises)",
+    "message": "Promises must be awaited, add void operator to ignore.",
+    "source": "showAlert(\"Errore durante l'eliminazione dell'integratore.\");",
+    "count": 1
+  },
+  {
+    "suite": "type-aware",
+    "file": "src/hooks/useSupplements.ts",
+    "code": "typescript(no-floating-promises)",
+    "message": "Promises must be awaited, add void operator to ignore.",
+    "source": "showAlert(\"Errore durante la rimozione dell'assunzione.\");",
+    "count": 1
+  },
+  {
+    "suite": "type-aware",
+    "file": "src/hooks/useTrainingExercises.ts",
+    "code": "typescript(no-floating-promises)",
+    "message": "Promises must be awaited, add void operator to ignore.",
+    "source": "showAlert(\"Errore durante il ripristino dell'esercizio.\");",
+    "count": 1
+  },
+  {
+    "suite": "type-aware",
+    "file": "src/hooks/useTrainingExercises.ts",
+    "code": "typescript(no-floating-promises)",
+    "message": "Promises must be awaited, add void operator to ignore.",
+    "source": "showAlert(\"Errore durante il salvataggio dell'esercizio.\");",
+    "count": 1
+  },
+  {
+    "suite": "type-aware",
+    "file": "src/hooks/useTrainingExercises.ts",
+    "code": "typescript(no-floating-promises)",
+    "message": "Promises must be awaited, add void operator to ignore.",
+    "source": "showAlert(\"Errore: esercizio originale non trovato.\");",
+    "count": 1
+  },
+  {
+    "suite": "type-aware",
+    "file": "src/hooks/useTrainingHistory.ts",
+    "code": "typescript(no-floating-promises)",
+    "message": "Promises must be awaited, add void operator to ignore.",
+    "source": "showAlert(\"Errore durante l'eliminazione dell'allenamento.\");",
+    "count": 1
+  },
+  {
+    "suite": "type-aware",
+    "file": "src/hooks/useWorkoutSession.ts",
+    "code": "typescript(no-floating-promises)",
+    "message": "Promises must be awaited, add void operator to ignore.",
+    "source": "showAlert(\"Errore durante il salvataggio della nota.\");",
+    "count": 1
+  },
+  {
+    "suite": "type-aware",
+    "file": "src/hooks/useWorkoutSession.ts",
+    "code": "typescript(no-floating-promises)",
+    "message": "Promises must be awaited, add void operator to ignore.",
+    "source": "showAlert(\"Errore durante il salvataggio delle modifiche.\");",
+    "count": 1
+  },
+  {
+    "suite": "type-aware",
+    "file": "src/hooks/useWorkoutSession.ts",
+    "code": "typescript(no-floating-promises)",
+    "message": "Promises must be awaited, add void operator to ignore.",
+    "source": "showAlert(\"Errore durante l'eliminazione della sessione.\");",
+    "count": 1
+  },
+  {
+    "suite": "type-aware",
+    "file": "src/lib/export.ts",
+    "code": "typescript(no-floating-promises)",
+    "message": "Promises must be awaited, add void operator to ignore.",
+    "source": "useDialogStore.getState().showAlert(\"Esportazione fallita, riprova.\");",
+    "count": 1
+  },
+  {
+    "suite": "type-aware",
+    "file": "src/main.tsx",
+    "code": "typescript(no-floating-promises)",
+    "message": "Promises must be awaited, add void operator to ignore.",
+    "source": "initApp();",
+    "count": 1
+  },
+  {
+    "suite": "type-aware",
+    "file": "src/sw.ts",
+    "code": "typescript(no-floating-promises)",
+    "message": "Promises must be awaited, add void operator to ignore.",
+    "source": "self.skipWaiting();",
+    "count": 1
+  },
+  {
+    "suite": "type-aware",
+    "file": "tests/activity_tracking.test.tsx",
+    "code": "typescript(no-floating-promises)",
+    "message": "Promises must be awaited, add void operator to ignore.",
+    "source": "act(() => vi.advanceTimersByTime(1100));",
+    "count": 1
+  },
+  {
+    "suite": "type-aware",
+    "file": "tests/analytics_worker_lifecycle.test.tsx",
+    "code": "typescript(no-floating-promises)",
+    "message": "Promises must be awaited, add void operator to ignore.",
+    "source": "act(() => worker.instance.onerror(new Error('crash')));",
+    "count": 1
+  },
+  {
+    "suite": "type-aware",
+    "file": "tests/audit_ui_regression.test.tsx",
+    "code": "typescript(no-floating-promises)",
+    "message": "Promises must be awaited, add void operator to ignore.",
+    "source": "act(() => vi.advanceTimersByTime(1000));",
+    "count": 1
+  },
+  {
+    "suite": "type-aware",
+    "file": "tests/dated_drafts.test.tsx",
+    "code": "typescript(no-floating-promises)",
+    "message": "Promises must be awaited, add void operator to ignore.",
+    "source": "act(() => vi.advanceTimersByTime(1100));",
+    "count": 1
+  },
+  {
+    "suite": "type-aware",
+    "file": "tests/enhancements_r1_r6_tier3.test.tsx",
+    "code": "typescript(no-floating-promises)",
+    "message": "Promises must be awaited, add void operator to ignore.",
+    "source": "sessionHook.current.startWorkout('r_legs');",
+    "count": 1
+  },
+  {
+    "suite": "type-aware",
+    "file": "tests/enhancements_r1_r6_tier3.test.tsx",
+    "code": "typescript(no-floating-promises)",
+    "message": "Promises must be awaited, add void operator to ignore.",
+    "source": "sessionHook.current.startWorkout('r_quads', { cycleId: 'c_mass', cycleName: 'Massa Gambe' });",
+    "count": 1
+  },
+  {
+    "suite": "type-aware",
+    "file": "tests/enhancements_r1_r6_tier4.test.tsx",
+    "code": "typescript(no-floating-promises)",
+    "message": "Promises must be awaited, add void operator to ignore.",
+    "source": "sessionHook.current.startWorkout('r_leg');",
+    "count": 1
+  },
+  {
+    "suite": "type-aware",
+    "file": "tests/enhancements_r1_r6_tier4.test.tsx",
+    "code": "typescript(no-floating-promises)",
+    "message": "Promises must be awaited, add void operator to ignore.",
+    "source": "sessionHook.current.startWorkout('r_pull');",
+    "count": 1
+  },
+  {
+    "suite": "type-aware",
+    "file": "tests/enhancements_r1_r6_tier4.test.tsx",
+    "code": "typescript(no-floating-promises)",
+    "message": "Promises must be awaited, add void operator to ignore.",
+    "source": "sessionHook.current.startWorkout('r_push');",
+    "count": 1
+  },
+  {
+    "suite": "type-aware",
+    "file": "tests/rir_per_set.test.tsx",
+    "code": "typescript(no-floating-promises)",
+    "message": "Promises must be awaited, add void operator to ignore.",
+    "source": "act(() => vi.runAllTimers());",
+    "count": 1
+  },
+  {
+    "suite": "type-aware",
+    "file": "tests/sync_indicator_and_toast.test.tsx",
+    "code": "typescript(no-floating-promises)",
+    "message": "Promises must be awaited, add void operator to ignore.",
+    "source": "useDialogStore.getState().showConfirm('Sei sicuro di voler procedere?');",
+    "count": 1
+  },
+  {
+    "suite": "type-aware",
+    "file": "tests/telemetry/telemetry_tier5.test.ts",
+    "code": "typescript(no-floating-promises)",
+    "message": "Promises must be awaited, add void operator to ignore.",
+    "source": "telemetryHub",
+    "count": 1
+  }
+]

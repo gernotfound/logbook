@@ -4,7 +4,7 @@ import { render, screen, fireEvent, act } from '@testing-library/react';
 import ReloadPrompt from '../src/components/UI/ReloadPrompt';
 import { useRegisterSW } from 'virtual:pwa-register/react';
 import App from '../src/App';
-import { renderWithProviders } from './setup';
+import { localStorageMock, renderWithProviders } from './setup';
 import { useAppStore } from '../src/store/useAppStore';
 import { BufferedInput } from '../src/components/UI/BufferedInput';
 import { invalidateSession } from '../src/lib/sync/session';
@@ -13,8 +13,10 @@ describe('Service Worker Update Lifecycle (ReloadPrompt) Suite', () => {
   let mockSetNeedRefresh: ReturnType<typeof vi.fn>;
   let mockUpdateServiceWorker: ReturnType<typeof vi.fn>;
   const originalServiceWorker = navigator.serviceWorker;
+  const originalStorageGetItem = localStorageMock.getItem.getMockImplementation()!;
 
   beforeEach(() => {
+    localStorageMock.getItem.mockImplementation(originalStorageGetItem);
     useAppStore.getState().resetStore();
     mockSetNeedRefresh = vi.fn();
     mockUpdateServiceWorker = vi.fn().mockResolvedValue(undefined);
@@ -65,6 +67,19 @@ describe('Service Worker Update Lifecycle (ReloadPrompt) Suite', () => {
     fireEvent.change(screen.getByLabelText('Bozza'), { target: { value: 'private' } });
     invalidateSession(); second.unmount();
     expect(update).not.toHaveBeenCalled();
+  });
+
+  test('rerendering a buffered input does not repeat strict owner storage reads', () => {
+    const update = vi.fn();
+    const view = render(<BufferedInput id="stable-session-draft" value="" onChange={update} aria-label="Stable" />);
+    useAppStore.setState({ localPersistenceBlocked: false, saveError: null });
+    localStorageMock.getItem.mockImplementation(() => { throw new Error('storage unavailable after mount'); });
+
+    expect(() => view.rerender(
+      <BufferedInput id="stable-session-draft" value="remote" onChange={update} aria-label="Stable" />,
+    )).not.toThrow();
+    expect(useAppStore.getState().localPersistenceBlocked).toBe(false);
+    view.unmount();
   });
 
   test('a dirty buffered field leaves an owner-scoped recovery copy before session invalidation', () => {

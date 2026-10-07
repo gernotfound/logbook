@@ -45,7 +45,9 @@ La parallelizzazione riguarda l'orchestrazione, non la semantica del gate. Unit,
 - MUST: gli shard non invocano umbrella `verify:mN` seriali; eseguono leaf command per ottenere parallelismo reale.
 - MUST: `npm audit --audit-level=high` e `test:security-static` (Gitleaks + zizmor) restano bloccanti nella CI ma non appartengono alla semantica deterministica di `verify:m8`, perché dipendono da registry/release esterni.
 - MUST: `test:dead-code` (Knip su file, dipendenze e import non dichiarati) è invece un leaf deterministico di `verify:m8`; gli unused export restano analisi advisory finché il rumore storico non è classificato.
-- MUST: `lint:a11y` blocca sulle regole JSX accessibility ad alta confidenza. `lint:type-aware` applica `typescript/no-floating-promises` con una soglia iniziale di 47 warning già classificati: la soglia non può aumentare e va ridotta man mano che il debito viene corretto con semantica esplicita, senza aggiungere `void` meccanicamente ai path di persistenza.
+- MUST: `lint:a11y` blocca sulle regole JSX accessibility ad alta confidenza e `lint:type-aware` applica `typescript/no-floating-promises`.
+- MUST: `lint:baseline` confronta l'identità dei warning correnti (suite, file, regola, messaggio e riga sorgente) con `config/lint-warning-baseline.json`; warning nuovi, sostituiti o rimossi fanno fallire il gate finché il delta non viene revisionato esplicitamente e la baseline non viene rigenerata. Un semplice limite numerico non è sufficiente perché può nascondere la sostituzione di warning benigni con warning critici.
+- MUST: la baseline dei warning può solo descrivere debito già esistente e revisionato; una sua modifica deve essere parte visibile della stessa PR che spiega/corregge il delta. Nei path di persistenza non si aggiunge `void` meccanicamente alle Promise per far sparire `no-floating-promises`.
 - MUST: M8 aggiunge test Domain Operations V4 e il boundary checker che impedisce nuovi consumer UI/hook snapshot-based fuori dall'allowlist documentata.
 - MUST: workflow temporanei di migrazione non devono esistere nell'HEAD candidato.
 - MUST: workflow legacy che duplicano test/E2E non restano attivi in parallelo.

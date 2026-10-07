@@ -23,7 +23,7 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
     });
 
     /* =========================================================================
-     * TIER 4: REAL-WORLD WORKFLOWS (End-to-End User Scenarios)
+     * TIER 4: REAL-WORLD WORKFLOWS (Multi-step User Scenarios)
      * ========================================================================= */
     describe('Tier 4: Real-World Workflows', () => {
 
