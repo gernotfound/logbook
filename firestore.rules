@@ -57,21 +57,12 @@ service cloud.firestore {
     function isValidSync(docData) {
       return !('_sync' in docData) || (
         docData._sync is map
-        && docData._sync.protocolVersion is int
+        && docData._sync.protocolVersion == 3
         && docData._sync.clock is map
         && docData._sync.fields is map
-        && (
-          (
-            (docData._sync.protocolVersion == 1 || docData._sync.protocolVersion == 2)
-            && docData._sync.keys().hasOnly(['protocolVersion', 'clock', 'fields'])
-          )
-          || (
-            docData._sync.protocolVersion == 3
-            && docData._sync.keys().hasOnly(['protocolVersion', 'clock', 'fields', 'writer'])
-            && 'writer' in docData._sync
-            && isValidReplicaWriter(docData._sync.writer)
-          )
-        )
+        && docData._sync.keys().hasOnly(['protocolVersion', 'clock', 'fields', 'writer'])
+        && 'writer' in docData._sync
+        && isValidReplicaWriter(docData._sync.writer)
       );
     }
 
@@ -106,26 +97,16 @@ service cloud.firestore {
     }
 
     function isAuthorizedSyncWrite(userId, docData) {
-      return (
-          !syncControlExistsAfter(userId)
-          && (
-            !('_sync' in docData)
-            || docData._sync.protocolVersion == 1
-            || docData._sync.protocolVersion == 2
-          )
-        )
-        || (
-          '_sync' in docData
-          && hasProtocol3Writer(userId, docData)
-        );
+      // Pre-launch clean cut: every persisted account write starts on Protocol 3
+      // and is attributable to an active replica generation.
+      return '_sync' in docData
+        && hasProtocol3Writer(userId, docData);
     }
 
     function hasAuthorizedSyncDelete(userId) {
-      // Legacy clients may delete monthly documents only before this account has
-      // crossed the Protocol 3 control barrier. After cutover, client sync persists
-      // an empty fenced shell instead, so every causal state transition is attributable
-      // to an exact replica id/generation through _sync.writer.
-      return !syncControlExistsAfter(userId);
+      // Current clients persist an empty fenced shell for terminal monthly state.
+      // Physical deletion is reserved for the trusted account-deletion backend.
+      return false;
     }
 
     function isValidReplicaEntry(entry) {
