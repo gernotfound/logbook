@@ -137,17 +137,27 @@ body {
   margin: 0;
 }
 
+html:has(.brand-loading-screen),
+body:has(.brand-loading-screen) {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
 .brand-loading-screen {
   --brand-loading-scale: 1;
   --brand-loading-offset-y: -2vh;
-  min-height: 100vh;
-  min-height: 100dvh;
+  position: fixed;
+  inset: 0;
+  z-index: 10001;
   width: 100%;
+  min-height: 0;
   display: grid;
   place-items: center;
   padding: 1.5rem;
   box-sizing: border-box;
   overflow: hidden;
+  overscroll-behavior: none;
+  touch-action: none;
   background: #000000;
   color: #ffffff;
 }
@@ -155,12 +165,8 @@ body {
 .brand-loading-screen--content {
   --brand-loading-scale: 0.72;
   --brand-loading-offset-y: 0px;
-  min-height: calc(
-    100dvh
-    - var(--nav-height)
-    - env(safe-area-inset-top, 0px)
-    - env(safe-area-inset-bottom, 0px)
-  );
+  inset: 0 0 calc(var(--nav-height) + env(safe-area-inset-bottom, 0px)) 0;
+  z-index: 9999;
 }
 
 .brand-loading-screen__brand {
