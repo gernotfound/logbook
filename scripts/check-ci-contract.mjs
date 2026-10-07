@@ -118,6 +118,7 @@ requirePattern('exact event SHA binding', workflow, /^      EXPECTED_SHA: \$\{\{
 requirePattern('Gitleaks event base binding', workflow, /^      GITLEAKS_BASE_SHA: \$\{\{ github\.event\.pull_request\.base\.sha \|\| github\.event\.before \}\}\s*$/m);
 requirePattern('exact checkout ref', workflow, /^          ref: \$\{\{ github\.event\.pull_request\.head\.sha \|\| github\.sha \}\}\s*$/m);
 requirePattern('runtime SHA read', workflow, /^          actual_sha="\$\(git rev-parse HEAD\)"\s*$/m);
+requirePattern('container runtime SHA read', workflow, /^          actual_sha="\$\(git -c safe\.directory="\$\{GITHUB_WORKSPACE\}" rev-parse HEAD\)"\s*$/m);
 requirePattern('runtime SHA comparison', workflow, /^          if \[ "\$\{actual_sha\}" != "\$\{EXPECTED_SHA\}" \]; then\s*$/m);
 const actualShaAssignments = workflow.match(/^\s*actual_sha=/gm) ?? [];
 if (actualShaAssignments.length !== 3) failures.push(`runtime SHA guard: expected matrix + E2E + CodeQL assignments, found ${actualShaAssignments.length}`);
