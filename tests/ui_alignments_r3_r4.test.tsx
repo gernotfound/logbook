@@ -8,11 +8,13 @@ import { useNutritionMeasurements } from '../src/hooks/useNutritionMeasurements'
 import { useAppStore } from '../src/store/useAppStore';
 import { useDialogStore } from '../src/store/useDialogStore';
 import { Logic } from '../src/lib/logic';
+import { storageOwner } from '../src/lib/sync/session';
 
 describe('UI Alignments - R3 & R4', () => {
     beforeEach(() => {
         localStorage.clear();
         useAppStore.setState({
+            dataOwner: storageOwner(),
             userData: {
                 profile: { height: 180, gender: 'M' },
                 nutrition: {
