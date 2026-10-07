@@ -40,6 +40,17 @@ vi.mock('firebase/firestore', () => ({
 
 import { DB } from '../../src/lib/db';
 
+const currentCloudDoc = (business: Record<string, unknown>) => ({
+    ...business,
+    _schemaVersion: 1,
+    _sync: {
+        protocolVersion: 3,
+        clock: {},
+        fields: {},
+        writer: { slot: 's00', replicaId: 'rootless-fixture', generation: 1, seq: 0 },
+    },
+});
+
 beforeEach(async () => {
     await clear();
     vi.resetAllMocks();
