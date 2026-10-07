@@ -40,21 +40,20 @@ describe('Firestore Security Rules Whitelist & Parity Verification', () => {
   it('allows only an active owner to access private month and telemetry collections', () => {
     expect(rulesContent).toMatch(/match\s+\/history_months\/\{monthId\}/);
     expect(rulesContent).toMatch(/allow\s+read:\s*if\s+isActiveOwner\(userId\);/);
-    expect(rulesContent).toContain('hasAuthorizedSyncDelete()');
+    expect(rulesContent.match(/allow\s+delete:\s*if\s+false;/g)?.length).toBeGreaterThanOrEqual(3);
     expect(rulesContent).toMatch(/match\s+\/nutrition_months\/\{monthId\}/);
     expect(rulesContent).toMatch(/match\s+\/telemetry_anomalies\/\{eventId\}/);
   });
 
   it('keeps Firestore data/sync rules aligned with current version constants and forbids marker downgrade', () => {
     expect(rulesContent).toContain("function isValidDataSchema(docData)");
-    expect(rulesContent).toContain(`!('_schemaVersion' in docData) || docData._schemaVersion == ${CURRENT_DATA_SCHEMA}`);
+    expect(rulesContent).toContain(`'_schemaVersion' in docData && docData._schemaVersion == ${CURRENT_DATA_SCHEMA}`);
     expect(CURRENT_SYNC_PROTOCOL).toBe(3);
     expect(rulesContent).not.toContain("docData._sync.protocolVersion == 1 || docData._sync.protocolVersion == 2");
     expect(rulesContent).toContain("docData._sync.protocolVersion == 3");
     expect(rulesContent).toContain("docData._sync.keys().hasOnly(['protocolVersion', 'clock', 'fields', 'writer'])");
     expect(rulesContent).toContain('function hasProtocol3Writer(userId, docData)');
-    expect(rulesContent).toContain("!('_sync' in docData)");
-    expect(rulesContent).toContain('return false;');
+    expect(rulesContent).toContain("return '_sync' in docData && hasProtocol3Writer(userId, docData);");
     expect(rulesContent).toContain('function validReplicaControlUpdate(oldData, newData)');
     expect(rulesContent).toContain("match /sync_control/{controlId}");
     expect(rulesContent).toContain('docData._sync.clock is map');
@@ -62,8 +61,8 @@ describe('Firestore Security Rules Whitelist & Parity Verification', () => {
     expect(rulesContent).toContain('function preservesDataSchema()');
     expect(rulesContent).toContain('function preservesSyncProtocol()');
     expect(rulesContent).toContain('incomingData()._sync.protocolVersion >= resource.data._sync.protocolVersion');
-    expect(rulesContent).toContain("!('_schemaVersion' in resource.data)");
-    expect(rulesContent).toContain("'_schemaVersion' in incomingData()");
+    expect(rulesContent).toContain("'_schemaVersion' in resource.data");
+    expect(rulesContent).toContain("incomingData()._schemaVersion >= resource.data._schemaVersion");
     expect(rulesContent.match(/isValidDataSchema\(incomingData\(\)\)/g)?.length).toBe(3);
     expect(rulesContent.match(/preservesDataSchema\(\)/g)?.length).toBe(4);
     expect(rulesContent.match(/preservesSyncProtocol\(\)/g)?.length).toBe(4);

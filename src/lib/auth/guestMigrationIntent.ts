@@ -1,9 +1,8 @@
 import type { User } from 'firebase/auth';
-import { readBrowserValueStrict, removeBrowserValue, tryWriteBrowserValue, writeBrowserJson } from '../sync/browserStorage';
+import { readBrowserValueStrict, removeBrowserValue, writeBrowserJson } from '../sync/browserStorage';
 import type { GuestMigrationPolicy } from '../../contexts/AuthContextDef';
 
 const KEY = 'guest_migration_intent_v1';
-const LEGACY_POLICY_KEY = 'guest_migration_policy';
 const MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
 export type GuestMigrationMethod = 'email' | 'google' | 'recovery';
@@ -85,8 +84,6 @@ export function beginGuestMigrationIntent(
     if (email) intent.expectedEmail = email;
     if (options.uid) intent.expectedUid = options.uid;
     writeBrowserJson(KEY, intent);
-    // Compatibility only for an older in-flight client. New code never trusts this key as authority.
-    tryWriteBrowserValue(LEGACY_POLICY_KEY, policy);
     return intent;
 }
 
@@ -125,5 +122,4 @@ export function clearGuestMigrationIntent(expectedId?: string): void {
         if (current.id !== expectedId) throw new Error('Il tentativo di trasferimento corrente è cambiato.');
     }
     removeBrowserValue(KEY);
-    try { removeBrowserValue(LEGACY_POLICY_KEY); } catch { /* legacy cleanup is non-authoritative */ }
 }

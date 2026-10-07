@@ -25,7 +25,7 @@ describe('guest -> account skip policy', () => {
         });
     });
 
-    it.each([undefined, 'corrupt'])('fails closed when migration policy is %s', async storedPolicy => {
+    it('fails closed when the authoritative migration intent is absent', async () => {
         const guest = parse({
             profile: { height: '175' },
             routines: [{ id: 'guest-routine', name: 'Guest', exercises: [] }],
@@ -33,7 +33,6 @@ describe('guest -> account skip policy', () => {
 
         await initializeLocal('guest', guest);
         localStorage.setItem('logbook_is_guest', 'true');
-        if (storedPolicy !== undefined) localStorage.setItem('guest_migration_policy', storedPolicy);
         useAppStore.getState().setUserData(guest);
 
         render(<AuthProvider><div>app</div></AuthProvider>);
@@ -81,7 +80,7 @@ describe('guest -> account skip policy', () => {
         const guestEnvelope = await readLocal('guest');
         expect(guestEnvelope?.data.routines.map(routine => routine.id)).toEqual(['guest-routine']);
         expect(localStorage.getItem('logbook_is_guest')).toBeNull();
-        expect(localStorage.getItem('guest_migration_policy')).toBeNull();
+        expect(localStorage.getItem('guest_migration_intent_v1')).toBeNull();
         expect(DB.loadCloudPayload).toHaveBeenCalledTimes(1);
     });
 });

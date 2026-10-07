@@ -11,6 +11,7 @@ import { DB as RealDB } from '../../src/lib/db';
 import { dbState as __testDbState } from '../../src/lib/db/db_core';
 import { adoptReplicaCheckpoint, readLocal, initializeLocal, commitLocal } from '../../src/lib/sync/localRepository';
 import { registerReplica } from './replicaHarness';
+import { CURRENT_DATA_SCHEMA, CURRENT_SYNC_PROTOCOL } from '../../src/lib/schemaEvolution';
 const DB = {
     ...RealDB
 };
@@ -74,7 +75,14 @@ it('adopts independent remote fields without overwriting them with the old local
     const base = data({ profile: { height: '170', gender: 'M' } });
     const desired = data({ profile: { height: '171', gender: 'M' } });
     await initializeLocal('user:a', base);
-    await setDoc(doc(sdk.db, 'users/a'), projectDocuments(data({ profile: { height: '170', gender: 'F' } }), catalog).get('')!);
+    const remoteBusiness = projectDocuments(data({ profile: { height: '170', gender: 'F' } }), catalog).get('')!;
+    await env.withSecurityRulesDisabled(async context => {
+        await setDoc(doc(context.firestore(), 'users/a'), {
+            ...remoteBusiness,
+            _schemaVersion: CURRENT_DATA_SCHEMA,
+            _sync: { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {} },
+        });
+    });
     await prepareReplica();
     await commitLocal('user:a', desired, base);
     expect((await DB.saveUserData(desired)).status).toBe('synced');

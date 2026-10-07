@@ -202,12 +202,17 @@ export function normalizeCloudDocument(raw: unknown, kind = 'Firestore data sche
     try {
         if (!isRecord(raw)) throw new Error('Documento Firestore non valido.');
 
-        // Missing marker permanently means the schema-1 baseline, even after future schema bumps.
-        const sourceVersion = raw._schemaVersion === undefined
-            ? BASELINE_DATA_SCHEMA
-            : assertVersionNumber(raw._schemaVersion, kind);
+        if (raw._schemaVersion === undefined) {
+            throw new LegacyVersionError(kind, 0, BASELINE_DATA_SCHEMA);
+        }
+        const sourceVersion = assertVersionNumber(raw._schemaVersion, kind);
+        if (sourceVersion < BASELINE_DATA_SCHEMA) throw new LegacyVersionError(kind, sourceVersion, BASELINE_DATA_SCHEMA);
+        if (sourceVersion > CURRENT_DATA_SCHEMA) throw new FutureVersionError(kind, sourceVersion, CURRENT_DATA_SCHEMA);
 
         const { _schemaVersion: _ignoredVersion, _sync, ...business } = raw;
+        if (_sync === undefined) {
+            throw new LegacyVersionError(`${kind} sync protocol`, 0, BASELINE_SYNC_PROTOCOL);
+        }
         const sourceSyncVersion = readSyncProtocol(_sync, `${kind} sync protocol`);
 
         const migrated = migrateFromBaseline<DataMigrationCarrier>(
@@ -280,6 +285,9 @@ export function withCurrentDataSchema(
     sync?: unknown,
 ): Record<string, unknown> {
     try {
+        if (sync === undefined) {
+            throw new LegacyVersionError('Protocollo sync in scrittura', 0, BASELINE_SYNC_PROTOCOL);
+        }
         const sourceSyncVersion = readSyncProtocol(sync, 'Protocollo sync in scrittura');
         const normalizedSync = normalizeSyncProtocol(sync, sourceSyncVersion, 'Protocollo sync in scrittura');
         return {

@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { getDoc, getDocs, writeBatch } from 'firebase/firestore';
-import { get as getIdb, set as setIdb } from 'idb-keyval';
 
 vi.unmock('../src/lib/db');
 
@@ -69,6 +68,8 @@ describe('DB Persistence for Training Cycles and Planning', () => {
 
     it('DB.loadUserData retrieves trainingCycles and activeCycleId from Firestore', async () => {
         const mockFirestoreDoc = {
+            _schemaVersion: 1,
+            _sync: { protocolVersion: 3, clock: {}, fields: {} },
             profile: { name: 'Mario' },
             library: [],
             routines: [],
@@ -109,28 +110,14 @@ describe('DB Persistence for Training Cycles and Planning', () => {
         expect(loadedData?.activeCycleId).toBe('cycle_loaded');
     });
 
-    it('DB.loadCloudPayload only cleans the legacy background sync failure marker', async () => {
-        await setIdb('sync_failed', true);
-        await setIdb('pending_sync_payload', { stale: true });
-        await setIdb('pending_sync_token', 'stale-token');
-        vi.mocked(getDoc).mockResolvedValueOnce({
-            exists: () => true,
-            data: () => ({ profile: { name: 'Mario' } })
-        } as any);
-
-        const payload = await DB.loadCloudPayload();
-
-        expect(payload).not.toBeNull();
-        expect(payload).not.toHaveProperty('backgroundSyncFailed');
-        expect(await getIdb('sync_failed')).toBeUndefined();
-        expect(await getIdb('pending_sync_payload')).toBeUndefined();
-        expect(await getIdb('pending_sync_token')).toBeUndefined();
-    });
-
     it('DB.loadUserData defaults trainingCycles to [] and activeCycleId to null if absent', async () => {
         vi.mocked(getDoc).mockResolvedValueOnce({
             exists: () => true,
-            data: () => ({ profile: { name: 'Mario' } })
+            data: () => ({
+                profile: { name: 'Mario' },
+                _schemaVersion: 1,
+                _sync: { protocolVersion: 3, clock: {}, fields: {} },
+            })
         } as any);
 
         vi.mocked(getDocs).mockResolvedValue({

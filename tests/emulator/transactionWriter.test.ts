@@ -6,7 +6,7 @@ vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackEvent: vi.fn
 
 import { applyDocumentChanges } from '../../src/lib/sync/transactionWriter';
 import { type SemanticOperation } from '../../src/lib/sync/semanticProjection';
-import { CURRENT_DATA_SCHEMA, CURRENT_SYNC_PROTOCOL, FutureVersionError } from '../../src/lib/schemaEvolution';
+import { CURRENT_DATA_SCHEMA, CURRENT_SYNC_PROTOCOL, FutureVersionError, LegacyVersionError } from '../../src/lib/schemaEvolution';
 import { registerReplica } from './replicaHarness';
 
 let env: RulesTestEnvironment;
@@ -34,18 +34,22 @@ it('1. V3 API: writes business data, FieldStamp metadata and the current data sc
     expect(saved._sync.fields['profile/height']).toMatchObject({ actorId: 's00', seq: 1, clock: { s00: 1 } });
 });
 
-it('1b. accepts an unversioned schema-1 document and lazily marks it on the next legitimate write', async () => {
+it('1b. distinguishes an absent first-account document from a persisted markerless document', async () => {
     const db = env.authenticatedContext('a').firestore();
-    await setDoc(doc(db, 'users/a'), { profile: { name: 'Baseline' } });
     const replica = await registerReplica(db, 'a');
 
     await applyDocumentChanges(db, 'a', [
         { docPath: '', path: ['profile', 'height'], value: '180', isDelete: false, actorId: 's00', seq: 1, clock: { s00: 1 } }
     ], () => true, replica);
+    expect((await getDoc(doc(db, 'users/a'))).data()?._schemaVersion).toBe(CURRENT_DATA_SCHEMA);
 
-    const saved = (await getDoc(doc(db, 'users/a'))).data()!;
-    expect(saved.profile).toMatchObject({ name: 'Baseline', height: '180' });
-    expect(saved._schemaVersion).toBe(CURRENT_DATA_SCHEMA);
+    await env.withSecurityRulesDisabled(async context => {
+        await setDoc(doc(context.firestore(), 'users/a'), { profile: { name: 'Unsupported' } });
+    });
+
+    await expect(applyDocumentChanges(db, 'a', [
+        { docPath: '', path: ['profile', 'height'], value: '181', isDelete: false, actorId: 's00', seq: 2, clock: { s00: 2 } }
+    ], () => true, replica)).rejects.toThrow(LegacyVersionError);
 });
 
 it('1c. refuses a future remote schema before semantic merge or write', async () => {
@@ -83,8 +87,15 @@ it('2. V3 API: replay is idempotent', async () => {
 
 it('2b. V3 API: contention smoke test converges to the semantic operation', async () => {
     const db = env.authenticatedContext('a').firestore();
-    await setDoc(doc(db, 'users/a'), { profile: { name: 'Initial' } });
     const replica = await registerReplica(db, 'a');
+    const writer0 = { slot: replica.slot, replicaId: replica.replicaId, generation: replica.generation, seq: 0 };
+    await env.withSecurityRulesDisabled(async context => {
+        await setDoc(doc(context.firestore(), 'users/a'), {
+            profile: { name: 'Initial' },
+            _schemaVersion: CURRENT_DATA_SCHEMA,
+            _sync: { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {}, writer: writer0 },
+        });
+    });
 
     const ops: SemanticOperation[] = [
         { docPath: '', path: ['profile', 'name'], value: 'TestRetry', isDelete: false, actorId: 's00', seq: 1, clock: { s00: 1 } }
@@ -92,7 +103,11 @@ it('2b. V3 API: contention smoke test converges to the semantic operation', asyn
 
     const promise = applyDocumentChanges(db, 'a', ops, () => true, replica);
     await env.withSecurityRulesDisabled(async context => {
-        await setDoc(doc(context.firestore(), 'users/a'), { profile: { name: 'Interfering' } });
+        await setDoc(doc(context.firestore(), 'users/a'), {
+            profile: { name: 'Interfering' },
+            _schemaVersion: CURRENT_DATA_SCHEMA,
+            _sync: { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {}, writer: writer0 },
+        });
     });
     await promise;
 
@@ -164,6 +179,7 @@ it('4. V3 API: remote FieldStamp can defeat a concurrent local operation', async
     await env.withSecurityRulesDisabled(async context => {
         await setDoc(doc(context.firestore(), 'users/a'), {
             profile: { height: '190' },
+            _schemaVersion: CURRENT_DATA_SCHEMA,
             _sync: {
                 protocolVersion: CURRENT_SYNC_PROTOCOL,
                 clock: { z: 1 },

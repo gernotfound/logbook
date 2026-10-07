@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import {
     UserDataSchema,
     UserProfileSchema,
@@ -28,7 +28,6 @@ import {
     TrainingCycleSchema,
     defaultUserDataFallback
 } from '../src/lib/schema';
-import { useAppStore } from '../src/store/useAppStore';
 import type { UserData } from '../src/types';
 
 describe('Zod Schema Resilience & Defensive Catches', () => {
@@ -348,73 +347,6 @@ describe('Zod Schema Resilience & Defensive Catches', () => {
             expect(parsed.nutritionPlanning?.avgMacros?.carbsPerKg).toBe(3.5);
             expect(parsed.nutritionPlanning?.onBoost?.carbsPercent).toBe(20);
             expect(parsed.nutritionPlanning?.normocalorica?.kcal).toBe(2600);
-        });
-    });
-
-    describe('Runtime Gateway in useAppStore & LocalStorage', () => {
-        beforeEach(() => {
-            localStorage.clear();
-        });
-
-        it('loads valid user data correctly from localStorage', () => {
-            const validData: UserData = {
-                profile: { dob: '1990-01-01', height: '180' },
-                library: [{ id: 'ex1', name: 'Squat', setsCount: 3, sets: [] }],
-                routines: [{ id: 'r1', name: 'Legs', exercises: [] }],
-                history: [],
-                nutrition: {},
-                customFoods: [],
-                activeWorkout: null,
-                trainingCycles: [],
-                activeCycleId: null,
-                supplements: []
-            };
-
-            localStorage.setItem('logbook_cached_user_data', JSON.stringify(validData));
-            
-            // Trigger state reset to re-read initial data
-            useAppStore.setState({ userData: null });
-            const parsed = UserDataSchema.parse(validData) as unknown as UserData;
-            expect(parsed.profile?.height).toBe('180');
-            expect(parsed.library?.[0].name).toBe('Squat');
-        });
-
-        it('gracefully recovers from severely corrupted localStorage JSON payload', () => {
-            const corruptedPayload = {
-                profile: 'not an object',
-                library: 'broken',
-                routines: 9999,
-                history: null,
-                nutrition: 'bad',
-                trainingCycles: 'none'
-            };
-
-            localStorage.setItem('logbook_cached_user_data', JSON.stringify(corruptedPayload));
-            const cached = localStorage.getItem('logbook_cached_user_data');
-            const parsed = JSON.parse(cached!);
-            const sanitized = UserDataSchema.parse(parsed) as unknown as UserData;
-
-            expect(sanitized).toBeDefined();
-            expect(sanitized.library).toEqual([]);
-            expect(sanitized.routines).toEqual([]);
-            expect(sanitized.history).toEqual([]);
-            expect(sanitized.nutrition).toEqual({});
-            expect(sanitized.trainingCycles).toEqual([]);
-        });
-
-        it('gracefully handles non-JSON corrupted string in localStorage without crashing', () => {
-            localStorage.setItem('logbook_cached_user_data', '<<<NOT JSON>>>');
-            expect(() => {
-                try {
-                    const cached = localStorage.getItem('logbook_cached_user_data');
-                    if (!cached) return null;
-                    const parsed = JSON.parse(cached);
-                    if (!parsed || typeof parsed !== 'object') return null;
-                    return UserDataSchema.parse(parsed);
-                } catch {
-                    return null;
-                }
-            }).not.toThrow();
         });
     });
 

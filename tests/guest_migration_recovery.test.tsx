@@ -86,7 +86,7 @@ describe('guest migration crash recovery boundary', () => {
         await waitFor(() => expect(screen.getByTestId('migration-status').textContent).toBe('failed'));
 
         expect(localStorage.getItem('logbook_is_guest')).toBe('true');
-        expect(localStorage.getItem('guest_migration_policy')).toBe('merge');
+        expect(localStorage.getItem('guest_migration_intent_v1')).not.toBeNull();
         expect(storageOwner()).toBe('guest');
         expect(screen.getByTestId('guest-state').textContent).toBe('guest');
 
@@ -121,7 +121,7 @@ describe('guest migration crash recovery boundary', () => {
         await waitFor(() => expect(screen.getByTestId('migration-status').textContent).toBe('idle'));
 
         expect(localStorage.getItem('logbook_is_guest')).toBeNull();
-        expect(localStorage.getItem('guest_migration_policy')).toBeNull();
+        expect(localStorage.getItem('guest_migration_intent_v1')).toBeNull();
         expect(storageOwner()).toBe(`user:${user.uid}`);
 
         const guestEnvelope = await localRepository.readLocal('guest');
@@ -161,7 +161,7 @@ describe('guest migration crash recovery boundary', () => {
         expect(authenticatedEnvelope?.pending.length).toBeGreaterThan(0);
         expect(guestEnvelope?.data.routines?.map(routine => routine.id)).toContain('guest-routine');
         expect(localStorage.getItem('logbook_is_guest')).toBeNull();
-        expect(localStorage.getItem('guest_migration_policy')).toBeNull();
+        expect(localStorage.getItem('guest_migration_intent_v1')).toBeNull();
         expect(storageOwner()).toBe(`user:${user.uid}`);
         expect(screen.getByTestId('guest-state').textContent).toBe('account');
     });

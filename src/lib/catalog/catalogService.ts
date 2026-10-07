@@ -4,7 +4,7 @@
  * Part of Requirement R3: Global Catalog, Offline Fallback & Separate Cache.
  * 
  * Architectural Highlights:
- * 1. Dedicated IndexedDB Key ('logbook_cached_global_catalog') completely separate from 'logbook_cached_user_data'.
+ * 1. Dedicated IndexedDB Key ('logbook_cached_global_catalog') completely separate from owner-scoped user envelopes.
  * 2. O(1) Manifest Verification: Single Firestore document read to check version freshness.
  *    If version matches, zero additional reads are performed (Spark 50k read limit preservation).
  * 3. Seed Fallback: Instantaneous offline/guest bootstrap using bundled seedExercises.json & seedFoods.json.

@@ -127,7 +127,7 @@ I boundary bulk — bootstrap/initialize, hydration, guest→account merge, impo
 
 **MUST:** nessuna ottimizzazione del debounce cloud può posticipare la persistenza IndexedDB immediata.
 
-**MUST:** gli helper legacy `syncHistoryMonths` / `syncNutritionMonths` non costituiscono la pipeline normativa di write. Le write utente correnti passano da journal + `transactionWriter`.
+**MUST:** `transactionWriter` è l'unico writer client dei documenti business Firestore root/mensili. I vecchi helper diretti `syncHistoryMonths` / `syncNutritionMonths` sono ritirati: nessun percorso client può scrivere documenti business privi di `_schemaVersion` e `_sync` Protocol 3.
 
 ### Replica checkpoint, lease e stable frontier
 

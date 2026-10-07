@@ -398,7 +398,6 @@ vi.mock('../src/lib/db', () => ({
       localStorage.removeItem('draft_routine');
       localStorage.removeItem('logbook_awaiting_redirect');
       localStorage.removeItem('logbook_telemetry_queue');
-      localStorage.removeItem('guest_migration_policy');
       localStorage.removeItem('guest_migration_intent_v1');
       const ownerUid = owner.startsWith('user:') ? owner.slice('user:'.length) : null;
       if (ownerUid && localStorage.getItem('logbook_guest_migration_sync_recovery') === ownerUid) {
