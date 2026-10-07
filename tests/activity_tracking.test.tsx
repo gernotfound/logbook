@@ -14,6 +14,7 @@ import { Exporter } from '../src/lib/export';
 import { useDialogStore } from '../src/store/useDialogStore';
 import { useAppStore } from '../src/store/useAppStore';
 import { useActivityTracking } from '../src/hooks/useActivityTracking';
+import { storageOwner } from '../src/lib/sync/session';
 import type { CachedGlobalCatalog, CardioSession, UserData } from '../src/types';
 
 const catalog: CachedGlobalCatalog = {
@@ -35,7 +36,7 @@ function nutritionDayFromDocs(documents: Map<string, any>, date = '2026-09-24') 
 
 beforeEach(() => {
     useAppStore.getState().resetStore();
-    useAppStore.setState({ userData: parse({}) });
+    useAppStore.setState({ userData: parse({}), dataOwner: storageOwner() });
 });
 afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
 
