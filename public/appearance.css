@@ -189,13 +189,31 @@ body:has(.brand-loading-screen) {
   margin-inline: auto;
 }
 
+:root[data-theme="light"] .brand-loading-screen {
+  background: #ffffff;
+  color: #161719;
+}
+
 :root[data-theme="light"] .brand-loading-screen__mascot {
   filter: invert(1);
 }
 
+:root[data-theme="light"] .brand-loading-screen__wordmark {
+  color: #161719;
+}
+
 @media (prefers-color-scheme: light) {
+  :root:not([data-theme]) .brand-loading-screen {
+    background: #ffffff;
+    color: #161719;
+  }
+
   :root:not([data-theme]) .brand-loading-screen__mascot {
     filter: invert(1);
+  }
+
+  :root:not([data-theme]) .brand-loading-screen__wordmark {
+    color: #161719;
   }
 }
 
