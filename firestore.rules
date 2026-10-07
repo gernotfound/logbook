@@ -97,10 +97,17 @@ service cloud.firestore {
     }
 
     function isAuthorizedSyncWrite(userId, docData) {
-      // Pre-launch clean cut: every persisted account write starts on Protocol 3
-      // and is attributable to an active replica generation.
-      return '_sync' in docData
-        && hasProtocol3Writer(userId, docData);
+      // Pre-launch clean cut: Protocol 1/2 are retired. A document without causal
+      // metadata is allowed only before the account creates its Protocol 3 control;
+      // once causal sync starts, every write is fenced to an active replica.
+      return (
+          !syncControlExistsAfter(userId)
+          && !('_sync' in docData)
+        )
+        || (
+          '_sync' in docData
+          && hasProtocol3Writer(userId, docData)
+        );
     }
 
     function hasAuthorizedSyncDelete(userId) {
