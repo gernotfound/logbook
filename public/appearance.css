@@ -181,7 +181,7 @@ body:has(.brand-loading-screen) {
   transform-origin: center;
 }
 
-.brand-loading-screen__icon {
+.brand-loading-screen__mascot {
   width: min(88vw, 28.75rem);
   aspect-ratio: 1;
   display: block;
