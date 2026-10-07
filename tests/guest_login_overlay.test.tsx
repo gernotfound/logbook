@@ -11,7 +11,7 @@ const authState = vi.hoisted(() => ({
     loginAsGuest: async () => {},
     linkGoogleAccount: async () => {},
     retryGuestMigration: vi.fn(async () => {}),
-    logout: async () => {},
+    logout: vi.fn(async () => {}),
     loginWithEmail: async () => {},
     registerWithEmail: async () => {},
 }));
@@ -81,6 +81,7 @@ describe('guest login overlay lifecycle', () => {
         authState.isGuest = true;
         authState.guestMigrationStatus = 'idle';
         authState.retryGuestMigration.mockClear();
+        authState.logout.mockClear();
         useAppStore.getState().resetStore({ force: true });
         useAppStore.getState().setSyncing(false);
     });
@@ -117,6 +118,17 @@ describe('guest login overlay lifecycle', () => {
         });
         expect(screen.queryByTestId('guest-login-box')).toBeNull();
         expect(screen.getByTestId('bottom-nav')).toBeTruthy();
+    });
+
+    it('shows an exit action next to login and delegates to the guarded guest logout flow', async () => {
+        render(<App />);
+
+        expect(screen.getByRole('button', { name: 'Accedi' })).toBeTruthy();
+        fireEvent.click(screen.getByRole('button', { name: 'Esci' }));
+
+        await waitFor(() => {
+            expect(authState.logout).toHaveBeenCalledWith({ mode: 'normal' });
+        });
     });
 
     it('restores the guest login overlay from sessionStorage after a remount', () => {

@@ -76,6 +76,29 @@ function persistGuestLoginOverlayState(visible: boolean): void {
   }
 }
 
+function GuestBanner({ onLogin }: { onLogin: () => void }) {
+  const { logout } = useAuth();
+
+  return (
+    <div className="guest-banner">
+      <AlertTriangle size={20} aria-hidden="true" />
+      <span className="guest-banner-text">Modalità locale · I dati sono solo su questo dispositivo</span>
+      <div className="guest-banner-actions">
+        <button type="button" className="btn btn-small" onClick={onLogin}>
+          Accedi
+        </button>
+        <button
+          type="button"
+          className="btn btn-small"
+          onClick={() => { void logout({ mode: 'normal' }); }}
+        >
+          Esci
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function App() {
   const { currentUser, loading, isGuest, guestMigrationStatus, retryGuestMigration } = useAuth();
   const syncing = useAppStore(state => state.syncing);
@@ -409,15 +432,7 @@ function App() {
           <LoginBox onCancel={closeGuestLogin} />
         </div>
       )}
-      {isGuest && (
-        <div className="guest-banner">
-          <AlertTriangle size={20} aria-hidden="true" />
-          <span className="guest-banner-text">Modalità locale · I dati sono solo su questo dispositivo</span>
-          <button type="button" className="btn btn-small" onClick={openGuestLogin}>
-            Accedi
-          </button>
-        </div>
-      )}
+      {isGuest && <GuestBanner onLogin={openGuestLogin} />}
       {showSyncIndicator && (
         <div
           className="sync-indicator"

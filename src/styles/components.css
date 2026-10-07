@@ -321,7 +321,15 @@ details[open] > .technique-summary::after {
 }
 
 .guest-banner-text { flex: 1; min-width: 0; font-size: var(--font-size-secondary); line-height: 1.4; text-align: center; }
+.guest-banner-actions { display: flex; gap: 0.5rem; flex-shrink: 0; }
 .guest-banner .btn { background: var(--warning-color); color: var(--on-warning); border-color: var(--warning-color); margin: 0; }
+
+@media (max-width: 30rem) {
+    .guest-banner { flex-wrap: wrap; }
+    .guest-banner-text { text-align: left; }
+    .guest-banner-actions { width: 100%; }
+    .guest-banner-actions .btn { flex: 1; }
+}
 
 .auth-panel {
     width: 100%;
