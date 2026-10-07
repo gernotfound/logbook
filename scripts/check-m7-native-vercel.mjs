@@ -251,7 +251,7 @@ if (firestoreVerifier.includes("searchParams.set('pageSize'")) {
 if (!vite.includes("process.env.FIREBASE_HOSTING_DEPLOY === 'production'")) failures.push('Sentry production source-map build must be bound to Firebase Hosting production');
 if (vite.includes("process.env.VERCEL_ENV === 'production'")) failures.push('Vercel backend deployments must not trigger frontend Sentry source-map builds');
 
-for (const output of ['dist/sw.js', 'dist/manifest.webmanifest', 'dist/index.html', 'dist/icon.svg', 'dist/favicon.ico', 'dist/social-share.png']) {
+for (const output of ['dist/sw.js', 'dist/manifest.webmanifest', 'dist/index.html', 'dist/icon.svg', 'dist/favicon.ico', 'dist/social-share.png', 'dist/loading-wait.svg']) {
   if (!existsSync(output)) failures.push(`PWA build artifact missing after verify:m6 build: ${output}`);
 }
 
@@ -278,11 +278,12 @@ if (existsSync('dist/index.html')) {
     'name="twitter:title" content="TheLogBook"',
     'name="twitter:description" content="Traccia i tuoi allenamenti, l\'alimentazione e i progressi corporei con TheLogBook."',
     'name="twitter:image:alt" content="Icona TheLogBook con stickman chef su sfondo nero"',
-    '<h1>TheLogBook</h1>',
   ];
   for (const branding of requiredBranding) {
     if (!builtHtml.includes(branding)) failures.push(`built HTML missing canonical TheLogBook branding: ${branding}`);
   }
+  if (!builtHtml.includes('<h1>Caricamento</h1>')) failures.push('built HTML must render the approved loading label');
+  if (!builtHtml.includes('loading-wait.svg?v=20261007-waiting-mascot')) failures.push('built HTML must preload and render the approved waiting mascot');
   if (!builtHtml.includes('https://thelogbook.web.app/social-share.png?v=20261006-vector-master')) failures.push('built HTML must expose the revisioned social share card URL');
   if (!builtHtml.includes('property="og:image:type" content="image/png"')) failures.push('built HTML must declare the lossless PNG social card type');
   if (!builtHtml.includes('name="twitter:card" content="summary_large_image"')) failures.push('built HTML must request a large Twitter/social preview card');
