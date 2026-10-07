@@ -261,7 +261,7 @@ function canonicalStamp(stamp: FieldStamp): FieldStamp {
                 actorId: candidate.actorId,
                 seq: candidate.seq,
                 value: structuredClone(candidate.value),
-                    ...(candidate.guard ? { guard: structuredClone(candidate.guard) } : {}),
+                ...(candidate.guard ? { guard: structuredClone(candidate.guard) } : {}),
             })),
         } : {}),
     };
@@ -434,7 +434,7 @@ export function applySemanticOperations(
                         seq: candidate.seq,
                     },
                     value: structuredClone(candidate.value),
-                            guard: candidate.guard ? structuredClone(candidate.guard) : undefined,
+                    guard: candidate.guard ? structuredClone(candidate.guard) : undefined,
                     source: 'hidden',
                 });
             }
@@ -480,7 +480,7 @@ export function applySemanticOperations(
             if (remoteStamp?.deleted) {
                 deleteCandidates.push({
                     stamp: fieldStamp(remoteStamp),
-                        guard: remoteStamp.guard ? structuredClone(remoteStamp.guard) : undefined,
+                    guard: remoteStamp.guard ? structuredClone(remoteStamp.guard) : undefined,
                     remote: true,
                 });
             }
