@@ -94,5 +94,30 @@ describe('Semantic Merge V3 regressions', () => {
         } })).toThrow('field clock');
         expect(() => parseSyncMeta({ protocolVersion: CURRENT_SYNC_PROTOCOL, clock: { A: 1.5 }, fields: {} })).toThrow('seq');
         expect(() => parseSyncMeta({ protocolVersion: CURRENT_SYNC_PROTOCOL + 1, clock: {}, fields: {} })).toThrow('Unsupported protocolVersion');
+        expect(() => parseSyncMeta({
+            protocolVersion: CURRENT_SYNC_PROTOCOL,
+            clock: { A: 1 },
+            fields: {
+                'profile/name': { actorId: 'A', seq: 1, clock: { A: 1 }, legacyClock: { A: 1 } },
+            },
+        })).toThrow('Unsupported legacy FieldStamp metadata');
+        expect(() => parseSyncMeta({
+            protocolVersion: CURRENT_SYNC_PROTOCOL,
+            clock: { A: 1, B: 1 },
+            fields: {
+                'profile/name': {
+                    actorId: 'A',
+                    seq: 1,
+                    clock: { A: 1 },
+                    candidates: [{
+                        actorId: 'B',
+                        seq: 1,
+                        clock: { B: 1 },
+                        value: 'hidden',
+                        legacyClock: { B: 1 },
+                    }],
+                },
+            },
+        })).toThrow('Unsupported legacy FieldCandidate metadata');
     });
 });
