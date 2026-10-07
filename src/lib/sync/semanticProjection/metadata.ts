@@ -57,6 +57,7 @@ function parseFieldCandidate(raw: unknown, documentClock: VectorClock, deleteClo
     if (!coversVectorClock(documentClock, clock)) throw new Error('Document clock does not cover FieldCandidate');
     if (deleteClock && !coversVectorClock(clock, deleteClock)) throw new Error('FieldCandidate does not cover delete barrier');
     if (!Object.hasOwn(raw, 'value') || raw.value === undefined) throw new Error('Invalid FieldCandidate value');
+    if ('legacyClock' in raw) throw new Error('Unsupported legacy FieldCandidate metadata');
     const guard = parseGuard(raw.guard, 'FieldCandidate');
     return {
         clock,
@@ -95,6 +96,8 @@ export function parseSyncMeta(raw: unknown): SyncMeta {
             if (typeof stampRaw.deleted !== 'boolean') throw new Error('Invalid deleted flag in FieldStamp');
             fieldStamp.deleted = stampRaw.deleted;
         }
+
+        if ('legacyClock' in stampRaw) throw new Error('Unsupported legacy FieldStamp metadata');
 
         if ('deleteClock' in stampRaw) {
             const deleteClock = parseVectorClock(stampRaw.deleteClock, 'delete clock');
