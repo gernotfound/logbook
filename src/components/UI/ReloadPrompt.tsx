@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useRegisterSW } from 'virtual:pwa-register/react';
 import { prepareForReload } from '../../lib/sync/reloadBarrier';
 import { isCurrentSession } from '../../lib/sync/session';
+import { checkForWaitingServiceWorker } from '../../lib/pwaUpdate';
 
 export const ReloadPrompt: React.FC = () => {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -72,15 +73,11 @@ export const ReloadPrompt: React.FC = () => {
           navigator.serviceWorker.getRegistration().then(reg => {
             if (reg && typeof reg.update === 'function') {
               try {
-                if (reg.waiting) setNeedRefresh(true);
-                const updateRes = reg.update();
-                if (updateRes && typeof updateRes.then === 'function') {
-                  updateRes
-                    .then(() => {
-                      if (reg.waiting) setNeedRefresh(true);
-                    })
-                    .catch(err => console.log('SW visibility update error:', err));
-                }
+                void checkForWaitingServiceWorker(reg)
+                  .then(waiting => {
+                    if (waiting) setNeedRefresh(true);
+                  })
+                  .catch(err => console.log('SW visibility update error:', err));
               } catch (err) {
                 console.log('SW visibility update synchronous error:', err);
               }
