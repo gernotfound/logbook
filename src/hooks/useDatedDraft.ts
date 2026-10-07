@@ -57,9 +57,8 @@ export function useDatedDraft<T extends Record<string, string>>(kind: string, da
     });
 
     const persist = (draftKey: string, value: T) => {
-        try {
-            localStorage.setItem(draftKey, JSON.stringify(value));
-        } catch (error) {
+        try { localStorage.setItem(draftKey, JSON.stringify(value)); }
+        catch (error) {
             useAppStore.getState().setSaveError('Bozza conservata solo in memoria: archivio del dispositivo non disponibile.');
             throw error;
         }
