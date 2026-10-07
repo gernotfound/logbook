@@ -33,8 +33,22 @@ describe('public TheLogBook branding', () => {
     expect(app).not.toContain('className="app-loading"');
     expect(appearanceCss).toContain('background: #000000;');
     expect(appearanceCss).toContain('color: #ffffff;');
+    expect(appearanceCss).toContain(`:root[data-theme="light"] .brand-loading-screen {
+  background: #ffffff;
+  color: #161719;
+}`);
     expect(appearanceCss).toContain(':root[data-theme="light"] .brand-loading-screen__mascot');
+    expect(appearanceCss).toContain(`:root[data-theme="light"] .brand-loading-screen__wordmark {
+  color: #161719;
+}`);
+    expect(appearanceCss).toContain(`:root:not([data-theme]) .brand-loading-screen {
+    background: #ffffff;
+    color: #161719;
+  }`);
     expect(appearanceCss).toContain(':root:not([data-theme]) .brand-loading-screen__mascot');
+    expect(appearanceCss).toContain(`:root:not([data-theme]) .brand-loading-screen__wordmark {
+    color: #161719;
+  }`);
     expect(appearanceCss).toContain('filter: invert(1);');
     expect(appearanceCss).toContain('--brand-loading-scale: 0.72;');
     expect(appearanceCss).toContain('transform: translateY(var(--brand-loading-offset-y)) scale(var(--brand-loading-scale));');
