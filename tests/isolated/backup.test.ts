@@ -40,6 +40,13 @@ describe('versioned backup and non-mutating restore', () => {
         expect(() => decodeImport(legacyV2, 'guest')).toThrow(LegacyVersionError);
     });
 
+    it('rejects pre-launch sync protocols in an otherwise current backup container', () => {
+        const base = createBackup(parse({}), 'guest') as any;
+        for (const syncProtocolVersion of [1, 2]) {
+            expect(() => decodeImport({ ...base, syncProtocolVersion }, 'guest')).toThrow(LegacyVersionError);
+        }
+    });
+
     it('rejects unknown future backup/data/sync dimensions', () => {
         const base = createBackup(parse({}), 'guest') as any;
         expect(() => decodeImport({ ...base, version: CURRENT_BACKUP_SCHEMA + 1 }, 'guest')).toThrow(FutureVersionError);
