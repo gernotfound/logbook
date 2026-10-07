@@ -155,20 +155,26 @@ describe('Schema Evolution registry', () => {
     it('rejects persisted Firestore documents missing the current schema or sync markers', () => {
         expect(() => normalizeCloudDocument({
             profile: { name: 'A' },
-            _sync: { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {} },
+            _sync: { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {}, writer: { slot: 's00', replicaId: 'test-replica', generation: 1, seq: 0 } },
         })).toThrow(LegacyVersionError);
 
         expect(() => normalizeCloudDocument({
             profile: { name: 'A' },
             _schemaVersion: CURRENT_DATA_SCHEMA,
         })).toThrow(LegacyVersionError);
+
+        expect(() => normalizeCloudDocument({
+            profile: { name: 'A' },
+            _schemaVersion: CURRENT_DATA_SCHEMA,
+            _sync: { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {} },
+        })).toThrow('writer obbligatorio');
     });
 
     it('refuses a future Firestore data schema before business data is consumed', () => {
         expect(() => normalizeCloudDocument({
             _schemaVersion: CURRENT_DATA_SCHEMA + 1,
             profile: { name: 'future' },
-            _sync: { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {} },
+            _sync: { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {}, writer: { slot: 's00', replicaId: 'test-replica', generation: 1, seq: 0 } },
         })).toThrow(FutureVersionError);
     });
 
@@ -181,11 +187,11 @@ describe('Schema Evolution registry', () => {
     });
 
     it('writes current schema and validates current sync protocol outside business data', () => {
-        expect(withCurrentDataSchema({ profile: { name: 'A' } }, { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {} }))
+        expect(withCurrentDataSchema({ profile: { name: 'A' } }, { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {}, writer: { slot: 's00', replicaId: 'test-replica', generation: 1, seq: 0 } }))
             .toEqual({
                 profile: { name: 'A' },
                 _schemaVersion: CURRENT_DATA_SCHEMA,
-                _sync: { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {} },
+                _sync: { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {}, writer: { slot: 's00', replicaId: 'test-replica', generation: 1, seq: 0 } },
             });
     });
 });

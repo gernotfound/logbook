@@ -17,7 +17,7 @@ import { CURRENT_DATA_SCHEMA, CURRENT_SYNC_PROTOCOL, FutureVersionError } from '
 import { invalidateSession } from '../../src/lib/sync/session';
 import type { UserData } from '../../src/types';
 const parse = (value: unknown) => UserDataSchema.parse(value) as unknown as UserData;
-const emptySync = { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {} };
+const emptySync = { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {}, writer: { slot: 's00', replicaId: 'backup-seed', generation: 1, seq: 0 } };
 const currentCloudDoc = (business: Record<string, unknown>, sync: unknown = emptySync) => ({ ...business, _schemaVersion: CURRENT_DATA_SCHEMA, _sync: sync });
 
 beforeEach(async () => {
@@ -98,7 +98,8 @@ it('uses root _sync metadata when replaying pending local operations', async () 
                         actorId,
                         seq: remoteSeq
                     }
-                }
+                },
+                writer: { slot: 's00', replicaId: 'backup-seed', generation: 1, seq: remoteSeq }
             }
         })
     });
@@ -145,7 +146,7 @@ it('fails safe when cloud causal metadata is malformed', async () => {
     await initializeLocal('user:a', base);
     sdk.root.mockResolvedValue({
         exists: () => true,
-        data: () => currentCloudDoc({ profile: { height: '180' } }, { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {} })
+        data: () => currentCloudDoc({ profile: { height: '180' } }, { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: { broken: 'invalid' }, writer: { slot: 's00', replicaId: 'backup-seed', generation: 1, seq: 0 } })
     });
 
     await expect(collectBackupSnapshot(base, true)).rejects.toThrow('Metadati _sync non validi');

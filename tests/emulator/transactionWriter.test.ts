@@ -185,7 +185,8 @@ it('4. V3 API: remote FieldStamp can defeat a concurrent local operation', async
                 clock: { z: 1 },
                 fields: {
                     'profile/height': { clock: { z: 1 }, actorId: 'z', seq: 1 }
-                }
+                },
+                writer: { slot: 's01', replicaId: 'remote-seed', generation: 1, seq: 1 },
             }
         });
     });

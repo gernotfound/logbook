@@ -69,7 +69,7 @@ describe('DB Persistence for Training Cycles and Planning', () => {
     it('DB.loadUserData retrieves trainingCycles and activeCycleId from Firestore', async () => {
         const mockFirestoreDoc = {
             _schemaVersion: 1,
-            _sync: { protocolVersion: 3, clock: {}, fields: {} },
+            _sync: { protocolVersion: 3, clock: {}, fields: {}, writer: { slot: 's00', replicaId: 'test-replica', generation: 1, seq: 0 } },
             profile: { name: 'Mario' },
             library: [],
             routines: [],
@@ -116,7 +116,7 @@ describe('DB Persistence for Training Cycles and Planning', () => {
             data: () => ({
                 profile: { name: 'Mario' },
                 _schemaVersion: 1,
-                _sync: { protocolVersion: 3, clock: {}, fields: {} },
+                _sync: { protocolVersion: 3, clock: {}, fields: {}, writer: { slot: 's00', replicaId: 'test-replica', generation: 1, seq: 0 } },
             })
         } as any);
 

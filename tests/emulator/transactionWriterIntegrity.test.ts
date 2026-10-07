@@ -49,7 +49,7 @@ it('blocks an unrelated root write instead of replacing malformed existing cloud
         profile: { name: 'Baseline' },
         nutritionPlanning: { weight: 'not-a-number' },
         _schemaVersion: 1,
-        _sync: { protocolVersion: 3, clock: {}, fields: {} },
+        _sync: { protocolVersion: 3, clock: {}, fields: {}, writer: { slot: 's01', replicaId: 'remote-seed', generation: 1, seq: 0 } },
     };
 
     await env.withSecurityRulesDisabled(async context => {
@@ -76,7 +76,7 @@ it('blocks a monthly write when another entity in the same shard would be destru
             supplementsIntake: [],
         },
         _schemaVersion: 1,
-        _sync: { protocolVersion: 3, clock: {}, fields: {} },
+        _sync: { protocolVersion: 3, clock: {}, fields: {}, writer: { slot: 's01', replicaId: 'remote-seed', generation: 1, seq: 0 } },
     };
 
     await env.withSecurityRulesDisabled(async context => {
@@ -113,7 +113,7 @@ it('allows an explicitly lossless scalar normalization while applying the semant
             supplementsIntake: [],
         },
         _schemaVersion: 1,
-        _sync: { protocolVersion: 3, clock: {}, fields: {} },
+        _sync: { protocolVersion: 3, clock: {}, fields: {}, writer: { slot: 's01', replicaId: 'remote-seed', generation: 1, seq: 0 } },
     };
 
     await env.withSecurityRulesDisabled(async context => {

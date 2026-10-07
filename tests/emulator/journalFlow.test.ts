@@ -80,7 +80,7 @@ it('adopts independent remote fields without overwriting them with the old local
         await setDoc(doc(context.firestore(), 'users/a'), {
             ...remoteBusiness,
             _schemaVersion: CURRENT_DATA_SCHEMA,
-            _sync: { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {} },
+            _sync: { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {}, writer: { slot: 's01', replicaId: 'remote-seed', generation: 1, seq: 0 } },
         });
     });
     await prepareReplica();
