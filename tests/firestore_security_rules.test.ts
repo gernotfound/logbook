@@ -40,7 +40,7 @@ describe('Firestore Security Rules Whitelist & Parity Verification', () => {
   it('allows only an active owner to access private month and telemetry collections', () => {
     expect(rulesContent).toMatch(/match\s+\/history_months\/\{monthId\}/);
     expect(rulesContent).toMatch(/allow\s+read:\s*if\s+isActiveOwner\(userId\);/);
-    expect(rulesContent).toContain('hasAuthorizedSyncDelete(userId)');
+    expect(rulesContent).toContain('hasAuthorizedSyncDelete()');
     expect(rulesContent).toMatch(/match\s+\/nutrition_months\/\{monthId\}/);
     expect(rulesContent).toMatch(/match\s+\/telemetry_anomalies\/\{eventId\}/);
   });
