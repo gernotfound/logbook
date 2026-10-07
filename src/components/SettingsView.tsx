@@ -15,6 +15,7 @@ import { StorageDiagnostics } from './Settings/StorageDiagnostics';
 import { PrivacySettingsTab } from './Settings/PrivacySettingsTab';
 import { ExportSettingsTab } from './Settings/ExportSettingsTab';
 import { useAppearanceStore, type ThemePreference } from '../store/useAppearanceStore';
+import { checkForWaitingServiceWorker } from '../lib/pwaUpdate';
 import './SettingsView.css';
 
 type SettingsSection = 'account' | 'privacy' | 'data' | 'application';
@@ -81,9 +82,9 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
                 return;
             }
 
-            await reg.update();
+            const updateWaiting = await checkForWaitingServiceWorker(reg);
 
-            if (reg.waiting) {
+            if (updateWaiting) {
                 window.dispatchEvent(new Event('logbook:pwa-update-waiting'));
                 await useDialogStore.getState().showAlert("Nuova versione trovata. Usa il banner in basso per aggiornare TheLogBook in sicurezza.");
                 return;

@@ -198,7 +198,7 @@ describe('Service Worker Update Lifecycle (ReloadPrompt) Suite', () => {
     });
 
     expect(mockSetNeedRefresh).toHaveBeenCalledWith(true);
-    expect(mockUpdate).toHaveBeenCalledTimes(1);
+    expect(mockUpdate).not.toHaveBeenCalled();
     unmount();
   });
 
@@ -559,7 +559,7 @@ describe('Service Worker Update Lifecycle (ReloadPrompt) Suite', () => {
     });
 
     expect(mockGetRegistration).toHaveBeenCalled();
-    expect(consoleSpy).toHaveBeenCalledWith('SW visibility update synchronous error:', expect.any(Error));
+    expect(consoleSpy).toHaveBeenCalledWith('SW visibility update error:', expect.any(Error));
 
     unmount();
     consoleSpy.mockRestore();
