@@ -189,6 +189,16 @@ body:has(.brand-loading-screen) {
   margin-inline: auto;
 }
 
+:root[data-theme="light"] .brand-loading-screen__mascot {
+  filter: invert(1);
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) .brand-loading-screen__mascot {
+    filter: invert(1);
+  }
+}
+
 .brand-loading-screen__wordmark {
   position: relative;
   isolation: isolate;
