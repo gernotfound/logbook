@@ -14,9 +14,9 @@ import { applyDomainOperations, type DomainOperationBatch } from '../../lib/sync
 import { markTabSnapshotClean, markTabSnapshotDirty } from '../../lib/sync/tabSnapshotCausality';
 import { requiredUpdateRecoveryRegistry } from '../../lib/sync/requiredUpdateRecovery';
 
-export type SyncHealth = 'saving' | 'synced' | 'local-pending' | 'rejected' | 'failed';
-export type SyncPresentation = 'normal' | 'quiet-workout';
-export type CompatibilityStatus = 'ok' | 'update-required';
+type SyncHealth = 'saving' | 'synced' | 'local-pending' | 'rejected' | 'failed';
+type SyncPresentation = 'normal' | 'quiet-workout';
+type CompatibilityStatus = 'ok' | 'update-required';
 export interface SyncSlice {
     saveError: string | null;
     syncing: boolean;

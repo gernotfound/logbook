@@ -7,7 +7,7 @@ import {
     type ProgressionExerciseRef,
 } from './progression';
 
-export interface SetEffortComparison {
+interface SetEffortComparison {
     setNumber: number;
     currentKg: string;
     previousKg: string;
@@ -17,7 +17,7 @@ export interface SetEffortComparison {
     previousRir?: number;
 }
 
-export interface ExerciseComparison {
+interface ExerciseComparison {
     exId: string;
     exName: string;
     currentVolume: number;

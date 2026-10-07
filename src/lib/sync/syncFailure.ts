@@ -3,7 +3,7 @@ import { SyncTimeoutError } from '../db/db_core';
 
 export type SyncFailureResult = Exclude<SyncResult, { ok: true }>;
 
-export function getSyncErrorCode(error: unknown): string | undefined {
+function getSyncErrorCode(error: unknown): string | undefined {
     if (!error || typeof error !== 'object' || !('code' in error)) return undefined;
     const code = (error as { code?: unknown }).code;
     return typeof code === 'string' ? code : undefined;

@@ -1,4 +1,4 @@
-import { MUSCLES, GROUP_MAP, MuscleDef } from './constants/muscles';
+import { MUSCLES, GROUP_MAP } from './constants/muscles';
 import { 
     generateId, 
     getLocalDateString, 
@@ -9,7 +9,6 @@ import {
     formatDuration, 
     normalizeDuration, 
     getCalendarMonthGrid, 
-    CalendarDayCell,
     formatSleepTime,
     parseSleepInput,
     isSleepTimeValid
@@ -41,7 +40,6 @@ import {
     filterItems,
     searchExerciseLibrary,
     normalizeStem,
-    VolumeExerciseRef,
     getLatestUserWeight,
     calculateEffectiveSetWeight,
     calculateSetVolume,
@@ -54,27 +52,12 @@ import {
     calculateCycleVolume,
     getDetailedMuscleCategory,
     calculateCycleTimeline,
-    CycleTimelineInfo,
     calculateCycleSchedule,
     getNextScheduledRoutine,
-    ScheduledCycleSession,
-    WeeklyCycleSchedule,
-    CycleScheduleResult,
-    NextScheduledRoutineResult
 } from './calc/planning';
 
-// Re-export all constants and types
+// Re-export shared constants.
 export { MUSCLES, GROUP_MAP };
-export type { 
-    MuscleDef, 
-    CalendarDayCell, 
-    CycleTimelineInfo,
-    ScheduledCycleSession,
-    WeeklyCycleSchedule,
-    CycleScheduleResult,
-    NextScheduledRoutineResult,
-    VolumeExerciseRef
-};
 
 // Re-export all functions
 export {
@@ -139,7 +122,6 @@ export const Logic = {
     formatItalianDate,
     parseDateInput,
     calculateAge,
-    formatTime,
     formatDuration,
     normalizeDuration,
     getCalendarMonthGrid,
@@ -151,7 +133,6 @@ export const Logic = {
     removeUndefinedValues,
 
     // Body Fat & Composition
-    calculateUsNavyBodyFat,
     calculateBodyFatByMethod,
     calculateBodyFat,
     calculateBodyComposition,

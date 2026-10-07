@@ -2,7 +2,7 @@ import { format, isValid, parseISO, addDays, startOfDay, differenceInCalendarDay
 import { GROUP_MAP } from '../constants/muscles';
 import type { TrainingCycle, WorkoutRoutine, Exercise, WorkoutSession } from '../../types';
 
-export interface MuscleVolumeDetail {
+interface MuscleVolumeDetail {
     key: string;
     label: string;
     sets: number;

@@ -1,7 +1,7 @@
 import { readDeviceValueStrict, writeDeviceValue } from '../sync/deviceStorage';
 import { storageOwner } from '../sync/session';
 
-export type WorkoutTimerState = 'stopped' | 'running' | 'paused';
+type WorkoutTimerState = 'stopped' | 'running' | 'paused';
 
 export interface WorkoutTimerSnapshot {
     version: 1;
@@ -53,7 +53,7 @@ function purgeObsoleteTimerValues(owner: string): void {
     }
 }
 
-export class WorkoutTimerStorageCorruptError extends Error {
+class WorkoutTimerStorageCorruptError extends Error {
     readonly code = 'workout-timer-storage-corrupt';
 
     constructor(message = 'Snapshot timer locale non leggibile.') {

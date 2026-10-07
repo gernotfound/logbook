@@ -1,7 +1,6 @@
 export type {
     DomainOperation,
     DomainOperationBatch,
-    NutritionDayPatch,
 } from './domainOperations/contracts';
 
 export {

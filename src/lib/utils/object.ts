@@ -73,7 +73,7 @@ export function removeUndefinedValues<T>(value: T, seen?: WeakSet<object>): T {
 
 import type { NutritionPlanning } from '../../types';
 
-export const NUTRITION_CONFLICT_FINGERPRINT_VERSION = 1;
+const NUTRITION_CONFLICT_FINGERPRINT_VERSION = 1;
 
 /**
  * Generates a deterministic, versioned fingerprint for a NutritionPlanning object.
