@@ -1,5 +1,5 @@
 import React from 'react';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, act, renderHook } from '@testing-library/react';
 
 import { Logic, formatSleepTime, parseSleepInput, isSleepTimeValid } from '../src/lib/logic';
@@ -9,6 +9,7 @@ import DataSleep from '../src/components/Data/DataSleep';
 import { useSleepMeasurements } from '../src/hooks/useSleepMeasurements';
 import { useAppStore } from '../src/store/useAppStore';
 import { useDialogStore } from '../src/store/useDialogStore';
+import { storageOwner } from '../src/lib/sync/session';
 
 describe('Empirical Challenger: Sleep Format HH:MM Adversarial Stress Test Suite', () => {
 
@@ -289,6 +290,12 @@ describe('Empirical Challenger: Sleep Format HH:MM Adversarial Stress Test Suite
     });
 
     describe('5. useSleepMeasurements Hook Adversarial Verification', () => {
+        beforeEach(() => {
+            localStorage.clear();
+            useAppStore.getState().resetStore();
+            useAppStore.setState({ dataOwner: storageOwner() });
+        });
+
         it('initializes from legacy number sleep data and formats to HH:MM in UI state', () => {
             const today = Logic.getLocalDateString();
             useAppStore.setState({
