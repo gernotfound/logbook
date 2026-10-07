@@ -24,7 +24,7 @@ function parseConfiguredOrigin(fallback?: string): string | null {
   return url.origin;
 }
 
-export function allowedAccountDeletionOrigins(): ReadonlySet<string> {
+function allowedAccountDeletionOrigins(): ReadonlySet<string> {
   return new Set([parseConfiguredOrigin(DEFAULT_PUBLIC_APP_ORIGIN)!]);
 }
 

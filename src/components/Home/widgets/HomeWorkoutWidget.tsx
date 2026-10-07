@@ -9,7 +9,7 @@ interface HomeWorkoutWidgetProps {
     onNavigate: (view: string) => void;
 }
 
-export const HomeWorkoutWidget: React.FC<HomeWorkoutWidgetProps> = ({
+const HomeWorkoutWidget: React.FC<HomeWorkoutWidgetProps> = ({
     isRestDay = false,
     todaysWorkout, activeWorkout,
     onNavigate

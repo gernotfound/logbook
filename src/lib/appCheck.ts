@@ -23,7 +23,7 @@ export interface AppCheckInitOptions {
     debugToken?: boolean | string;
 }
 
-export type AppCheckPhase =
+type AppCheckPhase =
     | 'uninitialized'
     | 'disabled'
     | 'unsupported'
@@ -58,7 +58,7 @@ export interface AppCheckStatusDetails {
     phase: AppCheckPhase;
 }
 
-export const APP_CHECK_STRINGS = {
+const APP_CHECK_STRINGS = {
     unsupportedTitle: 'Verifica di sicurezza non supportata',
     unsupportedMessage: 'Il browser o la modalità di navigazione attuale non supportano i controlli di sicurezza necessari per la sincronizzazione cloud. TheLogBook continuerà a funzionare regolarmente in modalità locale offline sul tuo dispositivo.',
     initErrorTitle: 'Errore controllo di sicurezza',
@@ -248,22 +248,6 @@ export function ensureAppCheckProvider(
 }
 
 /**
- * Checks whether the current runtime environment supports App Check.
- * Kept async for API compatibility with existing consumers/tests.
- */
-export async function isAppCheckSupported(): Promise<boolean> {
-    if (isSupportedCached !== null) return isSupportedCached;
-    try {
-        isSupportedCached = runtimeSupportsAppCheck();
-        return isSupportedCached;
-    } catch (error) {
-        console.warn('[AppCheck] Impossibile verificare il supporto del browser:', error);
-        isSupportedCached = false;
-        return false;
-    }
-}
-
-/**
  * Initializes the provider if needed, then resolves the initial token state.
  * A provider without a token is not reported as healthy/active.
  */
@@ -299,9 +283,6 @@ export async function initAppCheck(
     }
 }
 
-export function getAppCheckInstance(): AppCheck | null {
-    return appCheckInstance;
-}
 
 export function isAppCheckActive(): boolean {
     return appCheckInstance !== null && Boolean(lastToken?.token) && !isFallbackOfflineMode;

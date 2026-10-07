@@ -131,7 +131,7 @@ export function isDefaultNutritionPlanning(plan: NutritionPlanning | null | unde
  * Guest scalar and nested values take precedence when defined;
  * Cloud values are preserved when omitted in guest.
  */
-export function deepMergeNutritionPlanning(
+function deepMergeNutritionPlanning(
     cloud?: NutritionPlanning | null,
     guest?: NutritionPlanning | null
 ): NutritionPlanning | undefined {

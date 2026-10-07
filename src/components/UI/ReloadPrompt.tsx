@@ -4,7 +4,7 @@ import { prepareForReload } from '../../lib/sync/reloadBarrier';
 import { isCurrentSession } from '../../lib/sync/session';
 import { checkForWaitingServiceWorker } from '../../lib/pwaUpdate';
 
-export const ReloadPrompt: React.FC = () => {
+const ReloadPrompt: React.FC = () => {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const updateInFlight = useRef(false);
   const [updating, setUpdating] = useState(false);

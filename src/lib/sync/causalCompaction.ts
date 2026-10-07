@@ -1,6 +1,6 @@
 import type { FieldStamp, SyncMeta, VectorClock } from './semanticProjection';
 
-export function compactVector(clock: VectorClock): VectorClock {
+function compactVector(clock: VectorClock): VectorClock {
     const compacted: VectorClock = {};
     for (const [actorId, seq] of Object.entries(clock)) {
         if (seq > 0) compacted[actorId] = seq;

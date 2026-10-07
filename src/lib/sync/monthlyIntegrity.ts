@@ -7,7 +7,7 @@ import { WorkoutSessionSchema } from '../schemas/schema_training';
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
 
-export function isCanonicalLocalDate(date: unknown): date is string {
+function isCanonicalLocalDate(date: unknown): date is string {
     return typeof date === 'string'
         && DATE_RE.test(date)
         && getLocalDateString(new Date(`${date}T12:00:00`)) === date;

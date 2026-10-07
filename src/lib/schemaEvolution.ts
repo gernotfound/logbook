@@ -1,7 +1,7 @@
-export const BASELINE_DATA_SCHEMA = 1 as const;
-export const BASELINE_SYNC_PROTOCOL = 3 as const;
-export const BASELINE_LOCAL_ENVELOPE = 4 as const;
-export const BASELINE_BACKUP_SCHEMA = 3 as const;
+const BASELINE_DATA_SCHEMA = 1 as const;
+const BASELINE_SYNC_PROTOCOL = 3 as const;
+const BASELINE_LOCAL_ENVELOPE = 4 as const;
+const BASELINE_BACKUP_SCHEMA = 3 as const;
 
 export const CURRENT_DATA_SCHEMA = 1 as const;
 export const CURRENT_SYNC_PROTOCOL = 3 as const;
@@ -50,10 +50,10 @@ function reportRuntimeUpdateRequired(error: unknown) {
     window.dispatchEvent(new CustomEvent(UPDATE_REQUIRED_EVENT, { detail: error }));
 }
 
-export type Migration<T> = (value: Readonly<T>) => T;
+type Migration<T> = (value: Readonly<T>) => T;
 export type MigrationRegistry<T> = Readonly<Record<number, Migration<T>>>;
 
-export function assertVersionNumber(value: unknown, kind: string): number {
+function assertVersionNumber(value: unknown, kind: string): number {
     if (typeof value !== 'number' || !Number.isInteger(value) || value < 1) {
         throw new Error(`${kind} non valido.`);
     }
@@ -87,7 +87,7 @@ export function migrateSequential<T>(
     return current;
 }
 
-export function migrateFromBaseline<T>(
+function migrateFromBaseline<T>(
     value: T,
     fromVersion: number,
     baselineVersion: number,
@@ -121,14 +121,14 @@ export type SyncProtocolMigrationCarrier =
 // Future N->N+1 migrations are added only after a real released version has persisted user data.
 // Data/sync migration steps receive a storage-scope carrier so one version dimension can advance
 // independently of the local-envelope or backup container version without coupling those bumps.
-export const DATA_MIGRATIONS: MigrationRegistry<DataMigrationCarrier> = {};
+const DATA_MIGRATIONS: MigrationRegistry<DataMigrationCarrier> = {};
 // Pre-launch clean cut: no real account data exists below Protocol 3.
 // Future entries are added only for post-launch N->N+1 migrations.
-export const SYNC_PROTOCOL_MIGRATIONS: MigrationRegistry<SyncProtocolMigrationCarrier> = {};
-export const LOCAL_ENVELOPE_MIGRATIONS: MigrationRegistry<PersistedRecord> = {
+const SYNC_PROTOCOL_MIGRATIONS: MigrationRegistry<SyncProtocolMigrationCarrier> = {};
+const LOCAL_ENVELOPE_MIGRATIONS: MigrationRegistry<PersistedRecord> = {
     4: record => ({ ...structuredClone(record), replica: null }),
 };
-export const BACKUP_MIGRATIONS: MigrationRegistry<PersistedRecord> = {};
+const BACKUP_MIGRATIONS: MigrationRegistry<PersistedRecord> = {};
 
 export interface NormalizedCloudDocument {
     business: Record<string, unknown>;

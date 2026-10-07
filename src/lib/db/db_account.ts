@@ -198,7 +198,7 @@ async function requestServerDeletion(marker: AccountDeletionMarker, idToken: str
     markAccountDeletion(marker.owner, { receiptToken: marker.receiptToken, serverAcceptedAt: Date.now() });
 }
 
-export async function fetchAccountDeletionStatus(marker: AccountDeletionMarker, timeoutMs = ACCOUNT_DELETION_HTTP_TIMEOUT_MS): Promise<ServerDeletionStatus> {
+async function fetchAccountDeletionStatus(marker: AccountDeletionMarker, timeoutMs = ACCOUNT_DELETION_HTTP_TIMEOUT_MS): Promise<ServerDeletionStatus> {
     if (!marker.receiptToken) throw new Error('Cancellazione in sospeso senza ricevuta server. Riprendi l’operazione dalle impostazioni.');
     const response = await fetchAccountDeletion(accountDeletionUrl(), {
         method: 'GET',

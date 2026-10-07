@@ -1,8 +1,6 @@
 import type { PlannedSetTechnique, SessionExerciseSet, SetContinuationTechnique, SetSegment, SetTarget, SetTechnique } from '../types';
 
-export const ADVANCED_TECHNIQUES: Exclude<SetTechnique, 'straight'>[] = ['dropset', 'rest_pause', 'cluster', 'rep_match', 'diminishing'];
-
-export function techniqueLabel(technique: SetTechnique): string {
+function techniqueLabel(technique: SetTechnique): string {
     return ({ straight: 'Serie normale', dropset: 'Dropset', rest_pause: 'Rest-pause', cluster: 'Cluster', rep_match: 'Rep-match', diminishing: 'Diminishing set' })[technique];
 }
 

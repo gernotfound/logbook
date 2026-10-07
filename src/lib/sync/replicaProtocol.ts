@@ -12,14 +12,14 @@ import {
     type VectorClock,
 } from './semanticProjection';
 
-export const REPLICA_SLOT_COUNT = 16 as const;
-export const REPLICA_CHECKPOINT_INTERVAL_MS = 30 * 24 * 60 * 60 * 1000;
-export const REPLICA_LEASE_MS = 360 * 24 * 60 * 60 * 1000;
+const REPLICA_SLOT_COUNT = 16 as const;
+const REPLICA_CHECKPOINT_INTERVAL_MS = 30 * 24 * 60 * 60 * 1000;
+const REPLICA_LEASE_MS = 360 * 24 * 60 * 60 * 1000;
 const REPLICA_CLOCK_SKEW_MARGIN_MS = 5 * 60 * 1000;
 const SLOT_RE = /^s(?:0[0-9]|1[0-5])$/;
 const SLOT_IDS = Array.from({ length: REPLICA_SLOT_COUNT }, (_, index) => `s${String(index).padStart(2, '0')}`);
 
-export type ReplicaMutationAction = 'register' | 'checkpoint' | 'advance' | 'retire' | 'reuse-expired';
+type ReplicaMutationAction = 'register' | 'checkpoint' | 'advance' | 'retire' | 'reuse-expired';
 
 export interface ReplicaIdentity {
     slot: string;
@@ -54,7 +54,7 @@ export interface CloudCheckpoint {
     syncMetaByDocument: Record<string, SyncMeta>;
 }
 
-export class ReplicaCapacityError extends Error {
+class ReplicaCapacityError extends Error {
     readonly code = 'replica-capacity';
     constructor() {
         super('Numero massimo di repliche attive raggiunto. Riapri TheLogBook da un dispositivo già registrato o riprova dopo la scadenza di una replica inattiva.');
