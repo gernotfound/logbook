@@ -10,6 +10,8 @@ if (!existsSync(workflowPath)) {
 
 const workflow = readFileSync(workflowPath, 'utf8');
 const packageJson = JSON.parse(readFileSync('package.json', 'utf8'));
+const packageLock = JSON.parse(readFileSync('package-lock.json', 'utf8'));
+const lockedPlaywrightVersion = packageLock.packages?.['node_modules/@playwright/test']?.version;
 const nvmrc = existsSync('.nvmrc') ? readFileSync('.nvmrc', 'utf8').trim() : '';
 const nodeVersionFile = existsSync('.node-version') ? readFileSync('.node-version', 'utf8').trim() : '';
 
@@ -18,6 +20,7 @@ if (packageJson.engines?.npm !== '11.x') failures.push(`package engines.npm: exp
 if (packageJson.packageManager !== 'npm@11.21.0') failures.push(`packageManager: expected npm@11.21.0, got ${packageJson.packageManager ?? 'missing'}`);
 if (nvmrc !== '24') failures.push(`.nvmrc: expected 24, got ${nvmrc || 'missing'}`);
 if (nodeVersionFile !== '24') failures.push(`.node-version: expected 24, got ${nodeVersionFile || 'missing'}`);
+if (!lockedPlaywrightVersion) failures.push('package-lock: missing node_modules/@playwright/test version');
 if (packageJson.scripts?.['lint:type-aware'] !== 'oxlint --config .oxlintrc.type-aware.json') {
   failures.push('lint:type-aware must not use a warning-count threshold; lint:baseline owns reviewed warning drift');
 }
@@ -104,25 +107,35 @@ requirePattern('Ubuntu 24.04 shard runner', workflow, /^    runs-on: ubuntu-24\.
 requirePattern('checkout action pin', workflow, /^        uses: actions\/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7\s*$/m);
 requirePattern('full checkout history', workflow, /^          fetch-depth: 0\s*$/m);
 const checkoutCredentialGuards = workflow.match(/^          persist-credentials: false\s*$/gm) ?? [];
-if (checkoutCredentialGuards.length !== 2) failures.push(`checkout credential persistence: expected two disabled checkout credentials, found ${checkoutCredentialGuards.length}`);
+if (checkoutCredentialGuards.length !== 3) failures.push(`checkout credential persistence: expected three disabled checkout credentials, found ${checkoutCredentialGuards.length}`);
 requirePattern('Node setup action pin', workflow, /^        uses: actions\/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7\s*$/m);
 requirePattern('Node 24 runtime', workflow, /^          node-version: ['"]?24['"]?\s*$/m);
 requirePattern('npm cache', workflow, /^          cache: npm\s*$/m);
-requirePattern('dependency install', workflow, /^        run: npm ci\s*$/m);
+const dependencyInstalls = workflow.match(/^        run: npm ci\s*$/gm) ?? [];
+if (dependencyInstalls.length !== 2) failures.push(`dependency install: expected matrix + E2E npm ci steps, found ${dependencyInstalls.length}`);
 requirePattern('failure artifact action pin', workflow, /^        uses: actions\/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7\s*$/m);
 requirePattern('exact event SHA binding', workflow, /^      EXPECTED_SHA: \$\{\{ github\.event\.pull_request\.head\.sha \|\| github\.sha \}\}\s*$/m);
 requirePattern('Gitleaks event base binding', workflow, /^      GITLEAKS_BASE_SHA: \$\{\{ github\.event\.pull_request\.base\.sha \|\| github\.event\.before \}\}\s*$/m);
 requirePattern('exact checkout ref', workflow, /^          ref: \$\{\{ github\.event\.pull_request\.head\.sha \|\| github\.sha \}\}\s*$/m);
 requirePattern('runtime SHA read', workflow, /^          actual_sha="\$\(git rev-parse HEAD\)"\s*$/m);
+requirePattern('container runtime SHA read', workflow, /^          actual_sha="\$\(git -c safe\.directory="\$\{GITHUB_WORKSPACE\}" rev-parse HEAD\)"\s*$/m);
 requirePattern('runtime SHA comparison', workflow, /^          if \[ "\$\{actual_sha\}" != "\$\{EXPECTED_SHA\}" \]; then\s*$/m);
 const actualShaAssignments = workflow.match(/^\s*actual_sha=/gm) ?? [];
-if (actualShaAssignments.length !== 2) failures.push(`runtime SHA guard: expected shard + CodeQL assignments, found ${actualShaAssignments.length}`);
+if (actualShaAssignments.length !== 3) failures.push(`runtime SHA guard: expected matrix + E2E + CodeQL assignments, found ${actualShaAssignments.length}`);
 requirePattern('conditional Java setup', workflow, /^        if: matrix\.java == true\s*$/m);
 requirePattern('Java setup action pin', workflow, /^        uses: actions\/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6\s*$/m);
 requirePattern('Temurin distribution', workflow, /^          distribution: temurin\s*$/m);
 requirePattern('Java 21 runtime', workflow, /^          java-version: ['"]?21['"]?\s*$/m);
-requirePattern('conditional Playwright setup', workflow, /^        if: matrix\.playwright == true\s*$/m);
-requirePattern('Playwright Chromium and WebKit install', workflow, /^        run: npx playwright install --with-deps chromium webkit\s*$/m);
+requirePattern('dedicated Playwright E2E job', workflow, /^  e2e:\s*$/m);
+requirePattern('Playwright container IPC sharing', workflow, /^      options: --ipc=host\s*$/m);
+requirePattern('Playwright E2E execution', workflow, /^          npm run test:e2e 2>&1 \| tee "verification-e2e\.log"\s*$/m);
+forbidPattern('host Playwright dependency install', workflow, /playwright install --with-deps/);
+const playwrightImageMatch = workflow.match(/^      image: mcr\.microsoft\.com\/playwright:v([0-9]+\.[0-9]+\.[0-9]+)-noble\s*$/m);
+if (!playwrightImageMatch) {
+  failures.push('Playwright E2E container: missing pinned mcr.microsoft.com/playwright:vX.Y.Z-noble image');
+} else if (lockedPlaywrightVersion && playwrightImageMatch[1] !== lockedPlaywrightVersion) {
+  failures.push(`Playwright E2E container version ${playwrightImageMatch[1]} does not match package-lock @playwright/test ${lockedPlaywrightVersion}`);
+}
 requirePattern('matrix command execution', workflow, /^          \$\{\{ matrix\.command \}\} 2>&1 \| tee "verification-\$\{\{ matrix\.id \}\}\.log"\s*$/m);
 requirePattern('CodeQL job', workflow, /^  codeql:\s*$/m);
 requirePattern('CodeQL JavaScript-TypeScript language', workflow, /^          languages: javascript-typescript\s*$/m);
@@ -132,7 +145,6 @@ requirePattern('CodeQL analyze action pin', workflow, /^        uses: github\/co
 
 const allowedIfLines = new Set([
   'if: matrix.java == true',
-  'if: matrix.playwright == true',
   'if: failure()',
   'if: ${{ always() }}',
 ]);
@@ -150,11 +162,10 @@ if (!includeMatch) {
     const id = block.match(/^- id: ([A-Za-z0-9-]+)/)?.[1] ?? block.match(/^          - id: ([A-Za-z0-9-]+)/)?.[1];
     const command = block.match(/^            command: "([^"]+)"\s*$/m)?.[1];
     const java = block.match(/^            java: (true|false)\s*$/m)?.[1];
-    const playwright = block.match(/^            playwright: (true|false)\s*$/m)?.[1];
-    return { id, command, java, playwright };
+    return { id, command, java };
   });
 
-  const expectedIds = ['core', 'unit-1', 'unit-2', 'hardening-stress', 'rules', 'e2e', 'm7-m8'];
+  const expectedIds = ['core', 'unit-1', 'unit-2', 'hardening-stress', 'rules', 'm7-m8'];
   const ids = shards.map(shard => shard.id);
   if (JSON.stringify(ids) !== JSON.stringify(expectedIds)) {
     failures.push(`parallel matrix: expected shard ids ${expectedIds.join(', ')}, got ${ids.join(', ')}`);
@@ -163,7 +174,7 @@ if (!includeMatch) {
   const ciLeaves = [];
   const unitShardCommands = [];
   for (const shard of shards) {
-    if (!shard.id || !shard.command || !shard.java || !shard.playwright) {
+    if (!shard.id || !shard.command || !shard.java) {
       failures.push(`parallel matrix: malformed shard ${JSON.stringify(shard)}`);
       continue;
     }
@@ -195,6 +206,8 @@ if (!includeMatch) {
     ciLeaves.push(...expandScript('test'));
   }
 
+  ciLeaves.push(...expandScript('test:e2e'));
+
   let canonicalLeaves = [];
   try {
     canonicalLeaves = expandScript('verify:m8');
@@ -209,24 +222,27 @@ if (!includeMatch) {
   }
 
   if (shards.find(shard => shard.id === 'rules')?.java !== 'true') failures.push('rules shard must enable Java');
-  if (shards.find(shard => shard.id === 'e2e')?.playwright !== 'true') failures.push('e2e shard must enable Playwright');
   if (shards.filter(shard => shard.java === 'true').map(shard => shard.id).join(',') !== 'rules') failures.push('Java must be limited to the rules shard');
-  if (shards.filter(shard => shard.playwright === 'true').map(shard => shard.id).join(',') !== 'e2e') failures.push('Playwright must be limited to the e2e shard');
 }
 
 const auditOccurrences = workflow.match(/npm audit --audit-level=high/g) ?? [];
 if (auditOccurrences.length !== 1) failures.push(`security audit: expected once, found ${auditOccurrences.length}`);
 const staticSecurityOccurrences = workflow.match(/npm run test:security-static/g) ?? [];
 if (staticSecurityOccurrences.length !== 1) failures.push(`static security scan: expected once, found ${staticSecurityOccurrences.length}`);
+const e2eOccurrences = workflow.match(/npm run test:e2e/g) ?? [];
+if (e2eOccurrences.length !== 1) failures.push(`Playwright E2E: expected one dedicated execution, found ${e2eOccurrences.length}`);
 
 const canonicalNames = workflow.match(/name: ["']Canonical Verification["']/g) ?? [];
 if (canonicalNames.length !== 1) failures.push(`canonical aggregate: expected one stable check name, found ${canonicalNames.length}`);
 requirePattern('canonical needs verification shards', workflow, /^      - shards\s*$/m);
+requirePattern('canonical needs Playwright E2E', workflow, /^      - e2e\s*$/m);
 requirePattern('canonical needs CodeQL', workflow, /^      - codeql\s*$/m);
 requirePattern('canonical always evaluates', workflow, /^    if: \$\{\{ always\(\) \}\}\s*$/m);
 requirePattern('canonical shard result binding', workflow, /^          SHARD_RESULT: \$\{\{ needs\.shards\.result \}\}\s*$/m);
+requirePattern('canonical E2E result binding', workflow, /^          E2E_RESULT: \$\{\{ needs\.e2e\.result \}\}\s*$/m);
 requirePattern('canonical CodeQL result binding', workflow, /^          CODEQL_RESULT: \$\{\{ needs\.codeql\.result \}\}\s*$/m);
 requirePattern('canonical rejects failed shards', workflow, /^          if \[ "\$\{SHARD_RESULT\}" != "success" \]; then\s*$/m);
+requirePattern('canonical rejects failed E2E', workflow, /^          if \[ "\$\{E2E_RESULT\}" != "success" \]; then\s*$/m);
 requirePattern('canonical rejects failed CodeQL', workflow, /^          if \[ "\$\{CODEQL_RESULT\}" != "success" \]; then\s*$/m);
 
 for (const legacy of [
@@ -246,4 +262,4 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-console.log('M8 CI contract OK: exact-SHA parallel shards are leaf-equivalent to verify:m8, CodeQL plus the supplemental static-security gate are required, specialized dependencies stay isolated, and Canonical Verification remains the single aggregate gate.');
+console.log('M8 CI contract OK: exact-SHA matrix shards plus the pinned Playwright container are leaf-equivalent to verify:m8, CodeQL plus the supplemental static-security gate are required, specialized dependencies stay isolated, and Canonical Verification remains the single aggregate gate.');

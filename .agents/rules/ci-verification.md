@@ -10,7 +10,7 @@ Gerarchia corrente:
 - **check aggregato stabile:** `Canonical Verification`;
 - **analisi SAST richiesta:** job `Security / CodeQL` su JavaScript/TypeScript con query `security-extended`, aggregato dentro `Canonical Verification`;
 - **comando repository umbrella:** `npm run verify:m8`;
-- **orchestrazione CI:** matrice di shard exact-SHA verificata da `scripts/check-ci-contract.mjs`.
+- **orchestrazione CI:** matrice di shard exact-SHA per i leaf generalisti + job E2E exact-SHA isolato nel container Playwright ufficiale, verificati da `scripts/check-ci-contract.mjs`.
 
 La parallelizzazione riguarda l'orchestrazione, non la semantica del gate. Unit, integration, isolated, fuzz, recovery, GC, hardening, stress, Firestore Rules emulator, Playwright, build e controlli M7/M8 restano obbligatori.
 
@@ -18,6 +18,7 @@ La parallelizzazione riguarda l'orchestrazione, non la semantica del gate. Unit,
 
 - MUST: ogni shard che esegue codice della PR fa checkout esplicito di `github.event.pull_request.head.sha`, non del merge ref sintetico.
 - MUST: in ogni shard, prima dei test, `git rev-parse HEAD` viene confrontato con lo SHA atteso; una divergenza termina lo shard.
+- MUST: nel job container E2E, la verifica usa `git -c safe.directory="$GITHUB_WORKSPACE" rev-parse HEAD` per gestire il mount del workspace senza modificare globalmente la trust policy Git; il confronto con lo SHA atteso resta identico.
 - MUST: tutti gli shard della stessa run verificano lo stesso exact SHA.
 - MUST: anche il job CodeQL fa checkout e verifica esplicita dello stesso exact SHA prima dell'analisi.
 - MUST: ogni report di validazione indica lo SHA esatto realmente verificato.
@@ -41,7 +42,7 @@ La parallelizzazione riguarda l'orchestrazione, non la semantica del gate. Unit,
 ## Single source of truth
 
 - MUST: `npm run verify:m8` resta il comando repository umbrella e continua a comporre integralmente `verify:m7`, quindi M6/M5 e i gate precedenti richiesti.
-- MUST: GitHub Actions può appiattire quella composizione in shard paralleli soltanto se `test:ci-contract` prova meccanicamente che il multiset dei leaf command della matrice è equivalente all'espansione corrente di `verify:m8`.
+- MUST: GitHub Actions può appiattire quella composizione tra matrice di shard e job E2E dedicato soltanto se `test:ci-contract` prova meccanicamente che il multiset complessivo dei leaf command è equivalente all'espansione corrente di `verify:m8`.
 - MUST: gli shard non invocano umbrella `verify:mN` seriali; eseguono leaf command per ottenere parallelismo reale.
 - MUST: `npm audit --audit-level=high` e `test:security-static` (Gitleaks + zizmor) restano bloccanti nella CI ma non appartengono alla semantica deterministica di `verify:m8`, perché dipendono da registry/release esterni.
 - MUST: `test:dead-code` (Knip su file, dipendenze e import non dichiarati) è invece un leaf deterministico di `verify:m8`; gli unused export restano analisi advisory finché il rumore storico non è classificato.
@@ -56,7 +57,7 @@ La parallelizzazione riguarda l'orchestrazione, non la semantica del gate. Unit,
 
 - MUST: la matrice usa `fail-fast: false` per raccogliere l'esito di tutti gli shard dello stesso SHA.
 - MUST: Java viene installato solo nello shard Firestore Rules salvo nuova dipendenza documentata.
-- MUST: Chromium e il WebKit mirato per Mobile Safari vengono installati solo nello shard E2E salvo nuova dipendenza documentata; i test PWA/Service Worker restano Chromium-only e WebKit esegue soltanto suite esplicitamente selezionate.
+- MUST: Chromium e il WebKit mirato per Mobile Safari vengono forniti esclusivamente dal job E2E dedicato tramite l'immagine ufficiale `mcr.microsoft.com/playwright:vX.Y.Z-noble`; la versione `X.Y.Z` MUST coincidere con `node_modules/@playwright/test` risolto in `package-lock.json`. Il job E2E non esegue `playwright install --with-deps` sul runner host e usa `--ipc=host`; i test PWA/Service Worker restano Chromium-only e WebKit esegue soltanto suite esplicitamente selezionate.
 - MUST: suite intenzionalmente single-worker, incluse recovery/fuzz/GC/hardening dove configurato, mantengono i propri limiti interni; la CI parallelizza tra suite, non forza concorrenza dentro scenari che richiedono isolamento.
 - MUST: la suite Vitest standard può essere divisa per file con `--shard=i/N` soltanto se tutti gli indici `1..N` sono presenti esattamente una volta e il CI contract ricompone la coppia nell'unico leaf canonico `npm run test`.
 - MUST: il contract PWA M7 che legge `dist/` deve essere eseguito nello stesso shard che produce il build richiesto, oppure ricevere artefatti verificati dello stesso exact SHA.
@@ -69,6 +70,7 @@ La parallelizzazione riguarda l'orchestrazione, non la semantica del gate. Unit,
 - MUST: il solo job CodeQL può aggiungere `security-events: write`, limitato al caricamento dei risultati di code scanning; non estendere tale permesso agli shard applicativi.
 - MUST: nessun secret production è richiesto dal gate repository.
 - MUST: tutte le GitHub Actions di terze parti usate dal workflow canonico sono pin-nate a commit SHA completi e immutabili; il commento di versione serve alla manutenzione/Dependabot, non alla risoluzione runtime. I checkout impostano `persist-credentials: false` per non lasciare il token Git nel workspace.
+- MUST: l'immagine container Playwright usa un tag di versione esatto, mai `latest`, e `test:ci-contract` impedisce drift tra immagine e lockfile.
 - MUST: i test M7 server continuano a mockare Firebase Admin.
 - MUST: il runner E2E usa esclusivamente configurazione Firebase dummy/test.
 - MUST: `FIREBASE_ADMIN_*` e `CRON_SECRET` restano configurazione runtime e non fixture CI.
@@ -108,7 +110,7 @@ set -o pipefail
 ${{ matrix.command }} 2>&1 | tee "verification-${{ matrix.id }}.log"
 ```
 
-`pipefail` preserva il codice di uscita non-zero del leaf chain; `2>&1` unisce stdout e stderr nel log. La matrice non usa `continue-on-error`. Il job `Canonical Verification` usa `needs: shards` e fallisce se il risultato aggregato non è `success`.
+`pipefail` preserva il codice di uscita non-zero del leaf chain; `2>&1` unisce stdout e stderr nel log. La matrice e il job E2E non usano `continue-on-error`. Il job `Canonical Verification` usa `needs: shards`, `needs: e2e` e `needs: codeql` e fallisce se uno qualunque dei tre risultati non è `success`.
 
 - MUST: il check aggregato resta denominato esattamente `Canonical Verification` finché required checks/Vercel esterni dipendono da quel nome.
 - MUST: nessun documento può affermare che “qualsiasi stderr” è automaticamente bloccante finché tale controllo non viene implementato.
@@ -133,6 +135,6 @@ ${{ matrix.command }} 2>&1 | tee "verification-${{ matrix.id }}.log"
 
 ## Acceptance
 
-Localmente, un candidato è tecnicamente validato dal gate repository quando `npm run verify:m8` termina con exit code 0 sull'HEAD esatto. In GitHub Actions, l'evidenza equivalente è una run `Milestone Verification` sullo stesso SHA in cui tutti gli shard e `Security / CodeQL` sono verdi e il check aggregato `Canonical Verification` è `success`.
+Localmente, un candidato è tecnicamente validato dal gate repository quando `npm run verify:m8` termina con exit code 0 sull'HEAD esatto. In GitHub Actions, l'evidenza equivalente è una run `Milestone Verification` sullo stesso SHA in cui matrice di shard, job dedicato `Verification / Playwright E2E` e `Security / CodeQL` sono verdi e il check aggregato `Canonical Verification` è `success`.
 
 Per revisioni indipendenti richieste dal livello di rischio del task, congelare lo SHA candidato e far revisionare/testare quello stesso SHA. Non sostituire evidenza eseguibile con il solo consenso tra agenti.
