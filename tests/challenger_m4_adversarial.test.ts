@@ -583,6 +583,13 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
     describe('Scope 6: Windowed Load & Batched Deletion Limits', () => {
         it('DB.loadUserData queries only 3 months window', async () => {
             const mockUserDoc = {
+                _schemaVersion: 1,
+                _sync: {
+                    protocolVersion: 3,
+                    clock: {},
+                    fields: {},
+                    writer: { slot: 's00', replicaId: 'window-seed', generation: 1, seq: 0 },
+                },
                 profile: { name: 'Window User' },
                 library: [],
                 routines: [],
@@ -598,8 +605,8 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
                     data: () => mockUserDoc
                 } as any)
                 .mockResolvedValue({
-                    exists: () => true,
-                    data: () => ({})
+                    exists: () => false,
+                    data: () => undefined
                 } as any);
 
             const loaded = await DB.loadUserData();

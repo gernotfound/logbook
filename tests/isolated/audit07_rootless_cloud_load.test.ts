@@ -73,6 +73,13 @@ it('performs the exhaustive monthly scan when the root document is absent', asyn
                 size: 1,
                 docs: [{ id: '2024-01', data: () => ({
                     'rootless-workout': { id: 'rootless-workout', date: '2024-01-10' },
+                    _schemaVersion: 1,
+                    _sync: {
+                        protocolVersion: 3,
+                        clock: {},
+                        fields: {},
+                        writer: { slot: 's00', replicaId: 'rootless-seed', generation: 1, seq: 0 },
+                    },
                 }) }],
             };
         }
@@ -80,6 +87,13 @@ it('performs the exhaustive monthly scan when the root document is absent', asyn
             size: 1,
             docs: [{ id: '2023-12', data: () => ({
                 '2023-12-05': { date: '2023-12-05', weight: 70 },
+                _schemaVersion: 1,
+                _sync: {
+                    protocolVersion: 3,
+                    clock: {},
+                    fields: {},
+                    writer: { slot: 's00', replicaId: 'rootless-seed', generation: 1, seq: 0 },
+                },
             }) }],
         };
     });
