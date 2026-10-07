@@ -141,12 +141,14 @@ export async function applyDocumentChanges(
         const remoteSyncMetas: Record<string, SyncMeta> = {};
 
         pathsToRead.forEach((path, index) => {
-            const raw = snapshots[index].exists() ? snapshots[index].data() : {};
-            const normalized = normalizeCloudDocument(raw, `Firestore ${path || 'root'} data schema`);
-
-            if (normalized.sync !== undefined) {
-                remoteSyncMetas[path] = parseSyncMeta(normalized.sync);
+            const snapshot = snapshots[index];
+            if (!snapshot.exists()) {
+                baseDocs.set(path, {});
+                return;
             }
+
+            const normalized = normalizeCloudDocument(snapshot.data(), `Firestore ${path || 'root'} data schema`);
+            remoteSyncMetas[path] = parseSyncMeta(normalized.sync);
 
             const remote = removeUndefinedValues(normalizeRemote(path, normalized.business));
             assertRemoteBusinessPreserved(path, normalized.business, remote);

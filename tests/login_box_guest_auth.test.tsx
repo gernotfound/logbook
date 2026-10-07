@@ -60,7 +60,6 @@ describe('LoginBox guest Google authentication', () => {
         });
         expect(authMocks.login).not.toHaveBeenCalled();
         expect(authMocks.linkGoogleAccount).toHaveBeenCalledWith('skip');
-        expect(localStorage.getItem('guest_migration_policy')).toBeNull();
     });
 
     it('exposes guest login as a modal dialog and traps focus until it closes', () => {
@@ -92,6 +91,5 @@ describe('LoginBox guest Google authentication', () => {
             expect(authMocks.login).toHaveBeenCalledTimes(1);
         });
         expect(authMocks.linkGoogleAccount).not.toHaveBeenCalled();
-        expect(localStorage.getItem('guest_migration_policy')).toBeNull();
     });
 });

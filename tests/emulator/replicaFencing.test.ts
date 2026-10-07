@@ -131,13 +131,9 @@ it('rejects Protocol 1/2 writers both before and after the account creates its r
         }));
     }
 
-    await assertSucceeds(setDoc(rootRef, {
-        profile: { height: '170' },
-        _schemaVersion: 1,
-    }));
-
     const now = Date.now();
-    await assertSucceeds(setDoc(doc(db, 'users/' + uid + '/sync_control/state'), {
+    const controlRef = doc(db, 'users/' + uid + '/sync_control/state');
+    await assertSucceeds(setDoc(controlRef, {
         protocolVersion: 3,
         replicas: {
             s00: {
@@ -153,12 +149,50 @@ it('rejects Protocol 1/2 writers both before and after the account creates its r
         mutation: { slot: 's00', action: 'register' },
     }));
 
+    const control = (await getDoc(controlRef)).data()!;
+    const baselineBatch = writeBatch(db);
+    baselineBatch.set(controlRef, {
+        ...control,
+        replicas: {
+            ...control.replicas,
+            s00: { ...control.replicas.s00, lastSeq: 1 },
+        },
+        mutation: { slot: 's00', action: 'advance' },
+    });
+    baselineBatch.set(rootRef, {
+        profile: { height: '170' },
+        _schemaVersion: 1,
+        _sync: {
+            protocolVersion: 3,
+            clock: { s00: 1 },
+            fields: {},
+            writer: { slot: 's00', replicaId: 'current-replica', generation: 1, seq: 1 },
+        },
+    });
+    await assertSucceeds(baselineBatch.commit());
+
     for (const protocolVersion of [1, 2]) {
-        await assertFails(setDoc(rootRef, {
+        const current = (await getDoc(controlRef)).data()!;
+        const legacyBatch = writeBatch(db);
+        legacyBatch.set(controlRef, {
+            ...current,
+            replicas: {
+                ...current.replicas,
+                s00: { ...current.replicas.s00, lastSeq: 2 },
+            },
+            mutation: { slot: 's00', action: 'advance' },
+        });
+        legacyBatch.set(rootRef, {
             profile: { height: '171' },
             _schemaVersion: 1,
-            _sync: { protocolVersion, clock: { legacy: 1 }, fields: {} },
-        }));
+            _sync: {
+                protocolVersion,
+                clock: { s00: 2 },
+                fields: {},
+                writer: { slot: 's00', replicaId: 'current-replica', generation: 1, seq: 2 },
+            },
+        });
+        await assertFails(legacyBatch.commit());
     }
 
     expect((await getDoc(rootRef)).data()?.profile.height).toBe('170');

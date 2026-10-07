@@ -44,6 +44,7 @@ vi.mock('firebase/firestore', () => ({
                             '2026-09-14': { actorId: 'legacy', seq: 2, clock: { legacy: 2 }, deleted: true },
                             '2026-09-14/weight': { actorId: 'legacy', seq: 1, clock: { legacy: 1 } },
                         },
+                        writer: { slot: 's00', replicaId: 'replica-s00', generation: 1, seq: 0 },
                     },
                 }),
             }),

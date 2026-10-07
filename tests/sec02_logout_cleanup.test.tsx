@@ -43,6 +43,7 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
             'draft_routine',
             'logbook_is_guest',
             'logbook_awaiting_redirect',
+            'guest_migration_intent_v1',
             'guest_migration_policy'
         ];
 

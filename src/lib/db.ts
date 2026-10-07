@@ -11,7 +11,6 @@ import {
     startAfter,
     type QueryDocumentSnapshot,
 } from 'firebase/firestore';
-import { del } from 'idb-keyval';
 import type { UserData } from '../types';
 import { DomainParsers } from './schema';
 import { syncGlobalCatalog, getCachedCatalog } from './catalog/catalogService';
@@ -42,12 +41,6 @@ async function loadCloudPayload(options?: { allMonths?: boolean }): Promise<{
 } | null> {
     const user = auth.currentUser;
     if (!user) return null;
-
-    await Promise.all([
-        del('pending_sync_payload'),
-        del('pending_sync_token'),
-        del('sync_failed'),
-    ]).catch(() => {});
 
     const cloudDocuments = new Map<string, any>();
     let completeMonths: string[] = [];
@@ -83,9 +76,7 @@ async function loadCloudPayload(options?: { allMonths?: boolean }): Promise<{
         if (root && typeof root.exists === 'function' && root.exists()) {
             const normalizedRoot = normalizeCloudDocument(root.data(), 'Firestore root data schema');
             const data = normalizedRoot.business as Record<string, any>;
-            if (normalizedRoot.sync !== undefined) {
-                cloudDocuments.set('', { ...data, _sync: normalizedRoot.sync });
-            }
+            cloudDocuments.set('', { ...data, _sync: normalizedRoot.sync });
             if (data.profile) state.profile = data.profile;
             state.catalogOverrides = data.catalogOverrides || {};
             state.library = resolveEffectiveExercises(catalog.exercises, data.library || [], state.catalogOverrides);
@@ -126,9 +117,7 @@ async function loadCloudPayload(options?: { allMonths?: boolean }): Promise<{
                         const monthData = colName === 'history_months'
                             ? sanitizeHistoryMonthDocument(item.id, rawMonthData)
                             : sanitizeNutritionMonthDocument(item.id, rawMonthData);
-                        if (normalized.sync !== undefined) {
-                            cloudDocuments.set(`${colName}/${item.id}`, { ...monthData, _sync: normalized.sync });
-                        }
+                        cloudDocuments.set(`${colName}/${item.id}`, { ...monthData, _sync: normalized.sync });
                         if (!completeMonths.includes(item.id)) completeMonths.push(item.id);
                         if (colName === 'history_months') {
                             Object.values(monthData).forEach(historyItem => state.history.push(historyItem));

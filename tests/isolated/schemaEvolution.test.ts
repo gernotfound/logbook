@@ -120,6 +120,7 @@ describe('Schema Evolution registry', () => {
         for (const protocolVersion of [1, 2]) {
             expect(() => normalizeCloudDocument({
                 profile: { name: 'legacy' },
+                _schemaVersion: CURRENT_DATA_SCHEMA,
                 _sync: { protocolVersion, clock: {}, fields: {} },
             })).toThrow(LegacyVersionError);
 
@@ -151,33 +152,46 @@ describe('Schema Evolution registry', () => {
         }
     });
 
-    it('treats an unversioned Firestore document as the clean schema-1 baseline', () => {
-        const raw = { profile: { name: 'A' }, _sync: { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {} } };
-        const normalized = normalizeCloudDocument(raw);
-        expect(normalized.dataSchemaVersion).toBe(CURRENT_DATA_SCHEMA);
-        expect(normalized.business).toEqual({ profile: { name: 'A' } });
-        expect(normalized.sync).toEqual(raw._sync);
-        expect(raw).toHaveProperty('_sync');
+    it('rejects persisted Firestore documents missing the current schema or sync markers', () => {
+        expect(() => normalizeCloudDocument({
+            profile: { name: 'A' },
+            _sync: { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {}, writer: { slot: 's00', replicaId: 'test-replica', generation: 1, seq: 0 } },
+        })).toThrow(LegacyVersionError);
+
+        expect(() => normalizeCloudDocument({
+            profile: { name: 'A' },
+            _schemaVersion: CURRENT_DATA_SCHEMA,
+        })).toThrow(LegacyVersionError);
+
+        expect(() => normalizeCloudDocument({
+            profile: { name: 'A' },
+            _schemaVersion: CURRENT_DATA_SCHEMA,
+            _sync: { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {} },
+        })).toThrow('writer obbligatorio');
     });
 
     it('refuses a future Firestore data schema before business data is consumed', () => {
-        expect(() => normalizeCloudDocument({ _schemaVersion: CURRENT_DATA_SCHEMA + 1, profile: { name: 'future' } }))
-            .toThrow(FutureVersionError);
+        expect(() => normalizeCloudDocument({
+            _schemaVersion: CURRENT_DATA_SCHEMA + 1,
+            profile: { name: 'future' },
+            _sync: { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {}, writer: { slot: 's00', replicaId: 'test-replica', generation: 1, seq: 0 } },
+        })).toThrow(FutureVersionError);
     });
 
     it('refuses a future sync protocol before semantic metadata is consumed', () => {
         expect(() => normalizeCloudDocument({
             profile: { name: 'future' },
+            _schemaVersion: CURRENT_DATA_SCHEMA,
             _sync: { protocolVersion: CURRENT_SYNC_PROTOCOL + 1, clock: {}, fields: {} },
         })).toThrow(FutureVersionError);
     });
 
     it('writes current schema and validates current sync protocol outside business data', () => {
-        expect(withCurrentDataSchema({ profile: { name: 'A' } }, { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {} }))
+        expect(withCurrentDataSchema({ profile: { name: 'A' } }, { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {}, writer: { slot: 's00', replicaId: 'test-replica', generation: 1, seq: 0 } }))
             .toEqual({
                 profile: { name: 'A' },
                 _schemaVersion: CURRENT_DATA_SCHEMA,
-                _sync: { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {} },
+                _sync: { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {}, writer: { slot: 's00', replicaId: 'test-replica', generation: 1, seq: 0 } },
             });
     });
 });

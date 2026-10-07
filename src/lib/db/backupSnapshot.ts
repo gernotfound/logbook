@@ -29,12 +29,10 @@ export async function collectBackupSnapshot(fallback: UserData, includeCloud: bo
         documents.set(path, structuredClone((raw ?? {}) as DocumentData));
         const normalized = normalizeCloudDocument(raw ?? {}, `Backup ${path || 'root'} data schema`);
         businessDocuments.set(path, normalized.business);
-        if (normalized.sync !== undefined) {
-            try {
-                syncMetaByDocument[path] = parseSyncMeta(normalized.sync);
-            } catch (error) {
-                throw new Error(`Metadati _sync non validi nel backup per ${path || 'root'}`, { cause: error });
-            }
+        try {
+            syncMetaByDocument[path] = parseSyncMeta(normalized.sync);
+        } catch (error) {
+            throw new Error(`Metadati _sync non validi nel backup per ${path || 'root'}`, { cause: error });
         }
     };
 
@@ -47,7 +45,7 @@ export async function collectBackupSnapshot(fallback: UserData, includeCloud: bo
         const uid = session.owner.slice(5);
         const root = await withTimeout(getDocFromServer(doc(db, 'users', uid)), 10000, 'Cloud non disponibile per il backup completo.');
         assertCurrent();
-        addRawDoc('', root.exists() ? root.data() : {});
+        if (root.exists()) addRawDoc('', root.data());
         for (const name of ['history_months', 'nutrition_months']) {
             let cursor: QueryDocumentSnapshot | undefined;
             do {

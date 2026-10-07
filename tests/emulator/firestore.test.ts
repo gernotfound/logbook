@@ -39,29 +39,66 @@ function protocol3Registration() {
     };
 }
 
-it('allows the owner to create, read and update their profile but denies direct root deletion', async () => {
-    const ref = doc(env.authenticatedContext('a').firestore(), 'users/a');
-    await assertSucceeds(setDoc(ref, { profile: { height: '175' }, nutritionPlanningOrigin: 'user-edited', _schemaVersion: 1 }));
+async function fencedWrite(db: any, path: string, business: Record<string, unknown>, replica?: any) {
+    const activeReplica = replica ?? await registerReplica(db, 'a');
+    const controlRef = doc(db, 'users/a/sync_control/state');
+    const control = (await getDoc(controlRef)).data()!;
+    const currentEntry = control.replicas[activeReplica.slot];
+    const seq = currentEntry.lastSeq + 1;
+    const writer = {
+        slot: activeReplica.slot,
+        replicaId: activeReplica.replicaId,
+        generation: activeReplica.generation,
+        seq,
+    };
+    const batch = writeBatch(db);
+    batch.set(controlRef, {
+        ...control,
+        replicas: {
+            ...control.replicas,
+            [activeReplica.slot]: { ...currentEntry, lastSeq: seq },
+        },
+        mutation: { slot: activeReplica.slot, action: 'advance' },
+    });
+    batch.set(doc(db, path), {
+        ...business,
+        _schemaVersion: 1,
+        _sync: {
+            protocolVersion: CURRENT_SYNC_PROTOCOL,
+            clock: { [activeReplica.slot]: seq },
+            fields: {},
+            writer,
+        },
+    });
+    await batch.commit();
+    return activeReplica;
+}
+
+it('allows only Protocol 3 fenced owner writes and denies direct root deletion', async () => {
+    const db = env.authenticatedContext('a').firestore();
+    const ref = doc(db, 'users/a');
+    const replica = await fencedWrite(db, 'users/a', { profile: { height: '175' }, nutritionPlanningOrigin: 'user-edited' });
     expect((await assertSucceeds(getDoc(ref))).data()?.profile.height).toBe('175');
-    await assertSucceeds(setDoc(ref, { profile: { height: '176' }, nutritionPlanningOrigin: 'user-edited', _schemaVersion: 1 }));
+    await fencedWrite(db, 'users/a', { profile: { height: '176' }, nutritionPlanningOrigin: 'user-edited' }, replica);
     expect((await assertSucceeds(getDoc(ref))).data()?.profile.height).toBe('176');
     await assertFails(deleteDoc(ref));
 });
 
-it('allows the clean-cut unversioned schema-1 baseline, marks it lazily, and prevents marker downgrade', async () => {
+it('rejects markerless or unfenced business writes while allowing the current first-account baseline', async () => {
     const db = env.authenticatedContext('a').firestore();
     const root = doc(db, 'users/a');
-    await assertSucceeds(setDoc(root, { profile: { name: 'baseline' } }));
-    await assertSucceeds(setDoc(root, { profile: { name: 'current' }, _schemaVersion: 1 }));
-    await assertFails(setDoc(root, { profile: { name: 'marker-dropped' } }));
-    await assertFails(setDoc(root, { profile: { name: 'future' }, _schemaVersion: 2 }));
+    await assertFails(setDoc(root, { profile: { name: 'markerless' } }));
+    await assertFails(setDoc(root, { profile: { name: 'schema-only' }, _schemaVersion: 1 }));
+
+    const replica = await fencedWrite(db, 'users/a', { profile: { name: 'current' } });
+    expect((await getDoc(root)).data()?.profile.name).toBe('current');
 
     for (const collection of ['history_months', 'nutrition_months']) {
         const ref = doc(db, `users/a/${collection}/2026-09`);
-        await assertSucceeds(setDoc(ref, {}));
-        await assertSucceeds(setDoc(ref, { _schemaVersion: 1 }));
         await assertFails(setDoc(ref, {}));
-        await assertFails(setDoc(ref, { _schemaVersion: 2 }));
+        await assertFails(setDoc(ref, { _schemaVersion: 1 }));
+        await fencedWrite(db, `users/a/${collection}/2026-09`, {}, replica);
+        expect((await getDoc(ref)).data()?._schemaVersion).toBe(1);
     }
 });
 
@@ -69,7 +106,12 @@ it('denies client-side monthly physical deletion before and after Protocol 3 reg
     const db = env.authenticatedContext('a').firestore();
     const monthRef = doc(db, 'users/a/nutrition_months/2026-09');
 
-    await assertSucceeds(setDoc(monthRef, { _schemaVersion: 1 }));
+    await env.withSecurityRulesDisabled(async context => {
+        await setDoc(doc(context.firestore(), 'users/a/nutrition_months/2026-09'), {
+            _schemaVersion: 1,
+            _sync: { protocolVersion: 3, clock: {}, fields: {}, writer: { slot: 's00', replicaId: 'seed', generation: 1, seq: 0 } },
+        });
+    });
     await assertFails(deleteDoc(monthRef));
 
     await registerReplica(db, 'a');
@@ -96,7 +138,12 @@ it.each(['history_months', 'nutrition_months'])(
         const db = env.authenticatedContext('a').firestore();
         const monthRef = doc(db, `users/a/${collectionName}/2026-09`);
         const controlRef = doc(db, 'users/a/sync_control/state');
-        await assertSucceeds(setDoc(monthRef, { _schemaVersion: 1 }));
+        await env.withSecurityRulesDisabled(async context => {
+            await setDoc(doc(context.firestore(), `users/a/${collectionName}/2026-09`), {
+                _schemaVersion: 1,
+                _sync: { protocolVersion: 3, clock: {}, fields: {}, writer: { slot: 's00', replicaId: 'seed', generation: 1, seq: 0 } },
+            });
+        });
 
         const batch = writeBatch(db);
         batch.set(controlRef, protocol3Registration());
@@ -211,13 +258,14 @@ it.each([
     await assertFails(deleteDoc(existingRef));
 });
 
-it('rejects unknown root fields, invalid origin and malformed month paths', async () => {
+it('rejects unknown root fields, invalid origin and malformed month paths inside fenced writes', async () => {
     const db = env.authenticatedContext('a').firestore();
-    await assertFails(setDoc(doc(db, 'users/a'), { unknown: true }));
-    await assertFails(setDoc(doc(db, 'users/a'), { nutritionPlanningOrigin: 'injected' }));
+    const replica = await registerReplica(db, 'a');
+    await assertFails(fencedWrite(db, 'users/a', { unknown: true }, replica));
+    await assertFails(fencedWrite(db, 'users/a', { nutritionPlanningOrigin: 'injected' }, replica));
     for (const name of ['history_months', 'nutrition_months']) {
-        await assertFails(setDoc(doc(db, `users/a/${name}/2026-13`), {}));
-        await assertSucceeds(setDoc(doc(db, `users/a/${name}/2026-09`), { _schemaVersion: 1 }));
+        await assertFails(fencedWrite(db, `users/a/${name}/2026-13`, {}, replica));
+        await fencedWrite(db, `users/a/${name}/2026-09`, {}, replica);
     }
 });
 
@@ -266,9 +314,10 @@ it('permits public catalog reads but denies client writes', async () => {
     }
 });
 
-it('rejects untyped root fields', async () => {
+it('rejects untyped root fields inside a valid fenced write', async () => {
     const db = env.authenticatedContext('a').firestore();
-    await assertFails(setDoc(doc(db, 'users/a'), { profile: 'invalid-profile', _schemaVersion: 1 }));
+    const replica = await registerReplica(db, 'a');
+    await assertFails(fencedWrite(db, 'users/a', { profile: 'invalid-profile' }, replica));
 });
 
 it('accepts bounded owner telemetry and rejects malformed payloads', async () => {

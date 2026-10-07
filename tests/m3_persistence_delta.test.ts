@@ -256,6 +256,13 @@ describe('M3: Storage & Persistence Delta Isolation Suite', () => {
             await saveCatalogToCache(fixtureCatalog);
 
             const mockFirestoreDoc = {
+                _schemaVersion: 1,
+                _sync: {
+                    protocolVersion: 3,
+                    clock: {},
+                    fields: {},
+                    writer: { slot: 's00', replicaId: 'delta-seed', generation: 1, seq: 0 },
+                },
                 profile: { name: 'Cloud User', height: '180' },
                 library: [
                     { id: 'cloud_custom_dip', name: 'Dip alle Parallele Zavorrate', setsCount: 4, sets: [], isDefault: false }

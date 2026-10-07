@@ -148,6 +148,29 @@ function readSyncProtocol(sync: unknown, kind: string): number | undefined {
     return version;
 }
 
+function assertCurrentCloudSyncEnvelope(sync: unknown, kind: string): Record<string, unknown> {
+    if (!isRecord(sync)) throw new Error(`${kind} non valido.`);
+    const allowedKeys = new Set(['protocolVersion', 'clock', 'fields', 'writer']);
+    if (Object.keys(sync).some(key => !allowedKeys.has(key))) throw new Error(`${kind}: campi non supportati.`);
+    if (!isRecord(sync.clock)) throw new Error(`${kind}: clock non valido.`);
+    if (!isRecord(sync.fields)) throw new Error(`${kind}: fields non valido.`);
+    if (!isRecord(sync.writer)) throw new Error(`${kind}: writer obbligatorio.`);
+    const writer = sync.writer;
+    if (typeof writer.slot !== 'string' || !/^s(?:0[0-9]|1[0-5])$/.test(writer.slot)) {
+        throw new Error(`${kind}: writer slot non valido.`);
+    }
+    if (typeof writer.replicaId !== 'string' || !writer.replicaId.trim() || writer.replicaId.length > 128) {
+        throw new Error(`${kind}: writer replica non valido.`);
+    }
+    if (typeof writer.generation !== 'number' || !Number.isSafeInteger(writer.generation) || writer.generation < 1) {
+        throw new Error(`${kind}: writer generation non valida.`);
+    }
+    if (typeof writer.seq !== 'number' || !Number.isSafeInteger(writer.seq) || writer.seq < 0) {
+        throw new Error(`${kind}: writer seq non valida.`);
+    }
+    return sync;
+}
+
 function normalizeSyncProtocol(sync: unknown, sourceVersion: number | undefined, kind: string): unknown {
     if (sync === undefined || sourceVersion === undefined) return undefined;
     if (!isRecord(sync)) throw new Error(`${kind} non valido.`);
@@ -160,7 +183,10 @@ function normalizeSyncProtocol(sync: unknown, sourceVersion: number | undefined,
         kind,
     );
     if (migrated.scope !== 'cloud') throw new Error(`${kind}: migration scope non valido.`);
-    return { ...migrated.sync, protocolVersion: CURRENT_SYNC_PROTOCOL };
+    return assertCurrentCloudSyncEnvelope(
+        { ...migrated.sync, protocolVersion: CURRENT_SYNC_PROTOCOL },
+        kind,
+    );
 }
 
 function normalizePersistedDimensions(
@@ -202,12 +228,17 @@ export function normalizeCloudDocument(raw: unknown, kind = 'Firestore data sche
     try {
         if (!isRecord(raw)) throw new Error('Documento Firestore non valido.');
 
-        // Missing marker permanently means the schema-1 baseline, even after future schema bumps.
-        const sourceVersion = raw._schemaVersion === undefined
-            ? BASELINE_DATA_SCHEMA
-            : assertVersionNumber(raw._schemaVersion, kind);
+        if (raw._schemaVersion === undefined) {
+            throw new LegacyVersionError(kind, 0, BASELINE_DATA_SCHEMA);
+        }
+        const sourceVersion = assertVersionNumber(raw._schemaVersion, kind);
+        if (sourceVersion < BASELINE_DATA_SCHEMA) throw new LegacyVersionError(kind, sourceVersion, BASELINE_DATA_SCHEMA);
+        if (sourceVersion > CURRENT_DATA_SCHEMA) throw new FutureVersionError(kind, sourceVersion, CURRENT_DATA_SCHEMA);
 
         const { _schemaVersion: _ignoredVersion, _sync, ...business } = raw;
+        if (_sync === undefined) {
+            throw new LegacyVersionError(`${kind} sync protocol`, 0, BASELINE_SYNC_PROTOCOL);
+        }
         const sourceSyncVersion = readSyncProtocol(_sync, `${kind} sync protocol`);
 
         const migrated = migrateFromBaseline<DataMigrationCarrier>(
@@ -280,6 +311,9 @@ export function withCurrentDataSchema(
     sync?: unknown,
 ): Record<string, unknown> {
     try {
+        if (sync === undefined) {
+            throw new LegacyVersionError('Protocollo sync in scrittura', 0, BASELINE_SYNC_PROTOCOL);
+        }
         const sourceSyncVersion = readSyncProtocol(sync, 'Protocollo sync in scrittura');
         const normalizedSync = normalizeSyncProtocol(sync, sourceSyncVersion, 'Protocollo sync in scrittura');
         return {

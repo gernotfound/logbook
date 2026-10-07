@@ -105,7 +105,19 @@ describe('remote commit to local acknowledgement reconciliation', () => {
         const db = firebaseHarness.db;
         const userRef = doc(db, 'users/a');
 
-        await setDoc(userRef, projectDocuments(initial, catalog).get('')!);
+        const initialBusiness = projectDocuments(initial, catalog).get('')!;
+        await env.withSecurityRulesDisabled(async context => {
+            await setDoc(doc(context.firestore(), 'users/a'), {
+                ...initialBusiness,
+                _schemaVersion: 1,
+                _sync: {
+                    protocolVersion: 3,
+                    clock: {},
+                    fields: {},
+                    writer: { slot: 's01', replicaId: 'seed-remote', generation: 1, seq: 0 },
+                },
+            });
+        });
         const localReplica = await registerReplica(db, 'a', 's00', 'replica-local');
         await adoptReplicaCheckpoint(owner, { identity: localReplica, baseSeq: 0 }, { clock: {}, syncMetaByDocument: {} });
         const remoteReplica = await registerReplica(db, 'a', 's01', 'replica-remote');

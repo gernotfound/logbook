@@ -310,6 +310,13 @@ describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & D
     describe('2. 3-Month Windowing & Multi-Month Firestore Isolation', () => {
         it('2.1: DB.loadUserData strictly loads exactly 3 target months (current, M-1, M-2) via 8 getDoc calls', async () => {
             const mockUserDoc = {
+                _schemaVersion: 1,
+                _sync: {
+                    protocolVersion: 3,
+                    clock: {},
+                    fields: {},
+                    writer: { slot: 's00', replicaId: 'window-seed', generation: 1, seq: 0 },
+                },
                 profile: { height: '178' },
                 library: [],
                 routines: [],
@@ -327,20 +334,30 @@ describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & D
             const d2 = new Date(now.getFullYear(), now.getMonth() - 2, 1);
             const m2 = `${d2.getFullYear()}-${String(d2.getMonth() + 1).padStart(2, '0')}`;
 
-            const mockHistoryM0 = { h_m0: { id: 'h_m0', date: `${m0}-10`, globalStartTime: 100, exercises: [] } };
-            const mockHistoryM1 = { h_m1: { id: 'h_m1', date: `${m1}-15`, globalStartTime: 50, exercises: [] } };
-            const mockNutritionM2 = { [`${m2}-05`]: { date: `${m2}-05`, kcal: 2200, carbs: 200, pro: 150, fat: 60, meals: [] } };
+            const currentMonth = (business: Record<string, unknown>) => ({
+                ...business,
+                _schemaVersion: 1,
+                _sync: {
+                    protocolVersion: 3,
+                    clock: {},
+                    fields: {},
+                    writer: { slot: 's00', replicaId: 'window-seed', generation: 1, seq: 0 },
+                },
+            });
+            const mockHistoryM0 = currentMonth({ h_m0: { id: 'h_m0', date: `${m0}-10`, globalStartTime: 100, exercises: [] } });
+            const mockHistoryM1 = currentMonth({ h_m1: { id: 'h_m1', date: `${m1}-15`, globalStartTime: 50, exercises: [] } });
+            const mockNutritionM2 = currentMonth({ [`${m2}-05`]: { date: `${m2}-05`, kcal: 2200, carbs: 200, pro: 150, fat: 60, meals: [] } });
 
             vi.mocked(getDoc).mockImplementation(async (docRef: any) => {
                 const pathStr = docRef?.path || '';
                 if (pathStr.includes('history_months')) {
                     if (pathStr.includes(m0)) return { exists: () => true, data: () => mockHistoryM0 } as any;
                     if (pathStr.includes(m1)) return { exists: () => true, data: () => mockHistoryM1 } as any;
-                    return { exists: () => true, data: () => ({}) } as any;
+                    return { exists: () => false, data: () => undefined } as any;
                 }
                 if (pathStr.includes('nutrition_months')) {
                     if (pathStr.includes(m2)) return { exists: () => true, data: () => mockNutritionM2 } as any;
-                    return { exists: () => true, data: () => ({}) } as any;
+                    return { exists: () => false, data: () => undefined } as any;
                 }
                 // Root user doc
                 return { exists: () => true, data: () => mockUserDoc } as any;
