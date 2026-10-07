@@ -1,0 +1,151 @@
+.workout-timer-shell {
+  display: grid;
+  gap: .5rem;
+  min-width: 0;
+}
+
+.workout-timer-menu .context-menu-trigger {
+  border-color: transparent;
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.workout-timer-menu .context-menu-trigger:hover,
+.workout-timer-menu .context-menu-trigger:focus-visible,
+.workout-timer-menu .context-menu-trigger[aria-expanded="true"] {
+  background: var(--surface-light);
+  color: var(--text-main);
+  border-color: var(--glass-border);
+}
+
+.workout-metronome-panel {
+  display: grid;
+  gap: .5rem;
+  min-width: 0;
+  padding: .625rem .75rem .75rem;
+  border-top: 1px solid var(--glass-border);
+  border-radius: var(--radius-control, .875rem);
+  background: var(--surface-color);
+}
+
+.workout-metronome-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  min-width: 0;
+}
+
+.workout-metronome-heading strong {
+  color: var(--text-main);
+  font-size: var(--font-size-secondary);
+}
+
+.workout-metronome-heading output {
+  color: var(--primary-color);
+  font-size: var(--font-size-meta);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.workout-metronome-controls {
+  display: grid;
+  grid-template-columns: 2.75rem minmax(4.25rem, 5rem) 2.75rem minmax(5.5rem, auto);
+  align-items: center;
+  gap: .5rem;
+}
+
+.workout-metronome-step,
+.workout-metronome-toggle {
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-control, .875rem);
+  background: var(--surface-light);
+  color: var(--text-main);
+}
+
+.workout-metronome-step {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  padding: 0;
+}
+
+.workout-metronome-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .375rem;
+  padding: .5rem .75rem;
+  font-size: var(--font-size-secondary);
+  font-weight: 600;
+}
+
+.workout-metronome-toggle:not(:disabled) {
+  border-color: var(--primary-color);
+  background: var(--primary-color);
+  color: var(--on-primary);
+}
+
+.workout-metronome-toggle.is-running {
+  border-color: var(--warning-color);
+  background: var(--surface-light);
+  color: var(--warning-color);
+}
+
+.workout-metronome-step:disabled,
+.workout-metronome-toggle:disabled {
+  opacity: .45;
+}
+
+.workout-metronome-input {
+  min-width: 0;
+}
+
+.workout-metronome-input input {
+  width: 100%;
+  min-width: 0;
+  min-height: 2.75rem;
+  margin: 0;
+  padding: .5rem .625rem;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-control, .875rem);
+  background: var(--surface-light);
+  color: var(--text-main);
+  font-size: 16px !important;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.workout-metronome-status {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--font-size-micro);
+}
+
+@media (max-width: 22.5rem) {
+  .workout-timer {
+    gap: .5rem;
+  }
+
+  .workout-timer .timer-controls {
+    gap: .25rem;
+  }
+
+  .workout-metronome-panel {
+    padding-inline: .5rem;
+  }
+
+  .workout-metronome-controls {
+    grid-template-columns: 2.75rem minmax(3.75rem, 1fr) 2.75rem minmax(5rem, auto);
+    gap: .25rem;
+  }
+
+  .workout-metronome-toggle {
+    padding-inline: .5rem;
+  }
+}
