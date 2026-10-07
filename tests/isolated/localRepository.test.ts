@@ -40,9 +40,9 @@ describe('durable owner-scoped journal', () => {
         expect(await get('logbook:v2:user:a')).toEqual(future);
     });
 
-    it('migrates a protocol-1 local envelope in memory and preserves its causal state', async () => {
+    it('rejects a pre-launch protocol local envelope without rewriting its bytes', async () => {
         const payload = data(170);
-        await set('logbook:v2:user:a', {
+        const legacy = {
             version: CURRENT_LOCAL_ENVELOPE,
             dataSchemaVersion: CURRENT_DATA_SCHEMA,
             syncProtocolVersion: 1,
@@ -54,21 +54,13 @@ describe('durable owner-scoped journal', () => {
             baseline: payload,
             completeMonths: [],
             pending: [],
-            syncMetaByDocument: {
-                '': {
-                    protocolVersion: 1,
-                    clock: { 'actor-a': 1 },
-                    fields: {
-                        'profile/height': { actorId: 'actor-a', seq: 1, clock: { 'actor-a': 1 } },
-                    },
-                },
-            },
+            syncMetaByDocument: {},
             revision: 1,
-        });
+        };
+        await set('logbook:v2:user:a', legacy);
 
-        const migrated = await readLocal('a');
-        expect(migrated?.syncProtocolVersion).toBe(CURRENT_SYNC_PROTOCOL);
-        expect(migrated?.syncMetaByDocument[''].protocolVersion).toBe(CURRENT_SYNC_PROTOCOL);
+        await expect(readLocal('a')).rejects.toThrow(LegacyVersionError);
+        expect(await get('logbook:v2:user:a')).toEqual(legacy);
     });
 
     it('marks only the matching fenced replica as checkpoint-required without dropping its journal', async () => {

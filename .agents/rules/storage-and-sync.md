@@ -79,7 +79,7 @@ Non esistono utenti/account reali da migrare da build precedenti. Per questo M1 
 
 - la baseline M1 non introdusse una migrazione prodotto da local envelope V3 a V4;
 - nessuna importazione compatibile di backup V1/V2;
-- i registry contengono ora migrazioni reali sequenziali per Sync 1→2→3 e Local Envelope 4→5; non aggiungere step sintetici senza una reale evoluzione persistita;
+- Sync Protocol 3 è la baseline del primo account reale: Protocol 1/2 vengono rifiutati fail-closed e non vengono migrati; la migrazione Local Envelope 4→5 resta separata perché riguarda storage device-local già prodotto durante lo sviluppo;
 - vecchi formati locali/backup vengono rifiutati e non riscritti;
 - la vecchia cache locale non attribuita `logbook_cached_user_data` non viene letta, preservata né esportata dal prodotto corrente;
 - il timer legge esclusivamente lo snapshot owner-scoped `timer`; eventuali chiavi timer obsolete possono essere eliminate best-effort ma non vengono mai usate come fallback;
@@ -117,13 +117,13 @@ La pipeline V4 mantiene debounce e protocollo causale delle milestone precedenti
 
 **MUST:** ancestor e descendant vengono riconciliati con lo stesso ordine totale. Una write ancestor preserva e riapplica soltanto i descendant stamp che la superano; i descendant shadowed vengono rimossi semanticamente. Guard fallite vengono escluse prima dell'arbitration del field.
 
-Il protocollo 1 viene normalizzato sequenzialmente 1→2→3 prima del semantic merge. Poiché Protocol 1 poteva avere `FieldStamp.clock` già contaminati da contender perdenti, la migrazione separa il dot certo del winner (`actorId`/`seq`) dal vecchio frontier in `legacyClock`: i retry già risolti non possono cambiare il winner storico, mentre una nuova operation che dimostra di aver osservato il dot del winner può supersederlo senza ereditare dipendenze spurie. Client futuri restano fail-closed secondo le regole di schema evolution.
+Il primo account reale nasce direttamente su Sync Protocol 3. Metadata cloud/local/backup con Protocol 1 o 2 sono fuori baseline e vengono rifiutati senza riscrittura; da questo punto in poi eventuali nuove migrazioni sync devono essere introdotte solo per versioni realmente persistite dopo il lancio. Client futuri restano fail-closed secondo le regole di schema evolution.
 
 I boundary bulk — bootstrap/initialize, hydration, guest→account merge, import/restore e recovery — possono continuare a usare il percorso snapshot `saveUserData/updateUserData/commitLocal`. Non costituiscono il percorso normativo per una normale mutazione utente. L'allowlist canonica e il boundary checker sono documentati in `.agents/rules/domain-operations.md`.
 
 **MUST:** nuovi consumer business ordinari non possono introdurre bypass snapshot fuori dall'allowlist verificata dal gate M8.
 
-**MUST:** Data Schema resta 1 e Backup Schema resta 3. Sync Protocol 3 richiede Local Envelope 5 perché l'envelope persiste l'identità replica; le migrazioni 1→2→3 e 4→5 restano dimensioni esplicite e indipendenti.
+**MUST:** Data Schema resta 1 e Backup Schema resta 3. Sync Protocol 3 è la baseline account corrente e richiede Local Envelope 5 perché l'envelope persiste l'identità replica; l'eventuale migrazione del container locale 4→5 resta una dimensione distinta e non riabilita Protocol 1/2.
 
 **MUST:** nessuna ottimizzazione del debounce cloud può posticipare la persistenza IndexedDB immediata.
 

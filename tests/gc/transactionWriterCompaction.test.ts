@@ -38,7 +38,7 @@ vi.mock('firebase/firestore', () => ({
                 data: () => ({
                     _schemaVersion: 1,
                     _sync: {
-                        protocolVersion: 1,
+                        protocolVersion: 3,
                         clock: { legacy: 2 },
                         fields: {
                             '2026-09-14': { actorId: 'legacy', seq: 2, clock: { legacy: 2 }, deleted: true },

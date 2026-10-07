@@ -20,13 +20,11 @@ function cloneStamp(stamp: FieldStamp): FieldStamp {
         ...stamp,
         clock: compactVector(stamp.clock),
         ...(stamp.deleteClock ? { deleteClock: compactVector(stamp.deleteClock) } : {}),
-        ...(stamp.legacyClock ? { legacyClock: compactVector(stamp.legacyClock) } : {}),
         ...(stamp.guard ? { guard: structuredClone(stamp.guard) } : {}),
         ...(stamp.candidates?.length ? {
             candidates: stamp.candidates.map(candidate => ({
                 ...candidate,
                 clock: compactVector(candidate.clock),
-                ...(candidate.legacyClock ? { legacyClock: compactVector(candidate.legacyClock) } : {}),
                 ...(candidate.guard ? { guard: structuredClone(candidate.guard) } : {}),
                 value: structuredClone(candidate.value),
             })),
@@ -51,10 +49,8 @@ function stampClocks(stamp: FieldStamp): VectorClock[] {
     return [
         stamp.clock,
         ...(stamp.deleteClock ? [stamp.deleteClock] : []),
-        ...(stamp.legacyClock ? [stamp.legacyClock] : []),
         ...(stamp.candidates ?? []).flatMap(candidate => [
             candidate.clock,
-            ...(candidate.legacyClock ? [candidate.legacyClock] : []),
         ]),
     ];
 }

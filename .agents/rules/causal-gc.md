@@ -48,7 +48,7 @@ Per path gerarchici, gli stamp antenati sono il boundary canonico di riconciliaz
 
 1. `T.deleted === true` oppure `T.deleteClock` è presente dopo una recreation;
 2. la chiave di `D` è realmente discendente della chiave di `T` (`T + '/'` come prefisso di segmenti già URI-encoded);
-3. la barriera `T.deleteClock` (o il clock della tombstone legacy quando necessario) copre completamente `D.clock` **e** i clock di ogni `D.candidates`; un contender nascosto non coperto impedisce la compaction dell'intero descendant.
+3. la barriera `T.deleteClock` (o il clock della tombstone terminale) copre completamente `D.clock` **e** i clock di ogni `D.candidates`; un contender nascosto non coperto impedisce la compaction dell'intero descendant.
 
 **MUST:** senza una `stableFrontier` che copra integralmente lo stamp, `T` stessa e la sua barriera delete restano persistite. Con Protocol 3 possono essere ritirate solo secondo la prova stable-frontier descritta sotto.
 
@@ -80,7 +80,7 @@ Protocol 3 chiude il limite storico di M4 con un registro per-account in `users/
 
 La `stableFrontier` è il minimo componente-per-componente dei `checkpointClock` di tutte e sole le repliche `active`. Una coordinata assente vale zero e blocca il GC dello stato che la richiede.
 
-**MUST:** una tombstone terminale può essere eliminata solo quando la stable frontier copre winner clock, `deleteClock`, `legacyClock` e tutti i candidate clock dello stamp.
+**MUST:** una tombstone terminale può essere eliminata solo quando la stable frontier copre winner clock, `deleteClock` e tutti i candidate clock dello stamp.
 
 **MUST:** una `deleteClock` storica dopo recreation può essere rimossa solo con la stessa prova.
 
@@ -94,7 +94,7 @@ Le Security Rules rendono autorevoli membership, generation e lease tramite `req
 
 ### Empty shell dopo terminal GC
 
-Dopo la creazione del registro Protocol 3 il client non esegue delete fisiche dei documenti di sync. Se business state e `fields` diventano vuoti dopo stable-frontier GC, `transactionWriter` persiste un empty shell con `_schemaVersion` e `_sync.writer`. Le Rules negano la delete fisica mensile dopo il cutover; prima del cutover resta la compatibilità legacy.
+Il client non esegue delete fisiche dei documenti di sync. Se business state e `fields` diventano vuoti dopo stable-frontier GC, `transactionWriter` persiste un empty shell con `_schemaVersion` e `_sync.writer`. Le Rules negano sempre la delete fisica mensile lato client; la cancellazione fisica resta esclusivamente nel boundary trusted di account deletion.
 
 Questo impedisce che una vecchia generation trasformi una delete Firestore non attribuita in una transizione causale. La cancellazione account trusted/Admin resta separata e può rimuovere fisicamente i documenti.
 ## Gate

@@ -132,7 +132,7 @@ Le collection `users/{uid}/telemetry_errors`, `telemetry_events` e `telemetry_an
 
 ### Metadati `_sync`
 
-Le Rules verificano gli invarianti top-level del protocollo che appartengono al boundary di autorizzazione. Prima del cutover per-account accettano documenti legacy Protocol 1/2. Protocol 3 aggiunge `_sync.writer` (`slot`, `replicaId`, `generation`, `seq`) e `users/{uid}/sync_control/state`: una write corrente è ammessa solo se writer e registro attivo coincidono e l'avanzamento `lastSeq` avviene atomicamente. Dopo la creazione del registro, Protocol 1/2 non può più scrivere per quell'account e le delete fisiche dei documenti mensili sono negate. `request.time` è la prova autorevole della lease; la validazione completa di Vector Clock/`FieldStamp` e la completezza del full checkpoint restano nel protocollo TypeScript e nei relativi test.
+Le Rules verificano gli invarianti top-level del protocollo che appartengono al boundary di autorizzazione. Sync Protocol 3 è la baseline del primo account reale: Protocol 1/2 non sono più accettati né migrati. Prima della creazione di `users/{uid}/sync_control/state` sono consentite soltanto write bootstrap prive di `_sync`; una volta creato il registro, ogni write causale richiede `_sync.writer` (`slot`, `replicaId`, `generation`, `seq`) coerente con la replica attiva e l'avanzamento atomico di `lastSeq`. Le delete fisiche client-side dei documenti mensili sono sempre negate; la cancellazione fisica resta nel backend trusted di account deletion. `request.time` è la prova autorevole della lease; la validazione completa di Vector Clock/`FieldStamp` e la completezza del full checkpoint restano nel protocollo TypeScript e nei relativi test.
 
 ### Sintomo di Rules/Auth/App Check
 

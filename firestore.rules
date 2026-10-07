@@ -57,21 +57,12 @@ service cloud.firestore {
     function isValidSync(docData) {
       return !('_sync' in docData) || (
         docData._sync is map
-        && docData._sync.protocolVersion is int
+        && docData._sync.protocolVersion == 3
         && docData._sync.clock is map
         && docData._sync.fields is map
-        && (
-          (
-            (docData._sync.protocolVersion == 1 || docData._sync.protocolVersion == 2)
-            && docData._sync.keys().hasOnly(['protocolVersion', 'clock', 'fields'])
-          )
-          || (
-            docData._sync.protocolVersion == 3
-            && docData._sync.keys().hasOnly(['protocolVersion', 'clock', 'fields', 'writer'])
-            && 'writer' in docData._sync
-            && isValidReplicaWriter(docData._sync.writer)
-          )
-        )
+        && docData._sync.keys().hasOnly(['protocolVersion', 'clock', 'fields', 'writer'])
+        && 'writer' in docData._sync
+        && isValidReplicaWriter(docData._sync.writer)
       );
     }
 
@@ -106,13 +97,12 @@ service cloud.firestore {
     }
 
     function isAuthorizedSyncWrite(userId, docData) {
+      // Pre-launch clean cut: Protocol 1/2 are retired. A document without causal
+      // metadata is allowed only before the account creates its Protocol 3 control;
+      // once causal sync starts, every write is fenced to an active replica.
       return (
           !syncControlExistsAfter(userId)
-          && (
-            !('_sync' in docData)
-            || docData._sync.protocolVersion == 1
-            || docData._sync.protocolVersion == 2
-          )
+          && !('_sync' in docData)
         )
         || (
           '_sync' in docData
@@ -120,12 +110,10 @@ service cloud.firestore {
         );
     }
 
-    function hasAuthorizedSyncDelete(userId) {
-      // Legacy clients may delete monthly documents only before this account has
-      // crossed the Protocol 3 control barrier. After cutover, client sync persists
-      // an empty fenced shell instead, so every causal state transition is attributable
-      // to an exact replica id/generation through _sync.writer.
-      return !syncControlExistsAfter(userId);
+    function hasAuthorizedSyncDelete() {
+      // Current clients persist an empty fenced shell for terminal monthly state.
+      // Physical deletion is reserved for the trusted account-deletion backend.
+      return false;
     }
 
     function isValidReplicaEntry(entry) {
@@ -524,7 +512,7 @@ service cloud.firestore {
 
       match /history_months/{monthId} {
         allow read: if isActiveOwner(userId);
-        allow delete: if isActiveOwner(userId) && hasAuthorizedSyncDelete(userId);
+        allow delete: if isActiveOwner(userId) && hasAuthorizedSyncDelete();
         allow create, update: if isActiveOwner(userId)
           && isValidMonthId(monthId)
           && incomingData() is map
@@ -538,7 +526,7 @@ service cloud.firestore {
 
       match /nutrition_months/{monthId} {
         allow read: if isActiveOwner(userId);
-        allow delete: if isActiveOwner(userId) && hasAuthorizedSyncDelete(userId);
+        allow delete: if isActiveOwner(userId) && hasAuthorizedSyncDelete();
         allow create, update: if isActiveOwner(userId)
           && isValidMonthId(monthId)
           && incomingData() is map

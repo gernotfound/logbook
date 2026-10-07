@@ -28,7 +28,7 @@ M4's age-based prohibitions remain unchanged: terminal tombstones are never coll
 
 Replica membership is bounded to 16 slots. Expired/retired generations are fenced; slot reuse increments generation and continues the slot sequence. This is what makes removal of a stable terminal barrier safe against a stale device returning later.
 
-After the per-account Protocol 3 cutover, a client never turns terminal GC into a physical Firestore delete. If the last field disappears, the writer persists an empty `_schemaVersion` + `_sync.writer` shell so the transition remains attributable to the active replica generation.
+With Protocol 3 as the first-account baseline, a client never turns terminal GC into a physical Firestore delete. If the last field disappears, the writer persists an empty `_schemaVersion` + `_sync.writer` shell so the transition remains attributable to the active replica generation.
 ## Required properties
 
 The M4 suite checks:
@@ -39,5 +39,5 @@ The M4 suite checks:
 - bounded replica coordinates remain monotone; retired generations cannot publish stale journals;
 - compaction is idempotent and deterministic;
 - stale, concurrent, delete, recreation and out-of-order future deliveries produce the same business state and compacted causal state from original vs already-compacted metadata;
-- the Firestore write boundary persists compacted `_sync`, returns the same causal state to acknowledgement, and keeps a fenced empty shell instead of issuing a post-cutover physical delete;
-- Firestore Rules fence stale replica generations and legacy Protocol 1/2 writers after the per-account cutover.
+- the Firestore write boundary persists compacted `_sync`, returns the same causal state to acknowledgement, and keeps a fenced empty shell instead of issuing a physical delete;
+- Firestore Rules fence stale replica generations and reject retired Protocol 1/2 writers from the first-account baseline onward.

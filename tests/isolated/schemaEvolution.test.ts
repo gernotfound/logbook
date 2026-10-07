@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
     CURRENT_DATA_SCHEMA,
-    CURRENT_LOCAL_ENVELOPE,
     CURRENT_SYNC_PROTOCOL,
     FutureVersionError,
     LegacyVersionError,
@@ -117,111 +116,39 @@ describe('Schema Evolution registry', () => {
         expect(() => assertCurrentVersion(1, 2, 'schema')).toThrow(LegacyVersionError);
     });
 
-    it('migrates protocol-1 cloud metadata to the current protocol without changing causal payload', () => {
-        const raw = {
-            profile: { name: 'legacy' },
-            _sync: {
-                protocolVersion: 1,
-                clock: { A: 2, B: 1 },
-                fields: {
-                    'profile/name': { actorId: 'A', seq: 2, clock: { A: 2, B: 1 } },
-                },
-            },
-        };
-        const normalized = normalizeCloudDocument(raw);
-        expect(normalized.sync).toEqual({
-            protocolVersion: CURRENT_SYNC_PROTOCOL,
-            clock: raw._sync.clock,
-            fields: {
-                'profile/name': {
-                    actorId: 'A',
-                    seq: 2,
-                    clock: { A: 2 },
-                    legacyClock: { A: 2, B: 1 },
-                },
-            },
-        });
-        expect(raw._sync.protocolVersion).toBe(1);
-    });
+    it('rejects pre-launch sync protocols instead of migrating them into the first real account baseline', () => {
+        for (const protocolVersion of [1, 2]) {
+            expect(() => normalizeCloudDocument({
+                profile: { name: 'legacy' },
+                _sync: { protocolVersion, clock: {}, fields: {} },
+            })).toThrow(LegacyVersionError);
 
-    it('separates a polluted protocol-1 tombstone frontier from its immutable event dot', () => {
-        const normalized = normalizeCloudDocument({
-            _sync: {
-                protocolVersion: 1,
-                clock: { C: 1, B: 1 },
-                fields: {
-                    profile: { actorId: 'C', seq: 1, clock: { C: 1, B: 1 }, deleted: true },
-                },
-            },
-        });
-        expect(normalized.sync).toEqual({
-            protocolVersion: CURRENT_SYNC_PROTOCOL,
-            clock: { C: 1, B: 1 },
-            fields: {
-                profile: {
-                    actorId: 'C',
-                    seq: 1,
-                    clock: { C: 1 },
-                    legacyClock: { C: 1, B: 1 },
-                    deleted: true,
-                    deleteClock: { C: 1 },
-                },
-            },
-        });
-    });
+            expect(() => normalizeLocalEnvelopeRecord({
+                version: 4,
+                dataSchemaVersion: CURRENT_DATA_SCHEMA,
+                syncProtocolVersion: protocolVersion,
+                owner: 'user:a',
+                actorId: 'A',
+                actorSeq: 0,
+                clock: {},
+                data: {},
+                baseline: {},
+                completeMonths: [],
+                pending: [],
+                syncMetaByDocument: {},
+                revision: 0,
+            })).toThrow(LegacyVersionError);
 
-    it('migrates protocol-1 local metadata through envelope V5 while keeping backup V3', () => {
-        const syncMeta = {
-            protocolVersion: 1,
-            clock: { A: 1 },
-            fields: { 'profile/name': { actorId: 'A', seq: 1, clock: { A: 1 } } },
-        };
-        const envelope = {
-            version: 4,
-            dataSchemaVersion: 1,
-            syncProtocolVersion: 1,
-            owner: 'user:a',
-            actorId: 'A',
-            actorSeq: 1,
-            clock: { A: 1 },
-            data: {},
-            baseline: {},
-            completeMonths: [],
-            pending: [],
-            syncMetaByDocument: { '': syncMeta },
-            revision: 1,
-        };
-
-        const migratedEnvelope = normalizeLocalEnvelopeRecord(envelope);
-        expect(migratedEnvelope.version).toBe(CURRENT_LOCAL_ENVELOPE);
-        expect(migratedEnvelope.replica).toBeNull();
-        expect(migratedEnvelope.syncProtocolVersion).toBe(CURRENT_SYNC_PROTOCOL);
-        expect((migratedEnvelope.syncMetaByDocument as any)[''].protocolVersion).toBe(CURRENT_SYNC_PROTOCOL);
-        expect(envelope.syncProtocolVersion).toBe(1);
-
-        const backup = {
-            format: 'logbook-backup',
-            version: 3,
-            dataSchemaVersion: 1,
-            syncProtocolVersion: 1,
-            type: 'backup',
-            owner: 'user:a',
-            userData: {},
-            recovery: {
-                envelope,
-                cloudDocuments: {
-                    '': { profile: { name: 'legacy' }, _sync: syncMeta },
-                },
-            },
-        };
-        const migratedBackup = normalizeBackupRecord(backup);
-        expect(migratedBackup.version).toBe(3);
-        expect(migratedBackup.syncProtocolVersion).toBe(CURRENT_SYNC_PROTOCOL);
-        const recovery = migratedBackup.recovery as any;
-        expect(recovery.envelope.syncProtocolVersion).toBe(CURRENT_SYNC_PROTOCOL);
-        expect(recovery.envelope.syncMetaByDocument[''].protocolVersion).toBe(CURRENT_SYNC_PROTOCOL);
-        expect(recovery.cloudDocuments['']._sync.protocolVersion).toBe(CURRENT_SYNC_PROTOCOL);
-        expect(backup.syncProtocolVersion).toBe(1);
+            expect(() => normalizeBackupRecord({
+                format: 'logbook-backup',
+                version: 3,
+                dataSchemaVersion: CURRENT_DATA_SCHEMA,
+                syncProtocolVersion: protocolVersion,
+                type: 'backup',
+                owner: 'user:a',
+                userData: {},
+            })).toThrow(LegacyVersionError);
+        }
     });
 
     it('treats an unversioned Firestore document as the clean schema-1 baseline', () => {

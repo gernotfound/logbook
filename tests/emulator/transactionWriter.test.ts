@@ -165,7 +165,7 @@ it('4. V3 API: remote FieldStamp can defeat a concurrent local operation', async
         await setDoc(doc(context.firestore(), 'users/a'), {
             profile: { height: '190' },
             _sync: {
-                protocolVersion: 1,
+                protocolVersion: CURRENT_SYNC_PROTOCOL,
                 clock: { z: 1 },
                 fields: {
                     'profile/height': { clock: { z: 1 }, actorId: 'z', seq: 1 }

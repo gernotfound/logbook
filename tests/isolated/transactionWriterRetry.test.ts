@@ -39,7 +39,7 @@ vi.mock('firebase/firestore', () => ({
                         exists: () => true,
                         data: () => ({
                             profile: { height: '170' },
-                            _sync: { protocolVersion: 1, clock: {}, fields: {} }
+                            _sync: { protocolVersion: 3, clock: {}, fields: {} }
                         })
                     }),
                 set: (ref: { path: string }, data: any) => writes.push({ path: ref.path, data: structuredClone(data) }),

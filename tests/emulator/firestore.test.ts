@@ -65,16 +65,14 @@ it('allows the clean-cut unversioned schema-1 baseline, marks it lazily, and pre
     }
 });
 
-it('allows legacy monthly physical deletion only before the Protocol 3 account cutover', async () => {
+it('denies client-side monthly physical deletion before and after Protocol 3 registration', async () => {
     const db = env.authenticatedContext('a').firestore();
     const monthRef = doc(db, 'users/a/nutrition_months/2026-09');
 
     await assertSucceeds(setDoc(monthRef, { _schemaVersion: 1 }));
-    await assertSucceeds(deleteDoc(monthRef));
+    await assertFails(deleteDoc(monthRef));
 
-    await assertSucceeds(setDoc(monthRef, { _schemaVersion: 1 }));
     await registerReplica(db, 'a');
-
     const controlRef = doc(db, 'users/a/sync_control/state');
     const control = (await getDoc(controlRef)).data()!;
     const forgedDeleteBatch = writeBatch(db);
@@ -131,12 +129,14 @@ it.each([
     },
 );
 
-it('continues to allow legacy writes when Protocol 3 remains absent before and after the request', async () => {
+it('rejects Protocol 1/2 writes even before the account creates its Protocol 3 control', async () => {
     const db = env.authenticatedContext('a').firestore();
-    const legacySync = { protocolVersion: 1, clock: {}, fields: {} };
-    await assertSucceeds(setDoc(doc(db, 'users/a'), { profile: { name: 'legacy' }, _schemaVersion: 1, _sync: legacySync }));
-    await assertSucceeds(setDoc(doc(db, 'users/a/history_months/2026-09'), { _schemaVersion: 1, _sync: legacySync }));
-    await assertSucceeds(setDoc(doc(db, 'users/a/nutrition_months/2026-09'), { _schemaVersion: 1, _sync: legacySync }));
+    for (const protocolVersion of [1, 2]) {
+        const legacySync = { protocolVersion, clock: {}, fields: {} };
+        await assertFails(setDoc(doc(db, 'users/a'), { profile: { name: 'legacy' }, _schemaVersion: 1, _sync: legacySync }));
+        await assertFails(setDoc(doc(db, 'users/a/history_months/2026-09'), { _schemaVersion: 1, _sync: legacySync }));
+        await assertFails(setDoc(doc(db, 'users/a/nutrition_months/2026-09'), { _schemaVersion: 1, _sync: legacySync }));
+    }
     expect((await getDoc(doc(db, 'users/a/sync_control/state'))).exists()).toBe(false);
 });
 
@@ -226,7 +226,7 @@ it('rejects malformed sync envelopes while allowing the current structural contr
     const root = doc(db, 'users/a');
     const legacySync = { protocolVersion: 1, clock: {}, fields: {} };
 
-    await assertSucceeds(setDoc(root, { profile: { name: 'legacy' }, _schemaVersion: 1, _sync: legacySync }));
+    await assertFails(setDoc(root, { profile: { name: 'legacy' }, _schemaVersion: 1, _sync: legacySync }));
 
     const replica = await registerReplica(db, 'a');
     const controlRef = doc(db, 'users/a/sync_control/state');
