@@ -97,8 +97,22 @@ const removed = expected.filter(item => {
   return !match || match.count !== item.count;
 });
 
+function workflowEscape(value) {
+  return String(value).replaceAll('%', '%25').replaceAll('\r', '%0D').replaceAll('\n', '%0A');
+}
+
+function emitWorkflowAnnotation(level, item, prefix) {
+  if (process.env.GITHUB_ACTIONS !== 'true') return;
+  const file = workflowEscape(item.file);
+  const title = workflowEscape('Lint warning baseline drift');
+  const message = workflowEscape(prefix + ' ' + item.suite + ' ' + item.code + ': ' + item.message + ' :: ' + item.source + ' (x' + item.count + ')');
+  console.log('::' + level + ' file=' + file + ',title=' + title + '::' + message);
+}
+
 if (added.length || removed.length) {
   console.error('Lint warning baseline drift detected.');
+  for (const item of added.slice(0, 20)) emitWorkflowAnnotation('error', item, 'New/changed warning:');
+  for (const item of removed.slice(0, 20)) emitWorkflowAnnotation('notice', item, 'Removed/changed baseline entry:');
   for (const item of added.slice(0, 20)) {
     console.error('+ ' + item.suite + ' ' + item.file + ' ' + item.code + ': ' + item.message + ' :: ' + item.source + ' (x' + item.count + ')');
   }
