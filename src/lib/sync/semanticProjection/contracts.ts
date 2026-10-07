@@ -14,7 +14,6 @@ export interface FieldCandidate {
     actorId: string;
     seq: number;
     value: unknown;
-    legacyClock?: VectorClock;
     guard?: OperationGuard;
 }
 
@@ -24,7 +23,6 @@ export interface FieldStamp {
     seq: number;
     deleted?: boolean;
     deleteClock?: VectorClock;
-    legacyClock?: VectorClock;
     guard?: OperationGuard;
     candidates?: FieldCandidate[];
 }
