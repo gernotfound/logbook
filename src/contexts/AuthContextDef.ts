@@ -1,8 +1,8 @@
 import { createContext } from 'react';
 import type { User } from 'firebase/auth';
 
-export type LogoutOptions = { mode: 'normal' | 'force' };
-export type GuestMigrationStatus = 'idle' | 'pending' | 'failed';
+type LogoutOptions = { mode: 'normal' | 'force' };
+type GuestMigrationStatus = 'idle' | 'pending' | 'failed';
 export type GuestMigrationPolicy = 'merge' | 'skip';
 
 export interface AuthContextType {

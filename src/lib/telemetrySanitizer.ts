@@ -3,7 +3,7 @@
  */
 
 export type DerivedPlatform = 'ios' | 'ipados' | 'other';
-export type DisplayMode = 'standalone' | 'browser';
+type DisplayMode = 'standalone' | 'browser';
 
 export interface TelemetryContext {
   appVersion: string;

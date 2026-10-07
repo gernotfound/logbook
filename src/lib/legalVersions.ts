@@ -10,7 +10,6 @@ export const LEGAL_VERSIONS = {
   terms: "1.2.0",
 } as const;
 
-export type LegalVersionKey = keyof typeof LEGAL_VERSIONS;
 
 /**
  * Controlla se un utente deve vedere l'overlay di adeguamento

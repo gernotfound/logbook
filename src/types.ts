@@ -14,7 +14,7 @@ export interface UserProfile {
     calves?: string;
 }
 
-export interface MacroTarget {
+interface MacroTarget {
     kcal: number;
     carbs: number;
     pro: number;
@@ -39,7 +39,7 @@ export interface NutritionPlanning {
     totalKcal?: number;
 }
 
-export interface ExerciseSet {
+interface ExerciseSet {
     weight: string;
     reps: string;
     time?: string;
@@ -62,7 +62,7 @@ export interface Exercise {
 
 export type SetTechnique = 'straight' | 'dropset' | 'rest_pause' | 'cluster' | 'rep_match' | 'diminishing';
 export type SetContinuationTechnique = Exclude<SetTechnique, 'straight'> | 'isometry';
-export type ExecutionMode = 'standard' | 'stop_reps';
+type ExecutionMode = 'standard' | 'stop_reps';
 
 export interface SetTarget {
     type: 'reps';
@@ -87,8 +87,8 @@ export interface PlannedSetTechnique {
     segmentCount?: number;
 }
 
-export type ProgressionRole = 'primary' | 'secondary' | 'support';
-export type ProgressionMetric = 'performance' | 'volume' | 'density' | 'execution';
+type ProgressionRole = 'primary' | 'secondary' | 'support';
+type ProgressionMetric = 'performance' | 'volume' | 'density' | 'execution';
 
 export interface ProgressionContract {
     role?: ProgressionRole;
@@ -193,7 +193,6 @@ export interface LoggedMealItem {
     brand?: string;
 }
 
-export type Meal = LoggedMealItem;
 export type Routine = WorkoutRoutine;
 export type ExerciseLibraryItem = Exercise;
 
@@ -212,7 +211,7 @@ export interface SupplementIntake {
     time: number;
 }
 
-export type ActivitySource = 'manual' | 'imported';
+type ActivitySource = 'manual' | 'imported';
 export type CardioModality = 'walk' | 'treadmill' | 'bike' | 'elliptical' | 'stair' | 'run' | 'row' | 'swim' | 'other';
 export type CardioStructure = 'continuous' | 'intervals';
 export type CardioIntensity = 'low' | 'moderate' | 'high';
@@ -468,6 +467,7 @@ export type SyncResult =
     | { ok: false; status: 'rejected'; error: unknown }
     | { ok: false; status: 'failed'; error: unknown };
 
+
 export type ResolveNutritionConflictInput = {
     resolution: 'cloud' | 'local';
     expectedUid: string;
@@ -475,7 +475,6 @@ export type ResolveNutritionConflictInput = {
 };
 
 export type AppTab = 'home' | 'training' | 'nutrition' | 'data';
-export type MainTab = AppTab;
 export type TrainingSubTab = 'session' | 'planning' | 'routines' | 'exercises' | 'history';
 export type NutritionSubTab = 'meals' | 'planning' | 'archive' | 'history' | 'supplements';
 export type DataSubTab = 'measurements' | 'sleep' | 'activity' | 'biometry' | 'history';

@@ -1,5 +1,4 @@
 import { create } from 'zustand';
-import type { UserProfile, NutritionPlanning, UserData } from '../types';
 import { createDataSlice, getInitialUserData, type DataSlice } from './slices/createDataSlice';
 import { createWorkoutSlice, type WorkoutSlice } from './slices/createWorkoutSlice';
 import { createSyncSlice, type SyncSlice } from './slices/createSyncSlice';
@@ -7,8 +6,6 @@ import { captureSession } from '../lib/sync/session';
 import { persistOwnerBoundWorkoutSnapshot } from '../lib/sync/deviceCriticalState';
 import { draftRegistry } from '../lib/utils/draftRegistry';
 import { UPDATE_REQUIRED_EVENT } from '../lib/schemaEvolution';
-
-export type { UserProfile, NutritionPlanning, UserData };
 
 export interface AppState extends DataSlice, WorkoutSlice, SyncSlice {}
 

@@ -3,7 +3,7 @@ import { readBrowserValueStrict } from './browserStorage';
 import { userOwner } from './owner';
 import { readAuthenticatedOwnerHint } from './authOwnerHint';
 
-export { userOwner, normalizeStorageOwner } from './owner';
+export { userOwner } from './owner';
 
 let epoch = 0;
 export function storageOwner(): string {

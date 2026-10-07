@@ -15,10 +15,9 @@
  * - Universal environment compatibility (Browser Blob / Node Buffer).
  */
 
-export const FIRESTORE_HARD_LIMIT_BYTES = 1048576; // 1 MiB
 export const DOC_SIZE_LIMIT_BYTES = 950000;         // 950 KB safety margin
 
-export interface DocSizeAssessment {
+interface DocSizeAssessment {
     valid: boolean;
     sizeBytes: number;
     maxBytes: number;
@@ -57,7 +56,7 @@ export function calculateDocSizeBytes(data: unknown): number {
 /**
  * Evaluates whether a document payload is within the permitted size thresholds.
  */
-export function isDocSizeWithinLimit(
+function isDocSizeWithinLimit(
     data: unknown, 
     maxBytes: number = DOC_SIZE_LIMIT_BYTES
 ): DocSizeAssessment {
@@ -101,7 +100,7 @@ export function checkDocSize(
 /**
  * Helper to format byte counts into human-readable strings (KB / MB).
  */
-export function formatBytes(bytes: number): string {
+function formatBytes(bytes: number): string {
     if (bytes < 1024) return `${bytes} B`;
     const kb = (bytes / 1024).toFixed(1);
     if (bytes < 1024 * 1024) return `${kb} KB`;

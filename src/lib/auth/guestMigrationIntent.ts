@@ -87,7 +87,7 @@ export function beginGuestMigrationIntent(
     return intent;
 }
 
-export function readGuestMigrationIntentStrict(): GuestMigrationIntent {
+function readGuestMigrationIntentStrict(): GuestMigrationIntent {
     const intent = parse(readBrowserValueStrict(KEY));
     if (Date.now() - intent.startedAt > MAX_AGE_MS) {
         throw new Error('Il tentativo di trasferimento guest è scaduto. Avvia nuovamente l’accesso.');

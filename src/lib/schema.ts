@@ -84,7 +84,7 @@ const sanitizePersistedActiveWorkout = (data: unknown): unknown => {
     return { ...(data as Record<string, unknown>), id };
 };
 
-export const PersistedActiveWorkoutSchema = z.preprocess(
+const PersistedActiveWorkoutSchema = z.preprocess(
     sanitizePersistedActiveWorkout,
     WorkoutSessionSchema.nullable(),
 ).catch(null).default(null);
@@ -175,7 +175,7 @@ export const UserDataSchema = z.object({
 
 const isValidParsedId = isValidBusinessId;
 
-export function quarantineCorruptedRecord(context: {
+function quarantineCorruptedRecord(context: {
     collection: string;
     raw: unknown;
     error?: unknown;

@@ -18,7 +18,7 @@ export interface BackgroundPreloadOptions {
 const DEFAULT_INITIAL_DELAY_MS = 1500;
 const DEFAULT_FALLBACK_IDLE_DELAY_MS = 700;
 
-export function isBackgroundPreloadConstrained(): boolean {
+function isBackgroundPreloadConstrained(): boolean {
   if (typeof navigator === 'undefined') return false;
   const connection = (navigator as NavigatorWithConnection).connection;
   return connection?.saveData === true

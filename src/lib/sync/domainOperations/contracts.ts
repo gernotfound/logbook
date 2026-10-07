@@ -18,7 +18,7 @@ import type {
     WorkoutSession,
 } from '../../../types';
 
-export type NutritionDayPatch = Partial<Omit<
+type NutritionDayPatch = Partial<Omit<
     NutritionDay,
     'date' | 'kcal' | 'carbs' | 'pro' | 'fat' | 'meals' | 'supplementsIntake' | 'steps' | 'stepsSource' | 'stepsCapturedAt' | 'cardioSessions'
 >>;

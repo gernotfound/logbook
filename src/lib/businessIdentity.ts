@@ -1,4 +1,4 @@
-export const MAX_BUSINESS_ID_LENGTH = 160;
+const MAX_BUSINESS_ID_LENGTH = 160;
 
 export function normalizeBusinessId(value: unknown): string | null {
     if (typeof value === 'number') {

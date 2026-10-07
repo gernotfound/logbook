@@ -54,7 +54,7 @@ const PlannedSetTechniqueSchema = z.object({
     segmentCount: z.number().int().positive().optional().catch(undefined),
 }).passthrough();
 
-export const ProgressionContractSchema = z.object({
+const ProgressionContractSchema = z.object({
     role: z.enum(['primary', 'secondary', 'support']).optional().catch(undefined),
     metric: z.enum(['performance', 'volume', 'density', 'execution']).optional().catch(undefined),
 });
@@ -197,7 +197,7 @@ export const SessionExerciseSchema = z.object({
     progressionContract: ProgressionContractSchema.optional().catch(undefined),
 }).passthrough().catch({ exId: '', sessionNote: '', sets: [] }).default({ exId: '', sessionNote: '', sets: [] });
 
-export const TrainingCycleStrategySchema = z.object({
+const TrainingCycleStrategySchema = z.object({
     intent: z.enum(['development', 'maintenance', 'deload']).optional(),
     progressionFocus: z.enum(['performance', 'volume', 'density', 'execution']).optional().catch(undefined),
     primaryMuscles: z.array(z.string().trim().min(1)).optional().catch([]),
@@ -206,7 +206,7 @@ export const TrainingCycleStrategySchema = z.object({
 
 const ReadinessRatingSchema = z.number().int().min(1).max(5);
 
-export const WorkoutReadinessSchema = z.object({
+const WorkoutReadinessSchema = z.object({
     capturedAt: z.number().finite().nonnegative(),
     energy: ReadinessRatingSchema.optional(),
     stress: ReadinessRatingSchema.optional(),

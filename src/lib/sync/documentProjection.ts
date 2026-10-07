@@ -1,4 +1,3 @@
-import equal from 'fast-deep-equal';
 import { UserDataSchema } from '../schema';
 import type { UserData, CachedGlobalCatalog } from '../../types';
 import { extractCustomExercisesAndOverrides, extractCustomFoodsAndOverrides, resolveEffectiveExercises, resolveEffectiveFoods } from '../catalog/deltaResolver';
@@ -7,7 +6,6 @@ import { requireCanonicalWorkoutDate, sanitizeHistoryMonthDocument, sanitizeNutr
 import { removeUndefinedValues } from '../utils/object';
 
 export type DocumentData = Record<string, unknown>;
-export interface DocumentChange { path: string; base: DocumentData; desired: DocumentData }
 const monthPattern = /^\d{4}-(0[1-9]|1[0-2])$/;
 const rootKeys = ['profile', 'library', 'routines', 'customFoods', 'activeWorkout', 'trainingCycles', 'activeCycleId', 'nutritionPlanning', 'supplements', 'activePains', 'catalogOverrides', 'legalConsent', 'nutritionPlanningOrigin'] as const;
 
@@ -52,16 +50,6 @@ export function projectDocuments(input: UserData, catalog: CachedGlobalCatalog):
         add('nutrition_months', date.slice(0, 7), date, day);
     }
     return documents;
-}
-
-export function documentChanges(base: UserData, desired: UserData, catalog: CachedGlobalCatalog): DocumentChange[] {
-    const before = projectDocuments(base, catalog);
-    const after = projectDocuments(desired, catalog);
-    return [...new Set([...before.keys(), ...after.keys()])].flatMap(path => {
-        const original = before.get(path) ?? {};
-        const next = after.get(path) ?? {};
-        return equal(original, next) ? [] : [{ path, base: original, desired: next }];
-    });
 }
 
 export function applyRemoteDocuments(local: UserData, documents: Map<string, DocumentData>, catalog: CachedGlobalCatalog): UserData {

@@ -1,6 +1,6 @@
 import { calculateAge } from '../utils/date';
 
-export function calculateUsNavyBodyFat({ gender, height, waist, neck, hip }: { gender?: string; height: any; waist: any; neck: any; hip?: any }): number | null {
+function calculateUsNavyBodyFat({ gender, height, waist, neck, hip }: { gender?: string; height: any; waist: any; neck: any; hip?: any }): number | null {
     const h = parseFloat(height);
     const w = parseFloat(waist);
     const n = parseFloat(neck);

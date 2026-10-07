@@ -67,7 +67,7 @@ export const CachedGlobalCatalogSchema = z.object({
     cachedAt: safeNumber(Date.now()),
 }).passthrough();
 
-export const ExerciseOverrideSchema = z.object({
+const ExerciseOverrideSchema = z.object({
     name: safeOptionalString(),
     notes: safeOptionalString(),
     muscles: z.array(safeString()).optional(),
@@ -77,7 +77,7 @@ export const ExerciseOverrideSchema = z.object({
     trackingType: z.enum(['weight_reps', 'time', 'cardio']).optional(),
 }).passthrough();
 
-export const FoodOverrideSchema = z.object({
+const FoodOverrideSchema = z.object({
     name: safeOptionalString(),
     brand: safeOptionalString(),
     category: safeOptionalString(),

@@ -15,9 +15,9 @@ import { getSetSegments, getSetTechnique } from '../advancedSets';
 
 export type ProgressionExerciseRef = Pick<Exercise, 'id' | 'name' | 'trackingType' | 'isBodyweight' | 'equipmentWeight' | 'muscles' | 'secondaryMuscles'>;
 
-export type ComparisonLevel = 'high' | 'medium' | 'none';
+type ComparisonLevel = 'high' | 'medium' | 'none';
 export type ProgressionQuality = 'clear' | 'preliminary' | 'limited';
-export type ProgressionClassification =
+type ProgressionClassification =
     | 'performance_record'
     | 'progression'
     | 'output_up_effort_up'
@@ -43,7 +43,7 @@ export interface ProgressionBodyweightContext {
     explicitBodyweightKg?: number;
 }
 
-export interface NormalizedSet {
+interface NormalizedSet {
     technique: SetTechnique;
     executionMode: 'standard' | 'stop_reps';
     kg?: number;

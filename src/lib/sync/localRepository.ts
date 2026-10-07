@@ -26,7 +26,7 @@ import {
     sequenceOperationsForBoundedTransactions,
 } from './syncBatching';
 
-export interface LocalEnvelopeV5 {
+interface LocalEnvelopeV5 {
     version: typeof CURRENT_LOCAL_ENVELOPE;
     dataSchemaVersion: typeof CURRENT_DATA_SCHEMA;
     syncProtocolVersion: typeof CURRENT_SYNC_PROTOCOL;
@@ -47,7 +47,7 @@ export type LocalEnvelope = LocalEnvelopeV5;
 export type CloudCoverageMode = 'window' | 'all';
 export type LocalWriteGuard = () => boolean;
 
-export class InvalidCloudSyncMetadataError extends Error {
+class InvalidCloudSyncMetadataError extends Error {
     readonly code = 'invalid-cloud-sync-metadata';
 
     constructor(readonly documentPath: string, readonly originalError: unknown) {

@@ -1,7 +1,7 @@
 import type { MuscleDef } from '../../lib/constants/muscles';
 import { readDeviceValue, writeDeviceValue } from '../../lib/sync/deviceStorage';
 
-export const EXERCISE_DRAFT_KEY = 'draft_exercise';
+const EXERCISE_DRAFT_KEY = 'draft_exercise';
 
 export type ExerciseTrackingType = 'weight_reps' | 'time' | 'cardio';
 

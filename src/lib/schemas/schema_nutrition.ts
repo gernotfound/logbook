@@ -186,7 +186,7 @@ export const CardioSessionSchema = z.object({
     externalId: safeOptionalString(),
 }).passthrough();
 
-export const BodyFatProvenanceSchema = z.object({
+const BodyFatProvenanceSchema = z.object({
     method: z.enum(['manual', 'us_navy']),
     inputs: z.object({
         heightCm: safeOptionalNumber(),

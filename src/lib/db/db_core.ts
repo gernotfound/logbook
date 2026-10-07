@@ -1,9 +1,3 @@
-import type { UserData } from '../../types';
-
-const loadedMonths = new WeakMap<UserData, string[]>();
-export const recordLoadedMonths = (data: UserData, months: string[]) => { loadedMonths.set(data, [...months]); };
-export const getLoadedMonths = (data: UserData) => loadedMonths.get(data) ?? [];
-
 export class SyncTimeoutError extends Error {
     constructor(message: string = "Timeout operazione Firestore") {
         super(message);

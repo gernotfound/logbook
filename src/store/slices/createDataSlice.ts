@@ -2,7 +2,7 @@ import type { StateCreator } from 'zustand';
 import { del as idbDel } from 'idb-keyval';
 import equal from 'fast-deep-equal';
 import { DomainParsers, UserDataSchema } from '../../lib/schema';
-import type { UserData } from '../../types';
+import type { ResolveNutritionConflictInput, SyncResult, UserData } from '../../types';
 import type { AppState } from '../useAppStore';
 import { getNutritionConflictFingerprint } from '../../lib/utils/object';
 
@@ -17,7 +17,7 @@ export interface DataSlice {
     userData: UserData | null;
     dataOwner: string | null;
     setUserData: (data: UserData | null | ((prev: UserData | null) => UserData | null)) => void;
-    resolveNutritionConflict: (input: import('../../types').ResolveNutritionConflictInput) => Promise<import('../../types').SyncResult>;
+    resolveNutritionConflict: (input: ResolveNutritionConflictInput) => Promise<SyncResult>;
 }
 
 export const getInitialUserData = (): UserData | null => {

@@ -3,9 +3,9 @@ import { create } from 'zustand';
 export type ThemePreference = 'system' | 'light' | 'dark';
 export type ResolvedTheme = 'light' | 'dark';
 
-export const APPEARANCE_STORAGE_KEY = 'logbook:appearance:v1';
+const APPEARANCE_STORAGE_KEY = 'logbook:appearance:v1';
 
-export function parseThemePreference(value: unknown): ThemePreference {
+function parseThemePreference(value: unknown): ThemePreference {
   return value === 'light' || value === 'dark' ? value : 'system';
 }
 

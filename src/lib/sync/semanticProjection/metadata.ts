@@ -203,7 +203,7 @@ export function mergeVectors(...clocks: VectorClock[]): VectorClock {
     return res;
 }
 
-export function dominates(clockA: VectorClock, clockB: VectorClock): boolean {
+function dominates(clockA: VectorClock, clockB: VectorClock): boolean {
     let hasStrictlyGreater = false;
     for (const actor of Object.keys(clockB)) {
         const aVal = clockA[actor] || 0;
@@ -263,6 +263,3 @@ export function compareStamps(left: StampLike, right: StampLike): number {
     return 0;
 }
 
-export function stampWins(opA: StampLike, opB: StampLike): boolean {
-    return compareStamps(opA, opB) > 0;
-}

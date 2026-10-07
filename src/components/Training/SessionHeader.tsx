@@ -2,7 +2,7 @@ import React from 'react';
 import { Pencil } from 'lucide-react';
 import WorkoutTimer from './WorkoutTimer';
 
-export interface SessionHeaderProps {
+interface SessionHeaderProps {
     isEditingHistory?: boolean;
     routineName?: string;
     date?: string;
@@ -11,7 +11,7 @@ export interface SessionHeaderProps {
     totalExercises?: number;
 }
 
-export const SessionHeader: React.FC<SessionHeaderProps> = ({
+const SessionHeader: React.FC<SessionHeaderProps> = ({
     isEditingHistory,
     routineName,
     date,

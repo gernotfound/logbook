@@ -16,7 +16,7 @@ import {
 import { reportError } from '../lib/errorHandler';
 
 export const DEVICE_RECOVERY_RECHECK_INTERVAL_MS = 5 * 1000;
-export const DEVICE_RECOVERY_FAILURE_RETRY_MS = 30 * 1000;
+const DEVICE_RECOVERY_FAILURE_RETRY_MS = 30 * 1000;
 
 const UNKNOWN_RECOVERY_MESSAGE =
     'Impossibile verificare ora la cancellazione account. La copia locale resta conservata; il controllo verrà ripetuto automaticamente.';

@@ -61,7 +61,7 @@ function parseBackupCoverage(value: unknown): BackupCoverage {
     };
 }
 
-export function validateImportData(value: unknown): asserts value is Record<string, unknown> {
+function validateImportData(value: unknown): asserts value is Record<string, unknown> {
     if (!isRecord(value)) throw new Error('Dati del backup non validi. Il file originale non è stato modificato.');
     const checkIds = (items: unknown, path: string) => {
         if (!Array.isArray(items)) throw new Error(`${path}: atteso un elenco.`);

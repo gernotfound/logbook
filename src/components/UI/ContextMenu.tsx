@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { MoreHorizontal } from 'lucide-react';
 
-export type ContextMenuItemVariant = 'default' | 'danger' | 'primary';
+type ContextMenuItemVariant = 'default' | 'danger' | 'primary';
 
 export interface ContextMenuItem {
   /** Identificativo univoco della voce */

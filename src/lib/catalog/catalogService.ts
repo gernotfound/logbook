@@ -28,8 +28,8 @@ import {
 } from '../schema';
 
 export const CATALOG_CACHE_KEY = 'logbook_cached_global_catalog';
-export const CATALOG_FIRESTORE_COLLECTION = 'global_catalog';
-export const CATALOG_MANIFEST_DOC_ID = 'manifest';
+const CATALOG_FIRESTORE_COLLECTION = 'global_catalog';
+const CATALOG_MANIFEST_DOC_ID = 'manifest';
 
 import seedExercisesRaw from './seedExercises.json';
 import seedFoodsRaw from './seedFoods.json';
@@ -39,16 +39,6 @@ const DEFAULT_SYNC_TIMEOUT_MS = 4000;
 let inMemoryCatalogCache: CachedGlobalCatalog | null = null;
 let isLoadedFromPersistentCache = false;
 let syncInFlight: Promise<{ catalog: CachedGlobalCatalog; updated: boolean }> | null = null;
-
-export type CatalogUpdateListener = (catalog: CachedGlobalCatalog) => void;
-const catalogListeners = new Set<CatalogUpdateListener>();
-
-export function subscribeCatalogUpdates(listener: CatalogUpdateListener): () => void {
-    catalogListeners.add(listener);
-    return () => {
-        catalogListeners.delete(listener);
-    };
-}
 
 function validManifest(value: unknown): value is CatalogManifest {
     if (!value || typeof value !== 'object') return false;
@@ -165,7 +155,7 @@ export async function saveCatalogToCache(catalog: CachedGlobalCatalog): Promise<
 /**
  * Performs a single O(1) Firestore read to fetch the latest catalog manifest.
  */
-export async function fetchRemoteManifest(
+async function fetchRemoteManifest(
     dbInstance: Firestore,
     timeoutMs: number = DEFAULT_SYNC_TIMEOUT_MS
 ): Promise<CatalogManifest | null> {
@@ -270,9 +260,6 @@ async function performCatalogSync(dbInstance: Firestore, options?: { force?: boo
         };
 
         await saveCatalogToCache(updatedCatalog);
-        for (const listener of catalogListeners) {
-            try { listener(updatedCatalog); } catch (e) { console.error(e); }
-        }
         return { catalog: updatedCatalog, updated: true };
     } catch (err) {
         console.warn("[CatalogService] Sincronizzazione remota catalogo fallita, mantenuta versione locale:", err);

@@ -436,7 +436,7 @@ export function computeWeeklyWeightSeries(
     };
 }
 
-export interface ReadinessTrendDimension {
+interface ReadinessTrendDimension {
     average: number | null;
     latest: number | null;
     previous: number | null;

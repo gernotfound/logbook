@@ -38,7 +38,7 @@
     "test:quality:m5": "node scripts/check-m5-test-quality.mjs",
     "test:repo-hygiene": "node scripts/check-repo-hygiene.mjs",
     "test:ci-contract": "node scripts/check-ci-contract.mjs",
-    "test:dead-code": "node scripts/run-knip.mjs --no-progress --include files,dependencies,unlisted",
+    "test:dead-code": "node scripts/run-knip.mjs --no-progress --include files,dependencies,unlisted,exports,types",
     "analyze:dead-exports": "node scripts/run-knip.mjs --no-progress --production --include exports,types",
     "test:security-static": "node scripts/run-security-static.mjs",
     "test:typecheck:m7": "tsc --noEmit -p tsconfig.m7-server.json",
