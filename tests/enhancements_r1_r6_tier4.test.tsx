@@ -10,7 +10,7 @@ import DataHistory from '../src/components/Data/DataHistory';
 import { CycleEditor } from '../src/components/Training/planning/CycleEditor';
 import type { WorkoutRoutine, TrainingCycle, Exercise } from '../src/types';
 
-describe('LogBook PWA Enhancements E2E Suite (Requirements R1 - R6)', () => {
+describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', () => {
     beforeEach(() => {
         window.localStorage.clear();
         useAppStore.getState().resetStore();

@@ -137,6 +137,25 @@ describe('Audit 18 device-critical persistence', () => {
         expect(useAppStore.getState().saveError).toContain('timer');
     });
 
+    it('contains an initial pre-session owner read failure and blocks device-critical persistence', () => {
+        const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+        localStorageMock.getItem.mockImplementationOnce(() => { throw new Error('storage unavailable'); });
+
+        expect(() => render(
+            <PreSessionCheckIn
+                workoutId="w-current"
+                date="2026-10-05"
+                onStart={vi.fn(async () => true)}
+                onCancel={vi.fn(async () => {})}
+            />,
+        )).not.toThrow();
+
+        expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
+        expect(useAppStore.getState().syncHealth).toBe('failed');
+        expect(useAppStore.getState().saveError).toContain('check-in non salvata');
+        consoleSpy.mockRestore();
+    });
+
     it('persists pre-session readiness synchronously on each edit', () => {
         render(
             <PreSessionCheckIn

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useLayoutEffect, useCallback, useRef } from
 import { draftRegistry } from '../../lib/utils/draftRegistry';
 import { captureSession, isCurrentSession } from '../../lib/sync/session';
 import { readDeviceValueStrict, writeDeviceValue } from '../../lib/sync/deviceStorage';
+import { BrowserStorageError } from '../../lib/sync/browserStorage';
 import { requiredUpdateRecoveryRegistry } from '../../lib/sync/requiredUpdateRecovery';
 import { useAppStore } from '../../store/useAppStore';
 
@@ -20,34 +21,51 @@ function normalizeInputValue(value: string, type?: string, inputMode?: string) {
 
 function readRecoveryStrict(key: string | null, owner: string): string | null {
     if (!key) return null;
+    return readDeviceValueStrict(key, owner);
+}
+
+function blockBufferedPersistence(error: unknown): void {
+    console.error('Persistenza bozza bufferizzata non disponibile:', error);
+    useAppStore.setState({
+        localPersistenceBlocked: true,
+        syncHealth: 'failed',
+        syncPresentation: 'normal',
+        saveError: 'Una bozza del workout non è accessibile sul dispositivo. Riapri TheLogBook prima di continuare.',
+    });
+}
+
+type InitialBufferedRecovery = {
+    session: ReturnType<typeof captureSession> | null;
+    key: string | null;
+    recovered: string | null;
+    error: unknown | null;
+};
+
+function createInitialRecovery(kind: 'input' | 'textarea', id: string | undefined): InitialBufferedRecovery {
+    const key = recoveryName(kind, id);
     try {
-        return readDeviceValueStrict(key, owner);
+        const session = captureSession();
+        return { session, key, recovered: readRecoveryStrict(key, session.owner), error: null };
     } catch (error) {
-        console.error('Bozza bufferizzata non leggibile:', error);
-        useAppStore.setState({
-            localPersistenceBlocked: true,
-            syncHealth: 'failed',
-            syncPresentation: 'normal',
-            saveError: 'Una bozza del workout non è leggibile sul dispositivo. Riapri TheLogBook prima di continuare.',
-        });
-        return null;
+        return { session: null, key, recovered: null, error };
     }
 }
 
 export const BufferedInput = React.forwardRef<HTMLInputElement, BufferedInputProps>(
     ({ id, value, onChange, onBlur, onFocus, onKeyDown, type, inputMode, ...props }, ref) => {
-        const initialSession = useRef(captureSession());
-        const recoveryKey = useRef(recoveryName('input', id));
-        const recovered = useRef(
-            readRecoveryStrict(recoveryKey.current, initialSession.current.owner),
-        );
-        const initialValue = recovered.current ?? value ?? '';
+        const [initialRecovery] = useState(() => createInitialRecovery('input', id));
+        const initialValue = initialRecovery.recovered ?? value ?? '';
         const [localValue, setLocalValue] = useState(initialValue);
-        const isDirty = useRef(recovered.current !== null);
-        const editSession = useRef(initialSession.current);
+        const recoveryKey = useRef(initialRecovery.key);
+        const isDirty = useRef(initialRecovery.recovered !== null);
+        const editSession = useRef(initialRecovery.session);
         const isFocused = useRef(false);
         const latestLocalValue = useRef(initialValue);
-        const recoveryValue = useRef<string | null>(recovered.current);
+        const recoveryValue = useRef<string | null>(initialRecovery.recovered);
+
+        useEffect(() => {
+            if (initialRecovery.error) blockBufferedPersistence(initialRecovery.error);
+        }, [initialRecovery.error]);
 
         const onChangeRef = useRef(onChange);
         const typeRef = useRef(type);
@@ -63,10 +81,11 @@ export const BufferedInput = React.forwardRef<HTMLInputElement, BufferedInputPro
         const persistRecovery = useCallback(() => {
             if (!isDirty.current) return;
             const key = recoveryKey.current;
+            const session = editSession.current;
             if (!key) throw new Error('Bozza volatile senza identificativo stabile.');
-            if (!isCurrentSession(editSession.current)) throw new Error('Sessione cambiata prima del recupero della bozza.');
+            if (!session || !isCurrentSession(session)) throw new Error('Sessione cambiata prima del recupero della bozza.');
             const raw = String(latestLocalValue.current);
-            writeDeviceValue(key, raw, editSession.current.owner);
+            writeDeviceValue(key, raw, session.owner);
             recoveryValue.current = raw;
         }, []);
 
@@ -81,9 +100,11 @@ export const BufferedInput = React.forwardRef<HTMLInputElement, BufferedInputPro
                 );
                 if (String(value ?? '') === recoveredNormalized) {
                     try {
-                        writeDeviceValue(recoveryKey.current, null, editSession.current.owner);
+                        const session = editSession.current;
+                        if (!session) throw new Error('Sessione iniziale della bozza non disponibile.');
+                        writeDeviceValue(recoveryKey.current, null, session.owner);
                         recoveryValue.current = null;
-                    } catch (error) {
+                    } catch {
                         useAppStore.getState().setSaveError('Dato salvato; impossibile rimuovere la copia di recupero locale.');
                     }
                 }
@@ -96,7 +117,9 @@ export const BufferedInput = React.forwardRef<HTMLInputElement, BufferedInputPro
 
         const flush = useCallback(() => {
             if (isDirty.current) {
-                if (!isCurrentSession(editSession.current)) { isDirty.current = false; return; }
+                const session = editSession.current;
+                if (!session) throw new Error('Sessione della bozza non disponibile.');
+                if (!isCurrentSession(session)) { isDirty.current = false; return; }
                 const finalVal = normalizeInputValue(
                     String(latestLocalValue.current),
                     typeRef.current,
@@ -119,12 +142,16 @@ export const BufferedInput = React.forwardRef<HTMLInputElement, BufferedInputPro
         }, [flush, persistRecovery]);
 
         const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-            editSession.current = captureSession();
             setLocalValue(e.target.value);
             latestLocalValue.current = e.target.value;
             isDirty.current = true;
-            try { persistRecovery(); }
-            catch { useAppStore.getState().setSaveError('Bozza non ancora protetta nello storage del dispositivo.'); }
+            try {
+                editSession.current = captureSession();
+                persistRecovery();
+            } catch (error) {
+                useAppStore.getState().setSaveError('Bozza non ancora protetta nello storage del dispositivo.');
+                if (error instanceof BrowserStorageError) blockBufferedPersistence(error);
+            }
         };
 
         const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
@@ -172,18 +199,19 @@ interface BufferedTextareaProps extends Omit<React.TextareaHTMLAttributes<HTMLTe
 
 export const BufferedTextarea = React.forwardRef<HTMLTextAreaElement, BufferedTextareaProps>(
     ({ id, value, onChange, onBlur, onFocus, ...props }, ref) => {
-        const initialSession = useRef(captureSession());
-        const recoveryKey = useRef(recoveryName('textarea', id));
-        const recovered = useRef(
-            readRecoveryStrict(recoveryKey.current, initialSession.current.owner),
-        );
-        const initialValue = recovered.current ?? value ?? '';
+        const [initialRecovery] = useState(() => createInitialRecovery('textarea', id));
+        const initialValue = initialRecovery.recovered ?? value ?? '';
         const [localValue, setLocalValue] = useState(initialValue);
-        const isDirty = useRef(recovered.current !== null);
-        const editSession = useRef(initialSession.current);
+        const recoveryKey = useRef(initialRecovery.key);
+        const isDirty = useRef(initialRecovery.recovered !== null);
+        const editSession = useRef(initialRecovery.session);
         const isFocused = useRef(false);
         const latestLocalValue = useRef(initialValue);
-        const recoveryValue = useRef<string | null>(recovered.current);
+        const recoveryValue = useRef<string | null>(initialRecovery.recovered);
+
+        useEffect(() => {
+            if (initialRecovery.error) blockBufferedPersistence(initialRecovery.error);
+        }, [initialRecovery.error]);
 
         const onChangeRef = useRef(onChange);
 
@@ -195,10 +223,11 @@ export const BufferedTextarea = React.forwardRef<HTMLTextAreaElement, BufferedTe
         const persistRecovery = useCallback(() => {
             if (!isDirty.current) return;
             const key = recoveryKey.current;
+            const session = editSession.current;
             if (!key) throw new Error('Bozza volatile senza identificativo stabile.');
-            if (!isCurrentSession(editSession.current)) throw new Error('Sessione cambiata prima del recupero della bozza.');
+            if (!session || !isCurrentSession(session)) throw new Error('Sessione cambiata prima del recupero della bozza.');
             const raw = String(latestLocalValue.current);
-            writeDeviceValue(key, raw, editSession.current.owner);
+            writeDeviceValue(key, raw, session.owner);
             recoveryValue.current = raw;
         }, []);
 
@@ -206,7 +235,9 @@ export const BufferedTextarea = React.forwardRef<HTMLTextAreaElement, BufferedTe
             if (recoveryValue.current !== null && !isDirty.current && recoveryKey.current) {
                 if (String(value ?? '') === recoveryValue.current) {
                     try {
-                        writeDeviceValue(recoveryKey.current, null, editSession.current.owner);
+                        const session = editSession.current;
+                        if (!session) throw new Error('Sessione iniziale della bozza non disponibile.');
+                        writeDeviceValue(recoveryKey.current, null, session.owner);
                         recoveryValue.current = null;
                     } catch {
                         useAppStore.getState().setSaveError('Dato salvato; impossibile rimuovere la copia di recupero locale.');
@@ -221,7 +252,9 @@ export const BufferedTextarea = React.forwardRef<HTMLTextAreaElement, BufferedTe
 
         const flush = useCallback(() => {
             if (isDirty.current) {
-                if (!isCurrentSession(editSession.current)) { isDirty.current = false; return; }
+                const session = editSession.current;
+                if (!session) throw new Error('Sessione della bozza non disponibile.');
+                if (!isCurrentSession(session)) { isDirty.current = false; return; }
                 onChangeRef.current(String(latestLocalValue.current));
                 isDirty.current = false;
             }
@@ -239,12 +272,16 @@ export const BufferedTextarea = React.forwardRef<HTMLTextAreaElement, BufferedTe
         }, [flush, persistRecovery]);
 
         const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-            editSession.current = captureSession();
             setLocalValue(e.target.value);
             latestLocalValue.current = e.target.value;
             isDirty.current = true;
-            try { persistRecovery(); }
-            catch { useAppStore.getState().setSaveError('Bozza non ancora protetta nello storage del dispositivo.'); }
+            try {
+                editSession.current = captureSession();
+                persistRecovery();
+            } catch (error) {
+                useAppStore.getState().setSaveError('Bozza non ancora protetta nello storage del dispositivo.');
+                if (error instanceof BrowserStorageError) blockBufferedPersistence(error);
+            }
         };
 
         const handleFocus = (e: React.FocusEvent<HTMLTextAreaElement>) => {

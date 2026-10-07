@@ -3,6 +3,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, renderHook } from '@testing-library/react';
 import { renderWithProviders, emptyUserData, defaultMockUserData } from './setup';
 import { useAppStore } from '../src/store/useAppStore';
+import { captureSession } from '../src/lib/sync/session';
 import { Logic } from '../src/lib/logic';
 import {
     UserDataSchema,
@@ -18,7 +19,6 @@ import SessionRatings from '../src/components/Training/session/SessionRatings';
 import MuscleModel from '../src/components/Training/MuscleModel';
 import HomeView from '../src/components/Home/HomeView';
 import { useNutritionMeasurements } from '../src/hooks/useNutritionMeasurements';
-import type { Food, NutritionDay } from '../src/types';
 import {
     getLatestUserWeightContract,
     calculateEffectiveSetWeightContract,
@@ -32,6 +32,7 @@ describe('TheLogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => 
     beforeEach(() => {
         window.localStorage.clear();
         useAppStore.getState().resetStore();
+        useAppStore.setState({ dataOwner: captureSession().owner });
         vi.clearAllMocks();
     });
 

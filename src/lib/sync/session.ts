@@ -22,6 +22,9 @@ export function storageOwner(): string {
     // mutations cannot fall through into the guest envelope.
     return readAuthenticatedOwnerHint() ?? 'guest';
 }
-export const captureSession = () => ({ owner: storageOwner(), epoch });
-export const isCurrentSession = (session: ReturnType<typeof captureSession>) => session.epoch === epoch && session.owner === storageOwner();
+export type SessionSnapshot = { owner: string; epoch: number };
+
+export const captureSessionForOwner = (owner: string): SessionSnapshot => ({ owner, epoch });
+export const captureSession = (): SessionSnapshot => captureSessionForOwner(storageOwner());
+export const isCurrentSession = (session: SessionSnapshot) => session.epoch === epoch && session.owner === storageOwner();
 export const invalidateSession = () => { epoch += 1; };
