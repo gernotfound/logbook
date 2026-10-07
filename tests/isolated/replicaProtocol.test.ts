@@ -76,6 +76,7 @@ describe('Sync Protocol 3 replica registry', () => {
                     protocolVersion: 3,
                     clock: { s00: 4 },
                     fields: {},
+                    writer: { slot: 's00', replicaId: 'replica-s00-g1', generation: 1, seq: 4 },
                 },
             }],
             ['history_months/2026-09', {
@@ -83,6 +84,7 @@ describe('Sync Protocol 3 replica registry', () => {
                     protocolVersion: 3,
                     clock: { s00: 3, s01: 2 },
                     fields: {},
+                    writer: { slot: 's01', replicaId: 'replica-s01-g2', generation: 2, seq: 2 },
                 },
             }],
             ['nutrition_months/2026-09', { day: {} }],

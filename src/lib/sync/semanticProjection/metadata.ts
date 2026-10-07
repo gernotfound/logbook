@@ -40,8 +40,10 @@ function parseGuard(raw: unknown, context: string): OperationGuard | undefined {
 function parseReplicaWriter(raw: unknown): ReplicaWriter | undefined {
     if (raw === undefined) return undefined;
     if (!isRecord(raw)) throw new Error('Invalid replica writer');
+    const allowedKeys = new Set(['slot', 'replicaId', 'generation', 'seq']);
+    if (Object.keys(raw).some(key => !allowedKeys.has(key))) throw new Error('Unsupported replica writer metadata');
     if (typeof raw.slot !== 'string' || !/^s(?:0[0-9]|1[0-5])$/.test(raw.slot)) throw new Error('Invalid replica writer slot');
-    if (typeof raw.replicaId !== 'string' || !raw.replicaId.trim()) throw new Error('Invalid replica writer id');
+    if (typeof raw.replicaId !== 'string' || !raw.replicaId.trim() || raw.replicaId.length > 128) throw new Error('Invalid replica writer id');
     const generation = parseSafeSeq(raw.generation, 'replica writer generation');
     if (generation < 1) throw new Error('Invalid replica writer generation');
     const seq = parseSafeSeq(raw.seq, 'replica writer sequence');

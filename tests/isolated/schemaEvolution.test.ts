@@ -168,6 +168,17 @@ describe('Schema Evolution registry', () => {
             _schemaVersion: CURRENT_DATA_SCHEMA,
             _sync: { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {} },
         })).toThrow('writer obbligatorio');
+
+        expect(() => normalizeCloudDocument({
+            profile: { name: 'A' },
+            _schemaVersion: CURRENT_DATA_SCHEMA,
+            _sync: {
+                protocolVersion: CURRENT_SYNC_PROTOCOL,
+                clock: {},
+                fields: {},
+                writer: { slot: 's00', replicaId: 'test-replica', generation: 1, seq: 0, legacy: true },
+            },
+        })).toThrow('writer contiene campi non supportati');
     });
 
     it('refuses a future Firestore data schema before business data is consumed', () => {
