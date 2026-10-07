@@ -118,15 +118,22 @@ it('fences an old replica generation after an expired slot is reused', async () 
     });
 });
 
-it('rejects a stale Protocol 1/2 writer once the account has a replica-control barrier', async () => {
+it('rejects Protocol 1/2 writers both before and after the account creates its replica-control barrier', async () => {
     const uid = 'a';
     const db = env.authenticatedContext(uid).firestore();
     const rootRef = doc(db, 'users/' + uid);
 
+    for (const protocolVersion of [1, 2]) {
+        await assertFails(setDoc(rootRef, {
+            profile: { height: 'legacy' },
+            _schemaVersion: 1,
+            _sync: { protocolVersion, clock: {}, fields: {} },
+        }));
+    }
+
     await assertSucceeds(setDoc(rootRef, {
         profile: { height: '170' },
         _schemaVersion: 1,
-        _sync: { protocolVersion: 2, clock: {}, fields: {} },
     }));
 
     const now = Date.now();
@@ -146,11 +153,13 @@ it('rejects a stale Protocol 1/2 writer once the account has a replica-control b
         mutation: { slot: 's00', action: 'register' },
     }));
 
-    await assertFails(setDoc(rootRef, {
-        profile: { height: '171' },
-        _schemaVersion: 1,
-        _sync: { protocolVersion: 2, clock: { legacy: 1 }, fields: {} },
-    }));
+    for (const protocolVersion of [1, 2]) {
+        await assertFails(setDoc(rootRef, {
+            profile: { height: '171' },
+            _schemaVersion: 1,
+            _sync: { protocolVersion, clock: { legacy: 1 }, fields: {} },
+        }));
+    }
 
     expect((await getDoc(rootRef)).data()?.profile.height).toBe('170');
 });
