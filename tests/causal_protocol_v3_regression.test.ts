@@ -35,7 +35,7 @@ function deliver(
     return state;
 }
 
-describe('Sync Protocol 2 causal convergence regressions', () => {
+describe('Sync Protocol 3 causal convergence regressions', () => {
     it('keeps a causal recreation stable when a stale concurrent child is delivered before or after it', () => {
         const path = 'nutrition_months/2026-09';
         const date = '2026-09-14';

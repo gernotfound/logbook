@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { screen, fireEvent } from '@testing-library/react';
-import HomeView from './HomeView';
+import HomeView from '../components/Home/HomeView';
 import { renderWithProviders } from '../../tests/setup';
 import type { WorkoutSession, NutritionDay, Exercise } from '../types';
 import { getLocalDateString, shiftDateString } from '../lib/utils/date';

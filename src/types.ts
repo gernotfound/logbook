@@ -468,6 +468,12 @@ export type SyncResult =
     | { ok: false; status: 'failed'; error: unknown };
 
 
+export type ResolveNutritionConflictInput = {
+    resolution: 'cloud' | 'local';
+    expectedUid: string;
+    expectedConflictFingerprint: string;
+};
+
 export type AppTab = 'home' | 'training' | 'nutrition' | 'data';
 export type TrainingSubTab = 'session' | 'planning' | 'routines' | 'exercises' | 'history';
 export type NutritionSubTab = 'meals' | 'planning' | 'archive' | 'history' | 'supplements';

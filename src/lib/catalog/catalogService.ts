@@ -260,9 +260,6 @@ async function performCatalogSync(dbInstance: Firestore, options?: { force?: boo
         };
 
         await saveCatalogToCache(updatedCatalog);
-        for (const listener of catalogListeners) {
-            try { listener(updatedCatalog); } catch (e) { console.error(e); }
-        }
         return { catalog: updatedCatalog, updated: true };
     } catch (err) {
         console.warn("[CatalogService] Sincronizzazione remota catalogo fallita, mantenuta versione locale:", err);

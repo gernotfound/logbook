@@ -2,7 +2,7 @@ import React from 'react';
 import { Pencil, Save, Plus } from 'lucide-react';
 import MuscleModel from '../MuscleModel';
 import { RoutineExerciseItem } from './RoutineExerciseItem';
-import { ExerciseSearchDropdown } from './ExerciseSearchDropdown';
+import { ExerciseSearchDropdown } from '../ExerciseSearchDropdown';
 import { ExerciseLibraryItem } from '../../../types';
 
 interface RoutineEditorProps {
