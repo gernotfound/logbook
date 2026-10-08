@@ -21,6 +21,9 @@ function user(uid = 'user-a') {
 
 async function loadSubject() {
   vi.resetModules();
+  // The shared UI harness suppresses incidental registration; this dedicated
+  // suite must exercise the real device-recovery code instead.
+  vi.doUnmock('../src/lib/deletionDeviceRecovery');
   vi.doMock('../src/lib/firebase', () => firebase);
   vi.doMock('../src/lib/appCheck', () => appCheck);
   return import('../src/lib/deletionDeviceRecovery');
@@ -84,6 +87,49 @@ describe('account deletion recovery device registration retries', () => {
     window.dispatchEvent(new Event('online'));
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     dispose();
+  });
+
+  it('retries a failed registration when connectivity returns without losing the local credential', async () => {
+    const { watchDeletionRecoveryDeviceRegistration } = await loadSubject();
+    const current = user();
+    firebase.auth.currentUser = current;
+    const fetchMock = vi.fn()
+      .mockRejectedValueOnce(new Error('temporary offline failure'))
+      .mockResolvedValueOnce(new Response('{}', { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const onError = vi.fn();
+
+    const dispose = watchDeletionRecoveryDeviceRegistration(current, onError);
+    await vi.waitFor(() => expect(onError).toHaveBeenCalledTimes(1));
+    expect(localStorage.getItem('logbook_deletion_recovery_devices_v1')).not.toBeNull();
+
+    window.dispatchEvent(new Event('online'));
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(onError).toHaveBeenCalledTimes(1);
+
+    document.dispatchEvent(new Event('visibilitychange'));
+    await Promise.resolve();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    dispose();
+  });
+
+  it('removes retry listeners when a device registration watcher is disposed', async () => {
+    const { watchDeletionRecoveryDeviceRegistration } = await loadSubject();
+    const current = user();
+    firebase.auth.currentUser = current;
+    const fetchMock = vi.fn(async () => new Response('{}', { status: 503 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const onError = vi.fn();
+
+    const dispose = watchDeletionRecoveryDeviceRegistration(current, onError);
+    await vi.waitFor(() => expect(onError).toHaveBeenCalledTimes(1));
+    dispose();
+    window.dispatchEvent(new Event('online'));
+    document.dispatchEvent(new Event('visibilitychange'));
+    await Promise.resolve();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(onError).toHaveBeenCalledTimes(1);
   });
 
   it('does not register a stale user after the authenticated account changes', async () => {
