@@ -13,7 +13,7 @@ function hasRealMockTarget(filePath, specifier) {
 function checkMockTargets(filePath, source) {
     // Only check static relative specifiers. Bare package names and generated virtual modules
     // are resolved by Vite/Vitest, so their filesystem existence is not a useful oracle.
-    const mockPattern = /(?:^|\r?\n)[\uFEFF \t]*(?:vi|jest)\.(?:mock|doMock)\s*\(\s*(['"])(\.{1,2}\/[^'"\r\n]+)\1/g;
+    const mockPattern = /^[\uFEFF \t]*(?:vi|jest)\.(?:mock|doMock)\s*\(\s*(['"])(\.{1,2}\/[^'"\r\n]+)\1/gm;
     for (const match of source.matchAll(mockPattern)) {
         const specifier = match[2];
         if (!hasRealMockTarget(filePath, specifier)) {
