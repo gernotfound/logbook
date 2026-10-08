@@ -6,8 +6,9 @@ const mockFileExtensions = ['', '.ts', '.tsx', '.js', '.jsx', '.mjs', '.mts', '.
 
 function hasRealMockTarget(filePath, specifier) {
     const target = path.resolve(path.dirname(filePath), specifier.split(/[?#]/, 1)[0]);
-    return mockFileExtensions.some(extension => fs.existsSync(target + extension)) ||
-        mockFileExtensions.some(extension => fs.existsSync(path.join(target, 'index' + extension)));
+    const isFile = candidate => fs.existsSync(candidate) && fs.statSync(candidate).isFile();
+    return mockFileExtensions.some(extension => isFile(target + extension)) ||
+        mockFileExtensions.some(extension => isFile(path.join(target, 'index' + extension)));
 }
 
 function checkMockTargets(filePath, source) {
