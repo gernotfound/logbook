@@ -147,6 +147,33 @@ describe.each(['input', 'textarea'] as const)('owner-scoped buffered %s recovery
         view.unmount();
     });
 
+    it('never moves a mounted guest draft to a newly authenticated owner', () => {
+        // An input event may arrive before an old editor unmounts during login.
+        localStorage.setItem('logbook_is_guest', 'true');
+        expect(captureSession().owner).toBe('guest');
+        const guestKey = recoveryKey(kind);
+        const onChange = vi.fn();
+        const view = render(field(kind, onChange));
+
+        fireEvent.change(editor(), { target: { value: 'guest note' } });
+        expect(localStorage.getItem(guestKey)).toBe('guest note');
+
+        localStorage.removeItem('logbook_is_guest');
+        localStorage.setItem('logbook_authenticated_owner', 'user:another-account');
+        invalidateSession();
+        const newOwner = captureSession().owner;
+        expect(newOwner).toBe('user:another-account');
+        const otherKey = deviceKey(`draft:buffered:${kind}:stable-draft`, newOwner);
+
+        fireEvent.change(editor(), { target: { value: 'late edit' } });
+        expect(localStorage.getItem(guestKey)).toBe('guest note');
+        expect(localStorage.getItem(otherKey)).toBeNull();
+        expect(onChange).not.toHaveBeenCalled();
+        expect(useAppStore.getState().saveError).toMatch(/bozza non ancora protetta/i);
+        view.unmount();
+        expect(onChange).not.toHaveBeenCalled();
+    });
+
     it('keeps the original owner draft and never flushes it after session invalidation', () => {
         const key = recoveryKey(kind);
         const onChange = vi.fn();

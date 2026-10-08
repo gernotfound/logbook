@@ -42,6 +42,8 @@ type InitialBufferedRecovery = {
 };
 
 function createInitialRecovery(kind: 'input' | 'textarea', id: string | undefined): InitialBufferedRecovery {
+    // Preserve the owner captured on mount: a late edit must never rebind
+    // another account's draft after the session changes.
     const key = recoveryName(kind, id);
     try {
         const session = captureSession();
@@ -146,7 +148,6 @@ export const BufferedInput = React.forwardRef<HTMLInputElement, BufferedInputPro
             latestLocalValue.current = e.target.value;
             isDirty.current = true;
             try {
-                editSession.current = captureSession();
                 persistRecovery();
             } catch (error) {
                 useAppStore.getState().setSaveError('Bozza non ancora protetta nello storage del dispositivo.');
@@ -276,7 +277,6 @@ export const BufferedTextarea = React.forwardRef<HTMLTextAreaElement, BufferedTe
             latestLocalValue.current = e.target.value;
             isDirty.current = true;
             try {
-                editSession.current = captureSession();
                 persistRecovery();
             } catch (error) {
                 useAppStore.getState().setSaveError('Bozza non ancora protetta nello storage del dispositivo.');
