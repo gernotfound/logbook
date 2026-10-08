@@ -4,7 +4,7 @@
 
 M5 distingue tra test normativi di accettazione e suite legacy/stress. Un test normativo è una prova del comportamento solo se attraversa il codice di produzione responsabile del comportamento oppure usa un oracle indipendente.
 
-`tests/tier5_adversarial_guest_catalog.test.ts` e le altre suite stress restano utili per regressioni e carico, ma non possono essere citate da sole come prova di accettazione M5.
+Le suite stress `tests/tier5_adversarial_guest_catalog_*.test.ts` (suddivise per scenario) e le altre suite adversarial restano utili per regressioni e carico, ma non possono essere citate da sole come prova di accettazione M5.
 
 M8 non annulla questi criteri di qualità: aggiorna però il production mutation boundary ordinario. Dove una vecchia formulazione M5 cita uno snapshot-save diretto, prevale il boundary Domain Operations corrente.
 
