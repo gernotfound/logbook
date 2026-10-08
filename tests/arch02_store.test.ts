@@ -10,10 +10,6 @@ vi.mock('firebase/firestore', async (importOriginal) => {
     };
 });
 
-vi.mock('../src/lib/telemetry', () => ({
-    telemetryHub: { trackError: vi.fn() }
-}));
-
 describe('ARCH-02: createSyncSlice', () => {
     beforeEach(() => {
         vi.clearAllMocks();
