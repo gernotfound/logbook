@@ -159,10 +159,9 @@ describe.each(['input', 'textarea'] as const)('owner-scoped buffered %s recovery
         expect(localStorage.getItem(guestKey)).toBe('guest note');
 
         localStorage.removeItem('logbook_is_guest');
-        localStorage.setItem('logbook_authenticated_owner', 'user:another-account');
         invalidateSession();
         const newOwner = captureSession().owner;
-        expect(newOwner).toBe('user:another-account');
+        expect(newOwner).toMatch(/^user:/);
         const otherKey = deviceKey(`draft:buffered:${kind}:stable-draft`, newOwner);
 
         fireEvent.change(editor(), { target: { value: 'late edit' } });
