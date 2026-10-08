@@ -1,7 +1,27 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-const roots = ['src', 'tests'];
+const roots = ['src', 'tests', 'e2e'];
+const mockFileExtensions = ['', '.ts', '.tsx', '.js', '.jsx', '.mjs', '.mts', '.cjs', '.cts', '.json', '.css', '.scss', '.svg'];
+
+function hasRealMockTarget(filePath, specifier) {
+    const target = path.resolve(path.dirname(filePath), specifier.split(/[?#]/, 1)[0]);
+    return mockFileExtensions.some(extension => fs.existsSync(target + extension)) ||
+        mockFileExtensions.some(extension => fs.existsSync(path.join(target, 'index' + extension)));
+}
+
+function checkMockTargets(filePath, source) {
+    // Only check static relative specifiers. Bare package names and generated virtual modules
+    // are resolved by Vite/Vitest, so their filesystem existence is not a useful oracle.
+    const mockPattern = /(?:^|\r?\n)[\uFEFF \t]*(?:vi|jest)\.(?:mock|doMock)\s*\(\s*(['"])(\.{1,2}\/[^'"\r\n]+)\1/g;
+    for (const match of source.matchAll(mockPattern)) {
+        const specifier = match[2];
+        if (!hasRealMockTarget(filePath, specifier)) {
+            const line = source.slice(0, match.index).split('\n').length;
+            violations.push(`${filePath}:${line} [nonexistent mocked module]: ${specifier}`);
+        }
+    }
+}
 const violations = [];
 const testFilePattern = /\.(?:test|spec)\.[cm]?[jt]sx?$/;
 const forbiddenPatterns = [
@@ -22,6 +42,7 @@ function walk(directory) {
         if (!testFilePattern.test(entry.name)) continue;
 
         const content = fs.readFileSync(fullPath, 'utf8');
+        checkMockTargets(fullPath, content);
         const lines = content.split(/\r?\n/);
         lines.forEach((line, index) => {
             for (const { label, pattern } of forbiddenPatterns) {
@@ -35,9 +56,9 @@ function walk(directory) {
 for (const root of roots) walk(root);
 
 if (violations.length) {
-    console.error('Forbidden test shortcuts are not allowed in the canonical verification gate:');
+    console.error('Invalid test shortcuts or unresolved mocked modules in the canonical verification gate:');
     for (const item of violations) console.error(`- ${item}`);
     process.exit(1);
 }
 
-console.log('No skipped, focused, todo, or tautological tests found.');
+console.log('No skipped, focused, todo, tautological, or unresolved relative mocked modules found.');

@@ -20,19 +20,6 @@ vi.mock('../src/store/useAppStore', () => ({
     }),
 }));
 
-vi.mock('../src/hooks/useDataMeasurements', () => ({
-    useDataMeasurements: () => ({
-        profile: {},
-        handleEditClick: vi.fn(),
-    })
-}));
-
-vi.mock('../src/hooks/useDataSleep', () => ({
-    useDataSleep: () => ({
-        setEditingDate: vi.fn(),
-    })
-}));
-
 vi.mock('../src/hooks/useAuth', () => ({
     useAuth: () => ({
         currentUser: null,
