@@ -1,4 +1,27 @@
-import { vi, beforeEach } from 'vitest';
+import { vi, beforeEach, afterEach } from 'vitest';
+
+// Fail closed: UI tests must not contact real services. Record unexpected
+// requests so even errors swallowed by application catch handlers fail the test.
+const unexpectedNetworkRequests: string[] = [];
+function blockUnexpectedFetch(input: RequestInfo | URL): never {
+  const target = String(input);
+  unexpectedNetworkRequests.push(target);
+  throw new Error(`Unexpected network request in Vitest: ${target}`);
+}
+Object.defineProperty(globalThis, 'fetch', {
+  configurable: true,
+  writable: true,
+  value: blockUnexpectedFetch,
+});
+beforeEach(() => {
+  unexpectedNetworkRequests.length = 0;
+  globalThis.fetch = blockUnexpectedFetch;
+});
+afterEach(() => {
+  if (unexpectedNetworkRequests.length > 0) {
+    throw new Error(`Unexpected unmocked network requests: ${unexpectedNetworkRequests.join(', ')}`);
+  }
+});
 
 const storageMocks = vi.hoisted(() => {
   const localStorageStore: Record<string, string> = {};
@@ -228,23 +251,50 @@ vi.mock('virtual:pwa-register/react', () => ({
   })),
 }));
 
+// Shared UI tests start authenticated unless the test explicitly changes the session.
+// A single auth object is used by both Firebase constructors, as in production.
+const firebaseAuthFixture = vi.hoisted(() => {
+  const createUser = () => ({
+    uid: 'test-user-id',
+    email: 'test@example.com',
+    displayName: 'Test User',
+    emailVerified: true,
+    providerData: [{ providerId: 'password' }],
+    getIdToken: vi.fn(async () => 'test-id-token'),
+  });
+  return {
+    createUser,
+    listeners: new Set<(user: ReturnType<typeof createUser> | null) => void>(),
+    auth: {
+      currentUser: createUser() as ReturnType<typeof createUser> | null,
+      authStateReady: vi.fn(async () => undefined),
+    },
+  };
+});
+
+export const mockFirebaseAuth = firebaseAuthFixture.auth;
+
+beforeEach(() => {
+  // A previous test's logout must not leak into another test. Null remains null
+  // within a test: onAuthStateChanged must never silently re-authenticate it.
+  firebaseAuthFixture.listeners.clear();
+  firebaseAuthFixture.auth.currentUser = firebaseAuthFixture.createUser();
+});
+
 // Mock Firebase
 vi.mock('firebase/app', () => ({
   initializeApp: vi.fn(() => ({})),
 }));
 
 vi.mock('firebase/auth', () => ({
-  getAuth: vi.fn(() => ({ currentUser: { uid: 'test-user-id', email: 'test@example.com', displayName: 'Test User' } })),
-  initializeAuth: vi.fn(() => ({
-    currentUser: { uid: 'test-user-id', email: 'test@example.com', displayName: 'Test User' },
-    authStateReady: vi.fn().mockResolvedValue(undefined),
-  })),
+  getAuth: vi.fn(() => firebaseAuthFixture.auth),
+  initializeAuth: vi.fn(() => firebaseAuthFixture.auth),
   GoogleAuthProvider: class { setCustomParameters = vi.fn(); },
   EmailAuthProvider: { credential: vi.fn((email: string, password: string) => ({ email, password })) },
   signInWithPopup: vi.fn(),
   signInWithRedirect: vi.fn(),
-  signInWithEmailAndPassword: vi.fn().mockResolvedValue({ user: { uid: 'test-user-id', email: 'test@example.com', emailVerified: true, providerData: [{ providerId: 'password' }] } }),
-  createUserWithEmailAndPassword: vi.fn().mockResolvedValue({ user: { uid: 'test-user-id', email: 'test@example.com', emailVerified: true, providerData: [{ providerId: 'password' }] } }),
+  signInWithEmailAndPassword: vi.fn(async () => ({ user: firebaseAuthFixture.createUser() })),
+  createUserWithEmailAndPassword: vi.fn(async () => ({ user: firebaseAuthFixture.createUser() })),
   sendPasswordResetEmail: vi.fn().mockResolvedValue(undefined),
   updateEmail: vi.fn().mockResolvedValue(undefined),
   updatePassword: vi.fn().mockResolvedValue(undefined),
@@ -268,21 +318,27 @@ vi.mock('firebase/auth', () => ({
     passwordPolicy: { customStrengthOptions: { minPasswordLength: 8, maxPasswordLength: 4096 } },
   }),
   getRedirectResult: vi.fn().mockResolvedValue(null),
-  signOut: vi.fn(),
+  signOut: vi.fn(async (_auth) => {
+    _auth.currentUser = null;
+    for (const listener of firebaseAuthFixture.listeners) listener(null);
+  }),
   onAuthStateChanged: vi.fn((_auth, callback) => {
-    _auth.currentUser ??= {
-      uid: 'test-user-id',
-      email: 'test@example.com',
-      displayName: 'Test User',
-    };
+    firebaseAuthFixture.listeners.add(callback);
     callback(_auth.currentUser);
-    return () => {};
+    return () => { firebaseAuthFixture.listeners.delete(callback); };
   }),
   setPersistence: vi.fn().mockResolvedValue(undefined),
   browserLocalPersistence: {},
   browserPopupRedirectResolver: { name: 'browser-popup-redirect-resolver' },
   indexedDBLocalPersistence: {},
   deleteUser: vi.fn(),
+}));
+
+// UI tests must not register real recovery devices as an incidental mount effect.
+// Dedicated recovery suites explicitly opt into the real implementation.
+vi.mock('../src/lib/deletionDeviceRecovery', async (importOriginal) => ({
+  ...await importOriginal<typeof import('../src/lib/deletionDeviceRecovery')>(),
+  watchDeletionRecoveryDeviceRegistration: vi.fn(() => () => {}),
 }));
 
 vi.mock('firebase/app-check', () => ({
