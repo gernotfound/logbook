@@ -14,7 +14,7 @@ M4 riduce la crescita dei metadati `_sync` senza indebolire le garanzie causali 
 
 **MUST NOT:** eliminare coordinate positive da `SyncMeta.clock` in base alla sola assenza di una write recente.
 
-**MUST NOT:** usare `stampWins()` come prova di garbage-collectability. I tie-break concorrenti determinano un winner ma non dimostrano inclusione causale.
+**MUST NOT:** usare l'esito dell'arbitraggio totale dei `FieldStamp` (attualmente `compareStamps()`) come prova di garbage-collectability. I tie-break concorrenti determinano un winner ma non dimostrano inclusione causale.
 
 ## Copertura causale
 

@@ -1,6 +1,6 @@
 # LogBook — istruzioni operative per agenti AI
 
-Ultimo aggiornamento: 2026-09-30 | App: 1.1.0 | Progetto: PWA fitness tracking (allenamento, nutrizione, misurazioni corporee).
+Ultimo aggiornamento: 2026-10-08 | App: 1.1.0 | Progetto: PWA fitness tracking (allenamento, nutrizione, misurazioni corporee).
 
 ## Convenzioni
 
@@ -18,7 +18,8 @@ Ogni regola in questo documento è classificata:
 3. `AGENTS.md` contiene gli invarianti trasversali; `.agents/rules/` contiene i contratti specialistici.
 4. Se documentazione e codice divergono, non modificare il codice per farlo aderire alla cieca a una regola obsoleta. Discriminare il comportamento corretto con codice, test, history e configurazione; correggere la fonte normativa nello stesso task quando necessario.
 5. Una regola documentale obsoleta non deve bloccare un upgrade tecnicamente corretto: va aggiornata o rimossa con evidenza e regressioni adeguate.
-6. **MUST:** non dichiarare mai letto, testato, deployato o verificato ciò che non è stato realmente osservato.
+6. **MUST:** quando un refactor rimuove o rinomina funzioni/contratti o cambia i gate di CI, cercare i riferimenti normativi collegati in `AGENTS.md`, `.agents/rules/` e nella documentazione operativa; riallinearli nello stesso task. Descrivere prioritariamente gli invarianti, senza citare come esistenti helper rimossi o classificare advisory verifiche realmente bloccanti.
+7. **MUST:** non dichiarare mai letto, testato, deployato o verificato ciò che non è stato realmente osservato.
 
 ## Classificazione del rischio
 
@@ -29,6 +30,11 @@ Sono **CRITICAL** almeno: dati utente, IndexedDB/persistenza, sincronizzazione, 
 - **MUST:** maggiore è il rischio, maggiore è la profondità di ricerca, test e review.
 - **MUST:** risolvere la root cause, non applicare workaround locali che lasciano invarianti incoerenti.
 - **MUST:** mantenere il diff minimo rispetto all'obiettivo e aggiungere test di regressione quando appropriato.
+
+## Diagnosi e audit
+
+- **MUST:** non fermarsi al primo finding. Completare il perimetro pertinente distinguendo sintomo, causa immediata e root cause; seguire chiamanti, stato, persistenza, UI/runtime, test, workflow e configurazioni quando influiscono sulla diagnosi.
+- **MUST:** cercare evidenze contrarie, cause concorrenti e pattern analoghi prima di chiudere un audit. Per i percorsi CRITICAL includere failure path, recovery e invarianti di integrità dei dati.
 
 ## Autonomia operativa
 
@@ -235,6 +241,7 @@ Tema adattivo system/light/dark con superfici e controlli ispirati a iOS. `src/s
 - **MUST:** sulle superfici mantenute vive sotto `Suspense`, non usare l'attributo HTML `hidden` come meccanismo di tab visibility; il pattern corrente usa `style={{ display: ... }}` e va preservato salvo una migrazione React esplicitamente testata.
 - **MUST:** niente fallback inline di array/oggetti nei selettori Zustand che generano una nuova referenza a ogni render; usare costanti stabili.
 - **SHOULD:** memoizzazione custom solo dove misurata o già motivata dai componenti ad alta frequenza.
+- **MUST:** recovery e componenti React non devono mutare lo store globale durante il render. `useRef(initialValue)` non è una lazy initialization: l'espressione viene valutata a ogni render. Nei draft device-critical mantenere l'inizializzazione owner/session-scoped stabile e applicare eventuali blocchi di persistenza soltanto dopo il commit React, conservando il comportamento fail-closed.
 
 ## Processo Git e branch
 
@@ -311,4 +318,5 @@ npm run verify:m8
 | [`.agents/rules/distributed-fuzz.md`](.agents/rules/distributed-fuzz.md) | Fuzz distribuito e convergenza causale |
 | [`.agents/rules/verification-hardening.md`](.agents/rules/verification-hardening.md) | Qualità dei test normativi e production boundaries |
 | [`.agents/rules/catalog-operations.md`](.agents/rules/catalog-operations.md) | Catalogo globale, seeding e recovery |
+| [`.agents/rules/external-services.md`](.agents/rules/external-services.md) | Configurazioni esterne, segreti e verifica live |
 | [`.agents/rules/design-system.md`](.agents/rules/design-system.md) | Tema, CSS, tipografia e UX |
