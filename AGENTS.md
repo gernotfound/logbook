@@ -18,7 +18,8 @@ Ogni regola in questo documento è classificata:
 3. `AGENTS.md` contiene gli invarianti trasversali; `.agents/rules/` contiene i contratti specialistici.
 4. Se documentazione e codice divergono, non modificare il codice per farlo aderire alla cieca a una regola obsoleta. Discriminare il comportamento corretto con codice, test, history e configurazione; correggere la fonte normativa nello stesso task quando necessario.
 5. Una regola documentale obsoleta non deve bloccare un upgrade tecnicamente corretto: va aggiornata o rimossa con evidenza e regressioni adeguate.
-6. **MUST:** non dichiarare mai letto, testato, deployato o verificato ciò che non è stato realmente osservato.
+6. **MUST:** quando un refactor rimuove o rinomina funzioni/contratti o cambia i gate di CI, cercare i riferimenti normativi collegati in `AGENTS.md`, `.agents/rules/` e nella documentazione operativa; riallinearli nello stesso task. Descrivere prioritariamente gli invarianti, senza citare come esistenti helper rimossi o classificare advisory verifiche realmente bloccanti.
+7. **MUST:** non dichiarare mai letto, testato, deployato o verificato ciò che non è stato realmente osservato.
 
 ## Classificazione del rischio
 

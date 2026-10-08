@@ -113,7 +113,7 @@ La pipeline V4 mantiene debounce e protocollo causale delle milestone precedenti
 
 **MUST:** un contender perdente, una retry o una operation respinta da lifecycle guard può avanzare `SyncMeta.clock`, ma non può modificare retroattivamente `FieldStamp.clock` del winner.
 
-**MUST:** `stampWins()` usa un ordine totale compatibile con happens-before: causal dominance; peso monotono del vector clock (somma delle coordinate); delete bias solo a parità di peso; actor/seq; vector order canonico. Questa relazione deve restare transitiva.
+**MUST:** l'arbitraggio dei `FieldStamp` usa un ordine totale compatibile con happens-before (attualmente `compareStamps()` in `semanticProjection/metadata.ts`): causal dominance; peso monotono del vector clock (somma delle coordinate); delete bias solo a parità di peso; actor/seq; vector order canonico. Questa relazione deve restare transitiva.
 
 **MUST:** ancestor e descendant vengono riconciliati con lo stesso ordine totale. Una write ancestor preserva e riapplica soltanto i descendant stamp che la superano; i descendant shadowed vengono rimossi semanticamente. Guard fallite vengono escluse prima dell'arbitration del field.
 
