@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ShieldAlert, Download, Trash2, RefreshCw } from 'lucide-react';
+import { ShieldAlert, Download, Trash2, RefreshCw, LogOut } from 'lucide-react';
 import { useSettings } from '../../hooks/useSettings';
 import { useAuth } from '../../hooks/useAuth';
 import { useDialogStore } from '../../store/useDialogStore';
@@ -9,7 +9,7 @@ import { PrivacyPolicy } from '../../pages/PrivacyPolicy';
 
 export function HealthConsentSuspendedScreen({ status }: { status: HealthConsentGateStatus }) {
   const { isGuest } = useAuth();
-  const { handleExportBackup, handleDeleteAccount, exportingData, deletingAccount } = useSettings();
+  const { handleExportBackup, handleDeleteAccount, handleLogout, exportingData, deletingAccount } = useSettings();
   const [retrying, setRetrying] = useState(false);
   const [showPrivacy, setShowPrivacy] = useState(false);
 
@@ -71,6 +71,11 @@ export function HealthConsentSuspendedScreen({ status }: { status: HealthConsent
         <button type="button" className="btn" onClick={() => void handleExportBackup()} disabled={exportingData}>
           <Download size={16} aria-hidden="true" /> {exportingData ? 'Esportazione…' : 'Esporta i dati in JSON'}
         </button>
+        {!isGuest && (
+          <button type="button" className="btn" onClick={() => void handleLogout()}>
+            <LogOut size={16} aria-hidden="true" /> Esci dall'account
+          </button>
+        )}
         <button type="button" className="btn" onClick={() => void handleDeleteAccount()} disabled={deletingAccount}>
           <Trash2 size={16} aria-hidden="true" /> {isGuest ? 'Elimina dati locali' : 'Elimina account'}
         </button>
