@@ -242,6 +242,20 @@ describe('Workout lifecycle durable recovery regressions', () => {
         expect(localStorage.getItem(key)).toBeNull();
     });
 
+
+    it('keeps a completed session retired when the historical month was not loaded', () => {
+        const previous = workout('older-completed', true);
+        const stale = workout('newer-completed', true);
+        const key = deviceKey('workout', owner);
+        localStorage.setItem(key, JSON.stringify(previous));
+        expect(getInitialLocalWorkout(owner, null, [], stale.id, [previous.id, stale.id])).toBeNull();
+        expect(localStorage.getItem(key)).toBeNull();
+
+        // A separately provided old cloud fallback also cannot reopen a closed identity.
+        expect(getInitialLocalWorkout(owner, previous, [], stale.id, [previous.id, stale.id])).toBeNull();
+        expect(localStorage.getItem(key)).toBeNull();
+    });
+
     it('keeps post-session rating unchanged if its synchronous persistence fails', () => {
         const active = workout('post-write', true);
         useAppStore.setState({ userData: userData({ activeWorkout: active }), localWorkout: active });
