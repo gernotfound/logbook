@@ -2,6 +2,10 @@ import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { screen, fireEvent, act } from '@testing-library/react';
 import App from '../src/App';
+vi.mock('../src/hooks/useHealthConsentRevocation', () => ({
+  useHealthConsentRevocation: () => 'none',
+}));
+
 import { renderWithProviders, defaultMockUserData } from './setup';
 import { useAppStore } from '../src/store/useAppStore';
 import { clearSyncTimers } from '../src/store/slices/createSyncSlice';
