@@ -12,7 +12,7 @@ interface PreSessionCheckInProps {
     routineName?: string;
     date?: string;
     onStart: (readiness?: Omit<WorkoutReadiness, 'capturedAt'>) => Promise<boolean>;
-    onCancel: () => Promise<void>;
+    onCancel: () => Promise<boolean>;
 }
 
 type ReadinessKey = 'energy' | 'stress' | 'motivation' | 'muscleRecovery';
@@ -128,14 +128,17 @@ export default function PreSessionCheckIn({ workoutId, routineName, date, onStar
     const setMetric = (key: ReadinessKey, value: number) => {
         const current = valuesRef.current;
         const next = { ...current, [key]: current[key] === value ? undefined : value };
+        try {
+            const activeSession = session.current;
+            if (!activeSession || !isCurrentSession(activeSession)) throw new Error('Sessione cambiata prima del salvataggio del check-in.');
+            writeDeviceValue(recoveryName.current, JSON.stringify(next), activeSession.owner);
+        } catch (error) {
+            blockReadinessPersistence(error);
+            return;
+        }
         valuesRef.current = next;
         dirtyRef.current = true;
         setValues(next);
-        try {
-            persistDraft();
-        } catch (error) {
-            blockReadinessPersistence(error);
-        }
     };
 
     const start = async (includeReadiness: boolean) => {
@@ -143,7 +146,18 @@ export default function PreSessionCheckIn({ workoutId, routineName, date, onStar
         setStarting(true);
         try {
             const started = await onStart(includeReadiness ? valuesRef.current : undefined);
-            if (started) clearDraft();
+            if (started) {
+                try {
+                    clearDraft();
+                } catch (error) {
+                    // The workout is already durable. A failed obsolete-draft cleanup
+                    // must not turn a successful start into an unhandled rejection.
+                    console.warn('Check-in avviato, impossibile pulire la vecchia bozza:', error);
+                    useAppStore.getState().setSaveError('Allenamento avviato; impossibile rimuovere una vecchia bozza locale.');
+                }
+            }
+        } catch (error) {
+            blockReadinessPersistence(error);
         } finally {
             setStarting(false);
         }
@@ -151,8 +165,11 @@ export default function PreSessionCheckIn({ workoutId, routineName, date, onStar
 
     const cancel = async () => {
         if (starting) return;
-        await onCancel();
-        clearDraft();
+        try {
+            if (await onCancel()) clearDraft();
+        } catch (error) {
+            blockReadinessPersistence(error);
+        }
     };
 
     return (

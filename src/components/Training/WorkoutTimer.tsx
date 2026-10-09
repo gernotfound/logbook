@@ -26,20 +26,24 @@ function OwnerWorkoutTimer({ owner }: { owner: string }) {
         try {
             return { snapshot: readWorkoutTimerSnapshot(owner), unreadable: false };
         } catch (error) {
-            console.error('Timer device-critical non leggibile:', error);
-            useAppStore.setState({
-                localPersistenceBlocked: true,
-                syncHealth: 'failed',
-                syncPresentation: 'normal',
-                saveError: 'Timer locale non leggibile. Riapri TheLogBook prima di usare o sovrascrivere il cronometro.',
-            });
-            return { snapshot: stoppedWorkoutTimer(), unreadable: true };
+            return { snapshot: stoppedWorkoutTimer(), unreadable: true, error };
         }
     });
     const [restTimer, setRestTimer] = useState<WorkoutTimerSnapshot>(initialTimer.snapshot);
     const [timerUnreadable, setTimerUnreadable] = useState(initialTimer.unreadable);
     const [displayNow, setDisplayNow] = useState(() => Date.now());
     const [metronomeOpen, setMetronomeOpen] = useState(false);
+
+    useEffect(() => {
+        if (!initialTimer.unreadable) return;
+        console.error('Timer device-critical non leggibile:', initialTimer.error);
+        useAppStore.setState({
+            localPersistenceBlocked: true,
+            syncHealth: 'failed',
+            syncPresentation: 'normal',
+            saveError: 'Timer locale non leggibile. Riapri TheLogBook prima di usare o sovrascrivere il cronometro.',
+        });
+    }, [initialTimer]);
 
     const restDisplay = restTimer.state === 'running'
         ? formatTimerMs(displayNow - restTimer.startTime + restTimer.accumulated)
