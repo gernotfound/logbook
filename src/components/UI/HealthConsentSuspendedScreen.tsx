@@ -18,7 +18,7 @@ export function HealthConsentSuspendedScreen({ status }: { status: HealthConsent
   const [retrying, setRetrying] = useState(false);
   const [showPrivacy, setShowPrivacy] = useState(false);
   const [localErasure, setLocalErasure] = useState<'checking' | 'complete' | 'failed'>('checking');
-  const [cloudErasure, setCloudErasure] = useState<'pending' | 'complete' | 'failed'>('pending');
+  const [cloudErasure, setCloudErasure] = useState<'pending' | 'complete' | 'failed' | 'blocked'>('pending');
 
   const eraseLocal = useCallback(async () => {
     if (!owner || status === 'unavailable' || status === 'none') return;
@@ -52,7 +52,7 @@ export function HealthConsentSuspendedScreen({ status }: { status: HealthConsent
     return onSnapshot(doc(getDb(), 'health_consent_revocations', uid), snapshot => {
       if (!snapshot.exists()) { setCloudErasure('pending'); return; }
       const value = snapshot.data().eraseStatus;
-      setCloudErasure(value === 'complete' ? 'complete' : value === 'blocked' || value === 'failed' ? 'failed' : 'pending');
+      setCloudErasure(value === 'complete' ? 'complete' : value === 'blocked' ? 'blocked' : value === 'failed' ? 'failed' : 'pending');
     }, () => setCloudErasure('pending'));
   }, [owner, isGuest, status]);
 
@@ -81,7 +81,9 @@ export function HealthConsentSuspendedScreen({ status }: { status: HealthConsent
     try {
       await requestHealthConsentRevocation();
     } catch {
-      await useDialogStore.getState().showAlert('Il server non ha ancora confermato la revoca. La sospensione su questo dispositivo rimane attiva.');
+      await useDialogStore.getState().showAlert(status === 'confirmed'
+        ? 'La revoca resta valida, ma non è stato possibile ritentare la cancellazione cloud. Riprova più tardi.'
+        : 'Il server non ha ancora confermato la revoca. La sospensione su questo dispositivo rimane attiva.');
     } finally {
       setRetrying(false);
     }
@@ -107,7 +109,7 @@ export function HealthConsentSuspendedScreen({ status }: { status: HealthConsent
           <p role="status">Dati su questo dispositivo: {localErasure === 'complete'
             ? 'pulizia completata.'
             : localErasure === 'failed' ? 'pulizia non completata: riprova.' : 'cancellazione in corso.'}
-            {!isGuest && ' Cloud: ' + (cloudErasure === 'complete' ? 'cancellazione completata.' : cloudErasure === 'failed' ? 'cancellazione non completata; il recupero automatico sarà ritentato.' : 'cancellazione in attesa o in corso.')}
+            {!isGuest && ' Cloud: ' + (cloudErasure === 'complete' ? 'cancellazione completata.' : cloudErasure === 'blocked' ? 'cancellazione sospesa per dati inattesi; serve una verifica tecnica.' : cloudErasure === 'failed' ? 'cancellazione non completata; il recupero automatico sarà ritentato.' : 'cancellazione in attesa o in corso.')}
           </p>
         )}
         {localErasure === 'failed' && status !== 'unavailable' && (
@@ -115,9 +117,9 @@ export function HealthConsentSuspendedScreen({ status }: { status: HealthConsent
             <RefreshCw size={16} aria-hidden="true" /> Riprova la pulizia locale
           </button>
         )}
-        {pending && !isGuest && (
+        {!isGuest && (pending || (confirmed && cloudErasure !== 'complete' && cloudErasure !== 'blocked')) && (
           <button type="button" className="btn btn-primary" onClick={() => void retry()} disabled={retrying}>
-            <RefreshCw size={16} aria-hidden="true" /> {retrying ? 'Riprovo…' : 'Riprova la conferma della revoca'}
+            <RefreshCw size={16} aria-hidden="true" /> {retrying ? 'Riprovo…' : confirmed ? 'Riprova la cancellazione cloud' : 'Riprova la conferma della revoca'}
           </button>
         )}
         <button type="button" className="btn" onClick={() => setShowPrivacy(true)}>
