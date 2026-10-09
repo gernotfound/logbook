@@ -40,7 +40,7 @@ Questa tabella rappresenta un'analisi dei confini, **non** un penetration test e
 5. **Ospite:** distinguere l'uso locale e la raccolta presso i fornitori; stabilire le modalità necessarie a esercitare i diritti nella modalità priva di account.
 6. **Informativa e titolare:** correggere la descrizione della revoca, il canale di contatto e le basi giuridiche prima dei trattamenti per cui tali informazioni sono obbligatorie, non soltanto prima della vendita.
 
-La scelta A **non autorizza cancellazioni automatiche e irreversibili** né la conservazione indefinita. Un consenso ritirato non giustifica il proseguimento di trattamenti fondati esclusivamente su di esso, inclusa la conservazione senza altra base valida. La gestione dei dati residui e delle richieste di cancellazione deve essere validata sotto i profili degli artt. 6, 9 e 17 GDPR prima del rilascio.
+La decisione integrativa del 9 ottobre 2026 autorizza il comportamento futuro di cancellazione automatica dei dati di tracciamento non più giustificati dopo revoca, lasciando l'account attivo e offrendo l'esportazione facoltativa prima della revoca. Non autorizza operazioni retroattive su dati reali né il rilascio di un meccanismo incompleto. La scelta A **non autorizza conservazione indefinita**. Un consenso ritirato non giustifica il proseguimento di trattamenti fondati esclusivamente su di esso, inclusa la conservazione senza altra base valida. La gestione dei dati residui e delle richieste di cancellazione deve essere validata sotto i profili degli artt. 6, 9 e 17 GDPR prima del rilascio.
 
 ## Comportamento UX approvato per la soluzione A
 
