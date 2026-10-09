@@ -31,7 +31,7 @@ describe('durable owner-scoped journal', () => {
     it('does not overwrite a guest envelope that appeared after a stale bootstrap read', async () => {
         const initial = data(170);
         // Tab A observed absence, but tab B initialized and committed first.
-        expect(await readLocal('guest')).toBeNull();
+        expect(await readLocal('guest')).toBeUndefined();
         await initializeLocal('guest', initial);
         await commitLocal('guest', data(180), initial);
         const durable = await readLocal('guest');
@@ -52,14 +52,14 @@ describe('durable owner-scoped journal', () => {
         await clear();
         await expect(initializeLocal('guest', data(190), undefined, () => false))
             .rejects.toThrow('invalidata');
-        expect(await readLocal('guest')).toBeNull();
+        expect(await readLocal('guest')).toBeUndefined();
     });
 
     it('does not recreate deleted data from a stale snapshot commit', async () => {
         await initializeLocal('user:a', data(170));
         await clear();
         await commitLocal('user:a', data(180), data(170), () => false);
-        expect(await readLocal('user:a')).toBeNull();
+        expect(await readLocal('user:a')).toBeUndefined();
     });
 
     it('rejects pre-M1 and future local envelopes without rewriting their bytes', async () => {
