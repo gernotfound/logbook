@@ -18,6 +18,9 @@
     },
     "api/legacy-service-worker.ts": {
       "maxDuration": 10
+    },
+    "api/health-consent-revocation.ts": {
+      "maxDuration": 30
     }
   },
   "crons": [
