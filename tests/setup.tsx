@@ -6,7 +6,7 @@ const guestLockQueue = new Map<string, Promise<void>>();
 Object.defineProperty(navigator, 'locks', {
   configurable: true,
   value: {
-    request: async <T>(name: string, options: LockOptions, callback: (lock: Lock) => Promise<T>): Promise<T> => {
+    request: async <T,>(name: string, options: LockOptions, callback: (lock: Lock) => Promise<T>): Promise<T> => {
       const preceding = guestLockQueue.get(name) ?? Promise.resolve();
       let release!: () => void;
       const held = new Promise<void>(resolve => { release = resolve; });
