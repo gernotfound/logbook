@@ -50,13 +50,14 @@ export const saveUserDataToCache = async (data: UserData | null, base?: UserData
             if (expectedRevision !== undefined && current?.revision !== expectedRevision) {
                 throw new StaleLocalRevisionError(expectedRevision, current?.revision ?? null);
             }
-            if (!current || !equal(UserDataSchema.parse(current.data), UserDataSchema.parse(data))) {
-                if (base) await commitLocal(session.owner, data, base, guard, expectedRevision);
-                else if (current) await commitLocal(session.owner, data, current.data, guard, expectedRevision);
-                else {
-                    if (expectedRevision !== undefined) throw new StaleLocalRevisionError(expectedRevision, null);
-                    await initializeLocal(session.owner, data, undefined, guard);
-                }
+            if (!current) {
+                if (expectedRevision !== undefined) throw new StaleLocalRevisionError(expectedRevision, null);
+                await initializeLocal(session.owner, data, undefined, guard);
+            } else if (base && !equal(UserDataSchema.parse(current.data), UserDataSchema.parse(data))) {
+                // A snapshot without an observed base is only a bootstrap hint.
+                // Treating the latest durable snapshot as the caller's base would
+                // interpret concurrently created data as intended deletions.
+                await commitLocal(session.owner, data, base, guard, expectedRevision);
             }
             if (!guard()) throw new Error('Sessione cambiata durante il salvataggio locale.');
             const envelope = await readLocal(session.owner);
