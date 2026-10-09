@@ -631,8 +631,8 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
             expect(jobStore).toMatch(/\.limit\(PAGE_SIZE\)/);
 
             const verificationIndex = runner.indexOf('await verifyNoAccountResidue(uid);');
-            const authIndex = runner.indexOf('await deleteAuthUserLast(uid);');
-            const completeIndex = runner.indexOf('await markDeletionComplete(uid);');
+            const authIndex = runner.indexOf('await deleteAuthUserLast(uid, leaseOwner);');
+            const completeIndex = runner.indexOf('await markDeletionComplete(uid, leaseOwner);');
             expect(verificationIndex).toBeGreaterThan(-1);
             expect(authIndex).toBeGreaterThan(verificationIndex);
             expect(completeIndex).toBeGreaterThan(authIndex);
