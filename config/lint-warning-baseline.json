@@ -641,22 +641,6 @@
   },
   {
     "suite": "type-aware",
-    "file": "src/hooks/useWorkoutSession.ts",
-    "code": "typescript(no-floating-promises)",
-    "message": "Promises must be awaited, add void operator to ignore.",
-    "source": "showAlert(\"Errore durante il salvataggio delle modifiche.\");",
-    "count": 1
-  },
-  {
-    "suite": "type-aware",
-    "file": "src/hooks/useWorkoutSession.ts",
-    "code": "typescript(no-floating-promises)",
-    "message": "Promises must be awaited, add void operator to ignore.",
-    "source": "showAlert(\"Errore durante l'eliminazione della sessione.\");",
-    "count": 1
-  },
-  {
-    "suite": "type-aware",
     "file": "src/lib/export.ts",
     "code": "typescript(no-floating-promises)",
     "message": "Promises must be awaited, add void operator to ignore.",

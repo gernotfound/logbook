@@ -104,6 +104,11 @@ describe('Workout lifecycle durable recovery regressions', () => {
         expect(useAppStore.getState().userData?.activeWorkout?.id).toBe('active');
         expect(readWorkoutTimerSnapshot(owner)).toEqual(initialTimer);
 
+        // Rehydrate from the owner-scoped device snapshot while the editor is open.
+        const reopened = getInitialLocalWorkout(owner, active, [old]);
+        expect(reopened?.isEditingHistory).toBe(true);
+        useAppStore.setState({ localWorkout: reopened });
+
         let canceled = false;
         await act(async () => { canceled = await result.current.cancelHistoryEdit(); });
         expect(canceled).toBe(true);
@@ -119,7 +124,7 @@ describe('Workout lifecycle durable recovery regressions', () => {
             JSON.stringify({ version: 1, state: 'running', startTime: 1000, accumulated: 0 }));
         useAppStore.setState({ userData: userData({ activeWorkout: active, history: [old] }), localWorkout: active });
         const key = deviceKey('workout', owner);
-        localStorageMock.setItem.mockImplementationOnce((written: string) => {
+        localStorageMock.setItem.mockImplementation((written: string) => {
             if (written === key) throw new DOMException('blocked', 'SecurityError');
         });
         const { result } = renderHook(() => useWorkoutSession());
