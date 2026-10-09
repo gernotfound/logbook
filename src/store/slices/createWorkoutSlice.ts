@@ -97,6 +97,7 @@ export const getInitialLocalWorkout = (owner?: string, fallback?: WorkoutSession
         const normalized = normalizeDeviceWorkout(fallback);
         const validated = normalized ? DomainParsers.parseActiveWorkout(normalized) as WorkoutSession | null : null;
         if (!validated) throw new DeviceWorkoutCorruptError('Fallback activeWorkout locale non valido.');
+        if (wasClosed(String(validated.id))) return null;
         persistLocalWorkout(validated, owner);
         return validated;
     };
@@ -123,8 +124,7 @@ export const getInitialLocalWorkout = (owner?: string, fallback?: WorkoutSession
 
     // A crash between the atomic IndexedDB workout.complete commit and the
     // device-key cleanup must never resurrect a workout already in history.
-    if (!validated.isEditingHistory && fallback?.id !== validated.id
-        && (lastClosedWorkoutId === validated.id || closedWorkoutIds?.includes(savedWorkoutId) || history?.some(item => item.id === validated.id))) {
+    if (!validated.isEditingHistory && wasClosed(savedWorkoutId)) {
         persistLocalWorkout(null, owner);
         return recoverFallback();
     }
