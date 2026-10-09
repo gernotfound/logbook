@@ -1,5 +1,28 @@
 import { vi, beforeEach, afterEach } from 'vitest';
 
+// Model the browser's origin-scoped Web Locks across concurrent UI callbacks.
+// The queue is shared by each mounted AuthProvider in the test realm.
+const guestLockQueue = new Map<string, Promise<void>>();
+Object.defineProperty(navigator, 'locks', {
+  configurable: true,
+  value: {
+    request: async <T>(name: string, options: LockOptions, callback: (lock: Lock) => Promise<T>): Promise<T> => {
+      const preceding = guestLockQueue.get(name) ?? Promise.resolve();
+      let release!: () => void;
+      const held = new Promise<void>(resolve => { release = resolve; });
+      guestLockQueue.set(name, held);
+      await preceding;
+      try {
+        return await callback({ name, mode: options.mode ?? 'exclusive' } as Lock);
+      } finally {
+        release();
+        if (guestLockQueue.get(name) === held) guestLockQueue.delete(name);
+      }
+    },
+  },
+});
+
+
 // Fail closed: UI tests must not contact real services. Record unexpected
 // requests so even errors swallowed by application catch handlers fail the test.
 const unexpectedNetworkRequests: string[] = [];

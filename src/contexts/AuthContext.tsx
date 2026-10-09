@@ -17,6 +17,7 @@ import { migrateGuestAccount } from './auth/migrateGuestAccount';
 import { replicateJournal } from '../lib/sync/replicateJournal';
 import { activateGuestSession, captureSession, GUEST_REVOCATION_KEY, GUEST_SESSION_KEY, invalidateSession, isActiveGuestSession, isCurrentSession, revokeGuestSession, userOwner } from '../lib/sync/session';
 import { classifySyncFailure } from '../lib/sync/syncFailure';
+import { withGuestLifecycleLock } from '../lib/sync/guestLifecycleLock';
 import { SyncTimeoutError } from '../lib/db/db_core';
 import {
     BrowserStorageError,
@@ -630,20 +631,25 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     // Accesso guest: solo localStorage, zero Firebase
     const loginAsGuest = useCallback(async () => {
         try {
-            clearAuthenticatedOwnerHint();
-            // A revoked guest session may have left data behind after a failed
-            // purge. Clear it before explicitly authorizing a new generation.
-            if (readBrowserValueStrict(GUEST_REVOCATION_KEY) !== null) {
-                await DB.purgeAllLocalUserData('guest');
-            }
-            const bytes = crypto.getRandomValues(new Uint8Array(16));
-            const id = Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
-            writeBrowserValue(GUEST_SESSION_KEY, id);
-            writeBrowserValue(GUEST_KEY, 'true');
-            removeBrowserValue(GUEST_REVOCATION_KEY);
-            activateGuestSession(id);
+            // Serialize the entire cleanup-to-activation transition across tabs.
+            // An older logout must never delete a new guest generation.
+            await withGuestLifecycleLock(async () => {
+                clearAuthenticatedOwnerHint();
+                if (readBrowserValueStrict(GUEST_REVOCATION_KEY) !== null) {
+                    await DB.purgeAllLocalUserData('guest');
+                    // This realm might still hold the revoked guest's snapshot.
+                    // Do not seed the new generation with data from that session.
+                    useAppStore.getState().resetStore({ force: true });
+                }
+                const bytes = crypto.getRandomValues(new Uint8Array(16));
+                const id = Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
+                writeBrowserValue(GUEST_SESSION_KEY, id);
+                writeBrowserValue(GUEST_KEY, 'true');
+                removeBrowserValue(GUEST_REVOCATION_KEY);
+                activateGuestSession(id);
+            });
         } catch {
-            setSaveError('Impossibile avviare la modalità locale: la precedente sessione potrebbe non essere stata pulita completamente.');
+            setSaveError('Impossibile avviare la modalità locale: pulizia o coordinamento delle sessioni non disponibile. I dati esistenti restano protetti.');
             return;
         }
         isGuestRef.current = true;
@@ -794,25 +800,35 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                     if (!confirmed) return;
                 }
 
-                // Persistent revocation first: every other tab must lose write
-                // permission before this tab starts deleting its IndexedDB data.
-                revokeGuestSession();
-                useAppStore.getState().cancelPendingSyncs();
+                const requestedSession = captureSession();
                 let purgeError: unknown;
                 try {
-                    await DB.purgeAllLocalUserData('guest');
-                    // The infrastructure purge also removes these keys, but the
-                    // orchestrator enforces its public logout postcondition.
-                    removeBrowserValue(GUEST_KEY);
-                    removeBrowserValue(GUEST_SESSION_KEY);
-                } catch (error) {
-                    purgeError = error;
+                    await withGuestLifecycleLock(async () => {
+                        // Confirmation and lock acquisition are both asynchronous.
+                        // A different tab may have replaced or revoked this generation.
+                        if (!isCurrentSession(requestedSession)) return;
+                        revokeGuestSession();
+                        useAppStore.getState().cancelPendingSyncs();
+                        try {
+                            await DB.purgeAllLocalUserData('guest');
+                            // Keep the public logout postcondition explicit.
+                            removeBrowserValue(GUEST_KEY);
+                            removeBrowserValue(GUEST_SESSION_KEY);
+                        } catch (error) {
+                            purgeError = error;
+                        }
+                        if (initialUid) clearGuestMigrationSyncRecovery(initialUid);
+                        isGuestRef.current = false;
+                        setIsGuest(false);
+                        setGuestMigrationStatus('idle');
+                        useAppStore.getState().resetStore({ force: true });
+                    });
+                } catch {
+                    await useDialogStore.getState().showAlert(
+                        'Impossibile coordinare la chiusura della modalità locale. Nessuna nuova cancellazione viene avviata senza la protezione tra schede.'
+                    );
+                    return;
                 }
-                if (initialUid) clearGuestMigrationSyncRecovery(initialUid);
-                isGuestRef.current = false;
-                setIsGuest(false);
-                setGuestMigrationStatus('idle');
-                useAppStore.getState().resetStore({ force: true });
                 if (purgeError) {
                     await useDialogStore.getState().showAlert(
                         'Uscita dalla modalità locale, ma pulizia del dispositivo incompleta. I dati rimasti non sono accessibili dalla vecchia sessione; riprova dopo aver riaperto LogBook.'
