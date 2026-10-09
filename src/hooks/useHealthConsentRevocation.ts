@@ -21,7 +21,13 @@ export function useHealthConsentRevocation(owner: string | null): HealthConsentG
   const [observed, setObserved] = useState<{ owner: string | null; status: HealthConsentGateStatus }>(() => ({
     owner, status: localGateStatus(owner),
   }));
-  const status = observed.owner === owner ? observed.status : localGateStatus(owner);
+  // The same owner string may identify a newly created guest generation after
+  // explicit erasure. Do not reuse an obsolete 'confirmed' render snapshot:
+  // the durable marker is authoritative on every render.
+  const localStatus = localGateStatus(owner);
+  const status = observed.owner === owner && observed.status === 'unavailable'
+    ? 'unavailable'
+    : localStatus;
 
   useEffect(() => {
     if (!owner) return;
