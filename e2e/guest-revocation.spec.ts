@@ -42,11 +42,12 @@ test('health consent withdrawal suspends guest tracking across tabs and reloads'
   for (const checkbox of await page.locator('input[type="checkbox"]').all()) await checkbox.check();
   await page.getByRole('button', { name: 'Accetta e Continua' }).click();
 
-  await page.evaluate(() => localStorage.setItem('logbook:v2:guest:workout', 'synthetic-private-draft'));
-
   const otherTab = await context.newPage();
   await otherTab.goto('/');
   await expect(otherTab.getByRole('button', { name: 'Apri impostazioni' })).toBeVisible();
+  // Insert a synthetic leftover only after both tabs finish startup. It is
+  // deliberately not a valid workout snapshot and must never be hydrated.
+  await page.evaluate(() => localStorage.setItem('logbook:v2:guest:workout', 'synthetic-private-draft'));
 
   await page.getByRole('button', { name: 'Apri impostazioni' }).click();
   await page.getByRole('button', { name: /^Privacy/ }).click();
