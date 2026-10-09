@@ -26,6 +26,26 @@ describe('health-consent Firestore listener', () => {
     expect(readHealthConsentRevocation('user:owner-a')).toBe('confirmed');
   });
 
+  it('retains local erasure and retry eligibility after a remote listener error', () => {
+    localStorage.setItem('logbook:v2:user:owner-a:health-consent-revocation-v1', 'pending');
+    const { result } = renderHook(() => useHealthConsentRevocation('user:owner-a'));
+
+    const calls = (onSnapshot as unknown as { mock: { calls: unknown[][] } }).mock.calls;
+    const onError = calls.at(-1)?.[2] as ((error: { code: string }) => void) | undefined;
+    expect(onError).toBeTypeOf('function');
+    act(() => onError?.({ code: 'permission-denied' }));
+    expect(result.current).toBe('pending');
+  });
+
+  it('fails closed when the remote listener fails and no local revocation is known', () => {
+    const { result } = renderHook(() => useHealthConsentRevocation('user:owner-a'));
+    const calls = (onSnapshot as unknown as { mock: { calls: unknown[][] } }).mock.calls;
+    const onError = calls.at(-1)?.[2] as ((error: { code: string }) => void) | undefined;
+    expect(onError).toBeTypeOf('function');
+    act(() => onError?.({ code: 'permission-denied' }));
+    expect(result.current).toBe('unavailable');
+  });
+
   it('does not apply a previous account observer to a different signed-in owner', () => {
     const { result, rerender } = renderHook(
       ({ owner }: { owner: string }) => useHealthConsentRevocation(owner),

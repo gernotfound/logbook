@@ -25,7 +25,9 @@ export function useHealthConsentRevocation(owner: string | null): HealthConsentG
   // explicit erasure. Do not reuse an obsolete 'confirmed' render snapshot:
   // the durable marker is authoritative on every render.
   const localStatus = localGateStatus(owner);
-  const status = observed.owner === owner && observed.status === 'unavailable'
+  // A remote listener error cannot invalidate a durable local pending/confirmed
+  // withdrawal. Keep the UI retry and erasure paths available for that owner.
+  const status = localStatus === 'none' && observed.owner === owner && observed.status === 'unavailable'
     ? 'unavailable'
     : localStatus;
 
