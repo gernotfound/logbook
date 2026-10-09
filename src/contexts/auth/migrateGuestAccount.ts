@@ -8,6 +8,7 @@ import { useAppStore } from '../../store/useAppStore';
 import { getCachedCatalog, getInMemoryCatalog, isCatalogInMemory } from '../../lib/catalog/catalogService';
 import { replicateJournal } from '../../lib/sync/replicateJournal';
 import { userOwner } from '../../lib/sync/session';
+import { assertHealthConsentWritable } from '../../lib/healthConsentRevocation';
 import { getResolvedDefaultUserData } from './defaultUserData';
 import {
     checkpointFromCloudDocuments,
@@ -61,6 +62,9 @@ export async function migrateGuestAccount({ user, guestData, policy, setUserData
 
     try {
         assertCurrent();
+        // Consent withdrawn while in guest mode must never be silently
+        // transported into an authenticated account via a stale migration.
+        if (policy === 'merge') assertHealthConsentWritable('guest');
         setSyncing(true);
         const cloudPayload = await DB.loadCloudPayload({ allMonths: true });
         assertCurrent();
@@ -126,8 +130,13 @@ export async function migrateGuestAccount({ user, guestData, policy, setUserData
             assertCurrent();
             hydratedEnv = await prepareReplica(hydratedEnv);
             assertCurrent();
+            assertHealthConsentWritable('guest');
             const mergedData = mergeUserData(hydratedEnv.data, guestData);
-            await commitLocal(user.uid, mergedData, hydratedEnv.data, isCurrent);
+            await commitLocal(user.uid, mergedData, hydratedEnv.data, () => {
+                if (!isCurrent()) return false;
+                assertHealthConsentWritable('guest');
+                return true;
+            });
             assertCurrent();
             markLocalReady();
 
