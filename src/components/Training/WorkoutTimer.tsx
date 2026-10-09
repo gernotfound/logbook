@@ -24,7 +24,7 @@ export default function WorkoutTimer() {
 function OwnerWorkoutTimer({ owner }: { owner: string }) {
     const [initialTimer] = useState(() => {
         try {
-            return { snapshot: readWorkoutTimerSnapshot(owner), unreadable: false };
+            return { snapshot: readWorkoutTimerSnapshot(owner), unreadable: false, error: null };
         } catch (error) {
             return { snapshot: stoppedWorkoutTimer(), unreadable: true, error };
         }

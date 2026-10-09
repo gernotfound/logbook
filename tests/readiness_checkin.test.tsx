@@ -57,7 +57,7 @@ describe('pre-session readiness contract', () => {
 
     it('renders large 1-5 controls, canonical sleep and active pains without starting automatically', async () => {
         const onStart = vi.fn(async () => true);
-        render(<PreSessionCheckIn routineName="Push" date="2026-09-24" onStart={onStart} onCancel={vi.fn(async () => {})} />);
+        render(<PreSessionCheckIn routineName="Push" date="2026-09-24" onStart={onStart} onCancel={vi.fn(async () => true)} />);
 
         expect(screen.getByText('Registrato: 6 h 18 min')).toBeTruthy();
         expect(screen.getByText(/Spalle/)).toBeTruthy();
@@ -112,7 +112,7 @@ describe('pre-session readiness contract', () => {
 
     it('skips the check-in without inventing values', async () => {
         const onStart = vi.fn(async () => true);
-        render(<PreSessionCheckIn date="2026-09-24" onStart={onStart} onCancel={vi.fn(async () => {})} />);
+        render(<PreSessionCheckIn date="2026-09-24" onStart={onStart} onCancel={vi.fn(async () => true)} />);
         fireEvent.click(screen.getByRole('button', { name: 'Salta check-in e inizia' }));
         await waitFor(() => expect(onStart).toHaveBeenCalledWith(undefined));
     });
