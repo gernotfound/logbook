@@ -312,7 +312,9 @@ it('bounds the App Check provider during receipt polling without starting a late
         boundary.appCheck.mockReturnValue(new Promise<string>(resolve => { release = resolve; }));
 
         const operation = resumeAccountDeletion(context);
-        await vi.advanceTimersByTimeAsync(0);
+        // The dynamic App Check module import must complete before starting
+        // the fake-clock countdown; otherwise the test advances too early.
+        await vi.waitFor(() => expect(boundary.appCheck).toHaveBeenCalledTimes(1));
         await vi.advanceTimersByTimeAsync(7_500);
         await expect(operation).resolves.toMatchObject({ status: 'pending' });
         release('late-token');
@@ -330,14 +332,15 @@ it('bounds receipt body parsing and does not purge on a hanging response.json', 
     try {
         boundary.auth.currentUser = null;
         markAccountDeletion('user:a', { receiptToken: 'E'.repeat(43) });
+        const readBody = vi.fn(() => new Promise<unknown>(() => {}));
         boundary.fetch.mockResolvedValue({
             ok: true,
             status: 200,
-            json: () => new Promise<unknown>(() => {}),
+            json: readBody,
         } as Response);
 
         const operation = resumeAccountDeletion(context);
-        await vi.advanceTimersByTimeAsync(0);
+        await vi.waitFor(() => expect(readBody).toHaveBeenCalledTimes(1));
         await vi.advanceTimersByTimeAsync(7_500);
         await expect(operation).resolves.toMatchObject({ status: 'pending' });
         expect(await get('logbook:v2:user:a')).toBeDefined();
