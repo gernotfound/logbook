@@ -305,11 +305,12 @@ describe('account deletion recovery device registration retries', () => {
         { uid: 'user-a', token: 'A'.repeat(43) },
         { uid: 'user-b', token: 'B'.repeat(43) },
       ]));
+      const stalledJson = vi.fn(() => new Promise<unknown>(() => {}));
       const fetchMock = vi.fn()
         .mockResolvedValueOnce({
           ok: true,
           status: 200,
-          json: () => new Promise<unknown>(() => {}),
+          json: stalledJson,
         })
         .mockResolvedValueOnce(new Response(JSON.stringify({ status: 'complete' }), {
           status: 200,
@@ -319,6 +320,7 @@ describe('account deletion recovery device registration retries', () => {
       const finalize = vi.fn(async () => ({ status: 'complete' as const }));
 
       const operation = recoverDeletedAccountOnThisDevice(finalize);
+      await vi.waitFor(() => expect(stalledJson).toHaveBeenCalledTimes(1));
       await vi.advanceTimersByTimeAsync(7_500);
       await expect(operation).resolves.toEqual({ status: 'complete' });
       expect(finalize).toHaveBeenCalledTimes(1);
