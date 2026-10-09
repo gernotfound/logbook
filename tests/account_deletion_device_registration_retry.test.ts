@@ -321,7 +321,8 @@ describe('account deletion recovery device registration retries', () => {
       const operation = recoverDeletedAccountOnThisDevice(finalize);
       await vi.advanceTimersByTimeAsync(7_500);
       await expect(operation).resolves.toEqual({ status: 'complete' });
-      expect(finalize).toHaveBeenCalledExactlyOnceWith('user-b');
+      expect(finalize).toHaveBeenCalledTimes(1);
+      expect(finalize).toHaveBeenCalledWith('user-b');
       expect(fetchMock).toHaveBeenCalledTimes(2);
     } finally {
       vi.useRealTimers();
