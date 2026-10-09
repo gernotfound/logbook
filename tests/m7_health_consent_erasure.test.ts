@@ -32,11 +32,15 @@ function documentRef(path: string) {
   };
 }
 
-function collectionRef(path: string, max = Number.POSITIVE_INFINITY): any {
+function collectionRef(path: string, max = Number.POSITIVE_INFINITY, statuses?: readonly string[]): any {
   const api = {
     doc(id: string) { return documentRef(path + '/' + id); },
-    limit(count: number) { return collectionRef(path, count); },
-    select() { return collectionRef(path, max); },
+    limit(count: number) { return collectionRef(path, count, statuses); },
+    where(field: string, op: string, values: string[]) {
+      if (field !== 'eraseStatus' || op !== 'in') throw new Error('Unexpected query.');
+      return collectionRef(path, max, values);
+    },
+    select() { return collectionRef(path, max, statuses); },
     async get() {
       if (dbState.failsOnce === path) {
         dbState.failsOnce = '';
@@ -45,6 +49,7 @@ function collectionRef(path: string, max = Number.POSITIVE_INFINITY): any {
       const prefix = path + '/';
       const docs = [...dbState.documents.keys()]
         .filter(key => key.startsWith(prefix) && !key.slice(prefix.length).includes('/'))
+        .filter(key => !statuses || statuses.includes(String(dbState.documents.get(key)?.eraseStatus)))
         .slice(0, max).map(key => ({ id: key.split('/').at(-1), ref: documentRef(key) }));
       return { docs, size: docs.length, empty: docs.length === 0 };
     },
@@ -164,9 +169,6 @@ describe('health withdrawal server erasure (Firebase Admin transactional mock)',
     revoked('a');
     revoked('b');
     dbState.documents.set('health_consent_revocations/b', { eraseStatus: 'complete' });
-    // The collection mock intentionally ignores query filters. Assert via the raw
-    // Admin projection only in other tests; the real where query is covered by integration.
-    expect(dbState.documents.has('health_consent_revocations/a')).toBe(true);
-    expect(typeof listPendingHealthErasures).toBe('function');
+    expect(await listPendingHealthErasures()).toEqual(['a']);
   });
 });
