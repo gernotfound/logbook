@@ -1,11 +1,14 @@
 import { auth, getDb, ensureAppCheck, waitForPendingWrites } from '../firebase';
 import { del } from 'idb-keyval';
 import { withTimeout } from './db_core';
+import { assertDeletionDeadlineActive, withDeletionDeadline } from '../deletionDeadline';
 import { readBrowserValueStrict } from '../sync/browserStorage';
 import { storageOwner, captureSession, isCurrentSession } from '../sync/session';
 import {
     clearAccountDeletion,
     findPendingAccountDeletion,
+    isAccountDeletionPending,
+    listPendingAccountDeletions,
     markAccountDeletion,
     readAccountDeletionMarker,
     type AccountDeletionMarker,
@@ -70,7 +73,31 @@ function remainingLocalPurgeKeys(owner: string): Set<string> {
     return remaining;
 }
 
+function assertOrdinaryPurgeAllowed(owner: string): void {
+    if (owner.startsWith('user:')) {
+        if (isAccountDeletionPending(owner)) {
+            throw new Error('Cancellazione account in sospeso: i dati locali devono restare disponibili per il recupero.');
+        }
+    } else if (owner === 'guest' && readBrowserValueStrict('logbook_is_guest') !== 'true') {
+        // An auth-less recovery must not purge shared drafts via a guest fallback.
+        if (findPendingAccountDeletion()) {
+            throw new Error('Recupero cancellazione account in sospeso: impossibile azzerare i dati locali.');
+        }
+    }
+}
+
 export async function purgeAllLocalUserData(owner = storageOwner()) {
+    assertOrdinaryPurgeAllowed(owner);
+    return purgeOwnerLocalData(owner);
+}
+
+/** Only a verified server-complete account deletion may use this boundary. */
+export async function purgeCompletedAccountLocalData(owner: string) {
+    if (!owner.startsWith('user:')) throw new Error('La finalizzazione richiede un owner account.');
+    return purgeOwnerLocalData(owner);
+}
+
+async function purgeOwnerLocalData(owner: string) {
     const failures: unknown[] = [];
     const results = await Promise.allSettled([
         del('logbook:v2:' + owner), del('logbook_cached_user_data'),
@@ -124,25 +151,6 @@ export class AccountDeletionReceiptNotFoundError extends Error {
     }
 }
 
-async function fetchAccountDeletion(input: RequestInfo | URL, init: RequestInit, timeoutMs = ACCOUNT_DELETION_HTTP_TIMEOUT_MS): Promise<Response> {
-    const controller = new AbortController();
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const timeout = new Promise<never>((_, reject) => {
-        timer = setTimeout(() => {
-            controller.abort();
-            reject(new AccountDeletionRequestTimeoutError());
-        }, Math.max(1, timeoutMs));
-    });
-    try {
-        return await Promise.race([
-            fetch(input, { ...init, signal: controller.signal }),
-            timeout,
-        ]);
-    } finally {
-        if (timer) clearTimeout(timer);
-    }
-}
-
 function accountDeletionUrl(): string {
     if (!ACCOUNT_DELETION_API_ORIGIN) throw new Error('Backend cancellazione account non configurato.');
     return ACCOUNT_DELETION_API_ORIGIN + '/api/account-deletion';
@@ -178,17 +186,23 @@ async function readJson(response: Response): Promise<Record<string, unknown>> {
 }
 
 async function requestServerDeletion(marker: AccountDeletionMarker, idToken: string, appToken: string): Promise<void> {
-    const response = await fetchAccountDeletion(accountDeletionUrl(), {
-        method: 'POST',
-        headers: {
-            'content-type': 'application/json',
-            authorization: `Bearer ${idToken}`,
-            'x-firebase-appcheck': appToken,
-        },
-        body: JSON.stringify({ receiptToken: marker.receiptToken }),
-        cache: 'no-store',
-    });
-    const body = await readJson(response);
+    const { response, body } = await withDeletionDeadline(async signal => {
+        const response = await fetch(accountDeletionUrl(), {
+            method: 'POST',
+            headers: {
+                'content-type': 'application/json',
+                authorization: `Bearer ${idToken}`,
+                'x-firebase-appcheck': appToken,
+            },
+            body: JSON.stringify({ receiptToken: marker.receiptToken }),
+            cache: 'no-store',
+            signal,
+        });
+        assertDeletionDeadlineActive(signal);
+        const body = await readJson(response);
+        assertDeletionDeadlineActive(signal);
+        return { response, body };
+    }, ACCOUNT_DELETION_HTTP_TIMEOUT_MS, () => new AccountDeletionRequestTimeoutError());
     if (!response.ok) {
         const message = typeof body.error === 'string' ? body.error : 'Impossibile avviare la cancellazione account.';
         const error = new Error(message) as Error & { definitiveRejection?: boolean };
@@ -200,16 +214,24 @@ async function requestServerDeletion(marker: AccountDeletionMarker, idToken: str
 
 async function fetchAccountDeletionStatus(marker: AccountDeletionMarker, timeoutMs = ACCOUNT_DELETION_HTTP_TIMEOUT_MS): Promise<ServerDeletionStatus> {
     if (!marker.receiptToken) throw new Error('Cancellazione in sospeso senza ricevuta server. Riprendi l’operazione dalle impostazioni.');
-    const response = await fetchAccountDeletion(accountDeletionUrl(), {
-        method: 'GET',
-        headers: {
-            'x-firebase-appcheck': await appCheckToken(),
-            'x-account-deletion-uid': marker.uid,
-            'x-account-deletion-receipt': marker.receiptToken,
-        },
-        cache: 'no-store',
-    }, timeoutMs);
-    const body = await readJson(response);
+    const { response, body } = await withDeletionDeadline(async signal => {
+        const token = await appCheckToken();
+        assertDeletionDeadlineActive(signal);
+        const response = await fetch(accountDeletionUrl(), {
+            method: 'GET',
+            headers: {
+                'x-firebase-appcheck': token,
+                'x-account-deletion-uid': marker.uid,
+                'x-account-deletion-receipt': marker.receiptToken!,
+            },
+            cache: 'no-store',
+            signal,
+        });
+        assertDeletionDeadlineActive(signal);
+        const body = await readJson(response);
+        assertDeletionDeadlineActive(signal);
+        return { response, body };
+    }, timeoutMs, () => new AccountDeletionRequestTimeoutError());
     if (response.status === 404) throw new AccountDeletionReceiptNotFoundError();
     if (!response.ok) {
         throw new Error(typeof body.error === 'string'
@@ -241,12 +263,18 @@ export async function finalizeCompletedDeletionForUid(uid: string, context: Acco
         }
     }
 
+    if (anotherLocalIdentityIsActive(uid)) {
+        return pendingDeletionOutcome('Un altro account è diventato attivo durante la riconciliazione. La copia locale rimane conservata.');
+    }
+
     try {
         await context.purgeAllLocalUserData('user:' + uid);
         removeDeletionRecoveryCredential(uid);
-        context.resetCache();
         clearAccountDeletion('user:' + uid);
-        context.resetStore();
+        if (!anotherLocalIdentityIsActive(uid)) {
+            context.resetCache();
+            context.resetStore();
+        }
         return { status: 'complete' };
     } catch (error) {
         throw new Error('Account cloud eliminato, ma pulizia locale incompleta. Riapri LogBook per completare la pulizia dei dati su questo dispositivo.', { cause: error });
@@ -313,7 +341,11 @@ async function performDeletion(context: AccountDeletionContext): Promise<Account
     await withTimeout(waitForPendingWrites(getDb()), 10000, 'Scritture Firebase precedenti ancora in corso.');
     if (!isCurrentSession(before)) throw new Error('Sessione cambiata.');
 
-    const appToken = await appCheckToken();
+    const appToken = await withDeletionDeadline(async signal => {
+        const token = await appCheckToken();
+        assertDeletionDeadlineActive(signal);
+        return token;
+    }, ACCOUNT_DELETION_HTTP_TIMEOUT_MS, () => new AccountDeletionRequestTimeoutError());
     if (!isCurrentSession(before)) throw new Error('Sessione cambiata.');
 
     const existing = readAccountDeletionMarker(owner);
@@ -328,7 +360,8 @@ async function performDeletion(context: AccountDeletionContext): Promise<Account
         }
         const definitive = Boolean(error && typeof error === 'object' && 'definitiveRejection' in error
             && (error as { definitiveRejection?: boolean }).definitiveRejection);
-        if (definitive) clearAccountDeletion(owner);
+        // A previous POST may have been accepted despite a lost acknowledgement.
+        if (definitive && !existing) clearAccountDeletion(owner);
         throw error instanceof Error
             ? error
             : new Error('Cancellazione non avviata. Verifica la connessione e riprova.', { cause: error });
@@ -338,13 +371,25 @@ async function performDeletion(context: AccountDeletionContext): Promise<Account
 }
 
 export async function resumeAccountDeletion(context: AccountDeletionCompletionContext): Promise<AccountDeletionOutcome | null> {
-    const marker = findPendingAccountDeletion();
-    if (!marker) return null;
-    if (!marker.receiptToken) {
-        return {
-            status: 'pending',
-            message: 'Cancellazione account in sospeso. Accedi allo stesso account e riprendi l’operazione dalle impostazioni; la copia locale resta conservata.',
-        };
+    const { markers, corrupt } = listPendingAccountDeletions();
+    let firstError: unknown = corrupt[0];
+    let pending: AccountDeletionOutcome | null = null;
+    let completed = false;
+
+    // Every owner advances independently; errors cannot starve other receipts.
+    for (const marker of markers) {
+        if (!marker.receiptToken) {
+            pending ??= pendingDeletionOutcome('Cancellazione account in sospeso senza ricevuta. Accedi allo stesso account per riprendere l’operazione.');
+            continue;
+        }
+        try {
+            const outcome = await observeDeletion(marker, context, 0);
+            if (outcome.status === 'pending') pending ??= outcome;
+            else completed = true;
+        } catch (error) {
+            firstError ??= error;
+        }
     }
-    return observeDeletion(marker, context, 0);
+    if (firstError) throw firstError;
+    return pending ?? (completed ? { status: 'complete' } : null);
 }
