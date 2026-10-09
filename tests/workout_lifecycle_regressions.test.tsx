@@ -231,14 +231,14 @@ describe('Workout lifecycle durable recovery regressions', () => {
         }, afterStart);
         const durable = (await readLocal(owner))!;
         expect(durable.lastClosedWorkoutId).toBe(later.id);
-        expect(durable.deletedWorkoutIds).toContain(abandoned.id);
+        expect(durable.closedWorkoutIds).toContain(abandoned.id);
         expect(durable.data.history.some(item => item.id === abandoned.id)).toBe(false);
 
         const key = deviceKey('workout', owner);
         // A suspended old tab can re-write the original device snapshot after B.
         localStorage.setItem(key, JSON.stringify(abandoned));
         expect(getInitialLocalWorkout(owner, durable.data.activeWorkout,
-            durable.data.history, durable.lastClosedWorkoutId, durable.deletedWorkoutIds)).toBeNull();
+            durable.data.history, durable.lastClosedWorkoutId, durable.closedWorkoutIds)).toBeNull();
         expect(localStorage.getItem(key)).toBeNull();
     });
 
