@@ -15,6 +15,7 @@ const mocked = vi.hoisted(() => {
     deleteAuthUserLast: vi.fn(),
     deletePrivateCollectionPage: vi.fn(),
     deleteUserRoot: vi.fn(),
+    deleteHealthConsentRevocation: vi.fn(),
     markDeletionComplete: vi.fn(),
     markDeletionFailed: vi.fn(),
     markVerifying: vi.fn(),
@@ -42,6 +43,7 @@ describe('M7 native account deletion runner', () => {
       mocked.assertDeletionLease,
       mocked.deleteAuthUserLast,
       mocked.deleteUserRoot,
+      mocked.deleteHealthConsentRevocation,
       mocked.markDeletionComplete,
       mocked.markDeletionFailed,
       mocked.markVerifying,
@@ -64,6 +66,7 @@ describe('M7 native account deletion runner', () => {
       return seen === 0 ? 1 : 0;
     });
     mocked.deleteUserRoot.mockImplementation(async () => { order.push('root'); });
+    mocked.deleteHealthConsentRevocation.mockImplementation(async () => { order.push('revocation-marker'); });
     mocked.markVerifying.mockImplementation(async () => { order.push('mark-verifying'); });
     mocked.verifyNoAccountResidue.mockImplementation(async () => { order.push('verify'); });
     mocked.deleteAuthUserLast.mockImplementation(async () => { order.push('auth'); });
@@ -76,6 +79,8 @@ describe('M7 native account deletion runner', () => {
       expect(pageCount.get(name)).toBe(2);
     }
     expect(order.indexOf('revoke')).toBeLessThan(order.indexOf('root'));
+    expect(order.indexOf('root')).toBeLessThan(order.indexOf('revocation-marker'));
+    expect(order.indexOf('revocation-marker')).toBeLessThan(order.indexOf('verify'));
     expect(order.indexOf('verify')).toBeLessThan(order.indexOf('auth'));
     expect(order.at(-1)).toBe('complete');
     expect(mocked.markDeletionFailed).not.toHaveBeenCalled();
