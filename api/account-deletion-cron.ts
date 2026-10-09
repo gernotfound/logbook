@@ -88,6 +88,8 @@ export async function GET(request: Request): Promise<Response> {
     scanned: jobs.length,
     processed: results.length,
     purged,
+    erasuresScanned,
+    erasuresComplete,
     telemetryUsersScanned: telemetryRetention.usersScanned,
     telemetryPurged: telemetryRetention.documentsDeleted,
     telemetryCycleCompleted: telemetryRetention.completedCycle,
