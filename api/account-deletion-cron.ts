@@ -5,6 +5,7 @@ import {
 } from '../server/accountDeletion/retention.js';
 import { processAccountDeletion } from '../server/accountDeletion/runner.js';
 import { purgeExpiredTelemetry } from '../server/telemetryRetention.js';
+import { listPendingHealthErasures, processHealthErasure } from '../server/healthConsent/erasure.js';
 
 export const maxDuration = 300;
 
@@ -35,6 +36,25 @@ export async function GET(request: Request): Promise<Response> {
     results.push({ uid: job.uid, result });
   }
 
+  // Health-data erasure has its own marker and lease, distinct from account
+  // deletion. Use the remaining bounded cron budget to retry interrupted jobs.
+  let erasuresScanned = 0;
+  let erasuresComplete = 0;
+  if (Date.now() + SAFETY_BUFFER_MS < deadlineMs) {
+    const pending = await listPendingHealthErasures(25);
+    erasuresScanned = pending.length;
+    for (const uid of pending) {
+      if (Date.now() + SAFETY_BUFFER_MS >= deadlineMs) break;
+      try {
+        if (await processHealthErasure(uid, deadlineMs) === 'complete') erasuresComplete++;
+      } catch (error) {
+        console.error('[account-deletion-cron] health erasure retry failed', {
+          kind: error instanceof Error ? error.name : 'UnknownError',
+        });
+      }
+    }
+  }
+
   let purged = 0;
   while (Date.now() + SAFETY_BUFFER_MS < deadlineMs) {
     const deleted = await purgeExpiredCompletedDeletionJobs(ACCOUNT_DELETION_RETENTION_PAGE_SIZE);
@@ -57,6 +77,8 @@ export async function GET(request: Request): Promise<Response> {
     scanned: jobs.length,
     processed: results.length,
     purged,
+    erasuresScanned,
+    erasuresComplete,
     telemetryUsersScanned: telemetryRetention.usersScanned,
     telemetryPurged: telemetryRetention.documentsDeleted,
     telemetryCycleCompleted: telemetryRetention.completedCycle,
