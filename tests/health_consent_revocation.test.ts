@@ -35,7 +35,7 @@ describe('consent revocation local write barrier', () => {
     markHealthConsentRevocation('user:a', 'pending');
     expect(() => writeDeviceValue('workout', 'stale', 'user:a')).toThrow();
     expect(localStorage.getItem('logbook:v2:user:a:workout')).toBe('original');
-    writeDeviceValue('workout', null, 'user:a');
-    expect(localStorage.getItem('logbook:v2:user:a:workout')).toBeNull();
+    expect(() => writeDeviceValue('workout', null, 'user:a')).toThrow();
+    expect(localStorage.getItem('logbook:v2:user:a:workout')).toBe('original');
   });
 });
