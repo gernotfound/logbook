@@ -27,7 +27,7 @@ describe('RISK-02: Legal Consent Lifecycle', () => {
     };
 
     it('richiede un nuovo consenso quando una versione legale precedente non coincide', () => {
-        expect(LEGAL_VERSIONS.privacy).toBe('1.3.1');
+        expect(LEGAL_VERSIONS.privacy).toBe('1.3.2');
         expect(LEGAL_VERSIONS.terms).toBe('1.2.0');
         expect(needsLegalUpdate({
             ...mockConsent,
@@ -142,7 +142,7 @@ describe('RISK-02: ConsentOverlay UI Behavior', () => {
 
     it('descrive il nuovo stato GA4 e la data dell’informativa aggiornata', () => {
         render(<PrivacyPolicy onClose={vi.fn()} />);
-        expect(screen.getByText('Aggiornata al 2 ottobre 2026')).toBeDefined();
+        expect(screen.getByText('Aggiornata al 9 ottobre 2026')).toBeDefined();
         expect(screen.getByText(/cookie first-party tecnici\/analitici/i)).toBeDefined();
         expect(screen.getByText(/_ga/)).toBeDefined();
     });
