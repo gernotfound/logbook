@@ -180,6 +180,12 @@ function enforceMonthlyEntityTombstones(
     return operations;
 }
 
+function assertWorkoutNotClosed(id: string, envelope: LocalEnvelope | undefined): void {
+    if (envelope && (envelope.lastClosedWorkoutId === id || envelope.closedWorkoutIds?.includes(id))) {
+        throw new Error('Allenamento già terminato o eliminato: ricarica la sessione aggiornata.');
+    }
+}
+
 export async function readLocal(owner: string): Promise<LocalEnvelope | undefined> {
     owner = normalizeStorageOwner(owner);
     return validate(await get<any>(keyFor(owner)), owner);
@@ -278,6 +284,7 @@ export async function commitLocal(owner: string, data: UserData, initialBase: Us
         const reconciled = applyRemoteDocuments(currentData, reconciledDocs, catalog);
         reconciled.pendingConflicts = currentData.pendingConflicts;
         const savedData = parse(reconciled);
+        if (savedData.activeWorkout?.id) assertWorkoutNotClosed(String(savedData.activeWorkout.id), current);
 
         return { ...(current ?? { completeMonths: [], replica: null }), ...currentEnvelopeVersions(), owner, actorId, actorSeq: nextSeq, clock: testClock, data: savedData, baseline: current?.baseline ?? callerBase, completeMonths: current?.completeMonths ?? [], pending: owner === 'guest' ? [] : [...(current?.pending ?? []), ...operations], syncMetaByDocument: current?.syncMetaByDocument ?? {}, replica: current?.replica ?? null, revision: (current?.revision ?? 0) + 1 };
     });
@@ -316,6 +323,14 @@ export async function commitDomainOperations(owner: string, batch: DomainOperati
         if (guard && !guard()) throw new Error('Commit locale invalidato dal cambio sessione');
         const current = validate(raw, owner);
         const base = current?.data ?? fallback;
+        for (const operation of domainOperations) {
+            if (operation.type === 'active-workout.set' && operation.workout) {
+                assertWorkoutNotClosed(requireBusinessId(operation.workout.id, 'Allenamento attivo'), current);
+            }
+            if (operation.type === 'workout.complete') {
+                assertWorkoutNotClosed(requireBusinessId(operation.workout.id, 'Allenamento completato'), current);
+            }
+        }
         if (lastClosedWorkoutId && domainOperations.some(operation =>
             operation.type === 'active-workout.set' && operation.deletedWorkoutId !== undefined
         ) && base.activeWorkout && base.activeWorkout.id !== lastClosedWorkoutId) {
