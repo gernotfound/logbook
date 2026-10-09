@@ -89,6 +89,25 @@ describe('Workout lifecycle durable recovery regressions', () => {
         expect(useAppStore.getState().localWorkout?.id).toBe('keep');
     });
 
+
+    it('never deletes a replacement workout when confirmation belongs to another session', async () => {
+        const original = workout('original-confirmation', true);
+        const replacement = workout('replacement-confirmation', true);
+        const durable = userData({ activeWorkout: replacement });
+        await initializeLocal(owner, durable);
+        useAppStore.setState({ userData: durable, localWorkout: original });
+        vi.mocked(useDialogStore.getState().showConfirm).mockImplementationOnce(async () => {
+            useAppStore.setState({ localWorkout: replacement });
+            return true;
+        });
+        const { result } = renderHook(() => useWorkoutSession());
+        await act(async () => { expect(await result.current.deleteWorkout()).toBe(false); });
+        expect(useAppStore.getState().localWorkout?.id).toBe(replacement.id);
+        const stored = await readLocal(owner);
+        expect(stored?.data.activeWorkout?.id).toBe(replacement.id);
+        expect(stored?.closedWorkoutIds).toBeUndefined();
+    });
+
     it('suspends and restores an active workout without clearing its timer or cloud shadow', async () => {
         const active = workout('active', true);
         const old = workout('historical', true);
