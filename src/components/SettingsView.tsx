@@ -68,7 +68,7 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
     const handleRevokeHealthConsent = async () => {
         if (revokingHealthConsent) return;
         const confirmed = await useDialogStore.getState().showConfirm(
-            "Revocare il consenso ai dati salute?\n\nLe funzioni di allenamento, alimentazione e misurazioni saranno sospese. Potrai ancora esportare i dati, esercitare i diritti applicabili ed eliminare l'account. Nessun dato verrà cancellato automaticamente da questa conferma."
+            "Revocare il consenso ai dati salute?\n\nLe funzioni di allenamento, alimentazione e misurazioni saranno sospese. I dati di tracciamento senza altra base valida verranno eliminati: l'operazione è irreversibile e non elimina l'account. Se desideri una copia, scegli Annulla e usa «Esporta backup prima della revoca». La copia è facoltativa e non impedisce di revocare il consenso."
         );
         if (!confirmed) return;
         setRevokingHealthConsent(true);
@@ -214,7 +214,7 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
             )}
 
             {activeSection === 'privacy' && (
-                <PrivacySettingsTab analyticsEnabled={analyticsEnabled} onOpenTerms={() => setShowTerms(true)} onOpenPrivacy={() => setShowPrivacy(true)} onToggleAnalytics={handleAnalyticsToggle} onRevokeHealthConsent={() => { void handleRevokeHealthConsent(); }} revokingHealthConsent={revokingHealthConsent} />
+                <PrivacySettingsTab analyticsEnabled={analyticsEnabled} onOpenTerms={() => setShowTerms(true)} onOpenPrivacy={() => setShowPrivacy(true)} onToggleAnalytics={handleAnalyticsToggle} onRevokeHealthConsent={() => { void handleRevokeHealthConsent(); }} onExportBackup={() => { void handleExportBackup(); }} exportingData={exportingData} revokingHealthConsent={revokingHealthConsent} />
             )}
 
             {activeSection === 'data' && (
