@@ -8,6 +8,7 @@
 |---|---|---|---|---|---|
 | Dati core account | Firestore + copia locale owner-scoped | Creazione/inserimento | Per la durata dell'account e finché necessari al servizio; eventuale policy inattività `[TO_DECIDE]` | Account deletion + cancellazione locale dopo prova completion | Implementato per cancellazione account |
 | Dati guest | IndexedDB/localStorage dispositivo | Primo uso | Finché l'utente li mantiene o li elimina/migra | Azioni locali / browser OS / migrazione | Implementato |
+| Dati di tracciamento dopo revoca salute | Firestore, IndexedDB/localStorage, journal offline | Revoca informata | Cancellazione senza ingiustificato ritardo salvo diversa base documentata; nessuna retention indefinita | Marker server autorevole + cancellazione cloud paginata/retry + pulizia locale su ciascun dispositivo informato della revoca | Candidato PR #301, non distribuito; copia di dispositivo offline non raggiungibile finché non si riconnette |
 | Telemetria tecnica corrente | Sentry | Errore/anomalia Production | `[VERIFY_PLAN_AND_CONFIGURATION]` | Policy/configurazione Sentry | Implementato nel client; retention esterna da verificare |
 | Telemetria Firestore legacy `telemetry_errors` | Firestore | Ultima occorrenza aggregata | **30 giorni dall'ultima occorrenza** | Campo `expireAt` + maintenance cron giornaliero | Solo compatibilità/cleanup client precedenti |
 | Telemetria Firestore legacy `telemetry_events` / `telemetry_anomalies` | Firestore | Evento/anomalia | **30 giorni dall'evento** | Campo `expireAt` + maintenance cron giornaliero | Solo compatibilità/cleanup client precedenti |
@@ -27,6 +28,8 @@
 3. La cancellazione account deve includere le collection private note e fallire chiusa in presenza di dati privati inattesi.
 4. Le retention dei fornitori vanno riportate solo dopo verifica del piano/configurazione reale.
 5. Ogni eccezione legale alla cancellazione deve essere documentata con dataset, base, durata e accessi ridotti.
+6. Il marker che registra la revoca deve restare disponibile finché necessario per bloccare scritture e ripristini da dispositivi datati; la durata del marker e dei log tecnici va valutata separatamente dai contenuti salute eliminati.
+7. La cancellazione locale deve essere ritentata per ciascun dispositivo che apprende la revoca, senza dichiarare completata la cancellazione globale finché i dispositivi offline non sono stati riconciliati; la capacità di contattarli è limitata dalla connettività.
 
 ## Attivazione tecnica telemetry
 
