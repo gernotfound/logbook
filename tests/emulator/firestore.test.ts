@@ -197,6 +197,50 @@ it.each(['anonymous', 'b'])('denies %s all operations on another user and their 
     }
 });
 
+it('keeps health consent revocation server-only and fences stale-client writes without blocking export reads', async () => {
+    const db = env.authenticatedContext('a').firestore();
+    const anotherDb = env.authenticatedContext('b').firestore();
+    const guestDb = env.unauthenticatedContext().firestore();
+    const revocationRef = doc(db, 'health_consent_revocations/a');
+    const replica = await fencedWrite(db, 'users/a', { profile: { height: '175' } });
+    await fencedWrite(db, 'users/a/history_months/2026-09', { workout: {} }, replica);
+    await fencedWrite(db, 'users/a/nutrition_months/2026-09', { day: {} }, replica);
+
+    // Users cannot forge or reverse an authoritative revocation.
+    await assertFails(setDoc(revocationRef, { revokedAt: new Date() }));
+    await assertFails(getDoc(doc(anotherDb, 'health_consent_revocations/a')));
+    await assertFails(getDoc(doc(guestDb, 'health_consent_revocations/a')));
+
+    await env.withSecurityRulesDisabled(async context => {
+        await setDoc(doc(context.firestore(), 'health_consent_revocations/a'), {
+            revokedAt: new Date('2026-10-09T12:00:00Z'),
+            source: 'trusted-server',
+        });
+    });
+
+    expect((await assertSucceeds(getDoc(revocationRef))).exists()).toBe(true);
+    await assertFails(updateDoc(revocationRef, { source: 'client-forgery' }));
+    await assertFails(deleteDoc(revocationRef));
+
+    // Data previously stored remains readable solely for rights/export workflows.
+    for (const path of ['users/a', 'users/a/history_months/2026-09', 'users/a/nutrition_months/2026-09']) {
+        expect((await assertSucceeds(getDoc(doc(db, path)))).exists()).toBe(true);
+    }
+    await assertFails(fencedWrite(db, 'users/a', { profile: { height: '176' } }, replica));
+    await assertFails(fencedWrite(db, 'users/a/history_months/2026-09', { workout: { latest: true } }, replica));
+    await assertFails(fencedWrite(db, 'users/a/nutrition_months/2026-09', { day: { latest: true } }, replica));
+
+    // The suspension of A must not lock down unrelated accounts.
+    await fencedWrite(anotherDb, 'users/b', { profile: { height: '180' } });
+
+    // The account-deletion barrier remains stronger than the export-read exception.
+    await env.withSecurityRulesDisabled(async context => {
+        await setDoc(doc(context.firestore(), 'account_deletions/a'), { uid: 'a', status: 'requested' });
+    });
+    await assertFails(getDoc(revocationRef));
+    await assertFails(getDoc(doc(db, 'users/a')));
+});
+
 it('makes account_deletions server-only and immediately blocks the owner on every private path', async () => {
     const ownerDb = env.authenticatedContext('a').firestore();
     const privatePaths = [
