@@ -96,7 +96,7 @@ describe('Milestone M2: Guest Bootstrap & Cold Start Lifecycle', () => {
         const authenticatedPurge = vi.spyOn(DB, 'secureLogOut');
         // A storage event may arrive after a click in another tab.
         localStorage.setItem(GUEST_REVOCATION_KEY, 'another-tab');
-        await act(async () => { await result.current.logout({ skipConfirm: true }); });
+        await act(async () => { await result.current.logout({ mode: 'normal' }); });
 
         expect(authenticatedPurge).not.toHaveBeenCalled();
         expect(result.current.isGuest).toBe(false);
@@ -125,7 +125,7 @@ describe('Milestone M2: Guest Bootstrap & Cold Start Lifecycle', () => {
             });
 
         let logout!: Promise<void>;
-        act(() => { logout = result.current.logout({ skipConfirm: true }); });
+        act(() => { logout = result.current.logout({ mode: 'normal' }); });
         await waitFor(() => expect(purge).toHaveBeenCalledTimes(1));
         expect(localStorage.getItem(GUEST_REVOCATION_KEY)).not.toBeNull();
 
