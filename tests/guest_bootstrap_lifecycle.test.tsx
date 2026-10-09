@@ -8,6 +8,7 @@ import { useAppStore } from '../src/store/useAppStore';
 import { clearCatalogCache, saveCatalogToCache } from '../src/lib/catalog/catalogService';
 import { resolveEffectiveExercises, resolveEffectiveFoods } from '../src/lib/catalog/deltaResolver';
 import type { UserData, Exercise, Food } from '../src/types';
+import { activateGuestSession, GUEST_SESSION_KEY } from '../src/lib/sync/session';
 
 const GuestTestComponent = () => {
     const { currentUser, loading, isGuest, loginAsGuest, logout } = useAuth();
@@ -176,7 +177,9 @@ describe('Milestone M2: Guest Bootstrap & Cold Start Lifecycle', () => {
             isDefault: false
         };
 
+        localStorage.setItem(GUEST_SESSION_KEY, 'fixture-guest');
         localStorage.setItem('logbook_is_guest', 'true');
+        activateGuestSession('fixture-guest');
         useAppStore.getState().setUserData({
             profile: { height: '180' },
             library: [customEx],
