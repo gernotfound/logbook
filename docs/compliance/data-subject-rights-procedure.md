@@ -40,16 +40,16 @@ Usare come riferimento l'Art. 12 GDPR: risposta senza ingiustificato ritardo e, 
 | Limitazione | `[DEFINE_IF_REQUIRED]`; non esiste oggi un flag generico di restriction |
 | Opposizione | Valutare per i trattamenti basati sul legittimo interesse, inclusa telemetria tecnica |
 | Revoca Analytics | Impostazioni; effetto per il futuro |
-| Revoca consenso dati salute | **Blocker di prodotto/privacy: flusso da decidere, implementare e testare** |
+| Revoca consenso dati salute | **Soluzione A decisa (9 ottobre 2026): sospensione tracciamento, accesso a esportazione/diritti/account deletion.** Implementazione end-to-end e valutazione delle basi giuridiche e retention **ancora bloccanti prima del pilot**; vedi `health-consent-release-gate.md`. |
 | Reclamo | Informare del diritto di rivolgersi all'autorità di controllo competente |
 
-## Revoca consenso dati salute — blocker
+## Revoca consenso dati salute — decisione prodotto A, blocker tecnici e legali ancora aperti
 
-L'utente deve poter revocare il consenso in modo effettivo. Prima del pilot serve una decisione di prodotto, validata sul piano legale/privacy, che definisca almeno:
+Il product owner ha scelto la **soluzione A** (sospensione delle funzionalità di tracciamento dipendenti dal consenso, con accesso a diritti, esportazione e cancellazione account). Prima del pilot servono validazione legale, soluzione tecnica autorevole e test, come specificato in `health-consent-release-gate.md`. In particolare occorre definire e dimostrare:
 
 1. da quale momento cessano i trattamenti che dipendono dal consenso Art. 9;
-2. quali funzionalità restano disponibili senza dati salute;
-3. quali dati già raccolti vengono cancellati, conservati o resi non utilizzabili e su quale eventuale base residua;
+2. che le sole funzionalità rimaste disponibili siano informativa, gestione dei diritti, esportazione e cancellazione account (soluzione A);
+3. quali dati già raccolti devono essere cancellati, quali possono eventualmente essere conservati, per quale altra base giuridica e per quanto tempo: nessuna conservazione indefinita motivata dal consenso già ritirato;
 4. rapporto tra revoca, export e cancellazione account;
 5. comportamento offline e sincronizzazione multi-dispositivo;
 6. gestione di una revoca effettuata mentre esistono modifiche locali pendenti;

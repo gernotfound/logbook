@@ -1,6 +1,6 @@
 # Dati salute e revoca del consenso — decisione e gate pre-pilot
 
-> Stato: **ANALISI TECNICA / DECISIONE DI PRODOTTO E VALIDAZIONE LEGALE APERTE**.
+> Stato: **SOLUZIONE A APPROVATA DAL PRODUCT OWNER IL 9 OTTOBRE 2026**. Analisi legale, implementazione, regressioni e verifica Production ancora aperte.
 > Baseline repository osservata: `main` `5a9394649977cae4e2261e530312f5121818ce12` (9 ottobre 2026).
 > Questo documento non costituisce un parere legale, una DPIA conclusa o una specifica di implementazione approvata.
 > Non certifica configurazioni Firebase/Vercel/Sentry Production.
@@ -31,16 +31,30 @@ Fonti istituzionali da utilizzare nella revisione:
 
 Questa tabella rappresenta un'analisi dei confini, **non** un penetration test e **non** una verifica del runtime o di tutti i chiamanti.
 
-## Decisioni aperte: servono prodotto + revisione giuridica
+## Decisione di prodotto approvata: soluzione A; verifiche giuridiche aperte
 
-1. **Modalità dopo la revoca:** (A) sospensione dell'uso delle funzionalità che richiedono dati salute, lasciando accessibili soltanto diritti, esportazione e gestione account; oppure (B) modalità limitata realmente priva dei trattamenti che richiedono consenso. Decidere esplicitamente quali funzioni sono ammesse, non inferirlo dal termine generico "fitness".
+1. **DECISO — soluzione A:** sospendere le funzioni di tracciamento e modifica dei dati salute quando l'utente revoca il consenso. Mantenere esclusivamente gli strumenti necessari per consultare questa informativa, esercitare i diritti, esportare i dati e chiedere la cancellazione dell'account. Non introdurre la soluzione B (uso fitness limitato). L'eventuale conservazione temporanea dopo revoca va giustificata giuridicamente e limitata; non autorizza una conservazione indefinita.
 2. **Dati già conservati:** individuare per categoria ciò che va cancellato, ciò che può eventualmente restare su una diversa base valida, durata e modalità; valutare anche backend, cache locale, log e fornitori.
 3. **Revoca offline:** definire quando la revoca diventa effettiva e come comunicare un eventuale stato pendente del cloud. Interrompere subito le operazioni locali dipendenti dal consenso; non dichiarare revocato sul cloud un trattamento finché non si è ottenuta prova della registrazione server.
 4. **Re-consenso:** decidere se e come riattivare funzionalità senza reimportare/recreare dati cancellati, senza consentire a un altro dispositivo di sovrascrivere uno stato di revoca più recente.
 5. **Ospite:** distinguere l'uso locale e la raccolta presso i fornitori; stabilire le modalità necessarie a esercitare i diritti nella modalità priva di account.
 6. **Informativa e titolare:** correggere la descrizione della revoca, il canale di contatto e le basi giuridiche prima dei trattamenti per cui tali informazioni sono obbligatorie, non soltanto prima della vendita.
 
-Non convertire automaticamente la revoca in una cancellazione permanente dell'account o dei dati: la cancellazione è un'operazione irreversibile separata da spiegare e confermare.
+La scelta A **non autorizza cancellazioni automatiche e irreversibili** né la conservazione indefinita. Un consenso ritirato non giustifica il proseguimento di trattamenti fondati esclusivamente su di esso, inclusa la conservazione senza altra base valida. La gestione dei dati residui e delle richieste di cancellazione deve essere validata sotto i profili degli artt. 6, 9 e 17 GDPR prima del rilascio.
+
+## Comportamento UX approvato per la soluzione A
+
+- **Da Impostazioni → Privacy:** azione distinguibile `Revoca il consenso per i dati salute` con spiegazione anticipata delle conseguenze. Confermare la volontà di revoca senza creare ostacoli sproporzionati; l'eliminazione dei dati e dell'account è un'azione diversa.
+- **Dopo la revoca:** schermata di sospensione dedicata, senza dashboard, workout, diario o funzionalità che richiedano il consenso. Restano accessibili informativa, strumenti di esercizio dei diritti applicabili, esportazione dati e procedura di eliminazione account. La schermata non può presentare `Accetta e continua` come scorciatoia per annullare la revoca.
+- **Durante l'operazione:** bloccare subito le nuove modifiche/repliche dipendenti dal consenso. Distinguere visibilmente `revoca registrata`, `revoca in attesa di registrazione server` e `errore di registrazione`; mai comunicare un successo cloud non verificato.
+- **Offline e più dispositivi:** registrare la richiesta localmente in modo durevole e fermare le operazioni locali interessate anche a riavvio e fra tab. Quando ritorna la rete, registrare/riconciliare in modo idempotente presso un confine autorevole del server, con difesa contro client obsoleti e richieste già in volo; nessuna operazione di scrittura precedentemente pendente deve ripristinare il trattamento revocato.
+- **Esportazione e cancellazione:** non compromettere il backup dei dati già presenti o il percorso di account deletion/recovery, salvo diversa misura legalmente necessaria. Gli interventi irreversibili richiedono intenzione e conferma distinte; verificare la base giuridica e la durata dell'eventuale conservazione temporanea destinata alla gestione dei diritti.
+- **Riattivazione futura:** nessun re-consenso implicito da sessione vecchia, refresh, import/backup o modifica di `legalConsent` lato client. Un eventuale nuovo flusso di consenso esplicito va progettato e approvato separatamente.
+- **Utenti ospiti:** la sospensione riguarda le funzioni che dipendono dal consenso anche senza account, ma non va equiparato lo storage solo locale all'invio cloud; verificare finalità e confini dei trattamenti.
+
+## Vincoli giuridici non risolti
+
+Secondo GDPR art. 7(3) e Linee guida EDPB 05/2020, la revoca deve essere facile quanto il consenso; cessano le operazioni fondate solo su quel consenso, **compresa l'ulteriore conservazione se non esiste altra base valida**. La soluzione A non può promettere dati esportabili per un periodo indefinito senza una base giuridica appropriata. Prima della modifica runtime, la revisione privacy deve definire chiaramente i trattamenti residui e i termini minimi strettamente necessari, le eccezioni legittime, la notifica ai fornitori applicabili e i testi rivolti all'utente.
 
 ## Invarianti richiesti a qualunque implementazione approvata
 
@@ -67,7 +81,7 @@ Non convertire automaticamente la revoca in una cancellazione permanente dell'ac
 
 **NON CHIUSO.** Prima del pilot con utenti reali:
 - [ ] classificazione delle finalità e delle basi artt. 6/9 approvata da professionista competente;
-- [ ] decisione esplicita sul comportamento del prodotto dopo la revoca;
+- [x] decisione esplicita di prodotto: soluzione A (sospensione, accesso a diritti/esportazione/cancellazione);
 - [ ] specifica tecnica end-to-end per ospite, account, offline, multi-device e recovery;
 - [ ] implementazione atomica/autorativa con test negativi e failure path;
 - [ ] verifica Firestore Rules live, backend quando coinvolto e runtime PWA pertinente;

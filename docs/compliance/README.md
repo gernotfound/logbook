@@ -35,6 +35,7 @@ Queste assunzioni devono essere riconfermate nella documentazione firmata; se ca
 | `legitimate-interest-assessment-template.md` | LIA della telemetria tecnica | Compilare se si mantiene Art. 6(1)(f) |
 | `dpo-assessment-template.md` | Valutazione obbligo DPO | Compilare e riesaminare su aumento scala |
 | `data-subject-rights-procedure.md` | Accesso, rettifica, portabilità, cancellazione, revoche | Assegnare canale privacy |
+| `health-consent-release-gate.md` | Specifica CRITICAL soluzione A approvata dal product owner; revoca salute e percorso di sospensione | Validazione legale, implementazione e test **aperti** |
 | `support-sla-policy-template.md` | Supporto, severità e impegni di servizio | Definire solo promesse sostenibili |
 | `exit-deletion-policy-template.md` | Cessazione B2B e dati | Allineare al ruolo privacy |
 | `gym-privacy-instructions-template.md` | Istruzioni operative alla palestra | Consegnare/adattare al pilot |
