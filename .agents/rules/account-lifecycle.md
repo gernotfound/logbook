@@ -26,6 +26,19 @@ La baseline clean-cut corrente **non importa Backup Schema V1/V2**: `decodeImpor
 - **MUST:** Le date business giornaliere usano `YYYY-MM-DD`; gli istanti evento separati usano ISO UTC.
 - **MUST:** Un’operazione CSV multi-file termina soltanto dopo che tutti gli output previsti hanno concluso il proprio salvataggio o dopo un annullamento/errore esplicito.
 
+## Revoca dei dati salute senza eliminazione dell'account (PR #301, non ancora in Production)
+
+La revoca del consenso ai dati salute è una decisione distinta dalla richiesta di eliminare l'account. Il client registra subito un marker di revoca durevole e interrompe ogni scrittura di tracciamento; il marker server-only `health_consent_revocations/{uid}` è autorevole per i dispositivi sincronizzati e impedisce scritture da vecchi client tramite Firestore Rules. Un marker offline `pending` non equivale a una conferma server.
+
+- **MUST:** l'esportazione dei dati completa e facoltativa viene offerta *prima* della revoca; non deve essere un requisito per revocare. Dopo la conferma non promettere l'esportabilità di dati già in cancellazione.
+- **MUST:** il backend cancella in modo paginato e idempotente i dati privati di tracciamento del proprietario, verifica l'assenza di residui inattesi e mantiene Firebase Auth. Qualunque collection sconosciuta blocca il completamento e richiede verifica tecnica; non proseguire con retry distruttivi indiscriminati.
+- **MUST:** su ogni dispositivo che osserva la revoca, la cancellazione locale è owner-scoped e lascia intatti marker di revoca, stato di autenticazione e ricevuta di recupero cancellazione account. La cancellazione fallita deve risultare visibile e ritentabile, mai comunicata come completata.
+- **MUST:** ogni tab invalidi lo stato business volatile e la replica pendente; hydration concorrente, guest→account, vecchie versioni, restore e device draft non devono ripopolare dati dopo la revoca.
+- **VERIFY:** un dispositivo offline non può conoscere immediatamente la revoca avvenuta altrove; bloccare le sue scritture sul server e applicare il cleanup quando si riconnette e apprende la revoca, senza dichiarare che una cancellazione cross-device sia già stata osservata.
+- **MUST:** finché account deletion è pendente, non bypassare il protocollo separato di receipt/recupero. Una revoca completa non è autorizzazione a eliminare Firebase Auth.
+
+Questo contratto di futuro rilascio non dimostra la corretta attivazione live: applicare i gate di `docs/compliance/health-consent-release-gate.md` e verificare la configurazione reale.
+
 ## Eliminazione account
 
 `useSettings` chiede due conferme e riautentica Google prima di invocare `DB.deleteAccount`, passando esplicitamente gli adapter applicativi per congelare i writer e resettare lo store. Il boundary infrastrutturale `db_account.ts` non importa Zustand: riceve queste operazioni tramite context injection. Il client controlla il token aggiornato prima di congelare i writer; il backend trusted verifica nuovamente ID token, revoca e `auth_time` recente e richiede App Check prima di accettare il job.
