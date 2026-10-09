@@ -33,13 +33,30 @@ export async function GET(request: Request): Promise<Response> {
   const deadlineMs = Date.now() + CRON_BUDGET_MS;
   const accountDeadlineMs = deadlineMs - HEALTH_RESERVED_MS - MAINTENANCE_RESERVED_MS;
   const healthDeadlineMs = deadlineMs - MAINTENANCE_RESERVED_MS;
-  const jobs = await listRecoverableDeletionJobs(25);
+  let jobs: Awaited<ReturnType<typeof listRecoverableDeletionJobs>> = [];
+  let accountDiscoveryFailed = false;
+  try {
+    jobs = await listRecoverableDeletionJobs(25);
+  } catch (error) {
+    accountDiscoveryFailed = true;
+    console.error('[account-deletion-cron] account deletion discovery failed', {
+      kind: error instanceof Error ? error.name : 'UnknownError',
+    });
+  }
+  let accountRunsFailed = 0;
   const results: Array<{ uid: string; result: string }> = [];
 
   for (const job of jobs) {
     if (Date.now() + SAFETY_BUFFER_MS >= accountDeadlineMs) break;
-    const result = await processAccountDeletion(job.uid, accountDeadlineMs);
-    results.push({ uid: job.uid, result });
+    try {
+      const result = await processAccountDeletion(job.uid, accountDeadlineMs);
+      results.push({ uid: job.uid, result });
+    } catch (error) {
+      accountRunsFailed++;
+      console.error('[account-deletion-cron] account deletion retry failed', {
+        kind: error instanceof Error ? error.name : 'UnknownError',
+      });
+    }
   }
 
   // Health-data erasure has its own marker and lease, distinct from account
@@ -49,8 +66,17 @@ export async function GET(request: Request): Promise<Response> {
   let erasuresFailed = 0;
   let erasuresPending = 0;
   let erasuresBusy = 0;
+  let erasuresDiscoveryFailed = false;
   if (Date.now() + SAFETY_BUFFER_MS < healthDeadlineMs) {
-    const pending = await listPendingHealthErasures(25);
+    let pending: string[] = [];
+    try {
+      pending = await listPendingHealthErasures(25);
+    } catch (error) {
+      erasuresDiscoveryFailed = true;
+      console.error('[account-deletion-cron] health erasure discovery failed', {
+        kind: error instanceof Error ? error.name : 'UnknownError',
+      });
+    }
     erasuresScanned = pending.length;
     for (const uid of pending) {
       if (Date.now() + SAFETY_BUFFER_MS >= healthDeadlineMs) break;
@@ -103,12 +129,15 @@ export async function GET(request: Request): Promise<Response> {
   console.info('[account-deletion-cron] completed', {
     scanned: jobs.length,
     processed: results.length,
+    accountDiscoveryFailed,
+    accountRunsFailed,
     purged,
     erasuresScanned,
     erasuresComplete,
     erasuresFailed,
     erasuresPending,
     erasuresBusy,
+    erasuresDiscoveryFailed,
     erasuresBlocked,
     erasuresBacklogPossible: erasuresScanned === 25,
     telemetryUsersScanned: telemetryRetention.usersScanned,
@@ -119,12 +148,15 @@ export async function GET(request: Request): Promise<Response> {
   return Response.json({
     scanned: jobs.length,
     processed: results.length,
+    accountDiscoveryFailed,
+    accountRunsFailed,
     purged,
     erasuresScanned,
     erasuresComplete,
     erasuresFailed,
     erasuresPending,
     erasuresBusy,
+    erasuresDiscoveryFailed,
     erasuresBlocked,
     erasuresBacklogPossible: erasuresScanned === 25,
     telemetryUsersScanned: telemetryRetention.usersScanned,

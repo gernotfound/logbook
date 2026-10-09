@@ -89,12 +89,15 @@ describe('M7 daily account deletion recovery cron', () => {
     expect(await response.json()).toMatchObject({
       scanned: 2,
       processed: 2,
+      accountDiscoveryFailed: false,
+      accountRunsFailed: 0,
       purged: 0,
       erasuresScanned: 0,
       erasuresComplete: 0,
       erasuresFailed: 0,
       erasuresPending: 0,
       erasuresBusy: 0,
+      erasuresDiscoveryFailed: false,
       erasuresBlocked: false,
       erasuresBacklogPossible: false,
       telemetryUsersScanned: 0,
@@ -104,12 +107,15 @@ describe('M7 daily account deletion recovery cron', () => {
     expect(info).toHaveBeenCalledWith('[account-deletion-cron] completed', {
       scanned: 2,
       processed: 2,
+      accountDiscoveryFailed: false,
+      accountRunsFailed: 0,
       purged: 0,
       erasuresScanned: 0,
       erasuresComplete: 0,
       erasuresFailed: 0,
       erasuresPending: 0,
       erasuresBusy: 0,
+      erasuresDiscoveryFailed: false,
       erasuresBlocked: false,
       erasuresBacklogPossible: false,
       telemetryUsersScanned: 0,
@@ -212,6 +218,55 @@ describe('M7 daily account deletion recovery cron', () => {
       expect(retention.purgeExpiredCompletedDeletionJobs).toHaveBeenCalled();
       expect(JSON.stringify(errors.mock.calls)).not.toContain('internal private message');
     } finally { errors.mockRestore(); }
+  });
+
+  it('isolation: a failed account discovery cannot prevent health erasure or retention', async () => {
+    process.env.CRON_SECRET = 'expected-secret';
+    store.listRecoverableDeletionJobs.mockRejectedValueOnce(new Error('secret account data'));
+    erasure.listPendingHealthErasures.mockResolvedValueOnce(['owner-a']);
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      const response = await GET(request('expected-secret'));
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({
+        accountDiscoveryFailed: true, scanned: 0, erasuresComplete: 1, telemetryCycleCompleted: true,
+      });
+      expect(erasure.processHealthErasure).toHaveBeenCalledOnce();
+      expect(retention.purgeExpiredCompletedDeletionJobs).toHaveBeenCalled();
+      expect(JSON.stringify(log.mock.calls)).not.toContain('secret account data');
+    } finally { log.mockRestore(); }
+  });
+
+  it('isolation: a thrown account runner does not block other recovery jobs', async () => {
+    process.env.CRON_SECRET = 'expected-secret';
+    erasure.listPendingHealthErasures.mockResolvedValueOnce(['owner-health']);
+    runner.processAccountDeletion.mockRejectedValueOnce(new Error('account private'))
+      .mockResolvedValueOnce('complete');
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      const response = await GET(request('expected-secret'));
+      expect(await response.json()).toMatchObject({
+        accountRunsFailed: 1, processed: 1, erasuresComplete: 1, telemetryCycleCompleted: true,
+      });
+      expect(runner.processAccountDeletion).toHaveBeenCalledTimes(2);
+      expect(JSON.stringify(log.mock.calls)).not.toContain('account private');
+    } finally { log.mockRestore(); }
+  });
+
+  it('isolation: missing health recovery index does not stop unrelated maintenance', async () => {
+    process.env.CRON_SECRET = 'expected-secret';
+    erasure.listPendingHealthErasures.mockRejectedValueOnce(new Error('index missing confidential'));
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      const response = await GET(request('expected-secret'));
+      expect(await response.json()).toMatchObject({
+        erasuresDiscoveryFailed: true, erasuresScanned: 0,
+        processed: 2, telemetryCycleCompleted: true,
+      });
+      expect(erasure.hasBlockedHealthErasures).toHaveBeenCalledOnce();
+      expect(retention.purgeExpiredCompletedDeletionJobs).toHaveBeenCalled();
+      expect(JSON.stringify(log.mock.calls)).not.toContain('index missing confidential');
+    } finally { log.mockRestore(); }
   });
 
   it('uses only the residual cron budget for completed tombstone garbage collection', async () => {

@@ -12,10 +12,12 @@
 
 ## Monitoraggio senza identificatori personali
 
-Il cron emette campi aggregati `erasuresScanned`, `erasuresComplete`, `erasuresPending`, `erasuresBusy`, `erasuresFailed`, `erasuresBlocked` e `erasuresBacklogPossible`. Il valore `erasuresBlocked` è `null` quando la sonda non è riuscita: non interpretarlo come assenza di blocchi.
+Il cron emette campi aggregati `accountDiscoveryFailed`, `accountRunsFailed`, `erasuresScanned`, `erasuresComplete`, `erasuresPending`, `erasuresBusy`, `erasuresFailed`, `erasuresDiscoveryFailed`, `erasuresBlocked` e `erasuresBacklogPossible`. Il valore `erasuresBlocked` è `null` quando la sonda non è riuscita: non interpretarlo come assenza di blocchi.
 
 Nei log Vercel cercare:
 
+- `[account-deletion-cron] account deletion discovery failed` / `account deletion retry failed`: recupero account da analizzare; la cancellazione salute prosegue comunque.
+- `[account-deletion-cron] health erasure discovery failed`: errore di lettura della coda salute, incluso indice mancante; le altre manutenzioni continuano.
 - `[account-deletion-cron] health erasure retry failed`: fallimento ritentabile o da approfondire; viene registrato solo il tipo di errore sanitizzato.
 - `[account-deletion-cron] manual health erasure intervention required`: esiste almeno un marker `blocked`; serve revisione.
 - `[account-deletion-cron] health erasure monitoring unavailable`: controllo dei job bloccati non attendibile.
