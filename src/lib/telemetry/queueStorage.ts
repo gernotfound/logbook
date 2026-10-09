@@ -44,6 +44,7 @@ function parseQueuedItems(raw: string | null): QueuedTelemetryItem[] {
 
 export class TelemetryQueueStorage {
   private cachedQueue: QueuedTelemetryItem[] | null = null;
+  private cachedQueueKey: string | null = null;
   private isDiskSyncScheduled = false;
 
   constructor(private readonly getUserId: () => string | null) {}
@@ -55,13 +56,13 @@ export class TelemetryQueueStorage {
   }
 
   public getQueuedEvents(): QueuedTelemetryItem[] {
-    if (this.cachedQueue !== null) {
+    const ownerKey = this.getQueueStorageKey();
+    if (this.cachedQueue !== null && this.cachedQueueKey === ownerKey) {
       return this.cachedQueue;
     }
 
     try {
       if (typeof localStorage !== 'undefined') {
-        const ownerKey = this.getQueueStorageKey();
         const ownerRaw = localStorage.getItem(ownerKey);
         if (ownerRaw !== null) return parseQueuedItems(ownerRaw);
 
@@ -96,18 +97,19 @@ export class TelemetryQueueStorage {
   }
 
   private saveQueuedEvents(items: QueuedTelemetryItem[], immediateDiskSync: boolean = true): void {
+    const ownerKey = this.getQueueStorageKey();
     this.cachedQueue = items;
+    this.cachedQueueKey = ownerKey;
     if (immediateDiskSync) {
-      this.syncQueueToDisk();
+      this.syncQueueToDisk(ownerKey);
     }
   }
 
-  private syncQueueToDisk(): void {
+  private syncQueueToDisk(ownerKey: string): void {
+    if (this.cachedQueueKey !== ownerKey || this.cachedQueue === null) return;
     try {
       if (typeof localStorage !== 'undefined') {
-        const itemsToSave = this.cachedQueue ?? this.getQueuedEvents();
-        const ownerKey = this.getQueueStorageKey();
-        localStorage.setItem(ownerKey, JSON.stringify(itemsToSave));
+        localStorage.setItem(ownerKey, JSON.stringify(this.cachedQueue));
         localStorage.removeItem(TELEMETRY_QUEUE_KEY);
       }
     } catch {
@@ -119,8 +121,10 @@ export class TelemetryQueueStorage {
     if (!id) return;
 
     try {
-      if (this.cachedQueue === null) {
+      const ownerKey = this.getQueueStorageKey();
+      if (this.cachedQueue === null || this.cachedQueueKey !== ownerKey) {
         this.cachedQueue = this.getQueuedEvents();
+        this.cachedQueueKey = ownerKey;
       }
 
       let found = false;
@@ -136,9 +140,12 @@ export class TelemetryQueueStorage {
       if (found && !this.isDiskSyncScheduled) {
         this.isDiskSyncScheduled = true;
         queueMicrotask(() => {
+          // A delayed microtask must not persist or discard another account's cache.
+          if (!this.isDiskSyncScheduled || this.cachedQueueKey !== ownerKey) return;
           this.isDiskSyncScheduled = false;
-          this.syncQueueToDisk();
+          this.syncQueueToDisk(ownerKey);
           this.cachedQueue = null;
+          this.cachedQueueKey = null;
         });
       }
     } catch {
@@ -179,12 +186,15 @@ export class TelemetryQueueStorage {
     if (!this.isDiskSyncScheduled) return;
 
     this.isDiskSyncScheduled = false;
-    this.syncQueueToDisk();
+    if (this.cachedQueueKey !== null) this.syncQueueToDisk(this.cachedQueueKey);
     this.cachedQueue = null;
+    this.cachedQueueKey = null;
   }
 
   public invalidateCache(): void {
     this.cachedQueue = null;
+    this.cachedQueueKey = null;
+    this.isDiskSyncScheduled = false;
   }
 
   public replaceQueue(items: QueuedTelemetryItem[]): void {
@@ -192,7 +202,6 @@ export class TelemetryQueueStorage {
   }
 
   public reset(): void {
-    this.cachedQueue = null;
-    this.isDiskSyncScheduled = false;
+    this.invalidateCache();
   }
 }
