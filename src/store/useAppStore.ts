@@ -4,6 +4,7 @@ import { createWorkoutSlice, type WorkoutSlice } from './slices/createWorkoutSli
 import { createSyncSlice, type SyncSlice } from './slices/createSyncSlice';
 import { captureSession } from '../lib/sync/session';
 import { persistOwnerBoundWorkoutSnapshot } from '../lib/sync/deviceCriticalState';
+import { isHealthConsentWriteBlocked, readHealthConsentRevocation } from '../lib/healthConsentRevocation';
 import { draftRegistry } from '../lib/utils/draftRegistry';
 import { UPDATE_REQUIRED_EVENT } from '../lib/schemaEvolution';
 
@@ -32,6 +33,7 @@ if (typeof document !== 'undefined') {
             const state = useAppStore.getState();
             const session = captureSession();
             try {
+                if (readHealthConsentRevocation(session.owner) !== 'none') return;
                 draftRegistry.flushAll({ strict: true });
                 persistOwnerBoundWorkoutSnapshot(session, state.dataOwner, state.localWorkout);
             } catch (error) {
@@ -50,6 +52,7 @@ if (typeof document !== 'undefined') {
 // Reopening, reconnection and foreground resume all use the same durable journal.
 if (typeof window !== 'undefined') {
     const replay = () => {
+        if (isHealthConsentWriteBlocked(captureSession().owner)) return;
         void useAppStore.getState().flushPendingSyncs().catch(error => {
             console.warn('Ripresa sincronizzazione non completata:', error);
         });
