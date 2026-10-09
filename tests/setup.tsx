@@ -402,6 +402,12 @@ vi.mock('firebase/firestore', () => {
     };
   };
   const getDoc = vi.fn(async (ref: any) => snapshot(firestoreMockStore[refPath(ref)]));
+  const onSnapshot = vi.fn((ref: any, next: (snapshot: any) => void) => {
+    // The browser listener observes a first owner-scoped snapshot, even if absent.
+    // Explicit emulator tests, not this unit fixture, verify security rules.
+    next(snapshot(firestoreMockStore[refPath(ref)]));
+    return () => {};
+  });
   const createBatch = () => {
     const staged: Array<{ kind: 'set' | 'delete'; ref: any; data?: any }> = [];
     return {
@@ -422,7 +428,7 @@ vi.mock('firebase/firestore', () => {
     getFirestore: vi.fn(() => ({})), initializeFirestore: vi.fn(() => ({})),
     memoryLocalCache: vi.fn(() => ({})),
     waitForPendingWrites: vi.fn().mockResolvedValue(undefined),
-    doc: vi.fn((_db: unknown, ...parts: string[]) => ({ path: parts.join('/') })), getDoc,
+    doc: vi.fn((_db: unknown, ...parts: string[]) => ({ path: parts.join('/') })), getDoc, onSnapshot,
     setDoc: vi.fn(async (ref: any, data: any) => { firestoreMockStore[refPath(ref)] = structuredClone(data); }),
     deleteDoc: vi.fn(async (ref: any) => { delete firestoreMockStore[refPath(ref)]; }),
     collection: vi.fn((_db: unknown, ...parts: string[]) => ({ path: parts.join('/') })),
