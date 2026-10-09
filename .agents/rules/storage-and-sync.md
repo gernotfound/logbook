@@ -207,6 +207,8 @@ Un envelope locale con versione legacy/futura non viene reinterpretato: `readLoc
 
 ## Concorrenza bootstrap e revoca guest cross-tab
 
+**MUST:** logout guest e login guest esplicito (incluso recovery di purge incompleto) condividono un Web Lock esclusivo per origine che copre l'intero purge e il passaggio alla nuova generazione. Dopo una conferma asincrona, la vecchia sessione va rivalidata all'interno del lock prima della revoca. Senza lock disponibile la transizione distruttiva fallisce chiusa senza avviare la cancellazione. Una nuova generazione non deve ereditare lo snapshot in memoria della sessione revocata.
+
 **MUST:** `initializeLocal()` crea un envelope soltanto se assente nella transazione IndexedDB; un archivio già comparso, anche guest con journal vuoto o account già acknowledged, non viene sovrascritto da un seed obsoleto.
 
 **MUST:** tutti gli snapshot-save asincroni da store ricevono un guard di sessione verificato all'interno del commit IndexedDB, non solo dopo la persistenza. Logout e reset invalidano la sessione prima del purge.

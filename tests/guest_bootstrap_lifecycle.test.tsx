@@ -1,8 +1,9 @@
 import { auth, onAuthStateChanged } from '../src/lib/firebase';
 import React from 'react';
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen, act, waitFor } from '@testing-library/react';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { render, screen, act, waitFor, renderHook } from '@testing-library/react';
 import { AuthProvider } from '../src/contexts/AuthContext';
+import { DB } from '../src/lib/db';
 import { useAuth } from '../src/hooks/useAuth';
 import { useAppStore } from '../src/store/useAppStore';
 import { clearCatalogCache, saveCatalogToCache } from '../src/lib/catalog/catalogService';
@@ -27,6 +28,7 @@ const GuestTestComponent = () => {
 };
 
 describe('Milestone M2: Guest Bootstrap & Cold Start Lifecycle', () => {
+    afterEach(() => vi.restoreAllMocks());
     beforeEach(async () => {
         (auth as any).currentUser = null;
         vi.mocked(onAuthStateChanged).mockImplementation((_auth, callback: any) => { callback(null); return () => {}; });
@@ -83,6 +85,67 @@ describe('Milestone M2: Guest Bootstrap & Cold Start Lifecycle', () => {
         localStorage.setItem('logbook_is_guest', 'true');
         localStorage.removeItem(GUEST_REVOCATION_KEY);
         expect(isCurrentSession(stale)).toBe(false);
+    });
+
+
+    it('does not purge through authenticated logout when another tab revoked the guest first', async () => {
+        const { result } = renderHook(() => useAuth(), {
+            wrapper: ({ children }) => <AuthProvider>{children}</AuthProvider>,
+        });
+        await act(async () => { await result.current.loginAsGuest(); });
+        const authenticatedPurge = vi.spyOn(DB, 'secureLogOut');
+        // A storage event may arrive after a click in another tab.
+        localStorage.setItem(GUEST_REVOCATION_KEY, 'another-tab');
+        await act(async () => { await result.current.logout({ mode: 'normal' }); });
+
+        expect(authenticatedPurge).not.toHaveBeenCalled();
+        expect(result.current.isGuest).toBe(false);
+        expect(useAppStore.getState().userData).toBeNull();
+        expect(localStorage.getItem(GUEST_REVOCATION_KEY)).toBe('another-tab');
+    });
+
+    it('serializes an incomplete guest purge against a concurrent new guest login', async () => {
+        const { result } = renderHook(() => useAuth(), {
+            wrapper: ({ children }) => <AuthProvider>{children}</AuthProvider>,
+        });
+        await act(async () => { await result.current.loginAsGuest(); });
+        const previousId = localStorage.getItem(GUEST_SESSION_KEY);
+        expect(previousId).toBeTruthy();
+
+        let releasePurge!: () => void;
+        const blocked = new Promise<void>(resolve => { releasePurge = resolve; });
+        const purge = vi.spyOn(DB, 'purgeAllLocalUserData')
+            .mockImplementationOnce(async () => {
+                await blocked;
+                throw new Error('simulated IndexedDB delete failure');
+            })
+            .mockImplementationOnce(async () => {
+                localStorage.removeItem('logbook_is_guest');
+                localStorage.removeItem(GUEST_SESSION_KEY);
+            });
+
+        let logout!: Promise<void>;
+        act(() => { logout = result.current.logout({ mode: 'normal' }); });
+        await waitFor(() => expect(purge).toHaveBeenCalledTimes(1));
+        expect(localStorage.getItem(GUEST_REVOCATION_KEY)).not.toBeNull();
+
+        let relogin!: Promise<void>;
+        act(() => { relogin = result.current.loginAsGuest(); });
+        await Promise.resolve();
+        // A new generation must wait for the first purge, even if that purge fails.
+        expect(purge).toHaveBeenCalledTimes(1);
+        expect(localStorage.getItem(GUEST_SESSION_KEY)).toBe(previousId);
+
+        await act(async () => {
+            releasePurge();
+            await Promise.all([logout, relogin]);
+        });
+        expect(purge).toHaveBeenCalledTimes(2);
+        expect(localStorage.getItem(GUEST_REVOCATION_KEY)).toBeNull();
+        expect(localStorage.getItem(GUEST_SESSION_KEY)).not.toBe(previousId);
+        expect(localStorage.getItem('logbook_is_guest')).toBe('true');
+        expect(result.current.isGuest).toBe(true);
+        expect(useAppStore.getState().userData).not.toBeNull();
     });
 
     it('M2.2: catalog delta resolvers preserve custom entries and apply overrides', () => {

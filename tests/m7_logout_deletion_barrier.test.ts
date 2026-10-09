@@ -29,9 +29,14 @@ describe('M7 logout isolation with stale deletion receipts', () => {
     const authContext = readFileSync(resolve(process.cwd(), 'src/contexts/AuthContext.tsx'), 'utf8');
     const forcedResets = authContext.match(/resetStore\(\{ force: true \}\)/g) ?? [];
 
-    // Guest cross-tab revocation must also clear a stale in-memory view.
-    expect(forcedResets).toHaveLength(3);
+    // Every force reset belongs to an explicitly reviewed lifecycle path:
+    // cross-tab revocation, recovery cleanup before a new guest generation,
+    // a revoked tab's stale UI, guest logout, or authenticated logout.
+    expect(forcedResets).toHaveLength(5);
     expect(authContext).toMatch(/const reconcileGuestSession[\s\S]*?resetStore\(\{ force: true \}\)/);
+    expect(authContext).toMatch(/if \(readBrowserValueStrict\(GUEST_REVOCATION_KEY\) !== null\)[\s\S]{0,350}await DB\.purgeAllLocalUserData\('guest'\);[\s\S]{0,350}resetStore\(\{ force: true \}\)/);
+    expect(authContext).toMatch(/if \(isGuestRef\.current && !isActiveGuestSession\(\)\)[\s\S]{0,300}resetStore\(\{ force: true \}\)/);
+    expect(authContext).toMatch(/await DB\.purgeAllLocalUserData\('guest'\);[\s\S]{0,650}setIsGuest\(false\);[\s\S]{0,250}resetStore\(\{ force: true \}\)/);
     expect(authContext).toContain('await DB.secureLogOut();');
     expect(authContext).toMatch(/await DB\.secureLogOut\(\);[\s\S]{0,200}resetStore\(\{ force: true \}\)/);
     expect(authContext).toMatch(/setIsGuest\(false\);[\s\S]{0,200}resetStore\(\{ force: true \}\)/);
