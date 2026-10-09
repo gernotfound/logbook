@@ -4,7 +4,7 @@ import ErrorBoundary from '../src/components/UI/ErrorBoundary';
 import { DB } from '../src/lib/db';
 import { useDialogStore } from '../src/store/useDialogStore';
 import { idbStore, localStorageMock } from './setup';
-import { storageOwner } from '../src/lib/sync/session';
+import { activateGuestSession, GUEST_REVOCATION_KEY, GUEST_SESSION_KEY, storageOwner, isActiveGuestSession } from '../src/lib/sync/session';
 import { markAccountDeletion } from '../src/lib/sync/accountGate';
 
 const ProblemChild = ({ shouldThrow }: { shouldThrow: boolean }) => {
@@ -158,6 +158,24 @@ describe('R2: ErrorBoundary & Dialog Hardening Suite', () => {
 
         consoleErrorSpy.mockRestore();
     });
+    it('revokes the guest generation before a failed error-recovery purge', async () => {
+        const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+        vi.mocked(useDialogStore.getState().showConfirm).mockResolvedValue(true);
+        localStorage.setItem('logbook_is_guest', 'true');
+        localStorage.setItem(GUEST_SESSION_KEY, 'error-recovery-guest');
+        activateGuestSession('error-recovery-guest');
+        vi.spyOn(DB, 'purgeAllLocalUserData').mockRejectedValueOnce(new Error('simulated partial IndexedDB failure'));
+
+        render(<ErrorBoundary><ProblemChild shouldThrow={true} /></ErrorBoundary>);
+        await act(async () => { fireEvent.click(screen.getByText(/Azzera dati locali/i)); });
+
+        expect(localStorage.getItem(GUEST_REVOCATION_KEY)).not.toBeNull();
+        expect(isActiveGuestSession()).toBe(false);
+        expect(window.location.reload).not.toHaveBeenCalled();
+        expect(useDialogStore.getState().showAlert).toHaveBeenCalled();
+        spy.mockRestore();
+    });
+
     it('never calls local reset when the account has a pending server deletion', async () => {
         const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
         const owner = storageOwner();

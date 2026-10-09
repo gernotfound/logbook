@@ -3,7 +3,8 @@ import { useDialogStore } from '../../store/useDialogStore';
 import { GlobalDialog } from './GlobalDialog';
 import { DB } from '../../lib/db';
 import { safeHardReload } from '../../lib/sync/safeReload';
-import { storageOwner } from '../../lib/sync/session';
+import { captureSession, isActiveGuestSession, isCurrentSession, revokeGuestSession, storageOwner } from '../../lib/sync/session';
+import { withGuestLifecycleLock } from '../../lib/sync/guestLifecycleLock';
 import { isAccountDeletionPending } from '../../lib/sync/accountGate';
 
 interface Props {
@@ -48,11 +49,24 @@ class ErrorBoundary extends Component<Props, State> {
     if (!confirmed) return;
 
     try {
-      if (isAccountDeletionPending(storageOwner())) {
+      const owner = storageOwner();
+      if (isAccountDeletionPending(owner)) {
         await dialogs.showAlert('Cancellazione account ancora in corso: i dati locali sono necessari per il recupero e non possono essere azzerati.');
         return;
       }
-      await DB.purgeAllLocalUserData();
+      if (owner === 'guest') {
+        if (!isActiveGuestSession()) throw new Error('Sessione guest non più attiva.');
+        const session = captureSession();
+        await withGuestLifecycleLock(async () => {
+          if (!isCurrentSession(session)) throw new Error('Sessione guest cambiata durante la conferma.');
+          // Error recovery is also a destructive guest reset: fence every
+          // other tab before removing IndexedDB and never race a new login.
+          revokeGuestSession();
+          await DB.purgeAllLocalUserData('guest');
+        });
+      } else {
+        await DB.purgeAllLocalUserData(owner);
+      }
       window.location.reload();
     } catch (error) {
       console.error('Pulizia locale di recovery non completata:', error);
