@@ -158,6 +158,30 @@ describe('authenticated hydration session fencing', () => {
         expect(firstSetUserData).not.toHaveBeenCalled();
     });
 
+    it('never resurrects account data from in-flight cloud hydration after consent withdrawal', async () => {
+        const { loadAuthenticatedData, readLocal, invalidateSession } = await loadModules();
+        const { markHealthConsentRevocation } = await import('../src/lib/healthConsentRevocation');
+        invalidateSession();
+        const response = deferred<ReturnType<typeof payload>>();
+        dbState.loadCloudPayload.mockReturnValueOnce(response.promise);
+        const setUserData = vi.fn();
+
+        const loading = loadAuthenticatedData({
+            user: { uid: 'user-a' } as any,
+            isGuestActive: () => false,
+            setUserData,
+            setSyncing: vi.fn(),
+            setSaveError: vi.fn(),
+        });
+        await vi.waitFor(() => expect(dbState.loadCloudPayload).toHaveBeenCalledTimes(1));
+
+        markHealthConsentRevocation('user:user-a', 'pending');
+        response.resolve(payload('194'));
+        await loading;
+        expect(setUserData).not.toHaveBeenCalled();
+        expect(await readLocal('user-a')).toBeUndefined();
+    });
+
     it('lets the newest same-account load supersede an older overlapping load', async () => {
         const { loadAuthenticatedData, readLocal, invalidateSession } = await loadModules();
         invalidateSession();
