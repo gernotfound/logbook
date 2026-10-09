@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { getDb } from '../lib/firebase';
+import { healthConsentLaunchAvailable } from '../lib/healthConsentLaunch';
 import {
   HEALTH_CONSENT_REVOCATION_EVENT,
   healthConsentRevocationKey,
@@ -41,7 +42,9 @@ export function useHealthConsentRevocation(owner: string | null): HealthConsentG
     window.addEventListener(HEALTH_CONSENT_REVOCATION_EVENT, refresh);
 
     let unsubscribe: (() => void) | undefined;
-    if (owner.startsWith('user:')) {
+    // Production may still have older Firestore Rules: avoid probing an undeployed collection.
+    // Durable local markers continue to block writes regardless of this launch gate.
+    if (owner.startsWith('user:') && healthConsentLaunchAvailable()) {
       try {
         const uid = owner.slice(5);
         unsubscribe = onSnapshot(

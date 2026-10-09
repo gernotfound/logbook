@@ -10,6 +10,7 @@ import { PrivacyPolicy } from '../pages/PrivacyPolicy';
 import { TermsAndConditions } from '../pages/TermsAndConditions';
 import { getAnalyticsConsent, setAnalyticsConsent, subscribeAnalyticsConsent } from '../lib/analyticsConsent';
 import { requestHealthConsentRevocation } from '../lib/requestHealthConsentRevocation';
+import { healthConsentLaunchAvailable } from '../lib/healthConsentLaunch';
 import { readHealthConsentRevocation } from '../lib/healthConsentRevocation';
 import { captureSession } from '../lib/sync/session';
 import type { ExportSelection } from './ExportSelector';
@@ -66,7 +67,7 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
     useEffect(() => subscribeAnalyticsConsent(setAnalyticsEnabled), []);
 
     const handleRevokeHealthConsent = async () => {
-        if (revokingHealthConsent) return;
+        if (!healthConsentLaunchAvailable() || revokingHealthConsent) return;
         const confirmed = await useDialogStore.getState().showConfirm(
             "Revocare il consenso ai dati salute?\n\nLe funzioni di allenamento, alimentazione e misurazioni saranno sospese. I dati di tracciamento senza altra base valida verranno eliminati: l'operazione è irreversibile e non elimina l'account. Se desideri una copia, scegli Annulla e usa «Esporta backup prima della revoca». La copia è facoltativa e non impedisce di revocare il consenso."
         );

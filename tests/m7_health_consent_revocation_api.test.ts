@@ -24,6 +24,8 @@ vi.mock('../server/accountDeletion/httpAuth', () => auth);
 vi.mock('../server/healthConsent/revocation', () => store);
 const erasure = vi.hoisted(() => ({ processHealthErasure: vi.fn() }));
 vi.mock('../server/healthConsent/erasure', () => erasure);
+const release = vi.hoisted(() => ({ enabled: true }));
+vi.mock('../server/healthConsent/launch', () => ({ healthConsentReleaseEnabled: () => release.enabled }));
 
 import { OPTIONS, POST } from '../api/health-consent-revocation';
 
@@ -37,9 +39,21 @@ function req(origin = 'https://thelogbook.web.app', method = 'POST'): Request {
 describe('health consent revocation API boundary', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    release.enabled = true;
     auth.verifyHealthConsentRevocationRequester.mockResolvedValue({ uid: 'owner-a' });
     store.recordHealthConsentRevocation.mockResolvedValue(undefined);
     erasure.processHealthErasure.mockResolvedValue('complete');
+  });
+
+  it('fails closed until the legal go-live gate is approved', async () => {
+    release.enabled = false;
+    expect((await OPTIONS(req('https://thelogbook.web.app', 'OPTIONS'))).status).toBe(503);
+    const response = await POST(req());
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ error: 'Funzione non ancora disponibile.' });
+    expect(auth.verifyHealthConsentRevocationRequester).not.toHaveBeenCalled();
+    expect(store.recordHealthConsentRevocation).not.toHaveBeenCalled();
+    expect(erasure.processHealthErasure).not.toHaveBeenCalled();
   });
 
   it('rejects untrusted origins before authentication or server mutations', async () => {

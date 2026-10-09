@@ -6,6 +6,7 @@ import {
 import { processAccountDeletion } from '../server/accountDeletion/runner.js';
 import { purgeExpiredTelemetry } from '../server/telemetryRetention.js';
 import { hasBlockedHealthErasures, listPendingHealthErasures, processHealthErasure } from '../server/healthConsent/erasure.js';
+import { healthConsentReleaseEnabled } from '../server/healthConsent/launch.js';
 
 export const maxDuration = 300;
 
@@ -31,7 +32,8 @@ export async function GET(request: Request): Promise<Response> {
   }
 
   const deadlineMs = Date.now() + CRON_BUDGET_MS;
-  const accountDeadlineMs = deadlineMs - HEALTH_RESERVED_MS - MAINTENANCE_RESERVED_MS;
+  const healthErasureEnabled = healthConsentReleaseEnabled();
+  const accountDeadlineMs = deadlineMs - (healthErasureEnabled ? HEALTH_RESERVED_MS : 0) - MAINTENANCE_RESERVED_MS;
   const healthDeadlineMs = deadlineMs - MAINTENANCE_RESERVED_MS;
   let jobs: Awaited<ReturnType<typeof listRecoverableDeletionJobs>> = [];
   let accountDiscoveryFailed = false;
@@ -67,7 +69,7 @@ export async function GET(request: Request): Promise<Response> {
   let erasuresPending = 0;
   let erasuresBusy = 0;
   let erasuresDiscoveryFailed = false;
-  if (Date.now() + SAFETY_BUFFER_MS < healthDeadlineMs) {
+  if (healthErasureEnabled && Date.now() + SAFETY_BUFFER_MS < healthDeadlineMs) {
     let pending: string[] = [];
     try {
       pending = await listPendingHealthErasures(25);
@@ -97,7 +99,7 @@ export async function GET(request: Request): Promise<Response> {
   // A blocked job is intentionally excluded from automatic retries: it
   // requires a reviewed schema/data cleanup. Surface that state every day.
   let erasuresBlocked: boolean | null = null;
-  if (Date.now() + SAFETY_BUFFER_MS < deadlineMs) {
+  if (healthErasureEnabled && Date.now() + SAFETY_BUFFER_MS < deadlineMs) {
     try {
       erasuresBlocked = await hasBlockedHealthErasures();
       if (erasuresBlocked) console.error('[account-deletion-cron] manual health erasure intervention required', { blocked: true });
@@ -132,6 +134,7 @@ export async function GET(request: Request): Promise<Response> {
     accountDiscoveryFailed,
     accountRunsFailed,
     purged,
+    healthErasureEnabled,
     erasuresScanned,
     erasuresComplete,
     erasuresFailed,
@@ -151,6 +154,7 @@ export async function GET(request: Request): Promise<Response> {
     accountDiscoveryFailed,
     accountRunsFailed,
     purged,
+    healthErasureEnabled,
     erasuresScanned,
     erasuresComplete,
     erasuresFailed,

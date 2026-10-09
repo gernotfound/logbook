@@ -1,4 +1,5 @@
 import { auth, ensureAppCheck } from './firebase';
+import { healthConsentLaunchAvailable } from './healthConsentLaunch';
 import { getLimitedUseAppCheckToken } from './appCheck';
 import { captureSession, isCurrentSession, storageOwner } from './sync/session';
 import { markHealthConsentRevocation, readHealthConsentRevocation } from './healthConsentRevocation';
@@ -6,6 +7,8 @@ import { markHealthConsentRevocation, readHealthConsentRevocation } from './heal
 const API = (import.meta.env.VITE_ACCOUNT_DELETION_API_ORIGIN || 'https://logbook-gnf.vercel.app').replace(/\/$/, '');
 
 export async function requestHealthConsentRevocation(): Promise<void> {
+  // No local marker may be written until a reviewed release explicitly enables this feature.
+  if (!healthConsentLaunchAvailable()) throw new Error('Revoca non ancora disponibile.');
   const session = captureSession();
   const owner = session.owner;
   if (owner === 'guest') {

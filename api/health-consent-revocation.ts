@@ -2,6 +2,7 @@ import { RequestAuthError, verifyHealthConsentRevocationRequester } from '../ser
 import { accountDeletionCorsHeaders, requireAccountDeletionOrigin } from '../server/accountDeletion/cors.js';
 import { recordHealthConsentRevocation, RevocationAccountDeletingError } from '../server/healthConsent/revocation.js';
 import { processHealthErasure } from '../server/healthConsent/erasure.js';
+import { healthConsentReleaseEnabled } from '../server/healthConsent/launch.js';
 
 export const maxDuration = 30;
 const ALLOWED_HEADERS = 'authorization, x-firebase-appcheck';
@@ -26,6 +27,7 @@ export async function OPTIONS(request: Request): Promise<Response> {
   const origin = request.headers.get('origin');
   try {
     requireAccountDeletionOrigin(request);
+    if (!healthConsentReleaseEnabled()) return respond({ error: 'Funzione non ancora disponibile.' }, 503, origin);
     return new Response(null, {
       status: 204,
       headers: accountDeletionCorsHeaders(origin, ALLOWED_HEADERS),
@@ -39,6 +41,7 @@ export async function POST(request: Request): Promise<Response> {
   const origin = request.headers.get('origin');
   try {
     requireAccountDeletionOrigin(request);
+    if (!healthConsentReleaseEnabled()) return respond({ error: 'Funzione non ancora disponibile.' }, 503, origin);
     const { uid } = await verifyHealthConsentRevocationRequester(request);
     await recordHealthConsentRevocation(uid);
     // Revocation is durable immediately. Erasure is separately idempotent and

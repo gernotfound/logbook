@@ -24,6 +24,8 @@ const erasure = vi.hoisted(() => ({
   hasBlockedHealthErasures: vi.fn(),
 }));
 vi.mock('../server/healthConsent/erasure', () => erasure);
+const release = vi.hoisted(() => ({ enabled: true }));
+vi.mock('../server/healthConsent/launch', () => ({ healthConsentReleaseEnabled: () => release.enabled }));
 
 import { GET } from '../api/account-deletion-cron';
 
@@ -38,6 +40,7 @@ describe('M7 daily account deletion recovery cron', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    release.enabled = true;
     delete process.env.CRON_SECRET;
     store.listRecoverableDeletionJobs.mockResolvedValue([{ uid: 'a' }, { uid: 'b' }]);
     runner.processAccountDeletion.mockResolvedValue('complete');
@@ -92,6 +95,7 @@ describe('M7 daily account deletion recovery cron', () => {
       accountDiscoveryFailed: false,
       accountRunsFailed: 0,
       purged: 0,
+      healthErasureEnabled: true,
       erasuresScanned: 0,
       erasuresComplete: 0,
       erasuresFailed: 0,
@@ -110,6 +114,7 @@ describe('M7 daily account deletion recovery cron', () => {
       accountDiscoveryFailed: false,
       accountRunsFailed: 0,
       purged: 0,
+      healthErasureEnabled: true,
       erasuresScanned: 0,
       erasuresComplete: 0,
       erasuresFailed: 0,
@@ -147,6 +152,28 @@ describe('M7 daily account deletion recovery cron', () => {
       kind: 'Error',
     });
     error.mockRestore();
+  });
+
+  it('does not scan or delete health data before release while preserving account and telemetry maintenance', async () => {
+    process.env.CRON_SECRET = 'expected-secret';
+    release.enabled = false;
+    erasure.listPendingHealthErasures.mockResolvedValue(['synthetic-revoked-owner']);
+    const start = Date.now();
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(start);
+    try {
+      const response = await GET(request('expected-secret'));
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({
+        processed: 2, healthErasureEnabled: false,
+        erasuresScanned: 0, erasuresBlocked: null,
+        telemetryCycleCompleted: true,
+      });
+      expect(runner.processAccountDeletion).toHaveBeenCalledWith('a', start + 250_000);
+      expect(retention.purgeExpiredCompletedDeletionJobs).toHaveBeenCalled();
+      expect(erasure.listPendingHealthErasures).not.toHaveBeenCalled();
+      expect(erasure.processHealthErasure).not.toHaveBeenCalled();
+      expect(erasure.hasBlockedHealthErasures).not.toHaveBeenCalled();
+    } finally { clock.mockRestore(); }
   });
 
   it('retries health erasure without blocking account deletion or the other maintenance tasks', async () => {

@@ -1,4 +1,5 @@
 import { ChevronRight, FileText, ShieldCheck, ShieldAlert, Download } from 'lucide-react';
+import { healthConsentLaunchAvailable } from '../../lib/healthConsentLaunch';
 
 interface PrivacySettingsTabProps {
     analyticsEnabled: boolean;
@@ -24,6 +25,7 @@ export function PrivacySettingsTab({ analyticsEnabled, onOpenTerms, onOpenPrivac
                     <span aria-hidden="true" />
                 </label>
             </div>
+            {healthConsentLaunchAvailable() && (
             <div className="settings-detail-card">
                 <h2>Consenso per i dati relativi alla salute</h2>
                 <p>Puoi revocare il consenso in qualsiasi momento. Il tracciamento sarà sospeso e i dati di tracciamento privi di altra base giuridica valida saranno cancellati. L'account rimarrà attivo. Se vuoi conservarne una copia, esportala prima della revoca.</p>
@@ -36,6 +38,7 @@ export function PrivacySettingsTab({ analyticsEnabled, onOpenTerms, onOpenPrivac
                     {revokingHealthConsent ? 'Registrazione della revoca…' : 'Revoca il consenso per i dati salute'}
                 </button>
             </div>
+            )}
             <div className="settings-detail-list">
                 <button type="button" className="settings-simple-row" onClick={onOpenPrivacy}>
                     <span className="settings-row-icon"><ShieldCheck size={20} aria-hidden="true" /></span>

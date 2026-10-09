@@ -1,4 +1,6 @@
 # Recovery operativo — cancellazione dati salute (PR #301)
+> **Rilascio differito:** il gate `server/healthConsent/launch.ts` impedisce in Production l'endpoint di revoca (HTTP 503) e l'esecuzione health nel cron. Il frontend nasconde l'azione e non avvia nuove sottoscrizioni Firestore per questa funzione; solo i test sintetici e la build E2E `health-e2e` esercitano il flusso. Le barriere di sicurezza sui marker locali o Firestore già presenti restano valide. Non basta una variabile d'ambiente per abilitare cancellazioni irreversibili: occorre una PR successiva con revisione legale e controlli Production.
+
 
 > **Non attivo in Production finché i gate GDPR e di rilascio non sono risolti.** Questa guida descrive soltanto la proposta tecnica sulla PR, non attesta un deployment o una configurazione di alerting presso i provider.
 

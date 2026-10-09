@@ -93,7 +93,7 @@ La PR #301, ancora Draft, propone (non in Production):
 
 ## Gate di rilascio
 
-**NON CHIUSO.** Prima del pilot con utenti reali:
+**NON CHIUSO.** La versione di preparazione usa un gate chiuso nel codice per UI/API/cron (test sintetici separati): l'integrazione su `main` non implica l'abilitazione della revoca. Prima dell'attivazione con utenti reali:
 - [ ] classificazione delle finalità e delle basi artt. 6/9 approvata da professionista competente;
 - [x] decisione di prodotto: soluzione A (sospensione, export JSON facoltativo **prima** della conferma; informativa/diritti ed eliminazione account disponibili dopo);
 - [x] specifica/implementazione candidate end-to-end per ospite, account, offline, multi-device e recovery, su PR Draft (non Production);

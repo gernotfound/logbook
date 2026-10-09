@@ -4,6 +4,7 @@ import { ShieldAlert, Trash2, RefreshCw } from 'lucide-react';
 import { useSettings } from '../../hooks/useSettings';
 import { useAppStore } from '../../store/useAppStore';
 import { eraseWithdrawnLocalTracking } from '../../lib/healthConsentLocalErasure';
+import { healthConsentLaunchAvailable } from '../../lib/healthConsentLaunch';
 import { DB } from '../../lib/db';
 import { getDb } from '../../lib/firebase';
 import { useAuth } from '../../hooks/useAuth';
@@ -13,17 +14,19 @@ import type { HealthConsentGateStatus } from '../../hooks/useHealthConsentRevoca
 import { PrivacyPolicy } from '../../pages/PrivacyPolicy';
 
 export function HealthConsentSuspendedScreen({ status }: { status: HealthConsentGateStatus }) {
+  const launchAvailable = healthConsentLaunchAvailable();
   const { isGuest, currentUser } = useAuth();
   const owner = isGuest ? 'guest' : currentUser ? 'user:' + currentUser.uid : null;
   const { handleDeleteAccount, deletingAccount } = useSettings();
   const clearedOwner = useRef<string | null>(null);
   const [retrying, setRetrying] = useState(false);
   const [showPrivacy, setShowPrivacy] = useState(false);
-  const [localErasure, setLocalErasure] = useState<'checking' | 'complete' | 'failed'>('checking');
+  const [localErasure, setLocalErasure] = useState<'checking' | 'complete' | 'failed' | 'deferred'>(launchAvailable ? 'checking' : 'deferred');
   const [cloudErasure, setCloudErasure] = useState<'pending' | 'complete' | 'failed' | 'blocked'>('pending');
 
   const eraseLocal = useCallback(async () => {
     if (!owner || status === 'unavailable' || status === 'none') return;
+    if (!launchAvailable) { setLocalErasure('deferred'); return; }
     // Volatile business state must be invalidated before any asynchronous
     // IndexedDB cleanup, including in a second tab discovering the revocation.
     const currentState = useAppStore.getState();
@@ -38,7 +41,7 @@ export function HealthConsentSuspendedScreen({ status }: { status: HealthConsent
     } catch {
       setLocalErasure('failed');
     }
-  }, [owner, status]);
+  }, [owner, status, launchAvailable]);
 
   useEffect(() => {
     if (!owner || status === 'unavailable' || status === 'none') return;
@@ -61,17 +64,17 @@ export function HealthConsentSuspendedScreen({ status }: { status: HealthConsent
   }, [owner, eraseLocal, status]);
 
   useEffect(() => {
-    if (!owner || isGuest || status === 'unavailable') return;
+    if (!launchAvailable || !owner || isGuest || status === 'unavailable') return;
     const uid = owner.slice(5);
     return onSnapshot(doc(getDb(), 'health_consent_revocations', uid), snapshot => {
       if (!snapshot.exists()) { setCloudErasure('pending'); return; }
       const value = snapshot.data().eraseStatus;
       setCloudErasure(value === 'complete' ? 'complete' : value === 'blocked' ? 'blocked' : value === 'failed' ? 'failed' : 'pending');
     }, () => setCloudErasure('pending'));
-  }, [owner, isGuest, status]);
+  }, [owner, isGuest, status, launchAvailable]);
 
   useEffect(() => {
-    if (isGuest || status !== 'pending') return;
+    if (!launchAvailable || isGuest || status !== 'pending') return;
     let active = true;
     let inProgress = false;
     const retryOnline = () => {
@@ -87,10 +90,10 @@ export function HealthConsentSuspendedScreen({ status }: { status: HealthConsent
       active = false;
       window.removeEventListener('online', retryOnline);
     };
-  }, [isGuest, status]);
+  }, [isGuest, status, launchAvailable]);
 
   const retry = async () => {
-    if (retrying) return;
+    if (!launchAvailable || retrying) return;
     setRetrying(true);
     try {
       await requestHealthConsentRevocation();
@@ -118,20 +121,22 @@ export function HealthConsentSuspendedScreen({ status }: { status: HealthConsent
         ) : (
           <p role="alert">Non è possibile verificare in sicurezza lo stato del consenso. Il tracciamento rimane sospeso.</p>
         )}
-        <p>Puoi consultare l'informativa o eliminare il tuo account. La revoca non elimina l'account: il sistema avvia separatamente la cancellazione dei dati di tracciamento per i quali non esiste un'altra base giuridica valida.</p>
+        <p>{launchAvailable
+          ? "Puoi consultare l'informativa o eliminare il tuo account. La revoca non elimina l'account: il sistema avvia separatamente la cancellazione dei dati di tracciamento per i quali non esiste un'altra base giuridica valida."
+          : "La funzione di revoca non è ancora disponibile in questa versione. La sospensione rimane attiva su questo dispositivo, ma nessuna cancellazione automatica verrà avviata. Puoi consultare l'informativa oppure eliminare separatamente il tuo account."}</p>
         {status !== 'unavailable' && (
-          <p role="status">Dati su questo dispositivo: {localErasure === 'complete'
+          <p role="status">Dati su questo dispositivo: {localErasure === 'deferred' ? 'cancellazione non attivata.' : localErasure === 'complete'
             ? 'pulizia completata.'
             : localErasure === 'failed' ? 'pulizia non completata: riprova.' : 'cancellazione in corso.'}
-            {!isGuest && ' Cloud: ' + (cloudErasure === 'complete' ? 'cancellazione completata.' : cloudErasure === 'blocked' ? 'cancellazione sospesa per dati inattesi; serve una verifica tecnica.' : cloudErasure === 'failed' ? 'cancellazione non completata; il recupero automatico sarà ritentato.' : 'cancellazione in attesa o in corso.')}
+            {!isGuest && ' Cloud: ' + (!launchAvailable ? 'cancellazione non attivata.' : cloudErasure === 'complete' ? 'cancellazione completata.' : cloudErasure === 'blocked' ? 'cancellazione sospesa per dati inattesi; serve una verifica tecnica.' : cloudErasure === 'failed' ? 'cancellazione non completata; il recupero automatico sarà ritentato.' : 'cancellazione in attesa o in corso.')}
           </p>
         )}
-        {localErasure === 'failed' && status !== 'unavailable' && (
+        {launchAvailable && localErasure === 'failed' && status !== 'unavailable' && (
           <button type="button" className="btn" onClick={() => { setLocalErasure('checking'); void eraseLocal(); }}>
             <RefreshCw size={16} aria-hidden="true" /> Riprova la pulizia locale
           </button>
         )}
-        {!isGuest && (pending || (confirmed && cloudErasure !== 'complete' && cloudErasure !== 'blocked')) && (
+        {launchAvailable && !isGuest && (pending || (confirmed && cloudErasure !== 'complete' && cloudErasure !== 'blocked')) && (
           <button type="button" className="btn btn-primary" onClick={() => void retry()} disabled={retrying}>
             <RefreshCw size={16} aria-hidden="true" /> {retrying ? 'Riprovo…' : confirmed ? 'Riprova la cancellazione cloud' : 'Riprova la conferma della revoca'}
           </button>

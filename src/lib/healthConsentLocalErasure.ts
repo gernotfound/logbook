@@ -1,6 +1,7 @@
 import { del, get } from 'idb-keyval';
 import { isAccountDeletionPending } from './sync/accountGate';
 import { readHealthConsentRevocation } from './healthConsentRevocation';
+import { healthConsentLaunchAvailable } from './healthConsentLaunch';
 import { storageOwner, GUEST_SESSION_KEY } from './sync/session';
 import { readBrowserValueStrict } from './sync/browserStorage';
 
@@ -29,6 +30,8 @@ const idbBusinessKeys = (owner: string) => [
  * might finish after an earlier sweep.
  */
 export async function eraseWithdrawnLocalTracking(owner: string): Promise<void> {
+    // A caller cannot bypass the deferred rollout and erase data locally.
+    if (!healthConsentLaunchAvailable()) throw new Error('Pulizia salute non ancora disponibile.');
     if (owner !== 'guest' && !/^user:[^/]+$/.test(owner)) throw new Error('Owner non valido.');
     const initialGuestId = owner === 'guest' ? readBrowserValueStrict(GUEST_SESSION_KEY) : null;
 

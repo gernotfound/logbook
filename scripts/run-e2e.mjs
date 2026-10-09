@@ -14,7 +14,9 @@ Object.assign(process.env, {
 });
 
 await generateIcons();
-await build();
+// Synthetic E2E runs exercise unreleased consent behavior. The normal
+// production build uses MODE=production and cannot enable the feature.
+await build({ mode: 'health-e2e' });
 const server = await preview({ preview: { host: '127.0.0.1', port: 0, strictPort: true } });
 try {
   const address = server.httpServer.address();

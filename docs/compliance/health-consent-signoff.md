@@ -14,6 +14,12 @@ Il product owner ha scelto la soluzione A: revoca del consenso relativo ai dati 
 
 **Decisioni non autorizzate:** non introdurre ri-consenso implicito; non conservare indefinitamente contenuti salute dopo la revoca senza altra valida base; non dichiarare che backup/provider/dispositivi offline siano stati gia' ripuliti; non interpretare consenso Art. 9 come base Art. 6 per ogni finalita'.
 
+## Integrazione tecnica senza attivazione Production
+
+Il candidato usa **gate di rilascio chiusi nel codice**, non valori di configurazione attivabili accidentalmente: l'endpoint trusted restituisce HTTP 503, il cron non cerca o cancella dati salute e il frontend non presenta il pulsante di revoca in Production. Le verifiche automatiche usano dati sintetici e la build E2E isolata `health-e2e`; le protezioni locali già persistite restano attive.
+
+La PR potrà essere integrata in `main` soltanto dopo revisione del nuovo assetto fail-closed e delle verifiche canoniche sul relativo SHA. **Questa integrazione non equivale all'attivazione della funzione.** Per renderla disponibile servirà una successiva PR esplicita, la compilazione/validazione di questa scheda e i controlli dei provider prima dell'elaborazione di dati reali.
+
 ## Scheda placeholder da compilare in futuro
 
 **Rinvio deliberato dal product owner, 10 ottobre 2026:** non raccogliere adesso dati personali, fiscali o decisioni legali non ancora assunte. I valori tra parentesi quadre sono **segnaposto**, non fatti accertati e non approvazioni. Questa sezione è una scheda di lavoro unica per il futuro; compilare i documenti e l'informativa effettivi soltanto quando necessario e previa verifica del contenuto.

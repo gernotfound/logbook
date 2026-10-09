@@ -48,7 +48,7 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               Informativa sulla privacy
             </h2>
             <p style={{ margin: '4px 0 0', fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)' }}>
-              Aggiornata al 9 ottobre 2026
+              Aggiornata al 2 ottobre 2026
             </p>
           </div>
           <button
@@ -73,7 +73,7 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
         }}>
           <Section title="Titolare del trattamento">
             <p>
-              Prima di raccogliere dati personali di utenti reali devono essere indicati qui l'identità e i recapiti del titolare del trattamento: <strong style={{ color: 'var(--text-main)' }}>[NOME / RAGIONE SOCIALE]</strong>, <strong style={{ color: 'var(--text-main)' }}>[INDIRIZZO]</strong>, <strong style={{ color: 'var(--text-main)' }}>[EMAIL PRIVACY]</strong>.
+              Prima della distribuzione commerciale devono essere indicati qui l'identità e i recapiti del titolare del trattamento: <strong style={{ color: 'var(--text-main)' }}>[NOME / RAGIONE SOCIALE]</strong>, <strong style={{ color: 'var(--text-main)' }}>[INDIRIZZO]</strong>, <strong style={{ color: 'var(--text-main)' }}>[EMAIL PRIVACY]</strong>.
               Se TheLogBook viene fornito tramite una palestra, i ruoli privacy tra le parti dipendono dalle finalità e dai mezzi effettivamente determinati da ciascuna parte e devono essere definiti nella documentazione contrattuale.
             </p>
             <p>
@@ -160,9 +160,6 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               I dati applicativi cloud associati all'account vengono conservati per fornire il servizio finché l'account rimane attivo, salvo cancellazioni o obblighi diversi applicabili. La telemetria tecnica Sentry viene conservata secondo il periodo configurato nel servizio e soltanto per finalità diagnostiche; tale periodo va mantenuto coerente con la configurazione Production effettiva e con la documentazione pubblicata. Le vecchie raccolte telemetriche Firestore generate da versioni precedenti di TheLogBook mantengono invece la retention tecnica di 30 giorni e vengono progressivamente eliminate dal processo server di manutenzione. TheLogBook mette a disposizione backup JSON ed esportazioni CSV per consentire all'utente di conservare una copia dei propri dati.
             </p>
             <p>
-              Da Impostazioni → Privacy puoi revocare il consenso ai dati salute. Prima della conferma puoi facoltativamente esportare un backup JSON. La revoca disattiva il tracciamento e avvia la cancellazione irreversibile dei dati di allenamento, nutrizione e misurazione non più giustificati da un'altra base giuridica valida, compresi i dati salvati localmente e quelli sincronizzati nel cloud. La procedura cloud può continuare dopo la conferma e recuperare eventuali interruzioni; un altro dispositivo offline potrà cancellare la propria copia soltanto quando apprenderà la revoca al successivo collegamento. L'account di accesso non viene eliminato automaticamente. Il backup non è un requisito per revocare il consenso e, dopo l'avvio della cancellazione, non è più garantito il recupero dei dati.
-            </p>
-            <p>
               La funzione <strong style={{ color: 'var(--text-main)' }}>Elimina account</strong> avvia un workflow server-side che rimuove le raccolte private previste, i dati applicativi cloud e infine l'account Firebase Authentication. Il dispositivo conserva la propria copia locale finché non ha prova che il workflow cloud sia completato, per evitare cancellazioni locali premature in caso di rete instabile.
             </p>
             <p>
@@ -181,7 +178,7 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               <li><strong style={{ color: 'var(--text-main)' }}>Sentry</strong> — Error Monitoring tecnico in Production e gestione delle source map necessarie a ricostruire gli stack trace; TheLogBook non abilita Replay, tracing, logging o metriche Sentry.</li>
             </ul>
             <p>
-              Prima di trattare dati personali di utenti reali devono essere verificati e pubblicati l'elenco aggiornato dei fornitori/sub-responsabili, le localizzazioni effettive del trattamento e, per eventuali trasferimenti fuori dallo SEE, il meccanismo applicabile (ad esempio decisione di adeguatezza o clausole contrattuali standard).
+              Prima della distribuzione commerciale devono essere verificati e pubblicati l'elenco aggiornato dei fornitori/sub-responsabili, le localizzazioni effettive del trattamento e, per eventuali trasferimenti fuori dallo SEE, il meccanismo applicabile (ad esempio decisione di adeguatezza o clausole contrattuali standard).
             </p>
           </Section>
 
@@ -191,7 +188,7 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               <li><strong style={{ color: 'var(--text-main)' }}>Accesso e portabilità</strong>: usare backup JSON/esportazione CSV e richiedere le informazioni applicabili al trattamento.</li>
               <li><strong style={{ color: 'var(--text-main)' }}>Rettifica</strong>: correggere i dati modificabili tramite l'app.</li>
               <li><strong style={{ color: 'var(--text-main)' }}>Cancellazione</strong>: avviare la funzione di eliminazione account per la rimozione dei dati cloud applicativi.</li>
-              <li><strong style={{ color: 'var(--text-main)' }}>Revoca del consenso</strong>: disabilitare Analytics o revocare separatamente il consenso per i dati salute dalle Impostazioni. La revoca dei dati salute sospende il tracciamento e avvia la cancellazione dei dati non più necessari, senza eliminare automaticamente l'account; non pregiudica la liceità del trattamento precedente.</li>
+              <li><strong style={{ color: 'var(--text-main)' }}>Revoca del consenso</strong>: disabilitare Analytics dalle Impostazioni; per i dati di salute, la revoca non pregiudica la liceità del trattamento precedente e può richiedere l'interruzione delle funzionalità che dipendono da tali dati.</li>
               <li><strong style={{ color: 'var(--text-main)' }}>Limitazione/opposizione</strong>: quando applicabile rispetto alla specifica base giuridica e al trattamento interessato.</li>
             </ul>
             <p>
