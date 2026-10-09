@@ -66,7 +66,7 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
     const handleRevokeHealthConsent = async () => {
         if (revokingHealthConsent) return;
         const confirmed = await useDialogStore.getState().showConfirm(
-            "Revocare il consenso ai dati salute?\\n\\nLe funzioni di allenamento, alimentazione e misurazioni saranno sospese. Potrai ancora esportare i dati, esercitare i diritti applicabili ed eliminare l'account. Nessun dato verrà cancellato automaticamente da questa conferma."
+            "Revocare il consenso ai dati salute?\n\nLe funzioni di allenamento, alimentazione e misurazioni saranno sospese. Potrai ancora esportare i dati, esercitare i diritti applicabili ed eliminare l'account. Nessun dato verrà cancellato automaticamente da questa conferma."
         );
         if (!confirmed) return;
         setRevokingHealthConsent(true);
