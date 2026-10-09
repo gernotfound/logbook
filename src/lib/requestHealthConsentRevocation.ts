@@ -41,6 +41,7 @@ export async function requestHealthConsentRevocation(): Promise<void> {
     if (!response.ok) throw new Error('Revoca ancora in attesa di conferma dal server.');
     const body = await response.json() as { revoked?: unknown };
     if (body.revoked !== true) throw new Error('Risposta del server non verificata.');
+    if (!sameAuthenticatedOwner()) throw new Error('Sessione cambiata prima della conferma locale.');
     markHealthConsentRevocation(owner, 'confirmed');
   } finally {
     clearTimeout(timeout);
