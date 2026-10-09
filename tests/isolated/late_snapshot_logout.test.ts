@@ -12,6 +12,7 @@ import { saveUserDataToCache } from '../../src/store/slices/createDataSlice';
 import { UserDataSchema } from '../../src/lib/schema';
 import { activateGuestSession, GUEST_SESSION_KEY, invalidateSession, revokeGuestSession } from '../../src/lib/sync/session';
 import { initializeLocal, readLocal } from '../../src/lib/sync/localRepository';
+import { writeDeviceValue } from '../../src/lib/sync/deviceStorage';
 import type { UserData } from '../../src/types';
 
 const data = (height: number) => UserDataSchema.parse({ profile: { height: String(height) } }) as unknown as UserData;
@@ -39,6 +40,7 @@ it('refuses an in-flight guest snapshot that would recreate an archive after log
 
     const inFlight = saveUserDataToCache(data(170));
     revokeGuestSession();
+    expect(() => writeDeviceValue('workout', 'obsolete-session', 'guest')).toThrow('revocata');
     await expect(inFlight).rejects.toThrow('Sessione cambiata');
     expect(await get('logbook:v2:guest')).toBeUndefined();
 });
