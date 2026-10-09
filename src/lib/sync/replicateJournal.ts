@@ -8,6 +8,7 @@ import { applyDocumentChanges } from './transactionWriter';
 import { getCachedCatalog } from '../catalog/catalogService';
 import { SyncTimeoutError, withTimeout } from '../db/db_core';
 import { isAccountDeletionPending } from './accountGate';
+import { assertHealthConsentWritable, isHealthConsentWriteBlocked } from '../healthConsentRevocation';
 import type { SemanticOperation } from './semanticProjection';
 import { classifySyncFailure } from './syncFailure';
 import { ReplicaFencedError } from './replicaProtocol';
@@ -48,7 +49,8 @@ function containsDeliveredBatch(pending: SemanticOperation[], delivered: Semanti
 function isWritableSession(session: ReturnType<typeof captureSession>): boolean {
     return isCurrentSession(session)
         && auth.currentUser?.uid === session.owner.slice(5)
-        && !isAccountDeletionPending(session.owner);
+        && !isAccountDeletionPending(session.owner)
+        && !isHealthConsentWriteBlocked(session.owner);
 }
 
 async function requireDurableDeliveredBatch(
@@ -179,6 +181,7 @@ export async function replicateJournal(expectedOwner?: string): Promise<SyncResu
     try {
         if (expectedOwner && session.owner !== expectedOwner) throw new Error('Sessione cambiata');
         if (isAccountDeletionPending(session.owner)) throw new Error('Cancellazione account in sospeso. Riprendila dalle impostazioni; copia locale conservata.');
+        assertHealthConsentWritable(session.owner);
         const envelope = await readLocal(session.owner);
         if (expectedOwner && session.owner !== expectedOwner) throw new Error('Sessione cambiata');
         if (!envelope) throw new Error('Copia locale non disponibile');
