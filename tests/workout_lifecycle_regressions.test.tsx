@@ -13,6 +13,7 @@ import PreSessionCheckIn from '../src/components/Training/PreSessionCheckIn';
 import TrainingSession from '../src/components/Training/TrainingSession';
 import WorkoutTimer from '../src/components/Training/WorkoutTimer';
 import { useWorkoutSession } from '../src/hooks/useWorkoutSession';
+import { initializeLocal, readLocal } from '../src/lib/sync/localRepository';
 import { localStorageMock, renderWithProviders } from './setup';
 
 function workout(id: string, started = false): WorkoutSession {
@@ -160,6 +161,56 @@ describe('Workout lifecycle durable recovery regressions', () => {
         const prepared = workout('prepared');
         localStorage.setItem(deviceKey('workout', owner), JSON.stringify(prepared));
         expect(getInitialLocalWorkout(owner, null, [workout('other', true)])?.id).toBe('prepared');
+    });
+
+
+    it('recovers a durable deletion when the post-commit device cleanup fails', async () => {
+        const deleted = workout('deleted-on-device', true);
+        const initial = userData({ activeWorkout: deleted });
+        await initializeLocal(owner, initial);
+        const key = deviceKey('workout', owner);
+        localStorage.setItem(key, JSON.stringify(deleted));
+        useAppStore.setState({ userData: initial, localWorkout: deleted });
+        vi.mocked(useDialogStore.getState().showConfirm).mockResolvedValueOnce(true);
+        vi.mocked(useDialogStore.getState().showAlert).mockResolvedValue();
+        localStorageMock.removeItem.mockImplementationOnce(() => { throw new DOMException('blocked', 'SecurityError'); });
+
+        const { result } = renderHook(() => useWorkoutSession());
+        await act(async () => { expect(await result.current.deleteWorkout()).toBe(false); });
+
+        const durable = await readLocal(owner);
+        expect(durable?.data.activeWorkout).toBeNull();
+        expect(durable?.lastClosedWorkoutId).toBe(deleted.id);
+        expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
+        expect(localStorage.getItem(key)).not.toBeNull();
+
+        // Cold-boot uses the same durable owner envelope; the stale snapshot is retired.
+        expect(getInitialLocalWorkout(owner, durable?.data.activeWorkout, durable?.data.history,
+            durable?.lastClosedWorkoutId)).toBeNull();
+        expect(localStorage.getItem(key)).toBeNull();
+    });
+
+    it('recovers a completed workout after a successful commit but failed device cleanup', async () => {
+        const finished = workout('completed-on-device', true);
+        const initial = userData({ activeWorkout: finished });
+        await initializeLocal(owner, initial);
+        const key = deviceKey('workout', owner);
+        localStorage.setItem(key, JSON.stringify(finished));
+        useAppStore.setState({ userData: initial, localWorkout: finished });
+        vi.mocked(useDialogStore.getState().showAlert).mockResolvedValue();
+        localStorageMock.removeItem.mockImplementationOnce(() => { throw new DOMException('blocked', 'SecurityError'); });
+
+        const { result } = renderHook(() => useWorkoutSession());
+        await act(async () => { expect(await result.current.endWorkout(false)).toBeNull(); });
+
+        const durable = await readLocal(owner);
+        expect(durable?.data.history?.filter(item => item.id === finished.id)).toHaveLength(1);
+        expect(durable?.lastClosedWorkoutId).toBe(finished.id);
+        expect(localStorage.getItem(key)).not.toBeNull();
+        expect(getInitialLocalWorkout(owner, durable?.data.activeWorkout, durable?.data.history,
+            durable?.lastClosedWorkoutId)).toBeNull();
+        expect(localStorage.getItem(key)).toBeNull();
+        expect(useDialogStore.getState().showAlert).toHaveBeenCalledWith(expect.stringContaining('salvato nello storico'));
     });
 
     it('keeps post-session rating unchanged if its synchronous persistence fails', () => {

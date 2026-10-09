@@ -54,7 +54,7 @@ export type DomainOperation =
     | { type: 'active-cycle.set'; id: string | null }
     | { type: 'history.upsert'; workout: WorkoutSession }
     | { type: 'history.delete'; id: string }
-    | { type: 'active-workout.set'; workout: WorkoutSession | null }
+    | { type: 'active-workout.set'; workout: WorkoutSession | null; deletedWorkoutId?: string }
     | { type: 'workout.complete'; workout: WorkoutSession; expectedActiveWorkoutId: string; activePains: string[] }
     | { type: 'active-pains.set'; pains: string[] }
     | { type: 'exercise.upsert'; exercise: Exercise }

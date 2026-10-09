@@ -126,9 +126,10 @@ export const initApp = async () => {
     try {
       if (bootstrapOwner) {
         marker = getStorageMarker(undefined, bootstrapOwner);
-        cached = (await readLocal(bootstrapOwner))?.data;
+        const localEnvelope = await readLocal(bootstrapOwner);
+        cached = localEnvelope?.data;
         useAppStore.setState({
-          localWorkout: getInitialLocalWorkout(bootstrapOwner, cached?.activeWorkout ?? null, cached?.history),
+          localWorkout: getInitialLocalWorkout(bootstrapOwner, cached?.activeWorkout ?? null, cached?.history, localEnvelope?.lastClosedWorkoutId),
         });
       } else {
         useAppStore.setState({ localWorkout: null });

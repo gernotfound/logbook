@@ -346,7 +346,13 @@ export function useWorkoutSession() {
             if (auth.currentUser?.uid !== expectedUid || useAppStore.getState().localWorkout?.id !== expectedId) return null;
             // IndexedDB already contains the completed workout. If device cleanup
             // fails, startup reconciles the stale snapshot against durable history.
-            setLocalWorkout(null);
+            try {
+                setLocalWorkout(null);
+            } catch (error) {
+                console.error('Workout completato ma cleanup device-local non riuscito:', error);
+                await showAlert('Allenamento salvato nello storico, ma non è stato possibile rimuovere la copia temporanea. Riapri TheLogBook per recuperare lo stato aggiornato.');
+                return null;
+            }
             if (!resetGlobalWorkoutTimer()) {
                 useAppStore.setState({ localPersistenceBlocked: true, syncHealth: 'failed',
                     saveError: 'Allenamento completato; impossibile azzerare il timer locale.' });
@@ -372,9 +378,16 @@ export function useWorkoutSession() {
         if (!(await showConfirm("Sei sicuro di voler eliminare questa sessione in corso? Non verrà salvata."))) return false;
         const deletedWorkoutId = useAppStore.getState().localWorkout?.id;
         try {
-            const result = await dispatchDomainOperation({ type: 'active-workout.set', workout: null });
+            if (!deletedWorkoutId) return false;
+            const result = await dispatchDomainOperation({ type: 'active-workout.set', workout: null, deletedWorkoutId: String(deletedWorkoutId) });
             if (!result.ok && result.status !== 'local-pending') return false;
-            setLocalWorkout(null);
+            try {
+                setLocalWorkout(null);
+            } catch (error) {
+                console.error('Workout eliminato ma cleanup device-local non riuscito:', error);
+                await showAlert('Sessione eliminata dall’archivio locale, ma la copia temporanea non è stata rimossa. Riapri TheLogBook per completare il recupero.');
+                return false;
+            }
             if (!resetGlobalWorkoutTimer()) {
                 useAppStore.setState({ localPersistenceBlocked: true, syncHealth: 'failed',
                     saveError: 'Sessione eliminata; impossibile azzerare il timer locale.' });
