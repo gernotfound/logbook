@@ -35,6 +35,14 @@ function documentRef(path: string) {
 function collectionRef(path: string, max = Number.POSITIVE_INFINITY, statuses?: readonly string[]): any {
   const api = {
     doc(id: string) { return documentRef(path + '/' + id); },
+    async listDocuments() {
+      const prefix = path + '/';
+      // Firestore returns missing ancestors when nested subcollections survive.
+      const ids = new Set([...dbState.documents.keys()]
+        .filter(key => key.startsWith(prefix))
+        .map(key => key.slice(prefix.length).split('/')[0]));
+      return [...ids].map(id => documentRef(prefix + id));
+    },
     limit(count: number) { return collectionRef(path, count, statuses); },
     where(field: string, op: string, values: string[]) {
       if (field !== 'eraseStatus' || op !== 'in') throw new Error('Unexpected query.');
@@ -159,6 +167,25 @@ describe('health withdrawal server erasure (Firebase Admin transactional mock)',
     expect(await listPendingHealthErasures()).toEqual([]);
     await expect(processHealthErasure('a', Date.now() + 60_000)).resolves.toBe('busy');
     expect(dbState.documents.has('users/a/unknown_private/survivor')).toBe(true);
+  });
+
+  it('blocks completion when a deleted monthly parent leaves a nested orphan', async () => {
+    revoked('a');
+    dbState.documents.set('users/a/history_months/2026-10', { private: true });
+    dbState.documents.set('users/a/history_months/2026-10/nested/private', { health: true });
+
+    await expect(processHealthErasure('a', Date.now() + 60_000)).rejects.toThrow('Unexpected private collection');
+    expect(dbState.documents.get('health_consent_revocations/a')).toMatchObject({ eraseStatus: 'blocked' });
+    expect(dbState.documents.has('users/a/history_months/2026-10')).toBe(false);
+    expect(dbState.documents.has('users/a/history_months/2026-10/nested/private')).toBe(true);
+  });
+
+  it('blocks a private unknown collection with only a missing parent and nested data', async () => {
+    revoked('a');
+    dbState.documents.set('users/a/private_unknown/ghost/nested/private', { health: true });
+
+    await expect(processHealthErasure('a', Date.now() + 60_000)).rejects.toThrow('Unexpected private collection');
+    expect(dbState.documents.get('health_consent_revocations/a')).toMatchObject({ eraseStatus: 'blocked' });
   });
 
   it('returns pending without acquiring lease after the deadline', async () => {

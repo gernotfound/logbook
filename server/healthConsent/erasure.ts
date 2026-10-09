@@ -112,14 +112,20 @@ async function verifyEmpty(uid: string): Promise<void> {
     throw new Error('Consent was not invalidated in account root.');
   }
   for (const name of PRIVATE_ACCOUNT_COLLECTIONS) {
-    if (!(await root.collection(name).limit(1).select().get()).empty) {
+    const collection = root.collection(name);
+    if (!(await collection.limit(1).select().get()).empty) {
       throw new Error('Private documents still present in ' + name);
+    }
+    // Queries omit missing parent documents even when nested private data remains.
+    // listDocuments includes those references, so an orphan must block completion.
+    if ((await collection.listDocuments()).length > 0) {
+      throw new UnexpectedHealthCollection(name + ' (nested orphan)');
     }
   }
   const known = new Set<string>(PRIVATE_ACCOUNT_COLLECTIONS);
   for (const collection of await root.listCollections()) {
     if (known.has(collection.id)) continue;
-    if (!(await collection.limit(1).select().get()).empty) throw new UnexpectedHealthCollection(collection.id);
+    if ((await collection.listDocuments()).length > 0) throw new UnexpectedHealthCollection(collection.id);
   }
 }
 

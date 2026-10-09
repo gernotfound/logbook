@@ -72,6 +72,13 @@ function fakeCollection(path: string): any {
     doc(id: string) {
       return fakeDocument(`${path}/${id}`);
     },
+    async listDocuments() {
+      const prefix = `${path}/`;
+      const ids = new Set([...state.docs]
+        .filter(candidate => candidate.startsWith(prefix))
+        .map(candidate => candidate.slice(prefix.length).split('/')[0]));
+      return [...ids].map(id => fakeDocument(`${prefix}${id}`));
+    },
     ...query(),
   };
 }
@@ -223,6 +230,22 @@ describe('M7 native deletion job store', () => {
 
     await expect(verifyNoAccountResidue('u')).rejects.toBeInstanceOf(NonRetryableDeletionError);
     await expect(verifyNoAccountResidue('u')).rejects.toThrow('Unexpected residual collection: legacy_private.');
+  });
+
+  it('rejects nested private documents hidden behind a missing parent', async () => {
+    state.docs.add('account_deletions/u');
+    state.docs.add('users/u/history_months/deleted-parent/nested/private');
+
+    await expect(verifyNoAccountResidue('u')).rejects.toBeInstanceOf(NonRetryableDeletionError);
+    await expect(verifyNoAccountResidue('u')).rejects.toThrow('Unexpected nested private data in history_months.');
+  });
+
+  it('rejects unknown private collections containing only orphaned nested documents', async () => {
+    state.docs.add('account_deletions/u');
+    state.docs.add('users/u/private_unknown/deleted-parent/nested/private');
+
+    await expect(verifyNoAccountResidue('u')).rejects.toBeInstanceOf(NonRetryableDeletionError);
+    await expect(verifyNoAccountResidue('u')).rejects.toThrow('Unexpected residual collection: private_unknown.');
   });
 
   it('treats an already-missing Firebase Auth user as idempotent success', async () => {

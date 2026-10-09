@@ -301,16 +301,21 @@ export async function verifyNoAccountResidue(uidValue: string): Promise<void> {
   if (revocation.exists) throw new Error('Health consent revocation marker still exists after deletion.');
 
   for (const name of PRIVATE_ACCOUNT_COLLECTIONS) {
-    const residual = await root.collection(name).limit(1).select().get();
+    const collection = root.collection(name);
+    const residual = await collection.limit(1).select().get();
     if (!residual.empty) throw new Error(`Residual documents remain in ${name}.`);
+    // Deleted parents are invisible to queries but can still own subcollections.
+    // Such orphans need reviewed cleanup before Firebase Auth can be deleted.
+    if ((await collection.listDocuments()).length > 0) {
+      throw new NonRetryableDeletionError(`Unexpected nested private data in ${name}.`);
+    }
   }
 
   const known = new Set<string>(PRIVATE_ACCOUNT_COLLECTIONS);
   const collections = await root.listCollections();
   for (const collection of collections) {
     if (known.has(collection.id)) continue;
-    const residual = await collection.limit(1).select().get();
-    if (!residual.empty) {
+    if ((await collection.listDocuments()).length > 0) {
       throw new NonRetryableDeletionError(`Unexpected residual collection: ${collection.id}.`);
     }
   }
