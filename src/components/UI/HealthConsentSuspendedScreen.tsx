@@ -42,11 +42,15 @@ export function HealthConsentSuspendedScreen({ status }: { status: HealthConsent
 
   useEffect(() => {
     if (!owner || status === 'unavailable' || status === 'none') return;
-    void eraseLocal();
+    // Schedule the destructive local check after the current render commits.
+    // A dismissed effect must not operate on an obsolete account/session.
+    let active = true;
+    queueMicrotask(() => { if (active) void eraseLocal(); });
     const refresh = () => { if (document.visibilityState === 'visible') void eraseLocal(); };
     window.addEventListener('focus', refresh);
     document.addEventListener('visibilitychange', refresh);
     return () => {
+      active = false;
       window.removeEventListener('focus', refresh);
       document.removeEventListener('visibilitychange', refresh);
     };
