@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackEvent: vi.fn(), trackError: vi.fn() } }));
 import { UserDataSchema } from '../../src/lib/schema';
 import type { UserData } from '../../src/types';
-import { adoptReplicaCheckpoint, markReplicaCheckpointRequired, hydrateLocal, commitLocal, initializeLocal, readLocal, acknowledgeThrough, StaleLocalRevisionError } from '../../src/lib/sync/localRepository';
+import { adoptReplicaCheckpoint, markReplicaCheckpointRequired, hydrateLocal, commitLocal, commitDomainOperations, initializeLocal, readLocal, acknowledgeThrough, StaleLocalRevisionError } from '../../src/lib/sync/localRepository';
 import {
     CURRENT_DATA_SCHEMA,
     CURRENT_LOCAL_ENVELOPE,
@@ -18,6 +18,36 @@ beforeEach(() => clear());
 afterEach(() => vi.restoreAllMocks());
 
 describe('durable owner-scoped journal', () => {
+
+    it('commits closure evidence even for a no-op cloud clear, and keeps it through hydration', async () => {
+        const initial = UserDataSchema.parse({ activeWorkout: null }) as unknown as UserData;
+        await initializeLocal('user:a', initial);
+        const before = await readLocal('user:a');
+
+        await commitDomainOperations('user:a', {
+            type: 'active-workout.set', workout: null, deletedWorkoutId: 'retired-only-local',
+        }, initial);
+        const after = await readLocal('user:a');
+        expect(after?.data.activeWorkout).toBeNull();
+        expect(after?.lastClosedWorkoutId).toBe('retired-only-local');
+        expect(after?.revision).toBe((before?.revision ?? 0) + 1);
+        expect(after?.actorSeq).toBe(before?.actorSeq);
+
+        await hydrateLocal('user:a', initial, [], undefined, 'window');
+        expect((await readLocal('user:a'))?.lastClosedWorkoutId).toBe('retired-only-local');
+        await acknowledgeThrough('user:a', after!.actorSeq, initial);
+        expect((await readLocal('user:a'))?.lastClosedWorkoutId).toBe('retired-only-local');
+    });
+
+    it('rejects malformed closure evidence without overwriting the owner envelope', async () => {
+        await initializeLocal('user:a', data(170));
+        const key = 'logbook:v2:user:a';
+        const raw = await get(key) as Record<string, unknown>;
+        await set(key, { ...raw, lastClosedWorkoutId: 42 });
+        await expect(readLocal('user:a')).rejects.toThrow('Identificativo workout chiuso non valido');
+        expect((await get(key) as Record<string, unknown>).lastClosedWorkoutId).toBe(42);
+    });
+
     it('writes independent current envelope/data/sync versions', async () => {
         await initializeLocal('a', data(170));
         expect(await readLocal('a')).toMatchObject({
