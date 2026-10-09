@@ -25,6 +25,8 @@ export async function recordHealthConsentRevocation(uid: string): Promise<void> 
     transaction.create(marker, {
       schemaVersion: 1,
       revokedAt: Timestamp.now(),
+      eraseStatus: 'requested',
+      erasePhase: 'requested',
     });
   });
 }
