@@ -19,6 +19,9 @@ const authState = vi.hoisted(() => ({
 vi.mock('../src/hooks/useAuth', () => ({
     useAuth: () => authState,
 }));
+vi.mock('../src/hooks/useHealthConsentRevocation', () => ({
+  useHealthConsentRevocation: () => 'none',
+}));
 
 
 
