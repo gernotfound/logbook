@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { ACCOUNT_DELETION_BACKGROUND_SAFETY_BUFFER_MS } from './budget.js';
 import {
   acquireDeletionLease,
+  assertDeletionLease,
+  DeletionLeaseLostError,
   deleteAuthUserLast,
   deletePrivateCollectionPage,
   deleteUserRoot,
@@ -50,20 +52,22 @@ export async function processAccountDeletion(
   let phase = 'revoking';
   try {
     if (outOfBudget(deadlineMs, safetyBufferMs)) {
-      await parkDeletion(uid, 'deleting', { phase: 'revoking' });
+      await parkDeletion(uid, 'deleting', { phase: 'revoking' }, leaseOwner);
       return 'pending';
     }
+    await assertDeletionLease(uid, leaseOwner);
     await revokeAccountAccess(uid);
+    await assertDeletionLease(uid, leaseOwner);
 
     for (const name of PRIVATE_ACCOUNT_COLLECTIONS) {
       phase = `collection:${name}`;
       let deletedBatches = 0;
       for (;;) {
         if (outOfBudget(deadlineMs, safetyBufferMs)) {
-          await parkDeletion(uid, 'deleting', { phase: 'collection', collection: name, deletedBatches });
+          await parkDeletion(uid, 'deleting', { phase: 'collection', collection: name, deletedBatches }, leaseOwner);
           return 'pending';
         }
-        const deleted = await deletePrivateCollectionPage(uid, name, deletedBatches + 1);
+        const deleted = await deletePrivateCollectionPage(uid, name, deletedBatches + 1, leaseOwner);
         if (deleted === 0) break;
         deletedBatches += 1;
       }
@@ -71,31 +75,33 @@ export async function processAccountDeletion(
 
     phase = 'root';
     if (outOfBudget(deadlineMs, safetyBufferMs)) {
-      await parkDeletion(uid, 'deleting', { phase: 'root' });
+      await parkDeletion(uid, 'deleting', { phase: 'root' }, leaseOwner);
       return 'pending';
     }
-    await deleteUserRoot(uid);
+    await deleteUserRoot(uid, leaseOwner);
 
     phase = 'verification';
-    await markVerifying(uid);
+    await markVerifying(uid, leaseOwner);
     if (outOfBudget(deadlineMs, safetyBufferMs)) {
-      await parkDeletion(uid, 'verifying', { phase: 'verifying' });
+      await parkDeletion(uid, 'verifying', { phase: 'verifying' }, leaseOwner);
       return 'pending';
     }
     await verifyNoAccountResidue(uid);
+    await assertDeletionLease(uid, leaseOwner);
 
     phase = 'auth';
     if (outOfBudget(deadlineMs, safetyBufferMs)) {
-      await parkDeletion(uid, 'verifying', { phase: 'auth' });
+      await parkDeletion(uid, 'verifying', { phase: 'auth' }, leaseOwner);
       return 'pending';
     }
-    await deleteAuthUserLast(uid);
-    await markDeletionComplete(uid);
+    await deleteAuthUserLast(uid, leaseOwner);
+    await markDeletionComplete(uid, leaseOwner);
     return 'complete';
   } catch (error) {
+    if (error instanceof DeletionLeaseLostError) return 'busy';
     const retryable = !(error instanceof NonRetryableDeletionError);
     try {
-      await markDeletionFailed(uid, phase, error, retryable);
+      await markDeletionFailed(uid, phase, error, retryable, leaseOwner);
     } catch {
       // Preserve the original failure: a later poll/cron can recover an expired lease.
     }
