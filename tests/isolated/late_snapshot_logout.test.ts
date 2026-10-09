@@ -58,6 +58,6 @@ it('fences an in-flight authenticated snapshot when logout invalidates its epoch
 it('does not turn bootstrap into an overwrite if another tab initialized first', async () => {
     sdk.auth.currentUser = { uid: 'account-a' };
     await initializeLocal('user:account-a', data(180));
-    await saveUserDataToCache(data(180));
+    await saveUserDataToCache(data(160)); // stale bootstrap has no observed base
     expect((await readLocal('user:account-a'))?.data.profile.height).toBe('180');
 });
