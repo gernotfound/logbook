@@ -25,7 +25,7 @@ export function writeDeviceValue(name: string, value: string | null, owner?: str
     if (resolvedOwner === 'guest' && !isActiveGuestSession()) {
         throw new Error('Sessione guest revocata: scrittura locale non consentita.');
     }
-    if (value !== null) assertHealthConsentWritable(resolvedOwner);
+    assertHealthConsentWritable(resolvedOwner);
     const key = deviceKey(name, resolvedOwner);
     if (value === null) removeBrowserValue(key);
     else writeBrowserValue(key, value);
