@@ -89,6 +89,9 @@ function normalizeDeviceWorkout(raw: WorkoutSession): WorkoutSession | null {
 }
 
 export const getInitialLocalWorkout = (owner?: string, fallback?: WorkoutSession | null, history?: ReadonlyArray<WorkoutSession>, lastClosedWorkoutId?: string, closedWorkoutIds?: ReadonlyArray<string>): WorkoutSession | null => {
+    const wasClosed = (id: string) => lastClosedWorkoutId === id
+        || closedWorkoutIds?.includes(id) === true
+        || history?.some(item => item.id === id) === true;
     const recoverFallback = (): WorkoutSession | null => {
         if (!fallback) return null;
         const normalized = normalizeDeviceWorkout(fallback);
