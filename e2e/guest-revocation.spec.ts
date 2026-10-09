@@ -46,8 +46,8 @@ test('health consent withdrawal suspends guest tracking across tabs and reloads'
   await otherTab.goto('/');
   await expect(otherTab.getByRole('button', { name: 'Apri impostazioni' })).toBeVisible();
   // Insert a synthetic leftover only after both tabs finish startup. It is
-  // deliberately not a valid workout snapshot and must never be hydrated.
-  await page.evaluate(() => localStorage.setItem('logbook:v2:guest:workout', 'synthetic-private-draft'));
+  // owner-scoped cleanup residue and is not interpreted by workout hydration.
+  await page.evaluate(() => localStorage.setItem('logbook:v2:guest:draft:withdrawal-test', 'synthetic-private-draft'));
 
   await page.getByRole('button', { name: 'Apri impostazioni' }).click();
   await page.getByRole('button', { name: /^Privacy/ }).click();
@@ -58,8 +58,8 @@ test('health consent withdrawal suspends guest tracking across tabs and reloads'
   await expect(page.getByRole('heading', { name: 'Tracciamento sospeso' })).toBeVisible();
   await expect(otherTab.getByRole('heading', { name: 'Tracciamento sospeso' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Esporta i dati in JSON' })).toHaveCount(0);
-  await expect.poll(() => page.evaluate(() => localStorage.getItem('logbook:v2:guest:workout'))).toBeNull();
-  await expect.poll(() => otherTab.evaluate(() => localStorage.getItem('logbook:v2:guest:workout'))).toBeNull();
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('logbook:v2:guest:draft:withdrawal-test'))).toBeNull();
+  await expect.poll(() => otherTab.evaluate(() => localStorage.getItem('logbook:v2:guest:draft:withdrawal-test'))).toBeNull();
   await expect(page.getByText('pulizia completata.', { exact: false })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Allenamento', exact: true })).toHaveCount(0);
 
