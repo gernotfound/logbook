@@ -30,13 +30,36 @@ describe('durable owner-scoped journal', () => {
         const after = await readLocal('user:a');
         expect(after?.data.activeWorkout).toBeNull();
         expect(after?.lastClosedWorkoutId).toBe('retired-only-local');
+        expect(after?.deletedWorkoutIds).toEqual(['retired-only-local']);
         expect(after?.revision).toBe((before?.revision ?? 0) + 1);
         expect(after?.actorSeq).toBe(before?.actorSeq);
 
         await hydrateLocal('user:a', initial, [], undefined, 'window');
         expect((await readLocal('user:a'))?.lastClosedWorkoutId).toBe('retired-only-local');
+        expect((await readLocal('user:a'))?.deletedWorkoutIds).toEqual(['retired-only-local']);
         await acknowledgeThrough('user:a', after!.actorSeq, initial);
         expect((await readLocal('user:a'))?.lastClosedWorkoutId).toBe('retired-only-local');
+        expect((await readLocal('user:a'))?.deletedWorkoutIds).toEqual(['retired-only-local']);
+    });
+
+
+    it('preserves multiple deletion tombstones, including metadata-only commits', async () => {
+        const initial = UserDataSchema.parse({}) as unknown as UserData;
+        await initializeLocal('user:a', initial);
+        await commitDomainOperations('user:a', {
+            type: 'active-workout.set', workout: null, deletedWorkoutId: 'first-deleted',
+        }, initial);
+        await commitDomainOperations('user:a', {
+            type: 'active-workout.set', workout: null, deletedWorkoutId: 'second-deleted',
+        }, initial);
+        const persisted = await readLocal('user:a');
+        expect(persisted?.lastClosedWorkoutId).toBe('second-deleted');
+        expect(persisted?.deletedWorkoutIds).toEqual(['first-deleted', 'second-deleted']);
+        const beforeRetry = persisted?.revision;
+        await commitDomainOperations('user:a', {
+            type: 'active-workout.set', workout: null, deletedWorkoutId: 'second-deleted',
+        }, initial);
+        expect((await readLocal('user:a'))?.revision).toBe(beforeRetry);
     });
 
     it('rejects malformed closure evidence without overwriting the owner envelope', async () => {
