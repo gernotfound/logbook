@@ -17,12 +17,20 @@ import type { UserData } from '../../src/types';
 const data = (height: number) => UserDataSchema.parse({ profile: { height: String(height) } }) as unknown as UserData;
 
 beforeEach(async () => {
+    const disk = new Map<string, string>();
+    vi.stubGlobal('localStorage', {
+        get length() { return disk.size; },
+        key: (index: number) => [...disk.keys()][index] ?? null,
+        getItem: (key: string) => disk.get(key) ?? null,
+        setItem: (key: string, value: string) => { disk.set(key, String(value)); },
+        removeItem: (key: string) => { disk.delete(key); },
+        clear: () => disk.clear(),
+    });
     await clear();
-    localStorage.clear();
     sdk.auth.currentUser = null;
     invalidateSession();
 });
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 it('refuses an in-flight guest snapshot that would recreate an archive after logout', async () => {
     localStorage.setItem(GUEST_SESSION_KEY, 'guest-before-logout');
