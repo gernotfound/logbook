@@ -124,7 +124,10 @@ describe('Workout lifecycle durable recovery regressions', () => {
             JSON.stringify({ version: 1, state: 'running', startTime: 1000, accumulated: 0 }));
         useAppStore.setState({ userData: userData({ activeWorkout: active, history: [old] }), localWorkout: active });
         const key = deviceKey('workout', owner);
-        localStorageMock.setItem.mockImplementation((written: string) => {
+        // Context and workout are separate owner-scoped writes. Fail only the
+        // second write so no persistent mock leaks into subsequent cases.
+        localStorageMock.setItem.mockImplementationOnce(() => undefined);
+        localStorageMock.setItem.mockImplementationOnce((written: string) => {
             if (written === key) throw new DOMException('blocked', 'SecurityError');
         });
         const { result } = renderHook(() => useWorkoutSession());
