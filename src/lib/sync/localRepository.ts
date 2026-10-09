@@ -45,6 +45,8 @@ interface LocalEnvelopeV5 {
     // Owner-scoped closure evidence committed with the business mutation.
     // Older V5 envelopes legitimately omit this field.
     lastClosedWorkoutId?: string;
+    // Deleted workouts remain tombstoned across older suspended browser tabs.
+    deletedWorkoutIds?: string[];
 }
 
 export type LocalEnvelope = LocalEnvelopeV5;
@@ -135,6 +137,12 @@ function validate(value: any, owner: string): LocalEnvelope | undefined {
         typeof record.lastClosedWorkoutId !== 'string'
         || normalizeBusinessId(record.lastClosedWorkoutId) !== record.lastClosedWorkoutId
     )) throw new Error('Identificativo workout chiuso non valido');
+
+    if (record.deletedWorkoutIds !== undefined && (
+        !Array.isArray(record.deletedWorkoutIds)
+        || record.deletedWorkoutIds.some(id => typeof id !== 'string' || normalizeBusinessId(id) !== id)
+        || new Set(record.deletedWorkoutIds).size !== record.deletedWorkoutIds.length
+    )) throw new Error('Registro workout eliminati non valido');
 
     const replica = parseReplicaIdentity(record.replica);
 
@@ -294,6 +302,11 @@ export async function commitDomainOperations(owner: string, batch: DomainOperati
         }
         return id;
     }, undefined);
+    const deletedWorkoutIds = domainOperations.flatMap(operation =>
+        operation.type === 'active-workout.set' && operation.deletedWorkoutId !== undefined
+            ? [requireBusinessId(operation.deletedWorkoutId, 'Allenamento eliminato')]
+            : []
+    );
     let savedData = fallback;
     await update<any>(keyFor(owner), raw => {
         if (guard && !guard()) throw new Error('Commit locale invalidato dal cambio sessione');
@@ -305,8 +318,16 @@ export async function commitDomainOperations(owner: string, batch: DomainOperati
             throw new Error('Allenamento attivo cambiato prima della cancellazione');
         }
         const desired = applyDomainOperations(base, domainOperations);
-        const closure = lastClosedWorkoutId ? { lastClosedWorkoutId } : {};
-        const closureChanged = lastClosedWorkoutId !== undefined && lastClosedWorkoutId !== current?.lastClosedWorkoutId;
+        const previousDeletedIds = current?.deletedWorkoutIds ?? [];
+        const nextDeletedIds = deletedWorkoutIds.length
+            ? [...new Set([...previousDeletedIds, ...deletedWorkoutIds])]
+            : previousDeletedIds;
+        const closure = {
+            ...(lastClosedWorkoutId ? { lastClosedWorkoutId } : {}),
+            ...(deletedWorkoutIds.length ? { deletedWorkoutIds: nextDeletedIds } : {}),
+        };
+        const closureChanged = (lastClosedWorkoutId !== undefined && lastClosedWorkoutId !== current?.lastClosedWorkoutId)
+            || nextDeletedIds.length !== previousDeletedIds.length;
         const actorId = current?.replica?.slot ?? current?.actorId ?? generateId('actor');
         const baseSeq = current?.actorSeq ?? 0;
         const provisionalSeq = baseSeq + 1;
