@@ -25,14 +25,32 @@ describe('Firestore Security Rules Whitelist & Parity Verification', () => {
     expect(rulesContent).toContain('function isActiveOwner(userId)');
     expect(rulesContent).toContain('return isOwner(userId) && !deletionJobExists(userId);');
     expect(rulesContent).toMatch(/match\s+\/account_deletions\/\{userId\}\s*\{[\s\S]*?allow\s+read,\s*write:\s*if\s+false;/);
-    expect(rulesContent.match(/isActiveOwner\(userId\)/g)?.length).toBeGreaterThanOrEqual(12);
+    expect(rulesContent.match(/isActiveOwner\(userId\)/g)?.length).toBeGreaterThanOrEqual(8);
+  });
+
+  it('fences all user-data writes after a server-side health consent revocation', () => {
+    expect(rulesContent).toContain('function healthConsentRevoked(userId)');
+    expect(rulesContent).toContain('documents/health_consent_revocations/$(userId)');
+    expect(rulesContent).toContain('function isWritableOwner(userId)');
+    expect(rulesContent).toContain('return isActiveOwner(userId) && !healthConsentRevoked(userId);');
+    expect(rulesContent).toMatch(/match\s+\/health_consent_revocations\/\{userId\}\s*\{\s*allow\s+get:\s*if\s+isActiveOwner\(userId\);\s*allow\s+list,\s*create,\s*update,\s*delete:\s*if\s+false;/);
+
+    const writeBlocks = [
+      /match\s+\/users\/\{userId\}[\s\S]*?allow\s+create,\s*update:\s*if\s+isWritableOwner\(userId\)/,
+      /match\s+\/history_months\/\{monthId\}[\s\S]*?allow\s+create,\s*update:\s*if\s+isWritableOwner\(userId\)/,
+      /match\s+\/nutrition_months\/\{monthId\}[\s\S]*?allow\s+create,\s*update:\s*if\s+isWritableOwner\(userId\)/,
+      /match\s+\/sync_control\/\{controlId\}[\s\S]*?allow\s+create:\s*if\s+controlId == 'state'\s*&& isWritableOwner\(userId\)/,
+    ];
+    for (const pattern of writeBlocks) expect(rulesContent).toMatch(pattern);
+    expect(rulesContent.match(/allow (create|update): if isWritableOwner\(userId\)/g)?.length).toBe(6);
+    expect(rulesContent).toContain('allow read, delete: if isActiveOwner(userId);');
   });
 
   it('keeps root deletion server-only while allowing active-owner reads and writes', () => {
     const usersBlock = rulesContent.match(/match\s+\/users\/\{userId\}\s*\{([\s\S]*?)\n\s*match\s+\/history_months/);
     expect(usersBlock).not.toBeNull();
     expect(usersBlock![1]).toMatch(/allow\s+read:\s*if\s+isActiveOwner\(userId\);/);
-    expect(usersBlock![1]).toMatch(/allow\s+create,\s*update:\s*if\s+isActiveOwner\(userId\)/);
+    expect(usersBlock![1]).toMatch(/allow\s+create,\s*update:\s*if\s+isWritableOwner\(userId\)/);
     expect(usersBlock![1]).not.toMatch(/allow\s+read,\s*delete:/);
     expect(usersBlock![1]).not.toMatch(/allow\s+delete:/);
   });
