@@ -17,7 +17,7 @@ import type { WorkoutSession, WorkoutRoutine, Exercise, WorkoutReadiness } from 
 import { auth } from '../lib/firebase';
 import { draftRegistry } from '../lib/utils/draftRegistry';
 import { readDeviceValueStrict, writeDeviceValue } from '../lib/sync/deviceStorage';
-import { captureSession } from '../lib/sync/session';
+import { captureSession, isCurrentSession } from '../lib/sync/session';
 import { DomainParsers } from '../lib/schema';
 import { isWorkoutClockAnomalyError, resetWorkoutClockGuard } from '../lib/workoutClockGuard';
 
@@ -358,7 +358,7 @@ export function useWorkoutSession() {
                     saveError: 'Allenamento completato; impossibile azzerare il timer locale.' });
             }
             resetWorkoutClockGuard(expectedId);
-            return finishedWorkout;
+            return useAppStore.getState().userData?.history?.find(item => item.id === expectedId) ?? finishedWorkout;
         } catch (error) {
             if (auth.currentUser?.uid === expectedUid) {
                 await showAlert(
@@ -375,12 +375,15 @@ export function useWorkoutSession() {
     }, [showConfirm, dispatchDomainOperation, setLocalWorkout, showAlert]);
 
     const deleteWorkout = useCallback(async (): Promise<boolean> => {
-        if (!(await showConfirm("Sei sicuro di voler eliminare questa sessione in corso? Non verrà salvata."))) return false;
         const deletedWorkoutId = useAppStore.getState().localWorkout?.id;
         try {
             if (!deletedWorkoutId) return false;
+            const expectedSession = captureSession();
+            if (!(await showConfirm("Sei sicuro di voler eliminare questa sessione in corso? Non verrà salvata."))) return false;
+            if (!isCurrentSession(expectedSession) || useAppStore.getState().localWorkout?.id !== deletedWorkoutId) return false;
             const result = await dispatchDomainOperation({ type: 'active-workout.set', workout: null, deletedWorkoutId: String(deletedWorkoutId) });
             if (!result.ok && result.status !== 'local-pending') return false;
+            if (!isCurrentSession(expectedSession) || useAppStore.getState().localWorkout?.id !== deletedWorkoutId) return false;
             try {
                 setLocalWorkout(null);
             } catch (error) {

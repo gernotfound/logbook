@@ -45,6 +45,8 @@ interface LocalEnvelopeV5 {
     // Owner-scoped closure evidence committed with the business mutation.
     // Older V5 envelopes legitimately omit this field.
     lastClosedWorkoutId?: string;
+    // Owner-local closure ledger fences snapshots from suspended old tabs.
+    closedWorkoutIds?: string[];
 }
 
 export type LocalEnvelope = LocalEnvelopeV5;
@@ -136,6 +138,12 @@ function validate(value: any, owner: string): LocalEnvelope | undefined {
         || normalizeBusinessId(record.lastClosedWorkoutId) !== record.lastClosedWorkoutId
     )) throw new Error('Identificativo workout chiuso non valido');
 
+    if (record.closedWorkoutIds !== undefined && (
+        !Array.isArray(record.closedWorkoutIds)
+        || record.closedWorkoutIds.some(id => typeof id !== 'string' || normalizeBusinessId(id) !== id)
+        || new Set(record.closedWorkoutIds).size !== record.closedWorkoutIds.length
+    )) throw new Error('Registro workout chiusi non valido');
+
     const replica = parseReplicaIdentity(record.replica);
 
     return {
@@ -170,6 +178,12 @@ function enforceMonthlyEntityTombstones(
         }
     }
     return operations;
+}
+
+function assertWorkoutNotClosed(id: string, envelope: LocalEnvelope | undefined): void {
+    if (envelope && (envelope.lastClosedWorkoutId === id || envelope.closedWorkoutIds?.includes(id))) {
+        throw new Error('Allenamento già terminato o eliminato: ricarica la sessione aggiornata.');
+    }
 }
 
 export async function readLocal(owner: string): Promise<LocalEnvelope | undefined> {
@@ -270,6 +284,7 @@ export async function commitLocal(owner: string, data: UserData, initialBase: Us
         const reconciled = applyRemoteDocuments(currentData, reconciledDocs, catalog);
         reconciled.pendingConflicts = currentData.pendingConflicts;
         const savedData = parse(reconciled);
+        if (savedData.activeWorkout?.id) assertWorkoutNotClosed(String(savedData.activeWorkout.id), current);
 
         return { ...(current ?? { completeMonths: [], replica: null }), ...currentEnvelopeVersions(), owner, actorId, actorSeq: nextSeq, clock: testClock, data: savedData, baseline: current?.baseline ?? callerBase, completeMonths: current?.completeMonths ?? [], pending: owner === 'guest' ? [] : [...(current?.pending ?? []), ...operations], syncMetaByDocument: current?.syncMetaByDocument ?? {}, replica: current?.replica ?? null, revision: (current?.revision ?? 0) + 1 };
     });
@@ -284,34 +299,67 @@ export async function commitDomainOperations(owner: string, batch: DomainOperati
     const fallback = structuredClone(parse(initialBase));
     const catalog = await getCachedCatalog();
     let operations: SemanticOperation[] = [];
-    // Persist closure identity in the same IndexedDB transaction as the business
-    // state; a later localStorage removeItem failure cannot erase this evidence.
-    const lastClosedWorkoutId = domainOperations.reduce<string | undefined>((id, operation) => {
-        if (operation.type === 'workout.complete') return requireBusinessId(operation.workout.id, 'Allenamento completato');
-        if (operation.type === 'active-workout.set' && operation.deletedWorkoutId !== undefined) {
-            if (operation.workout !== null) throw new Error('Eliminazione workout: stato incompatibile');
-            return requireBusinessId(operation.deletedWorkoutId, 'Allenamento eliminato');
-        }
-        return id;
-    }, undefined);
     let savedData = fallback;
     await update<any>(keyFor(owner), raw => {
         if (guard && !guard()) throw new Error('Commit locale invalidato dal cambio sessione');
         const current = validate(raw, owner);
         const base = current?.data ?? fallback;
-        if (lastClosedWorkoutId && domainOperations.some(operation =>
+        // A retry after a durable local completion can deliver an outstanding
+        // journal without completing the same workout twice.
+        const effectiveDomainOperations = domainOperations.map(operation => {
+            if (operation.type !== 'workout.complete') return operation;
+            const id = requireBusinessId(operation.workout.id, 'Allenamento completato');
+            const previouslyClosed = current?.lastClosedWorkoutId === id || current?.closedWorkoutIds?.includes(id);
+            if (!previouslyClosed) return operation;
+            if (base.activeWorkout !== null || !base.history?.some(item => item.id === id)) {
+                throw new Error('Allenamento già chiuso: impossibile completarlo nuovamente.');
+            }
+            return { type: 'active-workout.set' as const, workout: null };
+        });
+        const lastClosedWorkoutId = effectiveDomainOperations.reduce<string | undefined>((id, operation) => {
+            if (operation.type === 'workout.complete') return requireBusinessId(operation.workout.id, 'Allenamento completato');
+            if (operation.type === 'active-workout.set' && operation.deletedWorkoutId !== undefined) {
+                if (operation.workout !== null) throw new Error('Eliminazione workout: stato incompatibile');
+                return requireBusinessId(operation.deletedWorkoutId, 'Allenamento eliminato');
+            }
+            return id;
+        }, undefined);
+        const newlyClosedIds = effectiveDomainOperations.flatMap(operation =>
+            operation.type === 'workout.complete'
+                ? [requireBusinessId(operation.workout.id, 'Allenamento completato')]
+                : operation.type === 'active-workout.set' && operation.deletedWorkoutId !== undefined
+                    ? [requireBusinessId(operation.deletedWorkoutId, 'Allenamento eliminato')]
+                    : []
+        );
+        for (const operation of effectiveDomainOperations) {
+            if (operation.type === 'active-workout.set' && operation.workout) {
+                assertWorkoutNotClosed(requireBusinessId(operation.workout.id, 'Allenamento attivo'), current);
+            }
+            if (operation.type === 'workout.complete') {
+                assertWorkoutNotClosed(requireBusinessId(operation.workout.id, 'Allenamento completato'), current);
+            }
+        }
+        if (lastClosedWorkoutId && effectiveDomainOperations.some(operation =>
             operation.type === 'active-workout.set' && operation.deletedWorkoutId !== undefined
         ) && base.activeWorkout && base.activeWorkout.id !== lastClosedWorkoutId) {
             throw new Error('Allenamento attivo cambiato prima della cancellazione');
         }
-        const desired = applyDomainOperations(base, domainOperations);
-        const closure = lastClosedWorkoutId ? { lastClosedWorkoutId } : {};
-        const closureChanged = lastClosedWorkoutId !== undefined && lastClosedWorkoutId !== current?.lastClosedWorkoutId;
+        const desired = applyDomainOperations(base, effectiveDomainOperations);
+        const previousClosedIds = current?.closedWorkoutIds ?? [];
+        const nextClosedIds = newlyClosedIds.length
+            ? [...new Set([...previousClosedIds, ...newlyClosedIds])]
+            : previousClosedIds;
+        const closure = {
+            ...(lastClosedWorkoutId ? { lastClosedWorkoutId } : {}),
+            ...(newlyClosedIds.length ? { closedWorkoutIds: nextClosedIds } : {}),
+        };
+        const closureChanged = (lastClosedWorkoutId !== undefined && lastClosedWorkoutId !== current?.lastClosedWorkoutId)
+            || nextClosedIds.length !== previousClosedIds.length;
         const actorId = current?.replica?.slot ?? current?.actorId ?? generateId('actor');
         const baseSeq = current?.actorSeq ?? 0;
         const provisionalSeq = baseSeq + 1;
         const provisionalClock = { ...(current?.clock ?? {}), [actorId]: provisionalSeq };
-        operations = compileDomainOperations(base, desired, domainOperations, catalog, actorId, provisionalSeq, provisionalClock);
+        operations = compileDomainOperations(base, desired, effectiveDomainOperations, catalog, actorId, provisionalSeq, provisionalClock);
         savedData = desired;
         if (operations.length === 0) return { ...(current ?? { completeMonths: [], replica: null }), ...currentEnvelopeVersions(), ...closure, owner, actorId, actorSeq: current?.actorSeq ?? 0, clock: current?.clock ?? {}, data: desired, baseline: current?.baseline ?? fallback, completeMonths: current?.completeMonths ?? [], pending: current?.pending ?? [], syncMetaByDocument: current?.syncMetaByDocument ?? {}, replica: current?.replica ?? null, revision: (current?.revision ?? 0) + (closureChanged ? 1 : 0) };
         const sequenced = sequenceOperationsForBoundedTransactions(operations, actorId, baseSeq, current?.clock ?? {});

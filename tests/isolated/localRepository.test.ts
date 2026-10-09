@@ -30,13 +30,104 @@ describe('durable owner-scoped journal', () => {
         const after = await readLocal('user:a');
         expect(after?.data.activeWorkout).toBeNull();
         expect(after?.lastClosedWorkoutId).toBe('retired-only-local');
+        expect(after?.closedWorkoutIds).toEqual(['retired-only-local']);
         expect(after?.revision).toBe((before?.revision ?? 0) + 1);
         expect(after?.actorSeq).toBe(before?.actorSeq);
 
         await hydrateLocal('user:a', initial, [], undefined, 'window');
         expect((await readLocal('user:a'))?.lastClosedWorkoutId).toBe('retired-only-local');
+        expect((await readLocal('user:a'))?.closedWorkoutIds).toEqual(['retired-only-local']);
         await acknowledgeThrough('user:a', after!.actorSeq, initial);
         expect((await readLocal('user:a'))?.lastClosedWorkoutId).toBe('retired-only-local');
+        expect((await readLocal('user:a'))?.closedWorkoutIds).toEqual(['retired-only-local']);
+    });
+
+
+    it('preserves multiple deletion tombstones, including metadata-only commits', async () => {
+        const initial = UserDataSchema.parse({}) as unknown as UserData;
+        await initializeLocal('user:a', initial);
+        await commitDomainOperations('user:a', {
+            type: 'active-workout.set', workout: null, deletedWorkoutId: 'first-deleted',
+        }, initial);
+        await commitDomainOperations('user:a', {
+            type: 'active-workout.set', workout: null, deletedWorkoutId: 'second-deleted',
+        }, initial);
+        const persisted = await readLocal('user:a');
+        expect(persisted?.lastClosedWorkoutId).toBe('second-deleted');
+        expect(persisted?.closedWorkoutIds).toEqual(['first-deleted', 'second-deleted']);
+        const beforeRetry = persisted?.revision;
+        await commitDomainOperations('user:a', {
+            type: 'active-workout.set', workout: null, deletedWorkoutId: 'second-deleted',
+        }, initial);
+        expect((await readLocal('user:a'))?.revision).toBe(beforeRetry);
+    });
+
+
+    it('records completion in the same durable write as history and cloud-active clear', async () => {
+        const finished = { id: 'session-finished', date: '2026-10-09', exercises: [] };
+        const initial = UserDataSchema.parse({ activeWorkout: finished }) as unknown as UserData;
+        await initializeLocal('user:a', initial);
+        await commitDomainOperations('user:a', {
+            type: 'workout.complete', workout: finished, expectedActiveWorkoutId: finished.id, activePains: [],
+        }, initial);
+        const persisted = await readLocal('user:a');
+        expect(persisted?.data.activeWorkout).toBeNull();
+        expect(persisted?.data.history.map(item => item.id)).toContain(finished.id);
+        expect(persisted?.closedWorkoutIds).toEqual([finished.id]);
+    });
+
+
+    it('keeps closure evidence and business state unchanged when the transaction is invalidated', async () => {
+        const initial = UserDataSchema.parse({}) as unknown as UserData;
+        await initializeLocal('user:a', initial);
+        const before = await readLocal('user:a');
+        await expect(commitDomainOperations('user:a', {
+            type: 'active-workout.set', workout: null, deletedWorkoutId: 'not-committed',
+        }, initial, () => false)).rejects.toThrow('invalidato');
+        const after = await readLocal('user:a');
+        expect(after?.closedWorkoutIds).toBeUndefined();
+        expect(after?.lastClosedWorkoutId).toBeUndefined();
+        expect(after?.revision).toBe(before?.revision);
+    });
+
+
+
+    it('retries a locally completed workout without modifying durable history or its journal', async () => {
+        const finished = { id: 'completion-retry', date: '2026-10-09', routineName: 'Original', exercises: [] };
+        const initial = UserDataSchema.parse({ activeWorkout: finished }) as unknown as UserData;
+        await initializeLocal('user:a', initial);
+        const original = { type: 'workout.complete' as const, workout: finished,
+            expectedActiveWorkoutId: finished.id, activePains: [] };
+        await commitDomainOperations('user:a', original, initial);
+        const before = (await readLocal('user:a'))!;
+        await commitDomainOperations('user:a', {
+            ...original, workout: { ...finished, routineName: 'Should not overwrite' },
+        }, initial);
+        const after = (await readLocal('user:a'))!;
+        expect(after.data.history).toEqual(before.data.history);
+        expect(after.pending).toEqual(before.pending);
+        expect(after.revision).toBe(before.revision);
+        expect(after.lastClosedWorkoutId).toBe(finished.id);
+        expect(after.closedWorkoutIds).toEqual([finished.id]);
+    });
+
+    it('rejects a stale tab write after deletion across domain and snapshot writers', async () => {
+        const closed = { id: 'closed-tab-session', date: '2026-10-09', exercises: [] };
+        const initial = UserDataSchema.parse({ activeWorkout: closed }) as unknown as UserData;
+        await initializeLocal('user:a', initial);
+        await commitDomainOperations('user:a', {
+            type: 'active-workout.set', workout: null, deletedWorkoutId: closed.id,
+        }, initial);
+        const afterDelete = (await readLocal('user:a'))!;
+        await expect(commitDomainOperations('user:a', {
+            type: 'active-workout.set', workout: closed,
+        }, initial)).rejects.toThrow('già terminato o eliminato');
+        await expect(commitLocal('user:a', initial, afterDelete.data))
+            .rejects.toThrow('già terminato o eliminato');
+        const durable = await readLocal('user:a');
+        expect(durable?.data.activeWorkout).toBeNull();
+        expect(durable?.revision).toBe(afterDelete.revision);
+        expect(durable?.closedWorkoutIds).toContain(closed.id);
     });
 
     it('rejects malformed closure evidence without overwriting the owner envelope', async () => {
@@ -46,6 +137,9 @@ describe('durable owner-scoped journal', () => {
         await set(key, { ...raw, lastClosedWorkoutId: 42 });
         await expect(readLocal('user:a')).rejects.toThrow('Identificativo workout chiuso non valido');
         expect((await get(key) as Record<string, unknown>).lastClosedWorkoutId).toBe(42);
+        await set(key, { ...raw, closedWorkoutIds: ['duplicate', 'duplicate'] });
+        await expect(readLocal('user:a')).rejects.toThrow('Registro workout chiusi non valido');
+        expect((await get(key) as Record<string, unknown>).closedWorkoutIds).toEqual(['duplicate', 'duplicate']);
     });
 
     it('writes independent current envelope/data/sync versions', async () => {

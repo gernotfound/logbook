@@ -13,7 +13,7 @@ import PreSessionCheckIn from '../src/components/Training/PreSessionCheckIn';
 import TrainingSession from '../src/components/Training/TrainingSession';
 import WorkoutTimer from '../src/components/Training/WorkoutTimer';
 import { useWorkoutSession } from '../src/hooks/useWorkoutSession';
-import { initializeLocal, readLocal } from '../src/lib/sync/localRepository';
+import { commitDomainOperations, initializeLocal, readLocal } from '../src/lib/sync/localRepository';
 import { localStorageMock, renderWithProviders } from './setup';
 
 function workout(id: string, started = false): WorkoutSession {
@@ -87,6 +87,25 @@ describe('Workout lifecycle durable recovery regressions', () => {
         await act(async () => { deleted = await result.current.deleteWorkout(); });
         expect(deleted).toBe(false);
         expect(useAppStore.getState().localWorkout?.id).toBe('keep');
+    });
+
+
+    it('never deletes a replacement workout when confirmation belongs to another session', async () => {
+        const original = workout('original-confirmation', true);
+        const replacement = workout('replacement-confirmation', true);
+        const durable = userData({ activeWorkout: replacement });
+        await initializeLocal(owner, durable);
+        useAppStore.setState({ userData: durable, localWorkout: original });
+        vi.mocked(useDialogStore.getState().showConfirm).mockImplementationOnce(async () => {
+            useAppStore.setState({ localWorkout: replacement });
+            return true;
+        });
+        const { result } = renderHook(() => useWorkoutSession());
+        await act(async () => { expect(await result.current.deleteWorkout()).toBe(false); });
+        expect(useAppStore.getState().localWorkout?.id).toBe(replacement.id);
+        const stored = await readLocal(owner);
+        expect(stored?.data.activeWorkout?.id).toBe(replacement.id);
+        expect(stored?.closedWorkoutIds).toBeUndefined();
     });
 
     it('suspends and restores an active workout without clearing its timer or cloud shadow', async () => {
@@ -211,6 +230,49 @@ describe('Workout lifecycle durable recovery regressions', () => {
             durable?.lastClosedWorkoutId)).toBeNull();
         expect(localStorage.getItem(key)).toBeNull();
         expect(useDialogStore.getState().showAlert).toHaveBeenCalledWith(expect.stringContaining('salvato nello storico'));
+    });
+
+
+    it('rejects an older tab snapshot even after a different workout closes later', async () => {
+        const abandoned = workout('deleted-from-another-tab', true);
+        const later = workout('subsequent-completion', true);
+        const initial = userData({ activeWorkout: abandoned });
+        await initializeLocal(owner, initial);
+        await commitDomainOperations(owner, {
+            type: 'active-workout.set', workout: null, deletedWorkoutId: abandoned.id,
+        }, initial);
+        const afterDelete = (await readLocal(owner))!.data;
+        await commitDomainOperations(owner, { type: 'active-workout.set', workout: later }, afterDelete);
+        const afterStart = (await readLocal(owner))!.data;
+        await commitDomainOperations(owner, {
+            type: 'workout.complete', workout: later,
+            expectedActiveWorkoutId: later.id, activePains: [],
+        }, afterStart);
+        const durable = (await readLocal(owner))!;
+        expect(durable.lastClosedWorkoutId).toBe(later.id);
+        expect(durable.closedWorkoutIds).toContain(abandoned.id);
+        expect(durable.data.history.some(item => item.id === abandoned.id)).toBe(false);
+
+        const key = deviceKey('workout', owner);
+        // A suspended old tab can re-write the original device snapshot after B.
+        localStorage.setItem(key, JSON.stringify(abandoned));
+        expect(getInitialLocalWorkout(owner, durable.data.activeWorkout,
+            durable.data.history, durable.lastClosedWorkoutId, durable.closedWorkoutIds)).toBeNull();
+        expect(localStorage.getItem(key)).toBeNull();
+    });
+
+
+    it('keeps a completed session retired when the historical month was not loaded', () => {
+        const previous = workout('older-completed', true);
+        const stale = workout('newer-completed', true);
+        const key = deviceKey('workout', owner);
+        localStorage.setItem(key, JSON.stringify(previous));
+        expect(getInitialLocalWorkout(owner, null, [], stale.id, [previous.id, stale.id])).toBeNull();
+        expect(localStorage.getItem(key)).toBeNull();
+
+        // A separately provided old cloud fallback also cannot reopen a closed identity.
+        expect(getInitialLocalWorkout(owner, previous, [], stale.id, [previous.id, stale.id])).toBeNull();
+        expect(localStorage.getItem(key)).toBeNull();
     });
 
     it('keeps post-session rating unchanged if its synchronous persistence fails', () => {

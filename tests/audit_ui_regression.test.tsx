@@ -107,8 +107,10 @@ describe('audit interaction regressions', () => {
             retry = result.current.endWorkout();
             await vi.advanceTimersByTimeAsync(1100);
         });
-        expect(await retry).toMatchObject({ id: workout.id });
+        const completed = await retry;
+        expect(completed).toMatchObject({ id: workout.id });
         expect(useAppStore.getState().userData?.history.filter(item => item.id === workout.id)).toHaveLength(1);
+        expect(completed).toEqual(useAppStore.getState().userData?.history.find(item => item.id === workout.id));
         expect(useAppStore.getState().localWorkout).toBeNull();
     });
 
