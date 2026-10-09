@@ -33,3 +33,30 @@ test('guest logout revokes another live tab and its background persistence', asy
   await expect(page.locator('.guest-banner')).toBeVisible();
   await expect(background.locator('.guest-banner')).toHaveCount(0);
 });
+
+test('health consent withdrawal suspends guest tracking across tabs and reloads', async ({ page, context }) => {
+  await page.setViewportSize({ width: 375, height: 800 });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Continua senza account' }).click();
+  await page.getByText('Aggiornamento Termini e Privacy').waitFor();
+  for (const checkbox of await page.locator('input[type="checkbox"]').all()) await checkbox.check();
+  await page.getByRole('button', { name: 'Accetta e Continua' }).click();
+
+  const otherTab = await context.newPage();
+  await otherTab.goto('/');
+  await expect(otherTab.getByRole('button', { name: 'Apri impostazioni' })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Apri impostazioni' }).click();
+  await page.getByRole('button', { name: /^Privacy/ }).click();
+  await page.getByRole('button', { name: 'Revoca il consenso per i dati salute' }).click();
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Conferma' }).click();
+
+  await expect(page.getByRole('heading', { name: 'Tracciamento sospeso' })).toBeVisible();
+  await expect(otherTab.getByRole('heading', { name: 'Tracciamento sospeso' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Esporta i dati in JSON' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Allenamento', exact: true })).toHaveCount(0);
+
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Tracciamento sospeso' })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)).toBe(false);
+});
