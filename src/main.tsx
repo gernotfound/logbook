@@ -129,7 +129,7 @@ export const initApp = async () => {
         const localEnvelope = await readLocal(bootstrapOwner);
         cached = localEnvelope?.data;
         useAppStore.setState({
-          localWorkout: getInitialLocalWorkout(bootstrapOwner, cached?.activeWorkout ?? null, cached?.history, localEnvelope?.lastClosedWorkoutId, localEnvelope?.deletedWorkoutIds),
+          localWorkout: getInitialLocalWorkout(bootstrapOwner, cached?.activeWorkout ?? null, cached?.history, localEnvelope?.lastClosedWorkoutId, localEnvelope?.closedWorkoutIds),
         });
       } else {
         useAppStore.setState({ localWorkout: null });
