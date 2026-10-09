@@ -88,6 +88,22 @@ describe('Milestone M2: Guest Bootstrap & Cold Start Lifecycle', () => {
     });
 
 
+    it('does not purge through authenticated logout when another tab revoked the guest first', async () => {
+        const { result } = renderHook(() => useAuth(), {
+            wrapper: ({ children }) => <AuthProvider>{children}</AuthProvider>,
+        });
+        await act(async () => { await result.current.loginAsGuest(); });
+        const authenticatedPurge = vi.spyOn(DB, 'secureLogOut');
+        // A storage event may arrive after a click in another tab.
+        localStorage.setItem(GUEST_REVOCATION_KEY, 'another-tab');
+        await act(async () => { await result.current.logout({ skipConfirm: true }); });
+
+        expect(authenticatedPurge).not.toHaveBeenCalled();
+        expect(result.current.isGuest).toBe(false);
+        expect(useAppStore.getState().userData).toBeNull();
+        expect(localStorage.getItem(GUEST_REVOCATION_KEY)).toBe('another-tab');
+    });
+
     it('serializes an incomplete guest purge against a concurrent new guest login', async () => {
         const { result } = renderHook(() => useAuth(), {
             wrapper: ({ children }) => <AuthProvider>{children}</AuthProvider>,
