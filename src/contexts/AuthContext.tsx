@@ -15,7 +15,7 @@ import { getResolvedDefaultUserData } from './auth/defaultUserData';
 import { loadAuthenticatedData } from './auth/loadAuthenticatedData';
 import { migrateGuestAccount } from './auth/migrateGuestAccount';
 import { replicateJournal } from '../lib/sync/replicateJournal';
-import { captureSession, invalidateSession, isCurrentSession, userOwner } from '../lib/sync/session';
+import { activateGuestSession, captureSession, GUEST_REVOCATION_KEY, GUEST_SESSION_KEY, invalidateSession, isActiveGuestSession, isCurrentSession, revokeGuestSession, userOwner } from '../lib/sync/session';
 import { classifySyncFailure } from '../lib/sync/syncFailure';
 import { SyncTimeoutError } from '../lib/db/db_core';
 import {
@@ -39,7 +39,7 @@ const GUEST_MIGRATION_SYNC_RECOVERY_KEY = 'logbook_guest_migration_sync_recovery
 const AWAITING_REDIRECT_KEY = 'logbook_awaiting_redirect';
 
 function isStoredGuest(): boolean {
-    return readBrowserValueStrict(GUEST_KEY) === 'true';
+    return readBrowserValueStrict(GUEST_KEY) === 'true' && readBrowserValueStrict(GUEST_REVOCATION_KEY) === null;
 }
 
 function readGuestMigrationSyncRecovery(): string | null {
@@ -80,6 +80,35 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const setSyncing = useAppStore(state => state.setSyncing);
     const setSaveError = useAppStore(state => state.setSaveError);
 
+    useEffect(() => {
+        const reconcileGuestSession = () => {
+            if (!isGuestRef.current || isActiveGuestSession()) return;
+            // A different tab explicitly revoked this guest generation.
+            // Never recreate its deleted data from the old Zustand snapshot.
+            invalidateSession();
+            isGuestRef.current = false;
+            setIsGuest(false);
+            setGuestMigrationStatus('idle');
+            useAppStore.getState().resetStore({ force: true });
+            DB.resetCache();
+        };
+        const onStorage = (event: StorageEvent) => {
+            if (event.key === GUEST_REVOCATION_KEY || event.key === GUEST_SESSION_KEY || event.key === GUEST_KEY) {
+                reconcileGuestSession();
+            }
+        };
+        const onForeground = () => { if (document.visibilityState === 'visible') reconcileGuestSession(); };
+        window.addEventListener('storage', onStorage);
+        window.addEventListener('focus', reconcileGuestSession);
+        document.addEventListener('visibilitychange', onForeground);
+        return () => {
+            window.removeEventListener('storage', onStorage);
+            window.removeEventListener('focus', reconcileGuestSession);
+            document.removeEventListener('visibilitychange', onForeground);
+        };
+    }, []);
+
+
     const blockUnreadableLifecycleStorage = useCallback((error: unknown): never => {
         console.error('Lifecycle Auth bloccato: ownership storage non leggibile.', error);
         useAppStore.setState({
@@ -96,7 +125,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     const isGuestActiveStrict = useCallback((): boolean => {
         try {
-            return isGuestRef.current || isStoredGuest();
+            return (isGuestRef.current || isStoredGuest()) && isActiveGuestSession();
         } catch (error) {
             return blockUnreadableLifecycleStorage(error);
         }
@@ -602,9 +631,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const loginAsGuest = useCallback(async () => {
         try {
             clearAuthenticatedOwnerHint();
+            // A revoked guest session may have left data behind after a failed
+            // purge. Clear it before explicitly authorizing a new generation.
+            if (readBrowserValueStrict(GUEST_REVOCATION_KEY) !== null) {
+                await DB.purgeAllLocalUserData('guest');
+            }
+            const bytes = crypto.getRandomValues(new Uint8Array(16));
+            const id = Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
+            writeBrowserValue(GUEST_SESSION_KEY, id);
             writeBrowserValue(GUEST_KEY, 'true');
+            removeBrowserValue(GUEST_REVOCATION_KEY);
+            activateGuestSession(id);
         } catch {
-            setSaveError('Impossibile avviare la modalità locale: archivio del dispositivo non disponibile.');
+            setSaveError('Impossibile avviare la modalità locale: la precedente sessione potrebbe non essere stata pulita completamente.');
             return;
         }
         isGuestRef.current = true;
@@ -755,20 +794,26 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                     if (!confirmed) return;
                 }
 
+                // Persistent revocation first: every other tab must lose write
+                // permission before this tab starts deleting its IndexedDB data.
+                revokeGuestSession();
                 useAppStore.getState().cancelPendingSyncs();
-                await DB.purgeAllLocalUserData();
-
+                let purgeError: unknown;
                 try {
-                    removeBrowserValue(GUEST_KEY);
-                } catch {
-                    await useDialogStore.getState().showAlert('Dati locali eliminati, ma non riesco ad aggiornare lo stato del dispositivo. Ricarica LogBook e riprova.');
-                    return;
+                    await DB.purgeAllLocalUserData('guest');
+                } catch (error) {
+                    purgeError = error;
                 }
                 if (initialUid) clearGuestMigrationSyncRecovery(initialUid);
                 isGuestRef.current = false;
                 setIsGuest(false);
                 setGuestMigrationStatus('idle');
                 useAppStore.getState().resetStore({ force: true });
+                if (purgeError) {
+                    await useDialogStore.getState().showAlert(
+                        'Uscita dalla modalità locale, ma pulizia del dispositivo incompleta. I dati rimasti non sono accessibili dalla vecchia sessione; riprova dopo aver riaperto LogBook.'
+                    );
+                }
                 return;
             }
 
