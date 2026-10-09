@@ -6,6 +6,7 @@ import { saveUserDataToCache } from './createDataSlice';
 import { clearWorkoutTimer } from './createWorkoutSlice';
 import type { AppState } from '../useAppStore';
 import { captureSession, invalidateSession, isActiveGuestSession, isCurrentSession } from '../../lib/sync/session';
+import { assertHealthConsentWritable } from '../../lib/healthConsentRevocation';
 import { commitDomainOperations, readLocal, revertRejectedConsent } from '../../lib/sync/localRepository';
 import { findPendingAccountDeletion, isAccountDeletionPending } from '../../lib/sync/accountGate';
 import { UserDataSchema } from '../../lib/schema';
@@ -87,6 +88,7 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
         if (get().dataOwner === 'guest' && !isActiveGuestSession()) {
             throw new Error('Sessione locale terminata in un’altra scheda. I dati non possono essere modificati.');
         }
+        assertHealthConsentWritable(captureSession().owner);
         if (get().localPersistenceBlocked) throw new Error(LOCAL_PERSISTENCE_BLOCKED_MESSAGE);
         if (relevantDeletionPending()) throw new Error('Cancellazione account in corso. Le modifiche sono bloccate finché il server non conferma il completamento.');
     };
