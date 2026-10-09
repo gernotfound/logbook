@@ -77,6 +77,18 @@ Secondo GDPR art. 7(3) e Linee guida EDPB 05/2020, la revoca deve essere facile 
 7. Prova su browser/PWA iOS, Android e Desktop con temi/viewport pertinenti; test della accessibilità del flusso.
 8. Nessun dato reale negli ambienti di test; `verify:m8` / CI canonica exact-SHA, review, merge, CI main e Production verificati separatamente.
 
+## Implementazione candidata nella PR tecnica (non rilasciata)
+
+La PR draft dell'issue #300 prepara:
+- `health_consent_revocations/{uid}`, registro immutabile per client e leggibile solo dal proprietario;
+- `isWritableOwner` in `firestore.rules`, per fermare le scritture anche da vecchie build; letture proprietario preservate per esercitare i diritti previsti;
+- endpoint trusted `POST /api/health-consent-revocation`, autenticato con Firebase Auth e App Check limited-use consumato, con commit idempotente del marker;
+- marker locale owner-scoped e barriera alle mutazioni/journal/device storage, con schermata di sospensione e retry senza falsa conferma cloud;
+- rimozione del marker dal server prima di completare la cancellazione account, protetta dal lease già previsto;
+- regressioni per Rules, replica, endpoint e lifecycle.
+
+**Gate non chiuso:** il codice è in bozza tecnica; non attivare in Production finché non è definito un regime giuridicamente fondato per i dati residui, con periodo di esportazione e cancellazione verificabile, e non sono verdi tutti i test di failure/recovery e le verifiche UI/runtime. Un altro dispositivo che resta offline non può conoscere immediatamente una revoca registrata altrove: il server può bloccarne le successive scritture, ma la UI potrà adeguarsi soltanto alla riconnessione. Documentare esplicitamente questo limite nel contratto operativo.
+
 ## Gate di rilascio
 
 **NON CHIUSO.** Prima del pilot con utenti reali:
