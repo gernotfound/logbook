@@ -91,6 +91,26 @@ describe('durable owner-scoped journal', () => {
     });
 
 
+
+    it('retries a locally completed workout without modifying durable history or its journal', async () => {
+        const finished = { id: 'completion-retry', date: '2026-10-09', routineName: 'Original', exercises: [] };
+        const initial = UserDataSchema.parse({ activeWorkout: finished }) as unknown as UserData;
+        await initializeLocal('user:a', initial);
+        const original = { type: 'workout.complete' as const, workout: finished,
+            expectedActiveWorkoutId: finished.id, activePains: [] };
+        await commitDomainOperations('user:a', original, initial);
+        const before = (await readLocal('user:a'))!;
+        await commitDomainOperations('user:a', {
+            ...original, workout: { ...finished, routineName: 'Should not overwrite' },
+        }, initial);
+        const after = (await readLocal('user:a'))!;
+        expect(after.data.history).toEqual(before.data.history);
+        expect(after.pending).toEqual(before.pending);
+        expect(after.revision).toBe(before.revision);
+        expect(after.lastClosedWorkoutId).toBe(finished.id);
+        expect(after.closedWorkoutIds).toEqual([finished.id]);
+    });
+
     it('rejects a stale tab write after deletion across domain and snapshot writers', async () => {
         const closed = { id: 'closed-tab-session', date: '2026-10-09', exercises: [] };
         const initial = UserDataSchema.parse({ activeWorkout: closed }) as unknown as UserData;
