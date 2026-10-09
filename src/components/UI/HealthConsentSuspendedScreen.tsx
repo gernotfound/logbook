@@ -46,7 +46,11 @@ export function HealthConsentSuspendedScreen({ status }: { status: HealthConsent
     // A dismissed effect must not operate on an obsolete account/session.
     let active = true;
     queueMicrotask(() => { if (active) void eraseLocal(); });
-    const refresh = () => { if (document.visibilityState === 'visible') void eraseLocal(); };
+    const refresh = () => {
+      if (document.visibilityState !== 'visible') return;
+      setLocalErasure('checking');
+      void eraseLocal();
+    };
     window.addEventListener('focus', refresh);
     document.addEventListener('visibilitychange', refresh);
     return () => {
