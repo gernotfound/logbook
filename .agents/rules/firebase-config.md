@@ -109,6 +109,12 @@ Non trasformare il deploy Rules in un side effect automatico di un test, di una 
 
 I file `firebase.json` e `.firebaserc` definiscono la configurazione repository usata dagli strumenti Firebase; leggere entrambi prima di cambiare target o Rules. Eventuali indici o policy esterne vanno verificate direttamente sul progetto reale.
 
+### Revoca consenso dati salute — contratto della PR candidata
+
+La soluzione A usa `health_consent_revocations/{uid}` come marker server-autorevole: il client owner può leggerlo, ma nessun client può crearlo, aggiornarlo o rimuoverlo. La scrittura avviene via `POST /api/health-consent-revocation`, con token Auth valido/non revocato, controllo origin esatto, token App Check limited-use consumato e transazione idempotente che rifiuta account in cancellazione. Il marker impone `isWritableOwner` per root, shard mensili, sync_control e write di telemetria legacy; resta `isActiveOwner` per le letture dei dati già registrati. Il job di account deletion elimina e verifica anche il marker prima di rimuovere Firebase Auth.
+
+La richiesta locale è memorizzata prima del roundtrip HTTP: uno stato `pending` blocca le mutazioni in questo dispositivo senza essere presentato come conferma cloud. La stessa sospensione viene rilevata da altre tab mediante storage events e da altri device online tramite listener del marker. **VERIFY prima del rilascio:** consenso e basi giuridiche Art. 6/9, tempi/destino dei dati residui, interoperabilità con client vecchi, account deletion, test E2E e provider Production. Un device rimasto offline non può apprendere immediatamente una revoca da un altro dispositivo; il server protegge il primo successivo tentativo di scrittura.
+
 ### Account deletion
 
 - **MUST:** il client non può eliminare direttamente `/users/{uid}`. Il root utente viene eliminato dal backend trusted del job account-deletion dopo la bonifica delle raccolte private e prima della cancellazione finale di Firebase Auth.
