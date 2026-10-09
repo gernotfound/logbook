@@ -231,7 +231,8 @@ it('keeps health consent revocation server-only and fences stale-client writes w
     await assertFails(fencedWrite(db, 'users/a/nutrition_months/2026-09', { day: { latest: true } }, replica));
 
     // The suspension of A must not lock down unrelated accounts.
-    await fencedWrite(anotherDb, 'users/b', { profile: { height: '180' } });
+    await assertSucceeds(registerReplica(anotherDb, 'b'));
+    expect((await assertSucceeds(getDoc(doc(anotherDb, 'users/b/sync_control/state')))).exists()).toBe(true);
 
     // The account-deletion barrier remains stronger than the export-read exception.
     await env.withSecurityRulesDisabled(async context => {
