@@ -1,3 +1,4 @@
+import { beforeEach } from 'vitest';
 // Browser origin-scoped storage fixture for isolated Node persistence tests.
 // Preserve strict storage behavior: tests may override getItem to simulate failures.
 const entries = new Map<string, string>();
@@ -14,3 +15,6 @@ Object.defineProperty(globalThis, 'localStorage', {
   writable: true,
   configurable: true,
 });
+
+// Each scenario starts from a clean browser origin.
+beforeEach(() => entries.clear());
