@@ -3,6 +3,8 @@ import { useDialogStore } from '../../store/useDialogStore';
 import { GlobalDialog } from './GlobalDialog';
 import { DB } from '../../lib/db';
 import { safeHardReload } from '../../lib/sync/safeReload';
+import { storageOwner } from '../../lib/sync/session';
+import { isAccountDeletionPending } from '../../lib/sync/accountGate';
 
 interface Props {
   children?: ReactNode;
@@ -46,6 +48,10 @@ class ErrorBoundary extends Component<Props, State> {
     if (!confirmed) return;
 
     try {
+      if (isAccountDeletionPending(storageOwner())) {
+        await dialogs.showAlert('Cancellazione account ancora in corso: i dati locali sono necessari per il recupero e non possono essere azzerati.');
+        return;
+      }
       await DB.purgeAllLocalUserData();
       window.location.reload();
     } catch (error) {
