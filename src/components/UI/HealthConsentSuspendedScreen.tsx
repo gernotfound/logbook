@@ -23,7 +23,6 @@ export function HealthConsentSuspendedScreen({ status }: { status: HealthConsent
 
   const eraseLocal = useCallback(async () => {
     if (!owner || status === 'unavailable' || status === 'none') return;
-    setLocalErasure('checking');
     // Volatile business state must be invalidated before any asynchronous
     // IndexedDB cleanup, including in a second tab discovering the revocation.
     const currentState = useAppStore.getState();
@@ -118,7 +117,7 @@ export function HealthConsentSuspendedScreen({ status }: { status: HealthConsent
           </p>
         )}
         {localErasure === 'failed' && status !== 'unavailable' && (
-          <button type="button" className="btn" onClick={() => void eraseLocal()}>
+          <button type="button" className="btn" onClick={() => { setLocalErasure('checking'); void eraseLocal(); }}>
             <RefreshCw size={16} aria-hidden="true" /> Riprova la pulizia locale
           </button>
         )}
