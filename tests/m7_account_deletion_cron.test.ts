@@ -18,6 +18,11 @@ vi.mock('../server/accountDeletion/jobStore', () => store);
 vi.mock('../server/accountDeletion/runner', () => runner);
 vi.mock('../server/accountDeletion/retention', () => retention);
 vi.mock('../server/telemetryRetention', () => telemetryRetention);
+const erasure = vi.hoisted(() => ({
+  listPendingHealthErasures: vi.fn(),
+  processHealthErasure: vi.fn(),
+}));
+vi.mock('../server/healthConsent/erasure', () => erasure);
 
 import { GET } from '../api/account-deletion-cron';
 
@@ -36,6 +41,8 @@ describe('M7 daily account deletion recovery cron', () => {
     store.listRecoverableDeletionJobs.mockResolvedValue([{ uid: 'a' }, { uid: 'b' }]);
     runner.processAccountDeletion.mockResolvedValue('complete');
     retention.purgeExpiredCompletedDeletionJobs.mockResolvedValue(0);
+    erasure.listPendingHealthErasures.mockResolvedValue([]);
+    erasure.processHealthErasure.mockResolvedValue('complete');
     telemetryRetention.purgeExpiredTelemetry.mockResolvedValue({
       usersScanned: 0,
       documentsDeleted: 0,
@@ -81,6 +88,8 @@ describe('M7 daily account deletion recovery cron', () => {
       scanned: 2,
       processed: 2,
       purged: 0,
+      erasuresScanned: 0,
+      erasuresComplete: 0,
       telemetryUsersScanned: 0,
       telemetryPurged: 0,
       telemetryCycleCompleted: true,
@@ -89,6 +98,8 @@ describe('M7 daily account deletion recovery cron', () => {
       scanned: 2,
       processed: 2,
       purged: 0,
+      erasuresScanned: 0,
+      erasuresComplete: 0,
       telemetryUsersScanned: 0,
       telemetryPurged: 0,
       telemetryCycleCompleted: true,
@@ -118,6 +129,20 @@ describe('M7 daily account deletion recovery cron', () => {
       kind: 'Error',
     });
     error.mockRestore();
+  });
+
+  it('retries health erasure without blocking account deletion or the other maintenance tasks', async () => {
+    process.env.CRON_SECRET = 'expected-secret';
+    erasure.listPendingHealthErasures.mockResolvedValue(['a', 'b']);
+    erasure.processHealthErasure.mockResolvedValueOnce('complete').mockResolvedValueOnce('pending');
+    const response = await GET(request('expected-secret'));
+    expect(response.status).toBe(200);
+    expect(erasure.listPendingHealthErasures).toHaveBeenCalledWith(25);
+    expect(erasure.processHealthErasure).toHaveBeenCalledTimes(2);
+    expect(await response.json()).toMatchObject({
+      erasuresScanned: 2, erasuresComplete: 1,
+      processed: 2, telemetryCycleCompleted: true,
+    });
   });
 
   it('uses only the residual cron budget for completed tombstone garbage collection', async () => {
