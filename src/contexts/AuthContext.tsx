@@ -792,6 +792,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             const mode = options?.mode || 'normal';
             const initialUid = auth.currentUser?.uid;
 
+            // A remote logout can revoke this tab before its storage event is
+            // delivered. Never fall through to the authenticated purge path.
+            if (isGuestRef.current && !isActiveGuestSession()) {
+                invalidateSession();
+                isGuestRef.current = false;
+                setIsGuest(false);
+                useAppStore.getState().resetStore({ force: true });
+                return;
+            }
+
             if (isGuestActiveStrict()) {
                 const requestedSession = captureSession();
                 if (!skipConfirm) {
