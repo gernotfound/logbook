@@ -30,6 +30,18 @@ describe('consent revocation local write barrier', () => {
     expect(isHealthConsentWriteBlocked('user:b')).toBe(true);
   });
 
+  it('repairs a corrupt on-device marker only after the server confirms withdrawal', () => {
+    const owner = 'user:a';
+    localStorage.setItem(healthConsentRevocationKey(owner), 'damaged');
+    expect(isHealthConsentWriteBlocked(owner)).toBe(true);
+    expect(() => markHealthConsentRevocation(owner, 'pending')).toThrow();
+    expect(localStorage.getItem(healthConsentRevocationKey(owner))).toBe('damaged');
+
+    markHealthConsentRevocation(owner, 'confirmed');
+    expect(readHealthConsentRevocation(owner)).toBe('confirmed');
+    expect(isHealthConsentWriteBlocked(owner)).toBe(true);
+  });
+
   it('rejects stale device writes but permits cleanup', () => {
     writeDeviceValue('workout', 'original', 'user:a');
     markHealthConsentRevocation('user:a', 'pending');
