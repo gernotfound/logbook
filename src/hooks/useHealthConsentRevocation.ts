@@ -11,18 +11,24 @@ import {
 
 export type HealthConsentGateStatus = HealthConsentRevocationStatus | 'unavailable';
 
+function localGateStatus(owner: string | null): HealthConsentGateStatus {
+  if (!owner) return 'none';
+  try { return readHealthConsentRevocation(owner); }
+  catch { return 'unavailable'; }
+}
+
 export function useHealthConsentRevocation(owner: string | null): HealthConsentGateStatus {
-  const [status, setStatus] = useState<HealthConsentGateStatus>('none');
+  const [observed, setObserved] = useState<{ owner: string | null; status: HealthConsentGateStatus }>(() => ({
+    owner, status: localGateStatus(owner),
+  }));
+  const status = observed.owner === owner ? observed.status : localGateStatus(owner);
 
   useEffect(() => {
     if (!owner) {
-      setStatus('none');
+      setObserved({ owner: null, status: 'none' });
       return;
     }
-    const refresh = () => {
-      try { setStatus(readHealthConsentRevocation(owner)); }
-      catch { setStatus('unavailable'); }
-    };
+    const refresh = () => setObserved({ owner, status: localGateStatus(owner) });
     const onStorage = (event: StorageEvent) => {
       if (event.key === healthConsentRevocationKey(owner) || event.key === null) refresh();
     };
@@ -39,13 +45,13 @@ export function useHealthConsentRevocation(owner: string | null): HealthConsentG
           snapshot => {
             if (snapshot.exists()) {
               try { markHealthConsentRevocation(owner, 'confirmed'); }
-              catch { setStatus('unavailable'); }
+              catch { setObserved({ owner, status: 'unavailable' }); }
             }
           },
           error => {
             // An offline device cannot learn the state of another device until
             // it reconnects. A server-side denial is not a benign offline state.
-            if (error.code !== 'unavailable') setStatus('unavailable');
+            if (error.code !== 'unavailable') setObserved({ owner, status: 'unavailable' });
           },
         );
       } catch {
