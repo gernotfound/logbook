@@ -115,11 +115,13 @@ export const getInitialLocalWorkout = (owner?: string, fallback?: WorkoutSession
     if (!normalized) throw new DeviceWorkoutCorruptError('Snapshot workout locale privo di identità valida.');
     const validated = DomainParsers.parseActiveWorkout(normalized) as WorkoutSession | null;
     if (!validated) throw new DeviceWorkoutCorruptError('Snapshot workout locale non valido.');
+    const savedWorkoutId = normalizeBusinessId(validated.id);
+    if (!savedWorkoutId) throw new DeviceWorkoutCorruptError('Snapshot workout locale privo di identità valida.');
 
     // A crash between the atomic IndexedDB workout.complete commit and the
     // device-key cleanup must never resurrect a workout already in history.
     if (!validated.isEditingHistory && fallback?.id !== validated.id
-        && (lastClosedWorkoutId === validated.id || deletedWorkoutIds?.includes(validated.id) || history?.some(item => item.id === validated.id))) {
+        && (lastClosedWorkoutId === validated.id || deletedWorkoutIds?.includes(savedWorkoutId) || history?.some(item => item.id === validated.id))) {
         persistLocalWorkout(null, owner);
         return recoverFallback();
     }
