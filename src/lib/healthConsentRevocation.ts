@@ -33,8 +33,14 @@ export function assertHealthConsentWritable(owner: string): void {
 }
 
 export function markHealthConsentRevocation(owner: string, status: Exclude<HealthConsentRevocationStatus, 'none'>): void {
-  const current = readHealthConsentRevocation(owner);
+  const key = healthConsentRevocationKey(owner);
+  // A confirmed, server-authoritative revocation can repair a malformed local
+  // marker. Pending requests must never silently overwrite corrupted evidence.
+  const current = readBrowserValueStrict(key);
   if (current === 'confirmed') return;
-  writeBrowserValue(healthConsentRevocationKey(owner), status);
+  if (current !== null && current !== 'pending' && status !== 'confirmed') {
+    throw new Error('Stato locale della revoca corrotto: attesa conferma server.');
+  }
+  writeBrowserValue(key, status);
   if (typeof window !== 'undefined') window.dispatchEvent(new Event(HEALTH_CONSENT_REVOCATION_EVENT));
 }
