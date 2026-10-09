@@ -76,6 +76,20 @@ describe('durable owner-scoped journal', () => {
         expect(persisted?.closedWorkoutIds).toEqual([finished.id]);
     });
 
+
+    it('keeps closure evidence and business state unchanged when the transaction is invalidated', async () => {
+        const initial = UserDataSchema.parse({}) as unknown as UserData;
+        await initializeLocal('user:a', initial);
+        const before = await readLocal('user:a');
+        await expect(commitDomainOperations('user:a', {
+            type: 'active-workout.set', workout: null, deletedWorkoutId: 'not-committed',
+        }, initial, () => false)).rejects.toThrow('invalidato');
+        const after = await readLocal('user:a');
+        expect(after?.closedWorkoutIds).toBeUndefined();
+        expect(after?.lastClosedWorkoutId).toBeUndefined();
+        expect(after?.revision).toBe(before?.revision);
+    });
+
     it('rejects malformed closure evidence without overwriting the owner envelope', async () => {
         await initializeLocal('user:a', data(170));
         const key = 'logbook:v2:user:a';
@@ -83,6 +97,9 @@ describe('durable owner-scoped journal', () => {
         await set(key, { ...raw, lastClosedWorkoutId: 42 });
         await expect(readLocal('user:a')).rejects.toThrow('Identificativo workout chiuso non valido');
         expect((await get(key) as Record<string, unknown>).lastClosedWorkoutId).toBe(42);
+        await set(key, { ...raw, closedWorkoutIds: ['duplicate', 'duplicate'] });
+        await expect(readLocal('user:a')).rejects.toThrow('Registro workout chiusi non valido');
+        expect((await get(key) as Record<string, unknown>).closedWorkoutIds).toEqual(['duplicate', 'duplicate']);
     });
 
     it('writes independent current envelope/data/sync versions', async () => {
