@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo, ReactNode } from 're
 import { User } from 'firebase/auth';
 import { auth, getDb, waitForPendingWrites, provider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendEmailVerification, reload } from '../lib/firebase';
 import { DB } from '../lib/db';
+import { isHealthConsentWriteBlocked } from '../lib/healthConsentRevocation';
 import { isAccountDeletionPending } from '../lib/sync/accountGate';
 import { useAppStore } from '../store/useAppStore';
 import { UserData } from '../types';
@@ -655,10 +656,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         isGuestRef.current = true;
         setIsGuest(true);
         setGuestMigrationStatus('idle');
+        const guestCanHydrate = () => isActiveGuestSession() && !isHealthConsentWriteBlocked('guest');
+        if (!guestCanHydrate()) return;
         const currentData = useAppStore.getState().userData;
         if (!currentData) {
             const catalog = isCatalogInMemory() ? getInMemoryCatalog() : (await getCachedCatalog());
             const initialGuestData = getResolvedDefaultUserData(catalog);
+            if (!guestCanHydrate()) return;
             setUserData(UserDataSchema.parse(initialGuestData) as unknown as UserData);
         } else {
             const hasCatalogExercises = Array.isArray(currentData.library) && currentData.library.some(e => e.isDefault === true);
@@ -671,6 +675,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 const resolvedFoods = !hasCatalogFoods
                     ? resolveEffectiveFoods(catalog.foods, currentData.customFoods || [], currentData.catalogOverrides)
                     : currentData.customFoods;
+                if (!guestCanHydrate()) return;
                 setUserData({
                     ...currentData,
                     library: resolvedLibrary,
