@@ -90,6 +90,26 @@ describe('durable owner-scoped journal', () => {
         expect(after?.revision).toBe(before?.revision);
     });
 
+
+    it('rejects a stale tab write after deletion across domain and snapshot writers', async () => {
+        const closed = { id: 'closed-tab-session', date: '2026-10-09', exercises: [] };
+        const initial = UserDataSchema.parse({ activeWorkout: closed }) as unknown as UserData;
+        await initializeLocal('user:a', initial);
+        await commitDomainOperations('user:a', {
+            type: 'active-workout.set', workout: null, deletedWorkoutId: closed.id,
+        }, initial);
+        const afterDelete = (await readLocal('user:a'))!;
+        await expect(commitDomainOperations('user:a', {
+            type: 'active-workout.set', workout: closed,
+        }, initial)).rejects.toThrow('già terminato o eliminato');
+        await expect(commitLocal('user:a', initial, afterDelete.data))
+            .rejects.toThrow('già terminato o eliminato');
+        const durable = await readLocal('user:a');
+        expect(durable?.data.activeWorkout).toBeNull();
+        expect(durable?.revision).toBe(afterDelete.revision);
+        expect(durable?.closedWorkoutIds).toContain(closed.id);
+    });
+
     it('rejects malformed closure evidence without overwriting the owner envelope', async () => {
         await initializeLocal('user:a', data(170));
         const key = 'logbook:v2:user:a';
