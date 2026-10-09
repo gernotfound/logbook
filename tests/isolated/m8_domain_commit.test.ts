@@ -25,6 +25,15 @@ const base = (): UserData => UserDataSchema.parse({ profile: { height: '170', ge
 
 describe('M8 domain commit durability', () => {
     beforeEach(async () => {
+        // The isolated Node runner lacks browser localStorage; supply a real
+        // no-revocation storage contract rather than bypassing the write fence.
+        const values = new Map<string, string>();
+        vi.stubGlobal('localStorage', {
+            getItem: (key: string) => values.get(key) ?? null,
+            setItem: (key: string, value: string) => { values.set(key, value); },
+            removeItem: (key: string) => { values.delete(key); },
+            clear: () => { values.clear(); },
+        });
         await clear();
     });
 
