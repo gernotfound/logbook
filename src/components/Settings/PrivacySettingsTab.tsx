@@ -1,13 +1,15 @@
-import { ChevronRight, FileText, ShieldCheck } from 'lucide-react';
+import { ChevronRight, FileText, ShieldCheck, ShieldAlert } from 'lucide-react';
 
 interface PrivacySettingsTabProps {
     analyticsEnabled: boolean;
     onOpenTerms: () => void;
     onOpenPrivacy: () => void;
     onToggleAnalytics: () => void;
+    onRevokeHealthConsent: () => void;
+    revokingHealthConsent: boolean;
 }
 
-export function PrivacySettingsTab({ analyticsEnabled, onOpenTerms, onOpenPrivacy, onToggleAnalytics }: PrivacySettingsTabProps) {
+export function PrivacySettingsTab({ analyticsEnabled, onOpenTerms, onOpenPrivacy, onToggleAnalytics, onRevokeHealthConsent, revokingHealthConsent }: PrivacySettingsTabProps) {
     return (
         <section className="settings-detail-stack" aria-label="Privacy">
             <div className="settings-toggle-card">
@@ -19,6 +21,14 @@ export function PrivacySettingsTab({ analyticsEnabled, onOpenTerms, onOpenPrivac
                     <input type="checkbox" id="analytics-toggle" aria-label="Statistiche di utilizzo" checked={analyticsEnabled} onChange={onToggleAnalytics} />
                     <span aria-hidden="true" />
                 </label>
+            </div>
+            <div className="settings-detail-card">
+                <h2>Consenso per i dati relativi alla salute</h2>
+                <p>Puoi revocare il consenso in qualsiasi momento. Il tracciamento verrà sospeso; potrai ancora esportare i dati quando consentito ed eliminare l'account.</p>
+                <button type="button" className="btn" onClick={onRevokeHealthConsent} disabled={revokingHealthConsent}>
+                    <ShieldAlert size={18} aria-hidden="true" />
+                    {revokingHealthConsent ? 'Registrazione della revoca…' : 'Revoca il consenso per i dati salute'}
+                </button>
             </div>
             <div className="settings-detail-list">
                 <button type="button" className="settings-simple-row" onClick={onOpenPrivacy}>
