@@ -358,7 +358,7 @@ export function useWorkoutSession() {
                     saveError: 'Allenamento completato; impossibile azzerare il timer locale.' });
             }
             resetWorkoutClockGuard(expectedId);
-            return useAppStore.getState().userData?.history.find(item => item.id === expectedId) ?? finishedWorkout;
+            return useAppStore.getState().userData?.history?.find(item => item.id === expectedId) ?? finishedWorkout;
         } catch (error) {
             if (auth.currentUser?.uid === expectedUid) {
                 await showAlert(
