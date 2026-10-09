@@ -4,7 +4,7 @@ import ErrorBoundary from '../src/components/UI/ErrorBoundary';
 import { DB } from '../src/lib/db';
 import { useDialogStore } from '../src/store/useDialogStore';
 import { idbStore, localStorageMock } from './setup';
-import { activateGuestSession, GUEST_REVOCATION_KEY, GUEST_SESSION_KEY, storageOwner, isActiveGuestSession } from '../src/lib/sync/session';
+import { activateGuestSession, GUEST_REVOCATION_KEY, GUEST_SESSION_KEY, storageOwner, isActiveGuestSession, invalidateSession } from '../src/lib/sync/session';
 import { markAccountDeletion } from '../src/lib/sync/accountGate';
 
 const ProblemChild = ({ shouldThrow }: { shouldThrow: boolean }) => {
@@ -173,6 +173,23 @@ describe('R2: ErrorBoundary & Dialog Hardening Suite', () => {
         expect(isActiveGuestSession()).toBe(false);
         expect(window.location.reload).not.toHaveBeenCalled();
         expect(useDialogStore.getState().showAlert).toHaveBeenCalled();
+        spy.mockRestore();
+    });
+
+    it('refuses a destructive reset when the confirmed session has changed', async () => {
+        const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+        let approve!: (allowed: boolean) => void;
+        vi.mocked(useDialogStore.getState().showConfirm).mockImplementationOnce(() =>
+            new Promise(resolve => { approve = resolve; })
+        );
+
+        render(<ErrorBoundary><ProblemChild shouldThrow={true} /></ErrorBoundary>);
+        fireEvent.click(screen.getByText(/Azzera dati locali/i));
+        invalidateSession(); // Simulate a login/logout while the confirm dialog is open.
+        await act(async () => { approve(true); });
+
+        expect(DB.purgeAllLocalUserData).not.toHaveBeenCalled();
+        expect(window.location.reload).not.toHaveBeenCalled();
         spy.mockRestore();
     });
 
