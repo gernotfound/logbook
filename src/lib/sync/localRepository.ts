@@ -8,6 +8,7 @@ import equal from 'fast-deep-equal';
 import { type SemanticOperation, type VectorClock, type SyncMeta, diffDocuments, applySemanticOperations, coversVectorClock, mergeVectors, parseSemanticOperation, parseSyncMeta, parseVectorClock } from './semanticProjection';
 import { projectDocuments, applyRemoteDocuments, type DocumentData } from './documentProjection';
 import { getCachedCatalog } from '../catalog/catalogService';
+import { assertHealthConsentWritable } from '../healthConsentRevocation';
 import { normalizeStorageOwner } from './owner';
 import { normalizeBusinessId, requireBusinessId } from '../businessIdentity';
 import {
@@ -237,12 +238,14 @@ export async function ensureBoundedPendingSequences(owner: string, expectedActor
 
 export async function commitLocal(owner: string, data: UserData, initialBase: UserData, guard?: LocalWriteGuard, expectedRevision?: number): Promise<SemanticOperation[]> {
     owner = normalizeStorageOwner(owner);
+    assertHealthConsentWritable(owner);
     const desired = structuredClone(parse(data));
     const callerBase = structuredClone(parse(initialBase));
     let operations: SemanticOperation[] = [];
     const catalog = await getCachedCatalog();
     await update<any>(keyFor(owner), raw => {
         if (guard && !guard()) return raw;
+        assertHealthConsentWritable(owner);
         const current = validate(raw, owner);
         if (expectedRevision !== undefined && (
             current?.revision !== expectedRevision
@@ -295,6 +298,7 @@ export interface DomainCommitResult { operations: SemanticOperation[]; data: Use
 
 export async function commitDomainOperations(owner: string, batch: DomainOperationBatch, initialBase: UserData, guard?: LocalWriteGuard): Promise<DomainCommitResult> {
     owner = normalizeStorageOwner(owner);
+    assertHealthConsentWritable(owner);
     const domainOperations = normalizeDomainOperationBatch(batch);
     const fallback = structuredClone(parse(initialBase));
     const catalog = await getCachedCatalog();
@@ -302,6 +306,7 @@ export async function commitDomainOperations(owner: string, batch: DomainOperati
     let savedData = fallback;
     await update<any>(keyFor(owner), raw => {
         if (guard && !guard()) throw new Error('Commit locale invalidato dal cambio sessione');
+        assertHealthConsentWritable(owner);
         const current = validate(raw, owner);
         const base = current?.data ?? fallback;
         // A retry after a durable local completion can deliver an outstanding
