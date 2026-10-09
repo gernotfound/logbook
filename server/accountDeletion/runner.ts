@@ -5,6 +5,7 @@ import {
   assertDeletionLease,
   DeletionLeaseLostError,
   deleteAuthUserLast,
+  deleteHealthConsentRevocation,
   deletePrivateCollectionPage,
   deleteUserRoot,
   markDeletionComplete,
@@ -79,6 +80,13 @@ export async function processAccountDeletion(
       return 'pending';
     }
     await deleteUserRoot(uid, leaseOwner);
+
+    phase = 'revocation';
+    if (outOfBudget(deadlineMs, safetyBufferMs)) {
+      await parkDeletion(uid, 'deleting', { phase: 'root' }, leaseOwner);
+      return 'pending';
+    }
+    await deleteHealthConsentRevocation(uid, leaseOwner);
 
     phase = 'verification';
     await markVerifying(uid, leaseOwner);
