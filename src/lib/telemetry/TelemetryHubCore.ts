@@ -45,6 +45,8 @@ export class TelemetryHub {
   private readonly rateLimits = new TelemetryRateLimitState();
   private readonly queue = new TelemetryQueueStorage(() => this.getUserId());
   private readonly retryScheduler = new TelemetryRetryScheduler();
+  private lastResolvedUserId: string | null | undefined;
+  private ownerEpoch = 0;
   private isErrorMicrotaskPending = false;
   private isFlushing = false;
   private inFlightFlushPromise: Promise<void> | null = null;
@@ -112,6 +114,8 @@ export class TelemetryHub {
     this.queue.reset();
     this.initialized = false;
     this.session.reset();
+    this.lastResolvedUserId = undefined;
+    this.ownerEpoch++;
     this.isErrorMicrotaskPending = false;
   }
 
@@ -152,15 +156,23 @@ export class TelemetryHub {
   };
 
   public setUserId(userId: string | null | undefined): void {
-    const previousUserId = this.session.getUserId();
     this.session.setUserId(userId);
-    if (previousUserId !== this.session.getUserId()) {
-      this.queue.invalidateCache();
-    }
+    this.getUserId();
   }
 
   public getUserId(): string | null {
-    return this.session.getUserId();
+    const userId = this.session.getUserId();
+    if (this.lastResolvedUserId !== undefined && this.lastResolvedUserId !== userId) {
+      // Auth changes can happen without setUserId(): isolate every owner-bound
+      // in-memory collaborator before another error can hit the dedup fast path.
+      this.ownerEpoch++;
+      this.rateLimits.reset();
+      this.queue.invalidateCache();
+      this.retryScheduler.clear();
+      this.session.rotateSessionId();
+    }
+    this.lastResolvedUserId = userId;
+    return userId;
   }
 
   public getSessionId(): string {
@@ -173,6 +185,7 @@ export class TelemetryHub {
 
   public trackError(error: unknown, options: TrackErrorOptions = {}): void {
     try {
+      this.getUserId();
       const now = Date.now();
 
       const fastType =
@@ -401,6 +414,7 @@ export class TelemetryHub {
   }
 
   private flushPendingDispatches(): void {
+    this.getUserId();
     for (const entry of this.rateLimits.values()) {
       if (entry.isDispatchPending) {
         entry.isDispatchPending = false;
@@ -422,6 +436,7 @@ export class TelemetryHub {
   }
 
   public async flushRateLimiters(): Promise<void> {
+    this.getUserId();
     const entries = this.rateLimits.takeAll();
 
     for (const entry of entries) {
@@ -490,12 +505,15 @@ export class TelemetryHub {
   }
 
   public async flushQueue(): Promise<void> {
+    this.getUserId();
     if (this.isFlushing) {
       return this.inFlightFlushPromise || Promise.resolve();
     }
 
     this.queue.flushPendingDiskSync();
 
+    const ownerKey = this.queue.getQueueStorageKey();
+    const ownerEpoch = this.ownerEpoch;
     const items = this.queue.getQueuedEvents();
     if (items.length === 0) {
       return;
@@ -504,7 +522,7 @@ export class TelemetryHub {
     this.isFlushing = true;
     const flushPromise = (async () => {
       try {
-        await this.executeFlushQueue(items);
+        await this.executeFlushQueue(items, ownerKey, ownerEpoch);
       } finally {
         this.isFlushing = false;
         this.inFlightFlushPromise = null;
@@ -515,7 +533,18 @@ export class TelemetryHub {
     return flushPromise;
   }
 
-  private async executeFlushQueue(items: QueuedTelemetryItem[]): Promise<void> {
+  private isQueueOwnerCurrent(ownerKey: string, ownerEpoch: number): boolean {
+    // Resolving the key also observes Firebase Auth changes not explicitly
+    // announced to the telemetry hub.
+    const currentKey = this.queue.getQueueStorageKey();
+    return this.ownerEpoch === ownerEpoch && currentKey === ownerKey;
+  }
+
+  private async executeFlushQueue(
+    items: QueuedTelemetryItem[],
+    ownerKey: string,
+    ownerEpoch: number
+  ): Promise<void> {
     try {
       const successfullyDispatchedIds = new Set<string>();
       const itemsToRetainWithRetry: QueuedTelemetryItem[] = [];
@@ -523,6 +552,7 @@ export class TelemetryHub {
       let processedCount = 0;
 
       for (const item of items) {
+        if (!this.isQueueOwnerCurrent(ownerKey, ownerEpoch)) return;
         if (!item || !item.payload || typeof item.payload !== 'object') {
           if (item?.id) {
             successfullyDispatchedIds.add(item.id);
@@ -553,6 +583,7 @@ export class TelemetryHub {
           );
         }
 
+        if (!this.isQueueOwnerCurrent(ownerKey, ownerEpoch)) return;
         processedCount++;
 
         if (success) {
@@ -586,6 +617,8 @@ export class TelemetryHub {
         }
       }
 
+      // Never reconcile a completed old-owner flush into a new-owner queue.
+      if (!this.isQueueOwnerCurrent(ownerKey, ownerEpoch)) return;
       this.queue.invalidateCache();
       const currentLiveQueue = this.queue.getQueuedEvents();
       const updatedQueue: QueuedTelemetryItem[] = [];

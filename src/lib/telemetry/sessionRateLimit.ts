@@ -10,8 +10,6 @@ import { createTelemetryId } from './id';
 
 export class TelemetrySessionState {
   private customUserId: string | null | undefined = undefined;
-  private cachedUserId: string | null = 'anonymous';
-  private cachedUserIdTime = 0;
   private inMemorySessionId: string | null = null;
 
   constructor() {
@@ -20,8 +18,6 @@ export class TelemetrySessionState {
 
   public setUserId(userId: string | null | undefined): void {
     this.customUserId = userId;
-    this.cachedUserId = userId !== undefined ? userId : 'anonymous';
-    this.cachedUserIdTime = userId !== undefined ? Date.now() + 100000 : 0;
   }
 
   public getUserId(): string | null {
@@ -29,26 +25,17 @@ export class TelemetrySessionState {
       return this.customUserId;
     }
 
-    const now = Date.now();
-    if (now - this.cachedUserIdTime < 1000) {
-      return this.cachedUserId;
-    }
-
-    this.cachedUserIdTime = now;
     try {
       if (typeof localStorage !== 'undefined' && localStorage.getItem('logbook_is_guest') === 'true') {
-        this.cachedUserId = null;
         return null;
       }
       if (typeof auth !== 'undefined' && auth && auth.currentUser) {
-        this.cachedUserId = auth.currentUser.uid;
         return auth.currentUser.uid;
       }
     } catch {
       // Telemetry identity resolution is best-effort.
     }
 
-    this.cachedUserId = 'anonymous';
     return 'anonymous';
   }
 
@@ -83,10 +70,21 @@ export class TelemetrySessionState {
     return this.inMemorySessionId;
   }
 
+  public rotateSessionId(): void {
+    // A tab may host multiple accounts; never link their diagnostics by session ID.
+    const nextId = createTelemetryId('sess');
+    this.inMemorySessionId = nextId;
+    try {
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.setItem(SESSION_ID_KEY, nextId);
+      }
+    } catch {
+      // Retain the isolated in-memory ID when session storage is unavailable.
+    }
+  }
+
   public reset(): void {
     this.customUserId = undefined;
-    this.cachedUserId = 'anonymous';
-    this.cachedUserIdTime = 0;
     this.inMemorySessionId = null;
   }
 }
