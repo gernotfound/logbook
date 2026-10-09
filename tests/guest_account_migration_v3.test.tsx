@@ -10,6 +10,8 @@ import { readLocal } from '../src/lib/sync/localRepository';
 import { useAppStore } from '../src/store/useAppStore';
 import type { UserData } from '../src/types';
 import { beginGuestMigrationIntent } from '../src/lib/auth/guestMigrationIntent';
+import { markHealthConsentRevocation } from '../src/lib/healthConsentRevocation';
+import { migrateGuestAccount } from '../src/contexts/auth/migrateGuestAccount';
 
 const parse = (value: unknown) => UserDataSchema.parse(value) as unknown as UserData;
 const user = { uid: 'a', email: 'a@example.com', displayName: 'A' } as any;
@@ -44,6 +46,18 @@ afterEach(() => {
 });
 
 describe('guest -> account V3 migration', () => {
+    it('refuses health-data merge after the guest withdrew consent, before any cloud read', async () => {
+        const { guest } = fixtures();
+        markHealthConsentRevocation('guest', 'confirmed');
+        await expect(migrateGuestAccount({
+            user, guestData: guest, policy: 'merge',
+            setUserData: vi.fn(), setSyncing: vi.fn(),
+            onLocalReady: vi.fn(), isCurrent: () => true,
+        })).rejects.toThrow('Consenso ai dati salute revocato');
+        expect(DB.loadCloudPayload).not.toHaveBeenCalled();
+    });
+
+
     it('stages SemanticOperations, drains the authenticated journal, and keeps cloud + guest data', async () => {
         const { cloud, guest, merged } = fixtures();
         localStorage.setItem('logbook_is_guest', 'true');
