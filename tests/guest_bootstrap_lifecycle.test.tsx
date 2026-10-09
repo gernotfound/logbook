@@ -8,6 +8,7 @@ import { useAppStore } from '../src/store/useAppStore';
 import { clearCatalogCache, saveCatalogToCache } from '../src/lib/catalog/catalogService';
 import { resolveEffectiveExercises, resolveEffectiveFoods } from '../src/lib/catalog/deltaResolver';
 import type { UserData, Exercise, Food } from '../src/types';
+import { activateGuestSession, captureSession, GUEST_REVOCATION_KEY, GUEST_SESSION_KEY, isCurrentSession } from '../src/lib/sync/session';
 
 const GuestTestComponent = () => {
     const { currentUser, loading, isGuest, loginAsGuest, logout } = useAuth();
@@ -61,6 +62,27 @@ describe('Milestone M2: Guest Bootstrap & Cold Start Lifecycle', () => {
         expect(state?.customFoods?.length).toBe(0);
         expect(parseInt(screen.getByTestId('exercise-count').textContent || '0')).toBe(0);
         expect(parseInt(screen.getByTestId('food-count').textContent || '0')).toBe(0);
+    });
+
+    it('invalidates a second guest view after cross-tab revocation', async () => {
+        render(<AuthProvider><GuestTestComponent /></AuthProvider>);
+        act(() => { screen.getByTestId('btn-guest').click(); });
+        await waitFor(() => expect(screen.getByTestId('auth-mode').textContent).toBe('GUEST'));
+        const stale = captureSession();
+        act(() => {
+            localStorage.setItem(GUEST_REVOCATION_KEY, 'remote-revocation');
+            localStorage.removeItem('logbook_is_guest');
+            window.dispatchEvent(new StorageEvent('storage', {
+                key: GUEST_REVOCATION_KEY, newValue: 'remote-revocation',
+            }));
+        });
+        await waitFor(() => expect(screen.getByTestId('auth-mode').textContent).toBe('ANONYMOUS'));
+        expect(useAppStore.getState().userData).toBeNull();
+        expect(isCurrentSession(stale)).toBe(false);
+        localStorage.setItem(GUEST_SESSION_KEY, 'another-generation');
+        localStorage.setItem('logbook_is_guest', 'true');
+        localStorage.removeItem(GUEST_REVOCATION_KEY);
+        expect(isCurrentSession(stale)).toBe(false);
     });
 
     it('M2.2: catalog delta resolvers preserve custom entries and apply overrides', () => {
@@ -176,7 +198,9 @@ describe('Milestone M2: Guest Bootstrap & Cold Start Lifecycle', () => {
             isDefault: false
         };
 
+        localStorage.setItem(GUEST_SESSION_KEY, 'fixture-guest');
         localStorage.setItem('logbook_is_guest', 'true');
+        activateGuestSession('fixture-guest');
         useAppStore.getState().setUserData({
             profile: { height: '180' },
             library: [customEx],

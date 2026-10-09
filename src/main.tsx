@@ -2,7 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { readLocal } from './lib/sync/localRepository'
 import { readBrowserValueStrict } from './lib/sync/browserStorage'
-import { captureSession } from './lib/sync/session'
+import { captureSession, GUEST_REVOCATION_KEY } from './lib/sync/session'
 import { readAuthenticatedOwnerHint } from './lib/sync/authOwnerHint'
 import App from './App'
 import { AuthProvider } from './contexts/AuthContext'
@@ -87,7 +87,7 @@ export const initApp = async () => {
 
   let isGuest = false;
   try {
-    isGuest = readBrowserValueStrict('logbook_is_guest') === 'true';
+    isGuest = readBrowserValueStrict('logbook_is_guest') === 'true' && readBrowserValueStrict(GUEST_REVOCATION_KEY) === null;
   } catch (error) {
     console.warn('Bootstrap bloccato: ownership storage non leggibile.', error);
     renderStorageUnavailable(rootElement);

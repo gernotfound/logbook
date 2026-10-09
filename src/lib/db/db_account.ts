@@ -51,7 +51,7 @@ function collectLocalPurgeKeys(owner: string): Set<string> {
     if (ownerUid && localStorage.getItem('logbook_guest_migration_sync_recovery') === ownerUid) {
         keys.add('logbook_guest_migration_sync_recovery');
     }
-    if (owner === 'guest') keys.add('logbook_is_guest');
+    if (owner === 'guest') { keys.add('logbook_is_guest'); keys.add('logbook_guest_session_id_v1'); }
 
     const prefix = 'logbook:v2:' + owner + ':';
     const length = localStorage.length;

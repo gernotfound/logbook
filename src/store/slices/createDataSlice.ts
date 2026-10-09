@@ -42,26 +42,33 @@ export const getInitialUserData = (): UserData | null => {
 
 export const saveUserDataToCache = async (data: UserData | null, base?: UserData, expectedRevision?: number): Promise<UserData | null> => {
         const session = captureSession();
+        const guard = () => isCurrentSession(session);
+        if (!guard()) throw new Error('Sessione non più autorizzata a salvare dati locali.');
         if (data) {
             const current = await readLocal(session.owner);
+            if (!guard()) throw new Error('Sessione cambiata prima del salvataggio locale.');
             if (expectedRevision !== undefined && current?.revision !== expectedRevision) {
                 throw new StaleLocalRevisionError(expectedRevision, current?.revision ?? null);
             }
-            if (!current || !equal(UserDataSchema.parse(current.data), UserDataSchema.parse(data))) {
-                if (base) await commitLocal(session.owner, data, base, undefined, expectedRevision);
-                else if (current) await commitLocal(session.owner, data, current.data, undefined, expectedRevision);
-                else {
-                    if (expectedRevision !== undefined) throw new StaleLocalRevisionError(expectedRevision, null);
-                    await initializeLocal(session.owner, data);
-                }
+            if (!current) {
+                if (expectedRevision !== undefined) throw new StaleLocalRevisionError(expectedRevision, null);
+                // A genuine mutation has an observed base and needs a journal
+                // even when this is the first envelope for the account.
+                if (base) await commitLocal(session.owner, data, base, guard);
+                else await initializeLocal(session.owner, data, undefined, guard);
+            } else if (base && !equal(UserDataSchema.parse(current.data), UserDataSchema.parse(data))) {
+                // An unbased bootstrap is only a seed, never deletion intent.
+                await commitLocal(session.owner, data, base, guard, expectedRevision);
             }
+            if (!guard()) throw new Error('Sessione cambiata durante il salvataggio locale.');
             const envelope = await readLocal(session.owner);
             if (!envelope) throw new Error('Copia locale non disponibile dopo il salvataggio.');
-            if (isCurrentSession(session)) updateStorageMarker(Date.now(), undefined, session.owner);
+            if (guard()) updateStorageMarker(Date.now(), undefined, session.owner);
             return envelope.data;
         }
+        if (!guard()) throw new Error('Sessione cambiata prima della rimozione locale.');
         await idbDel(`logbook:v2:${session.owner}`);
-        if (isCurrentSession(session)) clearStorageMarker(undefined, session.owner);
+        if (guard()) clearStorageMarker(undefined, session.owner);
         return null;
 };
 
@@ -96,6 +103,10 @@ export const createDataSlice: StateCreator<AppState, [], [], DataSlice> = (set, 
         }
 
         const session = captureSession();
+        if (!isCurrentSession(session)) {
+            set({ localPersistenceBlocked: true, syncHealth: 'failed', saveError: 'Sessione locale non più attiva. Riapri TheLogBook per continuare.' });
+            return;
+        }
         const aligned = alignActiveWorkout(rawNextData.activeWorkout, state.localWorkout);
         if (aligned.local !== state.localWorkout) {
             try {

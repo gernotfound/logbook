@@ -39,6 +39,9 @@ describe('store with real IndexedDB commits', () => {
     it('preserves the nutrition alternative in memory and IndexedDB when resolution is rejected', async () => {
         const conflicted = UserDataSchema.parse({ ...data(170), nutritionPlanning: { onDaysCount: 3 }, pendingConflicts: { nutritionPlanning: { onDaysCount: 0 } } }) as unknown as UserData;
         store.setState({ userData: conflicted });
+        // Bootstrap is now create-if-absent; reset this test fixture rather than
+        // relying on a production initializer to overwrite durable state.
+        await clear();
         await initializeLocal('user:A', conflicted);
         sdk.save.mockResolvedValue({ ok: false, status: 'rejected', error: { code: 'permission-denied' } });
         const result = store.getState().resolveNutritionConflict({ resolution: 'local', expectedUid: 'A', expectedConflictFingerprint: getNutritionConflictFingerprint(conflicted.pendingConflicts?.nutritionPlanning) });

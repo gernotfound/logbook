@@ -426,13 +426,17 @@ export async function acknowledgeThrough(owner: string, expectedSeq: number, rem
     });
 }
 
-export async function initializeLocal(owner: string, data: UserData, completeMonths?: string[]): Promise<void> {
+export async function initializeLocal(owner: string, data: UserData, completeMonths?: string[], guard?: LocalWriteGuard): Promise<void> {
     owner = normalizeStorageOwner(owner);
     const parsed = structuredClone(parse(data));
     await update<any>(keyFor(owner), raw => {
+        if (guard && !guard()) throw new Error('Inizializzazione locale invalidata dal cambio sessione');
         const current = validate(raw, owner);
-        if (current?.pending.length) return current;
-        return { ...current, ...currentEnvelopeVersions(), owner, actorId: current?.actorId ?? generateId('actor'), actorSeq: current?.actorSeq ?? 0, clock: current?.clock ?? {}, data: parsed, baseline: parsed, completeMonths: completeMonths ?? current?.completeMonths ?? [], pending: [], syncMetaByDocument: current?.syncMetaByDocument ?? {}, replica: current?.replica ?? null, revision: current?.revision ?? 0 };
+        // Bootstrap is create-if-absent, not a replacement write: the journal
+        // can be empty (especially for guest or an acknowledged account) while
+        // a concurrent tab has already committed durable business edits.
+        if (current) return current;
+        return { ...currentEnvelopeVersions(), owner, actorId: generateId('actor'), actorSeq: 0, clock: {}, data: parsed, baseline: parsed, completeMonths: completeMonths ?? [], pending: [], syncMetaByDocument: {}, replica: null, revision: 0 };
     });
 }
 

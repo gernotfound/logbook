@@ -205,6 +205,16 @@ All'avvio dell'app (`initApp` in `src/main.tsx`), **prima** di `createRoot().ren
 
 Un envelope locale con versione legacy/futura non viene reinterpretato: `readLocal()` fallisce in modo conservativo e i bytes restano in IndexedDB per diagnosi/recupero. Se la versione è futura, il boundary locale segnala anche lo stato applicativo `update-required` prima che l'app diventi editabile.
 
+## Concorrenza bootstrap e revoca guest cross-tab
+
+**MUST:** `initializeLocal()` crea un envelope soltanto se assente nella transazione IndexedDB; un archivio già comparso, anche guest con journal vuoto o account già acknowledged, non viene sovrascritto da un seed obsoleto.
+
+**MUST:** tutti gli snapshot-save asincroni da store ricevono un guard di sessione verificato all'interno del commit IndexedDB, non solo dopo la persistenza. Logout e reset invalidano la sessione prima del purge.
+
+**MUST:** il logout guest scrive il tombstone `logbook_guest_revoked_v1` prima del purge. Gli altri realm devono invalidare UI, draft e workout e non possono ricreare dati eliminati. `logbook_guest_session_id_v1` lega una generazione alla singola sessione/realm: una nuova entrata guest esplicita non riabilita le schede vecchie. Un purge incompleto mantiene la revoca fino a nuova entrata esplicita che ripulisce il residuo.
+
+**MUST:** i salvataggi device-critical (workout, bozze e flush in background) rispettano la revoca guest anche quando non passano da IndexedDB. Storage non leggibile non conferisce autorizzazione alla scrittura.
+
 ## Blindatura in background (Safari Suspend)
 
 Quando `document.visibilityState === 'hidden'`:

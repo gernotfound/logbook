@@ -29,7 +29,9 @@ describe('M7 logout isolation with stale deletion receipts', () => {
     const authContext = readFileSync(resolve(process.cwd(), 'src/contexts/AuthContext.tsx'), 'utf8');
     const forcedResets = authContext.match(/resetStore\(\{ force: true \}\)/g) ?? [];
 
-    expect(forcedResets).toHaveLength(2);
+    // Guest cross-tab revocation must also clear a stale in-memory view.
+    expect(forcedResets).toHaveLength(3);
+    expect(authContext).toMatch(/const reconcileGuestSession[\s\S]*?resetStore\(\{ force: true \}\)/);
     expect(authContext).toContain('await DB.secureLogOut();');
     expect(authContext).toMatch(/await DB\.secureLogOut\(\);[\s\S]{0,200}resetStore\(\{ force: true \}\)/);
     expect(authContext).toMatch(/setIsGuest\(false\);[\s\S]{0,200}resetStore\(\{ force: true \}\)/);
