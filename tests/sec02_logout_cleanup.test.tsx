@@ -5,6 +5,7 @@ import * as idb from 'idb-keyval';
 import { useAppStore } from '../src/store/useAppStore';
 import { storageOwner } from '../src/lib/sync/session';
 import { localStorageMock } from './setup';
+import { markAccountDeletion, isAccountDeletionPending } from '../src/lib/sync/accountGate';
 
 vi.mock('idb-keyval', () => ({
     get: vi.fn(),
@@ -297,4 +298,19 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
         expect(useAppStore.getState().syncing).toBe(false);
         expect(useAppStore.getState().saveError).toBeNull();
     });
+    it('refuses authenticated logout before signOut when a deletion receipt is pending', async () => {
+        const owner = storageOwner();
+        expect(owner.startsWith('user:')).toBe(true);
+        markAccountDeletion(owner, { receiptToken: 'A'.repeat(43), serverAcceptedAt: Date.now() });
+        localStorage.setItem('logbook:v2:' + owner + ':workout', 'recoverable');
+
+        await expect(DB.secureLogOut()).rejects.toThrow('Cancellazione account in sospeso');
+
+        const { auth } = await import('../src/lib/firebase');
+        expect(auth.signOut).not.toHaveBeenCalled();
+        expect(idb.del).not.toHaveBeenCalled();
+        expect(isAccountDeletionPending(owner)).toBe(true);
+        expect(localStorage.getItem('logbook:v2:' + owner + ':workout')).toBe('recoverable');
+    });
+
 });
