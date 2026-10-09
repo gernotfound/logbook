@@ -17,6 +17,13 @@ const RECEIPT_HASH_PATTERN = /^[a-f0-9]{64}$/;
 const MAX_ACCEPTED_RECEIPTS = 16;
 const JOB_COLLECTION = 'account_deletions';
 
+export class DeletionLeaseLostError extends Error {
+  constructor() {
+    super('Deletion lease no longer belongs to this worker.');
+    this.name = 'DeletionLeaseLostError';
+  }
+}
+
 export class NonRetryableDeletionError extends Error {
   constructor(message: string) {
     super(message);
@@ -178,22 +185,35 @@ export async function acquireDeletionLease(uidValue: string, leaseOwner: string,
   });
 }
 
+/**
+ * Every mutation (including destructive Firestore deletes) is fenced in the
+ * same transaction that checks lease ownership. A read-only preflight check
+ * is also used before externally managed Firebase Auth operations.
+ */
+function requireLiveLease(job: AccountDeletionJob | undefined, owner: string): void {
+  if (!job || job.status === 'complete' || job.leaseOwner !== owner
+    || (timestampMillis(job.leaseUntil) ?? 0) <= Date.now()) {
+    throw new DeletionLeaseLostError();
+  }
+}
+
+export async function assertDeletionLease(uidValue: string, leaseOwner: string): Promise<void> {
+  const snapshot = await jobRef(validateUid(uidValue)).get();
+  requireLiveLease(snapshot.exists ? snapshot.data() as AccountDeletionJob : undefined, leaseOwner);
+}
+
 export async function parkDeletion(
   uidValue: string,
   status: Extract<AccountDeletionStatus, 'deleting' | 'verifying'>,
   cursor: AccountDeletionCursor,
+  leaseOwner: string,
 ): Promise<void> {
-  const uid = validateUid(uidValue);
-  const ref = jobRef(uid);
+  const ref = jobRef(validateUid(uidValue));
   await adminDb().runTransaction(async (transaction: Transaction) => {
     const snapshot = await transaction.get(ref);
-    if (!snapshot.exists) return;
-    const current = snapshot.data() as AccountDeletionJob;
-    if (current.status === 'complete') return;
+    requireLiveLease(snapshot.exists ? snapshot.data() as AccountDeletionJob : undefined, leaseOwner);
     transaction.update(ref, {
-      status,
-      cursor,
-      updatedAt: Timestamp.now(),
+      status, cursor, updatedAt: Timestamp.now(),
       leaseOwner: FieldValue.delete(),
       leaseUntil: FieldValue.delete(),
     });
@@ -213,40 +233,49 @@ export async function deletePrivateCollectionPage(
   uidValue: string,
   name: PrivateAccountCollection,
   deletedBatches: number,
+  leaseOwner: string,
 ): Promise<number> {
   const uid = validateUid(uidValue);
   if (!PRIVATE_ACCOUNT_COLLECTIONS.includes(name)) throw new Error(`Unknown private collection: ${name}`);
   const db = adminDb();
   const page = await db.collection('users').doc(uid).collection(name).limit(PAGE_SIZE).select().get();
-  if (page.empty) return 0;
-
-  const batch = db.batch();
-  for (const item of page.docs) batch.delete(item.ref);
-  batch.update(jobRef(uid), {
-    status: 'deleting',
-    cursor: { phase: 'collection', collection: name, deletedBatches },
-    updatedAt: Timestamp.now(),
+  // Querying and deleting are deliberately separate; the job mutation AND
+  // every page delete must be in the same lease-fenced Firestore transaction.
+  await db.runTransaction(async (transaction: Transaction) => {
+    const ref = jobRef(uid);
+    const snapshot = await transaction.get(ref);
+    requireLiveLease(snapshot.exists ? snapshot.data() as AccountDeletionJob : undefined, leaseOwner);
+    for (const item of page.docs) transaction.delete(item.ref);
+    transaction.update(ref, {
+      status: 'deleting',
+      cursor: { phase: 'collection', collection: name, deletedBatches },
+      updatedAt: Timestamp.now(),
+    });
   });
-  await batch.commit();
   return page.size;
 }
 
-export async function deleteUserRoot(uidValue: string): Promise<void> {
+export async function deleteUserRoot(uidValue: string, leaseOwner: string): Promise<void> {
   const uid = validateUid(uidValue);
-  await adminDb().collection('users').doc(uid).delete();
-  await jobRef(uid).update({
-    status: 'deleting',
-    cursor: { phase: 'root' },
-    updatedAt: Timestamp.now(),
+  await adminDb().runTransaction(async (transaction: Transaction) => {
+    const ref = jobRef(uid);
+    const snapshot = await transaction.get(ref);
+    requireLiveLease(snapshot.exists ? snapshot.data() as AccountDeletionJob : undefined, leaseOwner);
+    transaction.delete(adminDb().collection('users').doc(uid));
+    transaction.update(ref, {
+      status: 'deleting', cursor: { phase: 'root' }, updatedAt: Timestamp.now(),
+    });
   });
 }
 
-export async function markVerifying(uidValue: string): Promise<void> {
-  const uid = validateUid(uidValue);
-  await jobRef(uid).update({
-    status: 'verifying',
-    cursor: { phase: 'verifying' },
-    updatedAt: Timestamp.now(),
+export async function markVerifying(uidValue: string, leaseOwner: string): Promise<void> {
+  const ref = jobRef(validateUid(uidValue));
+  await adminDb().runTransaction(async (transaction: Transaction) => {
+    const snapshot = await transaction.get(ref);
+    requireLiveLease(snapshot.exists ? snapshot.data() as AccountDeletionJob : undefined, leaseOwner);
+    transaction.update(ref, {
+      status: 'verifying', cursor: { phase: 'verifying' }, updatedAt: Timestamp.now(),
+    });
   });
 }
 
@@ -273,12 +302,17 @@ export async function verifyNoAccountResidue(uidValue: string): Promise<void> {
   }
 }
 
-export async function deleteAuthUserLast(uidValue: string): Promise<void> {
+export async function deleteAuthUserLast(uidValue: string, leaseOwner: string): Promise<void> {
   const uid = validateUid(uidValue);
-  await jobRef(uid).update({
-    status: 'verifying',
-    cursor: { phase: 'auth' },
-    updatedAt: Timestamp.now(),
+  // Firebase Auth is not part of Firestore transactions: fence immediately
+  // before the external call, then fence completion separately.
+  const ref = jobRef(uid);
+  await adminDb().runTransaction(async (transaction: Transaction) => {
+    const snapshot = await transaction.get(ref);
+    requireLiveLease(snapshot.exists ? snapshot.data() as AccountDeletionJob : undefined, leaseOwner);
+    transaction.update(ref, {
+      status: 'verifying', cursor: { phase: 'auth' }, updatedAt: Timestamp.now(),
+    });
   });
   try {
     await adminAuth().deleteUser(uid);
@@ -287,18 +321,22 @@ export async function deleteAuthUserLast(uidValue: string): Promise<void> {
   }
 }
 
-export async function markDeletionComplete(uidValue: string): Promise<void> {
-  const uid = validateUid(uidValue);
-  const now = Timestamp.now();
-  await jobRef(uid).update({
-    status: 'complete',
-    cursor: { phase: 'complete' },
-    updatedAt: now,
-    purgeAfter: completedDeletionPurgeAfter(now),
-    retryable: FieldValue.delete(),
-    lastError: FieldValue.delete(),
-    leaseOwner: FieldValue.delete(),
-    leaseUntil: FieldValue.delete(),
+export async function markDeletionComplete(uidValue: string, leaseOwner: string): Promise<void> {
+  const ref = jobRef(validateUid(uidValue));
+  await adminDb().runTransaction(async (transaction: Transaction) => {
+    const snapshot = await transaction.get(ref);
+    requireLiveLease(snapshot.exists ? snapshot.data() as AccountDeletionJob : undefined, leaseOwner);
+    const now = Timestamp.now();
+    transaction.update(ref, {
+      status: 'complete',
+      cursor: { phase: 'complete' },
+      updatedAt: now,
+      purgeAfter: completedDeletionPurgeAfter(now),
+      retryable: FieldValue.delete(),
+      lastError: FieldValue.delete(),
+      leaseOwner: FieldValue.delete(),
+      leaseUntil: FieldValue.delete(),
+    });
   });
 }
 
@@ -307,15 +345,14 @@ export async function markDeletionFailed(
   phase: string,
   error: unknown,
   retryable: boolean,
+  leaseOwner: string,
 ): Promise<void> {
   const uid = validateUid(uidValue);
   const message = error instanceof Error ? error.message : String(error);
   const ref = jobRef(uid);
   await adminDb().runTransaction(async (transaction: Transaction) => {
     const snapshot = await transaction.get(ref);
-    if (!snapshot.exists) return;
-    const current = snapshot.data() as AccountDeletionJob;
-    if (current.status === 'complete') return;
+    requireLiveLease(snapshot.exists ? snapshot.data() as AccountDeletionJob : undefined, leaseOwner);
     transaction.update(ref, {
       status: 'failed',
       retryable,

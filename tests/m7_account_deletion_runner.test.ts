@@ -10,6 +10,8 @@ const mocked = vi.hoisted(() => {
   return {
     NonRetryableDeletionError,
     acquireDeletionLease: vi.fn(),
+    assertDeletionLease: vi.fn(),
+    DeletionLeaseLostError: class DeletionLeaseLostError extends Error {},
     deleteAuthUserLast: vi.fn(),
     deletePrivateCollectionPage: vi.fn(),
     deleteUserRoot: vi.fn(),
@@ -37,6 +39,7 @@ describe('M7 native account deletion runner', () => {
     vi.clearAllMocks();
     for (const fn of [
       mocked.acquireDeletionLease,
+      mocked.assertDeletionLease,
       mocked.deleteAuthUserLast,
       mocked.deleteUserRoot,
       mocked.markDeletionComplete,
@@ -96,7 +99,7 @@ describe('M7 native account deletion runner', () => {
         100_000 + ACCOUNT_DELETION_INTERACTIVE_BUDGET_MS,
       );
       expect(mocked.revokeAccountAccess).toHaveBeenCalledWith('uid-interactive');
-      expect(mocked.markDeletionComplete).toHaveBeenCalledWith('uid-interactive');
+      expect(mocked.markDeletionComplete).toHaveBeenCalledWith('uid-interactive', 'lease-interactive');
     } finally {
       now.mockRestore();
     }
@@ -116,6 +119,7 @@ describe('M7 native account deletion runner', () => {
       'verification',
       expect.objectContaining({ message: 'Unexpected residual collection: legacy_private.' }),
       false,
+      'lease-b',
     );
   });
 
@@ -131,6 +135,7 @@ describe('M7 native account deletion runner', () => {
       'collection:history_months',
       expect.objectContaining({ message: 'transient Firestore failure' }),
       true,
+      'lease-c',
     );
   });
 
@@ -142,6 +147,27 @@ describe('M7 native account deletion runner', () => {
     expect(mocked.revokeAccountAccess).not.toHaveBeenCalled();
     expect(mocked.deletePrivateCollectionPage).not.toHaveBeenCalled();
     expect(mocked.deleteAuthUserLast).not.toHaveBeenCalled();
+  });
+
+
+  it('stops immediately when a worker loses its lease during a suspended page delete', async () => {
+    mocked.deletePrivateCollectionPage.mockRejectedValueOnce(new mocked.DeletionLeaseLostError());
+
+    await expect(processAccountDeletion('uid-stale', Date.now() + 60_000, {
+      leaseOwner: 'lease-stale',
+    })).resolves.toBe('busy');
+
+    expect(mocked.deleteUserRoot).not.toHaveBeenCalled();
+    expect(mocked.deleteAuthUserLast).not.toHaveBeenCalled();
+    expect(mocked.markDeletionFailed).not.toHaveBeenCalled();
+  });
+
+  it('does not mark failure when lease ownership changes after an external verification', async () => {
+    mocked.assertDeletionLease.mockRejectedValueOnce(new mocked.DeletionLeaseLostError());
+    await expect(processAccountDeletion('uid-old', Date.now() + 60_000, {
+      leaseOwner: 'lease-old',
+    })).resolves.toBe('busy');
+    expect(mocked.markDeletionFailed).not.toHaveBeenCalled();
   });
 
   it('refuses to start when the invocation budget is already inside the safety buffer', async () => {
