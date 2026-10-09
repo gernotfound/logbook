@@ -28,6 +28,8 @@ import BrandLoadingScreen from './components/UI/BrandLoadingScreen';
 import BottomNav from './components/UI/BottomNav';
 import { GlobalDialog } from './components/UI/GlobalDialog';
 import { ConsentOverlay } from './components/UI/ConsentOverlay';
+import { HealthConsentSuspendedScreen } from './components/UI/HealthConsentSuspendedScreen';
+import { useHealthConsentRevocation } from './hooks/useHealthConsentRevocation';
 import { needsLegalUpdate } from './lib/legalVersions';
 import { LoginBox } from './components/UI/LoginBox';
 import { AlertTriangle, X } from 'lucide-react';
@@ -101,6 +103,8 @@ function GuestBanner({ onLogin }: { onLogin: () => void }) {
 
 function App() {
   const { currentUser, loading, isGuest, guestMigrationStatus, retryGuestMigration } = useAuth();
+  const consentOwner = currentUser ? 'user:' + currentUser.uid : isGuest ? 'guest' : null;
+  const healthRevocation = useHealthConsentRevocation(consentOwner);
   const syncing = useAppStore(state => state.syncing);
   const userData = useAppStore(state => state.userData);
   const saveError = useAppStore(state => state.saveError);
@@ -121,7 +125,7 @@ function App() {
   const [showGuestLogin, setShowGuestLogin] = useState(readGuestLoginOverlayState);
 
   const hasUserData = Boolean(userData);
-  const showConsentOverlay = userData && needsLegalUpdate(userData.legalConsent);
+  const showConsentOverlay = userData && healthRevocation === 'none' && needsLegalUpdate(userData.legalConsent);
   const guestLoginOverlayVisible = showGuestLogin && (!currentUser || (isGuest && guestMigrationStatus === 'idle'));
   const guestLoginMigrationPending = !!currentUser && guestMigrationStatus === 'pending';
   const guestLoginMigrationFailed = !!currentUser && guestMigrationStatus === 'failed';
@@ -201,6 +205,7 @@ function App() {
       || guestLoginMigrationPending
       || guestLoginMigrationFailed
       || Boolean(showConsentOverlay)
+      || healthRevocation !== 'none'
       || guestLoginOverlayVisible
       || settingsOpen;
 
@@ -223,6 +228,7 @@ function App() {
     loading,
     settingsOpen,
     showConsentOverlay,
+    healthRevocation,
     syncing,
   ]);
 
@@ -420,6 +426,15 @@ function App() {
           )}
         </div>
       </div>
+    );
+  }
+
+  if (healthRevocation !== 'none') {
+    return (
+      <>
+        <GlobalDialog />
+        <HealthConsentSuspendedScreen status={healthRevocation} />
+      </>
     );
   }
 
