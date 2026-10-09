@@ -47,7 +47,10 @@ export async function eraseWithdrawnLocalTracking(owner: string): Promise<void> 
         privatePrefix + 'account-deletion',
     ]);
     const businessKeys = () => {
-        const keys = new Set<string>(legacyBusinessKeys);
+        const keys = new Set<string>();
+        for (const key of legacyBusinessKeys) {
+            if (localStorage.getItem(key) !== null) keys.add(key);
+        }
         for (let i = 0; i < localStorage.length; i++) {
             const key = localStorage.key(i);
             if (key?.startsWith(privatePrefix) && !preserved.has(key)) keys.add(key);
