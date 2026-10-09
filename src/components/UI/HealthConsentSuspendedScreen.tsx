@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ShieldAlert, Download, Trash2, RefreshCw } from 'lucide-react';
 import { useSettings } from '../../hooks/useSettings';
 import { useAuth } from '../../hooks/useAuth';
@@ -12,6 +12,25 @@ export function HealthConsentSuspendedScreen({ status }: { status: HealthConsent
   const { handleExportBackup, handleDeleteAccount, exportingData, deletingAccount } = useSettings();
   const [retrying, setRetrying] = useState(false);
   const [showPrivacy, setShowPrivacy] = useState(false);
+
+  useEffect(() => {
+    if (isGuest || status !== 'pending') return;
+    let active = true;
+    let inProgress = false;
+    const retryOnline = () => {
+      if (!active || inProgress || !navigator.onLine) return;
+      inProgress = true;
+      void requestHealthConsentRevocation().catch(() => {
+        // The durable pending marker remains the source of truth.
+      }).finally(() => { inProgress = false; });
+    };
+    window.addEventListener('online', retryOnline);
+    retryOnline();
+    return () => {
+      active = false;
+      window.removeEventListener('online', retryOnline);
+    };
+  }, [isGuest, status]);
 
   const retry = async () => {
     if (retrying) return;
