@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ShieldAlert, Download, Trash2, RefreshCw } from 'lucide-react';
+import { ShieldAlert, Trash2, RefreshCw } from 'lucide-react';
 import { useSettings } from '../../hooks/useSettings';
 import { useAuth } from '../../hooks/useAuth';
 import { useDialogStore } from '../../store/useDialogStore';
@@ -9,7 +9,7 @@ import { PrivacyPolicy } from '../../pages/PrivacyPolicy';
 
 export function HealthConsentSuspendedScreen({ status }: { status: HealthConsentGateStatus }) {
   const { isGuest } = useAuth();
-  const { handleExportBackup, handleDeleteAccount, exportingData, deletingAccount } = useSettings();
+  const { handleDeleteAccount, deletingAccount } = useSettings();
   const [retrying, setRetrying] = useState(false);
   const [showPrivacy, setShowPrivacy] = useState(false);
 
@@ -59,7 +59,7 @@ export function HealthConsentSuspendedScreen({ status }: { status: HealthConsent
         ) : (
           <p role="alert">Non è possibile verificare in sicurezza lo stato del consenso. Il tracciamento rimane sospeso.</p>
         )}
-        <p>Puoi continuare a consultare l'informativa, esportare i dati quando consentito o eliminare il tuo account. L'eliminazione dei dati è un'operazione separata.</p>
+        <p>Puoi consultare l'informativa o eliminare il tuo account. La revoca non elimina l'account: il sistema avvia separatamente la cancellazione dei dati di tracciamento per i quali non esiste un'altra base giuridica valida.</p>
         {pending && !isGuest && (
           <button type="button" className="btn btn-primary" onClick={() => void retry()} disabled={retrying}>
             <RefreshCw size={16} aria-hidden="true" /> {retrying ? 'Riprovo…' : 'Riprova la conferma della revoca'}
@@ -67,9 +67,6 @@ export function HealthConsentSuspendedScreen({ status }: { status: HealthConsent
         )}
         <button type="button" className="btn" onClick={() => setShowPrivacy(true)}>
           Informativa sulla privacy
-        </button>
-        <button type="button" className="btn" onClick={() => void handleExportBackup()} disabled={exportingData}>
-          <Download size={16} aria-hidden="true" /> {exportingData ? 'Esportazione…' : 'Esporta i dati in JSON'}
         </button>
         <button type="button" className="btn" onClick={() => void handleDeleteAccount()} disabled={deletingAccount}>
           <Trash2 size={16} aria-hidden="true" /> {isGuest ? 'Elimina dati locali' : 'Elimina account'}
