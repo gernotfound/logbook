@@ -91,6 +91,9 @@ describe('F-006 active workout persisted business identity', () => {
         localStorage.setItem(deviceKey('workout'), JSON.stringify(validWorkout));
         expect(getInitialLocalWorkout()).toMatchObject(validWorkout);
 
+        // A new bootstrap cannot replace an existing durable envelope.
+        // Reset the test fixture explicitly before seeding its next lifecycle.
+        await clear();
         await initializeLocal('guest', UserDataSchema.parse({ activeWorkout: validWorkout }) as unknown as UserData);
         expect((await readLocal('guest'))?.data.activeWorkout).toMatchObject(validWorkout);
     });
