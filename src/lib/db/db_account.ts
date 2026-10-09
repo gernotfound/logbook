@@ -14,6 +14,7 @@ import {
     type AccountDeletionMarker,
 } from '../sync/accountGate';
 import { waitForJournalIdle } from '../sync/replicateJournal';
+import { isHealthConsentWriteBlocked } from '../healthConsentRevocation';
 import { removeDeletionRecoveryCredential } from '../deletionDeviceRecovery';
 
 export type AccountDeletionOutcome =
@@ -336,9 +337,14 @@ async function performDeletion(context: AccountDeletionContext): Promise<Account
         throw new Error('Per eliminare l’account devi effettuare di nuovo il login. Nessun dato è stato cancellato.');
     }
 
-    await withTimeout(waitForJournalIdle(owner), 10000, 'Scritture precedenti ancora in corso.');
-    if (!isCurrentSession(before)) throw new Error('Sessione cambiata.');
-    await withTimeout(waitForPendingWrites(getDb()), 10000, 'Scritture Firebase precedenti ancora in corso.');
+    // Once revocation has frozen the owner, pending health-data writes must
+    // not be drained merely to permit the user's account deletion right.
+    // The server deletion job owns the cleanup and prevents later re-creation.
+    if (!isHealthConsentWriteBlocked(owner)) {
+        await withTimeout(waitForJournalIdle(owner), 10000, 'Scritture precedenti ancora in corso.');
+        if (!isCurrentSession(before)) throw new Error('Sessione cambiata.');
+        await withTimeout(waitForPendingWrites(getDb()), 10000, 'Scritture Firebase precedenti ancora in corso.');
+    }
     if (!isCurrentSession(before)) throw new Error('Sessione cambiata.');
 
     const appToken = await withDeletionDeadline(async signal => {
