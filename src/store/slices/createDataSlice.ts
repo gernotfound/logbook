@@ -52,11 +52,12 @@ export const saveUserDataToCache = async (data: UserData | null, base?: UserData
             }
             if (!current) {
                 if (expectedRevision !== undefined) throw new StaleLocalRevisionError(expectedRevision, null);
-                await initializeLocal(session.owner, data, undefined, guard);
+                // A genuine mutation has an observed base and needs a journal
+                // even when this is the first envelope for the account.
+                if (base) await commitLocal(session.owner, data, base, guard);
+                else await initializeLocal(session.owner, data, undefined, guard);
             } else if (base && !equal(UserDataSchema.parse(current.data), UserDataSchema.parse(data))) {
-                // A snapshot without an observed base is only a bootstrap hint.
-                // Treating the latest durable snapshot as the caller's base would
-                // interpret concurrently created data as intended deletions.
+                // An unbased bootstrap is only a seed, never deletion intent.
                 await commitLocal(session.owner, data, base, guard, expectedRevision);
             }
             if (!guard()) throw new Error('Sessione cambiata durante il salvataggio locale.');
