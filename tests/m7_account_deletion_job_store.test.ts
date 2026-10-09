@@ -81,17 +81,27 @@ const fakeDb = vi.hoisted(() => ({
     return fakeCollection(name);
   },
   async runTransaction(work: (transaction: any) => Promise<any>) {
-    return work({
+    const deleted: string[] = [];
+    const updates: Array<{ path: string; data: Record<string, unknown> }> = [];
+    const created: Array<{ path: string; data: unknown }> = [];
+    const result = await work({
       get: (ref: any) => ref.get(),
-      create: (ref: any, data: unknown) => {
-        state.docs.add(ref.path);
-        state.jobData.set(ref.path, data);
-      },
-      update: (ref: any, data: unknown) => {
-        state.jobUpdates.push(data);
-        state.jobData.set(ref.path, { ...(state.jobData.get(ref.path) ?? {}), ...(data as Record<string, unknown>) });
-      },
+      create: (ref: any, data: unknown) => created.push({ path: ref.path, data }),
+      delete: (ref: any) => deleted.push(ref.path),
+      update: (ref: any, data: Record<string, unknown>) => updates.push({ path: ref.path, data }),
     });
+    // Apply only when the whole transaction succeeds, as Firestore does.
+    for (const item of created) {
+      state.docs.add(item.path);
+      state.jobData.set(item.path, item.data);
+    }
+    for (const path of deleted) state.docs.delete(path);
+    for (const item of updates) {
+      state.jobUpdates.push(item.data);
+      state.jobData.set(item.path, { ...(state.jobData.get(item.path) ?? {}), ...item.data });
+    }
+    if (deleted.length) state.batchSizes.push(deleted.length);
+    return result;
   },
   batch() {
     const deletes: string[] = [];
@@ -120,6 +130,10 @@ vi.mock('../server/accountDeletion/firebaseAdmin', () => ({
 
 import {
   NonRetryableDeletionError,
+  DeletionLeaseLostError,
+  acquireDeletionLease,
+  parkDeletion,
+  markDeletionFailed,
   createOrRefreshDeletionJob,
   deleteAuthUserLast,
   deletePrivateCollectionPage,
@@ -148,9 +162,10 @@ describe('M7 native deletion job store', () => {
     state.docs.add('account_deletions/u');
     for (let i = 0; i < 950; i++) state.docs.add(`users/u/history_months/doc-${i}`);
 
+    await acquireDeletionLease('u', 'worker-page', Date.now() + 60_000);
     let batches = 0;
     for (;;) {
-      const deleted = await deletePrivateCollectionPage('u', 'history_months', batches + 1);
+      const deleted = await deletePrivateCollectionPage('u', 'history_months', batches + 1, 'worker-page');
       if (deleted === 0) break;
       batches += 1;
     }
@@ -194,7 +209,8 @@ describe('M7 native deletion job store', () => {
     state.docs.add('account_deletions/u');
     state.deleteUser.mockRejectedValueOnce(Object.assign(new Error('already deleted'), { code: 'auth/user-not-found' }));
 
-    await expect(deleteAuthUserLast('u')).resolves.toBeUndefined();
+    await acquireDeletionLease('u', 'worker-auth', Date.now() + 60_000);
+    await expect(deleteAuthUserLast('u', 'worker-auth')).resolves.toBeUndefined();
     expect(state.deleteUser).toHaveBeenCalledWith('u');
   });
 
@@ -239,8 +255,44 @@ describe('M7 native deletion job store', () => {
     expect(await readAuthorizedDeletionJob('u', receipts.at(-1)!)).not.toBeNull();
   });
 
+
+  it('fences a stale worker out of document deletion, park, failure and completion', async () => {
+    state.docs.add('account_deletions/u');
+    state.docs.add('users/u/history_months/survivor');
+    await acquireDeletionLease('u', 'worker-A', Date.now() + 60_000);
+    // Simulate lease expiry and takeover after worker A reads its page.
+    const job = state.jobData.get('account_deletions/u');
+    state.jobData.set('account_deletions/u', {
+      ...job, leaseOwner: 'worker-B',
+    });
+    await expect(deletePrivateCollectionPage('u', 'history_months', 1, 'worker-A'))
+      .rejects.toBeInstanceOf(DeletionLeaseLostError);
+    await expect(parkDeletion('u', 'deleting', { phase: 'root' }, 'worker-A'))
+      .rejects.toBeInstanceOf(DeletionLeaseLostError);
+    await expect(markDeletionFailed('u', 'root', new Error('old'), true, 'worker-A'))
+      .rejects.toBeInstanceOf(DeletionLeaseLostError);
+    await expect(markDeletionComplete('u', 'worker-A'))
+      .rejects.toBeInstanceOf(DeletionLeaseLostError);
+    expect(state.docs.has('users/u/history_months/survivor')).toBe(true);
+    expect(state.jobData.get('account_deletions/u').leaseOwner).toBe('worker-B');
+    expect(state.jobData.get('account_deletions/u').status).toBe('deleting');
+  });
+
+  it('preserves terminal complete state even if an older worker resumes', async () => {
+    state.docs.add('account_deletions/u');
+    await acquireDeletionLease('u', 'worker-B', Date.now() + 60_000);
+    await markDeletionComplete('u', 'worker-B');
+    await expect(markDeletionFailed('u', 'root', new Error('late'), true, 'worker-B'))
+      .rejects.toBeInstanceOf(DeletionLeaseLostError);
+    await expect(parkDeletion('u', 'deleting', { phase: 'root' }, 'worker-B'))
+      .rejects.toBeInstanceOf(DeletionLeaseLostError);
+    expect(state.jobData.get('account_deletions/u').status).toBe('complete');
+  });
+
   it('starts the 30-day tombstone retention window only after deletion is complete', async () => {
-    await markDeletionComplete('u');
+    state.docs.add('account_deletions/u');
+    await acquireDeletionLease('u', 'worker-complete', Date.now() + 60_000);
+    await markDeletionComplete('u', 'worker-complete');
 
     const update = state.jobUpdates.at(-1) as {
       status?: string;
