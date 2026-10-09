@@ -21,6 +21,7 @@ vi.mock('../server/telemetryRetention', () => telemetryRetention);
 const erasure = vi.hoisted(() => ({
   listPendingHealthErasures: vi.fn(),
   processHealthErasure: vi.fn(),
+  hasBlockedHealthErasures: vi.fn(),
 }));
 vi.mock('../server/healthConsent/erasure', () => erasure);
 
@@ -43,6 +44,7 @@ describe('M7 daily account deletion recovery cron', () => {
     retention.purgeExpiredCompletedDeletionJobs.mockResolvedValue(0);
     erasure.listPendingHealthErasures.mockResolvedValue([]);
     erasure.processHealthErasure.mockResolvedValue('complete');
+    erasure.hasBlockedHealthErasures.mockResolvedValue(false);
     telemetryRetention.purgeExpiredTelemetry.mockResolvedValue({
       usersScanned: 0,
       documentsDeleted: 0,
@@ -90,6 +92,11 @@ describe('M7 daily account deletion recovery cron', () => {
       purged: 0,
       erasuresScanned: 0,
       erasuresComplete: 0,
+      erasuresFailed: 0,
+      erasuresPending: 0,
+      erasuresBusy: 0,
+      erasuresBlocked: false,
+      erasuresBacklogPossible: false,
       telemetryUsersScanned: 0,
       telemetryPurged: 0,
       telemetryCycleCompleted: true,
@@ -100,6 +107,11 @@ describe('M7 daily account deletion recovery cron', () => {
       purged: 0,
       erasuresScanned: 0,
       erasuresComplete: 0,
+      erasuresFailed: 0,
+      erasuresPending: 0,
+      erasuresBusy: 0,
+      erasuresBlocked: false,
+      erasuresBacklogPossible: false,
       telemetryUsersScanned: 0,
       telemetryPurged: 0,
       telemetryCycleCompleted: true,
@@ -140,9 +152,66 @@ describe('M7 daily account deletion recovery cron', () => {
     expect(erasure.listPendingHealthErasures).toHaveBeenCalledWith(25);
     expect(erasure.processHealthErasure).toHaveBeenCalledTimes(2);
     expect(await response.json()).toMatchObject({
-      erasuresScanned: 2, erasuresComplete: 1,
+      erasuresScanned: 2, erasuresComplete: 1, erasuresPending: 1,
       processed: 2, telemetryCycleCompleted: true,
     });
+  });
+
+  it('reserves time for health erasure even if an account deletion consumes its entire slot', async () => {
+    process.env.CRON_SECRET = 'expected-secret';
+    store.listRecoverableDeletionJobs.mockResolvedValue([{ uid: 'account-a' }, { uid: 'account-b' }]);
+    erasure.listPendingHealthErasures.mockResolvedValue(['health-a']);
+    const start = Date.now();
+    let clock = start;
+    const time = vi.spyOn(Date, 'now').mockImplementation(() => clock);
+    try {
+      runner.processAccountDeletion.mockImplementation(async (_uid: string, deadline: number) => {
+        expect(deadline).toBe(start + 270_000 - 95_000 - 20_000);
+        clock = deadline - 5_000;
+        return 'pending';
+      });
+      erasure.processHealthErasure.mockImplementation(async (_uid: string, deadline: number) => {
+        expect(deadline).toBe(start + 270_000 - 20_000);
+        return 'complete';
+      });
+      const response = await GET(request('expected-secret'));
+      expect(response.status).toBe(200);
+      expect(runner.processAccountDeletion).toHaveBeenCalledTimes(1);
+      expect(erasure.processHealthErasure).toHaveBeenCalledWith('health-a', start + 250_000);
+      expect(await response.json()).toMatchObject({ processed: 1, erasuresComplete: 1 });
+    } finally { time.mockRestore(); }
+  });
+
+  it('emits a sanitized operational signal for failed or blocked health erasures', async () => {
+    process.env.CRON_SECRET = 'expected-secret';
+    erasure.listPendingHealthErasures.mockResolvedValue(['secret-owner-a', 'secret-owner-b']);
+    erasure.processHealthErasure.mockRejectedValueOnce(new Error('private payload'))
+      .mockResolvedValueOnce('busy');
+    erasure.hasBlockedHealthErasures.mockResolvedValue(true);
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      const response = await GET(request('expected-secret'));
+      expect(await response.json()).toMatchObject({
+        erasuresScanned: 2, erasuresFailed: 1, erasuresBusy: 1, erasuresBlocked: true,
+      });
+      expect(errors).toHaveBeenCalledWith(
+        '[account-deletion-cron] manual health erasure intervention required', { blocked: true },
+      );
+      expect(JSON.stringify(errors.mock.calls)).not.toContain('secret-owner');
+      expect(JSON.stringify(errors.mock.calls)).not.toContain('private payload');
+    } finally { errors.mockRestore(); }
+  });
+
+  it('reports monitoring as unknown and continues other work if the blocked-status probe fails', async () => {
+    process.env.CRON_SECRET = 'expected-secret';
+    erasure.hasBlockedHealthErasures.mockRejectedValueOnce(new Error('internal private message'));
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      const response = await GET(request('expected-secret'));
+      expect(await response.json()).toMatchObject({ erasuresBlocked: null, telemetryCycleCompleted: true });
+      expect(retention.purgeExpiredCompletedDeletionJobs).toHaveBeenCalled();
+      expect(JSON.stringify(errors.mock.calls)).not.toContain('internal private message');
+    } finally { errors.mockRestore(); }
   });
 
   it('uses only the residual cron budget for completed tombstone garbage collection', async () => {

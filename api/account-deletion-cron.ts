@@ -5,12 +5,16 @@ import {
 } from '../server/accountDeletion/retention.js';
 import { processAccountDeletion } from '../server/accountDeletion/runner.js';
 import { purgeExpiredTelemetry } from '../server/telemetryRetention.js';
-import { listPendingHealthErasures, processHealthErasure } from '../server/healthConsent/erasure.js';
+import { hasBlockedHealthErasures, listPendingHealthErasures, processHealthErasure } from '../server/healthConsent/erasure.js';
 
 export const maxDuration = 300;
 
 const CRON_BUDGET_MS = 270_000;
 const SAFETY_BUFFER_MS = 10_000;
+// Preserve a health-erasure window even when account deletion consumes its full
+// allotted budget. Retention gets a separate tail window.
+const HEALTH_RESERVED_MS = 95_000;
+const MAINTENANCE_RESERVED_MS = 20_000;
 
 function authorized(request: Request): boolean {
   const secret = process.env.CRON_SECRET;
@@ -27,12 +31,14 @@ export async function GET(request: Request): Promise<Response> {
   }
 
   const deadlineMs = Date.now() + CRON_BUDGET_MS;
+  const accountDeadlineMs = deadlineMs - HEALTH_RESERVED_MS - MAINTENANCE_RESERVED_MS;
+  const healthDeadlineMs = deadlineMs - MAINTENANCE_RESERVED_MS;
   const jobs = await listRecoverableDeletionJobs(25);
   const results: Array<{ uid: string; result: string }> = [];
 
   for (const job of jobs) {
-    if (Date.now() + SAFETY_BUFFER_MS >= deadlineMs) break;
-    const result = await processAccountDeletion(job.uid, deadlineMs);
+    if (Date.now() + SAFETY_BUFFER_MS >= accountDeadlineMs) break;
+    const result = await processAccountDeletion(job.uid, accountDeadlineMs);
     results.push({ uid: job.uid, result });
   }
 
@@ -40,18 +46,39 @@ export async function GET(request: Request): Promise<Response> {
   // deletion. Use the remaining bounded cron budget to retry interrupted jobs.
   let erasuresScanned = 0;
   let erasuresComplete = 0;
-  if (Date.now() + SAFETY_BUFFER_MS < deadlineMs) {
+  let erasuresFailed = 0;
+  let erasuresPending = 0;
+  let erasuresBusy = 0;
+  if (Date.now() + SAFETY_BUFFER_MS < healthDeadlineMs) {
     const pending = await listPendingHealthErasures(25);
     erasuresScanned = pending.length;
     for (const uid of pending) {
-      if (Date.now() + SAFETY_BUFFER_MS >= deadlineMs) break;
+      if (Date.now() + SAFETY_BUFFER_MS >= healthDeadlineMs) break;
       try {
-        if (await processHealthErasure(uid, deadlineMs) === 'complete') erasuresComplete++;
+        const outcome = await processHealthErasure(uid, healthDeadlineMs);
+        if (outcome === 'complete') erasuresComplete++;
+        else if (outcome === 'pending') erasuresPending++;
+        else erasuresBusy++;
       } catch (error) {
+        erasuresFailed++;
         console.error('[account-deletion-cron] health erasure retry failed', {
           kind: error instanceof Error ? error.name : 'UnknownError',
         });
       }
+    }
+  }
+
+  // A blocked job is intentionally excluded from automatic retries: it
+  // requires a reviewed schema/data cleanup. Surface that state every day.
+  let erasuresBlocked: boolean | null = null;
+  if (Date.now() + SAFETY_BUFFER_MS < deadlineMs) {
+    try {
+      erasuresBlocked = await hasBlockedHealthErasures();
+      if (erasuresBlocked) console.error('[account-deletion-cron] manual health erasure intervention required', { blocked: true });
+    } catch (error) {
+      console.error('[account-deletion-cron] health erasure monitoring unavailable', {
+        kind: error instanceof Error ? error.name : 'UnknownError',
+      });
     }
   }
 
@@ -79,6 +106,11 @@ export async function GET(request: Request): Promise<Response> {
     purged,
     erasuresScanned,
     erasuresComplete,
+    erasuresFailed,
+    erasuresPending,
+    erasuresBusy,
+    erasuresBlocked,
+    erasuresBacklogPossible: erasuresScanned === 25,
     telemetryUsersScanned: telemetryRetention.usersScanned,
     telemetryPurged: telemetryRetention.documentsDeleted,
     telemetryCycleCompleted: telemetryRetention.completedCycle,
@@ -90,6 +122,11 @@ export async function GET(request: Request): Promise<Response> {
     purged,
     erasuresScanned,
     erasuresComplete,
+    erasuresFailed,
+    erasuresPending,
+    erasuresBusy,
+    erasuresBlocked,
+    erasuresBacklogPossible: erasuresScanned === 25,
     telemetryUsersScanned: telemetryRetention.usersScanned,
     telemetryPurged: telemetryRetention.documentsDeleted,
     telemetryCycleCompleted: telemetryRetention.completedCycle,

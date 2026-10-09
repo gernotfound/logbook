@@ -184,6 +184,16 @@ export async function processHealthErasure(uid: string, deadlineMs: number): Pro
 export async function listPendingHealthErasures(limit = 25): Promise<string[]> {
   const docs = await adminDb().collection('health_consent_revocations')
     .where('eraseStatus', 'in', ['requested', 'deleting', 'failed'])
+    // Oldest attempted job first. Failed jobs receive a fresh eraseUpdatedAt
+    // on release, so repeated failures cannot monopolise the first page.
+    .orderBy('eraseUpdatedAt', 'asc')
     .limit(limit).select().get();
   return docs.docs.map(item => item.id);
+}
+
+/** Presence-only check: never emit user IDs or error contents in cron logs. */
+export async function hasBlockedHealthErasures(): Promise<boolean> {
+  const docs = await adminDb().collection('health_consent_revocations')
+    .where('eraseStatus', '==', 'blocked').limit(1).select().get();
+  return !docs.empty;
 }

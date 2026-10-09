@@ -47,7 +47,12 @@ describe('health consent revocation server state', () => {
   it('creates one immutable per-owner marker, and retry does not reset the timestamp', async () => {
     await recordHealthConsentRevocation('owner-a');
     const original = state.documents.get('health_consent_revocations/owner-a');
-    expect(original).toMatchObject({ schemaVersion: 1, revokedAt: expect.anything() });
+    expect(original).toMatchObject({
+      schemaVersion: 1,
+      revokedAt: expect.anything(),
+      eraseUpdatedAt: expect.anything(),
+      eraseStatus: 'requested',
+    });
 
     await recordHealthConsentRevocation('owner-a');
     expect(state.documents.get('health_consent_revocations/owner-a')).toBe(original);

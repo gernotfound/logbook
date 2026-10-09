@@ -22,9 +22,11 @@ export async function recordHealthConsentRevocation(uid: string): Promise<void> 
     ]);
     if (deleting.exists) throw new RevocationAccountDeletingError();
     if (revoked.exists) return;
+    const now = Timestamp.now();
     transaction.create(marker, {
       schemaVersion: 1,
-      revokedAt: Timestamp.now(),
+      revokedAt: now,
+      eraseUpdatedAt: now,
       eraseStatus: 'requested',
       erasePhase: 'requested',
     });

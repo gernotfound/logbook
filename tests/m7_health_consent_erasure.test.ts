@@ -32,7 +32,7 @@ function documentRef(path: string) {
   };
 }
 
-function collectionRef(path: string, max = Number.POSITIVE_INFINITY, statuses?: readonly string[]): any {
+function collectionRef(path: string, max = Number.POSITIVE_INFINITY, statuses?: readonly string[], sortByAge = false): any {
   const api = {
     doc(id: string) { return documentRef(path + '/' + id); },
     async listDocuments() {
@@ -43,12 +43,16 @@ function collectionRef(path: string, max = Number.POSITIVE_INFINITY, statuses?: 
         .map(key => key.slice(prefix.length).split('/')[0]));
       return [...ids].map(id => documentRef(prefix + id));
     },
-    limit(count: number) { return collectionRef(path, count, statuses); },
-    where(field: string, op: string, values: string[]) {
-      if (field !== 'eraseStatus' || op !== 'in') throw new Error('Unexpected query.');
-      return collectionRef(path, max, values);
+    limit(count: number) { return collectionRef(path, count, statuses, sortByAge); },
+    orderBy(field: string, direction: string) {
+      if (field !== 'eraseUpdatedAt' || direction !== 'asc') throw new Error('Unexpected order.');
+      return collectionRef(path, max, statuses, true);
     },
-    select() { return collectionRef(path, max, statuses); },
+    where(field: string, op: string, values: string[] | string) {
+      if (field !== 'eraseStatus' || !['in', '=='].includes(op)) throw new Error('Unexpected query.');
+      return collectionRef(path, max, Array.isArray(values) ? values : [values], sortByAge);
+    },
+    select() { return collectionRef(path, max, statuses, sortByAge); },
     async get() {
       if (dbState.failsOnce === path) {
         dbState.failsOnce = '';
@@ -58,6 +62,11 @@ function collectionRef(path: string, max = Number.POSITIVE_INFINITY, statuses?: 
       const docs = [...dbState.documents.keys()]
         .filter(key => key.startsWith(prefix) && !key.slice(prefix.length).includes('/'))
         .filter(key => !statuses || statuses.includes(String(dbState.documents.get(key)?.eraseStatus)))
+        .filter(key => !sortByAge || dbState.documents.get(key)?.eraseUpdatedAt instanceof Timestamp)
+        .sort((a, b) => sortByAge
+          ? (dbState.documents.get(a)?.eraseUpdatedAt as Timestamp).toMillis()
+            - (dbState.documents.get(b)?.eraseUpdatedAt as Timestamp).toMillis() || a.localeCompare(b)
+          : 0)
         .slice(0, max).map(key => ({ id: key.split('/').at(-1), ref: documentRef(key) }));
       return { docs, size: docs.length, empty: docs.length === 0 };
     },
@@ -92,11 +101,11 @@ const mockDb = vi.hoisted(() => ({
 
 vi.mock('../server/accountDeletion/firebaseAdmin', () => ({ adminDb: () => mockDb }));
 
-import { listPendingHealthErasures, processHealthErasure } from '../server/healthConsent/erasure';
+import { hasBlockedHealthErasures, listPendingHealthErasures, processHealthErasure } from '../server/healthConsent/erasure';
 
 function revoked(uid: string) {
   dbState.documents.set('health_consent_revocations/' + uid, {
-    revokedAt: Timestamp.now(), eraseStatus: 'requested',
+    revokedAt: Timestamp.now(), eraseUpdatedAt: Timestamp.now(), eraseStatus: 'requested',
   });
   dbState.documents.set('users/' + uid, {
     _schemaVersion: 1, legalConsent: { hasAcceptedTerms: true, hasAcceptedHealthData: true, termsVersion: '1', privacyVersion: '1' },
@@ -192,6 +201,42 @@ describe('health withdrawal server erasure (Firebase Admin transactional mock)',
     revoked('a');
     await expect(processHealthErasure('a', Date.now() + 200)).resolves.toBe('pending');
     expect(dbState.documents.get('health_consent_revocations/a')).toMatchObject({ eraseStatus: 'requested' });
+  });
+
+  it('rotates a saturated first page after failed retries so newer requests are not starved', async () => {
+    for (let i = 0; i < 31; i++) {
+      const uid = 'job-' + String(i).padStart(2, '0');
+      revoked(uid);
+      dbState.documents.set('health_consent_revocations/' + uid, {
+        eraseStatus: 'requested', eraseUpdatedAt: Timestamp.fromMillis(1_000),
+      });
+    }
+
+    const first = await listPendingHealthErasures(25);
+    expect(first).toHaveLength(25);
+    expect(first).toEqual(Array.from({ length: 25 }, (_, i) => 'job-' + String(i).padStart(2, '0')));
+
+    for (const uid of first) {
+      dbState.failsOnce = 'users/' + uid + '/history_months';
+      await expect(processHealthErasure(uid, Date.now() + 60_000))
+        .rejects.toThrow('Transient collection read error');
+    }
+
+    const next = await listPendingHealthErasures(25);
+    expect(next.slice(0, 6)).toEqual(
+      Array.from({ length: 6 }, (_, i) => 'job-' + String(i + 25).padStart(2, '0')),
+    );
+    expect(new Set(next).size).toBe(next.length);
+  });
+
+  it('detects blocked erasures without returning owner identifiers in the monitoring result', async () => {
+    revoked('secret-owner');
+    expect(await hasBlockedHealthErasures()).toBe(false);
+    dbState.documents.set('health_consent_revocations/secret-owner', {
+      eraseStatus: 'blocked', eraseUpdatedAt: Timestamp.now(),
+    });
+    expect(await hasBlockedHealthErasures()).toBe(true);
+    expect(await listPendingHealthErasures()).toEqual([]);
   });
 
   it('finds pending and failed jobs, but not completed markers', async () => {

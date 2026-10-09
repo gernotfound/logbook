@@ -27,6 +27,20 @@
           "order": "ASCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "health_consent_revocations",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "eraseStatus",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "eraseUpdatedAt",
+          "order": "ASCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": [
