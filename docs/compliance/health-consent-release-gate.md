@@ -1,8 +1,8 @@
 # Dati salute e revoca del consenso — decisione e gate pre-pilot
 
-> Stato: **SOLUZIONE A APPROVATA DAL PRODUCT OWNER IL 9 OTTOBRE 2026**. Analisi legale, implementazione, regressioni e verifica Production ancora aperte.
-> Baseline repository osservata: `main` `5a9394649977cae4e2261e530312f5121818ce12` (9 ottobre 2026).
-> Questo documento non costituisce un parere legale, una DPIA conclusa o una specifica di implementazione approvata.
+> Stato: **SOLUZIONE A APPROVATA DAL PRODUCT OWNER IL 9 OTTOBRE 2026**. Implementazione candidata nella [PR #301](https://github.com/gernotfound/logbook/pull/301), **non distribuita**; verifica legale, configurazioni esterne e prove Production ancora aperte.
+> Verifica tecnica precedente: 10 check CI superati sul commit `89cb37cae0f8bb143ef7346c2e8e4f32ddb37b0b` della PR; ogni nuovo commit richiede una nuova verifica exact-SHA. La vecchia baseline `5a9394649977cae4e2261e530312f5121818ce12` descriveva lo stato anteriore alla PR.
+> Questo documento non costituisce un parere legale, una DPIA conclusa o un'autorizzazione al rilascio. Il pacchetto di approvazione e' in `health-consent-signoff.md`.
 > Non certifica configurazioni Firebase/Vercel/Sentry Production.
 
 ## Perché esiste
@@ -17,19 +17,21 @@ Fonti istituzionali da utilizzare nella revisione:
 - Garante Privacy, principi fondamentali: https://garanteprivacy.it/web/guest/home/principi-fondamentali-del-trattamento
 - Garante Privacy, dispositivi e app fitness tracker: https://www.garanteprivacy.it/home/docweb/-/docweb-display/docweb/9968193
 
-## Stato osservato e confini tecnici
+## Confini tecnici — candidatura PR #301 (non Production)
 
-| Confine | Evidenza nel codice | Conseguenza |
+Questa tabella fotografa la **PR #301** e sostituisce il riepilogo precedente, ormai superato, che descriveva l'assenza del percorso di revoca.
+
+| Confine | Comportamento proposto, verificabile nel branch | Limite residuo |
 |---|---|---|
-| Tipi | `src/types.ts`: `LegalConsent` contiene `hasAcceptedTerms`, `hasAcceptedHealthData`, `acceptedAt`, versioni; nessuno stato dedicato di revoca | Un `false` storico o una versione vecchia non costituisce un protocollo distribuito di revoca |
-| UI | `src/components/UI/ConsentOverlay.tsx`: accettazione esplicita salute, obbligatoria per proseguire; `src/components/Settings/PrivacySettingsTab.tsx`: toggle GA4 e link legali, non revoca salute | L'utente non ha un controllo di revoca equivalente in Impostazioni |
-| Gate corrente | `src/lib/legalVersions.ts`: `needsLegalUpdate` richiede versioni correnti e due booleani veri | Impedisce l'accesso tramite overlay nei casi previsti, ma non costituisce revoca autorevole cross-device |
-| Replica dati | `src/lib/sync/documentProjection.ts`: `legalConsent` è nel root; storico e nutrizione in `history_months` e `nutrition_months` | Stato e dati attraversano percorsi di persistenza diversi |
-| Autorizzazioni | `firestore.rules`: proprietà UID e blocco account-deletion; `legalConsent` è ammesso come mappa nel root | Non è presente una barriera Rules per il consenso salute revocato che impedisca scritture da vecchi client |
-| Offline | `src/lib/sync/localRepository.ts`, `src/lib/sync/deviceStorage.ts`, `src/contexts/AuthContext.tsx`, journal e hydration | Una modifica solo React o solo localStorage non blocca tutte le repliche o le tab/dispositivi obsoleti |
-| Esportazione / eliminazione | `src/lib/db/backupSnapshot.ts`, `src/lib/backup.ts`, `src/lib/db/db_account.ts`, backend Vercel | Non confondere esportazione, revoca, limitazione e cancellazione account; le cancellazioni irreversibili richiedono conferma distinta |
+| UI e consenso | Azione di revoca in Impostazioni, esportazione JSON facoltativa prima della conferma, schermata di sospensione senza ri-consenso implicito | Informativa/titolare e basi legali da validare; UX Production e dispositivi reali da provare |
+| Auth e richiesta trusted | Endpoint Vercel con ID token Firebase, App Check e marker idempotente `health_consent_revocations/{uid}` | Credenziali, IAM, App Check e origin Production vanno verificati dal provider |
+| Firestore | Security Rules con barriera sul marker; cancellazione paginata e lease, verifica documenti annidati inattesi | Rules e nuovo indice composito non verificati live; test Emulator non sono Production |
+| Client offline, sync e restore | Marker locale durevole, blocco salvataggi/journal, pulizia owner-scoped e protezioni su vecchi client | Una copia su dispositivo offline rimane fino alla riconnessione; impossibile dichiarare l'erasure di ogni device remoto |
+| Recupero e monitoraggio | Retry cron di `requested/deleting/failed`, fairness e segnali aggregati; `blocked` richiede escalation | Non e' dimostrato alcun alert automatico/cron reale in Production |
+| Account e conservazione | Firebase Auth mantenuto; account deletion rimane percorso separato; marker di revoca mantiene barriera | Base, durata e finalita' dei metadati residui da validare legalmente |
 
-Questa tabella rappresenta un'analisi dei confini, **non** un penetration test e **non** una verifica del runtime o di tutti i chiamanti.
+La fonte tecnica resta **lo SHA corrente della PR**, non questa descrizione. La CI su branch non prova il runtime live.
+
 
 ## Decisione di prodotto approvata: soluzione A; verifiche giuridiche aperte
 
@@ -54,7 +56,7 @@ La decisione integrativa del 9 ottobre 2026 autorizza il comportamento futuro di
 
 ## Vincoli giuridici non risolti
 
-Secondo GDPR art. 7(3) e Linee guida EDPB 05/2020, la revoca deve essere facile quanto il consenso; cessano le operazioni fondate solo su quel consenso, **compresa l'ulteriore conservazione se non esiste altra base valida**. La soluzione A non può promettere dati esportabili per un periodo indefinito senza una base giuridica appropriata. Prima della modifica runtime, la revisione privacy deve definire chiaramente i trattamenti residui e i termini minimi strettamente necessari, le eccezioni legittime, la notifica ai fornitori applicabili e i testi rivolti all'utente.
+Secondo GDPR art. 7(3) e Linee guida EDPB 05/2020, la revoca deve essere facile quanto il consenso; cessano le operazioni fondate solo su quel consenso, **compresa l'ulteriore conservazione se non esiste altra base valida**. La soluzione A non può promettere dati esportabili per un periodo indefinito senza una base giuridica appropriata. Prima del rilascio del candidato runtime, la revisione privacy deve definire chiaramente i trattamenti residui e i termini minimi strettamente necessari, le eccezioni legittime, la notifica ai fornitori applicabili e i testi rivolti all'utente.
 
 ## Invarianti richiesti a qualunque implementazione approvata
 
@@ -79,7 +81,7 @@ Secondo GDPR art. 7(3) e Linee guida EDPB 05/2020, la revoca deve essere facile 
 
 ## Implementazione candidata nella PR tecnica (non rilasciata)
 
-La PR draft dell'issue #300 prepara:
+La PR #301, ancora Draft, propone (non in Production):
 - `health_consent_revocations/{uid}`, registro immutabile per client e leggibile solo dal proprietario;
 - `isWritableOwner` in `firestore.rules`, per fermare le scritture anche da vecchie build; letture proprietario preservate per esercitare i diritti previsti;
 - endpoint trusted `POST /api/health-consent-revocation`, autenticato con Firebase Auth e App Check limited-use consumato, con commit idempotente del marker;
@@ -87,16 +89,16 @@ La PR draft dell'issue #300 prepara:
 - rimozione del marker dal server prima di completare la cancellazione account, protetta dal lease già previsto;
 - regressioni per Rules, replica, endpoint e lifecycle.
 
-**Gate non chiuso:** il codice è in bozza tecnica; non attivare in Production finché non è definito un regime giuridicamente fondato per i dati residui, con periodo di esportazione e cancellazione verificabile, e non sono verdi tutti i test di failure/recovery e le verifiche UI/runtime. Un altro dispositivo che resta offline non può conoscere immediatamente una revoca registrata altrove: il server può bloccarne le successive scritture, ma la UI potrà adeguarsi soltanto alla riconnessione. Documentare esplicitamente questo limite nel contratto operativo.
+**Gate non chiuso:** la CI del candidato precedente e' verde, ma questo non prova il regime giuridico dei dati residui, le configurazioni esterne o il comportamento Production. Non attivare la funzione senza retention/cancellazione verificabili e review legale, runtime e UI. Un altro dispositivo che resta offline non può conoscere immediatamente una revoca registrata altrove: il server può bloccarne le successive scritture, ma la UI potrà adeguarsi soltanto alla riconnessione. Documentare esplicitamente questo limite nel contratto operativo.
 
 ## Gate di rilascio
 
 **NON CHIUSO.** Prima del pilot con utenti reali:
 - [ ] classificazione delle finalità e delle basi artt. 6/9 approvata da professionista competente;
-- [x] decisione esplicita di prodotto: soluzione A (sospensione, accesso a diritti/esportazione/cancellazione);
-- [ ] specifica tecnica end-to-end per ospite, account, offline, multi-device e recovery;
-- [ ] implementazione atomica/autorativa con test negativi e failure path;
+- [x] decisione di prodotto: soluzione A (sospensione, export JSON facoltativo **prima** della conferma; informativa/diritti ed eliminazione account disponibili dopo);
+- [x] specifica/implementazione candidate end-to-end per ospite, account, offline, multi-device e recovery, su PR Draft (non Production);
+- [x] test automatici e regressioni sul candidato tecnico (10/10 check verdi sullo SHA citato; non equivalgono a una validazione runtime o legale);
 - [ ] verifica Firestore Rules live, backend quando coinvolto e runtime PWA pertinente;
 - [ ] informativa, registro, DPIA screening, retention e procedura diritti aggiornati e validati.
 
-Rif.: `docs/compliance/data-subject-rights-procedure.md`, `docs/compliance/dpia-screening-template.md`, `docs/compliance/retention-schedule.md`, `docs/compliance/processing-record-template.md`, `.agents/rules/data-model-and-zod.md` e `.agents/rules/storage-and-sync.md`.
+Rif.: `docs/compliance/health-consent-signoff.md`, `docs/compliance/data-subject-rights-procedure.md`, `docs/compliance/dpia-screening-template.md`, `docs/compliance/retention-schedule.md`, `docs/compliance/processing-record-template.md`, `.agents/rules/data-model-and-zod.md` e `.agents/rules/storage-and-sync.md`.

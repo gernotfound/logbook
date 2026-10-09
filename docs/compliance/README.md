@@ -1,7 +1,7 @@
 # TheLogBook — pacchetto compliance per il primo pilot
 
 > Stato: struttura operativa da completare e far revisionare professionalmente prima della prima palestra.
-> Ultimo aggiornamento tecnico: 2 ottobre 2026.
+> Ultimo aggiornamento del pacchetto: 9 ottobre 2026 (preparazione PR #301, non deploy).
 > Questo pacchetto non certifica conformità GDPR e non sostituisce consulenza legale, privacy o fiscale.
 
 ## Obiettivo
@@ -35,7 +35,8 @@ Queste assunzioni devono essere riconfermate nella documentazione firmata; se ca
 | `legitimate-interest-assessment-template.md` | LIA della telemetria tecnica | Compilare se si mantiene Art. 6(1)(f) |
 | `dpo-assessment-template.md` | Valutazione obbligo DPO | Compilare e riesaminare su aumento scala |
 | `data-subject-rights-procedure.md` | Accesso, rettifica, portabilità, cancellazione, revoche | Assegnare canale privacy |
-| `health-consent-release-gate.md` | Specifica CRITICAL soluzione A approvata dal product owner; revoca salute e percorso di sospensione | Validazione legale, implementazione e test **aperti** |
+| `health-consent-release-gate.md` | Requisiti e stato tecnico soluzione A per revoca salute | Candidato PR #301 testato, non rilasciato; legal/provider Production aperti |
+| `health-consent-signoff.md` | Matrice decisioni privacy, dati residui, prove e firma go-live | **Non approvato**: richiede titolare e revisione professionale |
 | `support-sla-policy-template.md` | Supporto, severità e impegni di servizio | Definire solo promesse sostenibili |
 | `exit-deletion-policy-template.md` | Cessazione B2B e dati | Allineare al ruolo privacy |
 | `gym-privacy-instructions-template.md` | Istruzioni operative alla palestra | Consegnare/adattare al pilot |
