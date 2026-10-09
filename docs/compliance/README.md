@@ -47,7 +47,9 @@ Queste assunzioni devono essere riconfermate nella documentazione firmata; se ca
 
 ## Placeholder standard
 
-Non inserire dati personali o fiscali reali finché non serve alla release contrattuale.
+I dati del titolare e le decisioni giuridiche sono **rinviati** dal product owner: non vanno inventati né considerati approvati. Per completarli in futuro utilizzare la **scheda unica compilabile** in [`health-consent-signoff.md`](health-consent-signoff.md#scheda-placeholder-da-compilare-in-futuro), dove sono distinti identità, basi giuridiche, retention, fornitori, controlli e autorizzazione al rilascio. I tre segnaposto dell'informativa PWA (`[NOME / RAGIONE SOCIALE]`, `[INDIRIZZO]`, `[EMAIL PRIVACY]`) rimangono volutamente aperti e sono mappati nella scheda.
+
+Non inserire dati personali, fiscali o decisioni non verificati. La compilazione non è necessaria per sviluppare e testare con dati sintetici; è invece un requisito di rilascio/uso con dati personali reali **prima della raccolta**, non soltanto al momento della vendita.
 
 - `[PROVIDER_LEGAL_NAME]`
 - `[PROVIDER_LEGAL_FORM]`

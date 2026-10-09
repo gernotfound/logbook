@@ -14,6 +14,56 @@ Il product owner ha scelto la soluzione A: revoca del consenso relativo ai dati 
 
 **Decisioni non autorizzate:** non introdurre ri-consenso implicito; non conservare indefinitamente contenuti salute dopo la revoca senza altra valida base; non dichiarare che backup/provider/dispositivi offline siano stati gia' ripuliti; non interpretare consenso Art. 9 come base Art. 6 per ogni finalita'.
 
+## Scheda placeholder da compilare in futuro
+
+**Rinvio deliberato dal product owner, 10 ottobre 2026:** non raccogliere adesso dati personali, fiscali o decisioni legali non ancora assunte. I valori tra parentesi quadre sono **segnaposto**, non fatti accertati e non approvazioni. Questa sezione è una scheda di lavoro unica per il futuro; compilare i documenti e l'informativa effettivi soltanto quando necessario e previa verifica del contenuto.
+
+### Identità e contatti (da definire)
+
+| Dato | Placeholder |
+|---|---|
+| Tipologia del titolare (persona fisica / impresa / società / altro) | `[CONTROLLER_TYPE_TO_DEFINE]` |
+| Nome del titolare o denominazione/ragione sociale | `[PROVIDER_LEGAL_NAME]` |
+| Forma giuridica, se pertinente | `[PROVIDER_LEGAL_FORM]` |
+| Indirizzo/recapito del titolare da pubblicare | `[PROVIDER_ADDRESS]` |
+| Email per esercitare i diritti privacy | `[PRIVACY_EMAIL]` |
+| Email di supporto, se distinta | `[SUPPORT_EMAIL]` |
+| DPO, ove previsto, o esito motivato della valutazione | `[DPO_OR_NOT_APPLICABLE]` |
+
+I segnaposto già **presenti nell'interfaccia** `src/pages/PrivacyPolicy.tsx` sono `[NOME / RAGIONE SOCIALE]`, `[INDIRIZZO]` e `[EMAIL PRIVACY]`: corrispondono rispettivamente a `[PROVIDER_LEGAL_NAME]`, `[PROVIDER_ADDRESS]` e `[PRIVACY_EMAIL]`. **Non sostituirli adesso con identità presunte.** Non pubblicare nel repository pubblico dati fiscali, recapiti privati o documenti non destinati alla pubblicazione.
+
+### Decisioni giuridiche e organizzative (da validare)
+
+| Decisione/evidenza richiesta | Placeholder |
+|---|---|
+| Ruolo del titolare e relazione con eventuali palestre | `[CONTROLLER_ROLE_VALIDATION]` |
+| Basi giuridiche Art. 6, suddivise per finalità | `[ART6_PURPOSES_VALIDATION]` |
+| Condizione Art. 9 e prova/forma del consenso salute | `[ART9_HEALTH_CONSENT_VALIDATION]` |
+| Dati da cancellare dopo revoca, eventuali eccezioni Art. 17 e relative motivazioni | `[ERASURE_SCOPE_AND_EXCEPTIONS]` |
+| Retention e base per marker revoca, log e record tecnici | `[RETENTION_AND_REVOCATION_MARKER_VALIDATION]` |
+| Procedura per richieste di accesso/cancellazione/revoca, referenti e tempi | `[DSR_PROCEDURE_APPROVAL]` |
+| Screening DPIA, eventuale DPIA completa e approvazione | `[DPIA_SCREENING_OUTCOME]` |
+| Registro delle attività di trattamento (RoPA), ove richiesto | `[ROPA_APPROVAL]` |
+| LIA Sentry, se usato legittimo interesse | `[SENTRY_LIA_APPROVAL]` |
+| DPA/subprocessori, localizzazioni e trasferimenti extra SEE | `[VENDOR_DPA_TRANSFER_VALIDATION]` |
+| Backup/PITR e ciclo di cancellazione/restore verificato | `[BACKUP_AND_RESTORE_POLICY_VALIDATION]` |
+| Revisione professionale competente: ruolo ed esito | `[LEGAL_REVIEW_SIGNOFF]` |
+
+Queste voci non sono valori predefiniti: non inferire la risposta dal codice, dal template o da una suite di test verde. I dettagli vanno registrati nei template di `docs/compliance/` e, quando destinati agli interessati, nella Privacy Policy pubblicata.
+
+### Gate finali di rilascio (da verificare solo quando si decide di pubblicare)
+
+| Verifica | Placeholder |
+|---|---|
+| Informativa definitiva, recapiti e versione privacy | `[PRIVACY_POLICY_APPROVED_VERSION]` |
+| Indice Firestore Rules/indici live, in particolare indice per `eraseUpdatedAt` | `[FIRESTORE_LIVE_VERIFICATION]` |
+| Vercel backend, cron e allarmi di cancellazione effettivamente osservati | `[VERCEL_ERASURE_RUNTIME_VERIFICATION]` |
+| Smoke PWA/Hosting sui dispositivi previsti, senza dati reali non autorizzati | `[PWA_RUNTIME_SMOKE_VERIFICATION]` |
+| CI esatta sul commit candidato e review finale | `[EXACT_SHA_CI_REVIEW_EVIDENCE]` |
+| Decisione esplicita di rilascio e referente responsabile | `[RELEASE_AUTHORIZATION]` |
+
+**Regola:** lasciare i placeholder non compilati non blocca lo **sviluppo/test con dati sintetici**, ma **non autorizza** a trattare dati personali di utenti reali, eseguire merge/deploy della funzione CRITICAL o dichiarare conformità. Il momento corretto per chiudere i requisiti è **prima di iniziare il relativo trattamento**, non necessariamente quando il servizio viene venduto. Nessuna firma o approvazione deve essere simulata.
+
 ## 2. Informazioni indispensabili dal titolare
 
 | Campo | Dato/decisione reale necessaria | Stato |
