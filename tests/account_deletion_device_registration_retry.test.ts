@@ -265,4 +265,89 @@ describe('account deletion recovery device registration retries', () => {
     );
   });
 
+  it('bounds an unresolved ID token and releases the registration watcher for retry', async () => {
+    vi.useFakeTimers();
+    try {
+      const { watchDeletionRecoveryDeviceRegistration } = await loadSubject();
+      const current = user();
+      firebase.auth.currentUser = current;
+      let release!: (token: string) => void;
+      current.getIdToken.mockImplementationOnce(() => new Promise<string>(resolve => { release = resolve; }));
+      const fetchMock = vi.fn(async () => new Response('{}', { status: 200 }));
+      vi.stubGlobal('fetch', fetchMock);
+      const onError = vi.fn();
+
+      const dispose = watchDeletionRecoveryDeviceRegistration(current, onError);
+      await vi.advanceTimersByTimeAsync(7_500);
+      await Promise.resolve();
+      expect(onError).toHaveBeenCalledTimes(1);
+      expect(fetchMock).not.toHaveBeenCalled();
+
+      release('too-late-token');
+      await Promise.resolve();
+      expect(fetchMock).not.toHaveBeenCalled();
+
+      window.dispatchEvent(new Event('online'));
+      await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+      expect(localStorage.getItem('logbook_deletion_recovery_devices_v1')).not.toBeNull();
+      dispose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('continues to a second device when the first response body never finishes', async () => {
+    vi.useFakeTimers();
+    try {
+      const { recoverDeletedAccountOnThisDevice } = await loadSubject();
+      localStorage.setItem('logbook_deletion_recovery_devices_v1', JSON.stringify([
+        { uid: 'user-a', token: 'A'.repeat(43) },
+        { uid: 'user-b', token: 'B'.repeat(43) },
+      ]));
+      const stalledJson = vi.fn(() => new Promise<unknown>(() => {}));
+      const fetchMock = vi.fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: stalledJson,
+        })
+        .mockResolvedValueOnce(new Response(JSON.stringify({ status: 'complete' }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }));
+      vi.stubGlobal('fetch', fetchMock);
+      const finalize = vi.fn(async () => ({ status: 'complete' as const }));
+
+      const operation = recoverDeletedAccountOnThisDevice(finalize);
+      await vi.waitFor(() => expect(stalledJson).toHaveBeenCalledTimes(1));
+      await vi.advanceTimersByTimeAsync(7_500);
+      await expect(operation).resolves.toEqual({ status: 'complete' });
+      expect(finalize).toHaveBeenCalledTimes(1);
+      expect(finalize).toHaveBeenCalledWith('user-b');
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not abandon another completed device when an earlier finalization fails', async () => {
+    const { recoverDeletedAccountOnThisDevice, DeletionRecoveryFinalizationError } = await loadSubject();
+    localStorage.setItem('logbook_deletion_recovery_devices_v1', JSON.stringify([
+      { uid: 'user-a', token: 'A'.repeat(43) },
+      { uid: 'user-b', token: 'B'.repeat(43) },
+    ]));
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ status: 'complete' }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    })));
+    const finalize = vi.fn(async (uid: string) => {
+      if (uid === 'user-a') throw new Error('A: IndexedDB unavailable');
+      return { status: 'complete' as const };
+    });
+
+    await expect(recoverDeletedAccountOnThisDevice(finalize)).rejects.toBeInstanceOf(DeletionRecoveryFinalizationError);
+    expect(finalize).toHaveBeenCalledTimes(2);
+    expect(finalize).toHaveBeenCalledWith('user-b');
+  });
+
 });

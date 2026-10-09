@@ -119,6 +119,19 @@ it('uses the same account-isolation barrier for a completed device-recovery proo
     expect(isAccountDeletionPending('user:a')).toBe(true);
 });
 
+it('preserves account A archive if account B signs in while A is being signed out', async () => {
+    boundary.auth.currentUser = { uid: 'a' };
+    boundary.auth.signOut.mockImplementationOnce(async () => {
+        boundary.auth.currentUser = { uid: 'b' };
+    });
+
+    await expect(finalizeCompletedDeletionForUid('a', context)).resolves.toMatchObject({ status: 'pending' });
+
+    expect(boundary.auth.signOut).toHaveBeenCalledTimes(1);
+    expect(boundary.purge).not.toHaveBeenCalled();
+    expect(isAccountDeletionPending('user:a')).toBe(true);
+});
+
 it('finalizes a completed device-recovery proof when no other identity is active', async () => {
     boundary.auth.currentUser = null;
 

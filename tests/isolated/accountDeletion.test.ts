@@ -22,7 +22,7 @@ vi.mock('../../src/lib/firebase', () => ({
 vi.mock('../../src/lib/appCheck', () => ({ getLimitedUseAppCheckToken: boundary.appCheck }));
 vi.mock('../../src/lib/sync/replicateJournal', () => ({ waitForJournalIdle: boundary.idle }));
 
-import { deleteAccount, purgeAllLocalUserData, resumeAccountDeletion } from '../../src/lib/db/db_account';
+import { deleteAccount, purgeAllLocalUserData, purgeCompletedAccountLocalData, resumeAccountDeletion } from '../../src/lib/db/db_account';
 import { invalidateSession } from '../../src/lib/sync/session';
 import {
     isAccountDeletionPending,
@@ -30,7 +30,7 @@ import {
     readAccountDeletionMarker,
 } from '../../src/lib/sync/accountGate';
 
-const context = { purgeAllLocalUserData, resetCache: vi.fn(), cancelPendingSyncs: boundary.cancel, resetStore: boundary.reset };
+const context = { purgeAllLocalUserData: purgeCompletedAccountLocalData, resetCache: vi.fn(), cancelPendingSyncs: boundary.cancel, resetStore: boundary.reset };
 let disk: Map<string, string>;
 
 function response(status: number, body: Record<string, unknown>): Response {
@@ -92,7 +92,7 @@ beforeEach(async () => {
     await set('logbook:v2:user:b', { original: 'other owner' });
 });
 
-afterEach(() => { vi.unstubAllGlobals(); });
+afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 it('persists a recovery receipt before POST and purges only after server completion', async () => {
     installSuccessfulServerFlow();
@@ -267,4 +267,112 @@ it('reports storage deletion failures while continuing cleanup of other keys', a
 
     expect(disk.has('logbook:v2:user:a:workout')).toBe(true);
     expect(disk.has('logbook:v2:user:a:timer_state')).toBe(false);
+});
+
+it('blocks direct ordinary purge while preserving the pending receipt and real IndexedDB envelope', async () => {
+    const receipt = 'A'.repeat(43);
+    markAccountDeletion('user:a', { receiptToken: receipt, serverAcceptedAt: Date.now() });
+    disk.set('logbook:v2:user:a:workout', 'draft');
+
+    await expect(purgeAllLocalUserData('user:a')).rejects.toThrow('Cancellazione account in sospeso');
+    expect(await get('logbook:v2:user:a')).toEqual({ original: 'recoverable' });
+    expect(disk.get('logbook:v2:user:a:workout')).toBe('draft');
+    expect(readAccountDeletionMarker('user:a')?.receiptToken).toBe(receipt);
+});
+
+it('preserves the previously accepted marker after a rejected retry', async () => {
+    const receipt = 'B'.repeat(43);
+    markAccountDeletion('user:a', { receiptToken: receipt, serverAcceptedAt: Date.now() });
+    boundary.fetch.mockResolvedValueOnce(response(403, { error: 'Verifica App Check non valida.' }));
+
+    await expect(deleteAccount(context)).rejects.toThrow('Verifica App Check non valida.');
+    expect(readAccountDeletionMarker('user:a')?.receiptToken).toBe(receipt);
+    expect(isAccountDeletionPending('user:a')).toBe(true);
+    expect(await get('logbook:v2:user:a')).toEqual({ original: 'recoverable' });
+    expect(boundary.auth.signOut).not.toHaveBeenCalled();
+});
+
+it('keeps a lost-ack receipt on 401 even without serverAcceptedAt', async () => {
+    const receipt = 'C'.repeat(43);
+    markAccountDeletion('user:a', { receiptToken: receipt });
+    boundary.fetch.mockResolvedValueOnce(response(401, { error: 'Token revocato.' }));
+
+    await expect(deleteAccount(context)).rejects.toThrow('Token revocato.');
+    expect(readAccountDeletionMarker('user:a')?.receiptToken).toBe(receipt);
+    expect(isAccountDeletionPending('user:a')).toBe(true);
+    expect(await get('logbook:v2:user:a')).toBeDefined();
+});
+
+it('bounds the App Check provider during receipt polling without starting a late fetch', async () => {
+    // Use a shortened real deadline rather than fake timers: dynamic module
+    // import and fake IndexedDB each have their own asynchronous scheduling.
+    const nativeSetTimeout = globalThis.setTimeout;
+    vi.spyOn(globalThis, 'setTimeout').mockImplementation((handler, delay, ...args) =>
+        nativeSetTimeout(handler, delay === 7_500 ? 350 : delay, ...args));
+    boundary.auth.currentUser = null;
+    markAccountDeletion('user:a', { receiptToken: 'D'.repeat(43) });
+    let release!: (value: string) => void;
+    boundary.appCheck.mockReturnValue(new Promise<string>(resolve => { release = resolve; }));
+
+    const operation = resumeAccountDeletion(context);
+    await vi.waitFor(() => expect(boundary.appCheck).toHaveBeenCalledTimes(1));
+    await expect(operation).resolves.toMatchObject({ status: 'pending' });
+    release('late-token');
+    await Promise.resolve();
+    expect(boundary.fetch).not.toHaveBeenCalled();
+    expect(await get('logbook:v2:user:a')).toBeDefined();
+    expect(isAccountDeletionPending('user:a')).toBe(true);
+});
+
+it('bounds receipt body parsing and does not purge on a hanging response.json', async () => {
+    const nativeSetTimeout = globalThis.setTimeout;
+    vi.spyOn(globalThis, 'setTimeout').mockImplementation((handler, delay, ...args) =>
+        nativeSetTimeout(handler, delay === 7_500 ? 350 : delay, ...args));
+    boundary.auth.currentUser = null;
+    markAccountDeletion('user:a', { receiptToken: 'E'.repeat(43) });
+    const readBody = vi.fn(() => new Promise<unknown>(() => {}));
+    boundary.fetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: readBody,
+    } as Response);
+
+    const operation = resumeAccountDeletion(context);
+    await vi.waitFor(() => expect(readBody).toHaveBeenCalledTimes(1));
+    await expect(operation).resolves.toMatchObject({ status: 'pending' });
+    expect(await get('logbook:v2:user:a')).toBeDefined();
+    expect(isAccountDeletionPending('user:a')).toBe(true);
+    expect(boundary.auth.signOut).not.toHaveBeenCalled();
+});
+
+it('completes older owner A even when newer owner B is still deleting', async () => {
+    boundary.auth.currentUser = null;
+    markAccountDeletion('user:a', { receiptToken: 'A'.repeat(43) });
+    disk.set('logbook:v2:user:b:account-deletion', JSON.stringify({
+        uid: 'b', owner: 'user:b', startedAt: Date.now() + 1000,
+        receiptToken: 'B'.repeat(43),
+    }));
+    boundary.fetch.mockImplementation(async (_input, init?: RequestInit) => {
+        const uid = headerValue(init?.headers, 'x-account-deletion-uid');
+        return response(200, { uid, status: uid === 'a' ? 'complete' : 'deleting' });
+    });
+
+    await expect(resumeAccountDeletion(context)).resolves.toMatchObject({ status: 'pending' });
+    expect(await get('logbook:v2:user:a')).toBeUndefined();
+    expect(await get('logbook:v2:user:b')).toEqual({ original: 'other owner' });
+    expect(isAccountDeletionPending('user:a')).toBe(false);
+    expect(isAccountDeletionPending('user:b')).toBe(true);
+});
+
+it('reconciles a valid owner without discarding or suppressing a corrupt marker for another owner', async () => {
+    boundary.auth.currentUser = null;
+    markAccountDeletion('user:a', { receiptToken: 'A'.repeat(43) });
+    disk.set('logbook:v2:user:b:account-deletion', '{"startedAt":');
+    boundary.fetch.mockResolvedValue(response(200, { uid: 'a', status: 'complete' }));
+
+    await expect(resumeAccountDeletion(context)).rejects.toThrow('Marker di cancellazione account');
+    expect(await get('logbook:v2:user:a')).toBeUndefined();
+    expect(isAccountDeletionPending('user:a')).toBe(false);
+    expect(isAccountDeletionPending('user:b')).toBe(true);
+    expect(await get('logbook:v2:user:b')).toEqual({ original: 'other owner' });
 });

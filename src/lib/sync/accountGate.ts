@@ -97,15 +97,32 @@ export function clearAccountDeletion(owner: string): void {
     removeBrowserValue(key(owner));
 }
 
-export function findPendingAccountDeletion(): AccountDeletionMarker | null {
-    if (typeof localStorage === 'undefined') return null;
-    let newest: AccountDeletionMarker | null = null;
+export function listPendingAccountDeletions(): {
+    markers: AccountDeletionMarker[];
+    corrupt: AccountDeletionMarkerCorruptError[];
+} {
+    const markers: AccountDeletionMarker[] = [];
+    const corrupt: AccountDeletionMarkerCorruptError[] = [];
+    if (typeof localStorage === 'undefined') return { markers, corrupt };
     for (let index = 0; index < localStorage.length; index++) {
         const storageKey = localStorage.key(index);
         if (!storageKey?.startsWith('logbook:v2:user:') || !storageKey.endsWith(suffix)) continue;
         const owner = storageKey.slice('logbook:v2:'.length, -suffix.length);
-        const marker = parse(owner, readBrowserValueStrict(storageKey));
-        if (marker && (!newest || marker.startedAt > newest.startedAt)) newest = marker;
+        try {
+            const marker = parse(owner, readBrowserValueStrict(storageKey));
+            if (marker) markers.push(marker);
+        } catch (error) {
+            if (!(error instanceof AccountDeletionMarkerCorruptError)) throw error;
+            corrupt.push(error);
+        }
     }
-    return newest;
+    markers.sort((a, b) => a.startedAt - b.startedAt);
+    return { markers, corrupt };
+}
+
+export function findPendingAccountDeletion(): AccountDeletionMarker | null {
+    const { markers, corrupt } = listPendingAccountDeletions();
+    // Writer barriers must remain fail-closed even when another marker is valid.
+    if (corrupt.length) throw corrupt[0];
+    return markers.at(-1) ?? null;
 }

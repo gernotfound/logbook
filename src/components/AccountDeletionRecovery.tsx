@@ -6,7 +6,7 @@ import {
     resumeAccountDeletion,
     type AccountDeletionCompletionContext,
 } from '../lib/db/db_account';
-import { findPendingAccountDeletion } from '../lib/sync/accountGate';
+import { listPendingAccountDeletions } from '../lib/sync/accountGate';
 import { useDialogStore } from '../store/useDialogStore';
 import { useAppStore } from '../store/useAppStore';
 import {
@@ -33,7 +33,7 @@ export function AccountDeletionRecovery() {
         let nextDeviceRecoveryAt = 0;
 
         const completionContext: AccountDeletionCompletionContext = {
-            purgeAllLocalUserData: owner => DB.purgeAllLocalUserData(owner),
+            purgeAllLocalUserData: owner => DB.purgeCompletedAccountLocalData(owner),
             resetCache: () => DB.resetCache(),
             resetStore: () => useAppStore.getState().resetStore(),
         };
@@ -55,8 +55,11 @@ export function AccountDeletionRecovery() {
             }
         };
 
-        const showPending = async (message: string) => {
-            if (!disposed) await useDialogStore.getState().showAlert(message);
+        const showPending = (message: string) => {
+            // A dialog left open must not hold the recovery mutex.
+            if (!disposed) void useDialogStore.getState().showAlert(message).catch(error => {
+                reportError(error, { source: 'account_deletion_recovery_dialog' });
+            });
         };
 
         const reconcile = async (forceDeviceRecovery = false) => {
@@ -66,26 +69,32 @@ export function AccountDeletionRecovery() {
             running = true;
             let pendingDeletion: boolean | null = null;
             try {
-                pendingDeletion = Boolean(findPendingAccountDeletion());
-                if (!pendingDeletion) {
-                    const recovery = await recoverByDevice(forceDeviceRecovery);
-                    if (recovery.status === 'pending') await showPending(recovery.message);
-                    return;
+                const snapshot = listPendingAccountDeletions();
+                pendingDeletion = snapshot.markers.length > 0 || snapshot.corrupt.length > 0;
+                let markerError: unknown;
+                if (pendingDeletion) {
+                    try {
+                        const outcome = await resumeAccountDeletion(completionContext);
+                        if (outcome?.status === 'pending') showPending(outcome.message);
+                    } catch (error) {
+                        markerError = error;
+                    }
                 }
 
+                // Check device receipts independently of any local marker. A newer,
+                // incomplete deletion must not starve an older completed one.
+                let deviceError: unknown;
+                let deviceOutcome: Awaited<ReturnType<typeof recoverDeletedAccountOnThisDevice>> = { status: 'none' };
                 try {
-                    const outcome = await resumeAccountDeletion(completionContext);
-                    if (outcome?.status === 'pending') await showPending(outcome.message);
+                    deviceOutcome = await recoverByDevice(forceDeviceRecovery || markerError instanceof AccountDeletionReceiptNotFoundError);
+                    if (deviceOutcome.status === 'pending') showPending(deviceOutcome.message);
                 } catch (error) {
-                    if (!(error instanceof AccountDeletionReceiptNotFoundError)) throw error;
-                    const recovery = await recoverByDevice(true);
-                    if (recovery.status === 'complete') return;
-                    if (recovery.status === 'pending') {
-                        await showPending(recovery.message);
-                        return;
-                    }
-                    throw error;
+                    deviceError = error;
                 }
+                if (markerError && !(markerError instanceof AccountDeletionReceiptNotFoundError && deviceOutcome.status !== 'none')) {
+                    throw markerError;
+                }
+                if (deviceError) throw deviceError;
             } catch (error) {
                 reportError(error, { source: 'account_deletion_recovery' });
                 console.warn('Recovery cancellazione account non completato:', error);
@@ -98,7 +107,7 @@ export function AccountDeletionRecovery() {
                         : pendingDeletion === true && error instanceof Error
                             ? error.message
                             : UNKNOWN_RECOVERY_MESSAGE;
-                    await useDialogStore.getState().showAlert(message);
+                    showPending(message);
                 }
             } finally {
                 running = false;

@@ -4,6 +4,8 @@ import ErrorBoundary from '../src/components/UI/ErrorBoundary';
 import { DB } from '../src/lib/db';
 import { useDialogStore } from '../src/store/useDialogStore';
 import { idbStore, localStorageMock } from './setup';
+import { storageOwner } from '../src/lib/sync/session';
+import { markAccountDeletion } from '../src/lib/sync/accountGate';
 
 const ProblemChild = ({ shouldThrow }: { shouldThrow: boolean }) => {
     if (shouldThrow) {
@@ -156,4 +158,25 @@ describe('R2: ErrorBoundary & Dialog Hardening Suite', () => {
 
         consoleErrorSpy.mockRestore();
     });
+    it('never calls local reset when the account has a pending server deletion', async () => {
+        const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+        const owner = storageOwner();
+        markAccountDeletion(owner, { receiptToken: 'A'.repeat(43) });
+        vi.mocked(useDialogStore.getState().showConfirm).mockResolvedValue(true);
+        idbStore['logbook:v2:' + owner] = { data: { profile: { name: 'Keep me' } } };
+
+        render(<ErrorBoundary><ProblemChild shouldThrow={true} /></ErrorBoundary>);
+        await act(async () => {
+            fireEvent.click(screen.getByText(/Azzera dati locali/i));
+        });
+
+        expect(DB.purgeAllLocalUserData).not.toHaveBeenCalled();
+        expect(window.location.reload).not.toHaveBeenCalled();
+        expect(idbStore['logbook:v2:' + owner]).toBeDefined();
+        expect(useDialogStore.getState().showAlert).toHaveBeenCalledWith(
+            'Cancellazione account ancora in corso: i dati locali sono necessari per il recupero e non possono essere azzerati.'
+        );
+        consoleErrorSpy.mockRestore();
+    });
+
 });

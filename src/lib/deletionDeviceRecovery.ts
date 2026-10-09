@@ -1,10 +1,12 @@
 import type { User } from 'firebase/auth';
 import { auth, ensureAppCheck } from './firebase';
 import { readBrowserValueStrict, removeBrowserValue, writeBrowserJson } from './sync/browserStorage';
+import { assertDeletionDeadlineActive, withDeletionDeadline } from './deletionDeadline';
 
 const KEY='logbook_deletion_recovery_devices_v1';
 const API=(import.meta.env.VITE_ACCOUNT_DELETION_API_ORIGIN || 'https://logbook-gnf.vercel.app').replace(/\/$/,'');
 const MAX_DEVICES=4;
+const RECOVERY_REQUEST_TIMEOUT_MS=7_500;
 type Credential={uid:string;token:string};
 
 class DeletionRecoveryRequestError extends Error {
@@ -50,7 +52,15 @@ export async function registerDeletionRecoveryDevice(user:User):Promise<void>{
  if(!API||!navigator.onLine)return;
  const all=readAll();let cred=all.find(x=>x.uid===user.uid);
  if(!cred){cred={uid:user.uid,token:randomToken()};writeAll([...all.filter(x=>x.uid!==user.uid),cred]);}
- const response=await fetch(API+'/api/account-deletion-device',{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+await user.getIdToken(),'x-firebase-appcheck':await appToken()},body:JSON.stringify({deviceToken:cred.token}),cache:'no-store'});
+ const response=await withDeletionDeadline(async signal=>{
+   const idToken=await user.getIdToken();
+   assertDeletionDeadlineActive(signal);
+   const check=await appToken();
+   assertDeletionDeadlineActive(signal);
+   const result=await fetch(API+'/api/account-deletion-device',{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+idToken,'x-firebase-appcheck':check},body:JSON.stringify({deviceToken:cred.token}),cache:'no-store',signal});
+   assertDeletionDeadlineActive(signal);
+   return result;
+ },RECOVERY_REQUEST_TIMEOUT_MS);
  if(!response.ok)throw new DeletionRecoveryRequestError('Registrazione recovery device non riuscita',response.status);
 }
 
@@ -76,19 +86,39 @@ export type DeviceDeletionRecoveryOutcome={status:'none'}|LocalDeletionCompletio
 export async function recoverDeletedAccountOnThisDevice(finalize:(uid:string)=>Promise<LocalDeletionCompletion>):Promise<DeviceDeletionRecoveryOutcome>{
  if(!API||!navigator.onLine)return{status:'none'};
  let pendingMessage:string|undefined;let completed=false;let firstRequestError:Error|undefined;
+ let firstFinalizationError:DeletionRecoveryFinalizationError|undefined;
  for(const cred of readAll()){
-   const response=await fetch(API+'/api/account-deletion-device',{headers:{'x-firebase-appcheck':await appToken(),'x-account-deletion-uid':cred.uid,'x-account-deletion-device':cred.token},cache:'no-store'});
-   if(!response.ok){
-     if(response.status!==404&&!firstRequestError)firstRequestError=new DeletionRecoveryRequestError('Verifica recovery device non riuscita',response.status);
+   let status:number;
+   let body:{status?:string}|undefined;
+   try{
+     ({status,body}=await withDeletionDeadline(async signal=>{
+       const check=await appToken();
+       assertDeletionDeadlineActive(signal);
+       const response=await fetch(API+'/api/account-deletion-device',{headers:{'x-firebase-appcheck':check,'x-account-deletion-uid':cred.uid,'x-account-deletion-device':cred.token},cache:'no-store',signal});
+       assertDeletionDeadlineActive(signal);
+       if(!response.ok)return{status:response.status,body:undefined};
+       const json=await response.json() as {status?:string};
+       assertDeletionDeadlineActive(signal);
+       return{status:response.status,body:json};
+     },RECOVERY_REQUEST_TIMEOUT_MS));
+   }catch(error){
+     if(!firstRequestError)firstRequestError=error instanceof Error?error:new Error('Verifica recovery device non riuscita.');
      continue;
    }
-   const body=await response.json() as {status?:string};
-   if(body.status!=='complete')continue;
-   let outcome:LocalDeletionCompletion;
-   try{outcome=await finalize(cred.uid);}catch(error){throw new DeletionRecoveryFinalizationError(error);}
-   if(outcome.status==='complete')completed=true;
-   else pendingMessage=outcome.message;
+   if(status!==200){
+     if(status!==404&&!firstRequestError)firstRequestError=new DeletionRecoveryRequestError('Verifica recovery device non riuscita',status);
+     continue;
+   }
+   if(body?.status!=='complete')continue;
+   try{
+     const outcome=await finalize(cred.uid);
+     if(outcome.status==='complete')completed=true;
+     else pendingMessage=outcome.message;
+   }catch(error){
+     firstFinalizationError??=new DeletionRecoveryFinalizationError(error);
+   }
  }
+ if(firstFinalizationError)throw firstFinalizationError;
  if(completed)return{status:'complete'};
  if(pendingMessage)return{status:'pending',message:pendingMessage};
  if(firstRequestError)throw firstRequestError;

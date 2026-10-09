@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo, ReactNode } from 're
 import { User } from 'firebase/auth';
 import { auth, getDb, waitForPendingWrites, provider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendEmailVerification, reload } from '../lib/firebase';
 import { DB } from '../lib/db';
+import { isAccountDeletionPending } from '../lib/sync/accountGate';
 import { useAppStore } from '../store/useAppStore';
 import { UserData } from '../types';
 import { UserDataSchema } from '../lib/schema';
@@ -768,6 +769,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 setIsGuest(false);
                 setGuestMigrationStatus('idle');
                 useAppStore.getState().resetStore({ force: true });
+                return;
+            }
+
+            if (initialUid && isAccountDeletionPending(userOwner(initialUid))) {
+                await useDialogStore.getState().showAlert('Cancellazione account ancora in corso. I dati locali sono protetti: completa prima il recupero della cancellazione.');
                 return;
             }
 
