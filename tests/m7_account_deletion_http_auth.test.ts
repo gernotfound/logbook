@@ -13,6 +13,7 @@ vi.mock('../server/accountDeletion/firebaseAdmin', () => ({
 import {
   RequestAuthError,
   verifyDeletionRequester,
+  verifyHealthConsentRevocationRequester,
   verifyRecoveryRegistrationRequester,
   verifyStatusAppCheck,
 } from '../server/accountDeletion/httpAuth';
@@ -73,6 +74,24 @@ describe('M7 App Check replay protection for account deletion', () => {
     await expect(verifyRecoveryRegistrationRequester(requesterRequest())).resolves.toEqual({ uid: 'user-a' });
     expect(admin.verifyIdToken).toHaveBeenCalledWith('id-token', true);
     expect(admin.verifyToken).toHaveBeenCalledWith('limited-use-app-check', { consume: true });
+  });
+
+  it('authorizes revocation with a non-revoked session and consumes one-time App Check', async () => {
+    admin.verifyIdToken.mockResolvedValueOnce({
+      uid: 'user-a',
+      auth_time: Math.floor(Date.now() / 1000) - 86_400,
+    });
+    await expect(verifyHealthConsentRevocationRequester(requesterRequest())).resolves.toEqual({ uid: 'user-a' });
+    expect(admin.verifyIdToken).toHaveBeenCalledWith('id-token', true);
+    expect(admin.verifyToken).toHaveBeenCalledWith('limited-use-app-check', { consume: true });
+  });
+
+  it('rejects replayed App Check for consent revocation', async () => {
+    admin.verifyToken.mockResolvedValueOnce({ alreadyConsumed: true });
+    await expect(verifyHealthConsentRevocationRequester(requesterRequest())).rejects.toMatchObject({
+      name: 'RequestAuthError',
+      status: 403,
+    });
   });
 
   it('rejects stale authentication for the destructive deletion request even with valid one-time App Check', async () => {
