@@ -13,7 +13,7 @@ import PreSessionCheckIn from '../src/components/Training/PreSessionCheckIn';
 import TrainingSession from '../src/components/Training/TrainingSession';
 import WorkoutTimer from '../src/components/Training/WorkoutTimer';
 import { useWorkoutSession } from '../src/hooks/useWorkoutSession';
-import { initializeLocal, readLocal } from '../src/lib/sync/localRepository';
+import { commitDomainOperations, initializeLocal, readLocal } from '../src/lib/sync/localRepository';
 import { localStorageMock, renderWithProviders } from './setup';
 
 function workout(id: string, started = false): WorkoutSession {
@@ -211,6 +211,35 @@ describe('Workout lifecycle durable recovery regressions', () => {
             durable?.lastClosedWorkoutId)).toBeNull();
         expect(localStorage.getItem(key)).toBeNull();
         expect(useDialogStore.getState().showAlert).toHaveBeenCalledWith(expect.stringContaining('salvato nello storico'));
+    });
+
+
+    it('rejects an older tab snapshot even after a different workout closes later', async () => {
+        const abandoned = workout('deleted-from-another-tab', true);
+        const later = workout('subsequent-completion', true);
+        const initial = userData({ activeWorkout: abandoned });
+        await initializeLocal(owner, initial);
+        await commitDomainOperations(owner, {
+            type: 'active-workout.set', workout: null, deletedWorkoutId: abandoned.id,
+        }, initial);
+        const afterDelete = (await readLocal(owner))!.data;
+        await commitDomainOperations(owner, { type: 'active-workout.set', workout: later }, afterDelete);
+        const afterStart = (await readLocal(owner))!.data;
+        await commitDomainOperations(owner, {
+            type: 'workout.complete', workout: later,
+            expectedActiveWorkoutId: later.id, activePains: [],
+        }, afterStart);
+        const durable = (await readLocal(owner))!;
+        expect(durable.lastClosedWorkoutId).toBe(later.id);
+        expect(durable.deletedWorkoutIds).toContain(abandoned.id);
+        expect(durable.data.history.some(item => item.id === abandoned.id)).toBe(false);
+
+        const key = deviceKey('workout', owner);
+        // A suspended old tab can re-write the original device snapshot after B.
+        localStorage.setItem(key, JSON.stringify(abandoned));
+        expect(getInitialLocalWorkout(owner, durable.data.activeWorkout,
+            durable.data.history, durable.lastClosedWorkoutId, durable.deletedWorkoutIds)).toBeNull();
+        expect(localStorage.getItem(key)).toBeNull();
     });
 
     it('keeps post-session rating unchanged if its synchronous persistence fails', () => {
