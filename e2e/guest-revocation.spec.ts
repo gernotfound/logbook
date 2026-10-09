@@ -48,12 +48,13 @@ test('health consent withdrawal suspends guest tracking across tabs and reloads'
 
   await page.getByRole('button', { name: 'Apri impostazioni' }).click();
   await page.getByRole('button', { name: /^Privacy/ }).click();
+  await expect(page.getByRole('button', { name: 'Esporta backup prima della revoca' })).toBeVisible();
   await page.getByRole('button', { name: 'Revoca il consenso per i dati salute' }).click();
   await page.getByRole('alertdialog').getByRole('button', { name: 'Conferma' }).click();
 
   await expect(page.getByRole('heading', { name: 'Tracciamento sospeso' })).toBeVisible();
   await expect(otherTab.getByRole('heading', { name: 'Tracciamento sospeso' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Esporta i dati in JSON' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Esporta i dati in JSON' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Allenamento', exact: true })).toHaveCount(0);
 
   await page.reload();
