@@ -22,6 +22,8 @@ const store = vi.hoisted(() => ({
 
 vi.mock('../server/accountDeletion/httpAuth', () => auth);
 vi.mock('../server/healthConsent/revocation', () => store);
+const erasure = vi.hoisted(() => ({ processHealthErasure: vi.fn() }));
+vi.mock('../server/healthConsent/erasure', () => erasure);
 
 import { OPTIONS, POST } from '../api/health-consent-revocation';
 
@@ -37,6 +39,7 @@ describe('health consent revocation API boundary', () => {
     vi.clearAllMocks();
     auth.verifyHealthConsentRevocationRequester.mockResolvedValue({ uid: 'owner-a' });
     store.recordHealthConsentRevocation.mockResolvedValue(undefined);
+    erasure.processHealthErasure.mockResolvedValue('complete');
   });
 
   it('rejects untrusted origins before authentication or server mutations', async () => {
@@ -49,7 +52,8 @@ describe('health consent revocation API boundary', () => {
   it('uses only the verified UID, not a client supplied body or path parameter', async () => {
     const response = await POST(req());
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ revoked: true });
+    expect(await response.json()).toEqual({ revoked: true, erasure: 'complete' });
+    expect(erasure.processHealthErasure).toHaveBeenCalledWith('owner-a', expect.any(Number));
     expect(store.recordHealthConsentRevocation).toHaveBeenCalledExactlyOnceWith('owner-a');
     expect(response.headers.get('access-control-allow-origin')).toBe('https://thelogbook.web.app');
   });
@@ -67,6 +71,17 @@ describe('health consent revocation API boundary', () => {
     } finally {
       log.mockRestore();
     }
+  });
+
+  it('does not claim deletion completed when the erasure runner fails after consent was recorded', async () => {
+    erasure.processHealthErasure.mockRejectedValueOnce(new Error('internal confidential data'));
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      const response = await POST(req());
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ revoked: true, erasure: 'pending' });
+      expect(JSON.stringify(log.mock.calls)).not.toContain('internal confidential data');
+    } finally { log.mockRestore(); }
   });
 
   it('returns conflict if account deletion is already active', async () => {
