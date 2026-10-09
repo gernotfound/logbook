@@ -60,3 +60,30 @@ test('health consent withdrawal suspends guest tracking across tabs and reloads'
   await expect(page.getByRole('heading', { name: 'Tracciamento sospeso' })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)).toBe(false);
 });
+
+test('guest can explicitly delete suspended local data and start a fresh guest session', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Continua senza account' }).click();
+  await page.getByText('Aggiornamento Termini e Privacy').waitFor();
+  for (const checkbox of await page.locator('input[type="checkbox"]').all()) await checkbox.check();
+  await page.getByRole('button', { name: 'Accetta e Continua' }).click();
+
+  await page.getByRole('button', { name: 'Apri impostazioni' }).click();
+  await page.getByRole('button', { name: /^Privacy/ }).click();
+  await page.getByRole('button', { name: 'Revoca il consenso per i dati salute' }).click();
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Conferma' }).click();
+
+  await expect(page.getByRole('heading', { name: 'Tracciamento sospeso' })).toBeVisible();
+  await page.getByRole('button', { name: 'Elimina dati locali' }).click();
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Conferma' }).click();
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Conferma' }).click();
+
+  await expect(page.getByRole('button', { name: 'Continua senza account' })).toBeVisible();
+  await expect.poll(() => page.evaluate(() =>
+    localStorage.getItem('logbook:v2:guest:health-consent-revocation-v1')
+  )).toBeNull();
+
+  await page.getByRole('button', { name: 'Continua senza account' }).click();
+  await expect(page.locator('.guest-banner')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Tracciamento sospeso' })).toHaveCount(0);
+});
