@@ -217,13 +217,15 @@ export function useWorkoutSession() {
     }, [setSyncedLocalWorkout, showAlert]);
 
     const startEditHistoricalWorkout = useCallback(async (workout: WorkoutSession) => {
-        const currentLocal = useAppStore.getState().localWorkout;
+        const state = useAppStore.getState();
+        const currentLocal = state.localWorkout;
         if (currentLocal?.isEditingHistory) {
             await showAlert('Termina prima la modifica dello storico già aperta.');
             return false;
         }
-        if (currentLocal) {
-            const ok = await showConfirm("Hai già una sessione in corso. Vuoi sospenderla temporaneamente per modificare lo storico? Verrà ripristinata quando esci dall'editor.");
+        const suspended = currentLocal ?? state.userData?.activeWorkout ?? null;
+        if (suspended) {
+            const ok = await showConfirm("Hai già una sessione in corso. Vuoi modificare lo storico mantenendo la sessione attiva? Potrai riprenderla quando esci dall'editor.");
             if (!ok) return false;
         }
 
@@ -234,7 +236,7 @@ export function useWorkoutSession() {
             writeDeviceValue(HISTORY_EDITOR_CONTEXT, JSON.stringify({
                 version: 1,
                 editorId: editingWorkout.id,
-                suspended: currentLocal ?? null,
+                suspended,
             }), captureSession().owner);
             setLocalWorkout(editingWorkout);
             // The live timer belongs to the suspended session, not to the editor.

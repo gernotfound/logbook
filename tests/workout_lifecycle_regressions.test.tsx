@@ -117,6 +117,16 @@ describe('Workout lifecycle durable recovery regressions', () => {
         expect(readWorkoutTimerSnapshot(owner)).toEqual(initialTimer);
     });
 
+    it('restores a durable active shadow when the transient device state was absent', async () => {
+        const active = workout('shadow', true);
+        const old = workout('old-shadow', true);
+        useAppStore.setState({ userData: userData({ activeWorkout: active, history: [old] }), localWorkout: null });
+        const { result } = renderHook(() => useWorkoutSession());
+        await act(async () => { expect(await result.current.startEditHistoricalWorkout(old)).toBe(true); });
+        await act(async () => { expect(await result.current.cancelHistoryEdit()).toBe(true); });
+        expect(useAppStore.getState().localWorkout?.id).toBe('shadow');
+    });
+
     it('does not stop an active timer if switching to the historical editor fails', async () => {
         const active = workout('original', true);
         const old = workout('old', true);
