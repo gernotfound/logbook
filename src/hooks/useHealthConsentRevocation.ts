@@ -55,7 +55,7 @@ export function useHealthConsentRevocation(owner: string | null): HealthConsentG
           },
         );
       } catch {
-        setStatus('unavailable');
+        setObserved({ owner, status: 'unavailable' });
       }
     }
 
