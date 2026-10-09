@@ -69,7 +69,7 @@ describe('Workout lifecycle durable recovery regressions', () => {
     it('preserves readiness draft if deletion is declined', async () => {
         const cancel = vi.fn(async () => false);
         render(<PreSessionCheckIn workoutId="readiness-2" onStart={vi.fn(async () => true)} onCancel={cancel} />);
-        fireEvent.click(screen.getByRole('button', { name: 'Motivazione: 3 su 5' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Voglia di allenarti: 3 su 5' }));
         const key = deviceKey('draft:pre-session:readiness-2', owner);
         const saved = localStorage.getItem(key);
         fireEvent.click(screen.getByRole('button', { name: 'Annulla allenamento' }));
