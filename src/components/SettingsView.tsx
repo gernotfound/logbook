@@ -10,6 +10,8 @@ import { PrivacyPolicy } from '../pages/PrivacyPolicy';
 import { TermsAndConditions } from '../pages/TermsAndConditions';
 import { getAnalyticsConsent, setAnalyticsConsent, subscribeAnalyticsConsent } from '../lib/analyticsConsent';
 import { requestHealthConsentRevocation } from '../lib/requestHealthConsentRevocation';
+import { readHealthConsentRevocation } from '../lib/healthConsentRevocation';
+import { captureSession } from '../lib/sync/session';
 import type { ExportSelection } from './ExportSelector';
 import { AccountSettingsTab } from './Settings/AccountSettingsTab';
 import { StorageDiagnostics } from './Settings/StorageDiagnostics';
@@ -73,9 +75,15 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
         try {
             await requestHealthConsentRevocation();
         } catch {
-            await useDialogStore.getState().showAlert(
-                'La revoca è stata richiesta su questo dispositivo. Se il server non ha risposto, la conferma resta in sospeso e potrai riprovare.'
-            );
+            let locallySuspended = false;
+            try {
+                locallySuspended = readHealthConsentRevocation(captureSession().owner) !== 'none';
+            } catch {
+                // An unreadable security marker is not evidence of a saved request.
+            }
+            await useDialogStore.getState().showAlert(locallySuspended
+                ? 'La revoca è salvata su questo dispositivo, ma la conferma del server è ancora in attesa. Riprova dalla schermata di sospensione.'
+                : 'Non è stato possibile salvare la richiesta di revoca su questo dispositivo. Nessuna conferma è stata ricevuta; riprova quando la memoria locale sarà disponibile.');
         } finally {
             setRevokingHealthConsent(false);
         }
