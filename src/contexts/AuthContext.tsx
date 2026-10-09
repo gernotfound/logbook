@@ -801,6 +801,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 let purgeError: unknown;
                 try {
                     await DB.purgeAllLocalUserData('guest');
+                    // The infrastructure purge also removes these keys, but the
+                    // orchestrator enforces its public logout postcondition.
+                    removeBrowserValue(GUEST_KEY);
+                    removeBrowserValue(GUEST_SESSION_KEY);
                 } catch (error) {
                     purgeError = error;
                 }
