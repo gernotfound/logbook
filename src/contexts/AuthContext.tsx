@@ -39,7 +39,7 @@ const GUEST_MIGRATION_SYNC_RECOVERY_KEY = 'logbook_guest_migration_sync_recovery
 const AWAITING_REDIRECT_KEY = 'logbook_awaiting_redirect';
 
 function isStoredGuest(): boolean {
-    return readBrowserValueStrict(GUEST_KEY) === 'true' && readBrowserValueStrict(GUEST_REVOCATION_KEY) === null;
+    return readBrowserValueStrict(GUEST_KEY) === 'true' && readBrowserValueStrict(GUEST_REVOCATION_KEY) === null && isActiveGuestSession();
 }
 
 function readGuestMigrationSyncRecovery(): string | null {
