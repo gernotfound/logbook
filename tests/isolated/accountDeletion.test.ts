@@ -92,7 +92,7 @@ beforeEach(async () => {
     await set('logbook:v2:user:b', { original: 'other owner' });
 });
 
-afterEach(() => { vi.unstubAllGlobals(); });
+afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 it('persists a recovery receipt before POST and purges only after server completion', async () => {
     installSuccessfulServerFlow();
@@ -304,51 +304,45 @@ it('keeps a lost-ack receipt on 401 even without serverAcceptedAt', async () => 
 });
 
 it('bounds the App Check provider during receipt polling without starting a late fetch', async () => {
-    vi.useFakeTimers();
-    try {
-        boundary.auth.currentUser = null;
-        markAccountDeletion('user:a', { receiptToken: 'D'.repeat(43) });
-        let release!: (value: string) => void;
-        boundary.appCheck.mockReturnValue(new Promise<string>(resolve => { release = resolve; }));
+    // Use a shortened real deadline rather than fake timers: dynamic module
+    // import and fake IndexedDB each have their own asynchronous scheduling.
+    const nativeSetTimeout = globalThis.setTimeout;
+    vi.spyOn(globalThis, 'setTimeout').mockImplementation((handler, delay, ...args) =>
+        nativeSetTimeout(handler, delay === 7_500 ? 350 : delay, ...args));
+    boundary.auth.currentUser = null;
+    markAccountDeletion('user:a', { receiptToken: 'D'.repeat(43) });
+    let release!: (value: string) => void;
+    boundary.appCheck.mockReturnValue(new Promise<string>(resolve => { release = resolve; }));
 
-        const operation = resumeAccountDeletion(context);
-        // The dynamic App Check module import must complete before starting
-        // the fake-clock countdown; otherwise the test advances too early.
-        await vi.waitFor(() => expect(boundary.appCheck).toHaveBeenCalledTimes(1));
-        await vi.advanceTimersByTimeAsync(7_500);
-        await expect(operation).resolves.toMatchObject({ status: 'pending' });
-        release('late-token');
-        await Promise.resolve();
-        expect(boundary.fetch).not.toHaveBeenCalled();
-        expect(await get('logbook:v2:user:a')).toBeDefined();
-        expect(isAccountDeletionPending('user:a')).toBe(true);
-    } finally {
-        vi.useRealTimers();
-    }
+    const operation = resumeAccountDeletion(context);
+    await vi.waitFor(() => expect(boundary.appCheck).toHaveBeenCalledTimes(1));
+    await expect(operation).resolves.toMatchObject({ status: 'pending' });
+    release('late-token');
+    await Promise.resolve();
+    expect(boundary.fetch).not.toHaveBeenCalled();
+    expect(await get('logbook:v2:user:a')).toBeDefined();
+    expect(isAccountDeletionPending('user:a')).toBe(true);
 });
 
 it('bounds receipt body parsing and does not purge on a hanging response.json', async () => {
-    vi.useFakeTimers();
-    try {
-        boundary.auth.currentUser = null;
-        markAccountDeletion('user:a', { receiptToken: 'E'.repeat(43) });
-        const readBody = vi.fn(() => new Promise<unknown>(() => {}));
-        boundary.fetch.mockResolvedValue({
-            ok: true,
-            status: 200,
-            json: readBody,
-        } as Response);
+    const nativeSetTimeout = globalThis.setTimeout;
+    vi.spyOn(globalThis, 'setTimeout').mockImplementation((handler, delay, ...args) =>
+        nativeSetTimeout(handler, delay === 7_500 ? 350 : delay, ...args));
+    boundary.auth.currentUser = null;
+    markAccountDeletion('user:a', { receiptToken: 'E'.repeat(43) });
+    const readBody = vi.fn(() => new Promise<unknown>(() => {}));
+    boundary.fetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: readBody,
+    } as Response);
 
-        const operation = resumeAccountDeletion(context);
-        await vi.waitFor(() => expect(readBody).toHaveBeenCalledTimes(1));
-        await vi.advanceTimersByTimeAsync(7_500);
-        await expect(operation).resolves.toMatchObject({ status: 'pending' });
-        expect(await get('logbook:v2:user:a')).toBeDefined();
-        expect(isAccountDeletionPending('user:a')).toBe(true);
-        expect(boundary.auth.signOut).not.toHaveBeenCalled();
-    } finally {
-        vi.useRealTimers();
-    }
+    const operation = resumeAccountDeletion(context);
+    await vi.waitFor(() => expect(readBody).toHaveBeenCalledTimes(1));
+    await expect(operation).resolves.toMatchObject({ status: 'pending' });
+    expect(await get('logbook:v2:user:a')).toBeDefined();
+    expect(isAccountDeletionPending('user:a')).toBe(true);
+    expect(boundary.auth.signOut).not.toHaveBeenCalled();
 });
 
 it('completes older owner A even when newer owner B is still deleting', async () => {
