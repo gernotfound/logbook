@@ -4,6 +4,7 @@ import { auth, getDb } from '../../lib/firebase';
 import { DB } from '../../lib/db';
 import { UserDataSchema } from '../../lib/schema';
 import { captureSession, isCurrentSession, userOwner } from '../../lib/sync/session';
+import { isHealthConsentWriteBlocked } from '../../lib/healthConsentRevocation';
 import { useAppStore } from '../../store/useAppStore';
 import { getCachedCatalog, getInMemoryCatalog, isCatalogInMemory } from '../../lib/catalog/catalogService';
 import { getResolvedDefaultUserData } from './defaultUserData';
@@ -44,7 +45,10 @@ export async function loadAuthenticatedData({
         && isCurrentSession(session)
         && loadGenerationByOwner.get(expectedOwner) === generation
         && auth.currentUser?.uid === user.uid
-        && !isGuestActive();
+        && !isGuestActive()
+        // A cloud hydration already in flight must never restore erased data
+        // to Zustand or a device envelope after withdrawal was recorded.
+        && !isHealthConsentWriteBlocked(expectedOwner);
 
     if (!isCurrent()) return;
 
