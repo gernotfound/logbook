@@ -57,7 +57,7 @@ export async function loadAuthenticatedData({
         if (!isCurrent()) return;
 
         if (localEnvelope) {
-            const localWorkout = getInitialLocalWorkout(expectedOwner, localEnvelope.data.activeWorkout ?? null);
+            const localWorkout = getInitialLocalWorkout(expectedOwner, localEnvelope.data.activeWorkout ?? null, localEnvelope.data.history);
             useAppStore.setState({
                 userData: localEnvelope.data,
                 dataOwner: expectedOwner,

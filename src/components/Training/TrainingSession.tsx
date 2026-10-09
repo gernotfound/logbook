@@ -150,9 +150,14 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
         const current = postSessionDraftRef.current;
         if (!current) return;
         const next = { ...current, ...patch };
+        try {
+            persistPostSessionSnapshot(next, pendingEndTimeRef.current);
+        } catch {
+            // Keep the visible/ref draft aligned with the durable previous snapshot.
+            return;
+        }
         postSessionDraftRef.current = next;
         setPostSessionDraft(next);
-        persistPostSessionSnapshot(next, pendingEndTimeRef.current);
     }, [persistPostSessionSnapshot]);
 
     const togglePostSessionPain = useCallback((muscleId: string) => {
@@ -170,8 +175,6 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
         let current = postSessionDraftRef.current;
         if (!current || current.workoutId !== workoutId) {
             current = createPostSessionDraft(activeWorkout);
-            postSessionDraftRef.current = current;
-            setPostSessionDraft(current);
         }
         const endTime = Date.now();
         try {
@@ -179,6 +182,8 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
         } catch {
             return;
         }
+        postSessionDraftRef.current = current;
+        setPostSessionDraft(current);
         pendingEndTimeRef.current = endTime;
         setPendingEndTime(endTime);
     }, [activeWorkout, persistPostSessionSnapshot]);
@@ -280,9 +285,13 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
                         type="button"
                         className="btn btn-secondary"
                         onClick={() => {
+                            try {
+                                persistPostSessionSnapshot(postSessionDraftRef.current, null);
+                            } catch {
+                                return;
+                            }
                             pendingEndTimeRef.current = null;
                             setPendingEndTime(null);
-                            persistPostSessionSnapshot(postSessionDraftRef.current, null);
                         }}
                     >
                         Torna all’allenamento

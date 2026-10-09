@@ -146,7 +146,7 @@ describe('Audit 18 device-critical persistence', () => {
                 workoutId="w-current"
                 date="2026-10-05"
                 onStart={vi.fn(async () => true)}
-                onCancel={vi.fn(async () => {})}
+                onCancel={vi.fn(async () => true)}
             />,
         )).not.toThrow();
 
@@ -162,7 +162,7 @@ describe('Audit 18 device-critical persistence', () => {
                 workoutId="w-current"
                 date="2026-10-05"
                 onStart={vi.fn(async () => true)}
-                onCancel={vi.fn(async () => {})}
+                onCancel={vi.fn(async () => true)}
             />,
         );
 
@@ -182,7 +182,7 @@ describe('Audit 18 device-critical persistence', () => {
                 workoutId="w-current"
                 date="2026-10-05"
                 onStart={vi.fn(async () => true)}
-                onCancel={vi.fn(async () => {})}
+                onCancel={vi.fn(async () => true)}
             />,
         );
         localStorageMock.setItem.mockImplementationOnce((writtenKey: string) => {

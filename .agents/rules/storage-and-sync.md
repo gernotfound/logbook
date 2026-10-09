@@ -83,6 +83,7 @@ Non esistono utenti/account reali da migrare da build precedenti. Per questo M1 
 - vecchi formati locali/backup vengono rifiutati e non riscritti;
 - la vecchia cache locale non attribuita `logbook_cached_user_data` non viene letta, preservata né esportata dal prodotto corrente;
 - il timer legge esclusivamente lo snapshot owner-scoped `timer`; eventuali chiavi timer obsolete possono essere eliminate best-effort ma non vengono mai usate come fallback;
+- L'editor dello storico usa `history-editor-context` owner-scoped per conservare la sessione device-local sospesa: modifica e annullamento dello storico non eliminano `activeWorkout` né resettano il timer attivo. Il contesto è scritto prima di pubblicare l'editor; al termine la sessione sospesa viene ripristinata prima del cleanup della chiave. Le chiavi owner-scoped vengono eliminate dal purge tramite il prefisso completo `logbook:v2:${owner}:`.
 - un documento Firestore senza `_schemaVersion` è considerato schema 1 baseline, senza eseguire migrazioni storiche;
 - ogni documento Firestore realmente toccato da una semantic write viene riscritto lazy con `_schemaVersion: CURRENT_DATA_SCHEMA`;
 - non esiste una scansione cloud solo per aggiornare i marker.

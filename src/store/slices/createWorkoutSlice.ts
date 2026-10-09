@@ -88,7 +88,7 @@ function normalizeDeviceWorkout(raw: WorkoutSession): WorkoutSession | null {
     return { ...raw, id: workoutId, exercises };
 }
 
-export const getInitialLocalWorkout = (owner?: string, fallback?: WorkoutSession | null): WorkoutSession | null => {
+export const getInitialLocalWorkout = (owner?: string, fallback?: WorkoutSession | null, history?: ReadonlyArray<WorkoutSession>): WorkoutSession | null => {
     const recoverFallback = (): WorkoutSession | null => {
         if (!fallback) return null;
         const normalized = normalizeDeviceWorkout(fallback);
@@ -115,6 +115,14 @@ export const getInitialLocalWorkout = (owner?: string, fallback?: WorkoutSession
     if (!normalized) throw new DeviceWorkoutCorruptError('Snapshot workout locale privo di identità valida.');
     const validated = DomainParsers.parseActiveWorkout(normalized) as WorkoutSession | null;
     if (!validated) throw new DeviceWorkoutCorruptError('Snapshot workout locale non valido.');
+
+    // A crash between the atomic IndexedDB workout.complete commit and the
+    // device-key cleanup must never resurrect a workout already in history.
+    if (!validated.isEditingHistory && fallback?.id !== validated.id
+        && history?.some(item => item.id === validated.id)) {
+        persistLocalWorkout(null, owner);
+        return recoverFallback();
+    }
     persistLocalWorkout(validated, owner);
     return validated;
 };
