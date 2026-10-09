@@ -25,7 +25,7 @@ export function HealthConsentSuspendedScreen({ status }: { status: HealthConsent
     setLocalErasure('checking');
     // Volatile business state must be invalidated before any asynchronous
     // IndexedDB cleanup, including in a second tab discovering the revocation.
-    useAppStore.getState().resetStore({ force: true });
+    useAppStore.getState().resetStore();
     try {
       await eraseWithdrawnLocalTracking(owner);
       setLocalErasure('complete');
