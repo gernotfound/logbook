@@ -5,7 +5,7 @@ import { PRIVATE_ACCOUNT_COLLECTIONS } from '../accountDeletion/types.js';
 
 const PAGE_SIZE = 200;
 const SAFETY_BUFFER_MS = 1_000;
-type ErasureStatus = 'requested' | 'deleting' | 'complete' | 'failed';
+type ErasureStatus = 'requested' | 'deleting' | 'complete' | 'failed' | 'blocked';
 export type ErasureOutcome = 'complete' | 'pending' | 'busy';
 
 type ErasureMarker = {
@@ -15,6 +15,10 @@ type ErasureMarker = {
 };
 const markerRef = (uid: string) => adminDb().collection('health_consent_revocations').doc(uid);
 const deletionRef = (uid: string) => adminDb().collection('account_deletions').doc(uid);
+
+class UnexpectedHealthCollection extends Error {
+  constructor(collection: string) { super('Unexpected private collection requires reviewed erasure: ' + collection); }
+}
 
 class ErasureLeaseLost extends Error {
   constructor() { super('Health erasure lease no longer valid.'); }
@@ -115,7 +119,7 @@ async function verifyEmpty(uid: string): Promise<void> {
   const known = new Set<string>(PRIVATE_ACCOUNT_COLLECTIONS);
   for (const collection of await root.listCollections()) {
     if (known.has(collection.id)) continue;
-    if (!(await collection.limit(1).select().get()).empty) throw new Error('Unexpected private collection requires reviewed erasure: ' + collection.id);
+    if (!(await collection.limit(1).select().get()).empty) throw new UnexpectedHealthCollection(collection.id);
   }
 }
 
@@ -132,7 +136,7 @@ async function finalize(uid: string, owner: string): Promise<void> {
   });
 }
 
-async function release(uid: string, owner: string, status: 'requested' | 'failed'): Promise<void> {
+async function release(uid: string, owner: string, status: 'requested' | 'failed' | 'blocked'): Promise<void> {
   try {
     await withLease(uid, owner, tx => tx.update(markerRef(uid), {
       eraseStatus: status, eraseLeaseOwner: null, eraseLeaseUntil: null, eraseUpdatedAt: Timestamp.now(),
@@ -165,7 +169,7 @@ export async function processHealthErasure(uid: string, deadlineMs: number): Pro
     await finalize(uid, owner);
     return 'complete';
   } catch (error) {
-    await release(uid, owner, 'failed');
+    await release(uid, owner, error instanceof UnexpectedHealthCollection ? 'blocked' : 'failed');
     if (error instanceof ErasureLeaseLost) return 'busy';
     throw error;
   }
