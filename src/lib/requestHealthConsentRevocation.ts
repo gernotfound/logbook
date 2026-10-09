@@ -14,8 +14,11 @@ export async function requestHealthConsentRevocation(): Promise<void> {
   }
   const user = auth.currentUser;
   if (!user || owner !== 'user:' + user.uid) throw new Error('Sessione non autorizzata.');
-  if (readHealthConsentRevocation(owner) === 'confirmed') return;
-  markHealthConsentRevocation(owner, 'pending');
+  // A confirmed withdrawal may still have an incomplete server erasure. The
+  // endpoint is idempotent, so an explicit retry must reach the backend.
+  if (readHealthConsentRevocation(owner) !== 'confirmed') {
+    markHealthConsentRevocation(owner, 'pending');
+  }
 
   const idToken = await user.getIdToken(true);
   if (!isCurrentSession(session)) throw new Error('Sessione cambiata.');
