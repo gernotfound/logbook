@@ -136,6 +136,7 @@ import {
   markDeletionFailed,
   createOrRefreshDeletionJob,
   deleteAuthUserLast,
+  deleteHealthConsentRevocation,
   deletePrivateCollectionPage,
   hashReceipt,
   markDeletionComplete,
@@ -187,6 +188,25 @@ describe('M7 native deletion job store', () => {
     expect(state.projectedQueries).toContain('users/u/telemetry_errors');
     expect(state.projectedQueries).toContain('users/u/telemetry_events');
     expect(state.projectedQueries).toContain('users/u/telemetry_anomalies');
+  });
+
+  it('removes the consent revocation marker only while holding the deletion lease', async () => {
+    state.docs.add('account_deletions/u');
+    state.docs.add('health_consent_revocations/u');
+    await acquireDeletionLease('u', 'worker-revocation', Date.now() + 60_000);
+
+    await expect(deleteHealthConsentRevocation('u', 'wrong-worker')).rejects.toThrow();
+    expect(state.docs.has('health_consent_revocations/u')).toBe(true);
+
+    await expect(deleteHealthConsentRevocation('u', 'worker-revocation')).resolves.toBeUndefined();
+    expect(state.docs.has('health_consent_revocations/u')).toBe(false);
+    await expect(verifyNoAccountResidue('u')).resolves.toBeUndefined();
+  });
+
+  it('rejects account completion while any consent revocation marker survives', async () => {
+    state.docs.add('account_deletions/u');
+    state.docs.add('health_consent_revocations/u');
+    await expect(verifyNoAccountResidue('u')).rejects.toThrow('Health consent revocation marker still exists');
   });
 
   it('fails closed when the user root document still exists', async () => {
