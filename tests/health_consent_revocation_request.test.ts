@@ -77,6 +77,15 @@ describe('health consent revocation API client', () => {
     expect(readHealthConsentRevocation('user:owner-a')).toBe('pending');
   });
 
+  it('retries incomplete cloud erasure even when consent revocation was already confirmed', async () => {
+    const post = vi.fn(async () => Response.json({ revoked: true, erasure: 'pending' }));
+    vi.stubGlobal('fetch', post);
+    await requestHealthConsentRevocation();
+    expect(readHealthConsentRevocation('user:owner-a')).toBe('confirmed');
+    await requestHealthConsentRevocation();
+    expect(post).toHaveBeenCalledTimes(2);
+  });
+
   it('retains pending state when server acknowledgement is uncertain', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('network unavailable'); }));
     await expect(requestHealthConsentRevocation()).rejects.toThrow('network unavailable');
