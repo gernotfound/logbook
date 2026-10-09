@@ -24,17 +24,13 @@ export function useHealthConsentRevocation(owner: string | null): HealthConsentG
   const status = observed.owner === owner ? observed.status : localGateStatus(owner);
 
   useEffect(() => {
-    if (!owner) {
-      setObserved({ owner: null, status: 'none' });
-      return;
-    }
+    if (!owner) return;
     const refresh = () => setObserved({ owner, status: localGateStatus(owner) });
     const onStorage = (event: StorageEvent) => {
       if (event.key === healthConsentRevocationKey(owner) || event.key === null) refresh();
     };
     window.addEventListener('storage', onStorage);
     window.addEventListener(HEALTH_CONSENT_REVOCATION_EVENT, refresh);
-    refresh();
 
     let unsubscribe: (() => void) | undefined;
     if (owner.startsWith('user:')) {
