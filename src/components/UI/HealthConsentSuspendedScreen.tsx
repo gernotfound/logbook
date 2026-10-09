@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { ShieldAlert, Trash2, RefreshCw } from 'lucide-react';
 import { useSettings } from '../../hooks/useSettings';
@@ -15,6 +15,7 @@ export function HealthConsentSuspendedScreen({ status }: { status: HealthConsent
   const { isGuest, currentUser } = useAuth();
   const owner = isGuest ? 'guest' : currentUser ? 'user:' + currentUser.uid : null;
   const { handleDeleteAccount, deletingAccount } = useSettings();
+  const clearedOwner = useRef<string | null>(null);
   const [retrying, setRetrying] = useState(false);
   const [showPrivacy, setShowPrivacy] = useState(false);
   const [localErasure, setLocalErasure] = useState<'checking' | 'complete' | 'failed'>('checking');
@@ -25,7 +26,11 @@ export function HealthConsentSuspendedScreen({ status }: { status: HealthConsent
     setLocalErasure('checking');
     // Volatile business state must be invalidated before any asynchronous
     // IndexedDB cleanup, including in a second tab discovering the revocation.
-    useAppStore.getState().resetStore();
+    const currentState = useAppStore.getState();
+    if (clearedOwner.current !== owner || currentState.userData || currentState.localWorkout) {
+      currentState.resetStore();
+      clearedOwner.current = owner;
+    }
     try {
       await eraseWithdrawnLocalTracking(owner);
       setLocalErasure('complete');
