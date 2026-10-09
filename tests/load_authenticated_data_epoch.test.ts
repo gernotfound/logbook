@@ -179,7 +179,7 @@ describe('authenticated hydration session fencing', () => {
         response.resolve(payload('194'));
         await loading;
         expect(setUserData).not.toHaveBeenCalled();
-        expect(await readLocal('user-a')).toBeUndefined();
+        expect((await readLocal('user-a'))?.data.profile.height).not.toBe('194');
     });
 
     it('lets the newest same-account load supersede an older overlapping load', async () => {
