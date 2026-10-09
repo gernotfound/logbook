@@ -62,6 +62,20 @@ describe('durable owner-scoped journal', () => {
         expect((await readLocal('user:a'))?.revision).toBe(beforeRetry);
     });
 
+
+    it('records completion in the same durable write as history and cloud-active clear', async () => {
+        const finished = { id: 'session-finished', date: '2026-10-09', exercises: [] };
+        const initial = UserDataSchema.parse({ activeWorkout: finished }) as unknown as UserData;
+        await initializeLocal('user:a', initial);
+        await commitDomainOperations('user:a', {
+            type: 'workout.complete', workout: finished, expectedActiveWorkoutId: finished.id, activePains: [],
+        }, initial);
+        const persisted = await readLocal('user:a');
+        expect(persisted?.data.activeWorkout).toBeNull();
+        expect(persisted?.data.history.map(item => item.id)).toContain(finished.id);
+        expect(persisted?.closedWorkoutIds).toEqual([finished.id]);
+    });
+
     it('rejects malformed closure evidence without overwriting the owner envelope', async () => {
         await initializeLocal('user:a', data(170));
         const key = 'logbook:v2:user:a';
