@@ -28,6 +28,40 @@ describe('durable owner-scoped journal', () => {
         });
     });
 
+    it('does not overwrite a guest envelope that appeared after a stale bootstrap read', async () => {
+        const initial = data(170);
+        // Tab A observed absence, but tab B initialized and committed first.
+        expect(await readLocal('guest')).toBeNull();
+        await initializeLocal('guest', initial);
+        await commitLocal('guest', data(180), initial);
+        const durable = await readLocal('guest');
+        expect(durable?.pending).toEqual([]); // Guest operations have no cloud journal.
+        await initializeLocal('guest', data(160));
+        expect((await readLocal('guest'))?.data.profile.height).toBe('180');
+        expect((await readLocal('guest'))?.revision).toBe(durable?.revision);
+    });
+
+    it('preserves an already-acknowledged authenticated envelope during bootstrap', async () => {
+        await initializeLocal('user:a', data(170));
+        await initializeLocal('user:a', data(190));
+        expect((await readLocal('user:a'))?.data.profile.height).toBe('170');
+    });
+
+    it('rejects a stale initialization after logout rather than recreating its envelope', async () => {
+        await initializeLocal('guest', data(170), undefined, () => true);
+        await clear();
+        await expect(initializeLocal('guest', data(190), undefined, () => false))
+            .rejects.toThrow('invalidata');
+        expect(await readLocal('guest')).toBeNull();
+    });
+
+    it('does not recreate deleted data from a stale snapshot commit', async () => {
+        await initializeLocal('user:a', data(170));
+        await clear();
+        await commitLocal('user:a', data(180), data(170), () => false);
+        expect(await readLocal('user:a')).toBeNull();
+    });
+
     it('rejects pre-M1 and future local envelopes without rewriting their bytes', async () => {
         const legacy = { owner: 'user:a', version: 3 };
         await set('logbook:v2:user:a', legacy);
