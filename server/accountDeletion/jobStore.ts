@@ -268,6 +268,17 @@ export async function deleteUserRoot(uidValue: string, leaseOwner: string): Prom
   });
 }
 
+export async function deleteHealthConsentRevocation(uidValue: string, leaseOwner: string): Promise<void> {
+  const uid = validateUid(uidValue);
+  const db = adminDb();
+  await db.runTransaction(async (transaction: Transaction) => {
+    const ref = jobRef(uid);
+    const job = await transaction.get(ref);
+    requireLiveLease(job.exists ? job.data() as AccountDeletionJob : undefined, leaseOwner);
+    transaction.delete(db.collection('health_consent_revocations').doc(uid));
+  });
+}
+
 export async function markVerifying(uidValue: string, leaseOwner: string): Promise<void> {
   const ref = jobRef(validateUid(uidValue));
   await adminDb().runTransaction(async (transaction: Transaction) => {
@@ -285,6 +296,9 @@ export async function verifyNoAccountResidue(uidValue: string): Promise<void> {
   const root = users.doc(uid);
   const rootSnapshot = await users.where(FieldPath.documentId(), '==', uid).select().limit(1).get();
   if (!rootSnapshot.empty) throw new Error('User root document still exists after deletion.');
+
+  const revocation = await adminDb().collection('health_consent_revocations').doc(uid).get();
+  if (revocation.exists) throw new Error('Health consent revocation marker still exists after deletion.');
 
   for (const name of PRIVATE_ACCOUNT_COLLECTIONS) {
     const residual = await root.collection(name).limit(1).select().get();
