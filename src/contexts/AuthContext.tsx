@@ -793,6 +793,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             const initialUid = auth.currentUser?.uid;
 
             if (isGuestActiveStrict()) {
+                const requestedSession = captureSession();
                 if (!skipConfirm) {
                     const confirmed = await useDialogStore.getState().showConfirm(
                         "Sei in modalità locale. Se esci, i tuoi dati su questo dispositivo andranno persi definitivamente e non potranno essere recuperati.\n\nSei sicuro di voler continuare?"
@@ -800,7 +801,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                     if (!confirmed) return;
                 }
 
-                const requestedSession = captureSession();
                 let purgeError: unknown;
                 try {
                     await withGuestLifecycleLock(async () => {
