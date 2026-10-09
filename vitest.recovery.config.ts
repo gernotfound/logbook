@@ -8,6 +8,7 @@ export default defineConfig({
   define: { __APP_VERSION__: JSON.stringify(appVersion) },
   test: {
     environment: 'node',
+    setupFiles: ['tests/isolated/browserStorageFixture.ts'],
     include: ['tests/recovery/**/*.test.ts'],
     maxWorkers: 1,
     testTimeout: 15000,
