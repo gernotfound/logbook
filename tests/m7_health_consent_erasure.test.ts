@@ -59,14 +59,15 @@ function collectionRef(path: string, max = Number.POSITIVE_INFINITY, statuses?: 
         throw new Error('Transient collection read error');
       }
       const prefix = path + '/';
+      const age = (key: string): number => {
+        const updatedAt = dbState.documents.get(key)?.eraseUpdatedAt;
+        return updatedAt instanceof Timestamp ? updatedAt.toMillis() : Number.POSITIVE_INFINITY;
+      };
       const docs = [...dbState.documents.keys()]
         .filter(key => key.startsWith(prefix) && !key.slice(prefix.length).includes('/'))
         .filter(key => !statuses || statuses.includes(String(dbState.documents.get(key)?.eraseStatus)))
         .filter(key => !sortByAge || dbState.documents.get(key)?.eraseUpdatedAt instanceof Timestamp)
-        .sort((a, b) => sortByAge
-          ? (dbState.documents.get(a)?.eraseUpdatedAt as Timestamp).toMillis()
-            - (dbState.documents.get(b)?.eraseUpdatedAt as Timestamp).toMillis() || a.localeCompare(b)
-          : 0)
+        .sort((a, b) => sortByAge ? age(a) - age(b) || a.localeCompare(b) : 0)
         .slice(0, max).map(key => ({ id: key.split('/').at(-1), ref: documentRef(key) }));
       return { docs, size: docs.length, empty: docs.length === 0 };
     },
