@@ -103,7 +103,7 @@ function GuestBanner({ onLogin }: { onLogin: () => void }) {
 
 function App() {
   const { currentUser, loading, isGuest, guestMigrationStatus, retryGuestMigration } = useAuth();
-  const consentOwner = currentUser ? 'user:' + currentUser.uid : isGuest ? 'guest' : null;
+  const consentOwner = isGuest ? 'guest' : currentUser ? 'user:' + currentUser.uid : null;
   const healthRevocation = useHealthConsentRevocation(consentOwner);
   const syncing = useAppStore(state => state.syncing);
   const userData = useAppStore(state => state.userData);
