@@ -17,6 +17,16 @@ service cloud.firestore {
       return isOwner(userId) && !deletionJobExists(userId);
     }
 
+    // Server-authoritative and immutable for clients. A consent flag inside
+    // UserData can be rewritten by old PWA versions and is NOT a write fence.
+    function healthConsentRevoked(userId) {
+      return exists(/databases/$(database)/documents/health_consent_revocations/$(userId));
+    }
+
+    function isWritableOwner(userId) {
+      return isActiveOwner(userId) && !healthConsentRevoked(userId);
+    }
+
     function isValidMonthId(monthId) {
       return monthId.matches('^[0-9]{4}-(0[1-9]|1[0-2])$');
     }
@@ -449,13 +459,21 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Future trusted revocation flow writes this document via Firebase Admin.
+    // Owners can read their own status; no client can forge or undo revocation.
+    // Keep reads of existing private data available for validated export/rights.
+    match /health_consent_revocations/{userId} {
+      allow get: if isActiveOwner(userId);
+      allow list, create, update, delete: if false;
+    }
+
     match /users/{userId} {
       // Root deletion is server-only. Client-side account deletion must always use
       // the trusted account-deletion job so subcollections and Firebase Auth cannot
       // be orphaned.
       allow read: if isActiveOwner(userId);
 
-      allow create, update: if isActiveOwner(userId)
+      allow create, update: if isWritableOwner(userId)
         && incomingData().keys().hasOnly([
           'profile',
           'library',
@@ -498,7 +516,7 @@ service cloud.firestore {
       match /history_months/{monthId} {
         allow read: if isActiveOwner(userId);
         allow delete: if false;
-        allow create, update: if isActiveOwner(userId)
+        allow create, update: if isWritableOwner(userId)
           && isValidMonthId(monthId)
           && incomingData() is map
           && isValidDataSchema(incomingData())
@@ -511,7 +529,7 @@ service cloud.firestore {
       match /nutrition_months/{monthId} {
         allow read: if isActiveOwner(userId);
         allow delete: if false;
-        allow create, update: if isActiveOwner(userId)
+        allow create, update: if isWritableOwner(userId)
           && isValidMonthId(monthId)
           && incomingData() is map
           && isValidDataSchema(incomingData())
@@ -524,41 +542,41 @@ service cloud.firestore {
       match /sync_control/{controlId} {
         allow read: if controlId == 'state' && isActiveOwner(userId);
         allow create: if controlId == 'state'
-          && isActiveOwner(userId)
+          && isWritableOwner(userId)
           && validReplicaControlCreate(incomingData());
         allow update: if controlId == 'state'
-          && isActiveOwner(userId)
+          && isWritableOwner(userId)
           && validReplicaControlUpdate(resource.data, incomingData());
         allow delete: if false;
       }
 
       match /telemetry_errors/{errorId} {
         allow read, delete: if isActiveOwner(userId);
-        allow create: if isActiveOwner(userId)
+        allow create: if isWritableOwner(userId)
           && isValidTelemetryError(incomingData(), userId);
-        allow update: if isActiveOwner(userId)
+        allow update: if isWritableOwner(userId)
           && isValidTelemetryError(incomingData(), userId)
           && preservesTelemetryErrorIdentity();
       }
 
       match /telemetry_events/{eventId} {
         allow read, delete: if isActiveOwner(userId);
-        allow create: if isActiveOwner(userId)
+        allow create: if isWritableOwner(userId)
           && isValidTelemetryEvent(incomingData(), userId);
         // Events are append-only. Identical retries remain valid, and legacy
         // documents may receive only the rollout expiry field without changing history.
-        allow update: if isActiveOwner(userId)
+        allow update: if isWritableOwner(userId)
           && isValidTelemetryEvent(incomingData(), userId)
           && isIdenticalTelemetryRetryOrExpiryUpgrade();
       }
 
       match /telemetry_anomalies/{eventId} {
         allow read, delete: if isActiveOwner(userId);
-        allow create: if isActiveOwner(userId)
+        allow create: if isWritableOwner(userId)
           && isValidTelemetryAnomaly(incomingData());
         // Storage anomalies are immutable after creation apart from a one-time
         // legacy upgrade that adds only the rollout expiry field.
-        allow update: if isActiveOwner(userId)
+        allow update: if isWritableOwner(userId)
           && isValidTelemetryAnomaly(incomingData())
           && isIdenticalTelemetryRetryOrExpiryUpgrade();
       }
