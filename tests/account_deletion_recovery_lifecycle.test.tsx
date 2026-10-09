@@ -15,7 +15,7 @@ const boundary = vi.hoisted(() => ({
 
 vi.mock('../src/lib/db', () => ({
     DB: {
-        purgeAllLocalUserData: boundary.purge,
+        purgeCompletedAccountLocalData: boundary.purge,
         resetCache: boundary.resetCache,
     },
 }));
@@ -30,7 +30,7 @@ vi.mock('../src/lib/db/db_account', () => {
 });
 
 vi.mock('../src/lib/sync/accountGate', () => ({
-    findPendingAccountDeletion: boundary.findPending,
+    listPendingAccountDeletions: boundary.findPending,
 }));
 
 vi.mock('../src/lib/deletionDeviceRecovery', () => {
@@ -80,7 +80,7 @@ describe('account deletion recovery foreground lifecycle', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         setOnline(true);
-        boundary.findPending.mockReturnValue(null);
+        boundary.findPending.mockReturnValue({ markers: [], corrupt: [] });
         boundary.recoverByDevice.mockResolvedValue({ status: 'none' });
         boundary.resume.mockResolvedValue(undefined);
         boundary.showAlert.mockResolvedValue(undefined);
@@ -141,7 +141,7 @@ describe('account deletion recovery foreground lifecycle', () => {
     });
 
     it('keeps active deletion failures visible to the user', async () => {
-        boundary.findPending.mockReturnValue({ owner: 'user-a', receiptToken: 'receipt' });
+        boundary.findPending.mockReturnValue({ markers: [{ owner: 'user:a', uid: 'a', startedAt: 1, receiptToken: 'receipt' }], corrupt: [] });
         const failure = new Error('Cancellazione cloud incompleta');
         boundary.resume.mockRejectedValueOnce(failure);
 
@@ -153,4 +153,36 @@ describe('account deletion recovery foreground lifecycle', () => {
         });
         expect(boundary.showAlert).toHaveBeenCalledWith('Cancellazione cloud incompleta');
     });
+    it('checks device credentials despite another owner having a pending marker', async () => {
+        boundary.findPending.mockReturnValue({
+            markers: [{ owner: 'user:b', uid: 'b', startedAt: 2, receiptToken: 'receipt-b' }],
+            corrupt: [],
+        });
+        boundary.resume.mockResolvedValue({ status: 'pending', message: 'B in corso' });
+
+        render(<AccountDeletionRecovery />);
+        await settle();
+
+        expect(boundary.resume).toHaveBeenCalledTimes(1);
+        expect(boundary.recoverByDevice).toHaveBeenCalledTimes(1);
+    });
+
+    it('still checks device credentials if one marker fails to reconcile', async () => {
+        boundary.findPending.mockReturnValue({
+            markers: [{ owner: 'user:b', uid: 'b', startedAt: 2, receiptToken: 'receipt-b' }],
+            corrupt: [],
+        });
+        const failure = new Error('Errore marker B');
+        boundary.resume.mockRejectedValue(failure);
+        boundary.recoverByDevice.mockResolvedValue({ status: 'complete' });
+
+        render(<AccountDeletionRecovery />);
+        await settle();
+
+        expect(boundary.recoverByDevice).toHaveBeenCalledTimes(1);
+        expect(boundary.reportError).toHaveBeenCalledWith(failure, {
+            source: 'account_deletion_recovery',
+        });
+    });
+
 });
