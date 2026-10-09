@@ -288,8 +288,7 @@ describe('account deletion recovery device registration retries', () => {
       expect(fetchMock).not.toHaveBeenCalled();
 
       window.dispatchEvent(new Event('online'));
-      await vi.advanceTimersByTimeAsync(0);
-      expect(fetchMock).toHaveBeenCalledTimes(1);
+      await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
       expect(localStorage.getItem('logbook_deletion_recovery_devices_v1')).not.toBeNull();
       dispose();
     } finally {
