@@ -49,6 +49,11 @@ async function verifyAuthenticatedRequester(request: Request): Promise<DecodedId
   }
 }
 
+export async function verifyHealthConsentRevocationRequester(request: Request): Promise<{ uid: string }> {
+  const decoded = await verifyAuthenticatedRequester(request);
+  return { uid: decoded.uid };
+}
+
 export async function verifyRecoveryRegistrationRequester(request: Request): Promise<{ uid: string }> {
   const decoded = await verifyAuthenticatedRequester(request);
   return { uid: decoded.uid };
