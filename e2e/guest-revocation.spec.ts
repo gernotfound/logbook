@@ -42,6 +42,8 @@ test('health consent withdrawal suspends guest tracking across tabs and reloads'
   for (const checkbox of await page.locator('input[type="checkbox"]').all()) await checkbox.check();
   await page.getByRole('button', { name: 'Accetta e Continua' }).click();
 
+  await page.evaluate(() => localStorage.setItem('logbook:v2:guest:workout', 'synthetic-private-draft'));
+
   const otherTab = await context.newPage();
   await otherTab.goto('/');
   await expect(otherTab.getByRole('button', { name: 'Apri impostazioni' })).toBeVisible();
@@ -55,6 +57,9 @@ test('health consent withdrawal suspends guest tracking across tabs and reloads'
   await expect(page.getByRole('heading', { name: 'Tracciamento sospeso' })).toBeVisible();
   await expect(otherTab.getByRole('heading', { name: 'Tracciamento sospeso' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Esporta i dati in JSON' })).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('logbook:v2:guest:workout'))).toBeNull();
+  await expect.poll(() => otherTab.evaluate(() => localStorage.getItem('logbook:v2:guest:workout'))).toBeNull();
+  await expect(page.getByText('pulizia completata.', { exact: false })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Allenamento', exact: true })).toHaveCount(0);
 
   await page.reload();
