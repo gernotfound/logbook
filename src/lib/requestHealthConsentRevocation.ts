@@ -1,6 +1,6 @@
 import { auth, ensureAppCheck } from './firebase';
 import { getLimitedUseAppCheckToken } from './appCheck';
-import { captureSession, isCurrentSession } from './sync/session';
+import { captureSession, isCurrentSession, storageOwner } from './sync/session';
 import { markHealthConsentRevocation, readHealthConsentRevocation } from './healthConsentRevocation';
 
 const API = (import.meta.env.VITE_ACCOUNT_DELETION_API_ORIGIN || 'https://logbook-gnf.vercel.app').replace(/\/$/, '');
@@ -13,7 +13,11 @@ export async function requestHealthConsentRevocation(): Promise<void> {
     return;
   }
   const user = auth.currentUser;
-  if (!user || owner !== 'user:' + user.uid) throw new Error('Sessione non autorizzata.');
+  if (!user || owner !== 'user:' + user.uid || !isCurrentSession(session)) throw new Error('Sessione non autorizzata.');
+  // Local cleanup invalidates the sync epoch on purpose. That must not cancel
+  // the revocation request itself while this exact Firebase session and owner
+  // remain active; real logout/account switching still aborts the request.
+  const sameAuthenticatedOwner = () => auth.currentUser === user && storageOwner() === owner;
   // A confirmed withdrawal may still have an incomplete server erasure. The
   // endpoint is idempotent, so an explicit retry must reach the backend.
   if (readHealthConsentRevocation(owner) !== 'confirmed') {
@@ -21,10 +25,10 @@ export async function requestHealthConsentRevocation(): Promise<void> {
   }
 
   const idToken = await user.getIdToken(true);
-  if (!isCurrentSession(session)) throw new Error('Sessione cambiata.');
+  if (!sameAuthenticatedOwner()) throw new Error('Sessione cambiata.');
   await ensureAppCheck();
   const appToken = await getLimitedUseAppCheckToken();
-  if (!appToken || !isCurrentSession(session)) throw new Error('Sessione o verifica del dispositivo non disponibile.');
+  if (!appToken || !sameAuthenticatedOwner()) throw new Error('Sessione o verifica del dispositivo non disponibile.');
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 7500);
