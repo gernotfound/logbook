@@ -747,12 +747,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             const mode = options?.mode || 'normal';
             const initialUid = auth.currentUser?.uid;
 
-            if (initialUid && isAccountDeletionPending(userOwner(initialUid))) {
+            const guestMode = isGuestActiveStrict();
+            if (!guestMode && initialUid && isAccountDeletionPending(userOwner(initialUid))) {
                 await useDialogStore.getState().showAlert('Cancellazione account ancora in corso. I dati locali sono protetti: completa prima il recupero della cancellazione.');
                 return;
             }
 
-            if (isGuestActiveStrict()) {
+            if (guestMode) {
                 if (!skipConfirm) {
                     const confirmed = await useDialogStore.getState().showConfirm(
                         "Sei in modalità locale. Se esci, i tuoi dati su questo dispositivo andranno persi definitivamente e non potranno essere recuperati.\n\nSei sicuro di voler continuare?"
