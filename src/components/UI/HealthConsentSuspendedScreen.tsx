@@ -4,6 +4,7 @@ import { ShieldAlert, Trash2, RefreshCw } from 'lucide-react';
 import { useSettings } from '../../hooks/useSettings';
 import { useAppStore } from '../../store/useAppStore';
 import { eraseWithdrawnLocalTracking } from '../../lib/healthConsentLocalErasure';
+import { DB } from '../../lib/db';
 import { getDb } from '../../lib/firebase';
 import { useAuth } from '../../hooks/useAuth';
 import { useDialogStore } from '../../store/useDialogStore';
@@ -28,6 +29,7 @@ export function HealthConsentSuspendedScreen({ status }: { status: HealthConsent
     const currentState = useAppStore.getState();
     if (clearedOwner.current !== owner || currentState.userData || currentState.localWorkout) {
       currentState.resetStore();
+      DB.resetCache();
       clearedOwner.current = owner;
     }
     try {
