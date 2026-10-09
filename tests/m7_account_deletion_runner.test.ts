@@ -98,7 +98,7 @@ describe('M7 native account deletion runner', () => {
         'lease-interactive',
         100_000 + ACCOUNT_DELETION_INTERACTIVE_BUDGET_MS,
       );
-      expect(mocked.revokeAccountAccess).toHaveBeenCalledWith('uid-interactive', 'lease-interactive');
+      expect(mocked.revokeAccountAccess).toHaveBeenCalledWith('uid-interactive');
       expect(mocked.markDeletionComplete).toHaveBeenCalledWith('uid-interactive');
     } finally {
       now.mockRestore();
