@@ -52,7 +52,7 @@ async function acquireLease(uid: string, owner: string, deadlineMs: number): Pro
     ]);
     if (!marker.exists || deletion.exists) return false;
     const state = marker.data() as ErasureMarker;
-    if (state.eraseStatus === 'complete') return false;
+    if (state.eraseStatus === 'complete' || state.eraseStatus === 'blocked') return false;
     if (state.eraseLeaseOwner && state.eraseLeaseOwner !== owner
       && state.eraseLeaseUntil instanceof Timestamp
       && state.eraseLeaseUntil.toMillis() > Date.now()) return false;
