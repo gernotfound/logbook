@@ -9,6 +9,7 @@ import BrandLoadingScreen from './UI/BrandLoadingScreen';
 import { PrivacyPolicy } from '../pages/PrivacyPolicy';
 import { TermsAndConditions } from '../pages/TermsAndConditions';
 import { getAnalyticsConsent, setAnalyticsConsent, subscribeAnalyticsConsent } from '../lib/analyticsConsent';
+import { requestHealthConsentRevocation } from '../lib/requestHealthConsentRevocation';
 import type { ExportSelection } from './ExportSelector';
 import { AccountSettingsTab } from './Settings/AccountSettingsTab';
 import { StorageDiagnostics } from './Settings/StorageDiagnostics';
@@ -47,6 +48,7 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
     const [showPrivacy, setShowPrivacy] = useState(false);
     const [showTerms, setShowTerms] = useState(false);
     const [analyticsEnabled, setAnalyticsEnabled] = useState(getAnalyticsConsent());
+    const [revokingHealthConsent, setRevokingHealthConsent] = useState(false);
     const [activeSection, setActiveSection] = useState<SettingsSection | null>(null);
     const appearance = useAppearanceStore(state => state.preference);
     const setAppearance = useAppearanceStore(state => state.setPreference);
@@ -60,6 +62,24 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
     const storeCycles = useAppStore(state => state.userData?.trainingCycles);
 
     useEffect(() => subscribeAnalyticsConsent(setAnalyticsEnabled), []);
+
+    const handleRevokeHealthConsent = async () => {
+        if (revokingHealthConsent) return;
+        const confirmed = await useDialogStore.getState().showConfirm(
+            "Revocare il consenso ai dati salute?\\n\\nLe funzioni di allenamento, alimentazione e misurazioni saranno sospese. Potrai ancora esportare i dati, esercitare i diritti applicabili ed eliminare l'account. Nessun dato verrà cancellato automaticamente da questa conferma."
+        );
+        if (!confirmed) return;
+        setRevokingHealthConsent(true);
+        try {
+            await requestHealthConsentRevocation();
+        } catch {
+            await useDialogStore.getState().showAlert(
+                'La revoca è stata richiesta su questo dispositivo. Se il server non ha risposto, la conferma resta in sospeso e potrai riprovare.'
+            );
+        } finally {
+            setRevokingHealthConsent(false);
+        }
+    };
 
     const handleAnalyticsToggle = () => {
         const newState = !analyticsEnabled;
@@ -186,7 +206,7 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
             )}
 
             {activeSection === 'privacy' && (
-                <PrivacySettingsTab analyticsEnabled={analyticsEnabled} onOpenTerms={() => setShowTerms(true)} onOpenPrivacy={() => setShowPrivacy(true)} onToggleAnalytics={handleAnalyticsToggle} />
+                <PrivacySettingsTab analyticsEnabled={analyticsEnabled} onOpenTerms={() => setShowTerms(true)} onOpenPrivacy={() => setShowPrivacy(true)} onToggleAnalytics={handleAnalyticsToggle} onRevokeHealthConsent={() => { void handleRevokeHealthConsent(); }} revokingHealthConsent={revokingHealthConsent} />
             )}
 
             {activeSection === 'data' && (
