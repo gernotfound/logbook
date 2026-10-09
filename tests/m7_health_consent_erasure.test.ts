@@ -157,6 +157,7 @@ describe('health withdrawal server erasure (Firebase Admin transactional mock)',
     await expect(processHealthErasure('a', Date.now() + 60_000)).rejects.toThrow('Unexpected private collection');
     expect(dbState.documents.get('health_consent_revocations/a')).toMatchObject({ eraseStatus: 'blocked' });
     expect(await listPendingHealthErasures()).toEqual([]);
+    await expect(processHealthErasure('a', Date.now() + 60_000)).resolves.toBe('busy');
     expect(dbState.documents.has('users/a/unknown_private/survivor')).toBe(true);
   });
 
