@@ -7,6 +7,7 @@ import { UserDataSchema } from '../src/lib/schema';
 import type { WorkoutSession, UserData } from '../src/types';
 import { deviceKey, writeDeviceValue } from '../src/lib/sync/deviceStorage';
 import { useTrainingHistory } from '../src/hooks/useTrainingHistory';
+import { restoreSessionAfterHistoryEdit } from '../src/hooks/workout/historyEditorContext';
 import { useWorkoutSetMutations } from '../src/hooks/workout/useWorkoutSetMutations';
 import { captureSession } from '../src/lib/sync/session';
 import { getInitialLocalWorkout } from '../src/store/slices/createWorkoutSlice';
@@ -388,6 +389,46 @@ describe('Workout lifecycle durable recovery regressions', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Termina allenamento' }));
         await waitFor(() => expect(screen.getByText('Com’è andato l’allenamento?')).toBeDefined());
         expect(localStorage.getItem(deviceKey('draft:post-session:post-next', owner))).not.toBeNull();
+    });
+
+    it('does not reset the timer if the workout start never reaches IndexedDB', async () => {
+        const pending = workout('start-should-fail');
+        const initial = userData({ activeWorkout: pending });
+        await initializeLocal(owner, initial);
+        useAppStore.setState({ userData: initial, localWorkout: pending });
+        const timerKey = deviceKey('timer', owner);
+        const snapshot = { version: 1, state: 'running', startTime: 1000, accumulated: 250 };
+        localStorage.setItem(timerKey, JSON.stringify(snapshot));
+        const originalSetter = useAppStore.getState().setSyncedLocalWorkout;
+        useAppStore.setState({ setSyncedLocalWorkout: vi.fn(async () => { throw new Error('IndexedDB unavailable'); }) });
+        vi.mocked(useDialogStore.getState().showAlert).mockResolvedValue();
+        try {
+            const { result } = renderHook(() => useWorkoutSession());
+            await act(async () => {
+                expect(await result.current.confirmWorkoutStart()).toBe(false);
+            });
+            expect(readWorkoutTimerSnapshot(owner)).toEqual(snapshot);
+            expect((await readLocal(owner))?.data.activeWorkout?.globalStartTime).toBeUndefined();
+        } finally {
+            useAppStore.setState({ setSyncedLocalWorkout: originalSetter });
+        }
+    });
+
+    it('does not resurrect a suspended workout durably deleted in another tab', async () => {
+        const previous = workout('closed-in-other-tab', true);
+        const editor: WorkoutSession = { ...workout('history-being-edited', true), isEditingHistory: true };
+        const initial = userData({ activeWorkout: previous });
+        await initializeLocal(owner, initial);
+        writeDeviceValue('history-editor-context', JSON.stringify({
+            version: 1, editorId: editor.id, suspended: previous,
+        }), owner);
+        await commitDomainOperations(owner, {
+            type: 'active-workout.set', workout: null, deletedWorkoutId: previous.id,
+        }, initial);
+        useAppStore.setState({ userData: userData({}), localWorkout: editor });
+        await act(async () => { await restoreSessionAfterHistoryEdit(editor.id); });
+        expect(useAppStore.getState().localWorkout).toBeNull();
+        expect(localStorage.getItem(deviceKey('history-editor-context', owner))).toBeNull();
     });
 
 });
