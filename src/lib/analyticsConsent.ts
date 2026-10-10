@@ -68,8 +68,10 @@ export const setAnalyticsConsent = (consent: boolean): boolean => {
     if (consent) {
         // Never override an unresolved revocation barrier by accident.
         try {
-            sessionStorage.removeItem(REVOCATION_BARRIER_KEY);
-            if (hasRevocationBarrier()) throw new Error('Revocation barrier still active');
+            if (typeof sessionStorage !== 'undefined') {
+                sessionStorage.removeItem(REVOCATION_BARRIER_KEY);
+                if (hasRevocationBarrier()) throw new Error('Revocation barrier still active');
+            }
             localStorage.setItem(ANALYTICS_CONSENT_KEY, 'true');
             persisted = localStorage.getItem(ANALYTICS_CONSENT_KEY) === 'true';
             currentAnalyticsConsent = persisted;
