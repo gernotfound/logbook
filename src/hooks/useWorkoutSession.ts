@@ -2,7 +2,7 @@ import { useState, useCallback, useRef } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
 import { Logic } from '../lib/logic';
-import { resetGlobalWorkoutTimer } from '../lib/utils/timer';
+import { readWorkoutTimerSnapshot, resetGlobalWorkoutTimer, writeWorkoutTimerSnapshot } from '../lib/utils/timer';
 import { useWorkoutSetMutations } from './workout/useWorkoutSetMutations';
 import {
     applyWorkoutCompletionDraft,
@@ -16,6 +16,7 @@ import {
 import type { WorkoutSession, WorkoutRoutine, Exercise, WorkoutReadiness } from '../types';
 import { auth } from '../lib/firebase';
 import { draftRegistry } from '../lib/utils/draftRegistry';
+import { readLocal } from '../lib/sync/localRepository';
 import { readDeviceValueStrict, writeDeviceValue } from '../lib/sync/deviceStorage';
 import { captureSession, isCurrentSession } from '../lib/sync/session';
 import { claimHistorySave, HISTORY_EDITOR_CONTEXT, isHistorySavePending, releaseHistorySave, restoreSessionAfterHistoryEdit } from './workout/historyEditorContext';
@@ -157,6 +158,7 @@ export function useWorkoutSession() {
         const currentWorkout = useAppStore.getState().localWorkout;
         if (!currentWorkout || currentWorkout.isEditingHistory) return false;
         if (currentWorkout.globalStartTime) return true;
+        const session = captureSession();
 
         const startedAt = Date.now();
         const hasReadiness = readiness && Object.values(readiness).some(value => value !== undefined);
@@ -167,7 +169,13 @@ export function useWorkoutSession() {
             ...(hasReadiness ? { readiness: { capturedAt: startedAt, ...readiness } } : {}),
         };
 
-        if (!resetGlobalWorkoutTimer()) {
+        try {
+            // Verify the timer's device storage while retaining its original value.
+            // Resetting it before the IndexedDB commit could erase a still-running
+            // timer even when the new workout never becomes durable.
+            writeWorkoutTimerSnapshot(readWorkoutTimerSnapshot(session.owner), session.owner);
+        } catch (error) {
+            console.error('Timer locale non disponibile all’avvio:', error);
             useAppStore.setState({
                 localPersistenceBlocked: true,
                 syncHealth: 'failed',
@@ -177,13 +185,43 @@ export function useWorkoutSession() {
             await showAlert('Impossibile iniziare la sessione: il timer locale non può essere salvato sul dispositivo.');
             return false;
         }
+
+        let result: Awaited<ReturnType<typeof setSyncedLocalWorkout>> | null = null;
         try {
-            const result = await setSyncedLocalWorkout(startedWorkout);
-            return result.ok;
-        } catch {
-            await showAlert('Impossibile iniziare la sessione: i dati non sono stati salvati.');
+            result = await setSyncedLocalWorkout(startedWorkout);
+        } catch (error) {
+            console.error('Persistenza avvio workout non completata:', error);
+        }
+
+        if (!isCurrentSession(session)) return false;
+        try {
+            const durable = await readLocal(session.owner);
+            if (!isCurrentSession(session)) return false;
+            if (durable?.data.activeWorkout?.id === currentWorkout.id
+                && durable.data.activeWorkout.globalStartTime === startedAt
+                && useAppStore.getState().localWorkout?.id === currentWorkout.id) {
+                if (!resetGlobalWorkoutTimer(session.owner)) {
+                    useAppStore.setState({
+                        localPersistenceBlocked: true, syncHealth: 'failed',
+                        saveError: 'Allenamento salvato, ma il timer locale non è stato azzerato. Riapri TheLogBook.',
+                    });
+                    await showAlert('Allenamento salvato, ma il timer locale non è stato aggiornato. Riapri TheLogBook.');
+                    return false;
+                }
+            }
+        } catch (error) {
+            console.error('Verifica avvio workout duraturo non riuscita:', error);
+            useAppStore.setState({ localPersistenceBlocked: true, syncHealth: 'failed',
+                saveError: 'Impossibile verificare il salvataggio dell’avvio. Riapri TheLogBook.' });
+            await showAlert('Impossibile verificare il salvataggio dell’allenamento. Riapri TheLogBook.');
             return false;
         }
+
+        if (!result?.ok) {
+            await showAlert('Impossibile iniziare la sessione: il salvataggio non è stato confermato.');
+            return false;
+        }
+        return true;
     }, [setSyncedLocalWorkout, showAlert]);
 
     const startEditHistoricalWorkout = useCallback(async (workout: WorkoutSession) => {
