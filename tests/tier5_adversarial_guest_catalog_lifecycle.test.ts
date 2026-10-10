@@ -120,7 +120,7 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
             const customFood: Food = { id: 'dirty_custom_food_1', name: 'Dirty Whey', kcal: 150, pro: 30, carbs: 2, fat: 1, isCustom: true };
 
             const dirtyGuestData: UserData = {
-                profile: { name: 'Dirty Guest' },
+                profile: { height: '180' },
                 library: resolveEffectiveExercises(catalog.exercises, [customEx], {}),
                 customFoods: resolveEffectiveFoods(catalog.foods, [customFood], {}),
                 catalogOverrides: { exercises: { 'squat-bilanciere': { notes: 'Dirty Squat Note' } } },
@@ -138,7 +138,7 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
 
             // Step 1: Simulate rejection of logout dialog
             // In rejection, no store reset occurs
-            expect(useAppStore.getState().userData?.profile?.name).toBe('Dirty Guest');
+            expect(useAppStore.getState().userData?.profile?.height).toBe('180');
             expect(useAppStore.getState().userData?.library?.find(e => e.id === 'dirty_custom_ex_1')).toBeDefined();
 
             // Step 2: Simulate confirmed logout
@@ -168,7 +168,7 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
             useAppStore.getState().setUserData(freshGuestData);
 
             const currentState = useAppStore.getState().userData!;
-            expect(currentState.profile?.name).toBeUndefined();
+            expect(currentState.profile?.height).toBeUndefined();
             expect(currentState.library?.find(e => e.id === 'dirty_custom_ex_1')).toBeUndefined();
             expect(currentState.customFoods?.find(f => f.id === 'dirty_custom_food_1')).toBeUndefined();
             expect(currentState.routines).toHaveLength(0);
@@ -192,7 +192,7 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
             await saveCatalogToCache(fixtureCatalog);
 
             const incompleteUserData: UserData = {
-                profile: { name: 'Existing Athlete', height: '182', gender: 'M' },
+                profile: { height: '182', gender: 'M' },
                 library: [{ id: 'my_custom_deadlift', name: 'My Custom Deadlift', setsCount: 5, sets: [], isDefault: false }],
                 routines: [{ id: 'r_existing', name: 'Existing Routine', exercises: [] }],
                 customFoods: [{ id: 'my_custom_snack', name: 'My Snack', kcal: 180, pro: 10, carbs: 20, fat: 5, isCustom: true }],
@@ -227,7 +227,7 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
 
             const healed = useAppStore.getState().userData!;
             // Profile & routines preserved
-            expect(healed.profile?.name).toBe('Existing Athlete');
+            expect(healed.profile?.height).toBe('182');
             expect(healed.profile?.height).toBe('182');
             expect(healed.routines).toHaveLength(1);
             expect(healed.routines?.[0].id).toBe('r_existing');
