@@ -47,10 +47,11 @@ describe('Worker 1B: UI/UX, Date Navigation, CSV Export & PWA Fixes', () => {
     describe('P0-2 & P2-6: Exporter.exportToCSV Quoting and Fallbacks', () => {
         it('encloses dateStr in quotes to prevent locale dates with commas from corrupting columns', async () => {
             let exportedContent = '';
-            const downloadSpy = vi.spyOn(Exporter, 'downloadFile').mockImplementation((filename, content) => {
+            const downloadSpy = vi.spyOn(Exporter, 'downloadFile').mockImplementation(async (filename, content) => {
                 if (filename === 'allenamenti.csv') {
                     exportedContent = content;
                 }
+                return true;
             });
 
             const timestamp = new Date('2026-08-23T17:40:00.000Z').getTime();
@@ -61,7 +62,7 @@ describe('Worker 1B: UI/UX, Date Navigation, CSV Export & PWA Fixes', () => {
                 exercises: [
                     {
                         exId: 'ex_1',
-                        name: 'Panca piana',
+                        sessionNote: '',
                         sets: [{ id: 'set_1', kg: '100', reps: '8' }]
                     }
                 ]
@@ -83,10 +84,11 @@ describe('Worker 1B: UI/UX, Date Navigation, CSV Export & PWA Fixes', () => {
 
         it('falls back to session.date when globalStartTime is absent or 0', async () => {
             let exportedContent = '';
-            const downloadSpy = vi.spyOn(Exporter, 'downloadFile').mockImplementation((filename, content) => {
+            const downloadSpy = vi.spyOn(Exporter, 'downloadFile').mockImplementation(async (filename, content) => {
                 if (filename === 'allenamenti.csv') {
                     exportedContent = content;
                 }
+                return true;
             });
 
             const session: WorkoutSession = {
@@ -96,7 +98,7 @@ describe('Worker 1B: UI/UX, Date Navigation, CSV Export & PWA Fixes', () => {
                 exercises: [
                     {
                         exId: 'ex_1',
-                        name: 'Squat',
+                        sessionNote: '',
                         sets: [{ id: 'set_1', kg: '120', reps: '5' }]
                     }
                 ]
@@ -254,7 +256,7 @@ describe('Worker 1B: UI/UX, Date Navigation, CSV Export & PWA Fixes', () => {
                 id: 'w_hist_1',
                 date: '2025-12-25',
                 routineName: 'Christmas Workout',
-                exercises: [{ exId: 'ex_1', sets: [{ id: 's1', kg: '100', reps: '10' }] }]
+                exercises: [{ exId: 'ex_1', sessionNote: '', sets: [{ id: 's1', kg: '100', reps: '10' }] }]
             };
 
             useAppStore.setState({
