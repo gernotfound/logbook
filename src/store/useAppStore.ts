@@ -30,6 +30,9 @@ if (typeof document !== 'undefined') {
     document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'hidden') {
             const state = useAppStore.getState();
+            // An unauthenticated landing screen has no device-critical drafts to flush.
+            // Preserve the fail-closed path whenever any owner or workout data exists.
+            if (state.userData === null && state.dataOwner === null && state.localWorkout === null) return;
             const session = captureSession();
             try {
                 draftRegistry.flushAll({ strict: true });

@@ -212,4 +212,35 @@ describe('Audit 18 device-critical persistence', () => {
             draftRegistry.unregister(fail);
         }
     });
+    it('does not mark persistence as failed on an empty, unauthenticated landing screen', () => {
+        useAppStore.setState({
+            userData: null,
+            dataOwner: null,
+            localWorkout: null,
+            localPersistenceBlocked: false,
+            syncHealth: 'synced',
+            saveError: null,
+        });
+        Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });
+        document.dispatchEvent(new Event('visibilitychange'));
+        expect(useAppStore.getState().localPersistenceBlocked).toBe(false);
+        expect(useAppStore.getState().syncHealth).toBe('synced');
+        expect(useAppStore.getState().saveError).toBeNull();
+    });
+
+    it('fails closed for a workout that has no provable owner on backgrounding', () => {
+        useAppStore.setState({
+            userData: null,
+            dataOwner: null,
+            localWorkout: workout('w-current'),
+            localPersistenceBlocked: false,
+            syncHealth: 'synced',
+            saveError: null,
+        });
+        Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });
+        document.dispatchEvent(new Event('visibilitychange'));
+        expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
+        expect(useAppStore.getState().saveError).toContain('mettere al sicuro');
+    });
+
 });

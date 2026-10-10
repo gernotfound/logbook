@@ -29,6 +29,7 @@ vi.mock('../src/hooks/useAuth', () => ({
 vi.mock('../src/lib/firebase', () => ({
     auth: {},
     sendPasswordResetEmail: vi.fn(async () => {}),
+    validatePassword: vi.fn(async () => ({ isValid: true })),
 }));
 
 vi.mock('../src/store/useDialogStore', () => ({
@@ -36,10 +37,12 @@ vi.mock('../src/store/useDialogStore', () => ({
 }));
 
 import { LoginBox } from '../src/components/UI/LoginBox';
+import { useAppStore } from '../src/store/useAppStore';
 
 describe('LoginBox guest Google authentication', () => {
     beforeEach(() => {
         localStorage.clear();
+        useAppStore.getState().setSaveError(null);
         authState.isGuest = true;
         authMocks.login.mockClear();
         authMocks.loginWithEmail.mockClear();
@@ -92,4 +95,71 @@ describe('LoginBox guest Google authentication', () => {
         });
         expect(authMocks.linkGoogleAccount).not.toHaveBeenCalled();
     });
+    it('shows unmet password requirements immediately and rejects weak registration', async () => {
+        authState.isGuest = false;
+        render(<LoginBox />);
+        fireEvent.click(screen.getAllByRole('button', { name: 'Registrati' }).at(-1)!);
+        fireEvent.change(screen.getByRole('textbox', { name: 'Email' }), { target: { value: 'new@example.com' } });
+        fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'caccapuou' } });
+        fireEvent.change(screen.getByLabelText('Conferma password'), { target: { value: 'caccapuou' } });
+        expect(screen.getByText(/Una lettera maiuscola/).closest('li')?.getAttribute('data-status')).toBe('missing');
+        fireEvent.click(screen.getAllByRole('button', { name: 'Registrati' }).at(-1)!);
+        await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('12 caratteri'));
+        expect(authMocks.registerWithEmail).not.toHaveBeenCalled();
+        expect(screen.getAllByRole('button', { name: 'Registrati' }).at(-1)!.hasAttribute('disabled')).toBe(false);
+    });
+
+    it('reports mismatched confirmation before sending any registration request', async () => {
+        authState.isGuest = false;
+        render(<LoginBox />);
+        fireEvent.click(screen.getAllByRole('button', { name: 'Registrati' }).at(-1)!);
+        fireEvent.change(screen.getByRole('textbox', { name: 'Email' }), { target: { value: 'new@example.com' } });
+        fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'SecurePassword123!' } });
+        fireEvent.change(screen.getByLabelText('Conferma password'), { target: { value: 'not-the-same' } });
+        expect(screen.getByLabelText('Conferma password').getAttribute('aria-invalid')).toBe('true');
+        expect(screen.getByText('Le password non coincidono.')).toBeTruthy();
+        fireEvent.click(screen.getAllByRole('button', { name: 'Registrati' }).at(-1)!);
+        await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('non coincidono'));
+        expect(authMocks.registerWithEmail).not.toHaveBeenCalled();
+    });
+
+    it('completes a valid submission and displays a Firebase registration error if rejected', async () => {
+        authState.isGuest = false;
+        authMocks.registerWithEmail.mockRejectedValueOnce(
+            Object.assign(new Error('Firebase internal exception'), { code: 'auth/email-already-in-use' }),
+        );
+        render(<LoginBox />);
+        fireEvent.click(screen.getAllByRole('button', { name: 'Registrati' }).at(-1)!);
+        fireEvent.change(screen.getByRole('textbox', { name: 'Email' }), { target: { value: 'existing@example.com' } });
+        fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'SecurePassword123!' } });
+        fireEvent.change(screen.getByLabelText('Conferma password'), { target: { value: 'SecurePassword123!' } });
+        fireEvent.click(screen.getAllByRole('button', { name: 'Registrati' }).at(-1)!);
+        await waitFor(() => expect(authMocks.registerWithEmail).toHaveBeenCalledTimes(1));
+        await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('già registrata'));
+        expect(screen.queryByText('Firebase internal exception')).toBeNull();
+        expect(screen.getAllByRole('button', { name: 'Registrati' }).at(-1)!.hasAttribute('disabled')).toBe(false);
+    });
+
+    it('surfaces a Google sign-in failure returned through the auth store', async () => {
+        authState.isGuest = false;
+        authMocks.login.mockImplementationOnce(async () => {
+            useAppStore.getState().setSaveError('Accesso Google fallito. Riprova.');
+        });
+        render(<LoginBox />);
+        fireEvent.click(screen.getByRole('button', { name: 'Accedi con Google' }));
+        await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('Accesso Google fallito'));
+    });
+
+    it('submits a valid password and email when Firebase accepts the account', async () => {
+        authState.isGuest = false;
+        render(<LoginBox />);
+        fireEvent.click(screen.getAllByRole('button', { name: 'Registrati' }).at(-1)!);
+        fireEvent.change(screen.getByRole('textbox', { name: 'Email' }), { target: { value: 'valid@example.com' } });
+        fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'SecurePassword123!' } });
+        fireEvent.change(screen.getByLabelText('Conferma password'), { target: { value: 'SecurePassword123!' } });
+        fireEvent.click(screen.getAllByRole('button', { name: 'Registrati' }).at(-1)!);
+        await waitFor(() => expect(authMocks.registerWithEmail).toHaveBeenCalledWith('valid@example.com', 'SecurePassword123!', undefined));
+        expect(screen.queryByRole('alert')).toBeNull();
+    });
+
 });

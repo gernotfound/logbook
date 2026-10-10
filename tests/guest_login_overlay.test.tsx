@@ -31,7 +31,7 @@ vi.mock('../src/components/UI/BottomNav', () => ({
 }));
 
 vi.mock('../src/components/UI/GlobalDialog', () => ({
-    GlobalDialog: () => null,
+    GlobalDialog: () => <div data-testid="global-dialog" />,
 }));
 
 vi.mock('../src/components/UI/ReloadPrompt', () => ({
@@ -84,6 +84,13 @@ describe('guest login overlay lifecycle', () => {
         authState.logout.mockClear();
         useAppStore.getState().resetStore({ force: true });
         useAppStore.getState().setSyncing(false);
+    });
+
+    it('mounts the shared dialog boundary for the unauthenticated login screen', () => {
+        authState.isGuest = false;
+        render(<App />);
+        expect(screen.getByTestId('global-dialog')).toBeTruthy();
+        expect(screen.getByTestId('guest-login-box')).toBeTruthy();
     });
 
     it('blocks bottom navigation, survives account transition, then closes after migration settles', async () => {

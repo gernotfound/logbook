@@ -59,7 +59,7 @@ describe('email verification lifecycle', () => {
         await waitFor(() => expect(result.current.loading).toBe(false));
 
         await act(async () => {
-            await result.current.registerWithEmail('new@example.com', 'Password1!');
+            await result.current.registerWithEmail('new@example.com', 'SecurePassword123!');
         });
 
         expect(sendEmailVerification).toHaveBeenCalledWith(createdUser);
