@@ -76,7 +76,7 @@ La sorgente vettoriale approvata `assets/brand/thelogbook-icon-master.svg` viene
 TheLogBook non integra SDK per analytics di utilizzo. Rimane il monitoraggio degli errori tecnici:
 
 - **telemetria tecnica TheLogBook:** Sentry Error Monitoring riceve solo errori/anomalie tecniche sanitizzati in Production; TheLogBook non allega deliberatamente Firebase UID o email e non abilita Replay, tracing, logging o metriche. Le vecchie collection Firestore telemetriche restano temporaneamente solo per cleanup/compatibilità;
-- **Google Analytics 4 / Firebase Analytics:** ritirato dal client; nessuna raccolta di statistiche di utilizzo nell'app;
+- **Google Analytics 4 / Firebase Analytics:** dismesso; rimosso dal client, scollegato da Firebase e proprietà ritirata dal product owner; nessuna raccolta di statistiche di utilizzo nell'app;
 - **Vercel Analytics + Speed Insights:** ritirati dal frontend Production dopo il cutover a Firebase Hosting.
 
 I dettagli destinati agli utenti sono nella Privacy Policy dell'app. La documentazione tecnica non deve promettere anonimato quando esistono identificativi tecnici pseudonimi.

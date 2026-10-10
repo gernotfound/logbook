@@ -1,6 +1,6 @@
 # Registro servizi esterni TheLogBook
 
-> Stato: registro operativo stabile. Ultimo consolidamento: 2026-10-06.
+> Stato: registro operativo stabile. Ultimo consolidamento: 2026-10-10.
 >
 > Questo file documenta **perché** esistono le integrazioni e quali impostazioni devono essere preservate. Non è un inventario di segreti e non sostituisce la verifica live nelle console dei provider.
 
@@ -28,7 +28,7 @@ Il repository è pubblico. Questo registro non contiene token, private key, emai
 | Firebase App Check + reCAPTCHA Enterprise / Google Cloud Fraud Defense | ACTIVE | attestazione anti-abuse prima dell'accesso cloud | Firebase App Check + Google Cloud |
 | Vercel Functions / Cron | ACTIVE | backend trusted account-deletion/recovery, cron e redirect del vecchio root verso Firebase | Vercel + `vercel.json` |
 | Vercel Analytics / Speed Insights | RITIRATO | non fanno più parte del frontend Production | codice + cronologia cutover |
-| Google Analytics / GA4 | RITIRATO (2026-10-10) | SDK, toggle e Measurement ID rimossi dal frontend; dati storici/configurazione provider da verificare | repository + console Google da verificare |
+| Google Analytics / GA4 | DISMESSO | Nessuna dipendenza runtime; integrazione e preferenza client rimosse, collegamento Firebase sciolto e proprietà dismessa | PR #320 + operazioni Google/Firebase/GitHub confermate dal product owner |
 | Sentry | ACTIVE | error monitoring tecnico Production e source map del frontend Firebase Hosting | Sentry + build Firebase Hosting |
 | GitHub Actions / CodeQL / ruleset | ACTIVE | repository pubblico, PR, CI e SAST canonico | GitHub |
 | Snyk | OPTIONAL | controllo security supplementare | integrazione Snyk esterna |
@@ -181,31 +181,11 @@ La configurazione pubblica del frontend Production viene fornita al workflow Git
 
 Realtime Database, Firebase Storage e Cloud Messaging non fanno parte del runtime corrente; le relative vecchie env client sono ritirate. La configurazione Production non viene duplicata in un file `.env.production` versionato; `.env.example` documenta solo il contratto e CI/E2E usa valori sintetici.
 
-## Google Analytics / GA4 — configurazione storica, ritirata il 2026-10-10
+## Google Analytics / GA4 — dismesso
 
-Nel cutover del 2026-10-02 GA4 faceva parte dell'architettura del frontend Firebase Hosting come servizio opzionale. Dal 2026-10-10 il servizio è ritirato dal codice e dal deployment; le note sottostanti descrivono soltanto la configurazione storica.
+Google Analytics 4/Firebase Analytics non è più usato da TheLogBook. La PR #320 ha rimosso SDK, avvio, consenso e toggle GA4, Measurement ID dal build e domini Analytics dalla Content Security Policy. Il product owner ha successivamente confermato lo scollegamento Google Analytics dal progetto Firebase, la dismissione della proprietà Analytics e la rimozione della repository variable `VITE_FIREBASE_MEASUREMENT_ID`.
 
-Stato live verificato:
-
-- proprietà/account e Web data stream rinominati **TheLogBook**;
-- URL del Web data stream impostato su `https://thelogbook.web.app`;
-- esiste un Measurement ID GA4 `G-...`, ma il valore non viene duplicato in questo registro;
-- **Misurazione avanzata: OFF**;
-- **Google Signals: OFF**;
-- raccolta dati granulari di posizione/dispositivo: **OFF**;
-- personalizzazione annunci: **OFF**;
-- raccolta dati forniti dagli utenti / User-ID: non attivata;
-- integrazione dei segmenti di pubblico migliorata Firebase: **OFF**;
-- collegamenti prodotto: soltanto Firebase; nessun collegamento Ads osservato;
-- conservazione dati: **2 mesi**;
-- reset della retention in caso di nuova attività: **OFF**;
-- condivisione dati account: Prodotti e servizi Google **OFF**, modellazione/insight **OFF**, Assistenza tecnica **OFF**, Consigli per l'attività **OFF**;
-- paese dell'attività: **Italia**;
-- fuso orario report: **Europe/Rome / Italia**;
-- valuta: **EUR**;
-- filtro `Internal Traffic`: stato **Test**; nessuna regola di traffico interno/IP è stata configurata.
-
-Questa configurazione era privacy-minimal durante il cutover storico. Non è più una funzionalità del client; eventuali dati storici, stream, proprietà e variabili lato provider richiedono verifica e dismissione separata.
+**Servizi invariati:** Firebase Hosting, Authentication, Firestore, App Check e Sentry Error Monitoring non dipendono da Analytics e rimangono parte dell'architettura. La configurazione originaria e le decisioni del cutover sono consultabili nella cronologia Git, non nel runbook operativo corrente.
 
 ## Vercel Analytics / Speed Insights
 
@@ -299,8 +279,7 @@ Pulizia esterna completata/verificata il 2026-09-30:
 7. verificare Sentry privacy, Spike Protection e feature non richieste ancora disattivate;
 8. verificare Snyk come supplementare e CodeQL come gate;
 9. verificare Search Console, sitemap, robots e canonical Production URL;
-10. verificare in Google Analytics la dismissione dello stream/proprietà GA4, eventuali dati storici e le politiche di conservazione applicabili;
-11. rimuovere origin, chiavi e integrazioni legacy non più necessarie.
+10. rimuovere origin, chiavi e integrazioni legacy non più necessarie.
 
 
 ## Preparazione live cutover — 2026-10-02 (storico)
@@ -337,14 +316,6 @@ Questa sezione conserva le operazioni e verifiche esterne eseguite **prima** del
 - Confermata la presenza delle env server-only Firebase Admin e `CRON_SECRET` senza esporne i valori.
 - Durante la finestra di cutover erano state configurate `PUBLIC_APP_ORIGIN=https://thelogbook.web.app` e la temporanea `PUBLIC_APP_LEGACY_ORIGIN=https://logbook-gnf.vercel.app`. Il supporto applicativo al legacy origin è stato poi ritirato dopo gli smoke verdi.
 
-### Google Analytics / GA4 — note storiche pre-ritiro
-
-- Stream Web **TheLogBook** verificato su `https://thelogbook.web.app`; Measurement ID coerente con la repository variable configurata per il build.
-- Misurazione avanzata OFF, Google Signals OFF, raccolta dati forniti dagli utenti OFF, dati granulari posizione/dispositivo OFF e personalizzazione annunci consentita in 0 regioni.
-- Retention eventi e utenti: 2 mesi; reset retention su nuova attività OFF.
-- Filtro `Internal Traffic`: stato Test.
-- Collegamento Firebase presente con integrazione segmenti di pubblico migliorata OFF; Google Ads e AdMob: 0 collegamenti.
-
 ### Sentry
 
 - Creata integrazione interna dedicata al build GitHub/Firebase Hosting con solo capacità **Continuous Integration (CI)**; il token generato è conservato esclusivamente come GitHub Secret `SENTRY_AUTH_TOKEN`.
@@ -371,7 +342,7 @@ Questa sezione conserva il razionale del candidato PR #191 ormai mergiato. Il fr
 
 Vercel resta il boundary trusted server-only: `/api/account-deletion`, `/api/account-deletion-device` e il cron giornaliero `/api/account-deletion-cron`. Il frontend usa un origin Vercel esplicito e il backend accetta CORS soltanto dall'origin pubblico configurato (`PUBLIC_APP_ORIGIN`, fallback `https://thelogbook.web.app`), con App Check e autenticazione/credential specifica per il flusso.
 
-Storicamente GA4 ha sostituito Vercel Analytics/Speed Insights, ma dal 2026-10-10 nessun SDK analytics viene più caricato dal client. Lo stream/proprietà Google e i dati storici restano da verificare nella console.
+Google Analytics 4 e Vercel Analytics/Speed Insights sono dismessi e non appartengono alle integrazioni runtime correnti. Le decisioni originarie del cutover restano disponibili nella storia Git.
 
 ### Checklist pre-cutover storica
 

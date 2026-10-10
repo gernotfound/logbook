@@ -48,7 +48,7 @@ Google Cloud può presentare reCAPTCHA Enterprise dentro il prodotto più ampio 
 
 Google Analytics 4/Firebase Analytics non fa parte del runtime corrente. Nessun SDK `firebase/analytics`, Measurement ID, toggle GA4, consenso GA4 o script di tracciamento deve essere caricato. Firebase Authentication, Firestore, Hosting, Installations e App Check restano invariati e operativi. La vecchia preferenza browser è rimossa best-effort all'avvio per disabilitare anche schede della precedente build.
 
-La dismissione dello stream/proprietà e la gestione di dati eventualmente raccolti prima della rimozione restano azioni amministrative da verificare nel provider Google, non deducibili dal codice.
+Il product owner ha confermato lo scollegamento della proprietà Analytics dal progetto Firebase, la dismissione della proprietà e la rimozione della variabile GitHub del Measurement ID. Queste operazioni esterne sono distinte dalla rimozione dell'SDK attestata dalla PR #320; il progetto Firebase e i suoi servizi attivi non sono stati eliminati.
 
 ## Server trusted M7 — Firebase Admin
 

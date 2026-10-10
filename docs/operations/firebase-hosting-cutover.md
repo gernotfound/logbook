@@ -6,7 +6,7 @@ Stato: cutover Production completato il 2026-10-02. Le voci esterne non direttam
 
 - Frontend/PWA: Firebase Hosting, site `thelogbook`, Firebase Spark.
 - Firestore, Authentication e App Check/reCAPTCHA Enterprise restano Firebase.
-- GA4 era analytics opzionale al cutover del 2026-10-02; l'integrazione è stata ritirata il 2026-10-10. Sentry resta Error Monitoring.
+- GA4/Firebase Analytics è dismesso sia nel frontend sia nel collegamento al progetto Firebase; Sentry resta Error Monitoring.
 - Trusted backend e cron giornaliero: Vercel Hobby.
 - Production deriva esclusivamente da `main`.
 
@@ -33,7 +33,6 @@ Completato e verificato prima del merge:
 - WIF GitHub Actions + deployer Hosting least-privilege configurati; repository variables e secret del workflow provisionati;
 - preflight read-only WIF riuscito: GitHub Actions ha impersonato il deployer e letto il sito Hosting `thelogbook` senza creare versioni, release o canali; il workflow diagnostico temporaneo è rimosso dall'HEAD candidato;
 - Vercel Production predisposta per il nuovo origin; il bridge legacy usato nella finestra di cutover è stato successivamente ritirato dal contratto applicativo;
-- GA4 privacy-minimal verificato e privo di collegamenti Ads/AdMob;
 - Sentry CI token configurato, Allowed Domains ristretto ai due frontend del cutover e Project Security Token ruotato dopo esposizione durante la configurazione.
 
 Completamento 2026-10-02: PR #191 squash-merged; `main` = `edf164e3e410a650d1390b9cbe92344fa1fb9501`; Milestone Verification post-merge #1123 verde; Vercel Production READY sullo stesso SHA; Firebase Hosting Production run `36992998590` verde con prima release del site `thelogbook`; smoke automatici shell/SW verdi; login Google reale riuscito sul nuovo origin e registrazione recovery device osservata con risposte 200/204 dal backend.
