@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-export type UnsyncedLogoutReason = 'offline' | 'rejected' | 'failed' | 'conflict';
+type UnsyncedLogoutReason = 'offline' | 'rejected' | 'failed' | 'conflict';
 export type UnsyncedLogoutAction = 'wait' | 'export' | 'force-exit' | 'cancel' | 'safe-exit';
 
 interface DialogState {
