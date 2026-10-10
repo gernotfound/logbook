@@ -3,63 +3,129 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthProvider } from '../src/contexts/AuthContext';
 import { useAuth } from '../src/hooks/useAuth';
-import { auth, createUserWithEmailAndPassword, onAuthStateChanged, sendEmailVerification } from '../src/lib/firebase';
+import { auth, createUserWithEmailAndPassword, onAuthStateChanged, reload, sendEmailVerification, signOut } from '../src/lib/firebase';
 import { DB } from '../src/lib/db';
 import { useAppStore } from '../src/store/useAppStore';
+import { idbStore } from './setup';
+
+const safeReload = vi.hoisted(() => vi.fn(async () => {}));
+vi.mock('../src/lib/sync/safeReload', async importOriginal => ({
+    ...await importOriginal<typeof import('../src/lib/sync/safeReload')>(),
+    safeHardReload: safeReload,
+}));
 
 const wrapper = ({ children }: { children: React.ReactNode }) => <AuthProvider>{children}</AuthProvider>;
+
+function account(verified: boolean, providerId = 'password') {
+    return {
+        uid: 'unverified-user',
+        email: 'unverified@example.com',
+        emailVerified: verified,
+        providerData: [{ providerId }],
+        getIdToken: vi.fn().mockResolvedValue('test-token'),
+    } as any;
+}
+
+function startWith(user: ReturnType<typeof account>) {
+    (auth as any).currentUser = user;
+    vi.mocked(onAuthStateChanged).mockImplementationOnce((_auth, callback: any) => {
+        callback(user);
+        return () => {};
+    });
+}
 
 describe('email verification lifecycle', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         localStorage.clear();
         useAppStore.getState().resetStore({ force: true });
-        (auth as any).currentUser = {
-            uid: 'test-user-id',
-            email: 'test@example.com',
-            emailVerified: true,
-            providerData: [{ providerId: 'password' }],
-            getIdToken: vi.fn().mockResolvedValue('test-token'),
-        };
+        (auth as any).currentUser = account(true);
     });
 
-    it('marks an unverified password account without blocking its data hydration', async () => {
-        const unverified = {
-            uid: 'unverified-user',
-            email: 'unverified@example.com',
-            emailVerified: false,
-            providerData: [{ providerId: 'password' }],
-            getIdToken: vi.fn().mockResolvedValue('test-token'),
-        } as any;
-        (auth as any).currentUser = unverified;
-        vi.mocked(onAuthStateChanged).mockImplementationOnce((_auth, callback: any) => {
-            callback(unverified);
-            return () => {};
-        });
+    it('blocks unverified password accounts before cloud hydration and preserves existing local archives', async () => {
+        const user = account(false);
+        const existingArchive = { privateDraft: 'preserved' };
+        idbStore['logbook:v2:user:unverified-user'] = existingArchive;
+        startWith(user);
 
         const { result } = renderHook(() => useAuth(), { wrapper });
-
         await waitFor(() => expect(result.current.loading).toBe(false));
+
         expect(result.current.emailVerificationRequired).toBe(true);
-        expect(DB.loadCloudPayload).toHaveBeenCalled();
+        expect(result.current.currentUser?.uid).toBe(user.uid);
+        expect(DB.loadCloudPayload).not.toHaveBeenCalled();
+        expect(idbStore['logbook:v2:user:unverified-user']).toBe(existingArchive);
+        expect(DB.purgeAllLocalUserData).not.toHaveBeenCalled();
     });
 
-    it('sends a verification email immediately after creating an unverified password account', async () => {
-        const createdUser = {
-            uid: 'new-user',
-            email: 'new@example.com',
-            emailVerified: false,
-            providerData: [{ providerId: 'password' }],
-            getIdToken: vi.fn().mockResolvedValue('test-token'),
-        } as any;
+    it('also blocks an unverified federated account, rather than relying on provider type', async () => {
+        startWith(account(false, 'google.com'));
+        const { result } = renderHook(() => useAuth(), { wrapper });
+        await waitFor(() => expect(result.current.loading).toBe(false));
+        expect(result.current.emailVerificationRequired).toBe(true);
+        expect(DB.loadCloudPayload).not.toHaveBeenCalled();
+    });
+
+    it('does not refresh claims or navigate until Firebase reports the address verified', async () => {
+        const user = account(false);
+        startWith(user);
+        const { result } = renderHook(() => useAuth(), { wrapper });
+        await waitFor(() => expect(result.current.loading).toBe(false));
+
+        await act(async () => {
+            await result.current.refreshEmailVerification();
+        });
+        expect(reload).toHaveBeenCalledWith(user);
+        expect(user.getIdToken).not.toHaveBeenCalled();
+        expect(safeReload).not.toHaveBeenCalled();
+
+        vi.mocked(reload).mockImplementationOnce(async () => {
+            user.emailVerified = true;
+        });
+        await act(async () => {
+            await result.current.refreshEmailVerification();
+        });
+        expect(user.getIdToken).toHaveBeenCalledWith(true);
+        expect(safeReload).toHaveBeenCalledTimes(1);
+    });
+
+    it('starts a separate local session without purging the authenticated archive', async () => {
+        const user = account(false);
+        startWith(user);
+        const existingArchive = { privateDraft: 'preserved' };
+        idbStore['logbook:v2:user:unverified-user'] = existingArchive;
+        const { result } = renderHook(() => useAuth(), { wrapper });
+        await waitFor(() => expect(result.current.emailVerificationRequired).toBe(true));
+
+        await act(async () => {
+            await result.current.continueUnverifiedLocally();
+        });
+        expect(signOut).toHaveBeenCalledTimes(1);
+        expect(result.current.isGuest).toBe(true);
+        expect(localStorage.getItem('logbook_is_guest')).toBe('true');
+        expect(idbStore['logbook:v2:user:unverified-user']).toBe(existingArchive);
+        expect(DB.purgeAllLocalUserData).not.toHaveBeenCalled();
+    });
+
+    it('does not activate local mode if Firebase sign-out fails', async () => {
+        startWith(account(false));
+        const { result } = renderHook(() => useAuth(), { wrapper });
+        await waitFor(() => expect(result.current.emailVerificationRequired).toBe(true));
+        vi.mocked(signOut).mockRejectedValueOnce(new Error('offline'));
+        await expect(result.current.continueUnverifiedLocally()).rejects.toThrow('offline');
+        expect(result.current.isGuest).toBe(false);
+        expect(DB.purgeAllLocalUserData).not.toHaveBeenCalled();
+    });
+
+    it('sends verification mail after creating an unverified password account', async () => {
+        const createdUser = account(false);
         vi.mocked(createUserWithEmailAndPassword).mockResolvedValueOnce({ user: createdUser } as any);
         vi.mocked(sendEmailVerification).mockResolvedValueOnce(undefined);
 
         const { result } = renderHook(() => useAuth(), { wrapper });
         await waitFor(() => expect(result.current.loading).toBe(false));
-
         await act(async () => {
-            await result.current.registerWithEmail('new@example.com', 'SecurePassword123!');
+            await result.current.registerWithEmail('unverified@example.com', 'SecurePassword123!');
         });
 
         expect(sendEmailVerification).toHaveBeenCalledWith(createdUser);
