@@ -77,7 +77,7 @@
 .ui-login-box-8 { border-radius: 0.5rem; border: 1px solid var(--glass-border); background: var(--surface-light); color: var(--text-main); font-size: var(--font-size-control); }
 .ui-login-box-9 { border-radius: 0.5rem; border: 1px solid var(--glass-border); background: var(--surface-light); color: var(--text-main); font-size: var(--font-size-control); }
 .ui-login-box-10 { background: none; border: none; color: var(--text-muted); width: 2.75rem; height: 2.75rem; padding: 0; margin: 0; justify-content: center; }
-.ui-login-box-8, .ui-login-box-9, .ui-login-box-11 { margin-bottom: 0; }
+#auth-login-box .ui-login-box-8, #auth-login-box .ui-login-box-9, #auth-login-box .ui-login-box-11 { margin-bottom: 0; }
 .ui-login-box-password-rules { list-style: none; padding: 0; margin: 0.375rem 0 0; text-align: left; font-size: var(--font-size-secondary); }
 .ui-login-box-password-rules li { margin: 0.125rem 0; color: var(--text-muted); }
 .ui-login-box-password-rules li[data-status="missing"] { color: var(--danger-color); }
