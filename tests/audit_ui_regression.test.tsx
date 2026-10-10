@@ -90,7 +90,7 @@ describe('audit interaction regressions', () => {
     it('ends a workout once even after double submission and a rejected first save', async () => {
         vi.spyOn(useDialogStore.getState(), 'showConfirm').mockResolvedValue(true);
         vi.spyOn(useDialogStore.getState(), 'showAlert').mockResolvedValue();
-        vi.mocked(DB.saveUserData).mockResolvedValueOnce({ ok: false, status: 'rejected' });
+        vi.mocked(DB.saveUserData).mockResolvedValueOnce({ ok: false, status: 'rejected', error: { code: 'permission-denied' } });
         const { result } = renderHook(() => useWorkoutSession());
         let first!: Promise<unknown>;
         let duplicate!: Promise<unknown>;
@@ -109,8 +109,8 @@ describe('audit interaction regressions', () => {
         });
         const completed = await retry;
         expect(completed).toMatchObject({ id: workout.id });
-        expect(useAppStore.getState().userData?.history.filter(item => item.id === workout.id)).toHaveLength(1);
-        expect(completed).toEqual(useAppStore.getState().userData?.history.find(item => item.id === workout.id));
+        expect(useAppStore.getState().userData?.history?.filter(item => item.id === workout.id)).toHaveLength(1);
+        expect(completed).toEqual(useAppStore.getState().userData?.history?.find(item => item.id === workout.id));
         expect(useAppStore.getState().localWorkout).toBeNull();
     });
 
