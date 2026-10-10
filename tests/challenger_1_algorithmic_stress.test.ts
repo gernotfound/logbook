@@ -87,9 +87,9 @@ describe('Challenger 1: Algorithmic & Mathematical Stress Test Suite', () => {
 
         it('handles sparse data distribution (1 workout every 6 weeks) cleanly', () => {
             const history: WorkoutSession[] = [
-                { id: 'w1', date: '2026-01-15', exercises: [{ exId: 'ex_bench', sets: [{ id: 's1', kg: '100', reps: '10' }] }] },
-                { id: 'w2', date: '2026-04-20', exercises: [{ exId: 'ex_bench', sets: [{ id: 's2', kg: '100', reps: '10' }] }] },
-                { id: 'w3', date: '2026-08-10', exercises: [{ exId: 'ex_bench', sets: [{ id: 's3', kg: '100', reps: '10' }] }] }
+                { id: 'w1', date: '2026-01-15', exercises: [{ exId: 'ex_bench', sessionNote: '', sets: [{ id: 's1', kg: '100', reps: '10' }] }] },
+                { id: 'w2', date: '2026-04-20', exercises: [{ exId: 'ex_bench', sessionNote: '', sets: [{ id: 's2', kg: '100', reps: '10' }] }] },
+                { id: 'w3', date: '2026-08-10', exercises: [{ exId: 'ex_bench', sessionNote: '', sets: [{ id: 's3', kg: '100', reps: '10' }] }] }
             ];
             const { points, stats } = computeWeeklyVolumeSeries(history, testLibrary, 80, 36, '2026-08-22');
             expect(points).toHaveLength(36);
@@ -135,10 +135,10 @@ describe('Challenger 1: Algorithmic & Mathematical Stress Test Suite', () => {
 
         it('handles non-sequential, future, and ancient workout dates seamlessly', () => {
             const history: WorkoutSession[] = [
-                { id: 'w_ancient', date: '1999-12-31', exercises: [{ exId: 'ex_bench', sets: [{ id: 's1', kg: '100', reps: '10' }] }] },
-                { id: 'w_future', date: '2050-01-01', exercises: [{ exId: 'ex_bench', sets: [{ id: 's2', kg: '100', reps: '10' }] }] },
-                { id: 'w_shuffled1', date: '2026-08-19', exercises: [{ exId: 'ex_bench', sets: [{ id: 's3', kg: '100', reps: '10' }] }] },
-                { id: 'w_shuffled2', date: '2026-08-17', exercises: [{ exId: 'ex_bench', sets: [{ id: 's4', kg: '100', reps: '10' }] }] }
+                { id: 'w_ancient', date: '1999-12-31', exercises: [{ exId: 'ex_bench', sessionNote: '', sets: [{ id: 's1', kg: '100', reps: '10' }] }] },
+                { id: 'w_future', date: '2050-01-01', exercises: [{ exId: 'ex_bench', sessionNote: '', sets: [{ id: 's2', kg: '100', reps: '10' }] }] },
+                { id: 'w_shuffled1', date: '2026-08-19', exercises: [{ exId: 'ex_bench', sessionNote: '', sets: [{ id: 's3', kg: '100', reps: '10' }] }] },
+                { id: 'w_shuffled2', date: '2026-08-17', exercises: [{ exId: 'ex_bench', sessionNote: '', sets: [{ id: 's4', kg: '100', reps: '10' }] }] }
             ];
             const { points, stats } = computeWeeklyVolumeSeries(history, testLibrary, 80, 4, '2026-08-22');
             expect(points[points.length - 1].volumeKg).toBe(2000);
@@ -383,9 +383,9 @@ describe('Challenger 1: Algorithmic & Mathematical Stress Test Suite', () => {
 
         it('produces proper sentence case insight strings across positive, neutral, and inverse r intervals', () => {
             const history: WorkoutSession[] = [
-                { id: 'w1', date: '2026-08-04', exercises: [{ exId: 'ex_bench', sets: [{ id: 's1', kg: '100', reps: '10' }] }] },
-                { id: 'w2', date: '2026-08-11', exercises: [{ exId: 'ex_bench', sets: [{ id: 's2', kg: '200', reps: '10' }] }] },
-                { id: 'w3', date: '2026-08-18', exercises: [{ exId: 'ex_bench', sets: [{ id: 's3', kg: '300', reps: '10' }] }] }
+                { id: 'w1', date: '2026-08-04', exercises: [{ exId: 'ex_bench', sessionNote: '', sets: [{ id: 's1', kg: '100', reps: '10' }] }] },
+                { id: 'w2', date: '2026-08-11', exercises: [{ exId: 'ex_bench', sessionNote: '', sets: [{ id: 's2', kg: '200', reps: '10' }] }] },
+                { id: 'w3', date: '2026-08-18', exercises: [{ exId: 'ex_bench', sessionNote: '', sets: [{ id: 's3', kg: '300', reps: '10' }] }] }
             ];
             const nutritionPos: Record<string, NutritionDay> = {
                 '2026-08-04': { date: '2026-08-04', kcal: 2000, carbs: 0, pro: 0, fat: 0 },
