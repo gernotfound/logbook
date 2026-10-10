@@ -93,6 +93,8 @@ La private key supporta newline escaped (`\\n`) e viene normalizzata server-side
 
 ## Firestore Security Rules
 
+Le regole private di `/users/{uid}` e delle sottocollezioni richiedono sia la proprietà dell'UID sia il claim Firebase `email_verified == true` prima di verificare gli altri invarianti, inclusa l'assenza di una cancellazione account in corso. Un accesso privo del claim o con `false` viene negato; `global_catalog` continua a essere pubblico. I test dell'emulatore devono dichiarare esplicitamente `email_verified: true` per gli owner autorizzati e coprire il rifiuto delle sessioni non verificate.
+
 ### Test e deploy sono operazioni diverse
 
 Il gate repository corrente testa `firestore.rules` tramite Firebase Emulator (`npm run test:rules`, transitivamente incluso in `verify:m8`). Questo **non** deploya le Rules sul progetto Firebase.
