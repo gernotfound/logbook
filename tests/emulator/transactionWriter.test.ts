@@ -7,7 +7,7 @@ vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackEvent: vi.fn
 import { applyDocumentChanges } from '../../src/lib/sync/transactionWriter';
 import { type SemanticOperation } from '../../src/lib/sync/semanticProjection';
 import { CURRENT_DATA_SCHEMA, CURRENT_SYNC_PROTOCOL, FutureVersionError, LegacyVersionError } from '../../src/lib/schemaEvolution';
-import { registerReplica } from './replicaHarness';
+import { registerReplica, asModularFirestore } from './replicaHarness';
 
 let env: RulesTestEnvironment;
 
@@ -20,7 +20,7 @@ beforeEach(() => env.clearFirestore());
 afterAll(async () => { await env?.cleanup(); });
 
 it('1. V3 API: writes business data, FieldStamp metadata and the current data schema marker', async () => {
-    const db = env.authenticatedContext('a', { email_verified: true }).firestore();
+    const db = asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore());
     const replica = await registerReplica(db, 'a');
     const ops: SemanticOperation[] = [
         { docPath: '', path: ['profile', 'height'], value: '185', isDelete: false, actorId: 's00', seq: 1, clock: { s00: 1 } }
@@ -35,7 +35,7 @@ it('1. V3 API: writes business data, FieldStamp metadata and the current data sc
 });
 
 it('1b. distinguishes an absent first-account document from a persisted markerless document', async () => {
-    const db = env.authenticatedContext('a', { email_verified: true }).firestore();
+    const db = asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore());
     const replica = await registerReplica(db, 'a');
 
     await applyDocumentChanges(db, 'a', [
@@ -44,7 +44,7 @@ it('1b. distinguishes an absent first-account document from a persisted markerle
     expect((await getDoc(doc(db, 'users/a'))).data()?._schemaVersion).toBe(CURRENT_DATA_SCHEMA);
 
     await env.withSecurityRulesDisabled(async context => {
-        await setDoc(doc(context.firestore(), 'users/a'), { profile: { name: 'Unsupported' } });
+        await setDoc(doc(asModularFirestore(context.firestore()), 'users/a'), { profile: { name: 'Unsupported' } });
     });
 
     await expect(applyDocumentChanges(db, 'a', [
@@ -54,9 +54,9 @@ it('1b. distinguishes an absent first-account document from a persisted markerle
 
 it('1c. refuses a future remote schema before semantic merge or write', async () => {
     await env.withSecurityRulesDisabled(async context => {
-        await setDoc(doc(context.firestore(), 'users/a'), { profile: { height: '999' }, _schemaVersion: CURRENT_DATA_SCHEMA + 1 });
+        await setDoc(doc(asModularFirestore(context.firestore()), 'users/a'), { profile: { height: '999' }, _schemaVersion: CURRENT_DATA_SCHEMA + 1 });
     });
-    const db = env.authenticatedContext('a', { email_verified: true }).firestore();
+    const db = asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore());
     const replica = await registerReplica(db, 'a');
 
     await expect(applyDocumentChanges(db, 'a', [
@@ -64,13 +64,13 @@ it('1c. refuses a future remote schema before semantic merge or write', async ()
     ], () => true, replica)).rejects.toThrow(FutureVersionError);
 
     await env.withSecurityRulesDisabled(async context => {
-        const saved = (await getDoc(doc(context.firestore(), 'users/a'))).data()!;
+        const saved = (await getDoc(doc(asModularFirestore(context.firestore()), 'users/a'))).data()!;
         expect(saved).toEqual({ profile: { height: '999' }, _schemaVersion: CURRENT_DATA_SCHEMA + 1 });
     });
 });
 
 it('2. V3 API: replay is idempotent', async () => {
-    const db = env.authenticatedContext('a', { email_verified: true }).firestore();
+    const db = asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore());
     const replica = await registerReplica(db, 'a');
     const ops: SemanticOperation[] = [
         { docPath: '', path: ['profile', 'name'], value: 'Test', isDelete: false, actorId: 's00', seq: 1, clock: { s00: 1 } }
@@ -86,11 +86,11 @@ it('2. V3 API: replay is idempotent', async () => {
 });
 
 it('2b. V3 API: contention smoke test converges to the semantic operation', async () => {
-    const db = env.authenticatedContext('a', { email_verified: true }).firestore();
+    const db = asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore());
     const replica = await registerReplica(db, 'a');
     const writer0 = { slot: replica.slot, replicaId: replica.replicaId, generation: replica.generation, seq: 0 };
     await env.withSecurityRulesDisabled(async context => {
-        await setDoc(doc(context.firestore(), 'users/a'), {
+        await setDoc(doc(asModularFirestore(context.firestore()), 'users/a'), {
             profile: { name: 'Initial' },
             _schemaVersion: CURRENT_DATA_SCHEMA,
             _sync: { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {}, writer: writer0 },
@@ -103,7 +103,7 @@ it('2b. V3 API: contention smoke test converges to the semantic operation', asyn
 
     const promise = applyDocumentChanges(db, 'a', ops, () => true, replica);
     await env.withSecurityRulesDisabled(async context => {
-        await setDoc(doc(context.firestore(), 'users/a'), {
+        await setDoc(doc(asModularFirestore(context.firestore()), 'users/a'), {
             profile: { name: 'Interfering' },
             _schemaVersion: CURRENT_DATA_SCHEMA,
             _sync: { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {}, writer: writer0 },
@@ -117,7 +117,7 @@ it('2b. V3 API: contention smoke test converges to the semantic operation', asyn
 });
 
 it('3. V3 API: parent tombstone keeps an otherwise empty shard and permits causally later recreation', async () => {
-    const db = env.authenticatedContext('a', { email_verified: true }).firestore();
+    const db = asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore());
     const replica = await registerReplica(db, 'a');
     const createOps: SemanticOperation[] = [
         {
@@ -173,11 +173,11 @@ it('3. V3 API: parent tombstone keeps an otherwise empty shard and permits causa
 });
 
 it('4. V3 API: remote FieldStamp can defeat a concurrent local operation', async () => {
-    const db = env.authenticatedContext('a', { email_verified: true }).firestore();
+    const db = asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore());
     const replica = await registerReplica(db, 'a');
 
     await env.withSecurityRulesDisabled(async context => {
-        await setDoc(doc(context.firestore(), 'users/a'), {
+        await setDoc(doc(asModularFirestore(context.firestore()), 'users/a'), {
             profile: { height: '190' },
             _schemaVersion: CURRENT_DATA_SCHEMA,
             _sync: {
@@ -205,7 +205,7 @@ it('4. V3 API: remote FieldStamp can defeat a concurrent local operation', async
 });
 
 it('5. V3 API: checkDocSize receives a document that already contains schema and sync metadata', async () => {
-    const db = env.authenticatedContext('a', { email_verified: true }).firestore();
+    const db = asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore());
     const replica = await registerReplica(db, 'a');
     const ops: SemanticOperation[] = [
         { docPath: '', path: ['profile', 'name'], value: 'A'.repeat(500), isDelete: false, actorId: 's00', seq: 1, clock: { s00: 1 } }
