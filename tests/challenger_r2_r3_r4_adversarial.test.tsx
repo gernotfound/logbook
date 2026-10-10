@@ -152,7 +152,7 @@ describe('EMPIRICAL CHALLENGER: Adversarial Stress & Robustness Suite (R2, R3, R
      * ========================================================================= */
     describe('R3 Adversarial: Zustand saveUserData Concurrency & Promise Rejection Stress', () => {
         const createMockUserData = (index: number): UserData => ({
-            profile: { name: `Adversarial User ${index}`, height: `${170 + index}` },
+            profile: { height: `${170 + index}` },
             library: [{ id: `ex_${index}`, name: `Exercise ${index}`, setsCount: 3, sets: [] }],
             routines: [],
             history: [],
