@@ -285,14 +285,22 @@ const firebaseAuthFixture = vi.hoisted(() => {
     providerData: [{ providerId: 'password' }],
     getIdToken: vi.fn(async () => 'test-id-token'),
   });
-  return {
-    createUser,
-    listeners: new Set<(user: ReturnType<typeof createUser> | null) => void>(),
-    auth: {
-      currentUser: createUser() as ReturnType<typeof createUser> | null,
-      authStateReady: vi.fn(async () => undefined),
-    },
+  const listeners = new Set<(user: ReturnType<typeof createUser> | null) => void>();
+  const auth = {
+    currentUser: createUser() as ReturnType<typeof createUser> | null,
+    authStateReady: vi.fn(async () => undefined),
   };
+
+  // Resolve successful Firebase sign-in and emit the same auth transition
+  // observed by AuthProvider; returning a user alone would hide session bugs.
+  const signIn = () => {
+    const user = createUser();
+    auth.currentUser = user;
+    for (const listener of listeners) listener(user);
+    return { user };
+  };
+
+  return { createUser, listeners, auth, signIn };
 });
 
 export const mockFirebaseAuth = firebaseAuthFixture.auth;
@@ -314,10 +322,10 @@ vi.mock('firebase/auth', () => ({
   initializeAuth: vi.fn(() => firebaseAuthFixture.auth),
   GoogleAuthProvider: class { setCustomParameters = vi.fn(); },
   EmailAuthProvider: { credential: vi.fn((email: string, password: string) => ({ email, password })) },
-  signInWithPopup: vi.fn(),
+  signInWithPopup: vi.fn(async () => firebaseAuthFixture.signIn()),
   signInWithRedirect: vi.fn(),
-  signInWithEmailAndPassword: vi.fn(async () => ({ user: firebaseAuthFixture.createUser() })),
-  createUserWithEmailAndPassword: vi.fn(async () => ({ user: firebaseAuthFixture.createUser() })),
+  signInWithEmailAndPassword: vi.fn(async () => firebaseAuthFixture.signIn()),
+  createUserWithEmailAndPassword: vi.fn(async () => firebaseAuthFixture.signIn()),
   sendPasswordResetEmail: vi.fn().mockResolvedValue(undefined),
   updateEmail: vi.fn().mockResolvedValue(undefined),
   updatePassword: vi.fn().mockResolvedValue(undefined),
