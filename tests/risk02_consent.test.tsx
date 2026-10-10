@@ -3,6 +3,7 @@ import { useAppStore } from '../src/store/useAppStore';
 import { DB } from '../src/lib/db';
 import { LEGAL_VERSIONS, needsLegalUpdate } from '../src/lib/legalVersions';
 import { defaultUserDataFallback } from '../src/lib/schema';
+import type { SyncResult } from '../src/types';
 
 describe('RISK-02: Legal Consent Lifecycle', () => {
     beforeEach(() => {
@@ -55,7 +56,7 @@ describe('RISK-02: Legal Consent Lifecycle', () => {
     });
 
     it('Scenario 2: Offline (local-pending) - Il consenso è accettato localmente', async () => {
-        vi.spyOn(DB, 'saveUserData').mockResolvedValue({ ok: false, status: 'local-pending' });
+        vi.spyOn(DB, 'saveUserData').mockResolvedValue({ ok: false, status: 'local-pending', error: { code: 'unavailable' } });
 
         await useAppStore.getState().submitLegalConsent(mockConsent);
 
@@ -66,7 +67,7 @@ describe('RISK-02: Legal Consent Lifecycle', () => {
     });
 
     it('Scenario 3: Errore Remoto (rejected) - Nessun dato sporcato', async () => {
-        vi.spyOn(DB, 'saveUserData').mockResolvedValue({ ok: false, status: 'rejected' });
+        vi.spyOn(DB, 'saveUserData').mockResolvedValue({ ok: false, status: 'rejected', error: { code: 'permission-denied' } });
 
         const promise = useAppStore.getState().submitLegalConsent(mockConsent);
         await expect(promise).rejects.toThrow("Sincronizzazione rifiutata dal server");
@@ -98,7 +99,7 @@ describe('RISK-02: ConsentOverlay UI Behavior', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         vi.restoreAllMocks();
-        useDialogStore.setState({ dialogType: null, dialogMessage: '' });
+        useDialogStore.setState({ isOpen: false, message: '' });
         useAppStore.setState({
             userData: defaultUserDataFallback,
             localWorkout: null,
@@ -167,7 +168,7 @@ describe('RISK-02: ConsentOverlay UI Behavior', () => {
 
     it('Doppio click bloccato e pulsante in stato Salvataggio', async () => {
         let resolveSave: any;
-        const savePromise = new Promise<{ok: boolean, status: string}>(res => { resolveSave = res; });
+        const savePromise = new Promise<SyncResult>(res => { resolveSave = res; });
         vi.spyOn(DB, 'saveUserData').mockReturnValue(savePromise);
 
         render(<ConsentOverlay />);
@@ -191,7 +192,7 @@ describe('RISK-02: ConsentOverlay UI Behavior', () => {
     });
 
     it('Rejection mantiene overlay visibile e mostra alert', async () => {
-        vi.spyOn(DB, 'saveUserData').mockResolvedValue({ ok: false, status: 'rejected' });
+        vi.spyOn(DB, 'saveUserData').mockResolvedValue({ ok: false, status: 'rejected', error: { code: 'permission-denied' } });
         vi.spyOn(useDialogStore.getState(), 'showAlert');
 
         render(<ConsentOverlay />);
@@ -219,7 +220,7 @@ describe('RISK-02: ConsentOverlay UI Behavior', () => {
     });
 
     it('Failed (errore inatteso) mantiene overlay visibile e aggiorna syncHealth', async () => {
-        vi.spyOn(DB, 'saveUserData').mockResolvedValue({ ok: false, status: 'failed' });
+        vi.spyOn(DB, 'saveUserData').mockResolvedValue({ ok: false, status: 'failed', error: { code: 'internal' } });
         vi.spyOn(useDialogStore.getState(), 'showAlert');
 
         render(<ConsentOverlay />);
