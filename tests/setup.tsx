@@ -277,12 +277,12 @@ vi.mock('virtual:pwa-register/react', () => ({
 // Shared UI tests start authenticated unless the test explicitly changes the session.
 // A single auth object is used by both Firebase constructors, as in production.
 const firebaseAuthFixture = vi.hoisted(() => {
-  const createUser = () => ({
+  const createUser = (options: { email?: string; verified?: boolean; providerId?: 'password' | 'google.com' } = {}) => ({
     uid: 'test-user-id',
-    email: 'test@example.com',
+    email: options.email ?? 'test@example.com',
     displayName: 'Test User',
-    emailVerified: true,
-    providerData: [{ providerId: 'password' }],
+    emailVerified: options.verified ?? true,
+    providerData: [{ providerId: options.providerId ?? 'password' }],
     getIdToken: vi.fn(async () => 'test-id-token'),
   });
   const listeners = new Set<(user: ReturnType<typeof createUser> | null) => void>();
@@ -293,8 +293,8 @@ const firebaseAuthFixture = vi.hoisted(() => {
 
   // Resolve successful Firebase sign-in and emit the same auth transition
   // observed by AuthProvider; returning a user alone would hide session bugs.
-  const signIn = () => {
-    const user = createUser();
+  const signIn = (options: { email?: string; verified?: boolean; providerId?: 'password' | 'google.com' } = {}) => {
+    const user = createUser(options);
     auth.currentUser = user;
     for (const listener of listeners) listener(user);
     return { user };
@@ -322,10 +322,10 @@ vi.mock('firebase/auth', () => ({
   initializeAuth: vi.fn(() => firebaseAuthFixture.auth),
   GoogleAuthProvider: class { setCustomParameters = vi.fn(); },
   EmailAuthProvider: { credential: vi.fn((email: string, password: string) => ({ email, password })) },
-  signInWithPopup: vi.fn(async () => firebaseAuthFixture.signIn()),
+  signInWithPopup: vi.fn(async () => firebaseAuthFixture.signIn({ providerId: 'google.com' })),
   signInWithRedirect: vi.fn(),
-  signInWithEmailAndPassword: vi.fn(async () => firebaseAuthFixture.signIn()),
-  createUserWithEmailAndPassword: vi.fn(async () => firebaseAuthFixture.signIn()),
+  signInWithEmailAndPassword: vi.fn(async (_auth: unknown, email: string) => firebaseAuthFixture.signIn({ email })),
+  createUserWithEmailAndPassword: vi.fn(async (_auth: unknown, email: string) => firebaseAuthFixture.signIn({ email, verified: false })),
   sendPasswordResetEmail: vi.fn().mockResolvedValue(undefined),
   updateEmail: vi.fn().mockResolvedValue(undefined),
   updatePassword: vi.fn().mockResolvedValue(undefined),
