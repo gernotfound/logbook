@@ -31,12 +31,15 @@ const FIREBASE_API_KEY_REGEX = /\bAIza[0-9A-Za-z\-_]{35}\b/g;
 const JWT_REGEX = /\beyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+(?:\.[a-zA-Z0-9_-]*)?\b/g;
 const WIN_USER_PATH_REGEX = /[a-zA-Z]:[/\\](?:users|documents and settings)[/\\][^/\\\r\n"':<>,;]+(?:[/\\][^/\\\r\n"':<>,;]+)*/gi;
 const UNIX_USER_PATH_REGEX = /(?:\/home|\/users)\/[^/\r\n"':<>,;]+(?:\/[^/\r\n"':<>,;]+)*/gi;
-const SENSITIVE_KV_REGEX = /(^|[\s?&"',;])(password|token|secret|apiKey|auth|code|accessToken|refreshToken)=([^&"'\s,;]+)/gi;
-const SENSITIVE_JSON_KV_REGEX = /(["']?(?:password|token|secret|apiKey|auth|accessToken|refreshToken)["']?\s*:\s*["'])([^"'\r\n]+)(["'])/gi;
+// Shared field-name contract for JSON bodies and URL/form parameters.
+const SENSITIVE_FIELD_NAME = String.raw`(?:password|passphrase|token|secret|auth|authorization|proxy[_-]?authorization|credential|(?:api|client|access|refresh|id|session)[_-]?(?:key|secret|token))`;
+const SENSITIVE_KV_REGEX = new RegExp('(^|[\\s?&"\\x27,;])(' + SENSITIVE_FIELD_NAME + '|code)=([^&"\\x27\\s,;]+)', 'gi');
+const SENSITIVE_JSON_KV_REGEX = new RegExp('(["\\x27]?' + SENSITIVE_FIELD_NAME + '["\\x27]?\\s*:\\s*["\\x27])([^"\\x27\\r\\n]+)(["\\x27])', 'gi');
+const AUTHORIZATION_HEADER_REGEX = /(\b(?:authorization|proxy-authorization)\s*:\s*)(?:basic|bearer|token)\s+[A-Za-z0-9+/=._~%-]+/gi;
 
 const IPV4_TEST_REGEX = /\b(?:\d{1,3}\.){3}\d{1,3}\b/;
 const IPV6_TEST_REGEX = /::|(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|(?:[0-9a-fA-F]{1,4}:){6}\d{1,3}\./;
-const SENSITIVE_KV_TEST_REGEX = /(?:^|[\s?&"',;])(?:password|token|secret|apiKey|auth|code|accessToken|refreshToken)=/i;
+const SENSITIVE_KV_TEST_REGEX = new RegExp('(?:^|[\\s?&"\\x27,;])(?:' + SENSITIVE_FIELD_NAME + '|code)=', 'i');
 
 /**
  * Scrubs personally identifiable information (PII) and sensitive secrets from text.
@@ -61,6 +64,7 @@ export function scrubPII(text: string): string {
     }
   }
 
+  scrubbed = scrubbed.replace(AUTHORIZATION_HEADER_REGEX, '$1[REDACTED_TOKEN]');
   scrubbed = scrubbed.replace(BEARER_REGEX, 'Bearer [REDACTED_TOKEN]');
 
   if (scrubbed.includes('AIza')) {
