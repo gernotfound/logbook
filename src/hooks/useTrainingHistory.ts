@@ -26,6 +26,10 @@ export function useTrainingHistory() {
             const editor = useAppStore.getState().localWorkout;
             if (editor?.isEditingHistory && (editor.originalHistoryId || editor.id) === id) {
                 await restoreSessionAfterHistoryEdit(String(editor.id));
+            } else if (editor?.id === id) {
+                // Legacy matching device snapshot: retain the existing deletion
+                // contract without discarding a separate suspended live workout.
+                useAppStore.getState().setLocalWorkout(null);
             }
         } catch (error) {
             console.error('Eliminazione storico non completata:', error);
