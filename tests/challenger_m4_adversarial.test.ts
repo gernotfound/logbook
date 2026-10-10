@@ -264,18 +264,18 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
 
             // Verify local items were NOT deleted by cloudData
             expect(merged.customFoods).toHaveLength(2);
-            expect(merged.customFoods.some(f => f.name === 'Barretta Proteica')).toBe(true);
+            expect(merged.customFoods?.some(f => f.name === 'Barretta Proteica')).toBe(true);
 
             expect(merged.library).toHaveLength(2);
-            expect(merged.library.some(e => e.id === 'ex2')).toBe(true);
+            expect(merged.library?.some(e => e.id === 'ex2')).toBe(true);
 
-            expect(merged.nutrition['2026-08-16']).toBeDefined();
-            expect(merged.nutrition['2026-08-16'].meals).toHaveLength(1);
-            expect(merged.nutrition['2026-08-16'].meals[0].name).toBe('Riso e Pollo');
-            expect(merged.nutrition['2026-08-15']).toBeDefined();
+            expect(merged.nutrition?.['2026-08-16']).toBeDefined();
+            expect(merged.nutrition?.['2026-08-16']?.meals).toHaveLength(1);
+            expect(merged.nutrition?.['2026-08-16']?.meals[0].name).toBe('Riso e Pollo');
+            expect(merged.nutrition?.['2026-08-15']).toBeDefined();
 
             expect(merged.supplements).toHaveLength(1);
-            expect(merged.supplements[0].id).toBe('creatina');
+            expect(merged.supplements?.[0]?.id).toBe('creatina');
         });
 
         it('handles collision deterministically with local mutation priority', () => {
@@ -327,10 +327,10 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
 
             const merged = mergeUserData(cloudData, localData);
 
-            expect(merged.profile.height).toBe('180');
-            expect(merged.customFoods[0].name).toBe('Mutated Local Name');
-            expect(merged.nutrition['2026-08-16'].meals).toHaveLength(2);
-            expect(merged.nutrition['2026-08-16'].meals.find(m => m.id === 'meal_1')?.name).toBe('Pasta con Tonno');
+            expect(merged.profile?.height).toBe('180');
+            expect(merged.customFoods?.[0]?.name).toBe('Mutated Local Name');
+            expect(merged.nutrition?.['2026-08-16']?.meals).toHaveLength(2);
+            expect(merged.nutrition?.['2026-08-16']?.meals.find(m => m.id === 'meal_1')?.name).toBe('Pasta con Tonno');
         });
     });
 
