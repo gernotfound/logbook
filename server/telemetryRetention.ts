@@ -105,5 +105,10 @@ export async function purgeExpiredTelemetry(
     }
   }
 
-  return { documentsScanned, documentsDeleted, unexpectedDocuments, completedCycle: true };
+  return {
+    documentsScanned,
+    documentsDeleted,
+    unexpectedDocuments,
+    completedCycle: unexpectedDocuments === 0,
+  };
 }

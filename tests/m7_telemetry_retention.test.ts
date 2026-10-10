@@ -64,6 +64,7 @@ function removeDocsByPath(paths: string[]) {
 function collectionGroupQuery(collectionName: TelemetryName) {
   let nowFilter: Timestamp | null = null;
   let limitCount = Number.POSITIVE_INFINITY;
+  const orderByFields: string[] = [];
   let startAfterCursor: {
     collection: TelemetryName;
     path: string;
@@ -81,10 +82,12 @@ function collectionGroupQuery(collectionName: TelemetryName) {
     orderBy(field: string | { readonly _methodName?: string }, direction?: string) {
       if (field === 'expireAt') {
         if (direction !== 'asc') throw new Error('expireAt must be ordered ascending');
+        orderByFields.push('expireAt');
         return this;
       }
       if (typeof field === 'object') {
         if (direction !== 'asc') throw new Error('documentId must be ordered ascending');
+        orderByFields.push('__name__');
         return this;
       }
       throw new Error(`Unexpected orderBy field: ${String(field)}`);
@@ -107,6 +110,9 @@ function collectionGroupQuery(collectionName: TelemetryName) {
     },
     async get() {
       if (!nowFilter) throw new Error('where(expireAt, <=, now) must be configured');
+      if (orderByFields.join(',') !== 'expireAt,__name__') {
+        throw new Error(`Unexpected orderBy sequence: ${orderByFields.join(',')}`);
+      }
       if (state.queryFailure === collectionName) throw new Error(`Query failed for ${collectionName}`);
 
       if (state.advanceMsPerQuery > 0) {
@@ -291,6 +297,26 @@ describe('M7 telemetry retention sweep', () => {
     expect(state.docs.telemetry_errors).toHaveLength(0);
   });
 
+  it('keeps pagination stable when many documents share the same expireAt', async () => {
+    const now = Timestamp.fromMillis(2_000_000_000_000);
+    const sameExpireAt = Timestamp.fromMillis(now.toMillis() - 1);
+    state.docs.telemetry_events = Array.from({ length: 401 }, (_, index) => ({
+      id: `same-expire-${index.toString().padStart(3, '0')}`,
+      path: `users/user-${index.toString().padStart(3, '0')}/telemetry_events/same-expire-${index.toString().padStart(3, '0')}`,
+      expireAt: sameExpireAt,
+    }));
+
+    const result = await purgeExpiredTelemetry(Date.now() + 120_000, now);
+
+    expect(result).toEqual({
+      documentsScanned: 401,
+      documentsDeleted: 401,
+      unexpectedDocuments: 0,
+      completedCycle: true,
+    });
+    expect(state.docs.telemetry_events).toHaveLength(0);
+  });
+
   it('stops when cron budget is exhausted and resumes safely in a later run', async () => {
     const now = Timestamp.fromMillis(2_000_000_000_000);
     state.docs.telemetry_errors = Array.from({ length: 401 }, (_, index) =>
@@ -368,15 +394,33 @@ describe('M7 telemetry retention sweep', () => {
       documentsScanned: 401,
       documentsDeleted: 1,
       unexpectedDocuments: 400,
-      completedCycle: true,
+      completedCycle: false,
     });
     expect(state.deleted).toEqual(['users/b/telemetry_errors/valid']);
     expect(state.docs.telemetry_errors).toHaveLength(400);
   });
 
+  it('marks cycle as incomplete when only unexpected expired paths are found', async () => {
+    const now = Timestamp.fromMillis(2_000_000_000_000);
+    state.docs.telemetry_errors = Array.from({ length: 400 }, (_, index) =>
+      expiredDoc(`legacy-root/app/telemetry_errors/unexpected-${index.toString().padStart(3, '0')}`, now)
+    );
+
+    const result = await purgeExpiredTelemetry(Date.now() + 120_000, now);
+
+    expect(result).toEqual({
+      documentsScanned: 400,
+      documentsDeleted: 0,
+      unexpectedDocuments: 400,
+      completedCycle: false,
+    });
+    expect(state.deleted).toEqual([]);
+    expect(state.docs.telemetry_errors).toHaveLength(400);
+  });
+
   it('declares required collection-group indexes for expireAt retention queries', () => {
     const indexConfig = JSON.parse(
-      readFileSync('/home/runner/work/logbook/logbook/firestore.indexes.json', 'utf8'),
+      readFileSync(new URL('../firestore.indexes.json', import.meta.url), 'utf8'),
     ) as {
       indexes: Array<{
         collectionGroup: string;
