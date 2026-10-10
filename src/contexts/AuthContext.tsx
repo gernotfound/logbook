@@ -28,6 +28,7 @@ import {
     writeBrowserValue,
 } from '../lib/sync/browserStorage';
 import { safeHardReload } from '../lib/sync/safeReload';
+import { prepareForReload } from '../lib/sync/reloadBarrier';
 import { classifyGooglePopupFailure } from './auth/googlePopup';
 import { watchDeletionRecoveryDeviceRegistration } from '../lib/deletionDeviceRecovery';
 import { validatePasswordAgainstPolicy } from '../lib/auth/passwordPolicy';
@@ -690,6 +691,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const user = auth.currentUser;
         if (!user || user.emailVerified !== false) {
             throw new Error('Nessuna verifica email in attesa.');
+        }
+        // Reconcile any in-memory edits and device-critical drafts before switching
+        // owner; a failed durability check must leave the account session intact.
+        const current = useAppStore.getState();
+        if (current.userData !== null || current.localWorkout !== null) {
+            await prepareForReload();
         }
         // Sign out without the authenticated purge path: local owner envelopes and
         // any guest migration intent must survive until an explicit verified login.
