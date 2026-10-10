@@ -1,46 +1,135 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Timestamp } from 'firebase-admin/firestore';
 
 type TelemetryName = 'telemetry_errors' | 'telemetry_events' | 'telemetry_anomalies';
-type TelemetryDoc = { id: string; expireAt: Timestamp };
-type UserRecord = { id: string; telemetry: Record<TelemetryName, TelemetryDoc[]> };
+type CommitBehavior = 'ok' | 'throw-before' | 'throw-after';
+
+interface TelemetryDocRecord {
+  id: string;
+  path: string;
+  expireAt?: Timestamp;
+}
+
+const TELEMETRY_COLLECTIONS: TelemetryName[] = [
+  'telemetry_errors',
+  'telemetry_events',
+  'telemetry_anomalies',
+];
 
 const state = vi.hoisted(() => ({
-  users: [] as UserRecord[],
-  cursor: null as string | null,
+  docs: {
+    telemetry_errors: [] as TelemetryDocRecord[],
+    telemetry_events: [] as TelemetryDocRecord[],
+    telemetry_anomalies: [] as TelemetryDocRecord[],
+  } satisfies Record<TelemetryName, TelemetryDocRecord[]>,
   deleted: [] as string[],
-  stateWrites: 0,
+  listDocumentsCalls: 0,
+  queryFailure: null as TelemetryName | null,
+  commitBehavior: 'ok' as CommitBehavior,
+  advanceMsPerQuery: 0,
 }));
 
-function userRef(uid: string) {
+function asSnapshot(collectionName: TelemetryName, record: TelemetryDocRecord) {
   return {
-    id: uid,
-    path: `users/${uid}`,
-    collection(name: TelemetryName) {
-      return {
-        where(field: string, operator: string, value: Timestamp) {
-          if (field !== 'expireAt' || operator !== '<=') {
-            throw new Error('Unexpected telemetry retention query');
-          }
-          return {
-            limit(count: number) {
-              return {
-                async get() {
-                  const user = state.users.find(item => item.id === uid);
-                  const docs = (user?.telemetry[name] ?? [])
-                    .filter(item => item.expireAt.toMillis() <= value.toMillis())
-                    .slice(0, count)
-                    .map(item => ({
-                      id: item.id,
-                      ref: { path: `users/${uid}/${name}/${item.id}` },
-                    }));
-                  return { empty: docs.length === 0, size: docs.length, docs };
-                },
-              };
-            },
-          };
-        },
+    id: record.id,
+    ref: { path: record.path },
+    get(field: string) {
+      if (field !== 'expireAt') throw new Error(`Unexpected field lookup: ${field}`);
+      return record.expireAt;
+    },
+    __cursorCollection: collectionName,
+    __cursorPath: record.path,
+    __cursorExpireAtMillis: record.expireAt?.toMillis() ?? Number.NaN,
+  };
+}
+
+function sortByRetentionOrder(left: TelemetryDocRecord, right: TelemetryDocRecord): number {
+  const leftMs = left.expireAt?.toMillis() ?? Number.NaN;
+  const rightMs = right.expireAt?.toMillis() ?? Number.NaN;
+  if (leftMs < rightMs) return -1;
+  if (leftMs > rightMs) return 1;
+  return left.path < right.path ? -1 : left.path > right.path ? 1 : 0;
+}
+
+function removeDocsByPath(paths: string[]) {
+  for (const path of paths) {
+    for (const collectionName of TELEMETRY_COLLECTIONS) {
+      state.docs[collectionName] = state.docs[collectionName].filter(item => item.path !== path);
+    }
+    state.deleted.push(path);
+  }
+}
+
+function collectionGroupQuery(collectionName: TelemetryName) {
+  let nowFilter: Timestamp | null = null;
+  let limitCount = Number.POSITIVE_INFINITY;
+  let startAfterCursor: {
+    collection: TelemetryName;
+    path: string;
+    expireAtMillis: number;
+  } | null = null;
+
+  return {
+    where(field: string, operator: string, value: Timestamp) {
+      if (field !== 'expireAt' || operator !== '<=') {
+        throw new Error('Unexpected collection-group query filter');
+      }
+      nowFilter = value;
+      return this;
+    },
+    orderBy(field: string | { readonly _methodName?: string }, direction?: string) {
+      if (field === 'expireAt') {
+        if (direction !== 'asc') throw new Error('expireAt must be ordered ascending');
+        return this;
+      }
+      if (typeof field === 'object') {
+        if (direction !== 'asc') throw new Error('documentId must be ordered ascending');
+        return this;
+      }
+      throw new Error(`Unexpected orderBy field: ${String(field)}`);
+    },
+    limit(value: number) {
+      limitCount = value;
+      return this;
+    },
+    startAfter(snapshot: {
+      __cursorCollection: TelemetryName;
+      __cursorPath: string;
+      __cursorExpireAtMillis: number;
+    }) {
+      startAfterCursor = {
+        collection: snapshot.__cursorCollection,
+        path: snapshot.__cursorPath,
+        expireAtMillis: snapshot.__cursorExpireAtMillis,
       };
+      return this;
+    },
+    async get() {
+      if (!nowFilter) throw new Error('where(expireAt, <=, now) must be configured');
+      if (state.queryFailure === collectionName) throw new Error(`Query failed for ${collectionName}`);
+
+      if (state.advanceMsPerQuery > 0) {
+        const currentNow = Date.now();
+        vi.setSystemTime(currentNow + state.advanceMsPerQuery);
+      }
+
+      let rows = state.docs[collectionName]
+        .filter(item => item.expireAt && item.expireAt.toMillis() <= nowFilter.toMillis())
+        .sort(sortByRetentionOrder);
+
+      if (startAfterCursor) {
+        if (startAfterCursor.collection !== collectionName) throw new Error('Invalid cursor collection');
+        rows = rows.filter(item => {
+          const expireAtMillis = item.expireAt?.toMillis() ?? Number.NaN;
+          if (expireAtMillis > startAfterCursor.expireAtMillis) return true;
+          if (expireAtMillis < startAfterCursor.expireAtMillis) return false;
+          return item.path > startAfterCursor.path;
+        });
+      }
+
+      const docs = rows.slice(0, limitCount).map(item => asSnapshot(collectionName, item));
+      return { empty: docs.length === 0, size: docs.length, docs };
     },
   };
 }
@@ -50,32 +139,25 @@ const fakeDb = vi.hoisted(() => ({
     if (name === 'users') {
       return {
         async listDocuments() {
-          return [...state.users]
-            .sort((a, b) => a.id.localeCompare(b.id))
-            .map(user => userRef(user.id));
+          state.listDocumentsCalls += 1;
+          throw new Error('Telemetry retention must not enumerate users');
         },
       };
     }
     if (name === 'maintenance') {
       return {
-        doc(id: string) {
-          if (id !== 'telemetry_retention') throw new Error('Unexpected maintenance document');
-          return {
-            async get() {
-              return {
-                exists: state.cursor !== null,
-                data: () => state.cursor === null ? undefined : { lastCompletedUserId: state.cursor },
-              };
-            },
-            async set(data: { lastCompletedUserId: string | null }) {
-              state.cursor = data.lastCompletedUserId;
-              state.stateWrites += 1;
-            },
-          };
+        doc() {
+          throw new Error('Telemetry retention must not read or write cursor state');
         },
       };
     }
-    throw new Error(`Unexpected collection: ${name}`);
+    throw new Error(`Unexpected collection() call: ${name}`);
+  },
+  collectionGroup(name: string) {
+    if (!TELEMETRY_COLLECTIONS.includes(name as TelemetryName)) {
+      throw new Error(`Unexpected collectionGroup() call: ${name}`);
+    }
+    return collectionGroupQuery(name as TelemetryName);
   },
   batch() {
     const paths: string[] = [];
@@ -84,13 +166,12 @@ const fakeDb = vi.hoisted(() => ({
         paths.push(ref.path);
       },
       async commit() {
-        for (const path of paths) {
-          const [, uid, collectionName, docId] = path.split('/');
-          const user = state.users.find(item => item.id === uid);
-          if (!user) continue;
-          const name = collectionName as TelemetryName;
-          user.telemetry[name] = user.telemetry[name].filter(item => item.id !== docId);
-          state.deleted.push(path);
+        if (state.commitBehavior === 'throw-before') {
+          throw new Error('batch commit failed');
+        }
+        removeDocsByPath(paths);
+        if (state.commitBehavior === 'throw-after') {
+          throw new Error('batch commit acknowledgement lost');
         }
       },
     };
@@ -103,120 +184,219 @@ vi.mock('../server/accountDeletion/firebaseAdmin', () => ({
 
 import { purgeExpiredTelemetry } from '../server/telemetryRetention';
 
-function telemetry(
-  errors: TelemetryDoc[] = [],
-  events: TelemetryDoc[] = [],
-  anomalies: TelemetryDoc[] = [],
-): Record<TelemetryName, TelemetryDoc[]> {
-  return {
-    telemetry_errors: errors,
-    telemetry_events: events,
-    telemetry_anomalies: anomalies,
-  };
+function expiredDoc(path: string, now: Timestamp): TelemetryDocRecord {
+  return { id: path.split('/').at(-1) ?? 'doc', path, expireAt: Timestamp.fromMillis(now.toMillis() - 1) };
+}
+
+function freshDoc(path: string, now: Timestamp): TelemetryDocRecord {
+  return { id: path.split('/').at(-1) ?? 'doc', path, expireAt: Timestamp.fromMillis(now.toMillis() + 60_000) };
+}
+
+function noExpiryDoc(path: string): TelemetryDocRecord {
+  return { id: path.split('/').at(-1) ?? 'doc', path };
 }
 
 describe('M7 telemetry retention sweep', () => {
   beforeEach(() => {
-    state.users = [];
-    state.cursor = null;
+    state.docs.telemetry_errors = [];
+    state.docs.telemetry_events = [];
+    state.docs.telemetry_anomalies = [];
     state.deleted = [];
-    state.stateWrites = 0;
+    state.listDocumentsCalls = 0;
+    state.queryFailure = null;
+    state.commitBehavior = 'ok';
+    state.advanceMsPerQuery = 0;
+    vi.useFakeTimers();
+    vi.setSystemTime(2_000_000_000_000);
   });
 
-  it('deletes only expired telemetry across private user subcollections', async () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('deletes only expired telemetry docs across all legacy collection groups', async () => {
     const now = Timestamp.fromMillis(2_000_000_000_000);
-    state.users = [{
-      id: 'a',
-      telemetry: telemetry(
-        [
-          { id: 'old-error', expireAt: Timestamp.fromMillis(now.toMillis() - 1) },
-          { id: 'fresh-error', expireAt: Timestamp.fromMillis(now.toMillis() + 60_000) },
-        ],
-        [{ id: 'old-event', expireAt: Timestamp.fromMillis(now.toMillis() - 1) }],
-        [{ id: 'old-anomaly', expireAt: Timestamp.fromMillis(now.toMillis()) }],
-      ),
-    }];
+    state.docs.telemetry_errors = [
+      expiredDoc('users/a/telemetry_errors/old-error', now),
+      freshDoc('users/a/telemetry_errors/fresh-error', now),
+      noExpiryDoc('users/a/telemetry_errors/legacy-no-expiry'),
+    ];
+    state.docs.telemetry_events = [
+      expiredDoc('users/a/telemetry_events/old-event', now),
+      freshDoc('users/a/telemetry_events/fresh-event', now),
+    ];
+    state.docs.telemetry_anomalies = [expiredDoc('users/a/telemetry_anomalies/old-anomaly', now)];
 
-    const result = await purgeExpiredTelemetry(Date.now() + 60_000, now);
+    const result = await purgeExpiredTelemetry(Date.now() + 120_000, now);
 
-    expect(result).toEqual({ usersScanned: 1, documentsDeleted: 3, completedCycle: true });
+    expect(result).toEqual({
+      documentsScanned: 3,
+      documentsDeleted: 3,
+      unexpectedDocuments: 0,
+      completedCycle: true,
+    });
     expect(state.deleted).toEqual([
       'users/a/telemetry_errors/old-error',
       'users/a/telemetry_events/old-event',
       'users/a/telemetry_anomalies/old-anomaly',
     ]);
-    expect(state.users[0].telemetry.telemetry_errors.map(item => item.id)).toEqual(['fresh-error']);
-    expect(state.cursor).toBeNull();
-  });
-
-  it('deletes expired telemetry even when the user root document is missing', async () => {
-    const now = Timestamp.fromMillis(2_000_000_000_000);
-    state.users = [{
-      id: 'missing-parent',
-      telemetry: telemetry(
-        [],
-        [{ id: 'expired-event', expireAt: Timestamp.fromMillis(now.toMillis() - 1) }],
-      ),
-    }];
-
-    const result = await purgeExpiredTelemetry(Date.now() + 60_000, now);
-
-    expect(result).toEqual({ usersScanned: 1, documentsDeleted: 1, completedCycle: true });
-    expect(state.deleted).toEqual([
-      'users/missing-parent/telemetry_events/expired-event',
+    expect(state.docs.telemetry_errors.map(item => item.path)).toEqual([
+      'users/a/telemetry_errors/fresh-error',
+      'users/a/telemetry_errors/legacy-no-expiry',
     ]);
+    expect(state.listDocumentsCalls).toBe(0);
   });
 
-  it('resumes after the last completed user and resets the cursor after a full cycle', async () => {
+  it('covers telemetry under missing user parents through collection-group reads', async () => {
     const now = Timestamp.fromMillis(2_000_000_000_000);
-    state.cursor = 'a';
-    state.users = [
-      { id: 'a', telemetry: telemetry([{ id: 'old-a', expireAt: Timestamp.fromMillis(now.toMillis() - 1) }]) },
-      { id: 'b', telemetry: telemetry([{ id: 'old-b', expireAt: Timestamp.fromMillis(now.toMillis() - 1) }]) },
-    ];
+    state.docs.telemetry_events = [expiredDoc('users/missing-parent/telemetry_events/old-event', now)];
 
-    const result = await purgeExpiredTelemetry(Date.now() + 60_000, now);
+    const result = await purgeExpiredTelemetry(Date.now() + 120_000, now);
 
-    expect(result).toEqual({ usersScanned: 1, documentsDeleted: 1, completedCycle: true });
-    expect(state.deleted).toEqual(['users/b/telemetry_errors/old-b']);
-    expect(state.users[0].telemetry.telemetry_errors).toHaveLength(1);
-    expect(state.cursor).toBeNull();
+    expect(result).toEqual({
+      documentsScanned: 1,
+      documentsDeleted: 1,
+      unexpectedDocuments: 0,
+      completedCycle: true,
+    });
+    expect(state.deleted).toEqual(['users/missing-parent/telemetry_events/old-event']);
   });
 
-  it('resumes in the same binary ID order used to sort mixed-case Firestore document IDs', async () => {
+  it('processes more than one page and handles a page with exactly 400 docs', async () => {
     const now = Timestamp.fromMillis(2_000_000_000_000);
-    const expired = { id: 'expired', expireAt: Timestamp.fromMillis(now.toMillis() - 1) };
-    state.cursor = 'A';
-    state.users = [
-      { id: 'b', telemetry: telemetry([expired]) },
-      { id: 'a', telemetry: telemetry([expired]) },
-      { id: 'A', telemetry: telemetry([expired]) },
-    ];
+    state.docs.telemetry_errors = Array.from({ length: 400 }, (_, index) =>
+      expiredDoc(`users/page/telemetry_errors/exact-${index.toString().padStart(3, '0')}`, now)
+    );
 
-    const result = await purgeExpiredTelemetry(Date.now() + 60_000, now);
+    const exactResult = await purgeExpiredTelemetry(Date.now() + 120_000, now);
+    expect(exactResult).toEqual({
+      documentsScanned: 400,
+      documentsDeleted: 400,
+      unexpectedDocuments: 0,
+      completedCycle: true,
+    });
+    expect(state.docs.telemetry_errors).toHaveLength(0);
 
-    expect(result).toEqual({ usersScanned: 2, documentsDeleted: 2, completedCycle: true });
-    expect(state.deleted).toEqual([
-      'users/a/telemetry_errors/expired',
-      'users/b/telemetry_errors/expired',
-    ]);
-    // A was already completed: resume must never visit that owner again.
-    expect(state.users.find(user => user.id === 'A')?.telemetry.telemetry_errors).toHaveLength(1);
-    expect(state.cursor).toBeNull();
+    state.docs.telemetry_errors = Array.from({ length: 401 }, (_, index) =>
+      expiredDoc(`users/page/telemetry_errors/multi-${index.toString().padStart(3, '0')}`, now)
+    );
+
+    const multiPageResult = await purgeExpiredTelemetry(Date.now() + 120_000, now);
+    expect(multiPageResult).toEqual({
+      documentsScanned: 401,
+      documentsDeleted: 401,
+      unexpectedDocuments: 0,
+      completedCycle: true,
+    });
+    expect(state.docs.telemetry_errors).toHaveLength(0);
   });
 
-  it('preserves the cursor and performs no destructive work when the cron budget is exhausted', async () => {
+  it('stops when cron budget is exhausted and resumes safely in a later run', async () => {
     const now = Timestamp.fromMillis(2_000_000_000_000);
-    state.cursor = 'a';
-    state.users = [
-      { id: 'b', telemetry: telemetry([{ id: 'old-b', expireAt: Timestamp.fromMillis(now.toMillis() - 1) }]) },
-    ];
+    state.docs.telemetry_errors = Array.from({ length: 401 }, (_, index) =>
+      expiredDoc(`users/resume/telemetry_errors/doc-${index.toString().padStart(3, '0')}`, now)
+    );
+    state.advanceMsPerQuery = 120_000;
 
-    const result = await purgeExpiredTelemetry(Date.now() + 1_000, now);
+    const interrupted = await purgeExpiredTelemetry(Date.now() + 6_000, now);
+    expect(interrupted).toEqual({
+      documentsScanned: 400,
+      documentsDeleted: 400,
+      unexpectedDocuments: 0,
+      completedCycle: false,
+    });
 
-    expect(result).toEqual({ usersScanned: 0, documentsDeleted: 0, completedCycle: false });
+    state.advanceMsPerQuery = 0;
+    const resumed = await purgeExpiredTelemetry(Date.now() + 120_000, now);
+    expect(resumed).toEqual({
+      documentsScanned: 1,
+      documentsDeleted: 1,
+      unexpectedDocuments: 0,
+      completedCycle: true,
+    });
+    expect(state.docs.telemetry_errors).toHaveLength(0);
+  });
+
+  it('surfaces query failures instead of claiming a completed cycle', async () => {
+    const now = Timestamp.fromMillis(2_000_000_000_000);
+    state.docs.telemetry_errors = [expiredDoc('users/a/telemetry_errors/old', now)];
+    state.queryFailure = 'telemetry_errors';
+
+    await expect(purgeExpiredTelemetry(Date.now() + 120_000, now))
+      .rejects.toThrow('Query failed for telemetry_errors');
     expect(state.deleted).toEqual([]);
-    expect(state.cursor).toBe('a');
-    expect(state.stateWrites).toBe(1);
+  });
+
+  it('surfaces batch commit failures and retries idempotently after lost acknowledgements', async () => {
+    const now = Timestamp.fromMillis(2_000_000_000_000);
+    state.docs.telemetry_errors = [expiredDoc('users/a/telemetry_errors/old', now)];
+
+    state.commitBehavior = 'throw-before';
+    await expect(purgeExpiredTelemetry(Date.now() + 120_000, now))
+      .rejects.toThrow('batch commit failed');
+    expect(state.deleted).toEqual([]);
+    expect(state.docs.telemetry_errors).toHaveLength(1);
+
+    state.commitBehavior = 'throw-after';
+    await expect(purgeExpiredTelemetry(Date.now() + 120_000, now))
+      .rejects.toThrow('batch commit acknowledgement lost');
+    expect(state.deleted).toEqual(['users/a/telemetry_errors/old']);
+    expect(state.docs.telemetry_errors).toHaveLength(0);
+
+    state.commitBehavior = 'ok';
+    const retry = await purgeExpiredTelemetry(Date.now() + 120_000, now);
+    expect(retry).toEqual({
+      documentsScanned: 0,
+      documentsDeleted: 0,
+      unexpectedDocuments: 0,
+      completedCycle: true,
+    });
+  });
+
+  it('skips unexpected paths, records them, and still advances to valid docs without looping forever', async () => {
+    const now = Timestamp.fromMillis(2_000_000_000_000);
+    state.docs.telemetry_errors = [
+      ...Array.from({ length: 400 }, (_, index) =>
+        expiredDoc(`legacy-root/app/telemetry_errors/unexpected-${index.toString().padStart(3, '0')}`, now)
+      ),
+      expiredDoc('users/b/telemetry_errors/valid', now),
+    ];
+
+    const result = await purgeExpiredTelemetry(Date.now() + 120_000, now);
+
+    expect(result).toEqual({
+      documentsScanned: 401,
+      documentsDeleted: 1,
+      unexpectedDocuments: 400,
+      completedCycle: true,
+    });
+    expect(state.deleted).toEqual(['users/b/telemetry_errors/valid']);
+    expect(state.docs.telemetry_errors).toHaveLength(400);
+  });
+
+  it('declares required collection-group indexes for expireAt retention queries', () => {
+    const indexConfig = JSON.parse(
+      readFileSync('/home/runner/work/logbook/logbook/firestore.indexes.json', 'utf8'),
+    ) as {
+      indexes: Array<{
+        collectionGroup: string;
+        queryScope: string;
+        fields: Array<{ fieldPath: string; order?: string }>;
+      }>;
+    };
+    const expected = new Map<TelemetryName, string[]>([
+      ['telemetry_errors', ['expireAt', '__name__']],
+      ['telemetry_events', ['expireAt', '__name__']],
+      ['telemetry_anomalies', ['expireAt', '__name__']],
+    ]);
+
+    for (const [collectionGroup, fieldPaths] of expected) {
+      const index = indexConfig.indexes.find(item =>
+        item.collectionGroup === collectionGroup && item.queryScope === 'COLLECTION_GROUP'
+      );
+      expect(index, `missing ${collectionGroup} collection-group index`).toBeDefined();
+      expect(index?.fields.map(item => item.fieldPath)).toEqual(fieldPaths);
+      expect(index?.fields.map(item => item.order)).toEqual(['ASCENDING', 'ASCENDING']);
+    }
   });
 });
