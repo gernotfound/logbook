@@ -186,7 +186,7 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
             )}
 
             {activeSection === 'privacy' && (
-                <PrivacySettingsTab analyticsEnabled={analyticsEnabled} onOpenTerms={() => setShowTerms(true)} onOpenPrivacy={() => setShowPrivacy(true)} onToggleAnalytics={handleAnalyticsToggle} />
+                <PrivacySettingsTab analyticsEnabled={analyticsEnabled} onOpenTerms={() => setShowTerms(true)} onOpenPrivacy={() => setShowPrivacy(true)} onToggleAnalytics={handleAnalyticsToggle} isGuest={isGuest} onOpenAccountClosure={() => setActiveSection('account')} />
             )}
 
             {activeSection === 'data' && (
