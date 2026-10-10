@@ -1,95 +1,90 @@
-import { Timestamp, type DocumentReference, type Firestore } from 'firebase-admin/firestore';
+import { FieldPath, Timestamp, type Firestore, type QueryDocumentSnapshot } from 'firebase-admin/firestore';
 import { adminDb } from './accountDeletion/firebaseAdmin.js';
 
 const USER_COLLECTION = 'users';
-const STATE_COLLECTION = 'maintenance';
-const STATE_DOCUMENT = 'telemetry_retention';
 const TELEMETRY_COLLECTIONS = [
   'telemetry_errors',
   'telemetry_events',
   'telemetry_anomalies',
 ] as const;
 
-const TELEMETRY_RETENTION_USER_PAGE_SIZE = 50;
 const TELEMETRY_RETENTION_DOCUMENT_PAGE_SIZE = 400;
 const TELEMETRY_RETENTION_SAFETY_BUFFER_MS = 5_000;
+const EXPECTED_TELEMETRY_PATH_SEGMENTS = 4;
 
 type TelemetryCollectionName = typeof TELEMETRY_COLLECTIONS[number];
 
 export interface TelemetryRetentionSweepResult {
-  usersScanned: number;
+  documentsScanned: number;
   documentsDeleted: number;
+  unexpectedDocuments: number;
   completedCycle: boolean;
-}
-
-interface RetentionState {
-  lastCompletedUserId?: unknown;
 }
 
 function hasBudget(deadlineMs: number): boolean {
   return Date.now() + TELEMETRY_RETENTION_SAFETY_BUFFER_MS < deadlineMs;
 }
 
-async function readCursor(db: Firestore): Promise<string | null> {
-  const snapshot = await db.collection(STATE_COLLECTION).doc(STATE_DOCUMENT).get();
-  if (!snapshot.exists) return null;
-  const value = (snapshot.data() as RetentionState | undefined)?.lastCompletedUserId;
-  return typeof value === 'string' && value.length > 0 ? value : null;
+function isExpectedTelemetryPath(path: string, collectionName: TelemetryCollectionName): boolean {
+  const segments = path.split('/');
+  return segments.length === EXPECTED_TELEMETRY_PATH_SEGMENTS
+    && segments[0] === USER_COLLECTION
+    && segments[1].length > 0
+    && segments[2] === collectionName
+    && segments[3].length > 0;
 }
 
-async function writeCursor(db: Firestore, lastCompletedUserId: string | null): Promise<void> {
-  await db.collection(STATE_COLLECTION).doc(STATE_DOCUMENT).set({
-    lastCompletedUserId,
-    updatedAt: Timestamp.now(),
-  }, { merge: true });
-}
-
-async function purgeUserTelemetryCollection(
+async function purgeTelemetryCollectionGroup(
   db: Firestore,
-  userRef: DocumentReference,
   collectionName: TelemetryCollectionName,
   now: Timestamp,
   deadlineMs: number,
-): Promise<{ deleted: number; complete: boolean }> {
+) {
+  let scanned = 0;
   let deleted = 0;
+  let unexpected = 0;
+  let cursor: QueryDocumentSnapshot | null = null;
 
   while (hasBudget(deadlineMs)) {
-    const snapshot = await userRef.collection(collectionName)
+    let query = db.collectionGroup(collectionName)
       .where('expireAt', '<=', now)
-      .limit(TELEMETRY_RETENTION_DOCUMENT_PAGE_SIZE)
-      .get();
+      .orderBy('expireAt', 'asc')
+      .orderBy(FieldPath.documentId(), 'asc')
+      .limit(TELEMETRY_RETENTION_DOCUMENT_PAGE_SIZE);
+    if (cursor) query = query.startAfter(cursor);
+    const snapshot = await query.get();
 
-    if (snapshot.empty) return { deleted, complete: true };
+    if (snapshot.empty) return { scanned, deleted, unexpected, complete: true };
+
+    scanned += snapshot.size;
+    // A slow query must not initiate a destructive batch after the cron budget.
+    if (!hasBudget(deadlineMs)) return { scanned, deleted, unexpected, complete: false };
 
     const batch = db.batch();
-    for (const item of snapshot.docs) batch.delete(item.ref);
-    await batch.commit();
-    deleted += snapshot.size;
+    let pageDeleted = 0;
+    for (const item of snapshot.docs) {
+      if (!isExpectedTelemetryPath(item.ref.path, collectionName)) {
+        unexpected += 1;
+        continue;
+      }
+      // An aggregated error can be renewed while this query is in flight.
+      // Delete only the exact version observed as expired; retry later on races.
+      batch.delete(item.ref, { lastUpdateTime: item.updateTime });
+      pageDeleted += 1;
+    }
+    if (pageDeleted > 0) {
+      await batch.commit();
+      deleted += pageDeleted;
+    }
+
+    cursor = snapshot.docs[snapshot.docs.length - 1];
 
     if (snapshot.size < TELEMETRY_RETENTION_DOCUMENT_PAGE_SIZE) {
-      return { deleted, complete: true };
+      return { scanned, deleted, unexpected, complete: true };
     }
   }
 
-  return { deleted, complete: false };
-}
-
-async function purgeUserTelemetry(
-  db: Firestore,
-  userRef: DocumentReference,
-  now: Timestamp,
-  deadlineMs: number,
-): Promise<{ deleted: number; complete: boolean }> {
-  let deleted = 0;
-
-  for (const collectionName of TELEMETRY_COLLECTIONS) {
-    if (!hasBudget(deadlineMs)) return { deleted, complete: false };
-    const result = await purgeUserTelemetryCollection(db, userRef, collectionName, now, deadlineMs);
-    deleted += result.deleted;
-    if (!result.complete) return { deleted, complete: false };
-  }
-
-  return { deleted, complete: true };
+  return { scanned, deleted, unexpected, complete: false };
 }
 
 export async function purgeExpiredTelemetry(
@@ -97,50 +92,27 @@ export async function purgeExpiredTelemetry(
   now = Timestamp.now(),
 ): Promise<TelemetryRetentionSweepResult> {
   const db = adminDb();
-  let cursor = await readCursor(db);
-  let usersScanned = 0;
+  let documentsScanned = 0;
   let documentsDeleted = 0;
+  let unexpectedDocuments = 0;
 
-  // listDocuments() deliberately includes missing parent documents that still
-  // have subcollections. Querying only existing /users/{uid} documents would
-  // orphan telemetry written before the user's root document exists.
-  const userRefs = (await db.collection(USER_COLLECTION).listDocuments())
-    // Use the same binary ID ordering as the resume cursor comparison below.
-    .sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
-  const cursorId = cursor;
-  let index = cursorId
-    ? userRefs.findIndex(ref => ref.id > cursorId)
-    : 0;
-  if (index < 0) index = userRefs.length;
-
-  while (index < userRefs.length && hasBudget(deadlineMs)) {
-    const page = userRefs.slice(index, index + TELEMETRY_RETENTION_USER_PAGE_SIZE);
-
-    for (const userRef of page) {
-      if (!hasBudget(deadlineMs)) {
-        await writeCursor(db, cursor);
-        return { usersScanned, documentsDeleted, completedCycle: false };
-      }
-
-      const result = await purgeUserTelemetry(db, userRef, now, deadlineMs);
-      documentsDeleted += result.deleted;
-
-      if (!result.complete) {
-        await writeCursor(db, cursor);
-        return { usersScanned, documentsDeleted, completedCycle: false };
-      }
-
-      cursor = userRef.id;
-      usersScanned += 1;
-      index += 1;
+  for (const collectionName of TELEMETRY_COLLECTIONS) {
+    if (!hasBudget(deadlineMs)) {
+      return { documentsScanned, documentsDeleted, unexpectedDocuments, completedCycle: false };
+    }
+    const result = await purgeTelemetryCollectionGroup(db, collectionName, now, deadlineMs);
+    documentsScanned += result.scanned;
+    documentsDeleted += result.deleted;
+    unexpectedDocuments += result.unexpected;
+    if (!result.complete) {
+      return { documentsScanned, documentsDeleted, unexpectedDocuments, completedCycle: false };
     }
   }
 
-  if (index >= userRefs.length) {
-    await writeCursor(db, null);
-    return { usersScanned, documentsDeleted, completedCycle: true };
-  }
-
-  await writeCursor(db, cursor);
-  return { usersScanned, documentsDeleted, completedCycle: false };
+  return {
+    documentsScanned,
+    documentsDeleted,
+    unexpectedDocuments,
+    completedCycle: unexpectedDocuments === 0,
+  };
 }
