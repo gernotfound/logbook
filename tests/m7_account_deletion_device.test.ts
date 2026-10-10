@@ -93,6 +93,36 @@ describe('M7 account deletion recovery device registry', () => {
     store.readDeletionStatusForUid.mockResolvedValue({ uid: 'user-a', status: 'complete' });
   });
 
+  it.each(['{broken json', 'null', '[]', '"invalid shape"', '42', 'true'])(
+    'classifies invalid POST JSON as HTTP 400 after authenticating the requester: %s',
+    async raw => {
+      const response = await POST(new Request('https://backend.example/api/account-deletion-device', {
+        method: 'POST',
+        headers: { origin: 'https://thelogbook.web.app', 'content-type': 'application/json' },
+        body: raw,
+      }));
+      expect(response.status).toBe(400);
+      expect(await response.json()).toEqual({ error: 'Corpo JSON non valido.' });
+      expect(auth.verifyRecoveryRegistrationRequester).toHaveBeenCalledTimes(1);
+      expect(state.registry).toBeNull();
+    },
+  );
+
+  it('preserves a real backend exception as a generic 500 after valid input', async () => {
+    const registryError = vi.spyOn(fakeDb, 'runTransaction')
+      .mockRejectedValueOnce(new Error('internal DB connection detail'));
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      const response = await POST(request('POST'));
+      expect(response.status).toBe(500);
+      expect(await response.json()).toEqual({ error: 'Servizio recovery temporaneamente non disponibile.' });
+      expect(JSON.stringify(log.mock.calls)).not.toContain('internal DB connection detail');
+    } finally {
+      registryError.mockRestore();
+      log.mockRestore();
+    }
+  });
+
   it('stores only token hashes and verifies the matching account/device pair', async () => {
     const raw = token('A');
     await registerDeletionRecoveryDevice('user-a', raw);

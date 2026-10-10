@@ -37,8 +37,19 @@ export async function POST(request: Request): Promise<Response> {
   try {
     requireAccountDeletionOrigin(request);
     const { uid } = await verifyRecoveryRegistrationRequester(request);
-    const body = await request.json() as { deviceToken?: unknown };
-    await registerDeletionRecoveryDevice(uid, body.deviceToken);
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch (error) {
+      if (error instanceof SyntaxError) {
+        throw new DeletionRecoveryInputError('Corpo JSON non valido.');
+      }
+      throw error;
+    }
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      throw new DeletionRecoveryInputError('Corpo JSON non valido.');
+    }
+    await registerDeletionRecoveryDevice(uid, (body as Record<string, unknown>).deviceToken);
     return json({ registered: true }, 200, origin);
   } catch (error) {
     return errorResponse(error, origin);

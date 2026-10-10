@@ -362,6 +362,46 @@ describe('Unified Telemetry Hub E2E Suite — Tier 5', () => {
         Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
       });
 
+      it.each([
+        ['Error object', () => new Error('Repeat across offline windows')],
+        ['raw string', () => 'Repeat across offline windows'],
+      ])('uses distinct queue identities for %s across dedup windows without losing a failed replay', async (_label, makeError) => {
+        vi.useFakeTimers();
+        const start = 1_900_000_000_000;
+        vi.setSystemTime(start);
+        Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
+        telemetryHub.init();
+        telemetryHub.setUserId('user_t5_cross_window');
+
+        telemetryHub.trackError(makeError());
+        const first = telemetryHub.getQueuedEvents()[0];
+        expect(first?.payload).toHaveProperty('count', 1);
+
+        // No sleeping or flushing: a new rate-limit window must get a new queue identity.
+        vi.setSystemTime(start + DEDUP_WINDOW_MS + 1);
+        telemetryHub.trackError(makeError());
+        const queued = telemetryHub.getQueuedEvents();
+        expect(queued).toHaveLength(2);
+        expect(queued[0].id).not.toBe(queued[1].id);
+        expect((queued[0].payload as TelemetryErrorPayload).hash)
+          .toBe((queued[1].payload as TelemetryErrorPayload).hash);
+
+        Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
+        const dispatch = vi.spyOn(telemetryHub, 'dispatchErrorExternally')
+          .mockResolvedValueOnce(true)
+          .mockResolvedValueOnce(false);
+        try {
+          await telemetryHub.flushQueue();
+          const remaining = telemetryHub.getQueuedEvents();
+          expect(dispatch).toHaveBeenCalledTimes(2);
+          expect(remaining).toHaveLength(1);
+          expect(remaining[0].id).toBe(queued[1].id);
+          expect(remaining[0].retryCount).toBe(1);
+        } finally {
+          dispatch.mockRestore();
+        }
+      });
+
       it('T5-11: full replay of 50-item capped offline queue upon online event writes all 50 items and empties storage', async () => {
         Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
         telemetryHub.init();
