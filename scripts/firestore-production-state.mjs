@@ -51,6 +51,23 @@ export function normalizeFieldIndexModes(indexes) {
   return modes;
 }
 
+// Firestore's Admin REST Field.indexConfig.indexes[] uses full Index objects:
+// { queryScope, fields: [{ fieldPath, order|arrayConfig }], state }.
+// firestore.indexes.json fieldOverrides, by contrast, use flat mode descriptors.
+export function normalizeLiveFieldIndexModes(indexes, expectedFieldPath) {
+  if (!Array.isArray(indexes) || !expectedFieldPath) {
+    throw new Error('Invalid live Firestore field index configuration');
+  }
+  return normalizeFieldIndexModes(indexes.map(index => {
+    if (!index || !Array.isArray(index.fields) || index.fields.length !== 1 ||
+        index.fields[0]?.fieldPath !== expectedFieldPath) {
+      throw new Error('Unexpected Firestore live single-field index shape');
+    }
+    const field = index.fields[0];
+    return { queryScope: index.queryScope, order: field.order, arrayConfig: field.arrayConfig };
+  }));
+}
+
 export function isActiveFieldIndexAddition(operation, desired) {
   if (!operation || operation.done === true || operation.error) return false;
   const field = parseFieldResource(operation.metadata?.field);
@@ -88,7 +105,7 @@ export function classifyFieldOverride(desired, liveFields, operations) {
   const desiredModes = normalizeFieldIndexModes(desired.indexes ?? []);
   const indexesMatch = Boolean(live) && (desiredModes.length === 0
     ? indexes.length === 0
-    : JSON.stringify(normalizeFieldIndexModes(indexes)) === JSON.stringify(desiredModes));
+    : JSON.stringify(normalizeLiveFieldIndexModes(indexes, desired.fieldPath)) === JSON.stringify(desiredModes));
   const indexesReady = indexesMatch &&
     indexes.every(index => index.state === 'READY');
   // Firestore protobuf JSON may omit output-only false values. An explicit
