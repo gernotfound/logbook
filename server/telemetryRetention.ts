@@ -105,7 +105,8 @@ export async function purgeExpiredTelemetry(
   // have subcollections. Querying only existing /users/{uid} documents would
   // orphan telemetry written before the user's root document exists.
   const userRefs = (await db.collection(USER_COLLECTION).listDocuments())
-    .sort((a, b) => a.id.localeCompare(b.id));
+    // Use the same binary ID ordering as the resume cursor comparison below.
+    .sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
   const cursorId = cursor;
   let index = cursorId
     ? userRefs.findIndex(ref => ref.id > cursorId)

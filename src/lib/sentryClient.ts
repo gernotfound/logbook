@@ -69,12 +69,14 @@ export function isSentryInitialized(): boolean {
 function captureError(payload: TelemetryErrorPayload): boolean {
   if (!sentryInitialized) return false;
 
-  const error = new Error(payload.message);
+  // Never pass raw error text through exception values or Sentry fingerprints.
+  const message = scrubPII(payload.message).slice(0, 500);
+  const error = new Error(message);
   error.name = sanitizeTag(payload.type) || 'Error';
   if (payload.stack) error.stack = scrubPII(payload.stack).slice(0, 1000);
 
   Sentry.withScope((scope) => {
-    scope.setFingerprint([payload.hash || `${error.name}:${payload.message}`]);
+    scope.setFingerprint([payload.hash || `${error.name}:${message}`]);
     scope.setTag('source', sanitizeTag(payload.source));
     scope.setTag('app_version', sanitizeTag(payload.context.appVersion));
     scope.setTag('build_sha', safeBuildSha());

@@ -36,6 +36,8 @@ async function applyConsent(consent: boolean): Promise<void> {
     if (!consent) {
         if (analytics) {
             const module = await import('firebase/analytics');
+            // Regrant may occur while the import is pending: only current consent can disable.
+            if (getAnalyticsConsent()) return;
             module.setAnalyticsCollectionEnabled(analytics, false);
             analytics = null;
         }
