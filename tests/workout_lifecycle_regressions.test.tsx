@@ -431,4 +431,37 @@ describe('Workout lifecycle durable recovery regressions', () => {
         expect(localStorage.getItem(deviceKey('history-editor-context', owner))).toBeNull();
     });
 
+    it('preserves a suspended device workout with unsynced data over an unrelated durable active snapshot', async () => {
+        const staleCloud = workout('old-cloud-snapshot', true);
+        const suspended = workout('authoritative-device-session', true);
+        const editor: WorkoutSession = { ...workout('edit-context', true), isEditingHistory: true };
+        await initializeLocal(owner, userData({ activeWorkout: staleCloud }));
+        writeDeviceValue('history-editor-context', JSON.stringify({
+            version: 1, editorId: editor.id, suspended,
+        }), owner);
+        useAppStore.setState({ userData: userData({ activeWorkout: staleCloud }), localWorkout: editor });
+        await act(async () => { await restoreSessionAfterHistoryEdit(editor.id); });
+        expect(useAppStore.getState().localWorkout?.id).toBe(suspended.id);
+    });
+
+    it('never removes a different last set inserted while confirming deletion', async () => {
+        const first = workout('set-race', true);
+        useAppStore.setState({ localWorkout: first });
+        let confirm!: (decision: boolean) => void;
+        const showConfirm = () => new Promise<boolean>(resolve => { confirm = resolve; });
+        const update = (updater: (previous: WorkoutSession | null) => WorkoutSession | null) => {
+            useAppStore.setState(state => ({ localWorkout: updater(state.localWorkout) }));
+        };
+        const { result } = renderHook(() => useWorkoutSetMutations({ setLocalWorkout: update, showConfirm }));
+        let removal!: Promise<void>;
+        act(() => { removal = result.current.removeLastSet(0); });
+        act(() => {
+            useAppStore.setState({ localWorkout: { ...first, exercises: [
+                { ...first.exercises[0], sets: [...first.exercises[0].sets, { id: 'new-set', kg: '60', reps: '6' }] },
+            ] } });
+        });
+        await act(async () => { confirm(true); await removal; });
+        expect(useAppStore.getState().localWorkout?.exercises[0].sets.map(set => set.id)).toEqual(['s1', 'new-set']);
+    });
+
 });
