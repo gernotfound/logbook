@@ -31,6 +31,7 @@ export function AccountDeletionRecovery() {
         let disposed = false;
         let running = false;
         let nextDeviceRecoveryAt = 0;
+        const pendingNotices = new Set<string>();
 
         const completionContext: AccountDeletionCompletionContext = {
             purgeAllLocalUserData: owner => DB.purgeCompletedAccountLocalData(owner),
@@ -56,10 +57,13 @@ export function AccountDeletionRecovery() {
         };
 
         const showPending = (message: string) => {
-            // A dialog left open must not hold the recovery mutex.
-            if (!disposed) void useDialogStore.getState().showAlert(message).catch(error => {
+            // Deduplicate repeated focus/online attempts while preserving distinct notices.
+            // Dialogs stay queued independently of the recovery mutex.
+            if (disposed || pendingNotices.has(message)) return;
+            pendingNotices.add(message);
+            void useDialogStore.getState().showAlert(message).catch(error => {
                 reportError(error, { source: 'account_deletion_recovery_dialog' });
-            });
+            }).finally(() => { pendingNotices.delete(message); });
         };
 
         const reconcile = async (forceDeviceRecovery = false) => {

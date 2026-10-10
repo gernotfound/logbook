@@ -20,110 +20,126 @@ interface DialogState {
   closeDialog: () => void;
 }
 
-export const useDialogStore = create<DialogState>((set) => ({
-  isOpen: false,
-  type: 'alert',
-  title: '',
-  message: '',
-  onConfirm: () => {},
-  onCancel: () => {},
+// Requests have a single visible owner. A later notification must never replace
+// the resolver for a confirmation, password prompt or unsynced-data decision.
+export const useDialogStore = create<DialogState>((set) => {
+  const pending: Array<() => void> = [];
+  let active = false;
+  let cancelActive: (() => void) | null = null;
 
-  showAlert: (message, title = 'Avviso') => {
-    return new Promise((resolve) => {
-      set({
-        isOpen: true,
-        type: 'alert',
-        title,
-        message,
-        unsyncedReason: undefined,
-        onAction: undefined,
-        onInputConfirm: undefined,
-        onConfirm: () => {
-          set({ isOpen: false });
+  const advance = () => {
+    const next = pending.shift();
+    if (next) {
+      active = true;
+      next();
+    } else {
+      active = false;
+      cancelActive = null;
+      set({ isOpen: false, onAction: undefined, onInputConfirm: undefined });
+    }
+  };
+  const enqueue = (open: () => void) => {
+    pending.push(open);
+    if (!active) advance();
+  };
+
+  return {
+    isOpen: false,
+    type: 'alert',
+    title: '',
+    message: '',
+    onConfirm: () => {},
+    onCancel: () => {},
+
+    showAlert: (message, title = 'Avviso') => new Promise<void>((resolve) => {
+      enqueue(() => {
+        let finished = false;
+        const finish = () => {
+          if (finished) return;
+          finished = true;
           resolve();
-        },
-        onCancel: () => {
-          set({ isOpen: false });
-          resolve();
-        }
+          advance();
+        };
+        cancelActive = finish;
+        set({
+          isOpen: true, type: 'alert', title, message,
+          unsyncedReason: undefined, onAction: undefined, onInputConfirm: undefined,
+          onConfirm: finish, onCancel: finish,
+        });
       });
-    });
-  },
+    }),
 
-  showConfirm: (message, title = 'Conferma') => {
-    return new Promise((resolve) => {
-      set({
-        isOpen: true,
-        type: 'confirm',
-        title,
-        message,
-        unsyncedReason: undefined,
-        onAction: undefined,
-        onInputConfirm: undefined,
-        onConfirm: () => {
-          set({ isOpen: false });
-          resolve(true);
-        },
-        onCancel: () => {
-          set({ isOpen: false });
-          resolve(false);
-        }
+    showConfirm: (message, title = 'Conferma') => new Promise<boolean>((resolve) => {
+      enqueue(() => {
+        let finished = false;
+        const finish = (accepted: boolean) => {
+          if (finished) return;
+          finished = true;
+          resolve(accepted);
+          advance();
+        };
+        cancelActive = () => finish(false);
+        set({
+          isOpen: true, type: 'confirm', title, message,
+          unsyncedReason: undefined, onAction: undefined, onInputConfirm: undefined,
+          onConfirm: () => finish(true), onCancel: () => finish(false),
+        });
       });
-    });
-  },
+    }),
 
-  showPasswordPrompt: (message, title = 'Verifica identità') => {
-    return new Promise((resolve) => {
-      set({
-        isOpen: true,
-        type: 'password-prompt',
-        title,
-        message,
-        unsyncedReason: undefined,
-        onAction: undefined,
-        onInputConfirm: (value: string) => {
-          set({ isOpen: false, onInputConfirm: undefined });
+    showPasswordPrompt: (message, title = 'Verifica identità') => new Promise<string | null>((resolve) => {
+      enqueue(() => {
+        let finished = false;
+        const finish = (value: string | null) => {
+          if (finished) return;
+          finished = true;
           resolve(value);
-        },
-        onConfirm: () => {},
-        onCancel: () => {
-          set({ isOpen: false, onInputConfirm: undefined });
-          resolve(null);
-        },
+          advance();
+        };
+        cancelActive = () => finish(null);
+        set({
+          isOpen: true, type: 'password-prompt', title, message,
+          unsyncedReason: undefined, onAction: undefined,
+          onInputConfirm: value => finish(value),
+          onConfirm: () => {}, onCancel: () => finish(null),
+        });
       });
-    });
-  },
+    }),
 
-  showUnsyncedDataLogout: (reason: UnsyncedLogoutReason) => {
-    return new Promise((resolve) => {
-      set({
-        isOpen: true,
-        type: 'unsynced-data-logout',
-        title: 'Modifiche non sincronizzate',
-        message: '', // Message managed by GlobalDialog
-        unsyncedReason: reason,
-        onInputConfirm: undefined,
-        onAction: (action: UnsyncedLogoutAction) => {
-          // If the user clicks 'wait', we DO NOT close the dialog automatically here.
-          // The AuthContext handles 'wait' state. Wait, the prompt says:
-          // "se l’utente chiude il dialog, ogni listener/timer viene pulito."
-          // So 'cancel' closes it. But 'wait' means leaving it open.
-          // Wait, if it returns 'wait', the caller needs to keep it open.
-          // Actually, if we return 'wait', the Promise resolves. We might need a separate closeDialog.
-          // Let's resolve the action.
-          if (action !== 'wait') {
-            set({ isOpen: false });
-          }
+    showUnsyncedDataLogout: reason => new Promise<UnsyncedLogoutAction>((resolve) => {
+      enqueue(() => {
+        let finished = false;
+        let resolved = false;
+        const settle = (action: UnsyncedLogoutAction) => {
+          if (resolved) return;
+          resolved = true;
           resolve(action);
-        },
-        onConfirm: () => {},
-        onCancel: () => {
-          set({ isOpen: false });
-          resolve('cancel');
-        }
+        };
+        const finish = (action: UnsyncedLogoutAction) => {
+          if (finished) return;
+          finished = true;
+          settle(action);
+          advance();
+        };
+        cancelActive = () => finish('cancel');
+        set({
+          isOpen: true, type: 'unsynced-data-logout',
+          title: 'Modifiche non sincronizzate', message: '',
+          unsyncedReason: reason, onInputConfirm: undefined,
+          onAction: action => {
+            // "wait" preserves the dialog while the caller stops attempting logout.
+            // The active slot is released only when the dialog is later dismissed.
+            if (action === 'wait') settle('wait');
+            else finish(action);
+          },
+          onConfirm: () => {}, onCancel: () => finish('cancel'),
+        });
       });
-    });
-  },
+    }),
 
-  closeDialog: () => set({ isOpen: false }),
-}));
+    closeDialog: () => {
+      if (cancelActive) cancelActive();
+      else set({ isOpen: false });
+    },
+  };
+});

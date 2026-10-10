@@ -22,7 +22,14 @@ export function useTrainingHistory() {
         try {
             const result = await dispatchDomainOperation({ type: 'history.delete', id });
             if (!result.ok && result.status !== 'local-pending') throw new Error('Cancellazione non confermata');
-            if (!isCurrentSession(session)) return;
+        } catch (error) {
+            console.error('Eliminazione storico non completata:', error);
+            await showAlert("Errore durante l'eliminazione dell'allenamento.");
+            return;
+        }
+
+        if (!isCurrentSession(session)) return;
+        try {
             const editor = useAppStore.getState().localWorkout;
             if (editor?.isEditingHistory && (editor.originalHistoryId || editor.id) === id) {
                 await restoreSessionAfterHistoryEdit(String(editor.id));
@@ -32,8 +39,8 @@ export function useTrainingHistory() {
                 useAppStore.getState().setLocalWorkout(null);
             }
         } catch (error) {
-            console.error('Eliminazione storico non completata:', error);
-            await showAlert("Errore durante l'eliminazione dell'allenamento.");
+            console.error('Ripristino dopo eliminazione storico non completato:', error);
+            await showAlert('Allenamento eliminato, ma non è stato possibile ripristinare la sessione sospesa. Riapri TheLogBook per completare il recupero.');
         }
     };
 
