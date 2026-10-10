@@ -81,11 +81,11 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
             });
 
             it('T2.1.5: Exporter.exportToCSV outputs sleep values in CSV without throwing on empty days', async () => {
-                const downloadFileSpy = vi.spyOn(Exporter, 'downloadFile').mockImplementation(() => {});
+                const downloadFileSpy = vi.spyOn(Exporter, 'downloadFile').mockResolvedValue(true);
 
                 const nutrition = {
-                    '2026-08-01': { date: '2026-08-01', weight: 80, sleepHours: '07:30', sleepDeep: '02:00' },
-                    '2026-08-02': { date: '2026-08-02', weight: 80.2 } // no sleep
+                    '2026-08-01': { date: '2026-08-01', kcal: 0, carbs: 0, pro: 0, fat: 0, weight: 80, sleepHours: '07:30', sleepDeep: '02:00' },
+                    '2026-08-02': { date: '2026-08-02', kcal: 0, carbs: 0, pro: 0, fat: 0, weight: 80.2 } // no sleep
                 };
 
                 await Exporter.exportToCSV([], nutrition, []);
@@ -196,7 +196,7 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
                         {
                             exId: 'ex_treadmill',
                             sessionNote: 'Warmup',
-                            sets: [{ id: 's_cardio', time: '20', distance: '3.5', speed: '10.5', incline: '2.0', kcal: '210' }]
+                            sets: [{ id: 's_cardio', kg: '', reps: '', time: '20', distance: '3.5', speed: '10.5', incline: '2.0', kcal: '210' }]
                         },
                         { exId: 'ex_bench', sessionNote: '', sets: [] }
                     ]
