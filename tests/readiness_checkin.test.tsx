@@ -20,7 +20,7 @@ function session(readiness?: WorkoutSession['readiness']): WorkoutSession {
         date: '2026-09-24',
         routineName: 'Push',
         globalStartTime: 1_700_000_000_000,
-        exercises: [{ id: 'se-readiness-bench', exId: 'bench', name: 'Panca', sets: [{ id: 's1', kg: '100', reps: '8' }] }],
+        exercises: [{ id: 'se-readiness-bench', exId: 'bench', sessionNote: '', sets: [{ id: 's1', kg: '100', reps: '8' }] }],
         ...(readiness ? { readiness } : {}),
     };
 }
@@ -57,7 +57,7 @@ describe('pre-session readiness contract', () => {
 
     it('renders large 1-5 controls, canonical sleep and active pains without starting automatically', async () => {
         const onStart = vi.fn(async () => true);
-        render(<PreSessionCheckIn routineName="Push" date="2026-09-24" onStart={onStart} onCancel={vi.fn(async () => true)} />);
+        render(<PreSessionCheckIn workoutId="w-readiness" routineName="Push" date="2026-09-24" onStart={onStart} onCancel={vi.fn(async () => true)} />);
 
         expect(screen.getByText('Registrato: 6 h 18 min')).toBeTruthy();
         expect(screen.getByText(/Spalle/)).toBeTruthy();
@@ -112,7 +112,7 @@ describe('pre-session readiness contract', () => {
 
     it('skips the check-in without inventing values', async () => {
         const onStart = vi.fn(async () => true);
-        render(<PreSessionCheckIn date="2026-09-24" onStart={onStart} onCancel={vi.fn(async () => true)} />);
+        render(<PreSessionCheckIn workoutId="w-readiness" date="2026-09-24" onStart={onStart} onCancel={vi.fn(async () => true)} />);
         fireEvent.click(screen.getByRole('button', { name: 'Salta check-in e inizia' }));
         await waitFor(() => expect(onStart).toHaveBeenCalledWith(undefined));
     });
@@ -190,8 +190,9 @@ describe('pre-session readiness contract', () => {
 
     it('exports the four readiness dimensions and leaves absent dimensions empty', async () => {
         let content = '';
-        vi.spyOn(Exporter, 'downloadFile').mockImplementation((filename, value) => {
+        vi.spyOn(Exporter, 'downloadFile').mockImplementation(async (filename, value) => {
             if (filename === 'allenamenti.csv') content = value;
+            return true;
         });
         await Exporter.exportToCSV([session({ capturedAt: 123, energy: 5, stress: 1, muscleRecovery: 3 })], {}, []);
         expect(content.split('\n')[0]).toContain('Energia pre-sessione,Stress pre-sessione,Motivazione pre-sessione,Recupero muscolare pre-sessione');
