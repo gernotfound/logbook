@@ -19,11 +19,11 @@ import { useWorkoutSession } from '../src/hooks/useWorkoutSession';
 import { commitDomainOperations, initializeLocal, readLocal } from '../src/lib/sync/localRepository';
 import { localStorageMock, renderWithProviders } from './setup';
 
-function workout(id: string, started = false): WorkoutSession {
+function workout(id: string, started = false): WorkoutSession & { id: string } {
     return {
         id, date: '2026-10-09', routineName: 'Workout',
         ...(started ? { globalStartTime: Date.now() - 60_000 } : {}),
-        exercises: [{ id: 'se1', exId: 'bench', name: 'Panca',
+        exercises: [{ id: 'se1', exId: 'bench', sessionNote: '',
             sets: [{ id: 's1', reps: '8', kg: '50' }] }],
     };
 }
@@ -254,7 +254,7 @@ describe('Workout lifecycle durable recovery regressions', () => {
         const durable = (await readLocal(owner))!;
         expect(durable.lastClosedWorkoutId).toBe(later.id);
         expect(durable.closedWorkoutIds).toContain(abandoned.id);
-        expect(durable.data.history.some(item => item.id === abandoned.id)).toBe(false);
+        expect((durable.data.history ?? []).some(item => item.id === abandoned.id)).toBe(false);
 
         const key = deviceKey('workout', owner);
         // A suspended old tab can re-write the original device snapshot after B.
@@ -312,7 +312,7 @@ describe('Workout lifecycle durable recovery regressions', () => {
 
     it('keeps edits made during a pending history commit and refuses a concurrent cancel', async () => {
         const historical = workout('history-edit-target', true);
-        const editor: WorkoutSession = { ...historical, isEditingHistory: true, originalHistoryId: historical.id };
+        const editor: WorkoutSession & { id: string } = { ...historical, isEditingHistory: true, originalHistoryId: historical.id };
         const originalDispatch = useAppStore.getState().dispatchDomainOperation;
         useAppStore.setState({ userData: userData({ history: [historical] }), localWorkout: editor });
         let complete!: (result: { ok: true; status: 'synced' }) => void;
@@ -336,7 +336,7 @@ describe('Workout lifecycle durable recovery regressions', () => {
     it('deleting a history item closes the editor and restores its suspended live workout', async () => {
         const historical = workout('history-to-delete', true);
         const suspended = workout('still-live', true);
-        const editor: WorkoutSession = { ...historical, isEditingHistory: true, originalHistoryId: historical.id };
+        const editor: WorkoutSession & { id: string } = { ...historical, isEditingHistory: true, originalHistoryId: historical.id };
         await initializeLocal(owner, userData({ history: [historical], activeWorkout: suspended }));
         writeDeviceValue('history-editor-context', JSON.stringify({
             version: 1, editorId: historical.id, suspended,
@@ -360,7 +360,7 @@ describe('Workout lifecycle durable recovery regressions', () => {
 
     it('distinguishes a committed history deletion from a later recovery failure', async () => {
         const historical = workout('history-delete-then-recovery-fails', true);
-        const editor: WorkoutSession = { ...historical, isEditingHistory: true, originalHistoryId: historical.id };
+        const editor: WorkoutSession & { id: string } = { ...historical, isEditingHistory: true, originalHistoryId: historical.id };
         const initial = userData({ history: [historical] });
         await initializeLocal(owner, initial);
         writeDeviceValue('history-editor-context', '{invalid-json', owner);
@@ -377,8 +377,8 @@ describe('Workout lifecycle durable recovery regressions', () => {
 
     it('removes the confirmed exercise identity even if exercises are reordered in the dialog', async () => {
         const initial: WorkoutSession = { ...workout('exercise-race', true), exercises: [
-            { id: 'first', exId: 'bench', sets: [{ id: 's1', kg: '40', reps: '8' }] },
-            { id: 'second', exId: 'squat', sets: [{ id: 's2', kg: '60', reps: '5' }] },
+            { id: 'first', exId: 'bench', sessionNote: '', sets: [{ id: 's1', kg: '40', reps: '8' }] },
+            { id: 'second', exId: 'squat', sessionNote: '', sets: [{ id: 's2', kg: '60', reps: '5' }] },
         ] };
         useAppStore.setState({ localWorkout: initial });
         let confirm!: (decision: boolean) => void;
@@ -433,7 +433,7 @@ describe('Workout lifecycle durable recovery regressions', () => {
 
     it('does not resurrect a suspended workout durably deleted in another tab', async () => {
         const previous = workout('closed-in-other-tab', true);
-        const editor: WorkoutSession = { ...workout('history-being-edited', true), isEditingHistory: true };
+        const editor: WorkoutSession & { id: string } = { ...workout('history-being-edited', true), isEditingHistory: true };
         const initial = userData({ activeWorkout: previous });
         await initializeLocal(owner, initial);
         writeDeviceValue('history-editor-context', JSON.stringify({
@@ -451,7 +451,7 @@ describe('Workout lifecycle durable recovery regressions', () => {
     it('preserves a suspended device workout with unsynced data over an unrelated durable active snapshot', async () => {
         const staleCloud = workout('old-cloud-snapshot', true);
         const suspended = workout('authoritative-device-session', true);
-        const editor: WorkoutSession = { ...workout('edit-context', true), isEditingHistory: true };
+        const editor: WorkoutSession & { id: string } = { ...workout('edit-context', true), isEditingHistory: true };
         await initializeLocal(owner, userData({ activeWorkout: staleCloud }));
         writeDeviceValue('history-editor-context', JSON.stringify({
             version: 1, editorId: editor.id, suspended,
