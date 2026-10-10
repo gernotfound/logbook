@@ -45,14 +45,16 @@ export async function restoreSessionAfterHistoryEdit(editorId: string): Promise<
     if (!isCurrentSession(session) || useAppStore.getState().localWorkout !== editor) {
         throw new Error('Sessione o editor modificati durante il ripristino.');
     }
-    if (suspended && durable && (
-        durable.lastClosedWorkoutId === suspended.id
-        || durable.closedWorkoutIds?.includes(String(suspended.id))
-        || durable.data.history?.some(item => item.id === suspended?.id)
-    )) {
-        suspended = null;
-    }
-    if (durable?.data.activeWorkout && durable.data.activeWorkout.id !== suspended?.id) {
+    const wasClosed = (id: string) => durable && (
+        durable.lastClosedWorkoutId === id
+        || durable.closedWorkoutIds?.includes(id)
+        || durable.data.history?.some(item => item.id === id)
+    );
+    if (suspended && wasClosed(String(suspended.id))) suspended = null;
+    // The suspended device snapshot may include locally-entered sets not yet
+    // reflected in the durable cloud-oriented activeWorkout. It stays preferred
+    // unless closure evidence proves it is no longer live.
+    if (!suspended && durable?.data.activeWorkout && !wasClosed(String(durable.data.activeWorkout.id))) {
         suspended = durable.data.activeWorkout;
     }
     useAppStore.getState().setLocalWorkout(suspended);
