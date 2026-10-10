@@ -496,7 +496,9 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
                         onRemoveExercise={vi.fn()}
                         onUpdateSetsCount={vi.fn()}
                         onUpdateReps={vi.fn()}
-                        onUpdateTechnique={vi.fn()}
+                        onUpdateSetPlan={vi.fn()}
+                        onUpdateSetPlanField={vi.fn()}
+                        onUpdateExerciseMetadata={vi.fn()}
                         onSave={vi.fn()}
                         onCancel={vi.fn()}
                     />
@@ -563,7 +565,9 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
                         onRemoveExercise={vi.fn()}
                         onUpdateSetsCount={vi.fn()}
                         onUpdateReps={vi.fn()}
-                        onUpdateTechnique={vi.fn()}
+                        onUpdateSetPlan={vi.fn()}
+                        onUpdateSetPlanField={vi.fn()}
+                        onUpdateExerciseMetadata={vi.fn()}
                         onSave={vi.fn()}
                         onCancel={vi.fn()}
                     />
@@ -599,7 +603,9 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
                         onRemoveExercise={vi.fn()}
                         onUpdateSetsCount={vi.fn()}
                         onUpdateReps={vi.fn()}
-                        onUpdateTechnique={vi.fn()}
+                        onUpdateSetPlan={vi.fn()}
+                        onUpdateSetPlanField={vi.fn()}
+                        onUpdateExerciseMetadata={vi.fn()}
                         onSave={vi.fn()}
                         onCancel={vi.fn()}
                     />
