@@ -47,7 +47,7 @@ describe('Challenger 1: UI & Chart Component Stress Testing', () => {
         const history: WorkoutSession[] = [{
             id: 'w1',
             date: '2026-08-18',
-            exercises: [{ exId: 'ex_bench', sets: [{ id: 's1', kg: '100', reps: '10' }] }]
+            exercises: [{ exId: 'ex_bench', sessionNote: '', sets: [{ id: 's1', kg: '100', reps: '10' }] }]
         }];
 
         renderWithProviders(
@@ -107,9 +107,9 @@ describe('Challenger 1: UI & Chart Component Stress Testing', () => {
         const date1 = weeklyDate(1);
 
         const history: WorkoutSession[] = [
-            { id: 'w1', date: date3, exercises: [{ exId: 'ex_bench', sets: [{ id: 's1', kg: '100', reps: '10' }] }] },
-            { id: 'w2', date: date2, exercises: [{ exId: 'ex_bench', sets: [{ id: 's2', kg: '200', reps: '10' }] }] },
-            { id: 'w3', date: date1, exercises: [{ exId: 'ex_bench', sets: [{ id: 's3', kg: '300', reps: '10' }] }] }
+            { id: 'w1', date: date3, exercises: [{ exId: 'ex_bench', sessionNote: '', sets: [{ id: 's1', kg: '100', reps: '10' }] }] },
+            { id: 'w2', date: date2, exercises: [{ exId: 'ex_bench', sessionNote: '', sets: [{ id: 's2', kg: '200', reps: '10' }] }] },
+            { id: 'w3', date: date1, exercises: [{ exId: 'ex_bench', sessionNote: '', sets: [{ id: 's3', kg: '300', reps: '10' }] }] }
         ];
 
         const nutrition: Record<string, NutritionDay> = {
