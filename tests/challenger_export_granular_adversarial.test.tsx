@@ -42,7 +42,7 @@ describe('Challenger: Granular Export Adversarial & Stress', () => {
 
         const mockUserData: any = { library, routines, trainingCycles };
 
-        const downloadSpy = vi.spyOn(Exporter, 'downloadFile').mockImplementation(async () => {});
+        const downloadSpy = vi.spyOn(Exporter, 'downloadFile').mockResolvedValue(true);
         downloadSpy.mockClear();
 
         const start = performance.now();
@@ -66,7 +66,7 @@ describe('Challenger: Granular Export Adversarial & Stress', () => {
 
         // 5 cycles exported
         expect(exported.trainingCycles).toHaveLength(5);
-        expect(result.cyclesCount).toBe(5);
+        expect(result?.cyclesCount).toBe(5);
 
         // Each cycle has 2 routines, but they overlap?
         // cy_0: rt_0, rt_1
@@ -76,12 +76,12 @@ describe('Challenger: Granular Export Adversarial & Stress', () => {
         // cy_4: rt_4, rt_5
         // Unique routines: rt_0, rt_1, rt_2, rt_3, rt_4, rt_5 => 6 routines
         expect(exported.routines).toHaveLength(6);
-        expect(result.routinesCount).toBe(6);
+        expect(result?.routinesCount).toBe(6);
 
         // Each routine has 2 exercises
         // Unique exercises: ex_0 to ex_6 => 7 exercises
         expect(exported.library).toHaveLength(7);
-        expect(result.libraryCount).toBe(7);
+        expect(result?.libraryCount).toBe(7);
 
         // Performance check
         expect(duration).toBeLessThan(150); // Generous margin for CI
