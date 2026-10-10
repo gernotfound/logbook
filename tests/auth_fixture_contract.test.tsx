@@ -52,6 +52,9 @@ describe('shared Firebase Auth UI fixture contract', () => {
 
     const signIn = await signInWithEmailAndPassword(auth, 'synthetic@example.test', 'test-password');
     expect(auth.currentUser).toBe(signIn.user);
+    expect(signIn.user.email).toBe('synthetic@example.test');
+    expect(signIn.user.emailVerified).toBe(true);
+    expect(signIn.user.providerData[0].providerId).toBe('password');
     expect(observer).toHaveBeenLastCalledWith(signIn.user);
 
     await signOut(auth);
@@ -60,6 +63,9 @@ describe('shared Firebase Auth UI fixture contract', () => {
 
     const registration = await createUserWithEmailAndPassword(auth, 'synthetic@example.test', 'test-password');
     expect(auth.currentUser).toBe(registration.user);
+    expect(registration.user.email).toBe('synthetic@example.test');
+    expect(registration.user.emailVerified).toBe(false);
+    expect(registration.user.providerData[0].providerId).toBe('password');
     expect(observer).toHaveBeenLastCalledWith(registration.user);
     expect(observer).toHaveBeenCalledTimes(4);
 
@@ -75,6 +81,8 @@ describe('shared Firebase Auth UI fixture contract', () => {
 
     const credential = await signInWithPopup(auth, {} as never);
     expect(auth.currentUser).toBe(credential.user);
+    expect(credential.user.providerData[0].providerId).toBe('google.com');
+    expect(credential.user.emailVerified).toBe(true);
     expect(observer).toHaveBeenLastCalledWith(credential.user);
     expect(observer).toHaveBeenCalledTimes(2);
   });
