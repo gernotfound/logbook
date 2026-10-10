@@ -34,10 +34,10 @@ describe('Sentry technical error privacy boundary', () => {
     expect(initSentry()).toBe(true);
     const payload = {
       type: 'Error',
-      message: 'Failure {"PASSWORD":"SYNTH_SECRET"}',
+      message: 'Failure {"api_key":"SYNTH_SECRET"}',
       stack: 'Error at C:\\USERS\\Synthetic\\source.ts:12',
       source: 'window_error',
-      hash: '',
+      hash: 'Authorization: Basic SYNTH_FINGERPRINT',
       sessionId: 'synthetic-session',
       count: 1,
       firstSeen: 10,
@@ -52,13 +52,14 @@ describe('Sentry technical error privacy boundary', () => {
     expect(error.stack).toContain('[REDACTED_PATH]');
     expect(error.stack).not.toContain('Synthetic');
     expect(JSON.stringify(sentry.scope.setFingerprint.mock.calls)).not.toContain('SYNTH_SECRET');
+    expect(JSON.stringify(sentry.scope.setFingerprint.mock.calls)).not.toContain('SYNTH_FINGERPRINT');
 
     const config = sentry.init.mock.calls[0]?.[0] as {
       beforeSend: (event: { message?: string; exception?: { values: Array<{ value?: string }> } }) =>
         { message?: string; exception?: { values: Array<{ value?: string }> } };
     };
     const event = config.beforeSend({
-      message: 'Failure {"TOKEN":"SYNTH_SECRET"}',
+      message: 'Failure {"client_secret":"SYNTH_SECRET"}',
       exception: { values: [{ value: 'C:\\USERS\\Synthetic\\app.ts' }] },
     });
     expect(JSON.stringify(event)).not.toContain('SYNTH_SECRET');
