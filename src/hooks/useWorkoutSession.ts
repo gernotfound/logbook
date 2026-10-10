@@ -2,7 +2,7 @@ import { useState, useCallback, useRef } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
 import { Logic } from '../lib/logic';
-import { resetGlobalWorkoutTimer } from '../lib/utils/timer';
+import { readWorkoutTimerSnapshot, resetGlobalWorkoutTimer, writeWorkoutTimerSnapshot } from '../lib/utils/timer';
 import { useWorkoutSetMutations } from './workout/useWorkoutSetMutations';
 import {
     applyWorkoutCompletionDraft,
@@ -16,45 +16,15 @@ import {
 import type { WorkoutSession, WorkoutRoutine, Exercise, WorkoutReadiness } from '../types';
 import { auth } from '../lib/firebase';
 import { draftRegistry } from '../lib/utils/draftRegistry';
-import { readDeviceValueStrict, writeDeviceValue } from '../lib/sync/deviceStorage';
+import { readLocal } from '../lib/sync/localRepository';
+import { writeDeviceValue } from '../lib/sync/deviceStorage';
 import { captureSession, isCurrentSession } from '../lib/sync/session';
-import { DomainParsers } from '../lib/schema';
+import { claimHistorySave, HISTORY_EDITOR_CONTEXT, isHistorySavePending, releaseHistorySave, restoreSessionAfterHistoryEdit } from './workout/historyEditorContext';
 import { isWorkoutClockAnomalyError, resetWorkoutClockGuard } from '../lib/workoutClockGuard';
 
 const EMPTY_ROUTINES: WorkoutRoutine[] = [];
 const EMPTY_LIBRARY: Exercise[] = [];
 const EMPTY_HISTORY: WorkoutSession[] = [];
-const HISTORY_EDITOR_CONTEXT = 'history-editor-context';
-
-function readSuspendedWorkout(editorId: string): WorkoutSession | null {
-    const raw = readDeviceValueStrict(HISTORY_EDITOR_CONTEXT);
-    if (raw === null) {
-        // An editor already open before this release has no dedicated context.
-        return useAppStore.getState().userData?.activeWorkout ?? null;
-    }
-    const parsed: unknown = JSON.parse(raw);
-    if (!parsed || typeof parsed !== 'object') throw new Error('Contesto editor storico non valido.');
-    const saved = parsed as { version?: unknown; editorId?: unknown; suspended?: unknown };
-    if (saved.version !== 1 || saved.editorId !== editorId) throw new Error('Contesto editor storico non corrispondente.');
-    if (saved.suspended === null) return null;
-    const previous = DomainParsers.parseActiveWorkout(saved.suspended);
-    if (!previous || previous.isEditingHistory) throw new Error('Sessione sospesa non valida.');
-    return previous as WorkoutSession;
-}
-
-function restoreSessionAfterHistoryEdit(editorId: string, setLocalWorkout: (workout: WorkoutSession | null) => void): void {
-    const previous = readSuspendedWorkout(editorId);
-    // Recover the active workout before clearing the owner-scoped editor marker.
-    setLocalWorkout(previous);
-    try {
-        writeDeviceValue(HISTORY_EDITOR_CONTEXT, null);
-    } catch (error) {
-        // An orphaned marker cannot affect the restored active workout; the next
-        // history edit overwrites it with a newly scoped context.
-        console.warn('Sessione ripristinata; impossibile pulire il contesto storico:', error);
-    }
-}
-
 export function useWorkoutSession() {
     const routines = useAppStore(state => state.userData?.routines || EMPTY_ROUTINES);
     const library = useAppStore(state => state.userData?.library || EMPTY_LIBRARY);
@@ -70,6 +40,7 @@ export function useWorkoutSession() {
 
     const [selectedRoutine, setSelectedRoutine] = useState('');
     const endingRef = useRef(false);
+    const [historySaving, setHistorySaving] = useState(false);
 
     const mutateActiveWorkout = useCallback((
         workoutOrUpdater: WorkoutSession | null | ((prev: WorkoutSession | null) => WorkoutSession | null)
@@ -187,6 +158,7 @@ export function useWorkoutSession() {
         const currentWorkout = useAppStore.getState().localWorkout;
         if (!currentWorkout || currentWorkout.isEditingHistory) return false;
         if (currentWorkout.globalStartTime) return true;
+        const session = captureSession();
 
         const startedAt = Date.now();
         const hasReadiness = readiness && Object.values(readiness).some(value => value !== undefined);
@@ -197,7 +169,13 @@ export function useWorkoutSession() {
             ...(hasReadiness ? { readiness: { capturedAt: startedAt, ...readiness } } : {}),
         };
 
-        if (!resetGlobalWorkoutTimer()) {
+        try {
+            // Verify the timer's device storage while retaining its original value.
+            // Resetting it before the IndexedDB commit could erase a still-running
+            // timer even when the new workout never becomes durable.
+            writeWorkoutTimerSnapshot(readWorkoutTimerSnapshot(session.owner), session.owner);
+        } catch (error) {
+            console.error('Timer locale non disponibile all’avvio:', error);
             useAppStore.setState({
                 localPersistenceBlocked: true,
                 syncHealth: 'failed',
@@ -207,18 +185,51 @@ export function useWorkoutSession() {
             await showAlert('Impossibile iniziare la sessione: il timer locale non può essere salvato sul dispositivo.');
             return false;
         }
+
+        let result: Awaited<ReturnType<typeof setSyncedLocalWorkout>> | null = null;
         try {
-            const result = await setSyncedLocalWorkout(startedWorkout);
-            return result.ok;
-        } catch {
-            await showAlert('Impossibile iniziare la sessione: i dati non sono stati salvati.');
+            result = await setSyncedLocalWorkout(startedWorkout);
+        } catch (error) {
+            console.error('Persistenza avvio workout non completata:', error);
+        }
+
+        if (!isCurrentSession(session)) return false;
+        try {
+            const durable = await readLocal(session.owner);
+            if (!isCurrentSession(session)) return false;
+            const persistedWorkout = durable?.data.activeWorkout;
+            if (persistedWorkout && persistedWorkout.id === currentWorkout.id
+                && persistedWorkout.globalStartTime === startedAt
+                && useAppStore.getState().localWorkout?.id === currentWorkout.id) {
+                if (!resetGlobalWorkoutTimer(session.owner)) {
+                    useAppStore.setState({
+                        localPersistenceBlocked: true, syncHealth: 'failed',
+                        saveError: 'Allenamento salvato, ma il timer locale non è stato azzerato. Riapri TheLogBook.',
+                    });
+                    await showAlert('Allenamento salvato, ma il timer locale non è stato aggiornato. Riapri TheLogBook.');
+                    return false;
+                }
+            }
+        } catch (error) {
+            console.error('Verifica avvio workout duraturo non riuscita:', error);
+            useAppStore.setState({ localPersistenceBlocked: true, syncHealth: 'failed',
+                saveError: 'Impossibile verificare il salvataggio dell’avvio. Riapri TheLogBook.' });
+            await showAlert('Impossibile verificare il salvataggio dell’allenamento. Riapri TheLogBook.');
             return false;
         }
+
+        if (!result?.ok) {
+            await showAlert('Impossibile iniziare la sessione: il salvataggio non è stato confermato.');
+            return false;
+        }
+        return true;
     }, [setSyncedLocalWorkout, showAlert]);
 
     const startEditHistoricalWorkout = useCallback(async (workout: WorkoutSession) => {
         const state = useAppStore.getState();
         const currentLocal = state.localWorkout;
+        const session = captureSession();
+        if (isHistorySavePending(session.owner)) return false;
         if (currentLocal?.isEditingHistory) {
             await showAlert('Termina prima la modifica dello storico già aperta.');
             return false;
@@ -228,6 +239,12 @@ export function useWorkoutSession() {
             const ok = await showConfirm("Hai già una sessione in corso. Vuoi modificare lo storico mantenendo la sessione attiva? Potrai riprenderla quando esci dall'editor.");
             if (!ok) return false;
         }
+        const latest = useAppStore.getState();
+        if (!isCurrentSession(session) || latest.localWorkout !== currentLocal
+            || latest.userData?.activeWorkout !== state.userData?.activeWorkout
+            || isHistorySavePending(session.owner)) return false;
+        const selectedHistory = state.userData?.history?.find(item => item.id === workout.id);
+        if (!selectedHistory || latest.userData?.history?.find(item => item.id === workout.id) !== selectedHistory) return false;
 
         const editingWorkout = prepareHistoricalWorkoutForEditing(workout);
         try {
@@ -237,7 +254,7 @@ export function useWorkoutSession() {
                 version: 1,
                 editorId: editingWorkout.id,
                 suspended,
-            }), captureSession().owner);
+            }), session.owner);
             setLocalWorkout(editingWorkout);
             // The live timer belongs to the suspended session, not to the editor.
             return true;
@@ -249,51 +266,69 @@ export function useWorkoutSession() {
     }, [showConfirm, showAlert, setLocalWorkout]);
 
     const saveHistoryEdit = useCallback(async () => {
-        const currentWorkout = useAppStore.getState().localWorkout;
-        if (!currentWorkout) return false;
-        const targetId = currentWorkout.originalHistoryId || currentWorkout.id;
-        if (!targetId) return false;
-
-        const updatedWorkout = prepareHistoricalWorkoutForSave(
-            currentWorkout,
-            targetId,
-            { mood, pump, fatigue },
-            water,
-            manualDuration,
-        );
-
+        const session = captureSession();
+        if (!claimHistorySave(session.owner)) return false;
+        setHistorySaving(true);
         try {
-            const currentData = useAppStore.getState().userData;
-            if (!currentData) throw new Error('Dati utente non caricati');
+            const editor = useAppStore.getState().localWorkout;
+            if (!editor?.isEditingHistory) return false;
+            const targetId = editor.originalHistoryId || editor.id;
+            if (!targetId) return false;
+            const snapshot = JSON.stringify(editor);
+            const updatedWorkout = prepareHistoricalWorkoutForSave(
+                editor, targetId,
+                {
+                    mood: editor.moodRating == null ? '' : String(editor.moodRating),
+                    pump: editor.pumpRating == null ? '' : String(editor.pumpRating),
+                    fatigue: editor.fatigueRating == null ? '' : String(editor.fatigueRating),
+                },
+                editor.waterLiters == null ? '' : String(editor.waterLiters),
+                Logic.normalizeDuration(editor.manualDurationStr || editor.globalDurationStr || '00:00:00'),
+            );
+            if (!isCurrentSession(session) || !useAppStore.getState().userData) return false;
             const result = await dispatchDomainOperation({ type: 'history.upsert', workout: updatedWorkout });
             if (!result.ok && result.status !== 'local-pending') {
                 await showAlert('Errore durante il salvataggio delle modifiche.');
                 return false;
             }
-            restoreSessionAfterHistoryEdit(String(currentWorkout.id), setLocalWorkout);
+            if (!isCurrentSession(session)) return false;
+            const latest = useAppStore.getState().localWorkout;
+            if (!latest?.isEditingHistory || latest.id !== editor.id) return false;
+            if (JSON.stringify(latest) !== snapshot) {
+                await showAlert('Una versione dello storico è stata salvata, ma ci sono altre modifiche da salvare.');
+                return false;
+            }
+            await restoreSessionAfterHistoryEdit(String(editor.id));
             return true;
         } catch (error) {
             console.error('Salvataggio editor storico non completato:', error);
-            await showAlert('Impossibile completare il salvataggio dello storico. La modifica resta disponibile per il recupero.');
+            if (isCurrentSession(session)) {
+                await showAlert('Impossibile completare il salvataggio dello storico. La modifica resta disponibile.');
+            }
             return false;
+        } finally {
+            releaseHistorySave(session.owner);
+            setHistorySaving(false);
         }
-    }, [mood, pump, fatigue, water, manualDuration, dispatchDomainOperation, setLocalWorkout, showAlert]);
+    }, [dispatchDomainOperation, showAlert]);
 
     const cancelHistoryEdit = useCallback(async () => {
-        if (await showConfirm("Annullare le modifiche a questo allenamento?")) {
-            const editor = useAppStore.getState().localWorkout;
-            if (!editor?.isEditingHistory) return false;
-            try {
-                restoreSessionAfterHistoryEdit(String(editor.id), setLocalWorkout);
-                return true;
-            } catch (error) {
-                console.error('Ripristino sessione sospesa fallito:', error);
-                await showAlert('Impossibile recuperare la sessione sospesa. Le modifiche restano disponibili.');
-                return false;
-            }
+        const session = captureSession();
+        if (isHistorySavePending(session.owner)) return false;
+        const editor = useAppStore.getState().localWorkout;
+        if (!editor?.isEditingHistory) return false;
+        if (!(await showConfirm("Annullare le modifiche a questo allenamento?"))) return false;
+        if (!isCurrentSession(session) || isHistorySavePending(session.owner)
+            || useAppStore.getState().localWorkout !== editor) return false;
+        try {
+            await restoreSessionAfterHistoryEdit(String(editor.id));
+            return true;
+        } catch (error) {
+            console.error('Ripristino sessione sospesa fallito:', error);
+            await showAlert('Impossibile recuperare la sessione sospesa. Le modifiche restano disponibili.');
+            return false;
         }
-        return false;
-    }, [showConfirm, showAlert, setLocalWorkout]);
+    }, [showConfirm, showAlert]);
 
     const endWorkout = useCallback(async (
         confirmEnd = true,
@@ -416,6 +451,7 @@ export function useWorkoutSession() {
 
     return {
         activeWorkout,
+        historySaving,
         routines,
         library,
         history,

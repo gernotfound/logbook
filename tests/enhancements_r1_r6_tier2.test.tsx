@@ -618,11 +618,13 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
             it('T2.6.2: Removing all exercises during active workout leaves empty workout state without crash', async () => {
                 let localWorkout: WorkoutSession | null = {
                     id: 'w1',
-                    exercises: [{ exId: 'ex1', sessionNote: '', sets: [] }]
+                    exercises: [{ id: 'se-ex1', exId: 'ex1', sessionNote: '', sets: [] }]
                 };
 
+                useAppStore.setState({ localWorkout });
                 const setLocalWorkout = (updater: any) => {
                     localWorkout = typeof updater === 'function' ? updater(localWorkout) : updater;
+                    useAppStore.setState({ localWorkout });
                 };
 
                 const { result } = renderHook(() =>

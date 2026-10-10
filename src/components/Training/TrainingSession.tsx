@@ -87,10 +87,11 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
     const postSessionSessionRef = useRef(captureSession());
     const postSessionRecoveryName = activeWorkout?.id ? `draft:post-session:${activeWorkout.id}` : null;
     const wasStartedRef = useRef(Boolean(activeWorkout?.globalStartTime));
-    const isPostSession = pendingEndTime !== null;
+    const isPostSession = pendingEndTime !== null && postSessionDraft?.workoutId === String(activeWorkout?.id ?? '');
 
     const persistPostSessionSnapshot = useCallback((draft = postSessionDraftRef.current, endTime = pendingEndTimeRef.current) => {
         if (!draft || !postSessionRecoveryName) return;
+        if (draft.workoutId !== String(activeWorkout?.id ?? '')) throw new Error('Bozza finale riferita a un altro allenamento.');
         const session = postSessionSessionRef.current;
         if (!isCurrentSession(session)) throw new Error('Sessione cambiata prima del salvataggio della valutazione finale.');
         try {
@@ -103,7 +104,7 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
             blockPostSessionPersistence(error);
             throw error;
         }
-    }, [postSessionRecoveryName]);
+    }, [postSessionRecoveryName, activeWorkout?.id]);
 
     const clearPostSessionRecovery = useCallback(() => {
         if (!postSessionRecoveryName) return;
@@ -117,7 +118,11 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
 
     useEffect(() => {
         const workoutId = String(activeWorkout?.id ?? '');
-        if (!workoutId || activeWorkout?.isEditingHistory || !postSessionRecoveryName) return;
+        if (!workoutId || activeWorkout?.isEditingHistory || !postSessionRecoveryName) {
+            postSessionDraftRef.current = null;
+            pendingEndTimeRef.current = null;
+            return;
+        }
         const session = captureSession();
         postSessionSessionRef.current = session;
         let recovered: ReturnType<typeof parsePostSessionRecovery>;
@@ -130,7 +135,13 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
             blockPostSessionPersistence(error);
             return;
         }
-        if (!recovered) return;
+        if (!recovered) {
+            if (postSessionDraftRef.current?.workoutId !== workoutId) {
+                postSessionDraftRef.current = null;
+                pendingEndTimeRef.current = null;
+            }
+            return;
+        }
         postSessionDraftRef.current = recovered.draft;
         setPostSessionDraft(recovered.draft);
         pendingEndTimeRef.current = recovered.pendingEndTime;

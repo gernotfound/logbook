@@ -768,13 +768,15 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
                 let localWorkout: WorkoutSession | null = {
                     id: 'w1',
                     exercises: [
-                        { exId: 'ex1', sessionNote: '', sets: [] },
-                        { exId: 'ex2', sessionNote: '', sets: [] }
+                        { id: 'se-ex1', exId: 'ex1', sessionNote: '', sets: [] },
+                        { id: 'se-ex2', exId: 'ex2', sessionNote: '', sets: [] }
                     ]
                 };
 
+                useAppStore.setState({ localWorkout });
                 const setLocalWorkout = (updater: any) => {
                     localWorkout = typeof updater === 'function' ? updater(localWorkout) : updater;
+                    useAppStore.setState({ localWorkout });
                 };
 
                 const showConfirm = vi.fn().mockResolvedValue(true);

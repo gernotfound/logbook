@@ -157,6 +157,10 @@ describe('Workout Reorder (R2) and Live Sync & Badges (R3) Suite', () => {
                 ]
             };
 
+            useAppStore.setState(state => ({
+                localWorkout: null,
+                userData: { ...state.userData!, history: [historicalWorkout], activeWorkout: null },
+            }));
             const { result } = renderHook(() => useWorkoutSession());
 
             await act(async () => {

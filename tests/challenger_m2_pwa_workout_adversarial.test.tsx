@@ -407,6 +407,19 @@ describe('Milestone 2 Challenger Suite: PWA and Offline Workout Stress Tests', (
         ],
       };
 
+      // An editor must be opened from an item that still exists in the
+      // owner's history; corrupted legacy fields are normalized at the editor boundary.
+      useAppStore.setState({
+        userData: {
+          profile: { name: 'Stress' },
+          history: [malformedHistorical],
+          routines: [],
+          library: [],
+          activeWorkout: null,
+        } as unknown as UserData,
+        localWorkout: null,
+      });
+
       await act(async () => {
         const ok = await result.current.startEditHistoricalWorkout(malformedHistorical);
         expect(ok).toBe(true);
@@ -421,7 +434,7 @@ describe('Milestone 2 Challenger Suite: PWA and Offline Workout Stress Tests', (
       expect(active?.exercises[1].sets).toEqual([]);
     });
 
-    it('handles saveHistoryEdit when localWorkout has no originalHistoryId or corrupted data', async () => {
+    it('rejects saveHistoryEdit when localWorkout is not a history editor', async () => {
       const { result } = renderHook(() => useWorkoutSession());
 
       useAppStore.setState({
@@ -439,12 +452,14 @@ describe('Milestone 2 Challenger Suite: PWA and Offline Workout Stress Tests', (
         } as any,
       });
 
+      const orphan = useAppStore.getState().localWorkout;
       await act(async () => {
         const success = await result.current.saveHistoryEdit();
-        expect(success).toBe(true);
+        expect(success).toBe(false);
       });
 
-      expect(useAppStore.getState().localWorkout).toBeNull();
+      expect(useAppStore.getState().localWorkout).toBe(orphan);
+      expect(useAppStore.getState().userData?.history).toEqual([]);
     });
   });
 
