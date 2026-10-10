@@ -2,7 +2,7 @@
 
 > Stato: guida tecnica stabile | Ultima verifica: 2026-10-02 | Fonti eseguibili: `src/lib/sentryClient.ts`, `src/lib/telemetry/`, `src/lib/telemetrySanitizer.ts`, `src/lib/storageTelemetry.ts`, `vite.config.ts`, `firebase.json`.
 
-TheLogBook usa Sentry esclusivamente come **Error Monitoring** tecnico della Production. Google Analytics 4 è un sistema separato e opzionale, caricato soltanto dopo opt-in esplicito; Vercel Analytics e Speed Insights sono ritirati dal frontend Production.
+TheLogBook usa Sentry esclusivamente come **Error Monitoring** tecnico della Production. Google Analytics 4/Firebase Analytics, Vercel Analytics e Speed Insights sono ritirati dal frontend Production; TheLogBook non invia eventi di utilizzo a servizi analytics.
 
 ## Perimetro
 

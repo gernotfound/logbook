@@ -11,11 +11,10 @@
 | Google / reCAPTCHA Enterprise / App Check | Anti-abuse/attestazione | Dati tecnici dispositivo/rete secondo servizio | `[VERIFY]` | `[VERIFY]` | `[VERIFY]` | `[VERIFY]` | Aperto |
 | Google / Firebase Hosting | Hosting statico frontend/PWA | Request metadata e asset pubblici; nessun dato business utente intenzionale | `[VERIFY_DPA]` | `[VERIFY]` | `[VERIFY]` | `[VERIFY]` | Aperto |
 | Vercel Functions / Cron | API server trusted e manutenzione account | Request metadata; payload API necessari; log tecnici | `[VERIFY_DPA]` | `[VERIFY]` | `[VERIFY]` | `[VERIFY_PLAN]` | Aperto |
-| Google Analytics 4 / Firebase Analytics | Analytics opzionale post-consenso | Dati tecnici di utilizzo secondo configurazione; nessun User-ID/evento salute custom intenzionale | `[VERIFY_DPA]` | `[VERIFY]` | `[VERIFY]` | `[VERIFY_CONFIGURATION]` | Opt-in |
 | Sentry | Error Monitoring e source map | Errori/stack sanitizzati, session ID tecnico, release/build e contesto tecnico minimizzato; nessun UID/email deliberatamente allegato dall'app | `[VERIFY_DPA]` | `[VERIFY_LIVE]` | `[VERIFY]` | `[VERIFY_PLAN_AND_CONFIGURATION]` | Errori tecnici |
 | GitHub | Repository e CI | Codice, metadati dev, log CI; nessun dato utente intenzionale | `[VERIFY]` | `[VERIFY]` | `[VERIFY]` | `[VERIFY]` | Dev-only |
 
-Vercel Analytics e Speed Insights sono ritirati dal frontend Production. Sentry Replay, tracing, logging e Application Metrics sono esclusi dalla configurazione TheLogBook corrente.
+Google Analytics 4/Firebase Analytics, Vercel Analytics e Speed Insights sono ritirati dal frontend Production. GA4 resta un fornitore storico per eventuali dati raccolti in precedenza: verificare conservazione e cancellazione nella console Google. Sentry Replay, tracing, logging e Application Metrics sono esclusi dalla configurazione TheLogBook corrente.
 
 ## Checklist per ogni fornitore
 

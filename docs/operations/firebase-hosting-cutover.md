@@ -6,7 +6,7 @@ Stato: cutover Production completato il 2026-10-02. Le voci esterne non direttam
 
 - Frontend/PWA: Firebase Hosting, site `thelogbook`, Firebase Spark.
 - Firestore, Authentication e App Check/reCAPTCHA Enterprise restano Firebase.
-- GA4 è analytics opzionale con nuovo opt-in; Sentry resta Error Monitoring.
+- GA4 era analytics opzionale al cutover del 2026-10-02; l'integrazione è stata ritirata il 2026-10-10. Sentry resta Error Monitoring.
 - Trusted backend e cron giornaliero: Vercel Hobby.
 - Production deriva esclusivamente da `main`.
 
@@ -18,8 +18,8 @@ Stato: cutover Production completato il 2026-10-02. Le voci esterne non direttam
 4. Firestore: deployare `firestore.indexes.json` e attendere che gli indici risultino pronti prima di attivare il nuovo backend. Checkpoint 2026-10-02: entrambi gli indici compositi richiesti da `account_deletions` risultano Abilitati.
 5. Vercel Production: verificare che il deployment applichi `framework: null` (preset Other/backend-only) e `fluid: true` dal `vercel.json`, evitando una build frontend Vite su Vercel e preservando il runtime delle funzioni; verificare inoltre il permesso effettivo `firebaseappcheck.appCheckTokens.verify` sul service account Firebase Admin usato dal backend, necessario alla consumazione dei token limited-use; mantenere `FIREBASE_ADMIN_PROJECT_ID`, `FIREBASE_ADMIN_CLIENT_EMAIL`, `FIREBASE_ADMIN_PRIVATE_KEY`, `CRON_SECRET` e `PUBLIC_APP_ORIGIN=https://thelogbook.web.app`. Il bridge CORS verso il vecchio frontend Vercel è ritirato dopo gli smoke verdi; eventuali env provider residue con il vecchio nome non fanno più parte del contratto runtime. Non sostituire queste credenziali runtime con la WIF del deploy Hosting.
 6. GitHub Actions: configurare Workload Identity Federation verso un service account dedicato al deploy. Mappare `google.subject=assertion.sub`, `attribute.repository_id=assertion.repository_id` e `attribute.repository_owner_id=assertion.repository_owner_id`; applicare al provider una condition sugli ID immutabili del repository e dell'owner di `gernotfound/logbook`, quindi autorizzare all'impersonation (`roles/iam.workloadIdentityUser` sul service account) soltanto il principal del repository, non il pool intero. Sul progetto Firebase assegnare al deployer soltanto `roles/firebasehosting.admin` e `roles/serviceusage.apiKeysViewer`, necessari al deploy Hosting via Firebase CLI. Non assegnare ruoli Functions/Cloud Run/Firestore a questa identità Hosting. Checkpoint 2026-10-02: pool/provider/deployer e binding risultano configurati senza chiavi private JSON.
-7. Repository variables richieste: `GCP_WORKLOAD_IDENTITY_PROVIDER`, `GCP_FIREBASE_DEPLOY_SERVICE_ACCOUNT`, `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN` (esattamente `thelogbook.web.app` in Production), `VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_APP_ID`, `VITE_FIREBASE_MEASUREMENT_ID`, `VITE_ACCOUNT_DELETION_API_ORIGIN`, `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY`, `VITE_SENTRY_DSN`, `SENTRY_ORG`, `SENTRY_PROJECT`. Secret: `SENTRY_AUTH_TOKEN`.
-8. Verificare Auth Authorized domains, OAuth origin/redirect, App Check/reCAPTCHA Enterprise e GA4 per `https://thelogbook.web.app`.
+7. Repository variables richieste: `GCP_WORKLOAD_IDENTITY_PROVIDER`, `GCP_FIREBASE_DEPLOY_SERVICE_ACCOUNT`, `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN` (esattamente `thelogbook.web.app` in Production), `VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_APP_ID`, `VITE_ACCOUNT_DELETION_API_ORIGIN`, `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY`, `VITE_SENTRY_DSN`, `SENTRY_ORG`, `SENTRY_PROJECT`. Secret: `SENTRY_AUTH_TOKEN`.
+8. Verificare Auth Authorized domains, OAuth origin/redirect, App Check/reCAPTCHA Enterprise per `https://thelogbook.web.app`.
 9. Non rimuovere ancora il vecchio origin Vercel dalle allowlist esterne.
 
 ### Checkpoint preparazione live — 2026-10-02
@@ -49,13 +49,13 @@ Completamento 2026-10-02: PR #191 squash-merged; `main` = `edf164e3e410a650d1390
 
 ## Smoke obbligatori
 
-- `https://thelogbook.web.app/`: 200, canonical/asset corretti, `Cache-Control: no-cache, no-store, must-revalidate` sull'app shell, nessun errore console bloccante; la CSP non deve generare violazioni per Firestore, Auth, App Check, Firebase Installations/GA4, Sentry o backend Vercel.
+- `https://thelogbook.web.app/`: 200, canonical/asset corretti, `Cache-Control: no-cache, no-store, must-revalidate` sull'app shell, nessun errore console bloccante; la CSP non deve generare violazioni per Firestore, Auth, App Check, Firebase Installations, Sentry o backend Vercel.
 - `sw.js`: no-cache/no-store/must-revalidate; PWA installabile e avvio offline.
 - Google popup + redirect `/__/auth/handler`; email/password.
 - Firestore read/write e sync local-first con App Check.
 - CORS Vercel dal nuovo origin, mai wildcard.
 - Account deletion con autenticazione recente, polling, recovery device, offline/multi-device; ripetere intenzionalmente una richiesta con lo stesso token App Check deve essere rifiutato come replay.
-- GA4: zero richieste prima del consenso; page view dopo opt-in senza query/hash; revoca cross-tab.
+- Analytics di utilizzo: zero richieste ai domini GA4/Google Tag Manager e nessun toggle GA4 nel frontend corrente.
 - Sentry: solo Error Monitoring e release uguale allo SHA di `main`.
 - robots, sitemap, Open Graph, favicon.
 - Runtime Vercel senza nuovi errori; verificare inoltre che le funzioni account-deletion e cron risultino configurate con durata massima 300s sotto Fluid Compute.
