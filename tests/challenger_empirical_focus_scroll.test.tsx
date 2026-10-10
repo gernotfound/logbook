@@ -3,7 +3,7 @@ import React from 'react';
 import { render, fireEvent, screen } from '@testing-library/react';
 import SessionSetRow from '../src/components/Training/session/SessionSetRow';
 import ExerciseSearchDropdown from '../src/components/Training/ExerciseSearchDropdown';
-import { WorkoutSet, ExerciseLibraryItem } from '../src/types';
+import type { SessionExerciseSet, ExerciseLibraryItem } from '../src/types';
 
 describe('Empirical Challenger Focus & Scroll Suite', () => {
     let originalScrollTo: typeof window.scrollTo;
@@ -21,12 +21,10 @@ describe('Empirical Challenger Focus & Scroll Suite', () => {
     });
 
     describe('1. Desktop Input Focus Empirical Verification (Zero Scroll Displacement)', () => {
-        const mockSet: WorkoutSet = {
+        const mockSet: SessionExerciseSet = {
             id: 'set-empirical-1',
-            type: 'normal',
-            kg: 80,
-            reps: 10,
-            completed: false
+            kg: '80',
+            reps: '10'
         };
 
         it('clicking and focusing numeric inputs produces zero window.scrollTo calls on desktop', () => {
@@ -43,6 +41,7 @@ describe('Empirical Challenger Focus & Scroll Suite', () => {
                     onAddSpecialSet={vi.fn()}
                     onUpdateSpecialSet={vi.fn()}
                     onRemoveSpecialSet={vi.fn()}
+                    onUpdateSetTarget={vi.fn()}
                 />
             );
 
@@ -67,11 +66,11 @@ describe('Empirical Challenger Focus & Scroll Suite', () => {
         });
 
         it('focusing time tracking inputs produces zero window.scrollTo calls', () => {
-            const timeSet: WorkoutSet = {
+            const timeSet: SessionExerciseSet = {
                 id: 'set-time-1',
-                type: 'normal',
-                time: '60s',
-                completed: false
+                kg: '',
+                reps: '',
+                time: '60s'
             };
 
             render(
@@ -87,6 +86,7 @@ describe('Empirical Challenger Focus & Scroll Suite', () => {
                     onAddSpecialSet={vi.fn()}
                     onUpdateSpecialSet={vi.fn()}
                     onRemoveSpecialSet={vi.fn()}
+                    onUpdateSetTarget={vi.fn()}
                 />
             );
 
