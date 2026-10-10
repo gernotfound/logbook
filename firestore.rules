@@ -14,7 +14,9 @@ service cloud.firestore {
     }
 
     function isActiveOwner(userId) {
-      return isOwner(userId) && !deletionJobExists(userId);
+      return isOwner(userId)
+        && request.auth.token.email_verified == true
+        && !deletionJobExists(userId);
     }
 
     function isValidMonthId(monthId) {

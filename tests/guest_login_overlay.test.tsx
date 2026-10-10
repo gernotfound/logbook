@@ -7,6 +7,10 @@ const authState = vi.hoisted(() => ({
     loading: false,
     isGuest: true,
     guestMigrationStatus: 'idle' as 'idle' | 'pending' | 'failed',
+    emailVerificationRequired: false,
+    refreshEmailVerification: vi.fn(async () => {}),
+    resendEmailVerification: vi.fn(async () => {}),
+    continueUnverifiedLocally: vi.fn(async () => {}),
     login: async () => {},
     loginAsGuest: async () => {},
     linkGoogleAccount: async () => {},
@@ -80,10 +84,22 @@ describe('guest login overlay lifecycle', () => {
         authState.loading = false;
         authState.isGuest = true;
         authState.guestMigrationStatus = 'idle';
+        authState.emailVerificationRequired = false;
         authState.retryGuestMigration.mockClear();
         authState.logout.mockClear();
         useAppStore.getState().resetStore({ force: true });
         useAppStore.getState().setSyncing(false);
+    });
+
+    it('shows the email-verification barrier before account views or navigation', () => {
+        authState.currentUser = { uid: 'pending-email' };
+        authState.isGuest = false;
+        authState.emailVerificationRequired = true;
+        render(<App />);
+        expect(screen.getByRole('heading', { name: 'Verifica la tua email' })).toBeTruthy();
+        expect(screen.queryByText('Home view')).toBeNull();
+        expect(screen.queryByTestId('bottom-nav')).toBeNull();
+        expect(screen.getByTestId('global-dialog')).toBeTruthy();
     });
 
     it('mounts the shared dialog boundary for the unauthenticated login screen', () => {

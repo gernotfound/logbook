@@ -26,7 +26,7 @@ beforeAll(async () => {
     vi.stubGlobal('navigator', { onLine: true });
     env = await initializeTestEnvironment({ projectId: 'demo-logbook-audit', firestore: { host: '127.0.0.1', port: 8080, rules: readFileSync('firestore.rules', 'utf8') } });
 });
-beforeEach(async () => { await env.clearFirestore(); await clear(); DB.resetCache(); sdk.db = env.authenticatedContext('a').firestore(); sdk.auth.currentUser = { uid: 'a' }; });
+beforeEach(async () => { await env.clearFirestore(); await clear(); DB.resetCache(); sdk.db = env.authenticatedContext('a', { email_verified: true }).firestore(); sdk.auth.currentUser = { uid: 'a' }; });
 afterAll(async () => { await env?.cleanup(); vi.unstubAllGlobals(); });
 async function prepareReplica() {
     const replica = await registerReplica(sdk.db, 'a');
@@ -63,7 +63,7 @@ it('retains the owner journal when real Rules reject a write', async () => {
     const base = data({});
     await initializeLocal('user:a', base);
     await prepareReplica();
-    sdk.db = env.authenticatedContext('b').firestore();
+    sdk.db = env.authenticatedContext('b', { email_verified: true }).firestore();
     const desired = data({ profile: { height: '171' } });
     await commitLocal('user:a', desired, base);
     const result = await DB.saveUserData(desired);

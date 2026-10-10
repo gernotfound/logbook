@@ -23,7 +23,7 @@ describe('Firestore Security Rules Whitelist & Parity Verification', () => {
     expect(rulesContent).toContain('function deletionJobExists(userId)');
     expect(rulesContent).toContain('documents/account_deletions/$(userId)');
     expect(rulesContent).toContain('function isActiveOwner(userId)');
-    expect(rulesContent).toContain('return isOwner(userId) && !deletionJobExists(userId);');
+    expect(rulesContent).toMatch(/return isOwner\(userId\)\s*&& request\.auth\.token\.email_verified == true\s*&& !deletionJobExists\(userId\);/);
     expect(rulesContent).toMatch(/match\s+\/account_deletions\/\{userId\}\s*\{[\s\S]*?allow\s+read,\s*write:\s*if\s+false;/);
     expect(rulesContent.match(/isActiveOwner\(userId\)/g)?.length).toBeGreaterThanOrEqual(12);
   });

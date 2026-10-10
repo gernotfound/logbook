@@ -3,8 +3,8 @@
     "suite": "default",
     "file": "src/App.tsx",
     "code": "react-hooks(exhaustive-deps)",
-    "message": "React Hook useEffect has missing dependencies: 'handleTabChange', and 'setActiveTab'",
-    "source": "handleTabChange(parsed.data);",
+    "message": "React Hook useEffect has missing dependencies: 'setActiveTab', and 'handleTabChange'",
+    "source": "if (activeTab !== 'home') setActiveTab('home');",
     "count": 1
   },
   {

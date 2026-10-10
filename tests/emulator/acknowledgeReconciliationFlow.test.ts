@@ -80,7 +80,7 @@ beforeEach(async () => {
     await env.clearFirestore();
     invalidateSession();
     firebaseHarness.auth.currentUser = { uid: 'a' };
-    firebaseHarness.db = env.authenticatedContext('a').firestore();
+    firebaseHarness.db = env.authenticatedContext('a', { email_verified: true }).firestore();
     acknowledgeHarness.before = undefined;
     acknowledgeHarness.after = undefined;
     await initializeLocal(owner, data(170));

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo, ReactNode } from 'react';
 import { User } from 'firebase/auth';
-import { auth, getDb, waitForPendingWrites, provider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendEmailVerification, reload } from '../lib/firebase';
+import { auth, getDb, waitForPendingWrites, provider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendEmailVerification, reload } from '../lib/firebase';
 import { DB } from '../lib/db';
 import { isAccountDeletionPending } from '../lib/sync/accountGate';
 import { useAppStore } from '../store/useAppStore';
@@ -28,6 +28,7 @@ import {
     writeBrowserValue,
 } from '../lib/sync/browserStorage';
 import { safeHardReload } from '../lib/sync/safeReload';
+import { prepareForReload } from '../lib/sync/reloadBarrier';
 import { classifyGooglePopupFailure } from './auth/googlePopup';
 import { watchDeletionRecoveryDeviceRegistration } from '../lib/deletionDeviceRecovery';
 import { validatePasswordAgainstPolicy } from '../lib/auth/passwordPolicy';
@@ -201,7 +202,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }, [isGuestActiveStrict, setSyncing, setUserData, setSaveError]);
 
     useEffect(() => {
-        if (!currentUser) return;
+        if (!currentUser || emailVerificationRequired) return;
         return watchDeletionRecoveryDeviceRegistration(
             currentUser,
             error => {
@@ -209,7 +210,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 console.warn('Recovery device non registrato; nuovo tentativo al prossimo ritorno online/in primo piano.', error);
             },
         );
-    }, [currentUser]);
+    }, [currentUser, emailVerificationRequired]);
 
     useEffect(() => {
         if (!currentUser || guestMigrationStatus === 'idle') return;
@@ -354,6 +355,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 && authRunRef.current === authRun
                 && (expectedUid ? auth.currentUser?.uid === expectedUid : auth.currentUser === null);
 
+            if (user && user.emailVerified === false) {
+                // Account creation signs users in before they verify their inbox.
+                // Do not claim an owner, hydrate cloud data or transfer guest data
+                // until verification is complete; preserve the guest migration intent.
+                const current = useAppStore.getState();
+                if (!isGuestActiveStrict() && current.dataOwner && current.dataOwner !== userOwner(user.uid)) {
+                    // Discard only the stale in-memory owner; retain both IndexedDB archives.
+                    useAppStore.setState({ userData: null, dataOwner: null, localWorkout: null });
+                }
+                setGuestMigrationStatus('idle');
+                setCurrentUser(user);
+                setEmailVerificationRequired(true);
+                setLoading(false);
+                return;
+            }
             if (user) {
                 tryRemoveBrowserValue(AWAITING_REDIRECT_KEY);
                 const expectedOwner = userOwner(user.uid);
@@ -383,8 +399,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
             if (user) {
                 const wasGuest = isGuestActiveStrict();
-                const hasPasswordProvider = (user.providerData ?? []).some((item: { providerId?: string }) => item.providerId === 'password');
-                setEmailVerificationRequired(hasPasswordProvider && user.emailVerified === false);
+                setEmailVerificationRequired(false);
                 const recoveryUid = readGuestMigrationRecoveryStrict();
 
                 if (recoveryUid === user.uid) {
@@ -481,7 +496,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         let isReloading = false;
         const handleVisibilityChange = async () => {
             if (isGuestActiveStrict()) return;
-            if (document.visibilityState === 'visible' && auth.currentUser) {
+            if (document.visibilityState === 'visible' && auth.currentUser &&
+                auth.currentUser.emailVerified !== false) {
                 if (useAppStore.getState().userData !== null && !useAppStore.getState().syncing && !isReloading) {
                     try {
                         isReloading = true;
@@ -608,13 +624,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const user = auth.currentUser;
         if (!user) throw new Error('Sessione non disponibile.');
         await reload(user);
-        const pending = user.emailVerified === false;
-        setEmailVerificationRequired(pending);
-        setSaveError(
-            pending
-                ? 'Email non ancora verificata. Apri il link ricevuto e riprova.'
-                : 'Email verificata correttamente.'
-        );
+        if (!user.emailVerified) {
+            setEmailVerificationRequired(true);
+            setSaveError('Email non ancora verificata. Apri il link ricevuto e riprova.');
+            return;
+        }
+        // Firebase's ID token may still contain email_verified=false after reload().
+        // Refresh its claims before resuming any owner-scoped cloud operation.
+        await user.getIdToken(true);
+        await safeHardReload();
     }, [setSaveError]);
 
     // Accesso guest: solo localStorage, zero Firebase
@@ -668,6 +686,28 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             }
         }
     }, [setSaveError, setUserData]);
+
+    const continueUnverifiedLocally = useCallback(async () => {
+        const user = auth.currentUser;
+        if (!user || user.emailVerified !== false) {
+            throw new Error('Nessuna verifica email in attesa.');
+        }
+        // Reconcile any in-memory edits and device-critical drafts before switching
+        // owner; a failed durability check must leave the account session intact.
+        const current = useAppStore.getState();
+        if (current.userData !== null || current.localWorkout !== null) {
+            await prepareForReload();
+        }
+        // Sign out without the authenticated purge path: local owner envelopes and
+        // any guest migration intent must survive until an explicit verified login.
+        await signOut(auth);
+        if (!isGuestActiveStrict()) {
+            // Never seed a fresh guest from another authenticated user's in-memory data.
+            // resetStore does not delete the authenticated IndexedDB envelope.
+            useAppStore.getState().resetStore({ force: true });
+            await loginAsGuest();
+        }
+    }, [isGuestActiveStrict, loginAsGuest]);
 
     // Collega account Google: migra i dati locali su Firestore
     const linkGoogleAccount = useCallback(async (guestPolicy?: GuestMigrationPolicy) => {
@@ -954,8 +994,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         loginWithEmail,
         registerWithEmail,
         resendEmailVerification,
-        refreshEmailVerification
-    }), [currentUser, loading, isGuest, guestMigrationStatus, emailVerificationRequired, login, loginAsGuest, linkGoogleAccount, retryGuestMigration, logout, loginWithEmail, registerWithEmail, resendEmailVerification, refreshEmailVerification]);
+        refreshEmailVerification,
+        continueUnverifiedLocally
+    }), [currentUser, loading, isGuest, guestMigrationStatus, emailVerificationRequired, login, loginAsGuest, linkGoogleAccount, retryGuestMigration, logout, loginWithEmail, registerWithEmail, resendEmailVerification, refreshEmailVerification, continueUnverifiedLocally]);
 
     return (
         <AuthContext.Provider value={value}>

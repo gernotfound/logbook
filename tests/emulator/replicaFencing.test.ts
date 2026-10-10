@@ -26,7 +26,7 @@ afterAll(async () => { await env?.cleanup(); });
 
 it('deduplicates concurrent first claims from tabs sharing one local actor identity', async () => {
     const uid = 'a';
-    const db = env.authenticatedContext(uid).firestore();
+    const db = env.authenticatedContext(uid, { email_verified: true }).firestore();
     const candidate = 'shared-local-actor';
     const [left, right] = await Promise.all([
         claimReplicaCheckpoint(db, uid, null, {}, 0, candidate),
@@ -43,7 +43,7 @@ it('deduplicates concurrent first claims from tabs sharing one local actor ident
 
 it('fences an old replica generation after an expired slot is reused', async () => {
     const uid = 'a';
-    const db = env.authenticatedContext(uid).firestore();
+    const db = env.authenticatedContext(uid, { email_verified: true }).firestore();
     const controlRef = doc(db, 'users/' + uid + '/sync_control/state');
     const rootRef = doc(db, 'users/' + uid);
     const now = Date.now();
@@ -120,7 +120,7 @@ it('fences an old replica generation after an expired slot is reused', async () 
 
 it('rejects Protocol 1/2 writers both before and after the account creates its replica-control barrier', async () => {
     const uid = 'a';
-    const db = env.authenticatedContext(uid).firestore();
+    const db = env.authenticatedContext(uid, { email_verified: true }).firestore();
     const rootRef = doc(db, 'users/' + uid);
 
     for (const protocolVersion of [1, 2]) {

@@ -149,7 +149,8 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
                     value={email}
                     onChange={e => { setEmail(e.target.value); setFormError(null); }}
                     required
-                    autoComplete="email"
+                    autoComplete="username"
+                    name="username"
                     className="ui-login-box-8" style={{ padding: "0.75rem" }}
                 />
 
