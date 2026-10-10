@@ -45,7 +45,7 @@
 - sanitizzazione/allowlist della telemetria;
 - account deletion server-mediated e tombstone recovery;
 - CI exact-SHA e branch protection workflow;
-- optional analytics opt-in;
+- nessuna integrazione di analytics di utilizzo né consenso GA4 nel frontend; Sentry limitato alla telemetria tecnica;
 - CSP e security headers;
 - segreti server fuori dal bundle client.
 

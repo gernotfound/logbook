@@ -14,7 +14,7 @@
 | Sentry | Error Monitoring e source map | Errori/stack sanitizzati, session ID tecnico, release/build e contesto tecnico minimizzato; nessun UID/email deliberatamente allegato dall'app | `[VERIFY_DPA]` | `[VERIFY_LIVE]` | `[VERIFY]` | `[VERIFY_PLAN_AND_CONFIGURATION]` | Errori tecnici |
 | GitHub | Repository e CI | Codice, metadati dev, log CI; nessun dato utente intenzionale | `[VERIFY]` | `[VERIFY]` | `[VERIFY]` | `[VERIFY]` | Dev-only |
 
-Google Analytics 4/Firebase Analytics, Vercel Analytics e Speed Insights sono ritirati dal frontend Production. GA4 resta un fornitore storico per eventuali dati raccolti in precedenza: verificare conservazione e cancellazione nella console Google. Sentry Replay, tracing, logging e Application Metrics sono esclusi dalla configurazione TheLogBook corrente.
+Google Analytics 4/Firebase Analytics è dismesso e non è un fornitore runtime corrente: integrazione client e collegamento Firebase rimossi, proprietà Analytics dismessa e variabile di build eliminata, secondo le operazioni confermate dal product owner. Anche Vercel Analytics e Speed Insights restano ritirati. Sentry Replay, tracing, logging e Application Metrics sono esclusi dalla configurazione corrente. Le configurazioni storiche restano rintracciabili nella cronologia Git.
 
 ## Checklist per ogni fornitore
 

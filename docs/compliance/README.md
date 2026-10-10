@@ -1,7 +1,7 @@
 # TheLogBook — pacchetto compliance per il primo pilot
 
 > Stato: struttura operativa da completare e far revisionare professionalmente prima della prima palestra.
-> Ultimo aggiornamento tecnico: 2 ottobre 2026.
+> Ultimo aggiornamento tecnico: 10 ottobre 2026.
 > Questo pacchetto non certifica conformità GDPR e non sostituisce consulenza legale, privacy o fiscale.
 
 ## Obiettivo
@@ -15,7 +15,7 @@ La fonte di verità tecnica resta il repository corrente. Le configurazioni este
 - La palestra paga tramite rapporto commerciale esterno alla PWA.
 - La palestra rende TheLogBook disponibile agli iscritti ma, nell'architettura attuale, non dispone di ruoli gym/coach/admin e non accede ai dati TheLogBook degli utenti.
 - TheLogBook resta destinato a maggiorenni.
-- Google Analytics 4/Firebase Analytics è stato ritirato dal client; restano i servizi Firebase necessari e la telemetria tecnica Sentry.
+- Google Analytics 4/Firebase Analytics è dismesso: integrazione e preferenza rimosse dal client, Firebase scollegato dalla proprietà e configurazione GitHub Analytics ritirata. Restano i servizi Firebase necessari e Sentry Error Monitoring.
 - Vercel Analytics e Speed Insights sono ritirati dal frontend Production.
 - Sentry è usato esclusivamente per errori/anomalie tecniche sanitizzati; la telemetria tecnica non viene usata per misurare il comportamento di allenamento o il funnel PWA.
 
