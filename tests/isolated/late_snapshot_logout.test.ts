@@ -52,12 +52,12 @@ it('fences an in-flight authenticated snapshot when logout invalidates its epoch
     const inFlight = saveUserDataToCache(data(180), data(170));
     invalidateSession();
     await expect(inFlight).rejects.toThrow('Sessione cambiata');
-    expect((await readLocal('user:account-a'))?.data.profile.height).toBe('170');
+    expect((await readLocal('user:account-a'))?.data.profile?.height).toBe('170');
 });
 
 it('does not turn bootstrap into an overwrite if another tab initialized first', async () => {
     sdk.auth.currentUser = { uid: 'account-a' };
     await initializeLocal('user:account-a', data(180));
     await saveUserDataToCache(data(160)); // stale bootstrap has no observed base
-    expect((await readLocal('user:account-a'))?.data.profile.height).toBe('180');
+    expect((await readLocal('user:account-a'))?.data.profile?.height).toBe('180');
 });
