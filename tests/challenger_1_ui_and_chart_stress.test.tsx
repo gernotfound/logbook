@@ -24,6 +24,7 @@ describe('Challenger 1: UI & Chart Component Stress Testing', () => {
                 date: dateStr,
                 exercises: [{
                     exId: 'ex_bench',
+                    sessionNote: '',
                     sets: [{ id: 's_' + i, kg: '100', reps: '10' }]
                 }]
             });
