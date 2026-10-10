@@ -5,7 +5,7 @@ const NutritionPlanning = () => {
     const { 
         planning, onMacrosCalc, offMacrosCalc, avgMacrosCalc, tdeeCalc,
         currentOnMacros, currentOffMacros,
-        handleUpdate, handleUpdateAvgMacros, handleUpdateOnBoost, handleSave 
+        handleUpdate, handleUpdateAvgMacros, handleUpdateOnBoost, handleSave, saveStatus 
     } = useNutritionPlanning();
 
     return (

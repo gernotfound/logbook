@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { mergeUserData, isDefaultNutritionPlanning } from '../src/lib/merge';
+import { mergeUserData, mergeNutritionPlanning, isDefaultNutritionPlanning } from '../src/lib/merge';
 import { createDefaultNutritionPlanning } from '../src/lib/nutritionDefaults';
 import { UserData, NutritionPlanning } from '../src/types';
 import { defaultUserDataFallback } from '../src/lib/schema';
@@ -13,7 +13,34 @@ function buildUserData(
         ...defaultUserDataFallback,
         nutritionPlanning: plan || undefined,
         nutritionPlanningOrigin: origin,
-        pendingConflicts: undefined
+        pendingConflicdescribe('nutrition provenance integrity under forward-compatible input', () => {
+    it('does not let passthrough planning fields overwrite merge-control metadata', () => {
+        const cloud = createDefaultNutritionPlanning();
+        const guest = { ...cloud, weight: 90, activePlan: null, pendingConflict: null, activeOrigin: 'generated-default' };
+        const result = mergeNutritionPlanning(cloud, guest, 'user-edited', 'user-edited');
+        expect(result.activePlan).toEqual(cloud);
+        expect(result.pendingConflict).toEqual(guest);
+        expect(result.activeOrigin).toBe('user-edited');
+    });
+
+    it('preserves newer fields as user data when a legacy origin flag is missing', () => {
+        const oldDefault = createDefaultNutritionPlanning();
+        const modernGuest = {
+            ...oldDefault,
+            avgMacros: { carbsPerKg: 4.5, proPerKg: 2, fatPerKg: 1 },
+            onBoost: { carbsPercent: 10, proPercent: 0, fatPercent: 0 },
+        };
+        expect(isDefaultNutritionPlanning(modernGuest)).toBe(false);
+        const result = mergeUserData(
+            buildUserData({ ...oldDefault, weight: 75 }, 'user-edited'),
+            buildUserData(modernGuest, undefined),
+        );
+        expect(result.nutritionPlanning?.weight).toBe(75);
+        expect(result.pendingConflicts?.nutritionPlanning?.avgMacros?.carbsPerKg).toBe(4.5);
+    });
+});
+
+ts: undefined
     };
 }
 

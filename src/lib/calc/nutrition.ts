@@ -1,4 +1,5 @@
 import Fuse from 'fuse.js';
+import type { UserData } from '../../types';
 import { calculateBodyFat } from './bodyFat';
 import { parseDateInput } from '../utils/date';
 
@@ -140,7 +141,7 @@ export function calculateNormocaloricaDiff(current: any, normocalorica: any) {
     };
 }
 
-export function calculateTDEEAndMacros(state: any) {
+export function calculateTDEEAndMacros(state: Pick<UserData, 'nutritionPlanning' | 'nutrition' | 'profile'> | null | undefined) {
     if (!state) return { tdee: 2500, bf: null, carbs: 300, pro: 160, fat: 70, totalKcal: 2500 };
     let tdeeVal = 2500;
     if (state.nutritionPlanning && state.nutritionPlanning.normocalorica && state.nutritionPlanning.normocalorica.kcal) {
@@ -155,13 +156,19 @@ export function calculateTDEEAndMacros(state: any) {
         }
     }
     const planning = state.nutritionPlanning || { weight: 80, carbsPerKg: 3.5, proPerKg: 2.0, fatPerKg: 1.0 };
-    const weight = parseFloat(planning.weight) || 80;
+    const weight = Number(planning.weight) || 80;
     let bfVal = null;
     if (state.profile) {
         const bfStr = calculateBodyFat(weight, state.profile);
         if (bfStr) bfVal = parseFloat(bfStr as any);
     }
-    const macros = calculateMacrosFromKg(weight, planning.carbsPerKg, planning.proPerKg, planning.fatPerKg);
+    const ratios = planning.avgMacros;
+    const macros = calculateMacrosFromKg(
+        weight,
+        ratios?.carbsPerKg ?? planning.carbsPerKg,
+        ratios?.proPerKg ?? planning.proPerKg,
+        ratios?.fatPerKg ?? planning.fatPerKg,
+    );
     return {
         tdee: tdeeVal,
         bf: bfVal,

@@ -125,6 +125,21 @@ describe('Empirical Challenger Suite: Edge Cases & Stress Verification', () => {
       expect(res).toBeNull();
     });
 
+    test('TDEE macro results use the modern average ratio instead of stale legacy scalars', () => {
+      const result = Logic.calculateTDEEAndMacros({
+        nutritionPlanning: {
+          weight: 80,
+          avgMacros: { carbsPerKg: 4, proPerKg: 2.5, fatPerKg: 1 },
+          carbsPerKg: 1,
+          proPerKg: 1,
+          fatPerKg: 1,
+        },
+      });
+      expect(result.carbs).toBe(320);
+      expect(result.pro).toBe(200);
+      expect(result.fat).toBe(80);
+    });
+
     test('Logic.calculateTDEEAndMacros handles missing profile and state defaults gracefully', () => {
       expect(Logic.calculateTDEEAndMacros(null)).toEqual({
         tdee: 2500, bf: null, carbs: 300, pro: 160, fat: 70, totalKcal: 2500
