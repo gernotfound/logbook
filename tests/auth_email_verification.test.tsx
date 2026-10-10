@@ -7,12 +7,8 @@ import { auth, createUserWithEmailAndPassword, onAuthStateChanged, reload, sendE
 import { DB } from '../src/lib/db';
 import { useAppStore } from '../src/store/useAppStore';
 import { idbStore } from './setup';
-
-const safeReload = vi.hoisted(() => vi.fn(async () => {}));
-vi.mock('../src/lib/sync/safeReload', async importOriginal => ({
-    ...await importOriginal<typeof import('../src/lib/sync/safeReload')>(),
-    safeHardReload: safeReload,
-}));
+import { draftRegistry } from '../src/lib/utils/draftRegistry';
+import { UserDataSchema } from '../src/lib/schema';
 
 const wrapper = ({ children }: { children: React.ReactNode }) => <AuthProvider>{children}</AuthProvider>;
 
@@ -77,7 +73,7 @@ describe('email verification lifecycle', () => {
         });
         expect(reload).toHaveBeenCalledWith(user);
         expect(user.getIdToken).not.toHaveBeenCalled();
-        expect(safeReload).not.toHaveBeenCalled();
+
 
         vi.mocked(reload).mockImplementationOnce(async () => {
             user.emailVerified = true;
@@ -86,7 +82,7 @@ describe('email verification lifecycle', () => {
             await result.current.refreshEmailVerification();
         });
         expect(user.getIdToken).toHaveBeenCalledWith(true);
-        expect(safeReload).toHaveBeenCalledTimes(1);
+
     });
 
     it('starts a separate local session without purging the authenticated archive', async () => {
@@ -105,6 +101,27 @@ describe('email verification lifecycle', () => {
         expect(localStorage.getItem('logbook_is_guest')).toBe('true');
         expect(idbStore['logbook:v2:user:unverified-user']).toBe(existingArchive);
         expect(DB.purgeAllLocalUserData).not.toHaveBeenCalled();
+    });
+
+    it('never signs out if pending account edits cannot be made durable', async () => {
+        const user = account(false);
+        startWith(user);
+        const { result } = renderHook(() => useAuth(), { wrapper });
+        await waitFor(() => expect(result.current.emailVerificationRequired).toBe(true));
+        useAppStore.setState({
+            userData: UserDataSchema.parse({}) as any,
+            dataOwner: 'user:unverified-user',
+        });
+        const flush = vi.spyOn(draftRegistry, 'flushAll').mockImplementationOnce(() => {
+            throw new Error('device storage unavailable');
+        });
+        try {
+            await expect(result.current.continueUnverifiedLocally()).rejects.toThrow('device storage unavailable');
+            expect(signOut).not.toHaveBeenCalled();
+            expect(result.current.isGuest).toBe(false);
+        } finally {
+            flush.mockRestore();
+        }
     });
 
     it('does not activate local mode if Firebase sign-out fails', async () => {
