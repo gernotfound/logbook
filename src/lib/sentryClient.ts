@@ -76,7 +76,7 @@ function captureError(payload: TelemetryErrorPayload): boolean {
   if (payload.stack) error.stack = scrubPII(payload.stack).slice(0, 1000);
 
   Sentry.withScope((scope) => {
-    scope.setFingerprint([payload.hash || `${error.name}:${message}`]);
+    scope.setFingerprint([scrubPII(payload.hash || `${error.name}:${message}`).slice(0, 160)]);
     scope.setTag('source', sanitizeTag(payload.source));
     scope.setTag('app_version', sanitizeTag(payload.context.appVersion));
     scope.setTag('build_sha', safeBuildSha());
