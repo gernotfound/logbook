@@ -12,6 +12,10 @@
     "tests/logout_protection.test.ts",
     "tests/guest_bootstrap_lifecycle.test.tsx",
     "tests/guest_account_migration_v3.test.tsx",
+    "tests/fnc_merge_01.test.ts",
+    "tests/edge_cases.test.tsx",
+    "tests/challenger_react_hooks_memo_stress.test.tsx",
+    "tests/workout_lifecycle_regressions.test.tsx",
     "tests/hardening/**/*.test.ts",
     "tests/hardening/**/*.test.tsx"
   ],
