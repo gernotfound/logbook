@@ -249,6 +249,26 @@ describe('Empirical Challenger: React Hooks, Memoization & Re-render Loop Stress
 
             dbSaveMock.mockRestore();
         });
+
+        it('1.6 preserves unsaved edits when the domain operation reports a failed result', async () => {
+            const originalDispatch = useAppStore.getState().dispatchDomainOperation;
+            const showAlertSpy = vi.spyOn(useDialogStore.getState(), 'showAlert').mockResolvedValue();
+            useAppStore.setState({
+                dispatchDomainOperation: vi.fn(async () => ({ ok: false, status: 'rejected' as const })),
+            });
+            try {
+                const { result } = renderHook(() => useNutritionPlanning());
+                act(() => { result.current.handleUpdate('weight', '92'); });
+                expect(result.current.saveStatus).toBe('unsaved');
+                await act(async () => { await result.current.handleSave(); });
+                expect(result.current.saveStatus).toBe('unsaved');
+                expect(result.current.planning.weight).toBe('92');
+                expect(useAppStore.getState().userData?.nutritionPlanning?.weight).toBe(78.5);
+                expect(showAlertSpy).toHaveBeenCalledWith('Errore durante il salvataggio della pianificazione.');
+            } finally {
+                useAppStore.setState({ dispatchDomainOperation: originalDispatch });
+            }
+        });
     });
 
     // =========================================================================
