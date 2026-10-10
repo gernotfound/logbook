@@ -159,9 +159,8 @@ describe('M7 daily account deletion recovery cron', () => {
       telemetryCycleCompleted: true,
     });
   });
-});
 
-it('continues independent cron phases if job selection fails', async () => {
+  it('continues independent cron phases if job selection fails', async () => {
   process.env.CRON_SECRET = 'expected-secret';
   store.listRecoverableDeletionJobs.mockRejectedValueOnce(new Error('list unavailable'));
   const err = vi.spyOn(console, 'error').mockImplementation(() => undefined);
@@ -195,4 +194,5 @@ it('continues telemetry if completed tombstone cleanup fails', async () => {
     expect((await response.json())).toMatchObject({ retentionErrors: 1, purged: 0 });
     expect(telemetryRetention.purgeExpiredTelemetry).toHaveBeenCalled();
   } finally { err.mockRestore(); }
+});
 });
