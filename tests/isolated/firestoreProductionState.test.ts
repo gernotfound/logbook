@@ -3,7 +3,9 @@ import {
   classifyFieldOverride,
   FIELD_OVERRIDE_LIST_FILTER,
   fieldOverrideListParent,
+  isActiveFieldIndexAddition,
   isActiveFieldIndexRemoval,
+  normalizeFieldIndexModes,
   parseFieldResource,
 } from '../../scripts/firestore-production-state.mjs';
 
@@ -113,6 +115,68 @@ describe('Firestore Production field exemption convergence', () => {
       operationState: 'PROCESSING',
       documentProgress: { completedWork: '50', estimatedWork: '100' },
     });
+  });
+
+
+  it('validates exact single-field group indexes while retaining all default collection modes', () => {
+    const desiredGroup = {
+      collectionGroup: 'telemetry_errors',
+      fieldPath: 'expireAt',
+      indexes: [
+        { queryScope: 'COLLECTION', order: 'ASCENDING' },
+        { queryScope: 'COLLECTION', order: 'DESCENDING' },
+        { queryScope: 'COLLECTION', arrayConfig: 'CONTAINS' },
+        { queryScope: 'COLLECTION_GROUP', order: 'ASCENDING' },
+      ],
+    };
+    const field = 'projects/p/databases/(default)/collectionGroups/telemetry_errors/fields/expireAt';
+    const liveIndexes = desiredGroup.indexes.map(index => ({ ...index, state: 'READY' }));
+    const ready = classifyFieldOverride(desiredGroup, [{
+      name: field,
+      indexConfig: { indexes: liveIndexes },
+    }], []);
+    expect(ready).toMatchObject({
+      explicit: true, indexesMatch: true, indexesReady: true,
+      matchesDesired: true, pending: false,
+    });
+
+    const creating = classifyFieldOverride(desiredGroup, [{
+      name: field,
+      indexConfig: { indexes: liveIndexes.map((index, i) =>
+        i === 3 ? { ...index, state: 'CREATING' } : index) },
+    }], []);
+    expect(creating).toMatchObject({
+      indexesMatch: true, indexesReady: false, matchesDesired: false, pending: true,
+    });
+
+    const missingMode = classifyFieldOverride(desiredGroup, [{
+      name: field,
+      indexConfig: { indexes: liveIndexes.slice(0, 3) },
+    }], []);
+    expect(missingMode).toMatchObject({ indexesMatch: false, matchesDesired: false, pending: false });
+
+    const operation = {
+      metadata: { field, state: 'PROCESSING', indexConfigDeltas: [{ changeType: 'ADD' }] },
+    };
+    expect(isActiveFieldIndexAddition(operation, desiredGroup)).toBe(true);
+    expect(isActiveFieldIndexAddition({ ...operation, done: true }, desiredGroup)).toBe(false);
+    expect(isActiveFieldIndexAddition({
+      ...operation, metadata: { ...operation.metadata, indexConfigDeltas: [{ changeType: 'REMOVE' }] },
+    }, desiredGroup)).toBe(false);
+    expect(classifyFieldOverride(desiredGroup, [], [operation])).toMatchObject({
+      found: false, matchesDesired: false, pending: true,
+    });
+  });
+
+  it('rejects invalid single-field index mode declarations instead of accepting drift', () => {
+    expect(() => normalizeFieldIndexModes([{ queryScope: 'INVALID', order: 'ASCENDING' }]))
+      .toThrow('Unsupported Firestore field index scope');
+    expect(() => normalizeFieldIndexModes([
+      { queryScope: 'COLLECTION', order: 'ASCENDING' },
+      { queryScope: 'COLLECTION', order: 'ASCENDING' },
+    ])).toThrow('Duplicate Firestore field index mode');
+    expect(() => normalizeFieldIndexModes([{ queryScope: 'COLLECTION_GROUP' }]))
+      .toThrow('Unsupported Firestore field index mode');
   });
 
   it('fails closed when live state differs without a matching active removal', () => {
