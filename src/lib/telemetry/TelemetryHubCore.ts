@@ -253,7 +253,7 @@ export class TelemetryHub {
         fastHash &&
         fastScrubbed !== undefined
       ) {
-        const errorId = `err_${fastHash}`;
+        const errorId = createTelemetryId('err', now);
         const uid = this.getUserId();
         const sessId = this.getSessionId();
         const ctx = getTelemetryContext();
@@ -337,7 +337,7 @@ export class TelemetryHub {
         : this.rateLimits.getActive(hash, now);
 
       if (!activeEntry) {
-        const errorId = `err_${hash}`;
+        const errorId = createTelemetryId('err', now);
         const payload: TelemetryErrorPayload = {
           timestamp: now,
           id: errorId,
