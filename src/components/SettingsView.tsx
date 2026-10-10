@@ -63,8 +63,13 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
 
     const handleAnalyticsToggle = () => {
         const newState = !analyticsEnabled;
-        setAnalyticsEnabled(newState);
-        setAnalyticsConsent(newState);
+        const persisted = setAnalyticsConsent(newState);
+        setAnalyticsEnabled(getAnalyticsConsent());
+        if (!persisted) {
+            void useDialogStore.getState().showAlert(newState
+                ? 'Impossibile salvare il consenso: Google Analytics rimane disattivato.'
+                : 'Google Analytics è stato disattivato per questa sessione, ma la revoca non è stata salvata. Riprova o cancella i dati del sito nel browser per eliminare il vecchio consenso.');
+        }
     };
 
     const handleCheckUpdate = async () => {

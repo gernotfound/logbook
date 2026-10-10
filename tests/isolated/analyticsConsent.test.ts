@@ -55,3 +55,38 @@ it('fails closed when enabling analytics cannot be persisted', async () => {
     expect(warn).toHaveBeenCalledWith('Impossibile memorizzare la preferenza Google Analytics:', expect.any(Error));
 });
 
+
+it('removes an old grant if storage setItem is blocked but removeItem works', async () => {
+    storedValue = 'true';
+    vi.mocked(localStorage.setItem).mockImplementation(() => { throw new Error('quota'); });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    let consent = await import('../../src/lib/analyticsConsent');
+    expect(consent.getAnalyticsConsent()).toBe(true);
+    expect(consent.setAnalyticsConsent(false)).toBe(true);
+    vi.resetModules();
+    consent = await import('../../src/lib/analyticsConsent');
+    expect(consent.getAnalyticsConsent()).toBe(false);
+    warn.mockRestore();
+});
+
+it('fails closed across a same-tab reload when both writes and removal are blocked', async () => {
+    storedValue = 'true';
+    let revocationBarrier: string | null = null;
+    vi.stubGlobal('sessionStorage', {
+        getItem: vi.fn(() => revocationBarrier),
+        setItem: vi.fn((_key: string, value: string) => { revocationBarrier = value; }),
+        removeItem: vi.fn(() => { revocationBarrier = null; }),
+    });
+    vi.mocked(localStorage.setItem).mockImplementation(() => { throw new Error('write blocked'); });
+    vi.mocked(localStorage.removeItem).mockImplementation(() => { throw new Error('removal blocked'); });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    let consent = await import('../../src/lib/analyticsConsent');
+    expect(consent.getAnalyticsConsent()).toBe(true);
+    expect(consent.setAnalyticsConsent(false)).toBe(false);
+    expect(consent.getAnalyticsConsent()).toBe(false);
+    expect(revocationBarrier).toBe('true');
+    vi.resetModules();
+    consent = await import('../../src/lib/analyticsConsent');
+    expect(consent.getAnalyticsConsent()).toBe(false);
+    warn.mockRestore();
+});
