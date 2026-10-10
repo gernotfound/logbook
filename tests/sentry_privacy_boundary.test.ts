@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TelemetryErrorPayload } from '../src/lib/telemetry/contracts';
 
 const sentry = vi.hoisted(() => {
@@ -23,6 +23,10 @@ describe('Sentry technical error privacy boundary', () => {
     vi.clearAllMocks();
     vi.stubEnv('VITE_SENTRY_DSN', 'https://public@example.invalid/1');
     vi.stubEnv('PROD', true);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
   });
 
   it('never sends raw secrets through exception, stack or fallback fingerprint', async () => {
