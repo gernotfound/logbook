@@ -43,7 +43,7 @@ describe('guest -> account skip policy', () => {
 
         expect(DB.loadCloudPayload).not.toHaveBeenCalled();
         expect(await readLocal('user:skip-user')).toBeUndefined();
-        expect((await readLocal('guest'))?.data.routines.map(routine => routine.id)).toContain('guest-routine');
+        expect((await readLocal('guest'))?.data.routines?.map(routine => routine.id)).toContain('guest-routine');
         expect(localStorage.getItem('logbook_is_guest')).toBe('true');
     });
 
@@ -73,12 +73,12 @@ describe('guest -> account skip policy', () => {
         await waitFor(async () => {
             const accountEnvelope = await readLocal('user:skip-user');
             expect(accountEnvelope).toBeDefined();
-            expect(accountEnvelope?.data.routines.map(routine => routine.id)).toEqual(['cloud-routine']);
-            expect(useAppStore.getState().userData?.routines.map(routine => routine.id)).toEqual(['cloud-routine']);
+            expect(accountEnvelope?.data.routines?.map(routine => routine.id)).toEqual(['cloud-routine']);
+            expect(useAppStore.getState().userData?.routines?.map(routine => routine.id)).toEqual(['cloud-routine']);
         });
 
         const guestEnvelope = await readLocal('guest');
-        expect(guestEnvelope?.data.routines.map(routine => routine.id)).toEqual(['guest-routine']);
+        expect(guestEnvelope?.data.routines?.map(routine => routine.id)).toEqual(['guest-routine']);
         expect(localStorage.getItem('logbook_is_guest')).toBeNull();
         expect(localStorage.getItem('guest_migration_intent_v1')).toBeNull();
         expect(DB.loadCloudPayload).toHaveBeenCalledTimes(1);

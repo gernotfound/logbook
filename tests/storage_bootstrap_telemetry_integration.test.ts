@@ -100,7 +100,7 @@ describe('Storage Bootstrap & Telemetry Integration Flow', () => {
 
   it('Flow 1: Valid current cache in IndexedDB initializes store and updates marker', async () => {
     const validData = {
-      profile: { name: 'Gym Athlete' },
+      profile: { height: '180' },
       library: [],
       routines: [],
       history: [],
@@ -121,7 +121,7 @@ describe('Storage Bootstrap & Telemetry Integration Flow', () => {
     await initApp();
 
     expect(window.__INITIAL_USER_DATA__).not.toBeNull();
-    expect(useAppStore.getState().userData?.profile?.name).toBe('Gym Athlete');
+    expect(useAppStore.getState().userData?.profile?.height).toBe('180');
 
     const marker = getStorageMarker();
     expect(marker).not.toBeNull();

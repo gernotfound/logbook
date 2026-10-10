@@ -81,11 +81,11 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
             });
 
             it('T2.1.5: Exporter.exportToCSV outputs sleep values in CSV without throwing on empty days', async () => {
-                const downloadFileSpy = vi.spyOn(Exporter, 'downloadFile').mockImplementation(() => {});
+                const downloadFileSpy = vi.spyOn(Exporter, 'downloadFile').mockResolvedValue(true);
 
                 const nutrition = {
-                    '2026-08-01': { date: '2026-08-01', weight: 80, sleepHours: '07:30', sleepDeep: '02:00' },
-                    '2026-08-02': { date: '2026-08-02', weight: 80.2 } // no sleep
+                    '2026-08-01': { date: '2026-08-01', kcal: 0, carbs: 0, pro: 0, fat: 0, weight: 80, sleepHours: '07:30', sleepDeep: '02:00' },
+                    '2026-08-02': { date: '2026-08-02', kcal: 0, carbs: 0, pro: 0, fat: 0, weight: 80.2 } // no sleep
                 };
 
                 await Exporter.exportToCSV([], nutrition, []);
@@ -196,7 +196,7 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
                         {
                             exId: 'ex_treadmill',
                             sessionNote: 'Warmup',
-                            sets: [{ id: 's_cardio', time: '20', distance: '3.5', speed: '10.5', incline: '2.0', kcal: '210' }]
+                            sets: [{ id: 's_cardio', kg: '', reps: '', time: '20', distance: '3.5', speed: '10.5', incline: '2.0', kcal: '210' }]
                         },
                         { exId: 'ex_bench', sessionNote: '', sets: [] }
                     ]
@@ -338,7 +338,7 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
                     localWorkout: activeSession
                 });
 
-                const exerciseHeadings = Array.from(container.querySelectorAll('h2')).map(h => h.textContent);
+                const exerciseHeadings = Array.from(container.querySelectorAll('h2') as NodeListOf<HTMLHeadingElement>).map(h => h.textContent);
                 expect(exerciseHeadings).toContain('Exercise Ten');
                 expect(exerciseHeadings).not.toContain('Exercise One');
             });
@@ -378,7 +378,9 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
                         onRemoveExercise={vi.fn()}
                         onUpdateSetsCount={vi.fn()}
                         onUpdateReps={vi.fn()}
-                        onUpdateTechnique={vi.fn()}
+                        onUpdateSetPlan={vi.fn()}
+                        onUpdateSetPlanField={vi.fn()}
+                        onUpdateExerciseMetadata={vi.fn()}
                         onSave={vi.fn()}
                         onCancel={vi.fn()}
                     />
@@ -421,7 +423,9 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
                         onRemoveExercise={vi.fn()}
                         onUpdateSetsCount={vi.fn()}
                         onUpdateReps={vi.fn()}
-                        onUpdateTechnique={vi.fn()}
+                        onUpdateSetPlan={vi.fn()}
+                        onUpdateSetPlanField={vi.fn()}
+                        onUpdateExerciseMetadata={vi.fn()}
                         onSave={vi.fn()}
                         onCancel={vi.fn()}
                     />
@@ -448,7 +452,9 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
                         onRemoveExercise={vi.fn()}
                         onUpdateSetsCount={vi.fn()}
                         onUpdateReps={vi.fn()}
-                        onUpdateTechnique={vi.fn()}
+                        onUpdateSetPlan={vi.fn()}
+                        onUpdateSetPlanField={vi.fn()}
+                        onUpdateExerciseMetadata={vi.fn()}
                         onSave={vi.fn()}
                         onCancel={vi.fn()}
                     />
@@ -477,7 +483,9 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
                         onRemoveExercise={onRemoveExercise}
                         onUpdateSetsCount={vi.fn()}
                         onUpdateReps={vi.fn()}
-                        onUpdateTechnique={vi.fn()}
+                        onUpdateSetPlan={vi.fn()}
+                        onUpdateSetPlanField={vi.fn()}
+                        onUpdateExerciseMetadata={vi.fn()}
                         onSave={vi.fn()}
                         onCancel={vi.fn()}
                     />
@@ -697,6 +705,8 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
                         onUpdateSpecialSet={vi.fn()}
                         onRemoveSpecialSet={vi.fn()}
                         onToggleSpecialMenu={vi.fn()}
+                    onUpdateSetTarget={vi.fn()}
+                    onUpdateTechnicalStandard={vi.fn()}
                     />
                 );
 

@@ -169,13 +169,13 @@ describe('Render Test Suite - Zero Crash Verification', () => {
 
   test('renders WorkoutTimer without crashing', () => {
     const { container } = renderWithProviders(
-      <WorkoutTimer globalStartTime={Date.now() - 60000} />
+      <WorkoutTimer />
     );
     expect(container.textContent).toMatch(/\d{2}:\d{2}/);
   });
 
   test('renders MuscleModel without crashing', () => {
-    const { container } = renderWithProviders(<MuscleModel targetMuscle="petto" />);
+    const { container } = renderWithProviders(<MuscleModel selectedMuscles={['chest']} />);
     expect(container.querySelector('svg')).not.toBeNull();
   });
 

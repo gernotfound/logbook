@@ -62,7 +62,7 @@ describe('store with real IndexedDB commits', () => {
         const saving = store.getState().saveUserData(data(171));
         expect(store.getState().syncHealth).toBe('saving');
         await vi.waitFor(async () => expect((await readLocal('user:A'))?.pending).toHaveLength(1));
-        expect((await readLocal('user:A'))?.data.profile.height).toBe('171');
+        expect((await readLocal('user:A'))?.data.profile?.height).toBe('171');
         expect(sdk.save).not.toHaveBeenCalled();
         await store.getState().flushPendingSyncs();
         await expect(saving).resolves.toEqual({ ok: true, status: 'synced' });
@@ -75,7 +75,7 @@ describe('store with real IndexedDB commits', () => {
         await observed;
         expect(sdk.save).not.toHaveBeenCalled();
         expect(store.getState().syncHealth).toBe('failed');
-        expect((await readLocal('user:A'))?.data.profile.height).toBe('170');
+        expect((await readLocal('user:A'))?.data.profile?.height).toBe('170');
     });
     it('retains the journal on server rejection', async () => {
         sdk.save.mockResolvedValue({ ok: false, status: 'rejected', error: { code: 'permission-denied' } });
@@ -153,7 +153,7 @@ describe('store with real IndexedDB commits', () => {
         remote.resolve({ ok: true, status: 'synced' });
         await flushing; await first;
         expect(store.getState().syncHealth).toBe('saving');
-        expect((await readLocal('user:A'))?.data.profile.height).toBe('172');
+        expect((await readLocal('user:A'))?.data.profile?.height).toBe('172');
         await store.getState().flushPendingSyncs(); await second;
         expect((await readLocal('user:A'))?.pending).toEqual([]);
     });
@@ -169,7 +169,7 @@ describe('store with real IndexedDB commits', () => {
         store.setState({ userData: data(180), syncHealth: 'local-pending' });
         remote.resolve({ ok: true, status: 'synced' });
         await flushing; await observed;
-        expect(store.getState().userData?.profile.height).toBe('180');
+        expect(store.getState().userData?.profile?.height).toBe('180');
         expect(store.getState().syncHealth).toBe('local-pending');
         expect((await readLocal('user:A'))?.pending).toHaveLength(1);
     });

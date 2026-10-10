@@ -6,7 +6,18 @@ const remote = vi.hoisted(() => ({
     apply: vi.fn(),
     auth: { currentUser: { uid: 'a' } as { uid: string } | null },
 }));
-const catalog = vi.hoisted(() => ({ exercises: [], foods: [] }));
+const catalog = vi.hoisted(() => ({
+    exercises: [],
+    foods: [],
+    manifest: {
+        version: 'recovery-test',
+        updatedAt: '2026-09-15T00:00:00.000Z',
+        schemaVersion: 1,
+        docRefs: { exercises: 'catalog/exercises', foods: 'catalog/foods' },
+        itemCounts: { exercises: 0, foods: 0 },
+    },
+    cachedAt: 0,
+}));
 
 vi.mock('../../src/lib/firebase', () => ({
     auth: remote.auth,
@@ -137,7 +148,7 @@ describe('M3 journal crash consistency', () => {
     it('recovers a durable local commit after a new session epoch before any remote delivery', async () => {
         await commitLocal(owner, data(171), data(170));
         const beforeRestart = await readLocal(owner);
-        expect(beforeRestart?.data.profile.height).toBe('171');
+        expect(beforeRestart?.data.profile?.height).toBe('171');
         expect(beforeRestart?.pending.length).toBeGreaterThan(0);
 
         invalidateSession();
@@ -146,8 +157,8 @@ describe('M3 journal crash consistency', () => {
         const result = await replicateJournal();
         expect(result).toMatchObject({ ok: true, status: 'synced' });
         expect((await readLocal(owner))?.pending).toEqual([]);
-        expect((await readLocal(owner))?.data.profile.height).toBe('171');
-        expect(currentCloudData().profile.height).toBe('171');
+        expect((await readLocal(owner))?.data.profile?.height).toBe('171');
+        expect(currentCloudData().profile?.height).toBe('171');
     });
 
     it('keeps the old durable state when the local transaction fails before journaling', async () => {
@@ -206,7 +217,7 @@ describe('M3 journal crash consistency', () => {
         expect(remote.apply).toHaveBeenCalledTimes(2);
         expect(cloudSnapshot()).toBe(committedCloud);
         expect((await readLocal(owner))?.pending).toEqual([]);
-        expect((await readLocal(owner))?.data.profile.height).toBe('171');
+        expect((await readLocal(owner))?.data.profile?.height).toBe('171');
     });
 
     it('keeps a post-commit acknowledgement error hard-failed when the local journal is no longer durable', async () => {
@@ -219,7 +230,7 @@ describe('M3 journal crash consistency', () => {
 
         expect(result.status).toBe('failed');
         expect(await readLocal(owner)).toBeUndefined();
-        expect(currentCloudData().profile.height).toBe('171');
+        expect(currentCloudData().profile?.height).toBe('171');
     });
 
     it('requires a durable exact batch when the remote commit succeeds but its response is lost', async () => {
@@ -260,7 +271,7 @@ describe('M3 journal crash consistency', () => {
 
         expect(result.status).toBe('failed');
         expect(await readLocal(owner)).toBeUndefined();
-        expect(currentCloudData().profile.height).toBe('171');
+        expect(currentCloudData().profile?.height).toBe('171');
     });
 
     it('fails closed when a current-version envelope loses its journal field', async () => {
@@ -298,7 +309,7 @@ describe('M3 journal crash consistency', () => {
         const retained = await readLocal(owner);
         expect(retained?.pending).toHaveLength(1);
         expect(retained?.pending[0].value).toBe('corrupted-after-delivery');
-        expect(currentCloudData().profile.height).toBe('171');
+        expect(currentCloudData().profile?.height).toBe('171');
     });
 
     it('preserves a newer local edit created between remote commit and acknowledgement', async () => {
@@ -315,8 +326,8 @@ describe('M3 journal crash consistency', () => {
         expect(result).toMatchObject({ ok: true, status: 'synced' });
         expect(remote.apply).toHaveBeenCalledTimes(2);
         expect((await readLocal(owner))?.pending).toEqual([]);
-        expect((await readLocal(owner))?.data.profile.height).toBe('172');
-        expect(currentCloudData().profile.height).toBe('172');
+        expect((await readLocal(owner))?.data.profile?.height).toBe('172');
+        expect(currentCloudData().profile?.height).toBe('172');
     });
 
     it('rehydrates safely after remote commit with a lost acknowledgement, then clears the replayed journal', async () => {
@@ -334,7 +345,7 @@ describe('M3 journal crash consistency', () => {
         const committedCloud = cloudSnapshot();
         invalidateSession();
         const hydrated = await hydrateLocal(owner, currentCloudData(), [], cloudDocumentsWithSync());
-        expect(hydrated.data.profile.height).toBe('171');
+        expect(hydrated.data.profile?.height).toBe('171');
         expect(hydrated.pending.length).toBeGreaterThan(0);
 
         const retry = await replicateJournal();
@@ -379,6 +390,6 @@ describe('M3 journal crash consistency', () => {
         const retry = await replicateJournal();
         expect(retry).toMatchObject({ ok: true, status: 'synced' });
         expect((await readLocal(owner))?.pending).toEqual([]);
-        expect(currentCloudData().profile.height).toBe('171');
+        expect(currentCloudData().profile?.height).toBe('171');
     });
 });

@@ -159,7 +159,7 @@ describe('PR 4: Nutrition Conflict Resolution (Store Unit Tests)', () => {
         expect(result.ok).toBe(false);
         if (!result.ok) {
             expect(result.status).toBe('failed');
-            expect(result.error?.message).toBe('conflict-resolved-elsewhere');
+            expect(result.error).toMatchObject({ message: 'conflict-resolved-elsewhere' });
         }
     });
 
@@ -174,8 +174,10 @@ describe('PR 4: Nutrition Conflict Resolution (Store Unit Tests)', () => {
         });
 
         expect(result.ok).toBe(false);
-        if (!result.ok) expect(result.status).toBe('failed');
-        expect(result.error).toBeDefined();
+        if (!result.ok) {
+            expect(result.status).toBe('failed');
+            expect(result.error).toBeDefined();
+        }
 
         const state = useAppStore.getState();
         expect(state.userData?.pendingConflicts?.nutritionPlanning).toBeDefined(); // No destructive mutation

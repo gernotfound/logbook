@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { mergeUserData, mergeArrayById, mergeNutrition, mergeProfile, mergeNutritionPlanning } from '../src/lib/merge';
-import type { UserData, NutritionDay, WorkoutSession } from '../src/types';
+import type { UserData, NutritionDay, WorkoutSession, WorkoutRoutine, TrainingCycle } from '../src/types';
 
 describe('Empirical Challenger: Deterministic Guest Merge (R5) Stress & Adversarial Suite', () => {
 
@@ -30,7 +30,7 @@ describe('Empirical Challenger: Deterministic Guest Merge (R5) Stress & Adversar
         });
 
         it('handles collisions in routines with nested exercise arrays', () => {
-            const cloudRoutines = [
+            const cloudRoutines: WorkoutRoutine[] = [
                 {
                     id: 'r_push',
                     name: 'Cloud Push Routine',
@@ -43,7 +43,7 @@ describe('Empirical Challenger: Deterministic Guest Merge (R5) Stress & Adversar
                 }
             ];
 
-            const guestRoutines = [
+            const guestRoutines: WorkoutRoutine[] = [
                 {
                     id: 'r_push',
                     name: 'Guest Push Routine Overwrite',
@@ -86,7 +86,7 @@ describe('Empirical Challenger: Deterministic Guest Merge (R5) Stress & Adversar
         });
 
         it('handles collisions in trainingCycles with nested routine frequencies and progression modes', () => {
-            const cloudCycles = [
+            const cloudCycles: TrainingCycle[] = [
                 {
                     id: 'cycle_1',
                     name: 'Cloud Meso 1',
@@ -96,7 +96,7 @@ describe('Empirical Challenger: Deterministic Guest Merge (R5) Stress & Adversar
                 }
             ];
 
-            const guestCycles = [
+            const guestCycles: TrainingCycle[] = [
                 {
                     id: 'cycle_1',
                     name: 'Guest Meso 1 Overwrite',
@@ -322,7 +322,8 @@ describe('Empirical Challenger: Deterministic Guest Merge (R5) Stress & Adversar
                 { id: '3', name: 'Item 3 Guest' }
             ] as any;
 
-            const merged = mergeArrayById(cloudWithNulls, guestWithNulls);
+            // Null entries intentionally exercise the legacy input boundary.
+            const merged = mergeArrayById(cloudWithNulls as Array<{ id: string; name: string }>, guestWithNulls as Array<{ id: string; name: string }>);
             expect(merged.length).toBeGreaterThanOrEqual(3);
             expect(merged.find(x => x && x.id === '2')?.name).toBe('Item 2 Guest');
             expect(merged.find(x => x && x.id === '1')?.name).toBe('Item 1');
@@ -374,9 +375,9 @@ describe('Empirical Challenger: Deterministic Guest Merge (R5) Stress & Adversar
                 }
             };
             const sanitizedResult = mergeUserData(cloudWithoutKcal, {});
-            expect(sanitizedResult.nutrition['2026-08-17']).toBeDefined();
-            expect(Number.isFinite(sanitizedResult.nutrition['2026-08-17'].kcal)).toBe(true);
-            expect(sanitizedResult.nutrition['2026-08-17'].kcal).toBe(0);
+            expect(sanitizedResult.nutrition?.['2026-08-17']).toBeDefined();
+            expect(Number.isFinite(sanitizedResult.nutrition?.['2026-08-17']?.kcal)).toBe(true);
+            expect(sanitizedResult.nutrition?.['2026-08-17']?.kcal).toBe(0);
         });
 
         it('merges profile with empty strings, nulls, and undefined without obliterating valid cloud data', () => {
@@ -445,11 +446,11 @@ describe('Empirical Challenger: Deterministic Guest Merge (R5) Stress & Adversar
             const result = mergeUserData(malformedCloud, malformedGuest);
             expect(result).toBeDefined();
             expect(result.library).toHaveLength(1);
-            expect(typeof result.library[0].name).toBe('string');
+            expect(typeof result.library?.[0]?.name).toBe('string');
             expect(result.history).toHaveLength(1);
-            expect(result.history[0].waterLiters).toBe(2.5); // string '2.5' converted to number
-            expect(result.nutrition['2026-08-16']).toBeDefined();
-            expect(Number.isFinite(result.nutrition['2026-08-16'].kcal)).toBe(true);
+            expect(result.history?.[0]?.waterLiters).toBe(2.5); // string '2.5' converted to number
+            expect(result.nutrition?.['2026-08-16']).toBeDefined();
+            expect(Number.isFinite(result.nutrition?.['2026-08-16']?.kcal)).toBe(true);
         });
 
         it('resists prototype pollution and malicious property injection', () => {
@@ -462,7 +463,7 @@ describe('Empirical Challenger: Deterministic Guest Merge (R5) Stress & Adversar
             const merged = mergeUserData({}, guestData);
             expect((Object.prototype as any).polluted).toBeUndefined();
             expect((Object.prototype as any).injected).toBeUndefined();
-            expect(merged.library[0].id).toBe('ex_safe');
+            expect(merged.library?.[0]?.id).toBe('ex_safe');
         });
     });
 
@@ -631,7 +632,7 @@ describe('Empirical Challenger: Deterministic Guest Merge (R5) Stress & Adversar
             }
 
             const cloudData: UserData = {
-                profile: { height: '180', weight: 80 },
+                profile: { height: '180', waist: '80' },
                 library: cloudLibrary,
                 routines: cloudRoutines,
                 customFoods: cloudCustomFoods,
@@ -644,7 +645,7 @@ describe('Empirical Challenger: Deterministic Guest Merge (R5) Stress & Adversar
             };
 
             const guestData: UserData = {
-                profile: { height: '182', weight: 82 },
+                profile: { height: '182', waist: '82' },
                 library: guestLibrary,
                 routines: guestRoutines,
                 customFoods: guestCustomFoods,
@@ -672,7 +673,7 @@ describe('Empirical Challenger: Deterministic Guest Merge (R5) Stress & Adversar
             expect(merged.supplements).toHaveLength(90);
             expect(merged.activeWorkout?.id).toBe('w_active_large');
             expect(merged.profile?.height).toBe('182');
-            expect(merged.profile?.weight).toBe(82);
+            expect(merged.profile?.waist).toBe('82');
         });
     });
 });

@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { Logic } from '../src/lib/logic';
 import { NutritionDaySchema, UserDataSchema } from '../src/lib/schema';
 import { mergeNutrition } from '../src/lib/merge';
@@ -301,9 +301,10 @@ describe('Empirical Challenger: Deep Adversarial Sleep Format Suite (R1)', () =>
             let capturedContent = '';
 
             const origDownload = Exporter.downloadFile;
-            Exporter.downloadFile = (fn: string, content: string) => {
+            Exporter.downloadFile = async (fn: string, content: string) => {
                 capturedFilename = fn;
                 capturedContent = content;
+                return true;
             };
 
             const sampleNutrition = {

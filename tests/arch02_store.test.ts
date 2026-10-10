@@ -26,11 +26,9 @@ describe('ARCH-02: createSyncSlice', () => {
                 activeWorkout: null,
                 trainingCycles: [],
                 activeCycleId: null,
-                nutritionPlanning: null,
                 supplements: [],
                 activePains: [],
-                catalogOverrides: {},
-                legalConsent: null
+                catalogOverrides: {}
             },
             syncing: false,
             saveError: null

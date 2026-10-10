@@ -68,7 +68,7 @@ it('retains the owner journal when real Rules reject a write', async () => {
     await commitLocal('user:a', desired, base);
     const result = await DB.saveUserData(desired);
     expect(result.status).toBe('rejected');
-    expect((await readLocal('user:a'))?.data.profile.height).toBe('171');
+    expect((await readLocal('user:a'))?.data.profile?.height).toBe('171');
     expect((await readLocal('user:a'))?.pending).toHaveLength(1);
 });
 it('adopts independent remote fields without overwriting them with the old local snapshot', async () => {

@@ -32,7 +32,7 @@ describe('JSON Export/Import Logic', () => {
             history: [{ id: 'h1', date: '2023-01-01', routineName: 'A', exercises: [] }]
         };
 
-        const downloadSpy = vi.spyOn(Exporter, 'downloadFile').mockImplementation(async () => {});
+        const downloadSpy = vi.spyOn(Exporter, 'downloadFile').mockResolvedValue(true);
         await Exporter.exportShareJson(mockUserData);
 
         const [, content] = downloadSpy.mock.calls[0];
@@ -62,7 +62,7 @@ describe('JSON Export/Import Logic', () => {
         };
         const mockUser = { uid: 'user123' };
 
-        const downloadSpy = vi.spyOn(Exporter, 'downloadFile').mockImplementation(async () => {});
+        const downloadSpy = vi.spyOn(Exporter, 'downloadFile').mockResolvedValue(true);
         downloadSpy.mockClear();
         await Exporter.exportBackupJson(mockUserData, mockUser);
 
@@ -106,7 +106,7 @@ describe('JSON Export/Import Logic', () => {
             ]
         };
 
-        const downloadSpy = vi.spyOn(Exporter, 'downloadFile').mockImplementation(async () => {});
+        const downloadSpy = vi.spyOn(Exporter, 'downloadFile').mockResolvedValue(true);
         downloadSpy.mockClear();
         await Exporter.exportShareJson(mockUserData, {
             exportTrainingCycles: ['c1'],
@@ -133,7 +133,7 @@ describe('JSON Export/Import Logic', () => {
             trainingCycles: [{ id: 'broken_c', name: 'Broken', durationWeeks: 4, routines: [{ routineId: 'ghost_r', frequencyPerWeek: 1 }] }]
         };
 
-        const downloadSpy = vi.spyOn(Exporter, 'downloadFile').mockImplementation(async () => {});
+        const downloadSpy = vi.spyOn(Exporter, 'downloadFile').mockResolvedValue(true);
         downloadSpy.mockClear();
         await Exporter.exportShareJson(mockUserData, {
             exportTrainingCycles: ['broken_c'],

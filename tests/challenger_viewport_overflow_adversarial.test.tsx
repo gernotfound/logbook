@@ -236,6 +236,7 @@ describe('EMPIRICAL CHALLENGER: Viewport & Overflow Adversarial Stress Suite (m2
                     onAddSpecialSet={vi.fn()}
                     onUpdateSpecialSet={vi.fn()}
                     onRemoveSpecialSet={vi.fn()}
+                onUpdateSetTarget={vi.fn()}
                 />
             );
 
@@ -303,9 +304,7 @@ describe('EMPIRICAL CHALLENGER: Viewport & Overflow Adversarial Stress Suite (m2
                 <DataSleep
                     selectedDate="2026-08-25"
                     setSelectedDate={vi.fn()}
-                    activeDateStr="2026-08-25"
-                    isEditing={false}
-                    existingLog={null}
+                    todayDateStr="2026-08-25"
                     sleepHook={{
                         sleepHours: '07:30',
                         setSleepHours: vi.fn(),
@@ -370,6 +369,7 @@ render(
                     mealTypes={mealTypes}
                     onEdit={vi.fn()}
                     onDelete={vi.fn()}
+                    onDuplicate={vi.fn()}
                     onQuickAddToMeal={onQuickAdd}
                 />
             );
@@ -398,6 +398,7 @@ render(
                     mealTypes={mealTypes}
                     onEdit={vi.fn()}
                     onDelete={vi.fn()}
+                    onDuplicate={vi.fn()}
                     onQuickAddToMeal={vi.fn()}
                 />
             );
@@ -430,6 +431,7 @@ render(
                         mealTypes={mealTypes}
                         onEdit={vi.fn()}
                         onDelete={vi.fn()}
+                    onDuplicate={vi.fn()}
                         onQuickAddToMeal={vi.fn()}
                     />
                 </div>,
@@ -515,12 +517,10 @@ render(
                             mealTypes={['Colazione', 'Pranzo', 'Cena', 'Spuntini']}
                             onEdit={vi.fn()}
                             onDelete={vi.fn()}
+                    onDuplicate={vi.fn()}
                             onQuickAddToMeal={vi.fn()}
                         />
-                        <DataBiometry
-                            profile={{ height: 180, gender: 'M', birthDate: '1995-05-15' }}
-                            onSaveProfile={vi.fn()}
-                        />
+                        <DataBiometry />
                     </div>,
                     { container: wrapper }
                 );

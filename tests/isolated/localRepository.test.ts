@@ -98,7 +98,7 @@ describe('durable owner-scoped journal', () => {
         }, initial);
         const persisted = await readLocal('user:a');
         expect(persisted?.data.activeWorkout).toBeNull();
-        expect(persisted?.data.history.map(item => item.id)).toContain(finished.id);
+        expect(persisted?.data.history?.map(item => item.id)).toContain(finished.id);
         expect(persisted?.closedWorkoutIds).toEqual([finished.id]);
     });
 
@@ -187,14 +187,14 @@ describe('durable owner-scoped journal', () => {
         const durable = await readLocal('guest');
         expect(durable?.pending).toEqual([]); // Guest operations have no cloud journal.
         await initializeLocal('guest', data(160));
-        expect((await readLocal('guest'))?.data.profile.height).toBe('180');
+        expect((await readLocal('guest'))?.data.profile?.height).toBe('180');
         expect((await readLocal('guest'))?.revision).toBe(durable?.revision);
     });
 
     it('preserves an already-acknowledged authenticated envelope during bootstrap', async () => {
         await initializeLocal('user:a', data(170));
         await initializeLocal('user:a', data(190));
-        expect((await readLocal('user:a'))?.data.profile.height).toBe('170');
+        expect((await readLocal('user:a'))?.data.profile?.height).toBe('170');
     });
 
     it('rejects a stale initialization after logout rather than recreating its envelope', async () => {
@@ -381,8 +381,8 @@ describe('durable owner-scoped journal', () => {
         await acknowledgeThrough('a', 1, first, [], { '': meta1 });
 
         const stored = await readLocal('a');
-        expect(stored?.data.profile.height).toBe('172');
-        expect(stored?.baseline.profile.height).toBe('172');
+        expect(stored?.data.profile?.height).toBe('172');
+        expect(stored?.baseline.profile?.height).toBe('172');
         expect(stored?.syncMetaByDocument[''].clock[actor]).toBe(2);
     });
 
@@ -409,8 +409,8 @@ describe('durable owner-scoped journal', () => {
         ]);
         const hydrated = await hydrateLocal('a', stale, [], staleDocuments, 'window');
 
-        expect(hydrated.data.profile.height).toBe('172');
-        expect((await readLocal('a'))?.data.profile.height).toBe('172');
+        expect(hydrated.data.profile?.height).toBe('172');
+        expect((await readLocal('a'))?.data.profile?.height).toBe('172');
     });
 
     it('emits parent tombstones when a workout or nutrition day is deleted', async () => {
@@ -456,8 +456,8 @@ describe('durable owner-scoped journal', () => {
         await commitLocal('b', data(180), data(179));
         await commitLocal('guest', data(160), data(159));
         await initializeLocal('a', data(120));
-        expect((await readLocal('a'))?.data.profile.height).toBe('171');
-        expect((await readLocal('b'))?.data.profile.height).toBe('180');
+        expect((await readLocal('a'))?.data.profile?.height).toBe('171');
+        expect((await readLocal('b'))?.data.profile?.height).toBe('180');
         expect((await readLocal('guest'))?.pending).toEqual([]);
     });
 
@@ -478,7 +478,7 @@ describe('durable owner-scoped journal', () => {
         await hydrateLocal('a', data(180), [], undefined, 'window');
         const hydrated = await readLocal('a');
         expect(hydrated?.revision).toBe(preview?.revision);
-        expect(hydrated?.data.profile.height).toBe('180');
+        expect(hydrated?.data.profile?.height).toBe('180');
 
         await expect(
             commitLocal('a', data(190), base, undefined, preview!.revision),
@@ -521,7 +521,7 @@ describe('durable owner-scoped journal', () => {
         const operations = await commitLocal('a', tabB, base);
         const stored = await readLocal('a');
 
-        expect(stored?.data.profile.height).toBe('171');
+        expect(stored?.data.profile?.height).toBe('171');
         expect(stored?.data.routines?.map(routine => routine.id)).toContain('routine-a');
         expect(operations.some(op => op.isDelete && op.path.includes('routine-a'))).toBe(false);
         expect(stored?.pending.some(op => op.isDelete && op.path.includes('routine-a'))).toBe(false);
@@ -546,7 +546,7 @@ describe('durable owner-scoped journal', () => {
         const operations = await commitLocal('guest', tabB, base);
         const stored = await readLocal('guest');
 
-        expect(stored?.data.profile.height).toBe('171');
+        expect(stored?.data.profile?.height).toBe('171');
         expect(stored?.data.routines?.map(routine => routine.id)).toContain('guest-routine-a');
         expect(operations.some(op => op.isDelete && op.path.includes('guest-routine-a'))).toBe(false);
         expect(stored?.pending).toHaveLength(0);

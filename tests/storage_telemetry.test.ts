@@ -496,7 +496,7 @@ describe('Storage Recovery Telemetry Suite', () => {
 
         expect(sendSpy).toHaveBeenCalledTimes(1);
         const [, data] = sendSpy.mock.calls[0];
-        expect(data.persisted).toBe(true);
+        expect(data).toMatchObject({ persisted: true });
       } finally {
         (navigator as any).storage = originalStorage;
       }

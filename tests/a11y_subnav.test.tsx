@@ -6,6 +6,7 @@ import NutritionView from '../src/components/Nutrition/NutritionView';
 import SettingsView from '../src/components/SettingsView';
 import TrainingView from '../src/components/Training/TrainingView';
 import { BottomNav } from '../src/components/UI/BottomNav';
+import type { TrainingSubTab } from '../src/types';
 
 // Mock dependencies
 vi.mock('../src/store/useAppStore', () => ({
@@ -93,8 +94,8 @@ describe('A11Y-01: Keyboard Accessibility for Sub-Navigation', () => {
 
     it('TrainingView sub-nav uses buttons with role="tab" and is keyboard accessible', async () => {
         const Wrapper = () => {
-            const [subTab, setSubTab] = useState('session');
-            return <TrainingView subTab={subTab} setSubTab={setSubTab} handleEditWorkout={vi.fn()} />;
+            const [subTab, setSubTab] = useState<TrainingSubTab>('session');
+            return <TrainingView subTab={subTab} setSubTab={setSubTab} />;
         };
         render(<Wrapper />);
         

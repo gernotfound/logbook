@@ -119,7 +119,7 @@ describe('AppCheck Initialization & Fallback Behavior', () => {
     vi.spyOn(appCheckSdk, 'initializeAppCheck').mockReturnValue(mockAppCheckInstance as any);
     vi.spyOn(appCheckSdk, 'getToken')
       .mockRejectedValueOnce(new Error('temporary token failure'))
-      .mockResolvedValueOnce({ token: 'recovered-token', expireTimeMillis: Date.now() + 3600000 });
+      .mockResolvedValueOnce({ token: 'recovered-token' });
 
     const first = await initAppCheck(dummyApp, { siteKey: 'enterprise-site-key' });
     const second = await initAppCheck(dummyApp, { siteKey: 'enterprise-site-key' });

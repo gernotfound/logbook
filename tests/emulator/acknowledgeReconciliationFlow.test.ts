@@ -6,7 +6,18 @@ import { initializeTestEnvironment, type RulesTestEnvironment } from '@firebase/
 import { doc, getDoc, setDoc, type Firestore } from 'firebase/firestore';
 import type { SyncMeta } from '../../src/lib/sync/semanticProjection';
 
-const catalog = vi.hoisted(() => ({ exercises: [], foods: [] }));
+const catalog = vi.hoisted(() => ({
+    exercises: [],
+    foods: [],
+    manifest: {
+        version: 'reconcile-test',
+        updatedAt: '2026-09-15T00:00:00.000Z',
+        schemaVersion: 1,
+        docRefs: { exercises: 'catalog/exercises', foods: 'catalog/foods' },
+        itemCounts: { exercises: 0, foods: 0 },
+    },
+    cachedAt: 0,
+}));
 const firebaseHarness = vi.hoisted(() => ({
     auth: { currentUser: { uid: 'a' } as { uid: string } | null },
     db: undefined as unknown as Firestore,
@@ -50,7 +61,7 @@ import { invalidateSession } from '../../src/lib/sync/session';
 import { projectDocuments, type DocumentData } from '../../src/lib/sync/documentProjection';
 import { diffDocuments } from '../../src/lib/sync/semanticProjection';
 import { applyDocumentChanges } from '../../src/lib/sync/transactionWriter';
-import { registerReplica } from './replicaHarness';
+import { registerReplica, asModularFirestore } from './replicaHarness';
 
 const owner = 'user:a';
 const remoteActor = 's01';
@@ -80,7 +91,7 @@ beforeEach(async () => {
     await env.clearFirestore();
     invalidateSession();
     firebaseHarness.auth.currentUser = { uid: 'a' };
-    firebaseHarness.db = env.authenticatedContext('a', { email_verified: true }).firestore();
+    firebaseHarness.db = asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore());
     acknowledgeHarness.before = undefined;
     acknowledgeHarness.after = undefined;
     await initializeLocal(owner, data(170));
@@ -107,7 +118,7 @@ describe('remote commit to local acknowledgement reconciliation', () => {
 
         const initialBusiness = projectDocuments(initial, catalog).get('')!;
         await env.withSecurityRulesDisabled(async context => {
-            await setDoc(doc(context.firestore(), 'users/a'), {
+            await setDoc(doc(asModularFirestore(context.firestore()), 'users/a'), {
                 ...initialBusiness,
                 _schemaVersion: 1,
                 _sync: {

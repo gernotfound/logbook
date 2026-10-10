@@ -191,7 +191,8 @@ describe('Adversarial & Stress Testing Suite for Catalog Resolution Pipeline (M1
             ];
 
             const overrides: CatalogOverrides = {
-                hiddenFoodIds: [0]
+                // Intentionally malformed legacy numeric ID to test normalization and collisions.
+                hiddenFoodIds: [0] as unknown as string[]
             };
 
             const resolved = resolveEffectiveFoods(globalFoods, customFoods, overrides);

@@ -50,7 +50,7 @@ describe('account deletion recovery device registration retries', () => {
     const { watchDeletionRecoveryDeviceRegistration } = await loadSubject();
     const current = user();
     firebase.auth.currentUser = current;
-    const fetchMock = vi.fn(async () => new Response('{}', { status: 200 }));
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response('{}', { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
 
     const dispose = watchDeletionRecoveryDeviceRegistration(current);

@@ -18,7 +18,7 @@ const TestAuthConsumer = () => {
     <div>
       <div data-testid="loading-state">{loading ? 'LOADING' : 'READY'}</div>
       <div data-testid="user-state">{currentUser ? currentUser.email : 'ANONYMOUS'}</div>
-      <div data-testid="data-state">{userData ? (userData.profile?.name || 'HAS_DATA') : 'NO_DATA'}</div>
+      <div data-testid="data-state">{userData ? (userData.profile?.height || 'HAS_DATA') : 'NO_DATA'}</div>
     </div>
   );
 };
@@ -165,8 +165,8 @@ describe('PWA & iPhone Startup Resilience Tests', () => {
 
   test('IndexedDB Cache Snapshot: stores cached userData in IndexedDB for instant offline start', async () => {
     const mockCache: UserData = {
-      profile: { name: 'Mario Rossi', height: '180' },
-      library: [{ id: 'ex1', name: 'Panca Piana', targetMuscle: 'petto', notes: '' }],
+      profile: { height: '180' },
+      library: [{ id: 'ex1', name: 'Panca Piana', muscles: ['chest'], setsCount: 3, sets: [], notes: '' }],
       routines: [],
       history: [],
       nutrition: {},
@@ -181,12 +181,12 @@ describe('PWA & iPhone Startup Resilience Tests', () => {
 
     const cachedInStorage = idbStore['logbook:v2:user:test-user-id'];
     expect(cachedInStorage).toBeTruthy();
-    expect(cachedInStorage.data.profile.name).toBe('Mario Rossi');
+    expect(cachedInStorage.data.profile.height).toBe('180');
   });
 
   test('Save and Reset Store manages local cached data correctly', async () => {
     const sampleData: UserData = {
-      profile: { name: 'Luigi' },
+      profile: { height: '176' },
       library: [],
       routines: [],
       history: [],
@@ -198,7 +198,7 @@ describe('PWA & iPhone Startup Resilience Tests', () => {
 
     useAppStore.getState().setUserData(sampleData);
     await new Promise(r => setTimeout(r, 0));
-    expect(idbStore['logbook:v2:user:test-user-id']?.data.profile?.name).toBe('Luigi');
+    expect(idbStore['logbook:v2:user:test-user-id']?.data.profile?.height).toBe('176');
 
     await DB.purgeAllLocalUserData();
     useAppStore.getState().resetStore();
