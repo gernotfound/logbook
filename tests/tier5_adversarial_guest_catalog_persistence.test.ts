@@ -206,7 +206,7 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
             expect(fullFoods.length).toBeGreaterThanOrEqual(200);
 
             const massiveState: UserData = {
-                profile: { name: 'Stress Beast Athlete', height: '185', gender: 'M' },
+                profile: { height: '185', gender: 'M' },
                 library: fullLibrary,
                 customFoods: fullFoods,
                 catalogOverrides,
@@ -253,7 +253,7 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
             vi.mocked(writeBatch).mockReturnValue(mockBatch as any);
 
             const cleanState: UserData = {
-                profile: { name: 'Zero Custom User' },
+                profile: { height: '180' },
                 library: resolveEffectiveExercises(seed.exercises),
                 customFoods: resolveEffectiveFoods(seed.foods),
                 catalogOverrides: {},
