@@ -1,7 +1,7 @@
 import React from 'react';
 import { act, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { getAuth, initializeAuth, onAuthStateChanged, signOut } from 'firebase/auth';
+import { createUserWithEmailAndPassword, getAuth, initializeAuth, onAuthStateChanged, signInWithEmailAndPassword, signInWithPopup, signOut } from 'firebase/auth';
 import { auth } from '../src/lib/firebase';
 import { watchDeletionRecoveryDeviceRegistration } from '../src/lib/deletionDeviceRecovery';
 import { mockFirebaseAuth, renderWithProviders } from './setup';
@@ -40,6 +40,42 @@ describe('shared Firebase Auth UI fixture contract', () => {
 
     unsubscribe();
     await signOut(auth);
+    expect(observer).toHaveBeenCalledTimes(2);
+  });
+
+
+  it('updates the shared session and auth observers after email sign-in and registration', async () => {
+    mockFirebaseAuth.currentUser = null;
+    const observer = vi.fn();
+    const unsubscribe = onAuthStateChanged(auth, observer);
+    expect(observer).toHaveBeenCalledExactlyOnceWith(null);
+
+    const signIn = await signInWithEmailAndPassword(auth, 'synthetic@example.test', 'test-password');
+    expect(auth.currentUser).toBe(signIn.user);
+    expect(observer).toHaveBeenLastCalledWith(signIn.user);
+
+    await signOut(auth);
+    expect(auth.currentUser).toBeNull();
+    expect(observer).toHaveBeenLastCalledWith(null);
+
+    const registration = await createUserWithEmailAndPassword(auth, 'synthetic@example.test', 'test-password');
+    expect(auth.currentUser).toBe(registration.user);
+    expect(observer).toHaveBeenLastCalledWith(registration.user);
+    expect(observer).toHaveBeenCalledTimes(4);
+
+    unsubscribe();
+    await signOut(auth);
+    expect(observer).toHaveBeenCalledTimes(4);
+  });
+
+  it('notifies auth observers after a successful Google popup sign-in', async () => {
+    mockFirebaseAuth.currentUser = null;
+    const observer = vi.fn();
+    onAuthStateChanged(auth, observer);
+
+    const credential = await signInWithPopup(auth, {} as never);
+    expect(auth.currentUser).toBe(credential.user);
+    expect(observer).toHaveBeenLastCalledWith(credential.user);
     expect(observer).toHaveBeenCalledTimes(2);
   });
 
