@@ -101,7 +101,7 @@ describe('LogBook Background Sync & Error Toast 4-Tier Test Suite', () => {
           useAppStore.setState({ syncing: true });
         });
         const allElements = container.querySelectorAll('*');
-        allElements.forEach((el) => {
+        allElements.forEach((el: Element) => {
           expect(el.id).not.toBe('sync-overlay');
         });
       });
@@ -424,7 +424,7 @@ describe('LogBook Background Sync & Error Toast 4-Tier Test Suite', () => {
         act(() => {
           useAppStore.setState({ syncing: true });
           useAppStore.setState((prev) => ({
-            userData: { ...prev.userData!, profile: { name: 'Aggiornato' } }
+            userData: { ...prev.userData!, profile: { height: '180' } }
           }));
         });
         expect(container.querySelector('#sync-overlay')).toBeNull();
