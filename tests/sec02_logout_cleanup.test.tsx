@@ -252,13 +252,13 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
         const owner = storageOwner();
         localStorage.setItem(`logbook:v2:${owner}:account-deletion`, '{"startedAt":');
         useAppStore.setState({
-            userData: { profile: { name: 'Preserve me' } } as any,
+            userData: { profile: { height: '175' } } as any,
             dataOwner: owner,
         });
 
         useAppStore.getState().resetStore();
 
-        expect(useAppStore.getState().userData?.profile?.name).toBe('Preserve me');
+        expect(useAppStore.getState().userData?.profile?.height).toBe('175');
         expect(useAppStore.getState().saveError).toContain('Cancellazione account in verifica');
     });
 
@@ -275,17 +275,17 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
         useAppStore.setState({
             userData: {
                 ...useAppStore.getState().userData,
-                profile: { name: 'Before deletion' },
+                profile: { height: '176' },
             } as any,
             dataOwner: owner,
         });
 
         await expect(useAppStore.getState().dispatchDomainOperation({
             type: 'profile.patch',
-            patch: { name: 'Must not persist' },
+            patch: { height: '177' },
         } as any)).rejects.toThrow('Cancellazione account in corso');
 
-        expect(useAppStore.getState().userData?.profile?.name).toBe('Before deletion');
+        expect(useAppStore.getState().userData?.profile?.height).toBe('176');
     });
 
     it('resetStore clears memory state without manual storage deletion', () => {
