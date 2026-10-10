@@ -144,7 +144,7 @@ describe('RISK-02: ConsentOverlay UI Behavior', () => {
         render(<PrivacyPolicy onClose={vi.fn()} />);
         expect(screen.getByText('Aggiornata al 10 ottobre 2026')).toBeDefined();
         expect(screen.getByText(/non integra Google Analytics 4/i)).toBeDefined();
-        expect(screen.getByText(/_ga/)).toBeDefined();
+        expect(screen.queryByText(/cookie first-party tecnici\/analitici/i)).toBeNull();
     });
 
     it('Pulsante disabilitato se consenso incompleto', () => {
