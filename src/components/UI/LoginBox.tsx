@@ -1,10 +1,12 @@
-import React, { useId, useRef, useState } from 'react';
+import React, { useEffect, useId, useRef, useState } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { sendPasswordResetEmail, auth } from '../../lib/firebase';
 import { useDialogStore } from '../../store/useDialogStore';
 import { Eye, EyeOff } from 'lucide-react';
 import { useModalFocusTrap } from '../../hooks/useModalFocusTrap';
-import { validatePasswordAgainstPolicy } from '../../lib/auth/passwordPolicy';
+import { getPasswordRequirements, loadPasswordRuleConfig, validatePasswordAgainstPolicy, type PasswordRuleConfig } from '../../lib/auth/passwordPolicy';
+import { describeEmailAuthError } from '../../lib/auth/emailAuthError';
+import { useAppStore } from '../../store/useAppStore';
 import { BrowserStorageError } from '../../lib/sync/browserStorage';
 
 interface LoginBoxProps {
@@ -17,14 +19,29 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
+    const [configuredPasswordRules, setConfiguredPasswordRules] = useState<PasswordRuleConfig>();
     const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
+    const [formError, setFormError] = useState<string | null>(null);
     const [resetSent, setResetSent] = useState(false);
     const [migrationPolicy, setMigrationPolicy] = useState<'merge' | 'skip'>('merge');
     const { showAlert, isOpen: globalDialogOpen } = useDialogStore();
     const titleId = useId();
+    const requirementsId = useId();
+    const confirmErrorId = useId();
+    const passwordRequirements = getPasswordRequirements(password, configuredPasswordRules);
+    const passwordMissing = mode === 'register' && password.length > 0 && passwordRequirements.some(item => !item.met);
+    const passwordMismatch = mode === 'register' && confirmPassword.length > 0 && password !== confirmPassword;
     const dialogRef = useRef<HTMLDivElement>(null);
     const emailInputRef = useRef<HTMLInputElement>(null);
+    useEffect(() => {
+        if (mode !== 'register') return;
+        let active = true;
+        void loadPasswordRuleConfig()
+            .then(rules => { if (active) setConfiguredPasswordRules(rules); })
+            .catch(() => { /* Keep advisory hints; Firebase remains authoritative on submission. */ });
+        return () => { active = false; };
+    }, [mode]);
     useModalFocusTrap({
         containerRef: dialogRef,
         initialFocusRef: emailInputRef,
@@ -46,45 +63,38 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (loading) return;
+        setFormError(null);
         setLoading(true);
         try {
             if (mode === 'login') {
                 await handleAuthAction(() => loginWithEmail(email, password, isGuest ? migrationPolicy : undefined));
             } else if (mode === 'register') {
                 if (password !== confirmPassword) {
-                    await showAlert("Le password non coincidono.");
-                    setLoading(false);
+                    setFormError('Le password non coincidono.');
                     return;
                 }
                 const weakError = await validatePasswordAgainstPolicy(password);
                 if (weakError) {
-                    await showAlert(weakError);
-                    setLoading(false);
+                    setFormError(weakError);
                     return;
                 }
                 await handleAuthAction(() => registerWithEmail(email, password, isGuest ? migrationPolicy : undefined));
             } else if (mode === 'forgot') {
                 if (!email) {
-                    await showAlert("Inserisci la tua email.");
-                    setLoading(false);
+                    setFormError('Inserisci la tua email.');
                     return;
                 }
                 await sendPasswordResetEmail(auth, email);
                 setResetSent(true);
                 await showAlert("Se l'email è registrata, riceverai un link per reimpostare la password. Controlla anche la cartella spam.");
-                setTimeout(() => setResetSent(false), 60000); // 60s timeout
+                setTimeout(() => setResetSent(false), 60000);
                 setMode('login');
             }
-        } catch (error: any) {
-            if (mode === 'forgot') {
-                if (error.code === 'auth/invalid-email') {
-                    await showAlert("Formato email non valido.");
-                } else if (error.code === 'auth/too-many-requests') {
-                    await showAlert("Troppi tentativi. Riprova più tardi.");
-                } else {
-                    await showAlert("Errore durante l'invio dell'email.");
-                }
-            }
+        } catch (error: unknown) {
+            setFormError(mode === 'forgot'
+                ? 'Non è stato possibile inviare il link. Controlla la connessione e riprova.'
+                : describeEmailAuthError(error));
         } finally {
             setLoading(false);
         }
@@ -102,7 +112,7 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
                     type="button"
                     className={`btn ${mode === 'login' || mode === 'forgot' ? 'btn-primary' : ''}`}
                     style={{ flex: 1, margin: 0, padding: "0.625rem", background: (mode === "login" || mode === "forgot") ? "" : "var(--surface-light)", color: (mode === "login" || mode === "forgot") ? "" : "var(--text-muted)", border: (mode === "login" || mode === "forgot") ? "" : "1px solid var(--glass-border)" }}
-                    onClick={() => { setMode('login'); setPassword(''); setConfirmPassword(''); }}
+                    onClick={() => { setMode('login'); setPassword(''); setConfirmPassword(''); setFormError(null); }}
                 >
                     Accedi
                 </button>
@@ -110,7 +120,7 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
                     type="button"
                     className={`btn ${mode === 'register' ? 'btn-primary' : ''}`}
                     style={{ flex: 1, margin: 0, padding: "0.625rem", background: mode === "register" ? "" : "var(--surface-light)", color: mode === "register" ? "" : "var(--text-muted)", border: mode === "register" ? "" : "1px solid var(--glass-border)" }}
-                    onClick={() => { setMode('register'); setPassword(''); setConfirmPassword(''); }}
+                    onClick={() => { setMode('register'); setPassword(''); setConfirmPassword(''); setFormError(null); }}
                 >
                     Registrati
                 </button>
@@ -137,7 +147,7 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
                     aria-label="Email"
                     placeholder="La tua email"
                     value={email}
-                    onChange={e => setEmail(e.target.value)}
+                    onChange={e => { setEmail(e.target.value); setFormError(null); }}
                     required
                     autoComplete="email"
                     className="ui-login-box-8" style={{ padding: "0.75rem" }}
@@ -150,10 +160,12 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
                             aria-label="Password"
                             placeholder={mode === 'register' ? 'Scegli una password sicura' : 'Password'}
                             value={password}
-                            onChange={e => setPassword(e.target.value)}
+                            onChange={e => { setPassword(e.target.value); setFormError(null); }}
+                            aria-invalid={passwordMissing}
+                            aria-describedby={mode === 'register' ? requirementsId : undefined}
                             required
                             autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
-                            className="ui-login-box-9" style={{ padding: "0.75rem", paddingRight: "2.5rem", width: "100%", boxSizing: "border-box" }}
+                            className="ui-login-box-9" style={{ padding: "0.75rem", paddingRight: "3.5rem", width: "100%", boxSizing: "border-box" }}
                         />
                         <button
                             type="button"
@@ -167,16 +179,35 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
                 )}
 
                 {mode === 'register' && (
-                    <input
-                        type={showPassword ? "text" : "password"}
-                        aria-label="Conferma password"
-                        placeholder="Conferma Password"
-                        value={confirmPassword}
-                        onChange={e => setConfirmPassword(e.target.value)}
-                        required
-                        autoComplete="new-password"
-                        className="ui-login-box-11" style={{ padding: "0.75rem", width: "100%", boxSizing: "border-box" }}
-                    />
+                    <ul id={requirementsId} className="ui-login-box-password-rules" aria-label="Requisiti della password">
+                        {passwordRequirements.map(item => (
+                            <li key={item.label} data-status={password ? (item.met ? 'met' : 'missing') : 'idle'}>
+                                {item.met ? '✓' : '•'} {item.label}
+                            </li>
+                        ))}
+                    </ul>
+                )}
+
+                {mode === 'register' && (
+                    <div>
+                        <input
+                            type={showPassword ? "text" : "password"}
+                            aria-label="Conferma password"
+                            placeholder="Conferma Password"
+                            value={confirmPassword}
+                            onChange={e => { setConfirmPassword(e.target.value); setFormError(null); }}
+                            aria-invalid={passwordMismatch}
+                            aria-describedby={passwordMismatch ? confirmErrorId : undefined}
+                            required
+                            autoComplete="new-password"
+                            className="ui-login-box-11" style={{ padding: "0.75rem", width: "100%", boxSizing: "border-box" }}
+                        />
+                        {passwordMismatch && <p id={confirmErrorId} className="ui-login-box-error">Le password non coincidono.</p>}
+                    </div>
+                )}
+
+                {formError && (
+                    <p className="ui-login-box-error" role="alert">{formError}</p>
                 )}
 
                 <button
@@ -189,12 +220,12 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
                 </button>
 
                 {mode === 'login' && (
-                    <button type="button" onClick={() => setMode('forgot')} className="ui-login-box-13" style={{ cursor: "pointer", textDecoration: "underline" }}>
+                    <button type="button" onClick={() => { setMode('forgot'); setFormError(null); }} className="ui-login-box-13" style={{ cursor: "pointer", textDecoration: "underline" }}>
                         Hai dimenticato la password?
                     </button>
                 )}
                 {mode === 'forgot' && (
-                    <button type="button" onClick={() => setMode('login')} className="ui-login-box-14" style={{ cursor: "pointer" }}>
+                    <button type="button" onClick={() => { setMode('login'); setFormError(null); }} className="ui-login-box-14" style={{ cursor: "pointer" }}>
                         Torna all'accesso
                     </button>
                 )}
@@ -206,7 +237,12 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
                 <div className="ui-login-box-17" style={{ flex: 1, height: "1px" }} />
             </div>
 
-            <button id="btn-login-google" type="button" className="btn ui-login-box-18" style={{ padding: "0.75rem", width: "100%", marginBottom: "0.9375rem" }} onClick={() => handleAuthAction(() => isGuest ? linkGoogleAccount(migrationPolicy) : login())}>
+            <button id="btn-login-google" type="button" className="btn ui-login-box-18" style={{ padding: "0.75rem", width: "100%", marginBottom: "0.9375rem" }} onClick={() => {
+                setFormError(null);
+                void handleAuthAction(() => isGuest ? linkGoogleAccount(migrationPolicy) : login())
+                    .then(() => { const error = useAppStore.getState().saveError; if (error) setFormError(error); })
+                    .catch(error => setFormError(describeEmailAuthError(error)));
+            }}>
                 <svg style={{ width: "1.25rem", height: "1.25rem", marginRight: "0.625rem", fill: "currentColor", verticalAlign: "middle" }} viewBox="0 0 24 24">
                     <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
                     <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>

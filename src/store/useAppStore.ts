@@ -30,9 +30,12 @@ if (typeof document !== 'undefined') {
     document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'hidden') {
             const state = useAppStore.getState();
-            const session = captureSession();
             try {
+                // Flush registered drafts even when the current screen has no owner.
+                // Only the owner-bound workout snapshot can be skipped for an empty login screen.
                 draftRegistry.flushAll({ strict: true });
+                if (state.userData === null && state.dataOwner === null && state.localWorkout === null) return;
+                const session = captureSession();
                 persistOwnerBoundWorkoutSnapshot(session, state.dataOwner, state.localWorkout);
             } catch (error) {
                 console.error('Persistenza device-critical fallita durante visibilitychange:', error);

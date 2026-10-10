@@ -11,6 +11,30 @@ async function continueAsGuest(page: Page) {
   await page.getByRole('button', { name: 'Allenamento', exact: true }).waitFor();
 }
 
+test('registration password rules and visibility control stay aligned on mobile in both themes', async ({ page }) => {
+  for (const theme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme: theme });
+    await page.goto('/');
+    await page.getByRole('button', { name: 'Registrati' }).first().click();
+    const password = page.locator('input.ui-login-box-9');
+    await password.fill('caccapuou');
+    await expect(password).toHaveAttribute('aria-invalid', 'true');
+    await expect(page.getByText(/Una lettera maiuscola/)).toHaveAttribute('data-status', 'missing');
+
+    const inputBox = await password.boundingBox();
+    const eye = await page.getByRole('button', { name: 'Mostra password' }).boundingBox();
+    expect(inputBox).not.toBeNull();
+    expect(eye).not.toBeNull();
+    expect(eye!.width).toBeGreaterThanOrEqual(44);
+    expect(eye!.height).toBeGreaterThanOrEqual(44);
+    expect(Math.abs((eye!.y + eye!.height / 2) - (inputBox!.y + inputBox!.height / 2))).toBeLessThanOrEqual(1);
+
+    await page.getByRole('button', { name: 'Mostra password' }).click();
+    await expect(password).toHaveAttribute('type', 'text');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)).toBe(false);
+  }
+});
+
 test('food search results remain visible and can be added to a meal', async ({ page }) => {
   await continueAsGuest(page);
   await page.getByRole('button', { name: 'Nutrizione', exact: true }).click();

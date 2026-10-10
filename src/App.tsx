@@ -370,6 +370,7 @@ function App() {
   if (!currentUser && !isGuest) {
     return (
       <div id="auth-overlay">
+        <GlobalDialog />
         <LoginBox />
       </div>
     );

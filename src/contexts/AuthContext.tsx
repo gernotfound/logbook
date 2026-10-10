@@ -30,7 +30,8 @@ import {
 import { safeHardReload } from '../lib/sync/safeReload';
 import { classifyGooglePopupFailure } from './auth/googlePopup';
 import { watchDeletionRecoveryDeviceRegistration } from '../lib/deletionDeviceRecovery';
-import { PASSWORD_POLICY_SUMMARY, validatePasswordAgainstPolicy } from '../lib/auth/passwordPolicy';
+import { validatePasswordAgainstPolicy } from '../lib/auth/passwordPolicy';
+import { describeEmailAuthError } from '../lib/auth/emailAuthError';
 import { reportError } from '../lib/errorHandler';
 import { clearAuthenticatedOwnerHint, rememberAuthenticatedOwner } from '../lib/sync/authOwnerHint';
 import { beginGuestMigrationIntent, bindGuestMigrationIntentToUser, clearGuestMigrationIntent } from '../lib/auth/guestMigrationIntent';
@@ -542,20 +543,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
     }, [isGuestActiveStrict, setSaveError, startGoogleRedirect]);
 
-    const handleAuthError = useCallback((error: any) => {
-        let msg = "Errore di autenticazione.";
-        switch (error.code) {
-            case 'auth/email-already-in-use': msg = "Questa email è già registrata."; break;
-            case 'auth/invalid-email': msg = "Formato email non valido."; break;
-            case 'auth/weak-password': msg = PASSWORD_POLICY_SUMMARY; break;
-            case 'auth/user-not-found':
-            case 'auth/wrong-password':
-            case 'auth/invalid-credential':
-                msg = "Email o password errati."; break;
-            case 'auth/too-many-requests': msg = "Troppi tentativi falliti. Riprova più tardi."; break;
-            default: msg = error.message;
-        }
-        setSaveError(msg);
+    const handleAuthError = useCallback((error: unknown): never => {
+        setSaveError(describeEmailAuthError(error));
         throw error;
     }, [setSaveError]);
 
