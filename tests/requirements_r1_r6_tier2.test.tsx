@@ -227,6 +227,7 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                         onAddSpecialSet={vi.fn()}
                         onUpdateSpecialSet={vi.fn()}
                         onRemoveSpecialSet={vi.fn()}
+                    onUpdateSetTarget={vi.fn()}
                     />
                 );
 
@@ -242,6 +243,7 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                         onAddSpecialSet={vi.fn()}
                         onUpdateSpecialSet={vi.fn()}
                         onRemoveSpecialSet={vi.fn()}
+                    onUpdateSetTarget={vi.fn()}
                     />
                 );
 
@@ -270,6 +272,7 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                         onAddSpecialSet={vi.fn()}
                         onUpdateSpecialSet={vi.fn()}
                         onRemoveSpecialSet={vi.fn()}
+                    onUpdateSetTarget={vi.fn()}
                     />
                 );
 
@@ -299,6 +302,7 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                         onAddSpecialSet={vi.fn()}
                         onUpdateSpecialSet={vi.fn()}
                         onRemoveSpecialSet={vi.fn()}
+                    onUpdateSetTarget={vi.fn()}
                     />
                 );
 
@@ -326,6 +330,7 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                         onAddSpecialSet={vi.fn()}
                         onUpdateSpecialSet={vi.fn()}
                         onRemoveSpecialSet={vi.fn()}
+                    onUpdateSetTarget={vi.fn()}
                     />
                 );
 
@@ -353,6 +358,7 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                         onAddSpecialSet={vi.fn()}
                         onUpdateSpecialSet={vi.fn()}
                         onRemoveSpecialSet={mockRemove}
+                    onUpdateSetTarget={vi.fn()}
                     />
                 );
 
@@ -375,6 +381,7 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                         onAddSpecialSet={vi.fn()}
                         onUpdateSpecialSet={vi.fn()}
                         onRemoveSpecialSet={vi.fn()}
+                    onUpdateSetTarget={vi.fn()}
                     />
                 )).not.toThrow();
             });
@@ -392,6 +399,7 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                         onAddSpecialSet={vi.fn()}
                         onUpdateSpecialSet={vi.fn()}
                         onRemoveSpecialSet={vi.fn()}
+                    onUpdateSetTarget={vi.fn()}
                     />
                 );
 
