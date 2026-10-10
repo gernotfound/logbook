@@ -245,7 +245,9 @@ describe('Empirical Challenger: React Hooks, Memoization & Re-render Loop Stress
                 await result.current.handleSave();
                 await new Promise(r => setTimeout(r, 0));
             });
-            expect(showAlertSpy).toHaveBeenCalledWith('Errore durante il salvataggio della pianificazione.');
+            expect(showAlertSpy).toHaveBeenCalledWith(expect.stringContaining('Errore durante il salvataggio della pianificazione.'));
+            expect(result.current.saveStatus).toBe('error');
+            expect(result.current.planning.weight).toBe(82.5);
 
             dbSaveMock.mockRestore();
         });
