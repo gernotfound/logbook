@@ -62,7 +62,7 @@ Firebase Hosting, Firebase Authentication, Firestore, Firebase Admin e App Check
 
 - Google Analytics 4/Firebase Analytics, Vercel Analytics e Speed Insights non fanno parte del runtime corrente.
 - **MUST:** non inviare page view, eventi di utilizzo o dati sanitari a servizi analytics; mantenere separata la telemetria tecnica Sentry.
-- **VERIFY:** dismissione dello stream/proprietà GA4, eventuali dati storici e variabili residue nel provider sono controlli esterni, non attestati dal repository.
+- **NOTE:** il product owner ha confermato lo scollegamento GA4 dal progetto Firebase, la dismissione della proprietà Google Analytics e la rimozione della variabile GitHub del Measurement ID. La PR #320 attesta separatamente la rimozione dal codice e dai workflow. Non permane alcuna configurazione Analytics corrente da gestire.
 
 ### Sentry
 

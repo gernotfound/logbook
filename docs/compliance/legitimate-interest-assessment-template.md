@@ -22,7 +22,7 @@ L'interesse non deve essere descritto genericamente come "analytics": il perimet
 | Si può usare dato aggregato/non identificato invece di UID/session ID? | `[ASSESS]` |
 | L'evento è diagnostico e non comportamentale? | `[YES/NO]` |
 
-Se un evento non supera il test di necessità, rimuoverlo o spostarlo nel flusso analytics soggetto a consenso, se davvero necessario.
+Se un evento non supera il test di necessità, non raccoglierlo o rimuoverlo. Non trasformare la telemetria tecnica in analytics comportamentali.
 
 ## 3. Bilanciamento
 

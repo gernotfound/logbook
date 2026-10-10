@@ -54,18 +54,7 @@
 | Destinatari | Sentry / personale autorizzato strettamente necessario; Firestore solo per cleanup legacy |
 | Misure | Sanitizzazione PII client, `beforeSend` restrittivo, deduplica/rate limit, data scrubbing Sentry configurato esternamente; legacy Firestore owner-scoped |
 
-## Attività 4 — Google Analytics ritirato (storico)
-
-TheLogBook non effettua più analytics di utilizzo. Questa voce documenta soltanto il trattamento eventualmente avvenuto prima della rimozione e deve essere conservata come elemento storico, non compilata come attività corrente.
-
-| Campo | Stato da verificare |
-|---|---|
-| Fornitore storico | Google Analytics 4 / Firebase Analytics |
-| Stato attuale | SDK, Measurement ID e raccolta di utilizzo ritirati dal frontend |
-| Dati precedenti | Eventuali dati tecnici già raccolti: verificare nel provider |
-| Retention/cancellazione | Verificare stream, proprietà e dati storici nel provider Google |
-
-## Attività 5 — Account deletion e recovery
+## Attività 4 — Account deletion e recovery
 
 | Campo | Contenuto da validare |
 |---|---|
@@ -75,7 +64,7 @@ TheLogBook non effettua più analytics di utilizzo. Questa voce documenta soltan
 | Sistema | Vercel Functions + Firebase Admin + Firestore/Auth |
 | Accesso | Server-only |
 
-## Attività 6 — Richieste privacy e supporto
+## Attività 5 — Richieste privacy e supporto
 
 | Campo | Contenuto da validare |
 |---|---|

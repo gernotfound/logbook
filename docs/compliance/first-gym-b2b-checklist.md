@@ -34,7 +34,7 @@
 - `[ ]` Incident/data-breach runbook è assegnato e provato.
 - `[ ]` Procedura per i diritti degli interessati è operativa.
 - `[ ]` Revoca del consenso dati salute è implementata e testata.
-- `[ ]` Analytics opzionali restano disabilitati per default e revocabili.
+- `[ ]` Nessuna integrazione Analytics di utilizzo reintrodotta: GA4/Firebase Analytics dismesso, con Sentry limitato a Error Monitoring tecnico.
 - `[ ]` Privacy Policy e Termini corrispondono al modello commerciale e ai fornitori effettivi.
 
 ## Gate contrattuale e commerciale
