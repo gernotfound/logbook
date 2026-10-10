@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Timestamp } from 'firebase-admin/firestore';
 
@@ -337,9 +338,9 @@ describe('M7 telemetry retention sweep', () => {
     );
     state.advanceMsPerQuery = 1_000;
 
-    const interrupted = await purgeExpiredTelemetry(Date.now() + 6_000, now);
+    const interrupted = await purgeExpiredTelemetry(Date.now() + 7_000, now);
     expect(interrupted).toEqual({
-      documentsScanned: 400,
+      documentsScanned: 401,
       documentsDeleted: 400,
       unexpectedDocuments: 0,
       completedCycle: false,
@@ -468,29 +469,29 @@ describe('M7 telemetry retention sweep', () => {
     expect(state.docs.telemetry_errors).toHaveLength(400);
   });
 
-  it('declares required collection-group indexes for expireAt retention queries', () => {
+  it('declares the exact single-field collection-group expiry indexes without disabling default modes', () => {
     const indexConfig = JSON.parse(
-      readFileSync(new URL('../firestore.indexes.json', import.meta.url), 'utf8'),
+      readFileSync(resolve(process.cwd(), 'firestore.indexes.json'), 'utf8'),
     ) as {
-      indexes: Array<{
+      fieldOverrides: Array<{
         collectionGroup: string;
-        queryScope: string;
-        fields: Array<{ fieldPath: string; order?: string }>;
+        fieldPath: string;
+        indexes: Array<{ queryScope: string; order?: string; arrayConfig?: string }>;
       }>;
     };
-    const expected = new Map<TelemetryName, string[]>([
-      ['telemetry_errors', ['expireAt', '__name__']],
-      ['telemetry_events', ['expireAt', '__name__']],
-      ['telemetry_anomalies', ['expireAt', '__name__']],
-    ]);
+    const expected = [
+      { queryScope: 'COLLECTION', order: 'ASCENDING' },
+      { queryScope: 'COLLECTION', order: 'DESCENDING' },
+      { queryScope: 'COLLECTION', arrayConfig: 'CONTAINS' },
+      { queryScope: 'COLLECTION_GROUP', order: 'ASCENDING' },
+    ];
 
-    for (const [collectionGroup, fieldPaths] of expected) {
-      const index = indexConfig.indexes.find(item =>
-        item.collectionGroup === collectionGroup && item.queryScope === 'COLLECTION_GROUP'
+    for (const collectionGroup of TELEMETRY_COLLECTIONS) {
+      const index = indexConfig.fieldOverrides.find(item =>
+        item.collectionGroup === collectionGroup && item.fieldPath === 'expireAt'
       );
-      expect(index, `missing ${collectionGroup} collection-group index`).toBeDefined();
-      expect(index?.fields.map(item => item.fieldPath)).toEqual(fieldPaths);
-      expect(index?.fields.map(item => item.order)).toEqual(['ASCENDING', 'ASCENDING']);
+      expect(index, `missing ${collectionGroup} group expiry index`).toBeDefined();
+      expect(index?.indexes).toEqual(expected);
     }
   });
 });
