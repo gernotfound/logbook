@@ -23,3 +23,50 @@ describe('password prompt dialog state', () => {
     expect(useDialogStore.getState().isOpen).toBe(false);
   });
 });
+
+describe('dialog request serialization', () => {
+  it('keeps the first confirmation active until answered and then displays queued alerts', async () => {
+    const { useDialogStore } = await vi.importActual<typeof import('./useDialogStore')>('./useDialogStore');
+    const store = useDialogStore.getState();
+    store.closeDialog();
+
+    const confirmation = store.showConfirm('Conferma cancellazione');
+    const notice = store.showAlert('Recupero ancora in corso');
+    expect(useDialogStore.getState().type).toBe('confirm');
+    expect(useDialogStore.getState().message).toBe('Conferma cancellazione');
+
+    useDialogStore.getState().onCancel();
+    await expect(confirmation).resolves.toBe(false);
+    expect(useDialogStore.getState().type).toBe('alert');
+    expect(useDialogStore.getState().message).toBe('Recupero ancora in corso');
+    useDialogStore.getState().onConfirm();
+    await expect(notice).resolves.toBeUndefined();
+    expect(useDialogStore.getState().isOpen).toBe(false);
+  });
+
+  it('cancels the active password prompt and advances to the next request', async () => {
+    const { useDialogStore } = await vi.importActual<typeof import('./useDialogStore')>('./useDialogStore');
+    useDialogStore.getState().closeDialog();
+    const password = useDialogStore.getState().showPasswordPrompt('Password');
+    const confirmation = useDialogStore.getState().showConfirm('Procedere?');
+    expect(useDialogStore.getState().type).toBe('password-prompt');
+    useDialogStore.getState().closeDialog();
+    await expect(password).resolves.toBeNull();
+    expect(useDialogStore.getState().type).toBe('confirm');
+    useDialogStore.getState().onConfirm();
+    await expect(confirmation).resolves.toBe(true);
+  });
+
+  it('preserves unsynced logout action ordering when a recovery alert arrives', async () => {
+    const { useDialogStore } = await vi.importActual<typeof import('./useDialogStore')>('./useDialogStore');
+    useDialogStore.getState().closeDialog();
+    const logout = useDialogStore.getState().showUnsyncedDataLogout('offline');
+    const notice = useDialogStore.getState().showAlert('Dati in recupero');
+    expect(useDialogStore.getState().type).toBe('unsynced-data-logout');
+    useDialogStore.getState().onAction?.('cancel');
+    await expect(logout).resolves.toBe('cancel');
+    expect(useDialogStore.getState().message).toBe('Dati in recupero');
+    useDialogStore.getState().onConfirm();
+    await notice;
+  });
+});
