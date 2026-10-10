@@ -97,8 +97,8 @@ describe('ARCH-01: Non-destructive Cache Merge', () => {
             const merged = mergeCloudIntoLocal(localData, cloudData);
 
             expect(merged.profile?.height).toBe('185');
-            expect(merged.history.find(h => h.id === 'old-1')).toBeDefined();
-            expect(merged.history.find(h => h.id === 'new-1')).toBeDefined();
+            expect(merged.history?.find(h => h.id === 'old-1')).toBeDefined();
+            expect(merged.history?.find(h => h.id === 'new-1')).toBeDefined();
         });
     });
 
@@ -165,7 +165,7 @@ describe('ARCH-01: Non-destructive Cache Merge', () => {
                 // Verification: unloaded January survives while complete September is adopted.
                 const finalState = useAppStore.getState().userData;
                 expect(finalState).not.toBeNull();
-                const historyIds = finalState!.history.map(h => h.id);
+                const historyIds = finalState!.history?.map(h => h.id);
                 expect(historyIds).toContain('local-old');
                 expect(historyIds).toContain('cloud-new');
 
