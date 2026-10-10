@@ -10,6 +10,8 @@ export const maxDuration = 300;
 
 const CRON_BUDGET_MS = 270_000;
 const SAFETY_BUFFER_MS = 10_000;
+// Keep a dedicated window for legacy telemetry retention even when deletion jobs are busy.
+const TELEMETRY_RESERVE_MS = 30_000;
 
 function authorized(request: Request): boolean {
   const secret = process.env.CRON_SECRET;
@@ -26,6 +28,7 @@ export async function GET(request: Request): Promise<Response> {
   }
 
   const deadlineMs = Date.now() + CRON_BUDGET_MS;
+  const deletionDeadlineMs = deadlineMs - TELEMETRY_RESERVE_MS;
   let jobs: Awaited<ReturnType<typeof listRecoverableDeletionJobs>> = [];
   const results: Array<{ uid: string; result: string }> = [];
   let recoveryErrors = 0;
@@ -41,9 +44,9 @@ export async function GET(request: Request): Promise<Response> {
   }
 
   for (const job of jobs) {
-    if (Date.now() + SAFETY_BUFFER_MS >= deadlineMs) break;
+    if (Date.now() + SAFETY_BUFFER_MS >= deletionDeadlineMs) break;
     try {
-      const result = await processAccountDeletion(job.uid, deadlineMs);
+      const result = await processAccountDeletion(job.uid, deletionDeadlineMs);
       results.push({ uid: job.uid, result });
     } catch (error) {
       recoveryErrors += 1;
@@ -55,10 +58,10 @@ export async function GET(request: Request): Promise<Response> {
   }
 
   let purged = 0;
-  while (Date.now() + SAFETY_BUFFER_MS < deadlineMs) {
+  while (Date.now() + SAFETY_BUFFER_MS < deletionDeadlineMs) {
     try {
       const deleted = await purgeExpiredCompletedDeletionJobs(
-        ACCOUNT_DELETION_RETENTION_PAGE_SIZE, undefined, deadlineMs,
+        ACCOUNT_DELETION_RETENTION_PAGE_SIZE, undefined, deletionDeadlineMs,
       );
       purged += deleted;
       if (deleted < ACCOUNT_DELETION_RETENTION_PAGE_SIZE) break;

@@ -195,4 +195,16 @@ it('continues telemetry if completed tombstone cleanup fails', async () => {
     expect(telemetryRetention.purgeExpiredTelemetry).toHaveBeenCalled();
   } finally { err.mockRestore(); }
 });
+
+  it('reserves the final 30 seconds of cron budget for legacy telemetry retention', async () => {
+    process.env.CRON_SECRET = 'expected-secret';
+    runner.processAccountDeletion.mockImplementation(async (_uid: string, deadline: number) => {
+      expect(deadline).toBeGreaterThan(Date.now() + 200_000);
+      expect(deadline).toBeLessThan(Date.now() + 250_000);
+      return 'pending';
+    });
+    const response = await GET(request('expected-secret'));
+    expect(response.status).toBe(200);
+    expect(telemetryRetention.purgeExpiredTelemetry).toHaveBeenCalled();
+  });
 });
