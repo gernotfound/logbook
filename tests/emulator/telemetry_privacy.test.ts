@@ -41,7 +41,7 @@ const baseEvent = {
 };
 
 it('allows technical workout metadata but rejects user-authored routine names', async () => {
-  const db = env.authenticatedContext('a').firestore();
+  const db = env.authenticatedContext('a', { email_verified: true }).firestore();
   const expireAt = new Date(Date.now() + (30 * 24 * 60 * 60 * 1000));
 
   await assertSucceeds(setDoc(doc(db, 'users/a/telemetry_events/technical'), {
