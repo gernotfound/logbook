@@ -13,6 +13,8 @@ import NutritionMeals from '../src/components/Nutrition/NutritionMeals';
 import NutritionPlanning from '../src/components/Nutrition/NutritionPlanning';
 import SettingsView from '../src/components/SettingsView';
 import WorkoutTimer from '../src/components/Training/WorkoutTimer';
+import { stoppedWorkoutTimer, writeWorkoutTimerSnapshot } from '../src/lib/utils/timer';
+import { storageOwner } from '../src/lib/sync/session';
 import MuscleModel from '../src/components/Training/MuscleModel';
 
 describe('Empirical Challenger Suite: Edge Cases & Stress Verification', () => {
@@ -231,16 +233,24 @@ describe('Empirical Challenger Suite: Edge Cases & Stress Verification', () => {
   });
 
   describe('4. WorkoutTimer & Ticking Behavior', () => {
-    test('WorkoutTimer handles missing, 0, or future globalStartTime gracefully', () => {
-      const { container: c1 } = renderWithProviders(<WorkoutTimer />);
+    test('WorkoutTimer handles absent, stopped and future device-timer snapshots', () => {
+      const owner = storageOwner();
+      const { container: c1, unmount: unmount1 } = renderWithProviders(<WorkoutTimer />);
       expect(c1.textContent).toContain('00:00');
+      unmount1();
 
-      const { container: c2 } = renderWithProviders(<WorkoutTimer />);
+      writeWorkoutTimerSnapshot(stoppedWorkoutTimer(), owner);
+      const { container: c2, unmount: unmount2 } = renderWithProviders(<WorkoutTimer />);
       expect(c2.textContent).toContain('00:00');
+      unmount2();
 
-      const futureTime = Date.now() + 10000;
+      // A clock value in the future must not render a negative duration.
+      writeWorkoutTimerSnapshot({
+        version: 1, state: 'running',
+        startTime: Date.now() + 10000, accumulated: 0,
+      }, owner);
       const { container: c3 } = renderWithProviders(<WorkoutTimer />);
-      expect(c3).toBeDefined();
+      expect(c3.textContent).toContain('00:00');
     });
 
     test('WorkoutTimer rest controls (Play, Pause, Reset, Stop) operate cleanly without state crashes', () => {
