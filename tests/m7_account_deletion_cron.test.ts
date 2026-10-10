@@ -76,11 +76,13 @@ describe('M7 daily account deletion recovery cron', () => {
     expect(runner.processAccountDeletion).toHaveBeenCalledTimes(2);
     expect(runner.processAccountDeletion).toHaveBeenNthCalledWith(1, 'a', expect.any(Number));
     expect(runner.processAccountDeletion).toHaveBeenNthCalledWith(2, 'b', expect.any(Number));
-    expect(retention.purgeExpiredCompletedDeletionJobs).toHaveBeenCalledWith(400);
+    expect(retention.purgeExpiredCompletedDeletionJobs).toHaveBeenCalledWith(400, undefined, expect.any(Number));
     expect(telemetryRetention.purgeExpiredTelemetry).toHaveBeenCalledWith(expect.any(Number));
     expect(await response.json()).toMatchObject({
       scanned: 2,
       processed: 2,
+      recoveryErrors: 0,
+      retentionErrors: 0,
       purged: 0,
       telemetryDocumentsScanned: 0,
       telemetryPurged: 0,
@@ -90,6 +92,8 @@ describe('M7 daily account deletion recovery cron', () => {
     expect(info).toHaveBeenCalledWith('[account-deletion-cron] completed', {
       scanned: 2,
       processed: 2,
+      recoveryErrors: 0,
+      retentionErrors: 0,
       purged: 0,
       telemetryDocumentsScanned: 0,
       telemetryPurged: 0,
@@ -155,4 +159,40 @@ describe('M7 daily account deletion recovery cron', () => {
       telemetryCycleCompleted: true,
     });
   });
+});
+
+it('continues independent cron phases if job selection fails', async () => {
+  process.env.CRON_SECRET = 'expected-secret';
+  store.listRecoverableDeletionJobs.mockRejectedValueOnce(new Error('list unavailable'));
+  const err = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+  try {
+    const response = await GET(request('expected-secret'));
+    expect(response.status).toBe(200);
+    expect((await response.json())).toMatchObject({ recoveryErrors: 1, processed: 0 });
+    expect(retention.purgeExpiredCompletedDeletionJobs).toHaveBeenCalled();
+    expect(telemetryRetention.purgeExpiredTelemetry).toHaveBeenCalled();
+  } finally { err.mockRestore(); }
+});
+
+it('continues other jobs and telemetry if one runner fails before lease acquisition', async () => {
+  process.env.CRON_SECRET = 'expected-secret';
+  runner.processAccountDeletion.mockRejectedValueOnce(new Error('lease failed')).mockResolvedValueOnce('complete');
+  const err = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+  try {
+    const response = await GET(request('expected-secret'));
+    expect((await response.json())).toMatchObject({ recoveryErrors: 1, processed: 2 });
+    expect(runner.processAccountDeletion).toHaveBeenCalledTimes(2);
+    expect(telemetryRetention.purgeExpiredTelemetry).toHaveBeenCalled();
+  } finally { err.mockRestore(); }
+});
+
+it('continues telemetry if completed tombstone cleanup fails', async () => {
+  process.env.CRON_SECRET = 'expected-secret';
+  retention.purgeExpiredCompletedDeletionJobs.mockRejectedValueOnce(new Error('cleanup failed'));
+  const err = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+  try {
+    const response = await GET(request('expected-secret'));
+    expect((await response.json())).toMatchObject({ retentionErrors: 1, purged: 0 });
+    expect(telemetryRetention.purgeExpiredTelemetry).toHaveBeenCalled();
+  } finally { err.mockRestore(); }
 });

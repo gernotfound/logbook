@@ -82,3 +82,7 @@ L'accesso account/cloud richiede che Firebase Auth riporti `emailVerified === tr
 La modalità guest ha archivio e workout separati dagli utenti. La migrazione conserva la copia guest e registra il risultato locale prima della replica. Le callback vecchie sono invalidate tramite owner ed epoch.
 
 Gli aggiornamenti PWA sono differibili. Prima del reload: flush delle bozze, attesa dei salvataggi, confronto fra store e copia IndexedDB e snapshot sincrono del workout. Errori locali bloccano il reload. Un errore di caricamento chunk apre lo stesso prompt; non scatena più un reload automatico che può ripetersi.
+
+**MUST:** il cron seleziona i job recuperabili in ordine persistente server-side per evitare starvation oltre il limite di pagina; le query ordinate dipendono dagli indici `account_deletions(status, updatedAt)` e `account_deletions(status, retryable, updatedAt)` che devono essere `READY` prima della distribuzione del backend.
+
+**MUST:** il purge di un tombstone scaduto e del corrispondente registro delle credenziali device usa una singola transazione Firestore; un errore non può eliminare solo uno dei due record. Le fasi indipendenti del cron devono proseguire se una query o una manutenzione fallisce, conservando log aggregati privi di dati personali.

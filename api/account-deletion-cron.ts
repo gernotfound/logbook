@@ -26,20 +26,49 @@ export async function GET(request: Request): Promise<Response> {
   }
 
   const deadlineMs = Date.now() + CRON_BUDGET_MS;
-  const jobs = await listRecoverableDeletionJobs(25);
+  let jobs: Awaited<ReturnType<typeof listRecoverableDeletionJobs>> = [];
   const results: Array<{ uid: string; result: string }> = [];
+  let recoveryErrors = 0;
+  let retentionErrors = 0;
+
+  try {
+    jobs = await listRecoverableDeletionJobs(25);
+  } catch (error) {
+    recoveryErrors += 1;
+    console.error('[account-deletion-cron] recovery query failed', {
+      kind: error instanceof Error ? error.name : typeof error,
+    });
+  }
 
   for (const job of jobs) {
     if (Date.now() + SAFETY_BUFFER_MS >= deadlineMs) break;
-    const result = await processAccountDeletion(job.uid, deadlineMs);
-    results.push({ uid: job.uid, result });
+    try {
+      const result = await processAccountDeletion(job.uid, deadlineMs);
+      results.push({ uid: job.uid, result });
+    } catch (error) {
+      recoveryErrors += 1;
+      results.push({ uid: job.uid, result: 'failed' });
+      console.error('[account-deletion-cron] recovery job failed', {
+        kind: error instanceof Error ? error.name : typeof error,
+      });
+    }
   }
 
   let purged = 0;
   while (Date.now() + SAFETY_BUFFER_MS < deadlineMs) {
-    const deleted = await purgeExpiredCompletedDeletionJobs(ACCOUNT_DELETION_RETENTION_PAGE_SIZE);
-    purged += deleted;
-    if (deleted < ACCOUNT_DELETION_RETENTION_PAGE_SIZE) break;
+    try {
+      const deleted = await purgeExpiredCompletedDeletionJobs(
+        ACCOUNT_DELETION_RETENTION_PAGE_SIZE, undefined, deadlineMs,
+      );
+      purged += deleted;
+      if (deleted < ACCOUNT_DELETION_RETENTION_PAGE_SIZE) break;
+    } catch (error) {
+      retentionErrors += 1;
+      console.error('[account-deletion-cron] tombstone retention failed', {
+        kind: error instanceof Error ? error.name : typeof error,
+      });
+      break;
+    }
   }
 
   let telemetryRetention = {
@@ -61,6 +90,8 @@ export async function GET(request: Request): Promise<Response> {
   console.info('[account-deletion-cron] completed', {
     scanned: jobs.length,
     processed: results.length,
+    recoveryErrors,
+    retentionErrors,
     purged,
     telemetryDocumentsScanned: telemetryRetention.documentsScanned,
     telemetryPurged: telemetryRetention.documentsDeleted,
@@ -71,6 +102,8 @@ export async function GET(request: Request): Promise<Response> {
   return Response.json({
     scanned: jobs.length,
     processed: results.length,
+    recoveryErrors,
+    retentionErrors,
     purged,
     telemetryDocumentsScanned: telemetryRetention.documentsScanned,
     telemetryPurged: telemetryRetention.documentsDeleted,
