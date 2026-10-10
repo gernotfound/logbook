@@ -58,12 +58,11 @@ Firebase Hosting, Firebase Authentication, Firestore, Firebase Admin e App Check
 - CodeQL fa parte di `Canonical Verification`; Snyk è supplementare e non deve diventare l'unico controllo SAST bloccante.
 - Ruleset e required check sono stato GitHub esterno: verificarli direttamente prima di cambiare nomi dei check o comportamento di merge.
 
-### Google Analytics / GA4
+### Analytics di utilizzo ritirati
 
-- GA4 è analytics di utilizzo del frontend Firebase Hosting, separato dalla telemetria tecnica Sentry.
-- La raccolta resta OFF per default e viene abilitata soltanto da un consenso nuovo provider-specific.
-- **MUST:** niente User-ID, user property o eventi custom relativi a workout, nutrizione, misure o salute.
-- **VERIFY:** stream, Measurement ID, Signals, Ads/personalization, retention e data sharing sono stato esterno.
+- Google Analytics 4/Firebase Analytics, Vercel Analytics e Speed Insights non fanno parte del runtime corrente.
+- **MUST:** non inviare page view, eventi di utilizzo o dati sanitari a servizi analytics; mantenere separata la telemetria tecnica Sentry.
+- **VERIFY:** dismissione dello stream/proprietà GA4, eventuali dati storici e variabili residue nel provider sono controlli esterni, non attestati dal repository.
 
 ### Sentry
 

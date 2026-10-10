@@ -467,7 +467,7 @@ describe('Milestone 2 Challenger Suite: PWA and Offline Workout Stress Tests', (
   // 4. SettingsView UI & Storage Resilience Stress Tests
   // =========================================================================
   describe('4. SettingsView UI & Storage Resilience Stress Tests', () => {
-    it('handles rapid clicking on privacy, analytics toggle, and check update', async () => {
+    it('handles rapid privacy navigation without a usage tracking toggle and checks updates', async () => {
       useAppStore.setState({
         userData: {
           profile: { name: 'Settings Tester' },
@@ -479,22 +479,15 @@ describe('Milestone 2 Challenger Suite: PWA and Offline Workout Stress Tests', (
 
       const { unmount } = render(React.createElement(SettingsView));
 
-      // Navigate to Privacy to access analytics toggle.
-      const privacyButton = screen.getByRole('button', { name: /^Privacy/i });
-      fireEvent.click(privacyButton);
+      // Privacy must retain legal links without shipping the retired GA4 toggle.
+      for (let index = 0; index < 3; index += 1) {
+        fireEvent.click(screen.getByRole('button', { name: /^Privacy/i }));
+        expect(screen.getByRole('button', { name: 'Informativa sulla privacy' })).toBeDefined();
+        expect(screen.getByRole('button', { name: 'Termini e condizioni' })).toBeDefined();
+        expect(screen.queryByRole('checkbox', { name: 'Statistiche di utilizzo' })).toBeNull();
+        fireEvent.click(screen.getByRole('button', { name: 'Torna alle impostazioni' }));
+      }
 
-      const analyticsToggle = screen.getByRole('checkbox');
-      expect(analyticsToggle).toBeDefined();
-
-      // Rapid clicking on toggle
-      act(() => {
-        fireEvent.click(analyticsToggle);
-        fireEvent.click(analyticsToggle);
-        fireEvent.click(analyticsToggle);
-      });
-
-      // Return to the settings landing and open Aspetto e applicazione.
-      fireEvent.click(screen.getByRole('button', { name: 'Torna alle impostazioni' }));
       fireEvent.click(screen.getByRole('button', { name: /Aspetto e applicazione/i }));
 
       const updateBtn = screen.getByRole('button', { name: /Cerca aggiornamenti/i });

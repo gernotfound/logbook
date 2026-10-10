@@ -32,7 +32,6 @@ import { telemetryHub } from './lib/telemetryHub';
 import { initSentry } from './lib/sentryClient';
 import { markTabSnapshotClean } from './lib/sync/tabSnapshotCausality';
 import { isUpdateRequiredError } from './lib/schemaEvolution';
-import { initOptionalGoogleAnalytics } from './lib/googleAnalytics';
 import ReloadPrompt from './components/UI/ReloadPrompt';
 import { initializePWAInstallLifecycle } from './lib/pwaInstallLifecycle';
 
@@ -97,7 +96,8 @@ export const initApp = async () => {
   try {
     initSentry();
     telemetryHub.init();
-    initOptionalGoogleAnalytics();
+    // Retire GA4 opt-in so old tabs receive a storage change when this build starts.
+    try { localStorage.removeItem('logbook_ga4_consent_v1'); } catch { /* Optional storage. */ }
   } catch (err) {
     console.warn('[TelemetryHub] Inizializzazione fallita (non bloccante):', err);
   }

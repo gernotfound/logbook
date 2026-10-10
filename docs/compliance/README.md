@@ -15,7 +15,7 @@ La fonte di verità tecnica resta il repository corrente. Le configurazioni este
 - La palestra paga tramite rapporto commerciale esterno alla PWA.
 - La palestra rende TheLogBook disponibile agli iscritti ma, nell'architettura attuale, non dispone di ruoli gym/coach/admin e non accede ai dati TheLogBook degli utenti.
 - TheLogBook resta destinato a maggiorenni.
-- Google Analytics 4/Firebase Analytics è opzionale, disabilitato per default e viene caricato soltanto dopo opt-in esplicito provider-specific.
+- Google Analytics 4/Firebase Analytics è stato ritirato dal client; restano i servizi Firebase necessari e la telemetria tecnica Sentry.
 - Vercel Analytics e Speed Insights sono ritirati dal frontend Production.
 - Sentry è usato esclusivamente per errori/anomalie tecniche sanitizzati; la telemetria tecnica non viene usata per misurare il comportamento di allenamento o il funnel PWA.
 

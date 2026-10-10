@@ -26,7 +26,7 @@ const consent = (acceptedAt: string): LegalConsent => ({
     hasAcceptedTerms: true,
     hasAcceptedHealthData: true,
     acceptedAt,
-    privacyVersion: '1.3.1',
+    privacyVersion: '1.3.2',
     termsVersion: '1.2.0',
 });
 

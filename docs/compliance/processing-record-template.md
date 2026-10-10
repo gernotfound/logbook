@@ -54,16 +54,16 @@
 | Destinatari | Sentry / personale autorizzato strettamente necessario; Firestore solo per cleanup legacy |
 | Misure | Sanitizzazione PII client, `beforeSend` restrittivo, deduplica/rate limit, data scrubbing Sentry configurato esternamente; legacy Firestore owner-scoped |
 
-## Attività 4 — Analytics opzionali
+## Attività 4 — Google Analytics ritirato (storico)
 
-| Campo | Contenuto da validare |
+TheLogBook non effettua più analytics di utilizzo. Questa voce documenta soltanto il trattamento eventualmente avvenuto prima della rimozione e deve essere conservata come elemento storico, non compilata come attività corrente.
+
+| Campo | Stato da verificare |
 |---|---|
-| Finalità | Statistiche tecniche e di utilizzo non essenziali |
-| Fornitore | Google Analytics 4 / Firebase Analytics |
-| Attivazione | Opt-in provider-specific; disabilitato per default e revocabile |
-| Base | Consenso |
-| Dati | Dati tecnici di utilizzo secondo configurazione effettiva; nessun User-ID o evento custom relativo a workout, nutrizione, misure o salute intenzionale |
-| Retention/trasferimenti | Verificare documentazione e configurazione Google Analytics corrente |
+| Fornitore storico | Google Analytics 4 / Firebase Analytics |
+| Stato attuale | SDK, Measurement ID e raccolta di utilizzo ritirati dal frontend |
+| Dati precedenti | Eventuali dati tecnici già raccolti: verificare nel provider |
+| Retention/cancellazione | Verificare stream, proprietà e dati storici nel provider Google |
 
 ## Attività 5 — Account deletion e recovery
 

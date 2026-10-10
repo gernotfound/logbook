@@ -12,7 +12,7 @@
 | Sync | Local durability prima della replica cloud; recovery lost-ack | Implementato/testato |
 | Validazione | Gateway Zod ai boundary persistiti | Implementato |
 | Telemetria | Sanitizzazione PII, allowlist dettagli, queue bounded | Implementato |
-| Analytics | GA4 lazy e opt-in provider-specific; Vercel Analytics/Speed Insights ritirati | Implementato/testato |
+| Analytics | Google Analytics 4/Firebase Analytics e Vercel Analytics/Speed Insights rimossi dal frontend; Sentry resta tecnico | Codice ritirato, verifica provider esterno pendente |
 | Account deletion | Workflow server-mediated, idempotente, Auth cancellata per ultima | Implementato/testato |
 | Segreti | Firebase Admin/cron server-only, esclusi dal bundle | Contratto repository |
 | HTTP | CSP, frame denial, referrer/permissions policies e cache policy app-shell/SW | `firebase.json` + smoke Firebase Hosting |

@@ -582,7 +582,7 @@ render(
                 expect(fs.existsSync(absPath), `File ${relPath} must exist`).toBe(true);
                 const fileContent = fs.readFileSync(absPath, 'utf-8');
                 expect(
-                    /section-divider|tracking-panel|settings-system-card|settings-detail-card|settings-toggle-card|planning-active-card|planning-cycle-archive/.test(fileContent),
+                    /section-divider|tracking-panel|settings-system-card|settings-detail-card|settings-detail-list|settings-toggle-card|planning-active-card|planning-cycle-archive/.test(fileContent),
                     `File ${relPath} should utilize a divider or panel surface`
                 ).toBe(true);
             }

@@ -71,12 +71,12 @@ La cancellazione account non è una semplice delete client-side: è gestita da V
 
 La sorgente vettoriale approvata `assets/brand/thelogbook-icon-master.svg` viene processata da `scripts/resize_icons.mjs`; da un unico master vengono generati favicon, Apple touch, PNG PWA 192×192 e 512×512, SVG scalabile, variante maskable 512×512 e card social PNG.
 
-## Analytics e telemetria
+## Telemetria tecnica
 
-Sono sistemi distinti:
+TheLogBook non integra SDK per analytics di utilizzo. Rimane il monitoraggio degli errori tecnici:
 
 - **telemetria tecnica TheLogBook:** Sentry Error Monitoring riceve solo errori/anomalie tecniche sanitizzati in Production; TheLogBook non allega deliberatamente Firebase UID o email e non abilita Replay, tracing, logging o metriche. Le vecchie collection Firestore telemetriche restano temporaneamente solo per cleanup/compatibilità;
-- **Google Analytics 4 / Firebase Analytics:** opzionale, disabilitato per default e caricato dinamicamente soltanto dopo opt-in esplicito provider-specific; non usa User-ID né eventi custom relativi a workout, nutrizione, misure o salute;
+- **Google Analytics 4 / Firebase Analytics:** ritirato dal client; nessuna raccolta di statistiche di utilizzo nell'app;
 - **Vercel Analytics + Speed Insights:** ritirati dal frontend Production dopo il cutover a Firebase Hosting.
 
 I dettagli destinati agli utenti sono nella Privacy Policy dell'app. La documentazione tecnica non deve promettere anonimato quando esistono identificativi tecnici pseudonimi.
@@ -119,7 +119,7 @@ npm run dev
 
 Il repository non versiona `.env.production`. Il frontend Firebase Hosting riceve la configurazione pubblica dalla pipeline GitHub Actions; le credenziali server-only restano nel runtime Vercel. Test ed E2E usano configurazioni sintetiche.
 
-Il client richiede quattro variabili Firebase core (`VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_APP_ID`). `VITE_FIREBASE_MEASUREMENT_ID` è opzionale per il core e viene usata solo da GA4 dopo consenso. App Check usa `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY`; il frontend usa inoltre `VITE_ACCOUNT_DELETION_API_ORIGIN` per raggiungere il backend trusted Vercel. In Production Sentry usa `VITE_SENTRY_DSN`, mentre `SENTRY_AUTH_TOKEN`, `SENTRY_ORG` e `SENTRY_PROJECT` sono build-only per release/source map.
+Il client richiede quattro variabili Firebase core (`VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_APP_ID`). App Check usa `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY`; il frontend usa inoltre `VITE_ACCOUNT_DELETION_API_ORIGIN` per raggiungere il backend trusted Vercel. In Production Sentry usa `VITE_SENTRY_DSN`, mentre `SENTRY_AUTH_TOKEN`, `SENTRY_ORG` e `SENTRY_PROJECT` sono build-only per release/source map.
 
 Le API trusted di account deletion usano inoltre variabili **server-only**:
 

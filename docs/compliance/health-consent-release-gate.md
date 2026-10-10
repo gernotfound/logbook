@@ -22,7 +22,7 @@ Fonti istituzionali da utilizzare nella revisione:
 | Confine | Evidenza nel codice | Conseguenza |
 |---|---|---|
 | Tipi | `src/types.ts`: `LegalConsent` contiene `hasAcceptedTerms`, `hasAcceptedHealthData`, `acceptedAt`, versioni; nessuno stato dedicato di revoca | Un `false` storico o una versione vecchia non costituisce un protocollo distribuito di revoca |
-| UI | `src/components/UI/ConsentOverlay.tsx`: accettazione esplicita salute, obbligatoria per proseguire; `src/components/Settings/PrivacySettingsTab.tsx`: toggle GA4 e link legali, non revoca salute | L'utente non ha un controllo di revoca equivalente in Impostazioni |
+| UI | `src/components/UI/ConsentOverlay.tsx`: accettazione esplicita salute, obbligatoria per proseguire; `src/components/Settings/PrivacySettingsTab.tsx`: link legali, non revoca salute | L'utente non ha un controllo di revoca equivalente in Impostazioni |
 | Gate corrente | `src/lib/legalVersions.ts`: `needsLegalUpdate` richiede versioni correnti e due booleani veri | Impedisce l'accesso tramite overlay nei casi previsti, ma non costituisce revoca autorevole cross-device |
 | Replica dati | `src/lib/sync/documentProjection.ts`: `legalConsent` è nel root; storico e nutrizione in `history_months` e `nutrition_months` | Stato e dati attraversano percorsi di persistenza diversi |
 | Autorizzazioni | `firestore.rules`: proprietà UID e blocco account-deletion; `legalConsent` è ammesso come mappa nel root | Non è presente una barriera Rules per il consenso salute revocato che impedisca scritture da vecchi client |
@@ -64,7 +64,7 @@ Secondo GDPR art. 7(3) e Linee guida EDPB 05/2020, la revoca deve essere facile 
 - Se la barriera server deve proteggere anche client obsoleti, implementarla in un confine verificabile dal server: il campo `UserData.legalConsent` è modificabile dal client e da solo non garantisce l'invariante.
 - Revocare non deve cancellare silenziosamente dati, pending journal, ricevute di cancellazione o copie necessarie al recupero; qualsiasi purge va progettato e testato separatamente, coerentemente con la decisione giuridica.
 - Informativa, documentazione di accountability, UI e comportamenti devono concordare. Se cambiano condizioni materiali, aggiornare `LEGAL_VERSIONS.privacy` e regressioni correlate.
-- Non usare la revoca GA4 (`src/lib/analyticsConsent.ts`) come sostituto della revoca dei trattamenti salute: i due canali sono distinti.
+- La precedente revoca GA4 è stata ritirata insieme al servizio Analytics: non costituisce una soluzione alla revoca dei trattamenti salute.
 
 ## Regressioni CRITICAL da aggiungere **dopo** la decisione
 
