@@ -30,12 +30,12 @@ if (typeof document !== 'undefined') {
     document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'hidden') {
             const state = useAppStore.getState();
-            // An unauthenticated landing screen has no device-critical drafts to flush.
-            // Preserve the fail-closed path whenever any owner or workout data exists.
-            if (state.userData === null && state.dataOwner === null && state.localWorkout === null) return;
-            const session = captureSession();
             try {
+                // Flush registered drafts even when the current screen has no owner.
+                // Only the owner-bound workout snapshot can be skipped for an empty login screen.
                 draftRegistry.flushAll({ strict: true });
+                if (state.userData === null && state.dataOwner === null && state.localWorkout === null) return;
+                const session = captureSession();
                 persistOwnerBoundWorkoutSnapshot(session, state.dataOwner, state.localWorkout);
             } catch (error) {
                 console.error('Persistenza device-critical fallita durante visibilitychange:', error);
