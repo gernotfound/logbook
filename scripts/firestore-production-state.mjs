@@ -32,6 +32,37 @@ export function parseFieldResource(resourceName) {
   };
 }
 
+export function normalizeFieldIndexModes(indexes) {
+  if (!Array.isArray(indexes)) throw new Error('Field override indexes must be an array');
+  const modes = indexes.map(index => {
+    if (!index || !['COLLECTION', 'COLLECTION_GROUP'].includes(index.queryScope)) {
+      throw new Error('Unsupported Firestore field index scope');
+    }
+    const hasOrder = ['ASCENDING', 'DESCENDING'].includes(index.order);
+    const hasArray = index.arrayConfig === 'CONTAINS';
+    if (hasOrder === hasArray || (index.order && !hasOrder) || (index.arrayConfig && !hasArray)) {
+      throw new Error('Unsupported Firestore field index mode');
+    }
+    return `${index.queryScope}:${hasOrder ? index.order : 'CONTAINS'}`;
+  }).sort();
+  if (new Set(modes).size !== modes.length) {
+    throw new Error('Duplicate Firestore field index mode');
+  }
+  return modes;
+}
+
+export function isActiveFieldIndexAddition(operation, desired) {
+  if (!operation || operation.done === true || operation.error) return false;
+  const field = parseFieldResource(operation.metadata?.field);
+  if (!field || field.collectionGroup !== desired.collectionGroup || field.fieldPath !== desired.fieldPath) {
+    return false;
+  }
+  const deltas = Array.isArray(operation.metadata?.indexConfigDeltas)
+    ? operation.metadata.indexConfigDeltas
+    : [];
+  return deltas.length > 0 && deltas.every(delta => delta?.changeType === 'ADD');
+}
+
 export function isActiveFieldIndexRemoval(operation, desired) {
   if (!operation || operation.done === true || operation.error) return false;
   const metadata = operation.metadata;
@@ -54,13 +85,24 @@ export function classifyFieldOverride(desired, liveFields, operations) {
   const explicit = Boolean(live) && indexConfig?.usesAncestorConfig !== true;
   const reverting = indexConfig?.reverting === true;
   const indexesDisabled = Boolean(live) && indexes.length === 0;
-  // Firestore's protobuf JSON may omit output-only booleans when their value is false.
-  // firebase-tools therefore matches field overrides by exact resource + index modes,
-  // not by requiring an explicit `usesAncestorConfig: false` property in the response.
-  const matchesDesired = Boolean(live) && explicit && !reverting && indexesDisabled;
+  const desiredModes = normalizeFieldIndexModes(desired.indexes ?? []);
+  const indexesMatch = Boolean(live) &&
+    JSON.stringify(normalizeFieldIndexModes(indexes)) === JSON.stringify(desiredModes);
+  const indexesReady = indexesMatch &&
+    indexes.every(index => index.state === 'READY');
+  // Firestore protobuf JSON may omit output-only false values. An explicit
+  // override must be matched by resource and complete index modes, not by
+  // an encoded usesAncestorConfig:false property.
+  const matchesDesired = Boolean(live) && explicit && !reverting &&
+    indexesMatch && indexesReady;
 
-  const activeOperation = operations.find(operation => isActiveFieldIndexRemoval(operation, desired));
-  const pending = !matchesDesired && Boolean(activeOperation);
+  const activeOperation = operations.find(operation =>
+    desiredModes.length === 0
+      ? isActiveFieldIndexRemoval(operation, desired)
+      : isActiveFieldIndexAddition(operation, desired)
+  );
+  const building = indexesMatch && indexes.some(index => index.state === 'CREATING');
+  const pending = !matchesDesired && (Boolean(activeOperation) || (explicit && !reverting && building));
   const metadata = activeOperation?.metadata ?? {};
 
   return {
@@ -69,6 +111,9 @@ export function classifyFieldOverride(desired, liveFields, operations) {
     explicit,
     reverting,
     indexesDisabled,
+    indexesMatch,
+    indexesReady,
+    matchesDesired,
     pending,
     operationName: activeOperation?.name ?? null,
     operationState: metadata.state ?? null,
