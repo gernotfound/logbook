@@ -63,6 +63,32 @@ describe('durable owner-scoped journal', () => {
     });
 
 
+    it('retains a pre-ledger V5 closure when a later deletion replaces its legacy marker', async () => {
+        const initial = UserDataSchema.parse({ activeWorkout: null }) as unknown as UserData;
+        await initializeLocal('user:a', initial);
+        const key = 'logbook:v2:user:a';
+        const legacy = await get(key) as Record<string, unknown>;
+        // A real previous release recorded only lastClosedWorkoutId.
+        await set(key, { ...legacy, lastClosedWorkoutId: 'previously-deleted', closedWorkoutIds: undefined });
+
+        await commitDomainOperations('user:a', {
+            type: 'active-workout.set', workout: null, deletedWorkoutId: 'newly-deleted',
+        }, initial);
+        const after = (await readLocal('user:a'))!;
+        expect(after.lastClosedWorkoutId).toBe('newly-deleted');
+        expect(after.closedWorkoutIds).toEqual(['previously-deleted', 'newly-deleted']);
+
+        const oldTabWorkout = { id: 'previously-deleted', date: '2026-10-09', exercises: [] };
+        await expect(commitDomainOperations('user:a', {
+            type: 'active-workout.set', workout: oldTabWorkout,
+        }, initial)).rejects.toThrow('già terminato o eliminato');
+        await expect(commitLocal('user:a',
+            UserDataSchema.parse({ activeWorkout: oldTabWorkout }) as unknown as UserData,
+            initial,
+        )).rejects.toThrow('già terminato o eliminato');
+        expect((await readLocal('user:a'))?.revision).toBe(after.revision);
+    });
+
     it('records completion in the same durable write as history and cloud-active clear', async () => {
         const finished = { id: 'session-finished', date: '2026-10-09', exercises: [] };
         const initial = UserDataSchema.parse({ activeWorkout: finished }) as unknown as UserData;
