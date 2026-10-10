@@ -86,8 +86,9 @@ export function classifyFieldOverride(desired, liveFields, operations) {
   const reverting = indexConfig?.reverting === true;
   const indexesDisabled = Boolean(live) && indexes.length === 0;
   const desiredModes = normalizeFieldIndexModes(desired.indexes ?? []);
-  const indexesMatch = Boolean(live) &&
-    JSON.stringify(normalizeFieldIndexModes(indexes)) === JSON.stringify(desiredModes);
+  const indexesMatch = Boolean(live) && (desiredModes.length === 0
+    ? indexes.length === 0
+    : JSON.stringify(normalizeFieldIndexModes(indexes)) === JSON.stringify(desiredModes));
   const indexesReady = indexesMatch &&
     indexes.every(index => index.state === 'READY');
   // Firestore protobuf JSON may omit output-only false values. An explicit
