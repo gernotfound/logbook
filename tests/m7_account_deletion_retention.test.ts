@@ -2,138 +2,99 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Timestamp } from 'firebase-admin/firestore';
 
 const state = vi.hoisted(() => ({
-  docs: [] as Array<{ path: string; data: Record<string, unknown> }>,
+  jobs: [] as Array<{ id: string; data: Record<string, unknown> }>,
+  devices: new Set<string>(),
+  failUid: '' as string,
   deleted: [] as string[],
-  committed: 0,
-}));
-
-const recovery = vi.hoisted(() => ({
-  purgeDeletionRecoveryDevices: vi.fn(),
 }));
 
 const fakeDb = vi.hoisted(() => ({
   collection(name: string) {
-    const filters: Array<{ field: string; operator: string; value: unknown }> = [];
-    const query: any = {
-      where(field: string, operator: string, value: unknown) {
-        filters.push({ field, operator, value });
-        return query;
-      },
-      limit(count: number) {
-        return {
-          async get() {
-            if (name !== 'account_deletions') throw new Error('Unexpected retention collection');
-            const docs = state.docs.filter(item => filters.every(filter => {
-              if (filter.field === 'status' && filter.operator === '==') return item.data.status === filter.value;
-              if (filter.field === 'purgeAfter' && filter.operator === '<=') {
-                const purgeAfter = item.data.purgeAfter;
-                return Boolean(purgeAfter && typeof purgeAfter === 'object' && 'toMillis' in purgeAfter
-                  && typeof (purgeAfter as { toMillis?: unknown }).toMillis === 'function'
-                  && (purgeAfter as { toMillis: () => number }).toMillis() <= (filter.value as { toMillis: () => number }).toMillis());
-              }
-              throw new Error('Unexpected retention query');
-            })).slice(0, count).map(item => ({ ref: { path: item.path }, data: () => item.data }));
-            return { empty: docs.length === 0, docs };
-          },
-        };
-      },
+    if (name === 'account_deletion_devices') return {
+      doc: (uid: string) => ({ id: uid, path: 'account_deletion_devices/' + uid }),
     };
-    return query;
-  },
-  batch() {
-    const deletes: string[] = [];
+    if (name !== 'account_deletions') throw new Error('Unexpected collection');
     return {
-      delete(ref: { path: string }) { deletes.push(ref.path); },
-      async commit() {
-        state.committed += 1;
-        state.deleted.push(...deletes);
-        state.docs = state.docs.filter(item => !deletes.includes(item.path));
-      },
+      where() { return this; },
+      limit(count: number) { return { async get() {
+        const docs = state.jobs.filter(job => job.data.status === 'complete'
+          && (job.data.purgeAfter as Timestamp)?.toMillis() <= Date.now())
+          .slice(0, count).map(job => ({ id: job.id, ref: { id: job.id, path: 'account_deletions/' + job.id }, data: () => job.data }));
+        return { docs, empty: docs.length === 0 };
+      } }; },
     };
+  },
+  async runTransaction(work: (tx: any) => Promise<unknown>) {
+    const paths: string[] = [];
+    const tx = {
+      async get(ref: { path: string; id: string }) {
+        if (ref.path.startsWith('account_deletion_devices/')) return { exists: state.devices.has(ref.id) };
+        const job = state.jobs.find(x => x.id === ref.id);
+        return { exists: Boolean(job), data: () => job?.data };
+      },
+      delete(ref: { path: string }) { paths.push(ref.path); },
+    };
+    const result = await work(tx);
+    if (paths.some(path => path.endsWith('/' + state.failUid)) && state.failUid) throw new Error('firestore unavailable');
+    for (const path of paths) {
+      state.deleted.push(path);
+      if (path.startsWith('account_deletion_devices/')) state.devices.delete(path.split('/')[1]);
+      else state.jobs = state.jobs.filter(x => x.id !== path.split('/')[1]);
+    }
+    return result;
   },
 }));
-
-vi.mock('../server/accountDeletion/deviceRecovery', () => recovery);
 vi.mock('../server/accountDeletion/firebaseAdmin', () => ({ adminDb: () => fakeDb }));
+import { completedDeletionPurgeAfter, purgeExpiredCompletedDeletionJobs, ACCOUNT_DELETION_COMPLETED_RETENTION_MS } from '../server/accountDeletion/retention';
 
-import {
-  ACCOUNT_DELETION_COMPLETED_RETENTION_MS,
-  completedDeletionPurgeAfter,
-  purgeExpiredCompletedDeletionJobs,
-} from '../server/accountDeletion/retention';
+const OLD = Timestamp.fromMillis(2_000_000_000_000);
+const EXPIRED = Timestamp.fromMillis(1);
 
-describe('M7 completed account deletion retention', () => {
+describe('atomic completed account deletion retention', () => {
   beforeEach(() => {
-    state.docs = [];
-    state.deleted = [];
-    state.committed = 0;
-    vi.clearAllMocks();
-    recovery.purgeDeletionRecoveryDevices.mockResolvedValue(1);
+    state.jobs = []; state.devices = new Set(); state.failUid = ''; state.deleted = [];
   });
 
-  it('schedules completed tombstones exactly 30 days after completion', () => {
-    const now = Timestamp.fromMillis(1_700_000_000_000);
-    expect(completedDeletionPurgeAfter(now).toMillis())
-      .toBe(now.toMillis() + ACCOUNT_DELETION_COMPLETED_RETENTION_MS);
+  it('schedules tombstones 30 days after completion', () => {
+    expect(completedDeletionPurgeAfter(OLD).toMillis()).toBe(OLD.toMillis() + ACCOUNT_DELETION_COMPLETED_RETENTION_MS);
   });
 
-  it('purges device recovery before deleting only expired complete tombstones', async () => {
-    const now = Timestamp.fromMillis(2_000_000_000_000);
-    state.docs = [
-      {
-        path: 'account_deletions/expired-complete',
-        data: { uid: 'expired-complete', status: 'complete', purgeAfter: Timestamp.fromMillis(now.toMillis() - 1) },
-      },
-      {
-        path: 'account_deletions/future-complete',
-        data: { uid: 'future-complete', status: 'complete', purgeAfter: Timestamp.fromMillis(now.toMillis() + 60_000) },
-      },
-      {
-        path: 'account_deletions/corrupt-active',
-        data: { uid: 'corrupt-active', status: 'deleting', purgeAfter: Timestamp.fromMillis(now.toMillis() - 1) },
-      },
-      {
-        path: 'account_deletions/no-expiry',
-        data: { uid: 'no-expiry', status: 'complete' },
-      },
+  it('deletes each expired completed tombstone and device registry together', async () => {
+    state.jobs = [
+      { id: 'a', data: { uid: 'a', status: 'complete', purgeAfter: EXPIRED } },
+      { id: 'b', data: { uid: 'b', status: 'complete', purgeAfter: EXPIRED } },
+      { id: 'pending', data: { uid: 'pending', status: 'deleting', purgeAfter: EXPIRED } },
     ];
-
-    await expect(purgeExpiredCompletedDeletionJobs(400, now)).resolves.toBe(1);
-
-    expect(recovery.purgeDeletionRecoveryDevices).toHaveBeenCalledWith('expired-complete');
-    expect(state.deleted).toEqual(['account_deletions/expired-complete']);
-    expect(state.docs.map(item => item.path)).toEqual([
-      'account_deletions/future-complete',
-      'account_deletions/corrupt-active',
-      'account_deletions/no-expiry',
+    state.devices = new Set(['a', 'b', 'pending']);
+    expect(await purgeExpiredCompletedDeletionJobs(400)).toBe(2);
+    expect(state.deleted).toEqual([
+      'account_deletion_devices/a', 'account_deletions/a',
+      'account_deletion_devices/b', 'account_deletions/b',
     ]);
-    expect(state.committed).toBe(1);
+    expect(state.devices.has('pending')).toBe(true);
+    expect(state.jobs.map(x => x.id)).toEqual(['pending']);
   });
 
-  it('keeps the tombstone if device-recovery purge fails so cron can retry', async () => {
-    const now = Timestamp.fromMillis(2_000_000_000_000);
-    state.docs = [{
-      path: 'account_deletions/expired-complete',
-      data: { uid: 'expired-complete', status: 'complete', purgeAfter: Timestamp.fromMillis(now.toMillis() - 1) },
-    }];
-    recovery.purgeDeletionRecoveryDevices.mockRejectedValueOnce(new Error('firestore unavailable'));
-
-    await expect(purgeExpiredCompletedDeletionJobs(400, now)).rejects.toThrow('firestore unavailable');
-
+  it('rolls back both deletions if transaction commit fails', async () => {
+    state.jobs = [{ id: 'a', data: { uid: 'a', status: 'complete', purgeAfter: EXPIRED } }];
+    state.devices.add('a'); state.failUid = 'a';
+    await expect(purgeExpiredCompletedDeletionJobs()).rejects.toThrow('firestore unavailable');
     expect(state.deleted).toEqual([]);
-    expect(state.docs.map(item => item.path)).toEqual(['account_deletions/expired-complete']);
-    expect(state.committed).toBe(0);
+    expect(state.devices.has('a')).toBe(true);
+    expect(state.jobs).toHaveLength(1);
   });
 
-  it('does not commit a batch when no eligible tombstone is due', async () => {
-    const now = Timestamp.fromMillis(2_000_000_000_000);
-    state.docs = [{
-      path: 'account_deletions/active',
-      data: { uid: 'active', status: 'verifying', purgeAfter: Timestamp.fromMillis(now.toMillis() - 1) },
-    }];
-
-    await expect(purgeExpiredCompletedDeletionJobs(400, now)).resolves.toBe(0);
+  it('never deletes another owners registry when job UID is corrupt', async () => {
+    state.jobs = [{ id: 'a', data: { uid: 'other', status: 'complete', purgeAfter: EXPIRED } }];
+    state.devices.add('other');
+    expect(await purgeExpiredCompletedDeletionJobs()).toBe(0);
     expect(state.deleted).toEqual([]);
-    expect(state.committed).toBe(0);
+    expect(state.devices.has('other')).toBe(true);
+  });
+
+  it('does no destructive work when budget is exhausted', async () => {
+    state.jobs = [{ id: 'a', data: { uid: 'a', status: 'complete', purgeAfter: EXPIRED } }];
+    expect(await purgeExpiredCompletedDeletionJobs(400, OLD, Date.now() + 1_000)).toBe(0);
+    expect(state.deleted).toEqual([]);
   });
 });

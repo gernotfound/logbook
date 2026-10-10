@@ -376,9 +376,9 @@ function publicStatus(job: AccountDeletionJob): AccountDeletionPublicStatus {
     requestedAt: timestampIso(job.requestedAt),
     updatedAt: timestampIso(job.updatedAt),
     retryable: job.status === 'failed' ? job.retryable !== false : undefined,
-    error: job.status === 'failed'
-      ? 'Cancellazione cloud incompleta. Alcuni dati potrebbero essere già stati eliminati; riprova dalle impostazioni.'
-      : undefined,
+    error: job.status !== 'failed' ? undefined : job.retryable === false
+      ? 'Cancellazione cloud sospesa per un controllo di sicurezza. Alcuni dati potrebbero già essere stati eliminati: la verifica tecnica dei dati residui è necessaria prima di riprendere. Conserva la copia locale; riprovare dalle Impostazioni non risolverà il blocco.'
+      : 'Cancellazione cloud incompleta. Alcuni dati potrebbero essere già stati eliminati; riprova dalle impostazioni.',
   };
 }
 
@@ -403,8 +403,10 @@ export async function listRecoverableDeletionJobs(limitCount = 20): Promise<Acco
   const boundedLimit = Math.max(1, Math.min(100, Math.floor(limitCount)));
   const collection = adminDb().collection(JOB_COLLECTION);
   const [active, retryableFailed] = await Promise.all([
-    collection.where('status', 'in', ['requested', 'deleting', 'verifying']).limit(boundedLimit).get(),
-    collection.where('status', '==', 'failed').where('retryable', '==', true).limit(boundedLimit).get(),
+    collection.where('status', 'in', ['requested', 'deleting', 'verifying'])
+      .orderBy('updatedAt', 'asc').limit(boundedLimit).get(),
+    collection.where('status', '==', 'failed').where('retryable', '==', true)
+      .orderBy('updatedAt', 'asc').limit(boundedLimit).get(),
   ]);
 
   const unique = new Map<string, AccountDeletionJob>();
