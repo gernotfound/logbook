@@ -58,7 +58,7 @@ Per task strutturali o CRITICAL preparare un piano di lavoro prima delle modific
 - **Styling:** CSS nativo modulare aggregato da `src/styles/global.css`, con token semantici in `src/styles/tokens.css`; **MUST:** niente Tailwind.
 - **Icone UI:** `lucide-react`.
 - **PWA:** `vite-plugin-pwa`; asset applicativi generati dalla pipeline `scripts/resize_icons.mjs` a partire dalla sorgente approvata.
-- **Monitoring:** Sentry Error Monitoring per errori/anomalie tecniche. GA4/Firebase Analytics è analytics di utilizzo opzionale, lazy e provider-specific, attivato solo dopo opt-in esplicito; Vercel Analytics/Speed Insights sono ritirati dal frontend target. Le vecchie collection telemetriche Firestore restano solo per compatibilità/cleanup dei client precedenti.
+- **Monitoring:** Sentry Error Monitoring per errori/anomalie tecniche. Google Analytics 4/Firebase Analytics e Vercel Analytics/Speed Insights sono ritirati; nessun tracciamento di utilizzo è integrato nel frontend. Le vecchie collection telemetriche Firestore restano solo per compatibilità/cleanup dei client precedenti.
 - **Testing:** Vitest + Testing Library, Playwright E2E (Chromium + copertura Mobile Safari/WebKit mirata), `@axe-core/playwright`, Firebase Emulator, oxlint type-aware/JSX-a11y e Knip; `npm audit`, Gitleaks e zizmor sono gate workflow separati dal comando canonico M8.
 
 ## File canonici del modello dati
@@ -151,7 +151,7 @@ Versioni persistite correnti e indipendenti: Data Schema 1, Sync Protocol 3, Loc
 
 Esistono tre contratti separati:
 
-1. **Client Firebase:** quattro env `VITE_FIREBASE_*` obbligatorie lette staticamente in `src/lib/firebase.ts` (`API_KEY`, `AUTH_DOMAIN`, `PROJECT_ID`, `APP_ID`); `VITE_FIREBASE_MEASUREMENT_ID` è opzionale per il core ed è usata soltanto dal modulo GA4 dopo consenso.
+1. **Client Firebase:** quattro env `VITE_FIREBASE_*` obbligatorie lette staticamente in `src/lib/firebase.ts` (`API_KEY`, `AUTH_DOMAIN`, `PROJECT_ID`, `APP_ID`); non si configura alcun Measurement ID Analytics.
 2. **App Check client:** `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY` è l'unico nome runtime supportato; gli alias V3 legacy sono stati ritirati dopo il cutover Production verificato.
 3. **Server trusted:** `FIREBASE_ADMIN_PROJECT_ID`, `FIREBASE_ADMIN_CLIENT_EMAIL`, `FIREBASE_ADMIN_PRIVATE_KEY` e, per il cron, `CRON_SECRET`. Nessuna di queste deve avere prefisso `VITE_`.
 
@@ -199,15 +199,14 @@ La cancellazione account è un workflow CRITICAL server-mediated. Il client non 
 
 → Dettagli: `.agents/rules/account-lifecycle.md`.
 
-## Telemetria, Analytics e privacy
+## Telemetria tecnica e privacy
 
 Distinguere due sistemi:
 
 1. **Telemetria tecnica LogBook:** gli errori e le anomalie tecniche sanitizzati vengono inviati a Sentry Error Monitoring soltanto in Production e per sessioni account autenticate. Il Firebase UID serve esclusivamente come gate locale e **non viene deliberatamente trasmesso a Sentry**; il payload include solo session ID tecnico, release/build SHA, contesto limitato, tipo/messaggio errore sanitizzato, contatori/timestamp e stack troncato/sanitizzato. Non vengono usati Sentry Replay, tracing, logging o metriche e non vengono inviati eventi comportamentali workout/PWA. Le collection Firestore `telemetry_*` restano legacy per client precedenti, cleanup e account deletion.
-2. **Google Analytics / GA4:** caricato dinamicamente soltanto dopo il nuovo opt-in `logbook_ga4_consent_v1`; il precedente consenso Vercel non autorizza GA4. Nessun User-ID, user property o evento sanitario/custom viene inviato.
+2. **Analytics di utilizzo:** Google Analytics 4/Firebase Analytics, Vercel Analytics e Speed Insights sono ritirati. Non reintrodurre SDK di tracciamento, Measurement ID, identificatori o eventi di utilizzo.
 
-- **MUST:** l'opt-in Analytics resta disabilitato per default e revocabile dalle Impostazioni.
-- **MUST:** telemetria tecnica e analytics di utilizzo restano separati; non aggiungere eventi comportamentali workout/PWA alla telemetria tecnica per aggirare l'opt-in.
+- **MUST:** non aggiungere eventi comportamentali workout/PWA alla telemetria tecnica per ricreare di fatto analytics di utilizzo.
 - **MUST:** il client corrente non crea nuove scritture nelle collection Firestore `telemetry_errors`, `telemetry_events` o `telemetry_anomalies`; Rules e retention di 30 giorni restano attive per client precedenti e dati legacy finché il relativo cleanup non viene ritirato deliberatamente.
 - **MUST:** errori/stack sottoposti alla telemetria tecnica passano dai sanitizzatori che rimuovono email, IP, token, API key, path utente e chiavi sensibili riconosciute prima del boundary Sentry.
 - **MUST:** source map Sentry sono generate solo nella build frontend Firebase Hosting Production (`FIREBASE_HOSTING_DEPLOY=production`), caricate con `SENTRY_AUTH_TOKEN` e rimosse dagli asset pubblici dopo l'upload; il token non entra mai nel bundle client.

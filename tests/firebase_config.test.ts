@@ -68,14 +68,14 @@ describe('R2: Firebase Config Security & Fail-Fast Suite', () => {
             expect(envExample).not.toContain('VITE_RECAPTCHA_SITE_KEY');
         });
 
-        it('keeps Analytics initialization isolated from the Firebase core module', () => {
+        it('keeps retired Analytics out of the Firebase core module', () => {
             const firebaseSource = fs.readFileSync(path.resolve(__dirname, '../src/lib/firebase.ts'), 'utf-8');
             const appSource = fs.readFileSync(path.resolve(__dirname, '../src/App.tsx'), 'utf-8');
             const vercelConfig = fs.readFileSync(path.resolve(__dirname, '../vercel.json'), 'utf-8');
 
             expect(firebaseSource).not.toContain('firebase/analytics');
-            expect(firebaseSource).toContain('measurementId');
-            expect(firebaseSource).toContain('VITE_FIREBASE_MEASUREMENT_ID');
+            expect(firebaseSource).not.toContain('measurementId');
+            expect(firebaseSource).not.toContain('VITE_FIREBASE_MEASUREMENT_ID');
             expect(firebaseSource).toContain('memoryLocalCache');
             expect(firebaseSource).not.toContain('persistentLocalCache');
             expect(firebaseSource).not.toContain('persistentMultipleTabManager');

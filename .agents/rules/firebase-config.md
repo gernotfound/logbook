@@ -16,7 +16,6 @@ Non trattare tutte le variabili Firebase/App Check/Admin come un unico blocco ob
 | `VITE_FIREBASE_AUTH_DOMAIN` | MUST | Dominio Auth; in Production Firebase Hosting deve essere `thelogbook.web.app` così popup/redirect usano lo stesso origin del frontend |
 | `VITE_FIREBASE_PROJECT_ID` | MUST | Project ID |
 | `VITE_FIREBASE_APP_ID` | MUST | Config Firebase Web |
-| `VITE_FIREBASE_MEASUREMENT_ID` | OPTIONAL core / REQUIRED per GA4 Production | Letta esclusivamente dal modulo Analytics dopo consenso |
 
 Realtime Database, Firebase Storage e Cloud Messaging non sono importati dal runtime: `VITE_FIREBASE_DATABASE_URL`, `VITE_FIREBASE_STORAGE_BUCKET` e `VITE_FIREBASE_MESSAGING_SENDER_ID` sono ritirati dal contratto client.
 
@@ -45,18 +44,11 @@ Google Cloud può presentare reCAPTCHA Enterprise dentro il prodotto più ampio 
 
 **MUST:** nel percorso sync, un `permission-denied` osservato da `replicateJournal` resta `rejected` e non va mascherato. Retry bootstrap è accettabile solo quando la causa transitoria è identificata.
 
-## Analytics di utilizzo — GA4 opt-in
+## Analytics di utilizzo — integrazione ritirata
 
-Google/Firebase Analytics fa parte dell'architettura target soltanto come analytics opzionale dopo consenso esplicito.
+Google Analytics 4/Firebase Analytics non fa parte del runtime corrente. Nessun SDK `firebase/analytics`, Measurement ID, toggle GA4, consenso GA4 o script di tracciamento deve essere caricato. Firebase Authentication, Firestore, Hosting, Installations e App Check restano invariati e operativi. La vecchia preferenza browser è rimossa best-effort all'avvio per disabilitare anche schede della precedente build.
 
-- `src/lib/firebase.ts` non importa `firebase/analytics`; il Firebase core resta indipendente da Analytics.
-- `src/lib/googleAnalytics.ts` esegue import dinamico solo dopo `logbook_ga4_consent_v1=true` e presenza di `VITE_FIREBASE_MEASUREMENT_ID`.
-- Il precedente consenso `logbook_analytics_consent` usato da Vercel Analytics/Speed Insights non abilita GA4.
-- La revoca disabilita la raccolta e viene propagata fra tab.
-- Il page view manuale usa `origin + pathname`, senza query/hash; niente User-ID, user property o eventi custom workout/nutrizione/misure/salute.
-- Un'inizializzazione fallita resta ritentabile.
-
-**MUST:** nessuna richiesta GA4 prima del consenso. Configurazione GA4 live, Signals, Ads, retention e Measurement ID sono stato esterno da verificare nel provider.
+La dismissione dello stream/proprietà e la gestione di dati eventualmente raccolti prima della rimozione restano azioni amministrative da verificare nel provider Google, non deducibili dal codice.
 
 ## Server trusted M7 — Firebase Admin
 
@@ -156,9 +148,9 @@ La CSP e gli header del frontend Firebase Hosting sono configurati in `firebase.
 
 Prima di modificarli:
 1. leggere `firebase.json`;
-2. **MUST:** mantenere l'allowlist minima necessaria a Firebase/Auth/App Check, Firebase Installations/Analytics, Sentry e backend Vercel; le API Google usate dal runtime sono elencate esplicitamente, senza `*.googleapis.com`;
+2. **MUST:** mantenere l'allowlist minima necessaria a Firebase/Auth/App Check, Firebase Installations, Sentry e backend Vercel; le API Google usate dal runtime sono elencate esplicitamente, senza `*.googleapis.com`;
 3. **MUST:** non introdurre wildcard `script-src`, `connect-src` Google API o CORS `*`;
-4. verificare login popup/redirect, sync, App Check, GA4, account deletion e PWA.
+4. verificare login popup/redirect, sync, App Check, assenza di richieste GA4, account deletion e PWA.
 
 Il workflow `.github/workflows/firebase-hosting-production.yml` deploya Hosting soltanto dopo che `Firebase Firestore Production` ha completato con successo la riconciliazione dello stesso exact SHA di `main`; questo serializza i cutover che cambiano contemporaneamente client e Rules. Ricontrolla l'exact SHA e usa Workload Identity Federation. Il deploy resta limitato a `--only hosting`.
 

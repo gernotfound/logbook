@@ -148,10 +148,11 @@ const requiredConnectOrigins = [
   'https://firebaseinstallations.googleapis.com',
   'https://firebase.googleapis.com',
   'https://apis.google.com',
-  'https://www.google-analytics.com',
-  'https://region1.google-analytics.com',
   'https://logbook-gnf.vercel.app',
 ];
+for (const analyticsOrigin of ['google-analytics.com', 'googletagmanager.com']) {
+  if (csp.includes(analyticsOrigin)) failures.push(`Retired Analytics origin must not remain in Hosting CSP: ${analyticsOrigin}`);
+}
 if (csp.includes('*.googleapis.com')) failures.push('Firebase Hosting CSP must not use a broad googleapis wildcard');
 for (const origin of requiredConnectOrigins) {
   if (!csp.includes(origin)) failures.push(`Firebase Hosting CSP missing required connect origin: ${origin}`);
