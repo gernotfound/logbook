@@ -115,15 +115,9 @@ export function mergeProfile(
 
 export function isDefaultNutritionPlanning(plan: NutritionPlanning | null | undefined): boolean {
     if (!plan) return false;
-    const def = createDefaultNutritionPlanning();
-    return (
-        plan.weight === def.weight &&
-        plan.carbsPerKg === def.carbsPerKg &&
-        plan.proPerKg === def.proPerKg &&
-        plan.fatPerKg === def.fatPerKg &&
-        plan.chartPeriod === def.chartPeriod &&
-        plan.normocalorica?.kcal === def.normocalorica?.kcal
-    );
+    // A missing provenance flag must not silently discard user values from newer
+    // planning fields, partial legacy imports or forward-compatible extensions.
+    return deepEqual(plan, createDefaultNutritionPlanning());
 }
 
 /**
@@ -179,7 +173,7 @@ export function mergeNutritionPlanning(
             pendingConflict: undefined,
             activeOrigin
         };
-        return deepMerged ? Object.assign(baseResult, deepMerged) : baseResult;
+        return deepMerged ? { ...deepMerged, ...baseResult } : baseResult;
     }
 
     // Fallbacks
@@ -206,7 +200,8 @@ export function mergeNutritionPlanning(
         resultPayload = { activePlan: cloudPlan || guestPlan || undefined, pendingConflict: undefined, activeOrigin: resolvedCloudOrigin };
     }
 
-    return resultPayload.activePlan ? Object.assign(resultPayload, resultPayload.activePlan) : resultPayload;
+    // Reserved merge metadata wins over extension keys preserved by Zod passthrough.
+    return resultPayload.activePlan ? { ...resultPayload.activePlan, ...resultPayload } : resultPayload;
 }
 
 /**

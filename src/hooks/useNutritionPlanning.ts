@@ -1,9 +1,21 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
 import { Logic } from '../lib/logic';
 import type { NutritionPlanning } from '../types';
 import { normalizeOnDaysCount } from '../lib/nutritionDefaults';
+
+type EditableNumber = string | number;
+type MacroRatioDraft = Record<'carbsPerKg' | 'proPerKg' | 'fatPerKg', EditableNumber>;
+type MacroBoostDraft = Record<'carbsPercent' | 'proPercent' | 'fatPercent', EditableNumber>;
+type NutritionPlanningDraft = Omit<NutritionPlanning, 'weight' | 'onDaysCount' | 'avgMacros' | 'onBoost' | 'normocalorica'> & {
+    weight?: EditableNumber;
+    onDaysCount?: EditableNumber;
+    avgMacros?: MacroRatioDraft;
+    onBoost?: MacroBoostDraft;
+    normocalorica?: Partial<Record<'kcal' | 'carbs' | 'pro' | 'fat', EditableNumber>>;
+};
+type PlanningSaveStatus = 'unsaved' | 'saving' | 'saved' | 'local-pending' | 'error' | null;
 
 function numericInput(value: unknown, fallback = 0): number {
     if (value === null || value === undefined || (typeof value === 'string' && value.trim() === '')) return fallback;
@@ -45,20 +57,24 @@ export function useNutritionPlanning() {
     const dispatchDomainOperation = useAppStore(state => state.dispatchDomainOperation);
     const showAlert = useDialogStore(state => state.showAlert);
 
-    const [localPlanning, setLocalPlanning] = useState<NutritionPlanning | null>(null);
+    // Text inputs may temporarily contain an empty string. These are drafts, never business data.
+    const [localPlanning, setLocalPlanning] = useState<NutritionPlanningDraft | null>(null);
+    const [saveStatus, setSaveStatus] = useState<PlanningSaveStatus>(null);
+    const draftRevision = useRef(0);
+    const saving = useRef(false);
 
     let latestWeight = 80;
     if (nutritionMap) {
         const dates = Object.keys(nutritionMap).sort((a, b) => b.localeCompare(a));
         for (const d of dates) {
             if (nutritionMap[d].weight) {
-                latestWeight = parseFloat(nutritionMap[d].weight as string) || latestWeight;
+                latestWeight = parseFloat(String(nutritionMap[d].weight)) || latestWeight;
                 break;
             }
         }
     }
 
-    const defaultPlanning: NutritionPlanning = {
+    const defaultPlanning: NutritionPlanningDraft = {
         weight: latestWeight,
         onDaysCount: 4,
         avgMacros: { carbsPerKg: 3.5, proPerKg: 2.0, fatPerKg: 1.0 },
@@ -67,7 +83,7 @@ export function useNutritionPlanning() {
     };
 
     const basePlanning = localPlanning ?? storePlanning ?? defaultPlanning;
-    const planning: NutritionPlanning = {
+    const planning: NutritionPlanningDraft = {
         ...basePlanning,
         avgMacros: basePlanning.avgMacros ? { ...defaultPlanning.avgMacros, ...basePlanning.avgMacros } : defaultPlanning.avgMacros,
         onBoost: basePlanning.onBoost ? { ...defaultPlanning.onBoost, ...basePlanning.onBoost } : defaultPlanning.onBoost,
@@ -104,27 +120,33 @@ export function useNutritionPlanning() {
         nutrition: nutritionMap,
         profile: profile
     }), [storePlanning, nutritionMap, profile]);
-    const tdeeCalc = useMemo(() => Logic.calculateTDEEAndMacros(tdeeUserData as any), [tdeeUserData]);
+    const tdeeCalc = useMemo(() => Logic.calculateTDEEAndMacros(tdeeUserData), [tdeeUserData]);
 
-    const handleUpdate = (field: string, value: any) => {
+    const handleUpdate = <K extends keyof NutritionPlanningDraft>(field: K, value: NutritionPlanningDraft[K]) => {
+        draftRevision.current += 1;
+        setSaveStatus('unsaved');
         setLocalPlanning({ ...planning, [field]: value });
     };
 
-    const handleUpdateAvgMacros = (field: string, value: string) => {
+    const handleUpdateAvgMacros = (field: keyof MacroRatioDraft, value: string) => {
+        draftRevision.current += 1;
+        setSaveStatus('unsaved');
         setLocalPlanning({
             ...planning,
-            avgMacros: { ...planning.avgMacros!, [field]: value === '' ? '' : parseFloat(value) }
-        } as any);
+            avgMacros: { ...planning.avgMacros!, [field]: value === '' ? '' : Number(value) }
+        });
     };
 
-    const handleUpdateOnBoost = (field: string, value: string) => {
+    const handleUpdateOnBoost = (field: keyof MacroBoostDraft, value: string) => {
+        draftRevision.current += 1;
+        setSaveStatus('unsaved');
         setLocalPlanning({
             ...planning,
-            onBoost: { ...planning.onBoost!, [field]: value === '' ? '' : parseFloat(value) }
-        } as any);
+            onBoost: { ...planning.onBoost!, [field]: value === '' ? '' : Number(value) }
+        });
     };
 
-    const handleSave = async (e?: any) => {
+    const handleSave = async (e?: { preventDefault: () => void }) => {
         if (e) e.preventDefault();
 
         const weight = numericInput(planning.weight, latestWeight);
@@ -179,15 +201,28 @@ export function useNutritionPlanning() {
             offMacros: currentOffMacros
         };
 
-        setLocalPlanning(updatedPlanning);
+        if (saving.current) return;
+        saving.current = true;
+        const submittedRevision = draftRevision.current;
+        setSaveStatus('saving');
         try {
-            await dispatchDomainOperation({
+            const result = await dispatchDomainOperation({
                 type: 'nutrition-planning.replace',
                 value: updatedPlanning,
                 origin: 'user-edited',
             });
+            if (!result.ok && result.status !== 'local-pending') {
+                throw new Error('Salvataggio non confermato');
+            }
+            if (draftRevision.current === submittedRevision) {
+                setLocalPlanning(null);
+                setSaveStatus(result.status === 'local-pending' ? 'local-pending' : 'saved');
+            }
         } catch {
-            await showAlert("Errore durante il salvataggio della pianificazione.");
+            if (draftRevision.current === submittedRevision) setSaveStatus('error');
+            await showAlert("Errore durante il salvataggio della pianificazione. Le modifiche restano nella schermata, ma non sono salvate.");
+        } finally {
+            saving.current = false;
         }
     };
 
@@ -195,6 +230,6 @@ export function useNutritionPlanning() {
         planning,
         onMacrosCalc, offMacrosCalc, avgMacrosCalc, tdeeCalc,
         currentOnMacros, currentOffMacros,
-        handleUpdate, handleUpdateAvgMacros, handleUpdateOnBoost, handleSave
+        handleUpdate, handleUpdateAvgMacros, handleUpdateOnBoost, handleSave, saveStatus
     };
 }

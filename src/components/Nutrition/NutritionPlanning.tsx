@@ -5,7 +5,7 @@ const NutritionPlanning = () => {
     const { 
         planning, onMacrosCalc, offMacrosCalc, avgMacrosCalc, tdeeCalc,
         currentOnMacros, currentOffMacros,
-        handleUpdate, handleUpdateAvgMacros, handleUpdateOnBoost, handleSave 
+        handleUpdate, handleUpdateAvgMacros, handleUpdateOnBoost, handleSave, saveStatus 
     } = useNutritionPlanning();
 
     return (
@@ -147,9 +147,19 @@ const NutritionPlanning = () => {
                 />
             </div>
             
-            <button 
-                className="btn btn-primary" 
-                style={{ width: '100%', marginTop: '20px', padding: '15px' }} 
+            {saveStatus && (
+                <p role="status" aria-live="polite" style={{ color: 'var(--text-muted)' }}>
+                    {saveStatus === 'unsaved' && 'Modifiche non ancora salvate.'}
+                    {saveStatus === 'saving' && 'Salvataggio in corso…'}
+                    {saveStatus === 'saved' && 'Pianificazione salvata.'}
+                    {saveStatus === 'local-pending' && 'Salvata sul dispositivo; sincronizzazione cloud in attesa.'}
+                    {saveStatus === 'error' && 'Salvataggio non riuscito: le modifiche sono ancora una bozza.'}
+                </p>
+            )}
+            <button
+                className="btn btn-primary"
+                disabled={saveStatus === 'saving'}
+                style={{ width: '100%', marginTop: '20px', padding: '15px' }}
                 onClick={handleSave}
             >
                 <Save size={16} aria-hidden="true" style={{marginRight: '6px'}} /> Salva pianificazione

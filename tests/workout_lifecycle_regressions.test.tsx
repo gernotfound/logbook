@@ -358,6 +358,31 @@ describe('Workout lifecycle durable recovery regressions', () => {
         }
     });
 
+    it('reports a completed history deletion separately from a failed editor recovery', async () => {
+        const historical = workout('history-delete-recovery-error', true);
+        const editor: WorkoutSession = { ...historical, isEditingHistory: true, originalHistoryId: historical.id };
+        useAppStore.setState({ userData: userData({ history: [historical] }), localWorkout: editor });
+        writeDeviceValue('history-editor-context', JSON.stringify({
+            version: 1, editorId: 'another-editor', suspended: null,
+        }), owner);
+        vi.mocked(useDialogStore.getState().showConfirm).mockResolvedValueOnce(true);
+        vi.mocked(useDialogStore.getState().showAlert).mockResolvedValue();
+        const originalDispatch = useAppStore.getState().dispatchDomainOperation;
+        useAppStore.setState({ dispatchDomainOperation: vi.fn(async () => {
+            useAppStore.setState({ userData: userData({ history: [] }) });
+            return { ok: true, status: 'synced' } as const;
+        }) });
+        try {
+            const { result } = renderHook(() => useTrainingHistory());
+            await act(async () => { await result.current.deleteWorkout(historical.id); });
+            expect(useAppStore.getState().userData?.history).toEqual([]);
+            expect(useAppStore.getState().localWorkout?.id).toBe(editor.id);
+            expect(useDialogStore.getState().showAlert).toHaveBeenCalledWith(expect.stringContaining('Allenamento eliminato'));
+        } finally {
+            useAppStore.setState({ dispatchDomainOperation: originalDispatch });
+        }
+    });
+
     it('removes the confirmed exercise identity even if exercises are reordered in the dialog', async () => {
         const initial: WorkoutSession = { ...workout('exercise-race', true), exercises: [
             { id: 'first', exId: 'bench', sets: [{ id: 's1', kg: '40', reps: '8' }] },

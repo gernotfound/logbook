@@ -251,14 +251,6 @@
     "suite": "default",
     "file": "tests/fnc_merge_01.test.ts",
     "code": "eslint(no-unused-vars)",
-    "message": "Identifier 'isDefaultNutritionPlanning' is imported but never used.",
-    "source": "import { mergeUserData, isDefaultNutritionPlanning } from '../src/lib/merge';",
-    "count": 1
-  },
-  {
-    "suite": "default",
-    "file": "tests/fnc_merge_01.test.ts",
-    "code": "eslint(no-unused-vars)",
     "message": "Variable 'mockUser' is declared but never used. Unused variables should start with a '_'.",
     "source": "const mockUser = { uid: 'test-uid' } as any;",
     "count": 1
@@ -453,30 +445,6 @@
     "code": "typescript(no-floating-promises)",
     "message": "Promises must be awaited, add void operator to ignore.",
     "source": "onRemoveFood(item.time ?? item.id);",
-    "count": 1
-  },
-  {
-    "suite": "type-aware",
-    "file": "src/components/Nutrition/NutritionView.tsx",
-    "code": "typescript(no-floating-promises)",
-    "message": "Promises must be awaited, add void operator to ignore.",
-    "source": "showAlert('Piano locale salvato, in attesa di connessione per la sincronizzazione cloud.', 'warning');",
-    "count": 1
-  },
-  {
-    "suite": "type-aware",
-    "file": "src/components/Nutrition/NutritionView.tsx",
-    "code": "typescript(no-floating-promises)",
-    "message": "Promises must be awaited, add void operator to ignore.",
-    "source": "showAlert(`Errore durante il salvataggio: ${result.error}`, 'error');",
-    "count": 1
-  },
-  {
-    "suite": "type-aware",
-    "file": "src/components/Nutrition/NutritionView.tsx",
-    "code": "typescript(no-floating-promises)",
-    "message": "Promises must be awaited, add void operator to ignore.",
-    "source": "showAlert(`Si è verificato un errore: ${e.message}`, 'error');",
     "count": 1
   },
   {
