@@ -91,6 +91,70 @@ describe('Telemetry owner isolation at the production boundary', () => {
     expect(queueB[0].payload.count).toBe(1);
   });
 
+  it('queues a failed first online error without accepting a successful delivery', async () => {
+    changeAuth('owner-a');
+    telemetryHub.init();
+    dispatch.mockResolvedValueOnce(false);
+    telemetryHub.trackError(new Error('Immediate transport rejection'));
+    const keyA = telemetryHub.getQueueStorageKey();
+    await vi.advanceTimersByTimeAsync(0);
+
+    const queue = JSON.parse(localStorage.getItem(keyA) || '[]') as Array<{ payload: TelemetryErrorPayload }>;
+    expect(queue).toHaveLength(1);
+    expect(queue[0].payload.message).toBe('Immediate transport rejection');
+    expect(queue[0].payload.userId).toBe('owner-a');
+  });
+
+  it('never queues an old owner error after an async Sentry rejection and auth switch', async () => {
+    changeAuth('owner-a');
+    telemetryHub.init();
+    let finish!: (success: boolean) => void;
+    dispatch.mockImplementationOnce(() => new Promise<boolean>(resolve => { finish = resolve; }));
+    telemetryHub.trackError(new Error('Pending owner A rejection'));
+    const keyA = telemetryHub.getQueueStorageKey();
+    await vi.advanceTimersByTimeAsync(0);
+
+    changeAuth('owner-b');
+    const keyB = telemetryHub.getQueueStorageKey();
+    finish(false);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(JSON.parse(localStorage.getItem(keyA) || '[]')).toHaveLength(0);
+    expect(JSON.parse(localStorage.getItem(keyB) || '[]')).toHaveLength(0);
+  });
+
+  it('does not misattribute an old owner event if its transport rejects after switching accounts', async () => {
+    changeAuth('owner-a');
+    telemetryHub.init();
+    let finish!: (success: boolean) => void;
+    dispatch.mockImplementationOnce(() => new Promise<boolean>(resolve => { finish = resolve; }));
+    telemetryHub.trackEvent('synthetic_transport_failure');
+    const keyA = telemetryHub.getQueueStorageKey();
+    await vi.advanceTimersByTimeAsync(0);
+
+    changeAuth('owner-b');
+    const keyB = telemetryHub.getQueueStorageKey();
+    finish(false);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(JSON.parse(localStorage.getItem(keyA) || '[]')).toHaveLength(0);
+    expect(JSON.parse(localStorage.getItem(keyB) || '[]')).toHaveLength(0);
+  });
+
+  it('queues a failed rate limiter flush for the same authenticated owner', async () => {
+    changeAuth('owner-a');
+    telemetryHub.init();
+    telemetryHub.trackError(new Error('Flush after failed online transport'));
+    dispatch.mockResolvedValueOnce(false);
+    const keyA = telemetryHub.getQueueStorageKey();
+    await telemetryHub.flushRateLimiters();
+    await vi.advanceTimersByTimeAsync(0);
+
+    const queue = JSON.parse(localStorage.getItem(keyA) || '[]') as Array<{ payload: TelemetryErrorPayload }>;
+    expect(queue).toHaveLength(1);
+    expect(queue[0].payload.userId).toBe('owner-a');
+  });
+
   it('does not replace a new owner queue when an old owner flush resolves late', async () => {
     Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
     changeAuth('owner-a');
