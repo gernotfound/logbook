@@ -67,7 +67,7 @@ describe('Workout metronome', () => {
         if (originalAudioContextDescriptor) {
             Object.defineProperty(window, 'AudioContext', originalAudioContextDescriptor);
         } else {
-            delete (window as typeof window & { AudioContext?: unknown }).AudioContext;
+            Reflect.deleteProperty(window, 'AudioContext');
         }
         vi.restoreAllMocks();
     });
