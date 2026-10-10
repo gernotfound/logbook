@@ -36,6 +36,8 @@ Per i client precedenti e i dati legacy, il repository applica una retention nom
 
 La cancellazione viene eseguita dal maintenance cron server-side già schedulato quotidianamente. La sweep usa Firebase Admin e interroga direttamente le tre collection group `telemetry_*` con pagine bounded da 400 documenti scaduti per query, senza enumerare preventivamente tutti gli utenti in memoria. La cancellazione filtra rigidamente i percorsi attesi `users/{uid}/telemetry_*/*`, ignora i risultati inattesi e può riprendere in modo idempotente all'invocazione successiva se il budget della Function termina prima di completare il ciclo.
 
+Ogni delete usa una precondizione `lastUpdateTime`: se un errore aggregato riceve una nuova occorrenza e la sua scadenza viene estesa dopo la lettura, il batch non elimina il documento aggiornato e la sweep può ritentare alla successiva esecuzione. Un risultato inatteso fuori dai percorsi privati viene conteggiato ma non cancellato; in quel caso `completedCycle` rimane falso. Se il tempo residuo è insufficiente dopo una query, non si avvia il batch distruttivo.
+
 Prima del go-live devono essere completati e documentati:
 
 - Security Rules live con gate obbligatorio `expireAt` sul progetto Firebase reale;
