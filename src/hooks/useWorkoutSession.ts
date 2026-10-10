@@ -198,7 +198,7 @@ export function useWorkoutSession() {
             const durable = await readLocal(session.owner);
             if (!isCurrentSession(session)) return false;
             const persistedWorkout = durable?.data.activeWorkout;
-            if (persistedWorkout?.id === currentWorkout.id
+            if (persistedWorkout && persistedWorkout.id === currentWorkout.id
                 && persistedWorkout.globalStartTime === startedAt
                 && useAppStore.getState().localWorkout?.id === currentWorkout.id) {
                 if (!resetGlobalWorkoutTimer(session.owner)) {
