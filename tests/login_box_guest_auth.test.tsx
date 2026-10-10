@@ -69,6 +69,13 @@ describe('LoginBox guest Google authentication', () => {
         authMocks.showAlert.mockClear();
     });
 
+    it('identifies the email input as the username for autofill and password managers', () => {
+        render(<LoginBox />);
+        const emailField = screen.getByRole('textbox', { name: 'Email' });
+        expect(emailField.getAttribute('name')).toBe('username');
+        expect(emailField.getAttribute('autocomplete')).toBe('username');
+    });
+
     it('uses the guest account-link flow and preserves the selected skip policy', async () => {
         render(<LoginBox onCancel={() => {}} />);
 
