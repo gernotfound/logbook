@@ -95,7 +95,7 @@ describe('A11Y-01: Keyboard Accessibility for Sub-Navigation', () => {
     it('TrainingView sub-nav uses buttons with role="tab" and is keyboard accessible', async () => {
         const Wrapper = () => {
             const [subTab, setSubTab] = useState<TrainingSubTab>('session');
-            return <TrainingView subTab={subTab} setSubTab={setSubTab} handleEditWorkout={vi.fn()} />;
+            return <TrainingView subTab={subTab} setSubTab={setSubTab} />;
         };
         render(<Wrapper />);
         
