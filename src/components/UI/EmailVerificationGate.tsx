@@ -40,7 +40,7 @@ export function EmailVerificationGate() {
                     Per accedere al tuo account e sincronizzare gli allenamenti sul cloud devi prima verificare l'indirizzo email.
                 </p>
                 <p className="ui-login-box-3">
-                    Abbiamo inviato un link di verifica all'indirizzo {currentUser?.email ?? 'indicato'}.
+                    Controlla la casella di {currentUser?.email ?? 'posta elettronica'} e apri il link di verifica. Se non l'hai ricevuto, puoi richiederne uno nuovo.
                 </p>
                 <div style={{ display: 'grid', gap: '0.75rem' }}>
                     <button type="button" className="btn btn-primary" disabled={busy !== null} onClick={() => void run('verify')}>
