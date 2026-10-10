@@ -25,6 +25,17 @@ describe('Retired usage analytics boundary', () => {
     expect(app).not.toContain('@vercel/speed-insights');
   });
 
+  it('does not document retired GA4 consent as an available right or retained preference', () => {
+    const retention = readFileSync('docs/compliance/retention-schedule.md', 'utf8');
+    const rights = readFileSync('docs/compliance/data-subject-rights-procedure.md', 'utf8');
+
+    expect(retention).not.toContain('| Consenso analytics |');
+    expect(rights).not.toContain('revoca Analytics');
+    expect(rights).not.toContain('| Revoca Analytics |');
+    // The health-data consent withdrawal contract is separate and remains in scope.
+    expect(rights).toContain('| Revoca consenso dati salute |');
+  });
+
   it('restricts the Hosting CSP from contacting retired Analytics endpoints', () => {
     const config = JSON.parse(readFileSync('firebase.json', 'utf8'));
     const headers = config.hosting.headers.find((item: {source: string}) => item.source === '/**').headers;

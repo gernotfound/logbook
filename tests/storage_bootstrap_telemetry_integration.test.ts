@@ -12,6 +12,7 @@ import {
 import * as storageTelemetryModule from '../src/lib/storageTelemetry';
 import { CURRENT_DATA_SCHEMA, CURRENT_LOCAL_ENVELOPE, CURRENT_SYNC_PROTOCOL } from '../src/lib/schemaEvolution';
 import { localStorageMock } from './setup';
+import { telemetryHub } from '../src/lib/telemetryHub';
 
 vi.mock('react-dom/client', () => ({
   createRoot: vi.fn(() => ({
@@ -60,6 +61,41 @@ describe('Storage Bootstrap & Telemetry Integration Flow', () => {
     expect(useAppStore.getState().syncHealth).toBe('failed');
     expect(useAppStore.getState().saveError).toContain('Archivio del dispositivo non disponibile');
     expect(createRoot).toHaveBeenCalledTimes(1);
+  });
+
+  it('clears the retired GA4 opt-in even if error-monitoring initialization fails', async () => {
+    localStorage.setItem('logbook_ga4_consent_v1', 'true');
+    localStorage.setItem('unrelated_preference', 'keep');
+    const report = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.spyOn(telemetryHub, 'init').mockImplementationOnce(() => {
+      throw new Error('synthetic telemetry init failure');
+    });
+    vi.spyOn(idbKeyval, 'get').mockResolvedValue(null);
+
+    try {
+      await initApp();
+
+      expect(localStorage.getItem('logbook_ga4_consent_v1')).toBeNull();
+      expect(localStorage.getItem('unrelated_preference')).toBe('keep');
+      expect(createRoot).toHaveBeenCalledTimes(1);
+      expect(useAppStore.getState().localPersistenceBlocked).toBe(false);
+    } finally {
+      report.mockRestore();
+    }
+  });
+
+  it('does not block bootstrap when removing the retired GA4 preference is unavailable', async () => {
+    localStorage.setItem('logbook_ga4_consent_v1', 'true');
+    vi.mocked(localStorageMock.removeItem).mockImplementationOnce(() => {
+      throw new DOMException('storage write blocked', 'SecurityError');
+    });
+    vi.spyOn(idbKeyval, 'get').mockResolvedValue(null);
+
+    await initApp();
+
+    expect(localStorage.getItem('logbook_ga4_consent_v1')).toBe('true');
+    expect(createRoot).toHaveBeenCalledTimes(1);
+    expect(useAppStore.getState().localPersistenceBlocked).toBe(false);
   });
 
   it('Flow 1: Valid current cache in IndexedDB initializes store and updates marker', async () => {
