@@ -236,6 +236,7 @@ describe('EMPIRICAL CHALLENGER: Viewport & Overflow Adversarial Stress Suite (m2
                     onAddSpecialSet={vi.fn()}
                     onUpdateSpecialSet={vi.fn()}
                     onRemoveSpecialSet={vi.fn()}
+                onUpdateSetTarget={vi.fn()}
                 />
             );
 
