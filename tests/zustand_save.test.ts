@@ -5,7 +5,7 @@ import type { UserData } from '../src/types';
 
 describe('R3: Zustand saveUserData Error Rejection & Debouncing Suite', () => {
     const mockUserData1: UserData = {
-        profile: { name: 'User One', height: '175' },
+        profile: { height: '175' },
         library: [{ id: 'ex1', name: 'Bench Press', setsCount: 3, sets: [] }],
         routines: [],
         history: [],
@@ -19,12 +19,12 @@ describe('R3: Zustand saveUserData Error Rejection & Debouncing Suite', () => {
 
     const mockUserData2: UserData = {
         ...mockUserData1,
-        profile: { name: 'User Two', height: '180' }
+        profile: { height: '180' }
     };
 
     const mockUserData3: UserData = {
         ...mockUserData1,
-        profile: { name: 'User Three', height: '185' }
+        profile: { height: '185' }
     };
 
     beforeEach(() => {
@@ -53,7 +53,7 @@ describe('R3: Zustand saveUserData Error Rejection & Debouncing Suite', () => {
             expect(result.status).toBe('synced');
             expect(saveSpy).toHaveBeenCalledTimes(1);
             expect(saveSpy).toHaveBeenCalledWith(expect.objectContaining({
-                profile: expect.objectContaining({ name: 'User One' })
+                profile: expect.objectContaining({ height: '175' })
             }), expect.any(Number));
             expect(useAppStore.getState().syncing).toBe(false);
             expect(useAppStore.getState().saveError).toBeNull();
@@ -81,14 +81,14 @@ describe('R3: Zustand saveUserData Error Rejection & Debouncing Suite', () => {
 
             const savePromise = useAppStore.getState().saveUserData((prev) => ({
                 ...(prev as UserData),
-                profile: { ...(prev?.profile || {}), name: 'Updated Via Function' }
+                profile: { ...(prev?.profile || {}), height: '190' }
             }));
 
             await vi.advanceTimersByTimeAsync(1100);
             const result = await savePromise;
 
             expect(result.ok).toBe(true);
-            expect(useAppStore.getState().userData?.profile?.name).toBe('Updated Via Function');
+            expect(useAppStore.getState().userData?.profile?.height).toBe('190');
             expect(useAppStore.getState().syncing).toBe(false);
         });
     });
@@ -118,7 +118,7 @@ describe('R3: Zustand saveUserData Error Rejection & Debouncing Suite', () => {
             // Only ONE DB save call was executed with the freshest data (mockUserData3)
             expect(saveSpy).toHaveBeenCalledTimes(1);
             expect(saveSpy).toHaveBeenCalledWith(expect.objectContaining({
-                profile: expect.objectContaining({ name: 'User Three' })
+                profile: expect.objectContaining({ height: '185' })
             }), expect.any(Number));
             expect(useAppStore.getState().syncing).toBe(false);
             expect(useAppStore.getState().saveError).toBeNull();
@@ -154,7 +154,7 @@ describe('R3: Zustand saveUserData Error Rejection & Debouncing Suite', () => {
 
             const updatePromise = useAppStore.getState().updateUserData((prev) => ({
                 ...prev,
-                profile: { ...prev.profile, name: 'Mutated Name' }
+                profile: { ...prev.profile, height: '195' }
             }));
 
             await vi.advanceTimersByTimeAsync(1100);
@@ -162,7 +162,7 @@ describe('R3: Zustand saveUserData Error Rejection & Debouncing Suite', () => {
 
             expect(result.ok).toBe(true);
             expect(result.status).toBe('synced');
-            expect(useAppStore.getState().userData?.profile?.name).toBe('Mutated Name');
+            expect(useAppStore.getState().userData?.profile?.height).toBe('195');
             expect(useAppStore.getState().syncing).toBe(false);
         });
 
@@ -173,7 +173,7 @@ describe('R3: Zustand saveUserData Error Rejection & Debouncing Suite', () => {
 
             const updatePromise = useAppStore.getState().updateUserData((prev) => ({
                 ...prev,
-                profile: { ...prev.profile, name: 'Denied Mutation' }
+                profile: { ...prev.profile, height: '200' }
             }));
 
             const assertion = expect(updatePromise).rejects.toThrow('Database permission denied');
