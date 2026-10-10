@@ -41,7 +41,7 @@ describe('Integration Suite: Guest Mode & Global Catalog Resolution', () => {
         it('T4.1: Full guest lifecycle -> Google linking merges custom data and preserves catalogOverrides', () => {
             // Cloud user already has data on Firestore
             const cloudData: UserData = {
-                profile: { name: 'Mario Rossi', gender: 'M', height: '178', dob: '1992-04-15' },
+                profile: { gender: 'M', height: '178', dob: '1992-04-15' },
                 library: [
                     { id: 'cloud_ex_cable_curl', name: 'Curl ai Cavi', setsCount: 3, sets: [], isDefault: false }
                 ],
@@ -99,7 +99,7 @@ describe('Integration Suite: Guest Mode & Global Catalog Resolution', () => {
             const merged = mergeUserData(cloudData, guestData);
 
             // 1. Profile merged: cloud name/gender/dob preserved, guest weight/waist merged
-            expect(merged.profile?.name).toBe('Mario Rossi');
+            expect(merged.profile?.height).toBe('178');
             expect(merged.profile?.gender).toBe('M');
             expect(merged.profile?.height).toBe('178');
             expect((merged.profile as any)?.weight).toBe(77.5);
@@ -205,7 +205,7 @@ describe('Integration Suite: Guest Mode & Global Catalog Resolution', () => {
             expect(fullResolvedFoods.length).toBeGreaterThan(1);
 
             const stateToSave = {
-                profile: { name: 'Test Persistence User' },
+                profile: { height: '180' },
                 library: fullResolvedLibrary, // Full resolved list passed to save
                 customFoods: fullResolvedFoods, // Full resolved list passed to save
                 catalogOverrides: overrides,
@@ -257,7 +257,7 @@ describe('Integration Suite: Guest Mode & Global Catalog Resolution', () => {
             vi.mocked(writeBatch).mockReturnValue(mockBatch as any);
 
             const guestData: UserData = {
-                profile: { name: 'Fresh User' },
+                profile: { height: '175' },
                 library: [
                     { id: 'custom_only_ex', name: 'Custom Lateral Raise', setsCount: 3, sets: [], isDefault: false }
                 ],
