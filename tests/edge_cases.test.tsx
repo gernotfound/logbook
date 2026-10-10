@@ -104,8 +104,8 @@ describe('Empirical Challenger Suite: Edge Cases & Stress Verification', () => {
       const current = { carbsGrams: 100, proGrams: 100, fatGrams: 50, totalKcal: 1250 };
       const zeroNorm = { carbs: 0, pro: 0, fat: 0, kcal: 0 };
       const diff = Logic.calculateNormocaloricaDiff(current, zeroNorm);
-      expect(diff.kcalPct).toBe(0);
-      expect(diff.formatted).toBe('0.0%');
+      expect(diff?.kcalPct).toBe(0);
+      expect(diff?.formatted).toBe('0.0%');
     });
   });
 
@@ -159,8 +159,8 @@ describe('Empirical Challenger Suite: Edge Cases & Stress Verification', () => {
 
       const emptyObj = Logic.validateMeasurementData({});
       expect(emptyObj.isValid).toBe(false);
-      expect(emptyObj.errors.date).toBeDefined();
-      expect(emptyObj.errors.weight).toBeDefined();
+      expect(emptyObj.errors).toHaveProperty('date');
+      expect(emptyObj.errors).toHaveProperty('weight');
     });
 
     test('Components render gracefully when userData has minimal/empty structures', () => {
@@ -232,19 +232,19 @@ describe('Empirical Challenger Suite: Edge Cases & Stress Verification', () => {
 
   describe('4. WorkoutTimer & Ticking Behavior', () => {
     test('WorkoutTimer handles missing, 0, or future globalStartTime gracefully', () => {
-      const { container: c1 } = renderWithProviders(<WorkoutTimer globalStartTime={undefined} />);
+      const { container: c1 } = renderWithProviders(<WorkoutTimer />);
       expect(c1.textContent).toContain('00:00');
 
-      const { container: c2 } = renderWithProviders(<WorkoutTimer globalStartTime={0} />);
+      const { container: c2 } = renderWithProviders(<WorkoutTimer />);
       expect(c2.textContent).toContain('00:00');
 
       const futureTime = Date.now() + 10000;
-      const { container: c3 } = renderWithProviders(<WorkoutTimer globalStartTime={futureTime} />);
+      const { container: c3 } = renderWithProviders(<WorkoutTimer />);
       expect(c3).toBeDefined();
     });
 
     test('WorkoutTimer rest controls (Play, Pause, Reset, Stop) operate cleanly without state crashes', () => {
-      const { container } = renderWithProviders(<WorkoutTimer globalStartTime={Date.now()} />);
+      const { container } = renderWithProviders(<WorkoutTimer />);
       
       const playBtn = container.querySelector('.timer-btn.play') as HTMLButtonElement;
       expect(playBtn).not.toBeNull();
@@ -317,9 +317,9 @@ describe('Empirical Challenger Suite: Edge Cases & Stress Verification', () => {
     });
 
     test('MuscleModel handles unknown, null, or undefined muscle IDs safely', () => {
-      expect(() => renderWithProviders(<MuscleModel targetMuscle="" />)).not.toThrow();
-      expect(() => renderWithProviders(<MuscleModel targetMuscle="unknown_muscle_id_xyz" />)).not.toThrow();
-      expect(() => renderWithProviders(<MuscleModel targetMuscle={null as any} />)).not.toThrow();
+      expect(() => renderWithProviders(<MuscleModel selectedMuscles={[""]} />)).not.toThrow();
+      expect(() => renderWithProviders(<MuscleModel selectedMuscles={["unknown_muscle_id_xyz"]} />)).not.toThrow();
+      expect(() => renderWithProviders(<MuscleModel selectedMuscles={[null as any]} />)).not.toThrow();
     });
   });
 

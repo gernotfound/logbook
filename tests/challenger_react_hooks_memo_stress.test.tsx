@@ -86,7 +86,7 @@ describe('Empirical Challenger: React Hooks, Memoization & Re-render Loop Stress
                 name: 'Ipertrofia Fase 1',
                 totalSessions: 12,
                 completedSessions: 2,
-                routines: [{ routineId: 'routine_push' }]
+                routines: [{ routineId: 'routine_push', frequencyPerWeek: 1 }]
             }
         ],
         activeCycleId: 'cycle_1',
@@ -254,7 +254,7 @@ describe('Empirical Challenger: React Hooks, Memoization & Re-render Loop Stress
             const originalDispatch = useAppStore.getState().dispatchDomainOperation;
             const showAlertSpy = vi.spyOn(useDialogStore.getState(), 'showAlert').mockResolvedValue();
             useAppStore.setState({
-                dispatchDomainOperation: vi.fn(async () => ({ ok: false, status: 'rejected' as const })),
+                dispatchDomainOperation: vi.fn(async () => ({ ok: false as const, status: 'rejected' as const, error: new Error('Rejected write') })),
             });
             try {
                 const { result } = renderHook(() => useNutritionPlanning());
@@ -488,7 +488,7 @@ describe('Empirical Challenger: React Hooks, Memoization & Re-render Loop Stress
                 date: '2026-08-16',
                 globalStartTime: 1,
                 exercises: [
-                    { exId: 'ex_treadmill', sets: [{ id: 'st1', time: '20', distance: '3.0' }], sessionNote: '' }
+                    { exId: 'ex_treadmill', sets: [{ id: 'st1', kg: '', reps: '', time: '20', distance: '3.0' }], sessionNote: '' }
                 ]
             };
 
