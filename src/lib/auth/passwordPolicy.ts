@@ -3,30 +3,49 @@ import { auth, validatePassword } from '../firebase';
 export const PASSWORD_POLICY_SUMMARY =
     'La password non rispetta i requisiti di sicurezza configurati per l’account.';
 
-const MIN_PASSWORD_LENGTH = 12;
+export type PasswordRuleConfig = {
+    minPasswordLength?: number;
+    maxPasswordLength?: number;
+    containsLowercaseLetter?: boolean;
+    containsUppercaseLetter?: boolean;
+    containsNumericCharacter?: boolean;
+    containsNonAlphanumericCharacter?: boolean;
+};
 
-const LOCAL_PASSWORD_RULES = [
-    { label: 'Almeno 12 caratteri', test: (password: string) => password.length >= MIN_PASSWORD_LENGTH },
-    { label: 'Una lettera minuscola', test: (password: string) => /[a-z]/.test(password) },
-    { label: 'Una lettera maiuscola', test: (password: string) => /[A-Z]/.test(password) },
-    { label: 'Un numero', test: (password: string) => /[0-9]/.test(password) },
-    { label: 'Un carattere speciale', test: (password: string) => /[^a-zA-Z0-9]/.test(password) },
-] as const;
+// Stable minimum aligned with the documented Production policy. A remote policy
+// may add stricter limits, but cannot silently weaken the application's baseline.
+const FALLBACK_RULES: PasswordRuleConfig = {
+    minPasswordLength: 8,
+    containsLowercaseLetter: true,
+    containsUppercaseLetter: true,
+    containsNumericCharacter: true,
+    containsNonAlphanumericCharacter: true,
+};
 
-export function getPasswordRequirements(password: string): { label: string; met: boolean }[] {
-    return LOCAL_PASSWORD_RULES.map(rule => ({ label: rule.label, met: rule.test(password) }));
+export async function loadPasswordRuleConfig(): Promise<PasswordRuleConfig> {
+    const status = await validatePassword(auth, '');
+    return status.passwordPolicy?.customStrengthOptions ?? FALLBACK_RULES;
 }
 
-export function getPasswordBaselineError(password: string): string | null {
-    const missing = getPasswordRequirements(password).find(rule => !rule.met);
-    return missing ? `La password richiede: ${missing.label.toLowerCase()}.` : null;
+export function getPasswordRequirements(password: string, rules: PasswordRuleConfig = FALLBACK_RULES): { label: string; met: boolean }[] {
+    const minLength = Math.max(FALLBACK_RULES.minPasswordLength ?? 8, rules.minPasswordLength ?? 0);
+    const requirements = [
+        { label: `Almeno ${minLength} caratteri`, met: password.length >= minLength },
+    ];
+    requirements.push({ label: 'Una lettera minuscola', met: /[a-z]/.test(password) });
+    requirements.push({ label: 'Una lettera maiuscola', met: /[A-Z]/.test(password) });
+    requirements.push({ label: 'Un numero', met: /[0-9]/.test(password) });
+    requirements.push({ label: 'Un carattere speciale', met: /[^a-zA-Z0-9]/.test(password) });
+    if (rules.maxPasswordLength && password.length > rules.maxPasswordLength) {
+        requirements.push({ label: `Massimo ${rules.maxPasswordLength} caratteri`, met: false });
+    }
+    return requirements;
 }
 
 export async function validatePasswordAgainstPolicy(password: string): Promise<string | null> {
-    const baselineError = getPasswordBaselineError(password);
-    if (baselineError) return baselineError;
+    const baselineFailure = getPasswordRequirements(password).find(rule => !rule.met);
+    if (baselineFailure) return `La password richiede: ${baselineFailure.label.toLowerCase()}.`;
 
-    // Firebase may enforce additional, stricter requirements configured remotely.
     const status = await validatePassword(auth, password);
     if (status.isValid) return null;
 

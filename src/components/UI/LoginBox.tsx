@@ -1,10 +1,10 @@
-import React, { useId, useRef, useState } from 'react';
+import React, { useEffect, useId, useRef, useState } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { sendPasswordResetEmail, auth } from '../../lib/firebase';
 import { useDialogStore } from '../../store/useDialogStore';
 import { Eye, EyeOff } from 'lucide-react';
 import { useModalFocusTrap } from '../../hooks/useModalFocusTrap';
-import { getPasswordRequirements, validatePasswordAgainstPolicy } from '../../lib/auth/passwordPolicy';
+import { getPasswordRequirements, loadPasswordRuleConfig, validatePasswordAgainstPolicy, type PasswordRuleConfig } from '../../lib/auth/passwordPolicy';
 import { describeEmailAuthError } from '../../lib/auth/emailAuthError';
 import { useAppStore } from '../../store/useAppStore';
 import { BrowserStorageError } from '../../lib/sync/browserStorage';
@@ -19,6 +19,7 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
+    const [configuredPasswordRules, setConfiguredPasswordRules] = useState<PasswordRuleConfig>();
     const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
     const [formError, setFormError] = useState<string | null>(null);
@@ -28,11 +29,19 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
     const titleId = useId();
     const requirementsId = useId();
     const confirmErrorId = useId();
-    const passwordRequirements = getPasswordRequirements(password);
+    const passwordRequirements = getPasswordRequirements(password, configuredPasswordRules);
     const passwordMissing = mode === 'register' && password.length > 0 && passwordRequirements.some(item => !item.met);
     const passwordMismatch = mode === 'register' && confirmPassword.length > 0 && password !== confirmPassword;
     const dialogRef = useRef<HTMLDivElement>(null);
     const emailInputRef = useRef<HTMLInputElement>(null);
+    useEffect(() => {
+        if (mode !== 'register') return;
+        let active = true;
+        void loadPasswordRuleConfig()
+            .then(rules => { if (active) setConfiguredPasswordRules(rules); })
+            .catch(() => { /* Keep advisory hints; Firebase remains authoritative on submission. */ });
+        return () => { active = false; };
+    }, [mode]);
     useModalFocusTrap({
         containerRef: dialogRef,
         initialFocusRef: emailInputRef,

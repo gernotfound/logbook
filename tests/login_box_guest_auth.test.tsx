@@ -29,7 +29,19 @@ vi.mock('../src/hooks/useAuth', () => ({
 vi.mock('../src/lib/firebase', () => ({
     auth: {},
     sendPasswordResetEmail: vi.fn(async () => {}),
-    validatePassword: vi.fn(async () => ({ isValid: true })),
+    validatePassword: vi.fn(async (_auth: unknown, password: string) => ({
+        isValid: password.length > 0 && password !== 'caccapuou',
+        containsNumericCharacter: password.length > 0 && password !== 'caccapuou',
+        passwordPolicy: {
+            customStrengthOptions: {
+                minPasswordLength: 8,
+                containsLowercaseLetter: true,
+                containsUppercaseLetter: true,
+                containsNumericCharacter: true,
+                containsNonAlphanumericCharacter: true,
+            },
+        },
+    })),
 }));
 
 vi.mock('../src/store/useDialogStore', () => ({
@@ -37,12 +49,17 @@ vi.mock('../src/store/useDialogStore', () => ({
 }));
 
 import { LoginBox } from '../src/components/UI/LoginBox';
+import { validatePassword } from '../src/lib/firebase';
 import { useAppStore } from '../src/store/useAppStore';
 
 describe('LoginBox guest Google authentication', () => {
     beforeEach(() => {
         localStorage.clear();
         useAppStore.getState().setSaveError(null);
+        vi.mocked(validatePassword).mockResolvedValue({
+            isValid: true,
+            passwordPolicy: { customStrengthOptions: { minPasswordLength: 8, containsLowercaseLetter: true, containsUppercaseLetter: true, containsNumericCharacter: true, containsNonAlphanumericCharacter: true } },
+        } as any);
         authState.isGuest = true;
         authMocks.login.mockClear();
         authMocks.loginWithEmail.mockClear();
@@ -96,6 +113,10 @@ describe('LoginBox guest Google authentication', () => {
         expect(authMocks.linkGoogleAccount).not.toHaveBeenCalled();
     });
     it('shows unmet password requirements immediately and rejects weak registration', async () => {
+        const policy = { customStrengthOptions: { minPasswordLength: 8, containsLowercaseLetter: true, containsUppercaseLetter: true, containsNumericCharacter: true, containsNonAlphanumericCharacter: true } };
+        vi.mocked(validatePassword)
+            .mockResolvedValueOnce({ isValid: false, passwordPolicy: policy } as any)
+            .mockResolvedValueOnce({ isValid: false, containsNumericCharacter: false, passwordPolicy: policy } as any);
         authState.isGuest = false;
         render(<LoginBox />);
         fireEvent.click(screen.getAllByRole('button', { name: 'Registrati' }).at(-1)!);
@@ -104,7 +125,7 @@ describe('LoginBox guest Google authentication', () => {
         fireEvent.change(screen.getByLabelText('Conferma password'), { target: { value: 'caccapuou' } });
         expect(screen.getByText(/Una lettera maiuscola/).closest('li')?.getAttribute('data-status')).toBe('missing');
         fireEvent.click(screen.getAllByRole('button', { name: 'Registrati' }).at(-1)!);
-        await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('12 caratteri'));
+        await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('maiuscola'));
         expect(authMocks.registerWithEmail).not.toHaveBeenCalled();
         expect(screen.getAllByRole('button', { name: 'Registrati' }).at(-1)!.hasAttribute('disabled')).toBe(false);
     });
