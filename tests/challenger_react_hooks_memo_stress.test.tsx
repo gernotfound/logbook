@@ -84,8 +84,8 @@ describe('Empirical Challenger: React Hooks, Memoization & Re-render Loop Stress
             {
                 id: 'cycle_1',
                 name: 'Ipertrofia Fase 1',
-                totalSessions: 12,
-                completedSessions: 2,
+                durationWeeks: 4,
+                sessionsPerWeek: 3,
                 routines: [{ routineId: 'routine_push', frequencyPerWeek: 1 }]
             }
         ],
