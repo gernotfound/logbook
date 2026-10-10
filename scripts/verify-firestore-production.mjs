@@ -3,6 +3,7 @@ import {
   classifyFieldOverride,
   FIELD_OVERRIDE_LIST_FILTER,
   fieldOverrideListParent,
+  normalizeFieldIndexModes,
   progressSummary,
 } from './firestore-production-state.mjs';
 
@@ -79,12 +80,13 @@ const normalizeDesiredFieldOverride = override => {
   if (!override?.collectionGroup || !override?.fieldPath || !Array.isArray(override.indexes)) {
     throw new Error(`Invalid desired field override: ${JSON.stringify(override)}`);
   }
-  if (override.indexes.length !== 0) {
-    throw new Error(`Production verifier currently supports explicit index exemptions only: ${JSON.stringify(override)}`);
-  }
+  // Validate every desired single-field mode before deciding whether a deploy
+  // or a live READY-state verification is necessary.
+  normalizeFieldIndexModes(override.indexes);
   return {
     collectionGroup: override.collectionGroup,
     fieldPath: override.fieldPath,
+    indexes: override.indexes,
   };
 };
 
@@ -187,7 +189,7 @@ const missingIndexes = indexStatuses.filter(status => !status.found);
 const pendingIndexes = indexStatuses.filter(status => status.found && status.state !== 'READY');
 const pendingFieldOverrides = fieldOverrideStatuses.filter(status => status.pending);
 const mismatchedFieldOverrides = fieldOverrideStatuses.filter(status =>
-  !status.pending && (!status.found || !status.explicit || status.reverting || !status.indexesDisabled)
+  !status.pending && !status.matchesDesired
 );
 
 if (mode === 'preflight') {
@@ -197,8 +199,8 @@ if (mode === 'preflight') {
     console.log(`- ${status.collectionGroup}: ${status.found ? status.state : 'MISSING'}`);
   }
   for (const status of fieldOverrideStatuses) {
-    const state = status.found && status.explicit && status.indexesDisabled && !status.reverting
-      ? 'EXEMPT'
+    const state = status.matchesDesired
+      ? (status.indexesDisabled ? 'EXEMPT' : 'READY')
       : status.pending
         ? 'PENDING'
         : 'DIFFERS';
@@ -214,7 +216,7 @@ if (mode === 'status') {
       console.log(`Firestore reconciliation required: missing desired index ${status.collectionGroup}.`);
     }
     for (const status of mismatchedFieldOverrides) {
-      console.log(`Firestore reconciliation required: field exemption ${status.collectionGroup}/${status.fieldPath} differs from source.`);
+      console.log(`Firestore reconciliation required: field index override ${status.collectionGroup}/${status.fieldPath} differs from source.`);
     }
     process.exit(10);
   }
@@ -230,7 +232,7 @@ if (mode === 'status') {
     process.exit(11);
   }
 
-  console.log(`Firestore Production is already reconciled for project ${projectId}: live Rules match source, ${indexStatuses.length} desired composite indexes are READY, and ${fieldOverrideStatuses.length} field exemptions match.`);
+  console.log(`Firestore Production is already reconciled for project ${projectId}: live Rules match source, ${indexStatuses.length} desired composite indexes and ${fieldOverrideStatuses.length} explicit field indexes/exemptions are READY.`);
   process.exit(0);
 }
 
@@ -239,12 +241,12 @@ if (!rulesMatch) {
 }
 if (mismatchedFieldOverrides.length) {
   throw new Error(
-    `Desired Firestore field exemptions do not match live state: ${mismatchedFieldOverrides.map(item => `${item.collectionGroup}/${item.fieldPath}`).join(', ')}`,
+    `Desired Firestore field index overrides do not match live state: ${mismatchedFieldOverrides.map(item => `${item.collectionGroup}/${item.fieldPath}`).join(', ')}`,
   );
 }
 if (pendingFieldOverrides.length) {
   throw new Error(
-    `Desired Firestore field exemptions are still converging: ${pendingFieldOverrides.map(item => `${item.collectionGroup}/${item.fieldPath}${progressSummary(item)}`).join(', ')}`,
+    `Desired Firestore field index overrides are still converging: ${pendingFieldOverrides.map(item => `${item.collectionGroup}/${item.fieldPath}${progressSummary(item)}`).join(', ')}`,
   );
 }
 
@@ -255,4 +257,4 @@ if (pending.length) {
   );
 }
 
-console.log(`Firestore Production verified for project ${projectId}: live rules match source, ${indexStatuses.length} desired composite indexes are READY, and ${fieldOverrideStatuses.length} field exemptions match.`);
+console.log(`Firestore Production verified for project ${projectId}: live rules match source, ${indexStatuses.length} desired composite indexes and ${fieldOverrideStatuses.length} explicit field indexes/exemptions are READY.`);
