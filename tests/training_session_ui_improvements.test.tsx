@@ -163,6 +163,8 @@ describe('Training Session UI Improvements Suite (R1, R2, R3)', () => {
                     onUpdateSpecialSet={() => {}}
                     onRemoveSpecialSet={() => {}}
                     onToggleSpecialMenu={() => {}}
+                onUpdateSetTarget={vi.fn()}
+                onUpdateTechnicalStandard={vi.fn()}
                 />
             );
 
@@ -220,6 +222,8 @@ describe('Training Session UI Improvements Suite (R1, R2, R3)', () => {
                     onUpdateSpecialSet={() => {}}
                     onRemoveSpecialSet={() => {}}
                     onToggleSpecialMenu={() => {}}
+                onUpdateSetTarget={vi.fn()}
+                onUpdateTechnicalStandard={vi.fn()}
                 />
             );
 
@@ -264,6 +268,8 @@ describe('Training Session UI Improvements Suite (R1, R2, R3)', () => {
                     onUpdateSpecialSet={() => {}}
                     onRemoveSpecialSet={() => {}}
                     onToggleSpecialMenu={() => {}}
+                onUpdateSetTarget={vi.fn()}
+                onUpdateTechnicalStandard={vi.fn()}
                 />
             );
 
@@ -315,6 +321,8 @@ describe('Training Session UI Improvements Suite (R1, R2, R3)', () => {
                     onUpdateSpecialSet={() => {}}
                     onRemoveSpecialSet={() => {}}
                     onToggleSpecialMenu={() => {}}
+                onUpdateSetTarget={vi.fn()}
+                onUpdateTechnicalStandard={vi.fn()}
                 />
             );
 
@@ -363,6 +371,8 @@ describe('Training Session UI Improvements Suite (R1, R2, R3)', () => {
                     onUpdateSpecialSet={() => {}}
                     onRemoveSpecialSet={() => {}}
                     onToggleSpecialMenu={() => {}}
+                onUpdateSetTarget={vi.fn()}
+                onUpdateTechnicalStandard={vi.fn()}
                 />
             );
 
@@ -410,6 +420,8 @@ describe('Training Session UI Improvements Suite (R1, R2, R3)', () => {
                     onUpdateSpecialSet={() => {}}
                     onRemoveSpecialSet={() => {}}
                     onToggleSpecialMenu={() => {}}
+                onUpdateSetTarget={vi.fn()}
+                onUpdateTechnicalStandard={vi.fn()}
                 />
             );
 
@@ -456,6 +468,8 @@ describe('Training Session UI Improvements Suite (R1, R2, R3)', () => {
                     onUpdateSpecialSet={() => {}}
                     onRemoveSpecialSet={() => {}}
                     onToggleSpecialMenu={() => {}}
+                onUpdateSetTarget={vi.fn()}
+                onUpdateTechnicalStandard={vi.fn()}
                 />
             );
 
@@ -506,6 +520,8 @@ describe('Training Session UI Improvements Suite (R1, R2, R3)', () => {
                     onUpdateSpecialSet={() => {}}
                     onRemoveSpecialSet={() => {}}
                     onToggleSpecialMenu={() => {}}
+                onUpdateSetTarget={vi.fn()}
+                onUpdateTechnicalStandard={vi.fn()}
                 />
             );
 
@@ -637,6 +653,8 @@ describe('Training Session UI Improvements Suite (R1, R2, R3)', () => {
                     onUpdateSpecialSet={() => {}}
                     onRemoveSpecialSet={() => {}}
                     onToggleSpecialMenu={() => {}}
+                onUpdateSetTarget={vi.fn()}
+                onUpdateTechnicalStandard={vi.fn()}
                 />
             );
 
@@ -688,6 +706,8 @@ describe('Training Session UI Improvements Suite (R1, R2, R3)', () => {
                     onUpdateSpecialSet={() => {}}
                     onRemoveSpecialSet={() => {}}
                     onToggleSpecialMenu={() => {}}
+                onUpdateSetTarget={vi.fn()}
+                onUpdateTechnicalStandard={vi.fn()}
                 />
             );
 
@@ -734,6 +754,8 @@ describe('Training Session UI Improvements Suite (R1, R2, R3)', () => {
                     onUpdateSpecialSet={() => {}}
                     onRemoveSpecialSet={() => {}}
                     onToggleSpecialMenu={() => {}}
+                onUpdateSetTarget={vi.fn()}
+                onUpdateTechnicalStandard={vi.fn()}
                 />
             );
 
@@ -776,6 +798,8 @@ describe('Training Session UI Improvements Suite (R1, R2, R3)', () => {
                     onUpdateSpecialSet={() => {}}
                     onRemoveSpecialSet={() => {}}
                     onToggleSpecialMenu={() => {}}
+                onUpdateSetTarget={vi.fn()}
+                onUpdateTechnicalStandard={vi.fn()}
                 />
             );
 
@@ -821,6 +845,8 @@ describe('Training Session UI Improvements Suite (R1, R2, R3)', () => {
                     onUpdateSpecialSet={() => {}}
                     onRemoveSpecialSet={() => {}}
                     onToggleSpecialMenu={() => {}}
+                onUpdateSetTarget={vi.fn()}
+                onUpdateTechnicalStandard={vi.fn()}
                 />
             );
 
