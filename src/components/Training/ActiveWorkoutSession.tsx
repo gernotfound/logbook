@@ -78,7 +78,7 @@ export interface ActiveWorkoutSessionProps {
 
 export const ActiveWorkoutSession = ({ onNavigateToHistory, onRequestEnd }: ActiveWorkoutSessionProps) => {
     const {
-        activeWorkout, library, history,
+        activeWorkout, library, history, historySaving,
         mood, setMood, pump, setPump, fatigue, setFatigue, water, setWater,
         manualDuration, setManualDuration,
         pains, setPains, togglePain,
@@ -235,6 +235,7 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory, onRequestEnd }: Acti
                 routineName={activeWorkout.routineName}
                 date={activeWorkout.date}
                 onCancelHistory={handleCancelHistory}
+                historySaving={historySaving}
                 currentExerciseIndex={safeCurrentExerciseIndex}
                 totalExercises={totalExercises}
             />
@@ -337,10 +338,10 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory, onRequestEnd }: Acti
 
             {activeWorkout.isEditingHistory ? (
                 <div className="session-edit-actions">
-                    <button className="btn btn-primary" onClick={handleSaveHistory}>
+                    <button className="btn btn-primary" disabled={historySaving} onClick={handleSaveHistory}>
                         <Save size={20} aria-hidden="true" /> Salva modifiche
                     </button>
-                    <button className="btn btn-danger" onClick={handleCancelHistory}>
+                    <button className="btn btn-danger" disabled={historySaving} onClick={handleCancelHistory}>
                         Annulla modifica
                     </button>
                 </div>

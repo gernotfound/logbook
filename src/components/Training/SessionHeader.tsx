@@ -7,6 +7,7 @@ interface SessionHeaderProps {
     routineName?: string;
     date?: string;
     onCancelHistory: () => void;
+    historySaving?: boolean;
     currentExerciseIndex?: number;
     totalExercises?: number;
 }
@@ -16,6 +17,7 @@ const SessionHeader: React.FC<SessionHeaderProps> = ({
     routineName,
     date,
     onCancelHistory,
+    historySaving = false,
     currentExerciseIndex = 0,
     totalExercises = 0,
 }) => {
@@ -43,6 +45,7 @@ const SessionHeader: React.FC<SessionHeaderProps> = ({
                         type="button"
                         className="btn btn-small"
                         onClick={onCancelHistory}
+                        disabled={historySaving}
                     >
                         Annulla
                     </button>

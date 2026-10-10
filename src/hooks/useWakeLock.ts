@@ -12,11 +12,9 @@ import { useEffect, useRef } from 'react';
 export function useWakeLock(enabled: boolean): void {
     // Ref del sentinel attivo (null se non acquisito)
     const sentinelRef = useRef<WakeLockSentinel | null>(null);
-    // Flag per rilevare componente smontato o richiesta obsoleta
-    const cancelledRef = useRef(false);
-
     useEffect(() => {
-        cancelledRef.current = false;
+        // Each effect instance retains its own cancellation state.
+        let cancelled = false;
 
         // Verifica supporto API
         if (typeof navigator === 'undefined' || !('wakeLock' in navigator)) {
@@ -42,7 +40,7 @@ export function useWakeLock(enabled: boolean): void {
                 const sentinel = await navigator.wakeLock.request('screen');
 
                 // Race condition: se nel frattempo è stato disabilitato/smontato, rilascia subito.
-                if (cancelledRef.current || !enabled || document.visibilityState !== 'visible') {
+                if (cancelled || !enabled || document.visibilityState !== 'visible') {
                     sentinel.release().catch(() => {});
                     return;
                 }
@@ -56,7 +54,7 @@ export function useWakeLock(enabled: boolean): void {
                     if (sentinelRef.current !== sentinel) return;
                     sentinelRef.current = null;
                     if (
-                        cancelledRef.current
+                        cancelled
                         || !enabled
                         || document.visibilityState !== 'visible'
                         || spontaneousRetries >= MAX_SPONTANEOUS_RETRIES
@@ -102,7 +100,7 @@ export function useWakeLock(enabled: boolean): void {
 
         return () => {
             // Segnala che qualsiasi Promise pendente è obsoleta
-            cancelledRef.current = true;
+            cancelled = true;
             clearRetry();
             document.removeEventListener('visibilitychange', handleVisibilityChange);
             release();

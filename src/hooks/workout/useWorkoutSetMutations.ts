@@ -3,6 +3,7 @@ import { Logic } from '../../lib/logic';
 import { useAppStore } from '../../store/useAppStore';
 import type { WorkoutSession } from '../../types';
 import { sessionSetHasMeaningfulData } from '../../lib/workoutSetData';
+import { captureSession, isCurrentSession } from '../../lib/sync/session';
 
 interface UseWorkoutSetMutationsProps {
     setLocalWorkout: (updater: (prev: WorkoutSession | null) => WorkoutSession | null) => void;
@@ -95,14 +96,21 @@ export function useWorkoutSetMutations({ setLocalWorkout, showConfirm }: UseWork
     }, [reorderExercises]);
 
     const removeActiveExercise = useCallback(async (exIndex: number, closePanelsCallback?: (index: number) => void) => {
+        const session = captureSession();
+        const initial = useAppStore.getState().localWorkout;
+        const selected = initial?.exercises?.[exIndex];
+        if (!selected?.id || !initial) return;
         if (!(await showConfirm("Rimuovere questo esercizio dalla sessione corrente?"))) return;
-        setLocalWorkout((prev) => {
-            if (!prev) return prev;
-            const updatedExercises = [...prev.exercises];
-            updatedExercises.splice(exIndex, 1);
-            return { ...prev, exercises: updatedExercises };
+        if (!isCurrentSession(session)) return;
+        let removedAt = -1;
+        setLocalWorkout(prev => {
+            if (!prev || prev.id !== initial.id || prev.isEditingHistory !== initial.isEditingHistory) return prev;
+            const index = prev.exercises.findIndex(exercise => exercise.id === selected.id);
+            if (index < 0) return prev;
+            removedAt = index;
+            return { ...prev, exercises: prev.exercises.filter((_, i) => i !== index) };
         });
-        if (closePanelsCallback) closePanelsCallback(exIndex);
+        if (removedAt >= 0) closePanelsCallback?.(removedAt);
     }, [showConfirm, setLocalWorkout]);
 
     // Sets Management - Sempre atomici con functional update
@@ -238,27 +246,25 @@ export function useWorkoutSetMutations({ setLocalWorkout, showConfirm }: UseWork
     }, [setLocalWorkout]);
 
     const removeLastSet = useCallback(async (exIndex: number) => {
-        const currentWorkout = useAppStore.getState().localWorkout;
-        const ex = currentWorkout?.exercises?.[exIndex];
-        if (!ex || !ex.sets || ex.sets.length === 0) return;
-
-        const setsCount = ex.sets.length;
-        const lastSet: any = ex.sets[setsCount - 1];
-
-        const isFilled = sessionSetHasMeaningfulData(lastSet);
-
-        if (isFilled) {
-            const ok = await showConfirm("La serie contiene dei dati. Vuoi davvero rimuoverla?");
-            if (!ok) return;
+        const session = captureSession();
+        const initial = useAppStore.getState().localWorkout;
+        const ex = initial?.exercises?.[exIndex];
+        if (!ex?.id || !ex.sets?.length) return;
+        const last = ex.sets[ex.sets.length - 1];
+        if (!last?.id) return;
+        if (sessionSetHasMeaningfulData(last)) {
+            if (!(await showConfirm("La serie contiene dei dati. Vuoi davvero rimuoverla?"))) return;
         }
-
-        setLocalWorkout((prev) => {
-            if (!prev) return prev;
-            const updatedExercises = prev.exercises.map((exItem: any, i: number) => {
-                if (i !== exIndex) return exItem;
-                return { ...exItem, sets: exItem.sets.slice(0, -1) };
-            });
-            return { ...prev, exercises: updatedExercises };
+        if (!isCurrentSession(session)) return;
+        setLocalWorkout(prev => {
+            if (!prev || prev.id !== initial?.id || prev.isEditingHistory !== initial?.isEditingHistory) return prev;
+            const index = prev.exercises.findIndex(item => item.id === ex.id);
+            if (index < 0) return prev;
+            const current = prev.exercises[index];
+            const currentLast = current.sets?.[current.sets.length - 1];
+            if (!currentLast || currentLast.id !== last.id || JSON.stringify(currentLast) !== JSON.stringify(last)) return prev;
+            return { ...prev, exercises: prev.exercises.map((item, i) =>
+                i === index ? { ...item, sets: item.sets.slice(0, -1) } : item) };
         });
     }, [setLocalWorkout, showConfirm]);
 
