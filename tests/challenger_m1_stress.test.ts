@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
 import { removeUndefinedValues, isPlainObject } from '../src/lib/utils/object';
-import type { UserData } from '../src/types';
 
 /**
  * Adversarial validator that recursively traverses a data structure
