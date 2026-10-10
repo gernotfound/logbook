@@ -13,34 +13,7 @@ function buildUserData(
         ...defaultUserDataFallback,
         nutritionPlanning: plan || undefined,
         nutritionPlanningOrigin: origin,
-        pendingConflicdescribe('nutrition provenance integrity under forward-compatible input', () => {
-    it('does not let passthrough planning fields overwrite merge-control metadata', () => {
-        const cloud = createDefaultNutritionPlanning();
-        const guest = { ...cloud, weight: 90, activePlan: null, pendingConflict: null, activeOrigin: 'generated-default' };
-        const result = mergeNutritionPlanning(cloud, guest, 'user-edited', 'user-edited');
-        expect(result.activePlan).toEqual(cloud);
-        expect(result.pendingConflict).toEqual(guest);
-        expect(result.activeOrigin).toBe('user-edited');
-    });
-
-    it('preserves newer fields as user data when a legacy origin flag is missing', () => {
-        const oldDefault = createDefaultNutritionPlanning();
-        const modernGuest = {
-            ...oldDefault,
-            avgMacros: { carbsPerKg: 4.5, proPerKg: 2, fatPerKg: 1 },
-            onBoost: { carbsPercent: 10, proPercent: 0, fatPercent: 0 },
-        };
-        expect(isDefaultNutritionPlanning(modernGuest)).toBe(false);
-        const result = mergeUserData(
-            buildUserData({ ...oldDefault, weight: 75 }, 'user-edited'),
-            buildUserData(modernGuest, undefined),
-        );
-        expect(result.nutritionPlanning?.weight).toBe(75);
-        expect(result.pendingConflicts?.nutritionPlanning?.avgMacros?.carbsPerKg).toBe(4.5);
-    });
-});
-
-ts: undefined
+        pendingConflicts: undefined
     };
 }
 
@@ -243,5 +216,32 @@ describe('PATCH: DB.loadUserData nutritionPlanningOrigin rehydration', () => {
         expect(merged.nutritionPlanning?.weight).toBe(defaultPlan.weight); // cloud weight
         // Guest stored in conflict because origins differ in value (guestPlan.weight=70 != cloudPlan.weight=default)
         expect(merged.pendingConflicts?.nutritionPlanning?.weight).toBe(70);
+    });
+});
+
+describe('nutrition provenance integrity under forward-compatible input', () => {
+    it('does not let passthrough planning fields overwrite merge-control metadata', () => {
+        const cloud = createDefaultNutritionPlanning();
+        const guest = { ...cloud, weight: 90, activePlan: null, pendingConflict: null, activeOrigin: 'generated-default' };
+        const result = mergeNutritionPlanning(cloud, guest, 'user-edited', 'user-edited');
+        expect(result.activePlan).toEqual(cloud);
+        expect(result.pendingConflict).toEqual(guest);
+        expect(result.activeOrigin).toBe('user-edited');
+    });
+
+    it('preserves newer fields as user data when a legacy origin flag is missing', () => {
+        const oldDefault = createDefaultNutritionPlanning();
+        const modernGuest = {
+            ...oldDefault,
+            avgMacros: { carbsPerKg: 4.5, proPerKg: 2, fatPerKg: 1 },
+            onBoost: { carbsPercent: 10, proPercent: 0, fatPercent: 0 },
+        };
+        expect(isDefaultNutritionPlanning(modernGuest)).toBe(false);
+        const result = mergeUserData(
+            buildUserData({ ...oldDefault, weight: 75 }, 'user-edited'),
+            buildUserData(modernGuest, undefined),
+        );
+        expect(result.nutritionPlanning?.weight).toBe(75);
+        expect(result.pendingConflicts?.nutritionPlanning?.avgMacros?.carbsPerKg).toBe(4.5);
     });
 });
