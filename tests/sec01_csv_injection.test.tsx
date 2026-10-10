@@ -32,7 +32,7 @@ describe('SEC-01: CSV Formula Injection Mitigation in Export', () => {
 
     it('exportToCSV mantiene righe coerenti e neutralizza i campi testuali pericolosi', async () => {
         const downloadSpy = vi.spyOn(Exporter, 'downloadFile').mockResolvedValue(true);
-        vi.spyOn(useDialogStore.getState(), 'showAlert').mockImplementation(() => {});
+        vi.spyOn(useDialogStore.getState(), 'showAlert').mockResolvedValue(undefined);
 
         await Exporter.exportToCSV([
             {
