@@ -448,7 +448,9 @@ describe('Intelligent Exercise Search & Dropdown Suite (M3: R4 & R6)', () => {
                     onRemoveExercise={vi.fn()}
                     onUpdateSetsCount={vi.fn()}
                     onUpdateReps={vi.fn()}
-                    onUpdateTechnique={vi.fn()}
+                    onUpdateSetPlan={vi.fn()}
+                    onUpdateSetPlanField={vi.fn()}
+                    onUpdateExerciseMetadata={vi.fn()}
                     onSave={vi.fn()}
                     onCancel={vi.fn()}
                 />
@@ -491,7 +493,9 @@ describe('Intelligent Exercise Search & Dropdown Suite (M3: R4 & R6)', () => {
                     onRemoveExercise={vi.fn()}
                     onUpdateSetsCount={vi.fn()}
                     onUpdateReps={vi.fn()}
-                    onUpdateTechnique={vi.fn()}
+                    onUpdateSetPlan={vi.fn()}
+                    onUpdateSetPlanField={vi.fn()}
+                    onUpdateExerciseMetadata={vi.fn()}
                     onSave={vi.fn()}
                     onCancel={vi.fn()}
                 />
@@ -525,6 +529,7 @@ describe('Intelligent Exercise Search & Dropdown Suite (M3: R4 & R6)', () => {
                 exercises: [
                     {
                         exId: 'ex_bench',
+                        sessionNote: '',
                         sets: [{ id: 's_1', kg: '80', reps: '8', done: true }]
                     }
                 ]
@@ -576,7 +581,7 @@ describe('Intelligent Exercise Search & Dropdown Suite (M3: R4 & R6)', () => {
             expect(state.localWorkout?.exercises[1].exId).toBe('ex_plank');
 
             // Routine blueprint in userData.routines must remain strictly unchanged
-            const blueprint = state.userData?.routines.find(r => r.id === 'rot_push');
+            const blueprint = state.userData?.routines?.find(r => r.id === 'rot_push');
             expect(blueprint?.exercises.length).toBe(1);
             expect(blueprint?.exercises[0].exId).toBe('ex_bench');
         });
@@ -592,12 +597,14 @@ describe('Intelligent Exercise Search & Dropdown Suite (M3: R4 & R6)', () => {
                     {
                         id: 'se_bench',
                         exId: 'ex_bench',
+                        sessionNote: '',
                         sets: [{ id: 's_1', kg: '90', reps: '6', done: true }]
                     },
                     {
                         id: 'se_treadmill',
                         exId: 'ex_treadmill',
-                        sets: [{ id: 's_2', time: '900', dist: '2.5', speed: '10', done: true }]
+                        sessionNote: '',
+                        sets: [{ id: 's_2', time: '900', distance: '2.5', speed: '10', done: true }]
                     }
                 ]
             };
@@ -628,12 +635,12 @@ describe('Intelligent Exercise Search & Dropdown Suite (M3: R4 & R6)', () => {
 
             const updatedState = useAppStore.getState();
             expect(updatedState.localWorkout).toBeNull();
-            expect(updatedState.userData?.history.length).toBe(1);
-            expect(updatedState.userData?.history[0].exercises.length).toBe(2);
-            expect(updatedState.userData?.history[0].exercises[1].exId).toBe('ex_treadmill');
+            expect(updatedState.userData?.history?.length).toBe(1);
+            expect(updatedState.userData?.history?.[0]?.exercises.length).toBe(2);
+            expect(updatedState.userData?.history?.[0]?.exercises[1]?.exId).toBe('ex_treadmill');
 
             // Blueprint still unchanged
-            const blueprint = updatedState.userData?.routines.find(r => r.id === 'rot_push');
+            const blueprint = updatedState.userData?.routines?.find(r => r.id === 'rot_push');
             expect(blueprint?.exercises.length).toBe(1);
         });
     });
