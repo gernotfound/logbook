@@ -5,9 +5,11 @@ interface PrivacySettingsTabProps {
     onOpenTerms: () => void;
     onOpenPrivacy: () => void;
     onToggleAnalytics: () => void;
+    isGuest: boolean;
+    onOpenAccountClosure: () => void;
 }
 
-export function PrivacySettingsTab({ analyticsEnabled, onOpenTerms, onOpenPrivacy, onToggleAnalytics }: PrivacySettingsTabProps) {
+export function PrivacySettingsTab({ analyticsEnabled, onOpenTerms, onOpenPrivacy, onToggleAnalytics, isGuest, onOpenAccountClosure }: PrivacySettingsTabProps) {
     return (
         <section className="settings-detail-stack" aria-label="Privacy">
             <div className="settings-toggle-card">
@@ -19,6 +21,15 @@ export function PrivacySettingsTab({ analyticsEnabled, onOpenTerms, onOpenPrivac
                     <input type="checkbox" id="analytics-toggle" aria-label="Statistiche di utilizzo" checked={analyticsEnabled} onChange={onToggleAnalytics} />
                     <span aria-hidden="true" />
                 </label>
+            </div>
+            <div className="settings-detail-card">
+                <h2>Non vuoi più utilizzare TheLogBook?</h2>
+                <p className="settings-help">{isGuest
+                    ? 'Puoi eliminare i dati locali salvati su questo dispositivo.'
+                    : 'Puoi esportare prima un backup da Dati e backup, poi richiedere la cancellazione definitiva del tuo account e dei dati associati. Questa scelta elimina l’intero account, non soltanto i dati salute.'}</p>
+                <button type="button" className="btn settings-full" onClick={onOpenAccountClosure}>
+                    {isGuest ? 'Vai a elimina dati locali' : 'Vai a elimina account e dati'}
+                </button>
             </div>
             <div className="settings-detail-list">
                 <button type="button" className="settings-simple-row" onClick={onOpenPrivacy}>
