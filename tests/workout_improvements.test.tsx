@@ -15,7 +15,7 @@ import { resetGlobalWorkoutTimer } from '../src/lib/utils/timer';
 import SettingsView from '../src/components/SettingsView';
 import MuscleModel from '../src/components/Training/MuscleModel';
 import { useHomeView } from '../src/hooks/useHomeView';
-import type { WorkoutSession } from '../src/types';
+import type { WorkoutSession, TrainingSubTab } from '../src/types';
 
 describe('Workout Improvements & History Edit Suite', () => {
 
@@ -153,7 +153,7 @@ describe('Workout Improvements & History Edit Suite', () => {
       });
 
       expect(editedWorkout).not.toBeNull();
-      expect(editedWorkout?.id).toBe('w_hist_1');
+      expect(editedWorkout).toMatchObject({ id: 'w_hist_1' });
     });
 
     test('TrainingSession in isEditingHistory mode renders banner, manual duration and "Salva Modifica"', () => {
@@ -211,8 +211,8 @@ describe('Workout Improvements & History Edit Suite', () => {
         }
       ];
 
-      let currentSubTab = 'history';
-      const setSubTab = (tab: string) => { currentSubTab = tab; };
+      let currentSubTab: TrainingSubTab = 'history';
+      const setSubTab = (tab: TrainingSubTab) => { currentSubTab = tab; };
 
       renderWithProviders(
         <TrainingView subTab={currentSubTab} setSubTab={setSubTab} />,
