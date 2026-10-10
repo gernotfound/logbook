@@ -20,6 +20,7 @@ export interface AuthContextType {
     registerWithEmail: (email: string, pass: string, guestPolicy?: GuestMigrationPolicy) => Promise<void>;
     resendEmailVerification: () => Promise<void>;
     refreshEmailVerification: () => Promise<void>;
+    continueUnverifiedLocally: () => Promise<void>;
 }
 
 export const defaultAuthContext: AuthContextType = {
@@ -36,7 +37,8 @@ export const defaultAuthContext: AuthContextType = {
     loginWithEmail: async () => {},
     registerWithEmail: async () => {},
     resendEmailVerification: async () => {},
-    refreshEmailVerification: async () => {}
+    refreshEmailVerification: async () => {},
+    continueUnverifiedLocally: async () => {}
 };
 
 export const AuthContext = createContext<AuthContextType>(defaultAuthContext);
