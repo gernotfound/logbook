@@ -120,9 +120,7 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
         const workoutId = String(activeWorkout?.id ?? '');
         if (!workoutId || activeWorkout?.isEditingHistory || !postSessionRecoveryName) {
             postSessionDraftRef.current = null;
-            setPostSessionDraft(null);
             pendingEndTimeRef.current = null;
-            setPendingEndTime(null);
             return;
         }
         const session = captureSession();
@@ -140,9 +138,7 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
         if (!recovered) {
             if (postSessionDraftRef.current?.workoutId !== workoutId) {
                 postSessionDraftRef.current = null;
-                setPostSessionDraft(null);
                 pendingEndTimeRef.current = null;
-                setPendingEndTime(null);
             }
             return;
         }

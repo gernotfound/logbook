@@ -625,14 +625,6 @@
   },
   {
     "suite": "type-aware",
-    "file": "src/hooks/useTrainingHistory.ts",
-    "code": "typescript(no-floating-promises)",
-    "message": "Promises must be awaited, add void operator to ignore.",
-    "source": "showAlert(\"Errore durante l'eliminazione dell'allenamento.\");",
-    "count": 1
-  },
-  {
-    "suite": "type-aware",
     "file": "src/hooks/useWorkoutSession.ts",
     "code": "typescript(no-floating-promises)",
     "message": "Promises must be awaited, add void operator to ignore.",

@@ -17,7 +17,7 @@ import type { WorkoutSession, WorkoutRoutine, Exercise, WorkoutReadiness } from 
 import { auth } from '../lib/firebase';
 import { draftRegistry } from '../lib/utils/draftRegistry';
 import { readLocal } from '../lib/sync/localRepository';
-import { readDeviceValueStrict, writeDeviceValue } from '../lib/sync/deviceStorage';
+import { writeDeviceValue } from '../lib/sync/deviceStorage';
 import { captureSession, isCurrentSession } from '../lib/sync/session';
 import { claimHistorySave, HISTORY_EDITOR_CONTEXT, isHistorySavePending, releaseHistorySave, restoreSessionAfterHistoryEdit } from './workout/historyEditorContext';
 import { isWorkoutClockAnomalyError, resetWorkoutClockGuard } from '../lib/workoutClockGuard';
@@ -197,8 +197,9 @@ export function useWorkoutSession() {
         try {
             const durable = await readLocal(session.owner);
             if (!isCurrentSession(session)) return false;
-            if (durable?.data.activeWorkout?.id === currentWorkout.id
-                && durable.data.activeWorkout.globalStartTime === startedAt
+            const persistedWorkout = durable?.data.activeWorkout;
+            if (persistedWorkout?.id === currentWorkout.id
+                && persistedWorkout.globalStartTime === startedAt
                 && useAppStore.getState().localWorkout?.id === currentWorkout.id) {
                 if (!resetGlobalWorkoutTimer(session.owner)) {
                     useAppStore.setState({
@@ -242,8 +243,8 @@ export function useWorkoutSession() {
         if (!isCurrentSession(session) || latest.localWorkout !== currentLocal
             || latest.userData?.activeWorkout !== state.userData?.activeWorkout
             || isHistorySavePending(session.owner)) return false;
-        if (latest.userData?.history?.find(item => item.id === workout.id)
-            !== state.userData?.history?.find(item => item.id === workout.id)) return false;
+        const selectedHistory = state.userData?.history?.find(item => item.id === workout.id);
+        if (!selectedHistory || latest.userData?.history?.find(item => item.id === workout.id) !== selectedHistory) return false;
 
         const editingWorkout = prepareHistoricalWorkoutForEditing(workout);
         try {
