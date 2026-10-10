@@ -20,6 +20,8 @@ describe('SettingsView hierarchical navigation', () => {
         expect(screen.getByRole('button', { name: /Termini e condizioni/i })).toBeDefined();
         expect(screen.getByRole('button', { name: /Informativa sulla privacy/i })).toBeDefined();
         expect(screen.getByRole('checkbox', { name: 'Statistiche di utilizzo' })).toBeDefined();
+        expect(screen.getByRole('button', { name: 'Vai a elimina account e dati' })).toBeDefined();
+        expect(screen.getByText(/Questa scelta elimina l’intero account, non soltanto i dati salute/)).toBeDefined();
 
         fireEvent.click(screen.getByRole('button', { name: 'Torna alle impostazioni' }));
         fireEvent.click(screen.getByRole('button', { name: /Dati e backup/i }));
@@ -27,6 +29,16 @@ describe('SettingsView hierarchical navigation', () => {
         expect(screen.getByRole('button', { name: /Esporta JSON/i })).toBeDefined();
         expect(screen.getByRole('button', { name: /Backup JSON/i })).toBeDefined();
         expect(screen.getByRole('button', { name: /Esporta dati \(CSV\)/i })).toBeDefined();
+    });
+
+    it('links the privacy explanation to the existing account deletion screen without starting deletion', () => {
+        renderWithProviders(<SettingsView />);
+        fireEvent.click(screen.getByRole('button', { name: /^Privacy/i }));
+        fireEvent.click(screen.getByRole('button', { name: 'Vai a elimina account e dati' }));
+
+        expect(screen.getByRole('heading', { name: 'Account e accesso' })).toBeDefined();
+        expect(screen.getByRole('button', { name: 'Elimina account e dati' })).toBeDefined();
+        expect(screen.queryByRole('heading', { name: 'Verifica identità…' })).toBeNull();
     });
 
     it('groups theme, updates and storage diagnostics under Aspetto e applicazione', () => {
