@@ -126,6 +126,21 @@ describe('Telemetry Sanitizer & Telemetry Hub Unit & Integration Suite', () => {
       expect(scrubPII('Crash /HOME/Synthetic/app.ts:12')).toBe('Crash [REDACTED_PATH]:12');
     });
 
+    it('redacts standard credential aliases consistently in JSON, query strings and headers', () => {
+      const input = '{"api_key":"SECRET_A","client_secret":"SECRET_B","idToken":"SECRET_C","authorization":"Basic SECRET_D"}';
+      const result = scrubPII(input);
+      for (const secret of ['SECRET_A', 'SECRET_B', 'SECRET_C', 'SECRET_D']) {
+        expect(result).not.toContain(secret);
+      }
+      expect(scrubPII('GET /?api_key=SECRET_E&access-token=SECRET_F&view=summary'))
+        .toBe('GET /?api_key=[REDACTED]&access-token=[REDACTED]&view=summary');
+      expect(scrubPII('Authorization: Basic SECRET_G'))
+        .toBe('Authorization: [REDACTED_TOKEN]');
+      expect(scrubPII('Proxy-Authorization: Bearer SECRET_H'))
+        .toBe('Proxy-Authorization: [REDACTED_TOKEN]');
+      expect(scrubPII('message: Expected "code": "state"')).toBe('message: Expected "code": "state"');
+    });
+
     it('handles non-string, null, undefined, and empty string inputs safely', () => {
       expect(scrubPII('')).toBe('');
       expect(scrubPII(null as any)).toBe('');
