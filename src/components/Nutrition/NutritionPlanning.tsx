@@ -3,7 +3,7 @@ import { Save } from 'lucide-react';
 
 const NutritionPlanning = () => {
     const { 
-        planning, onMacrosCalc, offMacrosCalc, avgMacrosCalc, tdeeCalc,
+        planning, saveStatus, onMacrosCalc, offMacrosCalc, avgMacrosCalc, tdeeCalc,
         currentOnMacros, currentOffMacros,
         handleUpdate, handleUpdateAvgMacros, handleUpdateOnBoost, handleSave 
     } = useNutritionPlanning();
@@ -154,6 +154,14 @@ const NutritionPlanning = () => {
             >
                 <Save size={16} aria-hidden="true" style={{marginRight: '6px'}} /> Salva pianificazione
             </button>
+
+            {saveStatus !== 'idle' && (
+                <p role="status" style={{ color: 'var(--text-muted)', marginTop: '10px' }}>
+                    {saveStatus === 'saving'
+                        ? 'Salvataggio della pianificazione in corso...'
+                        : 'Modifiche non ancora salvate sul dispositivo.'}
+                </p>
+            )}
 
             {/* TDEE COMPARE (Automatico) */}
             <div className="card" style={{ marginTop: '30px', padding: '15px' }}>

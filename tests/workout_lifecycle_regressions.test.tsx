@@ -358,6 +358,23 @@ describe('Workout lifecycle durable recovery regressions', () => {
         }
     });
 
+    it('distinguishes a committed history deletion from a later recovery failure', async () => {
+        const historical = workout('history-delete-then-recovery-fails', true);
+        const editor: WorkoutSession = { ...historical, isEditingHistory: true, originalHistoryId: historical.id };
+        const initial = userData({ history: [historical] });
+        await initializeLocal(owner, initial);
+        writeDeviceValue('history-editor-context', '{invalid-json', owner);
+        useAppStore.setState({ userData: initial, localWorkout: editor });
+        vi.mocked(useDialogStore.getState().showConfirm).mockResolvedValueOnce(true);
+        vi.mocked(useDialogStore.getState().showAlert).mockResolvedValue();
+        const { result } = renderHook(() => useTrainingHistory());
+        await act(async () => { await result.current.deleteWorkout(historical.id); });
+        expect((await readLocal(owner))?.data.history?.some(item => item.id === historical.id)).toBe(false);
+        expect(useDialogStore.getState().showAlert).toHaveBeenCalledWith(
+            expect.stringContaining('Allenamento eliminato dallo storico, ma'),
+        );
+    });
+
     it('removes the confirmed exercise identity even if exercises are reordered in the dialog', async () => {
         const initial: WorkoutSession = { ...workout('exercise-race', true), exercises: [
             { id: 'first', exId: 'bench', sets: [{ id: 's1', kg: '40', reps: '8' }] },

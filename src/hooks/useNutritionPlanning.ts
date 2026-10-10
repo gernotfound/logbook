@@ -1,9 +1,20 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
 import { Logic } from '../lib/logic';
 import type { NutritionPlanning } from '../types';
 import { normalizeOnDaysCount } from '../lib/nutritionDefaults';
+
+// Form inputs have intermediate strings (including an empty field), while only
+// normalized numeric values may enter the persisted NutritionPlanning schema.
+type EditableNumber = number | string;
+type NutritionPlanningDraft = Omit<NutritionPlanning, 'weight' | 'onDaysCount' | 'avgMacros' | 'onBoost' | 'normocalorica'> & {
+    weight?: EditableNumber;
+    onDaysCount?: EditableNumber;
+    avgMacros?: { carbsPerKg: EditableNumber; proPerKg: EditableNumber; fatPerKg: EditableNumber };
+    onBoost?: { carbsPercent: EditableNumber; proPercent: EditableNumber; fatPercent: EditableNumber };
+    normocalorica?: Partial<Record<'kcal' | 'carbs' | 'pro' | 'fat', EditableNumber>>;
+};
 
 function numericInput(value: unknown, fallback = 0): number {
     if (value === null || value === undefined || (typeof value === 'string' && value.trim() === '')) return fallback;
@@ -45,7 +56,9 @@ export function useNutritionPlanning() {
     const dispatchDomainOperation = useAppStore(state => state.dispatchDomainOperation);
     const showAlert = useDialogStore(state => state.showAlert);
 
-    const [localPlanning, setLocalPlanning] = useState<NutritionPlanning | null>(null);
+    const [localPlanning, setLocalPlanning] = useState<NutritionPlanningDraft | null>(null);
+    const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'unsaved'>('idle');
+    const draftRevision = useRef(0);
 
     let latestWeight = 80;
     if (nutritionMap) {
@@ -58,7 +71,7 @@ export function useNutritionPlanning() {
         }
     }
 
-    const defaultPlanning: NutritionPlanning = {
+    const defaultPlanning: NutritionPlanningDraft = {
         weight: latestWeight,
         onDaysCount: 4,
         avgMacros: { carbsPerKg: 3.5, proPerKg: 2.0, fatPerKg: 1.0 },
@@ -67,7 +80,7 @@ export function useNutritionPlanning() {
     };
 
     const basePlanning = localPlanning ?? storePlanning ?? defaultPlanning;
-    const planning: NutritionPlanning = {
+    const planning: NutritionPlanningDraft = {
         ...basePlanning,
         avgMacros: basePlanning.avgMacros ? { ...defaultPlanning.avgMacros, ...basePlanning.avgMacros } : defaultPlanning.avgMacros,
         onBoost: basePlanning.onBoost ? { ...defaultPlanning.onBoost, ...basePlanning.onBoost } : defaultPlanning.onBoost,
@@ -104,27 +117,33 @@ export function useNutritionPlanning() {
         nutrition: nutritionMap,
         profile: profile
     }), [storePlanning, nutritionMap, profile]);
-    const tdeeCalc = useMemo(() => Logic.calculateTDEEAndMacros(tdeeUserData as any), [tdeeUserData]);
+    const tdeeCalc = useMemo(() => Logic.calculateTDEEAndMacros(tdeeUserData), [tdeeUserData]);
 
-    const handleUpdate = (field: string, value: any) => {
+    const handleUpdate = (field: keyof NutritionPlanningDraft, value: NutritionPlanningDraft[keyof NutritionPlanningDraft]) => {
+        draftRevision.current++;
+        setSaveStatus('unsaved');
         setLocalPlanning({ ...planning, [field]: value });
     };
 
-    const handleUpdateAvgMacros = (field: string, value: string) => {
+    const handleUpdateAvgMacros = (field: keyof NonNullable<NutritionPlanningDraft['avgMacros']>, value: string) => {
+        draftRevision.current++;
+        setSaveStatus('unsaved');
         setLocalPlanning({
             ...planning,
-            avgMacros: { ...planning.avgMacros!, [field]: value === '' ? '' : parseFloat(value) }
-        } as any);
+            avgMacros: { ...planning.avgMacros!, [field]: value === '' ? '' : Number(value) }
+        });
     };
 
-    const handleUpdateOnBoost = (field: string, value: string) => {
+    const handleUpdateOnBoost = (field: keyof NonNullable<NutritionPlanningDraft['onBoost']>, value: string) => {
+        draftRevision.current++;
+        setSaveStatus('unsaved');
         setLocalPlanning({
             ...planning,
-            onBoost: { ...planning.onBoost!, [field]: value === '' ? '' : parseFloat(value) }
-        } as any);
+            onBoost: { ...planning.onBoost!, [field]: value === '' ? '' : Number(value) }
+        });
     };
 
-    const handleSave = async (e?: any) => {
+    const handleSave = async (e?: { preventDefault(): void }) => {
         if (e) e.preventDefault();
 
         const weight = numericInput(planning.weight, latestWeight);
@@ -179,20 +198,33 @@ export function useNutritionPlanning() {
             offMacros: currentOffMacros
         };
 
-        setLocalPlanning(updatedPlanning);
+        const revisionAtSubmit = draftRevision.current;
+        setSaveStatus('saving');
         try {
-            await dispatchDomainOperation({
+            const result = await dispatchDomainOperation({
                 type: 'nutrition-planning.replace',
                 value: updatedPlanning,
                 origin: 'user-edited',
             });
+            if (!result.ok && result.status !== 'local-pending') {
+                throw new Error('Salvataggio non confermato');
+            }
+            // Keep keystrokes made while saving, instead of clearing newer drafts.
+            if (draftRevision.current === revisionAtSubmit) {
+                setLocalPlanning(null);
+                setSaveStatus('idle');
+            } else {
+                setSaveStatus('unsaved');
+            }
         } catch {
+            setSaveStatus('unsaved');
+            // The draft remains editable, but must not be confused with a saved plan.
             await showAlert("Errore durante il salvataggio della pianificazione.");
         }
     };
 
     return {
-        planning,
+        planning, saveStatus,
         onMacrosCalc, offMacrosCalc, avgMacrosCalc, tdeeCalc,
         currentOnMacros, currentOffMacros,
         handleUpdate, handleUpdateAvgMacros, handleUpdateOnBoost, handleSave

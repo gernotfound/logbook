@@ -1,5 +1,6 @@
 import Fuse from 'fuse.js';
 import { calculateBodyFat } from './bodyFat';
+import type { UserData } from '../../types';
 import { parseDateInput } from '../utils/date';
 
 export function calculateTDEE(nutritionHistoryList: { date?: string; weight?: string | number; kcal?: string | number }[]) {
@@ -140,28 +141,34 @@ export function calculateNormocaloricaDiff(current: any, normocalorica: any) {
     };
 }
 
-export function calculateTDEEAndMacros(state: any) {
+export function calculateTDEEAndMacros(state: Partial<UserData> | null) {
     if (!state) return { tdee: 2500, bf: null, carbs: 300, pro: 160, fat: 70, totalKcal: 2500 };
     let tdeeVal = 2500;
     if (state.nutritionPlanning && state.nutritionPlanning.normocalorica && state.nutritionPlanning.normocalorica.kcal) {
         tdeeVal = state.nutritionPlanning.normocalorica.kcal;
     }
-    if (state.nutrition && typeof state.nutrition === 'object') {
-        const dates = Object.keys(state.nutrition).sort((a,b) => new Date(a).getTime() - new Date(b).getTime());
-        const historyList = dates.map(d => ({ date: d, weight: state.nutrition[d].weight, kcal: state.nutrition[d].kcal }));
+    const nutrition = state.nutrition;
+    if (nutrition && typeof nutrition === 'object') {
+        const dates = Object.keys(nutrition).sort((a,b) => new Date(a).getTime() - new Date(b).getTime());
+        const historyList = dates.map(d => ({ date: d, weight: nutrition[d].weight, kcal: nutrition[d].kcal }));
         const tdeeRes = calculateTDEE(historyList);
         if (!tdeeRes.error && tdeeRes.tdee) {
             tdeeVal = tdeeRes.tdee;
         }
     }
-    const planning = state.nutritionPlanning || { weight: 80, carbsPerKg: 3.5, proPerKg: 2.0, fatPerKg: 1.0 };
-    const weight = parseFloat(planning.weight) || 80;
+    const planning = state.nutritionPlanning;
+    const weight = Number(planning?.weight) || 80;
     let bfVal = null;
     if (state.profile) {
         const bfStr = calculateBodyFat(weight, state.profile);
-        if (bfStr) bfVal = parseFloat(bfStr as any);
+        if (bfStr) bfVal = Number(bfStr);
     }
-    const macros = calculateMacrosFromKg(weight, planning.carbsPerKg, planning.proPerKg, planning.fatPerKg);
+    const macros = calculateMacrosFromKg(
+        weight,
+        planning?.avgMacros?.carbsPerKg ?? planning?.carbsPerKg ?? 3.5,
+        planning?.avgMacros?.proPerKg ?? planning?.proPerKg ?? 2.0,
+        planning?.avgMacros?.fatPerKg ?? planning?.fatPerKg ?? 1.0
+    );
     return {
         tdee: tdeeVal,
         bf: bfVal,

@@ -116,13 +116,22 @@ export function mergeProfile(
 export function isDefaultNutritionPlanning(plan: NutritionPlanning | null | undefined): boolean {
     if (!plan) return false;
     const def = createDefaultNutritionPlanning();
+    // A plan without explicit provenance is only a generated default when all
+    // persisted fields match. Modern macro fields and unknown forward-compatible
+    // fields are user data, not evidence that a legacy default can be discarded.
+    const defaultKeys = new Set(Object.keys(def));
+    if (Object.entries(plan).some(([key, value]) => value !== undefined && !defaultKeys.has(key))) return false;
     return (
         plan.weight === def.weight &&
         plan.carbsPerKg === def.carbsPerKg &&
         plan.proPerKg === def.proPerKg &&
         plan.fatPerKg === def.fatPerKg &&
+        plan.lockedMacro === def.lockedMacro &&
         plan.chartPeriod === def.chartPeriod &&
-        plan.normocalorica?.kcal === def.normocalorica?.kcal
+        plan.normocalorica?.kcal === def.normocalorica?.kcal &&
+        plan.normocalorica?.carbs === def.normocalorica?.carbs &&
+        plan.normocalorica?.pro === def.normocalorica?.pro &&
+        plan.normocalorica?.fat === def.normocalorica?.fat
     );
 }
 
@@ -179,7 +188,7 @@ export function mergeNutritionPlanning(
             pendingConflict: undefined,
             activeOrigin
         };
-        return deepMerged ? Object.assign(baseResult, deepMerged) : baseResult;
+        return deepMerged ? { ...deepMerged, ...baseResult } : baseResult;
     }
 
     // Fallbacks
@@ -206,7 +215,7 @@ export function mergeNutritionPlanning(
         resultPayload = { activePlan: cloudPlan || guestPlan || undefined, pendingConflict: undefined, activeOrigin: resolvedCloudOrigin };
     }
 
-    return resultPayload.activePlan ? Object.assign(resultPayload, resultPayload.activePlan) : resultPayload;
+    return resultPayload.activePlan ? { ...resultPayload.activePlan, ...resultPayload } : resultPayload;
 }
 
 /**

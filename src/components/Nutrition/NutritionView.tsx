@@ -60,18 +60,18 @@ const NutritionView = ({ subTab = 'meals', setSubTab }: NutritionViewProps) => {
             if (result.ok) {
                 setConflictDialogOpen(false);
             } else if (result.status === 'local-pending') {
-                showAlert('Piano locale salvato, in attesa di connessione per la sincronizzazione cloud.', 'warning');
+                showAlert('Piano locale salvato, in attesa di connessione per la sincronizzazione cloud.', 'Attenzione');
                 setConflictDialogOpen(false);
             } else {
                 if (result.error instanceof Error && result.error.message === "conflict-resolved-elsewhere") {
                     setConflictDialogOpen(false);
                     return;
                 }
-                showAlert(`Errore durante il salvataggio: ${result.error}`, 'error');
+                showAlert(`Errore durante il salvataggio: ${result.error}`, 'Errore');
                 // Non chiudiamo il dialog, lasciamo all'utente la possibilità di esportare
             }
         } catch (e: any) {
-            showAlert(`Si è verificato un errore: ${e.message}`, 'error');
+            showAlert(`Si è verificato un errore: ${e.message}`, 'Errore');
         } finally {
             setIsResolving(false);
         }

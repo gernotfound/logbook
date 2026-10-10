@@ -130,10 +130,27 @@ describe('Empirical Challenger Suite: Edge Cases & Stress Verification', () => {
         tdee: 2500, bf: null, carbs: 300, pro: 160, fat: 70, totalKcal: 2500
       });
 
-      const emptyState = { userData: null };
+      const emptyState = {};
       const res = Logic.calculateTDEEAndMacros(emptyState);
       expect(res.tdee).toBe(2500);
       expect(res.bf).toBeNull();
+    });
+
+    test('Logic.calculateTDEEAndMacros reads modern average macros before legacy fields', () => {
+      const calculated = Logic.calculateTDEEAndMacros({
+        nutritionPlanning: {
+          weight: 80,
+          avgMacros: { carbsPerKg: 4, proPerKg: 2, fatPerKg: 0.8 },
+          carbsPerKg: 1, proPerKg: 1, fatPerKg: 1,
+        },
+      });
+      expect(calculated.carbs).toBe(320);
+      expect(calculated.pro).toBe(160);
+      expect(calculated.fat).toBe(64);
+      const legacy = Logic.calculateTDEEAndMacros({
+        nutritionPlanning: { weight: 80, carbsPerKg: 3, proPerKg: 2, fatPerKg: 1 },
+      });
+      expect(legacy.carbs).toBe(240);
     });
 
     test('Logic.validateMeasurementData handles null, empty, or missing profile fields', () => {
