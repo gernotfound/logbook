@@ -6,7 +6,7 @@
 
 - Privacy: `[PRIVACY_EMAIL]`
 - Supporto: `[SUPPORT_EMAIL]`
-- Capacità già disponibili in app: backup JSON/esportazioni, rettifica dei dati editabili, account deletion, revoca Analytics.
+- Capacità già disponibili in app: backup JSON/esportazioni, rettifica dei dati editabili e account deletion.
 
 ## Apertura del caso
 
@@ -39,7 +39,6 @@ Usare come riferimento l'Art. 12 GDPR: risposta senza ingiustificato ritardo e, 
 | Portabilità | Backup JSON / export CSV; verificare che il formato copra il perimetro richiesto |
 | Limitazione | `[DEFINE_IF_REQUIRED]`; non esiste oggi un flag generico di restriction |
 | Opposizione | Valutare per i trattamenti basati sul legittimo interesse, inclusa telemetria tecnica |
-| Revoca Analytics | Impostazioni; effetto per il futuro |
 | Revoca consenso dati salute | **Soluzione A decisa (9 ottobre 2026): sospensione tracciamento, accesso a esportazione/diritti/account deletion.** Implementazione end-to-end e valutazione delle basi giuridiche e retention **ancora bloccanti prima del pilot**; vedi `health-consent-release-gate.md`. |
 | Reclamo | Informare del diritto di rivolgersi all'autorità di controllo competente |
 
