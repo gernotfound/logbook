@@ -139,7 +139,11 @@ describe('Challenger 2: Zustand Fine-Grained Selectors & Background Render Isola
                             ...state.userData.nutrition,
                             '2026-08-16': {
                                 ...state.userData.nutrition?.['2026-08-16'],
-                                kcal: 2600
+                                date: '2026-08-16',
+                                kcal: 2600,
+                                carbs: state.userData.nutrition?.['2026-08-16']?.carbs ?? 0,
+                                pro: state.userData.nutrition?.['2026-08-16']?.pro ?? 0,
+                                fat: state.userData.nutrition?.['2026-08-16']?.fat ?? 0
                             }
                         }
                     } : null
