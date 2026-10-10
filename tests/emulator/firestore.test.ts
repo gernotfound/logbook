@@ -13,6 +13,46 @@ beforeAll(async () => {
 beforeEach(() => env.clearFirestore());
 afterAll(async () => { await env?.cleanup(); });
 
+it('gates every private owner path on the Firebase verified-email token claim', async () => {
+    const paths = [
+        'users/a',
+        'users/a/history_months/2026-09',
+        'users/a/nutrition_months/2026-09',
+        'users/a/sync_control/state',
+        'users/a/telemetry_errors/one',
+        'users/a/telemetry_events/one',
+        'users/a/telemetry_anomalies/one',
+    ];
+    await env.withSecurityRulesDisabled(async context => {
+        for (const path of paths) {
+            await setDoc(doc(context.firestore(), path), { marker: true });
+        }
+    });
+
+    const verified = env.authenticatedContext('a', { email_verified: true }).firestore();
+    const unverified = env.authenticatedContext('a', { email_verified: false }).firestore();
+    const missingClaim = env.authenticatedContext('a').firestore();
+    for (const path of paths) {
+        await assertSucceeds(getDoc(doc(verified, path)));
+        await assertFails(getDoc(doc(unverified, path)));
+        await assertFails(getDoc(doc(missingClaim, path)));
+    }
+
+    const validEvent = {
+        timestamp: 1000,
+        type: 'workout_started',
+        context: { appVersion: '1.1.0', platform: 'other', displayMode: 'browser', online: true },
+        userId: 'a',
+        sessionId: 'verify-email',
+        expireAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+    };
+    const eventPath = 'users/a/telemetry_events/new-event';
+    await assertFails(setDoc(doc(unverified, eventPath), validEvent));
+    await assertFails(setDoc(doc(missingClaim, eventPath), validEvent));
+    await assertSucceeds(setDoc(doc(verified, eventPath), validEvent));
+    await assertSucceeds(getDoc(doc(env.unauthenticatedContext().firestore(), 'global_catalog/public')));
+});
+
 const telemetryContext = {
     appVersion: '1.0.0',
     platform: 'other',
@@ -75,7 +115,7 @@ async function fencedWrite(db: any, path: string, business: Record<string, unkno
 }
 
 it('allows only Protocol 3 fenced owner writes and denies direct root deletion', async () => {
-    const db = env.authenticatedContext('a').firestore();
+    const db = env.authenticatedContext('a', { email_verified: true }).firestore();
     const ref = doc(db, 'users/a');
     const replica = await fencedWrite(db, 'users/a', { profile: { height: '175' }, nutritionPlanningOrigin: 'user-edited' });
     expect((await assertSucceeds(getDoc(ref))).data()?.profile.height).toBe('175');
@@ -85,7 +125,7 @@ it('allows only Protocol 3 fenced owner writes and denies direct root deletion',
 });
 
 it('rejects markerless or unfenced business writes while allowing the current first-account baseline', async () => {
-    const db = env.authenticatedContext('a').firestore();
+    const db = env.authenticatedContext('a', { email_verified: true }).firestore();
     const root = doc(db, 'users/a');
     await assertFails(setDoc(root, { profile: { name: 'markerless' } }));
     await assertFails(setDoc(root, { profile: { name: 'schema-only' }, _schemaVersion: 1 }));
@@ -103,7 +143,7 @@ it('rejects markerless or unfenced business writes while allowing the current fi
 });
 
 it('denies client-side monthly physical deletion before and after Protocol 3 registration', async () => {
-    const db = env.authenticatedContext('a').firestore();
+    const db = env.authenticatedContext('a', { email_verified: true }).firestore();
     const monthRef = doc(db, 'users/a/nutrition_months/2026-09');
 
     await env.withSecurityRulesDisabled(async context => {
@@ -135,7 +175,7 @@ it('denies client-side monthly physical deletion before and after Protocol 3 reg
 it.each(['history_months', 'nutrition_months'])(
     'denies Protocol 3 registration combined with a legacy physical delete from %s in the same batch',
     async collectionName => {
-        const db = env.authenticatedContext('a').firestore();
+        const db = env.authenticatedContext('a', { email_verified: true }).firestore();
         const monthRef = doc(db, `users/a/${collectionName}/2026-09`);
         const controlRef = doc(db, 'users/a/sync_control/state');
         await env.withSecurityRulesDisabled(async context => {
@@ -162,7 +202,7 @@ it.each([
 ])(
     'denies Protocol 3 registration combined with a legacy %s write in the same batch',
     async (_label, path, legacyDocument) => {
-        const db = env.authenticatedContext('a').firestore();
+        const db = env.authenticatedContext('a', { email_verified: true }).firestore();
         const controlRef = doc(db, 'users/a/sync_control/state');
         const targetRef = doc(db, path);
 
@@ -177,7 +217,7 @@ it.each([
 );
 
 it('rejects Protocol 1/2 writes even before the account creates its Protocol 3 control', async () => {
-    const db = env.authenticatedContext('a').firestore();
+    const db = env.authenticatedContext('a', { email_verified: true }).firestore();
     for (const protocolVersion of [1, 2]) {
         const legacySync = { protocolVersion, clock: {}, fields: {} };
         await assertFails(setDoc(doc(db, 'users/a'), { profile: { name: 'legacy' }, _schemaVersion: 1, _sync: legacySync }));
@@ -188,7 +228,7 @@ it('rejects Protocol 1/2 writes even before the account creates its Protocol 3 c
 });
 
 it.each(['anonymous', 'b'])('denies %s all operations on another user and their private collections', async identity => {
-    const db = identity === 'anonymous' ? env.unauthenticatedContext().firestore() : env.authenticatedContext(identity).firestore();
+    const db = identity === 'anonymous' ? env.unauthenticatedContext().firestore() : env.authenticatedContext(identity, { email_verified: true }).firestore();
     for (const path of ['users/a', 'users/a/history_months/2026-09', 'users/a/nutrition_months/2026-09', 'users/a/telemetry_events/e', 'users/a/telemetry_errors/e', 'users/a/telemetry_anomalies/e']) {
         const ref = doc(db, path);
         await assertFails(getDoc(ref));
@@ -198,7 +238,7 @@ it.each(['anonymous', 'b'])('denies %s all operations on another user and their 
 });
 
 it('makes account_deletions server-only and immediately blocks the owner on every private path', async () => {
-    const ownerDb = env.authenticatedContext('a').firestore();
+    const ownerDb = env.authenticatedContext('a', { email_verified: true }).firestore();
     const privatePaths = [
         'users/a',
         'users/a/history_months/2026-09',
@@ -240,7 +280,7 @@ it.each([
     ['owner', 'a'],
     ['other user', 'b'],
 ])('keeps account_deletion_devices server-only for %s clients', async (_label, uid) => {
-    const db = uid === null ? env.unauthenticatedContext().firestore() : env.authenticatedContext(uid).firestore();
+    const db = uid === null ? env.unauthenticatedContext().firestore() : env.authenticatedContext(uid, { email_verified: true }).firestore();
     await env.withSecurityRulesDisabled(async context => {
         await setDoc(doc(context.firestore(), 'account_deletion_devices/a'), {
             uid: 'a',
@@ -259,7 +299,7 @@ it.each([
 });
 
 it('rejects unknown root fields, invalid origin and malformed month paths inside fenced writes', async () => {
-    const db = env.authenticatedContext('a').firestore();
+    const db = env.authenticatedContext('a', { email_verified: true }).firestore();
     const replica = await registerReplica(db, 'a');
     await assertFails(fencedWrite(db, 'users/a', { unknown: true }, replica));
     await assertFails(fencedWrite(db, 'users/a', { nutritionPlanningOrigin: 'injected' }, replica));
@@ -270,7 +310,7 @@ it('rejects unknown root fields, invalid origin and malformed month paths inside
 });
 
 it('rejects malformed sync envelopes while allowing the current structural contract', async () => {
-    const db = env.authenticatedContext('a').firestore();
+    const db = env.authenticatedContext('a', { email_verified: true }).firestore();
     const root = doc(db, 'users/a');
     const legacySync = { protocolVersion: 1, clock: {}, fields: {} };
 
@@ -307,7 +347,7 @@ it('rejects malformed sync envelopes while allowing the current structural contr
 });
 
 it('permits public catalog reads but denies client writes', async () => {
-    for (const db of [env.unauthenticatedContext().firestore(), env.authenticatedContext('a').firestore()]) {
+    for (const db of [env.unauthenticatedContext().firestore(), env.authenticatedContext('a', { email_verified: true }).firestore()]) {
         const ref = doc(db, 'global_catalog/manifest');
         await assertSucceeds(getDoc(ref));
         await assertFails(setDoc(ref, { version: 'tampered' }));
@@ -315,13 +355,13 @@ it('permits public catalog reads but denies client writes', async () => {
 });
 
 it('rejects untyped root fields inside a valid fenced write', async () => {
-    const db = env.authenticatedContext('a').firestore();
+    const db = env.authenticatedContext('a', { email_verified: true }).firestore();
     const replica = await registerReplica(db, 'a');
     await assertFails(fencedWrite(db, 'users/a', { profile: 'invalid-profile' }, replica));
 });
 
 it('accepts bounded owner telemetry and rejects malformed payloads', async () => {
-    const db = env.authenticatedContext('a').firestore();
+    const db = env.authenticatedContext('a', { email_verified: true }).firestore();
     const expireAt = new Date(Date.now() + (30 * 24 * 60 * 60 * 1000));
     const eventRef = doc(db, 'users/a/telemetry_events/e1');
     const errorRef = doc(db, 'users/a/telemetry_errors/err1');
@@ -374,7 +414,7 @@ it('accepts bounded owner telemetry and rejects malformed payloads', async () =>
 });
 
 it('allows bounded telemetry expiry, supports legacy expiry upgrade, and prevents expiry removal', async () => {
-    const db = env.authenticatedContext('a').firestore();
+    const db = env.authenticatedContext('a', { email_verified: true }).firestore();
     const validExpireAt = new Date(Date.now() + (30 * 24 * 60 * 60 * 1000));
     const tooFarExpireAt = new Date(Date.now() + (32 * 24 * 60 * 60 * 1000));
 
@@ -420,7 +460,7 @@ it('allows bounded telemetry expiry, supports legacy expiry upgrade, and prevent
 });
 
 it('makes telemetry events/anomalies immutable and error aggregation monotonic', async () => {
-    const db = env.authenticatedContext('a').firestore();
+    const db = env.authenticatedContext('a', { email_verified: true }).firestore();
     const expireAt = new Date(Date.now() + (30 * 24 * 60 * 60 * 1000));
     const eventRef = doc(db, 'users/a/telemetry_events/e1');
     const errorRef = doc(db, 'users/a/telemetry_errors/err1');
