@@ -28,7 +28,7 @@ Il repository è pubblico. Questo registro non contiene token, private key, emai
 | Firebase App Check + reCAPTCHA Enterprise / Google Cloud Fraud Defense | ACTIVE | attestazione anti-abuse prima dell'accesso cloud | Firebase App Check + Google Cloud |
 | Vercel Functions / Cron | ACTIVE | backend trusted account-deletion/recovery, cron e redirect del vecchio root verso Firebase | Vercel + `vercel.json` |
 | Vercel Analytics / Speed Insights | RITIRATO | non fanno più parte del frontend Production | codice + cronologia cutover |
-| Google Analytics / GA4 | OPTIONAL / ACTIVE ARCHITECTURE | analytics di utilizzo del frontend Firebase, default OFF e lazy dopo consenso provider-specific | Google Analytics + Firebase + codice consenso |
+| Google Analytics / GA4 | RITIRATO (2026-10-10) | SDK, toggle e Measurement ID rimossi dal frontend; dati storici/configurazione provider da verificare | repository + console Google da verificare |
 | Sentry | ACTIVE | error monitoring tecnico Production e source map del frontend Firebase Hosting | Sentry + build Firebase Hosting |
 | GitHub Actions / CodeQL / ruleset | ACTIVE | repository pubblico, PR, CI e SAST canonico | GitHub |
 | Snyk | OPTIONAL | controllo security supplementare | integrazione Snyk esterna |
@@ -173,7 +173,6 @@ Le configurazioni server-only che appartengono al runtime Vercel sono:
 La configurazione pubblica del frontend Production viene fornita al workflow GitHub Actions che costruisce e distribuisce Firebase Hosting, non al runtime Vercel:
 
 - quattro env Firebase Web core: `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_APP_ID`;
-- `VITE_FIREBASE_MEASUREMENT_ID`, usata soltanto da GA4 dopo consenso;
 - `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY`;
 - `VITE_ACCOUNT_DELETION_API_ORIGIN`, che punta al backend trusted Vercel;
 - `VITE_SENTRY_DSN`.
@@ -182,9 +181,9 @@ La configurazione pubblica del frontend Production viene fornita al workflow Git
 
 Realtime Database, Firebase Storage e Cloud Messaging non fanno parte del runtime corrente; le relative vecchie env client sono ritirate. La configurazione Production non viene duplicata in un file `.env.production` versionato; `.env.example` documenta solo il contratto e CI/E2E usa valori sintetici.
 
-## Google Analytics / GA4
+## Google Analytics / GA4 — configurazione storica, ritirata il 2026-10-10
 
-Dal cutover del 2026-10-02 GA4 fa parte dell'architettura Production del frontend Firebase Hosting, ma resta disabilitato per default e viene caricato soltanto dopo il nuovo consenso provider-specific `logbook_ga4_consent_v1`.
+Nel cutover del 2026-10-02 GA4 faceva parte dell'architettura del frontend Firebase Hosting come servizio opzionale. Dal 2026-10-10 il servizio è ritirato dal codice e dal deployment; le note sottostanti descrivono soltanto la configurazione storica.
 
 Stato live verificato:
 
@@ -206,11 +205,11 @@ Stato live verificato:
 - valuta: **EUR**;
 - filtro `Internal Traffic`: stato **Test**; nessuna regola di traffico interno/IP è stata configurata.
 
-Questa configurazione è deliberatamente privacy-minimal. Il passaggio applicativo a GA4 è stato completato nel cutover; il precedente consenso Vercel non abilita GA4 e la raccolta resta subordinata al nuovo opt-in.
+Questa configurazione era privacy-minimal durante il cutover storico. Non è più una funzionalità del client; eventuali dati storici, stream, proprietà e variabili lato provider richiedono verifica e dismissione separata.
 
 ## Vercel Analytics / Speed Insights
 
-Sono ritirati dal frontend Production dopo il cutover Firebase Hosting. Il nuovo consenso GA4 è provider-specific e non riattiva Vercel Analytics/Speed Insights.
+Sono ritirati dal frontend Production dopo il cutover Firebase Hosting. Non esiste più alcun consenso GA4 nell'app.
 
 ## Sentry
 
@@ -300,7 +299,7 @@ Pulizia esterna completata/verificata il 2026-09-30:
 7. verificare Sentry privacy, Spike Protection e feature non richieste ancora disattivate;
 8. verificare Snyk come supplementare e CodeQL come gate;
 9. verificare Search Console, sitemap, robots e canonical Production URL;
-10. verificare GA4/Google Analytics se preparato o attivo: stream, Enhanced Measurement, Signals, Ads, retention e condivisione dati;
+10. verificare in Google Analytics la dismissione dello stream/proprietà GA4, eventuali dati storici e le politiche di conservazione applicabili;
 11. rimuovere origin, chiavi e integrazioni legacy non più necessarie.
 
 
@@ -326,7 +325,7 @@ Questa sezione conserva le operazioni e verifiche esterne eseguite **prima** del
 - Il deploy Firebase Hosting usa un service account dedicato, senza chiavi private JSON, referenziato dalla repository variable `GCP_FIREBASE_DEPLOY_SERVICE_ACCOUNT`; i privilegi progetto restano limitati a Firebase Hosting Admin e API Keys Viewer. Il workflow `Firebase Hosting Production` usa questa identità solo per `firebase deploy --only hosting`.
 - Il deploy Firestore Production usa un secondo service account dedicato e separato, anch'esso senza chiavi private JSON, referenziato dalla repository variable `GCP_FIRESTORE_DEPLOY_SERVICE_ACCOUNT`; i privilegi progetto sono limitati a Firebase Rules Admin, Cloud Datastore Index Admin, API Keys Viewer e Service Usage Viewer. Il workflow `Firebase Firestore Production` usa questa identità solo per Rules e indici Firestore.
 - Entrambi i workflow condividono soltanto il riferimento al provider OIDC tramite `GCP_WORKLOAD_IDENTITY_PROVIDER`; le due variabili service-account non sono duplicati e non sono intercambiabili.
-- Configurate le repository variables richieste dal workflow Firebase Hosting: `GCP_WORKLOAD_IDENTITY_PROVIDER`, `GCP_FIREBASE_DEPLOY_SERVICE_ACCOUNT`, `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_APP_ID`, `VITE_FIREBASE_MEASUREMENT_ID`, `VITE_ACCOUNT_DELETION_API_ORIGIN`, `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY`, `VITE_SENTRY_DSN`, `SENTRY_ORG`, `SENTRY_PROJECT`.
+- Configurate le repository variables richieste dal workflow Firebase Hosting: `GCP_WORKLOAD_IDENTITY_PROVIDER`, `GCP_FIREBASE_DEPLOY_SERVICE_ACCOUNT`, `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_APP_ID`, `VITE_ACCOUNT_DELETION_API_ORIGIN`, `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY`, `VITE_SENTRY_DSN`, `SENTRY_ORG`, `SENTRY_PROJECT`.
 - Configurata inoltre la repository variable `GCP_FIRESTORE_DEPLOY_SERVICE_ACCOUNT` per il workflow Firestore Production.
 - Configurato il repository secret `SENTRY_AUTH_TOKEN`. Nessun valore segreto viene registrato nel repository.
 - Preflight read-only Hosting eseguito da GitHub Actions il 2026-10-02: autenticazione OIDC/WIF riuscita con il service account dedicato e lettura del sito Hosting `thelogbook` riuscita tramite Firebase CLI.
@@ -338,7 +337,7 @@ Questa sezione conserva le operazioni e verifiche esterne eseguite **prima** del
 - Confermata la presenza delle env server-only Firebase Admin e `CRON_SECRET` senza esporne i valori.
 - Durante la finestra di cutover erano state configurate `PUBLIC_APP_ORIGIN=https://thelogbook.web.app` e la temporanea `PUBLIC_APP_LEGACY_ORIGIN=https://logbook-gnf.vercel.app`. Il supporto applicativo al legacy origin è stato poi ritirato dopo gli smoke verdi.
 
-### Google Analytics / GA4
+### Google Analytics / GA4 — note storiche pre-ritiro
 
 - Stream Web **TheLogBook** verificato su `https://thelogbook.web.app`; Measurement ID coerente con la repository variable configurata per il build.
 - Misurazione avanzata OFF, Google Signals OFF, raccolta dati forniti dagli utenti OFF, dati granulari posizione/dispositivo OFF e personalizzazione annunci consentita in 0 regioni.
@@ -372,16 +371,16 @@ Questa sezione conserva il razionale del candidato PR #191 ormai mergiato. Il fr
 
 Vercel resta il boundary trusted server-only: `/api/account-deletion`, `/api/account-deletion-device` e il cron giornaliero `/api/account-deletion-cron`. Il frontend usa un origin Vercel esplicito e il backend accetta CORS soltanto dall'origin pubblico configurato (`PUBLIC_APP_ORIGIN`, fallback `https://thelogbook.web.app`), con App Check e autenticazione/credential specifica per il flusso.
 
-GA4 ha sostituito Vercel Analytics/Speed Insights. Il consenso usa una nuova chiave provider-specific, quindi il precedente opt-in Vercel non abilita GA4. Il modulo Analytics è caricato dinamicamente solo dopo opt-in e una inizializzazione fallita resta ritentabile.
+Storicamente GA4 ha sostituito Vercel Analytics/Speed Insights, ma dal 2026-10-10 nessun SDK analytics viene più caricato dal client. Lo stream/proprietà Google e i dati storici restano da verificare nella console.
 
 ### Checklist pre-cutover storica
 
 - confermare che Firebase resti Spark e che il site ID `thelogbook` punti al progetto atteso;
-- configurare sul build frontend le env pubbliche necessarie, incluso `VITE_FIREBASE_AUTH_DOMAIN=thelogbook.web.app`, Measurement ID GA4 e origin backend Vercel;
+- configurare sul build frontend le env pubbliche necessarie, incluso `VITE_FIREBASE_AUTH_DOMAIN=thelogbook.web.app`, origin backend Vercel;
 - verificare che Vercel applichi `framework: null` (preset Other/backend-only) e `fluid: true` dal repository, così non resta dipendente dal preset Vite del frontend e le Functions conservano il runtime atteso; configurare su Vercel `PUBLIC_APP_ORIGIN=https://thelogbook.web.app` senza esporre secret al client; durante la sola finestra di cutover/rollback usare anche `PUBLIC_APP_LEGACY_ORIGIN=https://logbook-gnf.vercel.app`, da rimuovere dopo smoke verdi;
 - predisporre Workload Identity Federation per il workflow `Firebase Hosting Production`, vincolando l'impersonation al repository `gernotfound/logbook`; al deployer Hosting servono `roles/firebasehosting.admin` e `roles/serviceusage.apiKeysViewer`, senza ruoli Functions/Cloud Run/Firestore; nessun deploy da PR/branch e nessuna nuova chiave privata JSON se WIF è disponibile;
 - eseguire il deploy Hosting soltanto dallo SHA `main` già passato da Canonical Verification; il workflow post-gate ricontrolla che lo SHA sia ancora l'attuale `origin/main` e deploya esclusivamente Hosting;
-- verificare `roles/firebaseappcheck.tokenVerifier` sul service account Firebase Admin di Vercel, quindi verificare che possa consumare token App Check limited-use e che un token già consumato venga rifiutato; quindi verificare Auth popup/redirect, App Check, CORS, GA4 opt-in/revoca, PWA/offline e account deletion multi-device sul runtime reale;
+- verificare `roles/firebaseappcheck.tokenVerifier` sul service account Firebase Admin di Vercel, quindi verificare che possa consumare token App Check limited-use e che un token già consumato venga rifiutato; quindi verificare Auth popup/redirect, App Check, CORS, assenza di GA4, PWA/offline e account deletion multi-device sul runtime reale;
 - aggiornare Search Console per il nuovo origin senza rimuovere prematuramente la verifica della Production precedente.
 
 Le voci effettivamente concluse sono registrate nella sezione `Cutover Production verificato — 2026-10-02`; le configurazioni esterne non ancora riesaminate dopo il cutover restano esplicitamente indicate come cleanup pendente.
