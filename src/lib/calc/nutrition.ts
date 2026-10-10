@@ -155,19 +155,19 @@ export function calculateTDEEAndMacros(state: Pick<UserData, 'nutritionPlanning'
             tdeeVal = tdeeRes.tdee;
         }
     }
-    const planning = state.nutritionPlanning || { weight: 80, carbsPerKg: 3.5, proPerKg: 2.0, fatPerKg: 1.0 };
-    const weight = Number(planning.weight) || 80;
+    const planning = state.nutritionPlanning;
+    const weight = Number(planning?.weight) || 80;
     let bfVal = null;
     if (state.profile) {
         const bfStr = calculateBodyFat(weight, state.profile);
         if (bfStr) bfVal = parseFloat(bfStr as any);
     }
-    const ratios = planning.avgMacros;
+    const ratios = planning?.avgMacros;
     const macros = calculateMacrosFromKg(
         weight,
-        ratios?.carbsPerKg ?? planning.carbsPerKg,
-        ratios?.proPerKg ?? planning.proPerKg,
-        ratios?.fatPerKg ?? planning.fatPerKg,
+        ratios?.carbsPerKg ?? planning?.carbsPerKg ?? 3.5,
+        ratios?.proPerKg ?? planning?.proPerKg ?? 2,
+        ratios?.fatPerKg ?? planning?.fatPerKg ?? 1,
     );
     return {
         tdee: tdeeVal,
