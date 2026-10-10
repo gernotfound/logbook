@@ -147,9 +147,10 @@ export function calculateTDEEAndMacros(state: Pick<UserData, 'nutritionPlanning'
     if (state.nutritionPlanning && state.nutritionPlanning.normocalorica && state.nutritionPlanning.normocalorica.kcal) {
         tdeeVal = state.nutritionPlanning.normocalorica.kcal;
     }
-    if (state.nutrition && typeof state.nutrition === 'object') {
-        const dates = Object.keys(state.nutrition).sort((a,b) => new Date(a).getTime() - new Date(b).getTime());
-        const historyList = dates.map(d => ({ date: d, weight: state.nutrition[d].weight, kcal: state.nutrition[d].kcal }));
+    const nutrition = state.nutrition;
+    if (nutrition && typeof nutrition === 'object') {
+        const dates = Object.keys(nutrition).sort((a,b) => new Date(a).getTime() - new Date(b).getTime());
+        const historyList = dates.map(d => ({ date: d, weight: nutrition[d].weight, kcal: nutrition[d].kcal }));
         const tdeeRes = calculateTDEE(historyList);
         if (!tdeeRes.error && tdeeRes.tdee) {
             tdeeVal = tdeeRes.tdee;
