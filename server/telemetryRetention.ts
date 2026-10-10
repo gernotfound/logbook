@@ -50,8 +50,7 @@ async function purgeTelemetryCollectionGroup(
       .where('expireAt', '<=', now)
       .orderBy('expireAt', 'asc')
       .orderBy(FieldPath.documentId(), 'asc')
-      .limit(TELEMETRY_RETENTION_DOCUMENT_PAGE_SIZE)
-      ;
+      .limit(TELEMETRY_RETENTION_DOCUMENT_PAGE_SIZE);
     if (cursor) query = query.startAfter(cursor);
     const snapshot = await query.get();
 
