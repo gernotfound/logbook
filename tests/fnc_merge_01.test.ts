@@ -17,6 +17,42 @@ function buildUserData(
     };
 }
 
+describe('Nutrition planning provenance and metadata integrity', () => {
+    it('classifies modern and additional fields as edited when origin is missing', () => {
+        const legacy = createDefaultNutritionPlanning();
+        expect(isDefaultNutritionPlanning(legacy)).toBe(true);
+        const modern = { ...legacy, avgMacros: { carbsPerKg: 3.5, proPerKg: 2, fatPerKg: 1 } };
+        expect(isDefaultNutritionPlanning(modern)).toBe(false);
+        expect(isDefaultNutritionPlanning({ ...legacy, normocalorica: { ...legacy.normocalorica, carbs: 345 } })).toBe(false);
+        expect(isDefaultNutritionPlanning({ ...legacy, onDaysCount: 4 })).toBe(false);
+        expect(isDefaultNutritionPlanning({ ...legacy, futureSetting: 'preserve' } as NutritionPlanning)).toBe(false);
+
+        const cloud = buildUserData({ ...legacy, weight: 90 }, 'user-edited');
+        const guest = buildUserData(modern);
+        const merged = mergeUserData(cloud, guest);
+        expect(merged.nutritionPlanning?.weight).toBe(90);
+        expect(merged.pendingConflicts?.nutritionPlanning?.avgMacros?.carbsPerKg).toBe(3.5);
+    });
+
+    it('does not let forward-compatible nutrition keys overwrite merge metadata', () => {
+        const cloud = {
+            ...createDefaultNutritionPlanning(),
+            weight: 90,
+            activePlan: null,
+            pendingConflict: null,
+            activeOrigin: 'untrusted',
+        };
+        const guest = { ...createDefaultNutritionPlanning(), weight: 75 };
+        const merged = mergeUserData(
+            buildUserData(cloud, 'user-edited'),
+            buildUserData(guest, 'user-edited'),
+        );
+        expect(merged.nutritionPlanning?.weight).toBe(90);
+        expect(merged.pendingConflicts?.nutritionPlanning?.weight).toBe(75);
+        expect(merged.nutritionPlanningOrigin).toBe('user-edited');
+    });
+});
+
 describe('PR 3: FNC-MERGE-01 Nutrition Planning Merge Policy', () => {
 
     // 1. Guest default + cloud assente
