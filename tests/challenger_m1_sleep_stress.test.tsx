@@ -260,7 +260,7 @@ describe('Empirical Challenger: Sleep Format in HH:MM & State Integration Stress
                 fireEvent.change(awakeInput, { target: { value: '' } });
             });
 
-            const saveBtn = Array.from(container.querySelectorAll<HTMLButtonElement>('button')).find(b => b.textContent?.includes('Salva sonno'));
+            const saveBtn = Array.from((container.querySelectorAll('button') as NodeListOf<HTMLButtonElement>)).find(b => b.textContent?.includes('Salva sonno'));
             expect(saveBtn).toBeDefined();
 
             await act(async () => {
@@ -311,7 +311,7 @@ describe('Empirical Challenger: Sleep Format in HH:MM & State Integration Stress
                 fireEvent.change(awakeInput, { target: { value: '' } });
             });
 
-            const saveBtn = Array.from(container.querySelectorAll<HTMLButtonElement>('button')).find(b => b.textContent?.includes('Salva sonno'));
+            const saveBtn = Array.from((container.querySelectorAll('button') as NodeListOf<HTMLButtonElement>)).find(b => b.textContent?.includes('Salva sonno'));
 
             await act(async () => {
                 fireEvent.click(saveBtn!);
@@ -332,7 +332,7 @@ describe('Empirical Challenger: Sleep Format in HH:MM & State Integration Stress
             const { container } = renderWithProviders(<SleepIntegratedView />, { userData: emptyUserData });
             const showAlertSpy = vi.spyOn(useDialogStore.getState(), 'showAlert');
 
-            const saveBtn = Array.from(container.querySelectorAll<HTMLButtonElement>('button')).find(b => b.textContent?.includes('Salva sonno'));
+            const saveBtn = Array.from((container.querySelectorAll('button') as NodeListOf<HTMLButtonElement>)).find(b => b.textContent?.includes('Salva sonno'));
 
             await act(async () => {
                 fireEvent.click(saveBtn!);
@@ -354,7 +354,7 @@ describe('Empirical Challenger: Sleep Format in HH:MM & State Integration Stress
                 fireEvent.change(hoursInput, { target: { value: '25:00' } });
             });
 
-            const saveBtn = Array.from(container.querySelectorAll<HTMLButtonElement>('button')).find(b => b.textContent?.includes('Salva sonno'));
+            const saveBtn = Array.from((container.querySelectorAll('button') as NodeListOf<HTMLButtonElement>)).find(b => b.textContent?.includes('Salva sonno'));
 
             await act(async () => {
                 fireEvent.click(saveBtn!);
