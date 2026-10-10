@@ -24,7 +24,7 @@ describe('local hydration write fencing', () => {
             .rejects.toThrow('Hydration locale invalidata o non riuscita');
 
         const envelope = await readLocal(owner);
-        expect(envelope?.data.profile.height).toBe('182');
-        expect(envelope?.baseline.profile.height).toBe('182');
+        expect(envelope?.data.profile?.height).toBe('182');
+        expect(envelope?.baseline.profile?.height).toBe('182');
     });
 });
