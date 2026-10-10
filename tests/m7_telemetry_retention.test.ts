@@ -9,6 +9,7 @@ interface TelemetryDocRecord {
   id: string;
   path: string;
   expireAt?: Timestamp;
+  updateTime?: Timestamp;
 }
 
 const TELEMETRY_COLLECTIONS: TelemetryName[] = [
@@ -28,12 +29,14 @@ const state = vi.hoisted(() => ({
   queryFailure: null as TelemetryName | null,
   commitBehavior: 'ok' as CommitBehavior,
   advanceMsPerQuery: 0,
+  beforeCommit: null as (() => void) | null,
 }));
 
 function asSnapshot(collectionName: TelemetryName, record: TelemetryDocRecord) {
   return {
     id: record.id,
     ref: { path: record.path },
+    updateTime: record.updateTime ?? record.expireAt ?? Timestamp.fromMillis(0),
     get(field: string) {
       if (field !== 'expireAt') throw new Error(`Unexpected field lookup: ${field}`);
       return record.expireAt;
@@ -166,16 +169,25 @@ const fakeDb = vi.hoisted(() => ({
     return collectionGroupQuery(name as TelemetryName);
   },
   batch() {
-    const paths: string[] = [];
+    const targets: Array<{ path: string; updateTime: Timestamp }> = [];
     return {
-      delete(ref: { path: string }) {
-        paths.push(ref.path);
+      delete(ref: { path: string }, precondition: { lastUpdateTime: Timestamp }) {
+        targets.push({ path: ref.path, updateTime: precondition.lastUpdateTime });
       },
       async commit() {
         if (state.commitBehavior === 'throw-before') {
           throw new Error('batch commit failed');
         }
-        removeDocsByPath(paths);
+        state.beforeCommit?.();
+        // Real Firestore checks all batch preconditions atomically before deleting.
+        for (const target of targets) {
+          const row = TELEMETRY_COLLECTIONS.flatMap(name => state.docs[name])
+            .find(item => item.path === target.path);
+          if (!row || (row.updateTime ?? row.expireAt)?.toMillis() !== target.updateTime.toMillis()) {
+            throw new Error('batch lastUpdateTime precondition failed');
+          }
+        }
+        removeDocsByPath(targets.map(item => item.path));
         if (state.commitBehavior === 'throw-after') {
           throw new Error('batch commit acknowledgement lost');
         }
@@ -212,6 +224,7 @@ describe('M7 telemetry retention sweep', () => {
     state.queryFailure = null;
     state.commitBehavior = 'ok';
     state.advanceMsPerQuery = 0;
+    state.beforeCommit = null;
     vi.useFakeTimers();
     vi.setSystemTime(2_000_000_000_000);
   });
@@ -322,7 +335,7 @@ describe('M7 telemetry retention sweep', () => {
     state.docs.telemetry_errors = Array.from({ length: 401 }, (_, index) =>
       expiredDoc(`users/resume/telemetry_errors/doc-${index.toString().padStart(3, '0')}`, now)
     );
-    state.advanceMsPerQuery = 120_000;
+    state.advanceMsPerQuery = 1_000;
 
     const interrupted = await purgeExpiredTelemetry(Date.now() + 6_000, now);
     expect(interrupted).toEqual({
@@ -341,6 +354,43 @@ describe('M7 telemetry retention sweep', () => {
       completedCycle: true,
     });
     expect(state.docs.telemetry_errors).toHaveLength(0);
+  });
+
+  it('does not start deletions when a slow query has exhausted the cron budget', async () => {
+    const now = Timestamp.fromMillis(2_000_000_000_000);
+    state.docs.telemetry_errors = [expiredDoc('users/slow/telemetry_errors/old', now)];
+    state.advanceMsPerQuery = 120_000;
+
+    const result = await purgeExpiredTelemetry(Date.now() + 6_000, now);
+
+    expect(result).toEqual({
+      documentsScanned: 1,
+      documentsDeleted: 0,
+      unexpectedDocuments: 0,
+      completedCycle: false,
+    });
+    expect(state.deleted).toEqual([]);
+  });
+
+  it('refuses to delete an error renewed after its expiry snapshot was read', async () => {
+    const now = Timestamp.fromMillis(2_000_000_000_000);
+    const path = 'users/race/telemetry_errors/error';
+    state.docs.telemetry_errors = [expiredDoc(path, now)];
+    state.beforeCommit = () => {
+      const document = state.docs.telemetry_errors[0];
+      document.expireAt = Timestamp.fromMillis(now.toMillis() + 60_000);
+      document.updateTime = Timestamp.fromMillis(now.toMillis() + 1);
+    };
+
+    await expect(purgeExpiredTelemetry(Date.now() + 120_000, now))
+      .rejects.toThrow('batch lastUpdateTime precondition failed');
+    expect(state.deleted).toEqual([]);
+    expect(state.docs.telemetry_errors[0].expireAt!.toMillis()).toBeGreaterThan(now.toMillis());
+
+    state.beforeCommit = null;
+    const retry = await purgeExpiredTelemetry(Date.now() + 120_000, now);
+    expect(retry.documentsDeleted).toBe(0);
+    expect(retry.completedCycle).toBe(true);
   });
 
   it('surfaces query failures instead of claiming a completed cycle', async () => {
