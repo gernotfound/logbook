@@ -37,8 +37,9 @@ describe('M7 daily account deletion recovery cron', () => {
     runner.processAccountDeletion.mockResolvedValue('complete');
     retention.purgeExpiredCompletedDeletionJobs.mockResolvedValue(0);
     telemetryRetention.purgeExpiredTelemetry.mockResolvedValue({
-      usersScanned: 0,
+      documentsScanned: 0,
       documentsDeleted: 0,
+      unexpectedDocuments: 0,
       completedCycle: true,
     });
   });
@@ -81,16 +82,18 @@ describe('M7 daily account deletion recovery cron', () => {
       scanned: 2,
       processed: 2,
       purged: 0,
-      telemetryUsersScanned: 0,
+      telemetryDocumentsScanned: 0,
       telemetryPurged: 0,
+      telemetryUnexpectedDocuments: 0,
       telemetryCycleCompleted: true,
     });
     expect(info).toHaveBeenCalledWith('[account-deletion-cron] completed', {
       scanned: 2,
       processed: 2,
       purged: 0,
-      telemetryUsersScanned: 0,
+      telemetryDocumentsScanned: 0,
       telemetryPurged: 0,
+      telemetryUnexpectedDocuments: 0,
       telemetryCycleCompleted: true,
     });
     info.mockRestore();
@@ -110,8 +113,9 @@ describe('M7 daily account deletion recovery cron', () => {
       scanned: 1,
       processed: 1,
       purged: 0,
-      telemetryUsersScanned: 0,
+      telemetryDocumentsScanned: 0,
       telemetryPurged: 0,
+      telemetryUnexpectedDocuments: 0,
       telemetryCycleCompleted: false,
     });
     expect(error).toHaveBeenCalledWith('[account-deletion-cron] telemetry retention failed', {
@@ -134,7 +138,7 @@ describe('M7 daily account deletion recovery cron', () => {
     });
     telemetryRetention.purgeExpiredTelemetry.mockImplementation(async () => {
       order.push('telemetry');
-      return { usersScanned: 1, documentsDeleted: 3, completedCycle: true };
+      return { documentsScanned: 1, documentsDeleted: 3, unexpectedDocuments: 0, completedCycle: true };
     });
 
     const response = await GET(request('expected-secret'));
@@ -145,8 +149,9 @@ describe('M7 daily account deletion recovery cron', () => {
       scanned: 1,
       processed: 1,
       purged: 2,
-      telemetryUsersScanned: 1,
+      telemetryDocumentsScanned: 1,
       telemetryPurged: 3,
+      telemetryUnexpectedDocuments: 0,
       telemetryCycleCompleted: true,
     });
   });

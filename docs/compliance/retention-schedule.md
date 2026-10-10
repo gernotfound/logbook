@@ -34,14 +34,14 @@ Il client corrente invia errori/anomalie tecniche a Sentry e non crea nuove scri
 
 Per i client precedenti e i dati legacy, il repository applica una retention nominale di 30 giorni tramite un campo Firestore `expireAt` calcolato dall'evento o dall'ultima occorrenza dell'errore e Security Rules che rifiutano nuove scritture telemetriche prive di scadenza. I client PWA obsoleti possono perdere temporaneamente la sola telemetria best-effort finché non si aggiornano; le funzionalità essenziali restano indipendenti da questo canale.
 
-La cancellazione viene eseguita dal maintenance cron server-side già schedulato quotidianamente. La sweep usa Firebase Admin, pagina gli utenti, elimina i documenti scaduti nelle tre subcollection e mantiene un cursore server-only se il budget della Function termina prima di completare il ciclo.
+La cancellazione viene eseguita dal maintenance cron server-side già schedulato quotidianamente. La sweep usa Firebase Admin e interroga direttamente le tre collection group `telemetry_*` con pagine bounded da 400 documenti scaduti per query, senza enumerare preventivamente tutti gli utenti in memoria. La cancellazione filtra rigidamente i percorsi attesi `users/{uid}/telemetry_*/*`, ignora i risultati inattesi e può riprendere in modo idempotente all'invocazione successiva se il budget della Function termina prima di completare il ciclo.
 
 Prima del go-live devono essere completati e documentati:
 
 - Security Rules live con gate obbligatorio `expireAt` sul progetto Firebase reale;
 - verifica di eventuali documenti telemetrici preesistenti privi di `expireAt`; se presenti, migrazione o cancellazione secondo una procedura approvata;
 - verifica runtime dopo il rilascio che i nuovi documenti contengano `expireAt` e che le scritture non siano rifiutate;
-- osservazione di almeno un'esecuzione reale del cron con i contatori `telemetryUsersScanned`, `telemetryPurged` e `telemetryCycleCompleted`;
+- osservazione di almeno un'esecuzione reale del cron con i contatori `telemetryDocumentsScanned`, `telemetryPurged`, `telemetryUnexpectedDocuments` e `telemetryCycleCompleted`;
 - conferma che l'informativa Privacy pubblicata descriva la retention effettivamente attiva.
 
 La retention applicativa non dipende dalle policy Firestore TTL native: il maintenance cron usa Firebase Admin e resta quindi compatibile con il piano Firebase corrente senza introdurre un requisito di billing solo per la cancellazione telemetrica.

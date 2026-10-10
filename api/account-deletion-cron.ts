@@ -42,7 +42,12 @@ export async function GET(request: Request): Promise<Response> {
     if (deleted < ACCOUNT_DELETION_RETENTION_PAGE_SIZE) break;
   }
 
-  let telemetryRetention = { usersScanned: 0, documentsDeleted: 0, completedCycle: false };
+  let telemetryRetention = {
+    documentsScanned: 0,
+    documentsDeleted: 0,
+    unexpectedDocuments: 0,
+    completedCycle: false,
+  };
   if (Date.now() + SAFETY_BUFFER_MS < deadlineMs) {
     try {
       telemetryRetention = await purgeExpiredTelemetry(deadlineMs);
@@ -57,8 +62,9 @@ export async function GET(request: Request): Promise<Response> {
     scanned: jobs.length,
     processed: results.length,
     purged,
-    telemetryUsersScanned: telemetryRetention.usersScanned,
+    telemetryDocumentsScanned: telemetryRetention.documentsScanned,
     telemetryPurged: telemetryRetention.documentsDeleted,
+    telemetryUnexpectedDocuments: telemetryRetention.unexpectedDocuments,
     telemetryCycleCompleted: telemetryRetention.completedCycle,
   });
 
@@ -66,8 +72,9 @@ export async function GET(request: Request): Promise<Response> {
     scanned: jobs.length,
     processed: results.length,
     purged,
-    telemetryUsersScanned: telemetryRetention.usersScanned,
+    telemetryDocumentsScanned: telemetryRetention.documentsScanned,
     telemetryPurged: telemetryRetention.documentsDeleted,
+    telemetryUnexpectedDocuments: telemetryRetention.unexpectedDocuments,
     telemetryCycleCompleted: telemetryRetention.completedCycle,
     results,
   });
