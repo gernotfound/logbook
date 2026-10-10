@@ -604,7 +604,7 @@ describe('Intelligent Exercise Search & Dropdown Suite (M3: R4 & R6)', () => {
                         id: 'se_treadmill',
                         exId: 'ex_treadmill',
                         sessionNote: '',
-                        sets: [{ id: 's_2', time: '900', distance: '2.5', speed: '10', done: true }]
+                        sets: [{ id: 's_2', kg: '', reps: '', time: '900', distance: '2.5', speed: '10', done: true }]
                     }
                 ]
             };
