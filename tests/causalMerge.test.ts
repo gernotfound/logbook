@@ -145,7 +145,7 @@ describe('Causal Semantic Merge', () => {
         ];
 
         const { documents, syncMetas } = applySemanticOperations(base, ops);
-        expect(documents.get('')?.profile).not.toHaveProperty('height');
+        expect((documents.get('')?.profile as Record<string, unknown> | undefined)?.height).toBeUndefined();
         expect(syncMetas[''].fields['profile/height'].deleted).toBe(true);
     });
 
@@ -183,7 +183,7 @@ describe('Causal Semantic Merge', () => {
         ];
 
         const { documents } = applySemanticOperations(base, ops, remoteSyncMetas);
-        expect(documents.get('')?.profile).not.toHaveProperty('height');
+        expect((documents.get('')?.profile as Record<string, unknown> | undefined)?.height).toBeUndefined();
     });
 
     it('12. replay della stessa operation è idempotente', () => {
@@ -285,6 +285,9 @@ describe('Causal Semantic Merge', () => {
         // Find them regardless of order (ordered-keyed sorts by $order, but for new items they might just append)
         const ex1 = routine.exercises.find((e: any) => e.exId === 'ex1');
         const ex2 = routine.exercises.find((e: any) => e.exId === 'ex2');
+        expect(ex1).toBeDefined();
+        expect(ex2).toBeDefined();
+        if (!ex1 || !ex2) throw new Error('Missing routines after causal merge');
         expect(ex1.setsCount).toBe(2);
         expect(ex2.setsCount).toBe(3);
     });
