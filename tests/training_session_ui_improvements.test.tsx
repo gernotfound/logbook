@@ -7,13 +7,13 @@ import TrainingSession from '../src/components/Training/TrainingSession';
 import { useDialogStore } from '../src/store/useDialogStore';
 import { useAppStore } from '../src/store/useAppStore';
 import { renderWithProviders, emptyUserData } from './setup';
-import type { WorkoutSession } from '../src/types';
+import type { WorkoutSession, Exercise } from '../src/types';
 
 describe('Training Session UI Improvements Suite (R1, R2, R3)', () => {
-    const mockLibrary = [
-        { id: 'ex_bench', name: 'Panca Piana', setsCount: 3, trackingType: 'weight_reps' },
-        { id: 'ex_plank', name: 'Plank', setsCount: 3, trackingType: 'time' },
-        { id: 'ex_treadmill', name: 'Tapis Roulant', setsCount: 1, trackingType: 'cardio' }
+    const mockLibrary: Exercise[] = [
+        { id: 'ex_bench', name: 'Panca Piana', setsCount: 3, sets: [], trackingType: 'weight_reps' },
+        { id: 'ex_plank', name: 'Plank', setsCount: 3, sets: [], trackingType: 'time' },
+        { id: 'ex_treadmill', name: 'Tapis Roulant', setsCount: 1, sets: [], trackingType: 'cardio' }
     ];
 
     beforeEach(() => {
