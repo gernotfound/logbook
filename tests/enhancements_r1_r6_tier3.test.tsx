@@ -132,7 +132,7 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
         });
 
         it('T3.3: Sleep Logging + Nutrition Day State + History Display + CSV Export', async () => {
-            const downloadFileSpy = vi.spyOn(Exporter, 'downloadFile').mockImplementation(() => {});
+            const downloadFileSpy = vi.spyOn(Exporter, 'downloadFile').mockResolvedValue(true);
 
             const nutritionData = {
                 '2026-08-10': {
@@ -287,7 +287,7 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
         });
 
         it('T3.6: Comprehensive Multi-Module Flow: Cycle Planning -> Session Execution -> Ad-Hoc Finisher -> Sleep Log -> Export', async () => {
-            const downloadFileSpy = vi.spyOn(Exporter, 'downloadFile').mockImplementation(() => {});
+            const downloadFileSpy = vi.spyOn(Exporter, 'downloadFile').mockResolvedValue(true);
 
             // 1. Setup complete UserData with library and routines
             const library: Exercise[] = [
