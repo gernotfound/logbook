@@ -354,11 +354,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 && authRunRef.current === authRun
                 && (expectedUid ? auth.currentUser?.uid === expectedUid : auth.currentUser === null);
 
-            if (user && user.emailVerified === false
-                && (user.providerData ?? []).some((item: { providerId?: string }) => item.providerId === 'password')) {
+            if (user && user.emailVerified === false) {
                 // Account creation signs users in before they verify their inbox.
                 // Do not claim an owner, hydrate cloud data or transfer guest data
                 // until verification is complete; preserve the guest migration intent.
+                const current = useAppStore.getState();
+                if (!isGuestActiveStrict() && current.dataOwner && current.dataOwner !== userOwner(user.uid)) {
+                    // Discard only the stale in-memory owner; retain both IndexedDB archives.
+                    useAppStore.setState({ userData: null, dataOwner: null, localWorkout: null });
+                }
+                setGuestMigrationStatus('idle');
                 setCurrentUser(user);
                 setEmailVerificationRequired(true);
                 setLoading(false);
@@ -393,8 +398,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
             if (user) {
                 const wasGuest = isGuestActiveStrict();
-                const hasPasswordProvider = (user.providerData ?? []).some((item: { providerId?: string }) => item.providerId === 'password');
-                setEmailVerificationRequired(hasPasswordProvider && user.emailVerified === false);
+                setEmailVerificationRequired(false);
                 const recoveryUid = readGuestMigrationRecoveryStrict();
 
                 if (recoveryUid === user.uid) {
@@ -492,8 +496,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const handleVisibilityChange = async () => {
             if (isGuestActiveStrict()) return;
             if (document.visibilityState === 'visible' && auth.currentUser &&
-                !(auth.currentUser.emailVerified === false &&
-                    auth.currentUser.providerData.some(item => item.providerId === 'password'))) {
+                auth.currentUser.emailVerified !== false) {
                 if (useAppStore.getState().userData !== null && !useAppStore.getState().syncing && !isReloading) {
                     try {
                         isReloading = true;
@@ -685,13 +688,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     const continueUnverifiedLocally = useCallback(async () => {
         const user = auth.currentUser;
-        if (!user || user.emailVerified || !user.providerData.some(p => p.providerId === 'password')) {
+        if (!user || user.emailVerified !== false) {
             throw new Error('Nessuna verifica email in attesa.');
         }
         // Sign out without the authenticated purge path: local owner envelopes and
         // any guest migration intent must survive until an explicit verified login.
         await signOut(auth);
-        if (!isGuestActiveStrict()) await loginAsGuest();
+        if (!isGuestActiveStrict()) {
+            // Never seed a fresh guest from another authenticated user's in-memory data.
+            // resetStore does not delete the authenticated IndexedDB envelope.
+            useAppStore.getState().resetStore({ force: true });
+            await loginAsGuest();
+        }
     }, [isGuestActiveStrict, loginAsGuest]);
 
     // Collega account Google: migra i dati locali su Firestore
