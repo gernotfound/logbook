@@ -57,6 +57,8 @@ async function purgeTelemetryCollectionGroup(
     if (snapshot.empty) return { scanned, deleted, unexpected, complete: true };
 
     scanned += snapshot.size;
+    // A slow query must not initiate a destructive batch after the cron budget.
+    if (!hasBudget(deadlineMs)) return { scanned, deleted, unexpected, complete: false };
 
     const batch = db.batch();
     let pageDeleted = 0;
@@ -65,7 +67,9 @@ async function purgeTelemetryCollectionGroup(
         unexpected += 1;
         continue;
       }
-      batch.delete(item.ref);
+      // An aggregated error can be renewed while this query is in flight.
+      // Delete only the exact version observed as expired; retry later on races.
+      batch.delete(item.ref, { lastUpdateTime: item.updateTime });
       pageDeleted += 1;
     }
     if (pageDeleted > 0) {
