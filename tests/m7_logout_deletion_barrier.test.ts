@@ -31,12 +31,13 @@ describe('M7 logout isolation with stale deletion receipts', () => {
 
     // Every force reset belongs to an explicitly reviewed lifecycle path:
     // cross-tab revocation, recovery cleanup before a new guest generation,
-    // a revoked tab's stale UI, guest logout, or authenticated logout.
-    expect(forcedResets).toHaveLength(5);
+    // a revoked tab's stale UI, guest logout, authenticated logout, or safe unverified-email handoff.
+    expect(forcedResets).toHaveLength(6);
     expect(authContext).toMatch(/const reconcileGuestSession[\s\S]*?resetStore\(\{ force: true \}\)/);
     expect(authContext).toMatch(/if \(readBrowserValueStrict\(GUEST_REVOCATION_KEY\) !== null\)[\s\S]{0,350}await DB\.purgeAllLocalUserData\('guest'\);[\s\S]{0,350}resetStore\(\{ force: true \}\)/);
     expect(authContext).toMatch(/if \(isGuestRef\.current && !isActiveGuestSession\(\)\)[\s\S]{0,300}resetStore\(\{ force: true \}\)/);
     expect(authContext).toMatch(/await DB\.purgeAllLocalUserData\('guest'\);[\s\S]{0,650}setIsGuest\(false\);[\s\S]{0,250}resetStore\(\{ force: true \}\)/);
+    expect(authContext).toMatch(/const continueUnverifiedLocally[\s\S]*?await signOut\(auth\);[\s\S]{0,350}resetStore\(\{ force: true \}\)/);
     expect(authContext).toContain('await DB.secureLogOut();');
     expect(authContext).toMatch(/await DB\.secureLogOut\(\);[\s\S]{0,200}resetStore\(\{ force: true \}\)/);
     expect(authContext).toMatch(/setIsGuest\(false\);[\s\S]{0,200}resetStore\(\{ force: true \}\)/);
