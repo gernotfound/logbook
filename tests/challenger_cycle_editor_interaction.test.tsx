@@ -11,21 +11,21 @@ describe('Challenger 2 Empirical Verification: CycleEditor UI & Two-Way Binding'
             id: 'routine_1',
             name: 'Push Routine',
             exercises: [
-                { exId: 'ex_bench', targetSets: 4, targetReps: '8-10' }
+                { exId: 'ex_bench', setsCount: 4, minReps: 8, maxReps: 10 }
             ]
         },
         {
             id: 'routine_2',
             name: 'Pull Routine',
             exercises: [
-                { exId: 'ex_pullup', targetSets: 4, targetReps: '6-8' }
+                { exId: 'ex_pullup', setsCount: 4, minReps: 6, maxReps: 8 }
             ]
         },
         {
             id: 'routine_3',
             name: 'Legs Routine',
             exercises: [
-                { exId: 'ex_squat', targetSets: 4, targetReps: '5' }
+                { exId: 'ex_squat', setsCount: 4, minReps: 5, maxReps: 5 }
             ]
         }
     ];
