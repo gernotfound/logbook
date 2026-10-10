@@ -145,7 +145,7 @@ describe('Causal Semantic Merge', () => {
         ];
 
         const { documents, syncMetas } = applySemanticOperations(base, ops);
-        expect(documents.get('')?.profile?.height).toBeUndefined();
+        expect(documents.get('')?.profile).not.toHaveProperty('height');
         expect(syncMetas[''].fields['profile/height'].deleted).toBe(true);
     });
 
@@ -183,7 +183,7 @@ describe('Causal Semantic Merge', () => {
         ];
 
         const { documents } = applySemanticOperations(base, ops, remoteSyncMetas);
-        expect(documents.get('')?.profile?.height).toBeUndefined();
+        expect(documents.get('')?.profile).not.toHaveProperty('height');
     });
 
     it('12. replay della stessa operation è idempotente', () => {
@@ -276,7 +276,10 @@ describe('Causal Semantic Merge', () => {
         ];
 
         const { documents } = applySemanticOperations(base, ops);
-        const routine = documents.get('')?.routines[0];
+        const routines = documents.get('')?.routines;
+        expect(Array.isArray(routines)).toBe(true);
+        if (!Array.isArray(routines)) throw new Error('La proiezione deve restituire le schede');
+        const routine = routines[0] as { exercises: Array<{ exId: string; setsCount: number }> };
         expect(routine.exercises).toHaveLength(2);
         
         // Find them regardless of order (ordered-keyed sorts by $order, but for new items they might just append)
