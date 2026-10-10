@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { emptyUserData } from './setup';
+import { clear } from 'idb-keyval';
 import type { UserData } from '../src/types';
 
 const authState = vi.hoisted(() => ({
@@ -64,12 +65,12 @@ function payload(height: string) {
 
 async function loadModules() {
     vi.resetModules();
-    const [{ loadAuthenticatedData }, { readLocal }, { invalidateSession }] = await Promise.all([
+    const [{ loadAuthenticatedData }, { readLocal, initializeLocal, commitDomainOperations }, { invalidateSession }] = await Promise.all([
         import('../src/contexts/auth/loadAuthenticatedData'),
         import('../src/lib/sync/localRepository'),
         import('../src/lib/sync/session'),
     ]);
-    return { loadAuthenticatedData, readLocal, invalidateSession };
+    return { loadAuthenticatedData, readLocal, initializeLocal, commitDomainOperations, invalidateSession };
 }
 
 describe('authenticated hydration session fencing', () => {
@@ -82,6 +83,37 @@ describe('authenticated hydration session fencing', () => {
             localPersistenceBlocked: false,
         };
         dbState.loadCloudPayload.mockReset();
+    });
+
+    it('rejects a stale workout when an owner envelope appears during an offline cloud-load failure', async () => {
+        await clear();
+        const { loadAuthenticatedData, readLocal, initializeLocal, commitDomainOperations, invalidateSession } = await loadModules();
+        invalidateSession();
+        storeState.current = { userData: null, localWorkout: null, localPersistenceBlocked: false };
+        const oldWorkout = { id: 'closed-during-cloud-load', date: '2026-10-09', exercises: [] };
+        const deviceKey = 'logbook:v2:user:user-a:workout';
+        localStorage.setItem(deviceKey, JSON.stringify(oldWorkout));
+
+        const initial = data('170');
+        dbState.loadCloudPayload.mockImplementationOnce(async () => {
+            // Another tab initialized and closed the session after the first readLocal.
+            await initializeLocal('user:user-a', initial);
+            await commitDomainOperations('user:user-a', {
+                type: 'active-workout.set', workout: null, deletedWorkoutId: oldWorkout.id,
+            }, initial);
+            throw Object.assign(new Error('Cloud unavailable'), { code: 'unavailable' });
+        });
+        await loadAuthenticatedData({
+            user: { uid: 'user-a' } as any,
+            isGuestActive: () => false,
+            setUserData: vi.fn(),
+            setSyncing: vi.fn(),
+            setSaveError: vi.fn(),
+        });
+        expect((await readLocal('user:user-a'))?.closedWorkoutIds).toContain(oldWorkout.id);
+        expect(storeState.current.localWorkout).toBeNull();
+        expect(localStorage.getItem(deviceKey)).toBeNull();
+        await clear();
     });
 
     it('does not publish or persist A when the session changes before cloud data arrives', async () => {

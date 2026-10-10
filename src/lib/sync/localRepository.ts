@@ -346,8 +346,11 @@ export async function commitDomainOperations(owner: string, batch: DomainOperati
         }
         const desired = applyDomainOperations(base, effectiveDomainOperations);
         const previousClosedIds = current?.closedWorkoutIds ?? [];
+        // V5 envelopes written before the additive ledger retain only the last
+        // closed ID. Fold it into the ledger before any subsequent closure can
+        // replace that marker, without losing the fence for old browser tabs.
         const nextClosedIds = newlyClosedIds.length
-            ? [...new Set([...previousClosedIds, ...newlyClosedIds])]
+            ? [...new Set([...previousClosedIds, ...(current?.lastClosedWorkoutId ? [current.lastClosedWorkoutId] : []), ...newlyClosedIds])]
             : previousClosedIds;
         const closure = {
             ...(lastClosedWorkoutId ? { lastClosedWorkoutId } : {}),

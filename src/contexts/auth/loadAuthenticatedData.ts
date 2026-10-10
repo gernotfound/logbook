@@ -150,7 +150,7 @@ export async function loadAuthenticatedData({
             const stillAbsent = await readLocal(expectedOwner);
             if (!isCurrent()) return;
             if (stillAbsent) {
-                const localWorkout = getInitialLocalWorkout(expectedOwner, stillAbsent.data.activeWorkout ?? null);
+                const localWorkout = getInitialLocalWorkout(expectedOwner, stillAbsent.data.activeWorkout ?? null, stillAbsent.data.history, stillAbsent.lastClosedWorkoutId, stillAbsent.closedWorkoutIds);
                 useAppStore.setState({ userData: stillAbsent.data, dataOwner: expectedOwner, localWorkout });
                 markTabSnapshotClean(session, stillAbsent.data);
                 return;
