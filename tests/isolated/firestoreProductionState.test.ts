@@ -6,6 +6,7 @@ import {
   isActiveFieldIndexAddition,
   isActiveFieldIndexRemoval,
   normalizeFieldIndexModes,
+  normalizeLiveFieldIndexModes,
   parseFieldResource,
 } from '../../scripts/firestore-production-state.mjs';
 
@@ -130,7 +131,14 @@ describe('Firestore Production field exemption convergence', () => {
       ],
     };
     const field = 'projects/p/databases/(default)/collectionGroups/telemetry_errors/fields/expireAt';
-    const liveIndexes = desiredGroup.indexes.map(index => ({ ...index, state: 'READY' }));
+    const liveIndexes = desiredGroup.indexes.map(index => ({
+      queryScope: index.queryScope,
+      fields: [{
+        fieldPath: 'expireAt',
+        ...(index.order ? { order: index.order } : { arrayConfig: index.arrayConfig }),
+      }],
+      state: 'READY',
+    }));
     const ready = classifyFieldOverride(desiredGroup, [{
       name: field,
       indexConfig: { indexes: liveIndexes },
@@ -139,6 +147,25 @@ describe('Firestore Production field exemption convergence', () => {
       explicit: true, indexesMatch: true, indexesReady: true,
       matchesDesired: true, pending: false,
     });
+
+    // Comparing desired flat configuration with the actual nested REST
+    // response must succeed; that was the Production verifier's root cause.
+    expect(normalizeLiveFieldIndexModes(liveIndexes, 'expireAt')).toEqual(
+      normalizeFieldIndexModes(desiredGroup.indexes),
+    );
+    expect(() => normalizeLiveFieldIndexModes([{
+      ...liveIndexes[0],
+      fields: [{ fieldPath: 'wrongField', order: 'ASCENDING' }],
+    }], 'expireAt')).toThrow('Unexpected Firestore live single-field index shape');
+    expect(() => normalizeLiveFieldIndexModes([{
+      ...liveIndexes[0],
+      fields: [{ fieldPath: 'expireAt', order: 'ASCENDING' },
+        { fieldPath: '__name__', order: 'ASCENDING' }],
+    }], 'expireAt')).toThrow('Unexpected Firestore live single-field index shape');
+    expect(() => normalizeLiveFieldIndexModes([{
+      ...liveIndexes[0],
+      fields: [{ fieldPath: 'expireAt', order: 'INVALID' }],
+    }], 'expireAt')).toThrow('Unsupported Firestore field index mode');
 
     const creating = classifyFieldOverride(desiredGroup, [{
       name: field,
