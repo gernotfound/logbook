@@ -6,6 +6,7 @@
  * responsibilities live in focused collaborators.
  */
 
+import { isAccountDeletionPending } from '../sync/accountGate';
 import {
   computeErrorHash,
   sanitizeErrorPayload,
@@ -415,11 +416,19 @@ export class TelemetryHub {
 
   private flushPendingDispatches(): void {
     this.getUserId();
+    const ownerKey = this.queue.getQueueStorageKey();
+    const ownerEpoch = this.ownerEpoch;
     for (const entry of this.rateLimits.values()) {
       if (entry.isDispatchPending) {
         entry.isDispatchPending = false;
         entry.lastDispatchedCount = entry.count;
-        this.dispatchErrorExternally(entry.payload).catch(() => {});
+        // The async transport can report an immediate failure after the event
+        // was marked dispatched. Preserve the error without crossing owners.
+        void this.dispatchErrorExternally(entry.payload)
+          .then(success => {
+            if (!success) this.queueFailedDispatch('error', entry.payload, ownerKey, ownerEpoch);
+          })
+          .catch(() => this.queueFailedDispatch('error', entry.payload, ownerKey, ownerEpoch));
       }
     }
   }
@@ -437,15 +446,22 @@ export class TelemetryHub {
 
   public async flushRateLimiters(): Promise<void> {
     this.getUserId();
+    const ownerKey = this.queue.getQueueStorageKey();
+    const ownerEpoch = this.ownerEpoch;
     const entries = this.rateLimits.takeAll();
 
     for (const entry of entries) {
       if (entry.count > entry.lastDispatchedCount) {
         entry.lastDispatchedCount = entry.count;
         if (this.isOffline()) {
-          this.queue.enqueueItem('error', entry.payload);
+          this.queueFailedDispatch('error', entry.payload, ownerKey, ownerEpoch);
         } else {
-          await this.dispatchErrorExternally(entry.payload);
+          try {
+            const success = await this.dispatchErrorExternally(entry.payload);
+            if (!success) this.queueFailedDispatch('error', entry.payload, ownerKey, ownerEpoch);
+          } catch {
+            this.queueFailedDispatch('error', entry.payload, ownerKey, ownerEpoch);
+          }
         }
       }
     }
@@ -479,16 +495,14 @@ export class TelemetryHub {
       if (this.isOffline()) {
         this.queue.enqueueItem('event', payload);
       } else {
+        const ownerKey = this.queue.getQueueStorageKey();
+        const ownerEpoch = this.ownerEpoch;
         queueMicrotask(() => {
-          this.dispatchEventExternally(payload)
-            .then((success) => {
-              if (!success) {
-                this.queue.enqueueItem('event', payload);
-              }
+          void this.dispatchEventExternally(payload)
+            .then(success => {
+              if (!success) this.queueFailedDispatch('event', payload, ownerKey, ownerEpoch);
             })
-            .catch(() => {
-              this.queue.enqueueItem('event', payload);
-            });
+            .catch(() => this.queueFailedDispatch('event', payload, ownerKey, ownerEpoch));
         });
       }
     } catch (err) {
@@ -538,6 +552,20 @@ export class TelemetryHub {
     // announced to the telemetry hub.
     const currentKey = this.queue.getQueueStorageKey();
     return this.ownerEpoch === ownerEpoch && currentKey === ownerKey;
+  }
+
+  private queueFailedDispatch(
+    kind: 'error' | 'event',
+    payload: TelemetryErrorPayload | TelemetryEventPayload,
+    ownerKey: string,
+    ownerEpoch: number,
+  ): void {
+    if (!this.isQueueOwnerCurrent(ownerKey, ownerEpoch)) return;
+    const uid = payload.userId;
+    // A rejected dispatch during logout/deletion is not a retryable event.
+    if (!uid || uid === 'anonymous' || uid !== this.getUserId() ||
+        isAccountDeletionPending(`user:${uid}`)) return;
+    this.queue.enqueueItem(kind, payload);
   }
 
   private async executeFlushQueue(
