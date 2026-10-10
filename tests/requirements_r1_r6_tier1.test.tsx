@@ -250,7 +250,7 @@ describe('TheLogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => 
                     userData: {
                         ...emptyUserData,
                         nutrition: {
-                            [targetDate]: { weight: 75.0, kcal: 2200, carbs: 250, pro: 150, fat: 60 }
+                            [targetDate]: { date: targetDate, weight: 75.0, kcal: 2200, carbs: 250, pro: 150, fat: 60 }
                         }
                     }
                 });
