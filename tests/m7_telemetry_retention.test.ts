@@ -114,6 +114,7 @@ function collectionGroupQuery(collectionName: TelemetryName) {
     },
     async get() {
       if (!nowFilter) throw new Error('where(expireAt, <=, now) must be configured');
+      const queryNow = nowFilter;
       if (orderByFields.join(',') !== 'expireAt,__name__') {
         throw new Error(`Unexpected orderBy sequence: ${orderByFields.join(',')}`);
       }
@@ -125,16 +126,17 @@ function collectionGroupQuery(collectionName: TelemetryName) {
       }
 
       let rows = state.docs[collectionName]
-        .filter(item => item.expireAt && item.expireAt.toMillis() <= nowFilter.toMillis())
+        .filter(item => item.expireAt && item.expireAt.toMillis() <= queryNow.toMillis())
         .sort(sortByRetentionOrder);
 
       if (startAfterCursor) {
         if (startAfterCursor.collection !== collectionName) throw new Error('Invalid cursor collection');
+        const cursor = startAfterCursor;
         rows = rows.filter(item => {
           const expireAtMillis = item.expireAt?.toMillis() ?? Number.NaN;
-          if (expireAtMillis > startAfterCursor.expireAtMillis) return true;
-          if (expireAtMillis < startAfterCursor.expireAtMillis) return false;
-          return item.path > startAfterCursor.path;
+          if (expireAtMillis > cursor.expireAtMillis) return true;
+          if (expireAtMillis < cursor.expireAtMillis) return false;
+          return item.path > cursor.path;
         });
       }
 
