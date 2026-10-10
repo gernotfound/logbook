@@ -30,6 +30,7 @@ import { GlobalDialog } from './components/UI/GlobalDialog';
 import { ConsentOverlay } from './components/UI/ConsentOverlay';
 import { needsLegalUpdate } from './lib/legalVersions';
 import { LoginBox } from './components/UI/LoginBox';
+import { EmailVerificationGate } from './components/UI/EmailVerificationGate';
 import { AlertTriangle, X } from 'lucide-react';
 
 const loadHomeView = () => import('./components/Home/HomeView');
@@ -100,7 +101,7 @@ function GuestBanner({ onLogin }: { onLogin: () => void }) {
 }
 
 function App() {
-  const { currentUser, loading, isGuest, guestMigrationStatus, retryGuestMigration } = useAuth();
+  const { currentUser, loading, isGuest, guestMigrationStatus, retryGuestMigration, emailVerificationRequired } = useAuth();
   const syncing = useAppStore(state => state.syncing);
   const userData = useAppStore(state => state.userData);
   const saveError = useAppStore(state => state.saveError);
@@ -194,6 +195,7 @@ function App() {
   // Importing code here does not mount hidden views or start their hooks.
   useEffect(() => {
     const appBlocked = loading
+      || emailVerificationRequired
       || syncing
       || compatibilityStatus === 'update-required'
       || !hasUserData
@@ -215,6 +217,7 @@ function App() {
     activeTab,
     compatibilityStatus,
     currentUser,
+    emailVerificationRequired,
     guestLoginMigrationFailed,
     guestLoginMigrationPending,
     guestLoginOverlayVisible,
@@ -365,6 +368,10 @@ function App() {
         </div>
       </div>
     );
+  }
+
+  if (currentUser && emailVerificationRequired) {
+    return <><GlobalDialog /><EmailVerificationGate /></>;
   }
 
   if (!currentUser && !isGuest) {
