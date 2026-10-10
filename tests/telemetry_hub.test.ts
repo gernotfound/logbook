@@ -113,6 +113,19 @@ describe('Telemetry Sanitizer & Telemetry Hub Unit & Integration Suite', () => {
       expect(scrubbedJson).toContain('"name": "Squat"');
     });
 
+    it('scrubs mixed-case secret keys, bearer credentials and user paths before external telemetry', () => {
+      const message = 'Error {"PASSWORD":"SYNTH_SECRET_A","ToKeN":"SYNTH_SECRET_B","APIKEY":"SYNTH_SECRET_C"}';
+      const sanitized = scrubPII(message);
+      for (const value of ['SYNTH_SECRET_A', 'SYNTH_SECRET_B', 'SYNTH_SECRET_C']) {
+        expect(sanitized).not.toContain(value);
+      }
+      expect(sanitized).toContain('[REDACTED]');
+
+      expect(scrubPII('AUTH BeArEr SyntheticCredential123')).toBe('AUTH Bearer [REDACTED_TOKEN]');
+      expect(scrubPII('Crash C:\\USERS\\Synthetic\\app.ts:12')).toBe('Crash [REDACTED_PATH]:12');
+      expect(scrubPII('Crash /HOME/Synthetic/app.ts:12')).toBe('Crash [REDACTED_PATH]:12');
+    });
+
     it('handles non-string, null, undefined, and empty string inputs safely', () => {
       expect(scrubPII('')).toBe('');
       expect(scrubPII(null as any)).toBe('');
