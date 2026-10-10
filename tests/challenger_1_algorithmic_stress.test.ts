@@ -122,6 +122,7 @@ describe('Challenger 1: Algorithmic & Mathematical Stress Test Suite', () => {
                 date: '2026-08-18',
                 exercises: [{
                     exId: 'ex_bench',
+                    sessionNote: '',
                     sets: [{ id: 's1', kg: '1000000', reps: '1000' }]
                 }]
             }];
