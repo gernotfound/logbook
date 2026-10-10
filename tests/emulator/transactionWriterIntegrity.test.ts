@@ -56,7 +56,7 @@ it('blocks an unrelated root write instead of replacing malformed existing cloud
         await setDoc(doc(context.firestore(), 'users/a'), original);
     });
 
-    const db = env.authenticatedContext('a').firestore();
+    const db = env.authenticatedContext('a', { email_verified: true }).firestore();
     const replica = await registerReplica(db, 'a');
     await expect(applyDocumentChanges(db, 'a', [profileHeightOp()], () => true, replica))
         .rejects.toBeInstanceOf(CloudDataIntegrityError);
@@ -93,7 +93,7 @@ it('blocks a monthly write when another entity in the same shard would be destru
         clock: { s00: 1 },
     };
 
-    const db = env.authenticatedContext('a').firestore();
+    const db = env.authenticatedContext('a', { email_verified: true }).firestore();
     const replica = await registerReplica(db, 'a');
     await expect(applyDocumentChanges(db, 'a', [op], () => true, replica))
         .rejects.toBeInstanceOf(CloudDataIntegrityError);
@@ -130,7 +130,7 @@ it('allows an explicitly lossless scalar normalization while applying the semant
         clock: { s00: 1 },
     };
 
-    const db = env.authenticatedContext('a').firestore();
+    const db = env.authenticatedContext('a', { email_verified: true }).firestore();
     const replica = await registerReplica(db, 'a');
     await applyDocumentChanges(db, 'a', [op], () => true, replica);
 
