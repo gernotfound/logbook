@@ -5,7 +5,9 @@ import { useAppStore } from '../src/store/useAppStore';
 import { useDialogStore } from '../src/store/useDialogStore';
 import { UserDataSchema } from '../src/lib/schema';
 import type { WorkoutSession, UserData } from '../src/types';
-import { deviceKey } from '../src/lib/sync/deviceStorage';
+import { deviceKey, writeDeviceValue } from '../src/lib/sync/deviceStorage';
+import { useTrainingHistory } from '../src/hooks/useTrainingHistory';
+import { useWorkoutSetMutations } from '../src/hooks/workout/useWorkoutSetMutations';
 import { captureSession } from '../src/lib/sync/session';
 import { getInitialLocalWorkout } from '../src/store/slices/createWorkoutSlice';
 import { readWorkoutTimerSnapshot } from '../src/lib/utils/timer';
@@ -289,4 +291,103 @@ describe('Workout lifecycle durable recovery regressions', () => {
         expect(screen.getByRole('button', { name: 'Umore: 5 su 5' }).getAttribute('aria-pressed')).toBe('false');
         expect(localStorage.getItem(key)).toBe(previous);
     });
+    it('refuses to open a history editor after the live workout changes during confirmation', async () => {
+        const oldLive = workout('live-before-confirmation', true);
+        const replacement = workout('replacement-session', true);
+        const previous = workout('history-item', true);
+        useAppStore.setState({ userData: userData({ history: [previous], activeWorkout: oldLive }), localWorkout: oldLive });
+        let confirm!: (choice: boolean) => void;
+        vi.mocked(useDialogStore.getState().showConfirm).mockImplementationOnce(
+            () => new Promise(resolve => { confirm = resolve; }),
+        );
+        const { result } = renderHook(() => useWorkoutSession());
+        let editing!: Promise<boolean>;
+        act(() => { editing = result.current.startEditHistoricalWorkout(previous); });
+        act(() => { useAppStore.setState({ localWorkout: replacement }); });
+        await act(async () => { confirm(true); expect(await editing).toBe(false); });
+        expect(useAppStore.getState().localWorkout?.id).toBe(replacement.id);
+        expect(localStorage.getItem(deviceKey('history-editor-context', owner))).toBeNull();
+    });
+
+    it('keeps edits made during a pending history commit and refuses a concurrent cancel', async () => {
+        const historical = workout('history-edit-target', true);
+        const editor: WorkoutSession = { ...historical, isEditingHistory: true, originalHistoryId: historical.id };
+        const originalDispatch = useAppStore.getState().dispatchDomainOperation;
+        useAppStore.setState({ userData: userData({ history: [historical] }), localWorkout: editor });
+        let complete!: (result: { ok: true; status: 'synced' }) => void;
+        const mockedDispatch = vi.fn(() => new Promise<{ ok: true; status: 'synced' }>(resolve => { complete = resolve; }));
+        useAppStore.setState({ dispatchDomainOperation: mockedDispatch });
+        try {
+            const { result } = renderHook(() => useWorkoutSession());
+            let saving!: Promise<boolean>;
+            act(() => { saving = result.current.saveHistoryEdit(); });
+            expect(mockedDispatch).toHaveBeenCalledOnce();
+            await act(async () => { expect(await result.current.cancelHistoryEdit()).toBe(false); });
+            act(() => { useAppStore.setState({ localWorkout: { ...editor, routineName: 'Modifica più recente' } }); });
+            await act(async () => { complete({ ok: true, status: 'synced' }); expect(await saving).toBe(false); });
+            expect(useAppStore.getState().localWorkout?.routineName).toBe('Modifica più recente');
+            expect(useAppStore.getState().localWorkout?.isEditingHistory).toBe(true);
+        } finally {
+            useAppStore.setState({ dispatchDomainOperation: originalDispatch });
+        }
+    });
+
+    it('deleting a history item closes the editor and restores its suspended live workout', async () => {
+        const historical = workout('history-to-delete', true);
+        const suspended = workout('still-live', true);
+        const editor: WorkoutSession = { ...historical, isEditingHistory: true, originalHistoryId: historical.id };
+        await initializeLocal(owner, userData({ history: [historical], activeWorkout: suspended }));
+        writeDeviceValue('history-editor-context', JSON.stringify({
+            version: 1, editorId: historical.id, suspended,
+        }), owner);
+        useAppStore.setState({ userData: userData({ history: [historical], activeWorkout: suspended }), localWorkout: editor });
+        vi.mocked(useDialogStore.getState().showConfirm).mockResolvedValueOnce(true);
+        const originalDispatch = useAppStore.getState().dispatchDomainOperation;
+        useAppStore.setState({ dispatchDomainOperation: vi.fn(async () => {
+            useAppStore.setState({ userData: userData({ activeWorkout: suspended }) });
+            return { ok: true, status: 'synced' } as const;
+        }) });
+        try {
+            const { result } = renderHook(() => useTrainingHistory());
+            await act(async () => { await result.current.deleteWorkout(historical.id); });
+            expect(useAppStore.getState().localWorkout?.id).toBe(suspended.id);
+            expect(localStorage.getItem(deviceKey('history-editor-context', owner))).toBeNull();
+        } finally {
+            useAppStore.setState({ dispatchDomainOperation: originalDispatch });
+        }
+    });
+
+    it('removes the confirmed exercise identity even if exercises are reordered in the dialog', async () => {
+        const initial: WorkoutSession = { ...workout('exercise-race', true), exercises: [
+            { id: 'first', exId: 'bench', sets: [{ id: 's1', kg: '40', reps: '8' }] },
+            { id: 'second', exId: 'squat', sets: [{ id: 's2', kg: '60', reps: '5' }] },
+        ] };
+        useAppStore.setState({ localWorkout: initial });
+        let confirm!: (decision: boolean) => void;
+        const showConfirm = () => new Promise<boolean>(resolve => { confirm = resolve; });
+        const update = (updater: (previous: WorkoutSession | null) => WorkoutSession | null) => {
+            useAppStore.setState(state => ({ localWorkout: updater(state.localWorkout) }));
+        };
+        const { result } = renderHook(() => useWorkoutSetMutations({ setLocalWorkout: update, showConfirm }));
+        let removal!: Promise<void>;
+        act(() => { removal = result.current.removeActiveExercise(0); });
+        act(() => { useAppStore.setState({ localWorkout: { ...initial, exercises: [...initial.exercises].reverse() } }); });
+        await act(async () => { confirm(true); await removal; });
+        expect(useAppStore.getState().localWorkout?.exercises.map(ex => ex.id)).toEqual(['second']);
+    });
+
+    it('drops an obsolete post-session draft when the displayed session identity changes', async () => {
+        const first = workout('post-first', true);
+        const next = workout('post-next', true);
+        useAppStore.setState({ userData: userData({ activeWorkout: first }), localWorkout: first });
+        render(<TrainingSession />);
+        fireEvent.click(screen.getByRole('button', { name: 'Termina allenamento' }));
+        expect(screen.getByText('Com’è andato l’allenamento?')).toBeDefined();
+        act(() => { useAppStore.setState({ localWorkout: next, userData: userData({ activeWorkout: next }) }); });
+        await waitFor(() => expect(screen.queryByText('Com’è andato l’allenamento?')).toBeNull());
+        fireEvent.click(screen.getByRole('button', { name: 'Termina allenamento' }));
+        await waitFor(() => expect(screen.getByText('Com’è andato l’allenamento?')).toBeDefined());
+        expect(localStorage.getItem(deviceKey('draft:post-session:post-next', owner))).not.toBeNull();
+    });
+
 });

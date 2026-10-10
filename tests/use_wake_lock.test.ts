@@ -160,4 +160,22 @@ describe('useWakeLock', () => {
             vi.useRealTimers();
         }
     });
+    it('releases an obsolete pending request after enabled is toggled off and back on', async () => {
+        let resolveOld!: (sentinel: ReturnType<typeof makeSentinel>) => void;
+        const old = makeSentinel();
+        const fresh = makeSentinel();
+        mockRequest
+            .mockImplementationOnce(() => new Promise(resolve => { resolveOld = resolve; }))
+            .mockResolvedValueOnce(fresh);
+        const { rerender } = renderHook(({ enabled }) => useWakeLock(enabled), {
+            initialProps: { enabled: true },
+        });
+        rerender({ enabled: false });
+        rerender({ enabled: true });
+        await vi.waitFor(() => expect(mockRequest).toHaveBeenCalledTimes(2));
+        resolveOld(old);
+        await vi.waitFor(() => expect(old.release).toHaveBeenCalledOnce());
+        expect(fresh.release).not.toHaveBeenCalled();
+    });
+
 });
