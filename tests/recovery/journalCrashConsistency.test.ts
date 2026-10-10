@@ -6,7 +6,18 @@ const remote = vi.hoisted(() => ({
     apply: vi.fn(),
     auth: { currentUser: { uid: 'a' } as { uid: string } | null },
 }));
-const catalog = vi.hoisted(() => ({ exercises: [], foods: [] }));
+const catalog = vi.hoisted(() => ({
+    exercises: [],
+    foods: [],
+    manifest: {
+        version: 'recovery-test',
+        updatedAt: '2026-09-15T00:00:00.000Z',
+        schemaVersion: 1,
+        docRefs: { exercises: 'catalog/exercises', foods: 'catalog/foods' },
+        itemCounts: { exercises: 0, foods: 0 },
+    },
+    cachedAt: 0,
+}));
 
 vi.mock('../../src/lib/firebase', () => ({
     auth: remote.auth,
