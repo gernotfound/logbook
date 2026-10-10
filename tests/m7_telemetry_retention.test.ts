@@ -183,6 +183,28 @@ describe('M7 telemetry retention sweep', () => {
     expect(state.cursor).toBeNull();
   });
 
+  it('resumes in the same binary ID order used to sort mixed-case Firestore document IDs', async () => {
+    const now = Timestamp.fromMillis(2_000_000_000_000);
+    const expired = { id: 'expired', expireAt: Timestamp.fromMillis(now.toMillis() - 1) };
+    state.cursor = 'A';
+    state.users = [
+      { id: 'b', telemetry: telemetry([expired]) },
+      { id: 'a', telemetry: telemetry([expired]) },
+      { id: 'A', telemetry: telemetry([expired]) },
+    ];
+
+    const result = await purgeExpiredTelemetry(Date.now() + 60_000, now);
+
+    expect(result).toEqual({ usersScanned: 2, documentsDeleted: 2, completedCycle: true });
+    expect(state.deleted).toEqual([
+      'users/a/telemetry_errors/expired',
+      'users/b/telemetry_errors/expired',
+    ]);
+    // A was already completed: resume must never visit that owner again.
+    expect(state.users.find(user => user.id === 'A')?.telemetry.telemetry_errors).toHaveLength(1);
+    expect(state.cursor).toBeNull();
+  });
+
   it('preserves the cursor and performs no destructive work when the cron budget is exhausted', async () => {
     const now = Timestamp.fromMillis(2_000_000_000_000);
     state.cursor = 'a';
