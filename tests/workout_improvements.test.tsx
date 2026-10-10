@@ -546,6 +546,7 @@ describe('Workout Improvements & History Edit Suite', () => {
           mealTypes={['Colazione', 'Pranzo']}
           onEdit={(f) => { editedFood = f; }}
           onDelete={(f) => { deletedFood = f; }}
+          onDuplicate={() => {}}
           onQuickAddToMeal={(f, mt) => { quickAdded = { food: f, mealType: mt }; }}
         />
       );
