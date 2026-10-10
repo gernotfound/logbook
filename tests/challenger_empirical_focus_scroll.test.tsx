@@ -12,7 +12,7 @@ describe('Empirical Challenger Focus & Scroll Suite', () => {
     beforeEach(() => {
         originalScrollTo = window.scrollTo;
         scrollToSpy = vi.fn();
-        window.scrollTo = scrollToSpy;
+        Object.defineProperty(window, 'scrollTo', { configurable: true, writable: true, value: scrollToSpy });
     });
 
     afterEach(() => {
@@ -210,9 +210,9 @@ describe('Empirical Challenger Focus & Scroll Suite', () => {
     describe('3. Intentional Scroll Preservation Verification', () => {
         it('preserves dropdown listbox keyboard scrollIntoView with block: nearest', () => {
             const mockExercises: ExerciseLibraryItem[] = [
-                { id: '1', name: 'Panca piana', category: 'Chest', equipment: 'Barbell', custom: false },
-                { id: '2', name: 'Squat', category: 'Legs', equipment: 'Barbell', custom: false },
-                { id: '3', name: 'Stacco', category: 'Back', equipment: 'Barbell', custom: false }
+                { id: '1', name: 'Panca piana', muscles: ['chest'], setsCount: 3, sets: [] },
+                { id: '2', name: 'Squat', muscles: ['quads'], setsCount: 3, sets: [] },
+                { id: '3', name: 'Stacco', muscles: ['back'], setsCount: 3, sets: [] }
             ];
 
             const scrollIntoViewMock = vi.fn();
