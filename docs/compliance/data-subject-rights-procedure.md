@@ -40,15 +40,15 @@ Usare come riferimento l'Art. 12 GDPR: risposta senza ingiustificato ritardo e, 
 | Limitazione | `[DEFINE_IF_REQUIRED]`; non esiste oggi un flag generico di restriction |
 | Opposizione | Valutare per i trattamenti basati sul legittimo interesse, inclusa telemetria tecnica |
 | Revoca Analytics | Impostazioni; effetto per il futuro |
-| Revoca consenso dati salute | **Soluzione A decisa (9 ottobre 2026): sospensione tracciamento, accesso a esportazione/diritti/account deletion.** Implementazione end-to-end e valutazione delle basi giuridiche e retention **ancora bloccanti prima del pilot**; vedi `health-consent-release-gate.md`. |
+| Revoca consenso dati salute | **Soluzione A decisa, ma non disponibile nella PWA distribuita:** export facoltativo **prima** della conferma, poi sospensione del tracciamento e accesso a informativa/diritti/cancellazione account. La PR #301 resta in bozza; verifiche legali e rilascio aperti. Vedi `health-consent-release-gate.md`. |
 | Reclamo | Informare del diritto di rivolgersi all'autorità di controllo competente |
 
 ## Revoca consenso dati salute — decisione prodotto A, blocker tecnici e legali ancora aperti
 
-Il product owner ha scelto la **soluzione A** (sospensione delle funzionalità di tracciamento dipendenti dal consenso, con accesso a diritti, esportazione e cancellazione account). Prima del pilot servono validazione legale, soluzione tecnica autorevole e test, come specificato in `health-consent-release-gate.md`. In particolare occorre definire e dimostrare:
+Il product owner ha scelto la **soluzione A**: esportazione facoltativa offerta **prima** della revoca, poi sospensione delle funzioni di tracciamento dipendenti dal consenso, mantenendo informativa, diritti e cancellazione account. Questa funzione non è ancora stata rilasciata. Prima del pilot servono validazione legale, soluzione tecnica autorevole e prove runtime, come specificato in `health-consent-release-gate.md`. In particolare occorre definire e dimostrare:
 
 1. da quale momento cessano i trattamenti che dipendono dal consenso Art. 9;
-2. che le sole funzionalità rimaste disponibili siano informativa, gestione dei diritti, esportazione e cancellazione account (soluzione A);
+2. che dopo la revoca siano disponibili informativa, gestione dei diritti e cancellazione account; la proposta di esportazione completa avviene prima della conferma, senza promettere la conservazione dei dati già eliminati;
 3. quali dati già raccolti devono essere cancellati, quali possono eventualmente essere conservati, per quale altra base giuridica e per quanto tempo: nessuna conservazione indefinita motivata dal consenso già ritirato;
 4. rapporto tra revoca, export e cancellazione account;
 5. comportamento offline e sincronizzazione multi-dispositivo;
