@@ -25,6 +25,28 @@ describe('GA4 consent race', () => {
         vi.unstubAllEnvs();
     });
 
+    it('keeps analytics enabled when consent is revoked and immediately regranted', async () => {
+        analytics.isSupported.mockResolvedValue(true);
+        localStorage.setItem('logbook_ga4_consent_v1', 'true');
+        const consent = await import('../src/lib/analyticsConsent');
+        const module = await import('../src/lib/googleAnalytics');
+
+        module.initOptionalGoogleAnalytics();
+        await vi.waitFor(() => expect(analytics.setAnalyticsCollectionEnabled).toHaveBeenCalledWith(
+            expect.anything(), true,
+        ));
+        analytics.setAnalyticsCollectionEnabled.mockClear();
+
+        expect(consent.setAnalyticsConsent(false)).toBe(true);
+        expect(consent.setAnalyticsConsent(true)).toBe(true);
+        await new Promise(resolve => setTimeout(resolve, 0));
+
+        expect(consent.getAnalyticsConsent()).toBe(true);
+        expect(analytics.setAnalyticsCollectionEnabled).not.toHaveBeenCalledWith(
+            expect.anything(), false,
+        );
+    });
+
     it('does not initialize or emit after consent is revoked while support detection is pending', async () => {
         let resolveSupported!: (supported: boolean) => void;
         analytics.isSupported.mockReturnValueOnce(new Promise<boolean>(resolve => {
