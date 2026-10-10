@@ -338,7 +338,7 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
                     localWorkout: activeSession
                 });
 
-                const exerciseHeadings = Array.from(container.querySelectorAll('h2')).map(h => h.textContent);
+                const exerciseHeadings = Array.from(container.querySelectorAll('h2') as NodeListOf<HTMLHeadingElement>).map(h => h.textContent);
                 expect(exerciseHeadings).toContain('Exercise Ten');
                 expect(exerciseHeadings).not.toContain('Exercise One');
             });
