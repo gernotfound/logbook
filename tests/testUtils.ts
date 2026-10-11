@@ -47,7 +47,7 @@ export const ConsentedTestDB = {
     saveUserData: (state: any, revision?: any) => TestDB.saveUserData({
         ...state,
         // Tests outside the legal-consent suite exercise transport with a consented account.
-        legalConsent: Object.prototype.hasOwnProperty.call(state ?? {}, 'legalConsent')
+        legalConsent: state?.legalConsent !== undefined
             ? state.legalConsent
             : {
                 hasAcceptedTerms: true,
