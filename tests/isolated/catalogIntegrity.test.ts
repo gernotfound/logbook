@@ -1,5 +1,18 @@
 import 'fake-indexeddb/auto';
-import * as idbKeyval from 'idb-keyval';
+const storageFault = vi.hoisted(() => ({ failNextSet: false }));
+vi.mock('idb-keyval', async (importOriginal) => {
+    const original = await importOriginal<typeof import('idb-keyval')>();
+    return {
+        ...original,
+        set: (...args: Parameters<typeof original.set>) => {
+            if (storageFault.failNextSet) {
+                storageFault.failNextSet = false;
+                return Promise.reject(new Error('quota exceeded'));
+            }
+            return original.set(...args);
+        },
+    };
+});
 import { beforeEach, expect, it, vi } from 'vitest';
 const remote = vi.hoisted(() => ({ get: vi.fn() }));
 vi.mock('firebase/firestore', () => ({ doc: (_db: unknown, collection: string, id: string) => collection + '/' + id, getDoc: remote.get }));
@@ -49,13 +62,9 @@ it('preserves distinct IDs sharing a name and gives the custom identity preceden
 it('reports a new catalog as memory-only if IndexedDB rejects the write', async () => {
     await saveCatalogToCache(getSeedCatalog());
     arrange();
-    const write = vi.spyOn(idbKeyval, 'set').mockRejectedValueOnce(new Error('quota exceeded'));
-    try {
-        const result = await syncGlobalCatalog({} as never);
-        expect(result.updated).toBe(true);
-        expect(result.persisted).toBe(false);
-        expect((await getCachedCatalog()).exercises.map(item => item.id)).toEqual(['a']);
-    } finally {
-        write.mockRestore();
-    }
+    storageFault.failNextSet = true;
+    const result = await syncGlobalCatalog({} as never);
+    expect(result.updated).toBe(true);
+    expect(result.persisted).toBe(false);
+    expect((await getCachedCatalog()).exercises.map(item => item.id)).toEqual(['a']);
 });
