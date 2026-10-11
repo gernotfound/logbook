@@ -82,7 +82,7 @@ const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, histor
 
     const handleSaveAsRoutine = async () => {
         if (!newRoutineName.trim()) {
-            showAlert("Inserisci un nome per la scheda.");
+            void showAlert("Inserisci un nome per la scheda.");
             return;
         }
         
@@ -140,9 +140,9 @@ const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, histor
             const formatted = mapFirebaseErrorCode(err);
             if (formatted.isOfflineSafe) {
                 setIsSavingAsRoutine(false);
-                showAlert("Scheda salvata in locale (offline).");
+                void showAlert("Scheda salvata in locale (offline).");
             } else {
-                showAlert("Errore durante il salvataggio della scheda.");
+                void showAlert("Errore durante il salvataggio della scheda.");
             }
         } finally {
             setIsSavingRoutineLoading(false);

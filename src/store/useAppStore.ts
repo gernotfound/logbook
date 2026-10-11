@@ -73,13 +73,13 @@ if (typeof navigator !== 'undefined' && 'setAppBadge' in navigator) {
         if (hasWorkout && !hadWorkout) {
             try {
                 (navigator as any).setAppBadge(1).catch(() => {});
-            } catch (e) {
+            } catch {
                 // Ignore
             }
         } else if (!hasWorkout && hadWorkout) {
             try {
                 (navigator as any).clearAppBadge().catch(() => {});
-            } catch (e) {
+            } catch {
                 // Ignore
             }
         }
@@ -90,14 +90,14 @@ if (typeof navigator !== 'undefined' && 'setAppBadge' in navigator) {
         if (useAppStore.getState().localWorkout) {
             try {
                 (navigator as any).setAppBadge(1).catch(() => {});
-            } catch (e) {}
+            } catch {}
         } else {
             try {
                 (navigator as any).clearAppBadge().catch(() => {});
                 if (import.meta.env.DEV) {
                     console.log('[AppBadge] Cleared orphan badge at startup');
                 }
-            } catch (e) {}
+            } catch {}
         }
     }, 1000);
 }

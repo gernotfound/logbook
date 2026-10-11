@@ -24,6 +24,12 @@ export function useTrainingExercises() {
     const dispatchDomainOperation = useAppStore(state => state.dispatchDomainOperation);
     const showAlert = useDialogStore(state => state.showAlert);
     const showConfirm = useDialogStore(state => state.showConfirm);
+    const persistExercise = async (operation: Parameters<typeof dispatchDomainOperation>[0]) => {
+        const result = await persistExercise(operation);
+        if (!result.ok && result.status !== 'local-pending') {
+            throw result.error instanceof Error ? result.error : new Error('Operazione esercizio non completata');
+        }
+    };
     const [editingExId, setEditingExId] = useState<string | null>(null);
     const [exName, setExName] = useState('');
     const [exNotes, setExNotes] = useState('');
@@ -35,6 +41,7 @@ export function useTrainingExercises() {
     const [isBodyweight, setIsBodyweight] = useState(false);
     const [equipmentWeight, setEquipmentWeight] = useState('');
     const [draftOwner] = useState(() => storageOwner());
+    const [draftRestored, setDraftRestored] = useState(false);
 
     // Restore draft on mount
     useEffect(() => {
@@ -50,11 +57,12 @@ export function useTrainingExercises() {
                 setEquipmentWeight(String(parsed.equipmentWeight));
             }
         }
+        setDraftRestored(true);
     }, [draftOwner]);
 
     // Save draft on change
     useEffect(() => {
-        if (!editingExId) {
+        if (draftRestored && !editingExId) {
             persistExerciseDraft({
                 name: exName,
                 notes: exNotes,
@@ -65,7 +73,7 @@ export function useTrainingExercises() {
                 equipmentWeight
             }, draftOwner);
         }
-    }, [exName, exNotes, trackingType, selectedMuscles, secondaryMuscles, isBodyweight, equipmentWeight, editingExId, draftOwner]);
+    }, [exName, exNotes, trackingType, selectedMuscles, secondaryMuscles, isBodyweight, equipmentWeight, editingExId, draftOwner, draftRestored]);
 
     const filteredMuscles = useMemo(() => filterMuscles(muscleSearch), [muscleSearch]);
 
@@ -125,7 +133,7 @@ export function useTrainingExercises() {
             isDefault: false
         };
         try {
-            await dispatchDomainOperation({ type: 'exercise.upsert', exercise: duplicated });
+            await persistExercise({ type: 'exercise.upsert', exercise: duplicated });
         } catch (err) {
             console.error(err);
         }
@@ -253,11 +261,11 @@ export function useTrainingExercises() {
                 ? updatedLibrary.find(ex => ex.id === editingExId)
                 : updatedLibrary.find(ex => !library.some(current => current.id === ex.id));
             if (!savedExercise) throw new Error('Esercizio non trovato dopo la modifica');
-            await dispatchDomainOperation({ type: 'exercise.upsert', exercise: savedExercise });
+            await persistExercise({ type: 'exercise.upsert', exercise: savedExercise });
             handleCancelEdit(); // Reset form
             return true;
         } catch {
-            showAlert("Errore durante il salvataggio dell'esercizio.");
+            void showAlert("Errore durante il salvataggio dell'esercizio.");
             return false;
         }
     };
@@ -283,7 +291,7 @@ export function useTrainingExercises() {
         if (!(await showConfirm(confirmMsg))) return false;
 
         try {
-            await dispatchDomainOperation({ type: 'exercise.delete', id });
+            await persistExercise({ type: 'exercise.delete', id });
             if (editingExId === id) handleCancelEdit();
             return true;
         } catch {
@@ -296,13 +304,13 @@ export function useTrainingExercises() {
         const catalog = getInMemoryCatalog(true);
         const originalEx = catalog.exercises.find(e => e.id === id);
         if (!originalEx) {
-            showAlert("Errore: esercizio originale non trovato.");
+            void showAlert("Errore: esercizio originale non trovato.");
             return;
         }
 
         if (await showConfirm("Vuoi ripristinare questo esercizio ai valori originali? Le tue modifiche andranno perse.")) {
             try {
-                await dispatchDomainOperation({
+                await persistExercise({
                     type: 'exercise.upsert',
                     exercise: {
                         ...originalEx,
@@ -315,7 +323,7 @@ export function useTrainingExercises() {
                     handleEditClick(originalEx);
                 }
             } catch {
-                showAlert("Errore durante il ripristino dell'esercizio.");
+                void showAlert("Errore durante il ripristino dell'esercizio.");
             }
         }
     };

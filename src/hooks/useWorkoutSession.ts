@@ -343,7 +343,7 @@ export function useWorkoutSession() {
         if (!expectedId || (confirmEnd && !(await showConfirm("Terminare l'allenamento?")))) return null;
         try {
             draftRegistry.flushAll({ strict: true });
-        } catch (error) {
+        } catch {
             useAppStore.setState({
                 localPersistenceBlocked: true,
                 syncHealth: 'failed',
@@ -443,9 +443,10 @@ export function useWorkoutSession() {
         try {
             const exercise = useAppStore.getState().userData?.library?.find(item => item.id === exId);
             if (!exercise) throw new Error('Esercizio non trovato');
-            await dispatchDomainOperation({ type: 'exercise.upsert', exercise: { ...exercise, notes: note } });
+            const result = await dispatchDomainOperation({ type: 'exercise.upsert', exercise: { ...exercise, notes: note } });
+            if (!result.ok && result.status !== 'local-pending') throw result.error instanceof Error ? result.error : new Error('Nota non salvata');
         } catch {
-            showAlert("Errore durante il salvataggio della nota.");
+            void showAlert("Errore durante il salvataggio della nota.");
         }
     }, [dispatchDomainOperation, showAlert]);
 

@@ -22,6 +22,7 @@ export function useTrainingRoutines() {
     const [routineExercises, setRoutineExercises] = useState<RoutineExercise[]>([]);
     const [expandedRoutineId, setExpandedRoutineId] = useState<string | null>(null);
     const [draftOwner] = useState(() => storageOwner());
+    const [draftRestored, setDraftRestored] = useState(false);
 
     useEffect(() => {
         const draft = readDeviceValue(ROUTINE_DRAFT_KEY, draftOwner);
@@ -34,10 +35,11 @@ export function useTrainingRoutines() {
                 // Invalid drafts remain non-authoritative and are ignored.
             }
         }
+        setDraftRestored(true);
     }, [draftOwner]);
 
     useEffect(() => {
-        if (editingRoutineId) return;
+        if (!draftRestored || editingRoutineId) return;
         if (routineName.trim() !== '' || routineExercises.length > 0) {
             try {
                 writeDeviceValue(ROUTINE_DRAFT_KEY, JSON.stringify({ name: routineName, exercises: routineExercises }), draftOwner);
@@ -51,7 +53,7 @@ export function useTrainingRoutines() {
                 setSaveError('Impossibile rimuovere la bozza della scheda dal dispositivo.');
             }
         }
-    }, [routineName, routineExercises, editingRoutineId, setSaveError, draftOwner]);
+    }, [routineName, routineExercises, editingRoutineId, setSaveError, draftOwner, draftRestored]);
 
     const clearRoutineDraft = () => {
         try {
