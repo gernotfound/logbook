@@ -3,7 +3,7 @@ import { User } from 'firebase/auth';
 import { auth, getDb, waitForPendingWrites, provider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendEmailVerification, reload } from '../lib/firebase';
 import { DB } from '../lib/db';
 import { isAccountDeletionPending } from '../lib/sync/accountGate';
-import { beginHealthConsentVerification, refreshHealthConsent } from '../lib/healthConsent';
+import { beginHealthConsentVerification, refreshHealthConsent, isHealthConsentWritable } from '../lib/healthConsent';
 import { useAppStore } from '../store/useAppStore';
 import { UserData } from '../types';
 import { UserDataSchema } from '../lib/schema';
@@ -406,8 +406,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             if (user) {
                 // Hydration/migration and all cloud business writes must wait for
                 // this check; an offline/failed check remains fail-closed.
-                await refreshHealthConsent(user);
+                const consentStatus = await refreshHealthConsent(user);
                 if (!isCurrentRun()) return;
+                if (consentStatus !== 'active') {
+                    // No regular hydration/migration/replica registration after a
+                    // withdrawal, even when a local cached envelope exists.
+                    useAppStore.getState().cancelPendingSyncs();
+                    setLoading(false);
+                    return;
+                }
             }
 
             if (user) {
@@ -513,7 +520,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             if (isGuestActiveStrict()) return;
             if (document.visibilityState === 'visible' && auth.currentUser &&
                 auth.currentUser.emailVerified !== false) {
-                if (useAppStore.getState().userData !== null && !useAppStore.getState().syncing && !isReloading) {
+                if (isHealthConsentWritable(userOwner(auth.currentUser.uid)) && useAppStore.getState().userData !== null && !useAppStore.getState().syncing && !isReloading) {
                     try {
                         isReloading = true;
                         await Promise.race([

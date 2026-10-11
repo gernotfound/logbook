@@ -4,7 +4,7 @@ Decisione UX del product owner (12 ottobre 2026): dopo la revoca nessuna funzion
 
 ## Confine autorevole
 
-`health_consent_withdrawals/{uid}` è esclusivamente server-managed. Il backend autentica UID Firebase, verifica App Check limited-use e origini consentite. Lo stato `withdrawn` blocca tramite Security Rules tutte le nuove scritture della zona fitness e della telemetria; le letture dell'owner restano abilitate per esportazione e diritti. `active` richiede una nuova scelta esplicita con versioni legali correnti, mai un ripristino automatico da backup o da `legalConsent` client. La registrazione della revoca è idempotente. Nessuna revoca cancella dati o account in modo implicito; l'account deletion elimina il marker come parte del suo cleanup.
+`health_consent_withdrawals/{uid}` è esclusivamente server-managed. Il backend autentica UID Firebase, verifica App Check limited-use e origini consentite. Lo stato `withdrawn` blocca tramite Security Rules tutte le nuove scritture della zona fitness e della telemetria; le letture dirette dell'owner sono bloccate in stato revocato anche per client obsoleti; per esercitare i diritti e produrre il backup cloud il server espone un endpoint separato autenticato e paginato, senza aprire Firestore ai vecchi client. `active` richiede una nuova scelta esplicita con versioni legali correnti, mai un ripristino automatico da backup o da `legalConsent` client. La registrazione della revoca è idempotente. Nessuna revoca cancella dati o account in modo implicito; l'account deletion elimina il marker come parte del suo cleanup.
 
 ## Verifiche ancora richieste prima della distribuzione
 

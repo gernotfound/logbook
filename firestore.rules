@@ -470,7 +470,7 @@ service cloud.firestore {
       // Root deletion is server-only. Client-side account deletion must always use
       // the trusted account-deletion job so subcollections and Firebase Auth cannot
       // be orphaned.
-      allow read: if isActiveOwner(userId);
+      allow read: if isWritableOwner(userId);
 
       allow create, update: if isWritableOwner(userId)
         && incomingData().keys().hasOnly([
@@ -513,7 +513,7 @@ service cloud.firestore {
         && preservesSyncProtocol();
 
       match /history_months/{monthId} {
-        allow read: if isActiveOwner(userId);
+        allow read: if isWritableOwner(userId);
         allow delete: if false;
         allow create, update: if isWritableOwner(userId)
           && isValidMonthId(monthId)
@@ -526,7 +526,7 @@ service cloud.firestore {
       }
 
       match /nutrition_months/{monthId} {
-        allow read: if isActiveOwner(userId);
+        allow read: if isWritableOwner(userId);
         allow delete: if false;
         allow create, update: if isWritableOwner(userId)
           && isValidMonthId(monthId)
@@ -550,7 +550,7 @@ service cloud.firestore {
       }
 
       match /telemetry_errors/{errorId} {
-        allow read, delete: if isActiveOwner(userId);
+        allow read, delete: if isWritableOwner(userId);
         allow create: if isWritableOwner(userId)
           && isValidTelemetryError(incomingData(), userId);
         allow update: if isWritableOwner(userId)
@@ -559,7 +559,7 @@ service cloud.firestore {
       }
 
       match /telemetry_events/{eventId} {
-        allow read, delete: if isActiveOwner(userId);
+        allow read, delete: if isWritableOwner(userId);
         allow create: if isWritableOwner(userId)
           && isValidTelemetryEvent(incomingData(), userId);
         // Events are append-only. Identical retries remain valid, and legacy
@@ -570,7 +570,7 @@ service cloud.firestore {
       }
 
       match /telemetry_anomalies/{eventId} {
-        allow read, delete: if isActiveOwner(userId);
+        allow read, delete: if isWritableOwner(userId);
         allow create: if isWritableOwner(userId)
           && isValidTelemetryAnomaly(incomingData());
         // Storage anomalies are immutable after creation apart from a one-time

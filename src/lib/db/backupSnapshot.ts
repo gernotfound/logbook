@@ -11,6 +11,8 @@ import { withTimeout } from './db_core';
 import type { UserData } from '../../types';
 import type { BackupCoverage } from '../backup';
 import equal from 'fast-deep-equal';
+import { currentHealthConsentStatus } from '../healthConsent';
+import { fetchWithdrawnCloudBackup } from './withdrawnBackupTransport';
 
 const RECOVERY_DEVICE_KEYS = new Set(['workout', 'timer', 'draft_exercise', 'draft_routine']);
 const isRecoveryDeviceKey = (name: string) => RECOVERY_DEVICE_KEYS.has(name) || name.startsWith('draft:');
@@ -41,20 +43,27 @@ export async function collectBackupSnapshot(fallback: UserData, includeCloud: bo
         coverage.readStartedAt = new Date().toISOString();
         await ensureAppCheck();
         assertCurrent();
-        const db = getDb();
         const uid = session.owner.slice(5);
-        const root = await withTimeout(getDocFromServer(doc(db, 'users', uid)), 10000, 'Cloud non disponibile per il backup completo.');
-        assertCurrent();
-        if (root.exists()) addRawDoc('', root.data());
-        for (const name of ['history_months', 'nutrition_months']) {
-            let cursor: QueryDocumentSnapshot | undefined;
-            do {
-                const constraints = [orderBy(documentId()), limit(50)];
-                const page = await withTimeout(getDocsFromServer(query(collection(db, 'users', uid, name), ...constraints, ...(cursor ? [startAfter(cursor)] : []))), 10000, 'Lettura dello storico interrotta.');
-                assertCurrent();
-                for (const item of page.docs) addRawDoc(name + '/' + item.id, item.data());
-                cursor = page.size === 50 ? page.docs[page.docs.length - 1] : undefined;
-            } while (cursor);
+        if (currentHealthConsentStatus(uid) !== 'active') {
+            // Rules deny all direct fitness reads during revocation. Export and
+            // privacy rights use the independently authenticated Admin boundary.
+            const withdrawnDocuments = await fetchWithdrawnCloudBackup(uid, assertCurrent);
+            for (const [path, raw] of withdrawnDocuments) { assertCurrent(); addRawDoc(path, raw); }
+        } else {
+            const db = getDb();
+            const root = await withTimeout(getDocFromServer(doc(db, 'users', uid)), 10000, 'Cloud non disponibile per il backup completo.');
+            assertCurrent();
+            if (root.exists()) addRawDoc('', root.data());
+            for (const name of ['history_months', 'nutrition_months']) {
+                let cursor: QueryDocumentSnapshot | undefined;
+                do {
+                    const constraints = [orderBy(documentId()), limit(50)];
+                    const page = await withTimeout(getDocsFromServer(query(collection(db, 'users', uid, name), ...constraints, ...(cursor ? [startAfter(cursor)] : []))), 10000, 'Lettura dello storico interrotta.');
+                    assertCurrent();
+                    for (const item of page.docs) addRawDoc(name + '/' + item.id, item.data());
+                    cursor = page.size === 50 ? page.docs[page.docs.length - 1] : undefined;
+                } while (cursor);
+            }
         }
         const catalog = await getCachedCatalog();
         assertCurrent();

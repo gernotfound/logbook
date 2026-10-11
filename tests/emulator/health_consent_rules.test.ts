@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { beforeAll, afterAll, beforeEach, it } from 'vitest';
 import { assertFails, assertSucceeds, initializeTestEnvironment, type RulesTestEnvironment } from '@firebase/rules-unit-testing';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
 
 let env: RulesTestEnvironment;
 const mark = (status: 'active' | 'withdrawn') => ({
@@ -24,13 +24,14 @@ it('keeps withdrawal records server-only even for their owner', async () => {
   await assertFails(setDoc(doc(db, 'health_consent_withdrawals/u'), mark('active')));
 });
 
-it('allows owner read and denies telemetry writes during withdrawal', async () => {
+it('denies all direct fitness reads and writes after withdrawal', async () => {
   await env.withSecurityRulesDisabled(async context => {
     await setDoc(doc(context.firestore(), 'health_consent_withdrawals/u'), mark('withdrawn'));
     await setDoc(doc(context.firestore(), 'users/u'), { legacy: 'retained for export' });
   });
   const db = env.authenticatedContext('u', { email_verified: true }).firestore();
-  await assertSucceeds(getDoc(doc(db, 'users/u')));
+  await assertFails(getDoc(doc(db, 'users/u')));
+  await assertFails(deleteDoc(doc(db, 'users/u/telemetry_events/one')));
   await assertFails(setDoc(doc(db, 'users/u/telemetry_events/one'), {
     timestamp: Date.now(), type: 'workout_started', userId: 'u', sessionId: 's',
     context: { appVersion: '1.0', platform: 'other', displayMode: 'browser', online: true },

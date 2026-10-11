@@ -6,6 +6,9 @@ import { useDialogStore } from '../store/useDialogStore';
 import { DB } from '../lib/db';
 import { captureSession, isCurrentSession } from '../lib/sync/session';
 import { collectBackupSnapshot } from '../lib/db/backupSnapshot';
+import { readLocal } from '../lib/sync/localRepository';
+import { UserDataSchema } from '../lib/schema';
+import { currentHealthConsentStatus } from '../lib/healthConsent';
 import type { ImportMode } from '../lib/backup';
 import { isAccountDeletionPending } from '../lib/sync/accountGate';
 import {
@@ -93,12 +96,14 @@ export function useSettings() {
 
     const handleExportBackup = async () => {
         if (exportBusy.current) return;
-        const userData = useAppStore.getState().userData;
-        if (!userData) return;
         const session = captureSession();
+        const stateData = useAppStore.getState().userData;
+        if (!stateData && (session.owner === 'guest' || currentHealthConsentStatus(session.owner.slice(5)) === 'active')) return;
         exportBusy.current = true;
         setExportingData(true);
         try {
+            const envelope = stateData ? undefined : await readLocal(session.owner);
+            const userData = stateData ?? envelope?.data ?? (UserDataSchema.parse({}) as NonNullable<typeof stateData>);
             try { await useAppStore.getState().flushPendingSyncs(); }
             catch { /* A rejected cloud write must not prevent exporting its durable local copy. */ }
             if (!isCurrentSession(session)) throw new Error('Sessione cambiata.');
