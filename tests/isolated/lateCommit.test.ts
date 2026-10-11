@@ -53,6 +53,7 @@ it('keeps the account journal pending when consent is missing, without starting 
 
     const result = await replicateJournal();
     expect(result.status).toBe('local-pending');
+    if (result.ok) throw new Error('La replica senza consenso non doveva riuscire.');
     expect(result.error).toMatchObject({ code: 'legal-consent-required' });
     expect(remote.apply).not.toHaveBeenCalled();
 
