@@ -29,7 +29,7 @@ describe('PWA IndexedDB Cache & Sync Lock Refactor Suite', () => {
   describe('R1 & R2: IndexedDB UserData Cache & Zustand Integration', () => {
     test('Zustand store initializes userData from window.__INITIAL_USER_DATA__ synchronously', () => {
       const mockInitialData: UserData = {
-        profile: { name: 'Initial Pre-Booted User', height: '178' },
+        profile: { height: '178' },
         library: [],
         routines: [],
         history: [],
@@ -43,12 +43,12 @@ describe('PWA IndexedDB Cache & Sync Lock Refactor Suite', () => {
 
       // When store is reset/re-evaluated or setUserData with initial
       useAppStore.setState({ userData: window.__INITIAL_USER_DATA__ });
-      expect(useAppStore.getState().userData?.profile?.name).toBe('Initial Pre-Booted User');
+      expect(useAppStore.getState().userData?.profile?.height).toBe('178');
     });
 
     test('saveUserData and setUserData write to IndexedDB via idb-keyval instead of localStorage', async () => {
       const mockData: UserData = {
-        profile: { name: 'Cache Test User', height: '185' },
+        profile: { height: '185' },
         library: [],
         routines: [],
         history: [],
@@ -64,7 +64,7 @@ describe('PWA IndexedDB Cache & Sync Lock Refactor Suite', () => {
 
       // IndexedDB store mock should receive the item
       expect(idbStore['logbook:v2:user:test-user-id']).toBeDefined();
-      expect(idbStore['logbook:v2:user:test-user-id'].data.profile.name).toBe('Cache Test User');
+      expect(idbStore['logbook:v2:user:test-user-id'].data.profile.height).toBe('185');
 
       // LocalStorage should NOT contain logbook_cached_user_data
       expect(localStorage.getItem('logbook_cached_user_data')).toBeNull();
@@ -72,7 +72,7 @@ describe('PWA IndexedDB Cache & Sync Lock Refactor Suite', () => {
 
     test('setUserData(null) clears the view and preserves the durable archive', async () => {
       const mockData: UserData = {
-        profile: { name: 'User to Nullify' },
+        profile: { height: '170' },
         library: [],
         routines: [],
         history: [],
@@ -96,7 +96,7 @@ describe('PWA IndexedDB Cache & Sync Lock Refactor Suite', () => {
       vi.useFakeTimers();
 
       const mockData: UserData = {
-        profile: { name: 'Pending User' },
+        profile: { height: '171' },
         library: [],
         routines: [],
         history: [],
@@ -127,7 +127,7 @@ describe('PWA IndexedDB Cache & Sync Lock Refactor Suite', () => {
 
     test('explicit purge removes the owner archive and clears the view', async () => {
       const mockData: UserData = {
-        profile: { name: 'User to Clear' },
+        profile: { height: '172' },
         library: [],
         routines: [],
         history: [],
@@ -152,7 +152,7 @@ describe('PWA IndexedDB Cache & Sync Lock Refactor Suite', () => {
         id: 'session-123',
         date: '2026-08-14',
         routineName: 'Chest Day',
-        duration: '30m',
+        manualDurationStr: '00:30:00',
         exercises: []
       };
 
@@ -182,15 +182,15 @@ describe('PWA IndexedDB Cache & Sync Lock Refactor Suite', () => {
       expect(getInitialUserData()).toBeNull();
 
       // 3. Partial object gets sanitized via UserDataSchema defaults
-      (window as any).__INITIAL_USER_DATA__ = { profile: { name: 'Partially Loaded' } };
+      (window as any).__INITIAL_USER_DATA__ = { profile: { height: '173' } };
       const sanitized = getInitialUserData();
       expect(sanitized).not.toBeNull();
-      expect(sanitized?.profile?.name).toBe('Partially Loaded');
+      expect(sanitized?.profile?.height).toBe('173');
       expect(Array.isArray(sanitized?.routines)).toBe(true);
 
       // 3. Valid parsed object
       const validData: UserData = {
-        profile: { name: 'Valid User' },
+        profile: { height: '174' },
         library: [],
         routines: [],
         history: [],
@@ -201,14 +201,14 @@ describe('PWA IndexedDB Cache & Sync Lock Refactor Suite', () => {
       };
       window.__INITIAL_USER_DATA__ = validData;
       useAppStore.setState({ userData: window.__INITIAL_USER_DATA__ });
-      expect(useAppStore.getState().userData?.profile?.name).toBe('Valid User');
+      expect(useAppStore.getState().userData?.profile?.height).toBe('174');
     });
 
     test('saveUserData sets syncing to true during debounce and false upon completion', async () => {
       vi.useFakeTimers();
 
       const mockData: UserData = {
-        profile: { name: 'Async Save User' },
+        profile: { height: '175' },
         library: [],
         routines: [],
         history: [],
@@ -239,8 +239,7 @@ describe('PWA IndexedDB Cache & Sync Lock Refactor Suite', () => {
       vi.useFakeTimers();
       const { DB } = await import('../src/lib/db');
 
-      let resolveFirstWrite: ((val: any) => void) | null = null;
-      let resolveSecondWrite: ((val: any) => void) | null = null;
+      const pendingResolvers: Array<(val: any) => void> = [];
 
       const originalSave = DB.saveUserData;
       let callCount = 0;
@@ -248,17 +247,17 @@ describe('PWA IndexedDB Cache & Sync Lock Refactor Suite', () => {
         callCount++;
         if (callCount === 1) {
           return new Promise<any>((resolve) => {
-            resolveFirstWrite = resolve;
+            pendingResolvers.push(resolve);
           });
         } else {
           return new Promise<any>((resolve) => {
-            resolveSecondWrite = resolve;
+            pendingResolvers.push(resolve);
           });
         }
       });
 
       const mockData1: UserData = {
-        profile: { name: 'First Mutation' },
+        profile: { height: '176' },
         library: [],
         routines: [],
         history: [],
@@ -270,7 +269,7 @@ describe('PWA IndexedDB Cache & Sync Lock Refactor Suite', () => {
 
       const mockData2: UserData = {
         ...mockData1,
-        profile: { name: 'Second Mutation' }
+        profile: { height: '177' }
       };
 
       // 1. Trigger first save
@@ -287,7 +286,7 @@ describe('PWA IndexedDB Cache & Sync Lock Refactor Suite', () => {
       expect(useAppStore.getState().syncing).toBe(true);
 
       // 4. First network write finishes while second save is debouncing
-      if (resolveFirstWrite) resolveFirstWrite({ ok: true, status: 'synced' });
+      pendingResolvers[0]?.({ ok: true, status: 'synced' });
       await vi.advanceTimersByTimeAsync(100);
 
       // CRITICAL: syncing MUST remain TRUE because second save is still debouncing
@@ -299,7 +298,7 @@ describe('PWA IndexedDB Cache & Sync Lock Refactor Suite', () => {
       expect(useAppStore.getState().syncing).toBe(true);
 
       // 6. Second network write finishes
-      if (resolveSecondWrite) resolveSecondWrite({ ok: true, status: 'synced' });
+      pendingResolvers[1]?.({ ok: true, status: 'synced' });
       await vi.advanceTimersByTimeAsync(50);
       await Promise.all([p1, p2]);
 
@@ -314,7 +313,7 @@ describe('PWA IndexedDB Cache & Sync Lock Refactor Suite', () => {
       vi.useFakeTimers();
 
       const mockData: UserData = {
-        profile: { name: 'Pending Cancel User' },
+        profile: { height: '178' },
         library: [],
         routines: [],
         history: [],
@@ -346,7 +345,7 @@ describe('PWA IndexedDB Cache & Sync Lock Refactor Suite', () => {
         id: 'session-vis-test',
         date: '2026-08-14',
         routineName: 'Leg Day',
-        duration: '45m',
+        manualDurationStr: '00:45:00',
         exercises: []
       };
 

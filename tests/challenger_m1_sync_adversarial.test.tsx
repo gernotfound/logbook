@@ -103,14 +103,14 @@ describe('Empirical Challenger: M1 Background Sync & Error Toast Stress Suite', 
             syncing: i % 2 === 0,
             userData: {
               ...prev.userData!,
-              profile: { ...prev.userData?.profile, name: `Lifter ${i}` }
+              profile: { ...prev.userData?.profile, height: String(170 + i) }
             }
           }));
         }
       });
 
       expect(container.querySelector('#sync-overlay')).toBeNull();
-      expect(useAppStore.getState().userData?.profile?.name).toBe('Lifter 49');
+      expect(useAppStore.getState().userData?.profile?.height).toBe('219');
       // 49 is odd -> syncing is false
       expect(container.querySelector('.sync-indicator')).toBeNull();
     });
@@ -216,12 +216,12 @@ describe('Empirical Challenger: M1 Background Sync & Error Toast Stress Suite', 
           ...prev,
           userData: {
             ...prev.userData!,
-            profile: { ...prev.userData?.profile, name: 'Concurrent Lifter' }
+            profile: { ...prev.userData?.profile, height: '180' }
           }
         }));
       });
 
-      expect(useAppStore.getState().userData?.profile?.name).toBe('Concurrent Lifter');
+      expect(useAppStore.getState().userData?.profile?.height).toBe('180');
       expect(container.querySelector('#sync-overlay')).toBeNull();
     });
 

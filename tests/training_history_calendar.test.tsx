@@ -15,8 +15,8 @@ const history: WorkoutSession[] = [
     globalStartTime: septemberEvening,
     globalEndTime: septemberEvening + 70 * 60 * 1000,
     exercises: [
-      { exId: 'ex1', sets: [{ id: 's1', kg: '80', reps: '10' }] },
-      { exId: 'ex2', sets: [{ id: 's2', kg: '100', reps: '5' }] },
+      { exId: 'ex1', sessionNote: '', sets: [{ id: 's1', kg: '80', reps: '10' }] },
+      { exId: 'ex2', sessionNote: '', sets: [{ id: 's2', kg: '100', reps: '5' }] },
     ],
   },
   {
@@ -26,7 +26,7 @@ const history: WorkoutSession[] = [
     globalStartTime: septemberMorning,
     manualDurationStr: '35 min',
     exercises: [
-      { exId: 'ex1', sets: [{ id: 's3', kg: '70', reps: '12' }] },
+      { exId: 'ex1', sessionNote: '', sets: [{ id: 's3', kg: '70', reps: '12' }] },
     ],
   },
   {
@@ -35,7 +35,7 @@ const history: WorkoutSession[] = [
     routineName: 'Sessione di agosto',
     globalDurationStr: '01:00:00',
     exercises: [
-      { exId: 'ex1', sets: [{ id: 's4', kg: '75', reps: '10' }] },
+      { exId: 'ex1', sessionNote: '', sets: [{ id: 's4', kg: '75', reps: '10' }] },
     ],
   },
 ];

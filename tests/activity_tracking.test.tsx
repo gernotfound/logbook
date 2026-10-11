@@ -146,7 +146,7 @@ describe('activity export and local-day behavior', () => {
         const download = vi.spyOn(Exporter, 'downloadFile').mockImplementation(async () => true);
         vi.spyOn(useDialogStore.getState(), 'showAlert').mockImplementation(() => undefined as any);
         await Exporter.exportToCSV([], {
-            '2026-09-24': { date: '2026-09-24', steps: 9842, stepsSource: 'manual', stepsCapturedAt: 1000, cardioSessions: [{ ...cardio('c1', 35), averageHeartRate: 132, distanceKm: 2.1 }] },
+            '2026-09-24': { date: '2026-09-24', kcal: 0, carbs: 0, pro: 0, fat: 0, steps: 9842, stepsSource: 'manual', stepsCapturedAt: 1000, cardioSessions: [{ ...cardio('c1', 35), averageHeartRate: 132, distanceKm: 2.1 }] },
         }, []);
         await vi.advanceTimersByTimeAsync(1600);
         const byName = new Map(download.mock.calls.map(call => [call[0], call[1]]));

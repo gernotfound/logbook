@@ -30,7 +30,7 @@ describe('Zod Schema Fallback & Telemetry Integration (Milestone 3 R1)', () => {
         Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
 
         mockSetDoc = vi.spyOn(sentryClient, 'sendTelemetryToSentry').mockResolvedValue(true);
-        vi.spyOn(firebaseLib, 'ensureAppCheck').mockResolvedValue(undefined);
+        vi.spyOn(firebaseLib, 'ensureAppCheck').mockResolvedValue({ success: true, appCheck: null, isFallbackOffline: false, phase: 'token-ready', providerInitialized: true, tokenAvailable: true, retryable: false });
         vi.spyOn(firebaseLib, 'getDb').mockReturnValue({} as any);
 
         setSchemaFallbackListener(null);

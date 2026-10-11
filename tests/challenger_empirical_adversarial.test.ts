@@ -4,7 +4,7 @@ import { doc, getDoc, writeBatch } from 'firebase/firestore';
 vi.unmock('../src/lib/db');
 import { TestDB as DB } from './testUtils';
 import { DomainParsers, UserDataSchema } from '../src/lib/schema';
-import type {} from '../src/types';
+import type { UserData } from '../src/types';
 
 vi.mock('../src/lib/firebase', () => ({
     auth: {
@@ -194,7 +194,7 @@ describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & D
         });
 
         it('1.5: Accumulates offline state mutations across multiple failures and commits the complete aggregate state on recovery', async () => {
-            const state1 = createBaseState();
+            const state1: UserData = createBaseState();
             await DB.saveUserData(state1);
             mockBatch.set.mockClear();
             mockBatch.commit.mockClear();
@@ -209,7 +209,7 @@ describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & D
             mockBatch.commit.mockRejectedValueOnce(timeoutErr);
             const state3 = {
                 ...state2,
-                routines: [...state2.routines, { id: 'r_2', name: 'Pull', exercises: [] }]
+                routines: [...(state2.routines ?? []), { id: 'r_2', name: 'Pull', exercises: [] }]
             };
             await DB.saveUserData(state3);
 
@@ -218,7 +218,7 @@ describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & D
             const state4 = {
                 ...state3,
                 history: [
-                    ...state3.history,
+                    ...(state3.history ?? []),
                     { id: 'h_2', date: '2026-08-17', exercises: [] }
                 ]
             };
@@ -280,7 +280,7 @@ describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & D
             const saveRes = await DB.saveUserData(oversizedState);
             expect(saveRes.ok).toBe(false);
             expect(saveRes.status).toBe('failed');
-            expect(String(saveRes.error)).toMatch(/supera il limite di dimensione/);
+            expect(String('error' in saveRes ? saveRes.error : undefined)).toMatch(/supera il limite di dimensione/);
             expect(mockBatch.commit).not.toHaveBeenCalled();
 
             // A later clean semantic update must supersede the oversized pending operation and sync successfully.
@@ -366,11 +366,11 @@ describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & D
             const loaded = await DB.loadUserData();
 
             expect(loaded).not.toBeNull();
-            expect(loaded?.profile.height).toBe('178');
+            expect(loaded?.profile?.height).toBe('178');
             expect(loaded?.history).toHaveLength(2);
-            expect(loaded?.history[0].id).toBe('h_m0'); // Sorted by globalStartTime descending
-            expect(loaded?.history[1].id).toBe('h_m1');
-            expect(loaded?.nutrition[`${m2}-05`]).toBeDefined();
+            expect(loaded?.history?.[0]?.id).toBe('h_m0'); // Sorted by globalStartTime descending
+            expect(loaded?.history?.[1]?.id).toBe('h_m1');
+            expect(loaded?.nutrition?.[`${m2}-05`]).toBeDefined();
 
             // Total getDoc calls must be exactly 1 (manifest) + 1 (user) + 3 (history) + 3 (nutrition) = 8
             expect(getDoc).toHaveBeenCalledTimes(8);
@@ -454,7 +454,7 @@ describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & D
             // 1 user doc + 5 history month docs = 6 business-document writes.
             expect(setCalls).toHaveLength(6);
 
-            const monthDocsWritten = setCalls
+            const monthDocsWritten: string[] = setCalls
                 .map((c: any) => c[0]?.path || '')
                 .filter((p: string) => p.includes('history_months'));
 
@@ -764,6 +764,7 @@ describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & D
             };
 
             const parsedPlanning = DomainParsers.parseNutritionPlanning(rawPlanning);
+            if (!parsedPlanning) throw new Error('La pianificazione valida non deve essere null');
             expect(parsedPlanning.weight).toBe(82.5);
             expect(parsedPlanning.onDaysCount).toBe(4);
             expect(parsedPlanning.avgMacros?.carbsPerKg).toBe(4);

@@ -7,7 +7,7 @@ vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackEvent: vi.fn
 
 import { applyDocumentChanges, CloudDataIntegrityError } from '../../src/lib/sync/transactionWriter';
 import type { SemanticOperation } from '../../src/lib/sync/semanticProjection';
-import { registerReplica } from './replicaHarness';
+import { registerReplica, asModularFirestore } from './replicaHarness';
 import { CURRENT_DATA_SCHEMA, CURRENT_SYNC_PROTOCOL } from '../../src/lib/schemaEvolution';
 
 let env: RulesTestEnvironment;
@@ -53,16 +53,16 @@ it('blocks an unrelated root write instead of replacing malformed existing cloud
     };
 
     await env.withSecurityRulesDisabled(async context => {
-        await setDoc(doc(context.firestore(), 'users/a'), original);
+        await setDoc(doc(asModularFirestore(context.firestore()), 'users/a'), original);
     });
 
-    const db = env.authenticatedContext('a', { email_verified: true }).firestore();
+    const db = asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore());
     const replica = await registerReplica(db, 'a');
     await expect(applyDocumentChanges(db, 'a', [profileHeightOp()], () => true, replica))
         .rejects.toBeInstanceOf(CloudDataIntegrityError);
 
     await env.withSecurityRulesDisabled(async context => {
-        const saved = (await getDoc(doc(context.firestore(), 'users/a'))).data();
+        const saved = (await getDoc(doc(asModularFirestore(context.firestore()), 'users/a'))).data();
         expect(saved).toEqual(original);
     });
 });
@@ -80,7 +80,7 @@ it('blocks a monthly write when another entity in the same shard would be destru
     };
 
     await env.withSecurityRulesDisabled(async context => {
-        await setDoc(doc(context.firestore(), 'users/a/nutrition_months/2026-09'), original);
+        await setDoc(doc(asModularFirestore(context.firestore()), 'users/a/nutrition_months/2026-09'), original);
     });
 
     const op: SemanticOperation = {
@@ -93,13 +93,13 @@ it('blocks a monthly write when another entity in the same shard would be destru
         clock: { s00: 1 },
     };
 
-    const db = env.authenticatedContext('a', { email_verified: true }).firestore();
+    const db = asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore());
     const replica = await registerReplica(db, 'a');
     await expect(applyDocumentChanges(db, 'a', [op], () => true, replica))
         .rejects.toBeInstanceOf(CloudDataIntegrityError);
 
     await env.withSecurityRulesDisabled(async context => {
-        const saved = (await getDoc(doc(context.firestore(), 'users/a/nutrition_months/2026-09'))).data();
+        const saved = (await getDoc(doc(asModularFirestore(context.firestore()), 'users/a/nutrition_months/2026-09'))).data();
         expect(saved).toEqual(original);
     });
 });
@@ -117,7 +117,7 @@ it('allows an explicitly lossless scalar normalization while applying the semant
     };
 
     await env.withSecurityRulesDisabled(async context => {
-        await setDoc(doc(context.firestore(), 'users/a/nutrition_months/2026-09'), original);
+        await setDoc(doc(asModularFirestore(context.firestore()), 'users/a/nutrition_months/2026-09'), original);
     });
 
     const op: SemanticOperation = {
@@ -130,7 +130,7 @@ it('allows an explicitly lossless scalar normalization while applying the semant
         clock: { s00: 1 },
     };
 
-    const db = env.authenticatedContext('a', { email_verified: true }).firestore();
+    const db = asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore());
     const replica = await registerReplica(db, 'a');
     await applyDocumentChanges(db, 'a', [op], () => true, replica);
 

@@ -20,8 +20,8 @@ const routines: WorkoutRoutine[] = [
 ];
 
 const library: Exercise[] = [
-    { id: 'bench', name: 'Panca piana', muscles: ['chest-upper', 'chest-lower'] },
-    { id: 'squat', name: 'Squat', muscles: ['quads', 'glutes'] }
+    { id: 'bench', name: 'Panca piana', muscles: ['chest-upper', 'chest-lower'], setsCount: 4, sets: [] },
+    { id: 'squat', name: 'Squat', muscles: ['quads', 'glutes'], setsCount: 4, sets: [] }
 ];
 
 describe('Pianificazione redesign', () => {

@@ -9,7 +9,7 @@ import { storageOwner } from '../src/lib/sync/session';
 import { mergeUserData } from '../src/lib/merge';
 import { useAppStore } from '../src/store/useAppStore';
 import { clearSyncTimers } from '../src/store/slices/createSyncSlice';
-import type { UserData } from '../src/types';
+import type { UserData, SyncResult } from '../src/types';
 import { idbStore } from './setup';
 
 vi.mock('../src/lib/firebase', () => ({
@@ -102,7 +102,7 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
             vi.useFakeTimers();
 
             const createMockData = (i: number): UserData => ({
-                profile: { name: `Rapid Saver Mutation ${i}` },
+                profile: { height: String(170 + i) },
                 library: [],
                 customFoods: [],
                 catalogOverrides: {},
@@ -118,7 +118,7 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
             useAppStore.getState().setUserData(createMockData(0));
 
             // Trigger 10 rapid mutations
-            const promises: Promise<void>[] = [];
+            const promises: Promise<SyncResult>[] = [];
             for (let i = 1; i <= 10; i++) {
                 promises.push(useAppStore.getState().saveUserData(createMockData(i)));
             }
@@ -139,7 +139,7 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
             }
 
             expect(useAppStore.getState().syncing).toBe(false);
-            expect(useAppStore.getState().userData?.profile?.name).toBe('Rapid Saver Mutation 10');
+            expect(useAppStore.getState().userData?.profile?.height).toBe('180');
 
             vi.useRealTimers();
         });
@@ -147,7 +147,7 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
         it('T5.5.3: Error propagation in saveUserData: if DB.saveUserData throws, all coalesced Promises reject, saveError is set, and syncing resets to false', async () => {
             // Test error propagation directly with simulated rejection in saveUserData pipeline
             const createMockData = (label: string): UserData => ({
-                profile: { name: label },
+                profile: { height: label === 'DirectSaveFail' ? '181' : '182' },
                 library: [],
                 customFoods: [],
                 catalogOverrides: {},
@@ -175,7 +175,7 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
             vi.mocked(getDoc).mockResolvedValueOnce({
                 exists: () => true,
                 data: () => ({
-                    profile: { name: 'Initial' },
+                    profile: { height: '172' },
                     library: [],
                     customFoods: [],
                     catalogOverrides: {},
@@ -197,6 +197,7 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
             const result = await DB.saveUserData(createMockData('DirectSaveFail'));
             expect(result.ok).toBe(false);
             expect(result.status).toBe('failed');
+            if (result.ok) throw new Error('A failed cloud write cannot report success');
             expect((result.error as Error).message).toContain("Firestore Network Failure");
 
             // Verify store error handling when saveError is set
@@ -206,7 +207,7 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
 
         it('T5.5.4: Account linking during pending debounced save merges freshest in-memory state without data loss', () => {
             const cloudData: UserData = {
-                profile: { name: 'Cloud Account' },
+                profile: { height: '173' },
                 library: [{ id: 'cloud_ex_1', name: 'Cloud Ex', setsCount: 3, sets: [], isDefault: false }],
                 customFoods: [],
                 catalogOverrides: {},
@@ -221,7 +222,7 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
 
             // Guest performs multiple state updates in memory
             const initialGuestState: UserData = {
-                profile: { name: 'Guest In-Flight' },
+                profile: { height: '174' },
                 library: [{ id: 'guest_ex_1', name: 'Guest Ex Initial', setsCount: 3, sets: [], isDefault: false }],
                 customFoods: [{ id: 'guest_food_1', name: 'Guest Food Initial', kcal: 100, pro: 10, carbs: 10, fat: 2, isCustom: true }],
                 catalogOverrides: {},
@@ -267,7 +268,7 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
             });
 
             useAppStore.getState().setUserData({
-                profile: { name: 'Pre-Reset User' },
+                profile: { height: '175' },
                 library: [],
                 customFoods: [],
                 catalogOverrides: {},
@@ -283,7 +284,7 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
             // Start a debounced save
             useAppStore.getState().saveUserData(prev => ({
                 ...prev!,
-                profile: { name: 'Ghost Name' }
+                profile: { height: '176' }
             })).catch(() => {});
 
             expect(useAppStore.getState().syncing).toBe(true);

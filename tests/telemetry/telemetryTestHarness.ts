@@ -23,6 +23,7 @@ export function installTelemetryTestHarness(): void {
       phase: 'token-ready',
       providerInitialized: true,
       tokenAvailable: true,
+      retryable: false,
     });
     vi.spyOn(firebaseLib, 'getDb').mockReturnValue({} as any);
 

@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as sentryClient from '../src/lib/sentryClient';
+import type { TelemetryErrorPayload } from '../src/lib/telemetry/contracts';
 import { z } from 'zod';
 import {
   scrubPII,

@@ -207,7 +207,7 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
     describe('Scope 2: Race Condition & Reconcile (In-flight Sync Protection)', () => {
         it('preserves local uncommitted nutrition and customFoods when cloudData returns during sync', () => {
             const staleCloudData: UserData = {
-                profile: { name: 'Cloud User' },
+                profile: { height: '175' },
                 library: [{ id: 'ex1', name: 'Panca piana', setsCount: 3, sets: [] }],
                 routines: [{ id: 'r1', name: 'Spinta', exercises: [] }],
                 history: [],
@@ -228,7 +228,7 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
             };
 
             const localPendingData: UserData = {
-                profile: { name: 'Cloud User' },
+                profile: { height: '175' },
                 library: [
                     { id: 'ex1', name: 'Panca piana', setsCount: 3, sets: [] },
                     { id: 'ex2', name: 'Croci manubri', setsCount: 3, sets: [] } // Added locally
@@ -264,23 +264,23 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
 
             // Verify local items were NOT deleted by cloudData
             expect(merged.customFoods).toHaveLength(2);
-            expect(merged.customFoods.some(f => f.name === 'Barretta Proteica')).toBe(true);
+            expect(merged.customFoods?.some(f => f.name === 'Barretta Proteica')).toBe(true);
 
             expect(merged.library).toHaveLength(2);
-            expect(merged.library.some(e => e.id === 'ex2')).toBe(true);
+            expect(merged.library?.some(e => e.id === 'ex2')).toBe(true);
 
-            expect(merged.nutrition['2026-08-16']).toBeDefined();
-            expect(merged.nutrition['2026-08-16'].meals).toHaveLength(1);
-            expect(merged.nutrition['2026-08-16'].meals[0].name).toBe('Riso e Pollo');
-            expect(merged.nutrition['2026-08-15']).toBeDefined();
+            expect(merged.nutrition?.['2026-08-16']).toBeDefined();
+            expect(merged.nutrition?.['2026-08-16']?.meals).toHaveLength(1);
+            expect(merged.nutrition?.['2026-08-16']?.meals?.[0]?.name).toBe('Riso e Pollo');
+            expect(merged.nutrition?.['2026-08-15']).toBeDefined();
 
             expect(merged.supplements).toHaveLength(1);
-            expect(merged.supplements[0].id).toBe('creatina');
+            expect(merged.supplements?.[0]?.id).toBe('creatina');
         });
 
         it('handles collision deterministically with local mutation priority', () => {
             const cloudData: UserData = {
-                profile: { name: 'Cloud User', height: '175' },
+                profile: { height: '175' },
                 library: [],
                 routines: [],
                 history: [],
@@ -301,7 +301,7 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
             };
 
             const localData: UserData = {
-                profile: { name: 'Cloud User', height: '180' }, // Mutated height
+                profile: { height: '180' }, // Mutated height
                 library: [],
                 routines: [],
                 history: [],
@@ -327,10 +327,10 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
 
             const merged = mergeUserData(cloudData, localData);
 
-            expect(merged.profile.height).toBe('180');
-            expect(merged.customFoods[0].name).toBe('Mutated Local Name');
-            expect(merged.nutrition['2026-08-16'].meals).toHaveLength(2);
-            expect(merged.nutrition['2026-08-16'].meals.find(m => m.id === 'meal_1')?.name).toBe('Pasta con Tonno');
+            expect(merged.profile?.height).toBe('180');
+            expect(merged.customFoods?.[0]?.name).toBe('Mutated Local Name');
+            expect(merged.nutrition?.['2026-08-16']?.meals).toHaveLength(2);
+            expect(merged.nutrition?.['2026-08-16']?.meals?.find(m => m.id === 'meal_1')?.name).toBe('Pasta con Tonno');
         });
     });
 
@@ -590,7 +590,7 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
                     fields: {},
                     writer: { slot: 's00', replicaId: 'window-seed', generation: 1, seq: 0 },
                 },
-                profile: { name: 'Window User' },
+                profile: { height: '180' },
                 library: [],
                 routines: [],
                 customFoods: [],
@@ -612,7 +612,7 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
             const loaded = await DB.loadUserData();
 
             expect(loaded).not.toBeNull();
-            expect(loaded?.profile.name).toBe('Window User');
+            expect(loaded?.profile?.height).toBe('180');
             // getDoc should be called: 1 for manifest + 1 for userDoc + 3 for history_months + 3 for nutrition_months = 8 calls total
             expect(getDoc).toHaveBeenCalledTimes(8);
         });

@@ -155,7 +155,7 @@ it('preserves a concurrent authenticated change while durably replaying this tab
     await prepareForReload();
 
     const durable = await readLocal('user:a');
-    expect(durable?.data.profile.height).toBe('171');
+    expect(durable?.data.profile?.height).toBe('171');
     expect(durable?.data.routines?.map(routine => routine.id)).toContain('routine-a');
     expect(durable?.pending.some(op => op.isDelete && op.path.includes('routine-a'))).toBe(false);
 });

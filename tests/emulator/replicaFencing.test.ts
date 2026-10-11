@@ -8,6 +8,7 @@ import {
 } from '@firebase/rules-unit-testing';
 import { doc, getDoc, setDoc, writeBatch } from 'firebase/firestore';
 import { claimReplicaCheckpoint } from '../../src/lib/sync/replicaProtocol';
+import { asModularFirestore } from './replicaHarness';
 
 let env: RulesTestEnvironment;
 
@@ -26,7 +27,7 @@ afterAll(async () => { await env?.cleanup(); });
 
 it('deduplicates concurrent first claims from tabs sharing one local actor identity', async () => {
     const uid = 'a';
-    const db = env.authenticatedContext(uid, { email_verified: true }).firestore();
+    const db = asModularFirestore(env.authenticatedContext(uid, { email_verified: true }).firestore());
     const candidate = 'shared-local-actor';
     const [left, right] = await Promise.all([
         claimReplicaCheckpoint(db, uid, null, {}, 0, candidate),
@@ -43,13 +44,13 @@ it('deduplicates concurrent first claims from tabs sharing one local actor ident
 
 it('fences an old replica generation after an expired slot is reused', async () => {
     const uid = 'a';
-    const db = env.authenticatedContext(uid, { email_verified: true }).firestore();
+    const db = asModularFirestore(env.authenticatedContext(uid, { email_verified: true }).firestore());
     const controlRef = doc(db, 'users/' + uid + '/sync_control/state');
     const rootRef = doc(db, 'users/' + uid);
     const now = Date.now();
 
     await env.withSecurityRulesDisabled(async context => {
-        await setDoc(doc(context.firestore(), 'users/' + uid + '/sync_control/state'), {
+        await setDoc(doc(asModularFirestore(context.firestore()), 'users/' + uid + '/sync_control/state'), {
             protocolVersion: 3,
             replicas: {
                 s00: {
@@ -120,7 +121,7 @@ it('fences an old replica generation after an expired slot is reused', async () 
 
 it('rejects Protocol 1/2 writers both before and after the account creates its replica-control barrier', async () => {
     const uid = 'a';
-    const db = env.authenticatedContext(uid, { email_verified: true }).firestore();
+    const db = asModularFirestore(env.authenticatedContext(uid, { email_verified: true }).firestore());
     const rootRef = doc(db, 'users/' + uid);
 
     for (const protocolVersion of [1, 2]) {

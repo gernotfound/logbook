@@ -152,7 +152,7 @@ describe('EMPIRICAL CHALLENGER: Adversarial Stress & Robustness Suite (R2, R3, R
      * ========================================================================= */
     describe('R3 Adversarial: Zustand saveUserData Concurrency & Promise Rejection Stress', () => {
         const createMockUserData = (index: number): UserData => ({
-            profile: { name: `Adversarial User ${index}`, height: `${170 + index}` },
+            profile: { height: `${170 + index}` },
             library: [{ id: `ex_${index}`, name: `Exercise ${index}`, setsCount: 3, sets: [] }],
             routines: [],
             history: [],
@@ -215,13 +215,13 @@ describe('EMPIRICAL CHALLENGER: Adversarial Stress & Robustness Suite (R2, R3, R
             expect(saveSpy).toHaveBeenCalledTimes(1);
             // Must have received the 50th payload (freshest state)
             expect(saveSpy).toHaveBeenCalledWith(expect.objectContaining({
-                profile: expect.objectContaining({ name: 'Adversarial User 50', height: '220' })
+                profile: expect.objectContaining({ height: '220' })
             }), expect.any(Number));
 
             // Final store state must be clean
             expect(useAppStore.getState().syncing).toBe(false);
             expect(useAppStore.getState().saveError).toBeNull();
-            expect(useAppStore.getState().userData?.profile?.name).toBe('Adversarial User 50');
+            expect(useAppStore.getState().userData?.profile?.height).toBe('220');
         });
 
         it('BURST STRESS (50 Concurrent Calls - Rejection): when debounced DB write fails, ALL 50 caller promises reject with the identical error', async () => {
@@ -281,7 +281,7 @@ describe('EMPIRICAL CHALLENGER: Adversarial Stress & Robustness Suite (R2, R3, R
             r2.forEach(res => expect(res.status).toBe('fulfilled'));
             expect(useAppStore.getState().saveError).toBeNull();
             expect(useAppStore.getState().syncing).toBe(false);
-            expect(useAppStore.getState().userData?.profile?.name).toBe('Adversarial User 14');
+            expect(useAppStore.getState().userData?.profile?.height).toBe('184');
 
             // Stage 3: Burst of 10 Failures
             const stage3Err = new Error('Stage 3 Firestore Timeout');
@@ -314,7 +314,7 @@ describe('EMPIRICAL CHALLENGER: Adversarial Stress & Robustness Suite (R2, R3, R
             const p5 = useAppStore.getState().saveUserData(createMockUserData(100));
             await vi.advanceTimersByTimeAsync(1100);
             await expect(p5).resolves.toEqual({ ok: true, status: 'synced' });
-            expect(useAppStore.getState().userData?.profile?.name).toBe('Adversarial User 100');
+            expect(useAppStore.getState().userData?.profile?.height).toBe('270');
             expect(useAppStore.getState().saveError).toBeNull();
             expect(useAppStore.getState().syncing).toBe(false);
         });

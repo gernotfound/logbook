@@ -2,6 +2,13 @@ import { doc, getDoc, setDoc, type Firestore } from 'firebase/firestore';
 import type { ReplicaIdentity } from '../../src/lib/sync/replicaProtocol';
 import type { VectorClock } from '../../src/lib/sync/semanticProjection';
 
+// RulesTestEnvironment exposes the compat Firestore surface in its types.
+// Its emulator database is already exercised with the modular API throughout
+// these integration tests; this test-only adapter preserves the same instance.
+export function asModularFirestore<T extends object>(emulatorDb: T): Firestore {
+    return emulatorDb as unknown as Firestore;
+}
+
 export async function registerReplica(
     db: Firestore,
     uid: string,

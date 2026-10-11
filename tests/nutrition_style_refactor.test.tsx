@@ -279,6 +279,7 @@ renderWithProviders(
                     mealTypes={['Colazione', 'Pranzo']}
                     onEdit={vi.fn()}
                     onDelete={vi.fn()}
+                    onDuplicate={vi.fn()}
                     onQuickAddToMeal={vi.fn()}
                 />
             );

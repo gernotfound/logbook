@@ -182,14 +182,14 @@ describe('Challenger 2: Adversarial State Management, Schemas, Guest Merge & UI 
 
             const merged = mergeUserData(cloudData, guestData);
             expect(merged.library).toHaveLength(3);
-            const dip = merged.library.find(e => e.id === 'ex_dip');
+            const dip = merged.library?.find(e => e.id === 'ex_dip');
             expect(dip?.name).toBe('Dip alle parallele (Guest)');
             expect(dip?.isBodyweight).toBe(true);
             expect(dip?.equipmentWeight).toBe(10);
             expect(dip?.setsCount).toBe(4);
 
-            expect(merged.library.some(e => e.id === 'ex_squat')).toBe(true);
-            expect(merged.library.some(e => e.id === 'ex_pullup')).toBe(true);
+            expect(merged.library?.some(e => e.id === 'ex_squat')).toBe(true);
+            expect(merged.library?.some(e => e.id === 'ex_pullup')).toBe(true);
         });
 
         it('2.3 hasUserData returns true when only activePains or bodyweight exercises exist', () => {
@@ -228,8 +228,8 @@ describe('Challenger 2: Adversarial State Management, Schemas, Guest Merge & UI 
 
             expect(duration).toBeLessThan(500); // sub-500ms
             expect(merged.library).toHaveLength(500);
-            expect(merged.library[0].name).toBe('Guest Ex 0');
-            expect(merged.library[0].isBodyweight).toBe(true);
+            expect(merged.library?.[0]?.name).toBe('Guest Ex 0');
+            expect(merged.library?.[0]?.isBodyweight).toBe(true);
             expect(merged.activePains).toEqual(['chest', 'back_lats']);
         });
     });
@@ -273,23 +273,23 @@ describe('Challenger 2: Adversarial State Management, Schemas, Guest Merge & UI 
             const session: Partial<WorkoutSession> = {
                 exercises: [
                     {
-                        exId: 'lib_bench',
+                        exId: 'lib_bench', sessionNote: '',
                         sets: [
-                            { kg: '100', reps: '10' }, // 100 * 10 = 1000
-                            { kg: '100', reps: '8', dropsets: [{ kg: '80', reps: '5' }] } // 100*8 + 80*5 = 800 + 400 = 1200
+                            { id: 's1', kg: '100', reps: '10' }, // 100 * 10 = 1000
+                            { id: 's2', kg: '100', reps: '8', dropsets: [{ id: 's3', kg: '80', reps: '5' }] } // 100*8 + 80*5 = 800 + 400 = 1200
                         ]
                     },
                     {
-                        exId: 'lib_dips',
+                        exId: 'lib_dips', sessionNote: '',
                         sets: [
-                            { kg: '0', reps: '10' }, // (0 + 80) * 10 = 800
-                            { kg: '20', reps: '5' }   // (20 + 80) * 5 = 500
+                            { id: 's4', kg: '0', reps: '10' }, // (0 + 80) * 10 = 800
+                            { id: 's5', kg: '20', reps: '5' }   // (20 + 80) * 5 = 500
                         ]
                     },
                     {
-                        exId: 'lib_legpress',
+                        exId: 'lib_legpress', sessionNote: '',
                         sets: [
-                            { kg: '100', reps: '10' } // (100 + 45) * 10 = 1450
+                            { id: 's6', kg: '100', reps: '10' } // (100 + 45) * 10 = 1450
                         ]
                     }
                 ]

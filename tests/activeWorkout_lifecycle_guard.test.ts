@@ -130,6 +130,6 @@ describe('activeWorkout lifecycle guard', () => {
         };
 
         const result = applySemanticOperations(base, [child]);
-        expect(result.documents.get('')?.activeWorkout.exercises).toEqual([{ id: 'ex-1', name: 'Bench' }]);
+        expect(result.documents.get('')).toMatchObject({ activeWorkout: { exercises: [{ id: 'ex-1', name: 'Bench' }] } });
     });
 });

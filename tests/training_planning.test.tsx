@@ -551,6 +551,7 @@ describe('Training Planning & Volume Calculations', () => {
                     onToggleExpand={onToggle}
                     onEdit={onEdit}
                     onDelete={onDelete}
+                    onDuplicate={vi.fn()}
                 />
             );
 
@@ -590,6 +591,7 @@ describe('Training Planning & Volume Calculations', () => {
                     onToggleExpand={onToggle}
                     onEdit={onEdit}
                     onDelete={onDelete}
+                    onDuplicate={vi.fn()}
                 />
             );
 
@@ -616,6 +618,7 @@ describe('Training Planning & Volume Calculations', () => {
                     onToggleExpand={onToggle}
                     onEdit={onEdit}
                     onDelete={onDelete}
+                    onDuplicate={vi.fn()}
                 />
             );
 

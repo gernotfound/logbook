@@ -101,9 +101,10 @@ describe('DB Persistence for Training Cycles and Planning', () => {
         const loadedData = await DB.loadUserData();
 
         expect(loadedData).not.toBeNull();
-        expect(loadedData?.trainingCycles).toHaveLength(1);
-        expect(loadedData?.trainingCycles[0].id).toBe('cycle_loaded');
-        expect(loadedData?.trainingCycles[0].strategy).toEqual({
+        const loadedCycles = loadedData?.trainingCycles ?? [];
+        expect(loadedCycles).toHaveLength(1);
+        expect(loadedCycles[0].id).toBe('cycle_loaded');
+        expect(loadedCycles[0].strategy).toEqual({
             intent: 'maintenance',
             primaryMuscles: ['chest']
         });

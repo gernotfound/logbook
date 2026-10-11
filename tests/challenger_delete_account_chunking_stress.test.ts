@@ -71,10 +71,10 @@ describe('M7 client boundary: durable server-coordinated account deletion', () =
         boundary.waitForPendingWrites.mockResolvedValue(undefined);
         boundary.waitForJournalIdle.mockResolvedValue(undefined);
         boundary.getLimitedUseAppCheckToken.mockResolvedValue('app-check-token');
-        auth.currentUser = {
+        Object.assign(auth, { currentUser: {
             uid: 'test-user-id',
             getIdTokenResult: boundary.getIdTokenResult,
-        } as typeof auth.currentUser;
+        } as unknown as typeof auth.currentUser });
         vi.stubGlobal('fetch', vi.fn());
     });
 

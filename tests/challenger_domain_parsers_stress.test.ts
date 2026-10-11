@@ -377,6 +377,7 @@ describe('Challenger 2: DomainParsers Adversarial Stress Testing', () => {
             };
 
             const parsed = DomainParsers.parseNutritionPlanning(planning);
+            if (!parsed) throw new Error('Parser must return planning for this valid/fallback case');
             expect(parsed.weight).toBe(82);
             expect(parsed.onDaysCount).toBe(4);
             expect(parsed.avgMacros?.carbsPerKg).toBe(4.0);
@@ -392,6 +393,7 @@ describe('Challenger 2: DomainParsers Adversarial Stress Testing', () => {
             };
 
             const parsed = DomainParsers.parseNutritionPlanning(dirtyPlanning);
+            if (!parsed) throw new Error('Parser must return planning for this valid/fallback case');
             expect(parsed.weight).toBeUndefined(); // safeOptionalNumber returns undefined on invalid
             expect(parsed.avgMacros?.carbsPerKg).toBe(0);
             expect(parsed.avgMacros?.proPerKg).toBe(0);

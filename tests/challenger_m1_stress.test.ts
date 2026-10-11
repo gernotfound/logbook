@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
 import { removeUndefinedValues, isPlainObject } from '../src/lib/utils/object';
-import type { UserData } from '../src/types';
 
 /**
  * Adversarial validator that recursively traverses a data structure
@@ -436,7 +435,9 @@ describe('Empirical Challenger: removeUndefinedValues & Firestore Serialization 
     describe('8. Full UserData & Firestore Payloads Serialization Invariants', () => {
         it('guarantees ZERO undefined values in simulated userDocData, history_months, and nutrition_months', () => {
             // Construct a complete realistic UserData payload with pervasive undefined values in every collection
-            const mockFullState: UserData = {
+            // Deliberately legacy/malformed Firestore payload: this exercises undefined cleanup,
+            // not the validated application UserData contract.
+            const mockFullState = {
                 profile: {
                     displayName: 'Challenger Athlete',
                     gender: 'male',
@@ -639,10 +640,11 @@ describe('Empirical Challenger: removeUndefinedValues & Firestore Serialization 
 
             // 3. Simulate db.ts nutrition_months payload
             const nutMonths: Record<string, any> = {};
-            Object.keys(mockFullState.nutrition).forEach(date => {
+            const nutritionByDate: Record<string, unknown> = mockFullState.nutrition;
+            Object.keys(nutritionByDate).forEach(date => {
                 const month = date.substring(0, 7);
                 if (!nutMonths[month]) nutMonths[month] = {};
-                nutMonths[month][date] = mockFullState.nutrition[date];
+                nutMonths[month][date] = nutritionByDate[date];
             });
 
             for (const month of Object.keys(nutMonths)) {

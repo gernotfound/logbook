@@ -97,9 +97,12 @@ describe('F-003 nutrition identity integrity', () => {
         expect(day?.supplementsIntake?.map(item => item.id)).toEqual(['intake-ok']);
 
         const projected = projectDocuments(hydrated, catalog);
-        const projectedDay = projected.get('nutrition_months/2026-09')?.['2026-09-29'] as any;
-        expect(projectedDay.meals.map(item => item.id)).toEqual(['meal-ok']);
-        expect(projectedDay.supplementsIntake.map(item => item.id)).toEqual(['intake-ok']);
+        const projectedDay = projected.get('nutrition_months/2026-09')?.['2026-09-29'] as {
+            meals?: Array<{ id: string }>;
+            supplementsIntake?: Array<{ id: string }>;
+        } | undefined;
+        expect(projectedDay?.meals?.map(item => item.id)).toEqual(['meal-ok']);
+        expect(projectedDay?.supplementsIntake?.map(item => item.id)).toEqual(['intake-ok']);
     });
 
     it('keeps normal ID-based delete and upsert usable after malformed hydration', () => {

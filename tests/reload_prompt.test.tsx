@@ -1,4 +1,5 @@
 import React from 'react';
+import type { WorkoutSession } from '../src/types';
 import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import ReloadPrompt from '../src/components/UI/ReloadPrompt';
@@ -10,16 +11,16 @@ import { BufferedInput } from '../src/components/UI/BufferedInput';
 import { invalidateSession } from '../src/lib/sync/session';
 
 describe('Service Worker Update Lifecycle (ReloadPrompt) Suite', () => {
-  let mockSetNeedRefresh: ReturnType<typeof vi.fn>;
-  let mockUpdateServiceWorker: ReturnType<typeof vi.fn>;
+  let mockSetNeedRefresh = vi.fn<(value: React.SetStateAction<boolean>) => void>();
+  let mockUpdateServiceWorker = vi.fn<(reloadPage?: boolean) => Promise<void>>();
   const originalServiceWorker = navigator.serviceWorker;
   const originalStorageGetItem = localStorageMock.getItem.getMockImplementation()!;
 
   beforeEach(() => {
     localStorageMock.getItem.mockImplementation(originalStorageGetItem);
     useAppStore.getState().resetStore();
-    mockSetNeedRefresh = vi.fn();
-    mockUpdateServiceWorker = vi.fn().mockResolvedValue(undefined);
+    mockSetNeedRefresh = vi.fn<(value: React.SetStateAction<boolean>) => void>();
+    mockUpdateServiceWorker = vi.fn<(reloadPage?: boolean) => Promise<void>>().mockResolvedValue(undefined);
     vi.clearAllMocks();
   });
 
@@ -361,15 +362,15 @@ describe('Service Worker Update Lifecycle (ReloadPrompt) Suite', () => {
   });
 
   test('Rule 8 & UX: Active workout session state and input responsiveness are not interrupted when ReloadPrompt appears', () => {
-    const mockActiveWorkout = {
+    const mockActiveWorkout: WorkoutSession = {
       routineId: 'r1',
       routineName: 'Scheda A - Upper',
-      startTime: Date.now(),
+      globalStartTime: Date.now(),
       exercises: [
         {
           exId: 'ex1',
-          name: 'Panca Piana',
-          sets: [{ id: 's1', kg: '80', reps: '10', completed: false }]
+          sessionNote: '',
+          sets: [{ id: 's1', kg: '80', reps: '10', done: false }]
         }
       ]
     };
@@ -385,7 +386,7 @@ describe('Service Worker Update Lifecycle (ReloadPrompt) Suite', () => {
     // Verify workout is still preserved in store and active in memory
     const state = useAppStore.getState();
     expect(state.localWorkout).toEqual(mockActiveWorkout);
-    expect(state.localWorkout?.exercises[0].name).toBe('Panca Piana');
+    expect(state.localWorkout?.exercises[0].exId).toBe('ex1');
 
     // Both ReloadPrompt banner and workout UI exist concurrently
     expect(screen.getByText('Nuova versione disponibile')).toBeDefined();
@@ -394,7 +395,8 @@ describe('Service Worker Update Lifecycle (ReloadPrompt) Suite', () => {
 
   test('Edge Case: Handles updateServiceWorker rejection gracefully without crashing', async () => {
     const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-    const rejectingUpdate = vi.fn().mockRejectedValue(new Error('Failed to postMessage to SW'));
+    const rejectingUpdate = vi.fn<(reloadPage?: boolean) => Promise<void>>()
+      .mockRejectedValue(new Error('Failed to postMessage to SW'));
 
     vi.mocked(useRegisterSW).mockReturnValue({
       needRefresh: [true, mockSetNeedRefresh],
@@ -582,7 +584,7 @@ describe('Service Worker Update Lifecycle (ReloadPrompt) Suite', () => {
 
   test('Edge Case: Handles synchronous exception in updateServiceWorker invocation on click', async () => {
     const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-    const throwingUpdate = vi.fn().mockImplementation(() => {
+    const throwingUpdate = vi.fn<(reloadPage?: boolean) => Promise<void>>().mockImplementation(() => {
       throw new Error('Immediate sync throw');
     });
 

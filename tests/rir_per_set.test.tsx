@@ -105,6 +105,7 @@ describe('RIR reale per singola serie', () => {
             onAddSpecialSet: vi.fn(),
             onUpdateSpecialSet: vi.fn(),
             onRemoveSpecialSet: vi.fn(),
+            onUpdateSetTarget: vi.fn(),
         };
 
         const { rerender } = render(<SessionSetRow {...props} />);
@@ -134,7 +135,7 @@ describe('RIR reale per singola serie', () => {
             set={{ id: 'time-set', kg: '20', reps: '', time: '60' }}
             sIndex={0} exIndex={0} trackingType="time" isOpenMenu={true}
             onToggleMenu={vi.fn()} onRemoveSet={vi.fn()} onUpdateSet={vi.fn()}
-            onAddSpecialSet={vi.fn()} onUpdateSpecialSet={vi.fn()} onRemoveSpecialSet={vi.fn()}
+            onAddSpecialSet={vi.fn()} onUpdateSpecialSet={vi.fn()} onRemoveSpecialSet={vi.fn()} onUpdateSetTarget={vi.fn()}
         />);
         expect(screen.queryByRole('button', { name: /Imposta RIR serie/ })).toBeNull();
     });
@@ -159,7 +160,7 @@ describe('RIR reale per singola serie', () => {
             set={{ id: 'special', kg: '80', reps: '10', rir: 1, dropsets: [{ id: 'd1', kg: '60', reps: '8' }], isometrics: [{ id: 'i1', kg: '40', time: '20' }] }}
             sIndex={1} exIndex={0} trackingType="weight_reps" isOpenMenu={true}
             onToggleMenu={vi.fn()} onRemoveSet={vi.fn()} onUpdateSet={vi.fn()}
-            onAddSpecialSet={vi.fn()} onUpdateSpecialSet={vi.fn()} onRemoveSpecialSet={vi.fn()}
+            onAddSpecialSet={vi.fn()} onUpdateSpecialSet={vi.fn()} onRemoveSpecialSet={vi.fn()} onUpdateSetTarget={vi.fn()}
         />);
         expect(screen.getAllByRole('button', { name: /Imposta RIR serie/ })).toHaveLength(1);
     });
@@ -279,7 +280,7 @@ describe('RIR reale per singola serie', () => {
             onToggleHistory={vi.fn()} onToggleSetup={vi.fn()} onRemoveExercise={vi.fn()}
             onUpdateSetupNote={vi.fn()} onUpdateSessionNote={vi.fn()} onAddSet={vi.fn()}
             onRemoveSet={vi.fn()} onUpdateSet={vi.fn()} onAddSpecialSet={vi.fn()}
-            onUpdateSpecialSet={vi.fn()} onRemoveSpecialSet={vi.fn()} onToggleSpecialMenu={vi.fn()}
+            onUpdateSpecialSet={vi.fn()} onRemoveSpecialSet={vi.fn()} onUpdateSetTarget={vi.fn()} onToggleSpecialMenu={vi.fn()} onUpdateTechnicalStandard={vi.fn()}
         />);
         expect(screen.getByText(/3 RIR/)).toBeTruthy();
 

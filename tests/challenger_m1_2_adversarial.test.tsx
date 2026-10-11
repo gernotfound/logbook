@@ -259,7 +259,7 @@ vi.spyOn(console, 'warn').mockImplementation(() => {});
             const noSchemaObj = { a: 1, b: [true, 'test'], c: { nested: true } };
             window.localStorage.setItem('no_schema_key', JSON.stringify(noSchemaObj));
 
-            const { result } = renderHook(() => useLocalStorage('no_schema_key', { fallback: true }));
+            const { result } = renderHook(() => useLocalStorage<Record<string, unknown>>('no_schema_key', { fallback: true }));
             expect(result.current[0]).toEqual(noSchemaObj);
 
             // Setter works and serializes correctly

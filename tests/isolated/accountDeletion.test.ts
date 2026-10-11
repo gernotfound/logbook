@@ -335,7 +335,7 @@ it('bounds receipt body parsing and does not purge on a hanging response.json', 
         ok: true,
         status: 200,
         json: readBody,
-    } as Response);
+    } as unknown as Response);
 
     const operation = resumeAccountDeletion(context);
     await vi.waitFor(() => expect(readBody).toHaveBeenCalledTimes(1));

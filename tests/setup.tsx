@@ -49,7 +49,7 @@ afterEach(() => {
 const storageMocks = vi.hoisted(() => {
   const localStorageStore: Record<string, string> = {};
   const localStorageMock = {
-    getItem: vi.fn((key: string) => localStorageStore[key] ?? null),
+    getItem: vi.fn((key: string): string | null => localStorageStore[key] ?? null),
     setItem: vi.fn((key: string, value: string) => {
       localStorageStore[key] = String(value);
     }),

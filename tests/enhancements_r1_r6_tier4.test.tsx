@@ -217,7 +217,7 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
         });
 
         it('T4.4: Scenario: "Athlete Daily Recovery & Biometrics Log Across Full Week"', async () => {
-            const downloadFileSpy = vi.spyOn(Exporter, 'downloadFile').mockImplementation(() => {});
+            const downloadFileSpy = vi.spyOn(Exporter, 'downloadFile').mockResolvedValue(true);
 
             // Record 7 days of sleep and weight
             const weekNutrition: Record<string, any> = {};

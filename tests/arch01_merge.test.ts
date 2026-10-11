@@ -88,17 +88,17 @@ describe('ARCH-01: Non-destructive Cache Merge', () => {
         it('T9: mergeCloudIntoLocal parses through Zod and respects policies', () => {
             const localData = getEmptyUserData();
             localData.history = [{ id: 'old-1', globalStartTime: 1000 } as any];
-            localData.profile = { name: 'Local Name' };
+            localData.profile = { height: '172' };
 
             const cloudData = getEmptyUserData();
             cloudData.history = [{ id: 'new-1', globalStartTime: 2000 } as any];
-            cloudData.profile = { name: 'Cloud Name' }; // Cloud overrides non-windowed
+            cloudData.profile = { height: '185' }; // Cloud overrides non-windowed
 
             const merged = mergeCloudIntoLocal(localData, cloudData);
 
-            expect(merged.profile?.name).toBe('Cloud Name');
-            expect(merged.history.find(h => h.id === 'old-1')).toBeDefined();
-            expect(merged.history.find(h => h.id === 'new-1')).toBeDefined();
+            expect(merged.profile?.height).toBe('185');
+            expect(merged.history?.find(h => h.id === 'old-1')).toBeDefined();
+            expect(merged.history?.find(h => h.id === 'new-1')).toBeDefined();
         });
     });
 
@@ -165,7 +165,7 @@ describe('ARCH-01: Non-destructive Cache Merge', () => {
                 // Verification: unloaded January survives while complete September is adopted.
                 const finalState = useAppStore.getState().userData;
                 expect(finalState).not.toBeNull();
-                const historyIds = finalState!.history.map(h => h.id);
+                const historyIds = finalState!.history?.map(h => h.id);
                 expect(historyIds).toContain('local-old');
                 expect(historyIds).toContain('cloud-new');
 
@@ -182,12 +182,12 @@ describe('ARCH-01: Non-destructive Cache Merge', () => {
         it('Hydration fail-closed: malformed cloud sync metadata preserves local state and surfaces a recovery error', async () => {
             (auth as any).currentUser = { uid: 'user123' };
             const initialLocal = getEmptyUserData();
-            initialLocal.profile = { name: 'Valid Local' } as any;
+            initialLocal.profile = { height: '170' };
             useAppStore.setState({ userData: initialLocal });
             await initializeLocal('user:user123', initialLocal);
 
             const cloudResponse = getEmptyUserData();
-            cloudResponse.profile = { name: 'Cloud Name' } as any;
+            cloudResponse.profile = { height: '190' };
             const loadSpy = vi.spyOn(DB, 'loadCloudPayload').mockResolvedValue({
                 data: cloudResponse,
                 completeMonths: [],
@@ -221,7 +221,7 @@ describe('ARCH-01: Non-destructive Cache Merge', () => {
                 });
 
                 const state = useAppStore.getState();
-                expect(state.userData?.profile?.name).toBe('Valid Local');
+                expect(state.userData?.profile?.height).toBe('170');
                 expect(state.saveError).toContain('metadati di sincronizzazione remoti non sono validi');
                 expect(consoleSpy).toHaveBeenCalledWith(
                     'Metadati di sincronizzazione cloud non validi; stato locale preservato:',
@@ -237,14 +237,14 @@ describe('ARCH-01: Non-destructive Cache Merge', () => {
         it('Hydration fallback: invalid projected cloud data preserves local state', async () => {
             (auth as any).currentUser = { uid: 'user123' };
             const initialLocal = getEmptyUserData();
-            initialLocal.profile = { name: 'Valid Local' } as any;
+            initialLocal.profile = { height: '170' };
             useAppStore.setState({ userData: initialLocal });
             await initializeLocal('user:user123', initialLocal);
 
             // UserDataSchema accepts arbitrary record keys; documentProjection correctly rejects non-date nutrition keys.
             // This exercises the real hydrateLocal -> projectDocuments failure boundary caught by AuthContext.
             const cloudResponse = getEmptyUserData();
-            cloudResponse.profile = { name: 'Cloud Name' } as any;
+            cloudResponse.profile = { height: '190' };
             cloudResponse.nutrition = {
                 'not-a-date': { date: 'not-a-date', kcal: 100, carbs: 10, pro: 10, fat: 1 }
             } as any;
@@ -279,7 +279,7 @@ describe('ARCH-01: Non-destructive Cache Merge', () => {
                 });
 
                 const finalState = useAppStore.getState().userData;
-                expect(finalState?.profile?.name).toBe('Valid Local');
+                expect(finalState?.profile?.height).toBe('170');
                 expect(consoleSpy).toHaveBeenCalledWith(
                     "Hydration cloud non valida; stato locale preservato:",
                     expect.any(Error)

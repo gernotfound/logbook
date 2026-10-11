@@ -94,7 +94,7 @@ describe('M3: Storage & Persistence Delta Isolation Suite', () => {
             expect(fullResolvedFoods.length).toBe(seed.foods.length + 2);
 
             const stateToSave: UserData = {
-                profile: { name: 'Delta Test Athlete' },
+                profile: { height: '178' },
                 library: fullResolvedLibrary,
                 customFoods: fullResolvedFoods,
                 catalogOverrides: {},
@@ -172,7 +172,7 @@ describe('M3: Storage & Persistence Delta Isolation Suite', () => {
             const fullResolvedFoods = resolveEffectiveFoods(globalFoodFixture, [], overrides);
 
             const stateToSave: UserData = {
-                profile: { name: 'Override Athlete' },
+                profile: { height: '179' },
                 library: fullResolvedLibrary,
                 customFoods: fullResolvedFoods,
                 catalogOverrides: overrides,
@@ -211,7 +211,7 @@ describe('M3: Storage & Persistence Delta Isolation Suite', () => {
             const fullResolvedFoods = resolveEffectiveFoods(seed.foods, []);
 
             const stateToSave: UserData = {
-                profile: { name: 'Cold Fallback User' },
+                profile: { height: '177' },
                 library: fullResolvedLibrary,
                 customFoods: fullResolvedFoods,
                 catalogOverrides: {},
@@ -263,7 +263,7 @@ describe('M3: Storage & Persistence Delta Isolation Suite', () => {
                     fields: {},
                     writer: { slot: 's00', replicaId: 'delta-seed', generation: 1, seq: 0 },
                 },
-                profile: { name: 'Cloud User', height: '180' },
+                profile: { height: '180' },
                 library: [
                     { id: 'cloud_custom_dip', name: 'Dip alle Parallele Zavorrate', setsCount: 4, sets: [], isDefault: false }
                 ],
@@ -292,7 +292,7 @@ describe('M3: Storage & Persistence Delta Isolation Suite', () => {
             const loaded = await DB.loadUserData();
 
             expect(loaded).not.toBeNull();
-            expect(loaded?.profile?.name).toBe('Cloud User');
+            expect(loaded?.profile?.height).toBe('180');
             // Library: 1 custom + 2 unhidden globals (panca-declinata hidden) = 3
             expect(loaded?.library?.length).toBeGreaterThan(1);
             expect(loaded?.library?.find(e => e.id === 'cloud_custom_dip')).toBeDefined();
@@ -321,27 +321,26 @@ describe('M3: Storage & Persistence Delta Isolation Suite', () => {
     describe('createDataSlice Cache Tiering', () => {
         it('saveUserDataToCache stores and removes user data in an owner-scoped IndexedDB envelope', async () => {
             const testData: UserData = {
-                profile: { name: 'Cache User' },
+                profile: { height: '176' },
                 library: [],
                 routines: [],
                 history: [],
                 nutrition: {},
                 customFoods: [],
                 activeWorkout: null,
-                nutritionPlanning: null
-            };
+                            };
 
             await saveUserDataToCache(testData);
             expect(idbStore['logbook:v2:user:test-user-id']).toBeDefined();
-            expect(idbStore['logbook:v2:user:test-user-id'].data.profile.name).toBe('Cache User');
+            expect(idbStore['logbook:v2:user:test-user-id'].data.profile.height).toBe('176');
 
             await saveUserDataToCache(null);
             expect(idbStore['logbook:v2:user:test-user-id']).toBeUndefined();
         });
 
         it('getInitialUserData safely returns validated UserData from window.__INITIAL_USER_DATA__', () => {
-            const rawData = {
-                profile: { name: 'Preboot User' },
+            const rawData: UserData = {
+                profile: { height: '175' },
                 library: [],
                 routines: [],
                 history: [],
@@ -354,7 +353,7 @@ describe('M3: Storage & Persistence Delta Isolation Suite', () => {
             const parsed = getInitialUserData();
 
             expect(parsed).not.toBeNull();
-            expect(parsed?.profile?.name).toBe('Preboot User');
+            expect(parsed?.profile?.height).toBe('175');
             expect(parsed?.catalogOverrides).toBeDefined();
         });
     });

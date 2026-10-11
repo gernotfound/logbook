@@ -85,6 +85,7 @@ describe('Adversarial Challenger Suite: Mobile UX, Layout, Sentence Case & Edge 
           onToggleExpand={vi.fn()}
           onEdit={vi.fn()}
           onDelete={vi.fn()}
+        onDuplicate={vi.fn()}
         />
       );
       expect(screen.getByRole('button', { name: 'Opzioni' }).classList.contains('context-menu-trigger')).toBe(true);
@@ -100,6 +101,7 @@ describe('Adversarial Challenger Suite: Mobile UX, Layout, Sentence Case & Edge 
           onEdit={vi.fn()}
           onDelete={vi.fn()}
           onQuickAddToMeal={vi.fn()}
+        onDuplicate={vi.fn()}
         />
       );
       expect(screen.getByRole('button', { name: 'Opzioni' }).classList.contains('context-menu-trigger')).toBe(true);
@@ -235,6 +237,7 @@ describe('Adversarial Challenger Suite: Mobile UX, Layout, Sentence Case & Edge 
           onToggleExpand={vi.fn()}
           onEdit={vi.fn()}
           onDelete={vi.fn()}
+        onDuplicate={vi.fn()}
         />
       );
 
@@ -293,6 +296,7 @@ describe('Adversarial Challenger Suite: Mobile UX, Layout, Sentence Case & Edge 
           onEdit={vi.fn()}
           onDelete={vi.fn()}
           onQuickAddToMeal={vi.fn()}
+        onDuplicate={vi.fn()}
         />
       );
 

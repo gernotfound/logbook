@@ -44,7 +44,7 @@ it('collects every page of historical documents beyond the 3-month view and reta
     });
     const backup = await collectBackupSnapshot(base, true);
     expect(backup.data.history).toHaveLength(105);
-    expect(backup.data.profile.height).toBe('175');
+    expect(backup.data.profile?.height).toBe('175');
     expect(backup.coverage).toMatchObject({ scope: 'cloud-and-device', months });
     expect(sdk.page).toHaveBeenCalledTimes(8);
     expect(backup.recovery.envelope?.pending.length).toBeGreaterThan(0);
@@ -70,7 +70,7 @@ it('retries when an edit is acknowledged while the cloud scan is in flight', asy
     });
 
     const backup = await collectBackupSnapshot(base, true);
-    expect(backup.data.profile.height).toBe('175');
+    expect(backup.data.profile?.height).toBe('175');
     expect(sdk.root).toHaveBeenCalledTimes(2);
 });
 
@@ -105,7 +105,7 @@ it('uses root _sync metadata when replaying pending local operations', async () 
     });
 
     const backup = await collectBackupSnapshot(base, true);
-    expect(backup.data.profile.height).toBe('180');
+    expect(backup.data.profile?.height).toBe('180');
 });
 
 it('keeps schema/sync metadata out of history and nutrition business data while preserving raw recovery docs', async () => {
@@ -133,7 +133,7 @@ it('keeps schema/sync metadata out of history and nutrition business data while 
     });
 
     const backup = await collectBackupSnapshot(base, true);
-    expect(backup.data.history.map(item => item.id)).toEqual(['w1']);
+    expect(backup.data.history?.map(item => item.id)).toEqual(['w1']);
     expect(Object.keys(backup.data.nutrition ?? {})).toEqual(['2026-09-10']);
     expect((backup.data.nutrition as any)?._sync).toBeUndefined();
     const rawHistory = (backup.recovery.cloudDocuments as any)['history_months/2026-09'];

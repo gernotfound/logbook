@@ -9,14 +9,14 @@ describe('Workout Deletion & Subcollection Persistence (V3)', () => {
       id: 'w-jul-1',
       date: '2026-07-10',
       routineName: 'Upper Body A',
-      duration: '50m',
+      manualDurationStr: '00:50:00',
       exercises: []
     };
     const workout2: WorkoutSession = {
       id: 'w-jul-2',
       date: '2026-07-20',
       routineName: 'Lower Body A',
-      duration: '45m',
+      manualDurationStr: '00:45:00',
       exercises: []
     };
 
@@ -61,7 +61,7 @@ describe('Workout Deletion & Subcollection Persistence (V3)', () => {
       id: 'w-jul-sole',
       date: '2026-07-15',
       routineName: 'Leg Day',
-      duration: '60m',
+      manualDurationStr: '01:00:00',
       exercises: []
     };
 

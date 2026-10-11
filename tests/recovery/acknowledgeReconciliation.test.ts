@@ -16,11 +16,11 @@ import {
 
 const owner = 'user:ack-reconcile';
 
-function data(height: number, name?: string): UserData {
+function data(height: number, neck?: string): UserData {
     return UserDataSchema.parse({
         profile: {
             height: String(height),
-            ...(name ? { name } : {}),
+            ...(neck ? { neck } : {}),
         },
     }) as unknown as UserData;
 }
@@ -42,13 +42,13 @@ describe('acknowledgeThrough reconciliation', () => {
 
         // The acknowledged cloud state contains seq 1 plus an independent change
         // made by another device while local seq 2 is still pending.
-        await acknowledgeThrough(owner, 1, data(171, 'remote-device'));
+        await acknowledgeThrough(owner, 1, data(171, '39'));
 
         const after = await readLocal(owner);
-        expect(after?.baseline.profile.height).toBe('171');
-        expect(after?.baseline.profile.name).toBe('remote-device');
-        expect(after?.data.profile.height).toBe('172');
-        expect(after?.data.profile.name).toBe('remote-device');
+        expect(after?.baseline.profile?.height).toBe('171');
+        expect(after?.baseline.profile?.neck).toBe('39');
+        expect(after?.data.profile?.height).toBe('172');
+        expect(after?.data.profile?.neck).toBe('39');
         expect(after?.pending.length).toBeGreaterThan(0);
         expect(after?.pending.every(operation => operation.seq > 1)).toBe(true);
         expect(after?.pending.some(operation => operation.seq === 2)).toBe(true);

@@ -190,6 +190,7 @@ describe('Empirical Adversarial Stress Suite: ContextMenu & Integrations', () =>
             onToggleExpand={onToggleExpand}
             onEdit={onEdit}
             onDelete={onDelete}
+            onDuplicate={vi.fn()}
           />
         );
 
@@ -215,6 +216,7 @@ describe('Empirical Adversarial Stress Suite: ContextMenu & Integrations', () =>
             onToggleExpand={onToggleExpand}
             onEdit={onEdit}
             onDelete={onDelete}
+            onDuplicate={vi.fn()}
           />
         );
 
@@ -253,6 +255,7 @@ describe('Empirical Adversarial Stress Suite: ContextMenu & Integrations', () =>
             onToggleExpand={onToggleExpand}
             onEdit={vi.fn()}
             onDelete={vi.fn()}
+            onDuplicate={vi.fn()}
           />
         );
 
@@ -301,7 +304,7 @@ describe('Empirical Adversarial Stress Suite: ContextMenu & Integrations', () =>
         name: 'Massa Ipertrofia Autunno',
         durationWeeks: 6,
         sessionsPerWeek: 4,
-        routines: [{ routineId: 'r1' }, { routineId: 'r2' }],
+        routines: [{ routineId: 'r1', frequencyPerWeek: 1 }, { routineId: 'r2', frequencyPerWeek: 1 }],
       };
 
       const mockRoutines: WorkoutRoutine[] = [
@@ -375,6 +378,7 @@ describe('Empirical Adversarial Stress Suite: ContextMenu & Integrations', () =>
             mealTypes={['Colazione', 'Pranzo', 'Cena']}
             onEdit={onEdit}
             onDelete={onDelete}
+            onDuplicate={vi.fn()}
             onQuickAddToMeal={onQuickAddToMeal}
           />
         );

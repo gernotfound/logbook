@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { calculateTDEE } from '../src/lib/calc/nutrition';
 import { computeWorkoutReport } from '../src/lib/calc/workoutReport';
+import type { ProgressionExerciseRef } from '../src/lib/calc/progression';
 import { calculateEffectiveSetWeight, calculateSetVolume, calculateWorkoutVolume } from '../src/lib/calc/workout';
 import type { WorkoutSession, SessionExercise } from '../src/types';
 
@@ -232,7 +233,7 @@ describe('EMPIRICAL ADVERSARIAL SUITE — R1 (TDEE Calculation) & R2 (Workout Vo
     // =========================================================================
     describe('R2: Workout Report Volume & PR Logic Adversarial Stress Tests', () => {
 
-        const exerciseCatalog = [
+        const exerciseCatalog: ProgressionExerciseRef[] = [
             { id: 'ex-bench', name: 'Panca piana bilanciere', isBodyweight: false, equipmentWeight: 0 },
             { id: 'ex-incline-db', name: 'Spinte manubri inclinata', isBodyweight: false, equipmentWeight: 0 },
             { id: 'ex-cable-fly', name: 'Croci ai cavi', isBodyweight: false, equipmentWeight: 0 },
@@ -257,7 +258,7 @@ describe('EMPIRICAL ADVERSARIAL SUITE — R1 (TDEE Calculation) & R2 (Workout Vo
                     // FW 1: Bench Press (isBodyweight: false, eq: 0) -> 100kg x 6, 90kg x 8
                     // Volume = 600 + 720 = 1320
                     {
-                        exId: 'ex-bench',
+                        exId: 'ex-bench', sessionNote: '',
                         sets: [
                             { id: 's1', kg: '100', reps: '6' },
                             { id: 's2', kg: '90', reps: '8' }
@@ -266,7 +267,7 @@ describe('EMPIRICAL ADVERSARIAL SUITE — R1 (TDEE Calculation) & R2 (Workout Vo
                     // FW 2: Incline DB (isBodyweight: false, eq: 0) -> 32kg x 10, 30kg x 10
                     // Volume = 320 + 300 = 620
                     {
-                        exId: 'ex-incline-db',
+                        exId: 'ex-incline-db', sessionNote: '',
                         sets: [
                             { id: 's3', kg: '32', reps: '10' },
                             { id: 's4', kg: '30', reps: '10' }
@@ -275,7 +276,7 @@ describe('EMPIRICAL ADVERSARIAL SUITE — R1 (TDEE Calculation) & R2 (Workout Vo
                     // FW 3: Squat (isBodyweight: false, eq: 20kg bar) -> 100kg plate + 20kg bar = 120kg x 5, 5 reps
                     // Volume = (100 + 20) * 5 + (100 + 20) * 5 = 600 + 600 = 1200
                     {
-                        exId: 'ex-squat-barbell',
+                        exId: 'ex-squat-barbell', sessionNote: '',
                         sets: [
                             { id: 's5', kg: '100', reps: '5' },
                             { id: 's6', kg: '100', reps: '5' }
@@ -286,7 +287,7 @@ describe('EMPIRICAL ADVERSARIAL SUITE — R1 (TDEE Calculation) & R2 (Workout Vo
                     // Set 2: unweighted (0kg) x 8 -> (0 + 85) * 8 = 85 * 8 = 680
                     // Volume = 600 + 680 = 1280
                     {
-                        exId: 'ex-pullup',
+                        exId: 'ex-pullup', sessionNote: '',
                         sets: [
                             { id: 's7', kg: '15', reps: '6' },
                             { id: 's8', kg: '0', reps: '8' }
@@ -297,7 +298,7 @@ describe('EMPIRICAL ADVERSARIAL SUITE — R1 (TDEE Calculation) & R2 (Workout Vo
                     // Set 2: +0kg plate x 10 -> (0 + 85 + 5) * 10 = 90 * 10 = 900
                     // Volume = 880 + 900 = 1780
                     {
-                        exId: 'ex-dip-belt',
+                        exId: 'ex-dip-belt', sessionNote: '',
                         sets: [
                             { id: 's9', kg: '20', reps: '8' },
                             { id: 's10', kg: '0', reps: '10' }
@@ -328,7 +329,7 @@ describe('EMPIRICAL ADVERSARIAL SUITE — R1 (TDEE Calculation) & R2 (Workout Vo
                     // Reps = 10 + 8 + 8 = 26
                     // avgWeight = (20 + 15 + 10) / 3 = 15.0
                     {
-                        exId: 'ex-cable-fly',
+                        exId: 'ex-cable-fly', sessionNote: '',
                         sets: [
                             {
                                 id: 's1',
@@ -347,7 +348,7 @@ describe('EMPIRICAL ADVERSARIAL SUITE — R1 (TDEE Calculation) & R2 (Workout Vo
                     // Reps = 5 + 5 + 5 = 15
                     // avgWeight = (100 + 90 + 80) / 3 = 90.0
                     {
-                        exId: 'ex-pullup',
+                        exId: 'ex-pullup', sessionNote: '',
                         sets: [
                             {
                                 id: 's2',
@@ -381,8 +382,8 @@ describe('EMPIRICAL ADVERSARIAL SUITE — R1 (TDEE Calculation) & R2 (Workout Vo
                 routineId: 'routine-legs',
                 date: '2026-09-01',
                 exercises: [
-                    { exId: 'ex-squat-barbell', sets: [{ id: 's1', kg: '200', reps: '10' }] }, // massive 2200kg volume
-                    { exId: 'ex-pullup', sets: [{ id: 's2', kg: '50', reps: '15' }] }
+                    { exId: 'ex-squat-barbell', sessionNote: '', sets: [{ id: 's1', kg: '200', reps: '10' }] }, // massive 2200kg volume
+                    { exId: 'ex-pullup', sessionNote: '', sets: [{ id: 's2', kg: '50', reps: '15' }] }
                 ]
             };
 
@@ -397,7 +398,7 @@ describe('EMPIRICAL ADVERSARIAL SUITE — R1 (TDEE Calculation) & R2 (Workout Vo
                     id: 'sess-other-1',
                     routineId: 'routine-arms',
                     date: '2026-08-20',
-                    exercises: [{ exId: 'ex-squat-barbell', sets: [{ id: 's1', kg: '100', reps: '10' }] }]
+                    exercises: [{ exId: 'ex-squat-barbell', sessionNote: '', sets: [{ id: 's1', kg: '100', reps: '10' }] }]
                 }
             ];
 
@@ -414,11 +415,11 @@ describe('EMPIRICAL ADVERSARIAL SUITE — R1 (TDEE Calculation) & R2 (Workout Vo
                 date: '2026-08-20',
                 exercises: [
                     // Bench: 100kg x 10 -> 1000 vol, 10 reps, 100 avgWeight
-                    { exId: 'ex-bench', sets: [{ id: 's1', kg: '100', reps: '10' }] },
+                    { exId: 'ex-bench', sessionNote: '', sets: [{ id: 's1', kg: '100', reps: '10' }] },
                     // Dips: +10kg (90 eff) x 10 -> 900 vol, 10 reps, 90 avgWeight (athleteWeight: 80)
-                    { exId: 'ex-pullup', sets: [{ id: 's2', kg: '10', reps: '10' }] },
+                    { exId: 'ex-pullup', sessionNote: '', sets: [{ id: 's2', kg: '10', reps: '10' }] },
                     // Incline DB: 30kg x 10 -> 300 vol, 10 reps, 30 avgWeight
-                    { exId: 'ex-incline-db', sets: [{ id: 's3', kg: '30', reps: '10' }] }
+                    { exId: 'ex-incline-db', sessionNote: '', sets: [{ id: 's3', kg: '30', reps: '10' }] }
                 ]
             };
 
@@ -431,9 +432,9 @@ describe('EMPIRICAL ADVERSARIAL SUITE — R1 (TDEE Calculation) & R2 (Workout Vo
                 routineId: 'routine-chest',
                 date: '2026-08-27',
                 exercises: [
-                    { exId: 'ex-bench', sets: [{ id: 's1', kg: '100', reps: '10' }] }, // Exact Tie
-                    { exId: 'ex-pullup', sets: [{ id: 's2', kg: '10', reps: '8' }] },   // Regression
-                    { exId: 'ex-incline-db', sets: [{ id: 's3', kg: '28', reps: '9' }] } // Regression
+                    { exId: 'ex-bench', sessionNote: '', sets: [{ id: 's1', kg: '100', reps: '10' }] }, // Exact Tie
+                    { exId: 'ex-pullup', sessionNote: '', sets: [{ id: 's2', kg: '10', reps: '8' }] },   // Regression
+                    { exId: 'ex-incline-db', sessionNote: '', sets: [{ id: 's3', kg: '28', reps: '9' }] } // Regression
                 ]
             };
 
@@ -464,11 +465,11 @@ describe('EMPIRICAL ADVERSARIAL SUITE — R1 (TDEE Calculation) & R2 (Workout Vo
                 date: '2026-08-20',
                 exercises: [
                     // Bench: 100kg x 10 = 1000 vol
-                    { exId: 'ex-bench', sets: [{ id: 's1', kg: '100', reps: '10', rir: 2 }] },
+                    { exId: 'ex-bench', sessionNote: '', sets: [{ id: 's1', kg: '100', reps: '10', rir: 2 }] },
                     // Pullup (BW 80kg): 0kg x 10 = 800 vol
-                    { exId: 'ex-pullup', sets: [{ id: 's2', kg: '0', reps: '10', rir: 2 }] },
+                    { exId: 'ex-pullup', sessionNote: '', sets: [{ id: 's2', kg: '0', reps: '10', rir: 2 }] },
                     // Cable Fly: 15kg x 10 = 150 vol
-                    { exId: 'ex-cable-fly', sets: [{ id: 's3', kg: '15', reps: '10', rir: 2 }] }
+                    { exId: 'ex-cable-fly', sessionNote: '', sets: [{ id: 's3', kg: '15', reps: '10', rir: 2 }] }
                 ]
             };
 
@@ -478,11 +479,11 @@ describe('EMPIRICAL ADVERSARIAL SUITE — R1 (TDEE Calculation) & R2 (Workout Vo
                 date: '2026-08-27',
                 exercises: [
                     // Bench: 100kg x 11 = 1100 vol (+100 vol, +1 rep) -> PR
-                    { exId: 'ex-bench', sets: [{ id: 's1', kg: '100', reps: '11', rir: 2 }] },
+                    { exId: 'ex-bench', sessionNote: '', sets: [{ id: 's1', kg: '100', reps: '11', rir: 2 }] },
                     // Pullup: +5kg weighted (85 eff) x 10 = 850 vol (+50 vol, +5 avgWeight) -> PR
-                    { exId: 'ex-pullup', sets: [{ id: 's2', kg: '5', reps: '10', rir: 2 }] },
+                    { exId: 'ex-pullup', sessionNote: '', sets: [{ id: 's2', kg: '5', reps: '10', rir: 2 }] },
                     // Cable Fly: 15kg x 10 = 150 vol (Exact tie) -> NOT PR
-                    { exId: 'ex-cable-fly', sets: [{ id: 's3', kg: '15', reps: '10', rir: 2 }] }
+                    { exId: 'ex-cable-fly', sessionNote: '', sets: [{ id: 's3', kg: '15', reps: '10', rir: 2 }] }
                 ]
             };
 
@@ -497,26 +498,26 @@ describe('EMPIRICAL ADVERSARIAL SUITE — R1 (TDEE Calculation) & R2 (Workout Vo
                 id: 'sess-1',
                 routineId: 'r-push',
                 date: '2026-08-01',
-                exercises: [{ exId: 'ex-bench', sets: [{ id: 's', kg: '80', reps: '10', rir: 2 }] }] // 800 vol
+                exercises: [{ exId: 'ex-bench', sessionNote: '', sets: [{ id: 's', kg: '80', reps: '10', rir: 2 }] }] // 800 vol
             };
             const h2: WorkoutSession = {
                 id: 'sess-2',
                 routineId: 'r-push',
                 date: '2026-08-15',
-                exercises: [{ exId: 'ex-bench', sets: [{ id: 's', kg: '90', reps: '10', rir: 2 }] }] // 900 vol (target previous)
+                exercises: [{ exId: 'ex-bench', sessionNote: '', sets: [{ id: 's', kg: '90', reps: '10', rir: 2 }] }] // 900 vol (target previous)
             };
             const h3Future: WorkoutSession = {
                 id: 'sess-3',
                 routineId: 'r-push',
                 date: '2026-09-05', // in the future relative to current session (2026-08-25)
-                exercises: [{ exId: 'ex-bench', sets: [{ id: 's', kg: '150', reps: '10', rir: 2 }] }]
+                exercises: [{ exId: 'ex-bench', sessionNote: '', sets: [{ id: 's', kg: '150', reps: '10', rir: 2 }] }]
             };
 
             const current: WorkoutSession = {
                 id: 'sess-curr',
                 routineId: 'r-push',
                 date: '2026-08-25',
-                exercises: [{ exId: 'ex-bench', sets: [{ id: 's', kg: '95', reps: '10', rir: 2 }] }] // 950 vol
+                exercises: [{ exId: 'ex-bench', sessionNote: '', sets: [{ id: 's', kg: '95', reps: '10', rir: 2 }] }] // 950 vol
             };
 
             // History provided in descending chronological order: [h3Future, h2, h1]
@@ -537,7 +538,7 @@ describe('EMPIRICAL ADVERSARIAL SUITE — R1 (TDEE Calculation) & R2 (Workout Vo
                 routineId: 'r-pull',
                 date: '2026-08-20',
                 exercises: [
-                    { exId: 'ex-pullup', sets: [{ id: 's1', kg: '0', reps: '8', rir: 2 }] } // 80 * 8 = 640
+                    { exId: 'ex-pullup', sessionNote: '', sets: [{ id: 's1', kg: '0', reps: '8', rir: 2 }] } // 80 * 8 = 640
                 ]
             };
 
@@ -547,9 +548,9 @@ describe('EMPIRICAL ADVERSARIAL SUITE — R1 (TDEE Calculation) & R2 (Workout Vo
                 date: '2026-08-27',
                 exercises: [
                     // Established exercise: improved from 640 to 800 vol -> PR
-                    { exId: 'ex-pullup', sets: [{ id: 's1', kg: '0', reps: '10', rir: 2 }] }, // 80 * 10 = 800
+                    { exId: 'ex-pullup', sessionNote: '', sets: [{ id: 's1', kg: '0', reps: '10', rir: 2 }] }, // 80 * 10 = 800
                     // Brand new exercise introduced in this workout session -> NOT PR
-                    { exId: 'ex-cable-fly', sets: [{ id: 's2', kg: '20', reps: '12' }] }
+                    { exId: 'ex-cable-fly', sessionNote: '', sets: [{ id: 's2', kg: '20', reps: '12' }] }
                 ]
             };
 

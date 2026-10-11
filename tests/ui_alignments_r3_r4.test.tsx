@@ -265,6 +265,7 @@ describe('UI Alignments - R3 & R4', () => {
                     onAddSpecialSet={vi.fn()}
                     onUpdateSpecialSet={vi.fn()}
                     onRemoveSpecialSet={vi.fn()}
+                onUpdateSetTarget={vi.fn()}
                 />
             );
 

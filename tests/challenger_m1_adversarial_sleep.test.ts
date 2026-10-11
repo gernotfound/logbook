@@ -10,6 +10,7 @@ import { useSleepMeasurements } from '../src/hooks/useSleepMeasurements';
 import { useAppStore } from '../src/store/useAppStore';
 import { useDialogStore } from '../src/store/useDialogStore';
 import { storageOwner } from '../src/lib/sync/session';
+import type { NutritionDay } from '../src/types';
 
 describe('Empirical Challenger: Sleep Format HH:MM Adversarial Stress Test Suite', () => {
 
@@ -235,9 +236,10 @@ describe('Empirical Challenger: Sleep Format HH:MM Adversarial Stress Test Suite
             let capturedContent = '';
 
             const origDownload = Exporter.downloadFile;
-            Exporter.downloadFile = (fn: string, content: string) => {
+            Exporter.downloadFile = async (fn: string, content: string) => {
                 capturedFilename = fn;
                 capturedContent = content;
+                return true;
             };
 
             const sampleNutrition = {
@@ -270,7 +272,8 @@ describe('Empirical Challenger: Sleep Format HH:MM Adversarial Stress Test Suite
             };
 
             try {
-                await Exporter.exportToCSV([], sampleNutrition, []);
+                // Legacy values deliberately violate the current NutritionDay type: exercise runtime CSV compatibility.
+                await Exporter.exportToCSV([], sampleNutrition as unknown as Record<string, NutritionDay>, []);
                 await new Promise(resolve => setTimeout(resolve, 600));
 
                 expect(capturedFilename).toBe('misurazioni.csv');

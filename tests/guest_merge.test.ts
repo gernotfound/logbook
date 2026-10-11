@@ -12,11 +12,16 @@ import {
 import { getSeedCatalog } from '../src/lib/catalog/catalogService';
 import type { UserData, Exercise, Food } from '../src/types';
 
+// Seed catalog entries are lean by design; the application Exercise model has
+// mutable workout set fields that legacy guest archives also contained.
+const asUserExercises = (entries: ReturnType<typeof getSeedCatalog>['exercises']): Exercise[] =>
+    entries.map(item => ({ ...item, setsCount: item.setsCount ?? 3, sets: [] }));
+
 describe('Deterministic Guest Merge (R5) Suite', () => {
     describe('filterCustomExercises & filterCustomFoods helpers', () => {
         it('filters out standard seed catalog exercises and preserves user custom exercises', () => {
             const seed = getSeedCatalog();
-            const standardEx = seed.exercises[0]; // e.g. panca-piana-bilanciere
+            const standardEx = asUserExercises(seed.exercises)[0]; // e.g. panca-piana-bilanciere
             const customEx1: Exercise = { id: 'custom_ex_1', name: 'Custom Fly', setsCount: 3, sets: [], isDefault: false };
             const customEx2: Exercise = { id: 'custom_ex_2', name: 'Another Custom', setsCount: 4, sets: [] };
 
@@ -48,7 +53,7 @@ describe('Deterministic Guest Merge (R5) Suite', () => {
         it('returns false for pristine state containing only standard seed catalog items', () => {
             const seed = getSeedCatalog();
             expect(hasUserData({
-                library: seed.exercises,
+                library: asUserExercises(seed.exercises),
                 customFoods: seed.foods,
                 catalogOverrides: { exercises: {}, foods: {}, hiddenExerciseIds: [], hiddenFoodIds: [] }
             })).toBe(false);
@@ -91,7 +96,7 @@ describe('Deterministic Guest Merge (R5) Suite', () => {
                 { id: '3', name: 'Guest Item 3', val: 30 }
             ];
 
-            const result = mergeArrayById(cloud, guest);
+            const result = mergeArrayById<{ id: string | number; name: string }>(cloud, guest);
             expect(result).toHaveLength(3);
             expect(result.find(x => x.id === '1')).toEqual({ id: '1', name: 'Cloud Item 1', val: 10 });
             expect(result.find(x => x.id === '2')).toEqual({ id: '2', name: 'Guest Item 2 Edited', val: 25 });
@@ -102,7 +107,7 @@ describe('Deterministic Guest Merge (R5) Suite', () => {
             const cloud = [{ id: 100, name: 'Cloud Food' }];
             const guest = [{ id: '100', name: 'Guest Food Overwrite' }];
 
-            const result = mergeArrayById(cloud, guest);
+            const result = mergeArrayById<{ id: string | number; name: string }>(cloud, guest);
             expect(result).toHaveLength(1);
             expect(result[0].name).toBe('Guest Food Overwrite');
         });
@@ -110,7 +115,7 @@ describe('Deterministic Guest Merge (R5) Suite', () => {
             const cloud = [{ name: 'Cloud Item Without ID' } as any, { id: 'c1', name: 'Cloud 1' }];
             const guest = [{ name: 'Guest Item Without ID' } as any, { id: 'g1', name: 'Guest 1' }];
 
-            const result = mergeArrayById(cloud, guest);
+            const result = mergeArrayById<{ id: string | number; name: string }>(cloud, guest);
             expect(result).toHaveLength(2);
             expect(result.find(x => x.name === 'Cloud Item Without ID')).toBeUndefined();
             expect(result.find(x => x.name === 'Guest Item Without ID')).toBeUndefined();
@@ -520,8 +525,8 @@ describe('Deterministic Guest Merge (R5) Suite', () => {
 
         it('passes complete merged data through UserDataSchema validation without stripping valid fields', () => {
             const cloudData: UserData = {
-                profile: { name: 'Cloud User', dob: '1990-01-01', height: '175', gender: 'M' },
-                library: [{ id: 'ex1', name: 'Squat', targetMuscle: 'gambe', setsCount: 3, sets: [] }],
+                profile: { dob: '1990-01-01', height: '175', gender: 'M' },
+                library: [{ id: 'ex1', name: 'Squat', setsCount: 3, sets: [] }],
                 routines: [{ id: 'r1', name: 'Leg Day', exercises: [{ exId: 'ex1', setsCount: 3 }] }],
                 customFoods: [{ id: 'cf1', name: 'Oats', kcal: 370, pro: 13, carbs: 60, fat: 7 }],
                 trainingCycles: [{ id: 'tc1', name: 'Mesociclo 1', durationWeeks: 4, routines: [{ routineId: 'r1', frequencyPerWeek: 2 }] }],
@@ -531,8 +536,8 @@ describe('Deterministic Guest Merge (R5) Suite', () => {
             };
 
             const guestData: UserData = {
-                profile: { weight: 80, bodyFat: 14 },
-                library: [{ id: 'ex2', name: 'Deadlift', targetMuscle: 'schiena', setsCount: 4, sets: [] }],
+                profile: { waist: '80', manualBf: '14' },
+                library: [{ id: 'ex2', name: 'Deadlift', setsCount: 4, sets: [] }],
                 routines: [{ id: 'r2', name: 'Back Day', exercises: [{ exId: 'ex2', setsCount: 4 }] }],
                 customFoods: [{ id: 'cf2', name: 'Whey', kcal: 380, pro: 80, carbs: 4, fat: 3 }],
                 trainingCycles: [{ id: 'tc2', name: 'Mesociclo 2', durationWeeks: 6, routines: [{ routineId: 'r2', frequencyPerWeek: 1 }] }],
@@ -550,18 +555,18 @@ describe('Deterministic Guest Merge (R5) Suite', () => {
             expect(result.supplements).toHaveLength(2);
             expect(result.history).toHaveLength(2);
             expect(Object.keys(result.nutrition || {})).toHaveLength(2);
-            expect(result.profile?.name).toBe('Cloud User');
-            expect(result.profile?.weight).toBe(80);
-            expect(result.profile?.bodyFat).toBe(14);
+            expect(result.profile?.height).toBe('175');
+            expect(result.profile?.waist).toBe('80');
+            expect(result.profile?.manualBf).toBe('14');
         });
 
         it('filters out monolithic seed items from guest/cloud libraries and merges catalogOverrides without duplication', () => {
             const seed = getSeedCatalog();
 
             const cloudData: UserData = {
-                profile: { name: 'Cloud User' },
+                profile: { height: '170' },
                 library: [
-                    ...seed.exercises.slice(0, 10), // monolithic legacy slice
+                    ...asUserExercises(seed.exercises.slice(0, 10)), // monolithic legacy slice
                     { id: 'cloud_custom_1', name: 'Cloud Special', setsCount: 3, sets: [], isDefault: false }
                 ],
                 customFoods: [
@@ -575,9 +580,9 @@ describe('Deterministic Guest Merge (R5) Suite', () => {
             };
 
             const guestData: UserData = {
-                profile: { weight: 75 },
+                profile: { waist: '75' },
                 library: [
-                    ...seed.exercises, // full resolved guest library
+                    ...asUserExercises(seed.exercises), // full resolved guest library
                     { id: 'guest_custom_1', name: 'Guest Special', setsCount: 4, sets: [], isDefault: false }
                 ],
                 customFoods: [

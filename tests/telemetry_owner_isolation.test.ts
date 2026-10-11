@@ -9,7 +9,7 @@ describe('Telemetry owner isolation at the production boundary', () => {
 
   const changeAuth = (uid: string | null): void => {
     // The shared Firebase Auth fixture is writable just like the Auth SDK state.
-    auth.currentUser = uid === null ? null : ({ uid } as typeof auth.currentUser);
+    Object.assign(auth, { currentUser: uid === null ? null : ({ uid } as typeof auth.currentUser) });
   };
 
   beforeEach(() => {
@@ -24,7 +24,7 @@ describe('Telemetry owner isolation at the production boundary', () => {
 
   afterEach(() => {
     telemetryHub.reset();
-    auth.currentUser = previousAuthUser;
+    Object.assign(auth, { currentUser: previousAuthUser });
     vi.restoreAllMocks();
     vi.useRealTimers();
     Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
