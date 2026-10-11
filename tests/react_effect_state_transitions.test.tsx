@@ -1,6 +1,6 @@
 import React from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import RecoveryBentoCard from '../src/components/Home/widgets/RecoveryBentoCard';
 import TrainingPlanning from '../src/components/Training/planning/TrainingPlanning';
 import { UserDataSchema } from '../src/lib/schema';
