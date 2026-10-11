@@ -1,6 +1,6 @@
 import React from 'react';
 import { act, fireEvent, render, renderHook, screen } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { UserDataSchema } from '../src/lib/schema';
 import { storageOwner } from '../src/lib/sync/session';
 import { deviceKey } from '../src/lib/sync/deviceStorage';
@@ -93,7 +93,8 @@ describe('failed domain result preserves user edits', () => {
         expect(cards).toHaveLength(2);
 
         const editCard = (card: Element) => {
-            fireEvent.click(card.querySelector('button.planning-cycle-toggle')!);
+            const toggle = card.querySelector('button.planning-cycle-toggle')!;
+            if (toggle.getAttribute('aria-expanded') !== 'true') fireEvent.click(toggle);
             fireEvent.click(card.querySelector('.planning-cycle-actions button')!);
         };
         editCard(cards[0]);
