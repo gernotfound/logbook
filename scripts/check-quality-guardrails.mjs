@@ -126,13 +126,32 @@ for (const path of ['.oxlintrc.json', '.oxlintrc.a11y.json', '.oxlintrc.type-awa
       failures.push(path + ': existing lint plugin removed: ' + plugin);
     }
   }
-  for (const area of ['rules', 'categories']) {
-    for (const [rule, oldValue] of Object.entries(before[area] || {})) {
-      const oldSeverity = severity(oldValue);
-      const newSeverity = severity(after[area]?.[rule]);
-      if (oldSeverity === null || newSeverity === null || newSeverity < oldSeverity) {
-        failures.push(path + ': lint ' + area + ' weakened or removed: ' + rule);
-      }
+  // Correctness rules are enabled by Oxlint even when "categories" is omitted.
+  for (const category of new Set([
+    'correctness', ...Object.keys(before.categories || {}), ...Object.keys(after.categories || {}),
+  ])) {
+    const defaultSeverity = category === 'correctness' ? 'warn' : 'off';
+    const oldSeverity = severity(before.categories?.[category] ?? defaultSeverity);
+    const newSeverity = severity(after.categories?.[category] ?? defaultSeverity);
+    if (oldSeverity === null || newSeverity === null || newSeverity < oldSeverity) {
+      failures.push(path + ': lint category weakened: ' + category);
+    }
+  }
+  for (const [rule, oldValue] of Object.entries(before.rules || {})) {
+    const oldSeverity = severity(oldValue);
+    const newValue = after.rules?.[rule];
+    const newSeverity = severity(newValue);
+    if (oldSeverity === null || newSeverity === null || newSeverity < oldSeverity) {
+      failures.push(path + ': lint rules weakened or removed: ' + rule);
+    }
+    const options = value => JSON.stringify(Array.isArray(value) ? value.slice(1) : []);
+    if (options(oldValue) !== options(newValue)) {
+      failures.push(path + ': existing lint rule options changed: ' + rule);
+    }
+  }
+  for (const [rule, value] of Object.entries(after.rules || {})) {
+    if (!Object.hasOwn(before.rules || {}, rule) && severity(value) === 0) {
+      failures.push(path + ': newly disabled lint rule: ' + rule);
     }
   }
   for (const key of ['ignorePatterns', 'ignore', 'overrides']) {
@@ -159,6 +178,14 @@ for (const path of ['.oxlintignore', '.eslintignore']) {
   }
 }
 
+// Oxlint honors .gitignore during directory traversal, including for tracked files.
+const ignoredCode = git(['ls-files', '--cached', '--ignored', '--exclude-standard', '-z'])
+  .split('\0')
+  .filter(path => /\.(?:[cm]?[jt]sx?)$/.test(path));
+if (ignoredCode.length) {
+  failures.push('Tracked JS/TS files hidden from lint by Git ignore rules: ' + ignoredCode.join(', '));
+}
+
 const typeSafetyFlags = [
   'strict', 'noImplicitAny', 'noUnusedLocals', 'noUnusedParameters',
   'noFallthroughCasesInSwitch', 'noEmit', 'isolatedModules',
@@ -176,6 +203,9 @@ for (const path of ['tsconfig.json', 'tsconfig.m5-tests.json', 'tsconfig.m7-serv
     } else if (oldValue !== false && newValue === false) {
       failures.push(path + ': TypeScript safety check explicitly disabled: ' + flag);
     }
+  }
+  if (after.compilerOptions?.noCheck === true) {
+    failures.push(path + ': TypeScript full checking disabled by noCheck');
   }
   if (before.extends !== after.extends) {
     failures.push(path + ': TypeScript configuration inheritance changed');
@@ -236,10 +266,9 @@ if (oldPackage && newPackage) {
 }
 
 // A new suppression is not an acceptable substitute for fixing a new warning.
-// This check examines only added comment lines, preserving historical comments.
+// Inspect all added source lines, including inline comments and root-level code.
 try {
-  const patch = git(['diff', '--no-ext-diff', '--unified=0', baseSha, 'HEAD', '--',
-    'src', 'tests', 'e2e', 'api', 'server', 'scripts']);
+  const patch = git(['diff', '--no-ext-diff', '--unified=0', baseSha, 'HEAD', '--', '.']);
   let file = '';
   for (const line of patch.split('\n')) {
     if (line.startsWith('+++ b/')) {
@@ -247,8 +276,9 @@ try {
       continue;
     }
     if (!line.startsWith('+') || line.startsWith('+++')) continue;
-    const text = line.slice(1).trimStart();
-    if (/^(?:\/\/|\/\*|\*)\s*(?:oxlint-disable|eslint-disable|@ts-nocheck|@ts-ignore|istanbul ignore|c8 ignore)\b/i.test(text)) {
+    if (!/\.(?:[cm]?[jt]sx?)$/.test(file)) continue;
+    const text = line.slice(1);
+    if (/(?:\/\/|\/\*|\*)\s*(?:oxlint-disable|eslint-disable|@ts-(?:nocheck|ignore|expect-error)|istanbul ignore|c8 ignore)\b/i.test(text)) {
       failures.push('New lint/typecheck/coverage suppression is forbidden: ' + file + ': ' + text.slice(0, 120));
     }
   }
