@@ -4,8 +4,10 @@ import { getStorageDiagnosticData } from './storageStatus';
 import { sendTelemetryToSentry } from './sentryClient';
 import { deviceKey } from './sync/deviceStorage';
 import { storageOwner } from './sync/session';
+import { detectDerivedPlatform, isStandaloneMode, type DerivedPlatform } from './telemetrySanitizer';
 
-export type DerivedPlatform = 'ios' | 'ipados' | 'other';
+export { detectDerivedPlatform, isStandaloneMode };
+export type { DerivedPlatform };
 
 export type StorageReadStatus =
   | 'valid'
@@ -164,50 +166,6 @@ export function markAnomalyReported(marker: StorageMarker, customStorage?: Stora
     storage.removeItem(STORAGE_ANOMALY_REPORTED_KEY);
   } catch {
     // Ignore storage errors
-  }
-}
-
-/**
- * Derives a privacy-minimized platform descriptor ('ios' | 'ipados' | 'other').
- * Never extracts or leaks user agent strings.
- */
-export function detectDerivedPlatform(nav?: Navigator): DerivedPlatform {
-  try {
-    const n = nav || (typeof navigator !== 'undefined' ? navigator : null);
-    if (!n) return 'other';
-    const ua = typeof n.userAgent === 'string' ? n.userAgent : '';
-    const platform = typeof n.platform === 'string' ? n.platform : '';
-    const maxTouchPoints = typeof n.maxTouchPoints === 'number' ? n.maxTouchPoints : 0;
-
-    // iPadOS check (iPad in UA or MacIntel with touch points / Macintosh with maxTouchPoints > 1)
-    if (/iPad/i.test(ua) || (platform === 'MacIntel' && maxTouchPoints > 1) || (/Macintosh/i.test(ua) && maxTouchPoints > 1)) {
-      return 'ipados';
-    }
-    // iPhone / iPod check
-    if (/iPhone|iPod/i.test(ua)) {
-      return 'ios';
-    }
-    return 'other';
-  } catch {
-    return 'other';
-  }
-}
-
-/**
- * Detects whether the app is running in standalone mode (PWA / home screen installed).
- */
-export function isStandaloneMode(win?: Window): boolean {
-  try {
-    const w = win || (typeof window !== 'undefined' ? window : null);
-    if (!w) return false;
-    const isIosStandalone = (w.navigator as any)?.standalone === true;
-    let isMediaStandalone = false;
-    if (typeof w.matchMedia === 'function') {
-      isMediaStandalone = w.matchMedia('(display-mode: standalone)')?.matches ?? false;
-    }
-    return Boolean(isIosStandalone || isMediaStandalone);
-  } catch {
-    return false;
   }
 }
 

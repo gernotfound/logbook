@@ -329,6 +329,22 @@ describe('Storage Recovery Telemetry Suite', () => {
         expect(detectDerivedPlatform(mockIpodNav)).toBe('ios');
       });
 
+      it('uses Apple platform metadata even when the user agent is generic', () => {
+        const ipad = {
+          userAgent: 'Mozilla/5.0',
+          platform: 'iPad',
+          maxTouchPoints: 5,
+        } as unknown as Navigator;
+        const iphone = {
+          userAgent: 'Mozilla/5.0',
+          platform: 'iPhone',
+          maxTouchPoints: 5,
+        } as unknown as Navigator;
+
+        expect(detectDerivedPlatform(ipad)).toBe('ipados');
+        expect(detectDerivedPlatform(iphone)).toBe('ios');
+      });
+
       it('derives "ipados" for iPad and MacIntel with touch support', () => {
         const mockIpadNav = {
           userAgent: 'Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X) AppleWebKit/605.1.15',
@@ -372,6 +388,23 @@ describe('Storage Recovery Telemetry Suite', () => {
     });
 
     describe('Standalone detection tests', () => {
+      it('keeps the iOS standalone signal when matchMedia throws', () => {
+        const win = {
+          navigator: { standalone: true },
+          matchMedia: () => { throw new Error('SecurityError'); },
+        } as unknown as Window;
+        expect(isStandaloneMode(win)).toBe(true);
+
+        const payload = createStorageRecoveryAnomalyPayload({
+          marker: { version: 1, timestamp: 1000 },
+          timestamp: 2000,
+          nav: { userAgent: 'Mozilla/5.0', platform: 'iPad', maxTouchPoints: 5 } as unknown as Navigator,
+          win,
+        });
+        expect(payload).toMatchObject({ platform: 'ipados', standalone: true });
+      });
+
+
       it('detects iOS standalone mode via navigator.standalone', () => {
         const mockWin = {
           navigator: { standalone: true },
