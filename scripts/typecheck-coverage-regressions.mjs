@@ -73,6 +73,16 @@ await test('rejects new TypeScript extensions not selected by existing globs', t
   assert.match(result.stderr, /src\/new-module\.mts/);
 });
 
+await test('rejects same-basename .ts and .tsx files when one is shadowed by TypeScript', t => {
+  const root = fixture(t);
+  writeFixture(root, 'tests/app.test.tsx');
+  execFileSync('git', ['add', 'tests/app.test.tsx'], { cwd: root });
+
+  const result = run(root);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /tests\/app\.test\.tsx/);
+});
+
 await test('rejects changes that silently remove existing files from a project', t => {
   const root = fixture(t);
   writeFixture(root, 'tsconfig.m5-tests.json', JSON.stringify({
