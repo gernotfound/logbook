@@ -326,8 +326,6 @@ describe('EMPIRICAL CHALLENGER: Viewport & Overflow Adversarial Stress Suite (m2
                         setSleepHrv: vi.fn(),
                         resetForm: vi.fn()
                     }}
-                    handleCancelEdit={vi.fn()}
-                    handleSaveSleep={vi.fn().mockResolvedValue(undefined)}
                 />
             );
 
