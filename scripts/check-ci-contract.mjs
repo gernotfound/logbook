@@ -27,7 +27,7 @@ if (packageJson.scripts?.['lint:type-aware'] !== 'oxlint --config .oxlintrc.type
 if (packageJson.scripts?.['lint:baseline'] !== 'node scripts/check-lint-baseline.mjs') {
   failures.push('lint:baseline: expected node scripts/check-lint-baseline.mjs');
 }
-if (packageJson.scripts?.['test:typecheck-coverage'] !== 'node --test scripts/check-typecheck-coverage.test.mjs && node scripts/check-typecheck-coverage.mjs') {
+if (packageJson.scripts?.['test:typecheck-coverage'] !== 'node --test scripts/typecheck-coverage-regressions.mjs && node scripts/check-typecheck-coverage.mjs') {
   failures.push('test:typecheck-coverage must run regressions and check tracked TypeScript files');
 }
 if (!existsSync('config/lint-warning-baseline.json')) {
