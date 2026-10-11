@@ -178,7 +178,7 @@ describe('authenticated hydration session fencing', () => {
         });
         await secondLoad;
 
-        expect((await readLocal('user-a'))?.data.profile.height).toBe('182');
+        expect((await readLocal('user-a'))?.data.profile?.height).toBe('182');
         expect(secondSetUserData).toHaveBeenCalledWith(expect.objectContaining({
             profile: expect.objectContaining({ height: '182' }),
         }));
@@ -186,7 +186,7 @@ describe('authenticated hydration session fencing', () => {
         firstPayload.resolve(payload('171'));
         await firstLoad;
 
-        expect((await readLocal('user-a'))?.data.profile.height).toBe('182');
+        expect((await readLocal('user-a'))?.data.profile?.height).toBe('182');
         expect(firstSetUserData).not.toHaveBeenCalled();
     });
 
@@ -218,7 +218,7 @@ describe('authenticated hydration session fencing', () => {
         });
         await secondLoad;
 
-        expect((await readLocal('user-a'))?.data.profile.height).toBe('183');
+        expect((await readLocal('user-a'))?.data.profile?.height).toBe('183');
         expect(secondSetUserData).toHaveBeenCalledWith(expect.objectContaining({
             profile: expect.objectContaining({ height: '183' }),
         }));
@@ -226,7 +226,7 @@ describe('authenticated hydration session fencing', () => {
         firstPayload.resolve(payload('171'));
         await firstLoad;
 
-        expect((await readLocal('user-a'))?.data.profile.height).toBe('183');
+        expect((await readLocal('user-a'))?.data.profile?.height).toBe('183');
         expect(firstSetUserData).not.toHaveBeenCalled();
     });
 });
