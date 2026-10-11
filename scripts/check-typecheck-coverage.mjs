@@ -1,9 +1,10 @@
 import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
-import ts from 'typescript';
+import { fileURLToPath } from 'node:url';
 
 const projectConfigs = ['tsconfig.m5-tests.json', 'tsconfig.m7-server.json'];
 const root = process.cwd();
+const compiler = fileURLToPath(new URL('../node_modules/.bin/tsc', import.meta.url));
 const trackedTypeScriptFiles = execFileSync('git', ['ls-files', '-z'], { cwd: root })
   .toString('utf8')
   .split('\0')
@@ -14,21 +15,21 @@ const includedFiles = new Set();
 const failures = [];
 
 for (const configName of projectConfigs) {
-  const diagnostics = [];
-  const parsed = ts.getParsedCommandLineOfConfigFile(resolve(root, configName), {}, {
-    ...ts.sys,
-    onUnRecoverableConfigFileDiagnostic: diagnostic => diagnostics.push(diagnostic),
-  });
+  try {
+    // TypeScript 7 exposes the authoritative compiler file list through its CLI,
+    // not through the pre-7 JavaScript compiler API.
+    const output = execFileSync(compiler, ['--listFilesOnly', '--project', resolve(root, configName)], {
+      cwd: root,
+      encoding: 'utf8',
+      maxBuffer: 16 * 1024 * 1024,
+    });
 
-  if (!parsed) {
-    failures.push(`${configName}: TypeScript could not read the project configuration`);
-  } else {
-    diagnostics.push(...parsed.errors);
-    for (const file of parsed.fileNames) includedFiles.add(resolve(file));
-  }
-
-  for (const diagnostic of diagnostics) {
-    failures.push(`${configName}: ${ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n')}`);
+    for (const file of output.trim().split(/\r?\n/).filter(Boolean)) {
+      includedFiles.add(resolve(root, file));
+    }
+  } catch (error) {
+    const detail = String(error.stdout || error.stderr || error.message).trim();
+    failures.push(`${configName}: compiler file listing failed: ${detail}`);
   }
 }
 
