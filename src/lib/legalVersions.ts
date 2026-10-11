@@ -1,4 +1,4 @@
-import { LegalConsent } from '../types';
+import type { LegalConsent } from '../types.js';
 
 /**
  * Versioni correnti dei documenti legali.

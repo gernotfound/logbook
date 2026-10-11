@@ -11,6 +11,10 @@ const listeners = new Set<() => void>();
 const verifiedReacceptance = new Map<string, string>();
 const marker = (uid: string) => `logbook:v2:user:${uid}:health-consent-withdrawal`;
 function notify() { for (const listener of listeners) listener(); }
+export function beginHealthConsentVerification(uid: string): void {
+  setStatus(uid, 'checking');
+}
+
 export function subscribeHealthConsent(listener: () => void): () => void {
   listeners.add(listener);
   return () => { listeners.delete(listener); };
@@ -28,7 +32,10 @@ export function currentHealthConsentStatus(uid: string | undefined): HealthConse
     const saved = readMarker(uid);
     if (saved === 'pending' || saved === 'withdrawn' || saved === 'reaccepting') return saved;
     if (saved !== null) return 'error';
-    return entries.get(uid) ?? 'checking';
+    // Before an authenticated session begins its verification, standalone
+  // persistence/recovery tooling has no revocation marker to reconcile.
+  // AuthProvider installs 'checking' before exposing an authenticated owner.
+  return entries.get(uid) ?? 'active';
   } catch {
     return 'error';
   }
@@ -55,6 +62,7 @@ async function serverRequest(user: User, method: 'GET' | 'POST', body?: unknown)
       ...(method === 'POST' ? { 'content-type': 'application/json' } : {}),
     },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    signal: AbortSignal.timeout(10_000),
   });
   if (!response.ok) throw new Error('Verifica del consenso non disponibile (HTTP ' + response.status + ').');
   const result: unknown = await response.json();

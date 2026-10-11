@@ -3,6 +3,7 @@ import { User } from 'firebase/auth';
 import { auth, getDb, waitForPendingWrites, provider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendEmailVerification, reload } from '../lib/firebase';
 import { DB } from '../lib/db';
 import { isAccountDeletionPending } from '../lib/sync/accountGate';
+import { beginHealthConsentVerification, refreshHealthConsent } from '../lib/healthConsent';
 import { useAppStore } from '../store/useAppStore';
 import { UserData } from '../types';
 import { UserDataSchema } from '../lib/schema';
@@ -373,6 +374,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 return;
             }
             if (user) {
+                beginHealthConsentVerification(user.uid);
                 tryRemoveBrowserValue(AWAITING_REDIRECT_KEY);
                 const expectedOwner = userOwner(user.uid);
                 const current = useAppStore.getState();
@@ -396,6 +398,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                     setLoading(false);
                     return;
                 }
+            }
+            if (user) {
+                // Authoritative consent check precedes hydration/migration and any
+                // authenticated writes. A failed/offline check remains fail-closed.
+                await refreshHealthConsent(user);
+                if (!isCurrentRun()) return;
             }
             setCurrentUser(user);
 

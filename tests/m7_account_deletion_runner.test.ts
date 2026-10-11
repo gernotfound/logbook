@@ -26,6 +26,8 @@ const mocked = vi.hoisted(() => {
 });
 
 vi.mock('../server/accountDeletion/jobStore', () => mocked);
+const consent = vi.hoisted(() => ({ removeHealthConsentStateForDeletedAccount: vi.fn() }));
+vi.mock('../server/healthConsent/withdrawal', () => consent);
 
 import {
   ACCOUNT_DELETION_INTERACTIVE_BUDGET_MS,
@@ -49,6 +51,7 @@ describe('M7 native account deletion runner', () => {
       mocked.revokeAccountAccess,
       mocked.verifyNoAccountResidue,
     ]) fn.mockResolvedValue(undefined);
+    consent.removeHealthConsentStateForDeletedAccount.mockResolvedValue(undefined);
     mocked.acquireDeletionLease.mockResolvedValue(true);
     mocked.deletePrivateCollectionPage.mockResolvedValue(0);
   });

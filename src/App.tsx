@@ -113,7 +113,6 @@ function App() {
   useEffect(() => {
     if (!currentUser || isGuest || emailVerificationRequired) return;
     const reconcile = () => { void refreshHealthConsent(currentUser); };
-    reconcile();
     const onStorage = (event: StorageEvent) => {
       if (event.key === `logbook:v2:user:${currentUser.uid}:health-consent-withdrawal`) {
         refreshHealthConsentFromStorage();
