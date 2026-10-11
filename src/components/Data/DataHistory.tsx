@@ -10,11 +10,12 @@ import {
 } from 'lucide-react';
 import { Logic } from '../../lib/logic';
 import { ContextMenu } from '../UI/ContextMenu';
+import type { MeasurementHistoryDay } from '../../types';
 
 interface DataHistoryProps {
-    measurementsHistory: any[];
+    measurementsHistory: MeasurementHistoryDay[];
     editingDate: string | null;
-    onSelectEdit: (day: any) => void;
+    onSelectEdit: (day: MeasurementHistoryDay) => void;
     onDeleteMeasurement?: (date: string) => void;
 }
 
@@ -48,16 +49,17 @@ function dayLabel(key: string): string {
     return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
-function hasMeasurementData(day: any): boolean {
-    return ['weight', 'bf', 'waist', 'neck', 'hip', 'chest', 'shoulders', 'biceps', 'thighs', 'calves']
-        .some(key => day?.[key] !== undefined && day?.[key] !== null && day?.[key] !== '');
+const MEASUREMENT_FIELDS = ['weight', 'bf', 'waist', 'neck', 'hip', 'chest', 'shoulders', 'biceps', 'thighs', 'calves'] as const satisfies readonly (keyof MeasurementHistoryDay)[];
+
+function hasMeasurementData(day: MeasurementHistoryDay): boolean {
+    return MEASUREMENT_FIELDS.some(key => day?.[key] !== undefined && day?.[key] !== null && day?.[key] !== '');
 }
 
 function hasFiniteValue(value: unknown): boolean {
     return value !== undefined && value !== null && value !== '' && Number.isFinite(Number(value));
 }
 
-function finiteAverage(days: any[], key: string): number | null {
+function finiteAverage(days: MeasurementHistoryDay[], key: 'weight' | 'bf'): number | null {
     const values = days
         .filter(day => hasFiniteValue(day?.[key]))
         .map(day => Number(day[key]));
@@ -69,7 +71,7 @@ function formatDecimal(value: number): string {
     return value.toLocaleString('it-IT', { maximumFractionDigits: 1 });
 }
 
-function recordSummary(day: any): string {
+function recordSummary(day: MeasurementHistoryDay): string {
     const parts: string[] = [];
     if (hasFiniteValue(day?.weight)) parts.push(`${formatDecimal(Number(day.weight))} kg`);
     if (hasFiniteValue(day?.bf)) parts.push(`BF ${formatDecimal(Number(day.bf))}%`);
@@ -96,7 +98,7 @@ const DataHistory: React.FC<DataHistoryProps> = ({
     const [selectedDate, setSelectedDate] = useState(() => initialDate);
     const [periodOpen, setPeriodOpen] = useState(false);
     const [pickerYear, setPickerYear] = useState(() => Number(initialDate.slice(0, 4)));
-    const [detailDay, setDetailDay] = useState<any | null>(null);
+    const [detailDay, setDetailDay] = useState<MeasurementHistoryDay | null>(null);
     const adoptedInitialHistory = useRef(datedHistory.length > 0);
 
     useEffect(() => {
@@ -109,7 +111,7 @@ const DataHistory: React.FC<DataHistoryProps> = ({
     }, [datedHistory]);
 
     const daysByDate = useMemo(() => {
-        const map = new Map<string, any[]>();
+        const map = new Map<string, MeasurementHistoryDay[]>();
         datedHistory.forEach(day => {
             const current = map.get(day.date);
             if (current) current.push(day);
@@ -119,7 +121,7 @@ const DataHistory: React.FC<DataHistoryProps> = ({
     }, [datedHistory]);
 
     const daysByMonth = useMemo(() => {
-        const map = new Map<string, any[]>();
+        const map = new Map<string, MeasurementHistoryDay[]>();
         datedHistory.forEach(day => {
             const key = day.date.slice(0, 7);
             const current = map.get(key);

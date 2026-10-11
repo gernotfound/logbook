@@ -274,6 +274,9 @@ export interface NutritionDay {
     cardioSessions?: CardioSession[];
 }
 
+/** UI history also accepts sparse archived days (including sleep-only records). */
+export type MeasurementHistoryDay = Pick<NutritionDay, 'date'> & Partial<Omit<NutritionDay, 'date'>>;
+
 export interface Food {
     id?: string | number;
     name: string;

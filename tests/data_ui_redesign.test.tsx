@@ -109,6 +109,19 @@ describe('Data UI redesign', () => {
         expect(calculateAndSave).toHaveBeenCalledWith(expect.anything(), 'calculate');
     });
 
+    it('keeps sparse sleep-only and zero-valued measurement days in history', () => {
+        render(<DataHistory
+            measurementsHistory={[
+                { date: '2026-10-04', weight: 0 },
+                { date: '2026-10-05', sleepHours: '07:30' },
+            ]}
+            editingDate={null}
+            onSelectEdit={vi.fn()}
+        />);
+        expect(screen.getByText('2 giorni registrati')).toBeDefined();
+        expect(screen.getByText('Sonno 07:30')).toBeDefined();
+    });
+
     it('renders the Data history calendar, detail view and real contextual callbacks', () => {
         const onSelectEdit = vi.fn();
         const onDeleteMeasurement = vi.fn();
