@@ -8,7 +8,6 @@ const sdk = vi.hoisted(() => ({ db: null as any, auth: { currentUser: { uid: 'a'
 vi.mock('../../src/lib/firebase', () => ({ auth: sdk.auth, getDb: () => sdk.db, ensureAppCheck: async () => {}, waitForPendingWrites: (db: any) => waitForPendingWrites(db) }));
 vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackEvent: vi.fn(), trackError: vi.fn() } }));
 import { DB as RealDB } from '../../src/lib/db';
-import { dbState as __testDbState } from '../../src/lib/db/db_core';
 import { adoptReplicaCheckpoint, readLocal, initializeLocal, commitLocal } from '../../src/lib/sync/localRepository';
 import { registerReplica } from './replicaHarness';
 import { CURRENT_DATA_SCHEMA, CURRENT_SYNC_PROTOCOL } from '../../src/lib/schemaEvolution';
