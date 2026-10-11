@@ -22,5 +22,4 @@ export { diffDocuments } from './semanticProjection/diff';
 
 export {
     applySemanticOperations,
-    normalizeDomainData,
 } from './semanticProjection/apply';
