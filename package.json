@@ -36,6 +36,7 @@
     "test:rules": "node scripts/run-firestore-rules-tests.mjs",
     "test:coverage": "vitest run --coverage",
     "test:no-skips": "node scripts/check-test-skips.mjs",
+    "test:typecheck-coverage": "node --test scripts/typecheck-coverage-regressions.mjs && node scripts/check-typecheck-coverage.mjs",
     "test:typecheck:m5": "tsc --noEmit -p tsconfig.m5-tests.json",
     "test:quality:m5": "node scripts/check-m5-test-quality.mjs",
     "test:repo-hygiene": "node scripts/check-repo-hygiene.mjs",
@@ -53,7 +54,7 @@
     "verify:m2": "npm run lint && npm run test && npm run test:isolated && npm run test:fuzz && npm run test:stress && npm run test:rules && npm run test:no-skips && npm run build",
     "verify:m3": "npm run lint && npm run test && npm run test:isolated && npm run test:fuzz && npm run test:recovery && npm run test:stress && npm run test:rules && npm run test:e2e && npm run test:no-skips && npm run build",
     "verify:m4": "npm run lint && npm run test && npm run test:isolated && npm run test:fuzz && npm run test:recovery && npm run test:gc && npm run test:stress && npm run test:rules && npm run test:e2e && npm run test:no-skips && npm run build",
-    "verify:m5": "npm run lint && npm run test:typecheck:m5 && npm run test:quality:m5 && npm run test && npm run test:isolated && npm run test:fuzz && npm run test:recovery && npm run test:gc && npm run test:hardening && npm run test:stress && npm run test:rules && npm run test:e2e && npm run test:no-skips && npm run build",
+    "verify:m5": "npm run lint && npm run test:typecheck-coverage && npm run test:typecheck:m5 && npm run test:quality:m5 && npm run test && npm run test:isolated && npm run test:fuzz && npm run test:recovery && npm run test:gc && npm run test:hardening && npm run test:stress && npm run test:rules && npm run test:e2e && npm run test:no-skips && npm run build",
     "verify:m6": "npm run test:repo-hygiene && npm run test:ci-contract && npm run test:dead-code && npm run lint:a11y && npm run lint:type-aware && npm run lint:baseline && npm run verify:m5",
     "verify:m7": "npm run verify:m6 && npm run test:typecheck:m7 && npm run test:m7 && npm run test:pwa:m7 && npm run test:smoke:m7",
     "verify:m8": "npm run verify:m7 && npm run test:m8 && npm run test:domain-boundary:m8"

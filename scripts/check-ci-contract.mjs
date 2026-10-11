@@ -27,6 +27,9 @@ if (packageJson.scripts?.['lint:type-aware'] !== 'oxlint --config .oxlintrc.type
 if (packageJson.scripts?.['lint:baseline'] !== 'node scripts/check-lint-baseline.mjs') {
   failures.push('lint:baseline: expected node scripts/check-lint-baseline.mjs');
 }
+if (packageJson.scripts?.['test:typecheck-coverage'] !== 'node --test scripts/typecheck-coverage-regressions.mjs && node scripts/check-typecheck-coverage.mjs') {
+  failures.push('test:typecheck-coverage must run regressions and check tracked TypeScript files');
+}
 if (!existsSync('config/lint-warning-baseline.json')) {
   failures.push('lint warning baseline: missing config/lint-warning-baseline.json');
 }
@@ -225,6 +228,8 @@ if (!includeMatch) {
   if (shards.filter(shard => shard.java === 'true').map(shard => shard.id).join(',') !== 'rules') failures.push('Java must be limited to the rules shard');
 }
 
+const coverageOccurrences = workflow.match(/npm run test:typecheck-coverage/g) ?? [];
+if (coverageOccurrences.length !== 1) failures.push(`TypeScript coverage gate: expected once, found ${coverageOccurrences.length}`);
 const auditOccurrences = workflow.match(/npm audit --audit-level=high/g) ?? [];
 if (auditOccurrences.length !== 1) failures.push(`security audit: expected once, found ${auditOccurrences.length}`);
 const staticSecurityOccurrences = workflow.match(/npm run test:security-static/g) ?? [];
