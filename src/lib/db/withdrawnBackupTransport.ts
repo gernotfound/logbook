@@ -2,8 +2,8 @@ import { auth, ensureAppCheck } from '../firebase';
 import { getLimitedUseAppCheckToken } from '../appCheck';
 import type { DocumentData } from '../sync/documentProjection';
 
-const API = (import.meta.env.VITE_ACCOUNT_DELETION_API_ORIGIN || 'https://logbook-gnf.vercel.app').replace(/\\/$/, '');
-const MONTH_RE = /^\\d{4}-(0[1-9]|1[0-2])$/;
+const API = (import.meta.env.VITE_ACCOUNT_DELETION_API_ORIGIN || 'https://logbook-gnf.vercel.app').replace(/\/$/, '');
+const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
 type Page = { documents: Array<{ path: string; data: DocumentData }>; nextCursor: string | null };
 type Section = 'root' | 'history_months' | 'nutrition_months';
 

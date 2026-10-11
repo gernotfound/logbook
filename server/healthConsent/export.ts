@@ -3,7 +3,7 @@ import { adminDb } from '../accountDeletion/firebaseAdmin.js';
 import { readHealthConsentState } from './withdrawal.js';
 
 export const HEALTH_EXPORT_PAGE_SIZE = 2;
-const MONTH_RE = /^\\d{4}-(0[1-9]|1[0-2])$/;
+const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
 export type HealthExportCollection = 'root' | 'history_months' | 'nutrition_months';
 export type HealthExportItem = { path: string; data: Record<string, unknown> };
 export type HealthExportPage = { documents: HealthExportItem[]; nextCursor: string | null };

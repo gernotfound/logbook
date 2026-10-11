@@ -25,7 +25,7 @@ export async function GET(request: Request): Promise<Response> {
     const name = params.get('collection');
     const after = params.get('after');
     if ((name !== 'root' && name !== 'history_months' && name !== 'nutrition_months')
-      || (after !== null && (name === 'root' || !/^\\d{4}-(0[1-9]|1[0-2])$/.test(after)))) {
+      || (after !== null && (name === 'root' || !/^\d{4}-(0[1-9]|1[0-2])$/.test(after)))) {
       return Response.json({ error: 'Parametri esportazione non validi.' }, { status: 400, headers: CORS(origin) });
     }
     const page = await readWithdrawnHealthExportPage(uid, name as HealthExportCollection, after);
