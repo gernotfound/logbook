@@ -15,3 +15,9 @@ Decisione UX del product owner (12 ottobre 2026): dopo la revoca nessuna funzion
 - Validazione con avvocato: basi art. 6/9 GDPR, libertà del consenso, conseguenze del diniego, conservazione residua dopo revoca, informativa, DPIA, DPA/trasferimenti.
 
 Questo branch non è una funzionalità Production pronta finché i punti sopra sono aperti.
+
+## Confine export dopo revoca (bozza tecnica)
+
+Durante la revoca, tutte le letture dirette delle collection `users/{uid}` sono negate dalla Security Rule anche a client obsoleti. `api/health-consent-export` verifica origin, Firebase UID, App Check limited-use e stato revocato ad ogni pagina; il server invia il root e le collection mensili in pagine di massimo due documenti, senza esporre documenti amministrativi. Il client verifica gli ID mensili, evita cursori ripetuti e costruisce il Backup Schema 3 con copertura `cloud-and-device` soltanto dopo la lettura completa. Se manca il server o il dispositivo è offline, il percorso esistente richiede la conferma esplicita per esportare il solo archivio locale, marcato parziale.
+
+Questa soluzione non sostituisce ancora i controlli di epoch/fencing delle scritture dopo nuova accettazione. Non pubblicare la PR senza chiudere quel confine e le verifiche dei diritti/privacy richieste.

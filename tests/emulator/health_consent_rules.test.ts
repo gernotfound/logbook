@@ -38,3 +38,13 @@ it('denies all direct fitness reads and writes after withdrawal', async () => {
     expireAt: new Date(Date.now() + 86400000),
   }));
 });
+
+// An active account retains ordinary reads: only the withdrawn state has the server-export gate.
+it('retains direct owner reads when consent is active', async () => {
+  await env.withSecurityRulesDisabled(async context => {
+    await setDoc(doc(context.firestore(), 'health_consent_withdrawals/u'), mark('active'));
+    await setDoc(doc(context.firestore(), 'users/u'), { profile: { name: 'Test' } });
+  });
+  const db = env.authenticatedContext('u', { email_verified: true }).firestore();
+  await assertSucceeds(getDoc(doc(db, 'users/u')));
+});
