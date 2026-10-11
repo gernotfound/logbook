@@ -21,3 +21,9 @@ Questo branch non è una funzionalità Production pronta finché i punti sopra s
 Durante la revoca, tutte le letture dirette delle collection `users/{uid}` sono negate dalla Security Rule anche a client obsoleti. `api/health-consent-export` verifica origin, Firebase UID, App Check limited-use e stato revocato ad ogni pagina; il server invia il root e le collection mensili in pagine di massimo due documenti, senza esporre documenti amministrativi. Il client verifica gli ID mensili, evita cursori ripetuti e costruisce il Backup Schema 3 con copertura `cloud-and-device` soltanto dopo la lettura completa. Se manca il server o il dispositivo è offline, il percorso esistente richiede la conferma esplicita per esportare il solo archivio locale, marcato parziale.
 
 Questa soluzione non sostituisce ancora i controlli di epoch/fencing delle scritture dopo nuova accettazione. Non pubblicare la PR senza chiudere quel confine e le verifiche dei diritti/privacy richieste.
+
+## Fence delle generazioni di consenso
+
+Dopo la prima revoca, il marker server non viene eliminato al re-consenso: la revisione cresce monotonicamente. Le Rules accettano un nuovo `sync_control` e le scritture con `_sync.writer` soltanto se dichiarano esplicitamente `consentRevision` uguale alla revisione server `active`. Un vecchio client Protocol 3 privo di tale campo non può né ri-registrare la replica né scrivere un vecchio journal. Il parser TypeScript riconosce il campo opzionale senza incrementare artificialmente il Sync Protocol 3.
+
+**Ancora aperto e bloccante:** il nuovo client deve associare ogni pending journal alla generazione in cui è stato creato, rifiutare replay silenzioso dopo la riattivazione e conservare i vecchi journal per il recupero. Finché questo codice e i test cross-device non esistono, il re-consenso non è operativo in Production. Gli utenti con backup/pending devono poter esercitare i diritti senza aprire il protocollo a dati di una generazione precedente.

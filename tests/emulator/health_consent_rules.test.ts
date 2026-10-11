@@ -48,3 +48,23 @@ it('retains direct owner reads when consent is active', async () => {
   const db = env.authenticatedContext('u', { email_verified: true }).firestore();
   await assertSucceeds(getDoc(doc(db, 'users/u')));
 });
+
+// The server has reactivated the account at revision 2. Stale Protocol 3
+// clients without a consent generation must not create or renew replicas.
+it('rejects a stale replica registration after reacceptance', async () => {
+  await env.withSecurityRulesDisabled(async context => {
+    await setDoc(doc(context.firestore(), 'health_consent_withdrawals/u'), { uid: 'u', status: 'active', revision: 2 });
+    await setDoc(doc(context.firestore(), 'users/u'), { profile: { name: 'Test' } });
+  });
+  const db = env.authenticatedContext('u', { email_verified: true }).firestore();
+  await assertSucceeds(getDoc(doc(db, 'users/u')));
+  const now = Date.now();
+  const base = {
+    protocolVersion: 3,
+    replicas: { s00: { replicaId: 'r', generation: 1, status: 'active', lastSeq: 0,
+      checkpointAtMs: now, leaseUntilMs: now + 30_000, checkpointClock: {} } },
+    mutation: { slot: 's00', action: 'register' },
+  };
+  await assertFails(setDoc(doc(db, 'users/u/sync_control/state'), base));
+  await assertSucceeds(setDoc(doc(db, 'users/u/sync_control/state'), { ...base, consentRevision: 2 }));
+});

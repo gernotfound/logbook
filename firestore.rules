@@ -26,6 +26,19 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/health_consent_withdrawals/$(userId)).data.status == 'withdrawn';
     }
 
+    // A revoked consent record is permanent across reacceptance cycles.
+    // Clients from an older generation can neither renew a replica nor publish
+    // their old queued journal after the user has explicitly reaccepted.
+    function matchesConsentEpoch(userId, candidate) {
+      let record = /databases/$(database)/documents/health_consent_withdrawals/$(userId);
+      return !exists(record) || (
+        get(record).data.status == 'active'
+        && 'consentRevision' in candidate
+        && candidate.consentRevision is int
+        && candidate.consentRevision == get(record).data.revision
+      );
+    }
+
     function isWritableOwner(userId) {
       return isActiveOwner(userId) && !consentWithdrawn(userId);
     }
@@ -58,7 +71,7 @@ service cloud.firestore {
 
     function isValidReplicaWriter(writer) {
       return writer is map
-        && writer.keys().hasOnly(['slot', 'replicaId', 'generation', 'seq'])
+        && writer.keys().hasOnly(['slot', 'replicaId', 'generation', 'seq', 'consentRevision'])
         && isReplicaSlot(writer.slot)
         && writer.replicaId is string
         && writer.replicaId.size() > 0
@@ -66,7 +79,9 @@ service cloud.firestore {
         && writer.generation is int
         && writer.generation >= 1
         && writer.seq is int
-        && writer.seq >= 0;
+        && writer.seq >= 0
+        && (!('consentRevision' in writer)
+            || (writer.consentRevision is int && writer.consentRevision >= 0));
     }
 
     function isValidSync(docData) {
@@ -101,6 +116,8 @@ service cloud.firestore {
         && control.mutation is map
         && control.mutation.action == 'advance'
         && control.mutation.slot == writer.slot
+        && matchesConsentEpoch(userId, writer)
+        && matchesConsentEpoch(userId, control)
         && writer.slot in control.replicas
         && control.replicas[writer.slot].status == 'active'
         && control.replicas[writer.slot].replicaId == writer.replicaId
@@ -152,7 +169,9 @@ service cloud.firestore {
 
     function hasValidReplicaControlShape(data) {
       return data is map
-        && data.keys().hasOnly(['protocolVersion', 'replicas', 'mutation'])
+        && data.keys().hasOnly(['protocolVersion', 'replicas', 'mutation', 'consentRevision'])
+        && (!('consentRevision' in data)
+            || (data.consentRevision is int && data.consentRevision >= 0))
         && data.protocolVersion == 3
         && data.replicas is map
         && data.replicas.size() <= 16
@@ -174,22 +193,24 @@ service cloud.firestore {
         && isValidReplicaEntry(data.replicas[data.mutation.slot]);
     }
 
-    function validReplicaControlCreate(data) {
+    function validReplicaControlCreate(userId, data) {
       let slot = data.mutation.slot;
       let entry = data.replicas[slot];
       return hasValidReplicaControlShape(data)
+        && matchesConsentEpoch(userId, data)
         && data.mutation.action == 'register'
         && data.replicas.size() == 1
         && entry.generation == 1
         && isFreshReplicaLease(entry);
     }
 
-    function validReplicaControlUpdate(oldData, newData) {
+    function validReplicaControlUpdate(userId, oldData, newData) {
       let slot = newData.mutation.slot;
       let next = newData.replicas[slot];
       let existed = slot in oldData.replicas;
       return hasValidReplicaControlShape(newData)
-        && newData.diff(oldData).affectedKeys().hasOnly(['replicas', 'mutation'])
+        && matchesConsentEpoch(userId, newData)
+        && newData.diff(oldData).affectedKeys().hasOnly(['replicas', 'mutation', 'consentRevision'])
         && newData.replicas.diff(oldData.replicas).affectedKeys().hasOnly([slot])
         && (
           (
@@ -542,10 +563,10 @@ service cloud.firestore {
         allow read: if controlId == 'state' && isActiveOwner(userId);
         allow create: if controlId == 'state'
           && isWritableOwner(userId)
-          && validReplicaControlCreate(incomingData());
+          && validReplicaControlCreate(userId, incomingData());
         allow update: if controlId == 'state'
           && isWritableOwner(userId)
-          && validReplicaControlUpdate(resource.data, incomingData());
+          && validReplicaControlUpdate(userId, resource.data, incomingData());
         allow delete: if false;
       }
 
