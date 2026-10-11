@@ -182,7 +182,6 @@ describe('PATCH: DB.loadUserData nutritionPlanningOrigin rehydration', () => {
     });
 
     it('R1. Firestore returns user-edited: origin is rehydrated correctly', async () => {
-        const mockUser = { uid: 'test-uid' } as any;
         vi.spyOn(DB, 'loadUserData').mockResolvedValue({
             ...defaultUserDataFallback,
             nutritionPlanningOrigin: 'user-edited',

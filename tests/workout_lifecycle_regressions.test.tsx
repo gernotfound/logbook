@@ -93,6 +93,28 @@ describe('Workout lifecycle durable recovery regressions', () => {
     });
 
 
+    it('verifies the owner-scoped IndexedDB snapshot after starting a planned workout', async () => {
+        const initial = userData({
+            routines: [{ id: 'routine-durable', name: 'Durable routine', exercises: [] }],
+            activeWorkout: null,
+        });
+        await initializeLocal(owner, initial);
+        useAppStore.setState({ userData: initial, dataOwner: owner, localWorkout: null });
+
+        const hook = renderHook(() => useWorkoutSession());
+        await act(async () => {
+            await hook.result.current.startWorkout('routine-durable');
+            await useAppStore.getState().flushPendingSyncs();
+        });
+
+        const visible = useAppStore.getState().localWorkout;
+        const durable = await readLocal(owner);
+        expect(visible?.routineId).toBe('routine-durable');
+        expect(durable?.data.activeWorkout?.id).toBe(visible?.id);
+        expect(durable?.data.activeWorkout?.routineId).toBe('routine-durable');
+        expect(localStorage.getItem(deviceKey('workout', owner))).not.toBeNull();
+    });
+
     it('never deletes a replacement workout when confirmation belongs to another session', async () => {
         const original = workout('original-confirmation', true);
         const replacement = workout('replacement-confirmation', true);

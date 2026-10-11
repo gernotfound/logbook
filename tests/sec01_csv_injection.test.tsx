@@ -5,14 +5,14 @@ import { useDialogStore } from '../src/store/useDialogStore';
 describe('SEC-01: CSV Formula Injection Mitigation in Export', () => {
     it('formatCsvField protegge le stringhe che iniziano con caratteri pericolosi', () => {
         // Stringhe malevole
-        expect(Exporter.formatCsvField('=1+1')).toBe(`"\'=1+1"`);
-        expect(Exporter.formatCsvField('+SUM(A1:A10)')).toBe(`"\'+SUM(A1:A10)"`);
-        expect(Exporter.formatCsvField('-cmd|\' /C calc\'!A0')).toBe(`"\'-cmd|\' /C calc\'!A0"`);
-        expect(Exporter.formatCsvField('@foo')).toBe(`"\'@foo"`);
-        expect(Exporter.formatCsvField('\t=1+1')).toBe(`"\'\t=1+1"`);
-        expect(Exporter.formatCsvField('\r=1+1')).toBe(`"\'\r=1+1"`);
-        expect(Exporter.formatCsvField('   =foo')).toBe(`"\'   =foo"`); // leading spaces
-        expect(Exporter.formatCsvField('-1+2')).toBe(`"\'-1+2"`); // stringa, non numero
+        expect(Exporter.formatCsvField('=1+1')).toBe(`"'=1+1"`);
+        expect(Exporter.formatCsvField('+SUM(A1:A10)')).toBe(`"'+SUM(A1:A10)"`);
+        expect(Exporter.formatCsvField('-cmd|\' /C calc\'!A0')).toBe(`"'-cmd|' /C calc'!A0"`);
+        expect(Exporter.formatCsvField('@foo')).toBe(`"'@foo"`);
+        expect(Exporter.formatCsvField('\t=1+1')).toBe(`"'\t=1+1"`);
+        expect(Exporter.formatCsvField('\r=1+1')).toBe(`"'\r=1+1"`);
+        expect(Exporter.formatCsvField('   =foo')).toBe(`"'   =foo"`); // leading spaces
+        expect(Exporter.formatCsvField('-1+2')).toBe(`"'-1+2"`); // stringa, non numero
 
         // Stringhe legittime
         expect(Exporter.formatCsvField('Allenamento normale')).toBe(`"Allenamento normale"`);

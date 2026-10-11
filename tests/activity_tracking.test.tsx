@@ -162,14 +162,14 @@ describe('activity export and local-day behavior', () => {
         expect(Logic.getLocalDateString(timestamp!)).toBe('2026-09-24');
         expect(localDateTimeToTimestamp('2026-09-24', '25:00')).toBeUndefined();
     });
-    it('rolls activity to the next local day at midnight without turning missing steps into zero', () => {
+    it('rolls activity to the next local day at midnight without turning missing steps into zero', async () => {
         vi.useFakeTimers();
         vi.setSystemTime(new Date(2026, 8, 24, 23, 59, 59));
         useAppStore.setState({ userData: parse({ nutrition: { '2026-09-24': { date: '2026-09-24', steps: 7777 } } }) });
         const hook = renderHook(() => useActivityTracking());
         expect(hook.result.current.selectedDate).toBe('2026-09-24');
         expect(hook.result.current.savedSteps).toBe(7777);
-        act(() => vi.advanceTimersByTime(1100));
+        await act(async () => { vi.advanceTimersByTime(1100); });
         expect(hook.result.current.selectedDate).toBe('2026-09-25');
         expect(hook.result.current.savedSteps).toBeUndefined();
         expect(hook.result.current.steps).toBe('');

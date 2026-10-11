@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import * as Logic from '../src/lib/logic';
-import { NutritionDaySchema, UserDataSchema } from '../src/lib/schema';
+import { NutritionDaySchema } from '../src/lib/schema';
 import { Exporter } from '../src/lib/export';
 
 describe('Milestone 1: Sleep Format in HH:MM & Backward Compatibility Tests', () => {

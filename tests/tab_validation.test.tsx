@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { screen, act, renderHook, fireEvent } from '@testing-library/react';
+import { screen, renderHook, fireEvent } from '@testing-library/react';
 import App from '../src/App';
 import HeaderDashboard from '../src/components/Home/widgets/HeaderDashboard';
 import { defaultMockUserData, renderWithProviders } from './setup';

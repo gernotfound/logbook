@@ -42,7 +42,8 @@ describe('Audit regression: React time boundaries', () => {
         let hookResult: ReturnType<typeof useHomeView> | null = null;
 
         function TestHomeConsumer() {
-            hookResult = useHomeView();
+            const latest = useHomeView();
+            React.useEffect(() => { hookResult = latest; });
             return <div data-testid="home-clock-consumer" />;
         }
 

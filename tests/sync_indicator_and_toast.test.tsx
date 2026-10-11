@@ -780,8 +780,8 @@ describe('LogBook Background Sync & Error Toast 4-Tier Test Suite', () => {
         useAppStore.setState({ syncing: true });
       });
 
-      act(() => {
-        useDialogStore.getState().showConfirm('Sei sicuro di voler procedere?');
+      await act(async () => {
+        await useDialogStore.getState().showConfirm('Sei sicuro di voler procedere?');
       });
 
       expect(screen.getByText(/Salvataggio in corso/i)).toBeDefined();

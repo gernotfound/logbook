@@ -200,8 +200,8 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
 
             const { result: sessionHook } = renderHook(() => useWorkoutSession());
 
-            act(() => {
-                sessionHook.current.startWorkout('r_legs');
+            await act(async () => {
+                await sessionHook.current.startWorkout('r_legs');
             });
 
             const activeWorkout = useAppStore.getState().localWorkout;
@@ -320,8 +320,8 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
 
             // 2. Start workout
             const { result: sessionHook } = renderHook(() => useWorkoutSession());
-            act(() => {
-                sessionHook.current.startWorkout('r_quads', { cycleId: 'c_mass', cycleName: 'Massa Gambe' });
+            await act(async () => {
+                await sessionHook.current.startWorkout('r_quads', { cycleId: 'c_mass', cycleName: 'Massa Gambe' });
             });
             expect(useAppStore.getState().localWorkout).not.toBeNull();
 

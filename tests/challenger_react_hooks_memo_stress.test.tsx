@@ -334,7 +334,7 @@ describe('Empirical Challenger: React Hooks, Memoization & Re-render Loop Stress
 
             const HostComponent = () => {
                 const [exercises, setExercises] = useState(currentExercises);
-                (window as any).__setHostExercises = setExercises;
+                React.useEffect(() => { (window as any).__setHostExercises = setExercises; }, [setExercises]);
 
                 return (
                     <div>
@@ -436,7 +436,7 @@ describe('Empirical Challenger: React Hooks, Memoization & Re-render Loop Stress
 
             const SetsHostComponent = () => {
                 const [sets, setSets] = useState(currentSets);
-                (window as any).__setHostSets = setSets;
+                React.useEffect(() => { (window as any).__setHostSets = setSets; }, [setSets]);
 
                 return (
                     <div>

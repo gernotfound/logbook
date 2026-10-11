@@ -75,7 +75,8 @@ describe('Sync Protocol 3 causal convergence regressions', () => {
         const staleThenRecreate = deliver(base, operations, [[0], [2], [1]]);
 
         expect(snapshot(staleThenRecreate)).toEqual(snapshot(recreateThenStale));
-        expect((recreateThenStale.documents.get(path)?.[date] as any).weight).toBe(82);
+        expect(recreateThenStale.documents.get(path)).toBeDefined();
+        expect((recreateThenStale.documents.get(path)![date] as any).weight).toBe(82);
         expect(recreateThenStale.syncMetas[path]).toMatchObject({
             protocolVersion: CURRENT_SYNC_PROTOCOL,
             clock: { A: 1, B: 1, C: 1 },
@@ -128,7 +129,8 @@ describe('Sync Protocol 3 causal convergence regressions', () => {
         const outcomes = schedules.map(schedule => deliver(base, operations, schedule));
         for (const outcome of outcomes.slice(1)) expect(snapshot(outcome)).toEqual(snapshot(outcomes[0]));
 
-        expect((outcomes[0].documents.get('')?.profile as any).name).toBe('X');
+        expect(outcomes[0].documents.get('')).toBeDefined();
+        expect((outcomes[0].documents.get('')!.profile as any).name).toBe('X');
         expect(outcomes[0].syncMetas[''].fields['profile/name']).toMatchObject({
             actorId: 'A',
             seq: 1,
@@ -181,7 +183,8 @@ describe('Sync Protocol 3 causal convergence regressions', () => {
         const ancestorFirst = deliver(base, [ancestor, visibleConcurrent, hiddenCausalDescendant], [[0], [1, 2]]);
 
         expect(snapshot(descendantsFirst)).toEqual(snapshot(ancestorFirst));
-        expect((descendantsFirst.documents.get(path)?.[date] as any).weight).toBe(82);
+        expect(descendantsFirst.documents.get(path)).toBeDefined();
+        expect((descendantsFirst.documents.get(path)![date] as any).weight).toBe(82);
         expect(descendantsFirst.syncMetas[path].fields[`${date}/weight`]).toMatchObject({
             actorId: 'A',
             seq: 1,
@@ -240,7 +243,8 @@ describe('Sync Protocol 3 causal convergence regressions', () => {
         const left = applySemanticOperations(validThenStale.documents, [followUp], validThenStale.syncMetas);
         const right = applySemanticOperations(staleThenValid.documents, [followUp], staleThenValid.syncMetas);
         expect(snapshot(right)).toEqual(snapshot(left));
-        expect((left.documents.get('')?.activeWorkout as any).moodRating).toBe(6);
+        expect(left.documents.get('')).toBeDefined();
+        expect((left.documents.get('')!.activeWorkout as any).moodRating).toBe(6);
     });
 
     it('converges ordered-keyed $order across the same mixed causal DAG and batch partitions', () => {
@@ -260,7 +264,8 @@ describe('Sync Protocol 3 causal convergence regressions', () => {
         const together = deliver(base, operations, [[0, 1, 2]]);
         const partitioned = deliver(base, operations, [[2], [0], [1]]);
         expect(snapshot(partitioned)).toEqual(snapshot(together));
-        expect((together.documents.get('')?.routines as any[]).map(item => item.id)).toEqual(['r3', 'r2', 'r1']);
+        expect(together.documents.get('')).toBeDefined();
+        expect((together.documents.get('')!.routines as any[]).map(item => item.id)).toEqual(['r3', 'r2', 'r1']);
     });
 
     it('keeps current-protocol SyncMeta internally covered after every regression scenario', () => {

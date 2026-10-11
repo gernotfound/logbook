@@ -5,7 +5,7 @@ import type { FieldStamp, SemanticOperation, StampLike, SyncMeta, VectorClock } 
 import { compareStamps, coversVectorClock, fieldKey, mergeVectors, pathFromFieldKey } from './metadata';
 import { getMergePolicy, identitySeed, resolveIdentity } from './policy';
 
-export function normalizeDomainData(docs: Map<string, DocumentData>) {
+function normalizeDomainData(docs: Map<string, DocumentData>) {
     for (const [path, doc] of docs.entries()) {
         if (path.startsWith('nutrition_months/')) {
             for (const [, dayData] of Object.entries(doc)) {

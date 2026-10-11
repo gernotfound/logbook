@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { UserDataSchema } from '../src/lib/schema';
 import { mergeUserData } from '../src/lib/merge';
-import type { CachedGlobalCatalog, UserData, WorkoutSession } from '../src/types';
+import type { UserData, WorkoutSession } from '../src/types';
 import { diffDocuments } from '../src/lib/sync/semanticProjection';
 import { applyDomainOperations } from '../src/lib/sync/domainOperations';
 import { assertHistoryMonthDocument, assertNutritionMonthDocument, requireCanonicalWorkoutDate } from '../src/lib/sync/monthlyIntegrity';
@@ -15,18 +15,6 @@ import { auth } from '../src/lib/firebase';
 
 const parse = (value: unknown): UserData => UserDataSchema.parse(value) as unknown as UserData;
 
-const catalog: CachedGlobalCatalog = {
-    manifest: {
-        version: 'audit-remediation',
-        updatedAt: '2026-10-03T00:00:00.000Z',
-        schemaVersion: 1,
-        docRefs: { exercises: 'catalog/exercises', foods: 'catalog/foods' },
-        itemCounts: { exercises: 0, foods: 0 },
-    },
-    exercises: [],
-    foods: [],
-    cachedAt: 0,
-};
 
 function workout(id: string, exerciseIds: Array<[string, string]> = []): WorkoutSession {
     return {

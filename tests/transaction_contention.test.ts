@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto';
 import { clear } from 'idb-keyval';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { UserDataSchema } from '../src/lib/schema';
 import type { UserData } from '../src/types';
 import { commitLocal, initializeLocal, readLocal } from '../src/lib/sync/localRepository';

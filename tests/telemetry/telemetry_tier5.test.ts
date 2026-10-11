@@ -135,7 +135,7 @@ describe('Unified Telemetry Hub E2E Suite — Tier 5', () => {
         telemetryHub.setUserId('user_t5_5');
 
         let errorResult: boolean | undefined;
-        telemetryHub
+        const dispatchAttempt = telemetryHub
           .dispatchErrorExternally({
             type: 'HangingError',
             message: 'Hangs',
@@ -152,6 +152,7 @@ describe('Unified Telemetry Hub E2E Suite — Tier 5', () => {
           });
 
         await vi.advanceTimersByTimeAsync(5100);
+        await dispatchAttempt;
         expect(errorResult).toBe(false);
       });
 

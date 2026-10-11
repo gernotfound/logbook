@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { calculateTDEE } from '../src/lib/calc/nutrition';
 import { computeWorkoutReport } from '../src/lib/calc/workoutReport';
 import type { ProgressionExerciseRef } from '../src/lib/calc/progression';
-import { calculateEffectiveSetWeight, calculateSetVolume, calculateWorkoutVolume } from '../src/lib/calc/workout';
-import type { WorkoutSession, SessionExercise } from '../src/types';
+import { calculateWorkoutVolume } from '../src/lib/calc/workout';
+import type { WorkoutSession } from '../src/types';
 
 describe('EMPIRICAL ADVERSARIAL SUITE — R1 (TDEE Calculation) & R2 (Workout Volume & PR Logic)', () => {
 
