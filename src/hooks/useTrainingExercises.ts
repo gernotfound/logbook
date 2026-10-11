@@ -30,39 +30,22 @@ export function useTrainingExercises() {
             throw result.error instanceof Error ? result.error : new Error('Operazione esercizio non completata');
         }
     };
-    const [editingExId, setEditingExId] = useState<string | null>(null);
-    const [exName, setExName] = useState('');
-    const [exNotes, setExNotes] = useState('');
-    const [muscleSearch, setMuscleSearch] = useState('');
-    const [selectedMuscles, setSelectedMuscles] = useState<any[]>([]);
-    const [secondaryMuscles, setSecondaryMuscles] = useState<any[]>([]);
-    const [selectionMode, setSelectionMode] = useState<'primary' | 'secondary'>('primary');
-    const [trackingType, setTrackingType] = useState<ExerciseTrackingType>('weight_reps');
-    const [isBodyweight, setIsBodyweight] = useState(false);
-    const [equipmentWeight, setEquipmentWeight] = useState('');
     const [draftOwner] = useState(() => storageOwner());
-    const [draftRestored, setDraftRestored] = useState(false);
-
-    // Restore draft on mount
-    useEffect(() => {
-        const parsed = readExerciseDraft(draftOwner);
-        if (parsed) {
-            if (parsed.name) setExName(parsed.name);
-            if (parsed.notes) setExNotes(parsed.notes);
-            if (parsed.trackingType) setTrackingType(parsed.trackingType);
-            if (parsed.selectedMuscles) setSelectedMuscles(parsed.selectedMuscles);
-            if (parsed.secondaryMuscles) setSecondaryMuscles(parsed.secondaryMuscles);
-            if (parsed.isBodyweight !== undefined) setIsBodyweight(Boolean(parsed.isBodyweight));
-            if (parsed.equipmentWeight !== undefined && parsed.equipmentWeight !== null) {
-                setEquipmentWeight(String(parsed.equipmentWeight));
-            }
-        }
-        setDraftRestored(true);
-    }, [draftOwner]);
+    const [initialDraft] = useState(() => readExerciseDraft(draftOwner));
+    const [editingExId, setEditingExId] = useState<string | null>(null);
+    const [exName, setExName] = useState(() => initialDraft?.name || '');
+    const [exNotes, setExNotes] = useState(() => initialDraft?.notes || '');
+    const [muscleSearch, setMuscleSearch] = useState('');
+    const [selectedMuscles, setSelectedMuscles] = useState<any[]>(() => initialDraft?.selectedMuscles || []);
+    const [secondaryMuscles, setSecondaryMuscles] = useState<any[]>(() => initialDraft?.secondaryMuscles || []);
+    const [selectionMode, setSelectionMode] = useState<'primary' | 'secondary'>('primary');
+    const [trackingType, setTrackingType] = useState<ExerciseTrackingType>(() => initialDraft?.trackingType || 'weight_reps');
+    const [isBodyweight, setIsBodyweight] = useState(() => Boolean(initialDraft?.isBodyweight));
+    const [equipmentWeight, setEquipmentWeight] = useState(() => initialDraft?.equipmentWeight == null ? '' : String(initialDraft.equipmentWeight));
 
     // Save draft on change
     useEffect(() => {
-        if (draftRestored && !editingExId) {
+        if (!editingExId) {
             persistExerciseDraft({
                 name: exName,
                 notes: exNotes,
@@ -73,7 +56,7 @@ export function useTrainingExercises() {
                 equipmentWeight
             }, draftOwner);
         }
-    }, [exName, exNotes, trackingType, selectedMuscles, secondaryMuscles, isBodyweight, equipmentWeight, editingExId, draftOwner, draftRestored]);
+    }, [exName, exNotes, trackingType, selectedMuscles, secondaryMuscles, isBodyweight, equipmentWeight, editingExId, draftOwner]);
 
     const filteredMuscles = useMemo(() => filterMuscles(muscleSearch), [muscleSearch]);
 
