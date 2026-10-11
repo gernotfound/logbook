@@ -35,7 +35,17 @@ export const normalizeStem = (str: string): string => {
         .replace(/\baddominale\b/g, 'addom');
 };
 
-export function searchExerciseLibrary(library: any[], query: string): any[] {
+/** Searchable exercise shape; preserve specialized exercise metadata on return. */
+interface SearchableExercise {
+    id?: string;
+    name?: string;
+    muscles?: string[];
+    secondaryMuscles?: string[];
+    notes?: string;
+    trackingType?: string;
+}
+
+export function searchExerciseLibrary<T extends SearchableExercise>(library: T[], query: string): T[] {
     if (!Array.isArray(library)) return [];
     if (!query || typeof query !== 'string' || !query.trim()) {
         return [...library].sort((a, b) => (a?.name || '').localeCompare(b?.name || '', 'it'));
@@ -46,7 +56,7 @@ export function searchExerciseLibrary(library: any[], query: string): any[] {
     const tokens = q.split(/\s+/).filter(t => t.length >= 1);
     const stemmedTokens = stemmedQ.split(/\s+/).filter(t => t.length >= 1);
 
-    const muscleMap = new Map();
+    const muscleMap = new Map<string, string>();
     if (Array.isArray(MUSCLES)) {
         MUSCLES.forEach(m => {
             if (m && m.id) muscleMap.set(m.id, (m.name || '').toLowerCase());
@@ -124,7 +134,7 @@ export function searchExerciseLibrary(library: any[], query: string): any[] {
         minMatchCharLength: 2
     });
 
-    let fuzzyMatches: any[] = [];
+    let fuzzyMatches: typeof enriched = [];
     if (tokens.length > 1) {
         const tokenMatches = tokens.map(tok => new Set(fuse.search(tok).map(r => r.item)));
         const allMatch = enriched.filter(item => tokenMatches.every(set => set.has(item)));
@@ -135,20 +145,20 @@ export function searchExerciseLibrary(library: any[], query: string): any[] {
     }
 
     const seen = new Set<string>();
-    const results: any[] = [];
+    const results: T[] = [];
     for (const item of [...directMatches, ...fuzzyMatches]) {
         const key = item.id;
         if (key && !seen.has(key)) {
             seen.add(key);
             const { _searchName, _stemmedName, _searchMuscles, _searchSecMuscles, _searchNotes, _searchType, ...original } = item;
-            results.push(original);
+            results.push(original as T);
         }
     }
 
     return results;
 }
 
-export function filterItems(items: any[], query: string, searchFields: string | string[] = ['name']) {
+export function filterItems<T extends object>(items: T[], query: string, searchFields: string | string[] = ['name']): T[] {
     if (!Array.isArray(items)) return [];
     if (!query || typeof query !== 'string' || !query.trim()) return items;
     const q = query.trim().toLowerCase();
@@ -158,8 +168,8 @@ export function filterItems(items: any[], query: string, searchFields: string | 
     const direct = items.filter(item => {
         if (!item) return false;
         return fields.some(field => {
-            const val = item[field];
-            return val && val.toString().toLowerCase().includes(q);
+            const val = (item as Record<string, unknown>)[field];
+            return Boolean(val && String(val).toLowerCase().includes(q));
         });
     });
 
@@ -172,7 +182,7 @@ export function filterItems(items: any[], query: string, searchFields: string | 
         minMatchCharLength: 2,
     });
     const tokens = query.trim().split(/\s+/).filter(t => t.length >= 2);
-    let fuzzy: any[] = [];
+    let fuzzy: T[] = [];
     if (tokens.length > 1) {
         const tokenMatches = tokens.map(tok => new Set(fuse.search(tok).map(r => r.item)));
         const allMatch = items.filter(item => tokenMatches.every(set => set.has(item)));
@@ -183,10 +193,10 @@ export function filterItems(items: any[], query: string, searchFields: string | 
     }
 
     // Merge direct + fuzzy without duplicates, keeping direct first
-    const seen = new Set<any>();
-    const result: any[] = [];
+    const seen = new Set<unknown>();
+    const result: T[] = [];
     for (const it of [...direct, ...fuzzy]) {
-        const key = it.id ?? it;
+        const key = (it as { id?: unknown }).id ?? it;
         if (!seen.has(key)) {
             seen.add(key);
             result.push(it);
