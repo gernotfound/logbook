@@ -302,3 +302,27 @@ await test('allows harmless reordering of existing rule-option object properties
   commit(ctx.root);
   assert.equal(run({ ...ctx, base }).status, 0);
 });
+
+await test('blocks nested Oxlint configuration that overrides the root policy', t => {
+  const ctx = fixture(t);
+  save(ctx.root, 'src/.oxlintrc.json', { categories: { correctness: 'off' } });
+  commit(ctx.root);
+  mustFail(run(ctx), /additional or nested Oxlint configuration/);
+});
+
+await test('blocks newly tracked minified-looking application source', t => {
+  const ctx = fixture(t);
+  save(ctx.root, 'src/recovery.min.ts', 'export const recovery = true;\n');
+  commit(ctx.root);
+  mustFail(run(ctx), /New tracked source skipped by Oxlint minified-file defaults/);
+});
+
+await test('does not retroactively reject pre-existing minified-looking files', t => {
+  const ctx = fixture(t);
+  save(ctx.root, 'src/legacy.min.js', 'export const legacy = true;\n');
+  commit(ctx.root);
+  const base = git(ctx.root, 'rev-parse', 'HEAD');
+  save(ctx.root, 'src/App.tsx', 'export const safe = 42;\n');
+  commit(ctx.root);
+  assert.equal(run({ ...ctx, base }).status, 0);
+});

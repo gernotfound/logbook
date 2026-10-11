@@ -197,6 +197,31 @@ if (ignoredCode.length) {
   failures.push('Tracked JS/TS files hidden from lint by Git ignore rules: ' + ignoredCode.join(', '));
 }
 
+// Nested Oxlint configs can silently override the root policy for subtrees.
+const trackedPaths = git(['ls-files', '-z']).split('\0').filter(Boolean);
+const rootLintConfigs = new Set([
+  '.oxlintrc.json', '.oxlintrc.a11y.json', '.oxlintrc.type-aware.json',
+]);
+for (const path of trackedPaths) {
+  if (/(?:^|\/)(?:\.oxlintrc\.jsonc?|oxlint\.config\.(?:js|mjs|ts|mts))$/.test(path)
+    && !rootLintConfigs.has(path)) {
+    failures.push('Unreviewed additional or nested Oxlint configuration: ' + path);
+  }
+}
+
+// Oxlint automatically skips minified-looking filenames even without ignore rules.
+const basePaths = new Set(git(['ls-tree', '-r', '--name-only', '-z', baseSha]).split('\0'));
+for (const path of trackedPaths) {
+  const name = path.slice(path.lastIndexOf('/') + 1);
+  if (!basePaths.has(path) && /\.(?:[cm]?[jt]sx?)$/.test(path)
+    && (path.startsWith('src/') || path.startsWith('tests/')
+      || path.startsWith('e2e/') || path.startsWith('api/')
+      || path.startsWith('server/') || path.startsWith('scripts/') || !path.includes('/'))
+    && /(?:\.min\.|-min\.|_min\.)/.test(name)) {
+    failures.push('New tracked source skipped by Oxlint minified-file defaults: ' + path);
+  }
+}
+
 const typeSafetyFlags = [
   'strict', 'noImplicitAny', 'noUnusedLocals', 'noUnusedParameters',
   'noFallthroughCasesInSwitch', 'noEmit', 'isolatedModules',
