@@ -136,16 +136,19 @@ describe('M5 nutrition guest flow through useNutritionMeals', () => {
 
     it('does not report success when the dispatcher returns a failed result without throwing', async () => {
         const showAlert = vi.mocked(useDialogStore.getState().showAlert);
+        const originalDispatch = useAppStore.getState().dispatchDomainOperation;
         const dispatchDomainOperation = vi.fn().mockResolvedValue({ ok: false, status: 'failed', error: new Error('Aggiornamento richiesto') });
         useAppStore.setState({ dispatchDomainOperation });
-        const { result } = renderHook(() => useNutritionMeals(DATE));
-
-        await act(async () => {
-            await result.current.handleQuickAdd({ name: 'Rejected', kcal: 50, carbs: 5, pro: 5, fat: 1 });
-        });
-
-        expect(showAlert).toHaveBeenCalledWith("Errore durante il salvataggio dell'alimento.");
-        expect(dispatchDomainOperation).toHaveBeenCalledTimes(1);
+        try {
+            const { result } = renderHook(() => useNutritionMeals(DATE));
+            await act(async () => {
+                await result.current.handleQuickAdd({ name: 'Rejected', kcal: 50, carbs: 5, pro: 5, fat: 1 });
+            });
+            expect(showAlert).toHaveBeenCalledWith("Errore durante il salvataggio dell'alimento.");
+            expect(dispatchDomainOperation).toHaveBeenCalledTimes(1);
+        } finally {
+            useAppStore.setState({ dispatchDomainOperation: originalDispatch });
+        }
     });
 
     it('reports persistence failure through the dialog boundary instead of resolving it as a silent success', async () => {
