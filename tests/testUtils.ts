@@ -40,3 +40,21 @@ export const TestDB = {
         return result;
     }
 };
+
+/** Explicitly consented account fixture for transport/stress tests, not production behavior. */
+export const ConsentedTestDB = {
+    ...TestDB,
+    saveUserData: (state: any, revision?: any) => TestDB.saveUserData({
+        ...state,
+        // Tests outside the legal-consent suite exercise transport with a consented account.
+        legalConsent: state?.legalConsent !== undefined
+            ? state.legalConsent
+            : {
+                hasAcceptedTerms: true,
+                hasAcceptedHealthData: true,
+                acceptedAt: '2026-10-11T10:00:00.000Z',
+                privacyVersion: '1.3.2',
+                termsVersion: '1.2.0',
+            },
+    }, revision),
+};

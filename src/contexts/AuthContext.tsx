@@ -14,7 +14,7 @@ import { draftRegistry } from '../lib/utils/draftRegistry';
 import { getResolvedDefaultUserData } from './auth/defaultUserData';
 import { loadAuthenticatedData } from './auth/loadAuthenticatedData';
 import { migrateGuestAccount } from './auth/migrateGuestAccount';
-import { replicateJournal } from '../lib/sync/replicateJournal';
+import { isLegalConsentRequiredError, replicateJournal } from '../lib/sync/replicateJournal';
 import { activateGuestSession, captureSession, GUEST_REVOCATION_KEY, GUEST_SESSION_KEY, invalidateSession, isActiveGuestSession, isCurrentSession, revokeGuestSession, userOwner } from '../lib/sync/session';
 import { classifySyncFailure } from '../lib/sync/syncFailure';
 import { withGuestLifecycleLock } from '../lib/sync/guestLifecycleLock';
@@ -321,7 +321,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                     clearGuestMigrationSyncRecovery(user.uid);
                     setGuestMigrationStatus('idle');
                     if (result.status === 'local-pending') {
-                        setSaveError('📶 Offline: i dati sono salvati sul dispositivo e verranno sincronizzati quando torni online.');
+                        setSaveError(isLegalConsentRequiredError(result.error)
+                            ? 'I dati sono salvati sul dispositivo. Accetta Termini e consenso salute per sincronizzarli con l’account.'
+                            : '📶 Offline: i dati sono salvati sul dispositivo e verranno sincronizzati quando torni online.');
                     }
                 } else {
                     setGuestMigrationStatus('failed');
@@ -458,7 +460,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                             clearGuestMigrationSyncRecovery(user.uid);
                             setGuestMigrationStatus('idle');
                             if (migrationResult.status === 'local-pending') {
-                                setSaveError('📶 Offline: account preparato sul dispositivo. La sincronizzazione riprenderà quando torni online.');
+                                setSaveError(isLegalConsentRequiredError(migrationResult.error)
+                                    ? 'Account preparato sul dispositivo. Accetta Termini e consenso salute per sincronizzare i progressi.'
+                                    : '📶 Offline: account preparato sul dispositivo. La sincronizzazione riprenderà quando torni online.');
                             }
                         }
                     } catch (error) {
@@ -793,7 +797,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 clearGuestMigrationSyncRecovery(initialUid);
                 setGuestMigrationStatus('idle');
                 if (result.status === 'local-pending') {
-                    setSaveError('📶 Offline: i dati sono salvati sul dispositivo e verranno sincronizzati quando torni online.');
+                    setSaveError(isLegalConsentRequiredError(result.error)
+                            ? 'I dati sono salvati sul dispositivo. Accetta Termini e consenso salute per sincronizzarli con l’account.'
+                            : '📶 Offline: i dati sono salvati sul dispositivo e verranno sincronizzati quando torni online.');
                 }
             } else {
                 setGuestMigrationStatus('failed');

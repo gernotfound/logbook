@@ -460,7 +460,9 @@ export function mergeUserData(
             ...(guest.activePains || [])
         ])),
         catalogOverrides: mergedOverrides,
-        legalConsent: guest.legalConsent || cloud.legalConsent,
+        // A guest acceptance must never become an authenticated account's consent.
+        // Only the account's own record survives the business-data merge.
+        legalConsent: cloud.legalConsent,
     };
 
     return UserDataSchema.parse(rawMerged) as unknown as UserData;

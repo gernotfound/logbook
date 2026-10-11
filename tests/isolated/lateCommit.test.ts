@@ -14,7 +14,7 @@ import { UserDataSchema } from '../../src/lib/schema';
 import { invalidateSession } from '../../src/lib/sync/session';
 import type { UserData } from '../../src/types';
 
-const data = (height: number) => UserDataSchema.parse({ profile: { height: String(height) } }) as unknown as UserData;
+const data = (height: number) => UserDataSchema.parse({ profile: { height: String(height) }, legalConsent: { hasAcceptedTerms: true, hasAcceptedHealthData: true, acceptedAt: '2026-10-11T10:00:00.000Z', privacyVersion: '1.3.2', termsVersion: '1.2.0' } }) as unknown as UserData;
 const deferred = <T>() => { let resolve!: (value: T) => void; let reject!: (err: any) => void; const promise = new Promise<T>((res, rej) => { resolve = res; reject = rej; }); return { promise, resolve, reject }; };
 
 beforeEach(async () => {
@@ -45,6 +45,21 @@ beforeEach(async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
 });
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
+
+it('keeps the account journal pending when consent is missing, without starting a remote write', async () => {
+    await commitLocal('user:a', { ...data(171), legalConsent: undefined }, data(171));
+    const before = await readLocal('user:a');
+    expect(before?.pending.length).toBeGreaterThan(0);
+
+    const result = await replicateJournal();
+    expect(result.status).toBe('local-pending');
+    if (result.ok) throw new Error('La replica senza consenso non doveva riuscire.');
+    expect(result.error).toMatchObject({ code: 'legal-consent-required' });
+    expect(remote.apply).not.toHaveBeenCalled();
+
+    const after = await readLocal('user:a');
+    expect(after?.pending).toEqual(before?.pending);
+});
 
 it('retains one writer after timeout and acknowledges its late commit before retrying', async () => {
     const completion = deferred<any>();

@@ -15,6 +15,7 @@ La baseline clean-cut corrente **non importa Backup Schema V1/V2**: `decodeImpor
 - L'anteprima/commit deve invalidarsi se cambia sessione o baseline rilevante durante l'operazione.
 - La conferma segue la persistenza locale; offline non va presentata come conferma cloud.
 - I consensi importati non sostituiscono l'accettazione corrente.
+- Nel merge ospite → account, il consenso legale ospite non è trasferibile: `legalConsent` resta quello già associato all'account, se presente; per un account nuovo serve una nuova accettazione esplicita.
 - Non inventare conversioni V1/V2 per aggirare la baseline clean-cut.
 
 ## Esportazione CSV
