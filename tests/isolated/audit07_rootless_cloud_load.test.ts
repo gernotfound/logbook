@@ -113,6 +113,63 @@ it('performs the exhaustive monthly scan when the root document is absent', asyn
 });
 
 
+it('fails closed on a future nutrition shard during exhaustive hydration and recovers on a corrected retry', async () => {
+    const metadata = {
+        protocolVersion: 3,
+        clock: {},
+        fields: {},
+        writer: { slot: 's00', replicaId: 'rootless-seed', generation: 1, seq: 0 },
+    };
+    let nutritionSchema = 999;
+    harness.page.mockImplementation(async ({ path }: { path: string }) => {
+        if (path.endsWith('history_months')) {
+            return {
+                size: 1,
+                docs: [{
+                    id: '2024-01',
+                    data: () => ({
+                        good: { id: 'good', date: '2024-01-10', exercises: [] },
+                        wrongMonth: { id: 'wrongMonth', date: '2024-02-10', exercises: [] },
+                        _schemaVersion: 1,
+                        _sync: metadata,
+                    }),
+                }],
+            };
+        }
+        return {
+            size: 1,
+            docs: [{
+                id: '2024-01',
+                data: () => ({
+                    '2024-01-11': { date: '2024-01-11', weight: 72 },
+                    '2024-01-12': { date: '2024-01-13', weight: 74 },
+                    _schemaVersion: nutritionSchema,
+                    _sync: metadata,
+                }),
+            }],
+        };
+    });
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+        await expect(DB.loadCloudPayload({ allMonths: true })).rejects.toThrow();
+        nutritionSchema = 1;
+        const payload = await DB.loadCloudPayload({ allMonths: true });
+        expect(payload?.completeMonths).toEqual(['2024-01']);
+        expect(payload?.data.history?.map(record => record.id)).toEqual(['good']);
+        expect(payload?.data.nutrition?.['2024-01-11']?.weight).toBe(72);
+        expect(payload?.data.nutrition).not.toHaveProperty('2024-01-12');
+        expect(payload?.cloudDocuments.get('history_months/2024-01')).not.toHaveProperty('wrongMonth');
+        expect(payload?.cloudDocuments.get('nutrition_months/2024-01')).toMatchObject({
+            '2024-01-11': { date: '2024-01-11' },
+            _sync: metadata,
+        });
+        expect(payload?.cloudDocuments.get('nutrition_months/2024-01')).not.toHaveProperty('2024-01-12');
+        expect(harness.page).toHaveBeenCalledTimes(4);
+    } finally {
+        consoleError.mockRestore();
+    }
+});
+
 it('loads history and nutrition month windows concurrently', async () => {
     let finishHistory: (() => void) | undefined;
     let finishNutrition: (() => void) | undefined;
