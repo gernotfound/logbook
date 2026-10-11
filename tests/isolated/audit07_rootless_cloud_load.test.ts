@@ -8,6 +8,7 @@ const harness = vi.hoisted(() => ({
     page: vi.fn(),
     historyWindow: vi.fn(),
     nutritionWindow: vi.fn(),
+    catalogSync: vi.fn(),
 }));
 
 vi.mock('../../src/lib/firebase', () => ({
@@ -18,7 +19,7 @@ vi.mock('../../src/lib/firebase', () => ({
 }));
 vi.mock('../../src/lib/catalog/catalogService', () => ({
     getCachedCatalog: async () => ({ exercises: [], foods: [] }),
-    syncGlobalCatalog: () => Promise.resolve(),
+    syncGlobalCatalog: harness.catalogSync,
 }));
 vi.mock('../../src/lib/db/db_training', () => ({ loadHistoryMonths: harness.historyWindow }));
 vi.mock('../../src/lib/db/db_nutrition', () => ({ loadNutritionMonths: harness.nutritionWindow }));
@@ -45,6 +46,7 @@ import { DB } from '../../src/lib/db';
 beforeEach(async () => {
     await clear();
     vi.resetAllMocks();
+    harness.catalogSync.mockResolvedValue({ catalog: { exercises: [], foods: [] }, updated: false });
     harness.auth.currentUser = { uid: 'a' };
     harness.root.mockResolvedValue({ exists: () => false });
     harness.page.mockResolvedValue({ size: 0, docs: [] });
@@ -127,4 +129,33 @@ it('loads history and nutrition month windows concurrently', async () => {
         finishNutrition?.();
     }
     expect(await loading).not.toBeNull();
+});
+
+
+it('publishes the freshly downloaded catalog instead of the stale initial cache', async () => {
+    let releaseCatalog: ((value: unknown) => void) | undefined;
+    harness.catalogSync.mockImplementation(() => new Promise(resolve => { releaseCatalog = resolve; }));
+    const loading = DB.loadCloudPayload();
+    await vi.waitFor(() => {
+        expect(harness.root).toHaveBeenCalledOnce();
+        expect(harness.catalogSync).toHaveBeenCalledOnce();
+    });
+    releaseCatalog?.({
+        updated: true, persisted: true,
+        catalog: {
+            exercises: [{ id: 'new-exercise', name: 'Catalog exercise', trackingType: 'weight_reps' }],
+            foods: [{ id: 'new-food', name: 'Catalog food', kcal: 100, carbs: 20, pro: 5, fat: 0 }],
+        },
+    });
+    const payload = await loading;
+    expect(payload?.data.library?.some(item => item.id === 'new-exercise' && item.isDefault)).toBe(true);
+    expect(payload?.data.customFoods?.some(item => item.id === 'new-food' && item.isCustom === false)).toBe(true);
+});
+
+it('retains the offline cached catalog when the remote catalog update rejects', async () => {
+    harness.catalogSync.mockRejectedValueOnce(new Error('offline'));
+    const payload = await DB.loadCloudPayload();
+    expect(payload).not.toBeNull();
+    expect(payload?.data.library).toEqual([]);
+    expect(payload?.data.customFoods).toEqual([]);
 });
