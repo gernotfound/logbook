@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.unmock('../src/lib/db');
 import { TestDB as DB } from './testUtils';
+import { DB as RealDB } from '../src/lib/db';
 import { writeBatch } from 'firebase/firestore';
 
 let mockBatch: {
@@ -49,6 +50,14 @@ describe('DB.saveUserData cloud failure semantics', () => {
 
         expect(result.ok).toBe(false);
         expect(result.status).toBe('local-pending');
+    });
+
+    it('does not serialize the input snapshot when the journal is already durable', async () => {
+        await DB.saveUserData(state);
+        const circular: Record<string, unknown> = {};
+        circular.self = circular;
+        const result = await RealDB.saveUserData(circular);
+        expect(result.ok).toBe(true);
     });
 
     it('classifies unknown cloud/runtime failures as failed', async () => {

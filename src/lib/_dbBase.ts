@@ -1,6 +1,5 @@
 import { auth } from './firebase';
 import type { SyncResult } from '../types';
-import { setLastSavedStateStr } from './db/db_core';
 import { purgeAllLocalUserData, purgeCompletedAccountLocalData, deleteAccount, type AccountDeletionContext } from './db/db_account';
 import { storageOwner } from './sync/session';
 import { isAccountDeletionPending } from './sync/accountGate';
@@ -9,15 +8,16 @@ import { replicateJournal } from './sync/replicateJournal';
 import { removeDeletionRecoveryCredential } from './deletionDeviceRecovery';
 
 export const DB = {
+    // Kept as a compatibility hook for account lifecycle and legacy callers;
+    // cloud sync no longer stores a redundant serialized user-state snapshot.
     resetCache() {
-        setLastSavedStateStr(null);
+        return;
     },
-    async saveUserData(state: Record<string, any>, _revision?: any): Promise<SyncResult> {
+    async saveUserData(_state: Record<string, any>, _revision?: any): Promise<SyncResult> {
         const user = auth.currentUser;
         if (!user) return { ok: true, status: 'synced' };
         try {
             const result = await replicateJournal();
-            if (result.ok) setLastSavedStateStr(JSON.stringify(state));
             return result;
         } catch (error) {
             console.error('Errore durante il salvataggio:', error);

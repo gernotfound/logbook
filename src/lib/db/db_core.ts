@@ -12,13 +12,3 @@ export function withTimeout<T>(promise: Promise<T>, ms: number, errMsg = "Timeou
     });
     return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
-
-export let dbState = {
-    lastSavedStateStr: null as string | null,
-    lastSavedOwner: null as string | null,
-};
-
-export function setLastSavedStateStr(val: string | null, owner: string | null = null) {
-    dbState.lastSavedStateStr = val;
-    dbState.lastSavedOwner = owner;
-}
