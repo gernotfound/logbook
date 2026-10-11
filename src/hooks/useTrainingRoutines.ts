@@ -17,24 +17,21 @@ export function useTrainingRoutines() {
     const setSaveError = useAppStore(state => state.setSaveError);
     const showAlert = useDialogStore(state => state.showAlert);
     const showConfirm = useDialogStore(state => state.showConfirm);
-    const [routineName, setRoutineName] = useState('');
-    const [editingRoutineId, setEditingRoutineId] = useState<string | null>(null);
-    const [routineExercises, setRoutineExercises] = useState<RoutineExercise[]>([]);
-    const [expandedRoutineId, setExpandedRoutineId] = useState<string | null>(null);
     const [draftOwner] = useState(() => storageOwner());
-
-    useEffect(() => {
-        const draft = readDeviceValue(ROUTINE_DRAFT_KEY, draftOwner);
-        if (draft) {
-            try {
-                const parsed = JSON.parse(draft);
-                if (parsed.name) setRoutineName(parsed.name);
-                if (parsed.exercises && Array.isArray(parsed.exercises)) setRoutineExercises(parsed.exercises);
-            } catch {
-                // Invalid drafts remain non-authoritative and are ignored.
-            }
+    const [initialDraft] = useState(() => {
+        const raw = readDeviceValue(ROUTINE_DRAFT_KEY, draftOwner);
+        if (!raw) return null;
+        try {
+            const parsed: unknown = JSON.parse(raw);
+            return parsed && typeof parsed === 'object' ? parsed as { name?: string; exercises?: RoutineExercise[] } : null;
+        } catch {
+            return null;
         }
-    }, [draftOwner]);
+    });
+    const [routineName, setRoutineName] = useState(() => initialDraft?.name || '');
+    const [editingRoutineId, setEditingRoutineId] = useState<string | null>(null);
+    const [routineExercises, setRoutineExercises] = useState<RoutineExercise[]>(() => Array.isArray(initialDraft?.exercises) ? initialDraft.exercises : []);
+    const [expandedRoutineId, setExpandedRoutineId] = useState<string | null>(null);
 
     useEffect(() => {
         if (editingRoutineId) return;

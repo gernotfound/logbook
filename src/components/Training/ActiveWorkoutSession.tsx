@@ -140,7 +140,7 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory, onRequestEnd }: Acti
     }, []);
 
     const handleUpdateSetupNote = useCallback((exId: string, note: string) => {
-        updateSetupNote(exId, note);
+        void updateSetupNote(exId, note).catch(error => console.error('Salvataggio nota esercizio non completato:', error));
     }, [updateSetupNote]);
 
     const handleUpdateSessionNote = useCallback((exIndex: number, note: string) => {

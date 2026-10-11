@@ -238,5 +238,8 @@ export const initApp = async () => {
 };
 
 if (typeof document !== 'undefined') {
-  initApp();
+  void initApp().catch(error => {
+    console.error('Avvio TheLogBook non completato:', error);
+    renderStorageUnavailable(document.getElementById('root'));
+  });
 }

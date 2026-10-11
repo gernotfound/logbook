@@ -14,6 +14,12 @@ export function useNutritionMeals(dateStr?: string) {
     const customFoods = useAppStore(state => state.userData?.customFoods || EMPTY_FOODS);
     const dispatchDomainOperation = useAppStore(state => state.dispatchDomainOperation);
     const showAlert = useDialogStore(state => state.showAlert);
+    const persistNutrition = async (operation: Parameters<typeof dispatchDomainOperation>[0]) => {
+        const result = await dispatchDomainOperation(operation);
+        if (!result.ok && result.status !== 'local-pending') {
+            throw result.error instanceof Error ? result.error : new Error('Operazione di nutrizione non completata');
+        }
+    };
 
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState<any[]>([]);
@@ -59,7 +65,7 @@ export function useNutritionMeals(dateStr?: string) {
     }
 
     const persistDayType = async (value: boolean | undefined) => {
-        await dispatchDomainOperation({ type: 'nutrition-day.patch', date: targetDateStr, patch: { isDayOn: value } });
+        await persistNutrition({ type: 'nutrition-day.patch', date: targetDateStr, patch: { isDayOn: value } });
     };
 
     const toggleDayType = async () => {
@@ -68,7 +74,7 @@ export function useNutritionMeals(dateStr?: string) {
         try { await persistDayType(newIsOn); }
         catch {
             setLocalDayOnMap(prev => ({ ...prev, [targetDateStr]: dbIsDayOn }));
-            showAlert("Errore durante il salvataggio.");
+            void showAlert("Errore durante il salvataggio.");
         }
     };
 
@@ -78,7 +84,7 @@ export function useNutritionMeals(dateStr?: string) {
         try { await persistDayType(isOn); }
         catch {
             setLocalDayOnMap(prev => ({ ...prev, [targetDateStr]: dbIsDayOn }));
-            showAlert("Errore durante il salvataggio.");
+            void showAlert("Errore durante il salvataggio.");
         }
     };
 
@@ -106,7 +112,7 @@ export function useNutritionMeals(dateStr?: string) {
     };
 
     const saveMeal = async (meal: LoggedMealItem) => {
-        await dispatchDomainOperation({ type: 'nutrition-meal.upsert', date: targetDateStr, meal });
+        await persistNutrition({ type: 'nutrition-meal.upsert', date: targetDateStr, meal });
     };
 
     const handleQuickAdd = async (quickData: any) => {
@@ -125,7 +131,7 @@ export function useNutritionMeals(dateStr?: string) {
         };
 
         try { await saveMeal(addedItem); }
-        catch { showAlert("Errore durante il salvataggio dell'alimento."); }
+        catch { void showAlert("Errore durante il salvataggio dell'alimento."); }
     };
 
     const handleSearch = (query: string) => {
@@ -158,7 +164,7 @@ export function useNutritionMeals(dateStr?: string) {
             await saveMeal(addedItem);
             setSearchQuery('');
         } catch {
-            showAlert("Errore durante il salvataggio dell'alimento.");
+            void showAlert("Errore durante il salvataggio dell'alimento.");
         }
     };
 
@@ -175,13 +181,13 @@ export function useNutritionMeals(dateStr?: string) {
             return;
         }
         try {
-            await dispatchDomainOperation({
+            await persistNutrition({
                 type: 'nutrition-meal.upsert',
                 date: targetDateStr,
                 meal: { ...current, ...updatedItem, id: current.id },
             });
         } catch {
-            showAlert("Errore durante l'aggiornamento dell'alimento.");
+            void showAlert("Errore durante l'aggiornamento dell'alimento.");
         }
     };
 
@@ -192,9 +198,9 @@ export function useNutritionMeals(dateStr?: string) {
             return;
         }
         try {
-            await dispatchDomainOperation({ type: 'nutrition-meal.delete', date: targetDateStr, mealId: current.id });
+            await persistNutrition({ type: 'nutrition-meal.delete', date: targetDateStr, mealId: current.id });
         } catch {
-            showAlert("Errore durante la rimozione dell'alimento.");
+            void showAlert("Errore durante la rimozione dell'alimento.");
         }
     };
 
@@ -204,9 +210,9 @@ export function useNutritionMeals(dateStr?: string) {
 
     const clearDay = async () => {
         try {
-            await dispatchDomainOperation({ type: 'nutrition-day.delete', date: targetDateStr });
+            await persistNutrition({ type: 'nutrition-day.delete', date: targetDateStr });
         } catch {
-            showAlert("Errore durante la pulizia della giornata.");
+            void showAlert("Errore durante la pulizia della giornata.");
         }
     };
 
@@ -227,7 +233,7 @@ export function useNutritionMeals(dateStr?: string) {
             const currentEditingId = editingFoodId;
             const id = currentEditingId ?? Logic.generateId('food');
             try {
-                await dispatchDomainOperation({ type: 'food.upsert', food: { ...validation.cleanData, id } as any });
+                await persistNutrition({ type: 'food.upsert', food: { ...validation.cleanData, id } as any });
                 setShowCustomModal(false);
                 setEditingFoodId(null);
                 setCfData({ name: '', brand: '', unit: 'g', pieceWeight: '', kcal: '', carbs: '', pro: '', fat: '' });

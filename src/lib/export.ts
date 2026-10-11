@@ -357,7 +357,7 @@ export const Exporter = {
                     console.warn("showSaveFilePicker bloccato, uso fallback nativo:", err);
                 } else {
                     console.error("Esportazione fallita:", err);
-                    useDialogStore.getState().showAlert("Esportazione fallita, riprova.");
+                    void useDialogStore.getState().showAlert("Esportazione fallita, riprova.");
                     return false;
                 }
             }

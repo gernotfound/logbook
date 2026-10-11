@@ -15,21 +15,27 @@ export function useSupplements(dateStr?: string) {
 
     const dispatchDomainOperation = useAppStore(state => state.dispatchDomainOperation);
     const showAlert = useDialogStore(state => state.showAlert);
+    const persistSupplement = async (operation: Parameters<typeof dispatchDomainOperation>[0]) => {
+        const result = await dispatchDomainOperation(operation);
+        if (!result.ok && result.status !== 'local-pending') {
+            throw result.error instanceof Error ? result.error : new Error('Operazione integratore non completata');
+        }
+    };
 
     const saveSupplementToLibrary = async (supplement: Omit<Supplement, 'id'>, editId?: string) => {
         try {
             const value: Supplement = { ...supplement, id: editId || Logic.generateId('supp') };
-            await dispatchDomainOperation({ type: 'supplement.upsert', supplement: value });
+            await persistSupplement({ type: 'supplement.upsert', supplement: value });
         } catch {
-            showAlert("Errore durante il salvataggio dell'integratore.");
+            void showAlert("Errore durante il salvataggio dell'integratore.");
         }
     };
 
     const deleteSupplementFromLibrary = async (id: string) => {
         try {
-            await dispatchDomainOperation({ type: 'supplement.delete', id });
+            await persistSupplement({ type: 'supplement.delete', id });
         } catch {
-            showAlert("Errore durante l'eliminazione dell'integratore.");
+            void showAlert("Errore durante l'eliminazione dell'integratore.");
         }
     };
 
@@ -41,17 +47,17 @@ export function useSupplements(dateStr?: string) {
                 amount,
                 time: Date.now()
             };
-            await dispatchDomainOperation({ type: 'supplement-intake.upsert', date: targetDateStr, intake });
+            await persistSupplement({ type: 'supplement-intake.upsert', date: targetDateStr, intake });
         } catch {
-            showAlert("Errore durante l'aggiunta dell'assunzione.");
+            void showAlert("Errore durante l'aggiunta dell'assunzione.");
         }
     };
 
     const removeIntake = async (intakeId: string) => {
         try {
-            await dispatchDomainOperation({ type: 'supplement-intake.delete', date: targetDateStr, intakeId });
+            await persistSupplement({ type: 'supplement-intake.delete', date: targetDateStr, intakeId });
         } catch {
-            showAlert("Errore durante la rimozione dell'assunzione.");
+            void showAlert("Errore durante la rimozione dell'assunzione.");
         }
     };
 

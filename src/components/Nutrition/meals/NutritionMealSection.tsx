@@ -95,7 +95,7 @@ export function NutritionMealSection({
                                 className="btn-icon text-danger"
                                 onClick={(event) => {
                                     event.stopPropagation();
-                                    onRemoveFood(item.time ?? item.id);
+                                    void onRemoveFood(item.time ?? item.id).catch(error => console.error('Rimozione alimento non completata:', error));
                                 }}
                                 aria-label={`Rimuovi ${item.name}`}
                             >

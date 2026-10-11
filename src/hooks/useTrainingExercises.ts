@@ -24,33 +24,24 @@ export function useTrainingExercises() {
     const dispatchDomainOperation = useAppStore(state => state.dispatchDomainOperation);
     const showAlert = useDialogStore(state => state.showAlert);
     const showConfirm = useDialogStore(state => state.showConfirm);
-    const [editingExId, setEditingExId] = useState<string | null>(null);
-    const [exName, setExName] = useState('');
-    const [exNotes, setExNotes] = useState('');
-    const [muscleSearch, setMuscleSearch] = useState('');
-    const [selectedMuscles, setSelectedMuscles] = useState<any[]>([]);
-    const [secondaryMuscles, setSecondaryMuscles] = useState<any[]>([]);
-    const [selectionMode, setSelectionMode] = useState<'primary' | 'secondary'>('primary');
-    const [trackingType, setTrackingType] = useState<ExerciseTrackingType>('weight_reps');
-    const [isBodyweight, setIsBodyweight] = useState(false);
-    const [equipmentWeight, setEquipmentWeight] = useState('');
-    const [draftOwner] = useState(() => storageOwner());
-
-    // Restore draft on mount
-    useEffect(() => {
-        const parsed = readExerciseDraft(draftOwner);
-        if (parsed) {
-            if (parsed.name) setExName(parsed.name);
-            if (parsed.notes) setExNotes(parsed.notes);
-            if (parsed.trackingType) setTrackingType(parsed.trackingType);
-            if (parsed.selectedMuscles) setSelectedMuscles(parsed.selectedMuscles);
-            if (parsed.secondaryMuscles) setSecondaryMuscles(parsed.secondaryMuscles);
-            if (parsed.isBodyweight !== undefined) setIsBodyweight(Boolean(parsed.isBodyweight));
-            if (parsed.equipmentWeight !== undefined && parsed.equipmentWeight !== null) {
-                setEquipmentWeight(String(parsed.equipmentWeight));
-            }
+    const persistExercise = async (operation: Parameters<typeof dispatchDomainOperation>[0]) => {
+        const result = await dispatchDomainOperation(operation);
+        if (!result.ok && result.status !== 'local-pending') {
+            throw result.error instanceof Error ? result.error : new Error('Operazione esercizio non completata');
         }
-    }, [draftOwner]);
+    };
+    const [draftOwner] = useState(() => storageOwner());
+    const [initialDraft] = useState(() => readExerciseDraft(draftOwner));
+    const [editingExId, setEditingExId] = useState<string | null>(null);
+    const [exName, setExName] = useState(() => initialDraft?.name || '');
+    const [exNotes, setExNotes] = useState(() => initialDraft?.notes || '');
+    const [muscleSearch, setMuscleSearch] = useState('');
+    const [selectedMuscles, setSelectedMuscles] = useState<any[]>(() => initialDraft?.selectedMuscles || []);
+    const [secondaryMuscles, setSecondaryMuscles] = useState<any[]>(() => initialDraft?.secondaryMuscles || []);
+    const [selectionMode, setSelectionMode] = useState<'primary' | 'secondary'>('primary');
+    const [trackingType, setTrackingType] = useState<ExerciseTrackingType>(() => initialDraft?.trackingType || 'weight_reps');
+    const [isBodyweight, setIsBodyweight] = useState(() => Boolean(initialDraft?.isBodyweight));
+    const [equipmentWeight, setEquipmentWeight] = useState(() => initialDraft?.equipmentWeight == null ? '' : String(initialDraft.equipmentWeight));
 
     // Save draft on change
     useEffect(() => {
@@ -125,7 +116,7 @@ export function useTrainingExercises() {
             isDefault: false
         };
         try {
-            await dispatchDomainOperation({ type: 'exercise.upsert', exercise: duplicated });
+            await persistExercise({ type: 'exercise.upsert', exercise: duplicated });
         } catch (err) {
             console.error(err);
         }
@@ -253,11 +244,11 @@ export function useTrainingExercises() {
                 ? updatedLibrary.find(ex => ex.id === editingExId)
                 : updatedLibrary.find(ex => !library.some(current => current.id === ex.id));
             if (!savedExercise) throw new Error('Esercizio non trovato dopo la modifica');
-            await dispatchDomainOperation({ type: 'exercise.upsert', exercise: savedExercise });
+            await persistExercise({ type: 'exercise.upsert', exercise: savedExercise });
             handleCancelEdit(); // Reset form
             return true;
         } catch {
-            showAlert("Errore durante il salvataggio dell'esercizio.");
+            void showAlert("Errore durante il salvataggio dell'esercizio.");
             return false;
         }
     };
@@ -283,7 +274,7 @@ export function useTrainingExercises() {
         if (!(await showConfirm(confirmMsg))) return false;
 
         try {
-            await dispatchDomainOperation({ type: 'exercise.delete', id });
+            await persistExercise({ type: 'exercise.delete', id });
             if (editingExId === id) handleCancelEdit();
             return true;
         } catch {
@@ -296,13 +287,13 @@ export function useTrainingExercises() {
         const catalog = getInMemoryCatalog(true);
         const originalEx = catalog.exercises.find(e => e.id === id);
         if (!originalEx) {
-            showAlert("Errore: esercizio originale non trovato.");
+            void showAlert("Errore: esercizio originale non trovato.");
             return;
         }
 
         if (await showConfirm("Vuoi ripristinare questo esercizio ai valori originali? Le tue modifiche andranno perse.")) {
             try {
-                await dispatchDomainOperation({
+                await persistExercise({
                     type: 'exercise.upsert',
                     exercise: {
                         ...originalEx,
@@ -315,7 +306,7 @@ export function useTrainingExercises() {
                     handleEditClick(originalEx);
                 }
             } catch {
-                showAlert("Errore durante il ripristino dell'esercizio.");
+                void showAlert("Errore durante il ripristino dell'esercizio.");
             }
         }
     };

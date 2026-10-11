@@ -44,7 +44,7 @@ export const ConsentOverlay: React.FC = () => {
             // App.tsx smonta l'overlay perché legalConsent è stato valorizzato.
         } catch {
             setIsSaving(false);
-            useDialogStore.getState().showAlert(
+            void useDialogStore.getState().showAlert(
                 'Errore durante il salvataggio del consenso. Controlla la connessione e riprova.'
             );
         }
