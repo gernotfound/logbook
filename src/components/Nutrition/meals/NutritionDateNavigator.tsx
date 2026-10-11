@@ -21,7 +21,7 @@ export function NutritionDateNavigator({
             <button type="button" className="btn btn-secondary tracking-day-arrow" onClick={onPrevious} aria-label="Giorno precedente">‹ <span>Prec.</span></button>
             <button type="button" className="tracking-day-current" onClick={onToday} title="Torna a oggi">
                 <strong>
-                    {Logic.formatItalianDate ? Logic.formatItalianDate(targetDateStr) : targetDateStr}
+                    {Logic.formatItalianDate(targetDateStr)}
                 </strong>
                 {isToday && (
                     <span className="text-sm tracking-accent">Oggi</span>

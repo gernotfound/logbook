@@ -38,16 +38,8 @@ export function useNutritionMeals(dateStr?: string) {
     const dbIsDayOn = todayNutrition.isDayOn;
     const isDayOn = Object.prototype.hasOwnProperty.call(localDayOnMap, targetDateStr) ? localDayOnMap[targetDateStr] : dbIsDayOn;
 
-    let latestWeight = 80;
-    if (nutritionMap) {
-        const dates = Object.keys(nutritionMap).sort((a, b) => b.localeCompare(a));
-        for (const d of dates) {
-            if (nutritionMap[d].weight) {
-                latestWeight = parseFloat(nutritionMap[d].weight as string) || latestWeight;
-                break;
-            }
-        }
-    }
+    // Use the shared parser to handle decimal commas and invalid measurements.
+    const latestWeight = Logic.getLatestUserWeight(nutritionMap);
 
     let dailyTarget = { kcal: 0, carbs: 0, pro: 0, fat: 0 };
     if (planning) {

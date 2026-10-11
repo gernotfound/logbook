@@ -1,4 +1,18 @@
 import 'fake-indexeddb/auto';
+const storageFault = vi.hoisted(() => ({ failNextSet: false }));
+vi.mock('idb-keyval', async (importOriginal) => {
+    const original = await importOriginal<typeof import('idb-keyval')>();
+    return {
+        ...original,
+        set: (...args: Parameters<typeof original.set>) => {
+            if (storageFault.failNextSet) {
+                storageFault.failNextSet = false;
+                return Promise.reject(new Error('quota exceeded'));
+            }
+            return original.set(...args);
+        },
+    };
+});
 import { beforeEach, expect, it, vi } from 'vitest';
 const remote = vi.hoisted(() => ({ get: vi.fn() }));
 vi.mock('firebase/firestore', () => ({ doc: (_db: unknown, collection: string, id: string) => collection + '/' + id, getDoc: remote.get }));
@@ -42,4 +56,15 @@ it('preserves distinct IDs sharing a name and gives the custom identity preceden
     expect(resolveEffectiveFoods([food], [{ ...food, id: 'b', isCustom: true }]).map(item => item.id)).toEqual(['b', '0']);
     expect(resolveEffectiveFoods([food], [{ ...food, name: 'Locale', isCustom: true }])).toHaveLength(1);
     expect(resolveEffectiveFoods([food], [{ ...food, name: 'Locale', isCustom: true }])[0].name).toBe('Locale');
+});
+
+
+it('reports a new catalog as memory-only if IndexedDB rejects the write', async () => {
+    await saveCatalogToCache(getSeedCatalog());
+    arrange();
+    storageFault.failNextSet = true;
+    const result = await syncGlobalCatalog({} as never);
+    expect(result.updated).toBe(true);
+    expect(result.persisted).toBe(false);
+    expect((await getCachedCatalog()).exercises.map(item => item.id)).toEqual(['a']);
 });
