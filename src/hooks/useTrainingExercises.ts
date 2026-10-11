@@ -25,7 +25,7 @@ export function useTrainingExercises() {
     const showAlert = useDialogStore(state => state.showAlert);
     const showConfirm = useDialogStore(state => state.showConfirm);
     const persistExercise = async (operation: Parameters<typeof dispatchDomainOperation>[0]) => {
-        const result = await persistExercise(operation);
+        const result = await dispatchDomainOperation(operation);
         if (!result.ok && result.status !== 'local-pending') {
             throw result.error instanceof Error ? result.error : new Error('Operazione esercizio non completata');
         }

@@ -15,7 +15,7 @@ export function useNutritionMeals(dateStr?: string) {
     const dispatchDomainOperation = useAppStore(state => state.dispatchDomainOperation);
     const showAlert = useDialogStore(state => state.showAlert);
     const persistNutrition = async (operation: Parameters<typeof dispatchDomainOperation>[0]) => {
-        const result = await persistNutrition(operation);
+        const result = await dispatchDomainOperation(operation);
         if (!result.ok && result.status !== 'local-pending') {
             throw result.error instanceof Error ? result.error : new Error('Operazione di nutrizione non completata');
         }
