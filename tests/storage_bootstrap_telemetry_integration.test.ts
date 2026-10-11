@@ -194,12 +194,13 @@ describe('Storage Bootstrap & Telemetry Integration Flow', () => {
 
     vi.setSystemTime(bootTime);
     vi.spyOn(idbKeyval, 'get').mockResolvedValue(null);
-    const dispatchSpy = vi.spyOn(storageTelemetryModule, 'dispatchStorageRecoveryAnomaly').mockResolvedValue();
+    const dispatchSpy = vi.spyOn(storageTelemetryModule, 'dispatchStorageRecoveryAnomaly').mockResolvedValue(true);
 
     await initApp();
 
     expect(window.__INITIAL_USER_DATA__).toBeNull();
     expect(dispatchSpy).toHaveBeenCalledTimes(1);
+    expect(dispatchSpy.mock.calls[0][1]).toBe('test-user-id');
     const payload = dispatchSpy.mock.calls[0][0];
     expect(payload.type).toBe('storage_recovery_anomaly');
     expect(payload.reason).toBe('indexeddb_cache_missing_with_valid_marker');

@@ -277,7 +277,7 @@ export function createStorageRecoveryAnomalyPayload({
 export async function dispatchStorageRecoveryAnomaly(
   payload: StorageRecoveryAnomalyPayload,
   providedUid?: string | null
-): Promise<void> {
+): Promise<boolean> {
   try {
     // Dynamically resolve persisted status if not yet determined at sync creation time
     if (payload.persisted === null) {
@@ -345,15 +345,14 @@ export async function dispatchStorageRecoveryAnomaly(
       }
     }
 
-    if (!uid) {
-      // Unauthenticated / guest session without cloud account
-      return;
-    }
+    // Auth may change while persisted() or onAuthStateChanged is pending. In
+    // particular, never attribute a boot-time guest/old-owner anomaly to a new account.
+    if (!uid || uid !== auth.currentUser?.uid) return false;
 
-    // Preserve the historical authenticated-only boundary without transmitting
-    // the Firebase UID to the external monitoring provider.
-    await sendTelemetryToSentry('storage-anomaly', payload);
+    // The UID is an eligibility check only; it is not included in the Sentry payload.
+    return await sendTelemetryToSentry('storage-anomaly', payload);
   } catch (err) {
     console.warn("Invio anomalia storage a Sentry non riuscito (non bloccante):", err);
+    return false;
   }
 }

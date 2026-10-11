@@ -413,13 +413,30 @@ export class TelemetryHub {
     }
   }
 
+  private async dispatchOrQueueError(payload: TelemetryErrorPayload): Promise<void> {
+    const ownerEpoch = this.ownerEpoch;
+    let accepted = false;
+    try {
+      accepted = await this.dispatchErrorExternally(payload);
+    } catch {
+      // Telemetry remains best-effort. A rejected transport must not drop an error.
+    }
+
+    const currentUid = this.getUserId();
+    // Never queue a previous owner's response after an asynchronous auth change.
+    if (!accepted && payload.userId && payload.userId === currentUid && ownerEpoch === this.ownerEpoch) {
+      this.queue.enqueueItem('error', payload);
+      if (!this.isOffline()) this.scheduleExponentialBackoff();
+    }
+  }
+
   private flushPendingDispatches(): void {
     this.getUserId();
     for (const entry of this.rateLimits.values()) {
       if (entry.isDispatchPending) {
         entry.isDispatchPending = false;
         entry.lastDispatchedCount = entry.count;
-        this.dispatchErrorExternally(entry.payload).catch(() => {});
+        void this.dispatchOrQueueError(entry.payload);
       }
     }
   }
@@ -445,7 +462,7 @@ export class TelemetryHub {
         if (this.isOffline()) {
           this.queue.enqueueItem('error', entry.payload);
         } else {
-          await this.dispatchErrorExternally(entry.payload);
+          await this.dispatchOrQueueError(entry.payload);
         }
       }
     }
