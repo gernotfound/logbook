@@ -6,7 +6,7 @@ import DataBiometry from './DataBiometry';
 import DataSleep from './DataSleep';
 import DataActivity from './DataActivity';
 import DataHistory from './DataHistory';
-import type { DataSubTab } from '../../types';
+import type { DataSubTab, MeasurementHistoryDay } from '../../types';
 import { useLocalToday } from '../../hooks/useLocalToday';
 import SubNav from '../UI/SubNav';
 import './data.css';
@@ -39,7 +39,7 @@ const DataView: React.FC<DataViewProps> = ({
     const currentSubTab = setSubTab ? subTab : localSubTab;
     const changeSubTab = setSubTab || setLocalSubTab;
 
-    const handleSelectEdit = (day: any) => {
+    const handleSelectEdit = (day: MeasurementHistoryDay) => {
         setSelectedDate(day.date);
         measurementsHook.handleEditClick(day);
         sleepHook.setEditingDate(day.date);
