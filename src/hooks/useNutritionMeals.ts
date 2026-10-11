@@ -131,7 +131,7 @@ export function useNutritionMeals(dateStr?: string) {
         };
 
         try { await saveMeal(addedItem); }
-        catch { void void showAlert("Errore durante il salvataggio dell'alimento."); }
+        catch { void showAlert("Errore durante il salvataggio dell'alimento."); }
     };
 
     const handleSearch = (query: string) => {
@@ -238,7 +238,7 @@ export function useNutritionMeals(dateStr?: string) {
                 setEditingFoodId(null);
                 setCfData({ name: '', brand: '', unit: 'g', pieceWeight: '', kcal: '', carbs: '', pro: '', fat: '' });
             } catch {
-                await void showAlert("Errore durante il salvataggio dell'alimento.");
+                await showAlert("Errore durante il salvataggio dell'alimento.");
             }
         }
     };
