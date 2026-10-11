@@ -131,7 +131,7 @@ function extractThemeTokens(css: string, selector: string): Record<string, strin
   const end = css.indexOf('}', start);
   if (end < 0) throw new Error(`Unclosed theme selector ${selector}`);
   const block = css.slice(start, end);
-  const entries = Array.from(block.matchAll(/(--[\\w-]+|color-scheme)\\s*:\\s*([^;]+);/g), match => [match[1], match[2].trim()] as const);
+  const entries = Array.from(block.matchAll(/(--[\w-]+|color-scheme)\s*:\s*([^;]+);/g), match => [match[1], match[2].trim()] as const);
   if (new Set(entries.map(([name]) => name)).size !== entries.length) {
     throw new Error(`Duplicate theme declaration in ${selector}`);
   }
