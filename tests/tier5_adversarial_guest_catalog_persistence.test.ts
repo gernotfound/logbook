@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { doc, writeBatch } from 'firebase/firestore';
 
 vi.unmock('../src/lib/db');
-import { TestDB as DB } from './testUtils';
+import { ConsentedTestDB as DB } from './testUtils';
 import { getSeedCatalog, saveCatalogToCache, clearCatalogCache } from '../src/lib/catalog/catalogService';
 import { resolveEffectiveExercises, resolveEffectiveFoods } from '../src/lib/catalog/deltaResolver';
 import { checkDocSize, calculateDocSizeBytes, DOC_SIZE_LIMIT_BYTES } from '../src/lib/checkDocSize';

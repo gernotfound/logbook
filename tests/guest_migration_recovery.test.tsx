@@ -150,7 +150,7 @@ describe('guest migration crash recovery boundary', () => {
             </AuthProvider>
         );
 
-        await waitFor(() => expect(useAppStore.getState().saveError).toContain('Offline: account preparato sul dispositivo'));
+        await waitFor(() => expect(useAppStore.getState().saveError).toContain('Accetta Termini e consenso salute'));
         await waitFor(() => expect(screen.getByTestId('migration-status').textContent).toBe('idle'));
 
         const authenticatedEnvelope = await localRepository.readLocal(user.uid);

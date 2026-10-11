@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { doc, getDoc, writeBatch } from 'firebase/firestore';
 
 vi.unmock('../src/lib/db');
-import { TestDB as DB } from './testUtils';
+import { ConsentedTestDB as DB } from './testUtils';
 import { DomainParsers, UserDataSchema } from '../src/lib/schema';
 import type { UserData } from '../src/types';
 
