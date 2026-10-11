@@ -36,15 +36,15 @@ function parsePersistedActiveWorkout(value: unknown) {
 
 async function loadCloudPayload(options?: { allMonths?: boolean }): Promise<{
     data: UserData;
-    cloudDocuments: Map<string, any>;
+    cloudDocuments: Map<string, Record<string, unknown>>;
     completeMonths: string[];
 } | null> {
     const user = auth.currentUser;
     if (!user) return null;
 
-    const cloudDocuments = new Map<string, any>();
+    const cloudDocuments = new Map<string, Record<string, unknown>>();
     let completeMonths: string[] = [];
-    const state: Record<string, any> = {
+    const state: Record<string, any> & { history: unknown[]; nutrition: Record<string, unknown> } = {
         profile: {},
         library: [],
         routines: [],
