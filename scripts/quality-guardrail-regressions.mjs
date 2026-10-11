@@ -286,3 +286,19 @@ await test('blocks ts-expect-error comments in root-level TypeScript files', t =
   commit(ctx.root);
   mustFail(run(ctx), /New lint\/typecheck\/coverage suppression/);
 });
+
+await test('allows harmless reordering of existing rule-option object properties', t => {
+  const ctx = fixture(t);
+  save(ctx.root, '.oxlintrc.json', {
+    plugins: ['react'],
+    rules: { 'react/rules-of-hooks': ['error', { strict: true, mode: 'safe' }] },
+  });
+  commit(ctx.root);
+  const base = git(ctx.root, 'rev-parse', 'HEAD');
+  save(ctx.root, '.oxlintrc.json', {
+    plugins: ['react'],
+    rules: { 'react/rules-of-hooks': ['error', { mode: 'safe', strict: true }] },
+  });
+  commit(ctx.root);
+  assert.equal(run({ ...ctx, base }).status, 0);
+});

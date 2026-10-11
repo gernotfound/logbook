@@ -117,6 +117,17 @@ function severity(value) {
   return null;
 }
 
+// Rule-option objects are unordered; arrays retain their semantic order.
+function stableOptions(value) {
+  if (Array.isArray(value)) return value.map(stableOptions);
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, entry]) => [key, stableOptions(entry)]));
+  }
+  return value;
+}
+
 for (const path of ['.oxlintrc.json', '.oxlintrc.a11y.json', '.oxlintrc.type-aware.json']) {
   const before = parseJson(readBase(path), 'main ' + path);
   const after = parseJson(readCurrent(path), 'candidate ' + path);
@@ -144,7 +155,7 @@ for (const path of ['.oxlintrc.json', '.oxlintrc.a11y.json', '.oxlintrc.type-awa
     if (oldSeverity === null || newSeverity === null || newSeverity < oldSeverity) {
       failures.push(path + ': lint rules weakened or removed: ' + rule);
     }
-    const options = value => JSON.stringify(Array.isArray(value) ? value.slice(1) : []);
+    const options = value => JSON.stringify(stableOptions(Array.isArray(value) ? value.slice(1) : []));
     if (options(oldValue) !== options(newValue)) {
       failures.push(path + ': existing lint rule options changed: ' + rule);
     }
