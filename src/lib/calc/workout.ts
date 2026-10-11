@@ -64,7 +64,7 @@ export function searchExerciseLibrary<T extends SearchableExercise>(library: T[]
     }
 
     const enriched = library.map(ex => {
-        if (!ex) return { ...ex, _searchName: '', _stemmedName: '', _searchMuscles: '', _searchSecMuscles: '', _searchNotes: '', _searchType: '' };
+        if (!ex) return { ...((ex || {}) as T), _searchName: '', _stemmedName: '', _searchMuscles: '', _searchSecMuscles: '', _searchNotes: '', _searchType: '' };
 
         const pMuscleNames = (ex.muscles || []).map((mId: string) => {
             const mName = muscleMap.get(mId) || mId;
