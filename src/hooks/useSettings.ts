@@ -1,3 +1,4 @@
+import { dispatchDurableOperation } from '../lib/sync/dispatchDurableOperation';
 import { useRef, useState } from 'react';
 import { useAuth } from './useAuth';
 import { useAppStore } from '../store/useAppStore';
@@ -56,7 +57,7 @@ export function useSettings() {
         if (e) e.preventDefault();
         const newProfile = { dob, height, gender };
         try {
-            await dispatchDomainOperation({ type: 'profile.patch', patch: newProfile });
+            await dispatchDurableOperation(dispatchDomainOperation, { type: 'profile.patch', patch: newProfile });
             setLocalProfile(null);
         } catch {
             await showAlert("Errore durante il salvataggio del profilo.");

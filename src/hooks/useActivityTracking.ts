@@ -1,3 +1,4 @@
+import { dispatchDurableOperation } from '../lib/sync/dispatchDurableOperation';
 import { useMemo, useRef, useState } from 'react';
 import { useDatedDraft } from './useDatedDraft';
 import { useLocalToday } from './useLocalToday';
@@ -97,7 +98,7 @@ export function useActivityTracking() {
         const submitted = { ...stepsDraft.values };
         try {
             if (!isCurrentSession(session)) throw new Error('Sessione cambiata');
-            await dispatchDomainOperation({ type: 'activity-steps.set', date: selectedDate, steps, source: 'manual', capturedAt: Date.now() });
+            await dispatchDurableOperation(dispatchDomainOperation, { type: 'activity-steps.set', date: selectedDate, steps, source: 'manual', capturedAt: Date.now() });
             if (!isCurrentSession(session)) return false;
             return stepsDraft.clear(submitted);
         } catch {
@@ -112,7 +113,7 @@ export function useActivityTracking() {
         const session = captureSession();
         if (!(await showConfirm('Rimuovere i passi registrati per questo giorno?')) || !isCurrentSession(session)) return false;
         try {
-            await dispatchDomainOperation({ type: 'activity-steps.clear', date: selectedDate });
+            await dispatchDurableOperation(dispatchDomainOperation, { type: 'activity-steps.clear', date: selectedDate });
             if (!isCurrentSession(session)) return false;
             try { stepsDraft.clear(); } catch { /* Il dato business è già stato salvato. */ }
             return true;
@@ -180,7 +181,7 @@ export function useActivityTracking() {
         const submitted = { ...form };
         try {
             if (!isCurrentSession(session)) throw new Error('Sessione cambiata');
-            await dispatchDomainOperation({ type: 'cardio-session.upsert', date: selectedDate, session: cardioSession });
+            await dispatchDurableOperation(dispatchDomainOperation, { type: 'cardio-session.upsert', date: selectedDate, session: cardioSession });
             if (!isCurrentSession(session)) return false;
             const cleared = cardioDraft.clear(submitted);
             if (cleared) setEditingCardioId(null);
@@ -197,7 +198,7 @@ export function useActivityTracking() {
         const session = captureSession();
         if (!(await showConfirm('Eliminare questa sessione cardio?')) || !isCurrentSession(session)) return false;
         try {
-            await dispatchDomainOperation({ type: 'cardio-session.delete', date: selectedDate, sessionId: id });
+            await dispatchDurableOperation(dispatchDomainOperation, { type: 'cardio-session.delete', date: selectedDate, sessionId: id });
             if (!isCurrentSession(session)) return false;
             if (editingCardioId === id) setEditingCardioId(null);
             return true;

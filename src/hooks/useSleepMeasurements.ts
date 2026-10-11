@@ -1,3 +1,4 @@
+import { dispatchDurableOperation } from '../lib/sync/dispatchDurableOperation';
 import { useState, useRef } from 'react';
 import { useDatedDraft } from './useDatedDraft';
 import { useLocalToday } from './useLocalToday';
@@ -68,7 +69,7 @@ export function useSleepMeasurements() {
             const targetDate = editingDate || selectedDate;
 
             if (!isCurrentSession(session)) throw new Error('Sessione cambiata');
-            await dispatchDomainOperation({
+            await dispatchDurableOperation(dispatchDomainOperation, {
                 type: 'nutrition-day.patch',
                 date: targetDate,
                 patch: {

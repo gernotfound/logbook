@@ -978,7 +978,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         } finally {
             logoutInFlightRef.current = false;
         }
-    }, [setSyncing]);
+    }, [isGuestActiveStrict, setSyncing]);
 
     const value = useMemo(() => ({
         currentUser,

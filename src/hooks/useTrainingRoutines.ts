@@ -1,3 +1,4 @@
+import { dispatchDurableOperation } from '../lib/sync/dispatchDurableOperation';
 import { useState, useEffect } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
@@ -70,7 +71,7 @@ export function useTrainingRoutines() {
             name: newName
         };
         try {
-            await dispatchDomainOperation({ type: 'routine.upsert', routine: duplicated });
+            await dispatchDurableOperation(dispatchDomainOperation, { type: 'routine.upsert', routine: duplicated });
         } catch (err) {
             console.error(err);
             await showAlert('Errore durante la duplicazione della scheda.');
@@ -110,7 +111,7 @@ export function useTrainingRoutines() {
             if (editingRoutineId) {
                 const existing = routines.find(r => r.id === editingRoutineId);
                 if (!existing) throw new Error('Routine non trovata');
-                await dispatchDomainOperation({
+                await dispatchDurableOperation(dispatchDomainOperation, {
                     type: 'routine.upsert',
                     routine: { ...existing, name: routineName.trim(), exercises: sanitizedExercises },
                 });
@@ -123,7 +124,7 @@ export function useTrainingRoutines() {
                 const orderIds = [...routines, newRoutine]
                     .sort((a, b) => a.name.localeCompare(b.name))
                     .map(routine => routine.id);
-                await dispatchDomainOperation([
+                await dispatchDurableOperation(dispatchDomainOperation, [
                     { type: 'routine.upsert', routine: newRoutine },
                     { type: 'routine.reorder', ids: orderIds },
                 ]);
@@ -144,7 +145,7 @@ export function useTrainingRoutines() {
         e.stopPropagation();
         if (!(await showConfirm("Sei sicuro di voler eliminare questa scheda?"))) return;
         try {
-            await dispatchDomainOperation({ type: 'routine.delete', id });
+            await dispatchDurableOperation(dispatchDomainOperation, { type: 'routine.delete', id });
             if (editingRoutineId === id) handleCancelEdit();
         } catch {
             await showAlert("Errore durante l'eliminazione della scheda.");

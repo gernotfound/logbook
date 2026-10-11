@@ -1,3 +1,4 @@
+import { dispatchDurableOperation } from '../../lib/sync/dispatchDurableOperation';
 import { useState, useMemo } from 'react';
 import { Plus, Search, Utensils } from 'lucide-react';
 import { useAppStore } from '../../store/useAppStore';
@@ -82,7 +83,7 @@ export default function NutritionFoodArchive({ onEditFood }: NutritionFoodArchiv
 
         try {
             const id = currentEditingId ?? Logic.generateId('food');
-            await dispatchDomainOperation({ type: 'food.upsert', food: { ...cleanData, id } as any });
+            await dispatchDurableOperation(dispatchDomainOperation, { type: 'food.upsert', food: { ...cleanData, id } as any });
             setShowModal(false);
             setEditingFoodId(null);
         } catch {
@@ -98,7 +99,7 @@ export default function NutritionFoodArchive({ onEditFood }: NutritionFoodArchiv
             name: newName
         };
         try {
-            await dispatchDomainOperation({ type: 'food.upsert', food: duplicated });
+            await dispatchDurableOperation(dispatchDomainOperation, { type: 'food.upsert', food: duplicated });
         } catch {
             await showAlert('Errore durante la duplicazione.');
         }
@@ -109,7 +110,7 @@ export default function NutritionFoodArchive({ onEditFood }: NutritionFoodArchiv
         if (!confirmed) return;
 
         try {
-            await dispatchDomainOperation({ type: 'food.delete', id: food.id });
+            await dispatchDurableOperation(dispatchDomainOperation, { type: 'food.delete', id: food.id });
         } catch {
             await showAlert("Errore durante l'eliminazione dell'alimento.");
         }
@@ -134,7 +135,7 @@ export default function NutritionFoodArchive({ onEditFood }: NutritionFoodArchiv
         };
 
         try {
-            await dispatchDomainOperation({ type: 'nutrition-meal.upsert', date: todayDateStr, meal: addedItem });
+            await dispatchDurableOperation(dispatchDomainOperation, { type: 'nutrition-meal.upsert', date: todayDateStr, meal: addedItem });
         } catch {
             await showAlert("Errore durante l'aggiunta dell'alimento.");
         }
