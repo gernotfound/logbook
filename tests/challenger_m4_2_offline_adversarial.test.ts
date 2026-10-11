@@ -100,7 +100,7 @@ describe('Empirical Challenger M4.2: Offline Queue, Circuit Breaker & Poison Pil
       // Populate queue with 20 items
       const initialItems: QueuedTelemetryItem[] = Array.from({ length: 20 }, (_, i) => ({
         id: `item_${i + 1}`,
-        timestamp: 1724486400000 + i * 100,
+        timestamp: Date.now() - 2000 + i * 100,
         itemType: 'event',
         payload: {
           id: `evt_${i + 1}`,
@@ -108,7 +108,7 @@ describe('Empirical Challenger M4.2: Offline Queue, Circuit Breaker & Poison Pil
           context: getTelemetryContext(),
           userId: 'user_circuit_breaker',
           sessionId: 'sess_cb',
-          timestamp: 1724486400000 + i * 100,
+          timestamp: Date.now() - 2000 + i * 100,
         },
       }));
       localStorage.setItem(telemetryHub.getQueueStorageKey(), JSON.stringify(initialItems));
@@ -230,7 +230,7 @@ describe('Empirical Challenger M4.2: Offline Queue, Circuit Breaker & Poison Pil
       const items: QueuedTelemetryItem[] = [
         {
           id: 'poison_item',
-          timestamp: 1000,
+          timestamp: Date.now(),
           itemType: 'error',
           payload: {
             id: 'err_poison',
@@ -241,14 +241,14 @@ describe('Empirical Challenger M4.2: Offline Queue, Circuit Breaker & Poison Pil
             userId: 'user_poison_hetero',
             sessionId: 'sess_1',
             count: 1,
-            firstSeen: 1000,
-            lastSeen: 1000,
+            firstSeen: Date.now(),
+            lastSeen: Date.now(),
           },
           retryCount: 0,
         },
         {
           id: 'valid_item_after',
-          timestamp: 2000,
+          timestamp: Date.now() + 1,
           itemType: 'event',
           payload: {
             id: 'evt_valid_after',
@@ -256,7 +256,7 @@ describe('Empirical Challenger M4.2: Offline Queue, Circuit Breaker & Poison Pil
             context: getTelemetryContext(),
             userId: 'user_poison_hetero',
             sessionId: 'sess_1',
-            timestamp: 2000,
+            timestamp: Date.now() + 1,
           },
           retryCount: 0,
         },
