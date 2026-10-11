@@ -109,14 +109,14 @@ function GuestBanner({ onLogin }: { onLogin: () => void }) {
 
 function App() {
   const { currentUser, loading, isGuest, guestMigrationStatus, retryGuestMigration, emailVerificationRequired } = useAuth();
-  const healthConsentStatus = useSyncExternalStore(subscribeHealthConsent, () => currentHealthConsentStatus(currentUser?.uid), () => 'checking');
+  const healthConsentStatus = useSyncExternalStore(subscribeHealthConsent, () => currentHealthConsentStatus(currentUser?.uid), () => 'checking' as const);
   useEffect(() => {
     if (!currentUser || isGuest || emailVerificationRequired) return;
     const reconcile = () => { void refreshHealthConsent(currentUser); };
     reconcile();
     const onStorage = (event: StorageEvent) => {
       if (event.key === `logbook:v2:user:${currentUser.uid}:health-consent-withdrawal`) {
-        refreshHealthConsentFromStorage(currentUser.uid);
+        refreshHealthConsentFromStorage();
         reconcile();
       }
     };

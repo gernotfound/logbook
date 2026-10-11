@@ -8,6 +8,7 @@ type ServerStatus = { status: 'active' | 'withdrawn'; revision: number; accepted
 const API = (import.meta.env.VITE_ACCOUNT_DELETION_API_ORIGIN || 'https://logbook-gnf.vercel.app').replace(/\/$/, '');
 const entries = new Map<string, HealthConsentStatus>();
 const listeners = new Set<() => void>();
+const verifiedReacceptance = new Map<string, string>();
 const marker = (uid: string) => `logbook:v2:user:${uid}:health-consent-withdrawal`;
 function notify() { for (const listener of listeners) listener(); }
 export function subscribeHealthConsent(listener: () => void): () => void {
@@ -34,7 +35,8 @@ export function currentHealthConsentStatus(uid: string | undefined): HealthConse
 }
 export function isHealthConsentWritable(owner: string): boolean {
   if (!owner.startsWith('user:')) return true;
-  return currentHealthConsentStatus(owner.slice(5)) === 'active';
+  const uid = owner.slice(5);
+  return currentHealthConsentStatus(uid) === 'active' || (currentHealthConsentStatus(uid) === 'reaccepting' && verifiedReacceptance.has(uid));
 }
 export function requireHealthConsentWritable(owner: string): void {
   if (!isHealthConsentWritable(owner)) throw new Error('Accesso fitness sospeso per revoca del consenso o stato non verificato.');
@@ -122,15 +124,18 @@ export async function reacceptHealthConsent(user: User, acceptance: {
   if (result.status !== 'active' || typeof result.acceptedAt !== 'string') {
     throw new Error('Nuovo consenso non confermato dal server.');
   }
+  verifiedReacceptance.set(uid, result.acceptedAt);
   return result.acceptedAt;
 }
 
 export function finishHealthConsentReacceptance(uid: string): void {
   if (readMarker(uid) !== 'reaccepting') throw new Error('Nessuna nuova accettazione in corso.');
+  if (!verifiedReacceptance.has(uid)) throw new Error('Manca la conferma server del nuovo consenso.');
   removeBrowserValue(marker(uid));
+  verifiedReacceptance.delete(uid);
   setStatus(uid, 'active');
 }
 
-export function refreshHealthConsentFromStorage(uid: string): void {
+export function refreshHealthConsentFromStorage(): void {
   notify();
 }
