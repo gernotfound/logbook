@@ -69,7 +69,7 @@ describe('M8 Domain Operations V4', () => {
         expect(operations.every(op => op.docPath === 'nutrition_months/2026-09')).toBe(true);
         expect(operations.some(op => op.path.join('/') === '2026-09-15/meals/meal-1')).toBe(true);
         expect(replay.get('nutrition_months/2026-09')).toBeDefined();
-        expect((replay.get('nutrition_months/2026-09')!.['2026-09-15'] as any).kcal).toBe(350);
+        expect((replay.get('nutrition_months/2026-09')!['2026-09-15'] as any).kcal).toBe(350);
     });
 
     it('moves a workout across months with an old-month tombstone and new-month upsert', () => {
@@ -82,7 +82,7 @@ describe('M8 Domain Operations V4', () => {
         expect(operations.some(op => op.docPath === 'history_months/2026-09' && op.path[0] === 'w-1' && !op.isDelete)).toBe(true);
         expect(replay.get('history_months/2026-08')?.['w-1']).toBeUndefined();
         expect(replay.get('history_months/2026-09')).toBeDefined();
-        expect((replay.get('history_months/2026-09')!.['w-1'] as any).date).toBe('2026-09-01');
+        expect((replay.get('history_months/2026-09')!['w-1'] as any).date).toBe('2026-09-01');
     });
 
     it('completes a workout as one domain batch spanning history and root state', () => {
@@ -98,7 +98,7 @@ describe('M8 Domain Operations V4', () => {
         expect(replay.get('')?.activeWorkout).toBeNull();
         expect(replay.get('')?.activePains).toEqual(['new']);
         expect(replay.get('history_months/2026-09')).toBeDefined();
-        expect((replay.get('history_months/2026-09')!.['w-2'] as any).globalEndTime).toBe(200);
+        expect((replay.get('history_months/2026-09')!['w-2'] as any).globalEndTime).toBe(200);
     });
 
     it('persists and semantically syncs structured training-cycle strategy', () => {
@@ -245,7 +245,7 @@ describe('M8 Domain Operations V4', () => {
                 ?.map(routine => routine.exercises.map(exercise => exercise.exId)),
         ).toEqual([['e-keep'], []]);
         expect(projectDocuments(after, catalog).get('history_months/2026-09')).toBeDefined();
-        expect((projectDocuments(after, catalog).get('history_months/2026-09')!.['w-delete-regression'] as WorkoutSession).exercises[0].exId)
+        expect((projectDocuments(after, catalog).get('history_months/2026-09')!['w-delete-regression'] as WorkoutSession).exercises[0].exId)
             .toBe('e-delete');
     });
 
@@ -295,7 +295,7 @@ describe('M8 Domain Operations V4', () => {
         expect(completed.after.history?.[0].readiness).toEqual(active.readiness);
         expect(completed.after.history?.[0].exercises[0].sets[0].rir).toBe(0);
         expect(completed.replay.get('history_months/2026-09')).toBeDefined();
-        expect((completed.replay.get('history_months/2026-09')!.['live-ready'] as WorkoutSession).exercises[0].sets[0].rir).toBe(0);
+        expect((completed.replay.get('history_months/2026-09')!['live-ready'] as WorkoutSession).exercises[0].sets[0].rir).toBe(0);
         expect(completed.after.activeWorkout).toBeNull();
 
         const edited = { ...completed.after.history![0], moodRating: 8 };

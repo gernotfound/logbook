@@ -134,7 +134,7 @@ describe('Causal Semantic Merge', () => {
 
         const { documents } = applySemanticOperations(base, ops);
         expect(documents.get('nutrition_months/2026-09')).toBeDefined();
-        const meal = (documents.get('nutrition_months/2026-09')!.['2026-09-13'] as any).meals[0];
+        const meal = (documents.get('nutrition_months/2026-09')!['2026-09-13'] as any).meals[0];
         expect(meal).toMatchObject({ quantity: 200, name: 'Mela Verde' });
     });
 

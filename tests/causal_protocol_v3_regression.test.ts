@@ -76,7 +76,7 @@ describe('Sync Protocol 3 causal convergence regressions', () => {
 
         expect(snapshot(staleThenRecreate)).toEqual(snapshot(recreateThenStale));
         expect(recreateThenStale.documents.get(path)).toBeDefined();
-        expect((recreateThenStale.documents.get(path)!.[date] as any).weight).toBe(82);
+        expect((recreateThenStale.documents.get(path)![date] as any).weight).toBe(82);
         expect(recreateThenStale.syncMetas[path]).toMatchObject({
             protocolVersion: CURRENT_SYNC_PROTOCOL,
             clock: { A: 1, B: 1, C: 1 },
@@ -184,7 +184,7 @@ describe('Sync Protocol 3 causal convergence regressions', () => {
 
         expect(snapshot(descendantsFirst)).toEqual(snapshot(ancestorFirst));
         expect(descendantsFirst.documents.get(path)).toBeDefined();
-        expect((descendantsFirst.documents.get(path)!.[date] as any).weight).toBe(82);
+        expect((descendantsFirst.documents.get(path)![date] as any).weight).toBe(82);
         expect(descendantsFirst.syncMetas[path].fields[`${date}/weight`]).toMatchObject({
             actorId: 'A',
             seq: 1,
