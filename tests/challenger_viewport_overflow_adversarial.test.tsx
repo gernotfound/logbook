@@ -306,6 +306,9 @@ describe('EMPIRICAL CHALLENGER: Viewport & Overflow Adversarial Stress Suite (m2
                     setSelectedDate={vi.fn()}
                     todayDateStr="2026-08-25"
                     sleepHook={{
+                        editingDate: null,
+                        setEditingDate: vi.fn(),
+                        saveSleep: vi.fn(),
                         sleepHours: '07:30',
                         setSleepHours: vi.fn(),
                         sleepDeep: '01:45',
@@ -316,15 +319,6 @@ describe('EMPIRICAL CHALLENGER: Viewport & Overflow Adversarial Stress Suite (m2
                         setSleepRem: vi.fn(),
                         sleepAwake: '00:15',
                         setSleepAwake: vi.fn(),
-                        sleepScore: '85',
-                        setSleepScore: vi.fn(),
-                        sleepQuality: 'Ottimo',
-                        setSleepQuality: vi.fn(),
-                        sleepHr: '52',
-                        setSleepHr: vi.fn(),
-                        sleepHrv: '65',
-                        setSleepHrv: vi.fn(),
-                        resetForm: vi.fn()
                     }}
                 />
             );
