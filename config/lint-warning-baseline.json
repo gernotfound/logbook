@@ -97,14 +97,6 @@
   },
   {
     "suite": "default",
-    "file": "src/hooks/useTrainingRoutines.ts",
-    "code": "react(set-state-in-effect)",
-    "message": "Calling setState synchronously within an effect can trigger cascading renders",
-    "source": "if (parsed.name) setRoutineName(parsed.name);",
-    "count": 1
-  },
-  {
-    "suite": "default",
     "file": "tests/audit_01_04_remediation.test.ts",
     "code": "eslint(no-unused-vars)",
     "message": "Variable 'catalog' is declared but never used. Unused variables should start with a '_'.",
