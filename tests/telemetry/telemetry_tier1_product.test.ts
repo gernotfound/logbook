@@ -213,15 +213,15 @@ describe('Unified Telemetry Hub E2E Suite — Tier 1 Product', () => {
         localStorage.setItem(TELEMETRY_QUEUE_KEY, JSON.stringify([
           {
             id: 'legacy-a',
-            timestamp: 1,
+            timestamp: Date.now() - 1,
             itemType: 'event',
-            payload: { type: 'a', timestamp: 1, context: getTelemetryContext(), userId: 'user_a' },
+            payload: { type: 'a', timestamp: Date.now() - 1, context: getTelemetryContext(), userId: 'user_a' },
           },
           {
             id: 'legacy-b',
-            timestamp: 2,
+            timestamp: Date.now(),
             itemType: 'event',
-            payload: { type: 'b', timestamp: 2, context: getTelemetryContext(), userId: 'user_b' },
+            payload: { type: 'b', timestamp: Date.now(), context: getTelemetryContext(), userId: 'user_b' },
           },
         ]));
 
