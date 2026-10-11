@@ -115,7 +115,11 @@ function App() {
   const [trainingSubTab, setTrainingSubTab] = useLocalStorage<TrainingSubTab>(LOCAL_STORAGE_TRAINING_TAB, 'session', TrainingSubTabSchema);
   const [nutritionSubTab, setNutritionSubTab] = useLocalStorage<NutritionSubTab>(LOCAL_STORAGE_NUTRITION_TAB, 'meals', NutritionSubTabSchema);
   const [dataSubTab, setDataSubTab] = useLocalStorage<DataSubTab>(LOCAL_STORAGE_DATA_TAB, 'measurements', DataSubTabSchema);
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  // A PWA shortcut is an initial navigation choice, not state to copy from
+  // the URL in an effect after the first paint.
+  const [settingsOpen, setSettingsOpen] = useState(() =>
+    typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('tab') === 'settings'
+  );
   const [requiredUpdateReloading, setRequiredUpdateReloading] = useState(false);
   const [requiredUpdateReloadError, setRequiredUpdateReloadError] = useState<string | null>(null);
 
@@ -157,13 +161,11 @@ function App() {
       if (tabParam) {
         if (tabParam === 'settings') {
           if (activeTab !== 'home') setActiveTab('home');
-          setSettingsOpen(true);
         } else {
           const parsed = AppTabSchema.safeParse(tabParam);
           if (parsed.success && parsed.data !== activeTab) {
             setActiveTab(parsed.data);
           }
-          setSettingsOpen(false);
         }
         window.history.replaceState({}, '', window.location.pathname);
       }
@@ -305,7 +307,7 @@ function App() {
     };
     window.addEventListener('app:navigate', handleNavEvent);
     return () => window.removeEventListener('app:navigate', handleNavEvent);
-  }, [activeTab, settingsOpen]);
+  }, [activeTab, settingsOpen, handleTabChange, setActiveTab]);
 
   // Sync Lock: prevent tab close/navigation if a cloud sync is currently in progress
   useEffect(() => {

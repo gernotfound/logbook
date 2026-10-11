@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import MuscleModel from '../../Training/MuscleModel';
 import { Activity, ChevronDown } from 'lucide-react';
 import { Logic } from '../../../lib/logic';
@@ -10,14 +10,10 @@ interface RecoveryBentoCardProps {
     onTogglePain: (muscleId: string) => void;
 }
 
-const RecoveryBentoCard: React.FC<RecoveryBentoCardProps> = ({ activePains = [], painColors, muscleColors = {}, onTogglePain }) => {
+const RecoveryBentoCardContent: React.FC<RecoveryBentoCardProps> = ({ activePains = [], painColors, muscleColors = {}, onTogglePain }) => {
     const combinedColors = { ...muscleColors, ...painColors };
     const [searchQuery, setSearchQuery] = useState('');
     const [isExpanded, setIsExpanded] = useState(false);
-
-    useEffect(() => {
-        if (activePains.length === 0) setIsExpanded(false);
-    }, [activePains.length]);
 
     const searchResults = useMemo(() => {
         if (!searchQuery.trim()) return [];
@@ -239,5 +235,14 @@ const RecoveryBentoCard: React.FC<RecoveryBentoCardProps> = ({ activePains = [],
         </div>
     );
 };
+
+// A transition through zero active pains remounts the disclosure in its
+// collapsed state without synchronizing React state from an effect.
+const RecoveryBentoCard: React.FC<RecoveryBentoCardProps> = props => (
+    <RecoveryBentoCardContent
+        key={props.activePains.length === 0 ? 'empty' : 'has-pains'}
+        {...props}
+    />
+);
 
 export default RecoveryBentoCard;

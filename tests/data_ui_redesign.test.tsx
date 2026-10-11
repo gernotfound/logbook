@@ -71,6 +71,34 @@ describe('Data UI redesign', () => {
         expect((container.querySelector('#measure-neck') as HTMLInputElement).value).toBe('38');
     });
 
+    it('resets the selected BF method when a different day or saved provenance is loaded', () => {
+        const props = measurementProps();
+        const { rerender } = render(<DataMeasurements {...props} />);
+        const manual = screen.getByRole('radio', { name: /BF manuale/i }) as HTMLInputElement;
+        const calculate = screen.getByRole('radio', { name: /Calcolo da misure/i }) as HTMLInputElement;
+        fireEvent.click(calculate);
+        expect(calculate.checked).toBe(true);
+
+        rerender(<DataMeasurements {...measurementProps({ selectedDate: '2026-10-04', targetDateStr: '2026-10-04' })} />);
+        expect(manual.checked).toBe(true);
+
+        rerender(<DataMeasurements {...measurementProps({
+            selectedDate: '2026-10-04',
+            targetDateStr: '2026-10-04',
+            bfProvenance: { method: 'us_navy' },
+        })} />);
+        expect(calculate.checked).toBe(true);
+        fireEvent.click(manual);
+        expect(manual.checked).toBe(true);
+
+        rerender(<DataMeasurements {...measurementProps({
+            selectedDate: '2026-10-04',
+            targetDateStr: '2026-10-04',
+            bfProvenance: { method: 'manual' },
+        })} />);
+        expect(manual.checked).toBe(true);
+    });
+
     it('submits the explicitly selected body-fat mode to the existing save callback', () => {
         const calculateAndSave = vi.fn().mockResolvedValue(true);
         render(<DataMeasurements {...measurementProps({ calculateAndSave })} />);

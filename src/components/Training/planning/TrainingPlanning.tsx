@@ -1,5 +1,5 @@
 import { dispatchDurableOperation } from '../../../lib/sync/dispatchDurableOperation';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Copy, Dumbbell, Pencil, Trash2 } from 'lucide-react';
 import { useAppStore } from '../../../store/useAppStore';
 import { useDialogStore } from '../../../store/useDialogStore';
@@ -38,7 +38,13 @@ export default function TrainingPlanning({ onOpenSession }: TrainingPlanningProp
 
     const [isEditing, setIsEditing] = useState(false);
     const [editingCycle, setEditingCycle] = useState<TrainingCycle | null>(null);
-    const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+    const [detailsState, setDetailsState] = useState(() => ({ cycleId: activeCycleId, isOpen: false }));
+    // Reset details before rendering a different active cycle. This avoids an
+    // effect and prevents briefly showing another cycle's expanded content.
+    if (detailsState.cycleId !== activeCycleId) {
+        setDetailsState({ cycleId: activeCycleId, isOpen: false });
+    }
+    const isDetailsOpen = detailsState.cycleId === activeCycleId && detailsState.isOpen;
 
     const activeCycle = useMemo(
         () => activeCycleId ? trainingCycles.find(cycle => cycle.id === activeCycleId) ?? null : null,
@@ -49,7 +55,6 @@ export default function TrainingPlanning({ onOpenSession }: TrainingPlanningProp
         [activeCycleId, trainingCycles]
     );
 
-    useEffect(() => setIsDetailsOpen(false), [activeCycleId]);
 
     const editingCycleHasRecordedSessions = useMemo(() => {
         if (!editingCycle) return false;
@@ -265,7 +270,7 @@ export default function TrainingPlanning({ onOpenSession }: TrainingPlanningProp
                         <button
                             type="button"
                             className="btn"
-                            onClick={() => setIsDetailsOpen(open => !open)}
+                            onClick={() => setDetailsState({ cycleId: activeCycleId, isOpen: !isDetailsOpen })}
                             aria-expanded={isDetailsOpen}
                         >
                             Dettagli ciclo
