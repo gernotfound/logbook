@@ -151,7 +151,8 @@ export function searchExerciseLibrary<T extends SearchableExercise>(library: T[]
         if (key && !seen.has(key)) {
             seen.add(key);
             const { _searchName, _stemmedName, _searchMuscles, _searchSecMuscles, _searchNotes, _searchType, ...original } = item;
-            results.push(original as T);
+            // Only temporary index fields are removed; the original T fields remain.
+            results.push(original as unknown as T);
         }
     }
 
