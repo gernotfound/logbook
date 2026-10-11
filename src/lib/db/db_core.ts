@@ -6,7 +6,7 @@ export class SyncTimeoutError extends Error {
 }
 
 export function withTimeout<T>(promise: Promise<T>, ms: number, errMsg = "Timeout operazione Firestore"): Promise<T> {
-    let timer: any;
+    let timer: ReturnType<typeof setTimeout> | undefined;
     const timeout = new Promise<never>((_, reject) => {
         timer = setTimeout(() => reject(new SyncTimeoutError(errMsg)), ms);
     });
