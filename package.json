@@ -36,7 +36,7 @@
     "test:rules": "node scripts/run-firestore-rules-tests.mjs",
     "test:coverage": "vitest run --coverage",
     "test:no-skips": "node scripts/check-test-skips.mjs",
-    "test:typecheck-coverage": "node --test scripts/check-typecheck-coverage.test.mjs && node scripts/check-typecheck-coverage.mjs",
+    "test:typecheck-coverage": "node --test scripts/typecheck-coverage-regressions.mjs && node scripts/check-typecheck-coverage.mjs",
     "test:typecheck:m5": "tsc --noEmit -p tsconfig.m5-tests.json",
     "test:quality:m5": "node scripts/check-m5-test-quality.mjs",
     "test:repo-hygiene": "node scripts/check-repo-hygiene.mjs",
