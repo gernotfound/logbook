@@ -46,6 +46,20 @@ beforeEach(async () => {
 });
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
 
+it('keeps the account journal pending when consent is missing, without starting a remote write', async () => {
+    await commitLocal('user:a', { ...data(171), legalConsent: undefined }, data(171));
+    const before = await readLocal('user:a');
+    expect(before?.pending.length).toBeGreaterThan(0);
+
+    const result = await replicateJournal();
+    expect(result.status).toBe('local-pending');
+    expect(result.error).toMatchObject({ code: 'legal-consent-required' });
+    expect(remote.apply).not.toHaveBeenCalled();
+
+    const after = await readLocal('user:a');
+    expect(after?.pending).toEqual(before?.pending);
+});
+
 it('retains one writer after timeout and acknowledges its late commit before retrying', async () => {
     const completion = deferred<any>();
     remote.apply.mockReturnValue(completion.promise);
