@@ -213,3 +213,116 @@ await test('blocks introducing an oxlint ignore file that hides app source', t =
   commit(ctx.root);
   mustFail(run(ctx), /lint ignore-file contents changed/);
 });
+
+await test('blocks disabling Oxlint implicit correctness rules', t => {
+  const ctx = fixture(t);
+  save(ctx.root, '.oxlintrc.json', {
+    plugins: ['react'], categories: { correctness: 'off' },
+    rules: { 'react/rules-of-hooks': 'error' },
+  });
+  commit(ctx.root);
+  mustFail(run(ctx), /lint category weakened: correctness/);
+});
+
+await test('blocks newly added explicit rule suppressions', t => {
+  const ctx = fixture(t);
+  save(ctx.root, '.oxlintrc.json', {
+    plugins: ['react'],
+    rules: { 'react/rules-of-hooks': 'error', 'react/no-unknown-property': 'off' },
+  });
+  commit(ctx.root);
+  mustFail(run(ctx), /newly disabled lint rule/);
+});
+
+await test('blocks weakening existing rule options without a policy review', t => {
+  const ctx = fixture(t);
+  save(ctx.root, '.oxlintrc.json', {
+    plugins: ['react'],
+    rules: { 'react/rules-of-hooks': ['error', { strict: true }] },
+  });
+  commit(ctx.root);
+  const base = git(ctx.root, 'rev-parse', 'HEAD');
+  save(ctx.root, '.oxlintrc.json', {
+    plugins: ['react'],
+    rules: { 'react/rules-of-hooks': ['error', { strict: false }] },
+  });
+  commit(ctx.root);
+  mustFail(run({ ...ctx, base }), /existing lint rule options changed/);
+});
+
+await test('blocks noCheck even when strict and noEmit remain true', t => {
+  const ctx = fixture(t);
+  save(ctx.root, 'tsconfig.m7-server.json', {
+    compilerOptions: { strict: true, noEmit: true, noCheck: true },
+  });
+  commit(ctx.root);
+  mustFail(run(ctx), /full checking disabled by noCheck/);
+});
+
+await test('blocks gitignore rules that hide tracked TypeScript code from lint', t => {
+  const ctx = fixture(t);
+  save(ctx.root, '.gitignore', 'src/App.tsx\n');
+  commit(ctx.root);
+  mustFail(run(ctx), /Tracked JS\/TS files hidden from lint/);
+});
+
+await test('allows unrelated gitignore additions with no tracked JS or TS excluded', t => {
+  const ctx = fixture(t);
+  save(ctx.root, '.gitignore', 'dist/\n');
+  commit(ctx.root);
+  assert.equal(run(ctx).status, 0);
+});
+
+await test('blocks inline suppression comments on existing source lines', t => {
+  const ctx = fixture(t);
+  save(ctx.root, 'src/App.tsx', 'export const safe = true; // oxlint-' + 'disable-line no-console\n');
+  commit(ctx.root);
+  mustFail(run(ctx), /New lint\/typecheck\/coverage suppression/);
+});
+
+await test('blocks ts-expect-error comments in root-level TypeScript files', t => {
+  const ctx = fixture(t);
+  save(ctx.root, 'vite.config.ts', '// @ts-' + 'expect-error suppress regression\nexport const safe = true;\n');
+  commit(ctx.root);
+  mustFail(run(ctx), /New lint\/typecheck\/coverage suppression/);
+});
+
+await test('allows harmless reordering of existing rule-option object properties', t => {
+  const ctx = fixture(t);
+  save(ctx.root, '.oxlintrc.json', {
+    plugins: ['react'],
+    rules: { 'react/rules-of-hooks': ['error', { strict: true, mode: 'safe' }] },
+  });
+  commit(ctx.root);
+  const base = git(ctx.root, 'rev-parse', 'HEAD');
+  save(ctx.root, '.oxlintrc.json', {
+    plugins: ['react'],
+    rules: { 'react/rules-of-hooks': ['error', { mode: 'safe', strict: true }] },
+  });
+  commit(ctx.root);
+  assert.equal(run({ ...ctx, base }).status, 0);
+});
+
+await test('blocks nested Oxlint configuration that overrides the root policy', t => {
+  const ctx = fixture(t);
+  save(ctx.root, 'src/.oxlintrc.json', { categories: { correctness: 'off' } });
+  commit(ctx.root);
+  mustFail(run(ctx), /additional or nested Oxlint configuration/);
+});
+
+await test('blocks newly tracked minified-looking application source', t => {
+  const ctx = fixture(t);
+  save(ctx.root, 'src/recovery.min.ts', 'export const recovery = true;\n');
+  commit(ctx.root);
+  mustFail(run(ctx), /New tracked source skipped by Oxlint minified-file defaults/);
+});
+
+await test('does not retroactively reject pre-existing minified-looking files', t => {
+  const ctx = fixture(t);
+  save(ctx.root, 'src/legacy.min.js', 'export const legacy = true;\n');
+  commit(ctx.root);
+  const base = git(ctx.root, 'rev-parse', 'HEAD');
+  save(ctx.root, 'src/App.tsx', 'export const safe = 42;\n');
+  commit(ctx.root);
+  assert.equal(run({ ...ctx, base }).status, 0);
+});
