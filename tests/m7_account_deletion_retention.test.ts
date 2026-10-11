@@ -6,6 +6,7 @@ const state = vi.hoisted(() => ({
   devices: new Set<string>(),
   failUid: '' as string,
   deleted: [] as string[],
+  afterId: '' as string,
 }));
 
 const fakeDb = vi.hoisted(() => ({
@@ -16,10 +17,14 @@ const fakeDb = vi.hoisted(() => ({
     if (name !== 'account_deletions') throw new Error('Unexpected collection');
     return {
       where() { return this; },
+      orderBy() { return this; },
+      startAfter(document: { id: string }) { state.afterId = document.id; return this; },
       limit(count: number) { return { async get() {
-        const docs = state.jobs.filter(job => job.data.status === 'complete'
-          && (job.data.purgeAfter as Timestamp)?.toMillis() <= Date.now())
-          .slice(0, count).map(job => ({ id: job.id, ref: { id: job.id, path: 'account_deletions/' + job.id }, data: () => job.data }));
+        const matching = state.jobs.filter(job => job.data.status === 'complete'
+          && (job.data.purgeAfter as Timestamp)?.toMillis() <= Date.now());
+        const offset = state.afterId ? matching.findIndex(job => job.id === state.afterId) + 1 : 0;
+        const docs = matching.slice(offset, offset + count)
+          .map(job => ({ id: job.id, ref: { id: job.id, path: 'account_deletions/' + job.id }, data: () => job.data }));
         return { docs, empty: docs.length === 0 };
       } }; },
     };
@@ -45,14 +50,14 @@ const fakeDb = vi.hoisted(() => ({
   },
 }));
 vi.mock('../server/accountDeletion/firebaseAdmin', () => ({ adminDb: () => fakeDb }));
-import { completedDeletionPurgeAfter, purgeExpiredCompletedDeletionJobs, ACCOUNT_DELETION_COMPLETED_RETENTION_MS } from '../server/accountDeletion/retention';
+import { completedDeletionPurgeAfter, purgeExpiredCompletedDeletionJobs, ACCOUNT_DELETION_COMPLETED_RETENTION_MS, type AccountDeletionRetentionPage } from '../server/accountDeletion/retention';
 
 const OLD = Timestamp.fromMillis(2_000_000_000_000);
 const EXPIRED = Timestamp.fromMillis(1);
 
 describe('atomic completed account deletion retention', () => {
   beforeEach(() => {
-    state.jobs = []; state.devices = new Set(); state.failUid = ''; state.deleted = [];
+    state.jobs = []; state.devices = new Set(); state.failUid = ''; state.deleted = []; state.afterId = '';
   });
 
   it('schedules tombstones 30 days after completion', () => {
@@ -90,6 +95,24 @@ describe('atomic completed account deletion retention', () => {
     expect(await purgeExpiredCompletedDeletionJobs()).toBe(0);
     expect(state.deleted).toEqual([]);
     expect(state.devices.has('other')).toBe(true);
+  });
+
+  it('walks past a full page of corrupt receipts without deleting another user registry', async () => {
+    state.jobs = Array.from({ length: 400 }, (_, index) => ({
+      id: `invalid-${String(index).padStart(3, '0')}`,
+      data: { uid: 'another-user', status: 'complete', purgeAfter: EXPIRED },
+    }));
+    state.jobs.push({ id: 'valid', data: { uid: 'valid', status: 'complete', purgeAfter: EXPIRED } });
+    state.devices.add('another-user');
+    state.devices.add('valid');
+    const progress: AccountDeletionRetentionPage = { scanned: 0 };
+    expect(await purgeExpiredCompletedDeletionJobs(400, undefined, Infinity, progress)).toBe(0);
+    expect(progress.scanned).toBe(400);
+    expect(await purgeExpiredCompletedDeletionJobs(400, undefined, Infinity, progress)).toBe(1);
+    expect(progress.scanned).toBe(1);
+    expect(state.devices.has('another-user')).toBe(true);
+    expect(state.devices.has('valid')).toBe(false);
+    expect(state.jobs).toHaveLength(400);
   });
 
   it('does no destructive work when budget is exhausted', async () => {
