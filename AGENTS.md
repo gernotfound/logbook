@@ -269,6 +269,7 @@ npm run verify:m8
 - Java/Firebase Emulator e Chromium Playwright vengono predisposti solo negli shard che li richiedono; i limiti single-worker delle suite sensibili restano invariati.
 - **MUST:** non dichiarare verde un gate non realmente eseguito.
 - **MUST:** warning inattesi, `act(...)`, unhandled rejection e framework warning nel candidato vanno corretti o spiegati, non soppressi cosmeticamente.
+- **MUST:** `test:quality-guardrails` impedisce che la PR aggiunga o sostituisca warning rispetto allo SHA base, indebolisca lint/TypeScript/leaf canonici o introduca nuove soppressioni. La baseline può solo diminuire; rigenerarla per accettare warning nuovi non è consentito.
 - **MUST:** test normativi devono attraversare il boundary di produzione che dichiarano di verificare; mock e oracle non possono reimplementare il comportamento sotto test.
 
 → Contratto completo: `.agents/rules/ci-verification.md` e `.agents/rules/verification-hardening.md`.

@@ -27,6 +27,12 @@ if (packageJson.scripts?.['lint:type-aware'] !== 'oxlint --config .oxlintrc.type
 if (packageJson.scripts?.['lint:baseline'] !== 'node scripts/check-lint-baseline.mjs') {
   failures.push('lint:baseline: expected node scripts/check-lint-baseline.mjs');
 }
+if (packageJson.scripts?.['test:quality-guardrails'] !== 'node --test scripts/quality-guardrail-regressions.mjs && node scripts/check-quality-guardrails.mjs') {
+  failures.push('test:quality-guardrails: mandatory regression suite and main-relative policy checker missing');
+}
+if (!packageJson.scripts?.['verify:m6']?.includes('npm run test:quality-guardrails')) {
+  failures.push('verify:m6: quality guardrails must run in the canonical verification chain');
+}
 if (packageJson.scripts?.['test:typecheck-coverage'] !== 'node --test scripts/typecheck-coverage-regressions.mjs && node scripts/check-typecheck-coverage.mjs') {
   failures.push('test:typecheck-coverage must run regressions and check tracked TypeScript files');
 }
@@ -119,6 +125,7 @@ if (dependencyInstalls.length !== 2) failures.push(`dependency install: expected
 requirePattern('failure artifact action pin', workflow, /^        uses: actions\/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7\s*$/m);
 requirePattern('exact event SHA binding', workflow, /^      EXPECTED_SHA: \$\{\{ github\.event\.pull_request\.head\.sha \|\| github\.sha \}\}\s*$/m);
 requirePattern('Gitleaks event base binding', workflow, /^      GITLEAKS_BASE_SHA: \$\{\{ github\.event\.pull_request\.base\.sha \|\| github\.event\.before \}\}\s*$/m);
+requirePattern('trusted quality baseline event binding', workflow, /^      QUALITY_BASE_SHA: \$\{\{ github\.event\.pull_request\.base\.sha \|\| '' \}\}\s*$/m);
 requirePattern('exact checkout ref', workflow, /^          ref: \$\{\{ github\.event\.pull_request\.head\.sha \|\| github\.sha \}\}\s*$/m);
 requirePattern('runtime SHA read', workflow, /^          actual_sha="\$\(git rev-parse HEAD\)"\s*$/m);
 requirePattern('container runtime SHA read', workflow, /^          actual_sha="\$\(git -c safe\.directory="\$\{GITHUB_WORKSPACE\}" rev-parse HEAD\)"\s*$/m);
@@ -228,6 +235,8 @@ if (!includeMatch) {
   if (shards.filter(shard => shard.java === 'true').map(shard => shard.id).join(',') !== 'rules') failures.push('Java must be limited to the rules shard');
 }
 
+const guardOccurrences = workflow.match(/npm run test:quality-guardrails/g) ?? [];
+if (guardOccurrences.length !== 1) failures.push(`quality regression gate: expected once in CI matrix, found ${guardOccurrences.length}`);
 const coverageOccurrences = workflow.match(/npm run test:typecheck-coverage/g) ?? [];
 if (coverageOccurrences.length !== 1) failures.push(`TypeScript coverage gate: expected once, found ${coverageOccurrences.length}`);
 const auditOccurrences = workflow.match(/npm audit --audit-level=high/g) ?? [];
