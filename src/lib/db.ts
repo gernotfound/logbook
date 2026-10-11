@@ -64,14 +64,25 @@ async function loadCloudPayload(options?: { allMonths?: boolean }): Promise<{
     try {
         await ensureAppCheck();
         const db = getDb();
-        const catalog = await getCachedCatalog();
-        syncGlobalCatalog(db).catch(() => {});
-
-        const root = await withTimeout(
-            getDoc(doc(db, 'users', user.uid)),
-            6000,
-            'Timeout recupero profilo utente',
-        );
+        // Read the root and refresh the global catalog concurrently. Hydration must
+        // resolve the user library from the catalog actually downloaded for this
+        // request, not from a stale snapshot captured before a detached sync.
+        const [freshCatalog, root] = await Promise.all([
+            syncGlobalCatalog(db)
+                .then(result => result?.catalog)
+                .catch(error => {
+                    // A catalog/network failure must never block offline-capable
+                    // user hydration; the cached seed remains a valid fallback.
+                    console.warn('[CatalogService] Aggiornamento remoto non disponibile:', error);
+                    return null;
+                }),
+            withTimeout(
+                getDoc(doc(db, 'users', user.uid)),
+                6000,
+                'Timeout recupero profilo utente',
+            ),
+        ]);
+        const catalog = freshCatalog ?? await getCachedCatalog();
 
         if (root && typeof root.exists === 'function' && root.exists()) {
             const normalizedRoot = normalizeCloudDocument(root.data(), 'Firestore root data schema');
