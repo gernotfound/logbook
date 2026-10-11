@@ -10,14 +10,6 @@ import { readLocal } from '../src/lib/sync/localRepository';
 import { useAppStore } from '../src/store/useAppStore';
 import type { UserData } from '../src/types';
 import { beginGuestMigrationIntent } from '../src/lib/auth/guestMigrationIntent';
-// These migration tests assume an active account consent verified by the server.
-// Revoked/pending account behavior is covered by dedicated consent tests.
-vi.mock('../src/lib/healthConsent', () => ({
-    beginHealthConsentVerification: vi.fn(),
-    refreshHealthConsent: vi.fn(async () => 'active'),
-    isHealthConsentWritable: vi.fn(() => true),
-    requireHealthConsentWritable: vi.fn(),
-}));
 
 const parse = (value: unknown) => UserDataSchema.parse(value) as unknown as UserData;
 const user = { uid: 'a', email: 'a@example.com', displayName: 'A' } as any;
