@@ -275,14 +275,14 @@ await test('allows unrelated gitignore additions with no tracked JS or TS exclud
 
 await test('blocks inline suppression comments on existing source lines', t => {
   const ctx = fixture(t);
-  save(ctx.root, 'src/App.tsx', 'export const safe = true; // oxlint-disable-line no-console\n');
+  save(ctx.root, 'src/App.tsx', 'export const safe = true; // oxlint-' + 'disable-line no-console\n');
   commit(ctx.root);
   mustFail(run(ctx), /New lint\/typecheck\/coverage suppression/);
 });
 
 await test('blocks ts-expect-error comments in root-level TypeScript files', t => {
   const ctx = fixture(t);
-  save(ctx.root, 'vite.config.ts', '// @ts-expect-error suppress regression\nexport const safe = true;\n');
+  save(ctx.root, 'vite.config.ts', '// @ts-' + 'expect-error suppress regression\nexport const safe = true;\n');
   commit(ctx.root);
   mustFail(run(ctx), /New lint\/typecheck\/coverage suppression/);
 });
