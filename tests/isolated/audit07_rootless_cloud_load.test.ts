@@ -109,3 +109,22 @@ it('performs the exhaustive monthly scan when the root document is absent', asyn
     expect(harness.historyWindow).not.toHaveBeenCalled();
     expect(harness.nutritionWindow).not.toHaveBeenCalled();
 });
+
+
+it('loads history and nutrition month windows concurrently', async () => {
+    let finishHistory: (() => void) | undefined;
+    let finishNutrition: (() => void) | undefined;
+    harness.historyWindow.mockImplementation(() => new Promise<void>(resolve => { finishHistory = resolve; }));
+    harness.nutritionWindow.mockImplementation(() => new Promise<void>(resolve => { finishNutrition = resolve; }));
+    const loading = DB.loadCloudPayload();
+    try {
+        await vi.waitFor(() => {
+            expect(harness.historyWindow).toHaveBeenCalledOnce();
+            expect(harness.nutritionWindow).toHaveBeenCalledOnce();
+        });
+    } finally {
+        finishHistory?.();
+        finishNutrition?.();
+    }
+    expect(await loading).not.toBeNull();
+});

@@ -37,10 +37,7 @@ export const ExerciseSearchDropdown: React.FC<ExerciseSearchDropdownProps> = ({
             const excludeSet = new Set(excludeIds);
             list = list.filter(item => item && !excludeSet.has(item.id));
         }
-        if (typeof Logic.searchExerciseLibrary === 'function') {
-            return Logic.searchExerciseLibrary(list, searchTerm);
-        }
-        return Logic.filterItems(list, searchTerm, ['name']) as ExerciseLibraryItem[];
+        return Logic.searchExerciseLibrary(list, searchTerm);
     }, [library, excludeIds, searchTerm]);
 
     // Handle outside clicks/touches

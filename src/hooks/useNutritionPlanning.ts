@@ -60,16 +60,8 @@ export function useNutritionPlanning() {
     const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'unsaved'>('idle');
     const draftRevision = useRef(0);
 
-    let latestWeight = 80;
-    if (nutritionMap) {
-        const dates = Object.keys(nutritionMap).sort((a, b) => b.localeCompare(a));
-        for (const d of dates) {
-            if (nutritionMap[d].weight) {
-                latestWeight = parseFloat(nutritionMap[d].weight as string) || latestWeight;
-                break;
-            }
-        }
-    }
+    // Use the shared parser to handle decimal commas and invalid measurements.
+    const latestWeight = Logic.getLatestUserWeight(nutritionMap);
 
     const defaultPlanning: NutritionPlanningDraft = {
         weight: latestWeight,

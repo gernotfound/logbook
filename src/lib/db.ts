@@ -136,8 +136,11 @@ async function loadCloudPayload(options?: { allMonths?: boolean }): Promise<{
                 const date = new Date(now.getFullYear(), now.getMonth() - offset, 1);
                 return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
             });
-            await loadHistoryMonths(user, targetMonths, state, cloudDocuments);
-            await loadNutritionMonths(user, targetMonths, state, cloudDocuments);
+            // Independent collections populate disjoint sections of the payload.
+            await Promise.all([
+                loadHistoryMonths(user, targetMonths, state, cloudDocuments),
+                loadNutritionMonths(user, targetMonths, state, cloudDocuments),
+            ]);
             completeMonths = targetMonths;
         }
 
