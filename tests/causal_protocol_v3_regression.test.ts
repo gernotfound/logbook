@@ -129,7 +129,7 @@ describe('Sync Protocol 3 causal convergence regressions', () => {
         const outcomes = schedules.map(schedule => deliver(base, operations, schedule));
         for (const outcome of outcomes.slice(1)) expect(snapshot(outcome)).toEqual(snapshot(outcomes[0]));
 
-        expect(documents.get('')).toBeDefined();
+        expect(outcomes[0].documents.get('')).toBeDefined();
         expect((outcomes[0].documents.get('')!.profile as any).name).toBe('X');
         expect(outcomes[0].syncMetas[''].fields['profile/name']).toMatchObject({
             actorId: 'A',
