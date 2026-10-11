@@ -2,6 +2,7 @@ import { deviceKey } from '../sync/deviceStorage';
 import { storageOwner } from '../sync/session';
 import {
   TELEMETRY_QUEUE_CAPACITY,
+  TELEMETRY_QUEUE_MAX_AGE_MS,
   TELEMETRY_QUEUE_KEY,
   type QueuedTelemetryItem,
   type TelemetryErrorPayload,
@@ -42,6 +43,19 @@ function parseQueuedItems(raw: string | null): QueuedTelemetryItem[] {
     .map((item) => minimizeQueuedItem(item as QueuedTelemetryItem));
 }
 
+// The timestamp is the fallback for queues saved by previous builds without queuedAt.
+// An absent, malformed or implausibly future timestamp must not extend retention.
+function retainUnexpiredItems(items: QueuedTelemetryItem[], now = Date.now()): QueuedTelemetryItem[] {
+  return items.filter((item) => {
+    const enqueuedAt = item.queuedAt === undefined ? item.timestamp : item.queuedAt;
+    return typeof enqueuedAt === 'number'
+      && Number.isFinite(enqueuedAt)
+      && enqueuedAt > 0
+      && enqueuedAt <= now + 24 * 60 * 60 * 1000
+      && now - enqueuedAt < TELEMETRY_QUEUE_MAX_AGE_MS;
+  }).slice(-TELEMETRY_QUEUE_CAPACITY);
+}
+
 export class TelemetryQueueStorage {
   private cachedQueue: QueuedTelemetryItem[] | null = null;
   private cachedQueueKey: string | null = null;
@@ -58,13 +72,24 @@ export class TelemetryQueueStorage {
   public getQueuedEvents(): QueuedTelemetryItem[] {
     const ownerKey = this.getQueueStorageKey();
     if (this.cachedQueue !== null && this.cachedQueueKey === ownerKey) {
-      return this.cachedQueue;
+      const recent = retainUnexpiredItems(this.cachedQueue);
+      if (recent.length !== this.cachedQueue.length) {
+        this.saveQueuedEvents(recent, true);
+      }
+      return recent;
     }
 
     try {
       if (typeof localStorage !== 'undefined') {
         const ownerRaw = localStorage.getItem(ownerKey);
-        if (ownerRaw !== null) return parseQueuedItems(ownerRaw);
+        if (ownerRaw !== null) {
+          const parsed = parseQueuedItems(ownerRaw);
+          const recent = retainUnexpiredItems(parsed);
+          if (recent.length !== parsed.length) {
+            localStorage.setItem(ownerKey, JSON.stringify(recent));
+          }
+          return recent;
+        }
 
         // One-way migration from the pre-owner-scoped queue. Telemetry is
         // best-effort, so entries are migrated only when their embedded UID
@@ -73,7 +98,7 @@ export class TelemetryQueueStorage {
         const legacyRaw = localStorage.getItem(TELEMETRY_QUEUE_KEY);
         if (legacyRaw !== null) {
           const uid = this.getUserId();
-          const legacyItems = parseQueuedItems(legacyRaw);
+          const legacyItems = retainUnexpiredItems(parseQueuedItems(legacyRaw));
           const migrated = legacyItems.filter((item) => {
             const payloadUid = item.payload?.userId;
             return uid && uid !== 'anonymous'
@@ -87,6 +112,9 @@ export class TelemetryQueueStorage {
       }
     } catch {
       try {
+        // A corrupted owner queue may contain sensitive diagnostic payloads;
+        // do not leave it on disk forever or touch any other owner's queue.
+        localStorage.removeItem(ownerKey);
         localStorage.removeItem(TELEMETRY_QUEUE_KEY);
       } catch {
         // Corrupted/unavailable storage remains non-blocking telemetry state.
@@ -98,7 +126,7 @@ export class TelemetryQueueStorage {
 
   private saveQueuedEvents(items: QueuedTelemetryItem[], immediateDiskSync: boolean = true): void {
     const ownerKey = this.getQueueStorageKey();
-    this.cachedQueue = items;
+    this.cachedQueue = retainUnexpiredItems(items);
     this.cachedQueueKey = ownerKey;
     if (immediateDiskSync) {
       this.syncQueueToDisk(ownerKey);
