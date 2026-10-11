@@ -4,8 +4,27 @@ import { TELEMETRY_DISPATCH_TIMEOUT_MS, type TelemetryErrorPayload, type Telemet
 import { dispatchTelemetryError, dispatchTelemetryEvent } from '../src/lib/telemetry/transportRetry';
 
 const OWNER = 'telemetry-timeout-owner';
-const errorPayload = { userId: OWNER } as TelemetryErrorPayload;
-const eventPayload = { userId: OWNER, details: { phase: 'synthetic' } } as TelemetryEventPayload;
+const context = { appVersion: 'test', platform: 'other', displayMode: 'browser', online: true } as const;
+const errorPayload: TelemetryErrorPayload = {
+  userId: OWNER,
+  timestamp: 1000,
+  type: 'SyntheticError',
+  message: 'Synthetic dispatch failure',
+  source: 'custom',
+  context,
+  sessionId: 'synthetic-session',
+  count: 1,
+  firstSeen: 1000,
+  lastSeen: 1000,
+};
+const eventPayload: TelemetryEventPayload = {
+  userId: OWNER,
+  timestamp: 1000,
+  type: 'custom_event',
+  details: { phase: 'synthetic' },
+  context,
+  sessionId: 'synthetic-session',
+};
 
 describe('Telemetry dispatch timeout cleanup', () => {
   beforeEach(() => {
