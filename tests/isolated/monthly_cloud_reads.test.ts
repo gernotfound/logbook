@@ -134,6 +134,32 @@ describe('monthly Firestore read boundaries', () => {
         expect(data.history).toHaveLength(1);
     });
 
+    it('keeps nutrition state untouched when one monthly fetch fails, then loads on retry', async () => {
+        const data = draft();
+        const documents = cloudDocuments();
+        firestore.getDoc.mockImplementation((path: string) => path.endsWith('/2026-06')
+            ? Promise.reject(new Error('Temporary nutrition fetch failure'))
+            : Promise.resolve(snapshot({
+                '2026-05-03': { date: '2026-05-03', weight: 74 },
+            })));
+
+        await expect(loadNutritionMonths(owner, ['2026-05', '2026-06'], data, documents))
+            .rejects.toThrow('Temporary nutrition fetch failure');
+        expect(data.nutrition).toEqual({});
+        expect(documents.size).toBe(0);
+
+        firestore.getDoc.mockReset();
+        firestore.getDoc.mockResolvedValue(snapshot({
+            '2026-05-03': { date: '2026-05-03', weight: 74 },
+        }));
+        await loadNutritionMonths(owner, ['2026-05'], data, documents);
+        expect(data.nutrition).toEqual({ '2026-05-03': { date: '2026-05-03', weight: 74 } });
+        expect(documents.get('nutrition_months/2026-05')).toMatchObject({
+            '2026-05-03': { date: '2026-05-03' },
+            _sync: syncMeta,
+        });
+    });
+
     it('propagates a timeout without publishing incomplete nutrition results', async () => {
         vi.useFakeTimers();
         const data = draft();
