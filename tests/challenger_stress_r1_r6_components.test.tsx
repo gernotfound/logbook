@@ -357,6 +357,7 @@ describe('EMPIRICAL CHALLENGER: Adversarial Stress Test Suite (Requirements R1 -
                     onToggleMenu={vi.fn()}
                     onRemoveSet={vi.fn()}
                     onUpdateSet={vi.fn()}
+                    onUpdateSetTarget={vi.fn()}
                     onAddSpecialSet={vi.fn()}
                     onUpdateSpecialSet={vi.fn()}
                     onRemoveSpecialSet={vi.fn()}
@@ -380,6 +381,7 @@ describe('EMPIRICAL CHALLENGER: Adversarial Stress Test Suite (Requirements R1 -
                     onToggleMenu={vi.fn()}
                     onRemoveSet={vi.fn()}
                     onUpdateSet={vi.fn()}
+                    onUpdateSetTarget={vi.fn()}
                     onAddSpecialSet={mockAdd}
                     onUpdateSpecialSet={vi.fn()}
                     onRemoveSpecialSet={vi.fn()}
@@ -416,6 +418,7 @@ describe('EMPIRICAL CHALLENGER: Adversarial Stress Test Suite (Requirements R1 -
                     onToggleMenu={vi.fn()}
                     onRemoveSet={vi.fn()}
                     onUpdateSet={vi.fn()}
+                    onUpdateSetTarget={vi.fn()}
                     onAddSpecialSet={vi.fn()}
                     onUpdateSpecialSet={mockUpdateSpecial}
                     onRemoveSpecialSet={mockRemoveSpecial}
