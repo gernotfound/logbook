@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { applySemanticOperations, type SemanticOperation, type SyncMeta, normalizeDomainData } from '../src/lib/sync/semanticProjection';
+import { applySemanticOperations, type SemanticOperation } from '../src/lib/sync/semanticProjection';
 import type { DocumentData } from '../src/lib/sync/documentProjection';
 
 describe('Causal Semantic Merge', () => {
@@ -133,7 +133,8 @@ describe('Causal Semantic Merge', () => {
         ];
 
         const { documents } = applySemanticOperations(base, ops);
-        const meal = (documents.get('nutrition_months/2026-09')?.['2026-09-13'] as any).meals[0];
+        expect(documents.get('nutrition_months/2026-09')).toBeDefined();
+        const meal = (documents.get('nutrition_months/2026-09')!.['2026-09-13'] as any).meals[0];
         expect(meal).toMatchObject({ quantity: 200, name: 'Mela Verde' });
     });
 

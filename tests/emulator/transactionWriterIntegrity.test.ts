@@ -8,7 +8,6 @@ vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackEvent: vi.fn
 import { applyDocumentChanges, CloudDataIntegrityError } from '../../src/lib/sync/transactionWriter';
 import type { SemanticOperation } from '../../src/lib/sync/semanticProjection';
 import { registerReplica, asModularFirestore } from './replicaHarness';
-import { CURRENT_DATA_SCHEMA, CURRENT_SYNC_PROTOCOL } from '../../src/lib/schemaEvolution';
 
 let env: RulesTestEnvironment;
 
@@ -33,16 +32,7 @@ const profileHeightOp = (seq = 1): SemanticOperation => ({
     clock: { s00: seq },
 });
 
-const currentPersisted = (business: Record<string, unknown>) => ({
-    ...business,
-    _schemaVersion: CURRENT_DATA_SCHEMA,
-    _sync: {
-        protocolVersion: CURRENT_SYNC_PROTOCOL,
-        clock: {},
-        fields: {},
-        writer: { slot: 's01', replicaId: 'seed-remote', generation: 1, seq: 0 },
-    },
-});
+
 
 it('blocks an unrelated root write instead of replacing malformed existing cloud data with a Zod fallback', async () => {
     const original = {
