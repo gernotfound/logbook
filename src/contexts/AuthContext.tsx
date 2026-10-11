@@ -399,13 +399,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                     return;
                 }
             }
+            // Expose identity promptly to owner-scoped UI/components, but the
+            // consent status was already set to 'checking' above. Fitness stays
+            // blocked until the server has authoritatively verified permission.
+            setCurrentUser(user);
             if (user) {
-                // Authoritative consent check precedes hydration/migration and any
-                // authenticated writes. A failed/offline check remains fail-closed.
+                // Hydration/migration and all cloud business writes must wait for
+                // this check; an offline/failed check remains fail-closed.
                 await refreshHealthConsent(user);
                 if (!isCurrentRun()) return;
             }
-            setCurrentUser(user);
 
             if (user) {
                 const wasGuest = isGuestActiveStrict();
