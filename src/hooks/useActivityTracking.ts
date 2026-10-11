@@ -8,11 +8,11 @@ import { captureSession, isCurrentSession } from '../lib/sync/session';
 import { Logic } from '../lib/logic';
 import { localDateTimeToTimestamp, timestampToLocalTime } from '../lib/activity';
 import { computeWeeklyActivitySeries, computeWeeklyTrainingActivityContext } from '../lib/calc/analytics';
-import type { CardioSession } from '../types';
+import type { CardioSession, NutritionDay, WorkoutSession, Exercise } from '../types';
 
-const EMPTY_NUTRITION = {};
-const EMPTY_HISTORY: any[] = [];
-const EMPTY_LIBRARY: any[] = [];
+const EMPTY_NUTRITION: Record<string, NutritionDay> = {};
+const EMPTY_HISTORY: WorkoutSession[] = [];
+const EMPTY_LIBRARY: Exercise[] = [];
 const NEW_CARDIO_ID = '/new';
 
 const EMPTY_CARDIO_DRAFT = {
@@ -37,7 +37,7 @@ export function useActivityTracking() {
     const [chosenDate, setChosenDate] = useState<string | null>(null);
     const selectedDate = chosenDate ?? today;
     const setSelectedDate = (date: string) => setChosenDate(date === today ? null : date);
-    const day = (nutrition as any)[selectedDate];
+    const day = nutrition[selectedDate];
     const stepsDraft = useDatedDraft('activity-steps', selectedDate, {
         steps: day?.steps !== undefined ? String(day.steps) : '',
     });
@@ -66,18 +66,16 @@ export function useActivityTracking() {
     }, [day]);
 
     const currentWeek = useMemo(() => {
-        const result = computeWeeklyActivitySeries(nutrition as any, 1, today);
+        const result = computeWeeklyActivitySeries(nutrition, 1, today);
         return result.points[0];
     }, [nutrition, today]);
 
     const trainingActivityContext = useMemo(() => {
-        const dates = Object.keys(nutrition as Record<string, any>).sort((a, b) => b.localeCompare(a));
-        const latestWeight = dates
-            .map(date => Number((nutrition as Record<string, any>)[date]?.weight))
-            .find(value => Number.isFinite(value) && value > 0) ?? 80;
+        // Share the comma-decimal and invalid-measurement policy with nutrition.
+        const latestWeight = Logic.getLatestUserWeight(nutrition);
         return computeWeeklyTrainingActivityContext(
             history,
-            nutrition as any,
+            nutrition,
             library,
             latestWeight,
             8,

@@ -264,7 +264,7 @@ export interface VolumeExerciseRef {
 }
 
 export function getLatestUserWeight(
-    nutrition?: Record<string, any> | null,
+    nutrition?: Record<string, { weight?: string | number | null } | undefined> | null,
     nutritionPlanning?: { weight?: number | string } | null
 ): number {
     let latestWeight: number | null = null;
