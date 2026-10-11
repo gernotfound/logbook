@@ -46,14 +46,14 @@ function run(root) {
   return spawnSync(process.execPath, [checker], { cwd: root, encoding: 'utf8' });
 }
 
-test('accepts tracked files covered by either TypeScript project', t => {
+await test('accepts tracked files covered by either TypeScript project', t => {
   const root = fixture(t);
   const result = run(root);
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /all 7 tracked/);
 });
 
-test('rejects a tracked TypeScript file in an unconfigured directory', t => {
+await test('rejects a tracked TypeScript file in an unconfigured directory', t => {
   const root = fixture(t);
   writeFixture(root, 'scripts/new-helper.ts');
   execFileSync('git', ['add', 'scripts/new-helper.ts'], { cwd: root });
@@ -63,7 +63,7 @@ test('rejects a tracked TypeScript file in an unconfigured directory', t => {
   assert.match(result.stderr, /scripts\/new-helper\.ts/);
 });
 
-test('rejects new TypeScript extensions not selected by existing globs', t => {
+await test('rejects new TypeScript extensions not selected by existing globs', t => {
   const root = fixture(t);
   writeFixture(root, 'src/new-module.mts');
   execFileSync('git', ['add', 'src/new-module.mts'], { cwd: root });
@@ -73,7 +73,7 @@ test('rejects new TypeScript extensions not selected by existing globs', t => {
   assert.match(result.stderr, /src\/new-module\.mts/);
 });
 
-test('rejects changes that silently remove existing files from a project', t => {
+await test('rejects changes that silently remove existing files from a project', t => {
   const root = fixture(t);
   writeFixture(root, 'tsconfig.m5-tests.json', JSON.stringify({
     compilerOptions: { noEmit: true },
@@ -86,7 +86,7 @@ test('rejects changes that silently remove existing files from a project', t => 
   assert.match(result.stderr, /vite\.config\.ts/);
 });
 
-test('ignores untracked TypeScript scratch files', t => {
+await test('ignores untracked TypeScript scratch files', t => {
   const root = fixture(t);
   writeFixture(root, 'scripts/untracked.ts');
 
