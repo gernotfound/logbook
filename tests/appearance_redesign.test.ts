@@ -118,3 +118,43 @@ describe('local appearance preference', () => {
     expect(useAppearanceStore.getState()).toMatchObject({ preference: 'system', resolvedTheme: 'light' });
   });
 });
+
+/**
+ * Both stylesheets participate in the first paint: CSS bootstrap is loaded
+ * before the React bundle, while runtime tokens win once it mounts.
+ * A mismatch causes an observable layout/color jump during hydration.
+ */
+function extractThemeTokens(css: string, selector: string): Record<string, string> {
+  const location = css.indexOf(`${selector} {`);
+  if (location < 0) throw new Error(`Missing theme selector ${selector}`);
+  const start = css.indexOf('{', location) + 1;
+  const end = css.indexOf('}', start);
+  if (end < 0) throw new Error(`Unclosed theme selector ${selector}`);
+  const block = css.slice(start, end);
+  const entries = Array.from(block.matchAll(/(--[\\w-]+|color-scheme)\\s*:\\s*([^;]+);/g), match => [match[1], match[2].trim()] as const);
+  if (new Set(entries.map(([name]) => name)).size !== entries.length) {
+    throw new Error(`Duplicate theme declaration in ${selector}`);
+  }
+  return Object.fromEntries(entries);
+}
+
+describe('prepaint and runtime theme-token contract', () => {
+  const bootstrapCss = readFileSync(resolve('public/appearance.css'), 'utf8');
+  const runtimeCss = readFileSync(resolve('src/styles/tokens.css'), 'utf8');
+
+  it.each([
+    ['dark', ':root'],
+    ['light', ':root[data-theme="light"]'],
+    ['system-light', ':root:not([data-theme])'],
+  ])('keeps %s tokens identical across boot and React runtime', (_theme, selector) => {
+    const bootstrapTokens = extractThemeTokens(bootstrapCss, selector);
+    const runtimeTokens = extractThemeTokens(runtimeCss, selector);
+    expect(Object.keys(bootstrapTokens).length).toBeGreaterThan(10);
+    expect(bootstrapTokens).toEqual(runtimeTokens);
+  });
+
+  it('uses the same navigation clearance before and after React loads', () => {
+    expect(extractThemeTokens(bootstrapCss, ':root')['--nav-height']).toBe('3.25rem');
+    expect(extractThemeTokens(runtimeCss, ':root')['--nav-height']).toBe('3.25rem');
+  });
+});
