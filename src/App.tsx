@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, Suspense, lazy } from 'react';
+import { useState, useEffect, useEffectEvent, useRef, Suspense, lazy } from 'react';
 import { useAuth } from './hooks/useAuth';
 import { useAppStore } from './store/useAppStore';
 import { useLocalStorage } from './hooks/useLocalStorage';
@@ -54,6 +54,11 @@ const BACKGROUND_VIEW_PRELOAD_ORDER = [
 ] as const;
 
 const GUEST_LOGIN_OVERLAY_SESSION_KEY = 'logbook_guest_login_overlay';
+
+function readStartupTabShortcut(): string | null {
+  if (typeof window === 'undefined') return null;
+  return new URLSearchParams(window.location.search).get('tab');
+}
 
 function readGuestLoginOverlayState(): boolean {
   if (typeof window === 'undefined') return false;
@@ -111,15 +116,16 @@ function App() {
   const setSaveError = useAppStore(state => state.setSaveError);
   const compatibilityStatus = useAppStore(state => state.compatibilityStatus);
   const compatibilityError = useAppStore(state => state.compatibilityError);
-  const [activeTab, setActiveTab] = useLocalStorage<AppTab>(LOCAL_STORAGE_ACTIVE_TAB, 'home', AppTabSchema);
+  const [startupTab] = useState(readStartupTabShortcut);
+  const parsedStartupTab = AppTabSchema.safeParse(startupTab);
+  const initialTabOverride: AppTab | undefined = startupTab === 'settings'
+    ? 'home'
+    : parsedStartupTab.success ? parsedStartupTab.data : undefined;
+  const [activeTab, setActiveTab] = useLocalStorage<AppTab>(LOCAL_STORAGE_ACTIVE_TAB, 'home', AppTabSchema, initialTabOverride);
   const [trainingSubTab, setTrainingSubTab] = useLocalStorage<TrainingSubTab>(LOCAL_STORAGE_TRAINING_TAB, 'session', TrainingSubTabSchema);
   const [nutritionSubTab, setNutritionSubTab] = useLocalStorage<NutritionSubTab>(LOCAL_STORAGE_NUTRITION_TAB, 'meals', NutritionSubTabSchema);
   const [dataSubTab, setDataSubTab] = useLocalStorage<DataSubTab>(LOCAL_STORAGE_DATA_TAB, 'measurements', DataSubTabSchema);
-  // A PWA shortcut is an initial navigation choice, not state to copy from
-  // the URL in an effect after the first paint.
-  const [settingsOpen, setSettingsOpen] = useState(() =>
-    typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('tab') === 'settings'
-  );
+  const [settingsOpen, setSettingsOpen] = useState(() => startupTab === 'settings');
   const [requiredUpdateReloading, setRequiredUpdateReloading] = useState(false);
   const [requiredUpdateReloadError, setRequiredUpdateReloadError] = useState<string | null>(null);
 
@@ -152,25 +158,13 @@ function App() {
     }
   }, [showGuestLogin, currentUser, isGuest, guestMigrationStatus, syncing]);
 
-  // Handle URL parameters for PWA shortcuts. "settings" remains a
-  // compatibility alias even though it is no longer a primary tab.
+  // PWA shortcuts override the saved initial tab during state initialization.
+  // Only the URL cleanup belongs in an effect; no extra render is required.
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search);
-      const tabParam = params.get('tab');
-      if (tabParam) {
-        if (tabParam === 'settings') {
-          if (activeTab !== 'home') setActiveTab('home');
-        } else {
-          const parsed = AppTabSchema.safeParse(tabParam);
-          if (parsed.success && parsed.data !== activeTab) {
-            setActiveTab(parsed.data);
-          }
-        }
-        window.history.replaceState({}, '', window.location.pathname);
-      }
+    if (startupTab && typeof window !== 'undefined') {
+      window.history.replaceState({}, '', window.location.pathname);
     }
-  }, [activeTab, setActiveTab]);
+  }, [startupTab]);
 
   // Transient save errors auto-dismiss. A local persistence failure is a durable
   // write barrier and must remain visible until the app lifecycle resets it.
@@ -292,22 +286,25 @@ function App() {
     handleTabChange(tab);
   };
 
+  // React's effect event reads the latest navigation state without forcing
+  // the native event subscription to churn on each UI render.
+  const onAppNavigate = useEffectEvent((detail: unknown) => {
+    if (detail === 'settings') {
+      if (activeTab !== 'home') setActiveTab('home');
+      setSettingsOpen(true);
+      return;
+    }
+    const parsed = AppTabSchema.safeParse(detail);
+    if (parsed.success) handleTabChange(parsed.data);
+  });
+
   useEffect(() => {
     const handleNavEvent = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
-      if (detail === 'settings') {
-        if (activeTab !== 'home') setActiveTab('home');
-        setSettingsOpen(true);
-        return;
-      }
-      const parsed = AppTabSchema.safeParse(detail);
-      if (parsed.success) {
-        handleTabChange(parsed.data);
-      }
+      onAppNavigate((e as CustomEvent).detail);
     };
     window.addEventListener('app:navigate', handleNavEvent);
     return () => window.removeEventListener('app:navigate', handleNavEvent);
-  }, [activeTab, settingsOpen, handleTabChange, setActiveTab]);
+  }, []);
 
   // Sync Lock: prevent tab close/navigation if a cloud sync is currently in progress
   useEffect(() => {

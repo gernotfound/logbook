@@ -161,6 +161,29 @@ describe('R4: Tab Zod Schema & LocalStorage Fallback Resilience (ARCH-05)', () =
             expect(screen.getByRole('button', { name: /^home$/i }).classList.contains('active')).toBe(true);
         });
 
+        it('makes a settings PWA shortcut override a previously saved training tab at startup', async () => {
+            window.localStorage.setItem(LOCAL_STORAGE_ACTIVE_TAB, JSON.stringify('training'));
+            window.history.replaceState({}, '', '/?tab=settings');
+
+            renderWithProviders(<App />, {
+                userData: {
+                    ...defaultMockUserData,
+                    legalConsent: {
+                        hasAcceptedTerms: true,
+                        hasAcceptedHealthData: true,
+                        acceptedAt: '2026-09-30T00:00:00.000Z',
+                        privacyVersion: LEGAL_VERSIONS.privacy,
+                        termsVersion: LEGAL_VERSIONS.terms,
+                    },
+                },
+            });
+
+            expect(await screen.findByRole('heading', { name: 'Impostazioni' })).toBeDefined();
+            expect(screen.getByRole('button', { name: /^home$/i }).classList.contains('active')).toBe(true);
+            expect(window.localStorage.getItem(LOCAL_STORAGE_ACTIVE_TAB)).toBe(JSON.stringify('home'));
+            expect(window.location.search).toBe('');
+        });
+
         it('exposes the settings control in the Home header', () => {
             const onOpenSettings = vi.fn();
             renderWithProviders(<HeaderDashboard streak={3} totalWorkouts={12} onOpenSettings={onOpenSettings} />);

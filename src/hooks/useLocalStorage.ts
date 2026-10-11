@@ -4,7 +4,8 @@ import type { ZodType } from 'zod';
 export function useLocalStorage<T>(
     key: string,
     initialValue: T,
-    schema?: ZodType<T, any, any>
+    schema?: ZodType<T, any, any>,
+    initialOverride?: T,
 ): [T, (value: T) => void] {
     const readStoredValue = (): T => {
         try {
@@ -27,7 +28,7 @@ export function useLocalStorage<T>(
             return initialValue;
         }
     };
-    const [stored, setStored] = useState(() => ({ key, value: readStoredValue() }));
+    const [stored, setStored] = useState(() => ({ key, value: initialOverride === undefined ? readStoredValue() : initialOverride }));
     if (stored.key !== key) setStored({ key, value: readStoredValue() });
 
     useEffect(() => {
