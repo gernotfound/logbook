@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Activity, ChevronDown, Pencil, Plus, Ruler, Save, Trash2, UserRound, X } from 'lucide-react';
 import { Logic } from '../../lib/logic';
 import { shiftDateString } from '../../lib/utils/date';
@@ -107,13 +107,15 @@ const DataMeasurements: React.FC<DataMeasurementsProps> = ({
     const activeDateStr = targetDateStr || selectedDate || editingDate || Logic.getLocalDateString();
     const todayStr = Logic.getLocalDateString();
     const isEditing = Boolean(editingDate || hasExistingData);
-    const [bfMode, setBfMode] = useState<BodyFatMode>(
-        bfProvenance?.method === 'us_navy' ? 'calculate' : 'manual'
+    // Keep the user's choice for the current day, but derive the default from
+    // persisted provenance whenever the viewed day or its saved method changes.
+    const modeKey = `${activeDateStr}:${bfProvenance?.method ?? 'none'}`;
+    const defaultMode: BodyFatMode = bfProvenance?.method === 'us_navy' ? 'calculate' : 'manual';
+    const [modeSelection, setModeSelection] = useState<{ key: string; mode: BodyFatMode }>(
+        () => ({ key: modeKey, mode: defaultMode })
     );
-
-    useEffect(() => {
-        setBfMode(bfProvenance?.method === 'us_navy' ? 'calculate' : 'manual');
-    }, [activeDateStr, bfProvenance?.method]);
+    const bfMode = modeSelection.key === modeKey ? modeSelection.mode : defaultMode;
+    const setBfMode = (mode: BodyFatMode) => setModeSelection({ key: modeKey, mode });
 
     const isFemale = profile?.gender === 'F';
     const profileComplete = Boolean((profile?.gender === 'M' || profile?.gender === 'F') && Number(profile?.height) > 0);

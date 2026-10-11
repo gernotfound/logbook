@@ -2,49 +2,9 @@
   {
     "suite": "default",
     "file": "src/App.tsx",
-    "code": "react-hooks(exhaustive-deps)",
-    "message": "React Hook useEffect has missing dependencies: 'setActiveTab', and 'handleTabChange'",
-    "source": "if (activeTab !== 'home') setActiveTab('home');",
-    "count": 1
-  },
-  {
-    "suite": "default",
-    "file": "src/App.tsx",
-    "code": "react(set-state-in-effect)",
-    "message": "Calling setState synchronously within an effect can trigger cascading renders",
-    "source": "setSettingsOpen(true);",
-    "count": 1
-  },
-  {
-    "suite": "default",
-    "file": "src/App.tsx",
     "code": "react(set-state-in-effect)",
     "message": "Calling setState synchronously within an effect can trigger cascading renders",
     "source": "setShowGuestLogin(false);",
-    "count": 1
-  },
-  {
-    "suite": "default",
-    "file": "src/components/Data/DataMeasurements.tsx",
-    "code": "react(set-state-in-effect)",
-    "message": "Calling setState synchronously within an effect can trigger cascading renders",
-    "source": "setBfMode(bfProvenance?.method === 'us_navy' ? 'calculate' : 'manual');",
-    "count": 1
-  },
-  {
-    "suite": "default",
-    "file": "src/components/Home/widgets/RecoveryBentoCard.tsx",
-    "code": "react(set-state-in-effect)",
-    "message": "Calling setState synchronously within an effect can trigger cascading renders",
-    "source": "if (activePains.length === 0) setIsExpanded(false);",
-    "count": 1
-  },
-  {
-    "suite": "default",
-    "file": "src/components/Training/planning/TrainingPlanning.tsx",
-    "code": "react(set-state-in-effect)",
-    "message": "Calling setState synchronously within an effect can trigger cascading renders",
-    "source": "useEffect(() => setIsDetailsOpen(false), [activeCycleId]);",
     "count": 1
   },
   {
