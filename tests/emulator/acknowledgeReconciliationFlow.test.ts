@@ -72,6 +72,7 @@ function data(height: number, name?: string): UserData {
             height: String(height),
             ...(name ? { name } : {}),
         },
+        legalConsent: { hasAcceptedTerms: true, hasAcceptedHealthData: true, acceptedAt: '2026-10-11T10:00:00.000Z', privacyVersion: '1.3.2', termsVersion: '1.2.0' },
     }) as unknown as UserData;
 }
 

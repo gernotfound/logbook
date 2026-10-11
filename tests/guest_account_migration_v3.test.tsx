@@ -18,7 +18,8 @@ let onlineSpy: ReturnType<typeof vi.spyOn> | undefined;
 function fixtures() {
     const cloud = parse({
         profile: { gender: 'M' },
-        routines: [{ id: 'cloud-routine', name: 'Cloud', exercises: [] }]
+        routines: [{ id: 'cloud-routine', name: 'Cloud', exercises: [] }],
+        legalConsent: { hasAcceptedTerms: true, hasAcceptedHealthData: true, acceptedAt: '2026-10-11T10:00:00.000Z', privacyVersion: '1.3.2', termsVersion: '1.2.0' }
     });
     const guest = parse({
         profile: { height: '175' },

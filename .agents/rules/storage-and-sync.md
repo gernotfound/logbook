@@ -198,6 +198,8 @@ Il sistema `replicateJournal` / `transactionWriter` gestisce l'esito:
 
 **MUST:** una write rifiutata (`rejected`) non deve mai essere esposta all'utente come confermata.
 
+**MUST:** un journal account con dati business non può replicarsi prima di un consenso account valido (`needsLegalUpdate` falso). La sospensione della replica è `local-pending` con motivo `legal-consent-required`, distinto dalla mancanza di rete; il journal resta durevole e la nuova accettazione esplicita può sbloccare la replica. Il consenso della sessione ospite non costituisce consenso dell'account. Le Rules e la revoca server-autorevole richiedono un gate separato e non si considerano risolte da questo controllo client.
+
 **MUST:** le funzioni di salvataggio devono rigettare se l'accodamento della transazione locale fallisce in maniera critica. Vietato risolvere silenziosamente nel catch.
 
 ## Pre-render bootstrap
