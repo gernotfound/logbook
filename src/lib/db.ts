@@ -16,7 +16,7 @@ import { DomainParsers } from './schema';
 import { syncGlobalCatalog, getCachedCatalog } from './catalog/catalogService';
 import { resolveEffectiveExercises, resolveEffectiveFoods } from './catalog/deltaResolver';
 import { normalizeCloudDocument } from './schemaEvolution';
-import { withTimeout, setLastSavedStateStr } from './db/db_core';
+import { withTimeout } from './db/db_core';
 import { loadHistoryMonths } from './db/db_training';
 import { loadNutritionMonths } from './db/db_nutrition';
 import { sanitizeHistoryMonthDocument, sanitizeNutritionMonthDocument } from './sync/monthlyIntegrity';
@@ -169,7 +169,6 @@ async function loadCloudPayload(options?: { allMonths?: boolean }): Promise<{
         if (state.nutritionPlanning) state.nutritionPlanning = DomainParsers.parseNutritionPlanning(state.nutritionPlanning);
         if (state.legalConsent) state.legalConsent = DomainParsers.parseLegalConsent(state.legalConsent);
 
-        setLastSavedStateStr(JSON.stringify(state));
         return { data: state as UserData, cloudDocuments, completeMonths };
     } catch (error) {
         console.error('Errore caricamento dati dal cloud:', error);
