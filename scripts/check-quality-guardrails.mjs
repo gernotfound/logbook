@@ -23,6 +23,7 @@ function parseJson(source, label) {
 }
 
 function parseJsonc(source, label) {
+  if (source === null) return null;
   return parseJson(source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, ''), label);
 }
 
