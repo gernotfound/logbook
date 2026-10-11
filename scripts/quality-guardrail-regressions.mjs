@@ -38,7 +38,10 @@ function fixture(t) {
   save(root, 'config/lint-warning-baseline.json', [warning]);
   save(root, '.oxlintrc.json', { plugins: ['react'], rules: { 'react/rules-of-hooks': 'error' } });
   save(root, '.oxlintrc.a11y.json', { plugins: ['jsx-a11y'], rules: { 'jsx-a11y/alt-text': 'error' } });
-  save(root, '.oxlintrc.type-aware.json', { plugins: ['typescript'], rules: { 'typescript/no-floating-promises': 'warn' } });
+  save(root, '.oxlintrc.type-aware.json', {
+    plugins: ['typescript'], options: { typeAware: true },
+    rules: { 'typescript/no-floating-promises': 'warn' },
+  });
   save(root, 'tsconfig.json', { compilerOptions: { strict: true, noEmit: true } });
   save(root, 'tsconfig.m5-tests.json', { extends: './tsconfig.json', compilerOptions: { noEmit: true } });
   save(root, 'tsconfig.m7-server.json', { compilerOptions: { strict: true, noEmit: true } });
@@ -119,7 +122,10 @@ await test('blocks removal of a lint plugin', t => {
 
 await test('blocks lowering lint rule severity', t => {
   const ctx = fixture(t);
-  save(ctx.root, '.oxlintrc.type-aware.json', { plugins: ['typescript'], rules: { 'typescript/no-floating-promises': 'off' } });
+  save(ctx.root, '.oxlintrc.type-aware.json', {
+    plugins: ['typescript'], options: { typeAware: true },
+    rules: { 'typescript/no-floating-promises': 'off' },
+  });
   commit(ctx.root);
   mustFail(run(ctx), /lint rules weakened/);
 });
@@ -189,4 +195,21 @@ await test('checks the first parent of merged main in push CI', t => {
   save(ctx.root, 'config/lint-warning-baseline.json', [{ ...warning, count: 3 }]);
   commit(ctx.root);
   mustFail(run(ctx, { QUALITY_BASE_SHA: '', GITHUB_EVENT_NAME: 'push' }), /New or increased warning forbidden/);
+});
+
+await test('blocks disabling type-aware lint while leaving the rule text unchanged', t => {
+  const ctx = fixture(t);
+  save(ctx.root, '.oxlintrc.type-aware.json', {
+    plugins: ['typescript'], options: { typeAware: false },
+    rules: { 'typescript/no-floating-promises': 'warn' },
+  });
+  commit(ctx.root);
+  mustFail(run(ctx), /type-aware lint analysis disabled/);
+});
+
+await test('blocks introducing an oxlint ignore file that hides app source', t => {
+  const ctx = fixture(t);
+  save(ctx.root, '.oxlintignore', 'src/**\n');
+  commit(ctx.root);
+  mustFail(run(ctx), /lint ignore-file contents changed/);
 });

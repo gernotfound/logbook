@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 
 const failures = [];
 const root = process.cwd();
@@ -139,6 +139,23 @@ for (const path of ['.oxlintrc.json', '.oxlintrc.a11y.json', '.oxlintrc.type-awa
     if (JSON.stringify(after[key] || []) !== JSON.stringify(before[key] || [])) {
       failures.push(path + ': changes to lint exclusions/overrides require a dedicated reviewed policy change: ' + key);
     }
+  }
+  if (before.options?.typeAware === true && after.options?.typeAware !== true) {
+    failures.push(path + ': type-aware lint analysis disabled');
+  }
+}
+
+// Oxlint may also obtain ignores outside JSON configuration.
+for (const path of ['.oxlintignore', '.eslintignore']) {
+  let baseContent = null;
+  try {
+    baseContent = git(['show', baseSha + ':' + path]);
+  } catch {
+    // An optional ignore file need not exist in the comparison commit.
+  }
+  const currentContent = existsSync(path) ? readCurrent(path)?.trimEnd() : null;
+  if (currentContent !== baseContent) {
+    failures.push(path + ': lint ignore-file contents changed');
   }
 }
 
