@@ -4,6 +4,8 @@ import { useAppStore } from '../store/useAppStore';
 import { useSettings } from '../hooks/useSettings';
 import { usePWAInstall } from '../hooks/usePWAInstall';
 import { useAuth } from '../hooks/useAuth';
+import { auth } from '../lib/firebase';
+import { withdrawHealthConsent } from '../lib/healthConsent';
 import { useDialogStore } from '../store/useDialogStore';
 import BrandLoadingScreen from './UI/BrandLoadingScreen';
 import { PrivacyPolicy } from '../pages/PrivacyPolicy';
@@ -99,6 +101,19 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
         };
     }, []);
 
+    const handleWithdrawHealthConsent = async () => {
+        const user = auth.currentUser;
+        if (isGuest || !user) return;
+        const confirm = await useDialogStore.getState().showConfirm('Revocando il consenso, non potrai più usare allenamenti, nutrizione e diario. Potrai ancora esportare i dati, esercitare i diritti privacy, eliminare l’account oppure prestare un nuovo consenso. Confermi la revoca?');
+        if (!confirm || auth.currentUser?.uid !== user.uid) return;
+        try {
+            useAppStore.getState().cancelPendingSyncs();
+            await withdrawHealthConsent(user);
+        } catch {
+            await useDialogStore.getState().showAlert('La revoca è stata bloccata sul dispositivo, ma la conferma del server non è disponibile. Riprova quando torni online; i dati non sono stati eliminati.');
+        }
+    };
+
     const handleBack = () => {
         if (activeSection) {
             setActiveSection(null);
@@ -176,7 +191,7 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
             )}
 
             {activeSection === 'privacy' && (
-                <PrivacySettingsTab onOpenTerms={() => setShowTerms(true)} onOpenPrivacy={() => setShowPrivacy(true)} />
+                <PrivacySettingsTab onOpenTerms={() => setShowTerms(true)} onOpenPrivacy={() => setShowPrivacy(true)} onWithdrawHealthConsent={isGuest ? undefined : () => { void handleWithdrawHealthConsent(); }} />
             )}
 
             {activeSection === 'data' && (

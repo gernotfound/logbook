@@ -92,6 +92,9 @@ export async function recordHealthConsentReacceptance(
     const [job, previousSnap] = await Promise.all([tx.get(deletion), tx.get(state)]);
     if (job.exists) throw new Error('Cancellazione account in corso.');
     const previous = previousSnap.data();
+    if (previousSnap.exists && previous?.status === 'active' && typeof previous.acceptedAt === 'string') {
+      return { status: 'active', revision: previous.revision, acceptedAt: previous.acceptedAt };
+    }
     if (!previousSnap.exists || previous?.status !== 'withdrawn') {
       throw new Error('Non esiste una revoca da riattivare.');
     }
