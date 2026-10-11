@@ -36,7 +36,7 @@ Questa tabella rappresenta un'analisi dei confini, **non** un penetration test e
 1. **DECISO — soluzione A:** sospendere le funzioni di tracciamento e modifica dei dati salute quando l'utente revoca il consenso. Mantenere esclusivamente gli strumenti necessari per consultare questa informativa, esercitare i diritti, esportare i dati e chiedere la cancellazione dell'account. Non introdurre la soluzione B (uso fitness limitato). L'eventuale conservazione temporanea dopo revoca va giustificata giuridicamente e limitata; non autorizza una conservazione indefinita.
 2. **Dati già conservati:** individuare per categoria ciò che va cancellato, ciò che può eventualmente restare su una diversa base valida, durata e modalità; valutare anche backend, cache locale, log e fornitori.
 3. **Revoca offline:** definire quando la revoca diventa effettiva e come comunicare un eventuale stato pendente del cloud. Interrompere subito le operazioni locali dipendenti dal consenso; non dichiarare revocato sul cloud un trattamento finché non si è ottenuta prova della registrazione server.
-4. **Re-consenso:** decidere se e come riattivare funzionalità senza reimportare/recreare dati cancellati, senza consentire a un altro dispositivo di sovrascrivere uno stato di revoca più recente.
+4. **Re-consenso — deciso il 12 ottobre:** l’utente può prestare nuovamente un consenso esplicito per riattivare l’intera PWA (nessuna modalità ridotta). Il flusso è distinto dalla revoca e non può implicare il ripristino di dati già cancellati né il replay di operazioni obsolete.
 5. **Ospite:** distinguere l'uso locale e la raccolta presso i fornitori; stabilire le modalità necessarie a esercitare i diritti nella modalità priva di account.
 6. **Informativa e titolare:** correggere la descrizione della revoca, il canale di contatto e le basi giuridiche prima dei trattamenti per cui tali informazioni sono obbligatorie, non soltanto prima della vendita.
 
@@ -45,11 +45,11 @@ La scelta A **non autorizza cancellazioni automatiche e irreversibili** né la c
 ## Comportamento UX approvato per la soluzione A
 
 - **Da Impostazioni → Privacy:** azione distinguibile `Revoca il consenso per i dati salute` con spiegazione anticipata delle conseguenze. Confermare la volontà di revoca senza creare ostacoli sproporzionati; l'eliminazione dei dati e dell'account è un'azione diversa.
-- **Dopo la revoca:** schermata di sospensione dedicata, senza dashboard, workout, diario o funzionalità che richiedano il consenso. Restano accessibili informativa, strumenti di esercizio dei diritti applicabili, esportazione dati e procedura di eliminazione account. La schermata non può presentare `Accetta e continua` come scorciatoia per annullare la revoca.
+- **Dopo la revoca:** schermata di sospensione dedicata, senza dashboard, workout, diario o funzionalità che richiedano il consenso. Restano accessibili informativa, strumenti di esercizio dei diritti applicabili, esportazione dati, cancellazione account e una nuova scelta distinta e esplicita per l’eventuale riattivazione. Il precedente consenso non è riutilizzabile come autorizzazione alla ripresa.
 - **Durante l'operazione:** bloccare subito le nuove modifiche/repliche dipendenti dal consenso. Distinguere visibilmente `revoca registrata`, `revoca in attesa di registrazione server` e `errore di registrazione`; mai comunicare un successo cloud non verificato.
 - **Offline e più dispositivi:** registrare la richiesta localmente in modo durevole e fermare le operazioni locali interessate anche a riavvio e fra tab. Quando ritorna la rete, registrare/riconciliare in modo idempotente presso un confine autorevole del server, con difesa contro client obsoleti e richieste già in volo; nessuna operazione di scrittura precedentemente pendente deve ripristinare il trattamento revocato.
 - **Esportazione e cancellazione:** non compromettere il backup dei dati già presenti o il percorso di account deletion/recovery, salvo diversa misura legalmente necessaria. Gli interventi irreversibili richiedono intenzione e conferma distinte; verificare la base giuridica e la durata dell'eventuale conservazione temporanea destinata alla gestione dei diritti.
-- **Riattivazione futura:** nessun re-consenso implicito da sessione vecchia, refresh, import/backup o modifica di `legalConsent` lato client. Un eventuale nuovo flusso di consenso esplicito va progettato e approvato separatamente.
+- **Nuova accettazione (decisione aggiornata):** l’utente può riattivare tutte le funzioni solo con checkbox esplicite distinte e conferma autorevole del server; nessun re-consenso implicito da sessione vecchia, refresh, import/backup o modifica di `legalConsent` lato client. Implementazione e regressioni restano in validazione nella PR #366.
 - **Utenti ospiti:** la sospensione riguarda le funzioni che dipendono dal consenso anche senza account, ma non va equiparato lo storage solo locale all'invio cloud; verificare finalità e confini dei trattamenti.
 
 ## Vincoli giuridici non risolti
@@ -80,7 +80,7 @@ Secondo GDPR art. 7(3) e Linee guida EDPB 05/2020, la revoca deve essere facile 
 
 **NON CHIUSO.** Prima del pilot con utenti reali:
 - [ ] classificazione delle finalità e delle basi artt. 6/9 approvata da professionista competente;
-- [x] decisione esplicita di prodotto: soluzione A (sospensione, accesso a diritti/esportazione/cancellazione);
+- [x] decisione esplicita di prodotto: sospensione totale delle funzioni fitness, accesso a diritti/esportazione/cancellazione e facoltà di nuovo consenso esplicito (12 ottobre 2026);
 - [ ] specifica tecnica end-to-end per ospite, account, offline, multi-device e recovery;
 - [ ] implementazione atomica/autorativa con test negativi e failure path;
 - [ ] verifica Firestore Rules live, backend quando coinvolto e runtime PWA pertinente;
