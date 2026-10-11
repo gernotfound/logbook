@@ -38,7 +38,7 @@ const DEFAULT_SYNC_TIMEOUT_MS = 4000;
 
 let inMemoryCatalogCache: CachedGlobalCatalog | null = null;
 let isLoadedFromPersistentCache = false;
-let syncInFlight: Promise<{ catalog: CachedGlobalCatalog; updated: boolean }> | null = null;
+let syncInFlight: Promise<{ catalog: CachedGlobalCatalog; updated: boolean; persisted?: boolean }> | null = null;
 
 function validManifest(value: unknown): value is CatalogManifest {
     if (!value || typeof value !== 'object') return false;
@@ -140,15 +140,18 @@ export async function getCachedCatalog(): Promise<CachedGlobalCatalog> {
 }
 
 /**
- * Persists the catalog to both memory and IndexedDB.
+ * Updates memory and attempts IndexedDB persistence; returns false when not durable.
  */
-export async function saveCatalogToCache(catalog: CachedGlobalCatalog): Promise<void> {
+export async function saveCatalogToCache(catalog: CachedGlobalCatalog): Promise<boolean> {
     inMemoryCatalogCache = catalog;
     isLoadedFromPersistentCache = true;
     try {
         await idbSet(CATALOG_CACHE_KEY, catalog);
+        return true;
     } catch (err) {
         console.warn("[CatalogService] Errore salvataggio catalogo in IndexedDB:", err);
+        // The catalog is usable in memory, but its offline persistence failed.
+        return false;
     }
 }
 
@@ -198,7 +201,7 @@ async function fetchRemoteManifest(
 export async function syncGlobalCatalog(
     dbInstance: Firestore,
     options?: { force?: boolean; timeoutMs?: number }
-): Promise<{ catalog: CachedGlobalCatalog; updated: boolean }> {
+): Promise<{ catalog: CachedGlobalCatalog; updated: boolean; persisted?: boolean }> {
     if (syncInFlight) return syncInFlight;
     const work = performCatalogSync(dbInstance, options);
     syncInFlight = work;
@@ -206,7 +209,7 @@ export async function syncGlobalCatalog(
     finally { if (syncInFlight === work) syncInFlight = null; }
 }
 
-async function performCatalogSync(dbInstance: Firestore, options?: { force?: boolean; timeoutMs?: number }): Promise<{ catalog: CachedGlobalCatalog; updated: boolean }> {
+async function performCatalogSync(dbInstance: Firestore, options?: { force?: boolean; timeoutMs?: number }): Promise<{ catalog: CachedGlobalCatalog; updated: boolean; persisted?: boolean }> {
     const cached = await getCachedCatalog();
     const timeoutMs = options?.timeoutMs ?? DEFAULT_SYNC_TIMEOUT_MS;
 
@@ -259,8 +262,8 @@ async function performCatalogSync(dbInstance: Firestore, options?: { force?: boo
             cachedAt: Date.now()
         };
 
-        await saveCatalogToCache(updatedCatalog);
-        return { catalog: updatedCatalog, updated: true };
+        const persisted = await saveCatalogToCache(updatedCatalog);
+        return { catalog: updatedCatalog, updated: true, persisted };
     } catch (err) {
         console.warn("[CatalogService] Sincronizzazione remota catalogo fallita, mantenuta versione locale:", err);
         return { catalog: cached, updated: false };

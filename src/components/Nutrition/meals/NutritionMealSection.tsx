@@ -2,6 +2,7 @@ import { Pencil } from 'lucide-react';
 import type { LoggedMealItem } from '../../../types';
 import type { useNutritionMeals } from '../../../hooks/useNutritionMeals';
 import InlineEditMealItem from '../InlineEditMealItem';
+import { calculateRawLoggedMealTotals, getLoggedMealPortion } from '../../../lib/nutrition/calculateLoggedMealTotals';
 
 type NutritionMealsHook = ReturnType<typeof useNutritionMeals>;
 
@@ -22,31 +23,14 @@ export function NutritionMealSection({
     onUpdateMealItem,
     onRemoveFood,
 }: NutritionMealSectionProps) {
-    let subKcal = 0;
-    let subC = 0;
-    let subP = 0;
-    let subF = 0;
-
-    mealItems.forEach(item => {
-        const base = item.baseQty !== undefined && item.baseQty !== null && item.baseQty > 0
-            ? item.baseQty
-            : (item.unit === 'porzione' || item.meal === 'quick' ? 1 : 100);
-        const qty = item.quantity !== undefined && item.quantity !== null
-            ? item.quantity
-            : base;
-        const ratio = base > 0 ? qty / base : 1;
-        subKcal += (Number(item.kcal) || 0) * ratio;
-        subC += (Number(item.carbs) || 0) * ratio;
-        subP += (Number(item.pro) || 0) * ratio;
-        subF += (Number(item.fat) || 0) * ratio;
-    });
+    const totals = calculateRawLoggedMealTotals(mealItems);
 
     return (
         <section className="tracking-panel">
             <div className="tracking-row tracking-row--wrap mb-10 pb-10 border-b">
                 <h2 className="tracking-heading">{mealType}</h2>
                 <span className="text-sm text-muted">
-                    {Math.round(subKcal)} kcal • P:{Math.round(subP)} C:{Math.round(subC)} G:{Math.round(subF)}
+                    {Math.round(totals.kcal)} kcal • P:{Math.round(totals.pro)} C:{Math.round(totals.carbs)} G:{Math.round(totals.fat)}
                 </span>
             </div>
 
@@ -54,13 +38,7 @@ export function NutritionMealSection({
                 <p className="text-muted text-center my-10 text-sm">Nessun alimento aggiunto.</p>
             ) : (
                 mealItems.map(item => {
-                    const base = item.baseQty !== undefined && item.baseQty !== null && item.baseQty > 0
-                        ? item.baseQty
-                        : (item.unit === 'porzione' || item.meal === 'quick' ? 1 : 100);
-                    const qty = item.quantity !== undefined && item.quantity !== null
-                        ? item.quantity
-                        : base;
-                    const ratio = base > 0 ? qty / base : 1;
+                    const { quantity: qty, ratio } = getLoggedMealPortion(item);
                     const itemKcal = Math.round((Number(item.kcal) || 0) * ratio);
                     const isEditing = editingMealItem && (editingMealItem.time === item.time || editingMealItem.id === item.id);
 
