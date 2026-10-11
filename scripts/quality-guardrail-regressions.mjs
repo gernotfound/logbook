@@ -81,13 +81,13 @@ function mustFail(result, pattern) {
   assert.match(result.stderr, pattern);
 }
 
-test('accepts unchanged warning identities and unchanged controls', t => {
+await test('accepts unchanged warning identities and unchanged controls', t => {
   const ctx = fixture(t);
   const result = run(ctx);
   assert.equal(result.status, 0, result.stderr);
 });
 
-test('permits reductions in the existing warning count', t => {
+await test('permits reductions in the existing warning count', t => {
   const ctx = fixture(t);
   save(ctx.root, 'config/lint-warning-baseline.json', [{ ...warning, count: 1 }]);
   commit(ctx.root);
@@ -96,35 +96,35 @@ test('permits reductions in the existing warning count', t => {
   assert.match(result.stdout, /1 warnings removed/);
 });
 
-test('blocks new warning identities at the same overall count', t => {
+await test('blocks new warning identities at the same overall count', t => {
   const ctx = fixture(t);
   save(ctx.root, 'config/lint-warning-baseline.json', [{ ...warning, code: 'react/rules-of-hooks' }]);
   commit(ctx.root);
   mustFail(run(ctx), /New or increased warning forbidden/);
 });
 
-test('blocks increasing an existing warning count', t => {
+await test('blocks increasing an existing warning count', t => {
   const ctx = fixture(t);
   save(ctx.root, 'config/lint-warning-baseline.json', [{ ...warning, count: 3 }]);
   commit(ctx.root);
   mustFail(run(ctx), /New or increased warning forbidden/);
 });
 
-test('blocks removal of a lint plugin', t => {
+await test('blocks removal of a lint plugin', t => {
   const ctx = fixture(t);
   save(ctx.root, '.oxlintrc.json', { plugins: [], rules: { 'react/rules-of-hooks': 'error' } });
   commit(ctx.root);
   mustFail(run(ctx), /existing lint plugin removed/);
 });
 
-test('blocks lowering lint rule severity', t => {
+await test('blocks lowering lint rule severity', t => {
   const ctx = fixture(t);
   save(ctx.root, '.oxlintrc.type-aware.json', { plugins: ['typescript'], rules: { 'typescript/no-floating-promises': 'off' } });
   commit(ctx.root);
   mustFail(run(ctx), /lint rules weakened/);
 });
 
-test('blocks introducing new lint ignore patterns', t => {
+await test('blocks introducing new lint ignore patterns', t => {
   const ctx = fixture(t);
   save(ctx.root, '.oxlintrc.json', {
     plugins: ['react'], rules: { 'react/rules-of-hooks': 'error' }, ignorePatterns: ['src/**'],
@@ -133,14 +133,14 @@ test('blocks introducing new lint ignore patterns', t => {
   mustFail(run(ctx), /lint exclusions/);
 });
 
-test('blocks disabling strict TypeScript', t => {
+await test('blocks disabling strict TypeScript', t => {
   const ctx = fixture(t);
   save(ctx.root, 'tsconfig.json', { compilerOptions: { strict: false, noEmit: true } });
   commit(ctx.root);
   mustFail(run(ctx), /TypeScript check weakened/);
 });
 
-test('blocks adding TypeScript exclusion globs', t => {
+await test('blocks adding TypeScript exclusion globs', t => {
   const ctx = fixture(t);
   save(ctx.root, 'tsconfig.m5-tests.json', {
     extends: './tsconfig.json', compilerOptions: { noEmit: true }, exclude: ['src/**'],
@@ -149,7 +149,7 @@ test('blocks adding TypeScript exclusion globs', t => {
   mustFail(run(ctx), /new TypeScript exclusion/);
 });
 
-test('blocks replacing lint command with a green shortcut', t => {
+await test('blocks replacing lint command with a green shortcut', t => {
   const ctx = fixture(t);
   const pkg = read(ctx.root, 'package.json');
   pkg.scripts.lint = 'echo green';
@@ -158,7 +158,7 @@ test('blocks replacing lint command with a green shortcut', t => {
   mustFail(run(ctx), /Mandatory package.json quality gate changed/);
 });
 
-test('blocks removal of a leaf from the canonical verification chain', t => {
+await test('blocks removal of a leaf from the canonical verification chain', t => {
   const ctx = fixture(t);
   const pkg = read(ctx.root, 'package.json');
   pkg.scripts['verify:m6'] = 'npm run lint && npm run test:typecheck:m5';
@@ -167,24 +167,24 @@ test('blocks removal of a leaf from the canonical verification chain', t => {
   mustFail(run(ctx), /Mandatory verification leaf removed/);
 });
 
-test('blocks newly added source suppression comments', t => {
+await test('blocks newly added source suppression comments', t => {
   const ctx = fixture(t);
   save(ctx.root, 'src/App.tsx', '// oxlint-disable react/rules-of-hooks\nexport const safe = true;\n');
   commit(ctx.root);
   mustFail(run(ctx), /New lint\/typecheck\/coverage suppression is forbidden/);
 });
 
-test('fails closed if a PR does not provide its real base SHA', t => {
+await test('fails closed if a PR does not provide its real base SHA', t => {
   const ctx = fixture(t);
   mustFail(run(ctx, { QUALITY_BASE_SHA: '' }), /requires QUALITY_BASE_SHA/);
 });
 
-test('fails closed if the comparison commit cannot be read', t => {
+await test('fails closed if the comparison commit cannot be read', t => {
   const ctx = fixture(t);
   mustFail(run(ctx, { QUALITY_BASE_SHA: 'a'.repeat(40) }), /comparison commit unavailable/);
 });
 
-test('checks the first parent of merged main in push CI', t => {
+await test('checks the first parent of merged main in push CI', t => {
   const ctx = fixture(t);
   save(ctx.root, 'config/lint-warning-baseline.json', [{ ...warning, count: 3 }]);
   commit(ctx.root);
