@@ -278,6 +278,37 @@ describe('Workout lifecycle durable recovery regressions', () => {
         expect(localStorage.getItem(key)).toBeNull();
     });
 
+    it('recovers the same pending post-session answers after the screen is destroyed and remounted', () => {
+        const active = workout('post-reopen', true);
+        useAppStore.setState({ userData: userData({ activeWorkout: active }), localWorkout: active });
+        const key = deviceKey('draft:post-session:post-reopen', owner);
+
+        const first = render(<TrainingSession />);
+        fireEvent.click(screen.getByRole('button', { name: 'Termina allenamento' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Umore: 5 su 5' }));
+        const saved = localStorage.getItem(key);
+        expect(saved).not.toBeNull();
+        expect(JSON.parse(saved!).draft.mood).toBe('5');
+
+        first.unmount();
+        render(<TrainingSession />);
+        expect(screen.getByRole('heading', { name: 'Com’è andato l’allenamento?' })).toBeDefined();
+        expect(screen.getByRole('button', { name: 'Umore: 5 su 5' }).getAttribute('aria-pressed')).toBe('true');
+        expect(localStorage.getItem(key)).toBe(saved);
+        expect(useAppStore.getState().localWorkout?.id).toBe(active.id);
+    });
+
+    it('blocks an unreadable post-session recovery without discarding its bytes', () => {
+        const active = workout('post-broken', true);
+        const key = deviceKey('draft:post-session:post-broken', owner);
+        localStorage.setItem(key, '{broken');
+        useAppStore.setState({ userData: userData({ activeWorkout: active }), localWorkout: active });
+        render(<TrainingSession />);
+        expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
+        expect(useAppStore.getState().syncHealth).toBe('failed');
+        expect(localStorage.getItem(key)).toBe('{broken');
+    });
+
     it('keeps post-session rating unchanged if its synchronous persistence fails', () => {
         const active = workout('post-write', true);
         useAppStore.setState({ userData: userData({ activeWorkout: active }), localWorkout: active });
