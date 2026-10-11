@@ -59,8 +59,8 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
             const { result: sessionHook } = renderHook(() => useWorkoutSession());
 
             // Gym-goer arrives and starts Push A
-            act(() => {
-                sessionHook.current.startWorkout('r_push');
+            await act(async () => {
+                await sessionHook.current.startWorkout('r_push');
             });
 
             // Bench press is occupied! User moves Military Press (index 2) to index 0
@@ -121,8 +121,8 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
             const { result: sessionHook } = renderHook(() => useWorkoutSession());
 
             // Start Pull Day
-            act(() => {
-                sessionHook.current.startWorkout('r_pull');
+            await act(async () => {
+                await sessionHook.current.startWorkout('r_pull');
             });
 
             // User finishes Lat Machine, feels great, adds Hammer Curl as ad-hoc finisher
@@ -291,8 +291,8 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
             const { result: sessionHook } = renderHook(() => useWorkoutSession());
 
             // 1. Lifter arrives and launches Leg Day session
-            act(() => {
-                sessionHook.current.startWorkout('r_leg');
+            await act(async () => {
+                await sessionHook.current.startWorkout('r_leg');
             });
 
             let activeSession = useAppStore.getState().localWorkout;

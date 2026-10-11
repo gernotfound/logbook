@@ -13,8 +13,9 @@ describe('home pain persistence', () => {
 
         let hookResult: ReturnType<typeof useHomeView> | null = null;
         function TestHomeComponent() {
-            hookResult = useHomeView();
-            return <div>{hookResult.loading ? 'loading' : 'ready'}</div>;
+            const latest = useHomeView();
+            React.useEffect(() => { hookResult = latest; });
+            return <div>{latest.loading ? 'loading' : 'ready'}</div>;
         }
 
         renderWithProviders(<TestHomeComponent />, {

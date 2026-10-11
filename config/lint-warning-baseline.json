@@ -26,14 +26,6 @@
   {
     "suite": "default",
     "file": "src/components/Data/DataMeasurements.tsx",
-    "code": "react(preserve-manual-memoization)",
-    "message": "Existing memoization could not be preserved",
-    "source": "}, [hip, isFemale, neck, profile?.gender, profile?.height, profileComplete, waist, weight]);",
-    "count": 2
-  },
-  {
-    "suite": "default",
-    "file": "src/components/Data/DataMeasurements.tsx",
     "code": "react(set-state-in-effect)",
     "message": "Calling setState synchronously within an effect can trigger cascading renders",
     "source": "setBfMode(bfProvenance?.method === 'us_navy' ? 'calculate' : 'manual');",
@@ -69,14 +61,6 @@
     "code": "eslint(no-unused-vars)",
     "message": "Variable 'catalog' is declared but never used. Unused variables should start with a '_'.",
     "source": "const catalog: CachedGlobalCatalog = {",
-    "count": 1
-  },
-  {
-    "suite": "default",
-    "file": "tests/audit_react_time_regression.test.tsx",
-    "code": "react(globals)",
-    "message": "Cannot reassign variables declared outside of the component/hook",
-    "source": "hookResult = useHomeView();",
     "count": 1
   },
   {
@@ -145,22 +129,6 @@
   },
   {
     "suite": "default",
-    "file": "tests/challenger_react_hooks_memo_stress.test.tsx",
-    "code": "react(immutability)",
-    "message": "This value cannot be modified",
-    "source": "(window as any).__setHostExercises = setExercises;",
-    "count": 1
-  },
-  {
-    "suite": "default",
-    "file": "tests/challenger_react_hooks_memo_stress.test.tsx",
-    "code": "react(immutability)",
-    "message": "This value cannot be modified",
-    "source": "(window as any).__setHostSets = setSets;",
-    "count": 1
-  },
-  {
-    "suite": "default",
     "file": "tests/emulator/transactionWriterIntegrity.test.ts",
     "code": "eslint(no-unused-vars)",
     "message": "Variable 'currentPersisted' is declared but never used. Unused variables should start with a '_'.",
@@ -181,14 +149,6 @@
     "code": "eslint(no-unused-vars)",
     "message": "Variable 'mockUser' is declared but never used. Unused variables should start with a '_'.",
     "source": "const mockUser = { uid: 'test-uid' } as any;",
-    "count": 1
-  },
-  {
-    "suite": "default",
-    "file": "tests/home_pain_persistence.test.tsx",
-    "code": "react(globals)",
-    "message": "Cannot reassign variables declared outside of the component/hook",
-    "source": "hookResult = useHomeView();",
     "count": 1
   },
   {
@@ -357,110 +317,6 @@
     "code": "eslint(no-unused-vars)",
     "message": "Identifier 'vi' is imported but never used.",
     "source": "import { beforeEach, describe, expect, it, vi } from 'vitest';",
-    "count": 1
-  },
-  {
-    "suite": "default",
-    "file": "tests/workout_improvements.test.tsx",
-    "code": "react(globals)",
-    "message": "Cannot reassign variables declared outside of the component/hook",
-    "source": "hookResult = res;",
-    "count": 3
-  },
-  {
-    "suite": "type-aware",
-    "file": "tests/activity_tracking.test.tsx",
-    "code": "typescript(no-floating-promises)",
-    "message": "Promises must be awaited, add void operator to ignore.",
-    "source": "act(() => vi.advanceTimersByTime(1100));",
-    "count": 1
-  },
-  {
-    "suite": "type-aware",
-    "file": "tests/analytics_worker_lifecycle.test.tsx",
-    "code": "typescript(no-floating-promises)",
-    "message": "Promises must be awaited, add void operator to ignore.",
-    "source": "act(() => worker.instance.onerror(new Error('crash')));",
-    "count": 1
-  },
-  {
-    "suite": "type-aware",
-    "file": "tests/audit_ui_regression.test.tsx",
-    "code": "typescript(no-floating-promises)",
-    "message": "Promises must be awaited, add void operator to ignore.",
-    "source": "act(() => vi.advanceTimersByTime(1000));",
-    "count": 1
-  },
-  {
-    "suite": "type-aware",
-    "file": "tests/dated_drafts.test.tsx",
-    "code": "typescript(no-floating-promises)",
-    "message": "Promises must be awaited, add void operator to ignore.",
-    "source": "act(() => vi.advanceTimersByTime(1100));",
-    "count": 1
-  },
-  {
-    "suite": "type-aware",
-    "file": "tests/enhancements_r1_r6_tier3.test.tsx",
-    "code": "typescript(no-floating-promises)",
-    "message": "Promises must be awaited, add void operator to ignore.",
-    "source": "sessionHook.current.startWorkout('r_legs');",
-    "count": 1
-  },
-  {
-    "suite": "type-aware",
-    "file": "tests/enhancements_r1_r6_tier3.test.tsx",
-    "code": "typescript(no-floating-promises)",
-    "message": "Promises must be awaited, add void operator to ignore.",
-    "source": "sessionHook.current.startWorkout('r_quads', { cycleId: 'c_mass', cycleName: 'Massa Gambe' });",
-    "count": 1
-  },
-  {
-    "suite": "type-aware",
-    "file": "tests/enhancements_r1_r6_tier4.test.tsx",
-    "code": "typescript(no-floating-promises)",
-    "message": "Promises must be awaited, add void operator to ignore.",
-    "source": "sessionHook.current.startWorkout('r_leg');",
-    "count": 1
-  },
-  {
-    "suite": "type-aware",
-    "file": "tests/enhancements_r1_r6_tier4.test.tsx",
-    "code": "typescript(no-floating-promises)",
-    "message": "Promises must be awaited, add void operator to ignore.",
-    "source": "sessionHook.current.startWorkout('r_pull');",
-    "count": 1
-  },
-  {
-    "suite": "type-aware",
-    "file": "tests/enhancements_r1_r6_tier4.test.tsx",
-    "code": "typescript(no-floating-promises)",
-    "message": "Promises must be awaited, add void operator to ignore.",
-    "source": "sessionHook.current.startWorkout('r_push');",
-    "count": 1
-  },
-  {
-    "suite": "type-aware",
-    "file": "tests/rir_per_set.test.tsx",
-    "code": "typescript(no-floating-promises)",
-    "message": "Promises must be awaited, add void operator to ignore.",
-    "source": "act(() => vi.runAllTimers());",
-    "count": 1
-  },
-  {
-    "suite": "type-aware",
-    "file": "tests/sync_indicator_and_toast.test.tsx",
-    "code": "typescript(no-floating-promises)",
-    "message": "Promises must be awaited, add void operator to ignore.",
-    "source": "useDialogStore.getState().showConfirm('Sei sicuro di voler procedere?');",
-    "count": 1
-  },
-  {
-    "suite": "type-aware",
-    "file": "tests/telemetry/telemetry_tier5.test.ts",
-    "code": "typescript(no-floating-promises)",
-    "message": "Promises must be awaited, add void operator to ignore.",
-    "source": "telemetryHub",
     "count": 1
   }
 ]

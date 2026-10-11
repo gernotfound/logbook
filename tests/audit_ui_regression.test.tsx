@@ -73,11 +73,11 @@ describe('audit interaction regressions', () => {
         expect(screen.queryByText('Esci in sicurezza')).toBeNull();
     });
 
-    it('removes a completed local workout immediately, before a timer or background event', () => {
+    it('removes a completed local workout immediately, before a timer or background event', async () => {
         localStorage.setItem(deviceKey('workout'), JSON.stringify(workout));
         act(() => useAppStore.getState().setLocalWorkout(null));
         expect(localStorage.getItem(deviceKey('workout'))).toBeNull();
-        act(() => vi.advanceTimersByTime(1000));
+        await act(async () => { vi.advanceTimersByTime(1000); });
         expect(localStorage.getItem(deviceKey('workout'))).toBeNull();
     });
 

@@ -19,6 +19,6 @@ it('cancels an outstanding task on unmount without computing the synchronous fal
 it('uses the fallback for a real worker failure while the view is still mounted', async () => {
     const hook = renderHook(() => useAnalyticsWorker());
     const result = hook.result.current.calculateVolumeStats([], [], 80, 8);
-    act(() => worker.instance.onerror(new Error('crash')));
+    await act(async () => { worker.instance.onerror(new Error('crash')); });
     expect(await result).toEqual({ points: [], stats: {} }); expect(worker.fallback).toHaveBeenCalledTimes(1);
 });

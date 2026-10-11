@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Activity, ChevronDown, Pencil, Plus, Ruler, Save, Trash2, UserRound, X } from 'lucide-react';
 import { Logic } from '../../lib/logic';
 import { shiftDateString } from '../../lib/utils/date';
@@ -117,7 +117,7 @@ const DataMeasurements: React.FC<DataMeasurementsProps> = ({
 
     const isFemale = profile?.gender === 'F';
     const profileComplete = Boolean((profile?.gender === 'M' || profile?.gender === 'F') && Number(profile?.height) > 0);
-    const estimate = useMemo(() => {
+    const estimate = (() => {
         if (!profileComplete) {
             return {
                 value: 'Profilo incompleto',
@@ -141,7 +141,7 @@ const DataMeasurements: React.FC<DataMeasurementsProps> = ({
         return value === null
             ? { value: 'Controlla le misure', detail: 'I valori non permettono una stima attendibile.' }
             : { value: `${value.toLocaleString('it-IT', { maximumFractionDigits: 1 })}%`, detail: 'Metodo US Navy · valore indicativo.' };
-    }, [hip, isFemale, neck, profile?.gender, profile?.height, profileComplete, waist, weight]);
+    })();
 
     const handlePrevDay = () => setSelectedDate?.(shiftDateString(activeDateStr, -1));
     const handleNextDay = () => {

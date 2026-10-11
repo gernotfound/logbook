@@ -315,7 +315,7 @@ describe('Workout Improvements & History Edit Suite', () => {
       let hookResult: any = null;
       function TestHomeComponent() {
         const res = useHomeView();
-        hookResult = res;
+        React.useEffect(() => { hookResult = res; });
         return <div data-testid="home-loaded">{res.loading ? 'loading' : 'ready'}</div>;
       }
 
@@ -343,7 +343,7 @@ describe('Workout Improvements & History Edit Suite', () => {
       let hookResult: any = null;
       function TestHomeComponent() {
         const res = useHomeView();
-        hookResult = res;
+        React.useEffect(() => { hookResult = res; });
         return <div data-testid="home-loaded">{res.loading ? 'loading' : 'ready'}</div>;
       }
 
@@ -372,7 +372,7 @@ describe('Workout Improvements & History Edit Suite', () => {
       let hookResult: any = null;
       function TestHomeComponent() {
         const res = useHomeView();
-        hookResult = res;
+        React.useEffect(() => { hookResult = res; });
         return <div data-testid="home-loaded">{res.loading ? 'loading' : 'ready'}</div>;
       }
 

@@ -165,10 +165,10 @@ describe('RIR reale per singola serie', () => {
         expect(screen.getAllByRole('button', { name: /Imposta RIR serie/ })).toHaveLength(1);
     });
 
-    it('persiste RIR nel draft locale e lo recupera senza convertire 0 in assenza', () => {
+    it('persiste RIR nel draft locale e lo recupera senza convertire 0 in assenza', async () => {
         vi.useFakeTimers();
         useAppStore.getState().setLocalWorkout(session(0));
-        act(() => vi.runAllTimers());
+        await act(async () => { vi.runAllTimers(); });
 
         expect(JSON.parse(localStorage.getItem(deviceKey('workout')) || '{}').exercises[0].sets[0].rir).toBe(0);
         expect(getInitialLocalWorkout()?.exercises[0].sets[0].rir).toBe(0);

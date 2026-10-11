@@ -107,12 +107,12 @@ it('does not attach legacy drafts or another owner draft to a new session', () =
     expect(localStorage.getItem(deviceKey('draft:measurement:2026-09-11', 'guest'))).toBeNull();
     expect(localStorage.getItem('draft_measurement')).toContain('99');
 });
-it('rolls the implicit day at local midnight while preserving yesterday drafts', () => {
+it('rolls the implicit day at local midnight while preserving yesterday drafts', async () => {
     vi.useFakeTimers(); vi.setSystemTime(new Date(2026, 8, 11, 23, 59, 59));
     const measurements = renderHook(() => useNutritionMeasurements());
     const sleep = renderHook(() => useSleepMeasurements());
     act(() => { measurements.result.current.setWeight('75'); sleep.result.current.setSleepHours('07:30'); });
-    act(() => vi.advanceTimersByTime(1100));
+    await act(async () => { vi.advanceTimersByTime(1100); });
     expect(measurements.result.current.targetDateStr).toBe('2026-09-12');
     expect(measurements.result.current.weight).toBe('');
     expect(sleep.result.current.selectedDate).toBe('2026-09-12');
