@@ -76,7 +76,7 @@ describe('M7 daily account deletion recovery cron', () => {
     expect(runner.processAccountDeletion).toHaveBeenCalledTimes(2);
     expect(runner.processAccountDeletion).toHaveBeenNthCalledWith(1, 'a', expect.any(Number));
     expect(runner.processAccountDeletion).toHaveBeenNthCalledWith(2, 'b', expect.any(Number));
-    expect(retention.purgeExpiredCompletedDeletionJobs).toHaveBeenCalledWith(400, undefined, expect.any(Number));
+    expect(retention.purgeExpiredCompletedDeletionJobs).toHaveBeenCalledWith(400, undefined, expect.any(Number), expect.objectContaining({ scanned: 0 }));
     expect(telemetryRetention.purgeExpiredTelemetry).toHaveBeenCalledWith(expect.any(Number));
     expect(await response.json()).toMatchObject({
       scanned: 2,
@@ -158,6 +158,24 @@ describe('M7 daily account deletion recovery cron', () => {
       telemetryUnexpectedDocuments: 0,
       telemetryCycleCompleted: true,
     });
+  });
+
+  it('advances beyond skipped expired receipts instead of exiting on zero deletions', async () => {
+    process.env.CRON_SECRET = 'expected-secret';
+    retention.purgeExpiredCompletedDeletionJobs
+      .mockImplementationOnce(async (_limit: number, _now: unknown, _deadline: number, page: { scanned: number }) => {
+        page.scanned = 400;
+        return 0;
+      })
+      .mockImplementationOnce(async (_limit: number, _now: unknown, _deadline: number, page: { scanned: number }) => {
+        page.scanned = 1;
+        return 1;
+      });
+    const response = await GET(request('expected-secret'));
+    expect(response.status).toBe(200);
+    expect(retention.purgeExpiredCompletedDeletionJobs).toHaveBeenCalledTimes(2);
+    expect((await response.json())).toMatchObject({ purged: 1, retentionErrors: 0 });
+    expect(telemetryRetention.purgeExpiredTelemetry).toHaveBeenCalledOnce();
   });
 
   it('continues independent cron phases if job selection fails', async () => {

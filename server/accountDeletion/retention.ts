@@ -1,4 +1,4 @@
-import { Timestamp, type DocumentReference } from 'firebase-admin/firestore';
+import { Timestamp, type DocumentReference, type QueryDocumentSnapshot } from 'firebase-admin/firestore';
 import { adminDb } from './firebaseAdmin.js';
 import type { AccountDeletionJob } from './types.js';
 
@@ -8,6 +8,12 @@ const RETENTION_SAFETY_BUFFER_MS = 8_000;
 
 export const ACCOUNT_DELETION_COMPLETED_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 export const ACCOUNT_DELETION_RETENTION_PAGE_SIZE = 400;
+
+/** Ephemeral pagination state for a single cron run; no user data is persisted. */
+export interface AccountDeletionRetentionPage {
+  lastDocument?: QueryDocumentSnapshot;
+  scanned: number;
+}
 
 function timestampMillis(value: unknown): number | null {
   if (value instanceof Timestamp) return value.toMillis();
@@ -30,19 +36,29 @@ export async function purgeExpiredCompletedDeletionJobs(
   limitCount = ACCOUNT_DELETION_RETENTION_PAGE_SIZE,
   now = Timestamp.now(),
   deadlineMs = Number.POSITIVE_INFINITY,
+  page?: AccountDeletionRetentionPage,
 ): Promise<number> {
   const boundedLimit = Math.max(1, Math.min(ACCOUNT_DELETION_RETENTION_PAGE_SIZE, Math.floor(limitCount)));
   const nowMs = now.toMillis();
   const db = adminDb();
-  const snapshot = await db.collection(JOB_COLLECTION)
+  // An expired but malformed receipt may be skipped for safety. Paginate by
+  // examined document, not by deletion count, or the cron can repeatedly read
+  // the same full page and starve valid tombstones after it.
+  let query = db.collection(JOB_COLLECTION)
     .where('status', '==', 'complete')
     .where('purgeAfter', '<=', now)
-    .limit(boundedLimit)
-    .get();
+    .orderBy('purgeAfter');
+  if (page?.lastDocument) query = query.startAfter(page.lastDocument);
+  const snapshot = await query.limit(boundedLimit).get();
 
   let deleted = 0;
+  if (page) page.scanned = 0;
   for (const item of snapshot.docs) {
     if (Date.now() + RETENTION_SAFETY_BUFFER_MS >= deadlineMs) break;
+    if (page) {
+      page.lastDocument = item;
+      page.scanned += 1;
+    }
     const job = item.data() as AccountDeletionJob;
     // The document ID is the canonical owner; a corrupted UID must not delete
     // an unrelated device registry.
