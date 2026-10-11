@@ -1,3 +1,4 @@
+import { dispatchDurableOperation } from '../../lib/sync/dispatchDurableOperation';
 import { useState } from 'react';
 import { shiftDateString } from '../../lib/utils/date';
 import { useAppStore } from '../../store/useAppStore';
@@ -95,7 +96,7 @@ export default function NutritionSupplements({ selectedDate, setSelectedDate }: 
             name: newName
         };
         try {
-            await dispatchDomainOperation({ type: 'supplement.upsert', supplement: duplicated });
+            await dispatchDurableOperation(dispatchDomainOperation, { type: 'supplement.upsert', supplement: duplicated });
         } catch {
             await showAlert('Errore durante la duplicazione.');
         }

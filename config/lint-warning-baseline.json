@@ -57,42 +57,10 @@
   },
   {
     "suite": "default",
-    "file": "src/components/Training/planning/useCycleForm.ts",
-    "code": "react(set-state-in-effect)",
-    "message": "Calling setState synchronously within an effect can trigger cascading renders",
-    "source": "setName(initialCycle.name || '');",
-    "count": 1
-  },
-  {
-    "suite": "default",
     "file": "src/components/Training/TrainingSession.tsx",
     "code": "react(set-state-in-effect)",
     "message": "Calling setState synchronously within an effect can trigger cascading renders",
     "source": "setPostSessionDraft(recovered.draft);",
-    "count": 1
-  },
-  {
-    "suite": "default",
-    "file": "src/contexts/AuthContext.tsx",
-    "code": "react-hooks(exhaustive-deps)",
-    "message": "React Hook useCallback has a missing dependency: 'isGuestActiveStrict'",
-    "source": "if (isGuestActiveStrict()) {",
-    "count": 1
-  },
-  {
-    "suite": "default",
-    "file": "src/hooks/useAnalyticsWorker.ts",
-    "code": "react-hooks(exhaustive-deps)",
-    "message": "The ref's value `.current` is accessed directly in the effect cleanup function.",
-    "source": "const pending = Array.from(pendingPromises.current.entries());",
-    "count": 1
-  },
-  {
-    "suite": "default",
-    "file": "src/hooks/useAnalyticsWorker.ts",
-    "code": "react-hooks(exhaustive-deps)",
-    "message": "The ref's value `.current` is accessed directly in the effect cleanup function.",
-    "source": "pendingPromises.current.clear();",
     "count": 1
   },
   {

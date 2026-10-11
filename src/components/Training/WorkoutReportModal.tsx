@@ -1,3 +1,4 @@
+import { dispatchDurableOperation } from '../../lib/sync/dispatchDurableOperation';
 import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { X, Trophy, Activity, Clock, Layers } from 'lucide-react';
 import { computeWorkoutReport } from '../../lib/calc/workoutReport';
@@ -133,7 +134,7 @@ const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, histor
                 exercises: routineExercises
             };
             
-            await dispatchDomainOperation({ type: 'routine.upsert', routine: newRoutine });
+            await dispatchDurableOperation(dispatchDomainOperation, { type: 'routine.upsert', routine: newRoutine });
             
             setIsSavingAsRoutine(false);
         } catch (err: any) {

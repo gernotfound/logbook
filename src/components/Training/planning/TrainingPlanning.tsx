@@ -1,3 +1,4 @@
+import { dispatchDurableOperation } from '../../../lib/sync/dispatchDurableOperation';
 import { useEffect, useMemo, useState } from 'react';
 import { Copy, Dumbbell, Pencil, Trash2 } from 'lucide-react';
 import { useAppStore } from '../../../store/useAppStore';
@@ -100,7 +101,12 @@ export default function TrainingPlanning({ onOpenSession }: TrainingPlanningProp
         handleCreateNew();
     };
 
-    const handleEditCycle = (cycle: TrainingCycle) => {
+    const handleEditCycle = async (cycle: TrainingCycle) => {
+        if (isEditing) {
+            if (editingCycle?.id === cycle.id) return;
+            const confirmed = await showConfirm('L’editor attuale contiene modifiche che potrebbero non essere salvate. Vuoi abbandonarle e aprire un altro ciclo?');
+            if (!confirmed) return;
+        }
         setEditingCycle(cycle);
         setIsEditing(true);
         openEditorAtTop();
@@ -113,7 +119,7 @@ export default function TrainingPlanning({ onOpenSession }: TrainingPlanningProp
             if (activeCycleId === null && !isUpdate && trainingCycles.length === 0) {
                 operations.push({ type: 'active-cycle.set', id: savedCycle.id });
             }
-            await dispatchDomainOperation(operations);
+            await dispatchDurableOperation(dispatchDomainOperation, operations);
             handleCancelEditor();
         } catch (error) {
             console.error('Errore salvataggio ciclo:', error);
@@ -123,7 +129,7 @@ export default function TrainingPlanning({ onOpenSession }: TrainingPlanningProp
 
     const handleSetActiveCycle = async (cycleId: string) => {
         try {
-            await dispatchDomainOperation({ type: 'active-cycle.set', id: cycleId });
+            await dispatchDurableOperation(dispatchDomainOperation, { type: 'active-cycle.set', id: cycleId });
         } catch (error) {
             console.error('Errore attivazione ciclo:', error);
             await showAlert('Impossibile attivare il ciclo. Riprova.');
@@ -134,7 +140,7 @@ export default function TrainingPlanning({ onOpenSession }: TrainingPlanningProp
         const confirmed = await showConfirm('Sei sicuro di voler disattivare il ciclo corrente?');
         if (!confirmed) return;
         try {
-            await dispatchDomainOperation({ type: 'active-cycle.set', id: null });
+            await dispatchDurableOperation(dispatchDomainOperation, { type: 'active-cycle.set', id: null });
         } catch (error) {
             console.error('Errore disattivazione ciclo:', error);
             await showAlert('Impossibile disattivare il ciclo. Riprova.');
@@ -150,7 +156,7 @@ export default function TrainingPlanning({ onOpenSession }: TrainingPlanningProp
             isActive: false
         };
         try {
-            await dispatchDomainOperation({ type: 'training-cycle.upsert', cycle: duplicated });
+            await dispatchDurableOperation(dispatchDomainOperation, { type: 'training-cycle.upsert', cycle: duplicated });
         } catch (error) {
             console.error('Errore duplicazione ciclo:', error);
             await showAlert('Impossibile duplicare il ciclo. Riprova.');
@@ -164,7 +170,7 @@ export default function TrainingPlanning({ onOpenSession }: TrainingPlanningProp
             const remaining = trainingCycles.filter(item => item.id !== cycle.id);
             const operations: DomainOperation[] = [{ type: 'training-cycle.delete', id: cycle.id }];
             if (activeCycleId === cycle.id) operations.push({ type: 'active-cycle.set', id: remaining[0]?.id ?? null });
-            await dispatchDomainOperation(operations);
+            await dispatchDurableOperation(dispatchDomainOperation, operations);
         } catch (error) {
             console.error('Errore eliminazione ciclo:', error);
             await showAlert('Impossibile eliminare il ciclo. Riprova.');
@@ -200,6 +206,7 @@ export default function TrainingPlanning({ onOpenSession }: TrainingPlanningProp
 
             {isEditing ? (
                 <CycleEditor
+                    key={editingCycle?.id ?? 'new-cycle'}
                     initialCycle={editingCycle}
                     routines={routines}
                     library={library}

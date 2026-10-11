@@ -11,15 +11,16 @@ export function useAnalyticsWorker() {
 
     useEffect(() => {
         mounted.current = true;
+        const pendingForThisMount = pendingPromises.current;
         try {
             workerRef.current = new AnalyticsWorker();
             
             workerRef.current.onmessage = (e) => {
                 const { id, type, result, error } = e.data;
-                const promiseHandlers = pendingPromises.current.get(id);
+                const promiseHandlers = pendingForThisMount.get(id);
                 if (promiseHandlers) {
                     clearTimeout(promiseHandlers.timeoutId);
-                    pendingPromises.current.delete(id);
+                    pendingForThisMount.delete(id);
                     if (type === 'SUCCESS') {
                         promiseHandlers.resolve(result);
                     } else {
@@ -32,8 +33,8 @@ export function useAnalyticsWorker() {
                 console.warn("Analytics Worker encountered an error:", e);
                 // We don't reject here because the task specific reject logic handles fallbacks.
                 // But we need to clean up pending promises and trigger their fallback.
-                const pending = Array.from(pendingPromises.current.entries());
-                pendingPromises.current.clear();
+                const pending = Array.from(pendingForThisMount.entries());
+                pendingForThisMount.clear();
                 for (const [, handlers] of pending) {
                     clearTimeout(handlers.timeoutId);
                     handlers.reject(new Error('Worker crashed'));
@@ -50,8 +51,8 @@ export function useAnalyticsWorker() {
                 workerRef.current.terminate();
                 workerRef.current = null;
             }
-            const pending = Array.from(pendingPromises.current.entries());
-            pendingPromises.current.clear();
+            const pending = Array.from(pendingForThisMount.entries());
+            pendingForThisMount.clear();
             for (const [, handlers] of pending) {
                 clearTimeout(handlers.timeoutId);
                 handlers.reject(new Error('Worker terminated on unmount'));

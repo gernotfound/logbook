@@ -1,3 +1,4 @@
+import { dispatchDurableOperation } from '../lib/sync/dispatchDurableOperation';
 import { useState, useMemo, useRef } from 'react';
 import { useDatedDraft } from './useDatedDraft';
 import { useLocalToday } from './useLocalToday';
@@ -71,7 +72,7 @@ export function useNutritionMeasurements(selectedDate?: string) {
         const confirmed = await useDialogStore.getState().showConfirm(`Sei sicuro di voler eliminare la misurazione del ${Logic.formatItalianDate ? Logic.formatItalianDate(dateStr) : dateStr}?`);
         if (!confirmed || !isCurrentSession(session)) return;
         try {
-            await dispatchDomainOperation({
+            await dispatchDurableOperation(dispatchDomainOperation, {
                 type: 'nutrition-day.patch',
                 date: dateStr,
                 patch: {
@@ -185,7 +186,7 @@ export function useNutritionMeasurements(selectedDate?: string) {
             const targetDate = targetDateStr;
             try {
                 if (!isCurrentSession(session)) throw new Error('Sessione cambiata');
-                await dispatchDomainOperation({
+                await dispatchDurableOperation(dispatchDomainOperation, {
                     type: 'nutrition-day.patch',
                     date: targetDate,
                     patch: {

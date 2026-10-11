@@ -2,7 +2,7 @@
 // Props: initialCycle (TrainingCycle), routines (WorkoutRoutine[]), onSave (callback), showAlert (callback).
 // Effetti: non salva sul DB, chiama onSave passando l'oggetto ciclo completato.
 
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useRef, useMemo } from 'react';
 import { addDays, differenceInCalendarDays, parseISO, format, isValid, startOfDay } from 'date-fns';
 import { Logic } from '../../../lib/logic';
 import type {
@@ -76,31 +76,6 @@ export function useCycleForm({ initialCycle, routines, onSave, showAlert }: UseC
         initialCycle?.routines ? structuredClone(initialCycle.routines) : []
     );
     const [showSchedulePreview, setShowSchedulePreview] = useState(false);
-
-    useEffect(() => {
-        if (initialCycle) {
-            setName(initialCycle.name || '');
-            const iso = initialCycle.startDate || Logic.getLocalDateString();
-            const weeksNum = initialCycle.durationWeeks !== undefined ? initialCycle.durationWeeks : 6;
-            const endIso = initialCycle.endDate || computeEndDate(iso, weeksNum);
-            setStartDate(iso);
-            setDateTextInput(Logic.formatItalianDate(iso));
-            setEndDate(endIso);
-            setEndDateTextInput(Logic.formatItalianDate(endIso));
-            setDurationWeeks(String(weeksNum));
-            setSessionsPerWeek(
-                initialCycle.sessionsPerWeek !== undefined
-                    ? String(initialCycle.sessionsPerWeek)
-                    : String(initialCycle.routines?.length || 4)
-            );
-            setNotes(initialCycle.notes || '');
-            setStrategyIntent(initialCycle.strategy?.intent ?? '');
-            setProgressionFocus(initialCycle.strategy?.progressionFocus ?? '');
-            setPrimaryMuscles([...(initialCycle.strategy?.primaryMuscles ?? [])]);
-            setSecondaryMuscles([...(initialCycle.strategy?.secondaryMuscles ?? [])]);
-            setCycleRoutines(initialCycle.routines ? structuredClone(initialCycle.routines) : []);
-        }
-    }, [initialCycle]);
 
     const handleDurationWeeksChange = (val: string) => {
         setDurationWeeks(val);
