@@ -120,11 +120,11 @@ it('retains the wrapped data-encryption key when a sealed local snapshot cannot 
 
 it('purges server-confirmed deleted account ciphertext without unlocking its protected DEK', async () => {
     const owner = 'user:a';
-    const { vault, dataKey } = await createLocalKeyVault(owner, 'deleted user passphrase 2026');
+    const { vault, dataKey } = await createLocalKeyVault(owner);
     const control = 'logbook:v2:user:a:secure-vault-control';
     const workout = 'logbook:v2:user:a:sealed:workout';
     disk.set(control, JSON.stringify({
-        format: 'thelogbook-local-vault-control', version: 1,
+        format: 'thelogbook-local-vault-control', version: 2,
         owner, phase: 'active', epoch: 'a'.repeat(32), wrappedKey: vault,
     }));
     disk.set(workout, sealLocalText(dataKey, owner, workout, '{"heartRate":145}'));
