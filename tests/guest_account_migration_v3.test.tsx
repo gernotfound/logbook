@@ -66,7 +66,17 @@ describe('guest -> account V3 migration', () => {
         await waitFor(async () => {
             const envelope = await readLocal('user:a');
             expect(envelope).toBeDefined();
-            expect(envelope?.pending).toEqual([]);
+            if (envelope?.pending.length) {
+                const latest = useAppStore.getState();
+                throw new Error('Journal pending after migration: ' + JSON.stringify({
+                    pending: envelope.pending.length,
+                    replica: envelope.replica !== undefined,
+                    consentRevision: envelope.consentRevision,
+                    saveError: latest.saveError,
+                    syncHealth: latest.syncHealth,
+                    cloudCalls: vi.mocked(DB.loadCloudPayload).mock.calls.length,
+                }));
+            }
             expect(useAppStore.getState().userData?.profile).toMatchObject({ height: '175', gender: 'M' });
         }, { timeout: 8000 });
 
