@@ -27,6 +27,7 @@ describe('Firestore Security Rules Whitelist & Parity Verification', () => {
     expect(rulesContent).toMatch(/match\s+\/account_deletions\/\{userId\}\s*\{[\s\S]*?allow\s+read,\s*write:\s*if\s+false;/);
     expect(rulesContent).toContain('function isWritableOwner(userId)');
     expect(rulesContent).toContain('function consentWithdrawn(userId)');
+    expect(rulesContent).toContain('function matchesConsentEpoch(userId, candidate)');
     expect(rulesContent).toContain('match /health_consent_withdrawals/{userId} {');
     expect(rulesContent.match(/isWritableOwner\(userId\)/g)?.length).toBeGreaterThanOrEqual(10);
   });
@@ -34,7 +35,7 @@ describe('Firestore Security Rules Whitelist & Parity Verification', () => {
   it('keeps root deletion server-only while allowing active-owner reads and writes', () => {
     const usersBlock = rulesContent.match(/match\s+\/users\/\{userId\}\s*\{([\s\S]*?)\n\s*match\s+\/history_months/);
     expect(usersBlock).not.toBeNull();
-    expect(usersBlock![1]).toMatch(/allow\s+read:\s*if\s+isActiveOwner\(userId\);/);
+    expect(usersBlock![1]).toMatch(/allow\s+read:\s*if\s+isWritableOwner\(userId\);/);
     expect(usersBlock![1]).toMatch(/allow\s+create,\s*update:\s*if\s+isWritableOwner\(userId\)/);
     expect(usersBlock![1]).not.toMatch(/allow\s+read,\s*delete:/);
     expect(usersBlock![1]).not.toMatch(/allow\s+delete:/);
@@ -42,7 +43,7 @@ describe('Firestore Security Rules Whitelist & Parity Verification', () => {
 
   it('allows only an active owner to access private month and telemetry collections', () => {
     expect(rulesContent).toMatch(/match\s+\/history_months\/\{monthId\}/);
-    expect(rulesContent).toMatch(/allow\s+read:\s*if\s+isActiveOwner\(userId\);/);
+    expect(rulesContent).toMatch(/allow\s+read:\s*if\s+isWritableOwner\(userId\);/);
     expect(rulesContent.match(/allow\s+delete:\s*if\s+false;/g)?.length).toBeGreaterThanOrEqual(3);
     expect(rulesContent).toMatch(/match\s+\/nutrition_months\/\{monthId\}/);
     expect(rulesContent).toMatch(/match\s+\/telemetry_anomalies\/\{eventId\}/);
