@@ -93,7 +93,7 @@ const ownerConsentRevision = (owner: string) => {
     // require a live consent API request just to initialize its archive.
     const raw = readBrowserValueStrict(`logbook:v2:${owner}:health-consent-generation`);
     if (raw === null) return {};
-    if (!/^[1-9]\\d*$/.test(raw)) throw new Error('Generazione consenso locale non valida');
+    if (!/^[1-9]\d*$/.test(raw)) throw new Error('Generazione consenso locale non valida');
     const revision = Number(raw);
     if (!Number.isSafeInteger(revision)) throw new Error('Generazione consenso fuori limite');
     return { consentRevision: revision };
