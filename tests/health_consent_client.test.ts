@@ -365,6 +365,25 @@ describe('offline consent cache and reconnect privacy boundary', () => {
     }
   });
 
+  it('keeps local-only access on a transport failure even when navigator incorrectly reports online', async () => {
+    const uid = 'transport-' + crypto.randomUUID();
+    const actor = user(uid);
+    (auth as { currentUser: unknown }).currentUser = actor;
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce(Response.json({ status: 'active', revision: 0 }))
+      .mockRejectedValueOnce(new TypeError('Failed to fetch')));
+    const onLine = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
+    try {
+      expect(await refreshHealthConsent(actor)).toBe('active');
+      expect(isHealthConsentCloudWritable('user:' + uid)).toBe(true);
+      expect(await refreshHealthConsent(actor)).toBe('active');
+      expect(isHealthConsentWritable('user:' + uid)).toBe(true);
+      expect(isHealthConsentCloudWritable('user:' + uid)).toBe(false);
+    } finally {
+      onLine.mockRestore();
+    }
+  });
+
   it('does not treat an online server failure as proof of active consent', async () => {
     const uid = 'no-reply-' + crypto.randomUUID();
     const actor = user(uid);
