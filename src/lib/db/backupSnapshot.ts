@@ -115,8 +115,12 @@ export async function collectBackupSnapshot(fallback: UserData, includeCloud: bo
     for (let index = 0; index < localStorage.length; index++) {
         const key = localStorage.key(index);
         if (key?.startsWith(prefix)) {
-            const name = key.slice(prefix.length);
+            const rawName = key.slice(prefix.length);
+            const name = rawName.startsWith('sealed:') ? rawName.slice('sealed:'.length) : rawName;
             if (!isRecoveryDeviceKey(name)) continue;
+            // Recovery payloads contain plaintext only in the EXPLICIT backup.
+            // The archive itself remains sealed. A resurfaced old-tab legacy key
+            // must fail the read rather than disappear from the backup silently.
             const value = readDeviceValueStrict(name, session.owner);
             if (value !== null) device[name] = value;
         }
