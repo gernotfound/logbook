@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import type { User } from 'firebase/auth';
 import { useSettings } from '../../hooks/useSettings';
+import { recoverOldLocalEditsAfterConsent } from '../../lib/healthConsentRecovery';
+import { useDialogStore } from '../../store/useDialogStore';
 import { LEGAL_VERSIONS } from '../../lib/legalVersions';
 import { beginGuestHealthReacceptance, completeGuestHealthReacceptance, finishHealthConsentReacceptance, reacceptHealthConsent, refreshHealthConsent, type HealthConsentStatus } from '../../lib/healthConsent';
 import { PrivacyPolicy } from '../../pages/PrivacyPolicy';
@@ -14,6 +16,7 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
   const [acceptedHealth, setAcceptedHealth] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [recoveryBusy, setRecoveryBusy] = useState(false);
   const [privacy, setPrivacy] = useState(false);
   const [terms, setTerms] = useState(false);
 
@@ -49,6 +52,23 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
     } finally { setBusy(false); }
   };
 
+  const recover = async () => {
+    if (!user || recoveryBusy || busy || exportingData) return;
+    const confirmed = await useDialogStore.getState().showConfirm(
+      'Hai già esportato una copia dei tuoi dati?\n\nPer riprendere TheLogBook, le modifiche offline precedenti verranno confrontate con tutti i dati cloud e ripresentate come nuove modifiche autorizzate dal consenso appena prestato. Alcune modifiche potrebbero avere conflitti con altri dispositivi.\n\nL’archivio precedente verrà conservato sul dispositivo. Confermi il recupero?'
+    );
+    if (!confirmed) return;
+    setError(null);
+    setRecoveryBusy(true);
+    try {
+      await recoverOldLocalEditsAfterConsent(user);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Recupero non riuscito; i dati locali restano conservati.');
+    } finally {
+      setRecoveryBusy(false);
+    }
+  };
+
   return <main id="auth-overlay" role="main">
     <section className="auth-panel" aria-label="Accesso sospeso" style={{ maxWidth: 560, maxHeight: '90vh', overflowY: 'auto' }}>
       <h1>Accesso a TheLogBook sospeso</h1>
@@ -57,7 +77,13 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
       {status === 'checking' && <p role="status">Verifica dello stato sul server in corso…</p>}
       {status === 'error' && <p role="alert">Non è stato possibile verificare lo stato del consenso. L’accesso fitness resta sospeso.</p>}
       {status === 'pending' && <p role="status">Revoca registrata su questo dispositivo. La conferma cloud è ancora in attesa.</p>}
-      {status === 'recovery-required' && <p role="alert">Su questo dispositivo sono presenti modifiche di una sessione precedente. Per evitare di sovrascriverle non possono essere sincronizzate automaticamente con il nuovo consenso. Esporta un backup locale per conservarle prima di continuare.</p>}
+      {status === 'recovery-required' && <section aria-label="Recupero delle modifiche precedenti">
+        <p role="alert">Il nuovo consenso è stato registrato, ma su questo dispositivo ci sono modifiche non sincronizzate prima della revoca. Non le eliminiamo e non le inviamo automaticamente.</p>
+        <p>Esporta prima un backup JSON. Poi, solo se lo desideri, puoi scegliere esplicitamente di recuperare le vecchie modifiche confrontandole con i dati aggiornati del cloud. La copia originale resterà conservata anche sul dispositivo.</p>
+        <button type="button" className="btn btn-primary" disabled={recoveryBusy || exportingData} onClick={() => void recover()}>
+          {recoveryBusy ? 'Recupero in corso…' : 'Recupera modifiche e riattiva'}
+        </button>
+      </section>}
       {status === 'reaccepting' && <p role="status">Nuovo consenso in fase di completamento. Riconferma qui sotto per completare.</p>}
       {(status === 'withdrawn' || status === 'reaccepting') && <>
         <h2>Per tornare a usare la PWA</h2>

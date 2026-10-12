@@ -128,6 +128,13 @@ async function serverRequest(user: User, method: 'GET' | 'POST', body?: unknown)
   return state as ServerStatus;
 }
 
+/** Read the live generation for a separate, user-confirmed pending-data recovery. */
+export async function readActiveHealthConsentRevision(user: User): Promise<number> {
+  const state = await serverRequest(user, 'GET');
+  if (state.status !== 'active' || state.revision < 2) throw new Error('Un nuovo consenso attivo non è stato verificato.');
+  return state.revision;
+}
+
 export async function refreshHealthConsent(user: User): Promise<HealthConsentStatus> {
   const uid = user.uid;
   const saved = readMarker(uid);

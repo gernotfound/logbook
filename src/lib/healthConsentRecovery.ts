@@ -7,7 +7,7 @@ import { readLocal, rebaseConsentRecoveryWithExplicitChoice } from './sync/local
 import { applyRemoteDocuments, type DocumentData } from './sync/documentProjection';
 import { normalizeCloudDocument } from './schemaEvolution';
 import { collectBackupSnapshot } from './db/backupSnapshot';
-import { currentHealthConsentStatus, refreshHealthConsent, finishHealthConsentReacceptance } from './healthConsent';
+import { currentHealthConsentStatus, readActiveHealthConsentRevision, refreshHealthConsent, finishHealthConsentReacceptance } from './healthConsent';
 
 /**
  * A deliberate second choice, after consent. Never silently deliver an old
@@ -26,6 +26,8 @@ export async function recoverOldLocalEditsAfterConsent(user: User): Promise<void
       throw new Error('La sessione è cambiata durante il recupero.');
     }
   };
+  const serverRevision = await readActiveHealthConsentRevision(user);
+  assertCurrent();
   const original = await readLocal(session.owner);
   assertCurrent();
   if (!original?.pending.length) throw new Error('Non ci sono operazioni locali da recuperare.');
@@ -46,7 +48,7 @@ export async function recoverOldLocalEditsAfterConsent(user: User): Promise<void
     UserDataSchema.parse({}) as unknown as UserData, normalized, catalog,
   );
   await rebaseConsentRecoveryWithExplicitChoice(
-    session.owner, original.consentRevision === undefined ? 0 : original.consentRevision + 1,
+    session.owner, serverRevision,
     original.revision, cloudData, snapshot.data, cloudDocuments, assertCurrent,
   );
   // A server refresh authoritatively confirms the revision and unlocks only
