@@ -99,7 +99,25 @@ export function assertOrdinaryPurgeAllowed(owner: string): void {
     }
 }
 
+/** A new server consent epoch never authorizes discarding an older offline journal. */
+export async function assertNoOutdatedConsentJournal(owner: string): Promise<void> {
+    if (!owner.startsWith('user:')) return;
+    const generation = readBrowserValueStrict(`logbook:v2:${owner}:health-consent-generation`);
+    if (generation === null) return;
+    if (!/^[1-9]\\d*$/.test(generation) || !Number.isSafeInteger(Number(generation))) {
+        throw new HealthConsentTransitionPendingError();
+    }
+    const { readLocal } = await import('../sync/localRepository');
+    const envelope = await readLocal(owner);
+    if (envelope?.pending.length && (envelope.consentRevision ?? 0) !== Number(generation)) {
+        throw new HealthConsentTransitionPendingError();
+    }
+}
+
 export async function purgeAllLocalUserData(owner = storageOwner()) {
+    assertOrdinaryPurgeAllowed(owner);
+    await assertNoOutdatedConsentJournal(owner);
+    // Recheck the synchronous intent after the IndexedDB read.
     assertOrdinaryPurgeAllowed(owner);
     return purgeOwnerLocalData(owner);
 }

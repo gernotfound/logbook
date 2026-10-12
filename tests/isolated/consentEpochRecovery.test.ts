@@ -12,6 +12,7 @@ import {
   commitLocal, initializeLocal, readLocal,
   rebaseConsentRecoveryWithExplicitChoice,
 } from '../../src/lib/sync/localRepository';
+import { purgeAllLocalUserData } from '../../src/lib/db/db_account';
 
 const owner = 'user:consent-recovery-user';
 function state(height: string, acceptedAt?: string): UserData {
@@ -30,6 +31,14 @@ beforeEach(async () => {
 });
 
 describe('explicit consent-epoch journal recovery', () => {
+  it('refuses ordinary local purge when old pending edits require consent recovery', async () => {
+    await commitLocal(owner, state('180'), state('170'));
+    const original = (await readLocal(owner))!;
+    localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '2');
+    await expect(purgeAllLocalUserData(owner)).rejects.toThrow('non è ancora riconciliata');
+    expect(await readLocal(owner)).toEqual(original);
+  });
+
   it('rebases only after explicit action, retaining complete original journal and legal consent from cloud', async () => {
     await commitLocal(owner, state('180'), state('170'));
     const original = (await readLocal(owner))!;

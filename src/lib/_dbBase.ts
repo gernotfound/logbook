@@ -1,6 +1,6 @@
 import { auth } from './firebase';
 import type { SyncResult } from '../types';
-import { assertOrdinaryPurgeAllowed, purgeAllLocalUserData, purgeCompletedAccountLocalData, deleteAccount, type AccountDeletionContext } from './db/db_account';
+import { assertOrdinaryPurgeAllowed, assertNoOutdatedConsentJournal, purgeAllLocalUserData, purgeCompletedAccountLocalData, deleteAccount, type AccountDeletionContext } from './db/db_account';
 import { storageOwner } from './sync/session';
 import { isAccountDeletionPending } from './sync/accountGate';
 import { classifySyncFailure } from './sync/syncFailure';
@@ -39,6 +39,8 @@ export const DB = {
         }
         // Check BEFORE invalidating Firebase Auth. Otherwise the pending
         // withdrawal cannot be resubmitted after the local purge.
+        assertOrdinaryPurgeAllowed(owner);
+        await assertNoOutdatedConsentJournal(owner);
         assertOrdinaryPurgeAllowed(owner);
         await auth.signOut();
         await this.purgeAllLocalUserData(owner);
