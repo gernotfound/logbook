@@ -149,7 +149,6 @@ export function isHealthConsentCloudWritable(owner: string): boolean {
   if (!isHealthConsentWritable(owner)) return false;
   if (!owner.startsWith('user:')) return owner !== 'guest';
   const uid = owner.slice(5);
-  // Pure isolated sync tests run without a Firebase-authenticated principal.
   if (auth?.currentUser?.uid !== uid || (typeof navigator !== 'undefined' && navigator.onLine === false)) return false;
   return onlineVerifiedRevisions.get(uid) === verifiedRevisions.get(uid)
     && verifiedRevisions.has(uid);
@@ -176,18 +175,21 @@ async function serverRequest(user: User, method: 'GET' | 'POST', body?: unknown)
   await ensureAppCheck();
   const token = await getLimitedUseAppCheckToken();
   if (!token) throw new Error('App Check non disponibile.');
+  // Token acquisition is a separate auth gate: a Firebase token failure
+  // must not be confused with a transient transport outage.
+  const idToken = await user.getIdToken();
   let response: Response;
   try {
     response = await fetch(API + '/api/health-consent', {
-    method,
-    cache: 'no-store',
-    headers: {
-      authorization: 'Bearer ' + await user.getIdToken(),
-      'x-firebase-appcheck': token,
-      ...(method === 'POST' ? { 'content-type': 'application/json' } : {}),
-    },
-    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-    signal: AbortSignal.timeout(10_000),
+      method,
+      cache: 'no-store',
+      headers: {
+        authorization: 'Bearer ' + idToken,
+        'x-firebase-appcheck': token,
+        ...(method === 'POST' ? { 'content-type': 'application/json' } : {}),
+      },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      signal: AbortSignal.timeout(10_000),
     });
   } catch (error) {
     // A rejected transport request (unlike an explicit HTTP denial or invalid
