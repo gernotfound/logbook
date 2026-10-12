@@ -42,7 +42,7 @@ beforeEach(async () => {
     });
     // The authenticated destination vault is genuinely provisioned/unlocked;
     // guest→account causality and consent are still exercised by the real code.
-    await createAndMigrateVault('user:a', 'guest migration destination passphrase 2026');
+    await createAndMigrateVault('user:a');
 });
 
 afterEach(() => {
