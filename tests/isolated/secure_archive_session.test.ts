@@ -72,6 +72,13 @@ describe('owner-fenced vault capability', () => {
         }));
         await unlockVaultWithPassphrase('guest', passphrase);
         expect(requireUnlockedLocalKey('guest')).toEqual(guest.dataKey);
+        // A later guest generation does not inherit an older generation's DEK,
+        // even when the control metadata and local owner name are unchanged.
+        localStorage.setItem(GUEST_SESSION_KEY, 'session-newer');
+        activateGuestSession('session-newer');
+        expect(() => requireUnlockedLocalKey('guest')).toThrow(LocalVaultLockedError);
+        await unlockVaultWithPassphrase('guest', passphrase);
+        expect(isVaultUnlocked('guest')).toBe(true);
         revokeGuestSession();
         expect(() => requireUnlockedLocalKey('guest')).toThrow(LocalVaultLockedError);
         expect(isVaultUnlocked('guest')).toBe(false);
