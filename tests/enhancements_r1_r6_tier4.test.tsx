@@ -2,6 +2,9 @@ import React from 'react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { screen, act, fireEvent, renderHook } from '@testing-library/react';
 import { renderWithProviders, emptyUserData } from './setup';
+import { prepareUnlockedTestArchive } from './secureVaultFixture';
+import { captureSession } from '../src/lib/sync/session';
+import { initializeLocal } from '../src/lib/sync/localRepository';
 import { useAppStore } from '../src/store/useAppStore';
 import { Logic } from '../src/lib/logic';
 import { Exporter } from '../src/lib/export';
@@ -279,14 +282,11 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
                 }
             ];
 
-            useAppStore.setState({
-                userData: {
-                    ...emptyUserData,
-                    library,
-                    routines,
-                    history: []
-                }
-            });
+            const owner = captureSession().owner;
+            const initialData = { ...emptyUserData, library, routines, history: [] };
+            await prepareUnlockedTestArchive(owner);
+            await initializeLocal(owner, initialData);
+            useAppStore.setState({ userData: initialData, dataOwner: owner });
 
             const { result: sessionHook } = renderHook(() => useWorkoutSession());
 
