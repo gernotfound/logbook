@@ -38,6 +38,7 @@ import { reportError } from '../lib/errorHandler';
 import { clearAuthenticatedOwnerHint, rememberAuthenticatedOwner } from '../lib/sync/authOwnerHint';
 import { beginGuestMigrationIntent, bindGuestMigrationIntentToUser, clearGuestMigrationIntent } from '../lib/auth/guestMigrationIntent';
 import { ensureLocalVaultReady } from '../lib/sync/secureArchiveUnlockFlow';
+import { lockVault } from '../lib/sync/secureArchiveSession';
 
 const GUEST_KEY = 'logbook_is_guest';
 const GUEST_MIGRATION_SYNC_RECOVERY_KEY = 'logbook_guest_migration_sync_recovery';
@@ -90,6 +91,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             if (!isGuestRef.current || isActiveGuestSession()) return;
             // A different tab explicitly revoked this guest generation.
             // Never recreate its deleted data from the old Zustand snapshot.
+            lockVault('guest');
             invalidateSession();
             isGuestRef.current = false;
             setIsGuest(false);
@@ -744,6 +746,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         // Sign out without the authenticated purge path: local owner envelopes and
         // any guest migration intent must survive until an explicit verified login.
         await signOut(auth);
+        lockVault(userOwner(user.uid));
         if (!isGuestActiveStrict()) {
             // Never seed a fresh guest from another authenticated user's in-memory data.
             // resetStore does not delete the authenticated IndexedDB envelope.
