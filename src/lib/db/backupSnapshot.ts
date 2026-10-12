@@ -44,7 +44,7 @@ export async function collectBackupSnapshot(fallback: UserData, includeCloud: bo
         await ensureAppCheck();
         assertCurrent();
         const uid = session.owner.slice(5);
-        if (['withdrawn', 'pending', 'checking', 'error'].includes(currentHealthConsentStatus(uid))) {
+        if (['withdrawn', 'pending', 'checking', 'error', 'reaccepting'].includes(currentHealthConsentStatus(uid))) {
             // Rules deny all direct fitness reads during revocation. Export and
             // privacy rights use the independently authenticated Admin boundary.
             const withdrawnDocuments = await fetchWithdrawnCloudBackup(uid, assertCurrent);

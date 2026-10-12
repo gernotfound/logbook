@@ -9,7 +9,7 @@ import {
   beginHealthConsentVerification, currentHealthConsentStatus,
   finishHealthConsentReacceptance, isHealthConsentWritable,
   reacceptHealthConsent, refreshHealthConsent, requireHealthConsentWritable,
-  withdrawHealthConsent, retainNewerHealthConsent,
+  withdrawHealthConsent, retainNewerHealthConsent, reconfirmStaleHealthWithdrawal,
   withdrawGuestHealthConsent, beginGuestHealthReacceptance,
   completeGuestHealthReacceptance, getGuestHealthConsentStatus,
 } from '../src/lib/healthConsent';
@@ -157,6 +157,29 @@ describe('overlapping consent verification', () => {
     resolveServer(Response.json({ status: 'active', revision: 2 }));
     await expect(retaining).rejects.toThrow('revoca locale è cambiata');
     expect(localStorage.getItem(key(uid))).toBe('pending:2');
+    expect(isHealthConsentWritable('user:' + uid)).toBe(false);
+  });
+});
+
+describe('stale withdrawal explicit reconfirmation', () => {
+  it('does not overwrite a newer local decision when the server check was delayed', async () => {
+    const uid = 'stale-reconfirm-race-' + crypto.randomUUID();
+    localStorage.setItem(key(uid), 'pending:0');
+    let resolveCheck!: (response: Response) => void;
+    const methods: string[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
+      methods.push(init.method ?? 'GET');
+      if (methods.length === 1) return Response.json({ status: 'active', revision: 2 });
+      return new Promise<Response>(resolve => { resolveCheck = resolve; });
+    }));
+    expect(await refreshHealthConsent(user(uid))).toBe('stale-request');
+    const ongoing = reconfirmStaleHealthWithdrawal(user(uid));
+    await vi.waitFor(() => expect(methods).toHaveLength(2));
+    localStorage.setItem(key(uid), 'withdrawn');
+    resolveCheck(Response.json({ status: 'active', revision: 2 }));
+    await expect(ongoing).rejects.toThrow('scelta locale è cambiata');
+    expect(localStorage.getItem(key(uid))).toBe('withdrawn');
+    expect(methods).toEqual(['GET', 'GET']);
     expect(isHealthConsentWritable('user:' + uid)).toBe(false);
   });
 });

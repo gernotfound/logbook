@@ -309,13 +309,23 @@ export async function retainNewerHealthConsent(user: User): Promise<HealthConsen
 }
 
 export async function reconfirmStaleHealthWithdrawal(user: User): Promise<void> {
-  if (currentHealthConsentStatus(user.uid) !== 'stale-request') throw new Error('Nessuna revoca precedente da riconfermare.');
+  const uid = user.uid;
+  if (currentHealthConsentStatus(uid) !== 'stale-request') throw new Error('Nessuna revoca precedente da riconfermare.');
+  const originalMarker = readMarker(uid);
+  const originalGeneration = readBrowserValueStrict(generationMarker(uid));
   const live = await serverRequest(user, 'GET');
+  // Never turn a newer decision made by another tab into an unsolicited
+  // revocation merely because an older confirmation request arrived late.
+  if (readMarker(uid) !== originalMarker
+    || readBrowserValueStrict(generationMarker(uid)) !== originalGeneration
+    || currentHealthConsentStatus(uid) !== 'stale-request') {
+    throw new Error('La scelta locale è cambiata durante la riconferma della revoca.');
+  }
   if (live.status !== 'active') {
     await refreshHealthConsent(user);
     return;
   }
-  writeBrowserValue(marker(user.uid), pendingMarker(live.revision));
+  writeBrowserValue(marker(uid), pendingMarker(live.revision));
   setStatus(user.uid, 'pending');
   const state = await serverRequest(user, 'POST', { action: 'withdraw', expectedRevision: live.revision });
   if (state.status !== 'withdrawn') throw new Error('Revoca non confermata.');
