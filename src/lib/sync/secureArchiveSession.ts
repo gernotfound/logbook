@@ -1,6 +1,6 @@
 import { readBrowserValueStrict } from './browserStorage';
 import { normalizeStorageOwner } from './owner';
-import { isActiveGuestSession } from './session';
+import { captureSessionForOwner, isActiveGuestSession } from './session';
 import {
     type LocalKeyVault, unlockLocalKeyVault, recoverLocalKeyVault,
 } from './secureArchiveKeys';
@@ -16,7 +16,7 @@ export interface PersistedVaultControl {
 }
 
 /** In-memory secret capability for the CURRENT tab, never persisted. */
-type LocalKeyCapability = { key: Uint8Array; epoch: string };
+type LocalKeyCapability = { key: Uint8Array; epoch: string; guestSessionId?: string | null };
 const capabilities = new Map<string, LocalKeyCapability>();
 
 export class LocalVaultLockedError extends Error {
@@ -68,7 +68,8 @@ export function requireUnlockedLocalKey(owner: string): Uint8Array {
     // Guest revocation is a separate durable session fence; retaining valid
     // wrapped metadata must not grant access after that generation is revoked.
     if (!control || control.phase !== 'active' || !capability || control.epoch !== capability.epoch
-        || (normalized === 'guest' && !isActiveGuestSession())) {
+        || (normalized === 'guest' && (!isActiveGuestSession()
+            || capability.guestSessionId !== captureSessionForOwner('guest').guestSessionId))) {
         if (capability) lockVault(normalized);
         throw new LocalVaultLockedError();
     }
@@ -91,7 +92,9 @@ export async function unlockVaultWithPassphrase(owner: string, passphrase: strin
         throw new LocalVaultLockedError();
     }
     lockVault(normalized);
-    capabilities.set(normalized, { key: unwrapped, epoch: control.epoch });
+    capabilities.set(normalized, { key: unwrapped, epoch: control.epoch,
+        ...(normalized === 'guest' ? { guestSessionId: captureSessionForOwner('guest').guestSessionId } : {}),
+    });
 }
 
 export async function unlockVaultWithRecoveryCode(owner: string, recoveryCode: string): Promise<void> {
@@ -105,7 +108,9 @@ export async function unlockVaultWithRecoveryCode(owner: string, recoveryCode: s
         throw new LocalVaultLockedError();
     }
     lockVault(normalized);
-    capabilities.set(normalized, { key: unwrapped, epoch: control.epoch });
+    capabilities.set(normalized, { key: unwrapped, epoch: control.epoch,
+        ...(normalized === 'guest' ? { guestSessionId: captureSessionForOwner('guest').guestSessionId } : {}),
+    });
 }
 
 /** For provisioning/migration ONLY: it never authorizes normal app writes. */
