@@ -58,7 +58,8 @@ function collectLocalPurgeKeys(owner: string): Set<string> {
     const length = localStorage.length;
     for (let index = 0; index < length; index++) {
         const storageKey = localStorage.key(index);
-        if (storageKey?.startsWith(prefix) && !storageKey.endsWith(':account-deletion')) {
+        if (storageKey?.startsWith(prefix) && !storageKey.endsWith(':account-deletion')
+            && !storageKey.endsWith(':secure-vault-control')) {
             keys.add(storageKey);
         }
     }
@@ -139,6 +140,12 @@ async function purgeOwnerLocalData(owner: string) {
     ]);
     for (const result of results) if (result.status === 'rejected') failures.push(result.reason);
 
+    // Wrapped DEK metadata must survive an IndexedDB purge failure. Deleting
+    // it first would leave the remaining ciphertext permanently undecryptable.
+    if (failures.length) {
+        throw new AggregateError(failures, 'Pulizia IndexedDB incompleta. Chiave cifrata e copie residue conservate per il recupero.');
+    }
+
     let remaining = new Set<string>();
     try {
         for (let pass = 0; pass < LOCAL_PURGE_MAX_PASSES; pass++) {
@@ -164,6 +171,18 @@ async function purgeOwnerLocalData(owner: string) {
 
     if (failures.length) {
         throw new AggregateError(failures, 'Pulizia locale incompleta. Alcuni dati sono ancora presenti su questo dispositivo.');
+    }
+
+    // Remove the ONLY durable wrapping metadata last. Partial device/IDB
+    // failures must not strand surviving encrypted data without its DEK.
+    const controlKey = 'logbook:v2:' + owner + ':secure-vault-control';
+    try {
+        localStorage.removeItem(controlKey);
+        if (localStorage.getItem(controlKey) !== null) {
+            throw new Error('La chiave cifrata locale non è stata eliminata.');
+        }
+    } catch (error) {
+        throw new AggregateError([error], 'Pulizia archivio protetto non completata.');
     }
     // Drop the resident DEK only once all encrypted and device records have
     // been verified removed. An incomplete deletion remains recoverable.
