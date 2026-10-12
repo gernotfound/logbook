@@ -516,6 +516,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         });
 
         let isReloading = false;
+        const handleConsentReactivated = (event: Event) => {
+            const uid = (event as CustomEvent<{uid:string}>).detail?.uid;
+            const current = auth.currentUser;
+            if (!current || current.uid !== uid || !isHealthConsentWritable(userOwner(uid))) return;
+            setLoading(true);
+            loadData(current).catch(error => {
+                console.error('Hydration dopo nuovo consenso non riuscita:', error);
+                setSaveError('Nuovo consenso registrato, ma i dati non sono ancora disponibili. Riprova dopo aver verificato la connessione.');
+            }).finally(() => setLoading(false));
+        };
+        window.addEventListener('logbook:health-consent-reactivated', handleConsentReactivated);
+
         const handleVisibilityChange = async () => {
             if (isGuestActiveStrict()) return;
             if (document.visibilityState === 'visible' && auth.currentUser &&
@@ -547,6 +559,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             document.removeEventListener('visibilitychange', handleAuthVisibilityChange);
             document.removeEventListener('visibilitychange', handleVisibilityChange);
             window.removeEventListener('online', handleVisibilityChange);
+            window.removeEventListener('logbook:health-consent-reactivated', handleConsentReactivated);
         };
     }, [isGuestActiveStrict, loadData, readGuestMigrationRecoveryStrict, setSyncing, setUserData, setSaveError]);
 

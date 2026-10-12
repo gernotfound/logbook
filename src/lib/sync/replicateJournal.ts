@@ -1,5 +1,5 @@
 import equal from 'fast-deep-equal';
-import { isHealthConsentWritable } from '../healthConsent';
+import { isHealthConsentWritable, getVerifiedHealthConsentRevision } from '../healthConsent';
 import { needsLegalUpdate } from '../legalVersions';
 import { auth, getDb, ensureAppCheck, waitForPendingWrites } from '../firebase';
 import type { UserData, SyncResult } from '../../types';
@@ -104,6 +104,9 @@ async function drain(session: ReturnType<typeof captureSession>, deliveryState: 
         if (!current()) throw new Error('Sessione cambiata');
         if (!envelope) throw new Error('Archivio locale non disponibile');
         if (!envelope.pending?.length) return;
+        if ((envelope.consentRevision ?? 0) !== getVerifiedHealthConsentRevision(session.owner.slice(5))) {
+            throw new ReplicaFencedError('Journal locale precedente al nuovo consenso: esporta il backup prima di procedere.');
+        }
         if (needsLegalUpdate(envelope.data.legalConsent)) throw new LegalConsentRequiredError();
         if (!envelope.replica) throw new ReplicaFencedError('Replica non registrata: attendi il checkpoint cloud completo.');
         const replica = envelope.replica;

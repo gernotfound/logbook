@@ -3,15 +3,17 @@ import { ensureAppCheck } from './firebase';
 import { getLimitedUseAppCheckToken } from './appCheck';
 import { readBrowserValueStrict, removeBrowserValue, writeBrowserValue } from './sync/browserStorage';
 
-export type HealthConsentStatus = 'checking' | 'active' | 'withdrawn' | 'pending' | 'reaccepting' | 'error';
+export type HealthConsentStatus = 'checking' | 'active' | 'withdrawn' | 'pending' | 'reaccepting' | 'recovery-required' | 'error';
 type ServerStatus = { status: 'active' | 'withdrawn'; revision: number; acceptedAt?: string };
 const API = (import.meta.env.VITE_ACCOUNT_DELETION_API_ORIGIN || 'https://logbook-gnf.vercel.app').replace(/\/$/, '');
 const entries = new Map<string, HealthConsentStatus>();
 const listeners = new Set<() => void>();
 const verifiedReacceptance = new Map<string, string>();
+const verifiedRevisions = new Map<string, number>();
 const marker = (uid: string) => `logbook:v2:user:${uid}:health-consent-withdrawal`;
 function notify() { for (const listener of listeners) listener(); }
 export function beginHealthConsentVerification(uid: string): void {
+  verifiedRevisions.delete(uid);
   setStatus(uid, 'checking');
 }
 
@@ -29,13 +31,13 @@ function setStatus(uid: string, status: HealthConsentStatus): void {
 export function currentHealthConsentStatus(uid: string | undefined): HealthConsentStatus {
   if (!uid) return 'active';
   try {
+    if (entries.get(uid) === 'recovery-required') return 'recovery-required';
     const saved = readMarker(uid);
     if (saved === 'pending' || saved === 'withdrawn' || saved === 'reaccepting') return saved;
     if (saved !== null) return 'error';
-    // Before an authenticated session begins its verification, standalone
-  // persistence/recovery tooling has no revocation marker to reconcile.
-  // AuthProvider installs 'checking' before exposing an authenticated owner.
-  return entries.get(uid) ?? 'active';
+    // Test/recovery tooling can operate before AuthProvider begins verification.
+    // AuthProvider synchronously fences the real session at each auth boundary.
+    return entries.get(uid) ?? 'active';
   } catch {
     return 'error';
   }
@@ -43,8 +45,13 @@ export function currentHealthConsentStatus(uid: string | undefined): HealthConse
 export function isHealthConsentWritable(owner: string): boolean {
   if (!owner.startsWith('user:')) return true;
   const uid = owner.slice(5);
-  return currentHealthConsentStatus(uid) === 'active' || (currentHealthConsentStatus(uid) === 'reaccepting' && verifiedReacceptance.has(uid));
+  return currentHealthConsentStatus(uid) === 'active';
 }
+export function getVerifiedHealthConsentRevision(uid: string): number {
+  if (currentHealthConsentStatus(uid) !== 'active') throw new Error('Consenso non verificato per questa sessione.');
+  return verifiedRevisions.get(uid) ?? 0;
+}
+
 export function requireHealthConsentWritable(owner: string): void {
   if (!isHealthConsentWritable(owner)) throw new Error('Accesso fitness sospeso per revoca del consenso o stato non verificato.');
 }
@@ -78,6 +85,9 @@ async function serverRequest(user: User, method: 'GET' | 'POST', body?: unknown)
 export async function refreshHealthConsent(user: User): Promise<HealthConsentStatus> {
   const uid = user.uid;
   const saved = readMarker(uid);
+  // Every refresh fences in-flight writes; only a completed, active server
+  // check may grant a new writable generation.
+  verifiedRevisions.delete(uid);
   setStatus(uid, saved === null ? 'checking' : saved as HealthConsentStatus);
   try {
     const state = await serverRequest(user, 'GET');
@@ -95,12 +105,23 @@ export async function refreshHealthConsent(user: User): Promise<HealthConsentSta
       setStatus(uid, 'withdrawn');
       return 'withdrawn';
     }
-    if (saved === 'reaccepting') {
-      // An explicit re-consent might have succeeded just before a crash.
-      // Preserve the barrier; the user must complete the local step.
-      setStatus(uid, 'reaccepting');
-      return 'reaccepting';
+    if (saved === 'withdrawn' || (saved === 'reaccepting' && !verifiedReacceptance.has(uid))) {
+      // A different device must not silently undo this device's withdrawal.
+      // Crash recovery requires the user to explicitly reaccept again.
+      setStatus(uid, saved);
+      return saved;
     }
+    // An older, unsent journal belongs to the previous consent generation.
+    // Never silently relabel it as newly authorized or delete it.
+    if (state.revision > 0) {
+      const { advanceLocalConsentRevisionIfClean } = await import('./sync/localRepository');
+      const ready = await advanceLocalConsentRevisionIfClean('user:' + uid, state.revision);
+      if (!ready) {
+        setStatus(uid, 'recovery-required');
+        return 'recovery-required';
+      }
+    }
+    verifiedRevisions.set(uid, state.revision);
     if (saved !== null) removeBrowserValue(marker(uid));
     setStatus(uid, 'active');
     return 'active';
@@ -137,11 +158,11 @@ export async function reacceptHealthConsent(user: User, acceptance: {
 }
 
 export function finishHealthConsentReacceptance(uid: string): void {
-  if (readMarker(uid) !== 'reaccepting') throw new Error('Nessuna nuova accettazione in corso.');
-  if (!verifiedReacceptance.has(uid)) throw new Error('Manca la conferma server del nuovo consenso.');
-  removeBrowserValue(marker(uid));
+  if (!verifiedReacceptance.has(uid) || currentHealthConsentStatus(uid) !== 'active') {
+    throw new Error('Nuovo consenso non verificato o dati pendenti da recuperare.');
+  }
   verifiedReacceptance.delete(uid);
-  setStatus(uid, 'active');
+  window.dispatchEvent(new CustomEvent('logbook:health-consent-reactivated', { detail: { uid } }));
 }
 
 export function refreshHealthConsentFromStorage(): void {

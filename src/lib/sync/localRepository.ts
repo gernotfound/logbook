@@ -9,6 +9,7 @@ import { type SemanticOperation, type VectorClock, type SyncMeta, diffDocuments,
 import { projectDocuments, applyRemoteDocuments, type DocumentData } from './documentProjection';
 import { getCachedCatalog } from '../catalog/catalogService';
 import { normalizeStorageOwner } from './owner';
+import { getVerifiedHealthConsentRevision } from '../healthConsent';
 import { normalizeBusinessId, requireBusinessId } from '../businessIdentity';
 import {
     applyDomainOperations,
@@ -42,6 +43,8 @@ interface LocalEnvelopeV5 {
     syncMetaByDocument: Record<string, SyncMeta>;
     replica: ReplicaIdentity | null;
     revision: number;
+    // An older journal must never be replayed under a newly accepted consent.
+    consentRevision?: number;
     // Owner-scoped closure evidence committed with the business mutation.
     // Older V5 envelopes legitimately omit this field.
     lastClosedWorkoutId?: string;
@@ -82,6 +85,12 @@ const keyFor = (owner: string) => {
     return `logbook:v2:${canonicalOwner}`;
 };
 const parse = (value: unknown) => UserDataSchema.parse(value) as unknown as UserData;
+
+const ownerConsentRevision = (owner: string) => {
+    if (!owner.startsWith('user:')) return {};
+    const revision = getVerifiedHealthConsentRevision(owner.slice(5));
+    return revision > 0 ? { consentRevision: revision } : {};
+};
 
 function parseCloudSyncMeta(documentPath: string, raw: unknown): SyncMeta {
     try {
@@ -144,6 +153,10 @@ function validate(value: any, owner: string): LocalEnvelope | undefined {
         || new Set(record.closedWorkoutIds).size !== record.closedWorkoutIds.length
     )) throw new Error('Registro workout chiusi non valido');
 
+    if (record.consentRevision !== undefined && (
+        typeof record.consentRevision !== 'number' || !Number.isSafeInteger(record.consentRevision) || record.consentRevision < 0
+    )) throw new Error('Generazione consenso dell’archivio locale non valida');
+
     const replica = parseReplicaIdentity(record.replica);
 
     return {
@@ -184,6 +197,23 @@ function assertWorkoutNotClosed(id: string, envelope: LocalEnvelope | undefined)
     if (envelope && (envelope.lastClosedWorkoutId === id || envelope.closedWorkoutIds?.includes(id))) {
         throw new Error('Allenamento già terminato o eliminato: ricarica la sessione aggiornata.');
     }
+}
+
+export async function advanceLocalConsentRevisionIfClean(owner: string, revision: number): Promise<boolean> {
+    owner = normalizeStorageOwner(owner);
+    if (!owner.startsWith('user:') || !Number.isSafeInteger(revision) || revision < 1) throw new Error('Generazione consenso non valida');
+    let ready = false;
+    await update<any>(keyFor(owner), raw => {
+        const current = validate(raw, owner);
+        if (!current) { ready = true; return raw; }
+        const previous = current.consentRevision ?? 0;
+        if (previous > revision) throw new Error('Generazione locale più recente del server');
+        if (previous === revision) { ready = true; return raw; }
+        if (current.pending.length > 0) { ready = false; return raw; }
+        ready = true;
+        return { ...current, consentRevision: revision, revision: current.revision + 1 };
+    });
+    return ready;
 }
 
 export async function readLocal(owner: string): Promise<LocalEnvelope | undefined> {
@@ -513,7 +543,7 @@ export async function initializeLocal(owner: string, data: UserData, completeMon
         // can be empty (especially for guest or an acknowledged account) while
         // a concurrent tab has already committed durable business edits.
         if (current) return current;
-        return { ...currentEnvelopeVersions(), owner, actorId: generateId('actor'), actorSeq: 0, clock: {}, data: parsed, baseline: parsed, completeMonths: completeMonths ?? [], pending: [], syncMetaByDocument: {}, replica: null, revision: 0 };
+        return { ...currentEnvelopeVersions(), ...ownerConsentRevision(owner), owner, actorId: generateId('actor'), actorSeq: 0, clock: {}, data: parsed, baseline: parsed, completeMonths: completeMonths ?? [], pending: [], syncMetaByDocument: {}, replica: null, revision: 0 };
     });
 }
 
@@ -533,7 +563,7 @@ export async function hydrateLocal(owner: string, cloudData: UserData, months: s
                 syncMetaByDocument[path] = meta;
                 for (const [actor, seq] of Object.entries(meta.clock)) clock[actor] = Math.max(clock[actor] || 0, seq);
             }
-            saved = { ...currentEnvelopeVersions(), owner, actorId: generateId('actor'), actorSeq: 0, clock, data: cloud, baseline: cloud, completeMonths: months, pending: [], syncMetaByDocument, replica: null, revision: 0 };
+            saved = { ...currentEnvelopeVersions(), ...ownerConsentRevision(owner), owner, actorId: generateId('actor'), actorSeq: 0, clock, data: cloud, baseline: cloud, completeMonths: months, pending: [], syncMetaByDocument, replica: null, revision: 0 };
         } else {
             const syncMeta: Record<string, SyncMeta> = {};
             const authoritativePaths = new Set(['', ...months.map(m => `history_months/${m}`), ...months.map(m => `nutrition_months/${m}`)]);

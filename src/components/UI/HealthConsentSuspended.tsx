@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import type { User } from 'firebase/auth';
 import { useSettings } from '../../hooks/useSettings';
-import { useAppStore } from '../../store/useAppStore';
 import { LEGAL_VERSIONS } from '../../lib/legalVersions';
 import { finishHealthConsentReacceptance, reacceptHealthConsent, refreshHealthConsent, type HealthConsentStatus } from '../../lib/healthConsent';
 import { PrivacyPolicy } from '../../pages/PrivacyPolicy';
@@ -9,7 +8,6 @@ import { TermsAndConditions } from '../../pages/TermsAndConditions';
 
 export function HealthConsentSuspended({ status, user }: { status: HealthConsentStatus; user: User }) {
   const { handleExportBackup, handleDeleteAccount, exportingData } = useSettings();
-  const submitLegalConsent = useAppStore(state => state.submitLegalConsent);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [acceptedHealth, setAcceptedHealth] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -22,14 +20,12 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
     setBusy(true);
     setError(null);
     try {
-      const acceptedAt = await reacceptHealthConsent(user, {
+      await reacceptHealthConsent(user, {
         acceptedTerms: true, acceptedHealthData: true,
         privacyVersion: LEGAL_VERSIONS.privacy, termsVersion: LEGAL_VERSIONS.terms,
       });
-      await submitLegalConsent({
-        hasAcceptedTerms: true, hasAcceptedHealthData: true, acceptedAt,
-        privacyVersion: LEGAL_VERSIONS.privacy, termsVersion: LEGAL_VERSIONS.terms,
-      });
+      const refreshed = await refreshHealthConsent(user);
+      if (refreshed !== 'active') throw new Error('Dati locali pendenti da recuperare prima della riattivazione.');
       finishHealthConsentReacceptance(user.uid);
     } catch {
       setError('Non è stato possibile completare il nuovo consenso. L’accesso resta sospeso; nessun dato è stato eliminato.');
@@ -43,6 +39,7 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
       {status === 'checking' && <p role="status">Verifica dello stato sul server in corso…</p>}
       {status === 'error' && <p role="alert">Non è stato possibile verificare lo stato del consenso. L’accesso fitness resta sospeso.</p>}
       {status === 'pending' && <p role="status">Revoca registrata su questo dispositivo. La conferma cloud è ancora in attesa.</p>}
+      {status === 'recovery-required' && <p role="alert">Su questo dispositivo sono presenti modifiche di una sessione precedente. Per evitare di sovrascriverle non possono essere sincronizzate automaticamente con il nuovo consenso. Esporta un backup locale per conservarle prima di continuare.</p>}
       {status === 'reaccepting' && <p role="status">Nuovo consenso in fase di completamento. Riconferma qui sotto per completare.</p>}
       {(status === 'withdrawn' || status === 'reaccepting') && <>
         <h2>Per tornare a usare la PWA</h2>

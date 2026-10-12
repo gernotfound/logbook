@@ -89,7 +89,8 @@ export async function recordHealthConsentReacceptance(
   return db.runTransaction(async tx => {
     const deletion = db.collection('account_deletions').doc(uid);
     const state = consentRef(uid);
-    const [job, previousSnap] = await Promise.all([tx.get(deletion), tx.get(state)]);
+    const root = db.collection('users').doc(uid);
+    const [job, previousSnap, userRoot] = await Promise.all([tx.get(deletion), tx.get(state), tx.get(root)]);
     if (job.exists) throw new Error('Cancellazione account in corso.');
     const previous = previousSnap.data();
     if (previousSnap.exists && previous?.status === 'active' && typeof previous.acceptedAt === 'string') {
@@ -102,6 +103,13 @@ export async function recordHealthConsentReacceptance(
     if (!Number.isSafeInteger(revision)) throw new Error('Revision consenso non valida.');
     const now = Timestamp.now();
     const acceptedAt = now.toDate().toISOString();
+    if (userRoot.exists) {
+      tx.update(root, { legalConsent: {
+        hasAcceptedTerms: true, hasAcceptedHealthData: true, acceptedAt,
+        privacyVersion: acceptance.privacyVersion,
+        termsVersion: acceptance.termsVersion,
+      } });
+    }
     tx.update(state, {
       status: 'active', revision, acceptedAt, updatedAt: now,
       privacyVersion: acceptance.privacyVersion,
