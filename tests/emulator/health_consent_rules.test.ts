@@ -77,3 +77,19 @@ it('denies reads for malformed server consent records rather than treating them 
   const db = env.authenticatedContext('u', { email_verified: true }).firestore();
   await assertFails(getDoc(doc(db, 'users/u')));
 });
+
+it('rejects private shards, telemetry and replica-control reads during withdrawal', async () => {
+  await env.withSecurityRulesDisabled(async context => {
+    await setDoc(doc(context.firestore(), 'health_consent_withdrawals/u'), mark('withdrawn'));
+    await setDoc(doc(context.firestore(), 'users/u'), { profile: { name: 'Retained' } });
+  });
+  const db = env.authenticatedContext('u', { email_verified: true }).firestore();
+  for (const path of [
+    'users/u/history_months/2026-09',
+    'users/u/nutrition_months/2026-09',
+    'users/u/sync_control/state',
+    'users/u/telemetry_errors/one',
+    'users/u/telemetry_events/one',
+    'users/u/telemetry_anomalies/one',
+  ]) await assertFails(getDoc(doc(db, path)));
+});

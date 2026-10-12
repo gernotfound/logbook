@@ -569,7 +569,7 @@ service cloud.firestore {
       }
 
       match /sync_control/{controlId} {
-        allow read: if controlId == 'state' && isActiveOwner(userId);
+        allow read: if controlId == 'state' && isWritableOwner(userId);
         allow create: if controlId == 'state'
           && isWritableOwner(userId)
           && validReplicaControlCreate(userId, incomingData());
