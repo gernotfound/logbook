@@ -40,6 +40,16 @@ export function SecureVaultPrompt({ owner, done }: { owner: string; done: () => 
             setSecret('');
             done();
         } catch (cause) {
+            // A quota/crash during initial migration leaves a durable 'migrating'
+            // control marker. Keep the current secret and offer immediate resume
+            // instead of trapping the person on an unusable new-setup form.
+            if (step === 'setup') {
+                try {
+                    const control = readVaultControl(owner);
+                    if (control?.phase === 'migrating') setStep('resume');
+                    else if (control?.phase === 'active') setStep('unlock');
+                } catch { /* Preserve invalid metadata for explicit recovery. */ }
+            }
             setError(cause instanceof Error ? cause.message : 'Sblocco non riuscito. I dati sul dispositivo sono stati conservati.');
         } finally {
             setBusy(false);
