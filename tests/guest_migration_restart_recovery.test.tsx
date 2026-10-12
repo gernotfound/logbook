@@ -170,9 +170,12 @@ describe('guest migration restart recovery', () => {
         expect(localStorage.getItem(SYNC_RECOVERY_KEY)).toBeNull();
         expect(document.getElementById('app-container')).toBeNull();
 
-        const envelopeA = await localRepository.readLocal(userA.uid);
-        expect(envelopeA?.data.routines?.map(routine => routine.id)).toContain('cloud-a');
-        expect(envelopeA?.data.routines?.map(routine => routine.id)).not.toContain('guest-routine');
+        // An account B session must not be able to decrypt A's archive, even
+        // in a regression test. The suspended A commit is fenced, not granted
+        // access through an artificial test-only unlock.
+        await expect(localRepository.readLocal(userA.uid)).rejects.toMatchObject({
+            code: 'local-vault-locked',
+        });
         expect(await localRepository.readLocal(userB.uid)).toBeUndefined();
 
         // A fresh explicit decision for B is required before B may own the guest data.
