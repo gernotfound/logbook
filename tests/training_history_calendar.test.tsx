@@ -1,8 +1,11 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi, beforeEach } from 'vitest';
 import { fireEvent, screen, within } from '@testing-library/react';
 import TrainingHistory from '../src/components/Training/TrainingHistory';
 import { createMockUserData, renderWithProviders } from './setup';
+import { prepareUnlockedTestArchive } from './secureVaultFixture';
 import type { WorkoutSession } from '../src/types';
+
+beforeEach(async () => { await prepareUnlockedTestArchive(); });
 
 const septemberEvening = new Date(2026, 8, 28, 18, 0, 0, 0).getTime();
 const septemberMorning = new Date(2026, 8, 28, 8, 30, 0, 0).getTime();
