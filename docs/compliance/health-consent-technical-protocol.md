@@ -1,4 +1,4 @@
-# Revoca consenso salute — protocollo tecnico (bozza pre-pilot)
+# Revoca consenso salute — protocollo tecnico distribuito, gate legale pre-pilot aperto
 
 Decisione UX del product owner (12 ottobre 2026): dopo la revoca nessuna funzione fitness è accessibile. La schermata di servizio sospeso consente informativa, diritti, esportazione, cancellazione account e nuova accettazione separata ed esplicita. Dopo la nuova accettazione, tutte le funzioni possono riattivarsi. Non esiste una modalità fitness ridotta.
 
@@ -14,7 +14,7 @@ Decisione UX del product owner (12 ottobre 2026): dopo la revoca nessuna funzion
 - Verifica canonica, review sullo SHA candidato, deploy coordinato frontend/backend/rules e smoke autenticato.
 - Validazione con avvocato: basi art. 6/9 GDPR, libertà del consenso, conseguenze del diniego, conservazione residua dopo revoca, informativa, DPIA, DPA/trasferimenti.
 
-Questo branch non è una funzionalità Production pronta finché i punti sopra sono aperti.
+La PR #366 è integrata e il release commit `5d21dc0` è in Production; i controlli pre-pilot elencati non sono certificati dalla sola CI o dal deploy.
 
 ## Confine export dopo revoca (candidato tecnico)
 
@@ -22,7 +22,7 @@ Durante la revoca, tutte le letture dirette delle collection `users/{uid}` sono 
 
 Il parser dei metadati cloud accetta e valida `_sync.writer.consentRevision` opzionale nel Sync Protocol 3, coerentemente con il writer e le Rules: un account riattivato con revisione positiva non deve essere classificato erroneamente come documento incompatibile. Valori malformati o fuori range vengono rifiutati senza conversione permissiva.
 
-Le regole di accesso e il fence delle revisioni sono implementati nel candidato PR #366. Il deploy resta vietato finché non sono completate la CI exact-SHA, la review e le verifiche runtime/legali dei diritti e della retention.
+Le regole di accesso e il fence delle revisioni sono stati integrati con la PR #366. CI e deploy sono completati. Il collaudo con un account reale, la revisione giuridica e la retention postrevoca restano ancora da validare prima del pilot.
 
 ## Fence delle generazioni di consenso
 
@@ -34,7 +34,7 @@ Dopo la prima revoca, il marker server non viene eliminato al re-consenso: la re
 
 Il client mantiene `consentRevision` opzionale nel Local Envelope V5. All'apertura di un account riattivato, la revisione locale può avanzare solo se non esistono pending operation della revisione precedente; il passaggio è un update IndexedDB atomico. I pending precedenti restano nel loro archivio originale e impediscono l'accesso fitness (stato `recovery-required`); l'utente vede la necessità di esportare i dati, non un successo sync. Il writer `_sync` e il registro `sync_control` presentano la stessa revisione verificata dal server. Le Rules rifiutano vecchi writer/registri anche se l'account è tornato `active`.
 
-La quarantena non autorizza la cancellazione dei pending originali. Il percorso di ripresa candidato archivia in un'unica transazione l'originale prima di ricostruire un journal autorizzato dall'utente rispetto al cloud; la PR rimane draft finché recovery, test, review e diritti privacy non sono verificati.
+La quarantena non autorizza la cancellazione dei pending originali. Il percorso di ripresa candidato archivia in un'unica transazione l'originale prima di ricostruire un journal autorizzato dall'utente rispetto al cloud; la PR è integrata, ma recovery manuale multi-device, controllo indipendente e diritti privacy rimangono da verificare prima del pilot.
 
 Il logout e il purge locale **ordinari** preservano il marker di una revoca/riaccettazione non ancora confermata dal server e i journal offline ancora pendenti dopo una revoca o appartenenti alla generazione precedente. Questi casi falliscono prima di `auth.signOut()` e prima del purge, preservando credenziali e dati per la riconciliazione. La cancellazione esplicita dell'account rimane un'operazione distinta e usa il percorso server-mediated con prova del completamento.
 
