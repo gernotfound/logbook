@@ -68,7 +68,7 @@ import {
 } from '../../src/lib/sync/semanticProjection';
 
 const owner = 'user:a';
-const data = (height: number) => UserDataSchema.parse({ profile: { height: String(height) }, legalConsent: { hasAcceptedTerms: true, hasAcceptedHealthData: true, acceptedAt: '2026-10-11T10:00:00.000Z', privacyVersion: '1.3.2', termsVersion: '1.2.0' } }) as unknown as UserData;
+const data = (height: number) => UserDataSchema.parse({ profile: { height: String(height) }, legalConsent: { hasAcceptedTerms: true, hasAcceptedHealthData: true, acceptedAt: '2026-10-11T10:00:00.000Z', privacyVersion: '1.3.3', termsVersion: '1.2.1' } }) as unknown as UserData;
 
 let cloudDocuments: Map<string, DocumentData>;
 let cloudSyncMeta: Record<string, SyncMeta>;
