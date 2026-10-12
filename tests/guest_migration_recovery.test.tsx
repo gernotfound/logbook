@@ -57,7 +57,7 @@ beforeEach(async () => {
 
     const { guest } = fixtures();
     await localRepository.initializeLocal('guest', guest, []);
-    await createAndMigrateVault('user:guest-recovery-user', 'guest recovery destination passphrase 2026');
+    await createAndMigrateVault('user:guest-recovery-user');
 });
 
 afterEach(() => {
