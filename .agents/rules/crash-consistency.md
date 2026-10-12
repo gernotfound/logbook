@@ -1,4 +1,4 @@
-# Crash Consistency e Recovery - LogBook
+# Crash Consistency e Recovery - TheLogBook
 
 > Stato: normativo da M3 | Baseline: `17fa94ce2c7b436b4b382f88acf05eddcb624efc`
 
