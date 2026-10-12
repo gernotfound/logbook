@@ -2,6 +2,7 @@ import { collection, doc, documentId, getDocFromServer, getDocsFromServer, limit
 import { auth, getDb, ensureAppCheck } from '../firebase';
 import { captureSession, isCurrentSession } from '../sync/session';
 import { readLocal } from '../sync/localRepository';
+import { readDeviceValueStrict } from '../sync/deviceStorage';
 import { getCachedCatalog } from '../catalog/catalogService';
 import { applyRemoteDocuments, projectDocuments, type DocumentData } from '../sync/documentProjection';
 import { applySemanticOperations, parseSyncMeta, type SyncMeta } from '../sync/semanticProjection';
@@ -116,7 +117,7 @@ export async function collectBackupSnapshot(fallback: UserData, includeCloud: bo
         if (key?.startsWith(prefix)) {
             const name = key.slice(prefix.length);
             if (!isRecoveryDeviceKey(name)) continue;
-            const value = localStorage.getItem(key);
+            const value = readDeviceValueStrict(name, session.owner);
             if (value !== null) device[name] = value;
         }
     }
