@@ -211,7 +211,7 @@ export async function advanceLocalConsentRevisionIfClean(owner: string, revision
         if (previous === revision) { ready = true; return raw; }
         if (current.pending.length > 0) { ready = false; return raw; }
         ready = true;
-        return { ...current, consentRevision: revision, revision: current.revision + 1 };
+        return { ...current, consentRevision: revision, replica: null, revision: current.revision + 1 };
     });
     return ready;
 }

@@ -34,6 +34,7 @@ vi.mock('../src/lib/healthConsent', () => ({
   refreshHealthConsent: vi.fn(async () => 'active'),
   refreshHealthConsentFromStorage: vi.fn(),
   isHealthConsentWritable: vi.fn(() => true),
+  getVerifiedHealthConsentRevision: vi.fn(() => 0),
   requireHealthConsentWritable: vi.fn(),
   withdrawHealthConsent: vi.fn(),
   reacceptHealthConsent: vi.fn(),

@@ -68,8 +68,10 @@ describe('durable health-consent client barrier', () => {
       Response.json({ status: 'active', revision: 2, acceptedAt: '2026-10-12T00:00:00.000Z' })));
     expect(await reacceptHealthConsent(user(uid), accepted)).toBe('2026-10-12T00:00:00.000Z');
     expect(currentHealthConsentStatus(uid)).toBe('reaccepting');
-    // During this narrow phase the explicit consent commit is allowed, while
-    // the suspended UI still hides all ordinary fitness operations.
+    // An acknowledged server action alone does NOT make the old local journal
+    // writable. The generation handshake is a separate durable step.
+    expect(isHealthConsentWritable('user:' + uid)).toBe(false);
+    expect(await refreshHealthConsent(user(uid))).toBe('active');
     expect(isHealthConsentWritable('user:' + uid)).toBe(true);
     finishHealthConsentReacceptance(uid);
     expect(localStorage.getItem(key(uid))).toBeNull();
