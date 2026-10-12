@@ -15,6 +15,7 @@ import { deviceKey, protectedDeviceKey, readDeviceValueStrict } from '../../src/
 import { createAndMigrateVault, resumeVaultMigration } from '../../src/lib/sync/secureArchiveMigration';
 import { LocalVaultLockedError, lockAllVaults, lockVault, readVaultControl, unlockVaultWithPassphrase } from '../../src/lib/sync/secureArchiveSession';
 import { LocalCiphertextError, SEALED_LOCAL_PREFIX } from '../../src/lib/sync/secureArchiveCipher';
+import { BrowserStorageError } from '../../src/lib/sync/browserStorage';
 import { activateGuestSession, GUEST_SESSION_KEY, GUEST_REVOCATION_KEY } from '../../src/lib/sync/session';
 import { collectBackupSnapshot } from '../../src/lib/db/backupSnapshot';
 
@@ -77,7 +78,7 @@ describe('durable secure archive migration', () => {
             if (name === protectedDeviceKey('draft:measurement:' + day, owner)) throw new Error('device quota');
             originalSet(name, value);
         });
-        await expect(createAndMigrateVault(owner, phrase)).rejects.toThrow('device quota');
+        await expect(createAndMigrateVault(owner, phrase)).rejects.toBeInstanceOf(BrowserStorageError);
         expect(readVaultControl(owner)?.phase).toBe('migrating');
         expect(localStorage.getItem(deviceKey('draft:measurement:' + day, owner))).toBe('{"weight":"77"}');
         expect((await get<string>('logbook:v2:' + owner))?.startsWith(SEALED_LOCAL_PREFIX)).toBe(true);
