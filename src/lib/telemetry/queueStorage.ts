@@ -122,6 +122,15 @@ export class TelemetryQueueStorage {
             : !item.payload?.userId || item.payload.userId === 'anonymous');
           if (storeEncryptedTelemetry(owner, JSON.stringify(filtered))) {
             discardLegacyUnscopedTelemetry();
+          } else if (!isVaultUnlocked(owner)) {
+            // Previously saved plaintext diagnostics must not stay on disk
+            // indefinitely while the account/guest vault is unavailable.
+            // Retain the valid remainder in RAM, then erase only the legacy
+            // best-effort copy; business snapshots are never handled here.
+            this.cachedQueue = filtered;
+            this.cachedQueueKey = ownerKey;
+            localStorage.removeItem(ownerKey);
+            discardLegacyUnscopedTelemetry();
           }
           return filtered;
         }
