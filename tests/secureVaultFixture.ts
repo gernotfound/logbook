@@ -1,13 +1,17 @@
-import { ensureLocalVaultReady } from '../src/lib/sync/secureArchiveUnlockFlow';
-import { isVaultUnlocked, lockAllVaults } from '../src/lib/sync/secureArchiveSession';
+import { createAndMigrateVault, resumeVaultMigration } from '../src/lib/sync/secureArchiveMigration';
+import { isVaultUnlocked, lockAllVaults, readVaultControl, unlockVaultForOwner } from '../src/lib/sync/secureArchiveSession';
 
 /**
- * Auth and feature integration tests use the SAME in-process vault readiness
- * serializer as the production app, with genuine device-backed CryptoKeys.
- * No fake password, bypassed encryption or independent provisioning race.
+ * Provision a genuine encrypted owner archive for an isolated integration test.
+ * Unlike the interactive application gate, a failing fixture must reject:
+ * waiting for an on-screen Recovery/Retry prompt would hang the test and hide
+ * the actual migration or key error behind a timeout.
  */
 export async function prepareUnlockedTestArchive(owner = 'user:test-user-id'): Promise<void> {
     lockAllVaults();
-    await ensureLocalVaultReady(owner);
+    const control = readVaultControl(owner);
+    if (!control) await createAndMigrateVault(owner);
+    else if (control.phase === 'migrating') await resumeVaultMigration(owner);
+    else await unlockVaultForOwner(owner);
     if (!isVaultUnlocked(owner)) throw new Error('Owner vault was not durably unlocked');
 }
