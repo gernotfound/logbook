@@ -1,7 +1,7 @@
 import { auth, onAuthStateChanged } from '../src/lib/firebase';
 import React from 'react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, act, waitFor, renderHook, fireEvent } from '@testing-library/react';
+import { render, screen, act, waitFor, renderHook } from '@testing-library/react';
 import { AuthProvider } from '../src/contexts/AuthContext';
 import { DB } from '../src/lib/db';
 import { purgeAllLocalUserData as purgeRealLocalUserData } from '../src/lib/db/db_account';
@@ -11,20 +11,11 @@ import { clearCatalogCache, saveCatalogToCache } from '../src/lib/catalog/catalo
 import { resolveEffectiveExercises, resolveEffectiveFoods } from '../src/lib/catalog/deltaResolver';
 import type { UserData, Exercise, Food } from '../src/types';
 import { activateGuestSession, captureSession, GUEST_REVOCATION_KEY, GUEST_SESSION_KEY, isCurrentSession } from '../src/lib/sync/session';
+import { isVaultUnlocked } from '../src/lib/sync/secureArchiveSession';
 
-const TEST_GUEST_PASSPHRASE = 'guest integration recovery passphrase 2026';
-
-/** Exercise the real vault initialization UI, including durable recovery-code confirmation. */
+/** Verify real silent encryption bootstrap rather than simulating a bypass. */
 async function confirmRealGuestVault() {
-    await screen.findByRole('dialog', { name: 'Archivio protetto TheLogBook' });
-    fireEvent.change(screen.getByLabelText('Passphrase locale'), { target: { value: TEST_GUEST_PASSPHRASE } });
-    fireEvent.change(screen.getByLabelText('Conferma la passphrase'), { target: { value: TEST_GUEST_PASSPHRASE } });
-    fireEvent.click(screen.getByRole('button', { name: 'Proteggi questo dispositivo' }));
-    const recovery = await screen.findByLabelText('Codice di recupero');
-    expect(recovery.textContent).toMatch(/^[0-9a-f]{64}$/);
-    fireEvent.click(screen.getByRole('checkbox', { name: 'Ho salvato il codice di recupero in un luogo sicuro.' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Continua nella PWA' }));
-    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Archivio protetto TheLogBook' })).toBeNull());
+    await waitFor(() => expect(isVaultUnlocked('guest')).toBe(true));
 }
 
 const GuestTestComponent = () => {
