@@ -34,6 +34,8 @@ Il client mantiene `consentRevision` opzionale nel Local Envelope V5. All'apertu
 
 La quarantena non autorizza la cancellazione dei pending originali. Il percorso di ripresa candidato archivia in un'unica transazione l'originale prima di ricostruire un journal autorizzato dall'utente rispetto al cloud; la PR rimane draft finché recovery, test, review e diritti privacy non sono verificati.
 
+Il logout e il purge locale **ordinari** preservano il marker di una revoca/riaccettazione non ancora confermata dal server e i journal offline ancora pendenti dopo una revoca o appartenenti alla generazione precedente. Questi casi falliscono prima di `auth.signOut()` e prima del purge, preservando credenziali e dati per la riconciliazione. La cancellazione esplicita dell'account rimane un'operazione distinta e usa il percorso server-mediated con prova del completamento.
+
 Anche il marker browser strict della revisione fa parte del SessionSnapshot locale, per cui una vecchia tab perde la validità della propria sessione quando la revisione cambia in un'altra tab. Il marker revoca `pending/withdrawn` è incluso nello stesso controllo; la sua mutazione invalida write in-flight senza affidarsi a React.
 
 ## Ospite (solo dispositivo)
