@@ -89,10 +89,6 @@ const currentEnvelopeVersions = () => ({
     syncProtocolVersion: CURRENT_SYNC_PROTOCOL,
 });
 
-const keyFor = (owner: string) => {
-    const canonicalOwner = normalizeStorageOwner(owner);
-    return `logbook:v2:${canonicalOwner}`;
-};
 const parse = (value: unknown) => UserDataSchema.parse(value) as unknown as UserData;
 
 const ownerConsentRevision = (owner: string) => {
