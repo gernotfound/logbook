@@ -1,6 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { readLocal } from './lib/sync/localRepository'
+import { ensureLocalVaultReady } from './lib/sync/secureArchiveUnlockFlow'
 import { readBrowserValueStrict } from './lib/sync/browserStorage'
 import { captureSession, GUEST_REVOCATION_KEY } from './lib/sync/session'
 import { readAuthenticatedOwnerHint } from './lib/sync/authOwnerHint'
@@ -123,6 +124,10 @@ export const initApp = async () => {
     renderStorageUnavailable(rootElement);
     return;
   }
+
+  // Never expose cached health data, workout recovery or start React auth
+  // hydration until the owner-scoped device vault is explicitly unlocked.
+  if (bootstrapOwner) await ensureLocalVaultReady(bootstrapOwner);
 
   try {
     const catalog = await getCachedCatalog();
