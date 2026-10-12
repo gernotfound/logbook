@@ -1,4 +1,4 @@
-# Causal Metadata Garbage Collection - LogBook
+# Causal Metadata Garbage Collection - TheLogBook
 
 > Stato: normativo da M4 | Baseline M3: `359e3bfdb45952ccce8a00478e2157f53f468dea`
 
