@@ -4,17 +4,17 @@
 
 ## Cosa la palestra può comunicare
 
-Nel modello corrente la palestra può indicare ai propri iscritti che LogBook è un servizio separato reso disponibile per il tracciamento personale e fornire il link/modalità di accesso concordati.
+Nel modello corrente la palestra può indicare ai propri iscritti che TheLogBook è un servizio separato reso disponibile per il tracciamento personale e fornire il link/modalità di accesso concordati.
 
 ## Cosa non deve dichiarare
 
 Salvo futura modifica del prodotto e dei contratti, la palestra non deve affermare che:
 
-- può vedere gli allenamenti, alimentazione, peso, misure o dolori registrati in LogBook;
-- LogBook invia automaticamente dati al coach o alla palestra;
-- l'uso di LogBook costituisce diagnosi, prescrizione o monitoraggio medico;
-- l'utente deve consegnare alla palestra le credenziali LogBook;
-- la palestra può cancellare o amministrare l'account LogBook dell'utente.
+- può vedere gli allenamenti, alimentazione, peso, misure o dolori registrati in TheLogBook;
+- TheLogBook invia automaticamente dati al coach o alla palestra;
+- l'uso di TheLogBook costituisce diagnosi, prescrizione o monitoraggio medico;
+- l'utente deve consegnare alla palestra le credenziali TheLogBook;
+- la palestra può cancellare o amministrare l'account TheLogBook dell'utente.
 
 ## Dati da non inviare al provider
 
@@ -30,7 +30,7 @@ Usare dati sintetici o descrizioni minimizzate quando sufficienti.
 
 ## Richieste privacy degli utenti
 
-Se un utente chiede alla palestra di esercitare diritti sui dati dentro LogBook:
+Se un utente chiede alla palestra di esercitare diritti sui dati dentro TheLogBook:
 
 1. non promettere azioni che la palestra non può eseguire;
 2. indirizzare al canale `[PRIVACY_EMAIL]` o agli strumenti in-app;
@@ -48,8 +48,8 @@ In caso di sospetto accesso indebito o esposizione:
 
 ## Contatti
 
-- Supporto LogBook: `[SUPPORT_EMAIL]`
-- Privacy LogBook: `[PRIVACY_EMAIL]`
+- Supporto TheLogBook: `[SUPPORT_EMAIL]`
+- Privacy TheLogBook: `[PRIVACY_EMAIL]`
 - Referente palestra: `[GYM_CONTACT]`
 
 Queste istruzioni devono essere riallineate se vengono introdotti accessi gym/coach o condivisione dati.

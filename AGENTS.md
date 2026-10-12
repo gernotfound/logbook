@@ -1,4 +1,4 @@
-# LogBook — istruzioni operative per agenti AI
+# TheLogBook — istruzioni operative per agenti AI
 
 Ultimo aggiornamento: 2026-10-08 | App: 1.1.0 | Progetto: PWA fitness tracking (allenamento, nutrizione, misurazioni corporee).
 
@@ -54,12 +54,19 @@ Per task strutturali o CRITICAL preparare un piano di lavoro prima delle modific
 - **State management:** Zustand 5 (`src/store/useAppStore.ts`).
 - **Validazione runtime:** Zod 4 (`src/lib/schema.ts`, `src/lib/schemas/*.ts`).
 - **Persistenza:** IndexedDB (`idb-keyval`), `localStorage` sincrono e Firestore cloud.
-- **Backend client:** Firebase Modular SDK v12 (`firestore`, `auth`, `app-check`).
+- **Backend client:** Firebase Modular SDK (`firestore`, `auth`, `app-check`). La versione effettiva è definita in `package.json` e `package-lock.json`.
 - **Styling:** CSS nativo modulare aggregato da `src/styles/global.css`, con token semantici in `src/styles/tokens.css`; **MUST:** niente Tailwind.
 - **Icone UI:** `lucide-react`.
 - **PWA:** `vite-plugin-pwa`; asset applicativi generati dalla pipeline `scripts/resize_icons.mjs` a partire dalla sorgente approvata.
 - **Monitoring:** Sentry Error Monitoring per errori/anomalie tecniche. Google Analytics 4/Firebase Analytics e Vercel Analytics/Speed Insights sono ritirati; nessun tracciamento di utilizzo è integrato nel frontend. Le vecchie collection telemetriche Firestore restano solo per compatibilità/cleanup dei client precedenti.
 - **Testing:** Vitest + Testing Library, Playwright E2E (Chromium + copertura Mobile Safari/WebKit mirata), `@axe-core/playwright`, Firebase Emulator, oxlint type-aware/JSX-a11y e Knip; `npm audit`, Gitleaks e zizmor sono gate workflow separati dal comando canonico M8.
+
+## Avvio locale
+
+- **Requisiti:** Node.js 24.x e npm; Java è necessario per i test Firebase Emulator.
+- **Installazione:** eseguire `npm ci`, copiare `.env.example` in `.env`, configurare i valori locali richiesti e avviare con `npm run dev`.
+- **Verifica finale:** `npm run verify:m8`; i comandi `lint`, `test` e `build` da soli sono soltanto diagnostici.
+- **Segreti:** `.env.example` contiene nomi e placeholder. Non versionare credenziali reali, `.env` o configurazioni private Production.
 
 ## File canonici del modello dati
 
@@ -177,7 +184,7 @@ Esistono tre contratti separati:
 
 ## Servizi esterni e configurazione fuori repository
 
-LogBook dipende da configurazioni live che non sono completamente rappresentabili nel Git repository (Vercel env, Firebase/Google Cloud, domini OAuth/Auth, App Check/reCAPTCHA, Sentry, GitHub ruleset, Snyk e Search Console).
+TheLogBook dipende da configurazioni live che non sono completamente rappresentabili nel Git repository (Vercel env, Firebase/Google Cloud, domini OAuth/Auth, App Check/reCAPTCHA, Sentry, GitHub ruleset, Snyk e Search Console).
 
 - **MUST:** verificare il sistema esterno competente prima di assumere stato live, quote, domini, enforcement o secret.
 - **MUST:** il repository pubblico non contiene valori segreti, email personali, identificativi di credenziali, dati di fatturazione o path locali del maintainer.
@@ -203,7 +210,7 @@ La cancellazione account è un workflow CRITICAL server-mediated. Il client non 
 
 Distinguere due sistemi:
 
-1. **Telemetria tecnica LogBook:** gli errori e le anomalie tecniche sanitizzati vengono inviati a Sentry Error Monitoring soltanto in Production e per sessioni account autenticate. Il Firebase UID serve esclusivamente come gate locale e **non viene deliberatamente trasmesso a Sentry**; il payload include solo session ID tecnico, release/build SHA, contesto limitato, tipo/messaggio errore sanitizzato, contatori/timestamp e stack troncato/sanitizzato. Non vengono usati Sentry Replay, tracing, logging o metriche e non vengono inviati eventi comportamentali workout/PWA. Le collection Firestore `telemetry_*` restano legacy per client precedenti, cleanup e account deletion.
+1. **Telemetria tecnica TheLogBook:** gli errori e le anomalie tecniche sanitizzati vengono inviati a Sentry Error Monitoring soltanto in Production e per sessioni account autenticate. Il Firebase UID serve esclusivamente come gate locale e **non viene deliberatamente trasmesso a Sentry**; il payload include solo session ID tecnico, release/build SHA, contesto limitato, tipo/messaggio errore sanitizzato, contatori/timestamp e stack troncato/sanitizzato. Non vengono usati Sentry Replay, tracing, logging o metriche e non vengono inviati eventi comportamentali workout/PWA. Le collection Firestore `telemetry_*` restano legacy per client precedenti, cleanup e account deletion.
 2. **Analytics di utilizzo:** Google Analytics 4/Firebase Analytics, Vercel Analytics e Speed Insights sono ritirati. Non reintrodurre SDK di tracciamento, Measurement ID, identificatori o eventi di utilizzo.
 
 - **MUST:** non aggiungere eventi comportamentali workout/PWA alla telemetria tecnica per ricreare di fatto analytics di utilizzo.

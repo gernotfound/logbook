@@ -1,4 +1,4 @@
-# Ciclo di vita account — LogBook
+# Ciclo di vita account — TheLogBook
 
 > Stato: normativo | Ultima verifica: 2026-09-20
 

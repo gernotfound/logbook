@@ -1,4 +1,4 @@
-# Operazioni Catalogo Globale — LogBook
+# Operazioni Catalogo Globale — TheLogBook
 
 > Stato: normativo | Ultima verifica: 2026-09-20 | File verificati: `src/lib/catalog/catalogService.ts`, seed JSON correnti, `scripts/seed-catalog.mjs`, Rules e test di seeding
 

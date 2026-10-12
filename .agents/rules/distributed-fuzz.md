@@ -1,4 +1,4 @@
-# Distributed Property Fuzzing — LogBook
+# Distributed Property Fuzzing — TheLogBook
 
 > Stato: normativo | Milestone: M2 | Baseline: M1 `1c3dce06745327d0622ab606afbb21ea0de906ad`
 

@@ -1,4 +1,4 @@
-# LIA — telemetria tecnica LogBook
+# LIA — telemetria tecnica TheLogBook
 
 > Template di Legitimate Interests Assessment. Compilare e far validare se la telemetria tecnica continua a basarsi sull'Art. 6(1)(f) GDPR.
 

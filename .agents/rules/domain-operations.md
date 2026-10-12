@@ -1,4 +1,4 @@
-# Domain Operations V4 — LogBook
+# Domain Operations V4 — TheLogBook
 
 > Stato: normativo da M8 | Baseline M7: `4d6b5d1f306587c16ee15e3ddb7386a63c5b94bd`
 

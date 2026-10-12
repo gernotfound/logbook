@@ -1,4 +1,4 @@
-# Procedura diritti interessati — LogBook
+# Procedura diritti interessati — TheLogBook
 
 > Procedura interna. Definire il canale privacy reale prima del pilot e mantenerla coerente con le capacità tecniche effettive.
 

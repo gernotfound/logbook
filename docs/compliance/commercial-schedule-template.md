@@ -18,7 +18,7 @@
 - Termini pagamento: `[PAYMENT_TERMS]`
 - Metodo: `[PAYMENT_METHOD]`
 
-Il pagamento non è processato da LogBook.
+Il pagamento non è processato da TheLogBook.
 
 ## Durata e rinnovo
 

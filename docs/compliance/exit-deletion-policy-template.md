@@ -1,10 +1,10 @@
-# Exit, cessazione e cancellazione — template LogBook
+# Exit, cessazione e cancellazione — template TheLogBook
 
-> Definisce il comportamento alla fine del rapporto commerciale senza confondere il contratto palestra con il rapporto dell'utente con LogBook.
+> Definisce il comportamento alla fine del rapporto commerciale senza confondere il contratto palestra con il rapporto dell'utente con TheLogBook.
 
 ## Principio corrente
 
-Nel modello pilot la palestra non possiede né amministra gli account LogBook degli iscritti. La cessazione del contratto B2B non comporta automaticamente la cancellazione degli account o dei dati dei singoli utenti.
+Nel modello pilot la palestra non possiede né amministra gli account TheLogBook degli iscritti. La cessazione del contratto B2B non comporta automaticamente la cancellazione degli account o dei dati dei singoli utenti.
 
 ## Cessazione palestra ↔ provider
 
@@ -26,11 +26,11 @@ Se il rapporto commerciale genera contatti, fatture o ticket relativi alla pales
 - retention: `[TERM]`;
 - cancellazione/archiviazione: `[PROCESS]`.
 
-## Dati utenti LogBook
+## Dati utenti TheLogBook
 
 - Nessuna cancellazione automatica per cessazione del contratto palestra nel modello corrente.
 - Gli utenti mantengono gli strumenti di export e cancellazione account secondo il servizio disponibile.
-- Se il servizio LogBook stesso viene dismesso, serve una procedura separata con preavviso, export, cessazione sync e cancellazione dei dati secondo basi/obblighi applicabili.
+- Se il servizio TheLogBook stesso viene dismesso, serve una procedura separata con preavviso, export, cessazione sync e cancellazione dei dati secondo basi/obblighi applicabili.
 
 ## Scenario processor Art. 28
 
