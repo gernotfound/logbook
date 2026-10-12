@@ -16,7 +16,7 @@ const reacceptMarker = (revision: number) => `reaccepting:${revision}`;
 const parseReacceptRevision = (saved: string | null): number | null => {
   if (!saved?.startsWith('reaccepting:')) return null;
   const revision = saved.slice('reaccepting:'.length);
-  if (!/^[1-9]\\d*$/.test(revision)) return null;
+  if (!/^[1-9]\d*$/.test(revision)) return null;
   const parsed = Number(revision);
   return Number.isSafeInteger(parsed) ? parsed : null;
 };
@@ -24,7 +24,7 @@ const pendingMarker = (revision: number) => `pending:${revision}`;
 const parsePendingRevision = (saved: string | null): number | null => {
   if (!saved?.startsWith('pending:')) return null;
   const revision = saved.slice('pending:'.length);
-  if (!/^(0|[1-9]\\d*)$/.test(revision)) return null;
+  if (!/^(0|[1-9]\d*)$/.test(revision)) return null;
   const parsed = Number(revision);
   return Number.isSafeInteger(parsed) ? parsed : null;
 };
