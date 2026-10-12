@@ -68,3 +68,12 @@ it('rejects a stale replica registration after reacceptance', async () => {
   await assertFails(setDoc(doc(db, 'users/u/sync_control/state'), base));
   await assertSucceeds(setDoc(doc(db, 'users/u/sync_control/state'), { ...base, consentRevision: 2 }));
 });
+
+it('denies reads for malformed server consent records rather than treating them as active', async () => {
+  await env.withSecurityRulesDisabled(async context => {
+    await setDoc(doc(context.firestore(), 'health_consent_withdrawals/u'), { uid: 'u', status: 'malformed', revision: -1 });
+    await setDoc(doc(context.firestore(), 'users/u'), { profile: { name: 'Retained' } });
+  });
+  const db = env.authenticatedContext('u', { email_verified: true }).firestore();
+  await assertFails(getDoc(doc(db, 'users/u')));
+});

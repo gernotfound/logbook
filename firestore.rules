@@ -22,8 +22,17 @@ service cloud.firestore {
     // A server-only revocation record cannot be undone by a stale client update
     // to users/{uid}. Reads remain available for lawful export and account rights.
     function consentWithdrawn(userId) {
-      return exists(/databases/$(database)/documents/health_consent_withdrawals/$(userId))
-        && get(/databases/$(database)/documents/health_consent_withdrawals/$(userId)).data.status == 'withdrawn';
+      // Absence means this account has never withdrawn. Once a record exists,
+      // ONLY a valid 'active' revision may resume reads or writes; a corrupt
+      // server record must not silently bypass revocation.
+      let record = /databases/$(database)/documents/health_consent_withdrawals/$(userId);
+      return exists(record) && (
+        !('status' in get(record).data)
+        || get(record).data.status != 'active'
+        || !('revision' in get(record).data)
+        || !(get(record).data.revision is int)
+        || get(record).data.revision < 1
+      );
     }
 
     // A revoked consent record is permanent across reacceptance cycles.
