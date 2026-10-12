@@ -2,13 +2,13 @@ import { readBrowserValueStrict } from './browserStorage';
 import { normalizeStorageOwner } from './owner';
 import { captureSessionForOwner, isActiveGuestSession } from './session';
 import {
-    type LocalKeyVault, unlockLocalKeyVault, recoverLocalKeyVault,
+    type LocalKeyVault, unlockLocalKeyVault,
 } from './secureArchiveKeys';
 
 type VaultPhase = 'migrating' | 'active';
 export interface PersistedVaultControl {
     format: 'thelogbook-local-vault-control';
-    version: 1;
+    version: 2;
     owner: string;
     phase: VaultPhase;
     epoch: string;
@@ -22,7 +22,7 @@ const capabilities = new Map<string, LocalKeyCapability>();
 export class LocalVaultLockedError extends Error {
     readonly code = 'local-vault-locked';
     constructor() {
-        super('Archivio protetto bloccato. Sblocca il dispositivo prima di accedere ai dati locali.');
+        super('Archivio protetto non pronto. I dati locali sono conservati per il recupero.');
         this.name = 'LocalVaultLockedError';
     }
 }
@@ -40,7 +40,7 @@ export function readVaultControl(owner: string): PersistedVaultControl | null {
     try { value = JSON.parse(raw); } catch { throw new LocalVaultLockedError(); }
     if (!value || typeof value !== 'object' || Array.isArray(value)) throw new LocalVaultLockedError();
     const parsed = value as Partial<PersistedVaultControl>;
-    if (parsed.format !== 'thelogbook-local-vault-control' || parsed.version !== 1
+    if (parsed.format !== 'thelogbook-local-vault-control' || parsed.version !== 2
         || parsed.owner !== normalized
         || (parsed.phase !== 'migrating' && parsed.phase !== 'active')
         || typeof parsed.epoch !== 'string' || !/^[0-9a-f]{32}$/.test(parsed.epoch)
@@ -80,28 +80,12 @@ export function isVaultUnlocked(owner: string): boolean {
     try { requireUnlockedLocalKey(owner); return true; } catch { return false; }
 }
 
-/** Only an authenticated unwrap may enter an unlocked capability. */
-export async function unlockVaultWithPassphrase(owner: string, passphrase: string): Promise<void> {
+/** Automatic same-device unlock after the caller verifies current owner identity. */
+export async function unlockVaultForOwner(owner: string): Promise<void> {
     const normalized = normalizeStorageOwner(owner);
     const control = readVaultControl(normalized);
     if (!control || control.phase !== 'active') throw new LocalVaultLockedError();
-    const unwrapped = await unlockLocalKeyVault(control.wrappedKey, normalized, passphrase);
-    const current = readVaultControl(normalized);
-    if (!current || current.epoch !== control.epoch || current.phase !== 'active') {
-        unwrapped.fill(0);
-        throw new LocalVaultLockedError();
-    }
-    lockVault(normalized);
-    capabilities.set(normalized, { key: unwrapped, epoch: control.epoch,
-        ...(normalized === 'guest' ? { guestSessionId: captureSessionForOwner('guest').guestSessionId } : {}),
-    });
-}
-
-export async function unlockVaultWithRecoveryCode(owner: string, recoveryCode: string): Promise<void> {
-    const normalized = normalizeStorageOwner(owner);
-    const control = readVaultControl(normalized);
-    if (!control || control.phase !== 'active') throw new LocalVaultLockedError();
-    const unwrapped = await recoverLocalKeyVault(control.wrappedKey, normalized, recoveryCode);
+    const unwrapped = await unlockLocalKeyVault(control.wrappedKey, normalized);
     const current = readVaultControl(normalized);
     if (!current || current.epoch !== control.epoch || current.phase !== 'active') {
         unwrapped.fill(0);
