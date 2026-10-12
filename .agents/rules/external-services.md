@@ -41,7 +41,7 @@ Il repository è pubblico.
 Firebase Hosting, Firebase Authentication, Firestore, Firebase Admin e App Check sono boundary distinti anche quando condividono lo stesso progetto Google Cloud. Il frontend/PWA target è servito da Firebase Hosting statico sul piano Spark; Functions/Scheduler Firebase non fanno parte dell'architettura.
 
 - Seguire `.agents/rules/firebase-config.md` per contratti env client/server, App Check e Rules.
-- Google Cloud può presentare reCAPTCHA Enterprise dentro il prodotto più ampio Fraud Defense. LogBook usa attualmente il provider reCAPTCHA Enterprise tramite Firebase App Check; non dichiarare attive Account defense, SMS defense, transaction defense o API Fraud Defense dirette senza evidenza live.
+- Google Cloud può presentare reCAPTCHA Enterprise dentro il prodotto più ampio Fraud Defense. TheLogBook usa attualmente il provider reCAPTCHA Enterprise tramite Firebase App Check; non dichiarare attive Account defense, SMS defense, transaction defense o API Fraud Defense dirette senza evidenza live.
 - Le restrizioni Browser API key e la configurazione OAuth sono controlli di sicurezza esterni e devono essere riesaminati quando cambia l'origin canonico di deployment.
 
 ### Vercel
