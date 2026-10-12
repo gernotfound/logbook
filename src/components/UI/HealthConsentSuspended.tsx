@@ -69,7 +69,11 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
         privacyVersion: LEGAL_VERSIONS.privacy, termsVersion: LEGAL_VERSIONS.terms,
       });
       const refreshed = await refreshHealthConsent(user);
-      if (refreshed !== 'active') throw new Error('Dati locali pendenti da recuperare prima della riattivazione.');
+      // The server accepted the new consent, but older local edits still need
+      // the person's separate, explicit recovery choice. This is not a failed
+      // consent: keep the suspension and let the recovery screen explain it.
+      if (refreshed === 'recovery-required') return;
+      if (refreshed !== 'active') throw new Error('Nuovo consenso non ancora verificato su questo dispositivo.');
       finishHealthConsentReacceptance(user.uid);
     } catch {
       setError('Non è stato possibile completare il nuovo consenso. L’accesso resta sospeso; nessun dato è stato eliminato.');

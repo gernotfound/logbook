@@ -1,9 +1,9 @@
 import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { User } from 'firebase/auth';
 import { HealthConsentSuspended } from '../src/components/UI/HealthConsentSuspended';
-import { reacceptHealthConsent } from '../src/lib/healthConsent';
+import { finishHealthConsentReacceptance, reacceptHealthConsent, refreshHealthConsent } from '../src/lib/healthConsent';
 
 vi.mock('../src/hooks/useSettings', () => ({
   useSettings: () => ({
@@ -74,6 +74,24 @@ describe('suspended health-consent screen', () => {
       expect(screen.queryByRole('button', { name: 'Presta un nuovo consenso' })).toBeNull();
       expect(screen.getByRole('button', { name: 'Esporta i tuoi dati (backup JSON)' })).toBeDefined();
     }
+  });
+
+
+  it('does not report a failed consent when the server accepted it but offline data needs recovery', async () => {
+    vi.mocked(reacceptHealthConsent).mockResolvedValue('2026-10-12T10:00:00.000Z');
+    vi.mocked(refreshHealthConsent).mockResolvedValue('recovery-required');
+
+    render(<HealthConsentSuspended status="withdrawn" user={account} />);
+    const [terms, health] = checkboxInputs();
+    fireEvent.click(terms);
+    fireEvent.click(health);
+    fireEvent.click(reacceptButton());
+
+    await waitFor(() => expect(refreshHealthConsent).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(reacceptButton().textContent).toContain('Presta un nuovo consenso'));
+    expect(reacceptHealthConsent).toHaveBeenCalledTimes(1);
+    expect(finishHealthConsentReacceptance).not.toHaveBeenCalled();
+    expect(screen.queryByText(/Non è stato possibile completare il nuovo consenso/)).toBeNull();
   });
 
   it('keeps the guest withdrawal form immediately usable without a cloud wait', () => {
