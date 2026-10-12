@@ -7,7 +7,7 @@ import { PrivacyPolicy } from '../../pages/PrivacyPolicy';
 import { TermsAndConditions } from '../../pages/TermsAndConditions';
 
 export function HealthConsentSuspended({ status, user }: { status: HealthConsentStatus; user: User }) {
-  const { handleExportBackup, handleDeleteAccount, exportingData } = useSettings();
+  const { handleExportBackup, handleDeleteAccount, handleLogout, exportingData } = useSettings();
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [acceptedHealth, setAcceptedHealth] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -62,6 +62,7 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
         <button type="button" className="btn" onClick={() => setPrivacy(true)}>Leggi l’informativa privacy</button>
         <button type="button" className="btn" onClick={() => setTerms(true)}>Leggi i termini e condizioni</button>
         <button type="button" className="btn" onClick={() => void handleExportBackup()} disabled={exportingData}>{exportingData ? 'Preparazione…' : 'Esporta i tuoi dati (backup JSON)'}</button>
+        <button type="button" className="btn" onClick={() => void handleLogout()}>Esci dall'account</button>
         <button type="button" className="btn" onClick={() => void handleDeleteAccount()}>Elimina definitivamente l'account</button>
         <button type="button" className="btn" disabled={busy} onClick={() => { void refreshHealthConsent(user); }}>Riprova a verificare il consenso</button>
       </div>
