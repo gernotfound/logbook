@@ -26,7 +26,7 @@ describe('guest -> account skip policy', () => {
             callback(user);
             return () => {};
         });
-        await createAndMigrateVault('user:skip-user', 'skip-policy account vault passphrase 2026');
+        await createAndMigrateVault('user:skip-user');
     });
 
     it('fails closed when the authoritative migration intent is absent', async () => {
