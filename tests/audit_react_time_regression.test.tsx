@@ -1,23 +1,36 @@
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
-import { act, fireEvent, screen } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor } from '@testing-library/react';
+import { useAuth } from '../src/hooks/useAuth';
 import WorkoutTimer from '../src/components/Training/WorkoutTimer';
 import { useHomeView } from '../src/hooks/useHomeView';
 import { emptyUserData, renderWithProviders } from './setup';
+import { prepareUnlockedTestArchive } from './secureVaultFixture';
 
 describe('Audit regression: React time boundaries', () => {
-    beforeEach(() => {
+    beforeEach(async () => {
+        localStorage.clear();
+        await prepareUnlockedTestArchive();
         vi.useFakeTimers();
         vi.setSystemTime(new Date('2026-09-18T12:00:00'));
-        localStorage.clear();
     });
 
     afterEach(() => {
         vi.useRealTimers();
     });
 
-    test('WorkoutTimer derives elapsed display from timestamps and freezes cleanly when paused', () => {
-        renderWithProviders(<WorkoutTimer />);
+    test('WorkoutTimer derives elapsed display from timestamps and freezes cleanly when paused', async () => {
+        // The standalone timer must wait for the same authenticated owner that
+        // unlocks the encrypted device snapshot in the full application.
+        vi.useRealTimers();
+        function AuthReady() {
+            const { currentUser, loading } = useAuth();
+            return <output data-testid="timer-auth-ready">{!loading ? currentUser?.uid : ''}</output>;
+        }
+        renderWithProviders(<><AuthReady /><WorkoutTimer /></>);
+        await waitFor(() => expect(screen.getByTestId('timer-auth-ready').textContent).toBe('test-user-id'));
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date('2026-09-18T12:00:00'));
 
         expect(screen.getByText('00:00')).toBeDefined();
         fireEvent.click(screen.getByRole('button', { name: 'Avvia recupero' }));

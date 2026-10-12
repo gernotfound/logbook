@@ -78,6 +78,12 @@ L'accesso account/cloud richiede che Firebase Auth riporti `emailVerified === tr
 
 **MUST:** Non eliminare la cache del service worker durante logout: contiene gli asset necessari all'avvio offline.
 
+### Chiave locale automatica e purge
+
+Il vault cifrato dell'owner è apribile automaticamente dopo il gate d'identità Firebase o la generazione guest; non richiede un secondo segreto. **MUST:** `purgeOwnerLocalData` elimina tutti i dati cifrati IndexedDB e device-critical prima di rimuovere la wrapping key IndexedDB; una rimozione parziale non autorizza perdita di chiavi se rimangono byte recuperabili. In caso di cancellazione account, il percorso receipt-based con stato server `complete` può effettuare la pulizia ciphertext senza aprire il vault.
+
+Se il key store non è disponibile ma esiste ciphertext, non generare una nuova chiave per sovrascriverlo. Preservare le evidenze e offrire retry/recupero non distruttivo. La chiave di dispositivo in IndexedDB non impedisce a un attaccante con copia integrale del profilo browser di tentare la decifratura: non descriverla come E2EE.
+
 ## Guest e aggiornamenti
 
 La modalità guest ha archivio e workout separati dagli utenti. La migrazione conserva la copia guest e registra il risultato locale prima della replica. Le callback vecchie sono invalidate tramite owner ed epoch.

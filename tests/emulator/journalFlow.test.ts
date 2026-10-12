@@ -15,6 +15,7 @@ vi.mock('../../src/lib/healthConsent', async () => {
     return {
         ...actual,
         isHealthConsentWritable: writable,
+        isHealthConsentCloudWritable: writable,
         requireHealthConsentWritable: (owner: string) => {
             if (!writable(owner)) throw new Error('Utente non autorizzato dal consenso');
         },

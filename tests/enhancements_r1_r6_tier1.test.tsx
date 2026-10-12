@@ -4,6 +4,9 @@ import { screen, act, fireEvent, renderHook } from '@testing-library/react';
 import { renderWithProviders, emptyUserData } from './setup';
 import { useAppStore } from '../src/store/useAppStore';
 import { captureSession } from '../src/lib/sync/session';
+
+import { initializeLocal } from '../src/lib/sync/localRepository';
+import { prepareUnlockedTestArchive } from './secureVaultFixture';
 import { Logic } from '../src/lib/logic';
 import { NutritionDaySchema, TrainingCycleSchema } from '../src/lib/schema';
 import { useSleepMeasurements } from '../src/hooks/useSleepMeasurements';
@@ -846,19 +849,32 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
                     ]
                 };
 
+                // Use the same owner and durable activeWorkout as the normal
+                // encrypted session flow; a completion must not operate against
+                // an empty/stale LocalEnvelope from a prior test.
+                const owner = captureSession().owner;
+                await prepareUnlockedTestArchive(owner);
+                const initialData = {
+                    ...emptyUserData, routines: initialRoutines,
+                    history: [], activeWorkout: activeSession,
+                };
+                await initializeLocal(owner, initialData);
                 useAppStore.setState({
-                    userData: {
-                        ...emptyUserData,
-                        routines: initialRoutines,
-                        history: []
-                    } as any,
-                    localWorkout: activeSession
+                    userData: initialData, dataOwner: owner, localWorkout: activeSession,
                 });
 
                 const { result } = renderHook(() => useWorkoutSession());
 
+                let completion!: Promise<unknown>;
+                act(() => { completion = result.current.endWorkout(); });
+                await vi.waitFor(() => {
+                    expect(useAppStore.getState().userData?.history?.some(workout => workout.id === activeSession.id)).toBe(true);
+                });
                 await act(async () => {
-                    await result.current.endWorkout();
+                    // Drive the production flush boundary, rather than leaving
+                    // a debounced cloud save pending inside React's async act.
+                    await useAppStore.getState().flushPendingSyncs();
+                    await completion;
                 });
 
                 const state = useAppStore.getState();
@@ -887,19 +903,29 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
                     ]
                 };
 
+                const owner = captureSession().owner;
+                await prepareUnlockedTestArchive(owner);
+                const initialData = {
+                    ...emptyUserData, routines: originalRoutines,
+                    history: [], activeWorkout: activeSession,
+                };
+                await initializeLocal(owner, initialData);
                 useAppStore.setState({
-                    userData: {
-                        ...emptyUserData,
-                        routines: originalRoutines,
-                        history: []
-                    } as any,
-                    localWorkout: activeSession
+                    userData: initialData, dataOwner: owner, localWorkout: activeSession,
                 });
 
                 const { result } = renderHook(() => useWorkoutSession());
 
+                let completion!: Promise<unknown>;
+                act(() => { completion = result.current.endWorkout(); });
+                await vi.waitFor(() => {
+                    expect(useAppStore.getState().userData?.history?.some(workout => workout.id === activeSession.id)).toBe(true);
+                });
                 await act(async () => {
-                    await result.current.endWorkout();
+                    // Drive the production flush boundary, rather than leaving
+                    // a debounced cloud save pending inside React's async act.
+                    await useAppStore.getState().flushPendingSyncs();
+                    await completion;
                 });
 
                 const state = useAppStore.getState();

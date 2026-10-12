@@ -179,9 +179,11 @@ describe('authenticated hydration session fencing', () => {
         await secondLoad;
 
         expect((await readLocal('user-a'))?.data.profile?.height).toBe('182');
-        expect(secondSetUserData).toHaveBeenCalledWith(expect.objectContaining({
-            profile: expect.objectContaining({ height: '182' }),
-        }));
+        // The cloud snapshot is already durably committed by hydrateLocal:
+        // exposing it through the user-edit writer would spawn duplicate
+        // SemanticOperations. The authenticated view must update directly.
+        expect(storeState.current.userData?.profile?.height).toBe('182');
+        expect(secondSetUserData).not.toHaveBeenCalled();
 
         firstPayload.resolve(payload('171'));
         await firstLoad;
@@ -219,9 +221,11 @@ describe('authenticated hydration session fencing', () => {
         await secondLoad;
 
         expect((await readLocal('user-a'))?.data.profile?.height).toBe('183');
-        expect(secondSetUserData).toHaveBeenCalledWith(expect.objectContaining({
-            profile: expect.objectContaining({ height: '183' }),
-        }));
+        // The cloud snapshot is already durably committed by hydrateLocal:
+        // exposing it through the user-edit writer would spawn duplicate
+        // SemanticOperations. The authenticated view must update directly.
+        expect(storeState.current.userData?.profile?.height).toBe('183');
+        expect(secondSetUserData).not.toHaveBeenCalled();
 
         firstPayload.resolve(payload('171'));
         await firstLoad;

@@ -7,7 +7,8 @@ import { hasUserData, mergeUserData } from '../../lib/merge';
 import { useAppStore } from '../../store/useAppStore';
 import { getCachedCatalog, getInMemoryCatalog, isCatalogInMemory } from '../../lib/catalog/catalogService';
 import { replicateJournal } from '../../lib/sync/replicateJournal';
-import { userOwner } from '../../lib/sync/session';
+import { captureSession, isCurrentSession, userOwner } from '../../lib/sync/session';
+import { markTabSnapshotClean } from '../../lib/sync/tabSnapshotCausality';
 import { getResolvedDefaultUserData } from './defaultUserData';
 import {
     checkpointFromCloudDocuments,
@@ -41,7 +42,23 @@ export async function migrateGuestAccount({ user, guestData, policy, setUserData
     const markLocalReady = () => { assertCurrent(); localReady = true; onLocalReady(); };
     const applyLocalData = (data: UserData) => {
         assertCurrent();
-        setUserData(data);
+        if (localReady) {
+            // The account envelope is already durable (hydrate/commit/ack).
+            // Publishing a server snapshot through setUserData() would interpret
+            // the previous guest/account view as a NEW user edit and append a
+            // duplicate semantic journal after successful remote acknowledgement.
+            const session = captureSession();
+            if (session.owner !== userOwner(user.uid) || !isCurrentSession(session)) {
+                throw new StaleGuestMigrationError();
+            }
+            const durable = UserDataSchema.parse(data) as unknown as UserData;
+            useAppStore.setState({ userData: durable, dataOwner: session.owner });
+            markTabSnapshotClean(session, durable);
+        } else {
+            // Pre-commit failure recovery still uses the original guest writer,
+            // preserving any unsaved guest edits instead of discarding them.
+            setUserData(data);
+        }
         useAppStore.getState().setLocalWorkout(data.activeWorkout || null);
     };
     const restoreAfterFailure = async () => {

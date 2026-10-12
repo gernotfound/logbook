@@ -1,5 +1,7 @@
 import { auth, getDb, ensureAppCheck, waitForPendingWrites } from '../firebase';
-import { del } from 'idb-keyval';
+import { del, get } from 'idb-keyval';
+import { lockVault } from '../sync/secureArchiveSession';
+import { deviceVaultKeyId } from '../sync/secureArchiveKeys';
 import { withTimeout } from './db_core';
 import { assertDeletionDeadlineActive, withDeletionDeadline } from '../deletionDeadline';
 import { readBrowserValueStrict } from '../sync/browserStorage';
@@ -57,7 +59,8 @@ function collectLocalPurgeKeys(owner: string): Set<string> {
     const length = localStorage.length;
     for (let index = 0; index < length; index++) {
         const storageKey = localStorage.key(index);
-        if (storageKey?.startsWith(prefix) && !storageKey.endsWith(':account-deletion')) {
+        if (storageKey?.startsWith(prefix) && !storageKey.endsWith(':account-deletion')
+            && !storageKey.endsWith(':secure-vault-control')) {
             keys.add(storageKey);
         }
     }
@@ -138,6 +141,12 @@ async function purgeOwnerLocalData(owner: string) {
     ]);
     for (const result of results) if (result.status === 'rejected') failures.push(result.reason);
 
+    // Wrapped DEK metadata must survive an IndexedDB purge failure. Deleting
+    // it first would leave the remaining ciphertext permanently undecryptable.
+    if (failures.length) {
+        throw new AggregateError(failures, 'Pulizia locale incompleta (IndexedDB). Chiave cifrata e copie residue conservate per il recupero.');
+    }
+
     let remaining = new Set<string>();
     try {
         for (let pass = 0; pass < LOCAL_PURGE_MAX_PASSES; pass++) {
@@ -164,6 +173,23 @@ async function purgeOwnerLocalData(owner: string) {
     if (failures.length) {
         throw new AggregateError(failures, 'Pulizia locale incompleta. Alcuni dati sono ancora presenti su questo dispositivo.');
     }
+
+    // Both the non-extractable device key and the wrapping metadata are owner
+    // scoped. NEVER remove the device key until the encrypted business envelope
+    // and every localStorage snapshot were verifiably removed.
+    const controlKey = 'logbook:v2:' + owner + ':secure-vault-control';
+    const keyId = deviceVaultKeyId(owner);
+    try {
+        await del(keyId);
+        if ((await get(keyId)) !== undefined) throw new Error('La chiave locale del dispositivo non è stata eliminata.');
+        localStorage.removeItem(controlKey);
+        if (localStorage.getItem(controlKey) !== null) throw new Error('I metadati crittografici locali non sono stati eliminati.');
+    } catch (error) {
+        throw new AggregateError([error], 'Pulizia archivio protetto non completata.');
+    }
+    // Drop the resident DEK only once all encrypted and device records have
+    // been verified removed. An incomplete deletion remains recoverable.
+    lockVault(owner);
 }
 
 const ACCOUNT_DELETION_API_ORIGIN = (import.meta.env.VITE_ACCOUNT_DELETION_API_ORIGIN || 'https://logbook-gnf.vercel.app').replace(/\/$/, '');

@@ -1,6 +1,7 @@
 import type { User } from 'firebase/auth';
 import type { UserData } from '../../types';
 import { auth, getDb } from '../../lib/firebase';
+import { isHealthConsentCloudWritable } from '../../lib/healthConsent';
 import { DB } from '../../lib/db';
 import { UserDataSchema } from '../../lib/schema';
 import { captureSession, isCurrentSession, userOwner } from '../../lib/sync/session';
@@ -86,11 +87,16 @@ export async function loadAuthenticatedData({
     }
 
     try {
+        // Cached offline consent permits local editing, NEVER remote reads,
+        // checkpoint registration or cloud writes until freshly revalidated.
+        const cloudAllowed = () => isCurrent() && isHealthConsentCloudWritable(expectedOwner);
+        if (!cloudAllowed()) return;
         const durableBeforeCloud = await readLocal(expectedOwner);
-        if (!isCurrent()) return;
+        if (!cloudAllowed()) return;
+        if (!cloudAllowed()) return;
         const checkpointDue = needsReplicaCheckpoint(durableBeforeCloud?.replica);
         const payload = await DB.loadCloudPayload({ allMonths: checkpointDue });
-        if (!isCurrent()) return;
+        if (!cloudAllowed()) return;
 
         if (payload) {
             try {
@@ -100,13 +106,13 @@ export async function loadAuthenticatedData({
                     payload.completeMonths,
                     payload.cloudDocuments,
                     checkpointDue ? 'all' : 'window',
-                    isCurrent,
+                    cloudAllowed,
                 );
-                if (!isCurrent()) return;
+                if (!cloudAllowed()) return;
 
                 if (checkpointDue) {
                     await retireExpiredReplicas(getDb(), user.uid);
-                    if (!isCurrent()) return;
+                    if (!cloudAllowed()) return;
                     const checkpoint = checkpointFromCloudDocuments(payload.cloudDocuments);
                     const claim = await claimReplicaCheckpoint(
                         getDb(),
@@ -116,14 +122,26 @@ export async function loadAuthenticatedData({
                         hydratedEnv.actorSeq,
                         hydratedEnv.replica ? undefined : hydratedEnv.actorId,
                     );
-                    if (!isCurrent()) return;
+                    if (!cloudAllowed()) return;
                     hydratedEnv = await adoptReplicaCheckpoint(expectedOwner, claim, checkpoint, isCurrent);
-                    if (!isCurrent()) return;
+                    if (!cloudAllowed()) return;
                 }
 
-                setUserData(hydratedEnv.data);
+                // hydrateLocal has already committed this authoritative snapshot
+                // atomically. Rendering it via the user-edit writer setUserData
+                // would create a second semantic journal from the old UI state.
+                const hydratedWorkout = getInitialLocalWorkout(
+                    expectedOwner, hydratedEnv.data.activeWorkout ?? null, hydratedEnv.data.history,
+                    hydratedEnv.lastClosedWorkoutId, hydratedEnv.closedWorkoutIds,
+                );
+                if (!cloudAllowed()) return;
+                useAppStore.setState({
+                    userData: hydratedEnv.data, dataOwner: expectedOwner,
+                    localWorkout: hydratedWorkout, localPersistenceBlocked: false,
+                });
+                markTabSnapshotClean(session, hydratedEnv.data);
             } catch (mergeError) {
-                if (!isCurrent()) return;
+                if (!cloudAllowed()) return;
                 const code = (mergeError as { code?: unknown })?.code;
                 if (code === 'invalid-cloud-sync-metadata') {
                     setSaveError('Sincronizzazione cloud sospesa: i metadati di sincronizzazione remoti non sono validi. I dati locali validi sono stati preservati e TheLogBook non sovrascriverà il cloud finché il problema non viene risolto.');

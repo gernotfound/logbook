@@ -24,6 +24,9 @@ vi.mock('../../src/lib/sync/replicateJournal', () => ({ waitForJournalIdle: boun
 
 import { deleteAccount, purgeAllLocalUserData, purgeCompletedAccountLocalData, resumeAccountDeletion } from '../../src/lib/db/db_account';
 import { invalidateSession } from '../../src/lib/sync/session';
+import { createLocalKeyVault, deviceVaultKeyId } from '../../src/lib/sync/secureArchiveKeys';
+import { isVaultUnlocked } from '../../src/lib/sync/secureArchiveSession';
+import { sealLocalText } from '../../src/lib/sync/secureArchiveCipher';
 import {
     isAccountDeletionPending,
     markAccountDeletion,
@@ -93,6 +96,49 @@ beforeEach(async () => {
 });
 
 afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+
+it('retains the wrapped data-encryption key when a sealed local snapshot cannot be purged', async () => {
+    const control = 'logbook:v2:user:a:secure-vault-control';
+    const sealedWorkout = 'logbook:v2:user:a:sealed:workout';
+    disk.set(control, '{"wrappedKey":"recoverable-when-storage-fails"}');
+    disk.set(sealedWorkout, 'tlb-sealed:v1:original-sealed-workout');
+    const originalRemove = localStorage.removeItem.bind(localStorage);
+    const failDeviceRemoval = vi.spyOn(localStorage, 'removeItem').mockImplementation((key: string) => {
+        if (key === sealedWorkout) throw new Error('Quota or device removal denied');
+        originalRemove(key);
+    });
+
+    await expect(purgeCompletedAccountLocalData('user:a')).rejects.toThrow('Pulizia locale incompleta');
+    expect(disk.get(control)).toContain('recoverable-when-storage-fails');
+    expect(disk.get(sealedWorkout)).toBe('tlb-sealed:v1:original-sealed-workout');
+    failDeviceRemoval.mockRestore();
+
+    await purgeCompletedAccountLocalData('user:a');
+    expect(disk.has(sealedWorkout)).toBe(false);
+    expect(disk.has(control)).toBe(false);
+});
+
+it('purges server-confirmed deleted account ciphertext without unlocking its protected DEK', async () => {
+    const owner = 'user:a';
+    const { vault, dataKey } = await createLocalKeyVault(owner);
+    const control = 'logbook:v2:user:a:secure-vault-control';
+    const workout = 'logbook:v2:user:a:sealed:workout';
+    disk.set(control, JSON.stringify({
+        format: 'thelogbook-local-vault-control', version: 2,
+        owner, phase: 'active', epoch: 'a'.repeat(32), wrappedKey: vault,
+    }));
+    disk.set(workout, sealLocalText(dataKey, owner, workout, '{"heartRate":145}'));
+    await set('logbook:v2:user:a', sealLocalText(dataKey, owner, 'logbook:v2:user:a', '{"pending":[1]}'));
+    expect(isVaultUnlocked(owner)).toBe(false);
+
+    // A server-complete deletion must not require any password/recovery code.
+    await purgeCompletedAccountLocalData(owner);
+    expect(disk.has(control)).toBe(false);
+    expect(disk.has(workout)).toBe(false);
+    expect(await get('logbook:v2:user:a')).toBeUndefined();
+    expect(await get(deviceVaultKeyId(owner))).toBeUndefined();
+    expect(await get('logbook:v2:user:b')).toEqual({ original: 'other owner' });
+});
 
 it('persists a recovery receipt before POST and purges only after server completion', async () => {
     installSuccessfulServerFlow();

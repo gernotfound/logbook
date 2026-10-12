@@ -8,6 +8,8 @@ import { DB } from '../src/lib/db';
 import { auth, onAuthStateChanged } from '../src/lib/firebase';
 import { refreshHealthConsent } from '../src/lib/healthConsent';
 import * as localRepository from '../src/lib/sync/localRepository';
+import { createAndMigrateVault } from '../src/lib/sync/secureArchiveMigration';
+import { lockAllVaults } from '../src/lib/sync/secureArchiveSession';
 import type { UserData } from '../src/types';
 
 import { idbStore, localStorageMock } from './setup';
@@ -25,7 +27,8 @@ const TestAuthConsumer = () => {
 };
 
 describe('PWA & iPhone Startup Resilience Tests', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    lockAllVaults();
     localStorage.clear();
     for (const k in idbStore) delete idbStore[k];
     if (typeof window !== 'undefined') {
@@ -40,6 +43,7 @@ describe('PWA & iPhone Startup Resilience Tests', () => {
       getIdToken: vi.fn().mockResolvedValue('test-token'),
     };
     vi.clearAllMocks();
+    await createAndMigrateVault('user:test-user-id');
   });
 
   test('auth becomes READY only after the authenticated owner has been hydrated', async () => {
@@ -62,6 +66,18 @@ describe('PWA & iPhone Startup Resilience Tests', () => {
     expect(screen.getByTestId('data-state').textContent).toBe('NO_DATA');
     expect(DB.loadCloudPayload).not.toHaveBeenCalled();
     expect(DB.loadUserData).not.toHaveBeenCalled();
+  });
+
+  test('rechecks the trusted consent before loading cloud data after reconnect', async () => {
+    render(<AuthProvider><TestAuthConsumer /></AuthProvider>);
+    await waitFor(() => expect(screen.getByTestId('loading-state').textContent).toBe('READY'));
+    const previousChecks = vi.mocked(refreshHealthConsent).mock.calls.length;
+    const previousCloudReads = vi.mocked(DB.loadCloudPayload).mock.calls.length;
+    vi.mocked(refreshHealthConsent).mockResolvedValueOnce('withdrawn');
+
+    await act(async () => { window.dispatchEvent(new Event('online')); });
+    await waitFor(() => expect(vi.mocked(refreshHealthConsent).mock.calls.length).toBe(previousChecks + 1));
+    expect(vi.mocked(DB.loadCloudPayload).mock.calls.length).toBe(previousCloudReads);
   });
 
   test('fences the previous owner while a different authenticated owner is still hydrating', async () => {
@@ -89,6 +105,8 @@ describe('PWA & iPhone Startup Resilience Tests', () => {
       return () => {};
     });
     (auth as any).currentUser = null;
+    // Owner B needs its own independent unlocked vault before its async hydration.
+    await createAndMigrateVault('user:account-b');
 
     const originalRead = localRepository.readLocal;
     let releaseRead!: () => void;
@@ -113,8 +131,11 @@ describe('PWA & iPhone Startup Resilience Tests', () => {
       authRun = authCallback(userB);
     });
 
+    // Device-key hydration is asynchronous even with a cached Firebase UID.
+    // B is exposed only after its own vault is ready, while A data stays fenced
+    // and B's intentionally delayed business hydration remains in progress.
+    await waitFor(() => expect(screen.getByTestId('user-state').textContent).toBe('b@example.com'));
     expect(screen.getByTestId('loading-state').textContent).toBe('LOADING');
-    expect(screen.getByTestId('user-state').textContent).toBe('b@example.com');
     expect(screen.getByTestId('data-state').textContent).toBe('NO_DATA');
     expect(useAppStore.getState().dataOwner).toBeNull();
 
@@ -192,8 +213,9 @@ describe('PWA & iPhone Startup Resilience Tests', () => {
     await new Promise(r => setTimeout(r, 0));
 
     const cachedInStorage = idbStore['logbook:v2:user:test-user-id'];
-    expect(cachedInStorage).toBeTruthy();
-    expect(cachedInStorage.data.profile.height).toBe('180');
+    expect(cachedInStorage).toMatch(/^tlb-sealed:v1:/);
+    expect(cachedInStorage).not.toContain('Panca Piana');
+    expect((await localRepository.readLocal('user:test-user-id'))?.data.profile?.height).toBe('180');
   });
 
   test('Save and Reset Store manages local cached data correctly', async () => {
@@ -210,7 +232,8 @@ describe('PWA & iPhone Startup Resilience Tests', () => {
 
     useAppStore.getState().setUserData(sampleData);
     await new Promise(r => setTimeout(r, 0));
-    expect(idbStore['logbook:v2:user:test-user-id']?.data.profile?.height).toBe('176');
+    expect(idbStore['logbook:v2:user:test-user-id']).toMatch(/^tlb-sealed:v1:/);
+    expect((await localRepository.readLocal('user:test-user-id'))?.data.profile?.height).toBe('176');
 
     await DB.purgeAllLocalUserData();
     useAppStore.getState().resetStore();

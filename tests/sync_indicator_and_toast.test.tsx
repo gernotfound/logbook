@@ -4,6 +4,7 @@ import { screen, fireEvent, act } from '@testing-library/react';
 import App from '../src/App';
 import ReloadPrompt from '../src/components/UI/ReloadPrompt';
 import { renderWithProviders, defaultMockUserData } from './setup';
+import { prepareUnlockedTestArchive } from './secureVaultFixture';
 import { useAppStore } from '../src/store/useAppStore';
 import { clearSyncTimers } from '../src/store/slices/createSyncSlice';
 import { DB } from '../src/lib/db';
@@ -20,7 +21,8 @@ vi.mock('../src/lib/sync/safeReload', () => reloadMocks);
 
 describe('LogBook Background Sync & Error Toast 4-Tier Test Suite', () => {
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    await prepareUnlockedTestArchive();
     vi.useFakeTimers();
     clearSyncTimers();
     vi.mocked(DB.saveUserData).mockReset();
@@ -675,16 +677,18 @@ describe('LogBook Background Sync & Error Toast 4-Tier Test Suite', () => {
         exercises: [
           {
             exId: 'ex1',
-            name: 'Panca Piana',
+            name: 'Panca Piana', sessionNote: '',
             sets: [{ id: 's1', kg: '80', reps: '10', completed: false }]
           }
         ]
       };
 
-      const { container } = await renderSettledApp({ localWorkout: activeWorkout });
+      const { container } = await renderSettledApp();
 
+      // This is a presentation test: apply the visible workout after auth
+      // hydration, rather than racing it with the AuthProvider bootstrap.
       act(() => {
-        useAppStore.setState({ syncing: true });
+        useAppStore.setState({ localWorkout: activeWorkout, syncing: true });
       });
 
       // UI is not blocked by sync overlay
@@ -793,13 +797,14 @@ describe('LogBook Background Sync & Error Toast 4-Tier Test Suite', () => {
         routineId: 'r1',
         routineName: 'Scheda A - Upper',
         startTime: Date.now(),
-        exercises: [{ exId: 'ex1', name: 'Panca', sets: [{ id: 's1', kg: '90', reps: '8' }] }]
+        exercises: [{ exId: 'ex1', name: 'Panca', sessionNote: '', sets: [{ id: 's1', kg: '90', reps: '8' }] }]
       };
 
-      const { container } = await renderSettledApp({ localWorkout: activeWorkout });
+      const { container } = await renderSettledApp();
 
       act(() => {
         useAppStore.setState({
+          localWorkout: activeWorkout,
           syncing: false,
           saveError: 'Timeout connessione Firestore'
         });

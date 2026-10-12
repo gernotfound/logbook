@@ -10,6 +10,8 @@ import { UserDataSchema } from '../src/lib/schema';
 import { useDialogStore } from '../src/store/useDialogStore';
 import { useAppStore } from '../src/store/useAppStore';
 import { BrowserStorageError } from '../src/lib/sync/browserStorage';
+import { createAndMigrateVault } from '../src/lib/sync/secureArchiveMigration';
+import { lockAllVaults } from '../src/lib/sync/secureArchiveSession';
 import type { UserData } from '../src/types';
 
 const exporter = vi.hoisted(() => ({
@@ -40,7 +42,8 @@ function renderAuth() {
     return renderHook(() => useAuth(), { wrapper });
 }
 
-beforeEach(() => {
+beforeEach(async () => {
+    lockAllVaults();
     useAppStore.getState().resetStore();
     localStorage.clear();
     vi.clearAllMocks();
@@ -67,6 +70,10 @@ beforeEach(() => {
     dialogs.showAlert.mockResolvedValue(undefined);
     dialogs.showConfirm.mockResolvedValue(true);
     dialogs.showUnsyncedDataLogout.mockResolvedValue('cancel');
+
+    // Authenticate the real local vault rather than bypassing its gate in
+    // production code or replacing it with a mock. Each test owns a fresh key.
+    await createAndMigrateVault('user:logout-user');
 });
 
 describe('M5 logout protection through AuthProvider', () => {

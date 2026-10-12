@@ -1,7 +1,8 @@
 import React from 'react';
-import { describe, test, expect } from 'vitest';
-import { screen, act, fireEvent } from '@testing-library/react';
+import { describe, test, expect, beforeEach } from 'vitest';
+import { screen, act, fireEvent, waitFor } from '@testing-library/react';
 import { renderWithProviders, emptyUserData } from './setup';
+import { prepareUnlockedTestArchive } from './secureVaultFixture';
 import { Logic } from '../src/lib/logic';
 
 import HomeView from '../src/components/Home/HomeView';
@@ -15,9 +16,16 @@ import SettingsView from '../src/components/SettingsView';
 import WorkoutTimer from '../src/components/Training/WorkoutTimer';
 import { stoppedWorkoutTimer, writeWorkoutTimerSnapshot } from '../src/lib/utils/timer';
 import { storageOwner } from '../src/lib/sync/session';
+import { useAuth } from '../src/hooks/useAuth';
 import MuscleModel from '../src/components/Training/MuscleModel';
 
+const ReadyOwner = () => {
+  const { currentUser, loading } = useAuth();
+  return <output data-testid="authenticated-owner">{!loading && currentUser ? currentUser.uid : 'pending'}</output>;
+};
+
 describe('Empirical Challenger Suite: Edge Cases & Stress Verification', () => {
+  beforeEach(async () => { await prepareUnlockedTestArchive(); });
 
   describe('1. Zero-Quantity Inputs & Calculations', () => {
     test('Logic.scaleFoodNutrients handles zero, negative, and invalid quantities', () => {
@@ -253,9 +261,13 @@ describe('Empirical Challenger Suite: Edge Cases & Stress Verification', () => {
       expect(c3.textContent).toContain('00:00');
     });
 
-    test('WorkoutTimer rest controls (Play, Pause, Reset, Stop) operate cleanly without state crashes', () => {
-      const { container } = renderWithProviders(<WorkoutTimer />);
-      
+    test('WorkoutTimer rest controls (Play, Pause, Reset, Stop) operate cleanly without state crashes', async () => {
+      // The previous case deliberately leaves a running future snapshot. Start
+      // from a known *durably committed* stopped timer, not leaked test state.
+      writeWorkoutTimerSnapshot(stoppedWorkoutTimer(), storageOwner());
+      const { container } = renderWithProviders(<><ReadyOwner /><WorkoutTimer /></>);
+      await waitFor(() => expect(screen.getByTestId('authenticated-owner').textContent).toBe('test-user-id'));
+
       const playBtn = container.querySelector('.timer-btn.play') as HTMLButtonElement;
       expect(playBtn).not.toBeNull();
 

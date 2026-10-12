@@ -3,7 +3,7 @@ import { User } from 'firebase/auth';
 import { auth, getDb, waitForPendingWrites, provider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendEmailVerification, reload } from '../lib/firebase';
 import { DB } from '../lib/db';
 import { isAccountDeletionPending } from '../lib/sync/accountGate';
-import { beginHealthConsentVerification, refreshHealthConsent, isHealthConsentWritable } from '../lib/healthConsent';
+import { beginHealthConsentVerification, refreshHealthConsent, isHealthConsentWritable, suspendHealthConsentCloudAccess } from '../lib/healthConsent';
 import { useAppStore } from '../store/useAppStore';
 import { UserData } from '../types';
 import { UserDataSchema } from '../lib/schema';
@@ -37,6 +37,8 @@ import { describeEmailAuthError } from '../lib/auth/emailAuthError';
 import { reportError } from '../lib/errorHandler';
 import { clearAuthenticatedOwnerHint, rememberAuthenticatedOwner } from '../lib/sync/authOwnerHint';
 import { beginGuestMigrationIntent, bindGuestMigrationIntentToUser, clearGuestMigrationIntent } from '../lib/auth/guestMigrationIntent';
+import { cancelLocalVaultReadiness, ensureLocalVaultReady } from '../lib/sync/secureArchiveUnlockFlow';
+import { isVaultUnlocked, lockVault } from '../lib/sync/secureArchiveSession';
 
 const GUEST_KEY = 'logbook_is_guest';
 const GUEST_MIGRATION_SYNC_RECOVERY_KEY = 'logbook_guest_migration_sync_recovery';
@@ -89,6 +91,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             if (!isGuestRef.current || isActiveGuestSession()) return;
             // A different tab explicitly revoked this guest generation.
             // Never recreate its deleted data from the old Zustand snapshot.
+            cancelLocalVaultReadiness('guest');
+            lockVault('guest');
             invalidateSession();
             isGuestRef.current = false;
             setIsGuest(false);
@@ -350,7 +354,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             const previousUid = authUidRef.current;
             authUidRef.current = nextUid;
             const authRun = ++authRunRef.current;
-            if (previousUid !== nextUid) invalidateSession();
+            if (previousUid !== nextUid) {
+                // Do not carry an account's unlocked DEK into another identity.
+                // A guest->account migration keeps its separate guest vault until
+                // the verified migration has completed.
+                if (previousUid) {
+                    cancelLocalVaultReadiness(userOwner(previousUid));
+                    lockVault(userOwner(previousUid));
+                }
+                invalidateSession();
+            }
             setSyncing(false);
             if (previousUid !== nextUid) setLoading(true);
             const expectedUid = nextUid;
@@ -399,9 +412,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                     return;
                 }
             }
-            // Expose identity promptly to owner-scoped UI/components, but the
-            // consent status was already set to 'checking' above. Fitness stays
-            // blocked until the server has authoritatively verified permission.
+            // A deletion receipt is independently recoverable even while the
+            // ciphertext is locked. Do not require the secret of an account
+            // already deleted on the server just to finalize its local purge.
+            if (user && isAccountDeletionPending(userOwner(user.uid))) {
+                useAppStore.getState().cancelPendingSyncs();
+                useAppStore.setState({ userData: null, dataOwner: null, localWorkout: null });
+                setCurrentUser(user);
+                setLoading(false);
+                return;
+            }
+            // Consent refresh itself performs a durable IndexedDB consent-epoch
+            // update. Unlock BEFORE it, not merely before later hydration/sync.
+            if (user) {
+                await ensureLocalVaultReady(userOwner(user.uid));
+                if (!isCurrentRun()) return;
+            }
+            // Expose identity only after the local archive can be safely read.
             setCurrentUser(user);
             if (user) {
                 // Hydration/migration and all cloud business writes must wait for
@@ -528,37 +555,63 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         };
         window.addEventListener('logbook:health-consent-reactivated', handleConsentReactivated);
 
-        const handleVisibilityChange = async () => {
-            if (isGuestActiveStrict()) return;
-            if (document.visibilityState === 'visible' && auth.currentUser &&
-                auth.currentUser.emailVerified !== false) {
-                if (isHealthConsentWritable(userOwner(auth.currentUser.uid)) && useAppStore.getState().userData !== null && !useAppStore.getState().syncing && !isReloading) {
-                    try {
-                        isReloading = true;
-                        await Promise.race([
-                            waitForPendingWrites(getDb()),
-                            new Promise(resolve => setTimeout(resolve, 1500))
-                        ]);
-                        await loadData(auth.currentUser);
-                    } catch (e) {
-                        console.warn("Skipping visibility reload due to pending writes / timeout", e);
-                    } finally {
-                        isReloading = false;
-                    }
+        const handleVisibilityChange = async (event?: Event) => {
+            if (isGuestActiveStrict() || isReloading) return;
+            // The "online" event must check consent even if this tab is hidden.
+            if (event?.type !== 'online' && document.visibilityState !== 'visible') return;
+            const user = auth.currentUser;
+            if (!user || user.emailVerified === false || !navigator.onLine
+                || !isVaultUnlocked(userOwner(user.uid))
+                || isAccountDeletionPending(userOwner(user.uid))) return;
+
+            isReloading = true;
+            const uid = user.uid;
+            try {
+                // A cached offline approval only authorizes local actions. On
+                // reconnect/foreground check the server BEFORE cloud hydration
+                // or delivering a journal that accumulated while disconnected.
+                const status = await refreshHealthConsent(user);
+                if (!isMounted || auth.currentUser?.uid !== uid || isGuestActiveStrict()) return;
+                if (status !== 'active') {
+                    useAppStore.getState().cancelPendingSyncs();
+                    return;
                 }
+                if (useAppStore.getState().syncing) return;
+                await Promise.race([
+                    waitForPendingWrites(getDb()),
+                    new Promise(resolve => setTimeout(resolve, 1500))
+                ]);
+                if (!isMounted || auth.currentUser?.uid !== uid
+                    || !isHealthConsentWritable(userOwner(uid))) return;
+                await loadData(user);
+            } catch (error) {
+                console.warn('Verifica consenso/aggiornamento dopo riconnessione non riusciti:', error);
+            } finally {
+                isReloading = false;
             }
+        };
+        const handleOffline = () => {
+            const uid = auth.currentUser?.uid;
+            if (uid) suspendHealthConsentCloudAccess(uid);
         };
         document.addEventListener('visibilitychange', handleVisibilityChange);
         window.addEventListener('online', handleVisibilityChange);
+        window.addEventListener('offline', handleOffline);
 
         return () => {
             isMounted = false;
             authRunRef.current += 1;
+            // A pending automatic vault operation or failure dialog belongs to
+            // THIS auth provider lifecycle. Never strand it above later login,
+            // consent, update or account-deletion screens after unmount.
+            if (authUidRef.current) cancelLocalVaultReadiness(userOwner(authUidRef.current));
+            cancelLocalVaultReadiness('guest');
             invalidateSession();
             unsubscribe();
             document.removeEventListener('visibilitychange', handleAuthVisibilityChange);
             document.removeEventListener('visibilitychange', handleVisibilityChange);
             window.removeEventListener('online', handleVisibilityChange);
+            window.removeEventListener('offline', handleOffline);
             window.removeEventListener('logbook:health-consent-reactivated', handleConsentReactivated);
         };
     }, [isGuestActiveStrict, loadData, readGuestMigrationRecoveryStrict, setSyncing, setUserData, setSaveError]);
@@ -694,6 +747,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             setSaveError('Impossibile avviare la modalità locale: pulizia o coordinamento delle sessioni non disponibile. I dati esistenti restano protetti.');
             return;
         }
+        // The newly activated guest session must be protected before any
+        // new local UserData/workout snapshot can be published.
+        await ensureLocalVaultReady('guest');
         isGuestRef.current = true;
         setIsGuest(true);
         setGuestMigrationStatus('idle');
@@ -736,6 +792,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         // Sign out without the authenticated purge path: local owner envelopes and
         // any guest migration intent must survive until an explicit verified login.
         await signOut(auth);
+        lockVault(userOwner(user.uid));
         if (!isGuestActiveStrict()) {
             // Never seed a fresh guest from another authenticated user's in-memory data.
             // resetStore does not delete the authenticated IndexedDB envelope.

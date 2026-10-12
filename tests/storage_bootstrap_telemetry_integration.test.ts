@@ -4,7 +4,6 @@ import { createRoot } from 'react-dom/client';
 import { initApp } from '../src/main';
 import { useAppStore } from '../src/store/useAppStore';
 import {
-  STORAGE_MARKER_VERSION,
   getStorageMarker,
   updateStorageMarker,
   isAnomalyAlreadyReported,
@@ -98,7 +97,7 @@ describe('Storage Bootstrap & Telemetry Integration Flow', () => {
     expect(useAppStore.getState().localPersistenceBlocked).toBe(false);
   });
 
-  it('Flow 1: Valid current cache in IndexedDB initializes store and updates marker', async () => {
+  it('Flow 1: unverified owner hint cannot expose health data from IndexedDB', async () => {
     const validData = {
       profile: { height: '180' },
       library: [],
@@ -120,17 +119,14 @@ describe('Storage Bootstrap & Telemetry Integration Flow', () => {
 
     await initApp();
 
-    expect(window.__INITIAL_USER_DATA__).not.toBeNull();
-    expect(useAppStore.getState().userData?.profile?.height).toBe('180');
-
-    const marker = getStorageMarker();
-    expect(marker).not.toBeNull();
-    expect(marker?.version).toBe(STORAGE_MARKER_VERSION);
-    expect(typeof marker?.timestamp).toBe('number');
+    // Firebase has not verified this hint. The owner data is inaccessible here.
+    expect(window.__INITIAL_USER_DATA__).toBeNull();
+    expect(useAppStore.getState().userData).toBeNull();
+    expect(getStorageMarker()).toBeNull();
     expect(dispatchSpy).not.toHaveBeenCalled();
   });
 
-  it('Flow 2: IndexedDB read_error enters the fail-safe storage barrier without generating writes', async () => {
+  it('Flow 2: do not read account IndexedDB merely because an owner hint exists', async () => {
     updateStorageMarker(1000)!;
     vi.spyOn(idbKeyval, 'get').mockRejectedValue(new Error('IndexedDB blocked'));
     const dispatchSpy = vi.spyOn(storageTelemetryModule, 'dispatchStorageRecoveryAnomaly');
@@ -140,12 +136,12 @@ describe('Storage Bootstrap & Telemetry Integration Flow', () => {
     expect(window.__INITIAL_USER_DATA__).toBeNull();
     expect(getStorageMarker()?.timestamp).toBe(1000);
     expect(dispatchSpy).not.toHaveBeenCalled();
-    expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
-    expect(useAppStore.getState().syncHealth).toBe('failed');
-    expect(useAppStore.getState().saveError).toContain('Archivio del dispositivo non disponibile');
+    expect(useAppStore.getState().localPersistenceBlocked).toBe(false);
+    expect(useAppStore.getState().syncHealth).toBe('synced');
+    expect(useAppStore.getState().saveError).toBeNull();
   });
 
-  it('Flow 2b: Future local envelope reaches the update-required barrier instead of storage-unavailable', async () => {
+  it('Flow 2b: account version cannot be inspected before verified authentication', async () => {
     vi.spyOn(idbKeyval, 'get').mockResolvedValue({
       version: CURRENT_LOCAL_ENVELOPE + 1,
       ownerV2: 'user:test-user-id',
@@ -154,8 +150,8 @@ describe('Storage Bootstrap & Telemetry Integration Flow', () => {
     await initApp();
 
     expect(window.__INITIAL_USER_DATA__).toBeNull();
-    expect(useAppStore.getState().compatibilityStatus).toBe('update-required');
-    expect(useAppStore.getState().compatibilityError).toContain('aggiorna TheLogBook');
+    expect(useAppStore.getState().compatibilityStatus).toBe('ok');
+    expect(useAppStore.getState().compatibilityError).toBeNull();
     expect(useAppStore.getState().localPersistenceBlocked).toBe(false);
     expect(useAppStore.getState().saveError).toBeNull();
     expect(createRoot).toHaveBeenCalledTimes(1);
@@ -184,7 +180,7 @@ describe('Storage Bootstrap & Telemetry Integration Flow', () => {
     expect(dispatchSpy).not.toHaveBeenCalled();
   });
 
-  it('Flow 5: Anomaly Detected when valid marker exists in localStorage but cache in IndexedDB is missing', async () => {
+  it('Flow 5: owner-bound missing-cache telemetry must wait for Firebase identity', async () => {
     vi.useFakeTimers();
     const markerTime = 1000000;
     const bootTime = 1005000;
@@ -199,16 +195,10 @@ describe('Storage Bootstrap & Telemetry Integration Flow', () => {
     await initApp();
 
     expect(window.__INITIAL_USER_DATA__).toBeNull();
-    expect(dispatchSpy).toHaveBeenCalledTimes(1);
-    expect(dispatchSpy.mock.calls[0][1]).toBe('test-user-id');
-    const payload = dispatchSpy.mock.calls[0][0];
-    expect(payload.type).toBe('storage_recovery_anomaly');
-    expect(payload.reason).toBe('indexeddb_cache_missing_with_valid_marker');
-    expect(payload.timestamp).toBe(bootTime);
-    expect(payload.elapsedMs).toBe(5000);
-
-    expect(isAnomalyAlreadyReported(marker)).toBe(true);
+    expect(dispatchSpy).not.toHaveBeenCalled();
+    expect(getStorageMarker()?.timestamp).toBe(markerTime);
+    expect(isAnomalyAlreadyReported(marker)).toBe(false);
     await initApp();
-    expect(dispatchSpy).toHaveBeenCalledTimes(1);
+    expect(dispatchSpy).not.toHaveBeenCalled();
   });
 });

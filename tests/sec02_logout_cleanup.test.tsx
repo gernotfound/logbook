@@ -85,7 +85,7 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
         expect(localStorage.getItem('logbook_guest_migration_sync_recovery')).toBe('another-user');
     });
 
-    it('purgeAllLocalUserData reports IndexedDB failure and still cleans localStorage', async () => {
+    it('purgeAllLocalUserData preserves local recovery data if IndexedDB deletion fails', async () => {
         vi.mocked(idb.del).mockRejectedValueOnce(new Error('IndexedDB quota exceeded'));
         const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
@@ -93,8 +93,10 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
 
         await expect(DB.purgeAllLocalUserData()).rejects.toThrow('Pulizia locale incompleta');
 
-        expect(localStorage.getItem('draft_measurement')).toBeNull();
-        
+        // Deleting drafts before the IndexedDB failure is resolved can orphan
+        // the encrypted journal. All remaining local bytes stay recoverable.
+        expect(localStorage.getItem('draft_measurement')).toBe('draft_data');
+
         consoleWarnSpy.mockRestore();
     });
 

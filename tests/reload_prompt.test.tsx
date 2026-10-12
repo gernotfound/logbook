@@ -1,7 +1,7 @@
 import React from 'react';
 import type { WorkoutSession } from '../src/types';
 import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent, act, within } from '@testing-library/react';
 import ReloadPrompt from '../src/components/UI/ReloadPrompt';
 import { useRegisterSW } from 'virtual:pwa-register/react';
 import App from '../src/App';
@@ -492,9 +492,12 @@ describe('Service Worker Update Lifecycle (ReloadPrompt) Suite', () => {
       updateServiceWorker: mockUpdateServiceWorker,
     });
 
-    render(<ReloadPrompt />);
+    const { container } = render(<ReloadPrompt />);
 
-    const alertContainer = screen.getByRole('alert');
+    // Scope accessibility assertions to this component. Other independent
+    // live regions (including a protected-vault storage failure) must not be
+    // mistaken for the update toast or mask its aria-live contract.
+    const alertContainer = within(container).getByRole('alert');
     expect(alertContainer.getAttribute('aria-live')).toBe('polite');
     expect(alertContainer.getAttribute('aria-atomic')).toBe('true');
 

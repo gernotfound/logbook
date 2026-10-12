@@ -1,7 +1,10 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { renderWithProviders } from './setup';
+import { renderWithProviders, emptyUserData } from './setup';
+import { prepareUnlockedTestArchive } from './secureVaultFixture';
+import { captureSession } from '../src/lib/sync/session';
+import { initializeLocal } from '../src/lib/sync/localRepository';
 import { ExerciseSearchDropdown } from '../src/components/Training/ExerciseSearchDropdown';
 import { RoutineEditor } from '../src/components/Training/routines/RoutineEditor';
 import TrainingSession from '../src/components/Training/TrainingSession';
@@ -609,13 +612,20 @@ describe('Intelligent Exercise Search & Dropdown Suite (M3: R4 & R6)', () => {
                 ]
             };
 
+            const owner = captureSession().owner;
+            const initialData = {
+                ...emptyUserData,
+                library: mockLibrary as any,
+                routines: useAppStore.getState().userData?.routines ?? [],
+                history: [],
+                activeWorkout,
+            };
+            await prepareUnlockedTestArchive(owner);
+            await initializeLocal(owner, initialData);
             useAppStore.setState({
                 localWorkout: activeWorkout,
-                userData: {
-                    ...useAppStore.getState().userData!,
-                    library: mockLibrary as any,
-                    history: []
-                }
+                userData: initialData,
+                dataOwner: owner,
             });
 
             // Simulate workout finish logic
@@ -627,10 +637,14 @@ describe('Intelligent Exercise Search & Dropdown Suite (M3: R4 & R6)', () => {
                 date: currentWorkout.date
             };
 
-            await useAppStore.getState().saveUserData((prev) => {
+            const pendingSave = useAppStore.getState().saveUserData((prev) => {
                 if (!prev) return prev;
                 return { ...prev, history: [finishedWorkout, ...(prev.history || [])], activeWorkout: null };
             });
+            // Exercise the production flush boundary rather than depending
+            // on a debounced cloud timer in this standalone store test.
+            await useAppStore.getState().flushPendingSyncs();
+            await pendingSave;
             useAppStore.setState({ localWorkout: null });
 
             const updatedState = useAppStore.getState();

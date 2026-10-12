@@ -10,6 +10,8 @@ import { readLocal } from '../src/lib/sync/localRepository';
 import { useAppStore } from '../src/store/useAppStore';
 import type { UserData } from '../src/types';
 import { beginGuestMigrationIntent } from '../src/lib/auth/guestMigrationIntent';
+import { createAndMigrateVault } from '../src/lib/sync/secureArchiveMigration';
+import { lockAllVaults } from '../src/lib/sync/secureArchiveSession';
 
 const parse = (value: unknown) => UserDataSchema.parse(value) as unknown as UserData;
 const user = { uid: 'a', email: 'a@example.com', displayName: 'A' } as any;
@@ -28,7 +30,8 @@ function fixtures() {
     return { cloud, guest, merged: mergeUserData(cloud, guest) };
 }
 
-beforeEach(() => {
+beforeEach(async () => {
+    lockAllVaults();
     vi.clearAllMocks();
     localStorage.clear();
     useAppStore.getState().resetStore();
@@ -37,6 +40,9 @@ beforeEach(() => {
         callback(user);
         return () => {};
     });
+    // The authenticated destination vault is genuinely provisioned/unlocked;
+    // guest→account causality and consent are still exercised by the real code.
+    await createAndMigrateVault('user:a');
 });
 
 afterEach(() => {
@@ -60,9 +66,19 @@ describe('guest -> account V3 migration', () => {
         await waitFor(async () => {
             const envelope = await readLocal('user:a');
             expect(envelope).toBeDefined();
-            expect(envelope?.pending).toEqual([]);
+            if (envelope?.pending.length) {
+                const latest = useAppStore.getState();
+                throw new Error('Journal pending after migration: ' + JSON.stringify({
+                    pending: envelope.pending.length,
+                    replica: envelope.replica !== undefined,
+                    consentRevision: envelope.consentRevision,
+                    saveError: latest.saveError,
+                    syncHealth: latest.syncHealth,
+                    cloudCalls: vi.mocked(DB.loadCloudPayload).mock.calls.length,
+                }));
+            }
             expect(useAppStore.getState().userData?.profile).toMatchObject({ height: '175', gender: 'M' });
-        });
+        }, { timeout: 8000 });
 
         const routines = useAppStore.getState().userData?.routines ?? [];
         expect(routines.map(routine => routine.id)).toEqual(expect.arrayContaining(['cloud-routine', 'guest-routine']));

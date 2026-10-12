@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { auth } from '../src/lib/firebase';
 // Unlike the rest of the UI fixture, this suite exercises the real policy module.
 vi.unmock('../src/lib/healthConsent');
 
@@ -7,7 +8,8 @@ vi.mock('../src/lib/appCheck', () => ({ getLimitedUseAppCheckToken: vi.fn(async 
 
 import {
   beginHealthConsentVerification, currentHealthConsentStatus,
-  finishHealthConsentReacceptance, isHealthConsentWritable,
+  finishHealthConsentReacceptance, isHealthConsentWritable, isHealthConsentCloudWritable,
+  getVerifiedHealthConsentRevision,
   reacceptHealthConsent, refreshHealthConsent, requireHealthConsentWritable,
   withdrawHealthConsent, retainNewerHealthConsent, reconfirmStaleHealthWithdrawal,
   withdrawGuestHealthConsent, beginGuestHealthReacceptance,
@@ -18,7 +20,7 @@ const user = (uid: string) => ({ uid, getIdToken: vi.fn(async () => 'id-token') 
 const key = (uid: string) => `logbook:v2:user:${uid}:health-consent-withdrawal`;
 const accepted = { acceptedTerms: true as const, acceptedHealthData: true as const, privacyVersion: '1.3.3', termsVersion: '1.2.1' };
 
-beforeEach(() => { localStorage.clear(); vi.unstubAllGlobals(); });
+beforeEach(() => { localStorage.clear(); vi.unstubAllGlobals(); (auth as { currentUser: unknown }).currentUser = null; });
 
 describe('durable health-consent client barrier', () => {
   it('suspends writes before server verification and when local intent is pending', () => {
@@ -292,5 +294,116 @@ describe('explicit acknowledgement of newer consent from another device', () => 
     expect(isHealthConsentWritable('user:' + uid)).toBe(true);
     expect(localStorage.getItem(key(uid))).toBeNull();
     expect(methods).toEqual(['GET', 'GET']);
+  });
+});
+
+describe('offline consent cache and reconnect privacy boundary', () => {
+  it('permits local editing only after a positive server check and never grants cloud writes offline', async () => {
+    const uid = 'cached-' + crypto.randomUUID();
+    const actor = user(uid);
+    (auth as { currentUser: unknown }).currentUser = actor;
+    const fetchMock = vi.fn(async () => Response.json({ status: 'active', revision: 0 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const onLine = vi.spyOn(navigator, 'onLine', 'get');
+    try {
+      onLine.mockReturnValue(true);
+      beginHealthConsentVerification(uid);
+      expect(await refreshHealthConsent(actor)).toBe('active');
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(isHealthConsentCloudWritable('user:' + uid)).toBe(true);
+
+      onLine.mockReturnValue(false);
+      beginHealthConsentVerification(uid); // Simulate a new authenticated cold start.
+      expect(await refreshHealthConsent(actor)).toBe('active');
+      expect(isHealthConsentWritable('user:' + uid)).toBe(true);
+      expect(isHealthConsentCloudWritable('user:' + uid)).toBe(false);
+      expect(() => getVerifiedHealthConsentRevision(uid)).toThrow('Consenso non verificato');
+      expect(fetchMock).toHaveBeenCalledTimes(1); // No network attempt while disconnected.
+
+      onLine.mockReturnValue(true);
+      fetchMock.mockResolvedValueOnce(Response.json({ status: 'withdrawn', revision: 1 }));
+      expect(await refreshHealthConsent(actor)).toBe('withdrawn');
+      expect(isHealthConsentWritable('user:' + uid)).toBe(false);
+      expect(isHealthConsentCloudWritable('user:' + uid)).toBe(false);
+      expect(localStorage.getItem(key(uid))).toBe('withdrawn');
+
+      onLine.mockReturnValue(false);
+      beginHealthConsentVerification(uid);
+      expect(await refreshHealthConsent(actor)).not.toBe('active');
+      expect(isHealthConsentWritable('user:' + uid)).toBe(false);
+    } finally {
+      onLine.mockRestore();
+    }
+  });
+
+  it('never activates an unverified account or a mismatched consent generation offline', async () => {
+    const uid = 'first-' + crypto.randomUUID();
+    const actor = user(uid);
+    (auth as { currentUser: unknown }).currentUser = actor;
+    const fetchMock = vi.fn(async () => Response.json({ status: 'active', revision: 2 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const onLine = vi.spyOn(navigator, 'onLine', 'get');
+    try {
+      onLine.mockReturnValue(false);
+      beginHealthConsentVerification(uid);
+      expect(await refreshHealthConsent(actor)).toBe('error');
+      expect(isHealthConsentWritable('user:' + uid)).toBe(false);
+      expect(fetchMock).not.toHaveBeenCalled();
+
+      onLine.mockReturnValue(true);
+      expect(await refreshHealthConsent(actor)).toBe('active');
+      expect(localStorage.getItem('logbook:v2:user:' + uid + ':health-consent-last-active')).toBe('2');
+
+      // A newer epoch from another tab must fence the old positive cache.
+      localStorage.setItem('logbook:v2:user:' + uid + ':health-consent-generation', '3');
+      onLine.mockReturnValue(false);
+      beginHealthConsentVerification(uid);
+      expect(await refreshHealthConsent(actor)).toBe('error');
+      expect(isHealthConsentWritable('user:' + uid)).toBe(false);
+    } finally {
+      onLine.mockRestore();
+    }
+  });
+
+  it('keeps local-only access on a transport failure even when navigator incorrectly reports online', async () => {
+    const uid = 'transport-' + crypto.randomUUID();
+    const actor = user(uid);
+    (auth as { currentUser: unknown }).currentUser = actor;
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce(Response.json({ status: 'active', revision: 0 }))
+      .mockRejectedValueOnce(new TypeError('Failed to fetch')));
+    const onLine = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
+    try {
+      expect(await refreshHealthConsent(actor)).toBe('active');
+      expect(isHealthConsentCloudWritable('user:' + uid)).toBe(true);
+      expect(await refreshHealthConsent(actor)).toBe('active');
+      expect(isHealthConsentWritable('user:' + uid)).toBe(true);
+      expect(isHealthConsentCloudWritable('user:' + uid)).toBe(false);
+    } finally {
+      onLine.mockRestore();
+    }
+  });
+
+  it('does not treat an online server failure as proof of active consent', async () => {
+    const uid = 'no-reply-' + crypto.randomUUID();
+    const actor = user(uid);
+    (auth as { currentUser: unknown }).currentUser = actor;
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(Response.json({ status: 'active', revision: 0 }))
+      .mockRejectedValueOnce(new Error('unavailable'));
+    vi.stubGlobal('fetch', fetchMock);
+    const onLine = vi.spyOn(navigator, 'onLine', 'get');
+    try {
+      onLine.mockReturnValue(true);
+      expect(await refreshHealthConsent(actor)).toBe('active');
+      expect(await refreshHealthConsent(actor)).toBe('error');
+      expect(isHealthConsentWritable('user:' + uid)).toBe(false);
+      expect(isHealthConsentCloudWritable('user:' + uid)).toBe(false);
+      onLine.mockReturnValue(false);
+      expect(await refreshHealthConsent(actor)).toBe('active');
+      expect(isHealthConsentCloudWritable('user:' + uid)).toBe(false);
+    } finally {
+      onLine.mockRestore();
+    }
   });
 });

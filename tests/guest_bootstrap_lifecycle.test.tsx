@@ -4,12 +4,19 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, act, waitFor, renderHook } from '@testing-library/react';
 import { AuthProvider } from '../src/contexts/AuthContext';
 import { DB } from '../src/lib/db';
+import { purgeAllLocalUserData as purgeRealLocalUserData } from '../src/lib/db/db_account';
 import { useAuth } from '../src/hooks/useAuth';
 import { useAppStore } from '../src/store/useAppStore';
 import { clearCatalogCache, saveCatalogToCache } from '../src/lib/catalog/catalogService';
 import { resolveEffectiveExercises, resolveEffectiveFoods } from '../src/lib/catalog/deltaResolver';
 import type { UserData, Exercise, Food } from '../src/types';
 import { activateGuestSession, captureSession, GUEST_REVOCATION_KEY, GUEST_SESSION_KEY, isCurrentSession } from '../src/lib/sync/session';
+import { isVaultUnlocked } from '../src/lib/sync/secureArchiveSession';
+
+/** Verify real silent encryption bootstrap rather than simulating a bypass. */
+async function confirmRealGuestVault() {
+    await waitFor(() => expect(isVaultUnlocked('guest')).toBe(true));
+}
 
 const GuestTestComponent = () => {
     const { currentUser, loading, isGuest, loginAsGuest, logout } = useAuth();
@@ -53,6 +60,7 @@ describe('Milestone M2: Guest Bootstrap & Cold Start Lifecycle', () => {
         act(() => {
             screen.getByTestId('btn-guest').click();
         });
+        await confirmRealGuestVault();
 
         await waitFor(() => expect(screen.getByTestId('auth-mode').textContent).toBe('GUEST'));
         await waitFor(() => expect(useAppStore.getState().userData).not.toBeNull());
@@ -69,6 +77,7 @@ describe('Milestone M2: Guest Bootstrap & Cold Start Lifecycle', () => {
     it('invalidates a second guest view after cross-tab revocation', async () => {
         render(<AuthProvider><GuestTestComponent /></AuthProvider>);
         act(() => { screen.getByTestId('btn-guest').click(); });
+        await confirmRealGuestVault();
         await waitFor(() => expect(screen.getByTestId('auth-mode').textContent).toBe('GUEST'));
         const stale = captureSession();
         act(() => {
@@ -92,7 +101,9 @@ describe('Milestone M2: Guest Bootstrap & Cold Start Lifecycle', () => {
         const { result } = renderHook(() => useAuth(), {
             wrapper: ({ children }) => <AuthProvider>{children}</AuthProvider>,
         });
-        await act(async () => { await result.current.loginAsGuest(); });
+        act(() => { void result.current.loginAsGuest(); });
+        await confirmRealGuestVault();
+        await waitFor(() => expect(result.current.isGuest).toBe(true));
         const authenticatedPurge = vi.spyOn(DB, 'secureLogOut');
         // A storage event may arrive after a click in another tab.
         localStorage.setItem(GUEST_REVOCATION_KEY, 'another-tab');
@@ -108,7 +119,9 @@ describe('Milestone M2: Guest Bootstrap & Cold Start Lifecycle', () => {
         const { result } = renderHook(() => useAuth(), {
             wrapper: ({ children }) => <AuthProvider>{children}</AuthProvider>,
         });
-        await act(async () => { await result.current.loginAsGuest(); });
+        act(() => { void result.current.loginAsGuest(); });
+        await confirmRealGuestVault();
+        await waitFor(() => expect(result.current.isGuest).toBe(true));
         const previousId = localStorage.getItem(GUEST_SESSION_KEY);
         expect(previousId).toBeTruthy();
 
@@ -120,8 +133,10 @@ describe('Milestone M2: Guest Bootstrap & Cold Start Lifecycle', () => {
                 throw new Error('simulated IndexedDB delete failure');
             })
             .mockImplementationOnce(async () => {
-                localStorage.removeItem('logbook_is_guest');
-                localStorage.removeItem(GUEST_SESSION_KEY);
+                // A successful purge must also remove the real encrypted IDB
+                // envelope and wrapped DEK. Clearing only localStorage would
+                // strand ciphertext encrypted under a previous guest identity.
+                await purgeRealLocalUserData('guest');
             });
 
         let logout!: Promise<void>;
@@ -136,10 +151,10 @@ describe('Milestone M2: Guest Bootstrap & Cold Start Lifecycle', () => {
         expect(purge).toHaveBeenCalledTimes(1);
         expect(localStorage.getItem(GUEST_SESSION_KEY)).toBe(previousId);
 
-        await act(async () => {
-            releasePurge();
-            await Promise.all([logout, relogin]);
-        });
+        act(() => { releasePurge(); });
+        // The second guest login must configure a NEW vault after successful purge.
+        await confirmRealGuestVault();
+        await act(async () => { await Promise.all([logout, relogin]); });
         expect(purge).toHaveBeenCalledTimes(2);
         expect(localStorage.getItem(GUEST_REVOCATION_KEY)).toBeNull();
         expect(localStorage.getItem(GUEST_SESSION_KEY)).not.toBe(previousId);
@@ -212,6 +227,7 @@ describe('Milestone M2: Guest Bootstrap & Cold Start Lifecycle', () => {
         act(() => {
             screen.getByTestId('btn-guest').click();
         });
+        await confirmRealGuestVault();
 
         await waitFor(() => expect(screen.getByTestId('auth-mode').textContent).toBe('GUEST'));
         await waitFor(() => expect(useAppStore.getState().userData).not.toBeNull());
@@ -230,6 +246,7 @@ describe('Milestone M2: Guest Bootstrap & Cold Start Lifecycle', () => {
         act(() => {
             screen.getByTestId('btn-guest').click();
         });
+        await confirmRealGuestVault();
 
         await waitFor(() => expect(screen.getByTestId('auth-mode').textContent).toBe('GUEST'));
         await waitFor(() => expect(useAppStore.getState().userData).not.toBeNull());
@@ -281,6 +298,7 @@ describe('Milestone M2: Guest Bootstrap & Cold Start Lifecycle', () => {
             screen.getByTestId('btn-guest').click();
         });
 
+        await confirmRealGuestVault();
         await waitFor(() => expect(useAppStore.getState().userData?.library?.length).toBe(2));
         const state = useAppStore.getState().userData!;
         expect(state.library?.find(e => e.id === 'custom_lat_pull')).toBeDefined();

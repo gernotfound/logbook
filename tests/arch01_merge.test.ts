@@ -8,6 +8,7 @@ import { AuthProvider } from '../src/contexts/AuthContext';
 import { AuthContext } from '../src/contexts/AuthContextDef';
 import { useContext } from 'react';
 import { auth } from '../src/lib/firebase';
+import { prepareUnlockedTestArchive } from './secureVaultFixture';
 import type { UserData, NutritionDay } from '../src/types';
 
 
@@ -103,9 +104,10 @@ describe('ARCH-01: Non-destructive Cache Merge', () => {
     });
 
     describe('Integration: loadData Flow', () => {
-        beforeEach(() => {
+        beforeEach(async () => {
             useAppStore.getState().resetStore();
             vi.clearAllMocks();
+            await prepareUnlockedTestArchive('user:user123');
         });
 
         it('T10 & Integration: V3 window hydration preserves unloaded months without triggering DB.saveUserData', async () => {

@@ -108,6 +108,16 @@ Versioni persistite correnti e indipendenti: Data Schema 1, Sync Protocol 3, Loc
 - **MUST:** una conferma cloud attraverso `acknowledgeThrough()` elimina solo le operation con `seq <= expectedSeq`, assorbe il causal context remoto e rigioca sullo snapshot remoto soltanto le operation locali ancora pending. Una modifica locale avvenuta fra remote commit e acknowledge non può essere sovrascritta da uno snapshot remoto stantio.
 - **MUST:** una classificazione `local-pending` dopo un possibile lost-ack richiede evidenza che l'intero batch consegnato sia ancora presente nel journal con payload semantico completo identico; stato assente/corrotto/parziale è failure, non pending sicuro.
 
+### Protezione automatica dell'archivio locale (CRITICAL)
+
+- **MUST:** nessuna passphrase/PIN/codice di recupero aggiuntivo nella UX ordinaria; la PWA usa l'identità Firebase Auth confermata o una generazione guest valida per inizializzare il vault cifrato automaticamente, anche offline dove la sessione è già disponibile.
+- **MUST:** UID, token e API key Firebase non sono segreti crittografici. Ogni owner ha DEK casuale, wrappata da un `CryptoKey` AES-GCM-256 **non esportabile** conservato in IndexedDB con namespace owner; la DEK non va persistita in chiaro.
+- **MUST:** cifratura AEAD sincrona dei record nel **medesimo** `idb-keyval.update` e salvataggi device-critical sincroni, con owner/AAD autenticati e fail-closed se storage/key/ciphertext non sono leggibili.
+- **MUST:** migrazione interrompibile/riprendibile, key control versionati, purge key soltanto dopo eliminazione verificata delle copie cifrate. Perdere la chiave non equivale ad avere l'archivio vuoto; conservare ciphertext offline non recuperabile.
+- **VERIFY:** una chiave non esportabile dentro lo *stesso profilo browser* non protegge dal furto dell'intero profilo o da XSS. Non è crittografia end-to-end né sblocco mediante hardware remoto.
+- **MUST:** una sessione autenticata già verificata può operare **solo localmente** offline con la generazione di consenso attivo in cache; primo accesso senza consenso verificato e revoche/intenti locali restano bloccati. Il primo `online`/foreground deve interrogare il consenso server **prima** di letture/write cloud, checkpoint o journal; una revoca remota blocca le attività e preserva il journal locale senza upload. Nessun cache marker locale può sostituire il controllo server per la replica.
+- **MUST:** documentazione completa e limiti nel file `docs/architecture/secure-local-archive-design.md`.
+
 ### Accesso browser storage
 
 `src/lib/sync/browserStorage.ts` distingue accessi strict e best-effort.
