@@ -19,6 +19,10 @@ export function readDeviceValue(name: string, owner?: string): string | null {
         // An unavailable or tampered ENCRYPTED record must not look like an
         // empty draft/workout: that could silently erase the only local copy.
         if (error instanceof LocalVaultLockedError || error instanceof LocalCiphertextError) throw error;
+        // Legacy best-effort draft reads may still treat transient storage
+        // failures as absent, but a provisioned sealed vault must NEVER do so:
+        // a follow-up write could overwrite a newer encrypted draft.
+        if (readVaultControl(owner ?? storageOwner()) !== null) throw error;
         return null;
     }
 }
