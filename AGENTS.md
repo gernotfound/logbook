@@ -54,7 +54,7 @@ Per task strutturali o CRITICAL preparare un piano di lavoro prima delle modific
 - **State management:** Zustand 5 (`src/store/useAppStore.ts`).
 - **Validazione runtime:** Zod 4 (`src/lib/schema.ts`, `src/lib/schemas/*.ts`).
 - **Persistenza:** IndexedDB (`idb-keyval`), `localStorage` sincrono e Firestore cloud.
-- **Backend client:** Firebase Modular SDK v12 (`firestore`, `auth`, `app-check`).
+- **Backend client:** Firebase Modular SDK (`firestore`, `auth`, `app-check`). La versione effettiva è definita in `package.json` e `package-lock.json`.
 - **Styling:** CSS nativo modulare aggregato da `src/styles/global.css`, con token semantici in `src/styles/tokens.css`; **MUST:** niente Tailwind.
 - **Icone UI:** `lucide-react`.
 - **PWA:** `vite-plugin-pwa`; asset applicativi generati dalla pipeline `scripts/resize_icons.mjs` a partire dalla sorgente approvata.
