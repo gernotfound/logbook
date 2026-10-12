@@ -168,7 +168,7 @@ if (!hostingWorkflow.includes('thelogbook-index-headers.txt') || !hostingWorkflo
 }
 const requiredHostingActionPins = [
   'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7',
-  'actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7',
+  'actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7',
   'google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3',
 ];
 for (const actionPin of requiredHostingActionPins) {
