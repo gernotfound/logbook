@@ -24,7 +24,7 @@ vi.mock('../../src/lib/sync/replicateJournal', () => ({ waitForJournalIdle: boun
 
 import { deleteAccount, purgeAllLocalUserData, purgeCompletedAccountLocalData, resumeAccountDeletion } from '../../src/lib/db/db_account';
 import { invalidateSession } from '../../src/lib/sync/session';
-import { createLocalKeyVault } from '../../src/lib/sync/secureArchiveKeys';
+import { createLocalKeyVault, deviceVaultKeyId } from '../../src/lib/sync/secureArchiveKeys';
 import { isVaultUnlocked } from '../../src/lib/sync/secureArchiveSession';
 import { sealLocalText } from '../../src/lib/sync/secureArchiveCipher';
 import {
@@ -136,6 +136,7 @@ it('purges server-confirmed deleted account ciphertext without unlocking its pro
     expect(disk.has(control)).toBe(false);
     expect(disk.has(workout)).toBe(false);
     expect(await get('logbook:v2:user:a')).toBeUndefined();
+    expect(await get(deviceVaultKeyId(owner))).toBeUndefined();
     expect(await get('logbook:v2:user:b')).toEqual({ original: 'other owner' });
 });
 
