@@ -200,6 +200,12 @@ export async function refreshHealthConsent(user: User): Promise<HealthConsentSta
       setStatus(uid, 'withdrawn');
       return 'withdrawn';
     }
+    if (saved === 'withdrawn' && state.revision >= 2) {
+      // The server accepted a NEW consent after this device withdrew.
+      // Keep the local block until the person explicitly chooses what to do.
+      setStatus(uid, 'stale-request');
+      return 'stale-request';
+    }
     if (saved === 'withdrawn' || (parseReacceptRevision(saved) !== null && !verifiedReacceptance.has(uid))) {
       // A different device must not silently undo this device's withdrawal.
       // Crash recovery requires the user to explicitly reaccept again.
@@ -262,10 +268,13 @@ export async function withdrawHealthConsent(user: User, freezeWriters?: () => vo
 export async function retainNewerHealthConsent(user: User): Promise<HealthConsentStatus> {
   const uid = user.uid;
   if (currentHealthConsentStatus(uid) !== 'stale-request') throw new Error('Nessuna scelta recente da confermare.');
-  const originalRevision = parsePendingRevision(readMarker(uid));
-  if (originalRevision === null) throw new Error('Richiesta precedente non riconosciuta.');
+  const saved = readMarker(uid);
+  const originalRevision = parsePendingRevision(saved);
+  if (originalRevision === null && saved !== 'withdrawn') throw new Error('Richiesta precedente non riconosciuta.');
   const live = await serverRequest(user, 'GET');
-  if (live.status !== 'active' || live.revision <= originalRevision) {
+  // The durable withdrawn marker has no request revision, but a live active
+  // revision >= 2 proves a subsequent explicit reacceptance occurred.
+  if (live.status !== 'active' || live.revision <= (originalRevision ?? 1)) {
     throw new Error('Il consenso server è cambiato; ripeti la verifica.');
   }
   writeBrowserValue(generationMarker(uid), String(live.revision));

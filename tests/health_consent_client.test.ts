@@ -121,6 +121,21 @@ describe('out-of-order consent checks', () => {
   });
 });
 
+describe('later reacceptance on another device', () => {
+  it('offers a choice when the durable withdrawn marker is older than the active server consent', async () => {
+    const uid = 'remote-accept-' + crypto.randomUUID();
+    localStorage.setItem(key(uid), 'withdrawn');
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json({
+      status: 'active', revision: 2, acceptedAt: '2026-10-12T05:00:00.000Z',
+    })));
+    expect(await refreshHealthConsent(user(uid))).toBe('stale-request');
+    expect(localStorage.getItem(key(uid))).toBe('withdrawn');
+    expect(isHealthConsentWritable('user:' + uid)).toBe(false);
+    expect(await retainNewerHealthConsent(user(uid))).toBe('active');
+    expect(localStorage.getItem(key(uid))).toBeNull();
+  });
+});
+
 describe('withdrawal acknowledgement racing with a newer consent', () => {
   it('offers an explicit stale-request decision instead of trapping the device in withdrawn state', async () => {
     const uid = 'late-ack-' + crypto.randomUUID();
