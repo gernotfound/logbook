@@ -6,6 +6,21 @@ import { initializeTestEnvironment, type RulesTestEnvironment } from '@firebase/
 import { doc, getDoc, setDoc, waitForPendingWrites } from 'firebase/firestore';
 const sdk = vi.hoisted(() => ({ db: null as any, auth: { currentUser: { uid: 'a' } } }));
 vi.mock('../../src/lib/firebase', () => ({ auth: sdk.auth, getDb: () => sdk.db, ensureAppCheck: async () => {}, waitForPendingWrites: (db: any) => waitForPendingWrites(db) }));
+// This suite exercises legacy sync/reconciliation under an already-authorized
+// authenticated account (server revision 0). Consent revocation and epoch
+// enforcement are tested separately with the real policy and emulator Rules.
+vi.mock('../../src/lib/healthConsent', async () => {
+    const actual = await vi.importActual<typeof import('../../src/lib/healthConsent')>('../../src/lib/healthConsent');
+    const writable = (owner: string) => owner === 'user:' + sdk.auth.currentUser?.uid;
+    return {
+        ...actual,
+        isHealthConsentWritable: writable,
+        requireHealthConsentWritable: (owner: string) => {
+            if (!writable(owner)) throw new Error('Utente non autorizzato dal consenso');
+        },
+        getVerifiedHealthConsentRevision: () => 0,
+    };
+});
 vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackEvent: vi.fn(), trackError: vi.fn() } }));
 import { DB as RealDB } from '../../src/lib/db';
 import { adoptReplicaCheckpoint, readLocal, initializeLocal, commitLocal } from '../../src/lib/sync/localRepository';
