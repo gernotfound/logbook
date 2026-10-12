@@ -49,7 +49,7 @@ export async function recoverOldLocalEditsAfterConsent(user: User): Promise<void
   );
   await rebaseConsentRecoveryWithExplicitChoice(
     session.owner, serverRevision,
-    original.revision, cloudData, snapshot.data, cloudDocuments, assertCurrent,
+    original.revision, cloudData, snapshot.data, cloudDocuments, () => { assertCurrent(); return true; },
   );
   // A server refresh authoritatively confirms the revision and unlocks only
   // after local data and the original journal are durably committed.
