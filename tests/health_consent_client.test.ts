@@ -65,7 +65,7 @@ describe('durable health-consent client barrier', () => {
 
   it('requires a server-confirmed explicit reacceptance before unlocking', async () => {
     const uid = 'reactivate-' + crypto.randomUUID();
-    localStorage.setItem(key(uid), 'withdrawn');
+    localStorage.setItem(key(uid), 'reaccepting:1');
     vi.stubGlobal('fetch', vi.fn(async () =>
       Response.json({ status: 'active', revision: 2, acceptedAt: '2026-10-12T00:00:00.000Z' })));
     expect(await reacceptHealthConsent(user(uid), accepted)).toBe('2026-10-12T00:00:00.000Z');

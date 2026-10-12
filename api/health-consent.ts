@@ -63,7 +63,10 @@ export async function POST(request: Request): Promise<Response> {
     if (body.action === 'reaccept') {
       try { validateExplicitAcceptance(body.acceptance); }
       catch { throw new ConsentInputError('È richiesta una nuova accettazione esplicita dei documenti correnti.'); }
-      return json(await recordHealthConsentReacceptance(uid, body.acceptance), 200, origin);
+      if (typeof body.expectedRevision !== 'number' || !Number.isSafeInteger(body.expectedRevision) || body.expectedRevision < 1) {
+        throw new ConsentInputError('Revisione della revoca mancante o non valida.');
+      }
+      return json(await recordHealthConsentReacceptance(uid, body.acceptance, body.expectedRevision), 200, origin);
     }
     throw new ConsentInputError('Azione non valida.');
   } catch (error) { return errorResponse(error, origin); }

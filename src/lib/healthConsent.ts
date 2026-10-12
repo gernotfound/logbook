@@ -10,8 +10,17 @@ const entries = new Map<string, HealthConsentStatus>();
 const listeners = new Set<() => void>();
 const verifiedReacceptance = new Map<string, string>();
 const verifiedRevisions = new Map<string, number>();
+const knownConsentRevisions = new Map<string, number>();
 let guestAcceptanceInProgress = false;
 const guestMarker = 'logbook:v2:guest:health-consent-withdrawal';
+const reacceptMarker = (revision: number) => `reaccepting:${revision}`;
+const parseReacceptRevision = (saved: string | null): number | null => {
+  if (!saved?.startsWith('reaccepting:')) return null;
+  const revision = saved.slice('reaccepting:'.length);
+  if (!/^[1-9]\\d*$/.test(revision)) return null;
+  const parsed = Number(revision);
+  return Number.isSafeInteger(parsed) ? parsed : null;
+};
 const pendingMarker = (revision: number) => `pending:${revision}`;
 const parsePendingRevision = (saved: string | null): number | null => {
   if (!saved?.startsWith('pending:')) return null;
@@ -46,7 +55,8 @@ export function currentHealthConsentStatus(uid: string | undefined): HealthConse
     if (entries.get(uid) === 'stale-request') return 'stale-request';
     const saved = readMarker(uid);
     if (parsePendingRevision(saved) !== null) return 'pending';
-    if (saved === 'withdrawn' || saved === 'reaccepting') return saved;
+    if (saved === 'withdrawn') return saved;
+    if (parseReacceptRevision(saved) !== null) return 'reaccepting';
     if (saved !== null) return 'error';
     // Test/recovery tooling can operate before AuthProvider begins verification.
     // AuthProvider synchronously fences the real session at each auth boundary.
@@ -157,9 +167,10 @@ export async function refreshHealthConsent(user: User): Promise<HealthConsentSta
   // Every refresh fences in-flight writes; only a completed, active server
   // check may grant a new writable generation.
   verifiedRevisions.delete(uid);
-  setStatus(uid, saved === null ? 'checking' : (parsePendingRevision(saved) !== null ? 'pending' : saved as HealthConsentStatus));
+  setStatus(uid, saved === null ? 'checking' : (parsePendingRevision(saved) !== null ? 'pending' : parseReacceptRevision(saved) !== null ? 'reaccepting' : saved as HealthConsentStatus));
   try {
     const state = await serverRequest(user, 'GET');
+    knownConsentRevisions.set(uid, state.revision);
     if (state.status === 'withdrawn') {
       writeBrowserValue(marker(uid), 'withdrawn');
       setStatus(uid, 'withdrawn');
@@ -179,7 +190,7 @@ export async function refreshHealthConsent(user: User): Promise<HealthConsentSta
       setStatus(uid, 'withdrawn');
       return 'withdrawn';
     }
-    if (saved === 'withdrawn' || (saved === 'reaccepting' && !verifiedReacceptance.has(uid))) {
+    if (saved === 'withdrawn' || (parseReacceptRevision(saved) !== null && !verifiedReacceptance.has(uid))) {
       // A different device must not silently undo this device's withdrawal.
       // Crash recovery requires the user to explicitly reaccept again.
       setStatus(uid, saved);
@@ -242,10 +253,17 @@ export async function reacceptHealthConsent(user: User, acceptance: {
 }): Promise<string> {
   const uid = user.uid;
   const saved = readMarker(uid);
-  if (saved !== 'withdrawn' && saved !== 'reaccepting') throw new Error('Revoca non confermata.');
-  writeBrowserValue(marker(uid), 'reaccepting');
+  const previousAttempt = parseReacceptRevision(saved);
+  if (saved !== 'withdrawn' && previousAttempt === null) throw new Error('Revoca non confermata.');
+  let expectedRevision = previousAttempt;
+  if (expectedRevision === null) {
+    const live = await serverRequest(user, 'GET');
+    if (live.status !== 'withdrawn') throw new Error('La revoca non risulta attiva sul server.');
+    expectedRevision = live.revision;
+  }
+  writeBrowserValue(marker(uid), reacceptMarker(expectedRevision));
   setStatus(uid, 'reaccepting');
-  const result = await serverRequest(user, 'POST', { action: 'reaccept', acceptance });
+  const result = await serverRequest(user, 'POST', { action: 'reaccept', acceptance, expectedRevision });
   if (result.status !== 'active' || typeof result.acceptedAt !== 'string') {
     throw new Error('Nuovo consenso non confermato dal server.');
   }

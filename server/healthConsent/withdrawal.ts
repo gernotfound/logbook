@@ -90,9 +90,10 @@ export function validateExplicitAcceptance(value: unknown): asserts value is Exp
 
 /** Re-consent is explicit, server-authenticated and monotonic; no client may edit the marker. */
 export async function recordHealthConsentReacceptance(
-  uid: string, acceptance: ExplicitConsentAcceptance,
+  uid: string, acceptance: ExplicitConsentAcceptance, expectedRevision: number,
 ): Promise<HealthConsentState> {
   validUid(uid);
+  if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 1) throw new Error('Revisione attesa del consenso non valida.');
   validateExplicitAcceptance(acceptance);
   const db = adminDb();
   return db.runTransaction(async tx => {
@@ -102,11 +103,17 @@ export async function recordHealthConsentReacceptance(
     const [job, previousSnap, userRoot] = await Promise.all([tx.get(deletion), tx.get(state), tx.get(root)]);
     if (job.exists) throw new Error('Cancellazione account in corso.');
     const previous = previousSnap.data();
-    if (previousSnap.exists && previous?.status === 'active' && typeof previous.acceptedAt === 'string') {
+    // Idempotent retry must prove it belongs to THIS transition and uses
+    // the same legal versions; it must not resurrect a superseded acceptance.
+    if (previousSnap.exists && previous?.status === 'active'
+      && previous.revision === expectedRevision + 1
+      && previous.privacyVersion === acceptance.privacyVersion
+      && previous.termsVersion === acceptance.termsVersion
+      && typeof previous.acceptedAt === 'string') {
       return { status: 'active', revision: previous.revision, acceptedAt: previous.acceptedAt };
     }
-    if (!previousSnap.exists || previous?.status !== 'withdrawn') {
-      throw new Error('Non esiste una revoca da riattivare.');
+    if (!previousSnap.exists || previous?.status !== 'withdrawn' || previous.revision !== expectedRevision) {
+      throw new HealthConsentRevisionConflictError();
     }
     const revision = Number(previous.revision) + 1;
     if (!Number.isSafeInteger(revision)) throw new Error('Revision consenso non valida.');
