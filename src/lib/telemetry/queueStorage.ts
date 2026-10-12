@@ -62,6 +62,9 @@ export class TelemetryQueueStorage {
   private cachedQueue: QueuedTelemetryItem[] | null = null;
   private cachedQueueKey: string | null = null;
   private isDiskSyncScheduled = false;
+  // Reports collected while locked must be merged with any pre-existing
+  // ciphertext after unlock, not overwrite it blindly.
+  private needsUnlockReconciliation = false;
 
   constructor(private readonly getUserId: () => string | null) {}
 
@@ -83,7 +86,7 @@ export class TelemetryQueueStorage {
       const recent = retainUnexpiredItems(this.cachedQueue);
       if (recent.length !== this.cachedQueue.length) this.saveQueuedEvents(recent, true);
       else this.syncQueueToDisk(ownerKey); // Persist an in-memory pre-unlock queue once the vault is ready.
-      return recent;
+      return this.cachedQueue ?? recent;
     }
 
     try {
@@ -129,6 +132,7 @@ export class TelemetryQueueStorage {
             // best-effort copy; business snapshots are never handled here.
             this.cachedQueue = filtered;
             this.cachedQueueKey = ownerKey;
+            this.needsUnlockReconciliation = true;
             localStorage.removeItem(ownerKey);
             discardLegacyUnscopedTelemetry();
           }
@@ -147,6 +151,7 @@ export class TelemetryQueueStorage {
     const ownerKey = this.getQueueStorageKey();
     this.cachedQueue = retainUnexpiredItems(items);
     this.cachedQueueKey = ownerKey;
+    if (!isVaultUnlocked(this.getOwner())) this.needsUnlockReconciliation = true;
     if (immediateDiskSync) {
       this.syncQueueToDisk(ownerKey);
     }
@@ -157,7 +162,20 @@ export class TelemetryQueueStorage {
     try {
       // Never create new plaintext report storage, even before vault setup.
       // In-memory diagnostics still work if the archive is locked or unavailable.
-      return storeEncryptedTelemetry(this.getOwner(), JSON.stringify(this.cachedQueue));
+      const owner = this.getOwner();
+      if (!isVaultUnlocked(owner)) return false;
+      if (this.needsUnlockReconciliation) {
+        const persisted = readEncryptedTelemetry(owner);
+        if (persisted !== null) {
+          const previous = retainUnexpiredItems(parseQueuedItems(persisted));
+          const knownIds = new Set(previous.map(item => item.id));
+          const additions = this.cachedQueue.filter(item => !knownIds.has(item.id));
+          this.cachedQueue = retainUnexpiredItems([...previous, ...additions]);
+        }
+      }
+      const saved = storeEncryptedTelemetry(owner, JSON.stringify(this.cachedQueue));
+      if (saved) this.needsUnlockReconciliation = false;
+      return saved;
     } catch {
       return false;
     }
@@ -251,6 +269,7 @@ export class TelemetryQueueStorage {
     this.cachedQueue = null;
     this.cachedQueueKey = null;
     this.isDiskSyncScheduled = false;
+    this.needsUnlockReconciliation = false;
   }
 
   public replaceQueue(items: QueuedTelemetryItem[]): void {
