@@ -147,9 +147,15 @@ export function isHealthConsentCloudWritable(owner: string): boolean {
   if (!owner.startsWith('user:')) return owner !== 'guest';
   const uid = owner.slice(5);
   // Pure isolated sync tests run without a Firebase-authenticated principal.
-  if (auth?.currentUser?.uid !== uid) return false;
+  if (auth?.currentUser?.uid !== uid || (typeof navigator !== 'undefined' && navigator.onLine === false)) return false;
   return onlineVerifiedRevisions.get(uid) === verifiedRevisions.get(uid)
     && verifiedRevisions.has(uid);
+}
+
+/** Keep local editing available when the network drops, but withdraw the
+ * current session's permission to call cloud APIs until another server check. */
+export function suspendHealthConsentCloudAccess(uid: string): void {
+  onlineVerifiedRevisions.delete(uid);
 }
 
 export function getVerifiedHealthConsentRevision(uid: string): number {
@@ -354,7 +360,9 @@ export async function retainNewerHealthConsent(user: User): Promise<HealthConsen
     setStatus(uid, 'recovery-required');
     return 'recovery-required';
   }
+  writeBrowserValue(lastActiveMarker(uid), String(live.revision));
   verifiedRevisions.set(uid, live.revision);
+  onlineVerifiedRevisions.set(uid, live.revision);
   setStatus(uid, 'active');
   return 'active';
 }
