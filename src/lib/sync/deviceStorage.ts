@@ -26,17 +26,19 @@ export function readDeviceValue(name: string, owner?: string): string | null {
 export function readDeviceValueStrict(name: string, owner?: string): string | null {
     const resolvedOwner = owner ?? storageOwner();
     const storageKey = deviceKey(name, resolvedOwner);
+    // The device-critical read must be the first strict storage access: an
+    // unreadable workout/timer cannot be masked by an earlier metadata probe.
+    const legacy = readBrowserValueStrict(storageKey);
     const control = readVaultControl(resolvedOwner);
     if (!control) {
-        const raw = readBrowserValueStrict(storageKey);
-        if (raw?.startsWith(SEALED_LOCAL_PREFIX)) throw new LocalCiphertextError();
-        return raw;
+        if (legacy?.startsWith(SEALED_LOCAL_PREFIX)) throw new LocalCiphertextError();
+        return legacy;
     }
     if (control.phase !== 'active') throw new LocalVaultLockedError();
     const key = requireUnlockedLocalKey(resolvedOwner);
     // A stale old PWA tab may recreate an old plaintext key. Never silently
     // discard such data or mistake it for a legitimate empty encrypted draft.
-    if (readBrowserValueStrict(storageKey) !== null) throw new LocalCiphertextError();
+    if (legacy !== null) throw new LocalCiphertextError();
     const sealedKey = protectedDeviceKey(name, resolvedOwner);
     const raw = readBrowserValueStrict(sealedKey);
     if (requireUnlockedLocalKey(resolvedOwner) !== key) throw new LocalVaultLockedError();
