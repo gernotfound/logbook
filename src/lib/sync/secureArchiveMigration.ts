@@ -15,12 +15,12 @@ import { isAccountDeletionPending } from './accountGate';
 const SAFE_PLAINTEXT_NAMES = new Set([
     'health-consent-withdrawal', 'health-consent-generation', 'health-consent-last-active',
     'account-deletion', 'secure-vault-control',
-    'storage_marker', 'storage_anomaly_reported', 'telemetry_queue',
+    'storage_marker', 'storage_anomaly_reported',
 ]);
 
 /** Explicitly inventory all current device-critical writers. Unknown keys halt migration. */
 function isSensitiveDeviceName(name: string): boolean {
-    return name === 'workout' || name === 'timer' || name === 'draft_exercise'
+    return name === 'telemetry_queue' || name === 'workout' || name === 'timer' || name === 'draft_exercise'
         || name === 'draft_routine' || name === 'history-editor-context'
         || (name.startsWith('draft:') && name.length > 'draft:'.length);
 }
