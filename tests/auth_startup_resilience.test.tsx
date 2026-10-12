@@ -68,6 +68,18 @@ describe('PWA & iPhone Startup Resilience Tests', () => {
     expect(DB.loadUserData).not.toHaveBeenCalled();
   });
 
+  test('rechecks the trusted consent before loading cloud data after reconnect', async () => {
+    render(<AuthProvider><TestAuthConsumer /></AuthProvider>);
+    await waitFor(() => expect(screen.getByTestId('loading-state').textContent).toBe('READY'));
+    const previousChecks = vi.mocked(refreshHealthConsent).mock.calls.length;
+    const previousCloudReads = vi.mocked(DB.loadCloudPayload).mock.calls.length;
+    vi.mocked(refreshHealthConsent).mockResolvedValueOnce('withdrawn');
+
+    await act(async () => { window.dispatchEvent(new Event('online')); });
+    await waitFor(() => expect(vi.mocked(refreshHealthConsent).mock.calls.length).toBe(previousChecks + 1));
+    expect(vi.mocked(DB.loadCloudPayload).mock.calls.length).toBe(previousCloudReads);
+  });
+
   test('fences the previous owner while a different authenticated owner is still hydrating', async () => {
     const previousData = {
       profile: { name: 'Account A' },
