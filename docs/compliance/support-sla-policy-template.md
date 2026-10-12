@@ -1,4 +1,4 @@
-# Supporto e SLA — template LogBook
+# Supporto e SLA — template TheLogBook
 
 > Definire solo impegni realmente sostenibili. Per il primo pilot è preferibile un modello best-effort se non esistono ancora reperibilità, monitoraggio e procedure capaci di sostenere SLA misurabili.
 
