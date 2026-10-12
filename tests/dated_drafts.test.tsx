@@ -4,16 +4,28 @@ import { useNutritionMeasurements } from '../src/hooks/useNutritionMeasurements'
 import { useSleepMeasurements } from '../src/hooks/useSleepMeasurements';
 import { useAppStore } from '../src/store/useAppStore';
 import { useDialogStore } from '../src/store/useDialogStore';
-import { invalidateSession, storageOwner } from '../src/lib/sync/session';
+import { activateGuestSession, GUEST_SESSION_KEY, GUEST_REVOCATION_KEY, invalidateSession, storageOwner } from '../src/lib/sync/session';
 import { deviceKey } from '../src/lib/sync/deviceStorage';
 import { draftRegistry } from '../src/lib/utils/draftRegistry';
 import { UserDataSchema } from '../src/lib/schema';
 import type { SyncResult } from '../src/types';
 import { useLocalStorage } from '../src/hooks/useLocalStorage';
+import { requireHealthConsentWritable } from '../src/lib/healthConsent';
 const data = (nutrition = {}) => UserDataSchema.parse({ profile: { height: '180', gender: 'M' }, nutrition }) as any;
 const day = (date: string, fields = {}) => ({ date, kcal: 0, pro: 0, carbs: 0, fat: 0, meals: [], ...fields });
 const storeItem = vi.mocked(localStorage.setItem).getMockImplementation()!;
-beforeEach(() => { vi.mocked(localStorage.setItem).mockImplementation(storeItem); localStorage.clear(); useAppStore.getState().resetStore(); useAppStore.setState({ userData: data(), dataOwner: storageOwner() }); });
+beforeEach(() => {
+    vi.mocked(localStorage.setItem).mockImplementation(storeItem);
+    localStorage.clear();
+    // A real owner-scoped guest draft can only be written by a live guest session.
+    // Preserve this production security contract in the hook fixtures.
+    localStorage.setItem('logbook_is_guest', 'true');
+    localStorage.setItem(GUEST_SESSION_KEY, 'dated-drafts-fixture');
+    localStorage.removeItem(GUEST_REVOCATION_KEY);
+    activateGuestSession('dated-drafts-fixture');
+    useAppStore.getState().resetStore();
+    useAppStore.setState({ userData: data(), dataOwner: storageOwner() });
+});
 afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
 
 it('uses the fenced store owner without rereading lifecycle ownership on rerender', () => {
@@ -34,6 +46,17 @@ it('fails closed instead of inferring an owner when userData is not owner-fenced
     act(() => hook.result.current.setWeight('75'));
     expect(hook.result.current.weight).toBe('');
     expect(localStorage.getItem(deviceKey('draft:measurement:2026-09-11', owner))).toBeNull();
+});
+
+it('never bypasses the health-consent write gate when persisting a dated draft', () => {
+    vi.mocked(requireHealthConsentWritable).mockImplementationOnce(() => {
+        throw new Error('Consent suspended');
+    });
+    const hook = renderHook(() => useNutritionMeasurements('2026-09-11'));
+    act(() => hook.result.current.setWeight('75'));
+    expect(hook.result.current.weight).toBe('75');
+    expect(localStorage.getItem(deviceKey('draft:measurement:2026-09-11', storageOwner()))).toBeNull();
+    expect(useAppStore.getState().saveError).toContain('solo in memoria');
 });
 
 it('reads a new localStorage key before any write can copy the previous value over it', () => {
