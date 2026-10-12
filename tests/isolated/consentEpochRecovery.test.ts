@@ -31,6 +31,14 @@ beforeEach(async () => {
 });
 
 describe('explicit consent-epoch journal recovery', () => {
+  it('preserves unsynced local edits after confirmed withdrawal until explicit deletion', async () => {
+    await commitLocal(owner, state('180'), state('170'));
+    const original = (await readLocal(owner))!;
+    localStorage.setItem(`logbook:v2:${owner}:health-consent-withdrawal`, 'withdrawn');
+    await expect(purgeAllLocalUserData(owner)).rejects.toThrow('non è ancora riconciliata');
+    expect(await readLocal(owner)).toEqual(original);
+  });
+
   it('refuses ordinary local purge when old pending edits require consent recovery', async () => {
     await commitLocal(owner, state('180'), state('170'));
     const original = (await readLocal(owner))!;
