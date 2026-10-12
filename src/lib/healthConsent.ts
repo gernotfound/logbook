@@ -10,6 +10,8 @@ const entries = new Map<string, HealthConsentStatus>();
 const listeners = new Set<() => void>();
 const verifiedReacceptance = new Map<string, string>();
 const verifiedRevisions = new Map<string, number>();
+// Offline access is local-only: a cached server approval must never authorize cloud I/O.
+const onlineVerifiedRevisions = new Map<string, number>();
 // Only the latest check may publish its result for an owner.
 const verificationSerials = new Map<string, number>();
 const invalidateConsentChecks = (uid: string) => {
@@ -37,10 +39,20 @@ const parsePendingRevision = (saved: string | null): number | null => {
 };
 const marker = (uid: string) => `logbook:v2:user:${uid}:health-consent-withdrawal`;
 const generationMarker = (uid: string) => `logbook:v2:user:${uid}:health-consent-generation`;
+const lastActiveMarker = (uid: string) => `logbook:v2:user:${uid}:health-consent-last-active`;
+function readCachedActiveRevision(uid: string): number | null {
+  const saved = readBrowserValueStrict(lastActiveMarker(uid));
+  if (saved === null || !/^(0|[1-9]\d*)$/.test(saved)) return null;
+  const revision = Number(saved);
+  if (!Number.isSafeInteger(revision)) return null;
+  const generation = readBrowserValueStrict(generationMarker(uid));
+  return (generation === null && revision === 0) || generation === String(revision) ? revision : null;
+}
 function notify() { for (const listener of listeners) listener(); }
 export function beginHealthConsentVerification(uid: string): void {
   invalidateConsentChecks(uid);
   verifiedRevisions.delete(uid);
+  onlineVerifiedRevisions.delete(uid);
   setStatus(uid, 'checking');
 }
 
@@ -129,8 +141,19 @@ export function isHealthConsentWritable(owner: string): boolean {
     return (persisted === null && verified === 0) || persisted === String(verified);
   } catch { return false; }
 }
+/** Cloud operations require a fresh server check in THIS online session. */
+export function isHealthConsentCloudWritable(owner: string): boolean {
+  if (!isHealthConsentWritable(owner)) return false;
+  if (!owner.startsWith('user:')) return owner !== 'guest';
+  const uid = owner.slice(5);
+  // Pure isolated sync tests run without a Firebase-authenticated principal.
+  if (auth?.currentUser?.uid !== uid) return false;
+  return onlineVerifiedRevisions.get(uid) === verifiedRevisions.get(uid)
+    && verifiedRevisions.has(uid);
+}
+
 export function getVerifiedHealthConsentRevision(uid: string): number {
-  if (currentHealthConsentStatus(uid) !== 'active' || (auth?.currentUser?.uid === uid && !verifiedRevisions.has(uid))) {
+  if (currentHealthConsentStatus(uid) !== 'active' || (auth?.currentUser?.uid === uid && !isHealthConsentCloudWritable('user:' + uid))) {
     throw new Error('Consenso non verificato per questa sessione.');
   }
   return verifiedRevisions.get(uid) ?? 0;
@@ -192,8 +215,21 @@ export async function refreshHealthConsent(user: User): Promise<HealthConsentSta
   // Every refresh fences in-flight writes; only a completed, active server
   // check may grant a new writable generation.
   verifiedRevisions.delete(uid);
+  onlineVerifiedRevisions.delete(uid);
   setStatus(uid, saved === null ? 'checking' : (parsePendingRevision(saved) !== null ? 'pending' : parseReacceptRevision(saved) !== null ? 'reaccepting' : saved as HealthConsentStatus));
   try {
+    // An already authorized device may continue locally with its most recent
+    // server-confirmed generation while disconnected. New accounts, pending
+    // withdrawal/reacceptance and unknown generations remain suspended.
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      const cached = saved === null ? readCachedActiveRevision(uid) : null;
+      if (cached !== null && isSameDecision()) {
+        verifiedRevisions.set(uid, cached);
+        setStatus(uid, 'active');
+        return 'active';
+      }
+      return currentHealthConsentStatus(uid) === 'checking' ? 'error' : currentHealthConsentStatus(uid);
+    }
     const state = await serverRequest(user, 'GET');
     if (!isSameDecision()) return currentHealthConsentStatus(uid);
     if (state.status === 'withdrawn') {
@@ -245,7 +281,12 @@ export async function refreshHealthConsent(user: User): Promise<HealthConsentSta
         return 'recovery-required';
       }
     }
+    // Store the positive server result only AFTER the local generation was
+    // validated. This marker is never enough to authorize remote operations.
+    writeBrowserValue(lastActiveMarker(uid), String(state.revision));
+    if (!isSameDecision()) return currentHealthConsentStatus(uid);
     verifiedRevisions.set(uid, state.revision);
+    onlineVerifiedRevisions.set(uid, state.revision);
     if (saved !== null) removeBrowserValue(marker(uid));
     setStatus(uid, 'active');
     return 'active';
