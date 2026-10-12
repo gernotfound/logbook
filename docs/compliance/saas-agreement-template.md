@@ -1,4 +1,4 @@
-# Accordo SaaS LogBook ↔ palestra — struttura per revisione legale
+# Accordo SaaS TheLogBook ↔ palestra — struttura per revisione legale
 
 > Bozza strutturale, non pronta per la firma. Inserire dati reali soltanto nella fase contrattuale e far revisionare il testo da un professionista legale/commerciale.
 
@@ -9,17 +9,17 @@
 
 ## 1. Oggetto
 
-Il Fornitore rende disponibile LogBook secondo il modello concordato. Il rapporto economico è B2B ed esterno alla PWA; LogBook non gestisce il pagamento della palestra né il pagamento degli utenti.
+Il Fornitore rende disponibile TheLogBook secondo il modello concordato. Il rapporto economico è B2B ed esterno alla PWA; TheLogBook non gestisce il pagamento della palestra né il pagamento degli utenti.
 
 ## 2. Modello di distribuzione
 
 Per il modello prodotto corrente:
 
-- la palestra può comunicare agli iscritti il link o le modalità di accesso a LogBook;
-- la palestra non riceve credenziali amministrative LogBook;
-- la palestra non accede, consulta, modifica o esporta i dati LogBook degli utenti;
+- la palestra può comunicare agli iscritti il link o le modalità di accesso a TheLogBook;
+- la palestra non riceve credenziali amministrative TheLogBook;
+- la palestra non accede, consulta, modifica o esporta i dati TheLogBook degli utenti;
 - l'utente gestisce direttamente il proprio eventuale account;
-- non esiste obbligo tecnico di condividere dati LogBook con la palestra.
+- non esiste obbligo tecnico di condividere dati TheLogBook con la palestra.
 
 Qualunque futuro accesso gym/coach, dashboard, invito gestito, report o condivisione dati richiede modifica preventiva di prodotto, privacy e contratto.
 
@@ -53,11 +53,11 @@ Non promettere uptime, tempi di risposta, backup o restore che non siano realmen
 
 La palestra si impegna, nei limiti definiti professionalmente nel contratto, a:
 
-- non presentare LogBook come servizio medico, diagnostico o prescrittivo;
-- non richiedere agli utenti credenziali o accesso al loro account LogBook;
+- non presentare TheLogBook come servizio medico, diagnostico o prescrittivo;
+- non richiedere agli utenti credenziali o accesso al loro account TheLogBook;
 - rispettare il perimetro 18+ del pilot;
 - non trasmettere al Fornitore dati personali degli iscritti oltre quanto necessario al rapporto commerciale;
-- non dichiarare di avere accesso ai dati LogBook se tale accesso non esiste;
+- non dichiarare di avere accesso ai dati TheLogBook se tale accesso non esiste;
 - informare il Fornitore prima di proporre flussi che comportino coach access, tenant gym, inviti nominativi, analytics per palestra o condivisione dati.
 
 ## 7. Proprietà intellettuale e licenza
@@ -90,7 +90,7 @@ Richiamare l'elenco applicabile e il meccanismo per comunicare cambiamenti quand
 
 ## 11. Dati, export e cessazione
 
-Definire gli effetti della cessazione del rapporto B2B senza compromettere i diritti autonomi degli utenti LogBook. In particolare, la fine del contratto palestra non deve comportare automaticamente la cancellazione degli account utenti salvo base, informazione e procedura valide.
+Definire gli effetti della cessazione del rapporto B2B senza compromettere i diritti autonomi degli utenti TheLogBook. In particolare, la fine del contratto palestra non deve comportare automaticamente la cancellazione degli account utenti salvo base, informazione e procedura valide.
 
 ## 12. Disponibilità, backup e continuità
 
