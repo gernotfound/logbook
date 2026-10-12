@@ -683,10 +683,12 @@ describe('LogBook Background Sync & Error Toast 4-Tier Test Suite', () => {
         ]
       };
 
-      const { container } = await renderSettledApp({ localWorkout: activeWorkout });
+      const { container } = await renderSettledApp();
 
+      // This is a presentation test: apply the visible workout after auth
+      // hydration, rather than racing it with the AuthProvider bootstrap.
       act(() => {
-        useAppStore.setState({ syncing: true });
+        useAppStore.setState({ localWorkout: activeWorkout, syncing: true });
       });
 
       // UI is not blocked by sync overlay
@@ -798,10 +800,11 @@ describe('LogBook Background Sync & Error Toast 4-Tier Test Suite', () => {
         exercises: [{ exId: 'ex1', name: 'Panca', sets: [{ id: 's1', kg: '90', reps: '8' }] }]
       };
 
-      const { container } = await renderSettledApp({ localWorkout: activeWorkout });
+      const { container } = await renderSettledApp();
 
       act(() => {
         useAppStore.setState({
+          localWorkout: activeWorkout,
           syncing: false,
           saveError: 'Timeout connessione Firestore'
         });
