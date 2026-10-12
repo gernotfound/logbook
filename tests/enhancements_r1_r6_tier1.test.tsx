@@ -866,8 +866,16 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
 
                 const { result } = renderHook(() => useWorkoutSession());
 
+                let completion!: Promise<unknown>;
+                act(() => { completion = result.current.endWorkout(); });
+                await vi.waitFor(() => {
+                    expect(useAppStore.getState().userData?.history?.some(workout => workout.id === activeSession.id)).toBe(true);
+                });
                 await act(async () => {
-                    await result.current.endWorkout();
+                    // Drive the production flush boundary, rather than leaving
+                    // a debounced cloud save pending inside React's async act.
+                    await useAppStore.getState().flushPendingSyncs();
+                    await completion;
                 });
 
                 const state = useAppStore.getState();
@@ -910,8 +918,16 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
 
                 const { result } = renderHook(() => useWorkoutSession());
 
+                let completion!: Promise<unknown>;
+                act(() => { completion = result.current.endWorkout(); });
+                await vi.waitFor(() => {
+                    expect(useAppStore.getState().userData?.history?.some(workout => workout.id === activeSession.id)).toBe(true);
+                });
                 await act(async () => {
-                    await result.current.endWorkout();
+                    // Drive the production flush boundary, rather than leaving
+                    // a debounced cloud save pending inside React's async act.
+                    await useAppStore.getState().flushPendingSyncs();
+                    await completion;
                 });
 
                 const state = useAppStore.getState();
