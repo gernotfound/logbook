@@ -1,5 +1,6 @@
 import type { StateCreator } from 'zustand';
 import { DB } from '../../lib/db';
+import { isHealthConsentWritable, requireHealthConsentWritable } from '../../lib/healthConsent';
 import type { UserData, SyncResult } from '../../types';
 import { DEBOUNCE_DELAY_GLOBAL } from '../../constants';
 import { saveUserDataToCache } from './createDataSlice';
@@ -242,6 +243,7 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
                 return updateRequiredResult(get().compatibilityError ?? 'Aggiornamento richiesto.');
             }
             assertLocalPersistenceWritable();
+            requireHealthConsentWritable(captureSession().owner);
             const { userData } = get();
             const next = typeof dataOrUpdater === 'function' ? dataOrUpdater(userData) : dataOrUpdater;
             if (!next) {
@@ -269,6 +271,7 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
             }
             try { assertLocalPersistenceWritable(); }
             catch (error) { return Promise.reject(error); }
+            requireHealthConsentWritable(captureSession().owner);
             const data = get().userData;
             if (!data) return Promise.reject(new Error('Dati utente non caricati'));
             return get().saveUserData(updater(data));
@@ -278,6 +281,7 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
                 return updateRequiredResult(get().compatibilityError ?? 'Aggiornamento richiesto.');
             }
             assertLocalPersistenceWritable();
+            requireHealthConsentWritable(captureSession().owner);
             const userData = get().userData;
             if (!userData) throw new Error('Dati utente non caricati');
 
@@ -320,6 +324,7 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
             if (isCurrentSession(session)) set(state => ({ userData: state.userData ? { ...state.userData, legalConsent: consent } : null }));
         },
         flushPendingSyncs: async () => {
+            if (!isHealthConsentWritable(captureSession().owner)) return;
             if (get().compatibilityStatus === 'update-required' || get().localPersistenceBlocked) return;
             if (timer) clearTimeout(timer);
             timer = null;

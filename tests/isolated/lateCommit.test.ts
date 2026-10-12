@@ -4,6 +4,22 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 const remote = vi.hoisted(() => ({ apply: vi.fn(), auth: { currentUser: { uid: 'a' } } }));
 vi.mock('../../src/lib/firebase', () => ({ auth: remote.auth, getDb: () => ({}), ensureAppCheck: async () => {}, waitForPendingWrites: async () => {} }));
+// This legacy persistence suite assumes a verified, still-active server consent
+// at revision zero. Real revocation/fencing is tested in dedicated suites.
+vi.mock('../../src/lib/healthConsent', async () => {
+    const actual = await vi.importActual<typeof import('../../src/lib/healthConsent')>('../../src/lib/healthConsent');
+    const writable = (owner: string) => owner.startsWith('user:')
+        ? owner === 'user:' + remote.auth.currentUser?.uid
+        : actual.isHealthConsentWritable(owner);
+    return {
+        ...actual,
+        isHealthConsentWritable: writable,
+        requireHealthConsentWritable: (owner: string) => {
+            if (!writable(owner)) throw new Error('Utente non autorizzato dal consenso');
+        },
+        getVerifiedHealthConsentRevision: () => 0,
+    };
+});
 vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackEvent: vi.fn(), trackError: vi.fn() } }));
 vi.mock('../../src/lib/catalog/catalogService', () => ({ getCachedCatalog: async () => ({ exercises: [], foods: [] }) }));
 vi.mock('../../src/lib/sync/transactionWriter', () => ({ applyDocumentChanges: remote.apply }));
@@ -14,7 +30,7 @@ import { UserDataSchema } from '../../src/lib/schema';
 import { invalidateSession } from '../../src/lib/sync/session';
 import type { UserData } from '../../src/types';
 
-const data = (height: number) => UserDataSchema.parse({ profile: { height: String(height) }, legalConsent: { hasAcceptedTerms: true, hasAcceptedHealthData: true, acceptedAt: '2026-10-11T10:00:00.000Z', privacyVersion: '1.3.2', termsVersion: '1.2.0' } }) as unknown as UserData;
+const data = (height: number) => UserDataSchema.parse({ profile: { height: String(height) }, legalConsent: { hasAcceptedTerms: true, hasAcceptedHealthData: true, acceptedAt: '2026-10-11T10:00:00.000Z', privacyVersion: '1.3.3', termsVersion: '1.2.1' } }) as unknown as UserData;
 const deferred = <T>() => { let resolve!: (value: T) => void; let reject!: (err: any) => void; const promise = new Promise<T>((res, rej) => { resolve = res; reject = rej; }); return { promise, resolve, reject }; };
 
 beforeEach(async () => {

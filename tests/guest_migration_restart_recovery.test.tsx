@@ -35,7 +35,7 @@ const user = { uid: 'guest-restart-user', email: 'restart@example.com', displayN
 let onlineSpy: { mockRestore: () => void; mockReturnValue: (value: boolean) => unknown } | undefined;
 
 function fixtures() {
-    const cloud = parse({ profile: { gender: 'M' }, routines: [{ id: 'cloud-routine', name: 'Cloud', exercises: [] }], legalConsent: { hasAcceptedTerms: true, hasAcceptedHealthData: true, acceptedAt: '2026-10-11T10:00:00.000Z', privacyVersion: '1.3.2', termsVersion: '1.2.0' } });
+    const cloud = parse({ profile: { gender: 'M' }, routines: [{ id: 'cloud-routine', name: 'Cloud', exercises: [] }], legalConsent: { hasAcceptedTerms: true, hasAcceptedHealthData: true, acceptedAt: '2026-10-11T10:00:00.000Z', privacyVersion: '1.3.3', termsVersion: '1.2.1' } });
     const guest = parse({ profile: { height: '175' }, routines: [{ id: 'guest-routine', name: 'Guest', exercises: [] }] });
     return { cloud, guest };
 }

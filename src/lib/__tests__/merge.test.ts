@@ -74,8 +74,8 @@ describe('mergeUserData', () => {
             hasAcceptedTerms: true,
             hasAcceptedHealthData: true,
             acceptedAt: '2026-10-11T10:00:00.000Z',
-            privacyVersion: '1.3.2',
-            termsVersion: '1.2.0',
+            privacyVersion: '1.3.3',
+            termsVersion: '1.2.1',
         };
         const merged = mergeUserData(null, { legalConsent: guestConsent, profile: { height: '180' } });
         expect(merged.profile?.height).toBe('180');
@@ -94,8 +94,8 @@ describe('mergeUserData', () => {
             hasAcceptedTerms: true,
             hasAcceptedHealthData: true,
             acceptedAt: '2026-10-11T10:00:00.000Z',
-            privacyVersion: '1.3.2',
-            termsVersion: '1.2.0',
+            privacyVersion: '1.3.3',
+            termsVersion: '1.2.1',
         };
         const merged = mergeUserData({ legalConsent: cloudConsent }, { legalConsent: guestConsent });
         expect(merged.legalConsent).toEqual(cloudConsent);

@@ -1,13 +1,13 @@
 # Dati salute e revoca del consenso — decisione e gate pre-pilot
 
-> Stato: **SOLUZIONE A APPROVATA DAL PRODUCT OWNER IL 9 OTTOBRE 2026**. Analisi legale, implementazione, regressioni e verifica Production ancora aperte.
-> Baseline repository osservata: `main` `5a9394649977cae4e2261e530312f5121818ce12` (9 ottobre 2026).
+> Stato aggiornato il **12 ottobre 2026**: soluzione A approvata dal product owner; implementazione e regressioni **candidate nella [PR #366](https://github.com/gernotfound/logbook/pull/366), ancora draft, non in Production**. Il gate automatizzato e la verifica giuridica/runtime sono evidenze distinte.
+> La fotografia di partenza seguente riguarda la baseline storica `main` `5a9394649977cae4e2261e530312f5121818ce12` (9 ottobre 2026), **non descrive lo stato corrente della PR**.
 > Questo documento non costituisce un parere legale, una DPIA conclusa o una specifica di implementazione approvata.
 > Non certifica configurazioni Firebase/Vercel/Sentry Production.
 
 ## Perché esiste
 
-La PWA tratta dati di allenamento, alimentazione, misurazioni corporee, sonno e annotazioni sui dolori. Alcuni di questi dati, per contenuto e contesto, possono rientrare nell'art. 9 GDPR; non tutti i singoli valori fitness vanno automaticamente classificati come dati sanitari. Il prodotto oggi richiede un consenso esplicito separato, ma non offre un percorso completo e verificato per revocarlo. Una semplice nuova checkbox non risolverebbe il problema: il trattamento comprende stato in memoria, copie locali e sincronizzate, dispositivi offline e fornitori.
+La PWA tratta dati di allenamento, alimentazione, misurazioni corporee, sonno e annotazioni sui dolori. Alcuni di questi dati, per contenuto e contesto, possono rientrare nell'art. 9 GDPR; non tutti i singoli valori fitness vanno automaticamente classificati come dati sanitari. La baseline del 9 ottobre richiedeva un consenso esplicito separato, ma non offriva ancora un percorso completo e verificato per revocarlo. Una semplice nuova checkbox non risolverebbe il problema: il trattamento comprende stato in memoria, copie locali e sincronizzate, dispositivi offline e fornitori.
 
 Le basi giuridiche di **ogni finalità** devono essere validate (art. 6 e, quando applicabile, art. 9 GDPR). La necessità dei dati per erogare singole funzioni, la libertà del consenso e le conseguenze della revoca non possono essere decise dalla sola architettura.
 
@@ -17,7 +17,7 @@ Fonti istituzionali da utilizzare nella revisione:
 - Garante Privacy, principi fondamentali: https://garanteprivacy.it/web/guest/home/principi-fondamentali-del-trattamento
 - Garante Privacy, dispositivi e app fitness tracker: https://www.garanteprivacy.it/home/docweb/-/docweb-display/docweb/9968193
 
-## Stato osservato e confini tecnici
+## Analisi della baseline storica del 9 ottobre — non dello SHA candidato attuale
 
 | Confine | Evidenza nel codice | Conseguenza |
 |---|---|---|
@@ -29,14 +29,18 @@ Fonti istituzionali da utilizzare nella revisione:
 | Offline | `src/lib/sync/localRepository.ts`, `src/lib/sync/deviceStorage.ts`, `src/contexts/AuthContext.tsx`, journal e hydration | Una modifica solo React o solo localStorage non blocca tutte le repliche o le tab/dispositivi obsoleti |
 | Esportazione / eliminazione | `src/lib/db/backupSnapshot.ts`, `src/lib/backup.ts`, `src/lib/db/db_account.ts`, backend Vercel | Non confondere esportazione, revoca, limitazione e cancellazione account; le cancellazioni irreversibili richiedono conferma distinta |
 
-Questa tabella rappresenta un'analisi dei confini, **non** un penetration test e **non** una verifica del runtime o di tutti i chiamanti.
+Questa tabella rappresenta un'analisi storica dei confini, **non** un penetration test e **non** una verifica del runtime o di tutti i chiamanti.
+
+### Stato tecnico candidato (12 ottobre 2026)
+
+La PR #366 implementa il marker trusted `health_consent_withdrawals/{uid}`, le Security Rules con fence di revisione, la sospensione completa della UI, l'export Admin autenticato durante la revoca, la nuova accettazione esplicita e il recupero non automatico del journal locale. La suite GitHub Actions verifica codice, Rules Emulator, backup/export, recovery e scenario ospite multi-tab con browser Chromium/WebKit emulato. **Il candidato non equivale a un servizio pubblicato**: non esistono in questa PR prove autenticata end-to-end su Firebase/Vercel Production né una revisione legale approvata. Vedere il [protocollo tecnico](health-consent-technical-protocol.md) per confini e rischi residui.
 
 ## Decisione di prodotto approvata: soluzione A; verifiche giuridiche aperte
 
 1. **DECISO — soluzione A:** sospendere le funzioni di tracciamento e modifica dei dati salute quando l'utente revoca il consenso. Mantenere esclusivamente gli strumenti necessari per consultare questa informativa, esercitare i diritti, esportare i dati e chiedere la cancellazione dell'account. Non introdurre la soluzione B (uso fitness limitato). L'eventuale conservazione temporanea dopo revoca va giustificata giuridicamente e limitata; non autorizza una conservazione indefinita.
 2. **Dati già conservati:** individuare per categoria ciò che va cancellato, ciò che può eventualmente restare su una diversa base valida, durata e modalità; valutare anche backend, cache locale, log e fornitori.
 3. **Revoca offline:** definire quando la revoca diventa effettiva e come comunicare un eventuale stato pendente del cloud. Interrompere subito le operazioni locali dipendenti dal consenso; non dichiarare revocato sul cloud un trattamento finché non si è ottenuta prova della registrazione server.
-4. **Re-consenso:** decidere se e come riattivare funzionalità senza reimportare/recreare dati cancellati, senza consentire a un altro dispositivo di sovrascrivere uno stato di revoca più recente.
+4. **Re-consenso — deciso il 12 ottobre:** l’utente può prestare nuovamente un consenso esplicito per riattivare l’intera PWA (nessuna modalità ridotta). Il flusso è distinto dalla revoca e non può implicare il ripristino di dati già cancellati né il replay di operazioni obsolete.
 5. **Ospite:** distinguere l'uso locale e la raccolta presso i fornitori; stabilire le modalità necessarie a esercitare i diritti nella modalità priva di account.
 6. **Informativa e titolare:** correggere la descrizione della revoca, il canale di contatto e le basi giuridiche prima dei trattamenti per cui tali informazioni sono obbligatorie, non soltanto prima della vendita.
 
@@ -45,11 +49,11 @@ La scelta A **non autorizza cancellazioni automatiche e irreversibili** né la c
 ## Comportamento UX approvato per la soluzione A
 
 - **Da Impostazioni → Privacy:** azione distinguibile `Revoca il consenso per i dati salute` con spiegazione anticipata delle conseguenze. Confermare la volontà di revoca senza creare ostacoli sproporzionati; l'eliminazione dei dati e dell'account è un'azione diversa.
-- **Dopo la revoca:** schermata di sospensione dedicata, senza dashboard, workout, diario o funzionalità che richiedano il consenso. Restano accessibili informativa, strumenti di esercizio dei diritti applicabili, esportazione dati e procedura di eliminazione account. La schermata non può presentare `Accetta e continua` come scorciatoia per annullare la revoca.
+- **Dopo la revoca:** schermata di sospensione dedicata, senza dashboard, workout, diario o funzionalità che richiedano il consenso. Restano accessibili informativa, strumenti di esercizio dei diritti applicabili, esportazione dati, cancellazione account e una nuova scelta distinta e esplicita per l’eventuale riattivazione. Il precedente consenso non è riutilizzabile come autorizzazione alla ripresa.
 - **Durante l'operazione:** bloccare subito le nuove modifiche/repliche dipendenti dal consenso. Distinguere visibilmente `revoca registrata`, `revoca in attesa di registrazione server` e `errore di registrazione`; mai comunicare un successo cloud non verificato.
 - **Offline e più dispositivi:** registrare la richiesta localmente in modo durevole e fermare le operazioni locali interessate anche a riavvio e fra tab. Quando ritorna la rete, registrare/riconciliare in modo idempotente presso un confine autorevole del server, con difesa contro client obsoleti e richieste già in volo; nessuna operazione di scrittura precedentemente pendente deve ripristinare il trattamento revocato.
 - **Esportazione e cancellazione:** non compromettere il backup dei dati già presenti o il percorso di account deletion/recovery, salvo diversa misura legalmente necessaria. Gli interventi irreversibili richiedono intenzione e conferma distinte; verificare la base giuridica e la durata dell'eventuale conservazione temporanea destinata alla gestione dei diritti.
-- **Riattivazione futura:** nessun re-consenso implicito da sessione vecchia, refresh, import/backup o modifica di `legalConsent` lato client. Un eventuale nuovo flusso di consenso esplicito va progettato e approvato separatamente.
+- **Nuova accettazione (decisione aggiornata):** l’utente può riattivare tutte le funzioni solo con checkbox esplicite distinte e conferma autorevole del server; nessun re-consenso implicito da sessione vecchia, refresh, import/backup o modifica di `legalConsent` lato client. Implementazione e regressioni restano in validazione nella PR #366.
 - **Utenti ospiti:** la sospensione riguarda le funzioni che dipendono dal consenso anche senza account, ma non va equiparato lo storage solo locale all'invio cloud; verificare finalità e confini dei trattamenti.
 
 ## Vincoli giuridici non risolti
@@ -65,7 +69,7 @@ Secondo GDPR art. 7(3) e Linee guida EDPB 05/2020, la revoca deve essere facile 
 - Revocare non deve cancellare silenziosamente dati, pending journal, ricevute di cancellazione o copie necessarie al recupero; qualsiasi purge va progettato e testato separatamente, coerentemente con la decisione giuridica.
 - Informativa, documentazione di accountability, UI e comportamenti devono concordare. Se cambiano condizioni materiali, aggiornare `LEGAL_VERSIONS.privacy` e regressioni correlate.
 
-## Regressioni CRITICAL da aggiungere **dopo** la decisione
+## Regressioni CRITICAL e verifiche di rilascio
 
 1. Consenso con versione corretta vs assente/vecchio; rifiuto, revoca, ripresa e re-consenso, senza accesso improprio.
 2. Revoca durante workout attivo, scrittura IndexedDB/journal, pending cloud write e lost acknowledgement.
@@ -76,14 +80,18 @@ Secondo GDPR art. 7(3) e Linee guida EDPB 05/2020, la revoca deve essere facile 
 7. Prova su browser/PWA iOS, Android e Desktop con temi/viewport pertinenti; test della accessibilità del flusso.
 8. Nessun dato reale negli ambienti di test; `verify:m8` / CI canonica exact-SHA, review, merge, CI main e Production verificati separatamente.
 
+## Decisione del product owner — 12 ottobre 2026
+
+Il product owner ha chiesto espressamente di **pubblicare le modifiche tecniche lasciando i placeholder delle informazioni legali** già utilizzati nella versione corrente di `main`. I testi pubblici descrivono il comportamento effettivo della revoca e individuano con segnaposto le informazioni non finalizzate, senza attribuire conformità GDPR. Questa decisione è un'autorizzazione tecnica al merge, **non** una validazione delle basi giuridiche, della retention postrevoca, dell'identità del titolare o delle procedure dei diritti. Il pilot con dati reali resta soggetto ai requisiti legali sottostanti.
+
 ## Gate di rilascio
 
-**NON CHIUSO.** Prima del pilot con utenti reali:
+**NON CHIUSO AI FINI DEL PILOT CON UTENTI REALI.** Il merge richiesto dal product owner non chiude le verifiche legali e non va rappresentato come prova di conformità. Prima del pilot con utenti reali:
 - [ ] classificazione delle finalità e delle basi artt. 6/9 approvata da professionista competente;
-- [x] decisione esplicita di prodotto: soluzione A (sospensione, accesso a diritti/esportazione/cancellazione);
-- [ ] specifica tecnica end-to-end per ospite, account, offline, multi-device e recovery;
-- [ ] implementazione atomica/autorativa con test negativi e failure path;
-- [ ] verifica Firestore Rules live, backend quando coinvolto e runtime PWA pertinente;
+- [x] decisione esplicita di prodotto: sospensione totale delle funzioni fitness, accesso a diritti/esportazione/cancellazione e facoltà di nuovo consenso esplicito (12 ottobre 2026);
+- [x] protocollo tecnico **candidato** documentato per ospite, account, offline, multi-device e recovery; verifica empirica con dispositivi distinti ancora aperta;
+- [x] implementazione candidata con protezioni server-side e regressioni automatizzate nella PR #366; la review indipendente e la prova runtime non sono ancora certificate;
+- [ ] verifica Firestore Rules live, backend quando coinvolto, browser fisici e runtime PWA pertinente dopo l'autorizzazione al rilascio;
 - [ ] informativa, registro, DPIA screening, retention e procedura diritti aggiornati e validati.
 
 Rif.: `docs/compliance/data-subject-rights-procedure.md`, `docs/compliance/dpia-screening-template.md`, `docs/compliance/retention-schedule.md`, `docs/compliance/processing-record-template.md`, `.agents/rules/data-model-and-zod.md` e `.agents/rules/storage-and-sync.md`.

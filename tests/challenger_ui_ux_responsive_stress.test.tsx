@@ -38,10 +38,17 @@ describe('Challenger 2: UI/UX Adversarial & Responsive Stress Test Suite', () =>
         }
     ];
 
+    // Relative to the test clock: these suites must not expire on a future date.
+    const recentDate = (weeksAgo: number, dayOffset = 0): string => {
+        const date = new Date();
+        date.setUTCDate(date.getUTCDate() - 7 * weeksAgo + dayOffset);
+        return date.toISOString().slice(0, 10);
+    };
+
     const generateRealisticHistory = (): WorkoutSession[] => [
         {
             id: 'sess_1',
-            date: '2026-08-04',
+            date: recentDate(3),
             routineName: 'Upper Body A',
             exercises: [
                 {
@@ -56,7 +63,7 @@ describe('Challenger 2: UI/UX Adversarial & Responsive Stress Test Suite', () =>
         },
         {
             id: 'sess_2',
-            date: '2026-08-11',
+            date: recentDate(2),
             routineName: 'Upper Body A',
             exercises: [
                 {
@@ -71,7 +78,7 @@ describe('Challenger 2: UI/UX Adversarial & Responsive Stress Test Suite', () =>
         },
         {
             id: 'sess_3',
-            date: '2026-08-18',
+            date: recentDate(1),
             routineName: 'Upper Body A',
             exercises: [
                 {
@@ -87,11 +94,11 @@ describe('Challenger 2: UI/UX Adversarial & Responsive Stress Test Suite', () =>
     ];
 
     const generateRealisticNutrition = (): Record<string, NutritionDay> => ({
-        '2026-08-04': { date: '2026-08-04', kcal: 2400, carbs: 280, pro: 160, fat: 70, weight: 80 },
-        '2026-08-05': { date: '2026-08-05', kcal: 2450, carbs: 290, pro: 160, fat: 70, weight: 80.1 },
-        '2026-08-11': { date: '2026-08-11', kcal: 2600, carbs: 320, pro: 170, fat: 75, weight: 80.3 },
-        '2026-08-12': { date: '2026-08-12', kcal: 2650, carbs: 330, pro: 170, fat: 75, weight: 80.4 },
-        '2026-08-18': { date: '2026-08-18', kcal: 2800, carbs: 350, pro: 180, fat: 80, weight: 80.6 }
+        [recentDate(3)]: { date: recentDate(3), kcal: 2400, carbs: 280, pro: 160, fat: 70, weight: 80 },
+        [recentDate(3, 1)]: { date: recentDate(3, 1), kcal: 2450, carbs: 290, pro: 160, fat: 70, weight: 80.1 },
+        [recentDate(2)]: { date: recentDate(2), kcal: 2600, carbs: 320, pro: 170, fat: 75, weight: 80.3 },
+        [recentDate(2, 1)]: { date: recentDate(2, 1), kcal: 2650, carbs: 330, pro: 170, fat: 75, weight: 80.4 },
+        [recentDate(1)]: { date: recentDate(1), kcal: 2800, carbs: 350, pro: 180, fat: 80, weight: 80.6 }
     });
 
     afterEach(() => {

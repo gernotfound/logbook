@@ -1,4 +1,4 @@
-import { LegalConsent } from '../types';
+import type { LegalConsent } from '../types.js';
 
 /**
  * Versioni correnti dei documenti legali.
@@ -6,8 +6,8 @@ import { LegalConsent } from '../types';
  * Gli utenti esistenti vedranno l'overlay di adeguamento se le versioni non corrispondono.
  */
 export const LEGAL_VERSIONS = {
-  privacy: "1.3.2",
-  terms: "1.2.0",
+  privacy: "1.3.3",
+  terms: "1.2.1",
 } as const;
 
 

@@ -33,6 +33,21 @@ vi.mock('../../src/lib/firebase', () => ({
     ensureAppCheck: async () => {},
     waitForPendingWrites: async () => {},
 }));
+// This suite exercises legacy sync/reconciliation under an already-authorized
+// authenticated account (server revision 0). Consent revocation and epoch
+// enforcement are tested separately with the real policy and emulator Rules.
+vi.mock('../../src/lib/healthConsent', async () => {
+    const actual = await vi.importActual<typeof import('../../src/lib/healthConsent')>('../../src/lib/healthConsent');
+    const writable = (owner: string) => owner === 'user:' + firebaseHarness.auth.currentUser?.uid;
+    return {
+        ...actual,
+        isHealthConsentWritable: writable,
+        requireHealthConsentWritable: (owner: string) => {
+            if (!writable(owner)) throw new Error('Utente non autorizzato dal consenso');
+        },
+        getVerifiedHealthConsentRevision: () => 0,
+    };
+});
 vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackEvent: vi.fn(), trackError: vi.fn() } }));
 vi.mock('../../src/lib/catalog/catalogService', () => ({ getCachedCatalog: async () => catalog }));
 vi.mock('../../src/lib/sync/localRepository', async () => {
@@ -72,7 +87,7 @@ function data(height: number, name?: string): UserData {
             height: String(height),
             ...(name ? { name } : {}),
         },
-        legalConsent: { hasAcceptedTerms: true, hasAcceptedHealthData: true, acceptedAt: '2026-10-11T10:00:00.000Z', privacyVersion: '1.3.2', termsVersion: '1.2.0' },
+        legalConsent: { hasAcceptedTerms: true, hasAcceptedHealthData: true, acceptedAt: '2026-10-11T10:00:00.000Z', privacyVersion: '1.3.3', termsVersion: '1.2.1' },
     }) as unknown as UserData;
 }
 

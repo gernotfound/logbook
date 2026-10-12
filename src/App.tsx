@@ -1,4 +1,4 @@
-import { useState, useEffect, useEffectEvent, useRef, Suspense, lazy } from 'react';
+import { useState, useEffect, useEffectEvent, useRef, useSyncExternalStore, Suspense, lazy } from 'react';
 import { useAuth } from './hooks/useAuth';
 import { useAppStore } from './store/useAppStore';
 import { useLocalStorage } from './hooks/useLocalStorage';
@@ -28,6 +28,8 @@ import BrandLoadingScreen from './components/UI/BrandLoadingScreen';
 import BottomNav from './components/UI/BottomNav';
 import { GlobalDialog } from './components/UI/GlobalDialog';
 import { ConsentOverlay } from './components/UI/ConsentOverlay';
+import { HealthConsentSuspended } from './components/UI/HealthConsentSuspended';
+import { currentHealthConsentStatus, getGuestHealthConsentStatus, refreshHealthConsent, refreshHealthConsentFromStorage, subscribeHealthConsent } from './lib/healthConsent';
 import { needsLegalUpdate } from './lib/legalVersions';
 import { LoginBox } from './components/UI/LoginBox';
 import { EmailVerificationGate } from './components/UI/EmailVerificationGate';
@@ -107,6 +109,41 @@ function GuestBanner({ onLogin }: { onLogin: () => void }) {
 
 function App() {
   const { currentUser, loading, isGuest, guestMigrationStatus, retryGuestMigration, emailVerificationRequired } = useAuth();
+  const healthConsentStatus = useSyncExternalStore(subscribeHealthConsent, () => isGuest ? getGuestHealthConsentStatus() : currentHealthConsentStatus(currentUser?.uid), () => 'checking' as const);
+  useEffect(() => {
+    if (!currentUser || isGuest || emailVerificationRequired) return;
+    const reconcile = () => { void refreshHealthConsent(currentUser); };
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === `logbook:v2:user:${currentUser.uid}:health-consent-withdrawal`) {
+        refreshHealthConsentFromStorage();
+        reconcile();
+      }
+    };
+    const onFocus = () => { if (document.visibilityState === 'visible') reconcile(); };
+    window.addEventListener('storage', onStorage);
+    window.addEventListener('online', onFocus);
+    window.addEventListener('focus', onFocus);
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      window.removeEventListener('online', onFocus);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [currentUser, isGuest, emailVerificationRequired]);
+  useEffect(() => {
+    if (!isGuest) return;
+    const reconcileGuest = (event: StorageEvent) => {
+      if (event.key === 'logbook:v2:guest:health-consent-withdrawal') {
+        refreshHealthConsentFromStorage();
+      }
+    };
+    const onFocus = () => refreshHealthConsentFromStorage();
+    window.addEventListener('storage', reconcileGuest);
+    window.addEventListener('focus', onFocus);
+    return () => {
+      window.removeEventListener('storage', reconcileGuest);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [isGuest]);
   const syncing = useAppStore(state => state.syncing);
   const userData = useAppStore(state => state.userData);
   const saveError = useAppStore(state => state.saveError);
@@ -199,6 +236,7 @@ function App() {
       || guestLoginMigrationPending
       || guestLoginMigrationFailed
       || Boolean(showConsentOverlay)
+      || (healthConsentStatus !== 'active')
       || guestLoginOverlayVisible
       || settingsOpen;
 
@@ -218,6 +256,7 @@ function App() {
     guestLoginMigrationPending,
     guestLoginOverlayVisible,
     hasUserData,
+    healthConsentStatus,
     isGuest,
     loading,
     settingsOpen,
@@ -428,6 +467,10 @@ function App() {
         </div>
       </div>
     );
+  }
+
+  if ((isGuest || currentUser) && healthConsentStatus !== 'active') {
+    return <><GlobalDialog /><HealthConsentSuspended status={healthConsentStatus} user={isGuest ? null : currentUser} /></>;
   }
 
   return (

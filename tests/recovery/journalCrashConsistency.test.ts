@@ -25,6 +25,21 @@ vi.mock('../../src/lib/firebase', () => ({
     ensureAppCheck: async () => {},
     waitForPendingWrites: async () => {},
 }));
+// This crash-consistency suite models a user whose initial (revision-zero)
+// health consent has already been verified. Consent epoch handling is tested
+// separately with the real policy and Firestore Rules.
+vi.mock('../../src/lib/healthConsent', async () => {
+    const actual = await vi.importActual<typeof import('../../src/lib/healthConsent')>('../../src/lib/healthConsent');
+    const writable = (owner: string) => owner === 'user:' + remote.auth.currentUser?.uid;
+    return {
+        ...actual,
+        isHealthConsentWritable: writable,
+        requireHealthConsentWritable: (owner: string) => {
+            if (!writable(owner)) throw new Error('Utente non autorizzato dal consenso');
+        },
+        getVerifiedHealthConsentRevision: () => 0,
+    };
+});
 vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackEvent: vi.fn(), trackError: vi.fn() } }));
 vi.mock('../../src/lib/catalog/catalogService', () => ({ getCachedCatalog: async () => catalog }));
 vi.mock('../../src/lib/sync/transactionWriter', () => ({ applyDocumentChanges: remote.apply }));
@@ -53,7 +68,7 @@ import {
 } from '../../src/lib/sync/semanticProjection';
 
 const owner = 'user:a';
-const data = (height: number) => UserDataSchema.parse({ profile: { height: String(height) }, legalConsent: { hasAcceptedTerms: true, hasAcceptedHealthData: true, acceptedAt: '2026-10-11T10:00:00.000Z', privacyVersion: '1.3.2', termsVersion: '1.2.0' } }) as unknown as UserData;
+const data = (height: number) => UserDataSchema.parse({ profile: { height: String(height) }, legalConsent: { hasAcceptedTerms: true, hasAcceptedHealthData: true, acceptedAt: '2026-10-11T10:00:00.000Z', privacyVersion: '1.3.3', termsVersion: '1.2.1' } }) as unknown as UserData;
 
 let cloudDocuments: Map<string, DocumentData>;
 let cloudSyncMeta: Record<string, SyncMeta>;

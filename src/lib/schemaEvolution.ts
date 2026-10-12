@@ -156,7 +156,7 @@ function assertCurrentCloudSyncEnvelope(sync: unknown, kind: string): Record<str
     if (!isRecord(sync.fields)) throw new Error(`${kind}: fields non valido.`);
     if (!isRecord(sync.writer)) throw new Error(`${kind}: writer obbligatorio.`);
     const writer = sync.writer;
-    const allowedWriterKeys = new Set(['slot', 'replicaId', 'generation', 'seq']);
+    const allowedWriterKeys = new Set(['slot', 'replicaId', 'generation', 'seq', 'consentRevision']);
     if (Object.keys(writer).some(key => !allowedWriterKeys.has(key))) {
         throw new Error(`${kind}: writer contiene campi non supportati.`);
     }
@@ -171,6 +171,12 @@ function assertCurrentCloudSyncEnvelope(sync: unknown, kind: string): Record<str
     }
     if (typeof writer.seq !== 'number' || !Number.isSafeInteger(writer.seq) || writer.seq < 0) {
         throw new Error(`${kind}: writer seq non valida.`);
+    }
+    if (writer.consentRevision !== undefined && (
+        typeof writer.consentRevision !== 'number'
+        || !Number.isSafeInteger(writer.consentRevision) || writer.consentRevision < 0
+    )) {
+        throw new Error(`${kind}: writer consentRevision non valida.`);
     }
     return sync;
 }
