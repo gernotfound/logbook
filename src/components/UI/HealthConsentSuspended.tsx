@@ -5,7 +5,7 @@ import { useSettings } from '../../hooks/useSettings';
 import { recoverOldLocalEditsAfterConsent } from '../../lib/healthConsentRecovery';
 import { useDialogStore } from '../../store/useDialogStore';
 import { LEGAL_VERSIONS } from '../../lib/legalVersions';
-import { beginGuestHealthReacceptance, completeGuestHealthReacceptance, finishHealthConsentReacceptance, reacceptHealthConsent, reconfirmStaleHealthWithdrawal, refreshHealthConsent, type HealthConsentStatus } from '../../lib/healthConsent';
+import { beginGuestHealthReacceptance, completeGuestHealthReacceptance, finishHealthConsentReacceptance, reacceptHealthConsent, reconfirmStaleHealthWithdrawal, retainNewerHealthConsent, refreshHealthConsent, type HealthConsentStatus } from '../../lib/healthConsent';
 import { PrivacyPolicy } from '../../pages/PrivacyPolicy';
 import { TermsAndConditions } from '../../pages/TermsAndConditions';
 
@@ -87,6 +87,18 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
           catch (e) { setError(e instanceof Error ? e.message : 'Impossibile confermare la revoca.'); }
           finally { setBusy(false); }
         })(); }}>Riconferma la revoca</button>
+        <button className="btn" type="button" disabled={busy} onClick={() => { void (async () => {
+          const confirmed = await useDialogStore.getState().showConfirm('Vuoi mantenere il consenso più recente prestato dall’altro dispositivo? La precedente richiesta di revoca non verrà inviata. Le modifiche offline rimarranno conservate.');
+          if (!confirmed) return;
+          setBusy(true); setError(null);
+          try {
+            if (!user) throw new Error('Account non disponibile.');
+            const result = await retainNewerHealthConsent(user);
+            if (result === 'active') finishHealthConsentReacceptance(user.uid);
+          } catch (e) {
+            setError(e instanceof Error ? e.message : 'Impossibile verificare il consenso più recente.');
+          } finally { setBusy(false); }
+        })(); }}>Mantieni il nuovo consenso</button>
       </section>}
       {status === 'recovery-required' && <section aria-label="Recupero delle modifiche precedenti">
         <p role="alert">Il nuovo consenso è stato registrato, ma su questo dispositivo ci sono modifiche non sincronizzate prima della revoca. Non le eliminiamo e non le inviamo automaticamente.</p>

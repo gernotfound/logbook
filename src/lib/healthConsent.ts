@@ -234,6 +234,35 @@ export async function withdrawHealthConsent(user: User, freezeWriters?: () => vo
 }
 
 /** A stale withdrawal is never replayed without a new explicit user decision. */
+/**
+ * A prior withdrawal cannot override an explicit reacceptance from another
+ * device. The user may explicitly KEEP that newer acceptance instead. Never
+ * use this path to discard a pending local journal.
+ */
+export async function retainNewerHealthConsent(user: User): Promise<HealthConsentStatus> {
+  const uid = user.uid;
+  if (currentHealthConsentStatus(uid) !== 'stale-request') throw new Error('Nessuna scelta recente da confermare.');
+  const originalRevision = parsePendingRevision(readMarker(uid));
+  if (originalRevision === null) throw new Error('Richiesta precedente non riconosciuta.');
+  const live = await serverRequest(user, 'GET');
+  if (live.status !== 'active' || live.revision <= originalRevision) {
+    throw new Error('Il consenso server è cambiato; ripeti la verifica.');
+  }
+  writeBrowserValue(generationMarker(uid), String(live.revision));
+  const { advanceLocalConsentRevisionIfClean } = await import('./sync/localRepository');
+  const ready = await advanceLocalConsentRevisionIfClean('user:' + uid, live.revision);
+  // The superseded request is cleared only after the live generation has
+  // durably fenced old tabs. An old journal remains in IndexedDB in either case.
+  removeBrowserValue(marker(uid));
+  if (!ready) {
+    setStatus(uid, 'recovery-required');
+    return 'recovery-required';
+  }
+  verifiedRevisions.set(uid, live.revision);
+  setStatus(uid, 'active');
+  return 'active';
+}
+
 export async function reconfirmStaleHealthWithdrawal(user: User): Promise<void> {
   if (currentHealthConsentStatus(user.uid) !== 'stale-request') throw new Error('Nessuna revoca precedente da riconfermare.');
   const live = await serverRequest(user, 'GET');
@@ -273,7 +302,8 @@ export async function reacceptHealthConsent(user: User, acceptance: {
 }
 
 export function finishHealthConsentReacceptance(uid: string): void {
-  if (!verifiedReacceptance.has(uid) || currentHealthConsentStatus(uid) !== 'active') {
+  if (currentHealthConsentStatus(uid) !== 'active' || !verifiedRevisions.has(uid)
+    || !isHealthConsentWritable('user:' + uid)) {
     throw new Error('Nuovo consenso non verificato o dati pendenti da recuperare.');
   }
   verifiedReacceptance.delete(uid);

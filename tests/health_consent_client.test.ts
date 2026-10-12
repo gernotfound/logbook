@@ -9,7 +9,7 @@ import {
   beginHealthConsentVerification, currentHealthConsentStatus,
   finishHealthConsentReacceptance, isHealthConsentWritable,
   reacceptHealthConsent, refreshHealthConsent, requireHealthConsentWritable,
-  withdrawHealthConsent,
+  withdrawHealthConsent, retainNewerHealthConsent,
   withdrawGuestHealthConsent, beginGuestHealthReacceptance,
   completeGuestHealthReacceptance, getGuestHealthConsentStatus,
 } from '../src/lib/healthConsent';
@@ -147,5 +147,22 @@ describe('stale withdrawal race', () => {
     expect(await refreshHealthConsent(user(uid))).toBe('stale-request');
     expect(calls).toEqual(['GET']);
     expect(isHealthConsentWritable('user:' + uid)).toBe(false);
+  });
+});
+
+describe('explicit acknowledgement of newer consent from another device', () => {
+  it('retains the newer server acceptance without retrying a stale withdrawal', async () => {
+    const uid = 'keep-' + crypto.randomUUID();
+    localStorage.setItem(key(uid), 'pending:0');
+    const methods: string[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
+      methods.push(init.method ?? 'GET');
+      return Response.json({ status: 'active', revision: 2, acceptedAt: '2026-10-12T00:00:00.000Z' });
+    }));
+    expect(await refreshHealthConsent(user(uid))).toBe('stale-request');
+    expect(await retainNewerHealthConsent(user(uid))).toBe('active');
+    expect(isHealthConsentWritable('user:' + uid)).toBe(true);
+    expect(localStorage.getItem(key(uid))).toBeNull();
+    expect(methods).toEqual(['GET', 'GET']);
   });
 });
