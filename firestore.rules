@@ -582,8 +582,10 @@ service cloud.firestore {
       match /telemetry_errors/{errorId} {
         allow read, delete: if isWritableOwner(userId);
         allow create: if isWritableOwner(userId)
+          && matchesConsentEpoch(userId, incomingData())
           && isValidTelemetryError(incomingData(), userId);
         allow update: if isWritableOwner(userId)
+          && matchesConsentEpoch(userId, incomingData())
           && isValidTelemetryError(incomingData(), userId)
           && preservesTelemetryErrorIdentity();
       }
@@ -591,10 +593,12 @@ service cloud.firestore {
       match /telemetry_events/{eventId} {
         allow read, delete: if isWritableOwner(userId);
         allow create: if isWritableOwner(userId)
+          && matchesConsentEpoch(userId, incomingData())
           && isValidTelemetryEvent(incomingData(), userId);
         // Events are append-only. Identical retries remain valid, and legacy
         // documents may receive only the rollout expiry field without changing history.
         allow update: if isWritableOwner(userId)
+          && matchesConsentEpoch(userId, incomingData())
           && isValidTelemetryEvent(incomingData(), userId)
           && isIdenticalTelemetryRetryOrExpiryUpgrade();
       }
@@ -602,10 +606,12 @@ service cloud.firestore {
       match /telemetry_anomalies/{eventId} {
         allow read, delete: if isWritableOwner(userId);
         allow create: if isWritableOwner(userId)
+          && matchesConsentEpoch(userId, incomingData())
           && isValidTelemetryAnomaly(incomingData());
         // Storage anomalies are immutable after creation apart from a one-time
         // legacy upgrade that adds only the rollout expiry field.
         allow update: if isWritableOwner(userId)
+          && matchesConsentEpoch(userId, incomingData())
           && isValidTelemetryAnomaly(incomingData())
           && isIdenticalTelemetryRetryOrExpiryUpgrade();
       }

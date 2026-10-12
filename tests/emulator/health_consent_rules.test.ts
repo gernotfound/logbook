@@ -93,3 +93,15 @@ it('rejects private shards, telemetry and replica-control reads during withdrawa
     'users/u/telemetry_anomalies/one',
   ]) await assertFails(getDoc(doc(db, path)));
 });
+
+it('rejects legacy telemetry without consent epoch even after a new explicit acceptance', async () => {
+  await env.withSecurityRulesDisabled(async context => {
+    await setDoc(doc(context.firestore(), 'health_consent_withdrawals/u'), { uid: 'u', status: 'active', revision: 2 });
+  });
+  const db = env.authenticatedContext('u', { email_verified: true }).firestore();
+  await assertFails(setDoc(doc(db, 'users/u/telemetry_events/obsolete'), {
+    timestamp: Date.now(), type: 'workout_saved', userId: 'u', sessionId: 'old-client',
+    context: { appVersion: '1.0', platform: 'other', displayMode: 'browser', online: true },
+    expireAt: new Date(Date.now() + 86400000),
+  }));
+});
