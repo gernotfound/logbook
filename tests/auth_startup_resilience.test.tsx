@@ -43,7 +43,7 @@ describe('PWA & iPhone Startup Resilience Tests', () => {
       getIdToken: vi.fn().mockResolvedValue('test-token'),
     };
     vi.clearAllMocks();
-    await createAndMigrateVault('user:test-user-id', 'startup integration test passphrase 2026');
+    await createAndMigrateVault('user:test-user-id');
   });
 
   test('auth becomes READY only after the authenticated owner has been hydrated', async () => {
@@ -94,7 +94,7 @@ describe('PWA & iPhone Startup Resilience Tests', () => {
     });
     (auth as any).currentUser = null;
     // Owner B needs its own independent unlocked vault before its async hydration.
-    await createAndMigrateVault('user:account-b', 'independent owner B passphrase 2026');
+    await createAndMigrateVault('user:account-b');
 
     const originalRead = localRepository.readLocal;
     let releaseRead!: () => void;
