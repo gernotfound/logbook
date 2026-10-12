@@ -13,14 +13,13 @@ vi.mock('../../src/lib/healthConsent', () => ({
 import { commitDomainOperations, initializeLocal, readLocal } from '../../src/lib/sync/localRepository';
 import { deviceKey, protectedDeviceKey, readDeviceValue, readDeviceValueStrict } from '../../src/lib/sync/deviceStorage';
 import { createAndMigrateVault, resumeVaultMigration } from '../../src/lib/sync/secureArchiveMigration';
-import { LocalVaultLockedError, lockAllVaults, lockVault, readVaultControl, unlockVaultWithPassphrase } from '../../src/lib/sync/secureArchiveSession';
+import { LocalVaultLockedError, lockAllVaults, lockVault, readVaultControl, unlockVaultForOwner } from '../../src/lib/sync/secureArchiveSession';
 import { LocalCiphertextError, SEALED_LOCAL_PREFIX } from '../../src/lib/sync/secureArchiveCipher';
 import { BrowserStorageError } from '../../src/lib/sync/browserStorage';
 import { activateGuestSession, GUEST_SESSION_KEY, GUEST_REVOCATION_KEY } from '../../src/lib/sync/session';
 import { collectBackupSnapshot } from '../../src/lib/db/backupSnapshot';
 
 const owner = 'user:secure-migration';
-const phrase = 'unique local strong passphrase 2026';
 const day = '2026-10-12';
 const base = (): UserData => UserDataSchema.parse({
     profile: { height: '170', gender: 'M' },
@@ -43,8 +42,7 @@ describe('durable secure archive migration', () => {
         localStorage.setItem(deviceKey('workout', owner), workout);
         localStorage.setItem(deviceKey('draft:measurement:' + day, owner), JSON.stringify({ weight: '76' }));
 
-        const { recoveryCode } = await createAndMigrateVault(owner, phrase);
-        expect(recoveryCode).toMatch(/^[0-9a-f]{64}$/);
+        await createAndMigrateVault(owner);
         expect(readVaultControl(owner)?.phase).toBe('active');
         const raw = await get('logbook:v2:' + owner);
         expect(typeof raw).toBe('string');
@@ -66,7 +64,7 @@ describe('durable secure archive migration', () => {
         lockVault(owner);
         await expect(readLocal(owner)).rejects.toBeInstanceOf(LocalVaultLockedError);
         expect(() => readDeviceValueStrict('workout', owner)).toThrow(LocalVaultLockedError);
-        await unlockVaultWithPassphrase(owner, phrase);
+        await unlockVaultForOwner(owner);
         expect(readDeviceValueStrict('workout', owner)).toBe(workout);
     });
 
@@ -78,13 +76,13 @@ describe('durable secure archive migration', () => {
             if (name === protectedDeviceKey('draft:measurement:' + day, owner)) throw new Error('device quota');
             originalSet(name, value);
         });
-        await expect(createAndMigrateVault(owner, phrase)).rejects.toBeInstanceOf(BrowserStorageError);
+        await expect(createAndMigrateVault(owner)).rejects.toBeInstanceOf(BrowserStorageError);
         expect(readVaultControl(owner)?.phase).toBe('migrating');
         expect(localStorage.getItem(deviceKey('draft:measurement:' + day, owner))).toBe('{"weight":"77"}');
         expect((await get<string>('logbook:v2:' + owner))?.startsWith(SEALED_LOCAL_PREFIX)).toBe(true);
         intercepted.mockRestore();
 
-        await resumeVaultMigration(owner, phrase, 'passphrase');
+        await resumeVaultMigration(owner);
         expect(readVaultControl(owner)?.phase).toBe('active');
         expect(localStorage.getItem(deviceKey('draft:measurement:' + day, owner))).toBeNull();
         expect(readDeviceValueStrict('draft:measurement:' + day, owner)).toBe('{"weight":"77"}');
@@ -94,7 +92,7 @@ describe('durable secure archive migration', () => {
         await initializeLocal(owner, base());
         const name = 'draft:measurement:' + day;
         localStorage.setItem(deviceKey(name, owner), '{"weight":"81"}');
-        await createAndMigrateVault(owner, phrase);
+        await createAndMigrateVault(owner);
         const protectedKey = protectedDeviceKey(name, owner);
         const ciphertext = localStorage.getItem(protectedKey);
         expect(ciphertext).toMatch(/^tlb-sealed:v1:/);
@@ -111,7 +109,7 @@ describe('durable secure archive migration', () => {
 
     it('refuses stale legacy-tab writes instead of hiding or deleting conflicting device data', async () => {
         localStorage.setItem(deviceKey('workout', owner), '{"id":"before"}');
-        await createAndMigrateVault(owner, phrase);
+        await createAndMigrateVault(owner);
         localStorage.setItem(deviceKey('workout', owner), '{"id":"newer-old-tab"}');
         expect(() => readDeviceValueStrict('workout', owner)).toThrow(LocalCiphertextError);
         expect(localStorage.getItem(deviceKey('workout', owner))).toContain('newer-old-tab');
@@ -130,7 +128,7 @@ describe('durable secure archive migration', () => {
         localStorage.setItem(deviceKey('workout', 'guest'), notes);
         localStorage.setItem(deviceKey('draft:measurement:' + day, 'guest'), draft);
 
-        await createAndMigrateVault('guest', phrase);
+        await createAndMigrateVault('guest');
         const snapshot = await collectBackupSnapshot(data, false);
         expect(snapshot.owner).toBe('guest');
         expect(snapshot.recovery.device).toMatchObject({
@@ -143,7 +141,7 @@ describe('durable secure archive migration', () => {
 
     it('never activates a corrupt legacy archive or silently seeds empty data', async () => {
         await set('logbook:v2:' + owner, { incompatible: 'legacy-bad' });
-        await expect(createAndMigrateVault(owner, phrase)).rejects.toThrow();
+        await expect(createAndMigrateVault(owner)).rejects.toThrow();
         expect(readVaultControl(owner)?.phase).toBe('migrating');
         expect(await get('logbook:v2:' + owner)).toEqual({ incompatible: 'legacy-bad' });
     });
