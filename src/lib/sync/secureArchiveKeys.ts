@@ -125,13 +125,24 @@ export async function recoverLocalKeyVault(vault: LocalKeyVault, owner: string, 
     } catch { throw new LocalUnlockError(); }
 }
 
-export async function rewrapLocalPassphrase(vault: LocalKeyVault, owner: string, dataKey: Uint8Array, nextPassphrase: string): Promise<LocalKeyVault> {
-    validateVault(vault, owner);
-    if (dataKey.length !== KEY_BYTES || nextPassphrase.length < 16 || nextPassphrase.length > 1024) throw new Error('Passphrase o chiave non valida.');
+async function rewrapVerifiedDek(vault: LocalKeyVault, owner: string, dataKey: Uint8Array, nextPassphrase: string): Promise<LocalKeyVault> {
+    if (nextPassphrase.length < 16 || nextPassphrase.length > 1024) throw new Error('La nuova passphrase non è valida.');
     const salt = crypto.getRandomValues(new Uint8Array(SALT_BYTES));
     return {
         ...vault,
         kdf: { id: 'pbkdf2-sha256', iterations: PBKDF2_ITERATIONS, salt: hex(salt) },
         passphrase: await wrapDek(await keyFromPassphrase(nextPassphrase, salt, PBKDF2_ITERATIONS), dataKey, owner, 'passphrase'),
     };
+}
+
+/** A wrong old passphrase MUST NOT turn a vault into an irrecoverable one. */
+export async function rewrapLocalPassphrase(vault: LocalKeyVault, owner: string, oldPassphrase: string, nextPassphrase: string): Promise<LocalKeyVault> {
+    const verifiedDek = await unlockLocalKeyVault(vault, owner, oldPassphrase);
+    return rewrapVerifiedDek(vault, owner, verifiedDek, nextPassphrase);
+}
+
+/** Recovery-based reset uses only a previously verified, independent recovery code. */
+export async function resetLocalPassphraseWithRecovery(vault: LocalKeyVault, owner: string, recoveryCode: string, nextPassphrase: string): Promise<LocalKeyVault> {
+    const verifiedDek = await recoverLocalKeyVault(vault, owner, recoveryCode);
+    return rewrapVerifiedDek(vault, owner, verifiedDek, nextPassphrase);
 }
