@@ -61,7 +61,6 @@ describe('Offline technical telemetry data minimization', () => {
   it('expires cached items and updates disk when time passes while the app is open', () => {
     const storage = new TelemetryQueueStorage(() => 'owner-a');
     storage.enqueueItem('event', queued('live', Date.now()).payload);
-    const key = storage.getQueueStorageKey();
     expect(storage.getQueuedEvents()).toHaveLength(1);
 
     vi.setSystemTime(Date.now() + TELEMETRY_QUEUE_MAX_AGE_MS);
