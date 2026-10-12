@@ -118,7 +118,11 @@ export const initApp = async () => {
   let readError: unknown = null;
 
   try {
-    bootstrapOwner = isGuest ? 'guest' : readAuthenticatedOwnerHint();
+    // A persisted account hint is NOT an authenticated identity. Never demand
+    // the old account's vault secret or hydrate its medical data before
+    // Firebase establishes the active UID. AuthProvider owns that unlock/read.
+    if (!isGuest) readAuthenticatedOwnerHint(); // strict validation only
+    bootstrapOwner = isGuest ? 'guest' : null;
   } catch (error) {
     console.warn('Bootstrap bloccato: owner autenticato locale non leggibile.', error);
     renderStorageUnavailable(rootElement);
