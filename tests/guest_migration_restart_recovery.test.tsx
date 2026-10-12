@@ -54,7 +54,7 @@ beforeEach(async () => {
     vi.mocked(onAuthStateChanged).mockImplementation((_auth, callback: any) => { callback(user); return () => {}; });
     const { guest } = fixtures();
     await localRepository.initializeLocal('guest', guest, []);
-    await createAndMigrateVault('user:guest-restart-user', 'guest recovery after restart passphrase 2026');
+    await createAndMigrateVault('user:guest-restart-user');
     onlineSpy = vi.spyOn(window.navigator, 'onLine', 'get').mockReturnValue(false) as any;
 });
 
