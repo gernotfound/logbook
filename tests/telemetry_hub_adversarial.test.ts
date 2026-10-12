@@ -276,11 +276,11 @@ describe('Adversarial Stress & Edge-Case Suite: TelemetryHub', () => {
 
       // Populate queue with 5 items in localStorage
       const items = [
-        { id: 'item_1', timestamp: 1, itemType: 'event' as const, payload: { timestamp: 1, type: 'evt1', context: {} as any, userId: 'user_flapping', sessionId: 's1' } },
-        { id: 'item_2', timestamp: 2, itemType: 'event' as const, payload: { timestamp: 2, type: 'evt2', context: {} as any, userId: 'user_flapping', sessionId: 's1' } },
-        { id: 'item_3', timestamp: 3, itemType: 'event' as const, payload: { timestamp: 3, type: 'evt3', context: {} as any, userId: 'user_flapping', sessionId: 's1' } },
-        { id: 'item_4', timestamp: 4, itemType: 'event' as const, payload: { timestamp: 4, type: 'evt4', context: {} as any, userId: 'user_flapping', sessionId: 's1' } },
-        { id: 'item_5', timestamp: 5, itemType: 'event' as const, payload: { timestamp: 5, type: 'evt5', context: {} as any, userId: 'user_flapping', sessionId: 's1' } },
+        { id: 'item_1', timestamp: Date.now() + 1, itemType: 'event' as const, payload: { timestamp: Date.now() + 1, type: 'evt1', context: {} as any, userId: 'user_flapping', sessionId: 's1' } },
+        { id: 'item_2', timestamp: Date.now() + 2, itemType: 'event' as const, payload: { timestamp: Date.now() + 2, type: 'evt2', context: {} as any, userId: 'user_flapping', sessionId: 's1' } },
+        { id: 'item_3', timestamp: Date.now() + 3, itemType: 'event' as const, payload: { timestamp: Date.now() + 3, type: 'evt3', context: {} as any, userId: 'user_flapping', sessionId: 's1' } },
+        { id: 'item_4', timestamp: Date.now() + 4, itemType: 'event' as const, payload: { timestamp: Date.now() + 4, type: 'evt4', context: {} as any, userId: 'user_flapping', sessionId: 's1' } },
+        { id: 'item_5', timestamp: Date.now() + 5, itemType: 'event' as const, payload: { timestamp: Date.now() + 5, type: 'evt5', context: {} as any, userId: 'user_flapping', sessionId: 's1' } },
       ];
       localStorage.setItem(telemetryHub.getQueueStorageKey(), JSON.stringify(items));
 
