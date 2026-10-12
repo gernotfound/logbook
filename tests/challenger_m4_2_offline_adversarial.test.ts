@@ -56,9 +56,8 @@ describe('Empirical Challenger M4.2: Offline Queue, Circuit Breaker & Poison Pil
         }
       }
 
-      const raw = localStorage.getItem(telemetryHub.getQueueStorageKey());
-      expect(raw).not.toBeNull();
-      const storedQueue: QueuedTelemetryItem[] = JSON.parse(raw!);
+      expect(localStorage.getItem(telemetryHub.getQueueStorageKey())).toBeNull();
+      const storedQueue: QueuedTelemetryItem[] = telemetryHub.getQueuedEvents();
       expect(storedQueue.length).toBe(TELEMETRY_QUEUE_CAPACITY);
       expect(storedQueue.length).toBe(50);
 
@@ -332,9 +331,10 @@ describe('Empirical Challenger M4.2: Offline Queue, Circuit Breaker & Poison Pil
           telemetryHub.trackEvent('recovery_event_check', { corruptPayloadTested: true });
         }).not.toThrow();
 
-        const repairedRaw = localStorage.getItem(telemetryHub.getQueueStorageKey());
-        expect(repairedRaw).not.toBeNull();
-        const parsed = JSON.parse(repairedRaw!);
+        // Diagnostic state stays in RAM if the account key is not ready;
+        // recovering from invalid legacy JSON must never write new plaintext.
+        expect(localStorage.getItem(telemetryHub.getQueueStorageKey())).toBeNull();
+        const parsed = telemetryHub.getQueuedEvents();
         expect(Array.isArray(parsed)).toBe(true);
         expect(parsed.length).toBe(1);
         expect(parsed[0].payload.type).toBe('recovery_event_check');
