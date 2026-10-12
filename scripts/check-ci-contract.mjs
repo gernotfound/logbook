@@ -117,12 +117,12 @@ requirePattern('checkout action pin', workflow, /^        uses: actions\/checkou
 requirePattern('full checkout history', workflow, /^          fetch-depth: 0\s*$/m);
 const checkoutCredentialGuards = workflow.match(/^          persist-credentials: false\s*$/gm) ?? [];
 if (checkoutCredentialGuards.length !== 3) failures.push(`checkout credential persistence: expected three disabled checkout credentials, found ${checkoutCredentialGuards.length}`);
-requirePattern('Node setup action pin', workflow, /^        uses: actions\/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7\s*$/m);
+requirePattern('Node setup action pin', workflow, /^        uses: actions\/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7\s*$/m);
 requirePattern('Node 24 runtime', workflow, /^          node-version: ['"]?24['"]?\s*$/m);
 requirePattern('npm cache', workflow, /^          cache: npm\s*$/m);
 const dependencyInstalls = workflow.match(/^        run: npm ci\s*$/gm) ?? [];
 if (dependencyInstalls.length !== 2) failures.push(`dependency install: expected matrix + E2E npm ci steps, found ${dependencyInstalls.length}`);
-requirePattern('failure artifact action pin', workflow, /^        uses: actions\/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7\s*$/m);
+requirePattern('failure artifact action pin', workflow, /^        uses: actions\/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7\s*$/m);
 requirePattern('exact event SHA binding', workflow, /^      EXPECTED_SHA: \$\{\{ github\.event\.pull_request\.head\.sha \|\| github\.sha \}\}\s*$/m);
 requirePattern('Gitleaks event base binding', workflow, /^      GITLEAKS_BASE_SHA: \$\{\{ github\.event\.pull_request\.base\.sha \|\| github\.event\.before \}\}\s*$/m);
 requirePattern('trusted quality baseline event binding', workflow, /^      QUALITY_BASE_SHA: \$\{\{ github\.event\.pull_request\.base\.sha \|\| '' \}\}\s*$/m);
@@ -150,8 +150,8 @@ requirePattern('matrix command execution', workflow, /^          \$\{\{ matrix\.
 requirePattern('CodeQL job', workflow, /^  codeql:\s*$/m);
 requirePattern('CodeQL JavaScript-TypeScript language', workflow, /^          languages: javascript-typescript\s*$/m);
 requirePattern('CodeQL extended security queries', workflow, /^          queries: security-extended\s*$/m);
-requirePattern('CodeQL init action pin', workflow, /^        uses: github\/codeql-action\/init@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4\s*$/m);
-requirePattern('CodeQL analyze action pin', workflow, /^        uses: github\/codeql-action\/analyze@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4\s*$/m);
+requirePattern('CodeQL init action pin', workflow, /^        uses: github\/codeql-action\/init@24c54180a607b1449ed407dd24f251e4e9147c8d # v4\s*$/m);
+requirePattern('CodeQL analyze action pin', workflow, /^        uses: github\/codeql-action\/analyze@24c54180a607b1449ed407dd24f251e4e9147c8d # v4\s*$/m);
 
 const allowedIfLines = new Set([
   'if: matrix.java == true',
