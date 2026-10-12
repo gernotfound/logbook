@@ -119,8 +119,11 @@ describe('PWA & iPhone Startup Resilience Tests', () => {
       authRun = authCallback(userB);
     });
 
+    // Device-key hydration is asynchronous even with a cached Firebase UID.
+    // B is exposed only after its own vault is ready, while A data stays fenced
+    // and B's intentionally delayed business hydration remains in progress.
+    await waitFor(() => expect(screen.getByTestId('user-state').textContent).toBe('b@example.com'));
     expect(screen.getByTestId('loading-state').textContent).toBe('LOADING');
-    expect(screen.getByTestId('user-state').textContent).toBe('b@example.com');
     expect(screen.getByTestId('data-state').textContent).toBe('NO_DATA');
     expect(useAppStore.getState().dataOwner).toBeNull();
 
