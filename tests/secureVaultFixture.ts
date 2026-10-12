@@ -2,7 +2,7 @@ import { get } from 'idb-keyval';
 import { createAndMigrateVault, resumeVaultMigration } from '../src/lib/sync/secureArchiveMigration';
 import { deviceVaultKeyId } from '../src/lib/sync/secureArchiveKeys';
 import { isVaultUnlocked, lockAllVaults, readVaultControl, unlockVaultForOwner, vaultControlKey } from '../src/lib/sync/secureArchiveSession';
-import { readBrowserValueStrict, removeBrowserValue } from '../src/lib/sync/browserStorage';
+import { removeBrowserValue } from '../src/lib/sync/browserStorage';
 
 /**
  * Provision a genuine encrypted owner archive for UI tests.
