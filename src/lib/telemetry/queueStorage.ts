@@ -10,6 +10,7 @@ import {
 } from './contracts';
 import { sanitizeTelemetryDetails } from './detailSanitizer';
 import { createTelemetryId } from './id';
+import { readEncryptedTelemetry, storeEncryptedTelemetry, discardLegacyUnscopedTelemetry } from './secureQueueDevice';
 
 function minimizeEventPayload(payload: TelemetryEventPayload): TelemetryEventPayload {
   if (payload.details === undefined) return payload;
@@ -63,64 +64,63 @@ export class TelemetryQueueStorage {
 
   constructor(private readonly getUserId: () => string | null) {}
 
-  public getQueueStorageKey(): string {
+  private getOwner(): string {
     const uid = this.getUserId();
-    const owner = uid && uid !== 'anonymous' ? `user:${uid}` : (storageOwner() || 'guest');
-    return deviceKey('telemetry_queue', owner);
+    return uid && uid !== 'anonymous' ? `user:${uid}` : (storageOwner() || 'guest');
+  }
+
+  public getQueueStorageKey(): string {
+    // Logical owner identity, retained for lifecycle fencing and old-tab
+    // migration; new reports are stored ONLY under the sealed namespace.
+    return deviceKey('telemetry_queue', this.getOwner());
   }
 
   public getQueuedEvents(): QueuedTelemetryItem[] {
     const ownerKey = this.getQueueStorageKey();
+    const owner = this.getOwner();
     if (this.cachedQueue !== null && this.cachedQueueKey === ownerKey) {
       const recent = retainUnexpiredItems(this.cachedQueue);
-      if (recent.length !== this.cachedQueue.length) {
-        this.saveQueuedEvents(recent, true);
-      }
+      if (recent.length !== this.cachedQueue.length) this.saveQueuedEvents(recent, true);
+      else this.syncQueueToDisk(ownerKey); // Persist an in-memory pre-unlock queue once the vault is ready.
       return recent;
     }
 
     try {
       if (typeof localStorage !== 'undefined') {
-        const ownerRaw = localStorage.getItem(ownerKey);
-        if (ownerRaw !== null) {
-          const parsed = parseQueuedItems(ownerRaw);
+        const protectedRaw = readEncryptedTelemetry(owner);
+        if (protectedRaw !== null) {
+          const parsed = parseQueuedItems(protectedRaw);
           const recent = retainUnexpiredItems(parsed);
-          if (recent.length !== parsed.length) {
-            localStorage.setItem(ownerKey, JSON.stringify(recent));
-          }
+          if (recent.length !== parsed.length) storeEncryptedTelemetry(owner, JSON.stringify(recent));
+          // An obsolete tab can recreate the old plaintext queue after a
+          // sealed write. Only the protected copy is authoritative.
+          localStorage.removeItem(ownerKey);
+          discardLegacyUnscopedTelemetry();
           return recent;
         }
 
-        // One-way migration from the pre-owner-scoped queue. Telemetry is
-        // best-effort, so entries are migrated only when their embedded UID
-        // proves that they belong to the current owner. Everything else is
-        // discarded rather than attributed to another account.
-        const legacyRaw = localStorage.getItem(TELEMETRY_QUEUE_KEY);
-        if (legacyRaw !== null) {
+        // One-way migration of existing unencrypted technical reports.
+        // Never erase the last owner-scoped copy until AEAD read-back succeeds.
+        const legacyRaw = localStorage.getItem(ownerKey);
+        const globalRaw = localStorage.getItem(TELEMETRY_QUEUE_KEY);
+        const source = legacyRaw ?? globalRaw;
+        if (source !== null) {
           const uid = this.getUserId();
-          const legacyItems = retainUnexpiredItems(parseQueuedItems(legacyRaw));
-          const migrated = legacyItems.filter((item) => {
-            const payloadUid = item.payload?.userId;
-            return uid && uid !== 'anonymous'
-              ? payloadUid === uid
-              : !payloadUid || payloadUid === 'anonymous';
-          });
-          localStorage.setItem(ownerKey, JSON.stringify(migrated));
-          localStorage.removeItem(TELEMETRY_QUEUE_KEY);
-          return migrated;
+          const items = retainUnexpiredItems(parseQueuedItems(source));
+          const filtered = items.filter(item => uid && uid !== 'anonymous'
+            ? item.payload?.userId === uid
+            : !item.payload?.userId || item.payload.userId === 'anonymous');
+          if (storeEncryptedTelemetry(owner, JSON.stringify(filtered))) {
+            discardLegacyUnscopedTelemetry();
+          }
+          return filtered;
         }
       }
     } catch {
-      try {
-        // A corrupted owner queue may contain sensitive diagnostic payloads;
-        // do not leave it on disk forever or touch any other owner's queue.
-        localStorage.removeItem(ownerKey);
-        localStorage.removeItem(TELEMETRY_QUEUE_KEY);
-      } catch {
-        // Corrupted/unavailable storage remains non-blocking telemetry state.
-      }
+      // A missing key, corrupted ciphertext, quota error or unavailable
+      // localStorage is not proof that the encrypted copy can be discarded.
+      // Technical telemetry is best-effort; business data is unaffected.
     }
-
     return [];
   }
 
@@ -133,15 +133,14 @@ export class TelemetryQueueStorage {
     }
   }
 
-  private syncQueueToDisk(ownerKey: string): void {
-    if (this.cachedQueueKey !== ownerKey || this.cachedQueue === null) return;
+  private syncQueueToDisk(ownerKey: string): boolean {
+    if (this.cachedQueueKey !== ownerKey || this.cachedQueue === null) return false;
     try {
-      if (typeof localStorage !== 'undefined') {
-        localStorage.setItem(ownerKey, JSON.stringify(this.cachedQueue));
-        localStorage.removeItem(TELEMETRY_QUEUE_KEY);
-      }
+      // Never create new plaintext report storage, even before vault setup.
+      // In-memory diagnostics still work if the archive is locked or unavailable.
+      return storeEncryptedTelemetry(this.getOwner(), JSON.stringify(this.cachedQueue));
     } catch {
-      // QuotaExceededError and SecurityError must not block the application.
+      return false;
     }
   }
 
@@ -171,9 +170,10 @@ export class TelemetryQueueStorage {
           // A delayed microtask must not persist or discard another account's cache.
           if (!this.isDiskSyncScheduled || this.cachedQueueKey !== ownerKey) return;
           this.isDiskSyncScheduled = false;
-          this.syncQueueToDisk(ownerKey);
-          this.cachedQueue = null;
-          this.cachedQueueKey = null;
+          if (this.syncQueueToDisk(ownerKey)) {
+            this.cachedQueue = null;
+            this.cachedQueueKey = null;
+          }
         });
       }
     } catch {
@@ -214,9 +214,10 @@ export class TelemetryQueueStorage {
     if (!this.isDiskSyncScheduled) return;
 
     this.isDiskSyncScheduled = false;
-    if (this.cachedQueueKey !== null) this.syncQueueToDisk(this.cachedQueueKey);
-    this.cachedQueue = null;
-    this.cachedQueueKey = null;
+    if (this.cachedQueueKey !== null && this.syncQueueToDisk(this.cachedQueueKey)) {
+      this.cachedQueue = null;
+      this.cachedQueueKey = null;
+    }
   }
 
   public invalidateCache(): void {
