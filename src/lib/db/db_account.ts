@@ -1,5 +1,6 @@
 import { auth, getDb, ensureAppCheck, waitForPendingWrites } from '../firebase';
 import { del } from 'idb-keyval';
+import { lockVault } from '../sync/secureArchiveSession';
 import { withTimeout } from './db_core';
 import { assertDeletionDeadlineActive, withDeletionDeadline } from '../deletionDeadline';
 import { readBrowserValueStrict } from '../sync/browserStorage';
@@ -164,6 +165,9 @@ async function purgeOwnerLocalData(owner: string) {
     if (failures.length) {
         throw new AggregateError(failures, 'Pulizia locale incompleta. Alcuni dati sono ancora presenti su questo dispositivo.');
     }
+    // Drop the resident DEK only once all encrypted and device records have
+    // been verified removed. An incomplete deletion remains recoverable.
+    lockVault(owner);
 }
 
 const ACCOUNT_DELETION_API_ORIGIN = (import.meta.env.VITE_ACCOUNT_DELETION_API_ORIGIN || 'https://logbook-gnf.vercel.app').replace(/\/$/, '');
