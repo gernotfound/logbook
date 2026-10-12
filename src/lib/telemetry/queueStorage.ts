@@ -106,7 +106,16 @@ export class TelemetryQueueStorage {
         const source = legacyRaw ?? globalRaw;
         if (source !== null) {
           const uid = this.getUserId();
-          const items = retainUnexpiredItems(parseQueuedItems(source));
+          let items: QueuedTelemetryItem[];
+          try {
+            items = retainUnexpiredItems(parseQueuedItems(source));
+          } catch {
+            // Only obsolete plaintext diagnostics are expendable. Never treat
+            // an encrypted read/decryption failure as authorization to erase.
+            localStorage.removeItem(ownerKey);
+            discardLegacyUnscopedTelemetry();
+            return [];
+          }
           const filtered = items.filter(item => uid && uid !== 'anonymous'
             ? item.payload?.userId === uid
             : !item.payload?.userId || item.payload.userId === 'anonymous');
