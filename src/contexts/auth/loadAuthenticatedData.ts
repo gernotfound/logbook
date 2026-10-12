@@ -121,7 +121,19 @@ export async function loadAuthenticatedData({
                     if (!isCurrent()) return;
                 }
 
-                setUserData(hydratedEnv.data);
+                // hydrateLocal has already committed this authoritative snapshot
+                // atomically. Rendering it via the user-edit writer setUserData
+                // would create a second semantic journal from the old UI state.
+                const hydratedWorkout = getInitialLocalWorkout(
+                    expectedOwner, hydratedEnv.data.activeWorkout ?? null, hydratedEnv.data.history,
+                    hydratedEnv.lastClosedWorkoutId, hydratedEnv.closedWorkoutIds,
+                );
+                if (!isCurrent()) return;
+                useAppStore.setState({
+                    userData: hydratedEnv.data, dataOwner: expectedOwner,
+                    localWorkout: hydratedWorkout, localPersistenceBlocked: false,
+                });
+                markTabSnapshotClean(session, hydratedEnv.data);
             } catch (mergeError) {
                 if (!isCurrent()) return;
                 const code = (mergeError as { code?: unknown })?.code;
