@@ -57,7 +57,7 @@ function req(method: 'GET' | 'POST' | 'OPTIONS', body?: unknown, origin = 'https
 
 const acceptance = {
   acceptedTerms: true as const, acceptedHealthData: true as const,
-  privacyVersion: '1.3.2', termsVersion: '1.2.0',
+  privacyVersion: '1.3.3', termsVersion: '1.2.1',
 };
 
 describe('trusted health consent boundary', () => {

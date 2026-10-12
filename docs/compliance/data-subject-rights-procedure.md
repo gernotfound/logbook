@@ -39,7 +39,7 @@ Usare come riferimento l'Art. 12 GDPR: risposta senza ingiustificato ritardo e, 
 | Portabilità | Backup JSON / export CSV; verificare che il formato copra il perimetro richiesto |
 | Limitazione | `[DEFINE_IF_REQUIRED]`; non esiste oggi un flag generico di restriction |
 | Opposizione | Valutare per i trattamenti basati sul legittimo interesse, inclusa telemetria tecnica |
-| Revoca consenso dati salute | **Soluzione A decisa (9 ottobre 2026): sospensione completa delle funzioni fitness, accesso a esportazione/diritti/account deletion e nuova accettazione esplicita possibile (decisione aggiornata il 12 ottobre).** Implementazione end-to-end e valutazione delle basi giuridiche e retention **ancora bloccanti prima del pilot**; vedi `health-consent-release-gate.md`. |
+| Revoca consenso dati salute | **Soluzione A decisa (9 ottobre 2026): sospensione completa delle funzioni fitness, accesso a esportazione/diritti/account deletion e nuova accettazione esplicita possibile (decisione aggiornata il 12 ottobre).** Implementazione tecnica candidata nella PR #366; valutazione delle basi giuridiche, dei contatti e della retention **ancora bloccante prima del pilot con utenti reali**; vedi `health-consent-release-gate.md`. |
 | Reclamo | Informare del diritto di rivolgersi all'autorità di controllo competente |
 
 ## Revoca consenso dati salute — decisione prodotto A, blocker tecnici e legali ancora aperti

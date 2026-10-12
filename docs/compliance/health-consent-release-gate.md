@@ -80,9 +80,13 @@ Secondo GDPR art. 7(3) e Linee guida EDPB 05/2020, la revoca deve essere facile 
 7. Prova su browser/PWA iOS, Android e Desktop con temi/viewport pertinenti; test della accessibilità del flusso.
 8. Nessun dato reale negli ambienti di test; `verify:m8` / CI canonica exact-SHA, review, merge, CI main e Production verificati separatamente.
 
+## Decisione del product owner — 12 ottobre 2026
+
+Il product owner ha chiesto espressamente di **pubblicare le modifiche tecniche lasciando i placeholder delle informazioni legali** già utilizzati nella versione corrente di `main`. I testi pubblici descrivono il comportamento effettivo della revoca e individuano con segnaposto le informazioni non finalizzate, senza attribuire conformità GDPR. Questa decisione è un'autorizzazione tecnica al merge, **non** una validazione delle basi giuridiche, della retention postrevoca, dell'identità del titolare o delle procedure dei diritti. Il pilot con dati reali resta soggetto ai requisiti legali sottostanti.
+
 ## Gate di rilascio
 
-**NON CHIUSO.** Prima del pilot con utenti reali:
+**NON CHIUSO AI FINI DEL PILOT CON UTENTI REALI.** Il merge richiesto dal product owner non chiude le verifiche legali e non va rappresentato come prova di conformità. Prima del pilot con utenti reali:
 - [ ] classificazione delle finalità e delle basi artt. 6/9 approvata da professionista competente;
 - [x] decisione esplicita di prodotto: sospensione totale delle funzioni fitness, accesso a diritti/esportazione/cancellazione e facoltà di nuovo consenso esplicito (12 ottobre 2026);
 - [x] protocollo tecnico **candidato** documentato per ospite, account, offline, multi-device e recovery; verifica empirica con dispositivi distinti ancora aperta;
