@@ -37,7 +37,7 @@ import { describeEmailAuthError } from '../lib/auth/emailAuthError';
 import { reportError } from '../lib/errorHandler';
 import { clearAuthenticatedOwnerHint, rememberAuthenticatedOwner } from '../lib/sync/authOwnerHint';
 import { beginGuestMigrationIntent, bindGuestMigrationIntentToUser, clearGuestMigrationIntent } from '../lib/auth/guestMigrationIntent';
-import { ensureLocalVaultReady } from '../lib/sync/secureArchiveUnlockFlow';
+import { cancelLocalVaultReadiness, ensureLocalVaultReady } from '../lib/sync/secureArchiveUnlockFlow';
 import { lockVault } from '../lib/sync/secureArchiveSession';
 
 const GUEST_KEY = 'logbook_is_guest';
@@ -91,6 +91,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             if (!isGuestRef.current || isActiveGuestSession()) return;
             // A different tab explicitly revoked this guest generation.
             // Never recreate its deleted data from the old Zustand snapshot.
+            cancelLocalVaultReadiness('guest');
             lockVault('guest');
             invalidateSession();
             isGuestRef.current = false;
@@ -357,7 +358,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 // Do not carry an account's unlocked DEK into another identity.
                 // A guest->account migration keeps its separate guest vault until
                 // the verified migration has completed.
-                if (previousUid) lockVault(userOwner(previousUid));
+                if (previousUid) {
+                    cancelLocalVaultReadiness(userOwner(previousUid));
+                    lockVault(userOwner(previousUid));
+                }
                 invalidateSession();
             }
             setSyncing(false);
