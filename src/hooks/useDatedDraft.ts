@@ -45,7 +45,7 @@ export function useDatedDraft<T extends Record<string, string>>(kind: string, da
     const session = owner ? captureSessionForOwner(owner) : null;
     const name = 'draft:' + kind + ':' + date;
     const key = owner ? deviceKey(name, owner) : null;
-    const stored = useMemo(() => key && owner ? readDraft(name, owner) : null, [key]);
+    const stored = useMemo(() => key && owner ? readDraft(name, owner) : null, [key, name, owner]);
     const loaded = mergeDraft(source, stored);
     const [edited, setEdited] = useState<{ key: string; values: T | null } | null>(null);
     const values = key && edited?.key === key ? edited.values ?? source : loaded ?? source;
@@ -72,7 +72,7 @@ export function useDatedDraft<T extends Record<string, string>>(kind: string, da
     const setField = <K extends keyof T>(field: K, value: T[K]) => {
         if (!session || !key || !isCurrentSession(session) || current.current.key !== key) return;
         const next = { ...current.current.values, [field]: value };
-        current.current = { key, values: next, dirty: true, session };
+        current.current = { key, name, values: next, dirty: true, session };
         setEdited({ key, values: next });
         try { persist(name, session.owner, next); } catch { /* Visible error; strict reload flush retries. */ }
     };
@@ -85,7 +85,7 @@ export function useDatedDraft<T extends Record<string, string>>(kind: string, da
             useAppStore.getState().setSaveError('Dati salvati; impossibile rimuovere la bozza locale.');
             throw error;
         }
-        current.current = { key, values: source, dirty: false, session };
+        current.current = { key, name, values: source, dirty: false, session };
         setEdited({ key, values: null });
         return true;
     };
