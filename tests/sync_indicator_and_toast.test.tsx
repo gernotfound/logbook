@@ -4,6 +4,7 @@ import { screen, fireEvent, act } from '@testing-library/react';
 import App from '../src/App';
 import ReloadPrompt from '../src/components/UI/ReloadPrompt';
 import { renderWithProviders, defaultMockUserData } from './setup';
+import { prepareUnlockedTestArchive } from './secureVaultFixture';
 import { useAppStore } from '../src/store/useAppStore';
 import { clearSyncTimers } from '../src/store/slices/createSyncSlice';
 import { DB } from '../src/lib/db';
@@ -20,7 +21,8 @@ vi.mock('../src/lib/sync/safeReload', () => reloadMocks);
 
 describe('LogBook Background Sync & Error Toast 4-Tier Test Suite', () => {
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    await prepareUnlockedTestArchive();
     vi.useFakeTimers();
     clearSyncTimers();
     vi.mocked(DB.saveUserData).mockReset();
