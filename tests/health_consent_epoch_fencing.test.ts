@@ -34,7 +34,7 @@ describe('consent generation is a durable local and cross-tab write fence', () =
     expect(await advanceLocalConsentRevisionIfClean(owner, 2)).toBe(false);
     const preserved = await readLocal(owner);
     expect(preserved?.pending).toEqual(pending?.pending);
-    expect(preserved?.data.profile.height).toBe('180');
+    expect(preserved?.data.profile?.height).toBe('180');
     expect(preserved?.consentRevision).toBeUndefined();
   });
 

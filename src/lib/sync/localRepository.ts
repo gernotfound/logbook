@@ -9,7 +9,7 @@ import { type SemanticOperation, type VectorClock, type SyncMeta, diffDocuments,
 import { projectDocuments, applyRemoteDocuments, type DocumentData } from './documentProjection';
 import { getCachedCatalog } from '../catalog/catalogService';
 import { normalizeStorageOwner } from './owner';
-import { getVerifiedHealthConsentRevision } from '../healthConsent';
+import { readBrowserValueStrict } from './browserStorage';
 import { normalizeBusinessId, requireBusinessId } from '../businessIdentity';
 import {
     applyDomainOperations,
@@ -88,8 +88,15 @@ const parse = (value: unknown) => UserDataSchema.parse(value) as unknown as User
 
 const ownerConsentRevision = (owner: string) => {
     if (!owner.startsWith('user:')) return {};
-    const revision = getVerifiedHealthConsentRevision(owner.slice(5));
-    return revision > 0 ? { consentRevision: revision } : {};
+    // The generation is durably published only after the trusted server check
+    // and an atomic pending-journal check. Pure local recovery code must not
+    // require a live consent API request just to initialize its archive.
+    const raw = readBrowserValueStrict(`logbook:v2:${owner}:health-consent-generation`);
+    if (raw === null) return {};
+    if (!/^[1-9]\\d*$/.test(raw)) throw new Error('Generazione consenso locale non valida');
+    const revision = Number(raw);
+    if (!Number.isSafeInteger(revision)) throw new Error('Generazione consenso fuori limite');
+    return { consentRevision: revision };
 };
 
 function parseCloudSyncMeta(documentPath: string, raw: unknown): SyncMeta {
