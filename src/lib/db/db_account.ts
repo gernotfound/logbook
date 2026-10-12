@@ -143,7 +143,7 @@ async function purgeOwnerLocalData(owner: string) {
     // Wrapped DEK metadata must survive an IndexedDB purge failure. Deleting
     // it first would leave the remaining ciphertext permanently undecryptable.
     if (failures.length) {
-        throw new AggregateError(failures, 'Pulizia IndexedDB incompleta. Chiave cifrata e copie residue conservate per il recupero.');
+        throw new AggregateError(failures, 'Pulizia locale incompleta (IndexedDB). Chiave cifrata e copie residue conservate per il recupero.');
     }
 
     let remaining = new Set<string>();
