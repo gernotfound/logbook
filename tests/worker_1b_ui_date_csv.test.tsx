@@ -75,7 +75,7 @@ describe('Worker 1B: UI/UX, Date Navigation, CSV Export & PWA Fixes', () => {
             const dataLine = lines[1]; // First data line after header
 
             // The dataLine must start with quotes around the date string: "dateStr","Spinta A","Panca piana",...
-            expect(dataLine).toMatch(/^"[^"]+", "Spinta A"|"[^"]+","Spinta A"/);
+            expect(dataLine).toMatch(/^"[^"]+","Spinta A","Panca piana",/);
             expect(dataLine).toContain('"Spinta A"');
             expect(dataLine).toContain('"Panca piana"');
 
