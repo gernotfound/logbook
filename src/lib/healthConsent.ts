@@ -63,7 +63,13 @@ export function withdrawGuestHealthConsent(): void {
 }
 
 export function beginGuestHealthReacceptance(): void {
-  if (getGuestHealthConsentStatus() !== 'withdrawn') throw new Error('Nessuna revoca ospite da aggiornare.');
+  const previousStatus = getGuestHealthConsentStatus();
+  if (guestAcceptanceInProgress || (previousStatus !== 'withdrawn' && previousStatus !== 'reaccepting')) {
+    throw new Error('Nessuna revoca ospite da aggiornare.');
+  }
+  // A crash after the local legal-consent write but before removing the marker
+  // must remain recoverable through another EXPLICIT acceptance.
+
   writeBrowserValue(guestMarker, 'reaccepting');
   guestAcceptanceInProgress = true;
   notify();

@@ -119,3 +119,14 @@ describe('local-only guest consent lifecycle', () => {
     expect(isHealthConsentWritable('guest')).toBe(false);
   });
 });
+
+describe('guest reconsent crash recovery', () => {
+  it('can explicitly retry after a crash left the guest marker reaccepting', () => {
+    localStorage.clear();
+    localStorage.setItem('logbook:v2:guest:health-consent-withdrawal', 'reaccepting');
+    expect(getGuestHealthConsentStatus()).toBe('reaccepting');
+    beginGuestHealthReacceptance();
+    completeGuestHealthReacceptance(true);
+    expect(getGuestHealthConsentStatus()).toBe('active');
+  });
+});
