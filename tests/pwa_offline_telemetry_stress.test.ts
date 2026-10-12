@@ -52,9 +52,8 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
         }
       }
 
-      const raw = localStorage.getItem(telemetryHub.getQueueStorageKey());
-      expect(raw).not.toBeNull();
-      const queued = JSON.parse(raw!) as QueuedTelemetryItem[];
+      expect(localStorage.getItem(telemetryHub.getQueueStorageKey())).toBeNull();
+      const queued = telemetryHub.getQueuedEvents() as QueuedTelemetryItem[];
 
       // Capacity must be strictly bounded at TELEMETRY_QUEUE_CAPACITY (50)
       expect(queued.length).toBe(TELEMETRY_QUEUE_CAPACITY);
