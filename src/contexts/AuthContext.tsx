@@ -2,7 +2,6 @@ import { useState, useEffect, useRef, useCallback, useMemo, ReactNode } from 're
 import { User } from 'firebase/auth';
 import { auth, getDb, waitForPendingWrites, provider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendEmailVerification, reload } from '../lib/firebase';
 import { DB } from '../lib/db';
-import { HealthConsentTransitionPendingError } from '../lib/db/db_account';
 import { isAccountDeletionPending } from '../lib/sync/accountGate';
 import { beginHealthConsentVerification, refreshHealthConsent, isHealthConsentWritable } from '../lib/healthConsent';
 import { useAppStore } from '../store/useAppStore';
@@ -1007,7 +1006,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 const localStorageFailure = error instanceof AggregateError
                     || error instanceof BrowserStorageError
                     || error?.name === 'BrowserStorageError';
-                await useDialogStore.getState().showAlert(error instanceof HealthConsentTransitionPendingError
+                await useDialogStore.getState().showAlert(error instanceof Error && error.name === 'HealthConsentTransitionPendingError'
                     ? error.message
                     : localStorageFailure
                         ? 'Impossibile completare il logout perché la memoria locale del dispositivo non è disponibile o non è stata pulita completamente. I dati locali potrebbero essere ancora presenti. Riprova.'
