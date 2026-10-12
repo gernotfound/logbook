@@ -115,6 +115,10 @@ it('keeps edited measurements across remote hydration, remount and date navigati
     expect(reopened.result.current.weight).toBe('76');
 });
 it('does not attach legacy drafts or another owner draft to a new session', () => {
+    // Start from a distinct owner; the shared suite normally uses an active guest.
+    localStorage.removeItem('logbook_is_guest');
+    invalidateSession();
+    useAppStore.setState({ userData: data(), dataOwner: 'user:previous-owner' });
     localStorage.setItem('draft_measurement', JSON.stringify({ weight: '99' }));
     const hook = renderHook(() => useNutritionMeasurements('2026-09-11'));
     expect(hook.result.current.weight).toBe('');
