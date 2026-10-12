@@ -3,7 +3,7 @@
 ## Comportamento attuale
 
 Il Service Worker non salva direttamente dati utente e non conserva credenziali o payload di sincronizzazione.
-Quando riceve l'evento `logbook-sync`, invia `LOGBOOK_SYNC_REQUIRED` alle finestre LogBook aperte.
+Quando riceve l'evento `logbook-sync`, invia `LOGBOOK_SYNC_REQUIRED` alle finestre TheLogBook aperte.
 L'app risponde rieseguendo il journal durevole associato all'owner corrente.
 
 Lo stesso replay viene richiesto anche quando:
@@ -15,7 +15,7 @@ Lo stesso replay viene richiesto anche quando:
 ## Verifica che il replay funzioni
 
 1. Apri DevTools > Application > Service Workers.
-2. Porta LogBook offline ed esegui una modifica che resti nel journal locale.
+2. Porta TheLogBook offline ed esegui una modifica che resti nel journal locale.
 3. Torna online oppure riporta la PWA in primo piano.
 4. Verifica che la sincronizzazione riparta senza letture di token o payload dal Service Worker.
 5. Se il browser supporta Background Sync, un evento `logbook-sync` deve soltanto notificare le finestre aperte.
