@@ -1,5 +1,6 @@
 import { readBrowserValueStrict } from './browserStorage';
 import { normalizeStorageOwner } from './owner';
+import { isActiveGuestSession } from './session';
 import {
     type LocalKeyVault, unlockLocalKeyVault, recoverLocalKeyVault,
 } from './secureArchiveKeys';
@@ -64,7 +65,10 @@ export function requireUnlockedLocalKey(owner: string): Uint8Array {
     const normalized = normalizeStorageOwner(owner);
     const control = readVaultControl(normalized);
     const capability = capabilities.get(normalized);
-    if (!control || control.phase !== 'active' || !capability || control.epoch !== capability.epoch) {
+    // Guest revocation is a separate durable session fence; retaining valid
+    // wrapped metadata must not grant access after that generation is revoked.
+    if (!control || control.phase !== 'active' || !capability || control.epoch !== capability.epoch
+        || (normalized === 'guest' && !isActiveGuestSession())) {
         if (capability) lockVault(normalized);
         throw new LocalVaultLockedError();
     }
