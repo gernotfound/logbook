@@ -1,6 +1,6 @@
 # DPA Art. 28 — template condizionale
 
-> Non usare né firmare automaticamente. Questo allegato serve soltanto se l'analisi fattuale conclude che, per uno specifico trattamento, la palestra è titolare e il provider LogBook tratta dati personali per suo conto come responsabile.
+> Non usare né firmare automaticamente. Questo allegato serve soltanto se l'analisi fattuale conclude che, per uno specifico trattamento, la palestra è titolare e il provider TheLogBook tratta dati personali per suo conto come responsabile.
 
 ## Parti e ambito
 
