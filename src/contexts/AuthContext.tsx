@@ -400,9 +400,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                     return;
                 }
             }
-            // Expose identity promptly to owner-scoped UI/components, but the
-            // consent status was already set to 'checking' above. Fitness stays
-            // blocked until the server has authoritatively verified permission.
+            // Consent refresh itself performs a durable IndexedDB consent-epoch
+            // update. Unlock BEFORE it, not merely before later hydration/sync.
+            if (user) {
+                await ensureLocalVaultReady(userOwner(user.uid));
+                if (!isCurrentRun()) return;
+            }
+            // Expose identity only after the local archive can be safely read.
             setCurrentUser(user);
             if (user) {
                 // Hydration/migration and all cloud business writes must wait for
@@ -419,10 +423,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             }
 
             if (user) {
-                // Firebase consent authorization and local vault access are
-                // separate gates: no guest merge, hydration or replay while locked.
-                await ensureLocalVaultReady(userOwner(user.uid));
-                if (!isCurrentRun()) return;
                 const wasGuest = isGuestActiveStrict();
                 setEmailVerificationRequired(false);
                 const recoveryUid = readGuestMigrationRecoveryStrict();
