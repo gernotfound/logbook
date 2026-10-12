@@ -4,6 +4,10 @@ import { LEGAL_VERSIONS } from '../../src/lib/legalVersions.js';
 
 const CONSENT_COLLECTION = 'health_consent_withdrawals';
 
+export class HealthConsentRevisionConflictError extends Error {
+  constructor() { super('Una scelta più recente ha sostituito questa revoca. Serve una nuova conferma.'); this.name = 'HealthConsentRevisionConflictError'; }
+}
+
 export type HealthConsentState = {
   status: 'active' | 'withdrawn';
   revision: number;
@@ -38,7 +42,8 @@ export async function readHealthConsentState(uid: string): Promise<HealthConsent
 }
 
 /** Durable server-only revocation. Never modify or delete fitness data here. */
-export async function recordHealthConsentWithdrawal(uid: string): Promise<HealthConsentState> {
+export async function recordHealthConsentWithdrawal(uid: string, expectedRevision: number): Promise<HealthConsentState> {
+  if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0) throw new Error('Revisione consenso richiesta non valida.');
   validUid(uid);
   const db = adminDb();
   return db.runTransaction(async tx => {
@@ -50,7 +55,11 @@ export async function recordHealthConsentWithdrawal(uid: string): Promise<Health
     if (existing.exists && previous?.status === 'withdrawn') {
       return { status: 'withdrawn', revision: previous.revision };
     }
-    const revision = existing.exists ? Number(previous?.revision) + 1 : 1;
+    const actual = existing.exists ? Number(previous?.revision) : 0;
+    if (!Number.isSafeInteger(actual) || actual !== expectedRevision || (existing.exists && previous?.status !== 'active')) {
+      throw new HealthConsentRevisionConflictError();
+    }
+    const revision = actual + 1;
     if (!Number.isSafeInteger(revision)) throw new Error('Revision consenso non valida.');
     const now = Timestamp.now();
     const update = {

@@ -73,17 +73,17 @@ describe('trusted health consent boundary', () => {
   });
 
   it('records withdrawal idempotently, monotonically and keeps the data intact', async () => {
-    const first = await POST(req('POST', { action: 'withdraw' }));
+    const first = await POST(req('POST', { action: 'withdraw', expectedRevision: 0 }));
     expect(first.status).toBe(200);
     expect(await first.json()).toEqual({ status: 'withdrawn', revision: 1 });
-    expect(await recordHealthConsentWithdrawal('account-1')).toEqual({ status: 'withdrawn', revision: 1 });
+    expect(await recordHealthConsentWithdrawal('account-1', 0)).toEqual({ status: 'withdrawn', revision: 1 });
     const state = storage.documents.get('health_consent_withdrawals/account-1');
     expect(state).toMatchObject({ uid: 'account-1', revision: 1, status: 'withdrawn' });
     expect(storage.documents.size).toBe(1);
   });
 
   it('rejects invalid and stale version acceptances while withdrawn', async () => {
-    await recordHealthConsentWithdrawal('account-1');
+    await recordHealthConsentWithdrawal('account-1', 0);
     for (const invalid of [null, {}, { ...acceptance, acceptedHealthData: false }, { ...acceptance, privacyVersion: 'old' }]) {
       const response = await POST(req('POST', { action: 'reaccept', acceptance: invalid }));
       expect(response.status).toBe(400);
@@ -93,23 +93,23 @@ describe('trusted health consent boundary', () => {
   });
 
   it('reenables only after explicit acceptance; retry is idempotent and later revocation advances revision', async () => {
-    await recordHealthConsentWithdrawal('account-1');
+    await recordHealthConsentWithdrawal('account-1', 0);
     const accepted = await recordHealthConsentReacceptance('account-1', acceptance);
     expect(accepted).toMatchObject({ status: 'active', revision: 2, acceptedAt: expect.any(String) });
     expect(await recordHealthConsentReacceptance('account-1', acceptance)).toEqual(accepted);
-    expect(await recordHealthConsentWithdrawal('account-1')).toEqual({ status: 'withdrawn', revision: 3 });
+    expect(await recordHealthConsentWithdrawal('account-1', 2)).toEqual({ status: 'withdrawn', revision: 3 });
   });
 
   it('will not resume or withdraw when account deletion has started', async () => {
-    await recordHealthConsentWithdrawal('account-1');
+    await recordHealthConsentWithdrawal('account-1', 0);
     storage.documents.set('account_deletions/account-1', { status: 'requested' });
     await expect(recordHealthConsentReacceptance('account-1', acceptance)).rejects.toThrow('Cancellazione');
-    await expect(recordHealthConsentWithdrawal('account-1')).rejects.toThrow('Cancellazione');
+    await expect(recordHealthConsentWithdrawal('account-1', 0)).rejects.toThrow('Cancellazione');
   });
 
   it('cleanup erases only the specific account consent marker', async () => {
-    await recordHealthConsentWithdrawal('account-1');
-    await recordHealthConsentWithdrawal('account-2');
+    await recordHealthConsentWithdrawal('account-1', 0);
+    await recordHealthConsentWithdrawal('account-2', 0);
     await removeHealthConsentStateForDeletedAccount('account-1');
     expect(storage.documents.has('health_consent_withdrawals/account-1')).toBe(false);
     expect(storage.documents.has('health_consent_withdrawals/account-2')).toBe(true);
@@ -117,7 +117,19 @@ describe('trusted health consent boundary', () => {
 
   it('enforces allowed origin before authenticated work', async () => {
     expect((await OPTIONS(req('OPTIONS', undefined, 'https://evil.example'))).status).toBe(403);
-    expect((await POST(req('POST', { action: 'withdraw' }, 'https://evil.example'))).status).toBe(403);
+    expect((await POST(req('POST', { action: 'withdraw', expectedRevision: 0 }, 'https://evil.example'))).status).toBe(403);
     expect(auth.verifyRecoveryRegistrationRequester).not.toHaveBeenCalled();
+  });
+});
+
+describe('withdrawal revision concurrency', () => {
+  it('refuses a delayed revocation request after another device reaccepted', async () => {
+    storage.documents.clear();
+    await recordHealthConsentWithdrawal('account-1', 0);
+    await recordHealthConsentReacceptance('account-1', acceptance);
+    const stale = await POST(req('POST', { action: 'withdraw', expectedRevision: 0 }));
+    expect(stale.status).toBe(409);
+    expect((await readHealthConsentState('account-1')).status).toBe('active');
+    expect(await recordHealthConsentWithdrawal('account-1', 2)).toEqual({ status: 'withdrawn', revision: 3 });
   });
 });

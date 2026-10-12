@@ -3,7 +3,7 @@ import { ensureAppCheck } from './firebase';
 import { getLimitedUseAppCheckToken } from './appCheck';
 import { readBrowserValueStrict, removeBrowserValue, writeBrowserValue } from './sync/browserStorage';
 
-export type HealthConsentStatus = 'checking' | 'active' | 'withdrawn' | 'pending' | 'reaccepting' | 'recovery-required' | 'error';
+export type HealthConsentStatus = 'checking' | 'active' | 'withdrawn' | 'pending' | 'reaccepting' | 'recovery-required' | 'stale-request' | 'error';
 type ServerStatus = { status: 'active' | 'withdrawn'; revision: number; acceptedAt?: string };
 const API = (import.meta.env.VITE_ACCOUNT_DELETION_API_ORIGIN || 'https://logbook-gnf.vercel.app').replace(/\/$/, '');
 const entries = new Map<string, HealthConsentStatus>();
@@ -12,6 +12,14 @@ const verifiedReacceptance = new Map<string, string>();
 const verifiedRevisions = new Map<string, number>();
 let guestAcceptanceInProgress = false;
 const guestMarker = 'logbook:v2:guest:health-consent-withdrawal';
+const pendingMarker = (revision: number) => `pending:${revision}`;
+const parsePendingRevision = (saved: string | null): number | null => {
+  if (!saved?.startsWith('pending:')) return null;
+  const revision = saved.slice('pending:'.length);
+  if (!/^(0|[1-9]\\d*)$/.test(revision)) return null;
+  const parsed = Number(revision);
+  return Number.isSafeInteger(parsed) ? parsed : null;
+};
 const marker = (uid: string) => `logbook:v2:user:${uid}:health-consent-withdrawal`;
 const generationMarker = (uid: string) => `logbook:v2:user:${uid}:health-consent-generation`;
 function notify() { for (const listener of listeners) listener(); }
@@ -35,8 +43,10 @@ export function currentHealthConsentStatus(uid: string | undefined): HealthConse
   if (!uid) return 'active';
   try {
     if (entries.get(uid) === 'recovery-required') return 'recovery-required';
+    if (entries.get(uid) === 'stale-request') return 'stale-request';
     const saved = readMarker(uid);
-    if (saved === 'pending' || saved === 'withdrawn' || saved === 'reaccepting') return saved;
+    if (parsePendingRevision(saved) !== null) return 'pending';
+    if (saved === 'withdrawn' || saved === 'reaccepting') return saved;
     if (saved !== null) return 'error';
     // Test/recovery tooling can operate before AuthProvider begins verification.
     // AuthProvider synchronously fences the real session at each auth boundary.
@@ -147,7 +157,7 @@ export async function refreshHealthConsent(user: User): Promise<HealthConsentSta
   // Every refresh fences in-flight writes; only a completed, active server
   // check may grant a new writable generation.
   verifiedRevisions.delete(uid);
-  setStatus(uid, saved === null ? 'checking' : saved as HealthConsentStatus);
+  setStatus(uid, saved === null ? 'checking' : (parsePendingRevision(saved) !== null ? 'pending' : saved as HealthConsentStatus));
   try {
     const state = await serverRequest(user, 'GET');
     if (state.status === 'withdrawn') {
@@ -155,10 +165,15 @@ export async function refreshHealthConsent(user: User): Promise<HealthConsentSta
       setStatus(uid, 'withdrawn');
       return 'withdrawn';
     }
-    if (saved === 'pending') {
-      // The previous request may have been lost. Never interpret an active
-      // server as a reason to discard a durable revocation intent.
-      const retry = await serverRequest(user, 'POST', { action: 'withdraw' });
+    const pendingRevision = parsePendingRevision(saved);
+    if (pendingRevision !== null) {
+      // Never re-submit a stale withdrawal AFTER a newer explicit acceptance.
+      // Such a request must be reconfirmed by the person, not replayed by focus/reload.
+      if (pendingRevision !== state.revision) {
+        setStatus(uid, 'stale-request');
+        return 'stale-request';
+      }
+      const retry = await serverRequest(user, 'POST', { action: 'withdraw', expectedRevision: pendingRevision });
       if (retry.status !== 'withdrawn') throw new Error('Revoca non registrata.');
       writeBrowserValue(marker(uid), 'withdrawn');
       setStatus(uid, 'withdrawn');
@@ -196,12 +211,30 @@ export async function refreshHealthConsent(user: User): Promise<HealthConsentSta
 
 export async function withdrawHealthConsent(user: User): Promise<void> {
   const uid = user.uid;
-  writeBrowserValue(marker(uid), 'pending');
+  const verified = verifiedRevisions.get(uid);
+  if (verified === undefined) throw new Error('Verifica prima il consenso sul server.');
+  writeBrowserValue(marker(uid), pendingMarker(verified));
   setStatus(uid, 'pending');
-  const server = await serverRequest(user, 'POST', { action: 'withdraw' });
+  const server = await serverRequest(user, 'POST', { action: 'withdraw', expectedRevision: verified });
   if (server.status !== 'withdrawn') throw new Error('Revoca non registrata dal server.');
   writeBrowserValue(marker(uid), 'withdrawn');
   setStatus(uid, 'withdrawn');
+}
+
+/** A stale withdrawal is never replayed without a new explicit user decision. */
+export async function reconfirmStaleHealthWithdrawal(user: User): Promise<void> {
+  if (currentHealthConsentStatus(user.uid) !== 'stale-request') throw new Error('Nessuna revoca precedente da riconfermare.');
+  const live = await serverRequest(user, 'GET');
+  if (live.status !== 'active') {
+    await refreshHealthConsent(user);
+    return;
+  }
+  writeBrowserValue(marker(user.uid), pendingMarker(live.revision));
+  setStatus(user.uid, 'pending');
+  const state = await serverRequest(user, 'POST', { action: 'withdraw', expectedRevision: live.revision });
+  if (state.status !== 'withdrawn') throw new Error('Revoca non confermata.');
+  writeBrowserValue(marker(user.uid), 'withdrawn');
+  setStatus(user.uid, 'withdrawn');
 }
 
 export async function reacceptHealthConsent(user: User, acceptance: {

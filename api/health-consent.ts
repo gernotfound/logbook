@@ -5,6 +5,7 @@ import {
   recordHealthConsentWithdrawal,
   recordHealthConsentReacceptance,
   validateExplicitAcceptance,
+  HealthConsentRevisionConflictError,
 } from '../server/healthConsent/withdrawal.js';
 
 export const maxDuration = 30;
@@ -16,6 +17,7 @@ function json(body: unknown, status: number, origin: string | null): Response {
 
 function errorResponse(error: unknown, origin: string | null): Response {
   if (error instanceof RequestAuthError) return json({ error: error.message }, error.status, origin);
+  if (error instanceof HealthConsentRevisionConflictError) return json({ error: error.message }, 409, origin);
   if (error instanceof ConsentInputError) return json({ error: error.message }, 400, origin);
   console.error('[health-consent] trusted endpoint failure', { kind: error instanceof Error ? error.name : 'unknown' });
   return json({ error: 'Stato del consenso non disponibile. Accesso ai dati fitness sospeso.' }, 503, origin);
@@ -53,7 +55,10 @@ export async function POST(request: Request): Promise<Response> {
     } catch { throw new ConsentInputError('Richiesta di consenso non valida.'); }
 
     if (body.action === 'withdraw') {
-      return json(await recordHealthConsentWithdrawal(uid), 200, origin);
+      if (typeof body.expectedRevision !== 'number' || !Number.isSafeInteger(body.expectedRevision) || body.expectedRevision < 0) {
+        throw new ConsentInputError('Revisione consenso mancante o non valida.');
+      }
+      return json(await recordHealthConsentWithdrawal(uid, body.expectedRevision), 200, origin);
     }
     if (body.action === 'reaccept') {
       try { validateExplicitAcceptance(body.acceptance); }

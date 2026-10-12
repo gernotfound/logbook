@@ -5,7 +5,7 @@ import { useSettings } from '../../hooks/useSettings';
 import { recoverOldLocalEditsAfterConsent } from '../../lib/healthConsentRecovery';
 import { useDialogStore } from '../../store/useDialogStore';
 import { LEGAL_VERSIONS } from '../../lib/legalVersions';
-import { beginGuestHealthReacceptance, completeGuestHealthReacceptance, finishHealthConsentReacceptance, reacceptHealthConsent, refreshHealthConsent, type HealthConsentStatus } from '../../lib/healthConsent';
+import { beginGuestHealthReacceptance, completeGuestHealthReacceptance, finishHealthConsentReacceptance, reacceptHealthConsent, reconfirmStaleHealthWithdrawal, refreshHealthConsent, type HealthConsentStatus } from '../../lib/healthConsent';
 import { PrivacyPolicy } from '../../pages/PrivacyPolicy';
 import { TermsAndConditions } from '../../pages/TermsAndConditions';
 
@@ -77,6 +77,17 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
       {status === 'checking' && <p role="status">Verifica dello stato sul server in corso…</p>}
       {status === 'error' && <p role="alert">Non è stato possibile verificare lo stato del consenso. L’accesso fitness resta sospeso.</p>}
       {status === 'pending' && <p role="status">Revoca registrata su questo dispositivo. La conferma cloud è ancora in attesa.</p>}
+      {status === 'stale-request' && <section aria-label="Revoca da riconfermare">
+        <p role="alert">Una nuova accettazione da un altro dispositivo è più recente della richiesta di revoca rimasta in attesa. La vecchia richiesta non è stata reinviata.</p>
+        <button className="btn btn-primary" type="button" disabled={busy} onClick={() => { void (async () => {
+          const confirmed = await useDialogStore.getState().showConfirm('Vuoi revocare nuovamente il consenso aggiornato? Tutte le funzioni fitness saranno sospese.');
+          if (!confirmed) return;
+          setBusy(true); setError(null);
+          try { if (!user) throw new Error('Account non disponibile.'); await reconfirmStaleHealthWithdrawal(user); }
+          catch (e) { setError(e instanceof Error ? e.message : 'Impossibile confermare la revoca.'); }
+          finally { setBusy(false); }
+        })(); }}>Riconferma la revoca</button>
+      </section>}
       {status === 'recovery-required' && <section aria-label="Recupero delle modifiche precedenti">
         <p role="alert">Il nuovo consenso è stato registrato, ma su questo dispositivo ci sono modifiche non sincronizzate prima della revoca. Non le eliminiamo e non le inviamo automaticamente.</p>
         <p>Esporta prima un backup JSON. Poi, solo se lo desideri, puoi scegliere esplicitamente di recuperare le vecchie modifiche confrontandole con i dati aggiornati del cloud. La copia originale resterà conservata anche sul dispositivo.</p>

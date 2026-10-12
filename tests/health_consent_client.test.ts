@@ -26,14 +26,14 @@ describe('durable health-consent client barrier', () => {
     beginHealthConsentVerification(uid);
     expect(currentHealthConsentStatus(uid)).toBe('checking');
     expect(() => requireHealthConsentWritable('user:' + uid)).toThrow('Accesso fitness sospeso');
-    localStorage.setItem(key(uid), 'pending');
+    localStorage.setItem(key(uid), 'pending:0');
     expect(currentHealthConsentStatus(uid)).toBe('pending');
     expect(isHealthConsentWritable('user:' + uid)).toBe(false);
   });
 
   it('does not discard an unsent withdrawal when the server initially reports active', async () => {
     const uid = 'pending-' + crypto.randomUUID();
-    localStorage.setItem(key(uid), 'pending');
+    localStorage.setItem(key(uid), 'pending:0');
     const calls: string[] = [];
     vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
       calls.push(init.method ?? 'GET');
@@ -59,7 +59,7 @@ describe('durable health-consent client barrier', () => {
     const uid = 'offline-' + crypto.randomUUID();
     vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('offline'); }));
     await expect(withdrawHealthConsent(user(uid))).rejects.toThrow('offline');
-    expect(localStorage.getItem(key(uid))).toBe('pending');
+    expect(localStorage.getItem(key(uid))).toBe('pending:0');
     expect(isHealthConsentWritable('user:' + uid)).toBe(false);
   });
 
@@ -128,5 +128,20 @@ describe('guest reconsent crash recovery', () => {
     beginGuestHealthReacceptance();
     completeGuestHealthReacceptance(true);
     expect(getGuestHealthConsentStatus()).toBe('active');
+  });
+});
+
+describe('stale withdrawal race', () => {
+  it('does not retry an outdated withdrawal after another device reaccepted', async () => {
+    const uid = 'stale-' + crypto.randomUUID();
+    localStorage.setItem(key(uid), 'pending:0');
+    const calls: string[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
+      calls.push(init.method ?? 'GET');
+      return Response.json({ status: 'active', revision: 2, acceptedAt: '2026-10-12T00:00:00.000Z' });
+    }));
+    expect(await refreshHealthConsent(user(uid))).toBe('stale-request');
+    expect(calls).toEqual(['GET']);
+    expect(isHealthConsentWritable('user:' + uid)).toBe(false);
   });
 });
