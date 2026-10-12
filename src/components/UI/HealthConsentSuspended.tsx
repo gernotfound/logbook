@@ -9,19 +9,43 @@ import { beginGuestHealthReacceptance, completeGuestHealthReacceptance, finishHe
 import { PrivacyPolicy } from '../../pages/PrivacyPolicy';
 import { TermsAndConditions } from '../../pages/TermsAndConditions';
 
+// The form has its own selection state: switching from pending to confirmed,
+ // or back to pending, creates a fresh opt-in without a render-time reset.
+function ReacceptanceForm({ enabled, busy, onReaccept }: { enabled: boolean; busy: boolean; onReaccept: () => Promise<void> }) {
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [acceptedHealth, setAcceptedHealth] = useState(false);
+
+  return <>
+    <h2>Per tornare a usare la PWA</h2>
+    <p>Esamina i documenti e scegli liberamente se prestare un nuovo consenso. I dati già presenti non vengono cancellati automaticamente.</p>
+    <label style={{ display: 'block', marginBlock: 12 }}>
+      <input type="checkbox" disabled={!enabled || busy} checked={acceptedTerms} onChange={e => setAcceptedTerms(e.target.checked)} />
+      {' '}Ho almeno 18 anni, ho letto l'informativa e accetto i termini.
+    </label>
+    <label style={{ display: 'block', marginBlock: 12 }}>
+      <input type="checkbox" disabled={!enabled || busy} checked={acceptedHealth} onChange={e => setAcceptedHealth(e.target.checked)} />
+      {' '}Presto esplicitamente il consenso al trattamento dei miei dati relativi alla salute per il servizio.
+    </label>
+    <button className="btn btn-primary" type="button" disabled={!enabled || busy || !acceptedTerms || !acceptedHealth}
+      onClick={() => { if (enabled && !busy && acceptedTerms && acceptedHealth) void onReaccept(); }}>
+      {busy ? 'Salvataggio in corso…' : 'Presta un nuovo consenso'}
+    </button>
+  </>;
+}
+
 export function HealthConsentSuspended({ status, user }: { status: HealthConsentStatus; user: User | null }) {
   const { handleExportBackup, handleDeleteAccount, handleLogout, exportingData } = useSettings();
   const submitLegalConsent = useAppStore(state => state.submitLegalConsent);
-  const [acceptedTerms, setAcceptedTerms] = useState(false);
-  const [acceptedHealth, setAcceptedHealth] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [recoveryBusy, setRecoveryBusy] = useState(false);
   const [privacy, setPrivacy] = useState(false);
   const [terms, setTerms] = useState(false);
+  const canReaccept = status === 'withdrawn' || status === 'reaccepting';
+  const showReacceptForm = status === 'pending' || canReaccept;
 
   const reaccept = async () => {
-    if (!acceptedTerms || !acceptedHealth || busy) return;
+    if (!canReaccept || busy) return;
     setBusy(true);
     setError(null);
     try {
@@ -45,7 +69,11 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
         privacyVersion: LEGAL_VERSIONS.privacy, termsVersion: LEGAL_VERSIONS.terms,
       });
       const refreshed = await refreshHealthConsent(user);
-      if (refreshed !== 'active') throw new Error('Dati locali pendenti da recuperare prima della riattivazione.');
+      // The server accepted the new consent, but older local edits still need
+      // the person's separate, explicit recovery choice. This is not a failed
+      // consent: keep the suspension and let the recovery screen explain it.
+      if (refreshed === 'recovery-required') return;
+      if (refreshed !== 'active') throw new Error('Nuovo consenso non ancora verificato su questo dispositivo.');
       finishHealthConsentReacceptance(user.uid);
     } catch {
       setError('Non è stato possibile completare il nuovo consenso. L’accesso resta sospeso; nessun dato è stato eliminato.');
@@ -72,11 +100,15 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
   return <main id="auth-overlay" role="main">
     <section className="auth-panel" aria-label="Accesso sospeso" style={{ maxWidth: 560, maxHeight: '90vh', overflowY: 'auto' }}>
       <h1>Accesso a TheLogBook sospeso</h1>
-      <p>Non puoi usare allenamenti, nutrizione o diario finché non presti nuovamente il consenso esplicito per i dati salute.</p>
+      <p>Allenamenti, nutrizione e diario sono sospesi. Per riattivarli serve un nuovo consenso esplicito dopo la conferma della revoca.</p>
       {user === null && <p>Modalità locale: i dati sono salvati solo su questo dispositivo. Non è necessario contattare il server per la revoca.</p>}
       {status === 'checking' && <p role="status">Verifica dello stato sul server in corso…</p>}
       {status === 'error' && <p role="alert">Non è stato possibile verificare lo stato del consenso. L’accesso fitness resta sospeso.</p>}
-      {status === 'pending' && <p role="status">Revoca registrata su questo dispositivo. La conferma cloud è ancora in attesa.</p>}
+      {(status === 'pending' || (status === 'withdrawn' && user !== null)) && <p role="status">
+        {status === 'pending'
+          ? 'Revoca registrata su questo dispositivo. In attesa della conferma cloud: la nuova accettazione sarà disponibile soltanto dopo la conferma.'
+          : 'Revoca confermata sul server. Puoi prestare un nuovo consenso se desideri riattivare la PWA.'}
+      </p>}
       {status === 'stale-request' && <section aria-label="Revoca da riconfermare">
         <p role="alert">Una nuova accettazione da un altro dispositivo è più recente della richiesta di revoca rimasta in attesa. La vecchia richiesta non è stata reinviata.</p>
         <button className="btn btn-primary" type="button" disabled={busy} onClick={() => { void (async () => {
@@ -108,21 +140,13 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
         </button>
       </section>}
       {status === 'reaccepting' && <p role="status">Nuovo consenso in fase di completamento. Riconferma qui sotto per completare.</p>}
-      {(status === 'withdrawn' || status === 'reaccepting') && <>
-        <h2>Per tornare a usare la PWA</h2>
-        <p>Esamina i documenti e scegli liberamente se prestare un nuovo consenso. I dati già presenti non vengono cancellati automaticamente.</p>
-        <label style={{ display: 'block', marginBlock: 12 }}>
-          <input type="checkbox" checked={acceptedTerms} onChange={e => setAcceptedTerms(e.target.checked)} />
-          {' '}Ho almeno 18 anni, ho letto l'informativa e accetto i termini.
-        </label>
-        <label style={{ display: 'block', marginBlock: 12 }}>
-          <input type="checkbox" checked={acceptedHealth} onChange={e => setAcceptedHealth(e.target.checked)} />
-          {' '}Presto esplicitamente il consenso al trattamento dei miei dati relativi alla salute per il servizio.
-        </label>
-        <button className="btn btn-primary" type="button" disabled={busy || !acceptedTerms || !acceptedHealth} onClick={() => void reaccept()}>
-          {busy ? 'Salvataggio in corso…' : 'Presta un nuovo consenso'}
-        </button>
-      </>}
+      {showReacceptForm &&
+        <ReacceptanceForm
+          key={canReaccept ? 'confirmed' : 'awaiting-confirmation'}
+          enabled={canReaccept}
+          busy={busy}
+          onReaccept={reaccept}
+        />}
       <h2>Gestisci i tuoi dati e i tuoi diritti</h2>
       <p>Puoi farlo anche senza prestare un nuovo consenso.</p>
       <div style={{ display: 'grid', gap: 12 }}>
