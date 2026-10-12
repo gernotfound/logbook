@@ -171,7 +171,7 @@ describe('Offline technical telemetry data minimization', () => {
 
     lockAllVaults();
     const volatile = new TelemetryQueueStorage(() => 'owner-a');
-    volatile.enqueueItem('event', queued('new', Date.now()).payload);
+    volatile.enqueueItem('event', { ...queued('new', Date.now()).payload, id: 'new' });
     expect(volatile.getQueuedEvents().map(item => item.id)).toEqual(['new']);
     expect(localStorage.getItem(volatile.getQueueStorageKey())).toBeNull();
 
