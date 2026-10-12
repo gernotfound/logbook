@@ -1,13 +1,14 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { captureSessionForOwner, isCurrentSession, type SessionSnapshot } from '../lib/sync/session';
-import { deviceKey } from '../lib/sync/deviceStorage';
+import { deviceKey, readDeviceValueStrict, writeDeviceValue } from '../lib/sync/deviceStorage';
 import { draftRegistry } from '../lib/utils/draftRegistry';
 import { requiredUpdateRecoveryRegistry } from '../lib/sync/requiredUpdateRecovery';
 import { useAppStore } from '../store/useAppStore';
+import { BrowserStorageError } from '../lib/sync/browserStorage';
 
-function readDraft(key: string): Record<string, string> | null {
+function readDraft(name: string, owner: string): Record<string, string> | null {
     try {
-        const raw = localStorage.getItem(key);
+        const raw = readDeviceValueStrict(name, owner);
         if (!raw) return null;
         const parsed: unknown = JSON.parse(raw);
         if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
@@ -15,6 +16,7 @@ function readDraft(key: string): Record<string, string> | null {
         if (entries.some(([, value]) => typeof value !== 'string')) return null;
         return Object.fromEntries(entries) as Record<string, string>;
     } catch (error) {
+        if (error instanceof BrowserStorageError) throw error;
         console.warn('Bozza non leggibile, originale conservato:', error);
         return null;
     }
@@ -32,6 +34,7 @@ function mergeDraft<T extends Record<string, string>>(source: T, stored: Record<
 
 type CurrentDraft<T extends Record<string, string>> = {
     key: string | null;
+    name: string | null;
     values: T;
     dirty: boolean;
     session: SessionSnapshot | null;
@@ -40,24 +43,26 @@ type CurrentDraft<T extends Record<string, string>> = {
 export function useDatedDraft<T extends Record<string, string>>(kind: string, date: string, source: T) {
     const owner = useAppStore(state => state.dataOwner);
     const session = owner ? captureSessionForOwner(owner) : null;
-    const key = owner ? deviceKey('draft:' + kind + ':' + date, owner) : null;
-    const stored = useMemo(() => key ? readDraft(key) : null, [key]);
+    const name = 'draft:' + kind + ':' + date;
+    const key = owner ? deviceKey(name, owner) : null;
+    const stored = useMemo(() => key && owner ? readDraft(name, owner) : null, [key]);
     const loaded = mergeDraft(source, stored);
     const [edited, setEdited] = useState<{ key: string; values: T | null } | null>(null);
     const values = key && edited?.key === key ? edited.values ?? source : loaded ?? source;
-    const current = useRef<CurrentDraft<T>>({ key, values, dirty: !!loaded, session });
+    const current = useRef<CurrentDraft<T>>({ key, name: key ? name : null, values, dirty: !!loaded, session });
 
     useLayoutEffect(() => {
         current.current = {
             key,
+            name: key ? name : null,
             values,
             dirty: Boolean(key) && (edited?.key === key ? edited.values !== null : !!loaded),
             session,
         };
     });
 
-    const persist = (draftKey: string, value: T) => {
-        try { localStorage.setItem(draftKey, JSON.stringify(value)); }
+    const persist = (draftName: string, draftOwner: string, value: T) => {
+        try { writeDeviceValue(draftName, JSON.stringify(value), draftOwner); }
         catch (error) {
             useAppStore.getState().setSaveError('Bozza conservata solo in memoria: archivio del dispositivo non disponibile.');
             throw error;
@@ -69,13 +74,13 @@ export function useDatedDraft<T extends Record<string, string>>(kind: string, da
         const next = { ...current.current.values, [field]: value };
         current.current = { key, values: next, dirty: true, session };
         setEdited({ key, values: next });
-        try { persist(key, next); } catch { /* Visible error; strict reload flush retries. */ }
+        try { persist(name, session.owner, next); } catch { /* Visible error; strict reload flush retries. */ }
     };
 
     const clear = (expected?: T) => {
         if (!session || !key || !isCurrentSession(session) || current.current.key !== key
             || (expected && JSON.stringify(expected) !== JSON.stringify(current.current.values))) return false;
-        try { localStorage.removeItem(key); }
+        try { writeDeviceValue(name, null, session.owner); }
         catch (error) {
             useAppStore.getState().setSaveError('Dati salvati; impossibile rimuovere la bozza locale.');
             throw error;
@@ -89,10 +94,10 @@ export function useDatedDraft<T extends Record<string, string>>(kind: string, da
         const flush = () => {
             const draft = current.current;
             if (!draft.dirty) return;
-            if (!draft.key || !draft.session || !isCurrentSession(draft.session)) {
+            if (!draft.key || !draft.name || !draft.session || !isCurrentSession(draft.session)) {
                 throw new Error('Sessione cambiata prima del salvataggio della bozza.');
             }
-            persist(draft.key, draft.values);
+            persist(draft.name, draft.session.owner, draft.values);
         };
         draftRegistry.register(flush);
         const unregisterRecovery = requiredUpdateRecoveryRegistry.register(flush);
