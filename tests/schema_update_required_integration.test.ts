@@ -3,6 +3,38 @@ import { useAppStore } from '../src/store/useAppStore';
 import { CURRENT_DATA_SCHEMA, CURRENT_SYNC_PROTOCOL, FutureVersionError, normalizeCloudDocument } from '../src/lib/schemaEvolution';
 import { requiredUpdateRecoveryRegistry } from '../src/lib/sync/requiredUpdateRecovery';
 
+describe('health consent writer metadata during cloud normalization', () => {
+    const cloudDocument = (consentRevision?: unknown) => ({
+        _schemaVersion: CURRENT_DATA_SCHEMA,
+        profile: { height: '178' },
+        _sync: {
+            protocolVersion: CURRENT_SYNC_PROTOCOL,
+            clock: {},
+            fields: {},
+            writer: {
+                slot: 's00', replicaId: 'health-consent-device', generation: 1, seq: 0,
+                ...(consentRevision === undefined ? {} : { consentRevision }),
+            },
+        },
+    });
+
+    it('loads a post-reacceptance server writer without losing the consent epoch', () => {
+        expect(normalizeCloudDocument(cloudDocument(2))).toMatchObject({
+            business: { profile: { height: '178' } },
+            sync: { writer: { slot: 's00', generation: 1, seq: 0, consentRevision: 2 } },
+        });
+        expect(normalizeCloudDocument(cloudDocument()).sync).toMatchObject({
+            writer: { slot: 's00', generation: 1, seq: 0 },
+        });
+    });
+
+    it('rejects invalid writer consent epochs instead of silently stripping them', () => {
+        for (const revision of [-1, 1.5, '2', null, Number.NaN, Number.MAX_SAFE_INTEGER + 1]) {
+            expect(() => normalizeCloudDocument(cloudDocument(revision))).toThrow();
+        }
+    });
+});
+
 describe('runtime update-required compatibility signal', () => {
     beforeEach(() => {
         useAppStore.setState({

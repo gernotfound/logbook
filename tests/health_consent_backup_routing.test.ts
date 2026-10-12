@@ -6,14 +6,20 @@ const boundary = vi.hoisted(() => ({
   serverRead: vi.fn(async () => 'withdrawn' as string),
   trustedExport: vi.fn(async () => new Map([['', {
     _schemaVersion: 1,
-    _sync: { protocolVersion: 3, clock: {}, fields: {} },
+    _sync: {
+      protocolVersion: 3, clock: {}, fields: {},
+      writer: { slot: 's00', replicaId: 'consent-backup-device', generation: 1, seq: 0, consentRevision: 2 },
+    },
     profile: { height: '178' },
   }]])),
   directRootRead: vi.fn(async () => ({
     exists: () => true,
     data: () => ({
     _schemaVersion: 1,
-    _sync: { protocolVersion: 3, clock: {}, fields: {} },
+    _sync: {
+      protocolVersion: 3, clock: {}, fields: {},
+      writer: { slot: 's00', replicaId: 'consent-backup-device', generation: 1, seq: 0, consentRevision: 2 },
+    },
     profile: { height: '178' },
   }),
   })),
@@ -63,7 +69,10 @@ beforeEach(() => {
   boundary.serverRead.mockImplementation(async () => boundary.serverStatus);
   boundary.trustedExport.mockResolvedValue(new Map([['', {
     _schemaVersion: 1,
-    _sync: { protocolVersion: 3, clock: {}, fields: {} },
+    _sync: {
+      protocolVersion: 3, clock: {}, fields: {},
+      writer: { slot: 's00', replicaId: 'consent-backup-device', generation: 1, seq: 0, consentRevision: 2 },
+    },
     profile: { height: '178' },
   }]]));
 });
