@@ -52,7 +52,7 @@ describe('durable secure archive migration', () => {
         expect(localStorage.getItem(protectedDeviceKey('workout', owner))).not.toContain('private health note');
         expect(readDeviceValueStrict('workout', owner)).toBe(workout);
         expect(readDeviceValueStrict('draft:measurement:' + day, owner)).toContain('76');
-        expect((await readLocal(owner))?.data.nutrition[day].weight).toBe(75);
+        expect((await readLocal(owner))?.data.nutrition?.[day]?.weight).toBe(75);
 
         const next = await commitDomainOperations(owner, { type: 'profile.patch', patch: { height: '171' } }, initial);
         expect(next.operations).toHaveLength(1);
