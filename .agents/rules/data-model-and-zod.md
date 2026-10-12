@@ -1,4 +1,4 @@
-# Modello Dati e Validazione Zod — LogBook
+# Modello Dati e Validazione Zod — TheLogBook
 
 > Stato: normativo | Ultima verifica: 2026-09-20 | File verificati: `src/types.ts`, `src/lib/schema.ts`, `src/lib/schemas/*.ts`, `src/lib/merge.ts`, `src/lib/db.ts`, `src/lib/sync/documentProjection.ts`, `src/lib/sync/domainOperations.ts`, `firestore.rules`
 
