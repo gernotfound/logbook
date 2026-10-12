@@ -1,6 +1,6 @@
 # Dati salute e revoca del consenso — decisione e gate pre-pilot
 
-> Stato aggiornato il **12 ottobre 2026**: soluzione A approvata dal product owner; implementazione e regressioni **candidate nella [PR #366](https://github.com/gernotfound/logbook/pull/366), ancora draft, non in Production**. Il gate automatizzato e la verifica giuridica/runtime sono evidenze distinte.
+> Stato aggiornato il **12 ottobre 2026**: soluzione A approvata dal product owner; implementazione della [PR #366](https://github.com/gernotfound/logbook/pull/366) **integrata** il 12 ottobre 2026. Il successivo rilascio dell'archivio cifrato ([PR #369](https://github.com/gernotfound/logbook/pull/369)) è in Production sul commit `5d21dc0b32a12676e1a08cc35611d96e5b18c3f3`. Restano separati il collaudo autenticato multi-dispositivo e i gate legali pre-pilot. Il gate automatizzato e la verifica giuridica/runtime sono evidenze distinte.
 > La fotografia di partenza seguente riguarda la baseline storica `main` `5a9394649977cae4e2261e530312f5121818ce12` (9 ottobre 2026), **non descrive lo stato corrente della PR**.
 > Questo documento non costituisce un parere legale, una DPIA conclusa o una specifica di implementazione approvata.
 > Non certifica configurazioni Firebase/Vercel/Sentry Production.
@@ -31,9 +31,9 @@ Fonti istituzionali da utilizzare nella revisione:
 
 Questa tabella rappresenta un'analisi storica dei confini, **non** un penetration test e **non** una verifica del runtime o di tutti i chiamanti.
 
-### Stato tecnico candidato (12 ottobre 2026)
+### Stato tecnico distribuito (12 ottobre 2026)
 
-La PR #366 implementa il marker trusted `health_consent_withdrawals/{uid}`, le Security Rules con fence di revisione, la sospensione completa della UI, l'export Admin autenticato durante la revoca, la nuova accettazione esplicita e il recupero non automatico del journal locale. La suite GitHub Actions verifica codice, Rules Emulator, backup/export, recovery e scenario ospite multi-tab con browser Chromium/WebKit emulato. **Il candidato non equivale a un servizio pubblicato**: non esistono in questa PR prove autenticata end-to-end su Firebase/Vercel Production né una revisione legale approvata. Vedere il [protocollo tecnico](health-consent-technical-protocol.md) per confini e rischi residui.
+La PR #366, già integrata, implementa il marker trusted `health_consent_withdrawals/{uid}`, le Security Rules con fence di revisione, la sospensione completa della UI, l'export Admin autenticato durante la revoca, la nuova accettazione esplicita e il recupero non automatico del journal locale. La suite GitHub Actions verifica codice, Rules Emulator, backup/export, recovery e scenario ospite multi-tab con browser Chromium/WebKit emulato. **Lo stato distribuito non equivale al collaudo autenticato end-to-end**: CI, Firebase Hosting e Rules risultano rilasciati; non è attestata una prova manuale con più dispositivi su Production né una revisione legale approvata. Vedere il [protocollo tecnico](health-consent-technical-protocol.md) per confini e rischi residui.
 
 ## Decisione di prodotto approvata: soluzione A; verifiche giuridiche aperte
 
@@ -53,7 +53,7 @@ La scelta A **non autorizza cancellazioni automatiche e irreversibili** né la c
 - **Durante l'operazione:** bloccare subito le nuove modifiche/repliche dipendenti dal consenso. Distinguere visibilmente `revoca registrata`, `revoca in attesa di registrazione server` e `errore di registrazione`; mai comunicare un successo cloud non verificato.
 - **Offline e più dispositivi:** registrare la richiesta localmente in modo durevole e fermare le operazioni locali interessate anche a riavvio e fra tab. Quando ritorna la rete, registrare/riconciliare in modo idempotente presso un confine autorevole del server, con difesa contro client obsoleti e richieste già in volo; nessuna operazione di scrittura precedentemente pendente deve ripristinare il trattamento revocato.
 - **Esportazione e cancellazione:** non compromettere il backup dei dati già presenti o il percorso di account deletion/recovery, salvo diversa misura legalmente necessaria. Gli interventi irreversibili richiedono intenzione e conferma distinte; verificare la base giuridica e la durata dell'eventuale conservazione temporanea destinata alla gestione dei diritti.
-- **Nuova accettazione (decisione aggiornata):** l’utente può riattivare tutte le funzioni solo con checkbox esplicite distinte e conferma autorevole del server; nessun re-consenso implicito da sessione vecchia, refresh, import/backup o modifica di `legalConsent` lato client. Implementazione e regressioni restano in validazione nella PR #366.
+- **Nuova accettazione (decisione aggiornata):** l’utente può riattivare tutte le funzioni solo con checkbox esplicite distinte e conferma autorevole del server; nessun re-consenso implicito da sessione vecchia, refresh, import/backup o modifica di `legalConsent` lato client. Il flusso è stato distribuito; restano aperte le verifiche manuali e legali del pilot.
 - **Utenti ospiti:** la sospensione riguarda le funzioni che dipendono dal consenso anche senza account, ma non va equiparato lo storage solo locale all'invio cloud; verificare finalità e confini dei trattamenti.
 
 ## Vincoli giuridici non risolti
@@ -90,8 +90,8 @@ Il product owner ha chiesto espressamente di **pubblicare le modifiche tecniche 
 - [ ] classificazione delle finalità e delle basi artt. 6/9 approvata da professionista competente;
 - [x] decisione esplicita di prodotto: sospensione totale delle funzioni fitness, accesso a diritti/esportazione/cancellazione e facoltà di nuovo consenso esplicito (12 ottobre 2026);
 - [x] protocollo tecnico **candidato** documentato per ospite, account, offline, multi-device e recovery; verifica empirica con dispositivi distinti ancora aperta;
-- [x] implementazione candidata con protezioni server-side e regressioni automatizzate nella PR #366; la review indipendente e la prova runtime non sono ancora certificate;
-- [ ] verifica Firestore Rules live, backend quando coinvolto, browser fisici e runtime PWA pertinente dopo l'autorizzazione al rilascio;
+- [x] implementazione con protezioni server-side e regressioni automatizzate integrata tramite PR #366; CI main e deploy Hosting/Rules osservati sul commit di rilascio; review indipendente e smoke autenticato multi-dispositivo non ancora certificati;
+- [x] deploy/riallineamento Firestore Rules, backend Vercel e Firebase Hosting Production verificati sul release SHA `5d21dc0`; **restano** browser fisici, smoke autenticato multi-dispositivo e verifica visiva;
 - [ ] informativa, registro, DPIA screening, retention e procedura diritti aggiornati e validati.
 
 Rif.: `docs/compliance/data-subject-rights-procedure.md`, `docs/compliance/dpia-screening-template.md`, `docs/compliance/retention-schedule.md`, `docs/compliance/processing-record-template.md`, `.agents/rules/data-model-and-zod.md` e `.agents/rules/storage-and-sync.md`.
