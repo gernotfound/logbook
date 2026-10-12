@@ -145,6 +145,24 @@ describe('Offline technical telemetry data minimization', () => {
     expect(localStorage.getItem(protectedDeviceKey('telemetry_queue', 'user:owner-a'))).toBeNull();
   });
 
+  it('retires a legacy plaintext queue without exposing its payload when the vault is locked', () => {
+    lockAllVaults();
+    const storage = new TelemetryQueueStorage(() => 'owner-a');
+    localStorage.setItem(storage.getQueueStorageKey(), JSON.stringify([queued('legacy', Date.now())]));
+    expect(storage.getQueuedEvents().map(x => x.id)).toEqual(['legacy']);
+    expect(localStorage.getItem(storage.getQueueStorageKey())).toBeNull();
+    expect(storage.getQueuedEvents().map(x => x.id)).toEqual(['legacy']);
+    expect(localStorage.getItem(protectedDeviceKey('telemetry_queue', 'user:owner-a'))).toBeNull();
+  });
+
+  it('purges a legacy non-array JSON payload instead of leaving plaintext on disk', () => {
+    lockAllVaults();
+    const storage = new TelemetryQueueStorage(() => 'owner-a');
+    localStorage.setItem(storage.getQueueStorageKey(), 'null');
+    expect(storage.getQueuedEvents()).toEqual([]);
+    expect(localStorage.getItem(storage.getQueueStorageKey())).toBeNull();
+  });
+
   it('never drops unexpired encrypted ciphertext when the wrapping key is locked', () => {
     const store = new TelemetryQueueStorage(() => 'owner-a');
     store.enqueueItem('event', queued('persisted', Date.now()).payload);
