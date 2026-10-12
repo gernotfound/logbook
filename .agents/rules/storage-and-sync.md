@@ -17,6 +17,18 @@ L'app utilizza quattro livelli di storage con ruoli distinti:
 
 **MUST:** la cache locale del client Firestore resta **memory-only**. La durabilità offline dei dati utente appartiene all'envelope IndexedDB owner-scoped di TheLogBook; non introdurre `persistentLocalCache()` come seconda copia persistente non gestita dal lifecycle di logout/cancellazione account.
 
+## Archivio locale cifrato senza password aggiuntiva
+
+**MUST:** il vault `logbook:v2:${owner}:secure-vault-control` esiste in tre stati distinti: assente, `migrating`, `active`. Controlli corrotti/versioni future, una chiave IndexedDB persa o un record non autenticato **non sono** assenza dati. Nessun nuovo provisioning sopra ciphertext preesistente.
+
+**MUST:** una DEK per owner/device è wrappata con AES-GCM mediante `CryptoKey` non esportabile persistito in IndexedDB, dopo aver verificato proprietario Firebase o guest generation. Il contenitore cifrato locale non deve essere associato a password, token o UID usati come chiavi. Alla ripresa offline, il runtime riapre automaticamente il vault *dello stesso browser/profilo*.
+
+**MUST:** `localRepository` conserva la singola transazione `idb-keyval.update`, con cifratura e decifratura **sincrone**; `deviceStorage` conserva salvataggi sincroni e namespace `sealed:` separato dai vecchi writer. Ogni ciphertext usa AAD owner/key/version e nonce distinto.
+
+**MUST:** finché conversione/cleanup non sono conclusi e verificati, le copie in chiaro, journal e metadata di recupero non si eliminano automaticamente. Fallimenti quota, tab legacy, AEAD, versioni future, Web Locks o browser storage bloccano la transizione senza cancellazione. Logout e account deletion rimuovono la chiave **dopo** la prova di pulizia dei ciphertext; server deletion richiede prova `complete`.
+
+**VERIFY:** l'assenza di passphrase aggiuntiva limita la confidenzialità contro furto integrale del profilo browser o codice malevolo same-origin, che può raggiungere anche la wrapping key. Non è E2EE; dati solo offline possono andare persi se si perde il device/key. Non promettere recupero senza replica cloud.
+
 ## Browser storage boundary
 
 `src/lib/sync/browserStorage.ts` centralizza i casi in cui è necessario distinguere accesso strict da best-effort:
