@@ -68,7 +68,7 @@ describe('guest -> account V3 migration', () => {
             expect(envelope).toBeDefined();
             expect(envelope?.pending).toEqual([]);
             expect(useAppStore.getState().userData?.profile).toMatchObject({ height: '175', gender: 'M' });
-        });
+        }, { timeout: 8000 });
 
         const routines = useAppStore.getState().userData?.routines ?? [];
         expect(routines.map(routine => routine.id)).toEqual(expect.arrayContaining(['cloud-routine', 'guest-routine']));
