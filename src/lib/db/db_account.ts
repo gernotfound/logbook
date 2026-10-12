@@ -73,7 +73,7 @@ function remainingLocalPurgeKeys(owner: string): Set<string> {
     return remaining;
 }
 
-export class HealthConsentTransitionPendingError extends Error {
+class HealthConsentTransitionPendingError extends Error {
     constructor() {
         super('La revoca o la nuova accettazione dei dati salute non è ancora riconciliata. Per non perdere la richiesta, completa la verifica prima di uscire.');
         this.name = 'HealthConsentTransitionPendingError';
