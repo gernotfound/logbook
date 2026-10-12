@@ -4,10 +4,18 @@ const boundary = vi.hoisted(() => ({
   localStatus: 'reaccepting' as string,
   serverStatus: 'withdrawn' as string,
   serverRead: vi.fn(async () => 'withdrawn' as string),
-  trustedExport: vi.fn(async () => new Map([['', { profile: { height: '178' } }]])),
+  trustedExport: vi.fn(async () => new Map([['', {
+    _schemaVersion: 1,
+    _sync: { protocolVersion: 3, clock: {}, fields: {} },
+    profile: { height: '178' },
+  }]])),
   directRootRead: vi.fn(async () => ({
     exists: () => true,
-    data: () => ({ profile: { height: '178' } }),
+    data: () => ({
+    _schemaVersion: 1,
+    _sync: { protocolVersion: 3, clock: {}, fields: {} },
+    profile: { height: '178' },
+  }),
   })),
 }));
 
@@ -53,7 +61,11 @@ beforeEach(() => {
   boundary.localStatus = 'reaccepting';
   boundary.serverStatus = 'withdrawn';
   boundary.serverRead.mockImplementation(async () => boundary.serverStatus);
-  boundary.trustedExport.mockResolvedValue(new Map([['', { profile: { height: '178' } }]]));
+  boundary.trustedExport.mockResolvedValue(new Map([['', {
+    _schemaVersion: 1,
+    _sync: { protocolVersion: 3, clock: {}, fields: {} },
+    profile: { height: '178' },
+  }]]));
 });
 
 const exportSnapshot = () => collectBackupSnapshot(UserDataSchema.parse({}), true);
