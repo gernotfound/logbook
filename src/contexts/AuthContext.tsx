@@ -408,6 +408,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                     return;
                 }
             }
+            // A deletion receipt is independently recoverable even while the
+            // ciphertext is locked. Do not require the secret of an account
+            // already deleted on the server just to finalize its local purge.
+            if (user && isAccountDeletionPending(userOwner(user.uid))) {
+                useAppStore.getState().cancelPendingSyncs();
+                useAppStore.setState({ userData: null, dataOwner: null, localWorkout: null });
+                setCurrentUser(user);
+                setLoading(false);
+                return;
+            }
             // Consent refresh itself performs a durable IndexedDB consent-epoch
             // update. Unlock BEFORE it, not merely before later hydration/sync.
             if (user) {
