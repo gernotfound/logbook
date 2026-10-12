@@ -1,4 +1,4 @@
-import { get, update } from 'idb-keyval';
+import { getArchiveRecord, updateArchiveRecord } from './secureArchiveRepository';
 import { UserDataSchema } from '../schema';
 import type { UserData } from '../../types';
 import { generateId } from '../utils/date';
@@ -253,7 +253,7 @@ export async function rebaseConsentRecoveryWithExplicitChoice(
     const months = [...new Set([...cloudDocuments.keys()]
         .filter(path => path.startsWith('history_months/') || path.startsWith('nutrition_months/'))
         .map(path => path.split('/')[1]))].sort();
-    await update<any>(keyFor(owner), raw => {
+    await updateArchiveRecord<any>(owner, raw => {
         if (!guard()) throw new Error('Sessione cambiata: recupero annullato');
         const current = validate(raw, owner);
         if (!current || current.revision !== expectedLocalRevision || !current.pending.length) {
@@ -299,7 +299,7 @@ export async function advanceLocalConsentRevisionIfClean(owner: string, revision
     owner = normalizeStorageOwner(owner);
     if (!owner.startsWith('user:') || !Number.isSafeInteger(revision) || revision < 1) throw new Error('Generazione consenso non valida');
     let ready = false;
-    await update<any>(keyFor(owner), raw => {
+    await updateArchiveRecord<any>(owner, raw => {
         const current = validate(raw, owner);
         if (!current) { ready = true; return raw; }
         const previous = current.consentRevision ?? 0;
@@ -314,7 +314,7 @@ export async function advanceLocalConsentRevisionIfClean(owner: string, revision
 
 export async function readLocal(owner: string): Promise<LocalEnvelope | undefined> {
     owner = normalizeStorageOwner(owner);
-    return validate(await get<any>(keyFor(owner)), owner);
+    return validate(await getArchiveRecord<any>(owner), owner);
 }
 
 export async function ensureBoundedPendingSequences(owner: string, expectedActorId: string): Promise<LocalEnvelope | undefined> {
@@ -331,7 +331,7 @@ export async function ensureBoundedPendingSequences(owner: string, expectedActor
     if (!initial.changed) return observed;
 
     let saved: LocalEnvelope | undefined;
-    await update<any>(keyFor(owner), raw => {
+    await updateArchiveRecord<any>(owner, raw => {
         const current = validate(raw, owner);
         if (!current || current.actorId !== expectedActorId) {
             saved = current;
@@ -367,7 +367,7 @@ export async function commitLocal(owner: string, data: UserData, initialBase: Us
     const callerBase = structuredClone(parse(initialBase));
     let operations: SemanticOperation[] = [];
     const catalog = await getCachedCatalog();
-    await update<any>(keyFor(owner), raw => {
+    await updateArchiveRecord<any>(owner, raw => {
         if (guard && !guard()) return raw;
         const current = validate(raw, owner);
         if (expectedRevision !== undefined && (
@@ -426,7 +426,7 @@ export async function commitDomainOperations(owner: string, batch: DomainOperati
     const catalog = await getCachedCatalog();
     let operations: SemanticOperation[] = [];
     let savedData = fallback;
-    await update<any>(keyFor(owner), raw => {
+    await updateArchiveRecord<any>(owner, raw => {
         if (guard && !guard()) throw new Error('Commit locale invalidato dal cambio sessione');
         const current = validate(raw, owner);
         const base = current?.data ?? fallback;
@@ -503,7 +503,7 @@ export async function markReplicaCheckpointRequired(
     expectedReplica?: ReplicaIdentity,
 ): Promise<void> {
     owner = normalizeStorageOwner(owner);
-    await update<any>(keyFor(owner), raw => {
+    await updateArchiveRecord<any>(owner, raw => {
         const current = validate(raw, owner);
         if (!current?.replica) return current;
         if (expectedReplica && (
@@ -534,7 +534,7 @@ export async function adoptReplicaCheckpoint(
     const catalog = await getCachedCatalog();
     let saved: LocalEnvelope | undefined;
 
-    await update<any>(keyFor(owner), raw => {
+    await updateArchiveRecord<any>(owner, raw => {
         if (guard && !guard()) return raw;
         const current = validate(raw, owner);
         if (!current) throw new Error('Archivio locale non trovato durante il checkpoint replica');
@@ -602,7 +602,7 @@ export async function acknowledgeThrough(owner: string, expectedSeq: number, rem
     owner = normalizeStorageOwner(owner);
     const parsed = parse(remote);
     const catalog = await getCachedCatalog();
-    await update<any>(keyFor(owner), raw => {
+    await updateArchiveRecord<any>(owner, raw => {
         const current = validate(raw, owner);
         if (!current) throw new Error('Archivio locale non trovato');
         const pending = current.pending.filter(op => op.seq > expectedSeq);
@@ -632,7 +632,7 @@ export async function acknowledgeThrough(owner: string, expectedSeq: number, rem
 export async function initializeLocal(owner: string, data: UserData, completeMonths?: string[], guard?: LocalWriteGuard): Promise<void> {
     owner = normalizeStorageOwner(owner);
     const parsed = structuredClone(parse(data));
-    await update<any>(keyFor(owner), raw => {
+    await updateArchiveRecord<any>(owner, raw => {
         if (guard && !guard()) throw new Error('Inizializzazione locale invalidata dal cambio sessione');
         const current = validate(raw, owner);
         // Bootstrap is create-if-absent, not a replacement write: the journal
@@ -648,7 +648,7 @@ export async function hydrateLocal(owner: string, cloudData: UserData, months: s
     const cloud = structuredClone(parse(cloudData));
     let saved: LocalEnvelope | undefined;
     const catalog = await getCachedCatalog();
-    await update<any>(keyFor(owner), raw => {
+    await updateArchiveRecord<any>(owner, raw => {
         if (guard && !guard()) return raw;
         const current = validate(raw, owner);
         if (!current) {
@@ -720,7 +720,7 @@ export async function clearNutritionConflict(owner: string, fingerprint: string,
         const { pendingConflicts: _old, ...rest } = data;
         return Object.keys(remaining).length ? { ...rest, pendingConflicts: remaining } : rest;
     };
-    await update<any>(keyFor(owner), raw => {
+    await updateArchiveRecord<any>(owner, raw => {
         const current = validate(raw, owner);
         const data = current?.data ?? fallback;
         if (getNutritionConflictFingerprint(data.pendingConflicts?.nutritionPlanning) !== fingerprint) throw new Error('Conflitto cambiato durante la risoluzione');
@@ -732,7 +732,7 @@ export async function clearNutritionConflict(owner: string, fingerprint: string,
 
 export async function revertRejectedConsent(owner: string, expected: UserData['legalConsent'], previous: UserData['legalConsent']): Promise<void> {
     owner = normalizeStorageOwner(owner);
-    await update<any>(keyFor(owner), raw => {
+    await updateArchiveRecord<any>(owner, raw => {
         const current = validate(raw, owner);
         if (!current || !equal(current.data.legalConsent, expected)) return raw!;
 
