@@ -19,9 +19,11 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
   const [recoveryBusy, setRecoveryBusy] = useState(false);
   const [privacy, setPrivacy] = useState(false);
   const [terms, setTerms] = useState(false);
+  const canReaccept = status === 'withdrawn' || status === 'reaccepting';
+  const showReacceptForm = status === 'pending' || canReaccept;
 
   const reaccept = async () => {
-    if (!acceptedTerms || !acceptedHealth || busy) return;
+    if (!canReaccept || !acceptedTerms || !acceptedHealth || busy) return;
     setBusy(true);
     setError(null);
     try {
@@ -72,11 +74,15 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
   return <main id="auth-overlay" role="main">
     <section className="auth-panel" aria-label="Accesso sospeso" style={{ maxWidth: 560, maxHeight: '90vh', overflowY: 'auto' }}>
       <h1>Accesso a TheLogBook sospeso</h1>
-      <p>Non puoi usare allenamenti, nutrizione o diario finché non presti nuovamente il consenso esplicito per i dati salute.</p>
+      <p>Allenamenti, nutrizione e diario sono sospesi. Per riattivarli serve un nuovo consenso esplicito dopo la conferma della revoca.</p>
       {user === null && <p>Modalità locale: i dati sono salvati solo su questo dispositivo. Non è necessario contattare il server per la revoca.</p>}
       {status === 'checking' && <p role="status">Verifica dello stato sul server in corso…</p>}
       {status === 'error' && <p role="alert">Non è stato possibile verificare lo stato del consenso. L’accesso fitness resta sospeso.</p>}
-      {status === 'pending' && <p role="status">Revoca registrata su questo dispositivo. La conferma cloud è ancora in attesa.</p>}
+      {(status === 'pending' || (status === 'withdrawn' && user !== null)) && <p role="status">
+        {status === 'pending'
+          ? 'Revoca registrata su questo dispositivo. In attesa della conferma cloud: la nuova accettazione sarà disponibile soltanto dopo la conferma.'
+          : 'Revoca confermata sul server. Puoi prestare un nuovo consenso se desideri riattivare la PWA.'}
+      </p>}
       {status === 'stale-request' && <section aria-label="Revoca da riconfermare">
         <p role="alert">Una nuova accettazione da un altro dispositivo è più recente della richiesta di revoca rimasta in attesa. La vecchia richiesta non è stata reinviata.</p>
         <button className="btn btn-primary" type="button" disabled={busy} onClick={() => { void (async () => {
@@ -108,18 +114,18 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
         </button>
       </section>}
       {status === 'reaccepting' && <p role="status">Nuovo consenso in fase di completamento. Riconferma qui sotto per completare.</p>}
-      {(status === 'withdrawn' || status === 'reaccepting') && <>
+      {showReacceptForm && <>
         <h2>Per tornare a usare la PWA</h2>
         <p>Esamina i documenti e scegli liberamente se prestare un nuovo consenso. I dati già presenti non vengono cancellati automaticamente.</p>
         <label style={{ display: 'block', marginBlock: 12 }}>
-          <input type="checkbox" checked={acceptedTerms} onChange={e => setAcceptedTerms(e.target.checked)} />
+          <input type="checkbox" disabled={!canReaccept || busy} checked={acceptedTerms} onChange={e => setAcceptedTerms(e.target.checked)} />
           {' '}Ho almeno 18 anni, ho letto l'informativa e accetto i termini.
         </label>
         <label style={{ display: 'block', marginBlock: 12 }}>
-          <input type="checkbox" checked={acceptedHealth} onChange={e => setAcceptedHealth(e.target.checked)} />
+          <input type="checkbox" disabled={!canReaccept || busy} checked={acceptedHealth} onChange={e => setAcceptedHealth(e.target.checked)} />
           {' '}Presto esplicitamente il consenso al trattamento dei miei dati relativi alla salute per il servizio.
         </label>
-        <button className="btn btn-primary" type="button" disabled={busy || !acceptedTerms || !acceptedHealth} onClick={() => void reaccept()}>
+        <button className="btn btn-primary" type="button" disabled={!canReaccept || busy || !acceptedTerms || !acceptedHealth} onClick={() => void reaccept()}>
           {busy ? 'Salvataggio in corso…' : 'Presta un nuovo consenso'}
         </button>
       </>}
