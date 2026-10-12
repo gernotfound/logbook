@@ -1,148 +1,137 @@
-// The local data-encryption key (DEK) is never persisted unwrapped. Wrapping and
-// passphrase stretching are asynchronous because they occur at explicit unlock,
-// never inside a synchronous IndexedDB update or device-critical localStorage save.
+import { get, update } from 'idb-keyval';
 
-const VAULT_VERSION = 1 as const;
-const PBKDF2_ITERATIONS = 600_000 as const;
-const MAX_PBKDF2_ITERATIONS = 2_000_000;
+// Keys are anchored to an owner-scoped, non-extractable Web Crypto key stored
+// in this device's IndexedDB. Firebase Auth gates the account owner before
+// application bootstrap; Firebase tokens, API keys and UIDs are NOT KDF secrets.
+// This protects ciphertext without the local device-key store; copying the
+// complete browser profile or compromising same-origin JavaScript can still
+// provide decryption access. It is NOT end-to-end encryption.
+const VERSION = 2 as const;
 const KEY_BYTES = 32;
-const SALT_BYTES = 32;
 const NONCE_BYTES = 12;
+const TAG_BYTES = 16;
 const encoder = new TextEncoder();
 
 export type LocalKeyVault = {
-    format: 'thelogbook-local-vault';
-    version: typeof VAULT_VERSION;
+    format: 'thelogbook-local-device-vault';
+    version: typeof VERSION;
     owner: string;
-    kdf: { id: 'pbkdf2-sha256'; iterations: number; salt: string };
-    passphrase: { nonce: string; wrappedDek: string };
-    recovery: { nonce: string; wrappedDek: string };
+    nonce: string;
+    wrappedDek: string;
 };
 
 export class LocalUnlockError extends Error {
     readonly code = 'local-archive-unlock-failed';
     constructor() {
-        super('Impossibile sbloccare l’archivio protetto. I dati locali sono stati conservati.');
+        super('Chiave locale del dispositivo non disponibile o archivio non leggibile. Nessun dato è stato cancellato.');
         this.name = 'LocalUnlockError';
     }
 }
 
-function hex(bytes: Uint8Array): string {
-    return Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+export function deviceVaultKeyId(owner: string): string {
+    if (!owner || owner.length > 512 || (owner !== 'guest' && !/^user:[^:]+$/.test(owner))) {
+        throw new LocalUnlockError();
+    }
+    return 'logbook:v2:' + owner + ':device-vault-key';
 }
 
-function parseHex(input: string, length: number): Uint8Array {
-    if (input.length !== length * 2 || !/^[0-9a-f]+$/i.test(input)) throw new LocalUnlockError();
-    const out = new Uint8Array(length);
-    for (let i = 0; i < length; i++) out[i] = Number.parseInt(input.slice(i * 2, i * 2 + 2), 16);
-    return out;
+const toHex = (b: Uint8Array): string =>
+    Array.from(b, x => x.toString(16).padStart(2, '0')).join('');
+
+function fromHex(s: string, expected: number): Uint8Array {
+    if (typeof s !== 'string' || s.length !== expected * 2 || !/^[0-9a-f]+$/i.test(s)) throw new LocalUnlockError();
+    const bytes = new Uint8Array(expected);
+    for (let i = 0; i < expected; i++) bytes[i] = Number.parseInt(s.slice(i * 2, i * 2 + 2), 16);
+    return bytes;
 }
 
-function aad(owner: string, purpose: 'passphrase' | 'recovery'): Uint8Array {
-    return encoder.encode(JSON.stringify(['thelogbook', 'local-dek', VAULT_VERSION, owner, purpose]));
+const context = (owner: string) => encoder.encode(
+    JSON.stringify(['thelogbook', 'local-dek', 'device', VERSION, owner, deviceVaultKeyId(owner)]),
+);
+
+function isSecureDeviceKey(value: unknown): value is CryptoKey {
+    if (!value || typeof value !== 'object') return false;
+    const key = value as Partial<CryptoKey>;
+    const algo = key.algorithm as AesKeyAlgorithm | undefined;
+    return key.type === 'secret' && key.extractable === false
+        && algo?.name === 'AES-GCM' && algo.length === 256
+        && key.usages?.includes('encrypt') === true && key.usages.includes('decrypt');
 }
 
-function validateVault(value: LocalKeyVault, owner: string): LocalKeyVault {
-    if (!value || value.format !== 'thelogbook-local-vault' || value.version !== VAULT_VERSION
-        || typeof owner !== 'string' || !owner || owner.length > 512 || value.owner !== owner
-        || value.kdf?.id !== 'pbkdf2-sha256'
-        || !Number.isInteger(value.kdf.iterations) || value.kdf.iterations < PBKDF2_ITERATIONS
-        || value.kdf.iterations > MAX_PBKDF2_ITERATIONS
-    ) throw new LocalUnlockError();
-    parseHex(value.kdf.salt, SALT_BYTES);
-    parseHex(value.passphrase?.nonce ?? '', NONCE_BYTES);
-    parseHex(value.passphrase?.wrappedDek ?? '', KEY_BYTES + 16);
-    parseHex(value.recovery?.nonce ?? '', NONCE_BYTES);
-    parseHex(value.recovery?.wrappedDek ?? '', KEY_BYTES + 16);
-    return value;
+async function requireDeviceKey(owner: string): Promise<CryptoKey> {
+    let candidate: unknown;
+    try { candidate = await get<unknown>(deviceVaultKeyId(owner)); }
+    catch { throw new LocalUnlockError(); }
+    if (!isSecureDeviceKey(candidate)) throw new LocalUnlockError();
+    return candidate;
 }
 
-async function keyFromPassphrase(passphrase: string, salt: Uint8Array, iterations: number): Promise<CryptoKey> {
-    const input = await crypto.subtle.importKey('raw', encoder.encode(passphrase), 'PBKDF2', false, ['deriveKey']);
-    return crypto.subtle.deriveKey(
-        { name: 'PBKDF2', hash: 'SHA-256', salt: new Uint8Array(salt), iterations },
-        input, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt'],
+/**
+ * Serialized by secureArchiveMigration's exclusive Web Lock. A prior orphan
+ * device key may be reused after a crash BEFORE control metadata was saved;
+ * it is never silently recreated while an active/migrating control exists.
+ */
+async function establishDeviceKey(owner: string): Promise<CryptoKey> {
+    const newKey = await crypto.subtle.generateKey(
+        { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt'],
     );
-}
-
-async function recoveryAesKey(code: Uint8Array): Promise<CryptoKey> {
-    return crypto.subtle.importKey('raw', new Uint8Array(code), 'AES-GCM', false, ['encrypt', 'decrypt']);
-}
-
-async function wrapDek(key: CryptoKey, dek: Uint8Array, owner: string, purpose: 'passphrase' | 'recovery') {
-    const nonce = crypto.getRandomValues(new Uint8Array(NONCE_BYTES));
-    const encrypted = await crypto.subtle.encrypt(
-        { name: 'AES-GCM', iv: nonce, additionalData: new Uint8Array(aad(owner, purpose)) },
-        key, new Uint8Array(dek),
-    );
-    return { nonce: hex(nonce), wrappedDek: hex(new Uint8Array(encrypted)) };
-}
-
-async function unwrapDek(key: CryptoKey, value: { nonce: string; wrappedDek: string }, owner: string, purpose: 'passphrase' | 'recovery'): Promise<Uint8Array> {
+    if (!isSecureDeviceKey(newKey)) throw new LocalUnlockError();
+    let saved: unknown;
     try {
-        const decrypted = await crypto.subtle.decrypt(
-            { name: 'AES-GCM', iv: new Uint8Array(parseHex(value.nonce, NONCE_BYTES)), additionalData: new Uint8Array(aad(owner, purpose)) },
-            key, new Uint8Array(parseHex(value.wrappedDek, KEY_BYTES + 16)),
+        await update<unknown>(deviceVaultKeyId(owner), previous => {
+            saved = previous === undefined ? newKey : previous;
+            if (!isSecureDeviceKey(saved)) throw new LocalUnlockError();
+            return saved;
+        });
+        return await requireDeviceKey(owner);
+    } catch { throw new LocalUnlockError(); }
+}
+
+function validateVault(vault: LocalKeyVault, owner: string): void {
+    deviceVaultKeyId(owner);
+    if (!vault || vault.format !== 'thelogbook-local-device-vault'
+        || vault.version !== VERSION || vault.owner !== owner) throw new LocalUnlockError();
+    fromHex(vault.nonce, NONCE_BYTES);
+    fromHex(vault.wrappedDek, KEY_BYTES + TAG_BYTES);
+}
+
+export async function createLocalKeyVault(owner: string): Promise<{ vault: LocalKeyVault; dataKey: Uint8Array }> {
+    deviceVaultKeyId(owner);
+    const key = await establishDeviceKey(owner);
+    const dek = crypto.getRandomValues(new Uint8Array(KEY_BYTES));
+    const nonce = crypto.getRandomValues(new Uint8Array(NONCE_BYTES));
+    try {
+        const ciphertext = await crypto.subtle.encrypt(
+            { name: 'AES-GCM', iv: new Uint8Array(nonce), additionalData: new Uint8Array(context(owner)) },
+            key, new Uint8Array(dek),
         );
-        const plain = new Uint8Array(decrypted);
-        if (plain.length !== KEY_BYTES) throw new LocalUnlockError();
-        return plain;
+        return {
+            vault: {
+                format: 'thelogbook-local-device-vault', version: VERSION,
+                owner, nonce: toHex(nonce), wrappedDek: toHex(new Uint8Array(ciphertext)),
+            },
+            dataKey: dek,
+        };
     } catch {
+        dek.fill(0);
         throw new LocalUnlockError();
     }
 }
 
-export async function createLocalKeyVault(owner: string, passphrase: string): Promise<{ vault: LocalKeyVault; dataKey: Uint8Array; recoveryCode: string }> {
-    if (!owner || owner.length > 512 || passphrase.length < 16 || passphrase.length > 1024) {
-        throw new Error('Scegli una passphrase di almeno 16 caratteri per proteggere il dispositivo.');
-    }
-    const dek = crypto.getRandomValues(new Uint8Array(KEY_BYTES));
-    const salt = crypto.getRandomValues(new Uint8Array(SALT_BYTES));
-    const recovery = crypto.getRandomValues(new Uint8Array(KEY_BYTES));
-    const passwordKey = await keyFromPassphrase(passphrase, salt, PBKDF2_ITERATIONS);
-    const vault: LocalKeyVault = {
-        format: 'thelogbook-local-vault', version: VAULT_VERSION, owner,
-        kdf: { id: 'pbkdf2-sha256', iterations: PBKDF2_ITERATIONS, salt: hex(salt) },
-        passphrase: await wrapDek(passwordKey, dek, owner, 'passphrase'),
-        recovery: await wrapDek(await recoveryAesKey(recovery), dek, owner, 'recovery'),
-    };
-    return { vault, dataKey: dek, recoveryCode: hex(recovery) };
-}
-
-export async function unlockLocalKeyVault(vault: LocalKeyVault, owner: string, passphrase: string): Promise<Uint8Array> {
+/** Rehydrates a DEK automatically on the SAME browser/profile, even offline. */
+export async function unlockLocalKeyVault(vault: LocalKeyVault, owner: string): Promise<Uint8Array> {
     validateVault(vault, owner);
+    const key = await requireDeviceKey(owner);
     try {
-        const key = await keyFromPassphrase(passphrase, parseHex(vault.kdf.salt, SALT_BYTES), vault.kdf.iterations);
-        return await unwrapDek(key, vault.passphrase, owner, 'passphrase');
+        const plaintext = await crypto.subtle.decrypt(
+            {
+                name: 'AES-GCM', iv: new Uint8Array(fromHex(vault.nonce, NONCE_BYTES)),
+                additionalData: new Uint8Array(context(owner)),
+            },
+            key, new Uint8Array(fromHex(vault.wrappedDek, KEY_BYTES + TAG_BYTES)),
+        );
+        const dek = new Uint8Array(plaintext);
+        if (dek.length !== KEY_BYTES) throw new LocalUnlockError();
+        return dek;
     } catch { throw new LocalUnlockError(); }
-}
-
-export async function recoverLocalKeyVault(vault: LocalKeyVault, owner: string, recoveryCode: string): Promise<Uint8Array> {
-    validateVault(vault, owner);
-    try {
-        const key = await recoveryAesKey(parseHex(recoveryCode.trim(), KEY_BYTES));
-        return await unwrapDek(key, vault.recovery, owner, 'recovery');
-    } catch { throw new LocalUnlockError(); }
-}
-
-async function rewrapVerifiedDek(vault: LocalKeyVault, owner: string, dataKey: Uint8Array, nextPassphrase: string): Promise<LocalKeyVault> {
-    if (nextPassphrase.length < 16 || nextPassphrase.length > 1024) throw new Error('La nuova passphrase non è valida.');
-    const salt = crypto.getRandomValues(new Uint8Array(SALT_BYTES));
-    return {
-        ...vault,
-        kdf: { id: 'pbkdf2-sha256', iterations: PBKDF2_ITERATIONS, salt: hex(salt) },
-        passphrase: await wrapDek(await keyFromPassphrase(nextPassphrase, salt, PBKDF2_ITERATIONS), dataKey, owner, 'passphrase'),
-    };
-}
-
-/** A wrong old passphrase MUST NOT turn a vault into an irrecoverable one. */
-export async function rewrapLocalPassphrase(vault: LocalKeyVault, owner: string, oldPassphrase: string, nextPassphrase: string): Promise<LocalKeyVault> {
-    const verifiedDek = await unlockLocalKeyVault(vault, owner, oldPassphrase);
-    return rewrapVerifiedDek(vault, owner, verifiedDek, nextPassphrase);
-}
-
-/** Recovery-based reset uses only a previously verified, independent recovery code. */
-export async function resetLocalPassphraseWithRecovery(vault: LocalKeyVault, owner: string, recoveryCode: string, nextPassphrase: string): Promise<LocalKeyVault> {
-    const verifiedDek = await recoverLocalKeyVault(vault, owner, recoveryCode);
-    return rewrapVerifiedDek(vault, owner, verifiedDek, nextPassphrase);
 }
