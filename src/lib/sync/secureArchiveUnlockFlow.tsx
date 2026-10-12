@@ -1,6 +1,6 @@
 import { createRoot, type Root } from 'react-dom/client';
 import { SecureVaultPrompt } from './SecureVaultPrompt';
-import { isVaultUnlocked, readVaultControl, unlockVaultForOwner } from './secureArchiveSession';
+import { isVaultUnlocked, lockVault, readVaultControl, unlockVaultForOwner } from './secureArchiveSession';
 import { createAndMigrateVault, resumeVaultMigration } from './secureArchiveMigration';
 import { normalizeStorageOwner } from './owner';
 
@@ -51,6 +51,7 @@ export function ensureLocalVaultReady(requestedOwner: string): Promise<void> {
             if (!control) await createAndMigrateVault(owner);
             else if (control.phase === 'migrating') await resumeVaultMigration(owner);
             else await unlockVaultForOwner(owner);
+            if (finished) { lockVault(owner); return; }
             if (!isVaultUnlocked(owner)) throw new Error('La sessione locale non è più valida.');
             complete();
         } catch (cause) {
