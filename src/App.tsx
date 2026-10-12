@@ -470,7 +470,7 @@ function App() {
   }
 
   if ((isGuest || currentUser) && healthConsentStatus !== 'active') {
-    return <><GlobalDialog /><HealthConsentSuspended status={healthConsentStatus} user={isGuest ? null : currentUser} /></>;
+    return <><GlobalDialog /><HealthConsentSuspended key={isGuest ? 'guest' : `user:${currentUser?.uid}`} status={healthConsentStatus} user={isGuest ? null : currentUser} /></>;
   }
 
   return (

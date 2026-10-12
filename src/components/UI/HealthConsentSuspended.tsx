@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import type { User } from 'firebase/auth';
 import { useSettings } from '../../hooks/useSettings';
@@ -21,6 +21,15 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
   const [terms, setTerms] = useState(false);
   const canReaccept = status === 'withdrawn' || status === 'reaccepting';
   const showReacceptForm = status === 'pending' || canReaccept;
+
+  // Never carry an earlier opt-in across a new withdrawal, a failed
+  // verification or an owner change. Reacceptance is always a fresh choice.
+  useEffect(() => {
+    if (!canReaccept) {
+      setAcceptedTerms(false);
+      setAcceptedHealth(false);
+    }
+  }, [canReaccept]);
 
   const reaccept = async () => {
     if (!canReaccept || !acceptedTerms || !acceptedHealth || busy) return;

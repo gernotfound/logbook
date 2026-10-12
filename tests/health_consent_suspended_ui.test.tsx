@@ -54,9 +54,16 @@ describe('suspended health-consent screen', () => {
     rerender(<HealthConsentSuspended status="pending" user={account} />);
     expect(terms.disabled).toBe(true);
     expect(health.disabled).toBe(true);
+    expect(terms.checked).toBe(false);
+    expect(health.checked).toBe(false);
     expect(submit.disabled).toBe(true);
     fireEvent.click(submit);
     expect(reacceptHealthConsent).not.toHaveBeenCalled();
+
+    rerender(<HealthConsentSuspended status="withdrawn" user={account} />);
+    expect(terms.checked).toBe(false);
+    expect(health.checked).toBe(false);
+    expect(submit.disabled).toBe(true);
   });
 
   it('does not offer premature reacceptance for unverified, failed, stale or recovery states', () => {
