@@ -1,6 +1,7 @@
 import type { User } from 'firebase/auth';
 import type { UserData } from '../../types';
 import { auth, getDb } from '../../lib/firebase';
+import { isHealthConsentCloudWritable } from '../../lib/healthConsent';
 import { DB } from '../../lib/db';
 import { UserDataSchema } from '../../lib/schema';
 import { captureSession, isCurrentSession, userOwner } from '../../lib/sync/session';
@@ -86,11 +87,16 @@ export async function loadAuthenticatedData({
     }
 
     try {
+        // Cached offline consent permits local editing, NEVER remote reads,
+        // checkpoint registration or cloud writes until freshly revalidated.
+        const cloudAllowed = () => isCurrent() && isHealthConsentCloudWritable(expectedOwner);
+        if (!cloudAllowed()) return;
         const durableBeforeCloud = await readLocal(expectedOwner);
         if (!isCurrent()) return;
+        if (!cloudAllowed()) return;
         const checkpointDue = needsReplicaCheckpoint(durableBeforeCloud?.replica);
         const payload = await DB.loadCloudPayload({ allMonths: checkpointDue });
-        if (!isCurrent()) return;
+        if (!cloudAllowed()) return;
 
         if (payload) {
             try {
