@@ -121,6 +121,30 @@ describe('out-of-order consent checks', () => {
   });
 });
 
+describe('withdrawal acknowledgement racing with a newer consent', () => {
+  it('offers an explicit stale-request decision instead of trapping the device in withdrawn state', async () => {
+    const uid = 'late-ack-' + crypto.randomUUID();
+    let latestRevision = 0;
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
+      if (init.method === 'POST') {
+        // The withdrawal committed at rev 1, but another device reaccepted
+        // at rev 2 before this acknowledgement reached the browser.
+        latestRevision = 2;
+        return Response.json({ status: 'withdrawn', revision: 1 });
+      }
+      return Response.json(latestRevision === 0
+        ? { status: 'active', revision: 0 }
+        : { status: 'active', revision: 2, acceptedAt: '2026-10-12T05:00:00.000Z' });
+    }));
+    expect(await refreshHealthConsent(user(uid))).toBe('active');
+    await withdrawHealthConsent(user(uid));
+    expect(localStorage.getItem(key(uid))).toBe('pending:0');
+    expect(currentHealthConsentStatus(uid)).toBe('stale-request');
+    expect(isHealthConsentWritable('user:' + uid)).toBe(false);
+    expect(await retainNewerHealthConsent(user(uid))).toBe('active');
+  });
+});
+
 describe('local-only guest consent lifecycle', () => {
   it('revocation is durable, immediately suspends local writes, and never calls a backend', () => {
     const mock = vi.fn();

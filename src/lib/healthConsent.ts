@@ -245,8 +245,12 @@ export async function withdrawHealthConsent(user: User, freezeWriters?: () => vo
   freezeWriters?.();
   const server = await serverRequest(user, 'POST', { action: 'withdraw', expectedRevision: verified });
   if (server.status !== 'withdrawn') throw new Error('Revoca non registrata dal server.');
-  writeBrowserValue(marker(uid), 'withdrawn');
-  setStatus(uid, 'withdrawn');
+  // A successful POST may arrive after another device has reaccepted.
+  // Preserve the original pending revision until a fresh read can detect it.
+  const reconciled = await refreshHealthConsent(user);
+  if (reconciled !== 'withdrawn' && reconciled !== 'stale-request') {
+    throw new Error('Stato finale della revoca non ancora verificato.');
+  }
 }
 
 /** A stale withdrawal is never replayed without a new explicit user decision. */
@@ -290,8 +294,10 @@ export async function reconfirmStaleHealthWithdrawal(user: User): Promise<void> 
   setStatus(user.uid, 'pending');
   const state = await serverRequest(user, 'POST', { action: 'withdraw', expectedRevision: live.revision });
   if (state.status !== 'withdrawn') throw new Error('Revoca non confermata.');
-  writeBrowserValue(marker(user.uid), 'withdrawn');
-  setStatus(user.uid, 'withdrawn');
+  const reconciled = await refreshHealthConsent(user);
+  if (reconciled !== 'withdrawn' && reconciled !== 'stale-request') {
+    throw new Error('Stato finale della revoca non ancora verificato.');
+  }
 }
 
 export async function reacceptHealthConsent(user: User, acceptance: {
