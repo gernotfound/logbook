@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import {
     createLocalKeyVault, LocalUnlockError, recoverLocalKeyVault,
-    rewrapLocalPassphrase, unlockLocalKeyVault,
+    resetLocalPassphraseWithRecovery, rewrapLocalPassphrase, unlockLocalKeyVault,
 } from '../src/lib/sync/secureArchiveKeys';
 import { openLocalText, sealLocalText } from '../src/lib/sync/secureArchiveCipher';
 
@@ -37,13 +37,17 @@ describe('offline archive key lifecycle', () => {
     it('supports atomic passphrase rewrapping without changing ciphertext or the recovery key', async () => {
         const { vault, dataKey, recoveryCode } = await createLocalKeyVault(owner, passphrase);
         const ciphertext = sealLocalText(dataKey, owner, 'data', 'offline pending journal');
-        const changed = await rewrapLocalPassphrase(vault, owner, dataKey, another);
+        await expect(rewrapLocalPassphrase(vault, owner, another, another)).rejects.toBeInstanceOf(LocalUnlockError);
+        const changed = await rewrapLocalPassphrase(vault, owner, passphrase, another);
         expect(changed.recovery).toEqual(vault.recovery);
         expect(changed.kdf.salt).not.toBe(vault.kdf.salt);
         await expect(unlockLocalKeyVault(changed, owner, passphrase)).rejects.toBeInstanceOf(LocalUnlockError);
         expect(await unlockLocalKeyVault(changed, owner, another)).toEqual(dataKey);
         const recovered = await recoverLocalKeyVault(changed, owner, recoveryCode);
         expect(openLocalText(recovered, owner, 'data', ciphertext)).toBe('offline pending journal');
+        const reset = await resetLocalPassphraseWithRecovery(changed, owner, recoveryCode, passphrase);
+        expect(await unlockLocalKeyVault(reset, owner, passphrase)).toEqual(dataKey);
+        await expect(resetLocalPassphraseWithRecovery(changed, owner, '0'.repeat(64), passphrase)).rejects.toBeInstanceOf(LocalUnlockError);
     });
 
     it('never creates a vault from an empty or weak passphrase', async () => {
