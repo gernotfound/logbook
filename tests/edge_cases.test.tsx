@@ -1,7 +1,8 @@
 import React from 'react';
-import { describe, test, expect } from 'vitest';
+import { describe, test, expect, beforeEach } from 'vitest';
 import { screen, act, fireEvent } from '@testing-library/react';
 import { renderWithProviders, emptyUserData } from './setup';
+import { prepareUnlockedTestArchive } from './secureVaultFixture';
 import { Logic } from '../src/lib/logic';
 
 import HomeView from '../src/components/Home/HomeView';
@@ -18,6 +19,7 @@ import { storageOwner } from '../src/lib/sync/session';
 import MuscleModel from '../src/components/Training/MuscleModel';
 
 describe('Empirical Challenger Suite: Edge Cases & Stress Verification', () => {
+  beforeEach(async () => { await prepareUnlockedTestArchive(); });
 
   describe('1. Zero-Quantity Inputs & Calculations', () => {
     test('Logic.scaleFoodNutrients handles zero, negative, and invalid quantities', () => {
