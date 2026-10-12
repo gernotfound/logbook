@@ -3,7 +3,7 @@ import { User } from 'firebase/auth';
 import { auth, getDb, waitForPendingWrites, provider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendEmailVerification, reload } from '../lib/firebase';
 import { DB } from '../lib/db';
 import { isAccountDeletionPending } from '../lib/sync/accountGate';
-import { beginHealthConsentVerification, refreshHealthConsent, isHealthConsentWritable } from '../lib/healthConsent';
+import { beginHealthConsentVerification, refreshHealthConsent, isHealthConsentWritable, suspendHealthConsentCloudAccess } from '../lib/healthConsent';
 import { useAppStore } from '../store/useAppStore';
 import { UserData } from '../types';
 import { UserDataSchema } from '../lib/schema';
@@ -588,8 +588,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 isReloading = false;
             }
         };
+        const handleOffline = () => {
+            const uid = auth.currentUser?.uid;
+            if (uid) suspendHealthConsentCloudAccess(uid);
+        };
         document.addEventListener('visibilitychange', handleVisibilityChange);
         window.addEventListener('online', handleVisibilityChange);
+        window.addEventListener('offline', handleOffline);
 
         return () => {
             isMounted = false;
@@ -604,6 +609,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             document.removeEventListener('visibilitychange', handleAuthVisibilityChange);
             document.removeEventListener('visibilitychange', handleVisibilityChange);
             window.removeEventListener('online', handleVisibilityChange);
+            window.removeEventListener('offline', handleOffline);
             window.removeEventListener('logbook:health-consent-reactivated', handleConsentReactivated);
         };
     }, [isGuestActiveStrict, loadData, readGuestMigrationRecoveryStrict, setSyncing, setUserData, setSaveError]);
