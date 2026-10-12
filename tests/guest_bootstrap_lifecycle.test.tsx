@@ -4,6 +4,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, act, waitFor, renderHook, fireEvent } from '@testing-library/react';
 import { AuthProvider } from '../src/contexts/AuthContext';
 import { DB } from '../src/lib/db';
+import { purgeAllLocalUserData as purgeRealLocalUserData } from '../src/lib/db/db_account';
 import { useAuth } from '../src/hooks/useAuth';
 import { useAppStore } from '../src/store/useAppStore';
 import { clearCatalogCache, saveCatalogToCache } from '../src/lib/catalog/catalogService';
@@ -135,7 +136,6 @@ describe('Milestone M2: Guest Bootstrap & Cold Start Lifecycle', () => {
 
         let releasePurge!: () => void;
         const blocked = new Promise<void>(resolve => { releasePurge = resolve; });
-        const realPurge = DB.purgeAllLocalUserData.bind(DB);
         const purge = vi.spyOn(DB, 'purgeAllLocalUserData')
             .mockImplementationOnce(async () => {
                 await blocked;
@@ -145,7 +145,7 @@ describe('Milestone M2: Guest Bootstrap & Cold Start Lifecycle', () => {
                 // A successful purge must also remove the real encrypted IDB
                 // envelope and wrapped DEK. Clearing only localStorage would
                 // strand ciphertext encrypted under a previous guest identity.
-                await realPurge('guest');
+                await purgeRealLocalUserData('guest');
             });
 
         let logout!: Promise<void>;
