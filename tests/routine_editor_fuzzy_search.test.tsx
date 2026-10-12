@@ -636,10 +636,14 @@ describe('Intelligent Exercise Search & Dropdown Suite (M3: R4 & R6)', () => {
                 date: currentWorkout.date
             };
 
-            await useAppStore.getState().saveUserData((prev) => {
+            const pendingSave = useAppStore.getState().saveUserData((prev) => {
                 if (!prev) return prev;
                 return { ...prev, history: [finishedWorkout, ...(prev.history || [])], activeWorkout: null };
             });
+            // Exercise the production flush boundary rather than depending
+            // on a debounced cloud timer in this standalone store test.
+            await useAppStore.getState().flushPendingSyncs();
+            await pendingSave;
             useAppStore.setState({ localWorkout: null });
 
             const updatedState = useAppStore.getState();
