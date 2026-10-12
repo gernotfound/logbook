@@ -636,7 +636,7 @@ export class TelemetryHub {
 
       // Never reconcile a completed old-owner flush into a new-owner queue.
       if (!this.isQueueOwnerCurrent(ownerKey, ownerEpoch)) return;
-      this.queue.invalidateCache();
+      this.queue.refreshAfterFlush();
       const currentLiveQueue = this.queue.getQueuedEvents();
       const updatedQueue: QueuedTelemetryItem[] = [];
 
