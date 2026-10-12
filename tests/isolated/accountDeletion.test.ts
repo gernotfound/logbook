@@ -24,6 +24,9 @@ vi.mock('../../src/lib/sync/replicateJournal', () => ({ waitForJournalIdle: boun
 
 import { deleteAccount, purgeAllLocalUserData, purgeCompletedAccountLocalData, resumeAccountDeletion } from '../../src/lib/db/db_account';
 import { invalidateSession } from '../../src/lib/sync/session';
+import { createLocalKeyVault } from '../../src/lib/sync/secureArchiveKeys';
+import { isVaultUnlocked } from '../../src/lib/sync/secureArchiveSession';
+import { sealLocalText } from '../../src/lib/sync/secureArchiveCipher';
 import {
     isAccountDeletionPending,
     markAccountDeletion,
@@ -113,6 +116,27 @@ it('retains the wrapped data-encryption key when a sealed local snapshot cannot 
     await purgeCompletedAccountLocalData('user:a');
     expect(disk.has(sealedWorkout)).toBe(false);
     expect(disk.has(control)).toBe(false);
+});
+
+it('purges server-confirmed deleted account ciphertext without unlocking its protected DEK', async () => {
+    const owner = 'user:a';
+    const { vault, dataKey } = await createLocalKeyVault(owner, 'deleted user passphrase 2026');
+    const control = 'logbook:v2:user:a:secure-vault-control';
+    const workout = 'logbook:v2:user:a:sealed:workout';
+    disk.set(control, JSON.stringify({
+        format: 'thelogbook-local-vault-control', version: 1,
+        owner, phase: 'active', epoch: 'a'.repeat(32), wrappedKey: vault,
+    }));
+    disk.set(workout, sealLocalText(dataKey, owner, workout, '{"heartRate":145}'));
+    await set('logbook:v2:user:a', sealLocalText(dataKey, owner, 'logbook:v2:user:a', '{"pending":[1]}'));
+    expect(isVaultUnlocked(owner)).toBe(false);
+
+    // A server-complete deletion must not require any password/recovery code.
+    await purgeCompletedAccountLocalData(owner);
+    expect(disk.has(control)).toBe(false);
+    expect(disk.has(workout)).toBe(false);
+    expect(await get('logbook:v2:user:a')).toBeUndefined();
+    expect(await get('logbook:v2:user:b')).toEqual({ original: 'other owner' });
 });
 
 it('persists a recovery receipt before POST and purges only after server completion', async () => {
