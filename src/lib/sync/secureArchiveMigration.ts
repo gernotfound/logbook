@@ -3,9 +3,9 @@ import { readBrowserValueStrict, removeBrowserValue, writeBrowserValue } from '.
 import { normalizeStorageOwner } from './owner';
 import { deviceKey, protectedDeviceKey } from './deviceStorage';
 import { openLocalJson, openLocalText, sealLocalJson, sealLocalText, SEALED_LOCAL_PREFIX, LocalCiphertextError } from './secureArchiveCipher';
-import { createLocalKeyVault, recoverLocalKeyVault, unlockLocalKeyVault } from './secureArchiveKeys';
+import { createLocalKeyVault, unlockLocalKeyVault } from './secureArchiveKeys';
 import {
-    readVaultControl, unlockVaultWithPassphrase, unlockVaultWithRecoveryCode,
+    readVaultControl, unlockVaultForOwner,
     vaultControlKey, verifyMigrationCapability, type PersistedVaultControl,
 } from './secureArchiveSession';
 import { assertLegacyEnvelopeValidForSecureMigration } from './localRepository';
@@ -133,20 +133,18 @@ function withSecureMigrationLock<T>(owner: string, operation: () => Promise<T>):
 }
 
 /**
- * Call only after the user has confirmed safekeeping of the recovery code.
- * A failed intermediate step leaves the original data and a MIGRATING vault
- * marker; re-enter the passphrase/recovery code to resume, not to reset.
+ * Called automatically after current account/guest ownership is established.
+ * A failed step leaves original data and a durable MIGRATING marker; the
+ * next start reopens the same non-extractable device key and resumes safely.
  */
-export async function createAndMigrateVault(
-    requestedOwner: string, passphrase: string,
-): Promise<{ recoveryCode: string }> {
+export async function createAndMigrateVault(requestedOwner: string): Promise<void> {
     const owner = normalizeStorageOwner(requestedOwner);
     return withSecureMigrationLock(owner, async () => {
         if (readVaultControl(owner) !== null) throw new Error('Archivio protetto già configurato o in migrazione.');
-        const { vault, dataKey, recoveryCode } = await createLocalKeyVault(owner, passphrase);
+        const { vault, dataKey } = await createLocalKeyVault(owner);
         const epoch = Array.from(crypto.getRandomValues(new Uint8Array(16)), b => b.toString(16).padStart(2, '0')).join('');
         const control: PersistedVaultControl = {
-            format: 'thelogbook-local-vault-control', version: 1,
+            format: 'thelogbook-local-vault-control', version: 2,
             owner, phase: 'migrating', epoch, wrappedKey: vault,
         };
         // Durable marker FIRST; no plain or encrypted business data is touched
@@ -154,26 +152,20 @@ export async function createAndMigrateVault(
         writeBrowserValue(vaultControlKey(owner), JSON.stringify(control));
         try {
             await migrateAndFinalize(owner, control, dataKey);
-            await unlockVaultWithPassphrase(owner, passphrase);
-            return { recoveryCode };
+            await unlockVaultForOwner(owner);
         } finally { dataKey.fill(0); }
     });
 }
 
-export async function resumeVaultMigration(
-    requestedOwner: string, secret: string, method: 'passphrase' | 'recovery',
-): Promise<void> {
+export async function resumeVaultMigration(requestedOwner: string): Promise<void> {
     const owner = normalizeStorageOwner(requestedOwner);
     await withSecureMigrationLock(owner, async () => {
         const control = readVaultControl(owner);
         if (!control || control.phase !== 'migrating') throw new Error('Nessuna migrazione riprendibile.');
-        const dataKey = method === 'passphrase'
-            ? await unlockLocalKeyVault(control.wrappedKey, owner, secret)
-            : await recoverLocalKeyVault(control.wrappedKey, owner, secret);
+        const dataKey = await unlockLocalKeyVault(control.wrappedKey, owner);
         try {
             await migrateAndFinalize(owner, control, dataKey);
-            if (method === 'passphrase') await unlockVaultWithPassphrase(owner, secret);
-            else await unlockVaultWithRecoveryCode(owner, secret);
+            await unlockVaultForOwner(owner);
         } finally { dataKey.fill(0); }
     });
 }
