@@ -5,6 +5,7 @@ import { createUserWithEmailAndPassword, getAuth, initializeAuth, onAuthStateCha
 import { auth } from '../src/lib/firebase';
 import { watchDeletionRecoveryDeviceRegistration } from '../src/lib/deletionDeviceRecovery';
 import { mockFirebaseAuth, renderWithProviders } from './setup';
+import { createAndMigrateVault } from '../src/lib/sync/secureArchiveMigration';
 
 describe('shared Firebase Auth UI fixture contract', () => {
   beforeEach(() => {
@@ -88,6 +89,7 @@ describe('shared Firebase Auth UI fixture contract', () => {
   });
 
   it('does not trigger device-recovery HTTP calls when a UI test mounts AuthProvider', async () => {
+    await createAndMigrateVault('user:test-user-id', 'firebase auth fixture passphrase 2026');
     const fetchSpy = vi.spyOn(globalThis, 'fetch');
     const watcher = vi.mocked(watchDeletionRecoveryDeviceRegistration);
 
