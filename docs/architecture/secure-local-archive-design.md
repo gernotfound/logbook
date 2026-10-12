@@ -1,6 +1,6 @@
 # TheLogBook — protezione automatica dei dati locali (CRITICAL)
 
-> **Specifiche di prodotto approvate il 12 ottobre 2026.** Nessuna passphrase locale, PIN aggiuntivo, recovery code da annotare o popup ordinario di sblocco. La presente specifica sostituisce integralmente il precedente progetto con passphrase. **Non è una prova di deploy:** l'implementazione resta nella PR #369 in draft fino a gate, review e verifiche Production.
+> **Specifiche di prodotto approvate il 12 ottobre 2026.** Nessuna passphrase locale, PIN aggiuntivo, recovery code da annotare o popup ordinario di sblocco. La presente specifica sostituisce integralmente il precedente progetto con passphrase. **Rilasciato:** PR #369 integrata in `main` con squash commit `5d21dc0b32a12676e1a08cc35611d96e5b18c3f3`; CI canonica, CI post-merge e Firebase Hosting Production verificati il 12 ottobre 2026. Lo smoke autenticato multi-dispositivo, le verifiche visive manuali e la validazione giuridica pre-pilot restano attività distinte.
 
 ## 1. Requisito e limiti reali
 
