@@ -140,7 +140,22 @@ function withSecureMigrationLock<T>(owner: string, operation: () => Promise<T>):
 export async function createAndMigrateVault(requestedOwner: string): Promise<void> {
     const owner = normalizeStorageOwner(requestedOwner);
     return withSecureMigrationLock(owner, async () => {
-        if (readVaultControl(owner) !== null) throw new Error('Archivio protetto già configurato o in migrazione.');
+        // Another tab may have provisioned this owner after the caller checked
+        // for missing metadata, but before it acquired the exclusive Web Lock.
+        // Reuse its existing device key/DEK; never create a competing archive.
+        const existing = readVaultControl(owner);
+        if (existing?.phase === 'active') {
+            await unlockVaultForOwner(owner);
+            return;
+        }
+        if (existing?.phase === 'migrating') {
+            const dataKey = await unlockLocalKeyVault(existing.wrappedKey, owner);
+            try {
+                await migrateAndFinalize(owner, existing, dataKey);
+                await unlockVaultForOwner(owner);
+            } finally { dataKey.fill(0); }
+            return;
+        }
         const { vault, dataKey } = await createLocalKeyVault(owner);
         const epoch = Array.from(crypto.getRandomValues(new Uint8Array(16)), b => b.toString(16).padStart(2, '0')).join('');
         const control: PersistedVaultControl = {
