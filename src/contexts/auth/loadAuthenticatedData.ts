@@ -92,7 +92,7 @@ export async function loadAuthenticatedData({
         const cloudAllowed = () => isCurrent() && isHealthConsentCloudWritable(expectedOwner);
         if (!cloudAllowed()) return;
         const durableBeforeCloud = await readLocal(expectedOwner);
-        if (!isCurrent()) return;
+        if (!cloudAllowed()) return;
         if (!cloudAllowed()) return;
         const checkpointDue = needsReplicaCheckpoint(durableBeforeCloud?.replica);
         const payload = await DB.loadCloudPayload({ allMonths: checkpointDue });
@@ -106,13 +106,13 @@ export async function loadAuthenticatedData({
                     payload.completeMonths,
                     payload.cloudDocuments,
                     checkpointDue ? 'all' : 'window',
-                    isCurrent,
+                    cloudAllowed,
                 );
-                if (!isCurrent()) return;
+                if (!cloudAllowed()) return;
 
                 if (checkpointDue) {
                     await retireExpiredReplicas(getDb(), user.uid);
-                    if (!isCurrent()) return;
+                    if (!cloudAllowed()) return;
                     const checkpoint = checkpointFromCloudDocuments(payload.cloudDocuments);
                     const claim = await claimReplicaCheckpoint(
                         getDb(),
@@ -122,9 +122,9 @@ export async function loadAuthenticatedData({
                         hydratedEnv.actorSeq,
                         hydratedEnv.replica ? undefined : hydratedEnv.actorId,
                     );
-                    if (!isCurrent()) return;
+                    if (!cloudAllowed()) return;
                     hydratedEnv = await adoptReplicaCheckpoint(expectedOwner, claim, checkpoint, isCurrent);
-                    if (!isCurrent()) return;
+                    if (!cloudAllowed()) return;
                 }
 
                 // hydrateLocal has already committed this authoritative snapshot
@@ -134,14 +134,14 @@ export async function loadAuthenticatedData({
                     expectedOwner, hydratedEnv.data.activeWorkout ?? null, hydratedEnv.data.history,
                     hydratedEnv.lastClosedWorkoutId, hydratedEnv.closedWorkoutIds,
                 );
-                if (!isCurrent()) return;
+                if (!cloudAllowed()) return;
                 useAppStore.setState({
                     userData: hydratedEnv.data, dataOwner: expectedOwner,
                     localWorkout: hydratedWorkout, localPersistenceBlocked: false,
                 });
                 markTabSnapshotClean(session, hydratedEnv.data);
             } catch (mergeError) {
-                if (!isCurrent()) return;
+                if (!cloudAllowed()) return;
                 const code = (mergeError as { code?: unknown })?.code;
                 if (code === 'invalid-cloud-sync-metadata') {
                     setSaveError('Sincronizzazione cloud sospesa: i metadati di sincronizzazione remoti non sono validi. I dati locali validi sono stati preservati e TheLogBook non sovrascriverà il cloud finché il problema non viene risolto.');
