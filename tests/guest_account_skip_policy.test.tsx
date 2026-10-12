@@ -9,12 +9,15 @@ import { initializeLocal, readLocal } from '../src/lib/sync/localRepository';
 import { useAppStore } from '../src/store/useAppStore';
 import type { UserData } from '../src/types';
 import { beginGuestMigrationIntent } from '../src/lib/auth/guestMigrationIntent';
+import { createAndMigrateVault } from '../src/lib/sync/secureArchiveMigration';
+import { lockAllVaults } from '../src/lib/sync/secureArchiveSession';
 
 const parse = (value: unknown) => UserDataSchema.parse(value) as unknown as UserData;
 const user = { uid: 'skip-user', email: 'skip@example.com', displayName: 'Skip User' } as any;
 
 describe('guest -> account skip policy', () => {
-    beforeEach(() => {
+    beforeEach(async () => {
+        lockAllVaults();
         vi.clearAllMocks();
         localStorage.clear();
         useAppStore.getState().resetStore({ force: true });
@@ -23,6 +26,7 @@ describe('guest -> account skip policy', () => {
             callback(user);
             return () => {};
         });
+        await createAndMigrateVault('user:skip-user', 'skip-policy account vault passphrase 2026');
     });
 
     it('fails closed when the authoritative migration intent is absent', async () => {
