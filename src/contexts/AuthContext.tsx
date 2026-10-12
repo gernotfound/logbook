@@ -353,7 +353,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             const previousUid = authUidRef.current;
             authUidRef.current = nextUid;
             const authRun = ++authRunRef.current;
-            if (previousUid !== nextUid) invalidateSession();
+            if (previousUid !== nextUid) {
+                // Do not carry an account's unlocked DEK into another identity.
+                // A guest->account migration keeps its separate guest vault until
+                // the verified migration has completed.
+                if (previousUid) lockVault(userOwner(previousUid));
+                invalidateSession();
+            }
             setSyncing(false);
             if (previousUid !== nextUid) setLoading(true);
             const expectedUid = nextUid;
