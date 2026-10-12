@@ -6,6 +6,7 @@ import { useAuth } from '../src/hooks/useAuth';
 import { useAppStore } from '../src/store/useAppStore';
 import { DB } from '../src/lib/db';
 import { auth, onAuthStateChanged } from '../src/lib/firebase';
+import { refreshHealthConsent } from '../src/lib/healthConsent';
 import * as localRepository from '../src/lib/sync/localRepository';
 import type { UserData } from '../src/types';
 
@@ -50,6 +51,17 @@ describe('PWA & iPhone Startup Resilience Tests', () => {
 
     await waitFor(() => expect(screen.getByTestId('loading-state').textContent).toBe('READY'));
     expect(screen.getByTestId('user-state').textContent).toBe('test@example.com');
+  });
+
+  test('does not hydrate or register fitness replicas when the trusted consent state is withdrawn', async () => {
+    vi.mocked(refreshHealthConsent).mockResolvedValueOnce('withdrawn');
+    useAppStore.setState({ userData: null, dataOwner: null });
+    render(<AuthProvider><TestAuthConsumer /></AuthProvider>);
+    await waitFor(() => expect(screen.getByTestId('loading-state').textContent).toBe('READY'));
+    expect(screen.getByTestId('user-state').textContent).toBe('test@example.com');
+    expect(screen.getByTestId('data-state').textContent).toBe('NO_DATA');
+    expect(DB.loadCloudPayload).not.toHaveBeenCalled();
+    expect(DB.loadUserData).not.toHaveBeenCalled();
   });
 
   test('fences the previous owner while a different authenticated owner is still hydrating', async () => {
