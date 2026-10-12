@@ -82,7 +82,7 @@ async function unwrapDek(key: CryptoKey, value: { nonce: string; wrappedDek: str
     try {
         const decrypted = await crypto.subtle.decrypt(
             { name: 'AES-GCM', iv: new Uint8Array(parseHex(value.nonce, NONCE_BYTES)), additionalData: new Uint8Array(aad(owner, purpose)) },
-            key, parseHex(value.wrappedDek, KEY_BYTES + 16),
+            key, new Uint8Array(parseHex(value.wrappedDek, KEY_BYTES + 16)),
         );
         const plain = new Uint8Array(decrypted);
         if (plain.length !== KEY_BYTES) throw new LocalUnlockError();
