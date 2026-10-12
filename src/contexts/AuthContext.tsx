@@ -581,6 +581,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return () => {
             isMounted = false;
             authRunRef.current += 1;
+            // A pending automatic vault operation or failure dialog belongs to
+            // THIS auth provider lifecycle. Never strand it above later login,
+            // consent, update or account-deletion screens after unmount.
+            if (authUidRef.current) cancelLocalVaultReadiness(userOwner(authUidRef.current));
+            cancelLocalVaultReadiness('guest');
             invalidateSession();
             unsubscribe();
             document.removeEventListener('visibilitychange', handleAuthVisibilityChange);
