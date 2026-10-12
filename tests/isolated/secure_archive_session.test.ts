@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createLocalKeyVault } from '../../src/lib/sync/secureArchiveKeys';
+import { activateGuestSession, revokeGuestSession, GUEST_SESSION_KEY, GUEST_REVOCATION_KEY } from '../../src/lib/sync/session';
 import {
     isVaultUnlocked, LocalVaultLockedError, lockAllVaults, lockVault,
     readVaultControl, requireUnlockedLocalKey, unlockVaultWithPassphrase,
@@ -57,6 +58,24 @@ describe('owner-fenced vault capability', () => {
         expect(() => readVaultControl(owner)).toThrow(LocalVaultLockedError);
         localStorage.setItem(vaultControlKey(owner), JSON.stringify({ ...metadata, owner: 'user:another' }));
         expect(() => readVaultControl(owner)).toThrow(LocalVaultLockedError);
+    });
+
+    it('invalidates a guest decryption capability after cross-tab guest revocation', async () => {
+        const guest = await createLocalKeyVault('guest', passphrase);
+        localStorage.setItem('logbook_is_guest', 'true');
+        localStorage.setItem(GUEST_SESSION_KEY, 'session-older');
+        localStorage.removeItem(GUEST_REVOCATION_KEY);
+        activateGuestSession('session-older');
+        localStorage.setItem(vaultControlKey('guest'), JSON.stringify({
+            format: 'thelogbook-local-vault-control', version: 1, owner: 'guest',
+            phase: 'active', epoch: 'c'.repeat(32), wrappedKey: guest.vault,
+        }));
+        await unlockVaultWithPassphrase('guest', passphrase);
+        expect(requireUnlockedLocalKey('guest')).toEqual(guest.dataKey);
+        revokeGuestSession();
+        expect(() => requireUnlockedLocalKey('guest')).toThrow(LocalVaultLockedError);
+        expect(isVaultUnlocked('guest')).toBe(false);
+        expect(readVaultControl('guest')?.phase).toBe('active'); // ciphertext/key recovery retained
     });
 
     it('does not expose a normal write capability during migration', async () => {
