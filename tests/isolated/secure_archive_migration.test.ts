@@ -11,7 +11,7 @@ vi.mock('../../src/lib/healthConsent', () => ({
 }));
 
 import { commitDomainOperations, initializeLocal, readLocal } from '../../src/lib/sync/localRepository';
-import { deviceKey, protectedDeviceKey, readDeviceValueStrict } from '../../src/lib/sync/deviceStorage';
+import { deviceKey, protectedDeviceKey, readDeviceValue, readDeviceValueStrict } from '../../src/lib/sync/deviceStorage';
 import { createAndMigrateVault, resumeVaultMigration } from '../../src/lib/sync/secureArchiveMigration';
 import { LocalVaultLockedError, lockAllVaults, lockVault, readVaultControl, unlockVaultWithPassphrase } from '../../src/lib/sync/secureArchiveSession';
 import { LocalCiphertextError, SEALED_LOCAL_PREFIX } from '../../src/lib/sync/secureArchiveCipher';
@@ -88,6 +88,25 @@ describe('durable secure archive migration', () => {
         expect(readVaultControl(owner)?.phase).toBe('active');
         expect(localStorage.getItem(deviceKey('draft:measurement:' + day, owner))).toBeNull();
         expect(readDeviceValueStrict('draft:measurement:' + day, owner)).toBe('{"weight":"77"}');
+    });
+
+    it('never converts an unreadable sealed draft into an empty best-effort value', async () => {
+        await initializeLocal(owner, base());
+        const name = 'draft:measurement:' + day;
+        localStorage.setItem(deviceKey(name, owner), '{"weight":"81"}');
+        await createAndMigrateVault(owner, phrase);
+        const protectedKey = protectedDeviceKey(name, owner);
+        const ciphertext = localStorage.getItem(protectedKey);
+        expect(ciphertext).toMatch(/^tlb-sealed:v1:/);
+        const getOriginal = localStorage.getItem.bind(localStorage);
+        const deniedRead = vi.spyOn(localStorage, 'getItem').mockImplementation(key => {
+            if (key === protectedKey) throw new Error('transient storage denied');
+            return getOriginal(key);
+        });
+        expect(() => readDeviceValue(name, owner)).toThrow(BrowserStorageError);
+        deniedRead.mockRestore();
+        expect(localStorage.getItem(protectedKey)).toBe(ciphertext);
+        expect(readDeviceValue(name, owner)).toBe('{"weight":"81"}');
     });
 
     it('refuses stale legacy-tab writes instead of hiding or deleting conflicting device data', async () => {
