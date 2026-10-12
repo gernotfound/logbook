@@ -68,6 +68,16 @@ describe('durable secure archive migration', () => {
         expect(readDeviceValueStrict('workout', owner)).toBe(workout);
     });
 
+    it('treats last confirmed consent revision as a safe lifecycle marker, not private plaintext', async () => {
+        const consentCacheKey = 'logbook:v2:' + owner + ':health-consent-last-active';
+        localStorage.setItem(consentCacheKey, '2');
+        await initializeLocal(owner, base());
+        await createAndMigrateVault(owner);
+        expect(readVaultControl(owner)?.phase).toBe('active');
+        expect(localStorage.getItem(consentCacheKey)).toBe('2');
+        expect((await readLocal(owner))?.data.nutrition?.[day]?.weight).toBe(75);
+    });
+
     it('serializes simultaneous provisioning attempts without replacing a durable key', async () => {
         const data = base();
         await initializeLocal(owner, data);
