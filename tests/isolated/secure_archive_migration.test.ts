@@ -68,6 +68,42 @@ describe('durable secure archive migration', () => {
         expect(readDeviceValueStrict('workout', owner)).toBe(workout);
     });
 
+    it('serializes simultaneous provisioning attempts without replacing a durable key', async () => {
+        const data = base();
+        await initializeLocal(owner, data);
+        const original = await get('logbook:v2:' + owner);
+        expect(original).toBeDefined();
+
+        // Match actual Web Locks serialization; both callers checked for no
+        // control before their exclusive callbacks were permitted to run.
+        let tail = Promise.resolve();
+        vi.stubGlobal('navigator', {
+            locks: {
+                request: async <T,>(_name: string, _options: unknown, run: () => Promise<T>): Promise<T> => {
+                    const preceding = tail;
+                    let release!: () => void;
+                    tail = new Promise<void>(resolve => { release = resolve; });
+                    await preceding;
+                    try { return await run(); } finally { release(); }
+                },
+            },
+        });
+
+        await Promise.all([createAndMigrateVault(owner), createAndMigrateVault(owner)]);
+        const control = readVaultControl(owner);
+        expect(control?.phase).toBe('active');
+        const ciphertext = await get<string>('logbook:v2:' + owner);
+        expect(ciphertext).toMatch(/^tlb-sealed:v1:/);
+        expect((await readLocal(owner))?.data.nutrition?.[day]?.weight).toBe(75);
+
+        // A later stale initializer must still reuse the original epoch/key.
+        lockVault(owner);
+        await createAndMigrateVault(owner);
+        expect(readVaultControl(owner)?.epoch).toBe(control?.epoch);
+        expect(await get('logbook:v2:' + owner)).toBe(ciphertext);
+        expect((await readLocal(owner))?.data.nutrition?.[day]?.weight).toBe(75);
+    });
+
     it('preserves the old snapshot and resumes an interrupted migration idempotently', async () => {
         await initializeLocal(owner, base());
         localStorage.setItem(deviceKey('draft:measurement:' + day, owner), '{"weight":"77"}');
