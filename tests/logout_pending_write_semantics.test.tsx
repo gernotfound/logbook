@@ -9,11 +9,14 @@ import { DB } from '../src/lib/db';
 import { UserDataSchema } from '../src/lib/schema';
 import { useAppStore } from '../src/store/useAppStore';
 import { useDialogStore } from '../src/store/useDialogStore';
+import { createAndMigrateVault } from '../src/lib/sync/secureArchiveMigration';
+import { lockAllVaults } from '../src/lib/sync/secureArchiveSession';
 
 const user = { uid: 'pending-write-user', email: 'sync@example.com' } as any;
 const wrapper = ({ children }: { children: React.ReactNode }) => React.createElement(AuthProvider, null, children);
 
-beforeEach(() => {
+beforeEach(async () => {
+    lockAllVaults();
     localStorage.clear();
     vi.clearAllMocks();
     (auth as any).currentUser = user;
@@ -23,6 +26,7 @@ beforeEach(() => {
     });
     vi.mocked(DB.loadCloudPayload).mockResolvedValue(null);
     vi.mocked(DB.secureLogOut).mockResolvedValue(undefined);
+    await createAndMigrateVault('user:pending-write-user', 'pending write local vault passphrase 2026');
     useAppStore.setState({
         userData: UserDataSchema.parse({ profile: { height: '180' } }) as any,
         localWorkout: null,
