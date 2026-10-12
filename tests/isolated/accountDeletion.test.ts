@@ -94,6 +94,27 @@ beforeEach(async () => {
 
 afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
+it('retains the wrapped data-encryption key when a sealed local snapshot cannot be purged', async () => {
+    const control = 'logbook:v2:user:a:secure-vault-control';
+    const sealedWorkout = 'logbook:v2:user:a:sealed:workout';
+    disk.set(control, '{"wrappedKey":"recoverable-when-storage-fails"}');
+    disk.set(sealedWorkout, 'tlb-sealed:v1:original-sealed-workout');
+    const originalRemove = localStorage.removeItem.bind(localStorage);
+    const failDeviceRemoval = vi.spyOn(localStorage, 'removeItem').mockImplementation((key: string) => {
+        if (key === sealedWorkout) throw new Error('Quota or device removal denied');
+        originalRemove(key);
+    });
+
+    await expect(purgeCompletedAccountLocalData('user:a')).rejects.toThrow('Pulizia locale incompleta');
+    expect(disk.get(control)).toContain('recoverable-when-storage-fails');
+    expect(disk.get(sealedWorkout)).toBe('tlb-sealed:v1:original-sealed-workout');
+    failDeviceRemoval.mockRestore();
+
+    await purgeCompletedAccountLocalData('user:a');
+    expect(disk.has(sealedWorkout)).toBe(false);
+    expect(disk.has(control)).toBe(false);
+});
+
 it('persists a recovery receipt before POST and purges only after server completion', async () => {
     installSuccessfulServerFlow();
 
