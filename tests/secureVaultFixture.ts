@@ -10,7 +10,7 @@ export async function prepareUnlockedTestArchive(owner = 'user:test-user-id'): P
     lockAllVaults();
     const control = readVaultControl(owner);
     if (control === null) {
-        await createAndMigrateVault(owner, passphrase);
+        await createAndMigrateVault(owner);
     } else if (control.phase === 'active') {
         await unlockVaultForOwner(owner);
     } else {
