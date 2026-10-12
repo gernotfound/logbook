@@ -1,4 +1,4 @@
-# Valutazione obbligo DPO — LogBook
+# Valutazione obbligo DPO — TheLogBook
 
 > Template di accountability. La presenza di dati salute non rende automaticamente obbligatoria la nomina: valutare le condizioni dell'Art. 37 GDPR sui fatti reali.
 
