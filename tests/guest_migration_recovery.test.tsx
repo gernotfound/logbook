@@ -12,6 +12,8 @@ import { storageOwner } from '../src/lib/sync/session';
 import { useAppStore } from '../src/store/useAppStore';
 import type { UserData } from '../src/types';
 import { beginGuestMigrationIntent } from '../src/lib/auth/guestMigrationIntent';
+import { createAndMigrateVault } from '../src/lib/sync/secureArchiveMigration';
+import { lockAllVaults } from '../src/lib/sync/secureArchiveSession';
 
 const parse = (value: unknown) => UserDataSchema.parse(value) as unknown as UserData;
 const user = { uid: 'guest-recovery-user', email: 'guest@example.com', displayName: 'Guest Recovery' } as any;
@@ -42,6 +44,7 @@ function fixtures() {
 }
 
 beforeEach(async () => {
+    lockAllVaults();
     vi.clearAllMocks();
     localStorage.clear();
     sessionStorage.clear();
@@ -54,6 +57,7 @@ beforeEach(async () => {
 
     const { guest } = fixtures();
     await localRepository.initializeLocal('guest', guest, []);
+    await createAndMigrateVault('user:guest-recovery-user', 'guest recovery destination passphrase 2026');
 });
 
 afterEach(() => {
