@@ -129,6 +129,21 @@ function App() {
       window.removeEventListener('focus', onFocus);
     };
   }, [currentUser, isGuest, emailVerificationRequired]);
+  useEffect(() => {
+    if (!isGuest) return;
+    const reconcileGuest = (event: StorageEvent) => {
+      if (event.key === 'logbook:v2:guest:health-consent-withdrawal') {
+        refreshHealthConsentFromStorage();
+      }
+    };
+    const onFocus = () => refreshHealthConsentFromStorage();
+    window.addEventListener('storage', reconcileGuest);
+    window.addEventListener('focus', onFocus);
+    return () => {
+      window.removeEventListener('storage', reconcileGuest);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [isGuest]);
   const syncing = useAppStore(state => state.syncing);
   const userData = useAppStore(state => state.userData);
   const saveError = useAppStore(state => state.saveError);
