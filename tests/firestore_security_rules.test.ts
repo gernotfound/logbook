@@ -58,7 +58,7 @@ describe('Firestore Security Rules Whitelist & Parity Verification', () => {
     expect(rulesContent).toContain("docData._sync.keys().hasOnly(['protocolVersion', 'clock', 'fields', 'writer'])");
     expect(rulesContent).toContain('function hasProtocol3Writer(userId, docData)');
     expect(rulesContent).toContain("return '_sync' in docData && hasProtocol3Writer(userId, docData);");
-    expect(rulesContent).toContain('function validReplicaControlUpdate(oldData, newData)');
+    expect(rulesContent).toContain('function validReplicaControlUpdate(userId, oldData, newData)');
     expect(rulesContent).toContain("match /sync_control/{controlId}");
     expect(rulesContent).toContain('docData._sync.clock is map');
     expect(rulesContent).toContain('docData._sync.fields is map');

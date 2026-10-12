@@ -16,10 +16,14 @@ describe('Analytics UI Components & Dashboard Integration', () => {
         }
     ];
 
+    // The volume widget defaults to a rolling eight-week window. Use a local
+    // recent business date instead of an expired fixed fixture date.
+    const today = new Date();
+    const currentDay = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
     const mockHistory: WorkoutSession[] = [
         {
             id: 'w1',
-            date: '2026-08-18',
+            date: currentDay,
             routineName: 'Scheda A',
             exercises: [
                 {
@@ -32,8 +36,8 @@ describe('Analytics UI Components & Dashboard Integration', () => {
     ];
 
     const mockNutrition: Record<string, NutritionDay> = {
-        '2026-08-18': {
-            date: '2026-08-18',
+        currentDay: {
+            date: currentDay,
             kcal: 2500,
             carbs: 300,
             pro: 160,
