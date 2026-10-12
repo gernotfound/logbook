@@ -59,7 +59,7 @@ export async function updateArchiveRecord<T>(
 
     // Existing pre-migration behavior for a legacy account. Fail on any late
     // vault setup or already-sealed record instead of writing plaintext.
-    await update<T | string>(storageKey, raw => {
+    await update<unknown>(storageKey, raw => {
         if (readVaultControl(owner)) throw new LocalVaultLockedError();
         if (typeof raw === 'string' && raw.startsWith(SEALED_LOCAL_PREFIX)) {
             throw new LocalCiphertextError();
