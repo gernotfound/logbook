@@ -4,7 +4,7 @@ import {
     type LocalKeyVault, unlockLocalKeyVault, recoverLocalKeyVault,
 } from './secureArchiveKeys';
 
-export type VaultPhase = 'migrating' | 'active';
+type VaultPhase = 'migrating' | 'active';
 export interface PersistedVaultControl {
     format: 'thelogbook-local-vault-control';
     version: 1;
