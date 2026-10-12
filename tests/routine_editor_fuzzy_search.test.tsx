@@ -616,6 +616,7 @@ describe('Intelligent Exercise Search & Dropdown Suite (M3: R4 & R6)', () => {
             const initialData = {
                 ...emptyUserData,
                 library: mockLibrary as any,
+                routines: useAppStore.getState().userData?.routines ?? [],
                 history: [],
                 activeWorkout,
             };
