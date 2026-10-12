@@ -1,4 +1,4 @@
-# Incident & personal data breach runbook — LogBook
+# Incident & personal data breach runbook — TheLogBook
 
 > Procedura operativa. Assegnare persone/canali reali e provarla prima del pilot.
 
@@ -12,7 +12,7 @@ Aprire un incidente quando esiste o è ragionevole sospettare:
 - compromissione credenziali/segreti;
 - Rules/App Check/IAM configurati in modo da ampliare accessi;
 - esposizione di log/telemetria con dati personali;
-- violazione presso un fornitore che coinvolga LogBook.
+- violazione presso un fornitore che coinvolga TheLogBook.
 
 Incident ID: `INC-[YYYY]-[NNN]`.
 
