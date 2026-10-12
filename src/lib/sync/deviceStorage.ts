@@ -6,6 +6,12 @@ import { isActiveGuestSession, storageOwner } from './session';
 
 export const deviceKey = (name: string, owner = storageOwner()) => `logbook:v2:${owner}:${name}`;
 
+/** Protected keys never alias the legacy plaintext namespace of suspended PWA tabs. */
+export const protectedDeviceKey = (name: string, owner = storageOwner()) => {
+    if (!name || name.startsWith('sealed:')) throw new Error('Chiave dispositivo protetta non valida.');
+    return deviceKey('sealed:' + name, owner);
+};
+
 export function readDeviceValue(name: string, owner?: string): string | null {
     try {
         return readDeviceValueStrict(name, owner);
@@ -28,10 +34,14 @@ export function readDeviceValueStrict(name: string, owner?: string): string | nu
     }
     if (control.phase !== 'active') throw new LocalVaultLockedError();
     const key = requireUnlockedLocalKey(resolvedOwner);
-    const raw = readBrowserValueStrict(storageKey);
+    // A stale old PWA tab may recreate an old plaintext key. Never silently
+    // discard such data or mistake it for a legitimate empty encrypted draft.
+    if (readBrowserValueStrict(storageKey) !== null) throw new LocalCiphertextError();
+    const sealedKey = protectedDeviceKey(name, resolvedOwner);
+    const raw = readBrowserValueStrict(sealedKey);
     if (requireUnlockedLocalKey(resolvedOwner) !== key) throw new LocalVaultLockedError();
     if (raw === null) return null;
-    return openLocalText(key, resolvedOwner, storageKey, raw);
+    return openLocalText(key, resolvedOwner, sealedKey, raw);
 }
 
 export function writeDeviceValue(name: string, value: string | null, owner?: string): void {
@@ -46,8 +56,12 @@ export function writeDeviceValue(name: string, value: string | null, owner?: str
     if (control) {
         if (control.phase !== 'active') throw new LocalVaultLockedError();
         const key = requireUnlockedLocalKey(resolvedOwner);
-        if (value === null) removeBrowserValue(storageKey);
-        else writeBrowserValue(storageKey, sealLocalText(key, resolvedOwner, storageKey, value));
+        // Legacy keys can reappear from pre-migration tabs. Block rather than
+        // overwrite a newer draft or lose unacknowledged legacy edits.
+        if (readBrowserValueStrict(storageKey) !== null) throw new LocalCiphertextError();
+        const sealedKey = protectedDeviceKey(name, resolvedOwner);
+        if (value === null) removeBrowserValue(sealedKey);
+        else writeBrowserValue(sealedKey, sealLocalText(key, resolvedOwner, sealedKey, value));
         if (requireUnlockedLocalKey(resolvedOwner) !== key) throw new LocalVaultLockedError();
         return;
     }
