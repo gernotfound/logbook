@@ -61,6 +61,7 @@
     "verify:m8": "npm run verify:m7 && npm run test:m8 && npm run test:domain-boundary:m8"
   },
   "dependencies": {
+    "@noble/ciphers": "2.2.0",
     "@sentry/react": "^11.6.0",
     "chart.js": "^4.5.1",
     "date-fns": "^4.4.0",
@@ -79,8 +80,12 @@
   },
   "overrides": {
     "@babel/plugin-transform-runtime": "^7.29.0",
-    "jwks-rsa": { "jose": "5.10.0" },
-    "gaxios": { "uuid": "^11.1.1" },
+    "jwks-rsa": {
+      "jose": "5.10.0"
+    },
+    "gaxios": {
+      "uuid": "^11.1.1"
+    },
     "@grpc/grpc-js": "1.14.5",
     "@grpc/proto-loader": "0.8.1",
     "source-map-js": "1.2.2"
