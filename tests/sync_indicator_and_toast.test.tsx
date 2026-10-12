@@ -677,7 +677,7 @@ describe('LogBook Background Sync & Error Toast 4-Tier Test Suite', () => {
         exercises: [
           {
             exId: 'ex1',
-            name: 'Panca Piana',
+            name: 'Panca Piana', sessionNote: '',
             sets: [{ id: 's1', kg: '80', reps: '10', completed: false }]
           }
         ]
@@ -797,7 +797,7 @@ describe('LogBook Background Sync & Error Toast 4-Tier Test Suite', () => {
         routineId: 'r1',
         routineName: 'Scheda A - Upper',
         startTime: Date.now(),
-        exercises: [{ exId: 'ex1', name: 'Panca', sets: [{ id: 's1', kg: '90', reps: '8' }] }]
+        exercises: [{ exId: 'ex1', name: 'Panca', sessionNote: '', sets: [{ id: 's1', kg: '90', reps: '8' }] }]
       };
 
       const { container } = await renderSettledApp();
