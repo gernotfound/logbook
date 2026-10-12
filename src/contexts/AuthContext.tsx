@@ -38,7 +38,7 @@ import { reportError } from '../lib/errorHandler';
 import { clearAuthenticatedOwnerHint, rememberAuthenticatedOwner } from '../lib/sync/authOwnerHint';
 import { beginGuestMigrationIntent, bindGuestMigrationIntentToUser, clearGuestMigrationIntent } from '../lib/auth/guestMigrationIntent';
 import { cancelLocalVaultReadiness, ensureLocalVaultReady } from '../lib/sync/secureArchiveUnlockFlow';
-import { lockVault } from '../lib/sync/secureArchiveSession';
+import { isVaultUnlocked, lockVault } from '../lib/sync/secureArchiveSession';
 
 const GUEST_KEY = 'logbook_is_guest';
 const GUEST_MIGRATION_SYNC_RECOVERY_KEY = 'logbook_guest_migration_sync_recovery';
@@ -560,7 +560,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             // The "online" event must check consent even if this tab is hidden.
             if (event?.type !== 'online' && document.visibilityState !== 'visible') return;
             const user = auth.currentUser;
-            if (!user || user.emailVerified === false || !navigator.onLine) return;
+            if (!user || user.emailVerified === false || !navigator.onLine
+                || !isVaultUnlocked(userOwner(user.uid))
+                || isAccountDeletionPending(userOwner(user.uid))) return;
 
             isReloading = true;
             const uid = user.uid;
