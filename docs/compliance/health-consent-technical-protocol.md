@@ -35,3 +35,7 @@ Il client mantiene `consentRevision` opzionale nel Local Envelope V5. All'apertu
 Questa quarantena non autorizza la cancellazione dei pending originali. Serve un percorso di riconciliazione/ripresa dopo backup che distingua i dati recuperabili dai replay proibiti; la PR rimane draft finché il recovery e l'esperienza utente non hanno regressioni complete.
 
 Anche il marker browser strict della revisione fa parte del SessionSnapshot locale, per cui una vecchia tab perde la validità della propria sessione quando la revisione cambia in un'altra tab. Il marker revoca `pending/withdrawn` è incluso nello stesso controllo; la sua mutazione invalida write in-flight senza affidarsi a React.
+
+## Ospite (solo dispositivo)
+
+In assenza di account Firebase, il marker `logbook:v2:guest:health-consent-withdrawal` è durevole nel browser: blocca mutazioni, nasconde tutto il fitness e invalida le sessioni delle altre schede. La sospensione lascia solo informativa, backup locale, cancellazione dati ospite, logout e nuova accettazione separata esplicita. Il re-consenso salva il documento locale prima di rimuovere il marker; nessun backend viene chiamato per il consenso ospite. Le Rules Firestore restano il confine dei soli account autenticati.

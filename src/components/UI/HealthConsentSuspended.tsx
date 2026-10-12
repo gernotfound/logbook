@@ -1,13 +1,15 @@
 import { useState } from 'react';
+import { useAppStore } from '../../store/useAppStore';
 import type { User } from 'firebase/auth';
 import { useSettings } from '../../hooks/useSettings';
 import { LEGAL_VERSIONS } from '../../lib/legalVersions';
-import { finishHealthConsentReacceptance, reacceptHealthConsent, refreshHealthConsent, type HealthConsentStatus } from '../../lib/healthConsent';
+import { beginGuestHealthReacceptance, completeGuestHealthReacceptance, finishHealthConsentReacceptance, reacceptHealthConsent, refreshHealthConsent, type HealthConsentStatus } from '../../lib/healthConsent';
 import { PrivacyPolicy } from '../../pages/PrivacyPolicy';
 import { TermsAndConditions } from '../../pages/TermsAndConditions';
 
-export function HealthConsentSuspended({ status, user }: { status: HealthConsentStatus; user: User }) {
+export function HealthConsentSuspended({ status, user }: { status: HealthConsentStatus; user: User | null }) {
   const { handleExportBackup, handleDeleteAccount, handleLogout, exportingData } = useSettings();
+  const submitLegalConsent = useAppStore(state => state.submitLegalConsent);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [acceptedHealth, setAcceptedHealth] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -20,6 +22,21 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
     setBusy(true);
     setError(null);
     try {
+      if (user === null) {
+        beginGuestHealthReacceptance();
+        try {
+          await submitLegalConsent({
+            hasAcceptedTerms: true, hasAcceptedHealthData: true,
+            acceptedAt: new Date().toISOString(),
+            privacyVersion: LEGAL_VERSIONS.privacy, termsVersion: LEGAL_VERSIONS.terms,
+          });
+          completeGuestHealthReacceptance(true);
+        } catch (error) {
+          completeGuestHealthReacceptance(false);
+          throw error;
+        }
+        return;
+      }
       await reacceptHealthConsent(user, {
         acceptedTerms: true, acceptedHealthData: true,
         privacyVersion: LEGAL_VERSIONS.privacy, termsVersion: LEGAL_VERSIONS.terms,
@@ -36,6 +53,7 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
     <section className="auth-panel" aria-label="Accesso sospeso" style={{ maxWidth: 560, maxHeight: '90vh', overflowY: 'auto' }}>
       <h1>Accesso a TheLogBook sospeso</h1>
       <p>Non puoi usare allenamenti, nutrizione o diario finché non presti nuovamente il consenso esplicito per i dati salute.</p>
+      {user === null && <p>Modalità locale: i dati sono salvati solo su questo dispositivo. Non è necessario contattare il server per la revoca.</p>}
       {status === 'checking' && <p role="status">Verifica dello stato sul server in corso…</p>}
       {status === 'error' && <p role="alert">Non è stato possibile verificare lo stato del consenso. L’accesso fitness resta sospeso.</p>}
       {status === 'pending' && <p role="status">Revoca registrata su questo dispositivo. La conferma cloud è ancora in attesa.</p>}
@@ -64,7 +82,7 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
         <button type="button" className="btn" onClick={() => void handleExportBackup()} disabled={exportingData}>{exportingData ? 'Preparazione…' : 'Esporta i tuoi dati (backup JSON)'}</button>
         <button type="button" className="btn" onClick={() => void handleLogout()}>Esci dall'account</button>
         <button type="button" className="btn" onClick={() => void handleDeleteAccount()}>Elimina definitivamente l'account</button>
-        <button type="button" className="btn" disabled={busy} onClick={() => { void refreshHealthConsent(user); }}>Riprova a verificare il consenso</button>
+        {user !== null && <button type="button" className="btn" disabled={busy} onClick={() => { void refreshHealthConsent(user); }}>Riprova a verificare il consenso</button>}
       </div>
       {error && <p role="alert">{error}</p>}
     </section>

@@ -64,7 +64,7 @@ export type SessionSnapshot = {
 
 export const captureSessionForOwner = (owner: string): SessionSnapshot => ({
     owner, epoch, ...(owner === 'guest'
-        ? { guestSessionId: currentRealmGuestId() }
+        ? { guestSessionId: currentRealmGuestId(), consentMarker: readBrowserValueStrict(consentMarkerKey(owner)) }
         : { consentMarker: readBrowserValueStrict(consentMarkerKey(owner)),
             consentGeneration: readBrowserValueStrict(consentGenerationKey(owner)) }),
 });
@@ -74,7 +74,8 @@ export const isCurrentSession = (session: SessionSnapshot): boolean => {
         return session.epoch === epoch
             && session.owner === storageOwner()
             && (session.owner === 'guest'
-                ? (session.guestSessionId === currentRealmGuestId() && isActiveGuestSession())
+                ? (session.guestSessionId === currentRealmGuestId() && isActiveGuestSession()
+                    && session.consentMarker === readBrowserValueStrict(consentMarkerKey(session.owner)))
                 : (session.consentMarker === readBrowserValueStrict(consentMarkerKey(session.owner))
                     && session.consentGeneration === readBrowserValueStrict(consentGenerationKey(session.owner))));
     } catch {

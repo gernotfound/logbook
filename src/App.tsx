@@ -29,7 +29,7 @@ import BottomNav from './components/UI/BottomNav';
 import { GlobalDialog } from './components/UI/GlobalDialog';
 import { ConsentOverlay } from './components/UI/ConsentOverlay';
 import { HealthConsentSuspended } from './components/UI/HealthConsentSuspended';
-import { currentHealthConsentStatus, refreshHealthConsent, refreshHealthConsentFromStorage, subscribeHealthConsent } from './lib/healthConsent';
+import { currentHealthConsentStatus, getGuestHealthConsentStatus, refreshHealthConsent, refreshHealthConsentFromStorage, subscribeHealthConsent } from './lib/healthConsent';
 import { needsLegalUpdate } from './lib/legalVersions';
 import { LoginBox } from './components/UI/LoginBox';
 import { EmailVerificationGate } from './components/UI/EmailVerificationGate';
@@ -109,7 +109,7 @@ function GuestBanner({ onLogin }: { onLogin: () => void }) {
 
 function App() {
   const { currentUser, loading, isGuest, guestMigrationStatus, retryGuestMigration, emailVerificationRequired } = useAuth();
-  const healthConsentStatus = useSyncExternalStore(subscribeHealthConsent, () => currentHealthConsentStatus(currentUser?.uid), () => 'checking' as const);
+  const healthConsentStatus = useSyncExternalStore(subscribeHealthConsent, () => isGuest ? getGuestHealthConsentStatus() : currentHealthConsentStatus(currentUser?.uid), () => 'checking' as const);
   useEffect(() => {
     if (!currentUser || isGuest || emailVerificationRequired) return;
     const reconcile = () => { void refreshHealthConsent(currentUser); };
@@ -221,7 +221,7 @@ function App() {
       || guestLoginMigrationPending
       || guestLoginMigrationFailed
       || Boolean(showConsentOverlay)
-      || (!isGuest && healthConsentStatus !== 'active')
+      || (healthConsentStatus !== 'active')
       || guestLoginOverlayVisible
       || settingsOpen;
 
@@ -454,8 +454,8 @@ function App() {
     );
   }
 
-  if (currentUser && !isGuest && healthConsentStatus !== 'active') {
-    return <><GlobalDialog /><HealthConsentSuspended status={healthConsentStatus} user={currentUser} /></>;
+  if ((isGuest || currentUser) && healthConsentStatus !== 'active') {
+    return <><GlobalDialog /><HealthConsentSuspended status={healthConsentStatus} user={isGuest ? null : currentUser} /></>;
   }
 
   return (

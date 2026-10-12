@@ -10,6 +10,8 @@ const entries = new Map<string, HealthConsentStatus>();
 const listeners = new Set<() => void>();
 const verifiedReacceptance = new Map<string, string>();
 const verifiedRevisions = new Map<string, number>();
+let guestAcceptanceInProgress = false;
+const guestMarker = 'logbook:v2:guest:health-consent-withdrawal';
 const marker = (uid: string) => `logbook:v2:user:${uid}:health-consent-withdrawal`;
 const generationMarker = (uid: string) => `logbook:v2:user:${uid}:health-consent-generation`;
 function notify() { for (const listener of listeners) listener(); }
@@ -43,7 +45,45 @@ export function currentHealthConsentStatus(uid: string | undefined): HealthConse
     return 'error';
   }
 }
+export function getGuestHealthConsentStatus(): HealthConsentStatus {
+  try {
+    const value = readBrowserValueStrict(guestMarker);
+    if (value === null) return 'active';
+    if (value === 'withdrawn' || value === 'reaccepting') return value;
+    return 'error';
+  } catch {
+    return 'error';
+  }
+}
+
+export function withdrawGuestHealthConsent(): void {
+  writeBrowserValue(guestMarker, 'withdrawn');
+  guestAcceptanceInProgress = false;
+  notify();
+}
+
+export function beginGuestHealthReacceptance(): void {
+  if (getGuestHealthConsentStatus() !== 'withdrawn') throw new Error('Nessuna revoca ospite da aggiornare.');
+  writeBrowserValue(guestMarker, 'reaccepting');
+  guestAcceptanceInProgress = true;
+  notify();
+}
+
+export function completeGuestHealthReacceptance(success: boolean): void {
+  if (!guestAcceptanceInProgress || getGuestHealthConsentStatus() !== 'reaccepting') {
+    throw new Error('Nuovo consenso ospite non avviato.');
+  }
+  if (success) removeBrowserValue(guestMarker);
+  else writeBrowserValue(guestMarker, 'withdrawn');
+  guestAcceptanceInProgress = false;
+  notify();
+}
+
 export function isHealthConsentWritable(owner: string): boolean {
+  if (owner === 'guest') {
+    const status = getGuestHealthConsentStatus();
+    return status === 'active' || (status === 'reaccepting' && guestAcceptanceInProgress);
+  }
   if (!owner.startsWith('user:')) return true;
   const uid = owner.slice(5);
   if (currentHealthConsentStatus(uid) !== 'active') return false;
