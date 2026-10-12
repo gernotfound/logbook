@@ -37,6 +37,7 @@ import { describeEmailAuthError } from '../lib/auth/emailAuthError';
 import { reportError } from '../lib/errorHandler';
 import { clearAuthenticatedOwnerHint, rememberAuthenticatedOwner } from '../lib/sync/authOwnerHint';
 import { beginGuestMigrationIntent, bindGuestMigrationIntentToUser, clearGuestMigrationIntent } from '../lib/auth/guestMigrationIntent';
+import { ensureLocalVaultReady } from '../lib/sync/secureArchiveUnlockFlow';
 
 const GUEST_KEY = 'logbook_is_guest';
 const GUEST_MIGRATION_SYNC_RECOVERY_KEY = 'logbook_guest_migration_sync_recovery';
@@ -418,6 +419,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             }
 
             if (user) {
+                // Firebase consent authorization and local vault access are
+                // separate gates: no guest merge, hydration or replay while locked.
+                await ensureLocalVaultReady(userOwner(user.uid));
+                if (!isCurrentRun()) return;
                 const wasGuest = isGuestActiveStrict();
                 setEmailVerificationRequired(false);
                 const recoveryUid = readGuestMigrationRecoveryStrict();
@@ -694,6 +699,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             setSaveError('Impossibile avviare la modalità locale: pulizia o coordinamento delle sessioni non disponibile. I dati esistenti restano protetti.');
             return;
         }
+        // The newly activated guest session must be protected before any
+        // new local UserData/workout snapshot can be published.
+        await ensureLocalVaultReady('guest');
         isGuestRef.current = true;
         setIsGuest(true);
         setGuestMigrationStatus('idle');
