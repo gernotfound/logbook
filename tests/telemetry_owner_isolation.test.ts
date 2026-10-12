@@ -89,6 +89,37 @@ describe('Telemetry owner isolation at the production boundary', () => {
     expect(JSON.parse(localStorage.getItem(queueKeyB) || '[]')).toHaveLength(0);
   });
 
+  it('never attributes a late failed online event to another authenticated owner', async () => {
+    changeAuth('owner-a');
+    telemetryHub.init();
+    let finish!: (accepted: boolean) => void;
+    dispatch.mockImplementationOnce(() => new Promise<boolean>(resolve => { finish = resolve; }));
+
+    telemetryHub.trackEvent('custom_event', { source: 'owner-a-only' });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(dispatch).toHaveBeenCalledTimes(1);
+
+    changeAuth('owner-b');
+    const ownerBKey = telemetryHub.getQueueStorageKey();
+    finish(false);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(localStorage.getItem(ownerBKey)).toBeNull();
+    expect(telemetryHub.getQueuedEvents()).toEqual([]);
+  });
+
+  it('does not dispatch a scheduled online event after the auth owner changes', async () => {
+    changeAuth('owner-a');
+    telemetryHub.init();
+    telemetryHub.trackEvent('custom_event', { source: 'owner-a-only' });
+    changeAuth('owner-b');
+    telemetryHub.getQueueStorageKey();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(dispatch).not.toHaveBeenCalled();
+    expect(telemetryHub.getQueuedEvents()).toEqual([]);
+  });
+
   it('does not send a previous owner pending microtask after an auth switch', async () => {
     changeAuth('owner-a');
     telemetryHub.init();
