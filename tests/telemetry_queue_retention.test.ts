@@ -9,7 +9,7 @@ import { TelemetryQueueStorage } from '../src/lib/telemetry/queueStorage';
 import { readEncryptedTelemetry } from '../src/lib/telemetry/secureQueueDevice';
 import { protectedDeviceKey } from '../src/lib/sync/deviceStorage';
 import { createAndMigrateVault } from '../src/lib/sync/secureArchiveMigration';
-import { lockAllVaults } from '../src/lib/sync/secureArchiveSession';
+import { lockAllVaults, unlockVaultForOwner } from '../src/lib/sync/secureArchiveSession';
 
 const CLOCK = new Date('2026-10-11T12:00:00Z');
 
@@ -161,6 +161,24 @@ describe('Offline technical telemetry data minimization', () => {
     localStorage.setItem(storage.getQueueStorageKey(), 'null');
     expect(storage.getQueuedEvents()).toEqual([]);
     expect(localStorage.getItem(storage.getQueueStorageKey())).toBeNull();
+  });
+
+  it('preserves durable encrypted reports when volatile reports arrive before unlock', async () => {
+    const disk = new TelemetryQueueStorage(() => 'owner-a');
+    disk.replaceQueue([queued('durable', Date.now())]);
+    const sealedKey = protectedDeviceKey('telemetry_queue', 'user:owner-a');
+    expect(localStorage.getItem(sealedKey)).toMatch(/^tlb-sealed:v1:/);
+
+    lockAllVaults();
+    const volatile = new TelemetryQueueStorage(() => 'owner-a');
+    volatile.enqueueItem('event', queued('new', Date.now()).payload);
+    expect(volatile.getQueuedEvents().map(item => item.id)).toEqual(['new']);
+    expect(localStorage.getItem(volatile.getQueueStorageKey())).toBeNull();
+
+    await unlockVaultForOwner('user:owner-a');
+    expect(volatile.getQueuedEvents().map(item => item.id)).toEqual(['durable', 'new']);
+    expect(JSON.parse(readEncryptedTelemetry('user:owner-a') || '[]')
+      .map((item: QueuedTelemetryItem) => item.id)).toEqual(['durable', 'new']);
   });
 
   it('never drops unexpired encrypted ciphertext when the wrapping key is locked', () => {
