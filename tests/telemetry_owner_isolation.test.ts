@@ -64,7 +64,8 @@ describe('Telemetry owner isolation at the production boundary', () => {
     telemetryHub.trackError(new Error('Temporary Sentry rejection'));
     await vi.advanceTimersByTimeAsync(0);
 
-    const saved = JSON.parse(localStorage.getItem(queueKey) || '[]') as Array<{ payload: TelemetryErrorPayload }>;
+    expect(localStorage.getItem(queueKey)).toBeNull();
+    const saved = telemetryHub.getQueuedEvents() as Array<{ payload: TelemetryErrorPayload }>;
     expect(saved).toHaveLength(1);
     expect(saved[0].payload.userId).toBe('owner-a');
     expect(saved[0].payload.message).toContain('Temporary Sentry rejection');
@@ -115,10 +116,12 @@ describe('Telemetry owner isolation at the production boundary', () => {
     await vi.advanceTimersByTimeAsync(0);
 
     expect(keyA).not.toBe(keyB);
-    const queueA = JSON.parse(localStorage.getItem(keyA) || '[]') as Array<{ payload: TelemetryErrorPayload }>;
-    const queueB = JSON.parse(localStorage.getItem(keyB) || '[]') as Array<{ payload: TelemetryErrorPayload }>;
-    expect(queueA).toHaveLength(1);
-    expect(queueA[0].payload.userId).toBe('owner-a');
+    // Before vault readiness there must be no diagnostic plaintext on disk.
+    // Changing Auth invalidates the volatile old-owner cache instead of
+    // attributing those reports to the new identity.
+    expect(localStorage.getItem(keyA)).toBeNull();
+    expect(localStorage.getItem(keyB)).toBeNull();
+    const queueB = telemetryHub.getQueuedEvents() as Array<{ payload: TelemetryErrorPayload }>;
     expect(queueB).toHaveLength(1);
     expect(queueB[0].payload.userId).toBe('owner-b');
     expect(queueB[0].payload.count).toBe(1);
@@ -144,11 +147,12 @@ describe('Telemetry owner isolation at the production boundary', () => {
     finish(true);
     await inFlightA;
 
-    const ownerA = JSON.parse(localStorage.getItem(keyA) || '[]') as Array<{ payload: TelemetryErrorPayload }>;
-    const ownerB = JSON.parse(localStorage.getItem(keyB) || '[]') as Array<{ payload: TelemetryErrorPayload }>;
-    expect(ownerA).toHaveLength(1); // Retain on auth switch; a lost-ack is safer than cross-owner deletion.
+    // An old in-flight completion cannot mutate the newly active owner's
+    // volatile queue, and no plaintext crosses the owner boundary.
+    expect(localStorage.getItem(keyA)).toBeNull();
+    expect(localStorage.getItem(keyB)).toBeNull();
+    const ownerB = telemetryHub.getQueuedEvents() as Array<{ payload: TelemetryErrorPayload }>;
     expect(ownerB).toHaveLength(1);
-    expect(ownerA[0].payload.userId).toBe('owner-a');
     expect(ownerB[0].payload.userId).toBe('owner-b');
     expect(dispatch).toHaveBeenCalledTimes(1);
   });
