@@ -5,7 +5,7 @@ import { useAppStore } from '../src/store/useAppStore';
 import { useDialogStore } from '../src/store/useDialogStore';
 import { UserDataSchema } from '../src/lib/schema';
 import type { WorkoutSession, UserData } from '../src/types';
-import { deviceKey, writeDeviceValue } from '../src/lib/sync/deviceStorage';
+import { deviceKey, protectedDeviceKey, readDeviceValueStrict, writeDeviceValue } from '../src/lib/sync/deviceStorage';
 import { useTrainingHistory } from '../src/hooks/useTrainingHistory';
 import { restoreSessionAfterHistoryEdit } from '../src/hooks/workout/historyEditorContext';
 import { useWorkoutSetMutations } from '../src/hooks/workout/useWorkoutSetMutations';
@@ -53,7 +53,15 @@ describe('Workout lifecycle durable recovery regressions', () => {
         // AuthContext resolves the real Firebase UID asynchronously. Wait for
         // the correct owner-mounted timer rather than asserting guest at mount.
         await waitFor(() => expect(useAppStore.getState().localPersistenceBlocked).toBe(true));
-        expect(localStorage.getItem(key)).toBe('{bad-json');
+        // The plaintext legacy key may be removed by a successful encrypted
+        // migration. The invalid snapshot must still exist *byte-for-byte*
+        // behind the authenticated device-storage boundary, and controls block.
+        expect(readDeviceValueStrict('timer', owner)).toBe('{bad-json');
+        if (localStorage.getItem(key) === null) {
+            expect(localStorage.getItem(protectedDeviceKey('timer', owner))).toMatch(/^tlb-sealed:v1:/);
+        } else {
+            expect(localStorage.getItem(key)).toBe('{bad-json');
+        }
         expect(screen.getByRole('button', { name: 'Avvia recupero' }).hasAttribute('disabled')).toBe(true);
     });
 
