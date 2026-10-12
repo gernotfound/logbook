@@ -4,12 +4,14 @@ import { act, fireEvent, screen } from '@testing-library/react';
 import WorkoutTimer from '../src/components/Training/WorkoutTimer';
 import { useHomeView } from '../src/hooks/useHomeView';
 import { emptyUserData, renderWithProviders } from './setup';
+import { prepareUnlockedTestArchive } from './secureVaultFixture';
 
 describe('Audit regression: React time boundaries', () => {
-    beforeEach(() => {
+    beforeEach(async () => {
+        localStorage.clear();
+        await prepareUnlockedTestArchive();
         vi.useFakeTimers();
         vi.setSystemTime(new Date('2026-09-18T12:00:00'));
-        localStorage.clear();
     });
 
     afterEach(() => {
