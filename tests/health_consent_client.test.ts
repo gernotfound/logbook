@@ -132,6 +132,7 @@ describe('overlapping consent verification', () => {
       return Response.json({ status: 'active', revision: 0 });
     }));
     const older = refreshHealthConsent(user(uid));
+    await vi.waitFor(() => expect(requests).toBe(1));
     expect(await refreshHealthConsent(user(uid))).toBe('active');
     resolveOlder(Response.json({ status: 'withdrawn', revision: 1 }));
     expect(await older).toBe('active');
@@ -151,6 +152,7 @@ describe('overlapping consent verification', () => {
     }));
     expect(await refreshHealthConsent(user(uid))).toBe('stale-request');
     const retaining = retainNewerHealthConsent(user(uid));
+    await vi.waitFor(() => expect(requests).toBe(2));
     localStorage.setItem(key(uid), 'pending:2');
     resolveServer(Response.json({ status: 'active', revision: 2 }));
     await expect(retaining).rejects.toThrow('revoca locale è cambiata');
