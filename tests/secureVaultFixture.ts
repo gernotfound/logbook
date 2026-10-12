@@ -1,19 +1,13 @@
-import { createAndMigrateVault } from '../src/lib/sync/secureArchiveMigration';
-import { lockAllVaults, readVaultControl, unlockVaultForOwner } from '../src/lib/sync/secureArchiveSession';
+import { ensureLocalVaultReady } from '../src/lib/sync/secureArchiveUnlockFlow';
+import { isVaultUnlocked, lockAllVaults } from '../src/lib/sync/secureArchiveSession';
 
 /**
- * Actual encrypted owner fixture for UI tests unrelated to the vault UX.
- * Never mocks, bypasses or overrides the production unlock gate.
- * Dedicated cryptography/migration/lock suites exercise negative paths.
+ * Auth and feature integration tests use the SAME in-process vault readiness
+ * serializer as the production app, with genuine device-backed CryptoKeys.
+ * No fake password, bypassed encryption or independent provisioning race.
  */
 export async function prepareUnlockedTestArchive(owner = 'user:test-user-id'): Promise<void> {
     lockAllVaults();
-    const control = readVaultControl(owner);
-    if (control === null) {
-        await createAndMigrateVault(owner);
-    } else if (control.phase === 'active') {
-        await unlockVaultForOwner(owner);
-    } else {
-        throw new Error('Unexpected interrupted fixture migration: test cannot continue without recovery');
-    }
+    await ensureLocalVaultReady(owner);
+    if (!isVaultUnlocked(owner)) throw new Error('Owner vault was not durably unlocked');
 }
