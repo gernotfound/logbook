@@ -1,4 +1,4 @@
-# Design System — LogBook
+# Design System — TheLogBook
 
 > Stato: normativo | Ultima verifica: 2026-09-21 | File verificati: `src/styles/global.css`, `src/styles/tokens.css`, `public/appearance.js`, `public/appearance.css`, `index.html`
 
