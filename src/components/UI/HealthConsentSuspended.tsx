@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import type { User } from 'firebase/auth';
 import { useSettings } from '../../hooks/useSettings';
@@ -9,11 +9,33 @@ import { beginGuestHealthReacceptance, completeGuestHealthReacceptance, finishHe
 import { PrivacyPolicy } from '../../pages/PrivacyPolicy';
 import { TermsAndConditions } from '../../pages/TermsAndConditions';
 
+// The form has its own selection state: switching from pending to confirmed,
+ // or back to pending, creates a fresh opt-in without a render-time reset.
+function ReacceptanceForm({ enabled, busy, onReaccept }: { enabled: boolean; busy: boolean; onReaccept: () => Promise<void> }) {
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [acceptedHealth, setAcceptedHealth] = useState(false);
+
+  return <>
+    <h2>Per tornare a usare la PWA</h2>
+    <p>Esamina i documenti e scegli liberamente se prestare un nuovo consenso. I dati già presenti non vengono cancellati automaticamente.</p>
+    <label style={{ display: 'block', marginBlock: 12 }}>
+      <input type="checkbox" disabled={!enabled || busy} checked={acceptedTerms} onChange={e => setAcceptedTerms(e.target.checked)} />
+      {' '}Ho almeno 18 anni, ho letto l'informativa e accetto i termini.
+    </label>
+    <label style={{ display: 'block', marginBlock: 12 }}>
+      <input type="checkbox" disabled={!enabled || busy} checked={acceptedHealth} onChange={e => setAcceptedHealth(e.target.checked)} />
+      {' '}Presto esplicitamente il consenso al trattamento dei miei dati relativi alla salute per il servizio.
+    </label>
+    <button className="btn btn-primary" type="button" disabled={!enabled || busy || !acceptedTerms || !acceptedHealth}
+      onClick={() => { if (enabled && !busy && acceptedTerms && acceptedHealth) void onReaccept(); }}>
+      {busy ? 'Salvataggio in corso…' : 'Presta un nuovo consenso'}
+    </button>
+  </>;
+}
+
 export function HealthConsentSuspended({ status, user }: { status: HealthConsentStatus; user: User | null }) {
   const { handleExportBackup, handleDeleteAccount, handleLogout, exportingData } = useSettings();
   const submitLegalConsent = useAppStore(state => state.submitLegalConsent);
-  const [acceptedTerms, setAcceptedTerms] = useState(false);
-  const [acceptedHealth, setAcceptedHealth] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [recoveryBusy, setRecoveryBusy] = useState(false);
@@ -22,17 +44,8 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
   const canReaccept = status === 'withdrawn' || status === 'reaccepting';
   const showReacceptForm = status === 'pending' || canReaccept;
 
-  // Never carry an earlier opt-in across a new withdrawal, a failed
-  // verification or an owner change. Reacceptance is always a fresh choice.
-  useEffect(() => {
-    if (!canReaccept) {
-      setAcceptedTerms(false);
-      setAcceptedHealth(false);
-    }
-  }, [canReaccept]);
-
   const reaccept = async () => {
-    if (!canReaccept || !acceptedTerms || !acceptedHealth || busy) return;
+    if (!canReaccept || busy) return;
     setBusy(true);
     setError(null);
     try {
@@ -123,21 +136,13 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
         </button>
       </section>}
       {status === 'reaccepting' && <p role="status">Nuovo consenso in fase di completamento. Riconferma qui sotto per completare.</p>}
-      {showReacceptForm && <>
-        <h2>Per tornare a usare la PWA</h2>
-        <p>Esamina i documenti e scegli liberamente se prestare un nuovo consenso. I dati già presenti non vengono cancellati automaticamente.</p>
-        <label style={{ display: 'block', marginBlock: 12 }}>
-          <input type="checkbox" disabled={!canReaccept || busy} checked={acceptedTerms} onChange={e => setAcceptedTerms(e.target.checked)} />
-          {' '}Ho almeno 18 anni, ho letto l'informativa e accetto i termini.
-        </label>
-        <label style={{ display: 'block', marginBlock: 12 }}>
-          <input type="checkbox" disabled={!canReaccept || busy} checked={acceptedHealth} onChange={e => setAcceptedHealth(e.target.checked)} />
-          {' '}Presto esplicitamente il consenso al trattamento dei miei dati relativi alla salute per il servizio.
-        </label>
-        <button className="btn btn-primary" type="button" disabled={!canReaccept || busy || !acceptedTerms || !acceptedHealth} onClick={() => void reaccept()}>
-          {busy ? 'Salvataggio in corso…' : 'Presta un nuovo consenso'}
-        </button>
-      </>}
+      {showReacceptForm &&
+        <ReacceptanceForm
+          key={canReaccept ? 'confirmed' : 'awaiting-confirmation'}
+          enabled={canReaccept}
+          busy={busy}
+          onReaccept={reaccept}
+        />}
       <h2>Gestisci i tuoi dati e i tuoi diritti</h2>
       <p>Puoi farlo anche senza prestare un nuovo consenso.</p>
       <div style={{ display: 'grid', gap: 12 }}>

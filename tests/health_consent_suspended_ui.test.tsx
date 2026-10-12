@@ -37,33 +37,33 @@ describe('suspended health-consent screen', () => {
 
     rerender(<HealthConsentSuspended status="withdrawn" user={account} />);
     expect(screen.getByRole('status').textContent).toContain('Revoca confermata sul server');
-    expect(checkboxInputs()[0]).toBe(terms);
-    expect(checkboxInputs()[1]).toBe(health);
-    expect(reacceptButton()).toBe(submit);
-    expect(terms.disabled).toBe(false);
-    expect(health.disabled).toBe(false);
-    expect(terms.checked).toBe(false);
-    expect(health.checked).toBe(false);
-    expect(submit.disabled).toBe(true);
+    const [enabledTerms, enabledHealth] = checkboxInputs();
+    const enabledSubmit = reacceptButton();
+    expect(enabledTerms.disabled).toBe(false);
+    expect(enabledHealth.disabled).toBe(false);
+    expect(enabledTerms.checked).toBe(false);
+    expect(enabledHealth.checked).toBe(false);
+    expect(enabledSubmit.disabled).toBe(true);
 
-    fireEvent.click(terms);
-    expect(submit.disabled).toBe(true);
-    fireEvent.click(health);
-    expect(submit.disabled).toBe(false);
+    fireEvent.click(enabledTerms);
+    expect(enabledSubmit.disabled).toBe(true);
+    fireEvent.click(enabledHealth);
+    expect(enabledSubmit.disabled).toBe(false);
 
     rerender(<HealthConsentSuspended status="pending" user={account} />);
-    expect(terms.disabled).toBe(true);
-    expect(health.disabled).toBe(true);
-    expect(terms.checked).toBe(false);
-    expect(health.checked).toBe(false);
-    expect(submit.disabled).toBe(true);
-    fireEvent.click(submit);
+    const [pendingTerms, pendingHealth] = checkboxInputs();
+    expect(pendingTerms.disabled).toBe(true);
+    expect(pendingHealth.disabled).toBe(true);
+    expect(pendingTerms.checked).toBe(false);
+    expect(pendingHealth.checked).toBe(false);
+    expect(reacceptButton().disabled).toBe(true);
+    fireEvent.click(reacceptButton());
     expect(reacceptHealthConsent).not.toHaveBeenCalled();
 
     rerender(<HealthConsentSuspended status="withdrawn" user={account} />);
-    expect(terms.checked).toBe(false);
-    expect(health.checked).toBe(false);
-    expect(submit.disabled).toBe(true);
+    expect(checkboxInputs()[0].checked).toBe(false);
+    expect(checkboxInputs()[1].checked).toBe(false);
+    expect(reacceptButton().disabled).toBe(true);
   });
 
   it('does not offer premature reacceptance for unverified, failed, stale or recovery states', () => {
