@@ -95,6 +95,32 @@ describe('durable health-consent client barrier', () => {
   // Across tabs the persisted epoch changes without mutating the original tab's
   // realm. Old in-flight callbacks must fail before touching the journal.
 
+describe('out-of-order consent checks', () => {
+  it('does not replace explicit reacceptance with an older withdrawn response', async () => {
+    const uid = 'delayed-' + crypto.randomUUID();
+    localStorage.setItem(key(uid), 'withdrawn');
+    let resolveOld!: (response: Response) => void;
+    let reads = 0;
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
+      if (init.method === 'POST') return Response.json({
+        status: 'active', revision: 2, acceptedAt: '2026-10-12T05:00:00.000Z',
+      });
+      reads += 1;
+      if (reads === 1) return new Promise<Response>(resolve => { resolveOld = resolve; });
+      if (reads === 2) return Response.json({ status: 'withdrawn', revision: 1 });
+      return Response.json({ status: 'active', revision: 2, acceptedAt: '2026-10-12T05:00:00.000Z' });
+    }));
+    const olderCheck = refreshHealthConsent(user(uid));
+    await reacceptHealthConsent(user(uid), accepted);
+    expect(localStorage.getItem(key(uid))).toBe('reaccepting:1');
+    resolveOld(Response.json({ status: 'withdrawn', revision: 1 }));
+    expect(await olderCheck).toBe('reaccepting');
+    expect(localStorage.getItem(key(uid))).toBe('reaccepting:1');
+    expect(await refreshHealthConsent(user(uid))).toBe('active');
+    finishHealthConsentReacceptance(uid);
+  });
+});
+
 describe('local-only guest consent lifecycle', () => {
   it('revocation is durable, immediately suspends local writes, and never calls a backend', () => {
     const mock = vi.fn();

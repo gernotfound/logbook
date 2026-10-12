@@ -168,12 +168,18 @@ export async function readActiveHealthConsentRevision(user: User): Promise<numbe
 export async function refreshHealthConsent(user: User): Promise<HealthConsentStatus> {
   const uid = user.uid;
   const saved = readMarker(uid);
+  // A delayed server check must not overwrite a newer local decision or
+  // the consent generation published by another tab during network I/O.
+  let observedGeneration = readBrowserValueStrict(generationMarker(uid));
+  const isSameDecision = () => readMarker(uid) === saved
+    && readBrowserValueStrict(generationMarker(uid)) === observedGeneration;
   // Every refresh fences in-flight writes; only a completed, active server
   // check may grant a new writable generation.
   verifiedRevisions.delete(uid);
   setStatus(uid, saved === null ? 'checking' : (parsePendingRevision(saved) !== null ? 'pending' : parseReacceptRevision(saved) !== null ? 'reaccepting' : saved as HealthConsentStatus));
   try {
     const state = await serverRequest(user, 'GET');
+    if (!isSameDecision()) return currentHealthConsentStatus(uid);
     if (state.status === 'withdrawn') {
       writeBrowserValue(marker(uid), 'withdrawn');
       setStatus(uid, 'withdrawn');
@@ -188,6 +194,7 @@ export async function refreshHealthConsent(user: User): Promise<HealthConsentSta
         return 'stale-request';
       }
       const retry = await serverRequest(user, 'POST', { action: 'withdraw', expectedRevision: pendingRevision });
+      if (!isSameDecision()) return currentHealthConsentStatus(uid);
       if (retry.status !== 'withdrawn') throw new Error('Revoca non registrata.');
       writeBrowserValue(marker(uid), 'withdrawn');
       setStatus(uid, 'withdrawn');
@@ -207,8 +214,10 @@ export async function refreshHealthConsent(user: User): Promise<HealthConsentSta
       // older tab could commit a new operation between the archive update and
       // the marker write, contaminating the new consent generation.
       writeBrowserValue(generationMarker(uid), String(state.revision));
+      observedGeneration = String(state.revision);
       const { advanceLocalConsentRevisionIfClean } = await import('./sync/localRepository');
       const ready = await advanceLocalConsentRevisionIfClean('user:' + uid, state.revision);
+      if (!isSameDecision()) return currentHealthConsentStatus(uid);
       if (!ready) {
         setStatus(uid, 'recovery-required');
         return 'recovery-required';
@@ -219,6 +228,7 @@ export async function refreshHealthConsent(user: User): Promise<HealthConsentSta
     setStatus(uid, 'active');
     return 'active';
   } catch {
+    if (!isSameDecision()) return currentHealthConsentStatus(uid);
     setStatus(uid, saved === null ? 'error' : saved as HealthConsentStatus);
     return currentHealthConsentStatus(uid);
   }

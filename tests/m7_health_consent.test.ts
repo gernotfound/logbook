@@ -98,6 +98,10 @@ describe('trusted health consent boundary', () => {
     expect(accepted).toMatchObject({ status: 'active', revision: 2, acceptedAt: expect.any(String) });
     expect(await recordHealthConsentReacceptance('account-1', acceptance, 1)).toEqual(accepted);
     expect(await recordHealthConsentWithdrawal('account-1', 2)).toEqual({ status: 'withdrawn', revision: 3 });
+    const staleSecondCycle = await POST(req('POST', { action: 'withdraw', expectedRevision: 0 }));
+    expect(staleSecondCycle.status).toBe(409);
+    expect(await readHealthConsentState('account-1')).toMatchObject({ status: 'withdrawn', revision: 3 });
+    expect(await recordHealthConsentWithdrawal('account-1', 2)).toEqual({ status: 'withdrawn', revision: 3 });
   });
 
   it('will not resume or withdraw when account deletion has started', async () => {

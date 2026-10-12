@@ -53,6 +53,12 @@ export async function recordHealthConsentWithdrawal(uid: string, expectedRevisio
     if (job.exists) throw new Error('Cancellazione account in corso.');
     const previous = existing.data();
     if (existing.exists && previous?.status === 'withdrawn') {
+      // A retry is idempotent only for its own transition. Older requests
+      // cannot acknowledge a different withdrawal after reacceptance.
+      if (!Number.isSafeInteger(previous.revision) || previous.revision < 1
+        || previous.revision !== expectedRevision + 1) {
+        throw new HealthConsentRevisionConflictError();
+      }
       return { status: 'withdrawn', revision: previous.revision };
     }
     const actual = existing.exists ? Number(previous?.revision) : 0;
