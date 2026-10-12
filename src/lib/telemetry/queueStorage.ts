@@ -1,5 +1,6 @@
 import { deviceKey } from '../sync/deviceStorage';
 import { storageOwner } from '../sync/session';
+import { isVaultUnlocked } from '../sync/secureArchiveSession';
 import {
   TELEMETRY_QUEUE_CAPACITY,
   TELEMETRY_QUEUE_MAX_AGE_MS,
@@ -227,6 +228,14 @@ export class TelemetryQueueStorage {
       this.cachedQueue = null;
       this.cachedQueueKey = null;
     }
+  }
+
+  /** Re-read a durable queue after cloud delivery, but do not erase an
+   * in-memory-only queue while the owner vault is still locked.
+   */
+  public refreshAfterFlush(): void {
+    if (!isVaultUnlocked(this.getOwner())) return;
+    this.invalidateCache();
   }
 
   public invalidateCache(): void {
