@@ -43,7 +43,7 @@ describe('Empirical Challenger 2: Telemetry Offline Queueing, Capacity & Online 
   // 1. Offline Queueing, Capacity Limits (50 items) & FIFO Eviction
   // =========================================================================
   describe('1. Offline Queueing, Capacity Limits & FIFO Eviction', () => {
-    it('1.1: Queues both errors and events in localStorage when navigator.onLine is false', () => {
+    it('1.1: Queues both errors and events in memory without plaintext before vault unlock', () => {
       Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
       telemetryHub.init();
       telemetryHub.setUserId('user_offline_001');
@@ -53,9 +53,8 @@ describe('Empirical Challenger 2: Telemetry Offline Queueing, Capacity & Online 
       telemetryHub.trackPWAInstallClick({ source: 'settings_banner' });
       telemetryHub.trackWorkoutSaved({ offline: true, exerciseCount: 5 });
 
-      const raw = localStorage.getItem(telemetryHub.getQueueStorageKey());
-      expect(raw).toBeDefined();
-      const queuedItems: QueuedTelemetryItem[] = JSON.parse(raw!);
+      expect(localStorage.getItem(telemetryHub.getQueueStorageKey())).toBeNull();
+      const queuedItems: QueuedTelemetryItem[] = telemetryHub.getQueuedEvents();
       expect(queuedItems.length).toBe(4);
 
       expect(queuedItems[0].itemType).toBe('error');
@@ -357,11 +356,8 @@ describe('Empirical Challenger 2: Telemetry Offline Queueing, Capacity & Online 
       expect(mockSetDoc).not.toHaveBeenCalled();
       expect(dispatchedDocs.length).toBe(0);
       expect(telemetryHub.getQueuedEvents()).toHaveLength(0);
-      const guestQueue: QueuedTelemetryItem[] = JSON.parse(localStorage.getItem(guestQueueKey) || '[]');
-      expect(guestQueue).toHaveLength(3);
-      guestQueue.forEach((docEntry) => {
-        expect(docEntry.payload.userId).toBeNull();
-      });
+      // Locked guest diagnostics were RAM-only and must not be assigned to the new account.
+      expect(localStorage.getItem(guestQueueKey)).toBeNull();
     });
 
     it('4.2: Isolates "anonymous" placeholder strings from authenticated user ID on flush', async () => {
@@ -386,11 +382,7 @@ describe('Empirical Challenger 2: Telemetry Offline Queueing, Capacity & Online 
       expect(mockSetDoc).not.toHaveBeenCalled();
       expect(dispatchedDocs.length).toBe(0);
       expect(telemetryHub.getQueuedEvents()).toHaveLength(0);
-      const anonymousQueue: QueuedTelemetryItem[] = JSON.parse(localStorage.getItem(anonymousQueueKey) || '[]');
-      expect(anonymousQueue).toHaveLength(2);
-      anonymousQueue.forEach((item) => {
-        expect(item.payload.userId).toBe('anonymous');
-      });
+      expect(localStorage.getItem(anonymousQueueKey)).toBeNull();
     });
   });
 
