@@ -73,7 +73,7 @@ beforeEach(async () => {
 
     // Authenticate the real local vault rather than bypassing its gate in
     // production code or replacing it with a mock. Each test owns a fresh key.
-    await createAndMigrateVault('user:logout-user', 'logout integration test passphrase 2026');
+    await createAndMigrateVault('user:logout-user');
 });
 
 describe('M5 logout protection through AuthProvider', () => {
