@@ -1,91 +1,43 @@
-# TheLogBook — archivio sanitario locale protetto (progetto CRITICAL)
+# TheLogBook — protezione automatica dei dati locali (CRITICAL)
 
-> Stato: progettazione / integrazione **non attiva**. Non usare questo documento per affermare che la cifratura sia distribuita. Baseline analizzata: `main` `b0dedd0664209c470bf1512458734e666286579b` (2026-10-12).
-> Obiettivo approvato: uno sblocco locale iniziale; dopo lo sblocco PWA completamente utilizzabile offline. Nessuna perdita silenziosa di dati o downgrade delle garanzie attuali.
+> **Specifiche di prodotto approvate il 12 ottobre 2026.** Nessuna passphrase locale, PIN aggiuntivo, recovery code da annotare o popup ordinario di sblocco. La presente specifica sostituisce integralmente il precedente progetto con passphrase. **Non è una prova di deploy:** l'implementazione resta nella PR #369 in draft fino a gate, review e verifiche Production.
 
-## 1. Modello di minaccia e limiti
+## 1. Requisito e limiti reali
 
-Proteggere la **riservatezza dei dati a riposo** quando un terzo ottiene una copia dei file del profilo browser, backup di IndexedDB/localStorage o accesso allo storage mentre l'archivio è bloccato. Garantire anche integrità autenticata, isolamento degli owner e rilevamento della manomissione; non reinterpretare ciphertext guasto come archivio assente.
+L'accesso dell'utente autenticato rimane quello **Firebase Auth già esistente**. Dopo la conferma dell'UID ed i gate legali/consenso, la PWA prepara e apre **automaticamente** il proprio archivio locale; la sessione guest resta confinata alla generazione guest corrente. Su browser già inizializzato, la chiave protetta del dispositivo deve funzionare offline, senza chiedere un secondo segreto.
 
-Non si promette protezione completa da XSS, estensioni malevole, compromissione del browser/OS oppure codice ostile che opera **dopo** lo sblocco: questi attori possono leggere il DOM/stato in memoria o utilizzare le funzioni di decifratura. Mantenere CSP, sanitizzazione, dipendenze e difese XSS. App Check e Firestore Rules non cifrano IndexedDB né localStorage. La soluzione **non** rende Firestore end-to-end encrypted.
+Non è tecnicamente corretto usare UID, ID token Firebase, password Firebase non accessibile al client, API key o informazioni pubbliche dell'account per derivare la chiave di cifratura. Firebase Auth autorizza l'identità; una chiave **casuale del dispositivo** svolge la cifratura. L'owner ID compare nei metadati autenticati, separa i contenitori e vincola ogni ciphertext, ma non è un segreto crittografico.
 
-Distinguere *autenticazione cloud Firebase*, *consenso al trattamento dei dati salute* e *sblocco del segreto crittografico del dispositivo*. Nessuno dei tre sostituisce gli altri. Un account revocato deve restare bloccato anche se la passphrase di archivio è corretta.
+**Threat model esplicito:** la cifratura protegge copie isolate di LocalEnvelope, journal, localStorage e snapshot dall'analisi accidentale in chiaro; una **copia integrale del profilo browser** può includere anche la chiave non esportabile conservata in IndexedDB e può quindi consentire la decifratura. Inoltre XSS, estensioni malevole, browser/OS compromessi e codice eseguito nell'origine TheLogBook possono usare la chiave, anche se `extractable: false`. Non chiamare questo sistema E2EE, né protezione equivalente a una passphrase indipendente o a un HSM. Firestore non diventa end-to-end encrypted.
 
-## 2. Inventario dei dati e copertura minima
+## 2. Chiavi e formato
 
-| Sorgente | Dati e invarianti | Boundary corrente |
-| --- | --- | --- |
-| IndexedDB `logbook:v2:${owner}` | Local Envelope 5, business state, baseline, journal pending, revisioni, consent recovery, ledger chiusura workout; aggiornamento atomico | `src/lib/sync/localRepository.ts`: `get`, `update`, `readLocal`, `commitDomainOperations`, `commitLocal`, `acknowledgeThrough`, `hydrateLocal`, recovery |
-| `localStorage` `logbook:v2:${owner}:*` | Workout corrente, timer, draft ed editor, bozze misurazioni/sonno/cardio, post-session, dati di recovery e segnali di lifecycle | `src/lib/sync/deviceStorage.ts`, `src/hooks/useDatedDraft.ts`, `src/lib/sync/deviceCriticalState.ts`, chiamanti workout |
-| `localStorage` e altri namespace | Flags guest, consent withdrawal/generation, owner hint, account deletion receipts, telemetria e preferenze | Audit **per singola chiave**: alcune sentinelle devono restare leggibili prima dello sblocco, ma nessun payload sanitario può rimanere in chiaro |
-| Backup / export / import | Raccolta recovery device, envelope, dati di origine locale e cloud, ripristino account e guest→account | `src/lib/db/backupSnapshot.ts`, `src/lib/backup.ts`, `src/lib/export.ts`, import/restore |
-| Lifecycle | Auth bootstrap, guest, multi-tab, logout, purge, revoca consenso, riaccettazione, account deletion, PWA reload/required-update | `src/main.tsx`, `src/contexts/AuthContext.tsx`, `src/lib/db/db_account.ts`, `src/lib/sync/reloadBarrier.ts` |
+- Per ciascun owner/device, generare una **DEK casuale da 256 bit** per i record. Non persisterla come bytes in chiaro.
+- Generare tramite Web Crypto una wrapping key **AES-GCM-256, `extractable: false`**, con sole usage `encrypt`/`decrypt`. Salvare il `CryptoKey` mediante structured clone in IndexedDB in `logbook:v2:${owner}:device-vault-key`.
+- Wrappare la DEK con AES-GCM, nonce random a 96 bit, additional authenticated data che incorpora applicazione, owner, scopo, formato e versione. Memorizzare nell'owner `secure-vault-control` soltanto DEK wrappata, nonce, fase e epoch. Versionare e validare rigorosamente metadati e chiavi.
+- I record del LocalEnvelope e dei device snapshot sono cifrati con XChaCha20-Poly1305 **sincrono**, AAD owner/key/path/version, nonce random 192 bit diverso per scrittura, parsing/limiti dimensionali fail-closed. La chiave raw è in RAM nella sola sessione sbloccata; logout, cambio owner e revoca guest invalidano il relativo handle.
+- Il key material resta **locale al profilo browser**. La stessa identità Firebase su altro device ottiene un'altra chiave e ricostruisce i dati già sincronizzati dal cloud, senza condividere la chiave.
+- La chiave persa/corrotta NON va ricreata se esiste ciphertext: bloccare, preservare byte originali e offrire il normale percorso di supporto/recupero dal cloud senza cancellare automaticamente le operazioni rimaste soltanto offline.
 
-Non conservare una seconda copia duratura in chiaro per il solo motivo che i dati sono cifrati nella prima. Le preferenze non sensibili possono restare in chiaro, dopo inventario esplicito.
+## 3. Persistenza e migrazione
 
-## 3. Chiavi e sblocco
+IndexedDB `logbook:v2:${owner}` contiene LocalEnvelope V5, dati, causal state, pending journal, workout ledger e consent epochs. I commit mantengono una sola transazione `idb-keyval.update` con decrypt/mutate/encrypt **sincroni** dentro la callback; non introdurre Promise né `get` → `set` separati. L'ack del journal e i merge rispettano causalità/atomicità esistente.
 
-- **Una DEK casuale da 256 bit per owner e dispositivo**, generata con CSPRNG, mai salvata in chiaro; DEK separata per guest e account e diversa per ogni device.
-- Una passphrase locale indipendente dalla password Firebase sblocca la DEK usando una **KEK derivata** con KDF versionata e salt casuale unico. Prima proposta interoperabile: PBKDF2-HMAC-SHA-256 tramite Web Crypto, costo calibrato, con minimo conservativo verificato su browser supportati. Argon2id resta alternativa solo dopo prova di compatibilità e memoria reale su iOS/WebKit.
-- Wrapping della DEK con AES-GCM nativo, nonce casuale, metadata autenticati, versione/owner/KDF/costo registrati e controllati per limiti plausibili, senza password in storage. La sola passphrase non viene persistita.
-- Secondo wrapping indipendente tramite **codice di recupero casuale ad alta entropia** mostrato all'attivazione (non salvare mai il codice in chiaro). Richiedere esplicita presa visione; evitare di lasciare la copia del codice in un endpoint remoto non autorizzato.
-- DEK disponibile soltanto nella memoria della scheda sbloccata; altre schede richiedono sblocco autonomo; non inviarla tramite BroadcastChannel/localStorage. Lock e logout devono invalidare l'epoca locale e pulire gli handle quanto possibile.
-- Cifratura dei **record** con AEAD e nonce nuovo per *ogni* scrittura; AAD vincolata a owner, key/path, namespace e versione. Controllare autenticità e limiti dimensionali prima di decodificare, quindi validare envelope e business schema esistenti. Errore AEAD = blocco e recupero, mai `undefined` / seed vuoto.
-- Se la DEK è compromessa, la sola sostituzione della passphrase non è sufficiente: serve vera rotazione con re-encryption verificata. Rewrapping della stessa DEK è ammesso per normale cambio passphrase.
+`deviceStorage` protegge i salvataggi **sincroni** di workout, timer, bozze datate, editor e recovery. Usare namespace `sealed:` per separare i nuovi payload dai writer PWA legacy e riconoscere eventuali dati old-tab riapparsi in chiaro. Marker di cancellazione, consenso, epoche e necessità di update possono rimanere fuori dal ciphertext nella misura strettamente necessaria ai gate pre-bootstrap; nessun payload salute deve restare in chiaro.
 
-## 4. Cifratura SINCRONA per la durabilità
+Migrazione crash-safe: `none → migrating → active` con durable metadata scritto PRIMA di toccare i dati, lock multi-tab, convert/read-back verificati, idempotenza se un record è già cifrato e cleanup delle copie precedenti solo dopo verifica. Un errore di storage, versione futura, owner incongruente, AEAD, schema o conflitto con tab legacy BLOCCA la conversione senza cancellazione. La stessa chiave di dispositivo va riaperta dopo un crash: non generare nuove chiavi per un vault incompleto.
 
-`idb-keyval.update()` riceve una callback di lettura-modifica-scrittura **sincrona** nello stesso contesto transazionale IndexedDB. Le funzioni `crypto.subtle.encrypt/decrypt` restituiscono Promise: NON inserirle direttamente nella callback; una transazione può essere invalidata o chiudersi durante gli await e la semantica causale andrebbe perduta.
+## 4. Auth, guest, recovery e lifecycle
 
-Anche `localStorage` conserva attualmente snapshot obbligatori **sincroni** per workout/timer/flush. Non sostituire con code asincrone non persistite né con salvataggi best-effort che perdano l'ultimo input su sospensione mobile.
+- Non caricare dati sanitari di un UID suggerito dall'owner hint **prima** della conferma Firebase Auth dell'UID. Guest ha own generation fence; guest→account mantiene i due owner separati e migra i dati attraverso il percorso già attestato in memoria.
+- Offline-first non equivale a login remoto: ripresa dei dati account offline solo quando Firebase Auth dispone di una sessione locale legittima e il dispositivo possiede già la chiave; i gate di consenso e revoca non possono essere bypassati.
+- Dopo logout non eliminare i dati fino al completamento del protocollo di purge richiesto; un errore o un pending journal impediscono di affermare una pulizia riuscita. In un purge riuscito, rimuovere DEK/ciphertext e **solo dopo** la chiave di dispositivo; fallimenti intermedi devono lasciare dati recuperabili e un percorso idempotente di retry.
+- Se un account è già stato cancellato lato server, la receipt e il recovery non devono richiedere lo sblocco per completare la pulizia **dopo verifica server `complete`**.
+- Backup JSON esplicito di dati già autorizzati e sbloccati può contenere plaintext dichiarato come tale; preservare separazione fra dati cloud, pending journal e snapshot device. Il logout o una cancellazione non autorizzano implicitamente perdita di modifiche offline.
+- Quando il dispositivo perde chiave e ciphertext o perde solo la chiave, dati **già sincronizzati** sono recuperabili da Firestore previo login; modifiche **solo offline** non sono ricostruibili crittograficamente. Non promettere il contrario.
 
-Selezionare, verificare integrità e fissare versione di una libreria crittografica AEAD **sincrona, mantenuta e revisionata**, ad esempio `@noble/ciphers` con XChaCha20-Poly1305 e nonce casuale da 192 bit, previa verifica di API, bundle, licenza, audit, interoperabilità, vector test, prestazioni e compatibilità TypeScript 7/Vite 8. La derivazione/wrapping all'atto dello sblocco può rimanere nativa Web Crypto asincrona perché non si trova nel percorso critico dei commit.
+## 5. Criteri di rilascio
 
-Il modulo `secureArchiveStorage` dovrà mantenere la callback `update` attuale **all'interno** della transazione, decrittando il valore corrente e sigillando quello nuovo sincronicamente; vietato un `get` seguito da `set` non atomico. Sostituire tutti i `update` di `localRepository.ts` tramite una sola API versionata, senza duplicare journal né modificare l'ordine di applicazione dei delta.
+Test obbligatori: KAT/roundtrip AEAD, integrità AAD, owner mistmatch, nonce, versioni future, wrapped key danneggiata, key missing, autenticazione account guest, offline cold start, quota/IndexedDB denied, migrazione crash per ogni fase, Web Locks iOS/WebKit, multi-tab e vecchie PWA, pending journal/ack/replay, guest→account, revoca consenso, import/export, account deletion/recovery, logout parziale, reload e theme/layout mobile. Scansione **bytes at rest** di LocalEnvelope, device snapshot e pending journal per contenuti sanitari noti. Non testare la promessa di protezione contro furto integrale profilo: è fuori dal modello.
 
-Il modulo sincrono `deviceStorage.ts` dovrà proteggere tutti i payload sensibili, comprese le bozze datate. Il refactor preparatorio delle bozze su questo boundary va verificato prima dell'attivazione della cifratura.
-
-## 5. Bootstrap e ciclo di vita
-
-1. Determinare owner in modo strict senza trattare storage illeggibile come owner assente. Esporre uno stato `locked` prima di leggere `UserData`, workout o journal; non far partire hydration/sync/guest migration quando locked.
-2. L'utente può creare passphrase e codice recovery al primo setup oppure sbloccare un vault esistente. Nessun accesso a plaintext prima dell'autorizzazione. Per un UID noto solo dopo Firebase Auth, sospendere `loadAuthenticatedData` finché non è sbloccato quell'owner.
-3. Dopo unlock, inizializzare l'archivio di quell'owner prima del bootstrap normale. Conservare offline-first, readiness Firebase/App Check e fencing del consenso come oggi.
-4. Logout, cancellazione e cambio owner devono invalidare immediatamente gli handle crittografici e bloccare callback stale. Account deletion **completata dal server** deve poter finalizzare la pulizia ciphertext senza chiedere la passphrase: il purge del record cifrato non necessita decrypt.
-5. Consent withdrawal e generation markers devono restare verificabili mentre locked. Il ri-consenso non riattiva da solo writer, replays o archivi precedenti. Un ciphertext non leggibile non autorizza cancellazione.
-6. Lock di una scheda non revoca automaticamente l'autorizzazione di un'altra senza policy esplicita, ma logout/revoca/account deletion cross-tab sì. Un nuovo epoch crittografico invalida la memoria della vecchia scheda.
-7. PWA update e hard reload: nessun aggiornamento mentre vi siano dirty edit non durevoli. Il reload dopo unlock deve riproporre sblocco; non persistere DEK per eludere UX.
-
-## 6. Migrazione *fail-closed*
-
-- Nessuna migrazione distruttiva all'avvio del frontend. Individuare prima vecchio record/plaintext e snapshot device, creare metadata di key wrapping e avviare una **transizione durable**, tracciata per owner e versionata. Non committare dati parzialmente migrati come `active`.
-- Preservare la copia originale fino al completamento verificato di ogni categoria di record. Migrare l'envelope dentro una sola `idb-keyval.update`, con validazione precedente e verifica authenticated decrypt. Per snapshot device definire journal di progresso e recovery idempotente che sopravviva a tab crash/quota e interruzioni.
-- **Non lasciare indefinitamente una copia in chiaro** dopo l'attivazione: termine della migrazione deve verificare scansione dei namespace e rimozione delle copie precedenti. Un failure arresta le scritture e preserva gli originali, senza rendere falsa la classificazione come cifrato.
-- Le schede PWA obsolete possono tentare writes in chiaro: la strategia deve prevedere fencing *misurabile* su owner/epoca anche in presenza di tab sospese; non assumere che BroadcastChannel basti o che tutti i client legacy rispettino una nuova sentinella. Verificare che un vecchio `update` non possa sostituire l'archivio cifrato e come rilevare/gestire una vecchia write device.
-- No conversione/sovrascrittura di ciphertext con versioni ignote, owner divergente, nonce/tag invalidi, key metadata corrotti o KDF parametrizzata fuori limiti. Trattare il crash come transizione riprendibile, non come archivio perso.
-
-## 7. Backup e recupero
-
-- Il backup esplicito conserva i dati in formato ripristinabile validato, non una miscela di ciphertext e vecchi device snapshot. Richiede unlock per includere la copia locale. Il backup in chiaro va identificato chiaramente all'utente; una successiva opzione di backup cifrato è separata e richiede propria progettazione/test.
-- Se si perde la passphrase ma si possiede il codice di recupero, riaprire la DEK e impostare una nuova passphrase **senza riscrivere arbitrariamente i dati o il journal**.
-- Se si perdono **entrambi**, non esiste recupero crittografico dei dati solo-device: gli account possono recuperare dati **già sincronizzati** dal cloud creando un nuovo archivio, ma **non** modifiche offline/pending rimaste cifrate. Non cancellare automaticamente il vecchio ciphertext: occorre una scelta esplicita con avvertenza del limite, esercizio dei diritti e backup disponibile.
-- Guest→account: mantenere l'origine guest cifrata e validare entrambe le identità; migrare dati *decrittati in memoria* attraverso il protocollo esistente, con salvataggio nel vault destinazione senza perdere il guest in failure.
-- Account deletion/recovery: la receipt non può sparire perché il vault è locked; i marker separati mantengono la prova dell'esito server e il wipe procede solo dopo `complete`.
-- Non confondere la revoca consenso e la cancellazione account: nessuna cancellazione silenziosa dovuta al solo lock.
-
-## 8. Matrice minima di verifica prima di una release
-
-- Vettori AEAD/KDF, nonces unici, wrong passphrase, wrong recovery code, wrong owner/path, tampering, bitflip, truncation, crypto/KDF versions future, malformed KDF, quota/access denied.
-- Verifica su **bytes reali** che peso, frequenza cardiaca, sonno, note, workout, pending journal e snapshot device non compaiano in chiaro negli storage esaminati **dopo** migrazione.
-- Concorrenza multi-tab e cross-owner: due domain operation simultanee mantengono entrambi gli intenti; consent epoch e replica generation non subiscono regressioni; nessuna desincronizzazione baseline/data/pending.
-- Crash dopo ogni fase: creazione metadata, before/after IDB commit, migrazione device key, update in corso, guest→account, ack cloud, delete receipt, required-update, chiusura improvvisa offline.
-- Browser refresh/nuova scheda offline, WebKit mobile, import/export backup, restore, account deletion anche con vault locked e revoca consenso da altra scheda/dispositivo.
-- CI `verify:m8` / exact-SHA + CodeQL / security-static / npm audit / review su candidato esatto, regressioni negative sui gate, verifica visiva dark/light e viewport, deploy frontend Firestore senza Rules/config nuove salvo evidenze, smoke Production **dopo** merge.
-- Il branch rimane **draft/non mergeable come prodotto** finché il perimetro end-to-end non è coperto. Non spostare il finding CodeQL a false positive e non indebolire SAST.
-
-## Riferimenti tecnici
-
-- [OWASP — Cryptographic Storage](https://cheatsheetseries.owasp.org/cheatsheets/Cryptographic_Storage_Cheat_Sheet.html)
-- [OWASP — Key Management](https://cheatsheetseries.owasp.org/cheatsheets/Key_Management_Cheat_Sheet.html)
-- [OWASP — HTML5 Security](https://cheatsheetseries.owasp.org/cheatsheets/HTML5_Security_Cheat_Sheet.html)
-- [MDN — Web Crypto deriveKey](https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/deriveKey)
-- [noble-ciphers — API, test e audit](https://github.com/paulmillr/noble-ciphers)
+Gate: `verify:m8` o CI canonica equivalente sullo SHA esatto, CodeQL, review, controlli statici, Firestore Rules, Playwright mobile, visivi dark/light, nessun blocker. Poi squash merge, main CI post-merge, Firebase Hosting Production e smoke (Vercel solo se diff backend). Non rilasciare una PR draft incompleta.
