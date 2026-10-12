@@ -1,4 +1,7 @@
-// @vitest-environment node
+// Uses the configured UI test setup; Web Crypto is supplied by Node's implementation.
+import { webcrypto } from 'node:crypto';
+import { beforeAll, vi } from 'vitest';
+beforeAll(() => { vi.stubGlobal('crypto', webcrypto); });
 import { describe, expect, it } from 'vitest';
 import {
     createLocalKeyVault, LocalUnlockError, recoverLocalKeyVault,
