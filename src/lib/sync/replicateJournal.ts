@@ -1,4 +1,6 @@
 import equal from 'fast-deep-equal';
+import { isHealthConsentWritable, getVerifiedHealthConsentRevision } from '../healthConsent';
+import { needsLegalUpdate } from '../legalVersions';
 import { auth, getDb, ensureAppCheck, waitForPendingWrites } from '../firebase';
 import type { UserData, SyncResult } from '../../types';
 import { readLocal, acknowledgeThrough, ensureBoundedPendingSequences, markReplicaCheckpointRequired } from './localRepository';
@@ -12,6 +14,17 @@ import type { SemanticOperation } from './semanticProjection';
 import { classifySyncFailure } from './syncFailure';
 import { ReplicaFencedError } from './replicaProtocol';
 import { boundedPendingTransactionBatch, distinctDocumentCount, MAX_SYNC_DOCUMENTS_PER_TRANSACTION } from './syncBatching';
+
+export class LegalConsentRequiredError extends Error {
+    readonly code = 'legal-consent-required';
+    constructor() {
+        super('Consenso dell’account necessario prima della sincronizzazione cloud. I dati restano conservati localmente.');
+        this.name = 'LegalConsentRequiredError';
+    }
+}
+
+export const isLegalConsentRequiredError = (error: unknown): error is LegalConsentRequiredError =>
+    error instanceof LegalConsentRequiredError || (typeof error === 'object' && error !== null && 'code' in error && error.code === 'legal-consent-required');
 
 class DurableAcknowledgementPendingError extends Error {
     constructor(cause: unknown) {
@@ -47,6 +60,7 @@ function containsDeliveredBatch(pending: SemanticOperation[], delivered: Semanti
 
 function isWritableSession(session: ReturnType<typeof captureSession>): boolean {
     return isCurrentSession(session)
+        && isHealthConsentWritable(session.owner)
         && auth.currentUser?.uid === session.owner.slice(5)
         && !isAccountDeletionPending(session.owner);
 }
@@ -90,6 +104,10 @@ async function drain(session: ReturnType<typeof captureSession>, deliveryState: 
         if (!current()) throw new Error('Sessione cambiata');
         if (!envelope) throw new Error('Archivio locale non disponibile');
         if (!envelope.pending?.length) return;
+        if ((envelope.consentRevision ?? 0) !== getVerifiedHealthConsentRevision(session.owner.slice(5))) {
+            throw new ReplicaFencedError('Journal locale precedente al nuovo consenso: esporta il backup prima di procedere.');
+        }
+        if (needsLegalUpdate(envelope.data.legalConsent)) throw new LegalConsentRequiredError();
         if (!envelope.replica) throw new ReplicaFencedError('Replica non registrata: attendi il checkpoint cloud completo.');
         const replica = envelope.replica;
         if (envelope.actorId !== replica.slot || envelope.pending.some(operation => operation.actorId !== replica.slot)) {
@@ -178,11 +196,15 @@ export async function replicateJournal(expectedOwner?: string): Promise<SyncResu
     const session = captureSession();
     try {
         if (expectedOwner && session.owner !== expectedOwner) throw new Error('Sessione cambiata');
+        if (!isHealthConsentWritable(session.owner)) return { ok: false, status: 'local-pending', error: new LegalConsentRequiredError() };
         if (isAccountDeletionPending(session.owner)) throw new Error('Cancellazione account in sospeso. Riprendila dalle impostazioni; copia locale conservata.');
         const envelope = await readLocal(session.owner);
         if (expectedOwner && session.owner !== expectedOwner) throw new Error('Sessione cambiata');
         if (!envelope) throw new Error('Copia locale non disponibile');
         if (session.owner === 'guest' || !envelope.pending?.length) return { ok: true, status: 'synced' };
+        if (needsLegalUpdate(envelope.data.legalConsent)) {
+            return { ok: false, status: 'local-pending', error: new LegalConsentRequiredError() };
+        }
         if (typeof navigator !== 'undefined' && !navigator.onLine) return { ok: false, status: 'local-pending', error: new Error('Connessione assente') };
         const previous = running.get(session.owner);
         const deliveryState = deliveryStates.get(session.owner) ?? { delivered: null };
@@ -215,6 +237,9 @@ export async function replicateJournal(expectedOwner?: string): Promise<SyncResu
                 // The original fencing error remains authoritative. A local storage
                 // failure is handled by the caller's normal persistence safety path.
             }
+        }
+        if (isLegalConsentRequiredError(error)) {
+            return { ok: false, status: 'local-pending', error };
         }
         return classifySyncFailure(error, { retryable: error instanceof DurableAcknowledgementPendingError });
     }

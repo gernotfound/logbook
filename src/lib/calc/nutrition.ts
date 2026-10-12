@@ -262,7 +262,7 @@ export function scaleFoodNutrients(food: any, quantity: any, unit?: any) {
     };
 }
 
-const normalizeFoodStr = (str: any) => (str || '').toString().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+const normalizeFoodStr = (str: unknown): string => String(str || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
 
 const FUSE_FOOD_OPTIONS = {
     keys: [
@@ -275,7 +275,17 @@ const FUSE_FOOD_OPTIONS = {
     minMatchCharLength: 2
 };
 
-export function searchFoods(foodsList: any[], query: string, categoryFilter?: string) {
+/** Keep all food metadata and caller-specific fields intact through filtering. */
+interface SearchableFood {
+    id?: string | number;
+    name: string;
+    brand?: string;
+    category?: string;
+    servingUnit?: string;
+    unit?: string;
+}
+
+export function searchFoods<T extends SearchableFood>(foodsList: T[], query: string, categoryFilter?: string): T[] {
     if (!Array.isArray(foodsList) || foodsList.length === 0) return [];
     let results = foodsList;
     if (categoryFilter && categoryFilter !== 'all') {
@@ -313,7 +323,7 @@ export function searchFoods(foodsList: any[], query: string, categoryFilter?: st
     const fuse = new Fuse(results, FUSE_FOOD_OPTIONS);
 
     const tokens = query.trim().split(/\s+/).filter(t => t.length >= 2);
-    let fuzzyMatched: any[] = [];
+    let fuzzyMatched: T[] = [];
     if (tokens.length > 1) {
         // Find items that match all tokens
         const tokenMatches = tokens.map(tok => new Set(fuse.search(tok).map(r => r.item)));
@@ -324,8 +334,8 @@ export function searchFoods(foodsList: any[], query: string, categoryFilter?: st
         fuzzyMatched = fuse.search(query.trim()).map(res => res.item);
     }
 
-    const seen = new Set<any>();
-    const merged: any[] = [];
+    const seen = new Set<string | number>();
+    const merged: T[] = [];
     for (const f of [...directMatched, ...fuzzyMatched]) {
         const key = f.id ?? f.name;
         if (!seen.has(key)) {

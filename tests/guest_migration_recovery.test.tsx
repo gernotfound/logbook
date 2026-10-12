@@ -31,7 +31,8 @@ const MigrationProbe = () => {
 function fixtures() {
     const cloud = parse({
         profile: { gender: 'M' },
-        routines: [{ id: 'cloud-routine', name: 'Cloud', exercises: [] }]
+        routines: [{ id: 'cloud-routine', name: 'Cloud', exercises: [] }],
+        legalConsent: { hasAcceptedTerms: true, hasAcceptedHealthData: true, acceptedAt: '2026-10-11T10:00:00.000Z', privacyVersion: '1.3.3', termsVersion: '1.2.1' }
     });
     const guest = parse({
         profile: { height: '175' },
@@ -149,7 +150,7 @@ describe('guest migration crash recovery boundary', () => {
             </AuthProvider>
         );
 
-        await waitFor(() => expect(useAppStore.getState().saveError).toContain('Offline: account preparato sul dispositivo'));
+        await waitFor(() => expect(useAppStore.getState().saveError).toContain('Accetta Termini e consenso salute'));
         await waitFor(() => expect(screen.getByTestId('migration-status').textContent).toBe('idle'));
 
         const authenticatedEnvelope = await localRepository.readLocal(user.uid);

@@ -184,17 +184,22 @@ export const initApp = async () => {
     } else if (status !== 'read_error') {
       window.__INITIAL_USER_DATA__ = null;
 
-      if (shouldReportAnomaly(status, marker)) {
-        if (!isAnomalyAlreadyReported(marker!, undefined, bootstrapOwner ?? undefined)) {
-          markAnomalyReported(marker!, undefined, bootstrapOwner ?? undefined);
+      if (shouldReportAnomaly(status, marker) && bootstrapOwner?.startsWith('user:')) {
+        if (!isAnomalyAlreadyReported(marker!, undefined, bootstrapOwner)) {
           const payload = createStorageRecoveryAnomalyPayload({
             marker: marker!,
             persisted: getStorageDiagnosticData()?.persistent ?? null,
           });
-          // Fire-and-forget: do not block render
-          dispatchStorageRecoveryAnomaly(payload).catch((err) => {
-            console.warn("Invio telemetria anomalia storage fallito (non bloccante):", err);
-          });
+          // Bind the report to the owner whose local data was actually inspected.
+          // A guest anomaly must not be sent after a subsequent account login.
+          const owner = bootstrapOwner;
+          void dispatchStorageRecoveryAnomaly(payload, owner.slice('user:'.length))
+            .then(accepted => {
+              if (accepted) markAnomalyReported(marker!, undefined, owner);
+            })
+            .catch(err => {
+              console.warn("Invio telemetria anomalia storage fallito (non bloccante):", err);
+            });
         }
       }
     }

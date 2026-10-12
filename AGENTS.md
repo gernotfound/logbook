@@ -117,7 +117,7 @@ Versioni persistite correnti e indipendenti: Data Schema 1, Sync Protocol 3, Loc
 - `all`: scansione completa per guest→account/operazioni complete; l'assenza remota diventa autorevole per i mesi coperti, quindi le pending locali vengono poi rigiocate.
 - **MUST:** non trattare una hydration `all` come finestra parziale.
 - **MUST:** il merge guest/cloud passa da `UserDataSchema.parse()` prima della persistenza.
-- Array con ID: unione deduplicata con priorità guest in collisione; record per data: merge per data e ID; scalari: guest se valorizzato.
+- Array con ID: unione deduplicata con priorità guest in collisione; record per data: merge per data e ID; scalari business: guest se valorizzato. **Eccezione di sicurezza:** `legalConsent` non segue la priorità guest: il consenso della sessione ospite non si trasferisce automaticamente all'account.
 - **NOTE:** “guest wins” non equivale a “dato più recente”. Leggere implementazione e test prima di alterare questa policy.
 
 ## Workout, timer e date

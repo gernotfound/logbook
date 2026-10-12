@@ -5,6 +5,21 @@ import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 const sdk = vi.hoisted(() => ({ auth: { currentUser: { uid: 'A' } as { uid: string } | null }, save: vi.fn() }));
 vi.mock('../../src/lib/firebase', () => ({ auth: sdk.auth }));
 vi.mock('../../src/lib/db', () => ({ DB: { saveUserData: sdk.save } }));
+// This suite exercises legacy sync/reconciliation under an already-authorized
+// authenticated account (server revision 0). Consent revocation and epoch
+// enforcement are tested separately with the real policy and emulator Rules.
+vi.mock('../../src/lib/healthConsent', async () => {
+    const actual = await vi.importActual<typeof import('../../src/lib/healthConsent')>('../../src/lib/healthConsent');
+    const writable = (owner: string) => owner === 'user:' + sdk.auth.currentUser?.uid;
+    return {
+        ...actual,
+        isHealthConsentWritable: writable,
+        requireHealthConsentWritable: (owner: string) => {
+            if (!writable(owner)) throw new Error('Utente non autorizzato dal consenso');
+        },
+        getVerifiedHealthConsentRevision: () => 0,
+    };
+});
 vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackEvent: vi.fn(), trackError: vi.fn() } }));
 vi.mock('../../src/lib/storageTelemetry', () => ({ updateStorageMarker: vi.fn(), clearStorageMarker: vi.fn() }));
 import { createDataSlice } from '../../src/store/slices/createDataSlice';

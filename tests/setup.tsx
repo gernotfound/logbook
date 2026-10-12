@@ -23,6 +23,28 @@ Object.defineProperty(navigator, 'locks', {
 });
 
 
+// Existing UI/integration suites start from an already authenticated, active-consent
+// test account. Stub only that separate trusted boundary here; the dedicated
+// health-consent tests import the REAL module and verify its denial paths.
+// Do not use a production bypass in the application source.
+vi.mock('../src/lib/healthConsent', () => ({
+  subscribeHealthConsent: vi.fn(() => () => {}),
+  currentHealthConsentStatus: vi.fn(() => 'active'),
+  beginHealthConsentVerification: vi.fn(),
+  refreshHealthConsent: vi.fn(async () => 'active'),
+  refreshHealthConsentFromStorage: vi.fn(),
+  getGuestHealthConsentStatus: vi.fn(() => 'active'),
+  withdrawGuestHealthConsent: vi.fn(),
+  beginGuestHealthReacceptance: vi.fn(),
+  completeGuestHealthReacceptance: vi.fn(),
+  isHealthConsentWritable: vi.fn(() => true),
+  getVerifiedHealthConsentRevision: vi.fn(() => 0),
+  requireHealthConsentWritable: vi.fn(),
+  withdrawHealthConsent: vi.fn(),
+  reacceptHealthConsent: vi.fn(),
+  finishHealthConsentReacceptance: vi.fn(),
+}));
+
 // Fail closed: UI tests must not contact real services. Record unexpected
 // requests so even errors swallowed by application catch handlers fail the test.
 const unexpectedNetworkRequests: string[] = [];

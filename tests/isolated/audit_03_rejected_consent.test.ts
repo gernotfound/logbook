@@ -26,8 +26,8 @@ const consent = (acceptedAt: string): LegalConsent => ({
     hasAcceptedTerms: true,
     hasAcceptedHealthData: true,
     acceptedAt,
-    privacyVersion: '1.3.2',
-    termsVersion: '1.2.0',
+    privacyVersion: '1.3.3',
+    termsVersion: '1.2.1',
 });
 
 describe('rejected legal-consent durable compensation', () => {

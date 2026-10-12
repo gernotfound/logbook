@@ -32,6 +32,7 @@ export interface ReplicaWriter {
     replicaId: string;
     generation: number;
     seq: number;
+    consentRevision?: number;
 }
 
 export interface SyncMeta {

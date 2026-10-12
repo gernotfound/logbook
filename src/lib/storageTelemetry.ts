@@ -4,8 +4,10 @@ import { getStorageDiagnosticData } from './storageStatus';
 import { sendTelemetryToSentry } from './sentryClient';
 import { deviceKey } from './sync/deviceStorage';
 import { storageOwner } from './sync/session';
+import { detectDerivedPlatform, isStandaloneMode, type DerivedPlatform } from './telemetrySanitizer';
 
-export type DerivedPlatform = 'ios' | 'ipados' | 'other';
+export { detectDerivedPlatform, isStandaloneMode };
+export type { DerivedPlatform };
 
 export type StorageReadStatus =
   | 'valid'
@@ -168,50 +170,6 @@ export function markAnomalyReported(marker: StorageMarker, customStorage?: Stora
 }
 
 /**
- * Derives a privacy-minimized platform descriptor ('ios' | 'ipados' | 'other').
- * Never extracts or leaks user agent strings.
- */
-export function detectDerivedPlatform(nav?: Navigator): DerivedPlatform {
-  try {
-    const n = nav || (typeof navigator !== 'undefined' ? navigator : null);
-    if (!n) return 'other';
-    const ua = typeof n.userAgent === 'string' ? n.userAgent : '';
-    const platform = typeof n.platform === 'string' ? n.platform : '';
-    const maxTouchPoints = typeof n.maxTouchPoints === 'number' ? n.maxTouchPoints : 0;
-
-    // iPadOS check (iPad in UA or MacIntel with touch points / Macintosh with maxTouchPoints > 1)
-    if (/iPad/i.test(ua) || (platform === 'MacIntel' && maxTouchPoints > 1) || (/Macintosh/i.test(ua) && maxTouchPoints > 1)) {
-      return 'ipados';
-    }
-    // iPhone / iPod check
-    if (/iPhone|iPod/i.test(ua)) {
-      return 'ios';
-    }
-    return 'other';
-  } catch {
-    return 'other';
-  }
-}
-
-/**
- * Detects whether the app is running in standalone mode (PWA / home screen installed).
- */
-export function isStandaloneMode(win?: Window): boolean {
-  try {
-    const w = win || (typeof window !== 'undefined' ? window : null);
-    if (!w) return false;
-    const isIosStandalone = (w.navigator as any)?.standalone === true;
-    let isMediaStandalone = false;
-    if (typeof w.matchMedia === 'function') {
-      isMediaStandalone = w.matchMedia('(display-mode: standalone)')?.matches ?? false;
-    }
-    return Boolean(isIosStandalone || isMediaStandalone);
-  } catch {
-    return false;
-  }
-}
-
-/**
  * Deterministically calculates the elapsed duration in milliseconds between current time and marker timestamp.
  */
 export function calculateElapsedMs(currentTimestamp: number, markerTimestamp: number): number {
@@ -319,7 +277,7 @@ export function createStorageRecoveryAnomalyPayload({
 export async function dispatchStorageRecoveryAnomaly(
   payload: StorageRecoveryAnomalyPayload,
   providedUid?: string | null
-): Promise<void> {
+): Promise<boolean> {
   try {
     // Dynamically resolve persisted status if not yet determined at sync creation time
     if (payload.persisted === null) {
@@ -387,15 +345,14 @@ export async function dispatchStorageRecoveryAnomaly(
       }
     }
 
-    if (!uid) {
-      // Unauthenticated / guest session without cloud account
-      return;
-    }
+    // Auth may change while persisted() or onAuthStateChanged is pending. In
+    // particular, never attribute a boot-time guest/old-owner anomaly to a new account.
+    if (!uid || uid !== auth.currentUser?.uid) return false;
 
-    // Preserve the historical authenticated-only boundary without transmitting
-    // the Firebase UID to the external monitoring provider.
-    await sendTelemetryToSentry('storage-anomaly', payload);
+    // The UID is an eligibility check only; it is not included in the Sentry payload.
+    return await sendTelemetryToSentry('storage-anomaly', payload);
   } catch (err) {
     console.warn("Invio anomalia storage a Sentry non riuscito (non bloccante):", err);
+    return false;
   }
 }

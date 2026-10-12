@@ -93,15 +93,13 @@ Il gate repository corrente testa `firestore.rules` tramite Firebase Emulator (`
 
 **MUST:** una modifica a `firestore.rules` richiede test pertinenti e il gate canonico.
 
-Il deploy reale è un'operazione distinta, da eseguire soltanto quando il task operativo lo richiede e dopo aver verificato il target:
+Il deploy Production non è un comando manuale successivo ai test. Dopo `Milestone Verification` riuscita su push a `main`, il workflow `.github/workflows/firebase-firestore-production.yml` riconcilia Rules e indici desiderati con lo stato live: applica soltanto le differenze necessarie tramite `--only firestore:rules,firestore:indexes` (senza `--force`) e verifica la convergenza. Usa un'identità Workload Identity Federation dedicata, distinta dal deployer Hosting. Se lo stato live non è determinabile, fallisce chiuso.
 
-```bash
-npx firebase-tools deploy --only firestore:rules
-```
+**MUST:** test emulator, modifiche documentali e PR non eseguono direttamente deploy Firestore. Il rilascio Production compete al workflow privilegiato, ammesso solo dopo il gate canonico riuscito sullo stesso SHA ancora corrente di `main`. `Firebase Hosting Production` attende il completamento verde della riconciliazione Firestore, per non pubblicare il client prima delle Rules e degli indici approvati.
 
-Non trasformare il deploy Rules in un side effect automatico di un test, di una modifica documentale o di una PR. L'autenticazione/credential path usato per il deploy dipende dall'ambiente operativo; non documentare un particolare ruolo IAM o service account come requisito corrente senza evidenza verificata.
+**MUST:** non eseguire un deploy manuale parallelo per aggirare un workflow fallito, né dedurre lo stato Production dal gate emulator. Gli interventi straordinari richiedono diagnosi e procedura deliberata nel provider competente, non il vecchio comando isolato `firebase-tools deploy --only firestore:rules`.
 
-I file `firebase.json` e `.firebaserc` definiscono la configurazione repository usata dagli strumenti Firebase; leggere entrambi prima di cambiare target o Rules. Eventuali indici o policy esterne vanno verificate direttamente sul progetto reale.
+I file `firebase.json`, `.firebaserc` e `firestore.indexes.json` definiscono il target dichiarato nel repository. I dettagli su riconciliazione, readiness degli indici e read-back live sono normati in `.agents/rules/ci-verification.md` e nella sezione Hosting/deploy qui sotto.
 
 ### Account deletion
 

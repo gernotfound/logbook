@@ -6,8 +6,9 @@ import { captureSession, isCurrentSession } from '../lib/sync/session';
 import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
 import { Logic } from '../lib/logic';
+import type { NutritionDay } from '../types';
 
-const EMPTY_NUTRITION = {};
+const EMPTY_NUTRITION: Record<string, NutritionDay> = {};
 
 export function useSleepMeasurements() {
     const nutrition = useAppStore(state => state.userData?.nutrition || EMPTY_NUTRITION);
@@ -20,14 +21,14 @@ export function useSleepMeasurements() {
     const selectedDate = chosenDate ?? todayDateStr;
     const setSelectedDate = (date: string) => { setEditingDate(null); setChosenDate(date === todayDateStr ? null : date); };
     const targetDate = editingDate || selectedDate;
-    const day = (nutrition as any)[targetDate];
+    const day = nutrition[targetDate];
     const draft = useDatedDraft('sleep', targetDate, {
         sleepHours: Logic.formatSleepTime(day?.sleepHours), sleepDeep: Logic.formatSleepTime(day?.sleepDeep),
         sleepLight: Logic.formatSleepTime(day?.sleepLight), sleepRem: Logic.formatSleepTime(day?.sleepRem), sleepAwake: Logic.formatSleepTime(day?.sleepAwake)
     });
     const { sleepHours, sleepDeep, sleepLight, sleepRem, sleepAwake } = draft.values;
     const saving = useRef(false);
-    const saveSleep = async (e?: any) => {
+    const saveSleep = async (e?: { preventDefault(): void }) => {
         if (e) e.preventDefault();
         if (saving.current) return false;
         saving.current = true;

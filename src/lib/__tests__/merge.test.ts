@@ -69,6 +69,38 @@ describe('mergeNutrition', () => {
 });
 
 describe('mergeUserData', () => {
+    it('does not transfer a guest health consent into a new account', () => {
+        const guestConsent = {
+            hasAcceptedTerms: true,
+            hasAcceptedHealthData: true,
+            acceptedAt: '2026-10-11T10:00:00.000Z',
+            privacyVersion: '1.3.3',
+            termsVersion: '1.2.1',
+        };
+        const merged = mergeUserData(null, { legalConsent: guestConsent, profile: { height: '180' } });
+        expect(merged.profile?.height).toBe('180');
+        expect(merged.legalConsent).toBeUndefined();
+    });
+
+    it('preserves only the account consent when merging guest fitness data', () => {
+        const cloudConsent = {
+            hasAcceptedTerms: false,
+            hasAcceptedHealthData: false,
+            acceptedAt: '',
+            privacyVersion: '',
+            termsVersion: '',
+        };
+        const guestConsent = {
+            hasAcceptedTerms: true,
+            hasAcceptedHealthData: true,
+            acceptedAt: '2026-10-11T10:00:00.000Z',
+            privacyVersion: '1.3.3',
+            termsVersion: '1.2.1',
+        };
+        const merged = mergeUserData({ legalConsent: cloudConsent }, { legalConsent: guestConsent });
+        expect(merged.legalConsent).toEqual(cloudConsent);
+    });
+
     it('should fallback to defaults on missing required fields via Zod parse', () => {
         const cloudData = { profile: null, library: null } as any;
         const guestData = { customFoods: undefined } as any;

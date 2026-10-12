@@ -141,6 +141,17 @@ describe('activity semantic merge concurrency', () => {
 });
 
 describe('activity export and local-day behavior', () => {
+    it('uses the shared parser for an Italian comma-decimal weight in activity analytics', () => {
+        useAppStore.setState({ userData: { ...parse({}), nutrition: {
+            '2026-09-24': { date: '2026-09-24', kcal: 0, carbs: 0, pro: 0, fat: 0, weight: '79,5' },
+        } } });
+        const parser = vi.spyOn(Logic, 'getLatestUserWeight');
+        const hook = renderHook(() => useActivityTracking());
+        expect(hook.result.current.trainingActivityContext).toHaveLength(8);
+        expect(parser).toHaveBeenCalled();
+        expect(parser.mock.results[0].value).toBe(79.5);
+    });
+
     it('exports steps and standalone cardio as separate CSV files', async () => {
         vi.useFakeTimers();
         const download = vi.spyOn(Exporter, 'downloadFile').mockImplementation(async () => true);

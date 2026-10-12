@@ -28,8 +28,8 @@ describe('RISK-02: Legal Consent Lifecycle', () => {
     };
 
     it('richiede un nuovo consenso quando una versione legale precedente non coincide', () => {
-        expect(LEGAL_VERSIONS.privacy).toBe('1.3.2');
-        expect(LEGAL_VERSIONS.terms).toBe('1.2.0');
+        expect(LEGAL_VERSIONS.privacy).toBe('1.3.3');
+        expect(LEGAL_VERSIONS.terms).toBe('1.2.1');
         expect(needsLegalUpdate({
             ...mockConsent,
             privacyVersion: '1.2.1'
@@ -143,9 +143,19 @@ describe('RISK-02: ConsentOverlay UI Behavior', () => {
 
     it('descrive la rimozione di GA4 e la data dell’informativa aggiornata', () => {
         render(<PrivacyPolicy onClose={vi.fn()} />);
-        expect(screen.getByText('Aggiornata al 10 ottobre 2026')).toBeDefined();
+        expect(screen.getByText('Aggiornata al 12 ottobre 2026')).toBeDefined();
         expect(screen.getByText(/non integra Google Analytics 4/i)).toBeDefined();
         expect(screen.queryByText(/cookie first-party tecnici\/analitici/i)).toBeNull();
+    });
+
+
+    it('documenta l’effetto della revoca e lascia identificabili i dati legali non ancora definiti', () => {
+        render(<PrivacyPolicy onClose={vi.fn()} />);
+        expect(screen.getByText('Revoca del consenso per i dati salute')).toBeDefined();
+        expect(screen.getByText(/non puoi utilizzare le funzioni di allenamento/)).toBeDefined();
+        expect(screen.getByText(/DA DEFINIRE E VALIDARE: FINALITÀ RESIDUE/)).toBeDefined();
+        expect(screen.getByText(/DA VALIDARE: BASI GIURIDICHE PER CIASCUNA FINALITÀ/)).toBeDefined();
+        expect(screen.getAllByText('[EMAIL PRIVACY]').length).toBeGreaterThan(0);
     });
 
     it('Pulsante disabilitato se consenso incompleto', () => {

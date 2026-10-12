@@ -2,9 +2,18 @@ import { ChevronDown, Moon, Pencil, Save, X } from 'lucide-react';
 import { Logic } from '../../lib/logic';
 import { shiftDateString } from '../../lib/utils/date';
 import DataDateNavigator from './DataDateNavigator';
+import type { useSleepMeasurements } from '../../hooks/useSleepMeasurements';
 
 interface DataSleepProps {
-    sleepHook: any;
+    // The view consumes only this subset; navigation belongs to DataView.
+    sleepHook: Pick<ReturnType<typeof useSleepMeasurements>,
+        | 'editingDate' | 'setEditingDate' | 'saveSleep'
+        | 'sleepHours' | 'setSleepHours'
+        | 'sleepDeep' | 'setSleepDeep'
+        | 'sleepLight' | 'setSleepLight'
+        | 'sleepRem' | 'setSleepRem'
+        | 'sleepAwake' | 'setSleepAwake'
+    >;
     selectedDate?: string;
     setSelectedDate?: (d: string) => void;
     todayDateStr?: string;

@@ -1,5 +1,5 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { Logic } from '../../lib/logic';
+import { getDateNavigatorState } from '../../lib/utils/dateNavigator';
 
 interface DataDateNavigatorProps {
     date: string;
@@ -20,7 +20,7 @@ export default function DataDateNavigator({
     disabled = false,
     label = 'Giorno selezionato',
 }: DataDateNavigatorProps) {
-    const isToday = date === today;
+    const { isToday, formattedDate, nextDisabled } = getDateNavigatorState(date, today, disabled);
 
     return (
         <nav className="data-date-nav" aria-label={label}>
@@ -40,14 +40,14 @@ export default function DataDateNavigator({
                 disabled={disabled}
                 aria-label="Torna a oggi"
             >
-                <strong>{Logic.formatItalianDate(date)}</strong>
+                <strong>{formattedDate}</strong>
                 {isToday && <span>OGGI</span>}
             </button>
             <button
                 type="button"
                 className="data-date-arrow"
                 onClick={onNext}
-                disabled={disabled || isToday}
+                disabled={nextDisabled}
                 aria-label="Giorno successivo"
             >
                 <ChevronRight size={20} aria-hidden="true" />

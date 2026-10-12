@@ -18,7 +18,8 @@ let onlineSpy: ReturnType<typeof vi.spyOn> | undefined;
 function fixtures() {
     const cloud = parse({
         profile: { gender: 'M' },
-        routines: [{ id: 'cloud-routine', name: 'Cloud', exercises: [] }]
+        routines: [{ id: 'cloud-routine', name: 'Cloud', exercises: [] }],
+        legalConsent: { hasAcceptedTerms: true, hasAcceptedHealthData: true, acceptedAt: '2026-10-11T10:00:00.000Z', privacyVersion: '1.3.3', termsVersion: '1.2.1' }
     });
     const guest = parse({
         profile: { height: '175' },
@@ -68,6 +69,35 @@ describe('guest -> account V3 migration', () => {
         expect(DB.loadCloudPayload).toHaveBeenNthCalledWith(1, { allMonths: true });
         expect(DB.loadCloudPayload).toHaveBeenCalledTimes(2);
         expect(localStorage.getItem('logbook_is_guest')).toBeNull();
+    });
+
+    it('keeps guest progress local and does not replicate it before account-specific consent', async () => {
+        const guest = parse({
+            profile: { height: '175' },
+            routines: [{ id: 'guest-routine', name: 'Guest', exercises: [] }],
+            legalConsent: { hasAcceptedTerms: true, hasAcceptedHealthData: true, acceptedAt: '2026-10-11T10:00:00.000Z', privacyVersion: '1.3.3', termsVersion: '1.2.1' },
+        });
+        const freshAccount = parse({ profile: { gender: 'M' } });
+        localStorage.setItem('logbook_is_guest', 'true');
+        beginGuestMigrationIntent('merge', 'recovery', { uid: user.uid });
+        useAppStore.getState().setUserData(guest);
+        vi.mocked(DB.loadCloudPayload).mockResolvedValueOnce({
+            data: freshAccount,
+            completeMonths: [],
+            cloudDocuments: new Map(),
+        });
+
+        render(<AuthProvider><div>app</div></AuthProvider>);
+
+        await waitFor(async () => {
+            const envelope = await readLocal('user:a');
+            expect(envelope?.pending.length).toBeGreaterThan(0);
+            expect(envelope?.data.legalConsent).toBeUndefined();
+            expect(envelope?.data.profile).toMatchObject({ height: '175', gender: 'M' });
+        });
+        expect(DB.loadCloudPayload).toHaveBeenCalledTimes(1);
+        expect(localStorage.getItem('logbook_is_guest')).toBeNull();
+        expect(useAppStore.getState().userData?.legalConsent).toBeUndefined();
     });
 
     it('keeps the merged authenticated envelope and pending journal if connectivity drops after hydration', async () => {

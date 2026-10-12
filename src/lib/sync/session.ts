@@ -55,18 +55,29 @@ export function storageOwner(): string {
     // mutations cannot fall through into the guest envelope.
     return readAuthenticatedOwnerHint() ?? 'guest';
 }
-export type SessionSnapshot = { owner: string; epoch: number; guestSessionId?: string | null };
+const consentMarkerKey = (owner: string) => `logbook:v2:${owner}:health-consent-withdrawal`;
+const consentGenerationKey = (owner: string) => `logbook:v2:${owner}:health-consent-generation`;
+export type SessionSnapshot = {
+    owner: string; epoch: number; guestSessionId?: string | null;
+    consentMarker?: string | null; consentGeneration?: string | null;
+};
 
 export const captureSessionForOwner = (owner: string): SessionSnapshot => ({
-    owner, epoch, ...(owner === 'guest' ? { guestSessionId: currentRealmGuestId() } : {}),
+    owner, epoch, ...(owner === 'guest'
+        ? { guestSessionId: currentRealmGuestId(), consentMarker: readBrowserValueStrict(consentMarkerKey(owner)) }
+        : { consentMarker: readBrowserValueStrict(consentMarkerKey(owner)),
+            consentGeneration: readBrowserValueStrict(consentGenerationKey(owner)) }),
 });
 export const captureSession = (): SessionSnapshot => captureSessionForOwner(storageOwner());
 export const isCurrentSession = (session: SessionSnapshot): boolean => {
     try {
         return session.epoch === epoch
             && session.owner === storageOwner()
-            && (session.owner !== 'guest'
-                || (session.guestSessionId === currentRealmGuestId() && isActiveGuestSession()));
+            && (session.owner === 'guest'
+                ? (session.guestSessionId === currentRealmGuestId() && isActiveGuestSession()
+                    && session.consentMarker === readBrowserValueStrict(consentMarkerKey(session.owner)))
+                : (session.consentMarker === readBrowserValueStrict(consentMarkerKey(session.owner))
+                    && session.consentGeneration === readBrowserValueStrict(consentGenerationKey(session.owner))));
     } catch {
         return false;
     }

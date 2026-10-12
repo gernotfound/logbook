@@ -3,7 +3,7 @@ import { getDoc, getDocs, writeBatch } from 'firebase/firestore';
 
 vi.unmock('../src/lib/db');
 
-import { TestDB as DB } from './testUtils';
+import { ConsentedTestDB as DB } from './testUtils';
 
 
 describe('DB Persistence for Training Cycles and Planning', () => {

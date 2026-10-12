@@ -48,7 +48,7 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               Informativa sulla privacy
             </h2>
             <p style={{ margin: '4px 0 0', fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)' }}>
-              Aggiornata al 10 ottobre 2026
+              Aggiornata al 12 ottobre 2026
             </p>
           </div>
           <button
@@ -73,7 +73,7 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
         }}>
           <Section title="Titolare del trattamento">
             <p>
-              Prima della distribuzione commerciale devono essere indicati qui l'identità e i recapiti del titolare del trattamento: <strong style={{ color: 'var(--text-main)' }}>[NOME / RAGIONE SOCIALE]</strong>, <strong style={{ color: 'var(--text-main)' }}>[INDIRIZZO]</strong>, <strong style={{ color: 'var(--text-main)' }}>[EMAIL PRIVACY]</strong>.
+              I dati identificativi e i recapiti del titolare restano da completare: <strong style={{ color: 'var(--text-main)' }}>[NOME / RAGIONE SOCIALE]</strong>, <strong style={{ color: 'var(--text-main)' }}>[INDIRIZZO]</strong>, <strong style={{ color: 'var(--text-main)' }}>[EMAIL PRIVACY]</strong>.
               Se TheLogBook viene fornito tramite una palestra, i ruoli privacy tra le parti dipendono dalle finalità e dai mezzi effettivamente determinati da ciascuna parte e devono essere definiti nella documentazione contrattuale.
             </p>
             <p>
@@ -129,6 +129,9 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
           </Section>
 
           <Section title="Base giuridica del trattamento">
+            <p>
+              <strong style={{ color: 'var(--text-main)' }}>[DA VALIDARE: BASI GIURIDICHE PER CIASCUNA FINALITÀ AI SENSI DEGLI ARTT. 6 E 9 GDPR]</strong>. Le indicazioni seguenti descrivono le basi previste nel progetto e richiedono una verifica legale prima del pilot con utenti reali; non sono una valutazione di conformità già conclusa.
+            </p>
             <ul style={ulStyle}>
               <li><strong style={{ color: 'var(--text-main)' }}>Esecuzione del servizio</strong> (art. 6, par. 1, lett. b GDPR): per autenticazione, sincronizzazione, backup/recovery e funzionalità richieste dall'utente.</li>
               <li><strong style={{ color: 'var(--text-main)' }}>Consenso esplicito</strong> (art. 9, par. 2, lett. a GDPR): per il trattamento dei dati relativi alla salute (categorie particolari di dati). Il consenso viene richiesto esplicitamente nell'app.</li>
@@ -145,12 +148,31 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
             </p>
           </Section>
 
+
+          <Section title="Revoca del consenso per i dati salute">
+            <p>
+              Puoi revocare il consenso per i dati relativi alla salute da Impostazioni → Privacy, scegliendo «Revoca il consenso per i dati salute». La revoca non pregiudica la liceità dei trattamenti effettuati prima della sua efficacia e non equivale alla cancellazione automatica dell'account.
+            </p>
+            <p>
+              Dopo la revoca <strong style={{ color: 'var(--text-main)' }}>non puoi utilizzare le funzioni di allenamento, nutrizione, diario o altre funzionalità fitness</strong>. Rimangono disponibili la consultazione di questa informativa e dei termini, gli strumenti per esercitare i diritti applicabili, l'esportazione JSON dei dati, la cancellazione dell'account e la possibilità di prestare un nuovo consenso esplicito. Non è prevista una modalità fitness ridotta.
+            </p>
+            <p>
+              Se usi un account, l'app interrompe subito le modifiche locali dipendenti dal consenso; se manca la connessione, la richiesta resta in attesa sul dispositivo e non viene presentata come revoca già confermata sul server. La conferma cloud avviene tramite un servizio autenticato. Le modifiche offline precedenti non vengono inviate automaticamente dopo un eventuale nuovo consenso: il loro recupero richiede una scelta separata e può presentare conflitti.
+            </p>
+            <p>
+              In modalità ospite la revoca riguarda i dati locali del dispositivo e non richiede un account. In entrambi i casi puoi scegliere separatamente di eliminare i dati. Per riattivare le funzioni devi prestare una nuova accettazione esplicita dei documenti correnti; nessun consenso viene ricostruito automaticamente da una vecchia copia o da un backup.
+            </p>
+            <p>
+              La revoca da sola non esegue una cancellazione automatica dei dati precedentemente conservati. <strong style={{ color: 'var(--text-main)' }}>[DA DEFINIRE E VALIDARE: FINALITÀ RESIDUE, BASE GIURIDICA EVENTUALMENTE APPLICABILE, CATEGORIE DI DATI CONSERVABILI E TERMINE DI CANCELLAZIONE DOPO LA REVOCA]</strong>. Il consenso ritirato non costituisce, di per sé, una base per continuare la conservazione.
+            </p>
+          </Section>
+
           <Section title="Conservazione, backup e cancellazione dei dati">
             <p>
               I dati locali in modalità ospite rimangono sul dispositivo finché non vengono eliminati dall'utente, rimossi dal browser/sistema oppure migrati secondo i flussi previsti dall'app.
             </p>
             <p>
-              I dati applicativi cloud associati all'account vengono conservati per fornire il servizio finché l'account rimane attivo, salvo cancellazioni o obblighi diversi applicabili. La telemetria tecnica Sentry viene conservata secondo il periodo configurato nel servizio e soltanto per finalità diagnostiche; tale periodo va mantenuto coerente con la configurazione Production effettiva e con la documentazione pubblicata. Le vecchie raccolte telemetriche Firestore generate da versioni precedenti di TheLogBook mantengono invece la retention tecnica di 30 giorni e vengono progressivamente eliminate dal processo server di manutenzione. TheLogBook mette a disposizione backup JSON ed esportazioni CSV per consentire all'utente di conservare una copia dei propri dati.
+              I dati applicativi cloud associati all'account sono utilizzati per fornire il servizio quando il consenso richiesto è attivo. In caso di revoca, l'accesso fitness viene sospeso e i dati cloud non sono cancellati automaticamente: restano tecnicamente accessibili attraverso gli strumenti autenticati di esportazione e cancellazione. <strong style={{ color: 'var(--text-main)' }}>[DA VALIDARE: TEMPI E BASE GIURIDICA DELL'EVENTUALE CONSERVAZIONE POSTREVOCA; DEFINIRE IL PERCORSO DI CANCELLAZIONE APPLICABILE]</strong>. La telemetria tecnica Sentry viene conservata secondo il periodo configurato nel servizio e soltanto per finalità diagnostiche; tale periodo va mantenuto coerente con la configurazione Production effettiva e con la documentazione pubblicata. Le vecchie raccolte telemetriche Firestore generate da versioni precedenti di TheLogBook mantengono invece la retention tecnica di 30 giorni e vengono progressivamente eliminate dal processo server di manutenzione. TheLogBook mette a disposizione backup JSON ed esportazioni CSV per consentire all'utente di conservare una copia dei propri dati.
             </p>
             <p>
               La funzione <strong style={{ color: 'var(--text-main)' }}>Elimina account</strong> avvia un workflow server-side che rimuove le raccolte private previste, i dati applicativi cloud e infine l'account Firebase Authentication. Il dispositivo conserva la propria copia locale finché non ha prova che il workflow cloud sia completato, per evitare cancellazioni locali premature in caso di rete instabile.
@@ -181,7 +203,7 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               <li><strong style={{ color: 'var(--text-main)' }}>Accesso e portabilità</strong>: usare backup JSON/esportazione CSV e richiedere le informazioni applicabili al trattamento.</li>
               <li><strong style={{ color: 'var(--text-main)' }}>Rettifica</strong>: correggere i dati modificabili tramite l'app.</li>
               <li><strong style={{ color: 'var(--text-main)' }}>Cancellazione</strong>: avviare la funzione di eliminazione account per la rimozione dei dati cloud applicativi.</li>
-              <li><strong style={{ color: 'var(--text-main)' }}>Revoca del consenso</strong>: per i dati di salute, la revoca non pregiudica la liceità del trattamento precedente e può richiedere l'interruzione delle funzionalità che dipendono da tali dati.</li>
+              <li><strong style={{ color: 'var(--text-main)' }}>Revoca del consenso</strong>: da Impostazioni → Privacy, con sospensione completa delle funzioni fitness; la revoca non pregiudica la liceità dei trattamenti precedenti. Puoi comunque esportare i dati, richiederne la cancellazione e, se lo desideri, prestare un nuovo consenso esplicito.</li>
               <li><strong style={{ color: 'var(--text-main)' }}>Limitazione/opposizione</strong>: quando applicabile rispetto alla specifica base giuridica e al trattamento interessato.</li>
             </ul>
             <p>

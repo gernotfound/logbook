@@ -22,13 +22,17 @@ import * as sentryClient from '../src/lib/sentryClient';
 import * as firebaseLib from '../src/lib/firebase';
 
 describe('Storage Recovery Telemetry Suite', () => {
+  let previousAuthUser: typeof firebaseLib.auth.currentUser;
+
   beforeEach(() => {
+    previousAuthUser = firebaseLib.auth.currentUser;
     localStorage.clear();
     vi.clearAllMocks();
     vi.useRealTimers();
   });
 
   afterEach(() => {
+    Object.assign(firebaseLib.auth, { currentUser: previousAuthUser });
     localStorage.clear();
     vi.restoreAllMocks();
   });
@@ -329,6 +333,22 @@ describe('Storage Recovery Telemetry Suite', () => {
         expect(detectDerivedPlatform(mockIpodNav)).toBe('ios');
       });
 
+      it('uses Apple platform metadata even when the user agent is generic', () => {
+        const ipad = {
+          userAgent: 'Mozilla/5.0',
+          platform: 'iPad',
+          maxTouchPoints: 5,
+        } as unknown as Navigator;
+        const iphone = {
+          userAgent: 'Mozilla/5.0',
+          platform: 'iPhone',
+          maxTouchPoints: 5,
+        } as unknown as Navigator;
+
+        expect(detectDerivedPlatform(ipad)).toBe('ipados');
+        expect(detectDerivedPlatform(iphone)).toBe('ios');
+      });
+
       it('derives "ipados" for iPad and MacIntel with touch support', () => {
         const mockIpadNav = {
           userAgent: 'Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X) AppleWebKit/605.1.15',
@@ -372,6 +392,23 @@ describe('Storage Recovery Telemetry Suite', () => {
     });
 
     describe('Standalone detection tests', () => {
+      it('keeps the iOS standalone signal when matchMedia throws', () => {
+        const win = {
+          navigator: { standalone: true },
+          matchMedia: () => { throw new Error('SecurityError'); },
+        } as unknown as Window;
+        expect(isStandaloneMode(win)).toBe(true);
+
+        const payload = createStorageRecoveryAnomalyPayload({
+          marker: { version: 1, timestamp: 1000 },
+          timestamp: 2000,
+          nav: { userAgent: 'Mozilla/5.0', platform: 'iPad', maxTouchPoints: 5 } as unknown as Navigator,
+          win,
+        });
+        expect(payload).toMatchObject({ platform: 'ipados', standalone: true });
+      });
+
+
       it('detects iOS standalone mode via navigator.standalone', () => {
         const mockWin = {
           navigator: { standalone: true },
@@ -421,7 +458,8 @@ describe('Storage Recovery Telemetry Suite', () => {
         persisted: true,
       });
 
-      await dispatchStorageRecoveryAnomaly(payload, 'test_user_uid_123');
+      Object.assign(firebaseLib.auth, { currentUser: { uid: 'test_user_uid_123' } });
+      expect(await dispatchStorageRecoveryAnomaly(payload, 'test_user_uid_123')).toBe(true);
 
       expect(sendSpy).toHaveBeenCalledTimes(1);
       expect(sendSpy).toHaveBeenCalledWith('storage-anomaly', payload);
@@ -459,6 +497,7 @@ describe('Storage Recovery Telemetry Suite', () => {
 
       const unsubSpy = vi.fn();
       vi.spyOn(firebaseLib, 'onAuthStateChanged').mockImplementation((_auth: any, callback: any) => {
+        Object.assign(firebaseLib.auth, { currentUser: { uid: 'async_auth_uid_456' } });
         callback({ uid: 'async_auth_uid_456' });
         return unsubSpy;
       });
@@ -468,7 +507,7 @@ describe('Storage Recovery Telemetry Suite', () => {
         timestamp: 1724486500000,
       });
 
-      await dispatchStorageRecoveryAnomaly(payload, null);
+      expect(await dispatchStorageRecoveryAnomaly(payload, null)).toBe(true);
 
       expect(sendSpy).toHaveBeenCalledTimes(1);
       expect(sendSpy).toHaveBeenCalledWith('storage-anomaly', payload);
@@ -492,7 +531,8 @@ describe('Storage Recovery Telemetry Suite', () => {
           persisted: null,
         });
 
-        await dispatchStorageRecoveryAnomaly(payload, 'test_user_789');
+        Object.assign(firebaseLib.auth, { currentUser: { uid: 'test_user_789' } });
+        expect(await dispatchStorageRecoveryAnomaly(payload, 'test_user_789')).toBe(true);
 
         expect(sendSpy).toHaveBeenCalledTimes(1);
         const [, data] = sendSpy.mock.calls[0];
@@ -500,6 +540,52 @@ describe('Storage Recovery Telemetry Suite', () => {
       } finally {
         (navigator as any).storage = originalStorage;
       }
+    });
+
+
+    it('rejects a stale provided UID instead of reporting an old-owner anomaly', async () => {
+      const sendSpy = vi.spyOn(sentryClient, 'sendTelemetryToSentry').mockResolvedValue(true);
+      Object.assign(firebaseLib.auth, { currentUser: { uid: 'owner-b' } });
+      const payload = createStorageRecoveryAnomalyPayload({
+        marker: { version: 1, timestamp: 1000 }, persisted: true,
+      });
+
+      expect(await dispatchStorageRecoveryAnomaly(payload, 'owner-a')).toBe(false);
+      expect(sendSpy).not.toHaveBeenCalled();
+    });
+
+    it('rechecks authentication after the async persisted() probe', async () => {
+      const sendSpy = vi.spyOn(sentryClient, 'sendTelemetryToSentry').mockResolvedValue(true);
+      Object.assign(firebaseLib.auth, { currentUser: { uid: 'owner-a' } });
+      const priorStorage = navigator.storage;
+      let finishProbe!: (persisted: boolean) => void;
+      Object.defineProperty(navigator, 'storage', {
+        configurable: true,
+        value: { persisted: () => new Promise<boolean>(resolve => { finishProbe = resolve; }) },
+      });
+      try {
+        const payload = createStorageRecoveryAnomalyPayload({
+          marker: { version: 1, timestamp: 1000 }, persisted: null,
+        });
+        const pending = dispatchStorageRecoveryAnomaly(payload, 'owner-a');
+        Object.assign(firebaseLib.auth, { currentUser: { uid: 'owner-b' } });
+        finishProbe(true);
+        expect(await pending).toBe(false);
+        expect(sendSpy).not.toHaveBeenCalled();
+      } finally {
+        Object.defineProperty(navigator, 'storage', { configurable: true, value: priorStorage });
+      }
+    });
+
+    it('keeps failed external reports eligible for retry', async () => {
+      const sendSpy = vi.spyOn(sentryClient, 'sendTelemetryToSentry').mockResolvedValue(false);
+      Object.assign(firebaseLib.auth, { currentUser: { uid: 'owner-a' } });
+      const payload = createStorageRecoveryAnomalyPayload({
+        marker: { version: 1, timestamp: 1000 }, persisted: true,
+      });
+
+      expect(await dispatchStorageRecoveryAnomaly(payload, 'owner-a')).toBe(false);
+      expect(sendSpy).toHaveBeenCalledTimes(1);
     });
 
     it('rejects Infinity and -Infinity in getStorageMarker and calculateElapsedMs', () => {

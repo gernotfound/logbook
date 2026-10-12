@@ -7,6 +7,22 @@ vi.mock('../../src/store/useAppStore', () => ({ useAppStore: {
     setState: (patch: any) => { app.state = { ...app.state, ...(typeof patch === 'function' ? patch(app.state) : patch) }; },
 } }));
 vi.mock('../../src/lib/firebase', () => ({ auth: app.auth }));
+// This legacy persistence suite assumes a verified, still-active server consent
+// at revision zero. Real revocation/fencing is tested in dedicated suites.
+vi.mock('../../src/lib/healthConsent', async () => {
+    const actual = await vi.importActual<typeof import('../../src/lib/healthConsent')>('../../src/lib/healthConsent');
+    const writable = (owner: string) => owner.startsWith('user:')
+        ? owner === 'user:' + app.auth.currentUser?.uid
+        : actual.isHealthConsentWritable(owner);
+    return {
+        ...actual,
+        isHealthConsentWritable: writable,
+        requireHealthConsentWritable: (owner: string) => {
+            if (!writable(owner)) throw new Error('Utente non autorizzato dal consenso');
+        },
+        getVerifiedHealthConsentRevision: () => 0,
+    };
+});
 vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackEvent: vi.fn(), trackError: vi.fn() } }));
 import { prepareForReload } from '../../src/lib/sync/reloadBarrier';
 import { requiredUpdateHardReload, safeHardReload } from '../../src/lib/sync/safeReload';

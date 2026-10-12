@@ -3,6 +3,7 @@ import { User } from 'firebase/auth';
 import { auth, getDb, waitForPendingWrites, provider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendEmailVerification, reload } from '../lib/firebase';
 import { DB } from '../lib/db';
 import { isAccountDeletionPending } from '../lib/sync/accountGate';
+import { beginHealthConsentVerification, refreshHealthConsent, isHealthConsentWritable } from '../lib/healthConsent';
 import { useAppStore } from '../store/useAppStore';
 import { UserData } from '../types';
 import { UserDataSchema } from '../lib/schema';
@@ -14,7 +15,7 @@ import { draftRegistry } from '../lib/utils/draftRegistry';
 import { getResolvedDefaultUserData } from './auth/defaultUserData';
 import { loadAuthenticatedData } from './auth/loadAuthenticatedData';
 import { migrateGuestAccount } from './auth/migrateGuestAccount';
-import { replicateJournal } from '../lib/sync/replicateJournal';
+import { isLegalConsentRequiredError, replicateJournal } from '../lib/sync/replicateJournal';
 import { activateGuestSession, captureSession, GUEST_REVOCATION_KEY, GUEST_SESSION_KEY, invalidateSession, isActiveGuestSession, isCurrentSession, revokeGuestSession, userOwner } from '../lib/sync/session';
 import { classifySyncFailure } from '../lib/sync/syncFailure';
 import { withGuestLifecycleLock } from '../lib/sync/guestLifecycleLock';
@@ -321,7 +322,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                     clearGuestMigrationSyncRecovery(user.uid);
                     setGuestMigrationStatus('idle');
                     if (result.status === 'local-pending') {
-                        setSaveError('📶 Offline: i dati sono salvati sul dispositivo e verranno sincronizzati quando torni online.');
+                        setSaveError(isLegalConsentRequiredError(result.error)
+                            ? 'I dati sono salvati sul dispositivo. Accetta Termini e consenso salute per sincronizzarli con l’account.'
+                            : '📶 Offline: i dati sono salvati sul dispositivo e verranno sincronizzati quando torni online.');
                     }
                 } else {
                     setGuestMigrationStatus('failed');
@@ -371,6 +374,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 return;
             }
             if (user) {
+                beginHealthConsentVerification(user.uid);
                 tryRemoveBrowserValue(AWAITING_REDIRECT_KEY);
                 const expectedOwner = userOwner(user.uid);
                 const current = useAppStore.getState();
@@ -395,7 +399,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                     return;
                 }
             }
+            // Expose identity promptly to owner-scoped UI/components, but the
+            // consent status was already set to 'checking' above. Fitness stays
+            // blocked until the server has authoritatively verified permission.
             setCurrentUser(user);
+            if (user) {
+                // Hydration/migration and all cloud business writes must wait for
+                // this check; an offline/failed check remains fail-closed.
+                const consentStatus = await refreshHealthConsent(user);
+                if (!isCurrentRun()) return;
+                if (consentStatus !== 'active') {
+                    // No regular hydration/migration/replica registration after a
+                    // withdrawal, even when a local cached envelope exists.
+                    useAppStore.getState().cancelPendingSyncs();
+                    setLoading(false);
+                    return;
+                }
+            }
 
             if (user) {
                 const wasGuest = isGuestActiveStrict();
@@ -458,7 +478,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                             clearGuestMigrationSyncRecovery(user.uid);
                             setGuestMigrationStatus('idle');
                             if (migrationResult.status === 'local-pending') {
-                                setSaveError('📶 Offline: account preparato sul dispositivo. La sincronizzazione riprenderà quando torni online.');
+                                setSaveError(isLegalConsentRequiredError(migrationResult.error)
+                                    ? 'Account preparato sul dispositivo. Accetta Termini e consenso salute per sincronizzare i progressi.'
+                                    : '📶 Offline: account preparato sul dispositivo. La sincronizzazione riprenderà quando torni online.');
                             }
                         }
                     } catch (error) {
@@ -494,11 +516,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         });
 
         let isReloading = false;
+        const handleConsentReactivated = (event: Event) => {
+            const uid = (event as CustomEvent<{uid:string}>).detail?.uid;
+            const current = auth.currentUser;
+            if (!current || current.uid !== uid || !isHealthConsentWritable(userOwner(uid))) return;
+            setLoading(true);
+            loadData(current).catch(error => {
+                console.error('Hydration dopo nuovo consenso non riuscita:', error);
+                setSaveError('Nuovo consenso registrato, ma i dati non sono ancora disponibili. Riprova dopo aver verificato la connessione.');
+            }).finally(() => setLoading(false));
+        };
+        window.addEventListener('logbook:health-consent-reactivated', handleConsentReactivated);
+
         const handleVisibilityChange = async () => {
             if (isGuestActiveStrict()) return;
             if (document.visibilityState === 'visible' && auth.currentUser &&
                 auth.currentUser.emailVerified !== false) {
-                if (useAppStore.getState().userData !== null && !useAppStore.getState().syncing && !isReloading) {
+                if (isHealthConsentWritable(userOwner(auth.currentUser.uid)) && useAppStore.getState().userData !== null && !useAppStore.getState().syncing && !isReloading) {
                     try {
                         isReloading = true;
                         await Promise.race([
@@ -525,6 +559,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             document.removeEventListener('visibilitychange', handleAuthVisibilityChange);
             document.removeEventListener('visibilitychange', handleVisibilityChange);
             window.removeEventListener('online', handleVisibilityChange);
+            window.removeEventListener('logbook:health-consent-reactivated', handleConsentReactivated);
         };
     }, [isGuestActiveStrict, loadData, readGuestMigrationRecoveryStrict, setSyncing, setUserData, setSaveError]);
 
@@ -793,7 +828,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 clearGuestMigrationSyncRecovery(initialUid);
                 setGuestMigrationStatus('idle');
                 if (result.status === 'local-pending') {
-                    setSaveError('📶 Offline: i dati sono salvati sul dispositivo e verranno sincronizzati quando torni online.');
+                    setSaveError(isLegalConsentRequiredError(result.error)
+                            ? 'I dati sono salvati sul dispositivo. Accetta Termini e consenso salute per sincronizzarli con l’account.'
+                            : '📶 Offline: i dati sono salvati sul dispositivo e verranno sincronizzati quando torni online.');
                 }
             } else {
                 setGuestMigrationStatus('failed');
@@ -969,9 +1006,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 const localStorageFailure = error instanceof AggregateError
                     || error instanceof BrowserStorageError
                     || error?.name === 'BrowserStorageError';
-                await useDialogStore.getState().showAlert(localStorageFailure
-                    ? 'Impossibile completare il logout perché la memoria locale del dispositivo non è disponibile o non è stata pulita completamente. I dati locali potrebbero essere ancora presenti. Riprova.'
-                    : 'Errore durante il logout. Controlla la connessione e riprova.');
+                await useDialogStore.getState().showAlert(error instanceof Error && error.name === 'HealthConsentTransitionPendingError'
+                    ? error.message
+                    : localStorageFailure
+                        ? 'Impossibile completare il logout perché la memoria locale del dispositivo non è disponibile o non è stata pulita completamente. I dati locali potrebbero essere ancora presenti. Riprova.'
+                        : 'Errore durante il logout. Controlla la connessione e riprova.');
             } finally {
                 setSyncing(false);
             }

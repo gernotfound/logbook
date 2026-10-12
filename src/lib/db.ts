@@ -9,6 +9,7 @@ import {
     orderBy,
     query,
     startAfter,
+    type QueryConstraint,
     type QueryDocumentSnapshot,
 } from 'firebase/firestore';
 import type { UserData } from '../types';
@@ -16,7 +17,7 @@ import { DomainParsers } from './schema';
 import { syncGlobalCatalog, getCachedCatalog } from './catalog/catalogService';
 import { resolveEffectiveExercises, resolveEffectiveFoods } from './catalog/deltaResolver';
 import { normalizeCloudDocument } from './schemaEvolution';
-import { withTimeout, setLastSavedStateStr } from './db/db_core';
+import { withTimeout } from './db/db_core';
 import { loadHistoryMonths } from './db/db_training';
 import { loadNutritionMonths } from './db/db_nutrition';
 import { sanitizeHistoryMonthDocument, sanitizeNutritionMonthDocument } from './sync/monthlyIntegrity';
@@ -36,15 +37,15 @@ function parsePersistedActiveWorkout(value: unknown) {
 
 async function loadCloudPayload(options?: { allMonths?: boolean }): Promise<{
     data: UserData;
-    cloudDocuments: Map<string, any>;
+    cloudDocuments: Map<string, Record<string, unknown>>;
     completeMonths: string[];
 } | null> {
     const user = auth.currentUser;
     if (!user) return null;
 
-    const cloudDocuments = new Map<string, any>();
+    const cloudDocuments = new Map<string, Record<string, unknown>>();
     let completeMonths: string[] = [];
-    const state: Record<string, any> = {
+    const state: Record<string, any> & { history: unknown[]; nutrition: Record<string, unknown> } = {
         profile: {},
         library: [],
         routines: [],
@@ -64,14 +65,25 @@ async function loadCloudPayload(options?: { allMonths?: boolean }): Promise<{
     try {
         await ensureAppCheck();
         const db = getDb();
-        const catalog = await getCachedCatalog();
-        syncGlobalCatalog(db).catch(() => {});
-
-        const root = await withTimeout(
-            getDoc(doc(db, 'users', user.uid)),
-            6000,
-            'Timeout recupero profilo utente',
-        );
+        // Read the root and refresh the global catalog concurrently. Hydration must
+        // resolve the user library from the catalog actually downloaded for this
+        // request, not from a stale snapshot captured before a detached sync.
+        const [freshCatalog, root] = await Promise.all([
+            syncGlobalCatalog(db)
+                .then(result => result?.catalog)
+                .catch(error => {
+                    // A catalog/network failure must never block offline-capable
+                    // user hydration; the cached seed remains a valid fallback.
+                    console.warn('[CatalogService] Aggiornamento remoto non disponibile:', error);
+                    return null;
+                }),
+            withTimeout(
+                getDoc(doc(db, 'users', user.uid)),
+                6000,
+                'Timeout recupero profilo utente',
+            ),
+        ]);
+        const catalog = freshCatalog ?? await getCachedCatalog();
 
         if (root && typeof root.exists === 'function' && root.exists()) {
             const normalizedRoot = normalizeCloudDocument(root.data(), 'Firestore root data schema');
@@ -104,7 +116,7 @@ async function loadCloudPayload(options?: { allMonths?: boolean }): Promise<{
             for (const colName of ['history_months', 'nutrition_months']) {
                 let cursor: QueryDocumentSnapshot | undefined;
                 do {
-                    const constraints: any[] = [orderBy(documentId()), limit(400)];
+                    const constraints: QueryConstraint[] = [orderBy(documentId()), limit(400)];
                     if (cursor) constraints.push(startAfter(cursor));
                     const page = await withTimeout(
                         getDocsFromServer(query(collection(db, 'users', user.uid, colName), ...constraints)),
@@ -113,7 +125,7 @@ async function loadCloudPayload(options?: { allMonths?: boolean }): Promise<{
                     );
                     for (const item of page.docs) {
                         const normalized = normalizeCloudDocument(item.data(), `${colName}/${item.id} data schema`);
-                        const rawMonthData = normalized.business as Record<string, any>;
+                        const rawMonthData = normalized.business;
                         const monthData = colName === 'history_months'
                             ? sanitizeHistoryMonthDocument(item.id, rawMonthData)
                             : sanitizeNutritionMonthDocument(item.id, rawMonthData);
@@ -158,7 +170,6 @@ async function loadCloudPayload(options?: { allMonths?: boolean }): Promise<{
         if (state.nutritionPlanning) state.nutritionPlanning = DomainParsers.parseNutritionPlanning(state.nutritionPlanning);
         if (state.legalConsent) state.legalConsent = DomainParsers.parseLegalConsent(state.legalConsent);
 
-        setLastSavedStateStr(JSON.stringify(state));
         return { data: state as UserData, cloudDocuments, completeMonths };
     } catch (error) {
         console.error('Errore caricamento dati dal cloud:', error);

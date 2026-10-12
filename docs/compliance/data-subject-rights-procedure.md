@@ -39,12 +39,12 @@ Usare come riferimento l'Art. 12 GDPR: risposta senza ingiustificato ritardo e, 
 | Portabilità | Backup JSON / export CSV; verificare che il formato copra il perimetro richiesto |
 | Limitazione | `[DEFINE_IF_REQUIRED]`; non esiste oggi un flag generico di restriction |
 | Opposizione | Valutare per i trattamenti basati sul legittimo interesse, inclusa telemetria tecnica |
-| Revoca consenso dati salute | **Soluzione A decisa (9 ottobre 2026): sospensione tracciamento, accesso a esportazione/diritti/account deletion.** Implementazione end-to-end e valutazione delle basi giuridiche e retention **ancora bloccanti prima del pilot**; vedi `health-consent-release-gate.md`. |
+| Revoca consenso dati salute | **Soluzione A decisa (9 ottobre 2026): sospensione completa delle funzioni fitness, accesso a esportazione/diritti/account deletion e nuova accettazione esplicita possibile (decisione aggiornata il 12 ottobre).** Implementazione tecnica candidata nella PR #366; valutazione delle basi giuridiche, dei contatti e della retention **ancora bloccante prima del pilot con utenti reali**; vedi `health-consent-release-gate.md`. |
 | Reclamo | Informare del diritto di rivolgersi all'autorità di controllo competente |
 
 ## Revoca consenso dati salute — decisione prodotto A, blocker tecnici e legali ancora aperti
 
-Il product owner ha scelto la **soluzione A** (sospensione delle funzionalità di tracciamento dipendenti dal consenso, con accesso a diritti, esportazione e cancellazione account). Prima del pilot servono validazione legale, soluzione tecnica autorevole e test, come specificato in `health-consent-release-gate.md`. In particolare occorre definire e dimostrare:
+Il product owner ha scelto la **soluzione A** (sospensione di tutte le funzioni fitness, con accesso a diritti, esportazione, cancellazione account e facoltà di accettare nuovamente in modo esplicito). Prima del pilot servono validazione legale, soluzione tecnica autorevole e test, come specificato in `health-consent-release-gate.md`. In particolare occorre definire e dimostrare:
 
 1. da quale momento cessano i trattamenti che dipendono dal consenso Art. 9;
 2. che le sole funzionalità rimaste disponibili siano informativa, gestione dei diritti, esportazione e cancellazione account (soluzione A);

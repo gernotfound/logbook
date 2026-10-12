@@ -19,6 +19,39 @@ service cloud.firestore {
         && !deletionJobExists(userId);
     }
 
+    // A server-only revocation record cannot be undone by a stale client update
+    // to users/{uid}. Reads remain available for lawful export and account rights.
+    function consentWithdrawn(userId) {
+      // Absence means this account has never withdrawn. Once a record exists,
+      // ONLY a valid 'active' revision may resume reads or writes; a corrupt
+      // server record must not silently bypass revocation.
+      let record = /databases/$(database)/documents/health_consent_withdrawals/$(userId);
+      return exists(record) && (
+        !('status' in get(record).data)
+        || get(record).data.status != 'active'
+        || !('revision' in get(record).data)
+        || !(get(record).data.revision is int)
+        || get(record).data.revision < 1
+      );
+    }
+
+    // A revoked consent record is permanent across reacceptance cycles.
+    // Clients from an older generation can neither renew a replica nor publish
+    // their old queued journal after the user has explicitly reaccepted.
+    function matchesConsentEpoch(userId, candidate) {
+      let record = /databases/$(database)/documents/health_consent_withdrawals/$(userId);
+      return !exists(record) || (
+        get(record).data.status == 'active'
+        && 'consentRevision' in candidate
+        && candidate.consentRevision is int
+        && candidate.consentRevision == get(record).data.revision
+      );
+    }
+
+    function isWritableOwner(userId) {
+      return isActiveOwner(userId) && !consentWithdrawn(userId);
+    }
+
     function isValidMonthId(monthId) {
       return monthId.matches('^[0-9]{4}-(0[1-9]|1[0-2])$');
     }
@@ -47,7 +80,7 @@ service cloud.firestore {
 
     function isValidReplicaWriter(writer) {
       return writer is map
-        && writer.keys().hasOnly(['slot', 'replicaId', 'generation', 'seq'])
+        && writer.keys().hasOnly(['slot', 'replicaId', 'generation', 'seq', 'consentRevision'])
         && isReplicaSlot(writer.slot)
         && writer.replicaId is string
         && writer.replicaId.size() > 0
@@ -55,7 +88,9 @@ service cloud.firestore {
         && writer.generation is int
         && writer.generation >= 1
         && writer.seq is int
-        && writer.seq >= 0;
+        && writer.seq >= 0
+        && (!('consentRevision' in writer)
+            || (writer.consentRevision is int && writer.consentRevision >= 0));
     }
 
     function isValidSync(docData) {
@@ -90,6 +125,8 @@ service cloud.firestore {
         && control.mutation is map
         && control.mutation.action == 'advance'
         && control.mutation.slot == writer.slot
+        && matchesConsentEpoch(userId, writer)
+        && matchesConsentEpoch(userId, control)
         && writer.slot in control.replicas
         && control.replicas[writer.slot].status == 'active'
         && control.replicas[writer.slot].replicaId == writer.replicaId
@@ -141,7 +178,9 @@ service cloud.firestore {
 
     function hasValidReplicaControlShape(data) {
       return data is map
-        && data.keys().hasOnly(['protocolVersion', 'replicas', 'mutation'])
+        && data.keys().hasOnly(['protocolVersion', 'replicas', 'mutation', 'consentRevision'])
+        && (!('consentRevision' in data)
+            || (data.consentRevision is int && data.consentRevision >= 0))
         && data.protocolVersion == 3
         && data.replicas is map
         && data.replicas.size() <= 16
@@ -163,22 +202,24 @@ service cloud.firestore {
         && isValidReplicaEntry(data.replicas[data.mutation.slot]);
     }
 
-    function validReplicaControlCreate(data) {
+    function validReplicaControlCreate(userId, data) {
       let slot = data.mutation.slot;
       let entry = data.replicas[slot];
       return hasValidReplicaControlShape(data)
+        && matchesConsentEpoch(userId, data)
         && data.mutation.action == 'register'
         && data.replicas.size() == 1
         && entry.generation == 1
         && isFreshReplicaLease(entry);
     }
 
-    function validReplicaControlUpdate(oldData, newData) {
+    function validReplicaControlUpdate(userId, oldData, newData) {
       let slot = newData.mutation.slot;
       let next = newData.replicas[slot];
       let existed = slot in oldData.replicas;
       return hasValidReplicaControlShape(newData)
-        && newData.diff(oldData).affectedKeys().hasOnly(['replicas', 'mutation'])
+        && matchesConsentEpoch(userId, newData)
+        && newData.diff(oldData).affectedKeys().hasOnly(['replicas', 'mutation', 'consentRevision'])
         && newData.replicas.diff(oldData.replicas).affectedKeys().hasOnly([slot])
         && (
           (
@@ -447,6 +488,10 @@ service cloud.firestore {
 
     // Server-only administrative barrier. Clients cannot inspect or mutate deletion jobs;
     // the trusted Admin SDK creates them and bypasses Firestore Security Rules.
+    match /health_consent_withdrawals/{userId} {
+      allow read, write: if false;
+    }
+
     match /account_deletions/{userId} {
       allow read, write: if false;
     }
@@ -455,9 +500,9 @@ service cloud.firestore {
       // Root deletion is server-only. Client-side account deletion must always use
       // the trusted account-deletion job so subcollections and Firebase Auth cannot
       // be orphaned.
-      allow read: if isActiveOwner(userId);
+      allow read: if isWritableOwner(userId);
 
-      allow create, update: if isActiveOwner(userId)
+      allow create, update: if isWritableOwner(userId)
         && incomingData().keys().hasOnly([
           'profile',
           'library',
@@ -498,9 +543,9 @@ service cloud.firestore {
         && preservesSyncProtocol();
 
       match /history_months/{monthId} {
-        allow read: if isActiveOwner(userId);
+        allow read: if isWritableOwner(userId);
         allow delete: if false;
-        allow create, update: if isActiveOwner(userId)
+        allow create, update: if isWritableOwner(userId)
           && isValidMonthId(monthId)
           && incomingData() is map
           && isValidDataSchema(incomingData())
@@ -511,9 +556,9 @@ service cloud.firestore {
       }
 
       match /nutrition_months/{monthId} {
-        allow read: if isActiveOwner(userId);
+        allow read: if isWritableOwner(userId);
         allow delete: if false;
-        allow create, update: if isActiveOwner(userId)
+        allow create, update: if isWritableOwner(userId)
           && isValidMonthId(monthId)
           && incomingData() is map
           && isValidDataSchema(incomingData())
@@ -524,43 +569,49 @@ service cloud.firestore {
       }
 
       match /sync_control/{controlId} {
-        allow read: if controlId == 'state' && isActiveOwner(userId);
+        allow read: if controlId == 'state' && isWritableOwner(userId);
         allow create: if controlId == 'state'
-          && isActiveOwner(userId)
-          && validReplicaControlCreate(incomingData());
+          && isWritableOwner(userId)
+          && validReplicaControlCreate(userId, incomingData());
         allow update: if controlId == 'state'
-          && isActiveOwner(userId)
-          && validReplicaControlUpdate(resource.data, incomingData());
+          && isWritableOwner(userId)
+          && validReplicaControlUpdate(userId, resource.data, incomingData());
         allow delete: if false;
       }
 
       match /telemetry_errors/{errorId} {
-        allow read, delete: if isActiveOwner(userId);
-        allow create: if isActiveOwner(userId)
+        allow read, delete: if isWritableOwner(userId);
+        allow create: if isWritableOwner(userId)
+          && matchesConsentEpoch(userId, incomingData())
           && isValidTelemetryError(incomingData(), userId);
-        allow update: if isActiveOwner(userId)
+        allow update: if isWritableOwner(userId)
+          && matchesConsentEpoch(userId, incomingData())
           && isValidTelemetryError(incomingData(), userId)
           && preservesTelemetryErrorIdentity();
       }
 
       match /telemetry_events/{eventId} {
-        allow read, delete: if isActiveOwner(userId);
-        allow create: if isActiveOwner(userId)
+        allow read, delete: if isWritableOwner(userId);
+        allow create: if isWritableOwner(userId)
+          && matchesConsentEpoch(userId, incomingData())
           && isValidTelemetryEvent(incomingData(), userId);
         // Events are append-only. Identical retries remain valid, and legacy
         // documents may receive only the rollout expiry field without changing history.
-        allow update: if isActiveOwner(userId)
+        allow update: if isWritableOwner(userId)
+          && matchesConsentEpoch(userId, incomingData())
           && isValidTelemetryEvent(incomingData(), userId)
           && isIdenticalTelemetryRetryOrExpiryUpgrade();
       }
 
       match /telemetry_anomalies/{eventId} {
-        allow read, delete: if isActiveOwner(userId);
-        allow create: if isActiveOwner(userId)
+        allow read, delete: if isWritableOwner(userId);
+        allow create: if isWritableOwner(userId)
+          && matchesConsentEpoch(userId, incomingData())
           && isValidTelemetryAnomaly(incomingData());
         // Storage anomalies are immutable after creation apart from a one-time
         // legacy upgrade that adds only the rollout expiry field.
-        allow update: if isActiveOwner(userId)
+        allow update: if isWritableOwner(userId)
+          && matchesConsentEpoch(userId, incomingData())
           && isValidTelemetryAnomaly(incomingData())
           && isIdenticalTelemetryRetryOrExpiryUpgrade();
       }

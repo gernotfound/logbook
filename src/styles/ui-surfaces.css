@@ -2,7 +2,6 @@
 .ui-app-1 { color: var(--primary-color); }
 .ui-app-2 { color: var(--primary-color); }
 .ui-app-3 { color: var(--text-muted); }
-.ui-app-4 { color: var(--text-muted); }
 .ui-account-card-1 { color: var(--warning-color); }
 .ui-account-card-2 { font-size: var(--font-size-secondary); }
 .ui-account-card-3 { background: var(--surface-light); }

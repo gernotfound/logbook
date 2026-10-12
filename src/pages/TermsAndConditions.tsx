@@ -48,7 +48,7 @@ export const TermsAndConditions: React.FC<{ onClose: () => void }> = ({ onClose 
               Termini e condizioni
             </h2>
             <p style={{ margin: '4px 0 0', fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)' }}>
-              Aggiornati al 23 settembre 2026
+              Aggiornati al 12 ottobre 2026
             </p>
           </div>
           <button
@@ -117,6 +117,18 @@ export const TermsAndConditions: React.FC<{ onClose: () => void }> = ({ onClose 
           <Section title="7. Dati dell'utente">
             <p>
               Mantieni i diritti sui contenuti e sui dati che inserisci nell'Applicazione. Le funzioni di backup, esportazione e cancellazione disponibili nell'app sono descritte anche nell'Informativa sulla privacy, che disciplina il trattamento dei dati personali e i relativi tempi di conservazione.
+            </p>
+          </Section>
+
+          <Section title="7 bis. Consenso ai dati salute e sospensione del servizio">
+            <p>
+              TheLogBook richiede un consenso separato ed esplicito per i trattamenti dei dati relativi alla salute. Puoi revocarlo da Impostazioni → Privacy. In tal caso tutte le funzioni fitness, inclusi allenamento, nutrizione e diario, rimangono sospese; non è disponibile una modalità di utilizzo ridotta.
+            </p>
+            <p>
+              Durante la sospensione restano disponibili informativa, esercizio dei diritti applicabili, esportazione JSON e cancellazione dell'account. La revoca non elimina automaticamente i dati; una nuova accettazione esplicita può consentire la riattivazione. Le modifiche offline precedenti non vengono ripristinate o inviate automaticamente. Le condizioni di conservazione postrevoca sono indicate nell'informativa privacy, con gli elementi ancora da definire espressamente segnalati tramite segnaposto.
+            </p>
+            <p>
+              <strong>[DA COMPLETARE: IDENTITÀ E CONTATTI DEL SOGGETTO CHE EROGA IL SERVIZIO]</strong>. L'uso per un eventuale pilot con utenti reali richiede la definizione delle informazioni legali mancanti.
             </p>
           </Section>
 

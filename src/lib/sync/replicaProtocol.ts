@@ -4,6 +4,7 @@ import {
     type Firestore,
 } from 'firebase/firestore';
 import { generateId } from '../utils/date';
+import { getVerifiedHealthConsentRevision } from '../healthConsent';
 import {
     mergeVectors,
     parseSyncMeta,
@@ -37,6 +38,7 @@ export interface ReplicaControlEntry extends Omit<ReplicaIdentity, 'slot'> {
 
 export interface ReplicaControl {
     protocolVersion: 3;
+    consentRevision?: number;
     replicas: Record<string, ReplicaControlEntry>;
     mutation: {
         slot: string;
@@ -127,7 +129,8 @@ export function parseReplicaControl(raw: unknown): ReplicaControl {
     if (action !== 'register' && action !== 'checkpoint' && action !== 'advance' && action !== 'retire' && action !== 'reuse-expired') {
         throw new Error('Mutazione registro repliche non valida');
     }
-    return { protocolVersion: 3, replicas, mutation: { slot: raw.mutation.slot, action } };
+    const revision = raw.consentRevision === undefined ? undefined : parseSafeInteger(raw.consentRevision, 'consent revision');
+    return { protocolVersion: 3, ...(revision !== undefined ? { consentRevision: revision } : {}), replicas, mutation: { slot: raw.mutation.slot, action } };
 }
 
 function emptyControl(slot = 's00'): ReplicaControl {
@@ -179,6 +182,7 @@ export function advanceReplicaControl(control: ReplicaControl, identity: Replica
     const nextSeq = Math.max(entry.lastSeq, parseSafeInteger(lastSeq, 'Replica sequence'));
     return {
         protocolVersion: 3,
+        ...(control.consentRevision !== undefined ? { consentRevision: control.consentRevision } : {}),
         replicas: {
             ...control.replicas,
             [identity.slot]: { ...entry, lastSeq: nextSeq },
@@ -322,8 +326,10 @@ export async function claimReplicaCheckpoint(
             checkpointClock: normalizedCheckpoint,
         };
 
+        const consentRevision = getVerifiedHealthConsentRevision(uid);
         transaction.set(ref, {
             protocolVersion: 3,
+            ...(consentRevision > 0 ? { consentRevision } : {}),
             replicas: { ...control.replicas, [slot]: entry },
             mutation: { slot, action: action! },
         });
