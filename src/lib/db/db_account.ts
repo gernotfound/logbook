@@ -1,6 +1,7 @@
 import { auth, getDb, ensureAppCheck, waitForPendingWrites } from '../firebase';
-import { del } from 'idb-keyval';
+import { del, get } from 'idb-keyval';
 import { lockVault } from '../sync/secureArchiveSession';
+import { deviceVaultKeyId } from '../sync/secureArchiveKeys';
 import { withTimeout } from './db_core';
 import { assertDeletionDeadlineActive, withDeletionDeadline } from '../deletionDeadline';
 import { readBrowserValueStrict } from '../sync/browserStorage';
@@ -173,14 +174,16 @@ async function purgeOwnerLocalData(owner: string) {
         throw new AggregateError(failures, 'Pulizia locale incompleta. Alcuni dati sono ancora presenti su questo dispositivo.');
     }
 
-    // Remove the ONLY durable wrapping metadata last. Partial device/IDB
-    // failures must not strand surviving encrypted data without its DEK.
+    // Both the non-extractable device key and the wrapping metadata are owner
+    // scoped. NEVER remove the device key until the encrypted business envelope
+    // and every localStorage snapshot were verifiably removed.
     const controlKey = 'logbook:v2:' + owner + ':secure-vault-control';
+    const keyId = deviceVaultKeyId(owner);
     try {
+        await del(keyId);
+        if ((await get(keyId)) !== undefined) throw new Error('La chiave locale del dispositivo non è stata eliminata.');
         localStorage.removeItem(controlKey);
-        if (localStorage.getItem(controlKey) !== null) {
-            throw new Error('La chiave cifrata locale non è stata eliminata.');
-        }
+        if (localStorage.getItem(controlKey) !== null) throw new Error('I metadati crittografici locali non sono stati eliminati.');
     } catch (error) {
         throw new AggregateError([error], 'Pulizia archivio protetto non completata.');
     }
