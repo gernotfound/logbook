@@ -191,8 +191,9 @@ export async function refreshHealthConsent(user: User): Promise<HealthConsentSta
     if (saved === 'withdrawn' || (parseReacceptRevision(saved) !== null && !verifiedReacceptance.has(uid))) {
       // A different device must not silently undo this device's withdrawal.
       // Crash recovery requires the user to explicitly reaccept again.
-      setStatus(uid, saved);
-      return saved;
+      const suspended: HealthConsentStatus = saved === 'withdrawn' ? 'withdrawn' : 'reaccepting';
+      setStatus(uid, suspended);
+      return suspended;
     }
     // An older, unsent journal belongs to the previous consent generation.
     // Never silently relabel it as newly authorized or delete it.
