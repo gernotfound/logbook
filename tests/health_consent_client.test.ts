@@ -57,7 +57,11 @@ describe('durable health-consent client barrier', () => {
 
   it('keeps revocation durable across uncertain server failures', async () => {
     const uid = 'offline-' + crypto.randomUUID();
-    vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('offline'); }));
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, request: RequestInit) => {
+      if (request.method === 'GET') return Response.json({ status: 'active', revision: 0 });
+      throw new Error('offline');
+    }));
+    expect(await refreshHealthConsent(user(uid))).toBe('active');
     await expect(withdrawHealthConsent(user(uid))).rejects.toThrow('offline');
     expect(localStorage.getItem(key(uid))).toBe('pending:0');
     expect(isHealthConsentWritable('user:' + uid)).toBe(false);
