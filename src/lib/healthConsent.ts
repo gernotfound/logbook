@@ -10,7 +10,6 @@ const entries = new Map<string, HealthConsentStatus>();
 const listeners = new Set<() => void>();
 const verifiedReacceptance = new Map<string, string>();
 const verifiedRevisions = new Map<string, number>();
-const knownConsentRevisions = new Map<string, number>();
 let guestAcceptanceInProgress = false;
 const guestMarker = 'logbook:v2:guest:health-consent-withdrawal';
 const reacceptMarker = (revision: number) => `reaccepting:${revision}`;
@@ -170,7 +169,6 @@ export async function refreshHealthConsent(user: User): Promise<HealthConsentSta
   setStatus(uid, saved === null ? 'checking' : (parsePendingRevision(saved) !== null ? 'pending' : parseReacceptRevision(saved) !== null ? 'reaccepting' : saved as HealthConsentStatus));
   try {
     const state = await serverRequest(user, 'GET');
-    knownConsentRevisions.set(uid, state.revision);
     if (state.status === 'withdrawn') {
       writeBrowserValue(marker(uid), 'withdrawn');
       setStatus(uid, 'withdrawn');
