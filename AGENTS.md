@@ -115,6 +115,7 @@ Versioni persistite correnti e indipendenti: Data Schema 1, Sync Protocol 3, Loc
 - **MUST:** cifratura AEAD sincrona dei record nel **medesimo** `idb-keyval.update` e salvataggi device-critical sincroni, con owner/AAD autenticati e fail-closed se storage/key/ciphertext non sono leggibili.
 - **MUST:** migrazione interrompibile/riprendibile, key control versionati, purge key soltanto dopo eliminazione verificata delle copie cifrate. Perdere la chiave non equivale ad avere l'archivio vuoto; conservare ciphertext offline non recuperabile.
 - **VERIFY:** una chiave non esportabile dentro lo *stesso profilo browser* non protegge dal furto dell'intero profilo o da XSS. Non è crittografia end-to-end né sblocco mediante hardware remoto.
+- **MUST:** una sessione autenticata già verificata può operare **solo localmente** offline con la generazione di consenso attivo in cache; primo accesso senza consenso verificato e revoche/intenti locali restano bloccati. Il primo `online`/foreground deve interrogare il consenso server **prima** di letture/write cloud, checkpoint o journal; una revoca remota blocca le attività e preserva il journal locale senza upload. Nessun cache marker locale può sostituire il controllo server per la replica.
 - **MUST:** documentazione completa e limiti nel file `docs/architecture/secure-local-archive-design.md`.
 
 ### Accesso browser storage
