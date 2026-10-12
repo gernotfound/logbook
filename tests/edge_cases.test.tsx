@@ -256,6 +256,9 @@ describe('Empirical Challenger Suite: Edge Cases & Stress Verification', () => {
     });
 
     test('WorkoutTimer rest controls (Play, Pause, Reset, Stop) operate cleanly without state crashes', () => {
+      // The previous case deliberately leaves a running future snapshot. Start
+      // from a known *durably committed* stopped timer, not leaked test state.
+      writeWorkoutTimerSnapshot(stoppedWorkoutTimer(), storageOwner());
       const { container } = renderWithProviders(<WorkoutTimer />);
       
       const playBtn = container.querySelector('.timer-btn.play') as HTMLButtonElement;
