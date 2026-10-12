@@ -26,7 +26,7 @@ beforeEach(async () => {
     });
     vi.mocked(DB.loadCloudPayload).mockResolvedValue(null);
     vi.mocked(DB.secureLogOut).mockResolvedValue(undefined);
-    await createAndMigrateVault('user:pending-write-user', 'pending write local vault passphrase 2026');
+    await createAndMigrateVault('user:pending-write-user');
     useAppStore.setState({
         userData: UserDataSchema.parse({ profile: { height: '180' } }) as any,
         localWorkout: null,
