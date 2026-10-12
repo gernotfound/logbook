@@ -1,60 +1,52 @@
-// Uses the configured UI test setup; Web Crypto is supplied by Node's implementation.
+// @vitest-environment node
+import 'fake-indexeddb/auto';
 import { webcrypto } from 'node:crypto';
-import { beforeAll, vi } from 'vitest';
-beforeAll(() => { vi.stubGlobal('crypto', webcrypto); });
-import { describe, expect, it } from 'vitest';
-import {
-    createLocalKeyVault, LocalUnlockError, recoverLocalKeyVault,
-    resetLocalPassphraseWithRecovery, rewrapLocalPassphrase, unlockLocalKeyVault,
-} from '../src/lib/sync/secureArchiveKeys';
+import { clear, del, get } from 'idb-keyval';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { createLocalKeyVault, deviceVaultKeyId, LocalUnlockError, unlockLocalKeyVault } from '../src/lib/sync/secureArchiveKeys';
 import { openLocalText, sealLocalText } from '../src/lib/sync/secureArchiveCipher';
 
 const owner = 'user:test-archive-keys';
-const passphrase = 'correct horse battery staple 2026';
-const another = 'new passphrase with sufficient entropy';
 
-describe('offline archive key lifecycle', () => {
-    it('wraps the DEK independently for the passphrase and recovery code', async () => {
-        const { vault, dataKey, recoveryCode } = await createLocalKeyVault(owner, passphrase);
-        expect(JSON.stringify(vault)).not.toContain(passphrase);
-        expect(JSON.stringify(vault)).not.toContain(recoveryCode);
-        expect(JSON.stringify(vault)).not.toContain('averageHeartRate');
-        expect(dataKey).toHaveLength(32);
-        expect(recoveryCode).toMatch(/^[0-9a-f]{64}$/);
-        expect(await unlockLocalKeyVault(vault, owner, passphrase)).toEqual(dataKey);
-        expect(await recoverLocalKeyVault(vault, owner, recoveryCode)).toEqual(dataKey);
-        const ciphertext = sealLocalText(dataKey, owner, 'data', 'averageHeartRate=143');
-        expect(openLocalText(await unlockLocalKeyVault(vault, owner, passphrase), owner, 'data', ciphertext))
-            .toBe('averageHeartRate=143');
+beforeEach(async () => {
+    vi.stubGlobal('crypto', webcrypto);
+    await clear();
+});
+
+describe('automatic account-bound device encryption key', () => {
+    it('creates a non-extractable AES-256 device key and resumes decryption offline', async () => {
+        const { vault, dataKey } = await createLocalKeyVault(owner);
+        const deviceKey = await get<CryptoKey>(deviceVaultKeyId(owner));
+        expect(deviceKey?.type).toBe('secret');
+        expect(deviceKey?.extractable).toBe(false);
+        expect(deviceKey?.usages).toContain('decrypt');
+        await expect(crypto.subtle.exportKey('raw', deviceKey!)).rejects.toThrow();
+        expect(JSON.stringify(vault)).not.toContain('fitness');
+        expect(vault.owner).toBe(owner);
+        expect(await unlockLocalKeyVault(vault, owner)).toEqual(dataKey);
+        const ciphertext = sealLocalText(dataKey, owner, 'journal', 'heartRate=147');
+        expect(openLocalText(await unlockLocalKeyVault(vault, owner), owner, 'journal', ciphertext)).toBe('heartRate=147');
     });
 
-    it('rejects wrong passphrase/recovery code, foreign owners and weaker KDF metadata', async () => {
-        const { vault, recoveryCode } = await createLocalKeyVault(owner, passphrase);
-        await expect(unlockLocalKeyVault(vault, owner, another)).rejects.toBeInstanceOf(LocalUnlockError);
-        await expect(recoverLocalKeyVault(vault, owner, '0'.repeat(64))).rejects.toBeInstanceOf(LocalUnlockError);
-        await expect(recoverLocalKeyVault(vault, 'user:other', recoveryCode)).rejects.toBeInstanceOf(LocalUnlockError);
-        await expect(unlockLocalKeyVault({ ...vault, kdf: { ...vault.kdf, iterations: 10 } }, owner, passphrase)).rejects.toBeInstanceOf(LocalUnlockError);
-        await expect(unlockLocalKeyVault({ ...vault, version: 2 as never }, owner, passphrase)).rejects.toBeInstanceOf(LocalUnlockError);
+    it('does not derive a key from a UID, Firebase token, API key or additional password', async () => {
+        const first = await createLocalKeyVault(owner);
+        const second = await createLocalKeyVault('user:another-account');
+        expect(first.vault.wrappedDek).not.toBe(second.vault.wrappedDek);
+        await expect(unlockLocalKeyVault(first.vault, 'user:another-account')).rejects.toBeInstanceOf(LocalUnlockError);
+        expect(JSON.stringify(first.vault)).not.toContain('password');
     });
 
-    it('supports atomic passphrase rewrapping without changing ciphertext or the recovery key', async () => {
-        const { vault, dataKey, recoveryCode } = await createLocalKeyVault(owner, passphrase);
-        const ciphertext = sealLocalText(dataKey, owner, 'data', 'offline pending journal');
-        await expect(rewrapLocalPassphrase(vault, owner, another, another)).rejects.toBeInstanceOf(LocalUnlockError);
-        const changed = await rewrapLocalPassphrase(vault, owner, passphrase, another);
-        expect(changed.recovery).toEqual(vault.recovery);
-        expect(changed.kdf.salt).not.toBe(vault.kdf.salt);
-        await expect(unlockLocalKeyVault(changed, owner, passphrase)).rejects.toBeInstanceOf(LocalUnlockError);
-        expect(await unlockLocalKeyVault(changed, owner, another)).toEqual(dataKey);
-        const recovered = await recoverLocalKeyVault(changed, owner, recoveryCode);
-        expect(openLocalText(recovered, owner, 'data', ciphertext)).toBe('offline pending journal');
-        const reset = await resetLocalPassphraseWithRecovery(changed, owner, recoveryCode, passphrase);
-        expect(await unlockLocalKeyVault(reset, owner, passphrase)).toEqual(dataKey);
-        await expect(resetLocalPassphraseWithRecovery(changed, owner, '0'.repeat(64), passphrase)).rejects.toBeInstanceOf(LocalUnlockError);
+    it('fails closed if the device key is lost, or the wrapped DEK is tampered with', async () => {
+        const { vault } = await createLocalKeyVault(owner);
+        await expect(unlockLocalKeyVault({ ...vault, wrappedDek: 'ff'.repeat(48) }, owner)).rejects.toBeInstanceOf(LocalUnlockError);
+        await del(deviceVaultKeyId(owner));
+        await expect(unlockLocalKeyVault(vault, owner)).rejects.toBeInstanceOf(LocalUnlockError);
+        expect(vault.wrappedDek).toMatch(/^[0-9a-f]+$/);
     });
 
-    it('never creates a vault from an empty or weak passphrase', async () => {
-        await expect(createLocalKeyVault(owner, 'short')).rejects.toThrow('16 caratteri');
-        await expect(createLocalKeyVault('', passphrase)).rejects.toThrow();
+    it('rejects unknown versions or foreign owner metadata rather than silently reprovisioning', async () => {
+        const { vault } = await createLocalKeyVault(owner);
+        await expect(unlockLocalKeyVault({ ...vault, version: 3 as never }, owner)).rejects.toBeInstanceOf(LocalUnlockError);
+        await expect(unlockLocalKeyVault({ ...vault, owner: 'user:foreign' }, owner)).rejects.toBeInstanceOf(LocalUnlockError);
     });
 });
