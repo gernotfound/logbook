@@ -38,6 +38,7 @@ vi.mock('../src/lib/healthConsent', () => ({
   beginGuestHealthReacceptance: vi.fn(),
   completeGuestHealthReacceptance: vi.fn(),
   isHealthConsentWritable: vi.fn(() => true),
+  isHealthConsentCloudWritable: vi.fn(() => true),
   getVerifiedHealthConsentRevision: vi.fn(() => 0),
   requireHealthConsentWritable: vi.fn(),
   withdrawHealthConsent: vi.fn(),
