@@ -3,13 +3,15 @@ import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
 import { screen, fireEvent, act } from '@testing-library/react';
 import App from '../src/App';
 import { renderWithProviders, defaultMockUserData } from './setup';
+import { prepareUnlockedTestArchive } from './secureVaultFixture';
 import { useAppStore } from '../src/store/useAppStore';
 import { clearSyncTimers } from '../src/store/slices/createSyncSlice';
 import { DB } from '../src/lib/db';
 
 describe('Empirical Challenger: M1 Background Sync & Error Toast Stress Suite', () => {
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    await prepareUnlockedTestArchive();
     vi.useFakeTimers();
     clearSyncTimers();
     vi.mocked(DB.saveUserData).mockReset();
