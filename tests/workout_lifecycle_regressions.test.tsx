@@ -46,12 +46,14 @@ describe('Workout lifecycle durable recovery regressions', () => {
     });
     afterEach(() => vi.restoreAllMocks());
 
-    it('keeps unreadable timer storage intact and blocks controls after React mount', () => {
+    it('keeps unreadable timer storage intact and blocks controls after authenticated owner hydration', async () => {
         const key = deviceKey('timer', owner);
         localStorage.setItem(key, '{bad-json');
         renderWithProviders(<React.StrictMode><WorkoutTimer /></React.StrictMode>);
+        // AuthContext resolves the real Firebase UID asynchronously. Wait for
+        // the correct owner-mounted timer rather than asserting guest at mount.
+        await waitFor(() => expect(useAppStore.getState().localPersistenceBlocked).toBe(true));
         expect(localStorage.getItem(key)).toBe('{bad-json');
-        expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
         expect(screen.getByRole('button', { name: 'Avvia recupero' }).hasAttribute('disabled')).toBe(true);
     });
 
