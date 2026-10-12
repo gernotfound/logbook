@@ -228,7 +228,11 @@ export async function refreshHealthConsent(user: User): Promise<HealthConsentSta
         setStatus(uid, 'active');
         return 'active';
       }
-      return currentHealthConsentStatus(uid) === 'checking' ? 'error' : currentHealthConsentStatus(uid);
+      if (saved === null) {
+        setStatus(uid, 'error');
+        return 'error';
+      }
+      return currentHealthConsentStatus(uid);
     }
     const state = await serverRequest(user, 'GET');
     if (!isSameDecision()) return currentHealthConsentStatus(uid);
