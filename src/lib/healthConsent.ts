@@ -234,7 +234,7 @@ export async function refreshHealthConsent(user: User): Promise<HealthConsentSta
   const isSameDecision = () => verificationSerials.get(uid) === serial
     && readMarker(uid) === saved
     && readBrowserValueStrict(generationMarker(uid)) === observedGeneration;
-  const useCachedOfflineConsent = (): boolean => {
+  const recoverCachedOfflineConsent = (): boolean => {
     const cached = saved === null ? readCachedActiveRevision(uid) : null;
     if (cached === null || !isSameDecision()) return false;
     verifiedRevisions.set(uid, cached);
@@ -251,7 +251,7 @@ export async function refreshHealthConsent(user: User): Promise<HealthConsentSta
     // server-confirmed generation while disconnected. New accounts, pending
     // withdrawal/reacceptance and unknown generations remain suspended.
     if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-      if (useCachedOfflineConsent()) return 'active';
+      if (recoverCachedOfflineConsent()) return 'active';
       if (saved === null) {
         setStatus(uid, 'error');
         return 'error';
@@ -320,7 +320,7 @@ export async function refreshHealthConsent(user: User): Promise<HealthConsentSta
     return 'active';
   } catch (error) {
     if (!isSameDecision()) return currentHealthConsentStatus(uid);
-    if (error instanceof ConsentTransportUnavailableError && useCachedOfflineConsent()) return 'active';
+    if (error instanceof ConsentTransportUnavailableError && recoverCachedOfflineConsent()) return 'active';
     setStatus(uid, saved === null ? 'error' : saved as HealthConsentStatus);
     return currentHealthConsentStatus(uid);
   }
