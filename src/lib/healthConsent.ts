@@ -218,12 +218,15 @@ export async function refreshHealthConsent(user: User): Promise<HealthConsentSta
   }
 }
 
-export async function withdrawHealthConsent(user: User): Promise<void> {
+export async function withdrawHealthConsent(user: User, freezeWriters?: () => void): Promise<void> {
   const uid = user.uid;
   const verified = verifiedRevisions.get(uid);
   if (verified === undefined) throw new Error('Verifica prima il consenso sul server.');
   writeBrowserValue(marker(uid), pendingMarker(verified));
   setStatus(uid, 'pending');
+  // The durable local barrier precedes cancellation, network I/O and any
+  // other async transition. An error must never silently undo the intent.
+  freezeWriters?.();
   const server = await serverRequest(user, 'POST', { action: 'withdraw', expectedRevision: verified });
   if (server.status !== 'withdrawn') throw new Error('Revoca non registrata dal server.');
   writeBrowserValue(marker(uid), 'withdrawn');

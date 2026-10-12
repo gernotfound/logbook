@@ -107,9 +107,12 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
         const confirm = await useDialogStore.getState().showConfirm('Revocando il consenso, non potrai più usare allenamenti, nutrizione e diario. Potrai ancora esportare i dati, esercitare i diritti privacy, eliminare l’account oppure prestare un nuovo consenso. Confermi la revoca?');
         if (!confirm || (!isGuest && auth.currentUser?.uid !== user?.uid)) return;
         try {
-            useAppStore.getState().cancelPendingSyncs();
-            if (isGuest) withdrawGuestHealthConsent();
-            else if (user) await withdrawHealthConsent(user);
+            if (isGuest) {
+                withdrawGuestHealthConsent();
+                useAppStore.getState().cancelPendingSyncs();
+            } else if (user) {
+                await withdrawHealthConsent(user, () => useAppStore.getState().cancelPendingSyncs());
+            }
         } catch {
             await useDialogStore.getState().showAlert('La revoca è stata bloccata sul dispositivo, ma la conferma del server non è disponibile. Riprova quando torni online; i dati non sono stati eliminati.');
         }
