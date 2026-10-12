@@ -11,8 +11,9 @@ import { useSleepMeasurements } from '../src/hooks/useSleepMeasurements';
 import { storageOwner } from '../src/lib/sync/session';
 import DataSleep from '../src/components/Data/DataSleep';
 import DataHistory from '../src/components/Data/DataHistory';
+import type { NutritionDay } from '../src/types';
 
-const EMPTY_NUTRITION_OBJ = {};
+const EMPTY_NUTRITION_OBJ: Record<string, NutritionDay> = {};
 
 // Integrated wrapper component simulating real parent page for sleep UI & history
 const SleepIntegratedView: React.FC = () => {
@@ -21,7 +22,7 @@ const SleepIntegratedView: React.FC = () => {
     
     // Sort history by date descending
     const measurementsHistory = React.useMemo(() => {
-        return Object.values(nutrition).sort((a: any, b: any) => 
+        return Object.values(nutrition).sort((a, b) => 
             (b.date || '').localeCompare(a.date || '')
         );
     }, [nutrition]);

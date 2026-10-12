@@ -15,6 +15,7 @@ La baseline clean-cut corrente **non importa Backup Schema V1/V2**: `decodeImpor
 - L'anteprima/commit deve invalidarsi se cambia sessione o baseline rilevante durante l'operazione.
 - La conferma segue la persistenza locale; offline non va presentata come conferma cloud.
 - I consensi importati non sostituiscono l'accettazione corrente.
+- Nel merge ospite → account, il consenso legale ospite non è trasferibile: `legalConsent` resta quello già associato all'account, se presente; per un account nuovo serve una nuova accettazione esplicita.
 - Non inventare conversioni V1/V2 per aggirare la baseline clean-cut.
 
 ## Esportazione CSV
@@ -71,7 +72,7 @@ L'accesso account/cloud richiede che Firebase Auth riporti `emailVerified === tr
 
 ## Logout e pulizia locale
 
-`secureLogOut` propaga un errore di `auth.signOut` e conserva il locale. Dopo sign-out riuscito, purga l'archivio dell'owner catturato prima del logout. Gli archivi owner-scoped degli altri utenti restano separati.
+`secureLogOut` propaga un errore di `auth.signOut` e conserva il locale. **Prima di invalidare Firebase Auth**, il logout autenticato rifiuta intenti di revoca/riaccettazione salute non ancora riconciliati, journal non inviati dopo una revoca confermata e journal di una generazione di consenso precedente ancora da recuperare. Il purge ordinario ripete queste verifiche, anche se chiamato direttamente; un errore di lettura del marker o dell'envelope non autorizza la cancellazione. Dopo sign-out riuscito, purga l'archivio dell'owner catturato prima del logout. Gli archivi owner-scoped degli altri utenti restano separati. L'eliminazione volontaria dell'account ha un boundary di finalizzazione separato, autorizzato solo dal completamento verificato del server.
 
 `purgeAllLocalUserData` tenta ogni rimozione e rigetta con un errore aggregato se alcune falliscono: la UI comunica la pulizia incompleta. Durante una cancellazione server la receipt viene esclusa dal purge ordinario e rimossa solo dopo il successo di tutte le altre operazioni locali.
 

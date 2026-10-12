@@ -2,12 +2,12 @@ import { useState } from 'react';
 import { Activity, ChevronDown, Pencil, Plus, Ruler, Save, Trash2, UserRound, X } from 'lucide-react';
 import { Logic } from '../../lib/logic';
 import { shiftDateString } from '../../lib/utils/date';
-import type { BodyFatProvenance } from '../../types';
+import type { BodyFatProvenance, UserProfile } from '../../types';
 import type { BodyFatMode } from '../../hooks/useNutritionMeasurements';
 import DataDateNavigator from './DataDateNavigator';
 
 interface DataMeasurementsProps {
-    profile: any;
+    profile: Pick<UserProfile, 'gender'> & { height?: string | number };
     selectedDate?: string;
     setSelectedDate?: (d: string) => void;
     targetDateStr?: string;
@@ -38,7 +38,7 @@ interface DataMeasurementsProps {
     setCalves: (val: string) => void;
     handleCancelEdit: () => void;
     onDeleteMeasurement?: (date: string) => void | Promise<void>;
-    calculateAndSave: (e?: any, bodyFatMode?: BodyFatMode) => Promise<unknown>;
+    calculateAndSave: (e?: { preventDefault(): void }, bodyFatMode?: BodyFatMode) => Promise<unknown>;
     onOpenBiometry?: () => void;
 }
 

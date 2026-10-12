@@ -73,7 +73,20 @@ function remainingLocalPurgeKeys(owner: string): Set<string> {
     return remaining;
 }
 
-function assertOrdinaryPurgeAllowed(owner: string): void {
+class HealthConsentTransitionPendingError extends Error {
+    constructor() {
+        super('La revoca o la nuova accettazione dei dati salute non è ancora riconciliata. Per non perdere la richiesta, completa la verifica prima di uscire.');
+        this.name = 'HealthConsentTransitionPendingError';
+    }
+}
+
+export function assertOrdinaryPurgeAllowed(owner: string): void {
+    // A sign-out or an ordinary purge must not erase the only durable copy
+    // of a withdrawal not yet confirmed by the trusted server.
+    const consent = readBrowserValueStrict(`logbook:v2:${owner}:health-consent-withdrawal`);
+    if (consent !== null && consent !== 'withdrawn') {
+        throw new HealthConsentTransitionPendingError();
+    }
     if (owner.startsWith('user:')) {
         if (isAccountDeletionPending(owner)) {
             throw new Error('Cancellazione account in sospeso: i dati locali devono restare disponibili per il recupero.');
@@ -86,7 +99,27 @@ function assertOrdinaryPurgeAllowed(owner: string): void {
     }
 }
 
+/** A new server consent epoch never authorizes discarding an older offline journal. */
+export async function assertNoOutdatedConsentJournal(owner: string): Promise<void> {
+    if (!owner.startsWith('user:')) return;
+    const generation = readBrowserValueStrict(`logbook:v2:${owner}:health-consent-generation`);
+    const withdrawal = readBrowserValueStrict(`logbook:v2:${owner}:health-consent-withdrawal`);
+    if (generation === null && withdrawal !== 'withdrawn') return;
+    if (generation !== null && (!/^[1-9]\\d*$/.test(generation) || !Number.isSafeInteger(Number(generation)))) {
+        throw new HealthConsentTransitionPendingError();
+    }
+    const { readLocal } = await import('../sync/localRepository');
+    const envelope = await readLocal(owner);
+    if (envelope?.pending.length && (withdrawal === 'withdrawn'
+        || (generation !== null && (envelope.consentRevision ?? 0) !== Number(generation)))) {
+        throw new HealthConsentTransitionPendingError();
+    }
+}
+
 export async function purgeAllLocalUserData(owner = storageOwner()) {
+    assertOrdinaryPurgeAllowed(owner);
+    await assertNoOutdatedConsentJournal(owner);
+    // Recheck the synchronous intent after the IndexedDB read.
     assertOrdinaryPurgeAllowed(owner);
     return purgeOwnerLocalData(owner);
 }

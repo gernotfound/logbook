@@ -199,6 +199,33 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
         consoleWarnSpy.mockRestore();
     });
 
+    it('keeps a pending cloud withdrawal and archive intact before any account sign-out or ordinary purge', async () => {
+        const { auth } = await import('../src/lib/firebase');
+        const owner = storageOwner();
+        expect(owner.startsWith('user:')).toBe(true);
+        const marker = `logbook:v2:${owner}:health-consent-withdrawal`;
+        localStorage.setItem(marker, 'pending:0');
+        const purgeSpy = vi.spyOn(DB, 'purgeAllLocalUserData');
+
+        await expect(DB.secureLogOut()).rejects.toThrow('non è ancora riconciliata');
+        await expect(DB.purgeAllLocalUserData(owner)).rejects.toThrow('non è ancora riconciliata');
+        expect(auth.signOut).not.toHaveBeenCalled();
+        expect(idb.del).not.toHaveBeenCalled();
+        expect(purgeSpy).toHaveBeenCalledTimes(1);
+        expect(localStorage.getItem(marker)).toBe('pending:0');
+        purgeSpy.mockRestore();
+    });
+
+    it('allows an ordinary logout after server-confirmed withdrawal', async () => {
+        const { auth } = await import('../src/lib/firebase');
+        const owner = storageOwner();
+        expect(owner.startsWith('user:')).toBe(true);
+        localStorage.setItem(`logbook:v2:${owner}:health-consent-withdrawal`, 'withdrawn');
+        await DB.secureLogOut();
+        expect(auth.signOut).toHaveBeenCalledTimes(1);
+        expect(idb.del).toHaveBeenCalledWith(`logbook:v2:${owner}`);
+    });
+
     it('secureLogOut removes the account-deletion recovery credential only after local purge succeeds', async () => {
         const recoveryKey = 'logbook_deletion_recovery_devices_v1';
         const owner = storageOwner();

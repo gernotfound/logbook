@@ -144,21 +144,20 @@ Comandi più piccoli (`npm run lint`, `npm run test`, `npm run build`, `npm run 
 
 ## Deployment
 
-Il frontend Production è distribuito su **Firebase Hosting** esclusivamente dallo stato corrente di `main` dopo il successo di `Milestone Verification` / `Canonical Verification`. Il workflow ricontrolla l'exact SHA e rifiuta un candidato diventato obsoleto prima di eseguire `firebase deploy --only hosting`.
+Il frontend Production è distribuito su **Firebase Hosting** dal commit corrente di `main`, ma soltanto dopo due gate distinti: `Milestone Verification` / `Canonical Verification` sul push a `main`, poi `Firebase Firestore Production`, che riconcilia Rules e indici con lo stato live (senza deploy se già allineati). `Firebase Hosting Production` attende il successo della riconciliazione prima di eseguire `firebase deploy --only hosting`. I workflow ricontrollano l'exact SHA corrente e rifiutano un commit superato.
 
-Vercel distribuisce da `main` soltanto il backend trusted/cron e il redirect del vecchio hostname. I branch di sviluppo non generano Preview Deployment Vercel.
+**Vercel segue un percorso separato:** da `main` distribuisce soltanto backend trusted, cron e redirect legacy quando il diff interessa il backend o la sua configurazione. `ignoreCommand` salta i commit che non lo richiedono; i branch di sviluppo non generano Preview Deployment Vercel.
 
 Il normale ciclo di consegna è quindi:
 
 ```text
-branch dedicato
-→ draft PR
-→ Canonical Verification exact-SHA
-→ review finale
-→ squash merge in main
-→ CI su main
-→ Firebase Hosting frontend + Vercel backend dallo stesso main verificato
+branch dedicato → draft PR → Canonical Verification exact-SHA → review finale
+→ squash merge in main → Canonical Verification su main
+→ Firebase Firestore Production (riconciliazione/verifica Rules e indici)
+→ Firebase Hosting Production (frontend/PWA sullo stesso SHA)
 ```
+
+Il deployment Vercel Production, **se richiesto dal diff**, viene verificato separatamente sul pertinente stato di `main`. CI, deployment e comportamento runtime sono evidenze distinte.
 
 ## Documentazione tecnica normativa
 

@@ -6,15 +6,15 @@ import { captureSession, isCurrentSession } from '../lib/sync/session';
 import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
 import { Logic } from '../lib/logic';
-import type { BodyFatProvenance } from '../types';
+import type { BodyFatProvenance, NutritionDay, UserProfile } from '../types';
 
-const EMPTY_NUTRITION = {};
-const EMPTY_PROFILE = {};
+const EMPTY_NUTRITION: Record<string, NutritionDay> = {};
+const EMPTY_PROFILE: UserProfile = {};
 
 export type BodyFatMode = 'manual' | 'calculate';
 
 export function useNutritionMeasurements(selectedDate?: string) {
-    const profile: any = useAppStore(state => state.userData?.profile || EMPTY_PROFILE);
+    const profile = useAppStore(state => state.userData?.profile || EMPTY_PROFILE);
     const nutrition = useAppStore(state => state.userData?.nutrition || EMPTY_NUTRITION);
     const dispatchDomainOperation = useAppStore(state => state.dispatchDomainOperation);
     const showAlert = useDialogStore(state => state.showAlert);
@@ -24,8 +24,8 @@ export function useNutritionMeasurements(selectedDate?: string) {
     const saving = useRef(false);
     const todayDateStr = useLocalToday();
     const targetDateStr = selectedDate || editingDate || todayDateStr;
-    const targetDayData = (nutrition as any)[targetDateStr];
-    const field = (name: string) => targetDayData?.[name]?.toString() ?? '';
+    const targetDayData = nutrition[targetDateStr];
+    const field = (name: keyof NutritionDay) => targetDayData?.[name]?.toString() ?? '';
     const draft = useDatedDraft('measurement', targetDateStr, {
         weight: field('weight'), waist: field('waist'), neck: field('neck'), hip: field('hip'),
         manualBf: targetDayData?.bfProvenance?.method === 'manual' || (targetDayData?.bf != null && !targetDayData?.bfProvenance) ? field('bf') : '',
@@ -52,13 +52,13 @@ export function useNutritionMeasurements(selectedDate?: string) {
         const historyFields = [
             'weight', 'bf', 'waist', 'neck', 'hip', 'chest', 'shoulders', 'biceps', 'thighs', 'calves',
             'sleepHours', 'sleepDeep', 'sleepLight', 'sleepRem', 'sleepAwake',
-        ];
+        ] as const satisfies readonly (keyof NutritionDay)[];
         return Object.values(nutrition)
-            .filter((day: any) => day && historyFields.some(key => day[key] !== undefined && day[key] !== null && day[key] !== ''))
-            .sort((a: any, b: any) => (b.date || '').localeCompare(a.date || ''));
+            .filter(day => day && historyFields.some(key => day[key] !== undefined && day[key] !== null && day[key] !== ''))
+            .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
     }, [nutrition]);
 
-    const handleEditClick = (day: any) => {
+    const handleEditClick = (day: Pick<NutritionDay, 'date'>) => {
         setEditingDate(day.date);
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
@@ -69,7 +69,7 @@ export function useNutritionMeasurements(selectedDate?: string) {
     const handleDeleteMeasurement = async (dateStr: string) => {
         const session = captureSession();
         const submittedDraft = dateStr === targetDateStr ? { ...draft.values } : undefined;
-        const confirmed = await useDialogStore.getState().showConfirm(`Sei sicuro di voler eliminare la misurazione del ${Logic.formatItalianDate ? Logic.formatItalianDate(dateStr) : dateStr}?`);
+        const confirmed = await useDialogStore.getState().showConfirm(`Sei sicuro di voler eliminare la misurazione del ${Logic.formatItalianDate(dateStr)}?`);
         if (!confirmed || !isCurrentSession(session)) return;
         try {
             await dispatchDurableOperation(dispatchDomainOperation, {
@@ -100,7 +100,7 @@ export function useNutritionMeasurements(selectedDate?: string) {
         }
     };
 
-    const calculateAndSave = async (e?: any, bodyFatMode?: BodyFatMode) => {
+    const calculateAndSave = async (e?: { preventDefault(): void }, bodyFatMode?: BodyFatMode) => {
         if (e) e.preventDefault();
         if (saving.current) return false;
         saving.current = true;

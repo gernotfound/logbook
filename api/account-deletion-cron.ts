@@ -58,13 +58,16 @@ export async function GET(request: Request): Promise<Response> {
   }
 
   let purged = 0;
+  const retentionPage = { scanned: 0 } as import('../server/accountDeletion/retention.js').AccountDeletionRetentionPage;
   while (Date.now() + SAFETY_BUFFER_MS < deletionDeadlineMs) {
     try {
       const deleted = await purgeExpiredCompletedDeletionJobs(
-        ACCOUNT_DELETION_RETENTION_PAGE_SIZE, undefined, deletionDeadlineMs,
+        ACCOUNT_DELETION_RETENTION_PAGE_SIZE, undefined, deletionDeadlineMs, retentionPage,
       );
       purged += deleted;
-      if (deleted < ACCOUNT_DELETION_RETENTION_PAGE_SIZE) break;
+      // Continue after a full page even when every receipt was skipped because
+      // its owner identity was corrupt. Do not retry that same page indefinitely.
+      if (retentionPage.scanned < ACCOUNT_DELETION_RETENTION_PAGE_SIZE) break;
     } catch (error) {
       retentionErrors += 1;
       console.error('[account-deletion-cron] tombstone retention failed', {

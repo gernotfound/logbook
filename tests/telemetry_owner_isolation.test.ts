@@ -55,6 +55,39 @@ describe('Telemetry owner isolation at the production boundary', () => {
     expect(sessionStorage.getItem(SESSION_ID_KEY)).toBe(telemetryHub.getSessionId());
   });
 
+  it('queues an online error if the Sentry boundary returns false', async () => {
+    changeAuth('owner-a');
+    telemetryHub.init();
+    dispatch.mockResolvedValueOnce(false);
+    const queueKey = telemetryHub.getQueueStorageKey();
+
+    telemetryHub.trackError(new Error('Temporary Sentry rejection'));
+    await vi.advanceTimersByTimeAsync(0);
+
+    const saved = JSON.parse(localStorage.getItem(queueKey) || '[]') as Array<{ payload: TelemetryErrorPayload }>;
+    expect(saved).toHaveLength(1);
+    expect(saved[0].payload.userId).toBe('owner-a');
+    expect(saved[0].payload.message).toContain('Temporary Sentry rejection');
+  });
+
+  it('never queues a failed send into the account that replaces its original owner', async () => {
+    changeAuth('owner-a');
+    telemetryHub.init();
+    let finish!: (accepted: boolean) => void;
+    dispatch.mockImplementationOnce(() => new Promise<boolean>(resolve => { finish = resolve; }));
+    const queueKeyA = telemetryHub.getQueueStorageKey();
+
+    telemetryHub.trackError(new Error('Old owner failure'));
+    await vi.advanceTimersByTimeAsync(0);
+    changeAuth('owner-b');
+    const queueKeyB = telemetryHub.getQueueStorageKey();
+    finish(false);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(JSON.parse(localStorage.getItem(queueKeyA) || '[]')).toHaveLength(0);
+    expect(JSON.parse(localStorage.getItem(queueKeyB) || '[]')).toHaveLength(0);
+  });
+
   it('does not send a previous owner pending microtask after an auth switch', async () => {
     changeAuth('owner-a');
     telemetryHub.init();

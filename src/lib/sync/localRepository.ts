@@ -3,12 +3,13 @@ import { UserDataSchema } from '../schema';
 import type { UserData } from '../../types';
 import { generateId } from '../utils/date';
 import { getNutritionConflictFingerprint } from '../utils/object';
-import { parseReplicaIdentity, type CloudCheckpoint, type ReplicaCheckpoint, type ReplicaIdentity } from './replicaProtocol';
+import { checkpointFromCloudDocuments, parseReplicaIdentity, type CloudCheckpoint, type ReplicaCheckpoint, type ReplicaIdentity } from './replicaProtocol';
 import equal from 'fast-deep-equal';
 import { type SemanticOperation, type VectorClock, type SyncMeta, diffDocuments, applySemanticOperations, coversVectorClock, mergeVectors, parseSemanticOperation, parseSyncMeta, parseVectorClock } from './semanticProjection';
 import { projectDocuments, applyRemoteDocuments, type DocumentData } from './documentProjection';
 import { getCachedCatalog } from '../catalog/catalogService';
 import { normalizeStorageOwner } from './owner';
+import { readBrowserValueStrict } from './browserStorage';
 import { normalizeBusinessId, requireBusinessId } from '../businessIdentity';
 import {
     applyDomainOperations,
@@ -42,6 +43,17 @@ interface LocalEnvelopeV5 {
     syncMetaByDocument: Record<string, SyncMeta>;
     replica: ReplicaIdentity | null;
     revision: number;
+    // An older journal must never be replayed under a newly accepted consent.
+    consentRevision?: number;
+    // Original local state is retained after an explicit, non-silent replay.
+    // The entire original journal is included in JSON backup/recovery.
+    archivedConsentJournals?: Array<{
+        sourceConsentRevision: number;
+        capturedAt: string;
+        data: UserData;
+        baseline: UserData;
+        pending: SemanticOperation[];
+    }>;
     // Owner-scoped closure evidence committed with the business mutation.
     // Older V5 envelopes legitimately omit this field.
     lastClosedWorkoutId?: string;
@@ -82,6 +94,19 @@ const keyFor = (owner: string) => {
     return `logbook:v2:${canonicalOwner}`;
 };
 const parse = (value: unknown) => UserDataSchema.parse(value) as unknown as UserData;
+
+const ownerConsentRevision = (owner: string) => {
+    if (!owner.startsWith('user:')) return {};
+    // The generation is durably published only after the trusted server check
+    // and an atomic pending-journal check. Pure local recovery code must not
+    // require a live consent API request just to initialize its archive.
+    const raw = readBrowserValueStrict(`logbook:v2:${owner}:health-consent-generation`);
+    if (raw === null) return {};
+    if (!/^[1-9]\d*$/.test(raw)) throw new Error('Generazione consenso locale non valida');
+    const revision = Number(raw);
+    if (!Number.isSafeInteger(revision)) throw new Error('Generazione consenso fuori limite');
+    return { consentRevision: revision };
+};
 
 function parseCloudSyncMeta(documentPath: string, raw: unknown): SyncMeta {
     try {
@@ -144,6 +169,24 @@ function validate(value: any, owner: string): LocalEnvelope | undefined {
         || new Set(record.closedWorkoutIds).size !== record.closedWorkoutIds.length
     )) throw new Error('Registro workout chiusi non valido');
 
+    if (record.consentRevision !== undefined && (
+        typeof record.consentRevision !== 'number' || !Number.isSafeInteger(record.consentRevision) || record.consentRevision < 0
+    )) throw new Error('Generazione consenso dell’archivio locale non valida');
+
+    if (record.archivedConsentJournals !== undefined) {
+        if (!Array.isArray(record.archivedConsentJournals) || record.archivedConsentJournals.length > 32) {
+            throw new Error('Archivio storico dei consensi non valido');
+        }
+        for (const entry of record.archivedConsentJournals) {
+            if (!entry || typeof entry !== 'object'
+                || !Number.isSafeInteger(entry.sourceConsentRevision) || entry.sourceConsentRevision < 0
+                || typeof entry.capturedAt !== 'string' || !Number.isFinite(Date.parse(entry.capturedAt))
+                || !Array.isArray(entry.pending)) throw new Error('Storico di recupero non valido');
+            parse(entry.data); parse(entry.baseline);
+            entry.pending.forEach(parseSemanticOperation);
+        }
+    }
+
     const replica = parseReplicaIdentity(record.replica);
 
     return {
@@ -184,6 +227,89 @@ function assertWorkoutNotClosed(id: string, envelope: LocalEnvelope | undefined)
     if (envelope && (envelope.lastClosedWorkoutId === id || envelope.closedWorkoutIds?.includes(id))) {
         throw new Error('Allenamento già terminato o eliminato: ricarica la sessione aggiornata.');
     }
+}
+
+/**
+ * Reauthorizes PREVIOUSLY unsent changes only after a new explicit acceptance
+ * and a separate user-confirmed recovery action. The old journal is never sent.
+ * This is one atomic IndexedDB transition; a failed/quota-limited update leaves
+ * the original envelope untouched. An exact full-cloud scan is required.
+ */
+export async function rebaseConsentRecoveryWithExplicitChoice(
+    owner: string, revision: number, expectedLocalRevision: number,
+    cloudData: UserData, chosenData: UserData,
+    cloudDocuments: Map<string, DocumentData>, guard: LocalWriteGuard,
+): Promise<void> {
+    owner = normalizeStorageOwner(owner);
+    if (!owner.startsWith('user:') || !Number.isSafeInteger(revision) || revision < 1) {
+        throw new Error('Nuovo consenso non valido');
+    }
+    const catalog = await getCachedCatalog();
+    const remote = structuredClone(parse(cloudData));
+    const desired = structuredClone(parse({ ...chosenData, legalConsent: remote.legalConsent }));
+    const checkpoint = checkpointFromCloudDocuments(cloudDocuments);
+    const baseDocs = projectDocuments(remote, catalog);
+    const desiredDocs = projectDocuments(desired, catalog);
+    const months = [...new Set([...cloudDocuments.keys()]
+        .filter(path => path.startsWith('history_months/') || path.startsWith('nutrition_months/'))
+        .map(path => path.split('/')[1]))].sort();
+    await update<any>(keyFor(owner), raw => {
+        if (!guard()) throw new Error('Sessione cambiata: recupero annullato');
+        const current = validate(raw, owner);
+        if (!current || current.revision !== expectedLocalRevision || !current.pending.length) {
+            throw new StaleLocalRevisionError(expectedLocalRevision, current?.revision ?? null);
+        }
+        if ((current.consentRevision ?? 0) >= revision) {
+            throw new Error('Journal non appartenente alla precedente generazione di consenso');
+        }
+        const originals = current.archivedConsentJournals ?? [];
+        if (originals.length >= 32) throw new Error('Archivio recupero pieno: esporta i dati prima di ripetere');
+        const actorId = generateId('actor');
+        const baseClock: VectorClock = { ...checkpoint.clock, [actorId]: 0 };
+        const provisionalClock: VectorClock = { ...baseClock, [actorId]: 1 };
+        let operations = diffDocuments(baseDocs, desiredDocs, actorId, 1, provisionalClock);
+        operations = enforceMonthlyEntityTombstones(baseDocs, desiredDocs, operations, actorId, 1, provisionalClock);
+        const sequenced = sequenceOperationsForBoundedTransactions(operations, actorId, 0, baseClock);
+        return {
+            ...current,
+            consentRevision: revision,
+            actorId, actorSeq: sequenced.actorSeq,
+            clock: sequenced.clock,
+            data: desired, baseline: remote,
+            completeMonths: months,
+            pending: sequenced.operations,
+            syncMetaByDocument: checkpoint.syncMetaByDocument,
+            replica: null,
+            archivedConsentJournals: [
+                ...originals,
+                {
+                    sourceConsentRevision: current.consentRevision ?? 0,
+                    capturedAt: new Date().toISOString(),
+                    data: structuredClone(current.data),
+                    baseline: structuredClone(current.baseline),
+                    pending: structuredClone(current.pending),
+                },
+            ],
+            revision: current.revision + 1,
+        };
+    });
+}
+
+export async function advanceLocalConsentRevisionIfClean(owner: string, revision: number): Promise<boolean> {
+    owner = normalizeStorageOwner(owner);
+    if (!owner.startsWith('user:') || !Number.isSafeInteger(revision) || revision < 1) throw new Error('Generazione consenso non valida');
+    let ready = false;
+    await update<any>(keyFor(owner), raw => {
+        const current = validate(raw, owner);
+        if (!current) { ready = true; return raw; }
+        const previous = current.consentRevision ?? 0;
+        if (previous > revision) throw new Error('Generazione locale più recente del server');
+        if (previous === revision) { ready = true; return raw; }
+        if (current.pending.length > 0) { ready = false; return raw; }
+        ready = true;
+        return { ...current, consentRevision: revision, replica: null, revision: current.revision + 1 };
+    });
+    return ready;
 }
 
 export async function readLocal(owner: string): Promise<LocalEnvelope | undefined> {
@@ -513,7 +639,7 @@ export async function initializeLocal(owner: string, data: UserData, completeMon
         // can be empty (especially for guest or an acknowledged account) while
         // a concurrent tab has already committed durable business edits.
         if (current) return current;
-        return { ...currentEnvelopeVersions(), owner, actorId: generateId('actor'), actorSeq: 0, clock: {}, data: parsed, baseline: parsed, completeMonths: completeMonths ?? [], pending: [], syncMetaByDocument: {}, replica: null, revision: 0 };
+        return { ...currentEnvelopeVersions(), ...ownerConsentRevision(owner), owner, actorId: generateId('actor'), actorSeq: 0, clock: {}, data: parsed, baseline: parsed, completeMonths: completeMonths ?? [], pending: [], syncMetaByDocument: {}, replica: null, revision: 0 };
     });
 }
 
@@ -533,7 +659,7 @@ export async function hydrateLocal(owner: string, cloudData: UserData, months: s
                 syncMetaByDocument[path] = meta;
                 for (const [actor, seq] of Object.entries(meta.clock)) clock[actor] = Math.max(clock[actor] || 0, seq);
             }
-            saved = { ...currentEnvelopeVersions(), owner, actorId: generateId('actor'), actorSeq: 0, clock, data: cloud, baseline: cloud, completeMonths: months, pending: [], syncMetaByDocument, replica: null, revision: 0 };
+            saved = { ...currentEnvelopeVersions(), ...ownerConsentRevision(owner), owner, actorId: generateId('actor'), actorSeq: 0, clock, data: cloud, baseline: cloud, completeMonths: months, pending: [], syncMetaByDocument, replica: null, revision: 0 };
         } else {
             const syncMeta: Record<string, SyncMeta> = {};
             const authoritativePaths = new Set(['', ...months.map(m => `history_months/${m}`), ...months.map(m => `nutrition_months/${m}`)]);

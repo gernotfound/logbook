@@ -7,6 +7,7 @@ import { rootDocument, type DocumentData } from './documentProjection';
 import type { UserData } from '../../types';
 import { assertHistoryMonthDocument, assertNutritionMonthDocument } from './monthlyIntegrity';
 import { type SemanticOperation, type SyncMeta, applySemanticOperations, parseSyncMeta } from './semanticProjection';
+import { getVerifiedHealthConsentRevision } from '../healthConsent';
 import { compactSyncMetas } from './causalCompaction';
 import {
     ReplicaFencedError,
@@ -129,6 +130,10 @@ export async function applyDocumentChanges(
         if (!isCurrent()) throw new Error('Sessione cambiata');
         if (!controlSnapshot.exists()) throw new ReplicaFencedError('Registro replica assente: checkpoint completo richiesto.');
         const control = parseReplicaControl(controlSnapshot.data());
+        const consentRevision = getVerifiedHealthConsentRevision(uid);
+        if ((control.consentRevision ?? 0) !== consentRevision) {
+            throw new ReplicaFencedError('La replica appartiene a una generazione di consenso precedente.');
+        }
         const replicaEntry = control.replicas[replica.slot];
         if (!matchesReplica(replicaEntry, replica)) throw new ReplicaFencedError();
         if (replicaEntry!.leaseUntilMs < Date.now()) throw new ReplicaFencedError('Lease replica scaduta: checkpoint completo richiesto.');
@@ -158,7 +163,8 @@ export async function applyDocumentChanges(
         const { documents: newDocs, syncMetas: mergedSyncMetas } = applySemanticOperations(baseDocs, ops, remoteSyncMetas);
         const compactedSyncMetas = compactSyncMetas(mergedSyncMetas, stableFrontier);
         const deliveredSeq = ops.reduce((max, operation) => Math.max(max, operation.seq), replicaEntry!.lastSeq);
-        const writer = { slot: replica.slot, replicaId: replica.replicaId, generation: replica.generation, seq: deliveredSeq };
+        const writer = { slot: replica.slot, replicaId: replica.replicaId, generation: replica.generation, seq: deliveredSeq,
+            ...(consentRevision > 0 ? { consentRevision } : {}) };
         const newSyncMetas: Record<string, SyncMeta> = Object.fromEntries(
             Object.entries(compactedSyncMetas).map(([path, meta]) => [path, { ...meta, writer }]),
         );

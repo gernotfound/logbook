@@ -3,7 +3,7 @@ import { set as idbSet } from 'idb-keyval';
 import { doc, writeBatch } from 'firebase/firestore';
 
 vi.unmock('../src/lib/db');
-import { TestDB as DB } from './testUtils';
+import { ConsentedTestDB as DB } from './testUtils';
 import { getCachedCatalog, clearCatalogCache } from '../src/lib/catalog/catalogService';
 import { storageOwner } from '../src/lib/sync/session';
 import { mergeUserData } from '../src/lib/merge';

@@ -16,10 +16,15 @@ async function dispatchWithTimeout(
   payload: TelemetryErrorPayload | TelemetryEventPayload,
 ): Promise<boolean> {
   const dispatchPromise = sendTelemetryToSentry(kind, payload);
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
   const timeoutPromise = new Promise<boolean>((resolve) => {
-    setTimeout(() => resolve(false), TELEMETRY_DISPATCH_TIMEOUT_MS);
+    timeoutId = setTimeout(() => resolve(false), TELEMETRY_DISPATCH_TIMEOUT_MS);
   });
-  return Promise.race([dispatchPromise, timeoutPromise]);
+  try {
+    return await Promise.race([dispatchPromise, timeoutPromise]);
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 export async function dispatchTelemetryError(

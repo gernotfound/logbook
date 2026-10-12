@@ -61,7 +61,7 @@ Completamento 2026-10-02: PR #191 squash-merged; `main` = `edf164e3e410a650d1390
 
 ## Chiusura
 
-Dopo smoke verdi il supporto CORS legacy viene rimosso dal backend. Il 2026-10-02 il vecchio origin Vercel è stato rimosso da Firebase Auth Authorized domains, Browser API key e reCAPTCHA Enterprise e App Check è stato portato in enforcement su Firestore/Auth/RTDB. Restano da verificare/ripulire l'eventuale origin/redirect Vercel nel Web OAuth client, Sentry Allowed Domains e Search Console. Il dominio Firebase predefinito resta necessario alle email action finché il provider rifiuta il cambio callback con `EMAIL_TEMPLATE_UPDATE_NOT_ALLOWED`.
+Questa è la **chiusura storica del cutover**, non una checklist ancora aperta. Dopo gli smoke iniziali è stato ritirato il supporto CORS legacy del backend. Il 2026-10-02 il vecchio origin Vercel è stato rimosso da Firebase Auth Authorized domains, Browser API key e reCAPTCHA Enterprise e App Check è stato portato in enforcement su Firestore/Auth/RTDB. Le verifiche successive del 2026-10-03, registrate in `docs/operations/external-services-register.md`, attestano l'assenza di origin/redirect Vercel nel Web OAuth client, la rimozione del dominio da Sentry Allowed Domains e la configurazione Search Console del nuovo origin con **Cambio di indirizzo avviato**, non attestato come concluso. Il dominio Firebase predefinito resta necessario alle email action finché il provider rifiuta il cambio callback con `EMAIL_TEMPLATE_UPDATE_NOT_ALLOWED`. Per lo stato live successivo usare il provider competente, non questo checkpoint.
 
 ## GO / NO-GO
 

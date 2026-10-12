@@ -99,6 +99,17 @@ I dati ad alta cardinalità sono organizzati per mese:
 
 Il mese deriva dalla data locale della registrazione. Hydration parziale/completa e merge dei mesi seguono gli invarianti di `.agents/rules/storage-and-sync.md`; non trattare un mese non caricato come mese vuoto.
 
+### Integrità dei documenti mensili
+
+`src/lib/sync/monthlyIntegrity.ts` è il boundary condiviso dalla scansione completa in `src/lib/db.ts` e dalle letture per finestra in `src/lib/db/db_training.ts` e `src/lib/db/db_nutrition.ts`.
+
+- **MUST:** normalizzare ogni shard con `normalizeCloudDocument()` prima di interpretarne i dati business. Versioni future o incompatibili falliscono chiuse, non diventano mesi vuoti.
+- **MUST:** `sanitizeHistoryMonthDocument()` ammette solo record con chiave e ID business validi/coerenti e data canonica appartenente al mese richiesto; `sanitizeNutritionMonthDocument()` ammette solo giornate con chiave data canonica del mese e `day.date` identica alla chiave. Le voci invalide sono scartate, senza inventare identità o spostare silenziosamente dati tra mesi.
+- **MUST:** conservare nel `cloudDocuments` i metadati causali `_sync` del documento normalizzato anche dopo la sanitizzazione business. Gli assert strict `assertHistoryMonthDocument()` e `assertNutritionMonthDocument()` proteggono invece i percorsi di scrittura.
+- **MUST:** preservare la validazione finale `DomainParsers.parseHistory()` e `DomainParsers.parseNutrition()` nel caricamento cloud, oltre al gateway `UserDataSchema` nell'hydration/commit locale. Gli oggetti Firestore intermedi restano non attendibili anche se hanno tipi TypeScript.
+
+**MUST:** un mese non caricato, un documento assente e una voce scartata per integrità sono casi distinti; nessuno giustifica da solo una cancellazione cloud o la sostituzione distruttiva di mesi locali. Rimangono obbligatori la copertura `window`/`all`, il journal e il replay causale. Ogni modifica di questi boundary richiede regressioni per dati incompleti, date/mese incoerenti, versioni future, fallimenti e retry.
+
 ## Domain Operations
 
 La classificazione storage non cambia il mutation boundary M8. Le normali mutazioni business UI/hook devono usare Domain Operations; snapshot-save resta confinato ai boundary bulk/compatibility allowlisted in `.agents/rules/domain-operations.md`.
