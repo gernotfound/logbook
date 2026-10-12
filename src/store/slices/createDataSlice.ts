@@ -9,6 +9,7 @@ import { getNutritionConflictFingerprint } from '../../lib/utils/object';
 import { updateStorageMarker, clearStorageMarker } from '../../lib/storageTelemetry';
 import { commitLocal, initializeLocal, clearNutritionConflict, readLocal, StaleLocalRevisionError } from '../../lib/sync/localRepository';
 import { writeDeviceValue } from '../../lib/sync/deviceStorage';
+import { readVaultControl } from '../../lib/sync/secureArchiveSession';
 import { captureSession, isCurrentSession } from '../../lib/sync/session';
 import { markTabSnapshotClean, markTabSnapshotDirty } from '../../lib/sync/tabSnapshotCausality';
 import { isUpdateRequiredError } from '../../lib/schemaEvolution';
@@ -67,6 +68,9 @@ export const saveUserDataToCache = async (data: UserData | null, base?: UserData
             return envelope.data;
         }
         if (!guard()) throw new Error('Sessione cambiata prima della rimozione locale.');
+        // A protected archive may be removed only through a verified lifecycle
+        // purge (logout/account deletion), never an incidental null cache save.
+        if (readVaultControl(session.owner)) throw new Error('Archivio cifrato: utilizza il percorso verificato di cancellazione locale.');
         await idbDel(`logbook:v2:${session.owner}`);
         if (guard()) clearStorageMarker(undefined, session.owner);
         return null;
