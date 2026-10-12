@@ -1,10 +1,10 @@
-# Screening DPIA — LogBook
+# Screening DPIA — TheLogBook
 
 > Screening preliminare Art. 35 GDPR. Non sostituisce una DPIA completa quando il trattamento è suscettibile di presentare un rischio elevato.
 
 ## Ambito
 
-- Trattamento: PWA LogBook per allenamento, nutrizione, misurazioni corporee, sync cloud e recovery.
+- Trattamento: PWA TheLogBook per allenamento, nutrizione, misurazioni corporee, sync cloud e recovery.
 - Popolazione: utenti maggiorenni; dimensione pilot `[NUMBER]`.
 - Organizzazioni coinvolte: `[PROVIDER]`, `[GYM]`, fornitori tecnici.
 - Versione architettura/repository: `[MAIN_SHA]`.
