@@ -73,7 +73,20 @@ function remainingLocalPurgeKeys(owner: string): Set<string> {
     return remaining;
 }
 
-function assertOrdinaryPurgeAllowed(owner: string): void {
+export class HealthConsentTransitionPendingError extends Error {
+    constructor() {
+        super('La revoca o la nuova accettazione dei dati salute non è ancora riconciliata. Per non perdere la richiesta, completa la verifica prima di uscire.');
+        this.name = 'HealthConsentTransitionPendingError';
+    }
+}
+
+export function assertOrdinaryPurgeAllowed(owner: string): void {
+    // A sign-out or an ordinary purge must not erase the only durable copy
+    // of a withdrawal not yet confirmed by the trusted server.
+    const consent = readBrowserValueStrict(`logbook:v2:${owner}:health-consent-withdrawal`);
+    if (consent !== null && consent !== 'withdrawn') {
+        throw new HealthConsentTransitionPendingError();
+    }
     if (owner.startsWith('user:')) {
         if (isAccountDeletionPending(owner)) {
             throw new Error('Cancellazione account in sospeso: i dati locali devono restare disponibili per il recupero.');
