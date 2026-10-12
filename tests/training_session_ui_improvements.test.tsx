@@ -1,6 +1,9 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
+import { captureSession } from '../src/lib/sync/session';
+import { prepareUnlockedTestArchive } from './secureVaultFixture';
+import { initializeLocal } from '../src/lib/sync/localRepository';
 import SessionExerciseCard from '../src/components/Training/session/SessionExerciseCard';
 import SessionSetRow from '../src/components/Training/session/SessionSetRow';
 import TrainingSession from '../src/components/Training/TrainingSession';
@@ -554,13 +557,18 @@ describe('Training Session UI Improvements Suite (R1, R2, R3)', () => {
                 ]
             };
 
+            const owner = captureSession().owner;
+            const initialData = {
+                ...emptyUserData,
+                library: mockLibrary,
+                routines: [{ id: 'routine_1', name: 'Scheda Petto', exercises: [{ exId: 'ex_bench', setsCount: 3 }] }],
+                activeWorkout,
+            };
+            await prepareUnlockedTestArchive(owner);
+            await initializeLocal(owner, initialData);
             renderWithProviders(<TrainingSession />, {
                 localWorkout: activeWorkout,
-                userData: {
-                    ...emptyUserData,
-                    library: mockLibrary,
-                    routines: [{ id: 'routine_1', name: 'Scheda Petto', exercises: [{ exId: 'ex_bench', setsCount: 3 }] }]
-                }
+                userData: initialData,
             });
 
             // 1. Add a 3rd set
@@ -591,8 +599,10 @@ describe('Training Session UI Improvements Suite (R1, R2, R3)', () => {
             });
 
             expect(showConfirmSpy).toHaveBeenCalledTimes(1);
+            await waitFor(() => {
+                expect(useAppStore.getState().localWorkout?.exercises[0].sets).toHaveLength(1);
+            });
             currentWorkout = useAppStore.getState().localWorkout;
-            expect(currentWorkout?.exercises[0].sets).toHaveLength(1);
 
             // 4. Remove the 1st filled set down to 0 sets
             showConfirmSpy.mockResolvedValueOnce(true);
