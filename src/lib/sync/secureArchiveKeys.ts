@@ -72,7 +72,7 @@ async function recoveryAesKey(code: Uint8Array): Promise<CryptoKey> {
 async function wrapDek(key: CryptoKey, dek: Uint8Array, owner: string, purpose: 'passphrase' | 'recovery') {
     const nonce = crypto.getRandomValues(new Uint8Array(NONCE_BYTES));
     const encrypted = await crypto.subtle.encrypt(
-        { name: 'AES-GCM', iv: nonce, additionalData: aad(owner, purpose) },
+        { name: 'AES-GCM', iv: nonce, additionalData: new Uint8Array(aad(owner, purpose)) },
         key, new Uint8Array(dek),
     );
     return { nonce: hex(nonce), wrappedDek: hex(new Uint8Array(encrypted)) };
@@ -81,7 +81,7 @@ async function wrapDek(key: CryptoKey, dek: Uint8Array, owner: string, purpose: 
 async function unwrapDek(key: CryptoKey, value: { nonce: string; wrappedDek: string }, owner: string, purpose: 'passphrase' | 'recovery'): Promise<Uint8Array> {
     try {
         const decrypted = await crypto.subtle.decrypt(
-            { name: 'AES-GCM', iv: parseHex(value.nonce, NONCE_BYTES), additionalData: aad(owner, purpose) },
+            { name: 'AES-GCM', iv: new Uint8Array(parseHex(value.nonce, NONCE_BYTES)), additionalData: new Uint8Array(aad(owner, purpose)) },
             key, parseHex(value.wrappedDek, KEY_BYTES + 16),
         );
         const plain = new Uint8Array(decrypted);
