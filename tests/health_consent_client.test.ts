@@ -10,6 +10,8 @@ import {
   finishHealthConsentReacceptance, isHealthConsentWritable,
   reacceptHealthConsent, refreshHealthConsent, requireHealthConsentWritable,
   withdrawHealthConsent,
+  withdrawGuestHealthConsent, beginGuestHealthReacceptance,
+  completeGuestHealthReacceptance, getGuestHealthConsentStatus,
 } from '../src/lib/healthConsent';
 
 const user = (uid: string) => ({ uid, getIdToken: vi.fn(async () => 'id-token') }) as any;
@@ -88,3 +90,32 @@ describe('durable health-consent client barrier', () => {
 
   // Across tabs the persisted epoch changes without mutating the original tab's
   // realm. Old in-flight callbacks must fail before touching the journal.
+
+describe('local-only guest consent lifecycle', () => {
+  it('revocation is durable, immediately suspends local writes, and never calls a backend', () => {
+    const mock = vi.fn();
+    vi.stubGlobal('fetch', mock);
+    expect(getGuestHealthConsentStatus()).toBe('active');
+    withdrawGuestHealthConsent();
+    expect(localStorage.getItem('logbook:v2:guest:health-consent-withdrawal')).toBe('withdrawn');
+    expect(getGuestHealthConsentStatus()).toBe('withdrawn');
+    expect(isHealthConsentWritable('guest')).toBe(false);
+    expect(mock).not.toHaveBeenCalled();
+  });
+  it('permits only an explicit guest reacceptance with its local persistence phase', () => {
+    withdrawGuestHealthConsent();
+    beginGuestHealthReacceptance();
+    expect(getGuestHealthConsentStatus()).toBe('reaccepting');
+    expect(isHealthConsentWritable('guest')).toBe(true);
+    completeGuestHealthReacceptance(true);
+    expect(localStorage.getItem('logbook:v2:guest:health-consent-withdrawal')).toBeNull();
+    expect(getGuestHealthConsentStatus()).toBe('active');
+  });
+  it('reverts to suspended mode after a failed local persistence attempt', () => {
+    withdrawGuestHealthConsent();
+    beginGuestHealthReacceptance();
+    completeGuestHealthReacceptance(false);
+    expect(getGuestHealthConsentStatus()).toBe('withdrawn');
+    expect(isHealthConsentWritable('guest')).toBe(false);
+  });
+});
