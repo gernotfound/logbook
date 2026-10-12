@@ -3,6 +3,7 @@ import { screen, renderHook, fireEvent } from '@testing-library/react';
 import App from '../src/App';
 import HeaderDashboard from '../src/components/Home/widgets/HeaderDashboard';
 import { defaultMockUserData, renderWithProviders } from './setup';
+import { prepareUnlockedTestArchive } from './secureVaultFixture';
 import { LEGAL_VERSIONS } from '../src/lib/legalVersions';
 import { 
     AppTabSchema, 
@@ -15,9 +16,10 @@ import { useLocalStorage } from '../src/hooks/useLocalStorage';
 import { LOCAL_STORAGE_ACTIVE_TAB } from '../src/constants';
 
 describe('R4: Tab Zod Schema & LocalStorage Fallback Resilience (ARCH-05)', () => {
-    beforeEach(() => {
+    beforeEach(async () => {
         window.localStorage.clear();
         vi.clearAllMocks();
+        await prepareUnlockedTestArchive();
     });
 
     describe('Zod Schema Unit Validation', () => {
