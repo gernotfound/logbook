@@ -15,6 +15,8 @@ import { deviceKey, protectedDeviceKey, readDeviceValueStrict } from '../../src/
 import { createAndMigrateVault, resumeVaultMigration } from '../../src/lib/sync/secureArchiveMigration';
 import { LocalVaultLockedError, lockAllVaults, lockVault, readVaultControl, unlockVaultWithPassphrase } from '../../src/lib/sync/secureArchiveSession';
 import { LocalCiphertextError, SEALED_LOCAL_PREFIX } from '../../src/lib/sync/secureArchiveCipher';
+import { activateGuestSession, GUEST_SESSION_KEY, GUEST_REVOCATION_KEY } from '../../src/lib/sync/session';
+import { collectBackupSnapshot } from '../../src/lib/db/backupSnapshot';
 
 const owner = 'user:secure-migration';
 const phrase = 'unique local strong passphrase 2026';
@@ -94,6 +96,29 @@ describe('durable secure archive migration', () => {
         expect(() => readDeviceValueStrict('workout', owner)).toThrow(LocalCiphertextError);
         expect(localStorage.getItem(deviceKey('workout', owner))).toContain('newer-old-tab');
         expect(localStorage.getItem(protectedDeviceKey('workout', owner))).not.toContain('newer-old-tab');
+    });
+
+    it('exports decrypted device snapshots in an explicit guest JSON backup without exposing plaintext in storage', async () => {
+        localStorage.setItem('logbook_is_guest', 'true');
+        localStorage.setItem(GUEST_SESSION_KEY, 'secure-backup-fixture');
+        localStorage.removeItem(GUEST_REVOCATION_KEY);
+        activateGuestSession('secure-backup-fixture');
+        const data = base();
+        await initializeLocal('guest', data);
+        const notes = '{"notes":"sensitive offline workout"}';
+        const draft = '{"weight":"77"}';
+        localStorage.setItem(deviceKey('workout', 'guest'), notes);
+        localStorage.setItem(deviceKey('draft:measurement:' + day, 'guest'), draft);
+
+        await createAndMigrateVault('guest', phrase);
+        const snapshot = await collectBackupSnapshot(data, false);
+        expect(snapshot.owner).toBe('guest');
+        expect(snapshot.recovery.device).toMatchObject({
+            workout: notes,
+            ['draft:measurement:' + day]: draft,
+        });
+        expect(localStorage.getItem(protectedDeviceKey('workout', 'guest'))).not.toContain('sensitive offline workout');
+        expect(localStorage.getItem(deviceKey('workout', 'guest'))).toBeNull();
     });
 
     it('never activates a corrupt legacy archive or silently seeds empty data', async () => {
