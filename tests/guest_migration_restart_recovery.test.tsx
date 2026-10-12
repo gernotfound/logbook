@@ -24,6 +24,8 @@ import * as localRepository from '../src/lib/sync/localRepository';
 import { useAppStore } from '../src/store/useAppStore';
 import type { UserData } from '../src/types';
 import { beginGuestMigrationIntent } from '../src/lib/auth/guestMigrationIntent';
+import { createAndMigrateVault } from '../src/lib/sync/secureArchiveMigration';
+import { lockAllVaults } from '../src/lib/sync/secureArchiveSession';
 
 const defaultRunTransaction = vi.mocked(runTransaction).getMockImplementation();
 
@@ -41,6 +43,7 @@ function fixtures() {
 }
 
 beforeEach(async () => {
+    lockAllVaults();
     vi.clearAllMocks();
     vi.mocked(runTransaction).mockReset();
     if (defaultRunTransaction) vi.mocked(runTransaction).mockImplementation(defaultRunTransaction);
@@ -51,6 +54,7 @@ beforeEach(async () => {
     vi.mocked(onAuthStateChanged).mockImplementation((_auth, callback: any) => { callback(user); return () => {}; });
     const { guest } = fixtures();
     await localRepository.initializeLocal('guest', guest, []);
+    await createAndMigrateVault('user:guest-restart-user', 'guest recovery after restart passphrase 2026');
     onlineSpy = vi.spyOn(window.navigator, 'onLine', 'get').mockReturnValue(false) as any;
 });
 
