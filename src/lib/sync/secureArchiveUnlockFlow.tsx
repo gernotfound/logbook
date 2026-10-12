@@ -1,35 +1,69 @@
-import { createRoot } from 'react-dom/client';
+import { createRoot, type Root } from 'react-dom/client';
 import { SecureVaultPrompt } from './SecureVaultPrompt';
-import { isVaultUnlocked } from './secureArchiveSession';
+import { isVaultUnlocked, readVaultControl, unlockVaultForOwner } from './secureArchiveSession';
+import { createAndMigrateVault, resumeVaultMigration } from './secureArchiveMigration';
 import { normalizeStorageOwner } from './owner';
 
-const activePrompts = new Map<string, Promise<void>>();
+type PendingReadiness = { promise: Promise<void>; cancel: () => void };
+const active = new Map<string, PendingReadiness>();
 
 /**
- * Blocks every ordinary business-data bootstrap, hydration, and sync until the
- * owner-scoped vault is provisioned or unwrapped. Prompts are shared by calls
- * in the SAME tab, but keys are never shared across tabs.
+ * Called only after the guest generation or Firebase UID has been established.
+ * No extra user credential is required. The DEK is unwrapped with the local
+ * non-extractable Web Crypto device key after ownership has been checked.
  */
 export function ensureLocalVaultReady(requestedOwner: string): Promise<void> {
     const owner = normalizeStorageOwner(requestedOwner);
     if (isVaultUnlocked(owner)) return Promise.resolve();
-    const running = activePrompts.get(owner);
-    if (running) return running;
-    if (typeof document === 'undefined') return Promise.reject(new Error('Sblocco archivio non disponibile senza interfaccia.'));
-    const node = document.createElement('div');
-    node.id = 'secure-local-archive-unlock';
-    document.body.appendChild(node);
-    const root = createRoot(node);
+    const existing = active.get(owner);
+    if (existing) return existing.promise;
+
+    let root: Root | null = null;
+    let container: HTMLElement | null = null;
+    let finished = false;
     let resolve!: () => void;
     const promise = new Promise<void>(r => { resolve = r; });
-    activePrompts.set(owner, promise);
-    const finish = () => {
-        if (!isVaultUnlocked(owner)) return;
-        root.unmount();
-        node.remove();
-        activePrompts.delete(owner);
+    const complete = () => {
+        if (finished) return;
+        finished = true;
+        root?.unmount();
+        container?.remove();
+        active.delete(owner);
         resolve();
     };
-    root.render(<SecureVaultPrompt owner={owner} done={finish} />);
+    const showFailure = (cause: unknown) => {
+        if (finished || typeof document === 'undefined') return;
+        if (!root) {
+            container = document.createElement('div');
+            container.id = 'secure-local-archive-recovery';
+            document.body.appendChild(container);
+            root = createRoot(container);
+        }
+        const message = cause instanceof Error ? cause.message : 'Errore sconosciuto dello storage.';
+        root.render(<SecureVaultPrompt error={message} retry={() => { void attempt(); }} />);
+    };
+    let busy = false;
+    const attempt = async () => {
+        if (finished || busy) return;
+        busy = true;
+        try {
+            const control = readVaultControl(owner);
+            if (!control) await createAndMigrateVault(owner);
+            else if (control.phase === 'migrating') await resumeVaultMigration(owner);
+            else await unlockVaultForOwner(owner);
+            if (!isVaultUnlocked(owner)) throw new Error('La sessione locale non è più valida.');
+            complete();
+        } catch (cause) {
+            showFailure(cause);
+        } finally { busy = false; }
+    };
+    active.set(owner, { promise, cancel: complete });
+    void attempt();
     return promise;
+}
+
+/** Cancel a waiting identity without granting it a key or deleting ciphertext. */
+export function cancelLocalVaultReadiness(requestedOwner: string): void {
+    const owner = normalizeStorageOwner(requestedOwner);
+    active.get(owner)?.cancel();
 }
