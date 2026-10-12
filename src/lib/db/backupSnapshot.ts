@@ -1,5 +1,5 @@
 import { collection, doc, documentId, getDocFromServer, getDocsFromServer, limit, orderBy, query, startAfter, type QueryDocumentSnapshot } from 'firebase/firestore';
-import { getDb, ensureAppCheck } from '../firebase';
+import { auth, getDb, ensureAppCheck } from '../firebase';
 import { captureSession, isCurrentSession } from '../sync/session';
 import { readLocal } from '../sync/localRepository';
 import { getCachedCatalog } from '../catalog/catalogService';
@@ -11,7 +11,7 @@ import { withTimeout } from './db_core';
 import type { UserData } from '../../types';
 import type { BackupCoverage } from '../backup';
 import equal from 'fast-deep-equal';
-import { currentHealthConsentStatus } from '../healthConsent';
+import { currentHealthConsentStatus, readHealthConsentServerStatus } from '../healthConsent';
 import { fetchWithdrawnCloudBackup } from './withdrawnBackupTransport';
 
 const RECOVERY_DEVICE_KEYS = new Set(['workout', 'timer', 'draft_exercise', 'draft_routine']);
@@ -44,9 +44,19 @@ export async function collectBackupSnapshot(fallback: UserData, includeCloud: bo
         await ensureAppCheck();
         assertCurrent();
         const uid = session.owner.slice(5);
-        if (['withdrawn', 'pending', 'checking', 'error', 'reaccepting'].includes(currentHealthConsentStatus(uid))) {
-            // Rules deny all direct fitness reads during revocation. Export and
-            // privacy rights use the independently authenticated Admin boundary.
+        let useTrustedExport = false;
+        if (currentHealthConsentStatus(uid) !== 'active') {
+            // The local suspended state may be behind another device. During
+            // reacceptance the server can be either withdrawn OR active; only
+            // the former is eligible for the dedicated Admin export endpoint.
+            const user = auth.currentUser;
+            if (!user || user.uid !== uid) throw new Error('Account cambiato durante esportazione.');
+            useTrustedExport = await readHealthConsentServerStatus(user) === 'withdrawn';
+            assertCurrent();
+        }
+        if (useTrustedExport) {
+            // Rules deny direct reads while the server is withdrawn. Rights
+            // export uses a separate authenticated, paginated Admin boundary.
             const withdrawnDocuments = await fetchWithdrawnCloudBackup(uid, assertCurrent);
             for (const [path, raw] of withdrawnDocuments) { assertCurrent(); addRawDoc(path, raw); }
         } else {

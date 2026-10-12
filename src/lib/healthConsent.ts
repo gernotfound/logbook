@@ -166,6 +166,12 @@ async function serverRequest(user: User, method: 'GET' | 'POST', body?: unknown)
   return state as ServerStatus;
 }
 
+/** Export is permitted in suspended mode, but the Admin-only transport is
+ * permitted only when the server is actually withdrawn. */
+export async function readHealthConsentServerStatus(user: User): Promise<ServerStatus['status']> {
+  return (await serverRequest(user, 'GET')).status;
+}
+
 /** Read the live generation for a separate, user-confirmed pending-data recovery. */
 export async function readActiveHealthConsentRevision(user: User): Promise<number> {
   const state = await serverRequest(user, 'GET');
