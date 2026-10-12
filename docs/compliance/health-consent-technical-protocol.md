@@ -39,3 +39,7 @@ Anche il marker browser strict della revisione fa parte del SessionSnapshot loca
 ## Ospite (solo dispositivo)
 
 In assenza di account Firebase, il marker `logbook:v2:guest:health-consent-withdrawal` è durevole nel browser: blocca mutazioni, nasconde tutto il fitness e invalida le sessioni delle altre schede. La sospensione lascia solo informativa, backup locale, cancellazione dati ospite, logout e nuova accettazione separata esplicita. Il re-consenso salva il documento locale prima di rimuovere il marker; nessun backend viene chiamato per il consenso ospite. Le Rules Firestore restano il confine dei soli account autenticati.
+
+## Ripresa consapevole del journal dopo nuovo consenso (candidato)
+
+Quando vi sono pending precedenti, non vengono spediti. La schermata `recovery-required` offre una scelta separata ed esplicita: utilizzare nuovamente le modifiche locali confrontandole con una lettura integrale e aggiornata dei documenti cloud. L'algoritmo produce un **nuovo** journal causale relativo al cloud corrente, preserva il consenso firmato dal server e conserva nell'archivio locale precedente i valori, il baseline e tutte le vecchie operazioni. Il cambio avviene in un'unica transazione IndexedDB con controllo di revisione e sessione; in caso di errore resta il vecchio journal. L'utente va avvisato dei conflitti e della necessità di scaricare un backup prima del recupero. Non si tratta di replay automatico.
