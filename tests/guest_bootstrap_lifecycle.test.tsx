@@ -135,15 +135,17 @@ describe('Milestone M2: Guest Bootstrap & Cold Start Lifecycle', () => {
 
         let releasePurge!: () => void;
         const blocked = new Promise<void>(resolve => { releasePurge = resolve; });
+        const realPurge = DB.purgeAllLocalUserData.bind(DB);
         const purge = vi.spyOn(DB, 'purgeAllLocalUserData')
             .mockImplementationOnce(async () => {
                 await blocked;
                 throw new Error('simulated IndexedDB delete failure');
             })
             .mockImplementationOnce(async () => {
-                localStorage.removeItem('logbook_is_guest');
-                localStorage.removeItem(GUEST_SESSION_KEY);
-                localStorage.removeItem('logbook:v2:guest:secure-vault-control');
+                // A successful purge must also remove the real encrypted IDB
+                // envelope and wrapped DEK. Clearing only localStorage would
+                // strand ciphertext encrypted under a previous guest identity.
+                await realPurge('guest');
             });
 
         let logout!: Promise<void>;
