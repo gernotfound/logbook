@@ -1,5 +1,5 @@
 import type { User } from 'firebase/auth';
-import { ensureAppCheck } from './firebase';
+import { auth, ensureAppCheck } from './firebase';
 import { getLimitedUseAppCheckToken } from './appCheck';
 import { readBrowserValueStrict, removeBrowserValue, writeBrowserValue } from './sync/browserStorage';
 
@@ -112,6 +112,9 @@ export function isHealthConsentWritable(owner: string): boolean {
   if (!owner.startsWith('user:')) return true;
   const uid = owner.slice(5);
   if (currentHealthConsentStatus(uid) !== 'active') return false;
+  // A real authenticated session may not write on the default/unknown revision.
+  // Node-only pure sync tests have no Firebase currentUser and use rev 0 fixtures.
+  if (auth?.currentUser?.uid === uid && !verifiedRevisions.has(uid)) return false;
   try {
     const persisted = readBrowserValueStrict(generationMarker(uid));
     const verified = verifiedRevisions.get(uid) ?? 0;
@@ -119,7 +122,9 @@ export function isHealthConsentWritable(owner: string): boolean {
   } catch { return false; }
 }
 export function getVerifiedHealthConsentRevision(uid: string): number {
-  if (currentHealthConsentStatus(uid) !== 'active') throw new Error('Consenso non verificato per questa sessione.');
+  if (currentHealthConsentStatus(uid) !== 'active' || (auth?.currentUser?.uid === uid && !verifiedRevisions.has(uid))) {
+    throw new Error('Consenso non verificato per questa sessione.');
+  }
   return verifiedRevisions.get(uid) ?? 0;
 }
 
