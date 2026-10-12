@@ -120,6 +120,10 @@ export async function refreshHealthConsent(user: User): Promise<HealthConsentSta
     // An older, unsent journal belongs to the previous consent generation.
     // Never silently relabel it as newly authorized or delete it.
     if (state.revision > 0) {
+      // Publish the cross-tab fence BEFORE touching IndexedDB. Otherwise an
+      // older tab could commit a new operation between the archive update and
+      // the marker write, contaminating the new consent generation.
+      writeBrowserValue(generationMarker(uid), String(state.revision));
       const { advanceLocalConsentRevisionIfClean } = await import('./sync/localRepository');
       const ready = await advanceLocalConsentRevisionIfClean('user:' + uid, state.revision);
       if (!ready) {
@@ -127,10 +131,6 @@ export async function refreshHealthConsent(user: User): Promise<HealthConsentSta
         return 'recovery-required';
       }
     }
-    // An epoch bump is a durable cross-tab fence before the session is
-    // declared active. A stale tab whose snapshot used the older generation
-    // fails isCurrentSession() even if its own React state did not refresh.
-    if (state.revision > 0) writeBrowserValue(generationMarker(uid), String(state.revision));
     verifiedRevisions.set(uid, state.revision);
     if (saved !== null) removeBrowserValue(marker(uid));
     setStatus(uid, 'active');
