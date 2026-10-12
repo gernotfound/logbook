@@ -346,8 +346,14 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
             });
 
             // 7. Finishes and saves workout
+            let completion!: Promise<unknown>;
+            act(() => { completion = sessionHook.current.endWorkout(); });
+            await vi.waitFor(() => {
+                expect(useAppStore.getState().userData?.history?.length).toBe(1);
+            });
             await act(async () => {
-                await sessionHook.current.endWorkout();
+                await useAppStore.getState().flushPendingSyncs();
+                await completion;
             });
 
             const state = useAppStore.getState();
