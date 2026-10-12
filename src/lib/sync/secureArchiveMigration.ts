@@ -13,7 +13,7 @@ import { withGuestLifecycleLock } from './guestLifecycleLock';
 import { isAccountDeletionPending } from './accountGate';
 
 const SAFE_PLAINTEXT_NAMES = new Set([
-    'health-consent-withdrawal', 'health-consent-generation',
+    'health-consent-withdrawal', 'health-consent-generation', 'health-consent-last-active',
     'account-deletion', 'secure-vault-control',
     'storage_marker', 'storage_anomaly_reported', 'telemetry_queue',
 ]);
