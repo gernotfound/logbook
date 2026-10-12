@@ -154,8 +154,8 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
         { id: 'item_string_payload', itemType: 'event', payload: 'string_payload_garbage' },
         { id: 'item_number_payload', itemType: 'error', payload: 99999 },
         { id: 'item_unsupported_type', itemType: 'unsupported_type', payload: { id: 'custom_1', type: 'custom', context: {}, sessionId: 's1', userId: 'u1', timestamp: 1002 } },
-        { id: 'valid_evt_1', timestamp: 2001, itemType: 'event', payload: { id: 'evt_real_1', type: 'real_event_1', context: {}, sessionId: 's1', userId: 'u1', timestamp: 2001 } },
-        { id: 'valid_err_1', timestamp: 2002, itemType: 'error', payload: { id: 'err_real_1', type: 'TypeError', message: 'real_error_1', source: 'custom', context: {}, sessionId: 's1', userId: 'u1', count: 1, firstSeen: 2002, lastSeen: 2002 } },
+        { id: 'valid_evt_1', timestamp: Date.now(), itemType: 'event', payload: { id: 'evt_real_1', type: 'real_event_1', context: {}, sessionId: 's1', userId: 'u1', timestamp: Date.now() } },
+        { id: 'valid_err_1', timestamp: Date.now(), itemType: 'error', payload: { id: 'err_real_1', type: 'TypeError', message: 'real_error_1', source: 'custom', context: {}, sessionId: 's1', userId: 'u1', count: 1, firstSeen: Date.now(), lastSeen: Date.now() } },
       ];
 
       telemetryHub.setUserId('u1');
@@ -443,27 +443,27 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
       const items: QueuedTelemetryItem[] = [
         {
           id: 'item_success_1',
-          timestamp: 1000,
+          timestamp: Date.now() + 1,
           itemType: 'event',
-          payload: { timestamp: 1000, type: 'evt_success_1', context: {} as any, userId: 'u1', sessionId: 's1' },
+          payload: { timestamp: Date.now() + 1, type: 'evt_success_1', context: {} as any, userId: 'u1', sessionId: 's1' },
         },
         {
           id: 'item_fail_2',
-          timestamp: 2000,
+          timestamp: Date.now() + 2,
           itemType: 'event',
-          payload: { timestamp: 2000, type: 'evt_fail_2', context: {} as any, userId: 'u1', sessionId: 's1' },
+          payload: { timestamp: Date.now() + 2, type: 'evt_fail_2', context: {} as any, userId: 'u1', sessionId: 's1' },
         },
         {
           id: 'item_success_3',
-          timestamp: 3000,
+          timestamp: Date.now() + 3,
           itemType: 'event',
-          payload: { timestamp: 3000, type: 'evt_success_3', context: {} as any, userId: 'u1', sessionId: 's1' },
+          payload: { timestamp: Date.now() + 3, type: 'evt_success_3', context: {} as any, userId: 'u1', sessionId: 's1' },
         },
         {
           id: 'item_fail_4',
-          timestamp: 4000,
+          timestamp: Date.now() + 4,
           itemType: 'event',
-          payload: { timestamp: 4000, type: 'evt_fail_4', context: {} as any, userId: 'u1', sessionId: 's1' },
+          payload: { timestamp: Date.now() + 4, type: 'evt_fail_4', context: {} as any, userId: 'u1', sessionId: 's1' },
         },
       ];
 
