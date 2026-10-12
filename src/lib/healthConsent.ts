@@ -10,6 +10,13 @@ const entries = new Map<string, HealthConsentStatus>();
 const listeners = new Set<() => void>();
 const verifiedReacceptance = new Map<string, string>();
 const verifiedRevisions = new Map<string, number>();
+// Only the latest check may publish its result for an owner.
+const verificationSerials = new Map<string, number>();
+const invalidateConsentChecks = (uid: string) => {
+  const next = (verificationSerials.get(uid) ?? 0) + 1;
+  verificationSerials.set(uid, next);
+  return next;
+};
 let guestAcceptanceInProgress = false;
 const guestMarker = 'logbook:v2:guest:health-consent-withdrawal';
 const reacceptMarker = (revision: number) => `reaccepting:${revision}`;
@@ -32,6 +39,7 @@ const marker = (uid: string) => `logbook:v2:user:${uid}:health-consent-withdrawa
 const generationMarker = (uid: string) => `logbook:v2:user:${uid}:health-consent-generation`;
 function notify() { for (const listener of listeners) listener(); }
 export function beginHealthConsentVerification(uid: string): void {
+  invalidateConsentChecks(uid);
   verifiedRevisions.delete(uid);
   setStatus(uid, 'checking');
 }
@@ -171,7 +179,9 @@ export async function refreshHealthConsent(user: User): Promise<HealthConsentSta
   // A delayed server check must not overwrite a newer local decision or
   // the consent generation published by another tab during network I/O.
   let observedGeneration = readBrowserValueStrict(generationMarker(uid));
-  const isSameDecision = () => readMarker(uid) === saved
+  const serial = invalidateConsentChecks(uid);
+  const isSameDecision = () => verificationSerials.get(uid) === serial
+    && readMarker(uid) === saved
     && readBrowserValueStrict(generationMarker(uid)) === observedGeneration;
   // Every refresh fences in-flight writes; only a completed, active server
   // check may grant a new writable generation.
@@ -272,6 +282,9 @@ export async function retainNewerHealthConsent(user: User): Promise<HealthConsen
   const originalRevision = parsePendingRevision(saved);
   if (originalRevision === null && saved !== 'withdrawn') throw new Error('Richiesta precedente non riconosciuta.');
   const live = await serverRequest(user, 'GET');
+  if (readMarker(uid) !== saved || currentHealthConsentStatus(uid) !== 'stale-request') {
+    throw new Error('La revoca locale è cambiata durante la verifica.');
+  }
   // The durable withdrawn marker has no request revision, but a live active
   // revision >= 2 proves a subsequent explicit reacceptance occurred.
   if (live.status !== 'active' || live.revision <= (originalRevision ?? 1)) {
@@ -280,6 +293,9 @@ export async function retainNewerHealthConsent(user: User): Promise<HealthConsen
   writeBrowserValue(generationMarker(uid), String(live.revision));
   const { advanceLocalConsentRevisionIfClean } = await import('./sync/localRepository');
   const ready = await advanceLocalConsentRevisionIfClean('user:' + uid, live.revision);
+  if (readMarker(uid) !== saved || currentHealthConsentStatus(uid) !== 'stale-request') {
+    throw new Error('La revoca locale è cambiata durante il recupero.');
+  }
   // The superseded request is cleared only after the live generation has
   // durably fenced old tabs. An old journal remains in IndexedDB in either case.
   removeBrowserValue(marker(uid));
@@ -320,6 +336,7 @@ export async function reacceptHealthConsent(user: User, acceptance: {
   if (expectedRevision === null) {
     const live = await serverRequest(user, 'GET');
     if (live.status !== 'withdrawn') throw new Error('La revoca non risulta attiva sul server.');
+    if (readMarker(uid) !== saved) throw new Error('La scelta locale è cambiata durante la verifica.');
     expectedRevision = live.revision;
   }
   writeBrowserValue(marker(uid), reacceptMarker(expectedRevision));

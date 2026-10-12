@@ -121,6 +121,44 @@ describe('out-of-order consent checks', () => {
   });
 });
 
+describe('overlapping consent verification', () => {
+  it('ignores an older withdrawn response after a newer active response', async () => {
+    const uid = 'overlap-' + crypto.randomUUID();
+    let resolveOlder!: (response: Response) => void;
+    let requests = 0;
+    vi.stubGlobal('fetch', vi.fn(async () => {
+      requests += 1;
+      if (requests === 1) return new Promise<Response>(resolve => { resolveOlder = resolve; });
+      return Response.json({ status: 'active', revision: 0 });
+    }));
+    const older = refreshHealthConsent(user(uid));
+    expect(await refreshHealthConsent(user(uid))).toBe('active');
+    resolveOlder(Response.json({ status: 'withdrawn', revision: 1 }));
+    expect(await older).toBe('active');
+    expect(localStorage.getItem(key(uid))).toBeNull();
+    expect(isHealthConsentWritable('user:' + uid)).toBe(true);
+  });
+
+  it('preserves a newer pending revocation while keeping remote consent', async () => {
+    const uid = 'retain-race-' + crypto.randomUUID();
+    localStorage.setItem(key(uid), 'pending:0');
+    let resolveServer!: (response: Response) => void;
+    let requests = 0;
+    vi.stubGlobal('fetch', vi.fn(async () => {
+      requests += 1;
+      if (requests === 1) return Response.json({ status: 'active', revision: 2 });
+      return new Promise<Response>(resolve => { resolveServer = resolve; });
+    }));
+    expect(await refreshHealthConsent(user(uid))).toBe('stale-request');
+    const retaining = retainNewerHealthConsent(user(uid));
+    localStorage.setItem(key(uid), 'pending:2');
+    resolveServer(Response.json({ status: 'active', revision: 2 }));
+    await expect(retaining).rejects.toThrow('revoca locale è cambiata');
+    expect(localStorage.getItem(key(uid))).toBe('pending:2');
+    expect(isHealthConsentWritable('user:' + uid)).toBe(false);
+  });
+});
+
 describe('later reacceptance on another device', () => {
   it('offers a choice when the durable withdrawn marker is older than the active server consent', async () => {
     const uid = 'remote-accept-' + crypto.randomUUID();
