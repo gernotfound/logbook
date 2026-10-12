@@ -179,7 +179,7 @@ describe('Unified Telemetry Hub E2E Suite — Tier 1 Product', () => {
     });
 
     describe('F9: Offline Queue & Replay Engine', () => {
-      it('F9-1: buffers errors and events in localStorage when navigator.onLine is false', () => {
+      it('F9-1: buffers errors and events in RAM without plaintext before vault unlock', () => {
         Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
         telemetryHub.init();
         telemetryHub.setUserId('user_queue');
@@ -187,22 +187,22 @@ describe('Unified Telemetry Hub E2E Suite — Tier 1 Product', () => {
         telemetryHub.trackError(new Error('Offline error 1'));
         telemetryHub.trackEvent('offline_event_1', { data: 123 });
 
-        const rawQueue = localStorage.getItem(telemetryHub.getQueueStorageKey());
-        expect(rawQueue).not.toBeNull();
-        const parsed = JSON.parse(rawQueue!);
+        expect(localStorage.getItem(telemetryHub.getQueueStorageKey())).toBeNull();
+        const parsed = telemetryHub.getQueuedEvents();
         expect(Array.isArray(parsed)).toBe(true);
         expect(parsed.length).toBe(2);
 
         Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
       });
 
-      it('F9-2: persists queue under the owner-scoped key and leaves the legacy global key unused', () => {
+      it('F9-2: keeps diagnostics volatile and avoids legacy plaintext keys without a vault', () => {
         Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
         telemetryHub.init();
         telemetryHub.setUserId('user_owner_scope');
         telemetryHub.trackEvent('owner_scoped_event');
 
-        expect(localStorage.getItem(telemetryHub.getQueueStorageKey())).not.toBeNull();
+        expect(telemetryHub.getQueuedEvents()).toHaveLength(1);
+        expect(localStorage.getItem(telemetryHub.getQueueStorageKey())).toBeNull();
         expect(localStorage.getItem(TELEMETRY_QUEUE_KEY)).toBeNull();
 
         Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
@@ -231,7 +231,9 @@ describe('Unified Telemetry Hub E2E Suite — Tier 1 Product', () => {
         const queued = telemetryHub.getQueuedEvents();
         expect(queued.map(item => item.id)).toEqual(['legacy-b']);
         expect(localStorage.getItem(TELEMETRY_QUEUE_KEY)).toBeNull();
-        expect(localStorage.getItem(telemetryHub.getQueueStorageKey())).not.toBeNull();
+        expect(localStorage.getItem(telemetryHub.getQueueStorageKey())).toBeNull();
+        // Legacy reports are filtered to the matching UID then retained
+        // in memory when the owner has not unlocked a cryptographic key.
 
         Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
       });
