@@ -4,7 +4,7 @@ import { screen, act, fireEvent, renderHook } from '@testing-library/react';
 import { renderWithProviders, emptyUserData } from './setup';
 import { useAppStore } from '../src/store/useAppStore';
 import { captureSession } from '../src/lib/sync/session';
-import { clear } from 'idb-keyval';
+
 import { initializeLocal } from '../src/lib/sync/localRepository';
 import { prepareUnlockedTestArchive } from './secureVaultFixture';
 import { Logic } from '../src/lib/logic';
@@ -853,7 +853,6 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
                 // encrypted session flow; a completion must not operate against
                 // an empty/stale LocalEnvelope from a prior test.
                 const owner = captureSession().owner;
-                await clear();
                 await prepareUnlockedTestArchive(owner);
                 const initialData = {
                     ...emptyUserData, routines: initialRoutines,
@@ -905,7 +904,6 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
                 };
 
                 const owner = captureSession().owner;
-                await clear();
                 await prepareUnlockedTestArchive(owner);
                 const initialData = {
                     ...emptyUserData, routines: originalRoutines,
