@@ -1,7 +1,8 @@
 import React from 'react';
-import { describe, test, expect, vi } from 'vitest';
+import { describe, test, expect, vi, beforeEach } from 'vitest';
 import { screen } from '@testing-library/react';
 import { renderWithProviders, emptyUserData } from './setup';
+import { prepareUnlockedTestArchive } from './secureVaultFixture';
 
 import App from '../src/App';
 import HomeView from '../src/components/Home/HomeView';
@@ -20,6 +21,7 @@ import WorkoutTimer from '../src/components/Training/WorkoutTimer';
 import MuscleModel from '../src/components/Training/MuscleModel';
 
 describe('Render Test Suite - Zero Crash Verification', () => {
+  beforeEach(async () => { await prepareUnlockedTestArchive(); });
 
   test('renders full App without crashing when authenticated', async () => {
     const { container } = renderWithProviders(<App />);
