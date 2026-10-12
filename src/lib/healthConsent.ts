@@ -11,6 +11,7 @@ const listeners = new Set<() => void>();
 const verifiedReacceptance = new Map<string, string>();
 const verifiedRevisions = new Map<string, number>();
 const marker = (uid: string) => `logbook:v2:user:${uid}:health-consent-withdrawal`;
+const generationMarker = (uid: string) => `logbook:v2:user:${uid}:health-consent-generation`;
 function notify() { for (const listener of listeners) listener(); }
 export function beginHealthConsentVerification(uid: string): void {
   verifiedRevisions.delete(uid);
@@ -45,7 +46,12 @@ export function currentHealthConsentStatus(uid: string | undefined): HealthConse
 export function isHealthConsentWritable(owner: string): boolean {
   if (!owner.startsWith('user:')) return true;
   const uid = owner.slice(5);
-  return currentHealthConsentStatus(uid) === 'active';
+  if (currentHealthConsentStatus(uid) !== 'active') return false;
+  try {
+    const persisted = readBrowserValueStrict(generationMarker(uid));
+    const verified = verifiedRevisions.get(uid) ?? 0;
+    return (persisted === null && verified === 0) || persisted === String(verified);
+  } catch { return false; }
 }
 export function getVerifiedHealthConsentRevision(uid: string): number {
   if (currentHealthConsentStatus(uid) !== 'active') throw new Error('Consenso non verificato per questa sessione.');
@@ -121,6 +127,10 @@ export async function refreshHealthConsent(user: User): Promise<HealthConsentSta
         return 'recovery-required';
       }
     }
+    // An epoch bump is a durable cross-tab fence before the session is
+    // declared active. A stale tab whose snapshot used the older generation
+    // fails isCurrentSession() even if its own React state did not refresh.
+    if (state.revision > 0) writeBrowserValue(generationMarker(uid), String(state.revision));
     verifiedRevisions.set(uid, state.revision);
     if (saved !== null) removeBrowserValue(marker(uid));
     setStatus(uid, 'active');

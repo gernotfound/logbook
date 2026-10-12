@@ -85,3 +85,6 @@ describe('durable health-consent client barrier', () => {
     expect(isHealthConsentWritable('user:' + uid)).toBe(false);
   });
 });
+
+  // Across tabs the persisted epoch changes without mutating the original tab's
+  // realm. Old in-flight callbacks must fail before touching the journal.
