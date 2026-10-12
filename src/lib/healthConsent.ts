@@ -9,6 +9,9 @@ const API = (import.meta.env.VITE_ACCOUNT_DELETION_API_ORIGIN || 'https://logboo
 const entries = new Map<string, HealthConsentStatus>();
 const listeners = new Set<() => void>();
 const verifiedReacceptance = new Map<string, string>();
+class ConsentTransportUnavailableError extends Error {
+  constructor() { super('Connessione al servizio consensi non disponibile.'); }
+}
 const verifiedRevisions = new Map<string, number>();
 // Offline access is local-only: a cached server approval must never authorize cloud I/O.
 const onlineVerifiedRevisions = new Map<string, number>();
@@ -173,7 +176,9 @@ async function serverRequest(user: User, method: 'GET' | 'POST', body?: unknown)
   await ensureAppCheck();
   const token = await getLimitedUseAppCheckToken();
   if (!token) throw new Error('App Check non disponibile.');
-  const response = await fetch(API + '/api/health-consent', {
+  let response: Response;
+  try {
+    response = await fetch(API + '/api/health-consent', {
     method,
     cache: 'no-store',
     headers: {
@@ -183,7 +188,16 @@ async function serverRequest(user: User, method: 'GET' | 'POST', body?: unknown)
     },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     signal: AbortSignal.timeout(10_000),
-  });
+    });
+  } catch (error) {
+    // A rejected transport request (unlike an explicit HTTP denial or invalid
+    // App Check) cannot prove a remote withdrawal while disconnected.
+    if (error instanceof TypeError || (error instanceof DOMException
+      && (error.name === 'TimeoutError' || error.name === 'AbortError'))) {
+      throw new ConsentTransportUnavailableError();
+    }
+    throw error;
+  }
   if (!response.ok) throw new Error('Verifica del consenso non disponibile (HTTP ' + response.status + ').');
   const result: unknown = await response.json();
   if (!result || typeof result !== 'object') throw new Error('Risposta server non valida.');
@@ -218,6 +232,13 @@ export async function refreshHealthConsent(user: User): Promise<HealthConsentSta
   const isSameDecision = () => verificationSerials.get(uid) === serial
     && readMarker(uid) === saved
     && readBrowserValueStrict(generationMarker(uid)) === observedGeneration;
+  const useCachedOfflineConsent = (): boolean => {
+    const cached = saved === null ? readCachedActiveRevision(uid) : null;
+    if (cached === null || !isSameDecision()) return false;
+    verifiedRevisions.set(uid, cached);
+    setStatus(uid, 'active');
+    return true;
+  };
   // Every refresh fences in-flight writes; only a completed, active server
   // check may grant a new writable generation.
   verifiedRevisions.delete(uid);
@@ -228,12 +249,7 @@ export async function refreshHealthConsent(user: User): Promise<HealthConsentSta
     // server-confirmed generation while disconnected. New accounts, pending
     // withdrawal/reacceptance and unknown generations remain suspended.
     if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-      const cached = saved === null ? readCachedActiveRevision(uid) : null;
-      if (cached !== null && isSameDecision()) {
-        verifiedRevisions.set(uid, cached);
-        setStatus(uid, 'active');
-        return 'active';
-      }
+      if (useCachedOfflineConsent()) return 'active';
       if (saved === null) {
         setStatus(uid, 'error');
         return 'error';
@@ -300,8 +316,9 @@ export async function refreshHealthConsent(user: User): Promise<HealthConsentSta
     if (saved !== null) removeBrowserValue(marker(uid));
     setStatus(uid, 'active');
     return 'active';
-  } catch {
+  } catch (error) {
     if (!isSameDecision()) return currentHealthConsentStatus(uid);
+    if (error instanceof ConsentTransportUnavailableError && useCachedOfflineConsent()) return 'active';
     setStatus(uid, saved === null ? 'error' : saved as HealthConsentStatus);
     return currentHealthConsentStatus(uid);
   }
