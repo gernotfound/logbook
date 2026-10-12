@@ -89,7 +89,7 @@
     "@axe-core/playwright": "^4.13.0",
     "@firebase/rules-unit-testing": "5.0.2",
     "@playwright/test": "^1.62.1",
-    "@sentry/vite-plugin": "^5.4.0",
+    "@sentry/vite-plugin": "^5.4.1",
     "@testing-library/dom": "^10.4.2",
     "@testing-library/react": "^16.3.3",
     "@types/react": "^19.3.0",
