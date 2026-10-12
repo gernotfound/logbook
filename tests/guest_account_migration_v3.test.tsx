@@ -10,6 +10,8 @@ import { readLocal } from '../src/lib/sync/localRepository';
 import { useAppStore } from '../src/store/useAppStore';
 import type { UserData } from '../src/types';
 import { beginGuestMigrationIntent } from '../src/lib/auth/guestMigrationIntent';
+import { createAndMigrateVault } from '../src/lib/sync/secureArchiveMigration';
+import { lockAllVaults } from '../src/lib/sync/secureArchiveSession';
 
 const parse = (value: unknown) => UserDataSchema.parse(value) as unknown as UserData;
 const user = { uid: 'a', email: 'a@example.com', displayName: 'A' } as any;
@@ -28,7 +30,8 @@ function fixtures() {
     return { cloud, guest, merged: mergeUserData(cloud, guest) };
 }
 
-beforeEach(() => {
+beforeEach(async () => {
+    lockAllVaults();
     vi.clearAllMocks();
     localStorage.clear();
     useAppStore.getState().resetStore();
@@ -37,6 +40,9 @@ beforeEach(() => {
         callback(user);
         return () => {};
     });
+    // The authenticated destination vault is genuinely provisioned/unlocked;
+    // guest→account causality and consent are still exercised by the real code.
+    await createAndMigrateVault('user:a', 'guest migration destination passphrase 2026');
 });
 
 afterEach(() => {
