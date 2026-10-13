@@ -11,12 +11,12 @@ Decisione UX del product owner (12 ottobre 2026): dopo la revoca nessuna funzion
 - Enforcement locale e cross-tab del blocco; avvio autenticato, offline, dispositivi secondari e sospensione di writer in-flight.
 - Riattivazione di un account revocato: il fence di generazione è implementato nelle Rules e coperto da regressioni; verificare il percorso autenticato multi-dispositivo e l'assenza di replay dei journal precedenti nel runtime Production.
 - Esportazione/diritti/account deletion anche in caso di backend indisponibile, senza dichiarare successo non verificato.
-- Verifica canonica, review sullo SHA candidato, deploy coordinato frontend/backend/rules e smoke autenticato.
+- CI canonica e deploy frontend/backend/Rules del release commit sono completati; resta lo smoke autenticato coordinato nel runtime Production.
 - Validazione con avvocato: basi art. 6/9 GDPR, libertà del consenso, conseguenze del diniego, conservazione residua dopo revoca, informativa, DPIA, DPA/trasferimenti.
 
 La PR #366 è integrata e il release commit `5d21dc0` è in Production; i controlli pre-pilot elencati non sono certificati dalla sola CI o dal deploy.
 
-## Confine export dopo revoca (candidato tecnico)
+## Confine export dopo revoca (implementato; smoke autenticato aperto)
 
 Durante la revoca, tutte le letture dirette delle collection `users/{uid}` sono negate dalla Security Rule anche a client obsoleti. `api/health-consent-export` verifica origin, Firebase UID, App Check limited-use e stato revocato ad ogni pagina; il server invia il root e le collection mensili in pagine di massimo due documenti, senza esporre documenti amministrativi. Il client verifica gli ID mensili, evita cursori ripetuti e costruisce il Backup Schema 3 con copertura `cloud-and-device` soltanto dopo la lettura completa. Se la UI è sospesa ma il server ha già accettato un nuovo consenso su un altro dispositivo, lo stato locale non basta a selezionare il trasporto: il client legge lo stato trusted attuale e usa l'endpoint Admin **solo se il server è `withdrawn`**; quando è `active`, usa la normale lettura owner Firestore, senza bypass Admin. Il controllo si applica anche alla riaccettazione in corso e allo stato `stale-request` senza trattarli come prove sufficienti dello stato del server. Se manca il server o il dispositivo è offline, il percorso esistente richiede la conferma esplicita per esportare il solo archivio locale, marcato parziale.
 
@@ -44,7 +44,7 @@ Anche il marker browser strict della revisione fa parte del SessionSnapshot loca
 
 In assenza di account Firebase, il marker `logbook:v2:guest:health-consent-withdrawal` è durevole nel browser: blocca mutazioni, nasconde tutto il fitness e invalida le sessioni delle altre schede. La sospensione lascia solo informativa, backup locale, cancellazione dati ospite, logout e nuova accettazione separata esplicita. Il re-consenso salva il documento locale prima di rimuovere il marker; nessun backend viene chiamato per il consenso ospite. Le Rules Firestore restano il confine dei soli account autenticati.
 
-## Ripresa consapevole del journal dopo nuovo consenso (candidato)
+## Ripresa consapevole del journal dopo nuovo consenso (implementata; collaudo multi-dispositivo aperto)
 
 Quando vi sono pending precedenti, non vengono spediti. La schermata `recovery-required` offre una scelta separata ed esplicita: utilizzare nuovamente le modifiche locali confrontandole con una lettura integrale e aggiornata dei documenti cloud. L'algoritmo produce un **nuovo** journal causale relativo al cloud corrente, preserva il consenso firmato dal server e conserva nell'archivio locale precedente i valori, il baseline e tutte le vecchie operazioni. Il cambio avviene in un'unica transazione IndexedDB con controllo di revisione e sessione; in caso di errore resta il vecchio journal. L'utente va avvisato dei conflitti e della necessità di scaricare un backup prima del recupero. Non si tratta di replay automatico.
 

@@ -154,8 +154,9 @@ describe('RISK-02: ConsentOverlay UI Behavior', () => {
         render(<PrivacyPolicy onClose={vi.fn()} />);
         expect(screen.getByText(/fino a 50 report temporanei/)).toBeDefined();
         expect(screen.getByText(/salvati con cifratura autenticata/)).toBeDefined();
-        expect(screen.getByText(/Dopo sette giorni non vengono più usati né inviati/)).toBeDefined();
-        expect(screen.getByText(/se resta chiusa, possono rimanere sul dispositivo oltre sette giorni/)).toBeDefined();
+        expect(screen.getByText(/può contenere l'identificativo Firebase dell'account/)).toBeDefined();
+        expect(screen.getByText(/esclude i report più vecchi di sette giorni/)).toBeDefined();
+        expect(screen.getByText(/se la PWA resta chiusa, i byte possono restare sul dispositivo oltre sette giorni/)).toBeDefined();
     });
 
     it('documenta l’effetto della revoca e lascia identificabili i dati legali non ancora definiti', () => {

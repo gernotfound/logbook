@@ -2,7 +2,7 @@
 
 > Stato aggiornato il **12 ottobre 2026**: soluzione A approvata dal product owner; implementazione della [PR #366](https://github.com/gernotfound/logbook/pull/366) **integrata** il 12 ottobre 2026. Il successivo rilascio dell'archivio cifrato ([PR #369](https://github.com/gernotfound/logbook/pull/369)) è in Production sul commit `5d21dc0b32a12676e1a08cc35611d96e5b18c3f3`. Restano separati il collaudo autenticato multi-dispositivo e i gate legali pre-pilot. Il gate automatizzato e la verifica giuridica/runtime sono evidenze distinte.
 > La fotografia di partenza seguente riguarda la baseline storica `main` `5a9394649977cae4e2261e530312f5121818ce12` (9 ottobre 2026), **non descrive lo stato corrente della PR**.
-> Questo documento non costituisce un parere legale, una DPIA conclusa o una specifica di implementazione approvata.
+> Questo documento non costituisce un parere legale, una DPIA conclusa o una prova di collaudo autenticato multi-dispositivo.
 > Non certifica configurazioni Firebase/Vercel/Sentry Production.
 
 ## Perché esiste
@@ -58,7 +58,7 @@ La scelta A **non autorizza cancellazioni automatiche e irreversibili** né la c
 
 ## Vincoli giuridici non risolti
 
-Secondo GDPR art. 7(3) e Linee guida EDPB 05/2020, la revoca deve essere facile quanto il consenso; cessano le operazioni fondate solo su quel consenso, **compresa l'ulteriore conservazione se non esiste altra base valida**. La soluzione A non può promettere dati esportabili per un periodo indefinito senza una base giuridica appropriata. Prima della modifica runtime, la revisione privacy deve definire chiaramente i trattamenti residui e i termini minimi strettamente necessari, le eccezioni legittime, la notifica ai fornitori applicabili e i testi rivolti all'utente.
+Secondo GDPR art. 7(3) e Linee guida EDPB 05/2020, la revoca deve essere facile quanto il consenso; cessano le operazioni fondate solo su quel consenso, **compresa l'ulteriore conservazione se non esiste altra base valida**. La soluzione A non può promettere dati esportabili per un periodo indefinito senza una base giuridica appropriata. Prima del pilot con utenti reali, la revisione privacy deve definire chiaramente i trattamenti residui e i termini minimi strettamente necessari, le eccezioni legittime, la notifica ai fornitori applicabili e i testi rivolti all'utente.
 
 ## Invarianti richiesti a qualunque implementazione approvata
 
