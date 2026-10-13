@@ -17,6 +17,7 @@ async function seedDurableState(data: UserData): Promise<string> {
     await initializeLocal(owner, data);
     useAppStore.setState({
         userData: data,
+        dataOwner: owner,
         localWorkout: null,
         saveError: null,
         syncing: false,

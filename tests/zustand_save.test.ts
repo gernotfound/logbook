@@ -77,7 +77,7 @@ describe('R3: Zustand saveUserData Error Rejection & Debouncing Suite', () => {
 
         it('supports updater function syntax and resolves with SyncResult on success', async () => {
             vi.spyOn(DB, 'saveUserData').mockResolvedValueOnce({ ok: true, status: 'synced' });
-            useAppStore.setState({ userData: mockUserData1 });
+            useAppStore.setState({ userData: mockUserData1, dataOwner: 'user:test-user-id' });
 
             const savePromise = useAppStore.getState().saveUserData((prev) => ({
                 ...(prev as UserData),
@@ -150,7 +150,7 @@ describe('R3: Zustand saveUserData Error Rejection & Debouncing Suite', () => {
     describe('updateUserData Helper Flow', () => {
         it('updateUserData resolves with SyncResult when underlying saveUserData succeeds', async () => {
             vi.spyOn(DB, 'saveUserData').mockResolvedValueOnce({ ok: true, status: 'synced' });
-            useAppStore.setState({ userData: mockUserData1 });
+            useAppStore.setState({ userData: mockUserData1, dataOwner: 'user:test-user-id' });
 
             const updatePromise = useAppStore.getState().updateUserData((prev) => ({
                 ...prev,
@@ -169,7 +169,7 @@ describe('R3: Zustand saveUserData Error Rejection & Debouncing Suite', () => {
         it('updateUserData propagates rejection when underlying saveUserData throws', async () => {
             const dbError = new Error('Database permission denied');
             vi.spyOn(DB, 'saveUserData').mockRejectedValueOnce(dbError);
-            useAppStore.setState({ userData: mockUserData1 });
+            useAppStore.setState({ userData: mockUserData1, dataOwner: 'user:test-user-id' });
 
             const updatePromise = useAppStore.getState().updateUserData((prev) => ({
                 ...prev,

@@ -1,3 +1,4 @@
+import { captureSession } from '../src/lib/sync/session';
 import { deviceKey } from '../src/lib/sync/deviceStorage';
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -49,6 +50,7 @@ describe('Workout Reorder (R2) and Live Sync & Badges (R3) Suite', () => {
     beforeEach(() => {
         localStorage.clear();
         useAppStore.setState({
+            dataOwner: captureSession().owner,
             userData: {
                 profile: {} as any,
                 library: mockLibrary as any,
