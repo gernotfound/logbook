@@ -92,6 +92,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             // A different tab explicitly revoked this guest generation.
             // Never recreate its deleted data from the old Zustand snapshot.
             cancelLocalVaultReadiness('guest');
+            useDialogStore.getState().cancelAll();
             lockVault('guest');
             invalidateSession();
             isGuestRef.current = false;
@@ -355,6 +356,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             authUidRef.current = nextUid;
             const authRun = ++authRunRef.current;
             if (previousUid !== nextUid) {
+                useDialogStore.getState().cancelAll();
                 // Do not carry an account's unlocked DEK into another identity.
                 // A guest->account migration keeps its separate guest vault until
                 // the verified migration has completed.
@@ -744,6 +746,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 writeBrowserValue(GUEST_KEY, 'true');
                 removeBrowserValue(GUEST_REVOCATION_KEY);
                 activateGuestSession(id);
+                useDialogStore.getState().cancelAll();
             });
         } catch {
             setSaveError('Impossibile avviare la modalità locale: pulizia o coordinamento delle sessioni non disponibile. I dati esistenti restano protetti.');

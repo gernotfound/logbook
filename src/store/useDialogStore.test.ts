@@ -70,3 +70,38 @@ describe('dialog request serialization', () => {
     await notice;
   });
 });
+
+
+describe('dialog identity boundaries', () => {
+  it('cancels both an active confirmation and a queued prompt without activating the next owner\'s request', async () => {
+    const { useDialogStore } = await vi.importActual<typeof import('./useDialogStore')>('./useDialogStore');
+    const dialog = useDialogStore.getState();
+    dialog.cancelAll();
+    const confirmation = dialog.showConfirm('Esci da A?');
+    const password = dialog.showPasswordPrompt('Password di A');
+    const staleConfirm = useDialogStore.getState().onConfirm;
+
+    dialog.cancelAll();
+    await expect(confirmation).resolves.toBe(false);
+    await expect(password).resolves.toBeNull();
+    expect(useDialogStore.getState().isOpen).toBe(false);
+
+    staleConfirm(); // Detached callbacks must remain inert after cancellation.
+    const next = dialog.showConfirm('Conferma per B');
+    expect(useDialogStore.getState().message).toBe('Conferma per B');
+    useDialogStore.getState().onConfirm();
+    await expect(next).resolves.toBe(true);
+  });
+
+  it('cancels queued unsynced logout actions as cancel, not as safe exit', async () => {
+    const { useDialogStore } = await vi.importActual<typeof import('./useDialogStore')>('./useDialogStore');
+    const dialog = useDialogStore.getState();
+    dialog.cancelAll();
+    const active = dialog.showAlert('A');
+    const pending = dialog.showUnsyncedDataLogout('offline');
+    dialog.cancelAll();
+    await expect(active).resolves.toBeUndefined();
+    await expect(pending).resolves.toBe('cancel');
+    expect(useDialogStore.getState().isOpen).toBe(false);
+  });
+});

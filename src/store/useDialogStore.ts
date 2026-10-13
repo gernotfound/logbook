@@ -18,6 +18,8 @@ interface DialogState {
   showPasswordPrompt: (message: string, title?: string) => Promise<string | null>;
   showUnsyncedDataLogout: (reason: UnsyncedLogoutReason) => Promise<UnsyncedLogoutAction>;
   closeDialog: () => void;
+  /** Cancel all owner-bound prompts, including queued requests, on identity changes. */
+  cancelAll: () => void;
 }
 
 const noop = () => {};
@@ -25,32 +27,51 @@ const noop = () => {};
 export const useDialogStore = create<DialogState>((set) => {
   // One visible dialog at a time. Each queued request retains its own resolver,
   // so a recovery notice cannot replace a pending confirmation or password prompt.
-  const queued: Array<() => void> = [];
+  const queued: Array<{ show: () => void; cancel: () => void }> = [];
   let cancelActive: (() => void) | null = null;
+  let cancellingOwner = false;
 
   const showNext = () => {
-    if (cancelActive) return;
-    queued.shift()?.();
+    if (cancelActive || cancellingOwner) return;
+    queued.shift()?.show();
   };
 
   const enqueue = <T,>(display: (finish: (value: T) => void, cancel: () => void) => void, cancelled: T): Promise<T> =>
     new Promise<T>(resolve => {
-      queued.push(() => {
-        let settled = false;
-        const finish = (value: T) => {
-          if (settled) return;
-          settled = true;
+      let settled = false;
+      const cancel = () => finish(cancelled);
+      const finish = (value: T) => {
+        if (settled) return;
+        settled = true;
+        if (cancelActive === cancel) {
           cancelActive = null;
           set({ isOpen: false, onConfirm: noop, onCancel: noop, onAction: undefined, onInputConfirm: undefined });
-          resolve(value);
-          showNext();
-        };
-        const cancel = () => finish(cancelled);
-        cancelActive = cancel;
-        display(finish, cancel);
+        }
+        resolve(value);
+        showNext();
+      };
+      queued.push({
+        show: () => {
+          if (settled) return;
+          cancelActive = cancel;
+          display(finish, cancel);
+        },
+        cancel,
       });
       showNext();
     });
+
+  const cancelAll = () => {
+    // Cancel pending promises too: dropping callbacks would strand callers
+    // while activating a stale confirmation in the next account.
+    cancellingOwner = true;
+    const pending = queued.splice(0);
+    pending.forEach(item => item.cancel());
+    cancelActive?.();
+    set({ isOpen: false, title: '', message: '', onConfirm: noop, onCancel: noop,
+      onAction: undefined, onInputConfirm: undefined, unsyncedReason: undefined });
+    cancellingOwner = false;
+  };
 
   return {
     isOpen: false,
@@ -104,5 +125,6 @@ export const useDialogStore = create<DialogState>((set) => {
       if (cancelActive) cancelActive();
       else set({ isOpen: false });
     },
+    cancelAll,
   };
 });

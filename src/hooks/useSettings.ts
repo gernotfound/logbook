@@ -31,10 +31,12 @@ export function useSettings() {
     const profile = localProfile ?? storeProfile ?? { dob: '', height: '', gender: '' };
 
     const handleLogout = async () => {
+        const session = captureSession();
         if (isGuest) {
-            await logout({ mode: 'normal' });
+            if (isCurrentSession(session)) await logout({ mode: 'normal' });
         } else if (await showConfirm("Sei sicuro di voler uscire dal tuo account?")) {
-            await logout({ mode: 'normal' });
+            // A confirmation from A must never sign out B after an auth change.
+            if (isCurrentSession(session)) await logout({ mode: 'normal' });
         }
     };
 

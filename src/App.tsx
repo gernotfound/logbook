@@ -108,7 +108,16 @@ function GuestBanner({ onLogin }: { onLogin: () => void }) {
   );
 }
 
+// Reset every ephemeral view/hook on an identity boundary, not only persisted tabs.
 function App() {
+  const { currentUser, isGuest } = useAuth();
+  // Capture the PWA shortcut once, before the URL is consumed by the child.
+  const [startupTab] = useState(readStartupTabShortcut);
+  const owner = isGuest ? 'guest' : currentUser ? `user:${currentUser.uid}` : 'unbound';
+  return <OwnerBoundApp key={owner} startupTab={startupTab} />;
+}
+
+function OwnerBoundApp({ startupTab }: { startupTab: string | null }) {
   const { currentUser, loading, isGuest, guestMigrationStatus, retryGuestMigration, emailVerificationRequired } = useAuth();
   const healthConsentStatus = useSyncExternalStore(subscribeHealthConsent, () => isGuest ? getGuestHealthConsentStatus() : currentHealthConsentStatus(currentUser?.uid), () => 'checking' as const);
   useEffect(() => {
@@ -151,7 +160,6 @@ function App() {
   const setSaveError = useAppStore(state => state.setSaveError);
   const compatibilityStatus = useAppStore(state => state.compatibilityStatus);
   const compatibilityError = useAppStore(state => state.compatibilityError);
-  const [startupTab] = useState(readStartupTabShortcut);
   const parsedStartupTab = AppTabSchema.safeParse(startupTab);
   const initialTabOverride: AppTab | undefined = startupTab === 'settings'
     ? 'home'
