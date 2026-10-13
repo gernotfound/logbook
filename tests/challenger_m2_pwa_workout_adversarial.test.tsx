@@ -199,6 +199,7 @@ describe('Milestone 2 Challenger Suite: PWA and Offline Workout Stress Tests', (
       } as unknown as UserData;
 
       useAppStore.setState({
+        dataOwner: 'user:test-user-id',
         userData: emptyRoutineUserData,
         localWorkout: null,
       });
@@ -238,6 +239,7 @@ describe('Milestone 2 Challenger Suite: PWA and Offline Workout Stress Tests', (
       } as unknown as UserData;
 
       useAppStore.setState({
+        dataOwner: 'user:test-user-id',
         userData: baseUserData,
         localWorkout: {
           id: 'w_corrupt_1',
@@ -274,6 +276,7 @@ describe('Milestone 2 Challenger Suite: PWA and Offline Workout Stress Tests', (
       } as unknown as UserData;
 
       useAppStore.setState({
+        dataOwner: 'user:test-user-id',
         userData: baseUserData,
         localWorkout: {
           id: 'w_bad_ratings',
@@ -319,6 +322,7 @@ describe('Milestone 2 Challenger Suite: PWA and Offline Workout Stress Tests', (
       } as unknown as UserData;
 
       useAppStore.setState({
+        dataOwner: 'user:test-user-id',
         userData: baseUserData,
         localWorkout: {
           id: 'w_crash_test',
@@ -359,6 +363,7 @@ describe('Milestone 2 Challenger Suite: PWA and Offline Workout Stress Tests', (
       } as unknown as UserData;
 
       useAppStore.setState({
+        dataOwner: 'user:test-user-id',
         userData: baseUserData,
         localWorkout: null,
       });
@@ -410,6 +415,7 @@ describe('Milestone 2 Challenger Suite: PWA and Offline Workout Stress Tests', (
       // An editor must be opened from an item that still exists in the
       // owner's history; corrupted legacy fields are normalized at the editor boundary.
       useAppStore.setState({
+        dataOwner: 'user:test-user-id',
         userData: {
           profile: { name: 'Stress' },
           history: [malformedHistorical],
@@ -438,6 +444,7 @@ describe('Milestone 2 Challenger Suite: PWA and Offline Workout Stress Tests', (
       const { result } = renderHook(() => useWorkoutSession());
 
       useAppStore.setState({
+        dataOwner: 'user:test-user-id',
         userData: {
           profile: { name: 'Test' },
           history: [],
@@ -469,6 +476,7 @@ describe('Milestone 2 Challenger Suite: PWA and Offline Workout Stress Tests', (
   describe('4. SettingsView UI & Storage Resilience Stress Tests', () => {
     it('handles rapid privacy navigation without a usage tracking toggle and checks updates', async () => {
       useAppStore.setState({
+        dataOwner: 'user:test-user-id',
         userData: {
           profile: { name: 'Settings Tester' },
           routines: [],
