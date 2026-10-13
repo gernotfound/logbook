@@ -206,7 +206,7 @@ describe('Workout metronome', () => {
         const previousVisibility = Object.getOwnPropertyDescriptor(document, 'visibilityState');
         Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' });
         try {
-            act(() => document.dispatchEvent(new Event('visibilitychange')));
+            act(() => { document.dispatchEvent(new Event('visibilitychange')); });
             await act(async () => {
                 releaseResume?.();
                 expect(await startPromise).toBe(false);
