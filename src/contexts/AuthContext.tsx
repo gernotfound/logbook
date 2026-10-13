@@ -946,6 +946,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                         // A different tab may have replaced or revoked this generation.
                         if (!isCurrentSession(requestedSession)) return;
                         revokeGuestSession();
+                        useDialogStore.getState().cancelAll();
                         useAppStore.getState().cancelPendingSyncs();
                         try {
                             await DB.purgeAllLocalUserData('guest');
