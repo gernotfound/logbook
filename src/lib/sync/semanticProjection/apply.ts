@@ -69,7 +69,8 @@ function requiredAncestorClock(stamp: FieldStamp): VectorClock {
 
 function blockedByAncestor(meta: SyncMeta, operation: SemanticOperation): boolean {
     for (let i = 1; i < operation.path.length; i++) {
-        const ancestor = meta.fields[fieldKey(operation.path.slice(0, i))];
+        const ancestorKey = fieldKey(operation.path.slice(0, i));
+        const ancestor = Object.hasOwn(meta.fields, ancestorKey) ? meta.fields[ancestorKey] : undefined;
         if (!ancestor) continue;
         if (!coversVectorClock(operation.clock, requiredAncestorClock(ancestor))) return true;
     }
@@ -413,7 +414,7 @@ export function applySemanticOperations(
         }
 
         const fk = fieldKey(opList[0].path);
-        const remoteStamp = meta.fields[fk];
+        const remoteStamp = Object.hasOwn(meta.fields, fk) ? meta.fields[fk] : undefined;
         const deleteOperations = eligible.filter(operation => operation.isDelete);
 
         // A delete barrier is monotone and survives later recreation. Any update
