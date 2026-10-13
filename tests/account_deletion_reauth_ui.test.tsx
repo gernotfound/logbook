@@ -8,6 +8,7 @@ const authState = vi.hoisted(() => ({
     providerData: [{ providerId: 'password' }],
   },
   logout: vi.fn(),
+  isGuest: false,
 }));
 
 const reauth = vi.hoisted(() => ({
@@ -23,7 +24,7 @@ const dialog = vi.hoisted(() => ({
 vi.mock('../src/hooks/useAuth', () => ({
   useAuth: () => ({
     currentUser: authState.user,
-    isGuest: false,
+    isGuest: authState.isGuest,
     logout: authState.logout,
   }),
 }));
@@ -39,11 +40,13 @@ vi.mock('../src/store/useDialogStore', () => ({
 import { DB } from '../src/lib/db';
 import { useSettings } from '../src/hooks/useSettings';
 import { localStorageMock } from './setup';
+import { activateGuestSession } from '../src/lib/sync/session';
 
 describe('account deletion recent authentication', () => {
   beforeEach(() => {
     localStorage.clear();
     vi.clearAllMocks();
+    authState.isGuest = false;
     dialog.showConfirm.mockResolvedValue(true);
     dialog.showAlert.mockResolvedValue(undefined);
   });
@@ -81,6 +84,23 @@ describe('account deletion recent authentication', () => {
     );
     expect(deleteSpy).toHaveBeenCalledTimes(1);
     expect(result.current.deletionPhase).toBe('idle');
+  });
+
+  it('deletes the authenticated account rather than purging guest data before initial consent', async () => {
+    authState.isGuest = true;
+    localStorage.setItem('logbook_is_guest', 'true');
+    localStorage.setItem('logbook_guest_session_id_v1', 'guest-before-consent');
+    activateGuestSession('guest-before-consent');
+    reauth.run.mockResolvedValue('reauthenticated');
+    const deleteSpy = vi.spyOn(DB, 'deleteAccount').mockResolvedValue({ status: 'pending', message: 'Server in corso' });
+    const { result } = renderHook(() => useSettings());
+
+    await act(async () => result.current.handleDeleteAccount());
+
+    expect(deleteSpy).toHaveBeenCalledTimes(1);
+    expect(authState.logout).not.toHaveBeenCalled();
+    expect(localStorage.getItem('logbook_is_guest')).toBe('true');
+    expect(dialog.showConfirm).toHaveBeenCalledTimes(2);
   });
 
   it('exposes a deleting phase while the server deletion is in progress', async () => {

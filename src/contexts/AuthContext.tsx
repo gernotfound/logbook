@@ -525,8 +525,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                     if (isCurrentRun()) setLoading(false);
                 }
             } else {
+                setCurrentUser(null);
                 setEmailVerificationRequired(false);
                 setGuestMigrationStatus('idle');
+                if (previousUid) {
+                    try { clearAuthenticatedOwnerHint(userOwner(previousUid)); }
+                    catch (error) { console.warn('Hint autenticato non ripulito dopo sign-out:', error); }
+                }
                 const isGuestActive = isGuestActiveStrict();
                 if (!isGuestActive) {
                     try {
@@ -933,6 +938,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 isGuestRef.current = false;
                 setIsGuest(false);
                 useAppStore.getState().resetStore({ force: true });
+                if (initialUid) {
+                    try { await signOut(auth); }
+                    catch { await useDialogStore.getState().showAlert('Uscita dall’account non riuscita. Riprova.'); }
+                }
+                return;
+            }
+
+            if (initialUid && isGuestActiveStrict()) {
+                // During deferred guest migration, signing out Firebase must not
+                // revoke or purge the still-owned guest archive.
+                try { await signOut(auth); }
+                catch { await useDialogStore.getState().showAlert('Uscita dall’account non riuscita. Riprova.'); }
                 return;
             }
 

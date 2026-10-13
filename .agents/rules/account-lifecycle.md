@@ -29,6 +29,8 @@ La baseline clean-cut corrente **non importa Backup Schema V1/V2**: `decodeImpor
 
 ## Eliminazione account
 
+**MUST:** quando Firebase Auth è attivo ma la migrazione guest→account è differita fino al primo consenso, l'owner locale può restare `guest`. «Esci dall'account» deve soltanto eseguire il sign-out Firebase, preservando l'archivio guest. «Elimina account» deve avviare il job backend per l'UID autenticato senza toccare i dati ospite; ricevuta e cleanup dell'archivio account restano pendenti finché un'altra identità locale è attiva. Il callback Auth null aggiorna sempre `currentUser` a null.
+
 `useSettings` chiede due conferme e riautentica Google prima di invocare `DB.deleteAccount`, passando esplicitamente gli adapter applicativi per congelare i writer e resettare lo store. Il boundary infrastrutturale `db_account.ts` non importa Zustand: riceve queste operazioni tramite context injection. Il client controlla il token aggiornato prima di congelare i writer; il backend trusted verifica nuovamente ID token, revoca e `auth_time` recente e richiede App Check prima di accettare il job.
 
 La cancellazione autenticata è coordinata dal backend Vercel nativo e dal job amministrativo `account_deletions/{uid}`. La collection dei job è server-only: i client non possono leggerla o mutarla. La presenza del job è anche una barriera Firestore globale: le Rules negano accesso al root utente e alle raccolte private da qualunque client autenticato con quell'UID, impedendo ad altri dispositivi o client vecchi di ricreare dati mentre il server cancella.

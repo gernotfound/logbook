@@ -4,11 +4,12 @@ import { useAuth } from './useAuth';
 import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
 import { DB } from '../lib/db';
-import { captureSession, isCurrentSession } from '../lib/sync/session';
+import { captureSession, isCurrentSession, isActiveGuestSession } from '../lib/sync/session';
 import { collectBackupSnapshot } from '../lib/db/backupSnapshot';
 import { readLocal } from '../lib/sync/localRepository';
 import { UserDataSchema } from '../lib/schema';
 import { currentHealthConsentStatus } from '../lib/healthConsent';
+import { auth } from '../lib/firebase';
 import type { ImportMode } from '../lib/backup';
 import { isAccountDeletionPending } from '../lib/sync/accountGate';
 import {
@@ -160,12 +161,16 @@ export function useSettings() {
         if (deleteBusy.current) return;
         deleteBusy.current = true;
         let session: ReturnType<typeof captureSession> | null = null;
+        const expectedUid = currentUser?.uid ?? null;
         try {
             session = captureSession();
             const assertCurrent = () => {
-                if (!session || !isCurrentSession(session)) throw new Error('Sessione cambiata: cancellazione annullata.');
+                if (!session || !isCurrentSession(session)
+                    || (expectedUid !== null && auth.currentUser?.uid !== expectedUid)) {
+                    throw new Error('Sessione cambiata: cancellazione annullata.');
+                }
             };
-            if (isGuest) {
+            if (isGuest && !currentUser) {
                 if (!(await showConfirm('Eliminare permanentemente i dati ospite di questo dispositivo?'))) return;
                 assertCurrent();
                 await logout({ mode: 'force' });
@@ -177,10 +182,12 @@ export function useSettings() {
             assertCurrent();
             setDeletingAccount(true);
             setDeletionPhase('verifying');
-            const { auth } = await import('../lib/firebase');
             assertCurrent();
             const user = auth.currentUser;
-            if (!user || 'user:' + user.uid !== session.owner) throw new Error('Account cambiato.');
+            if (!user || (session.owner !== 'user:' + user.uid
+                && !(session.owner === 'guest' && isActiveGuestSession()))) {
+                throw new Error('Account cambiato.');
+            }
 
             let reauth = await reauthenticateForSensitiveAction(user);
             if (reauth === 'password-required') {
