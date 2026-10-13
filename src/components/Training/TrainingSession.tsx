@@ -80,6 +80,16 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
         activeWorkout, history, library, confirmWorkoutStart, deleteWorkout, endWorkout,
     } = useWorkoutSession();
     const [reportWorkout, setReportWorkout] = useState<WorkoutSession | null>(null);
+    const localPersistenceBlocked = useAppStore(state => state.localPersistenceBlocked);
+    const [startPending, setStartPending] = useState(false);
+    const confirmStartWithGate = useCallback(async (...args: Parameters<typeof confirmWorkoutStart>) => {
+        setStartPending(true);
+        try {
+            return await confirmWorkoutStart(...args);
+        } finally {
+            setStartPending(false);
+        }
+    }, [confirmWorkoutStart]);
     const [pendingEndTime, setPendingEndTime] = useState<number | null>(null);
     const pendingEndTimeRef = useRef<number | null>(null);
     const [postSessionDraft, setPostSessionDraft] = useState<PostSessionDraft | null>(null);
@@ -210,6 +220,15 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
         setReportWorkout(null);
         window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'home' }));
     }, []);
+    // A failed IndexedDB commit can leave the device snapshot optimistically
+    // started. Keep all workout controls inaccessible until cold-boot recovery.
+    if (localPersistenceBlocked && activeWorkout && !activeWorkout.isEditingHistory && !startPending) {
+        return <section role="alert" className="pre-session-checkin">
+            <h2>Persistenza dell’allenamento non confermata</h2>
+            <p>Le modifiche sono bloccate per proteggere i dati. Riapri TheLogBook per verificare la sessione.</p>
+        </section>;
+    }
+
     // Il report appartiene al contenitore della sessione: deve sopravvivere alla
     // cancellazione del workout locale che segue un salvataggio riuscito.
     if (isPostSession && activeWorkout && !activeWorkout.isEditingHistory) {
@@ -312,6 +331,15 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
         );
     }
 
+    // The device snapshot becomes optimistic before the IndexedDB/cloud outcome
+    // is known. Do not expose completion controls until the start is verified.
+    if (startPending) {
+        return <section role="status" aria-live="polite" className="pre-session-checkin">
+            <h2>Avvio dell’allenamento</h2>
+            <p>Verifica del salvataggio sul dispositivo in corso…</p>
+        </section>;
+    }
+
     if (reportWorkout) {
         return (
             <WorkoutReportModal
@@ -330,7 +358,7 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
                 workoutId={String(activeWorkout.id ?? '')}
                 routineName={activeWorkout.routineName}
                 date={activeWorkout.date}
-                onStart={confirmWorkoutStart}
+                onStart={confirmStartWithGate}
                 onCancel={deleteWorkout}
             />
         );

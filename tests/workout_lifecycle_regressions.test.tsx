@@ -202,6 +202,7 @@ describe('Workout lifecycle durable recovery regressions', () => {
         expect(started).toBe(false);
         expect(readWorkoutTimerSnapshot(owner).state).toBe('running');
         expect(useAppStore.getState().localWorkout?.id).toBe('original');
+        expect(readDeviceValueStrict('history-editor-context', owner)).toBeNull();
     });
 
     it('does not resurrect a completed session from a stale device snapshot', () => {
@@ -230,7 +231,7 @@ describe('Workout lifecycle durable recovery regressions', () => {
         localStorageMock.removeItem.mockImplementationOnce(() => { throw new DOMException('blocked', 'SecurityError'); });
 
         const { result } = renderHook(() => useWorkoutSession());
-        await act(async () => { expect(await result.current.deleteWorkout()).toBe(false); });
+        await act(async () => { expect(await result.current.deleteWorkout()).toBe(true); });
 
         const durable = await readLocal(owner);
         expect(durable?.data.activeWorkout).toBeNull();
@@ -255,7 +256,7 @@ describe('Workout lifecycle durable recovery regressions', () => {
         localStorageMock.removeItem.mockImplementationOnce(() => { throw new DOMException('blocked', 'SecurityError'); });
 
         const { result } = renderHook(() => useWorkoutSession());
-        await act(async () => { expect(await result.current.endWorkout(false)).toBeNull(); });
+        await act(async () => { expect((await result.current.endWorkout(false))?.id).toBe(finished.id); });
 
         const durable = await readLocal(owner);
         expect(durable?.data.history?.filter(item => item.id === finished.id)).toHaveLength(1);
@@ -352,8 +353,11 @@ describe('Workout lifecycle durable recovery regressions', () => {
             if (written === key) throw new DOMException('full', 'QuotaExceededError');
         });
         fireEvent.click(screen.getByRole('button', { name: 'Umore: 5 su 5' }));
-        expect(screen.getByRole('button', { name: 'Umore: 5 su 5' }).getAttribute('aria-pressed')).toBe('false');
         expect(localStorage.getItem(key)).toBe(previous);
+        expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
+        expect(useAppStore.getState().syncHealth).toBe('failed');
+        expect(screen.getByRole('heading', { name: 'Persistenza dell’allenamento non confermata' })).toBeTruthy();
+        expect(screen.queryByRole('button', { name: 'Umore: 5 su 5' })).toBeNull();
     });
     it('refuses to open a history editor after the live workout changes during confirmation', async () => {
         const oldLive = workout('live-before-confirmation', true);
@@ -542,6 +546,74 @@ describe('Workout lifecycle durable recovery regressions', () => {
         });
         await act(async () => { confirm(true); await removal; });
         expect(useAppStore.getState().localWorkout?.exercises[0].sets.map(set => set.id)).toEqual(['s1', 'new-set']);
+    });
+
+
+    it('accepts a cloud-pending start only when the exact workout was durably committed', async () => {
+        const prepared = workout('offline-start');
+        const initial = userData({ activeWorkout: prepared });
+        await initializeLocal(owner, initial);
+        useAppStore.setState({ userData: initial, dataOwner: owner, localWorkout: prepared });
+        const originalSetter = useAppStore.getState().setSyncedLocalWorkout;
+        const localPending = vi.fn(async (input: Parameters<typeof originalSetter>[0]) => {
+            const started = typeof input === 'function' ? input(useAppStore.getState().localWorkout) : input;
+            if (!started) throw new Error('Workout atteso non disponibile.');
+            await commitDomainOperations(owner, { type: 'active-workout.set', workout: started }, initial);
+            useAppStore.setState({ localWorkout: started, userData: userData({ activeWorkout: started }) });
+            return { ok: false as const, status: 'local-pending' as const, error: new Error('offline') };
+        });
+        useAppStore.setState({ setSyncedLocalWorkout: localPending });
+        try {
+            const { result } = renderHook(() => useWorkoutSession());
+            await act(async () => { expect(await result.current.confirmWorkoutStart()).toBe(true); });
+            expect((await readLocal(owner))?.data.activeWorkout?.globalStartTime).toBeGreaterThan(0);
+            expect(useAppStore.getState().localPersistenceBlocked).toBe(false);
+        } finally { useAppStore.setState({ setSyncedLocalWorkout: originalSetter }); }
+    });
+
+    it('rejects a cloud-pending start if the matching IndexedDB write never happened', async () => {
+        const prepared = workout('unproven-start');
+        const initial = userData({ activeWorkout: prepared });
+        await initializeLocal(owner, initial);
+        useAppStore.setState({ userData: initial, dataOwner: owner, localWorkout: prepared });
+        const originalSetter = useAppStore.getState().setSyncedLocalWorkout;
+        useAppStore.setState({ setSyncedLocalWorkout: vi.fn(async (_input: Parameters<typeof originalSetter>[0]) => ({ ok: false as const, status: 'local-pending' as const, error: new Error('offline') })) });
+        vi.mocked(useDialogStore.getState().showAlert).mockResolvedValue();
+        try {
+            const { result } = renderHook(() => useWorkoutSession());
+            await act(async () => { expect(await result.current.confirmWorkoutStart()).toBe(false); });
+            expect((await readLocal(owner))?.data.activeWorkout?.globalStartTime).toBeUndefined();
+        } finally { useAppStore.setState({ setSyncedLocalWorkout: originalSetter }); }
+    });
+
+    it('cleans up the deleted workout final rating draft after confirming local deletion', async () => {
+        const target = workout('delete-final-rating', true);
+        const initial = userData({ activeWorkout: target });
+        await initializeLocal(owner, initial);
+        useAppStore.setState({ userData: initial, dataOwner: owner, localWorkout: target });
+        writeDeviceValue('draft:post-session:' + target.id, JSON.stringify({ draft: { workoutId: target.id } }), owner);
+        vi.mocked(useDialogStore.getState().showConfirm).mockResolvedValueOnce(true);
+        const { result } = renderHook(() => useWorkoutSession());
+        await act(async () => { expect(await result.current.deleteWorkout()).toBe(true); });
+        expect((await readLocal(owner))?.data.activeWorkout).toBeNull();
+        expect(readDeviceValueStrict('draft:post-session:' + target.id, owner)).toBeNull();
+    });
+
+
+    it('serializes a rapid start after its preparation without requiring an explicit UI flush', async () => {
+        const initial = userData({ activeWorkout: null });
+        await initializeLocal(owner, initial);
+        useAppStore.setState({ userData: initial, dataOwner: owner, localWorkout: null });
+        const { result } = renderHook(() => useWorkoutSession());
+        await act(async () => { await result.current.startFreeWorkout(); });
+        const prepared = useAppStore.getState().localWorkout;
+        expect(prepared?.id).toBeTruthy();
+        await act(async () => { expect(await result.current.confirmWorkoutStart()).toBe(true); });
+        const durable = await readLocal(owner);
+        expect(durable?.data.activeWorkout?.id).toBe(prepared?.id);
+        expect(durable?.data.activeWorkout?.globalStartTime).toBeGreaterThan(0);
+        expect(useAppStore.getState().localPersistenceBlocked).toBe(false);
+        expect(useDialogStore.getState().showAlert).not.toHaveBeenCalled();
     });
 
 });
