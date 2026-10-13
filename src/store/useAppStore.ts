@@ -24,7 +24,7 @@ if (typeof window !== 'undefined') {
 }
 
 // A failed device-critical write invalidates outstanding sync completions,
- // without deleting the owner's durable journal or invalidating its session.
+// without deleting the owner's durable journal or invalidating its session.
 useAppStore.subscribe((state, previous) => {
     if (state.localPersistenceBlocked && !previous.localPersistenceBlocked) {
         state.settleBlockedSyncJobs();
