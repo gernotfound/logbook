@@ -298,6 +298,35 @@ describe('explicit acknowledgement of newer consent from another device', () => 
 });
 
 describe('offline consent cache and reconnect privacy boundary', () => {
+  it('keeps a previously verified local session visible during recheck while fencing cloud writes', async () => {
+    const uid = 'recheck-' + crypto.randomUUID();
+    const actor = user(uid);
+    (auth as { currentUser: unknown }).currentUser = actor;
+    let resolveRecheck!: (response: Response) => void;
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(Response.json({ status: 'active', revision: 0 }))
+      .mockImplementationOnce(() => new Promise<Response>(resolve => { resolveRecheck = resolve; }));
+    vi.stubGlobal('fetch', fetchMock);
+    const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
+    try {
+      beginHealthConsentVerification(uid);
+      expect(await refreshHealthConsent(actor)).toBe('active');
+      expect(isHealthConsentCloudWritable('user:' + uid)).toBe(true);
+      const rechecking = refreshHealthConsent(actor);
+      await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+      expect(currentHealthConsentStatus(uid)).toBe('active');
+      expect(isHealthConsentWritable('user:' + uid)).toBe(true);
+      expect(isHealthConsentCloudWritable('user:' + uid)).toBe(false);
+      resolveRecheck(Response.json({ status: 'withdrawn', revision: 1 }));
+      expect(await rechecking).toBe('withdrawn');
+      expect(currentHealthConsentStatus(uid)).toBe('withdrawn');
+      expect(isHealthConsentWritable('user:' + uid)).toBe(false);
+      expect(isHealthConsentCloudWritable('user:' + uid)).toBe(false);
+    } finally {
+      online.mockRestore();
+    }
+  });
+
   it('permits local editing only after a positive server check and never grants cloud writes offline', async () => {
     const uid = 'cached-' + crypto.randomUUID();
     const actor = user(uid);

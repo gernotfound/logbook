@@ -1,13 +1,15 @@
 import { useMemo, useState, type MouseEvent } from 'react';
 import { Plus } from 'lucide-react';
 import { useLocalStorage } from '../../hooks/useLocalStorage';
+import { ownerUiPreferenceKey } from '../../lib/uiPreferenceKeys';
+import { storageOwner } from '../../lib/sync/session';
 import { useTrainingExercises } from '../../hooks/useTrainingExercises';
 import { z } from '../../lib/zod';
 import { ExerciseArchive } from './exercises/ExerciseArchive';
 import { ExerciseEditorForm } from './exercises/ExerciseEditorForm';
 
 const TrainingExercises = () => {
-    const [isCreating, setIsCreating] = useLocalStorage<boolean>('logbook_creating_exercise', false, z.boolean());
+    const [isCreating, setIsCreating] = useLocalStorage<boolean>(ownerUiPreferenceKey(storageOwner(), 'creating-exercise'), false, z.boolean());
     const [isSaving, setIsSaving] = useState(false);
     const [selectedExId, setSelectedExId] = useState<string | null>(null);
     const hook = useTrainingExercises();

@@ -4,11 +4,13 @@ import { useTrainingRoutines } from '../../hooks/useTrainingRoutines';
 import { RoutineEditor } from './routines/RoutineEditor';
 import { RoutineCard } from './routines/RoutineCard';
 import { useLocalStorage } from '../../hooks/useLocalStorage';
+import { ownerUiPreferenceKey } from '../../lib/uiPreferenceKeys';
+import { storageOwner } from '../../lib/sync/session';
 import { z } from '../../lib/zod';
 import './routines/routines.css';
 
 const TrainingRoutines: React.FC = () => {
-    const [isCreating, setIsCreating] = useLocalStorage<boolean>('logbook_creating_routine', false, z.boolean());
+    const [isCreating, setIsCreating] = useLocalStorage<boolean>(ownerUiPreferenceKey(storageOwner(), 'creating-routine'), false, z.boolean());
     const [isSaving, setIsSaving] = React.useState(false);
     const [searchQuery, setSearchQuery] = React.useState('');
     const {
