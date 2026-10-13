@@ -13,6 +13,7 @@ import type { UserData, Exercise, Food } from '../src/types';
 import { activateGuestSession, captureSession, GUEST_REVOCATION_KEY, GUEST_SESSION_KEY, isCurrentSession } from '../src/lib/sync/session';
 import { isVaultUnlocked } from '../src/lib/sync/secureArchiveSession';
 import { refreshHealthConsent } from '../src/lib/healthConsent';
+import { readAuthenticatedOwnerHint } from '../src/lib/sync/authOwnerHint';
 
 /** Verify real silent encryption bootstrap rather than simulating a bypass. */
 async function confirmRealGuestVault() {
@@ -111,6 +112,7 @@ describe('Milestone M2: Guest Bootstrap & Cold Start Lifecycle', () => {
         expect(result.current.currentUser).toBeNull();
         expect(result.current.isGuest).toBe(true);
         expect(captureSession().owner).toBe('guest');
+        expect(readAuthenticatedOwnerHint()).toBeNull();
         expect(useAppStore.getState().userData).toEqual(preserved);
         expect(localStorage.getItem('logbook_is_guest')).toBe('true');
     });
