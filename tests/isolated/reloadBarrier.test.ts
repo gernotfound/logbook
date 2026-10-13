@@ -25,7 +25,7 @@ vi.mock('../../src/lib/healthConsent', async () => {
     };
 });
 vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackEvent: vi.fn(), trackError: vi.fn() } }));
-import { prepareForReload } from '../../src/lib/sync/reloadBarrier';
+import { isReloadSessionCurrent, prepareForReload } from '../../src/lib/sync/reloadBarrier';
 import { requiredUpdateHardReload, safeHardReload } from '../../src/lib/sync/safeReload';
 import { commitLocal, initializeLocal, readLocal } from '../../src/lib/sync/localRepository';
 import { UserDataSchema } from '../../src/lib/schema';
@@ -100,6 +100,43 @@ it('propagates a failed input flush and does not proceed to reload', async () =>
         await expect(prepareForReload()).rejects.toThrow('bozze');
         expect(app.flush).not.toHaveBeenCalled();
     } finally { draftRegistry.unregister(badDraft); }
+});
+it('updates from the login screen without an active guest session or deleting an account archive', async () => {
+    const existing = await get('logbook:v2:user:a');
+    app.auth.currentUser = null as any;
+    app.state = { userData: null, localWorkout: null, dataOwner: null };
+    const reload = vi.fn();
+
+    await safeHardReload(reload);
+
+    expect(reload).toHaveBeenCalledTimes(1);
+    expect(app.flush).not.toHaveBeenCalled();
+    expect(await get('logbook:v2:user:a')).toEqual(existing);
+    expect(disk.has('logbook_is_guest')).toBe(false);
+});
+it('keeps the reload blocked if the login screen still holds unowned business data', async () => {
+    app.auth.currentUser = null as any;
+    const reload = vi.fn();
+
+    await expect(safeHardReload(reload)).rejects.toThrow('Sessione cambiata');
+    expect(reload).not.toHaveBeenCalled();
+});
+it('does not treat a revoked guest marker as a safe login-screen update', async () => {
+    app.auth.currentUser = null as any;
+    app.state = { userData: null, localWorkout: null, dataOwner: null };
+    disk.set('logbook_is_guest', 'true');
+    disk.set('logbook_guest_revoked_v1', 'revoked');
+    const reload = vi.fn();
+
+    await expect(safeHardReload(reload)).rejects.toThrow('Sessione cambiata');
+    expect(reload).not.toHaveBeenCalled();
+});
+it('fences a login-screen update if the session changes after preparation', async () => {
+    app.auth.currentUser = null as any;
+    app.state = { userData: null, localWorkout: null, dataOwner: null };
+    const prepared = await prepareForReload();
+    invalidateSession();
+    expect(isReloadSessionCurrent(prepared)).toBe(false);
 });
 it('hard reloads only after the durable reload barrier succeeds', async () => {
     app.flush.mockRejectedValue(new Error('offline'));

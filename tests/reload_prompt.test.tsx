@@ -5,7 +5,7 @@ import { render, screen, fireEvent, act, within } from '@testing-library/react';
 import ReloadPrompt from '../src/components/UI/ReloadPrompt';
 import { useRegisterSW } from 'virtual:pwa-register/react';
 import App from '../src/App';
-import { localStorageMock, renderWithProviders } from './setup';
+import { localStorageMock, mockFirebaseAuth, renderWithProviders } from './setup';
 import { useAppStore } from '../src/store/useAppStore';
 import { BufferedInput } from '../src/components/UI/BufferedInput';
 import { invalidateSession } from '../src/lib/sync/session';
@@ -134,6 +134,24 @@ describe('Service Worker Update Lifecycle (ReloadPrompt) Suite', () => {
 
     expect(mockUpdateServiceWorker).toHaveBeenCalledTimes(1);
     expect(mockUpdateServiceWorker).toHaveBeenCalledWith(true);
+  });
+
+  test('updates from the login screen without reporting a changed guest session', async () => {
+    mockFirebaseAuth.currentUser = null;
+    useAppStore.setState({ userData: null, dataOwner: null, localWorkout: null, syncing: false, localPersistenceBlocked: false });
+    vi.mocked(useRegisterSW).mockReturnValue({
+      needRefresh: [true, mockSetNeedRefresh],
+      offlineReady: [false, vi.fn()],
+      updateServiceWorker: mockUpdateServiceWorker,
+    });
+
+    render(<ReloadPrompt />);
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Aggiorna/i }));
+    });
+
+    expect(mockUpdateServiceWorker).toHaveBeenCalledExactlyOnceWith(true);
+    expect(screen.queryByText(/Sessione cambiata/i)).toBeNull();
   });
 
   test('R2: Clicking "Chiudi" button dismisses prompt via setNeedRefresh(false)', () => {

@@ -1,4 +1,4 @@
-import { prepareForReload, prepareForRequiredUpdateReload } from './reloadBarrier';
+import { isReloadSessionCurrent, prepareForReload, prepareForRequiredUpdateReload } from './reloadBarrier';
 import { isCurrentSession } from './session';
 
 const REQUIRED_UPDATE_SW_TIMEOUT_MS = 3000;
@@ -46,7 +46,7 @@ async function refreshServiceWorkerForRequiredUpdate(): Promise<void> {
  */
 export async function safeHardReload(reload: () => void = () => window.location.reload()): Promise<void> {
     const session = await prepareForReload();
-    if (!isCurrentSession(session)) {
+    if (!isReloadSessionCurrent(session)) {
         throw new Error('Sessione cambiata. Ripeti l’operazione.');
     }
     reload();
