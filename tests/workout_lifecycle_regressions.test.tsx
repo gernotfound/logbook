@@ -353,8 +353,11 @@ describe('Workout lifecycle durable recovery regressions', () => {
             if (written === key) throw new DOMException('full', 'QuotaExceededError');
         });
         fireEvent.click(screen.getByRole('button', { name: 'Umore: 5 su 5' }));
-        expect(screen.getByRole('button', { name: 'Umore: 5 su 5' }).getAttribute('aria-pressed')).toBe('false');
         expect(localStorage.getItem(key)).toBe(previous);
+        expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
+        expect(useAppStore.getState().syncHealth).toBe('failed');
+        expect(screen.getByRole('heading', { name: 'Persistenza dell’allenamento non confermata' })).toBeTruthy();
+        expect(screen.queryByRole('button', { name: 'Umore: 5 su 5' })).toBeNull();
     });
     it('refuses to open a history editor after the live workout changes during confirmation', async () => {
         const oldLive = workout('live-before-confirmation', true);

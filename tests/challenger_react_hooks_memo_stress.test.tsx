@@ -12,7 +12,7 @@ import { Logic } from '../src/lib/logic';
 import { DB } from '../src/lib/db';
 import type { UserData, WorkoutSession } from '../src/types';
 import { captureSession } from '../src/lib/sync/session';
-import { initializeLocal } from '../src/lib/sync/localRepository';
+import { initializeLocal, readLocal } from '../src/lib/sync/localRepository';
 import { UserDataSchema } from '../src/lib/schema';
 
 describe('Empirical Challenger: React Hooks, Memoization & Re-render Loop Stress Suite', () => {
@@ -519,6 +519,11 @@ describe('Empirical Challenger: React Hooks, Memoization & Re-render Loop Stress
             const initial = UserDataSchema.parse(baseUserData) as UserData;
             await initializeLocal(owner, initial);
             useAppStore.setState({ userData: initial, dataOwner: owner, localPersistenceBlocked: false });
+            // Keep the real owner-scoped IndexedDB commit. Only the cloud
+            // transport is offline; undefined is not a valid SyncResult.
+            const cloudSave = vi.spyOn(DB, 'saveUserData').mockResolvedValue({
+                ok: false, status: 'local-pending', error: new Error('Cloud offline'),
+            } as any);
             render(<TrainingSession />);
 
             // 1. Start workout from planned routine (first Avvia button)
@@ -536,8 +541,12 @@ describe('Empirical Challenger: React Hooks, Memoization & Re-render Loop Stress
                 fireEvent.click(screen.getByRole('button', { name: 'Salta check-in e inizia' }));
                 await new Promise(r => setTimeout(r, 0));
             });
+            await act(async () => { await useAppStore.getState().flushPendingSyncs(); });
             await waitFor(() => expect(screen.getByRole('heading', { name: 'Panca Piana' })).toBeDefined());
             expect(screen.getByRole('heading', { name: 'Squat' })).toBeDefined();
+            const started = useAppStore.getState().localWorkout;
+            expect((await readLocal(owner))?.data.activeWorkout?.globalStartTime).toBe(started?.globalStartTime);
+            expect(useAppStore.getState().localPersistenceBlocked).toBe(false);
 
             // 2. Add set to Exercise 0
             const addSetBtns = screen.getAllByText('+ Aggiungi serie');
@@ -554,7 +563,8 @@ describe('Empirical Challenger: React Hooks, Memoization & Re-render Loop Stress
             // so we can advance the globalSaveTimer (1000ms) without infinite loops.
             vi.useFakeTimers({ shouldAdvanceTime: false });
             vi.spyOn(useDialogStore.getState(), 'showConfirm').mockResolvedValue(true);
-            const dbSaveMock2 = vi.spyOn(DB, 'saveUserData').mockResolvedValue({ ok: true, status: 'synced' } as any);
+            // Cloud remains offline while the completion is committed to IndexedDB.
+            cloudSave.mockResolvedValue({ ok: false, status: 'local-pending', error: new Error('Cloud offline') } as any);
             const endBtn = screen.getByText(/Termina allenamento/i);
 
             await act(async () => {
@@ -576,13 +586,14 @@ describe('Empirical Challenger: React Hooks, Memoization & Re-render Loop Stress
             await act(async () => {
                 await new Promise(r => setTimeout(r, 50));
             });
-            dbSaveMock2.mockRestore();
+            cloudSave.mockRestore();
 
             // Workout saved to history and cleared from localWorkout
             expect(useAppStore.getState().localWorkout).toBeNull();
             const savedHistory = useAppStore.getState().userData?.history;
             expect(savedHistory?.[0]?.routineName).toBe('Push Day');
             expect(savedHistory?.[0]?.exercises[0].sets).toHaveLength(4);
+            expect((await readLocal(owner))?.data.history?.[0]?.exercises[0].sets).toHaveLength(4);
         });
     });
 });
