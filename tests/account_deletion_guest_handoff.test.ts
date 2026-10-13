@@ -69,6 +69,35 @@ describe('account deletion before guest-to-account migration', () => {
         expect(vi.mocked(signOut)).toHaveBeenCalledTimes(1);
     });
 
+    it('keeps the deletion receipt and guest archive when Firebase sign-out fails after server acceptance', async () => {
+        const fetchMock = vi.fn(async (_url: RequestInfo | URL, options: RequestInit) =>
+            Response.json({ uid: 'pre-consent-account', status: options.method === 'POST' ? 'requested' : 'complete' },
+                { status: options.method === 'POST' ? 202 : 200 }));
+        vi.stubGlobal('fetch', fetchMock);
+        vi.mocked(signOut).mockRejectedValueOnce(new Error('Firebase sign-out unavailable'));
+
+        const result = await deleteAccount(context);
+
+        expect(result).toMatchObject({ status: 'pending', message: expect.stringContaining('ricevuta account') });
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+        expect(context.purgeAllLocalUserData).not.toHaveBeenCalled();
+        expect(localStorage.getItem('logbook_is_guest')).toBe('true');
+        expect(idbStore['logbook:v2:guest']).toBeDefined();
+        expect(localStorage.getItem('logbook:v2:user:pre-consent-account:account-deletion')).not.toBeNull();
+    });
+
+    it('does not abandon guest storage when a new deletion request is rejected by the backend', async () => {
+        const fetchMock = vi.fn(async () => Response.json({ error: 'Verifica non valida.' }, { status: 403 }));
+        vi.stubGlobal('fetch', fetchMock);
+
+        await expect(deleteAccount(context)).rejects.toThrow('Verifica non valida.');
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        expect(context.purgeAllLocalUserData).not.toHaveBeenCalled();
+        expect(localStorage.getItem('logbook_is_guest')).toBe('true');
+        expect(idbStore['logbook:v2:guest']).toBeDefined();
+        expect(vi.mocked(signOut)).not.toHaveBeenCalled();
+    });
+
     it('refuses a guest session revoked by another tab before touching the server', async () => {
         localStorage.setItem('logbook_guest_revoked_v1', 'remote-revocation');
         const fetchMock = vi.fn();
