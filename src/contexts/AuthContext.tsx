@@ -528,6 +528,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 setCurrentUser(null);
                 setEmailVerificationRequired(false);
                 setGuestMigrationStatus('idle');
+                if (previousUid) {
+                    try { clearAuthenticatedOwnerHint(userOwner(previousUid)); }
+                    catch (error) { console.warn('Hint autenticato non ripulito dopo sign-out:', error); }
+                }
                 const isGuestActive = isGuestActiveStrict();
                 if (!isGuestActive) {
                     try {
