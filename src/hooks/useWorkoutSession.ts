@@ -168,8 +168,9 @@ export function useWorkoutSession() {
             if (!isCurrentSession(session) || useAppStore.getState().localPersistenceBlocked
                 || useAppStore.getState().localWorkout?.id !== currentWorkout.id) return false;
             const prepared = await readLocal(session.owner);
-            if (!isCurrentSession(session) || prepared?.data.activeWorkout?.id !== currentWorkout.id
-                || prepared.data.activeWorkout.globalStartTime) {
+            const durableWorkout = prepared?.data.activeWorkout;
+            if (!isCurrentSession(session) || !durableWorkout || durableWorkout.id !== currentWorkout.id
+                || durableWorkout.globalStartTime) {
                 await showAlert('Impossibile confermare la preparazione locale della sessione. Riapri TheLogBook e riprova.');
                 return false;
             }
