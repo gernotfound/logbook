@@ -1,7 +1,7 @@
 import { captureSession } from '../src/lib/sync/session';
 import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { WorkoutSessionSchema } from '../src/lib/schema';
 import { Exporter } from '../src/lib/export';
 import { createBackup, decodeImport, prepareImport } from '../src/lib/backup';
@@ -96,8 +96,9 @@ describe('pre-session readiness contract', () => {
 
         await waitFor(() => expect(useAppStore.getState().localWorkout?.globalStartTime).toBeTruthy());
         await waitFor(() => expect(scrollToSpy).toHaveBeenCalledWith({ top: 0, left: 0, behavior: 'auto' }));
-        // An optimistic timestamp is not durable evidence. Finish the async
-        // start before this test releases its owner and starts the next scenario.
+        // The production debounce lasts 1,000 ms, matching waitFor's default
+        // timeout. Drain the real queue rather than racing the assertion deadline.
+        await act(async () => { await useAppStore.getState().flushPendingSyncs(); });
         await waitFor(() => expect(screen.getByRole('button', { name: 'Termina allenamento' })).toBeTruthy());
         const saved = await readLocal(captureSession().owner);
         expect(saved?.data.activeWorkout?.id).toBe('pending-scroll');
@@ -118,6 +119,10 @@ describe('pre-session readiness contract', () => {
         const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(startedAt);
         try {
             fireEvent.click(screen.getByRole('button', { name: 'Salta check-in e inizia' }));
+            // First observe the real optimistic transition, then force its queued
+            // production commit to settle before checking UI and IndexedDB.
+            await waitFor(() => expect(useAppStore.getState().localWorkout?.globalStartTime).toBe(startedAt));
+            await act(async () => { await useAppStore.getState().flushPendingSyncs(); });
             await waitFor(() => expect(screen.getByRole('button', { name: 'Termina allenamento' })).toBeTruthy());
             const started = useAppStore.getState().localWorkout;
             expect(started?.globalStartTime).toBe(startedAt);
