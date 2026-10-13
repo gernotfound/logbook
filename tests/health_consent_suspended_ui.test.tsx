@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { User } from 'firebase/auth';
 import { HealthConsentSuspended } from '../src/components/UI/HealthConsentSuspended';
-import { finishHealthConsentReacceptance, reacceptHealthConsent, refreshHealthConsent } from '../src/lib/healthConsent';
+import { finishHealthConsentReacceptance, registerInitialHealthConsent, reacceptHealthConsent, refreshHealthConsent } from '../src/lib/healthConsent';
 
 vi.mock('../src/hooks/useSettings', () => ({
   useSettings: () => ({
@@ -21,6 +21,22 @@ const reacceptButton = () => screen.getByRole('button', { name: 'Presta un nuovo
 beforeEach(() => { vi.clearAllMocks(); });
 
 describe('suspended health-consent screen', () => {
+  it('renders explicit first acceptance separately from revocation and does not submit unchecked choices', async () => {
+    vi.mocked(registerInitialHealthConsent).mockRejectedValue(new Error('Rete non disponibile'));
+    render(<HealthConsentSuspended status="unregistered" user={account} />);
+    expect(screen.getByRole('heading', { name: 'Primo consenso richiesto' })).toBeDefined();
+    const submit = screen.getByRole('button', { name: 'Accetta e continua' }) as HTMLButtonElement;
+    expect(submit.disabled).toBe(true);
+    expect(screen.getAllByRole('checkbox')).toHaveLength(2);
+    fireEvent.click(checkboxInputs()[0]);
+    expect(submit.disabled).toBe(true);
+    fireEvent.click(checkboxInputs()[1]);
+    expect(submit.disabled).toBe(false);
+    fireEvent.click(submit);
+    await waitFor(() => expect(registerInitialHealthConsent).toHaveBeenCalledTimes(1));
+    expect(screen.getByRole('alert').textContent).toContain('Rete non disponibile');
+  });
+
   it('keeps the same reacceptance form visible from pending to server-confirmed withdrawal', () => {
     const { rerender } = render(<HealthConsentSuspended status="pending" user={account} />);
     const [terms, health] = checkboxInputs();
