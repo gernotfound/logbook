@@ -3,11 +3,31 @@ import { flushSync } from 'react-dom';
 import { useAppStore } from '../../store/useAppStore';
 import { draftRegistry } from '../utils/draftRegistry';
 import { commitLocal, readLocal } from './localRepository';
-import { captureSession, isCurrentSession } from './session';
+import { captureSession, isActiveGuestSession, isCurrentSession } from './session';
+import { auth } from '../firebase';
+import { readBrowserValueStrict } from './browserStorage';
 import { persistOwnerBoundWorkoutSnapshot } from './deviceCriticalState';
 import { UserDataSchema } from '../schema';
 import type { UserData } from '../../types';
 import { markTabSnapshotClean, readTabSnapshotState } from './tabSnapshotCausality';
+
+function isUnauthenticatedReloadSession(session: ReturnType<typeof captureSession>): boolean {
+    try {
+        const state = useAppStore.getState();
+        // The login screen has no active guest generation. No in-memory business
+        // state can be attributed to it, so a reload leaves stored archives intact.
+        if (auth.currentUser !== null || readBrowserValueStrict('logbook_is_guest') === 'true'
+            || isActiveGuestSession() || state.userData != null || state.localWorkout != null
+            || state.dataOwner != null || state.syncing || state.localPersistenceBlocked) return false;
+        return equal(captureSession(), session);
+    } catch {
+        return false;
+    }
+}
+
+export function isReloadSessionCurrent(session: ReturnType<typeof captureSession>): boolean {
+    return isUnauthenticatedReloadSession(session) || isCurrentSession(session);
+}
 
 export function prepareForRequiredUpdateReload() {
     const session = captureSession();
@@ -20,6 +40,7 @@ export function prepareForRequiredUpdateReload() {
 export async function prepareForReload() {
     const session = captureSession();
     flushSync(() => draftRegistry.flushAll({ strict: true }));
+    if (isUnauthenticatedReloadSession(session)) return session;
     try { await useAppStore.getState().flushPendingSyncs(); }
     catch { /* Remote rejection is compatible with reload only if the local copy is verified below. */ }
     if (!isCurrentSession(session)) throw new Error('Sessione cambiata. Ripeti l’aggiornamento.');

@@ -251,6 +251,8 @@ Il componente di ricarica della PWA (`src/lib/sync/reloadBarrier.ts`) regola gli
 
 **MUST:** se `state.userData` esiste in memoria ma l'envelope persistito è assente, incompatibile o corrotto, l'app deve bloccare l'aggiornamento (`isUnsaved = true`).
 
+**MUST:** dalla schermata di accesso, senza account né generazione guest attiva e senza dati business o salvataggi in memoria, l'aggiornamento PWA può procedere senza creare una sessione guest o leggere/azzerare archivi owner-scoped persistiti. Se esiste stato in memoria non attribuibile, la barriera resta fail-closed.
+
 **MUST:** una differenza tra Zustand e IndexedDB non prova che IndexedDB sia indietro. La tab mantiene in memoria la provenienza causale del proprio snapshot: solo modifiche marcate dirty rispetto a una base osservata possono essere rigiocate, e il replay applica il delta base→desired sopra l'envelope durevole corrente. Una tab clean ma stale si riallinea a IndexedDB senza generare delete/tombstone.
 
 **MUST:** i boundary snapshot bulk (`commitLocal`, import/restore e recovery compatibili) calcolano l'intento rispetto alla base osservata dal chiamante e lo applicano all'envelope corrente. Entità o campi creati concorrentemente e assenti dalla base del chiamante non possono essere interpretati come cancellazioni.

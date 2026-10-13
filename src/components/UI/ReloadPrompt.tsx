@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useRegisterSW } from 'virtual:pwa-register/react';
-import { prepareForReload } from '../../lib/sync/reloadBarrier';
-import { isCurrentSession } from '../../lib/sync/session';
+import { isReloadSessionCurrent, prepareForReload } from '../../lib/sync/reloadBarrier';
 import { checkForWaitingServiceWorker } from '../../lib/pwaUpdate';
 
 const ReloadPrompt: React.FC = () => {
@@ -111,7 +110,7 @@ const ReloadPrompt: React.FC = () => {
     setUpdateError(null);
     try {
       const session = await prepareForReload();
-      if (!isCurrentSession(session)) throw new Error('Sessione cambiata.');
+      if (!isReloadSessionCurrent(session)) throw new Error('Sessione cambiata.');
       if (chunkFailed) window.location.reload();
       else await updateServiceWorker(true);
     } catch (err) {
