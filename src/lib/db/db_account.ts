@@ -437,7 +437,11 @@ async function performDeletion(context: AccountDeletionContext): Promise<Account
         // Only AFTER the backend accepted the durable job may Auth be released.
         // Keep the guest owner and the account receipt; owner-local purge is
         // deferred until there is no other active local identity.
-        await signOut(auth);
+        try {
+            await signOut(auth);
+        } catch {
+            return pendingDeletionOutcome('Cancellazione acquisita dal server, ma la sessione Firebase non è stata chiusa. L’archivio ospite e la ricevuta account sono conservati; riprova dopo aver riaperto TheLogBook.');
+        }
     }
     return outcome;
 }
