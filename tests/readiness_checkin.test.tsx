@@ -101,13 +101,15 @@ describe('pre-session readiness contract', () => {
 
     it('anchors the workout date to the actual local start time when check-in crosses midnight', async () => {
         const startedAt = new Date(2026, 8, 25, 0, 0, 5).getTime();
-        const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(startedAt);
         const prepared: WorkoutSession = { id: 'pending-midnight', date: '2026-09-24', routineName: 'Push', ratingScale: 5, exercises: [] };
         const data = parseUserData({ activeWorkout: prepared });
         await initializeLocal(captureSession().owner, data);
         useAppStore.setState({ userData: data, dataOwner: captureSession().owner,
             localWorkout: prepared, localPersistenceBlocked: false });
         render(<TrainingSession />);
+        // Isolate the clock-boundary check from archive initialization and
+        // its asynchronous security bookkeeping.
+        const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(startedAt);
         fireEvent.click(screen.getByRole('button', { name: 'Salta check-in e inizia' }));
         await waitFor(() => {
             const started = useAppStore.getState().localWorkout;
