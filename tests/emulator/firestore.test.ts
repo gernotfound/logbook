@@ -519,14 +519,15 @@ it('bounds monthly dynamic entry counts while preserving normal calendar and wor
         const date = '2026-10-' + String(i + 1).padStart(2, '0');
         return [date, { date, kcal: 2000 }];
     }));
-    await assertSucceeds(fencedWrite(db, 'users/a/nutrition_months/2026-10', days));
+    const replica = await registerReplica(db, 'a');
+    await assertSucceeds(fencedWrite(db, 'users/a/nutrition_months/2026-10', days, replica));
     await assertFails(fencedWrite(db, 'users/a/nutrition_months/2026-10', {
         ...days, unexpected: { privatePayload: true },
-    }));
+    }, replica));
     const workouts = Object.fromEntries(Array.from({ length: 256 }, (_, i) =>
         ['workout-' + i, { id: 'workout-' + i, date: '2026-10-13', exercises: [] }]));
-    await assertSucceeds(fencedWrite(db, 'users/a/history_months/2026-10', workouts));
+    await assertSucceeds(fencedWrite(db, 'users/a/history_months/2026-10', workouts, replica));
     await assertFails(fencedWrite(db, 'users/a/history_months/2026-10', {
         ...workouts, extraWorkout: { id: 'extraWorkout', date: '2026-10-13', exercises: [] },
-    }));
+    }, replica));
 });
