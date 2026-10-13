@@ -3,6 +3,7 @@ import { normalizeBusinessId } from '../businessIdentity';
 import { getLocalDateString } from '../utils/date';
 import { assertWorkoutSessionIdentities } from './domainOperations/validation';
 import { WorkoutSessionSchema } from '../schemas/schema_training';
+import { NutritionDaySchema } from '../schemas/schema_nutrition';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
@@ -47,7 +48,7 @@ export function assertNutritionMonthDocument(month: string, data: Record<string,
         if (!isCanonicalLocalDate(date) || date.slice(0, 7) !== month || !raw || typeof raw !== 'object' || Array.isArray(raw)) {
             throw new Error(`Shard nutrizione ${month}: giornata ${date} non valida`);
         }
-        const day = raw as NutritionDay;
+        const day = NutritionDaySchema.parse(raw) as NutritionDay;
         if (day.date !== date) {
             throw new Error(`Shard nutrizione ${month}: chiave ${date} diversa da day.date`);
         }
@@ -80,8 +81,10 @@ export function sanitizeNutritionMonthDocument(month: string, data: Record<strin
     const sanitized: Record<string, unknown> = {};
     for (const [date, raw] of Object.entries(data)) {
         if (!isCanonicalLocalDate(date) || date.slice(0, 7) !== month || !raw || typeof raw !== 'object' || Array.isArray(raw)) continue;
-        if ((raw as NutritionDay).date !== date) continue;
-        sanitized[date] = raw;
+        const day = NutritionDaySchema.safeParse(raw);
+        if (!day.success || day.data.date !== date) continue;
+        // Normalize remote data before it can enter the in-memory application.
+        sanitized[date] = day.data;
     }
     return sanitized;
 }

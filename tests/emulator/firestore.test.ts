@@ -512,3 +512,21 @@ it('makes telemetry events/anomalies immutable and error aggregation monotonic',
     await assertFails(setDoc(errorRef, { ...error, count: 1, lastSeen: 900 }));
     await assertFails(setDoc(errorRef, { ...error, count: 3, lastSeen: 1200, message: 'tampered' }));
 });
+
+it('bounds monthly dynamic entry counts while preserving normal calendar and workout shards', async () => {
+    const db = asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore());
+    const days = Object.fromEntries(Array.from({ length: 31 }, (_, i) => {
+        const date = '2026-10-' + String(i + 1).padStart(2, '0');
+        return [date, { date, kcal: 2000 }];
+    }));
+    await assertSucceeds(fencedWrite(db, 'users/a/nutrition_months/2026-10', days));
+    await assertFails(fencedWrite(db, 'users/a/nutrition_months/2026-10', {
+        ...days, unexpected: { privatePayload: true },
+    }));
+    const workouts = Object.fromEntries(Array.from({ length: 256 }, (_, i) =>
+        ['workout-' + i, { id: 'workout-' + i, date: '2026-10-13', exercises: [] }]));
+    await assertSucceeds(fencedWrite(db, 'users/a/history_months/2026-10', workouts));
+    await assertFails(fencedWrite(db, 'users/a/history_months/2026-10', {
+        ...workouts, extraWorkout: { id: 'extraWorkout', date: '2026-10-13', exercises: [] },
+    }));
+});
