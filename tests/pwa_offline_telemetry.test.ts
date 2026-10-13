@@ -1,3 +1,4 @@
+import { captureSession } from '../src/lib/sync/session';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as sentryClient from '../src/lib/sentryClient';
 import { renderHook, act, render, screen, fireEvent, waitFor } from '@testing-library/react';
@@ -254,6 +255,7 @@ describe('Milestone 2: PWA, offline workout and telemetry boundaries', () => {
       telemetryHub.setUserId('user_settings_test');
 
       useAppStore.setState({
+        dataOwner: captureSession().owner,
         userData: {
           profile: { name: 'Mario Rossi' },
           routines: [],
@@ -320,6 +322,7 @@ describe('Milestone 2: PWA, offline workout and telemetry boundaries', () => {
       telemetryHub.setUserId('user_athlete_online');
 
       useAppStore.setState({
+        dataOwner: captureSession().owner,
         userData: mockUserData,
         localWorkout: null,
       });
@@ -344,6 +347,7 @@ describe('Milestone 2: PWA, offline workout and telemetry boundaries', () => {
       Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
 
       useAppStore.setState({
+        dataOwner: captureSession().owner,
         userData: mockUserData,
         localWorkout: null,
       });
@@ -369,6 +373,7 @@ describe('Milestone 2: PWA, offline workout and telemetry boundaries', () => {
       });
 
       useAppStore.setState({
+        dataOwner: captureSession().owner,
         userData: mockUserData,
         localWorkout: {
           id: 'w_test_1',
@@ -407,6 +412,7 @@ describe('Milestone 2: PWA, offline workout and telemetry boundaries', () => {
       });
 
       useAppStore.setState({
+        dataOwner: captureSession().owner,
         userData: mockUserData,
         localWorkout: {
           id: 'w_offline_1',
@@ -442,6 +448,7 @@ describe('Milestone 2: PWA, offline workout and telemetry boundaries', () => {
       });
 
       useAppStore.setState({
+        dataOwner: captureSession().owner,
         userData: mockUserData,
         localWorkout: {
           id: 'w_fail_safe_1',

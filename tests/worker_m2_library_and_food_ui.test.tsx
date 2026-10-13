@@ -106,6 +106,7 @@ describe('Worker M2: Exercise Library UI & Food Form Real-Time Calorie Calculati
 
         it('handleSaveExercise creates new exercise with isBodyweight and equipmentWeight', async () => {
             useAppStore.setState({
+                dataOwner: 'user:test-user-id',
                 userData: {
                     ...emptyUserData,
                     library: []
@@ -141,6 +142,7 @@ describe('Worker M2: Exercise Library UI & Food Form Real-Time Calorie Calculati
             };
 
             useAppStore.setState({
+                dataOwner: 'user:test-user-id',
                 userData: {
                     ...emptyUserData,
                     library: [existingEx]
@@ -180,6 +182,7 @@ describe('Worker M2: Exercise Library UI & Food Form Real-Time Calorie Calculati
             };
 
             useAppStore.setState({
+                dataOwner: 'user:test-user-id',
                 userData: {
                     ...emptyUserData,
                     library: [original]
@@ -221,6 +224,7 @@ describe('Worker M2: Exercise Library UI & Food Form Real-Time Calorie Calculati
             const showConfirm = vi.fn().mockResolvedValue(true);
             useDialogStore.setState({ showAlert, showConfirm });
             useAppStore.setState({
+                dataOwner: 'user:test-user-id',
                 userData: {
                     ...emptyUserData,
                     library: [catalogExercise, customExercise],
@@ -301,6 +305,7 @@ describe('Worker M2: Exercise Library UI & Food Form Real-Time Calorie Calculati
                 showAlert: vi.fn().mockResolvedValue(undefined)
             });
             useAppStore.setState({
+                dataOwner: 'user:test-user-id',
                 userData: {
                     ...emptyUserData,
                     library: [modified]
