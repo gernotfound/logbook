@@ -57,6 +57,7 @@ it('denies cross-owner replica registration and otherwise valid owner telemetry'
   await assertFails(registerReplica(bob, 'a'));
   await assertSucceeds(registerReplica(alice, 'a'));
   const event = {
+    consentRevision: 1,
     timestamp: Date.now(),
     type: 'workout_started',
     context: { appVersion: '1.1.0', platform: 'other', displayMode: 'browser', online: true },

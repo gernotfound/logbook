@@ -29,6 +29,7 @@ beforeEach(async () => { await env.clearFirestore(); await seedTrustedConsent(en
 afterAll(async () => { await env?.cleanup(); });
 
 const baseEvent = {
+  consentRevision: 1,
   timestamp: 1000,
   type: 'workout_started',
   context: {

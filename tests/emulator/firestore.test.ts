@@ -64,6 +64,7 @@ function protocol3Registration() {
     const now = Date.now();
     return {
         protocolVersion: CURRENT_SYNC_PROTOCOL,
+        consentRevision: 1,
         replicas: {
             s00: {
                 replicaId: 'replica-s00',
@@ -90,6 +91,7 @@ async function fencedWrite(db: any, path: string, business: Record<string, unkno
         replicaId: activeReplica.replicaId,
         generation: activeReplica.generation,
         seq,
+        consentRevision: 1,
     };
     const batch = writeBatch(db);
     batch.set(controlRef, {
@@ -318,7 +320,7 @@ it('rejects malformed sync envelopes while allowing the current structural contr
 
     const replica = await registerReplica(db, 'a');
     const controlRef = doc(db, 'users/a/sync_control/state');
-    const writer = { slot: replica.slot, replicaId: replica.replicaId, generation: replica.generation, seq: 1 };
+    const writer = { slot: replica.slot, replicaId: replica.replicaId, generation: replica.generation, seq: 1, consentRevision: 1 };
     const validSync = { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: { s00: 1 }, fields: {}, writer };
     const authorizedWrite = async (sync: any, name: string, seq = 1) => {
         const control = (await getDoc(controlRef)).data()!;
@@ -368,6 +370,7 @@ it('accepts bounded owner telemetry and rejects malformed payloads', async () =>
     const anomalyRef = doc(db, 'users/a/telemetry_anomalies/a1');
 
     const event = {
+        consentRevision: 1,
         timestamp: 1000,
         type: 'workout_started',
         context: telemetryContext,
@@ -377,6 +380,7 @@ it('accepts bounded owner telemetry and rejects malformed payloads', async () =>
         expireAt,
     };
     const error = {
+        consentRevision: 1,
         timestamp: 1000,
         type: 'TypeError',
         message: 'safe message',
@@ -390,6 +394,7 @@ it('accepts bounded owner telemetry and rejects malformed payloads', async () =>
         expireAt,
     };
     const anomaly = {
+        consentRevision: 1,
         type: 'storage_recovery_anomaly',
         reason: 'indexeddb_cache_missing_with_valid_marker',
         timestamp: 1000,
@@ -419,6 +424,7 @@ it('allows bounded telemetry expiry, supports legacy expiry upgrade, and prevent
     const tooFarExpireAt = new Date(Date.now() + (32 * 24 * 60 * 60 * 1000));
 
     const event = {
+        consentRevision: 1,
         timestamp: 1000,
         type: 'schema_fallback',
         context: telemetryContext,
@@ -439,6 +445,7 @@ it('allows bounded telemetry expiry, supports legacy expiry upgrade, and prevent
     await assertFails(setDoc(legacyEventRef, { ...event, type: 'tampered', expireAt: validExpireAt }));
 
     const error = {
+        consentRevision: 1,
         timestamp: 1000,
         type: 'TypeError',
         message: 'safe message',
@@ -467,6 +474,7 @@ it('makes telemetry events/anomalies immutable and error aggregation monotonic',
     const anomalyRef = doc(db, 'users/a/telemetry_anomalies/a1');
 
     const event = {
+        consentRevision: 1,
         timestamp: 1000,
         type: 'pwa_install_click',
         context: telemetryContext,
@@ -476,6 +484,7 @@ it('makes telemetry events/anomalies immutable and error aggregation monotonic',
         expireAt,
     };
     const error = {
+        consentRevision: 1,
         timestamp: 1000,
         type: 'TypeError',
         message: 'safe message',
@@ -489,6 +498,7 @@ it('makes telemetry events/anomalies immutable and error aggregation monotonic',
         expireAt,
     };
     const anomaly = {
+        consentRevision: 1,
         type: 'storage_recovery_anomaly',
         reason: 'indexeddb_cache_missing_with_valid_marker',
         timestamp: 1000,

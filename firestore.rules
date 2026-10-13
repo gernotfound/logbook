@@ -390,6 +390,7 @@ service cloud.firestore {
           'count',
           'firstSeen',
           'lastSeen',
+          'consentRevision',
           'expireAt'
         ])
         && 'timestamp' in docData
@@ -443,6 +444,7 @@ service cloud.firestore {
           'userId',
           'sessionId',
           'details',
+          'consentRevision',
           'expireAt'
         ])
         && 'timestamp' in docData
@@ -467,6 +469,7 @@ service cloud.firestore {
           'platform',
           'standalone',
           'persisted',
+          'consentRevision',
           'expireAt'
         ])
         && 'type' in docData
