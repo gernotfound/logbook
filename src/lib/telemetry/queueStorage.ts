@@ -260,11 +260,14 @@ export class TelemetryQueueStorage {
     }
   }
 
-  /** Re-read a durable queue after cloud delivery, but do not erase an
-   * in-memory-only queue while the owner vault is still locked.
+  /** Re-read the durable queue after cloud delivery. Do not discard reports
+   * retained in RAM if their encrypted write has not succeeded yet.
    */
   public refreshAfterFlush(): void {
     if (!isVaultUnlocked(this.getOwner())) return;
+    const ownerKey = this.getQueueStorageKey();
+    if (this.cachedQueue !== null && this.cachedQueueKey === ownerKey
+      && !this.syncQueueToDisk(ownerKey)) return;
     this.invalidateCache();
   }
 
