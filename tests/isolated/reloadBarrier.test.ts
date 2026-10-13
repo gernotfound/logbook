@@ -121,10 +121,11 @@ it('keeps the reload blocked if the login screen still holds unowned business da
     await expect(safeHardReload(reload)).rejects.toThrow('Sessione cambiata');
     expect(reload).not.toHaveBeenCalled();
 });
-it('does not treat a stale guest marker as a safe login-screen update', async () => {
+it('does not treat a revoked guest marker as a safe login-screen update', async () => {
     app.auth.currentUser = null as any;
     app.state = { userData: null, localWorkout: null, dataOwner: null };
     disk.set('logbook_is_guest', 'true');
+    disk.set('logbook_guest_revoked_v1', 'revoked');
     const reload = vi.fn();
 
     await expect(safeHardReload(reload)).rejects.toThrow('Sessione cambiata');
