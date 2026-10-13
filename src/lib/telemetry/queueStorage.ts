@@ -266,7 +266,10 @@ export class TelemetryQueueStorage {
   public refreshAfterFlush(): void {
     if (!isVaultUnlocked(this.getOwner())) return;
     const ownerKey = this.getQueueStorageKey();
+    // A successfully persisted cache can be discarded: reread disk so we
+    // do not overwrite reports added by another tab. Only retry a dirty cache.
     if (this.cachedQueue !== null && this.cachedQueueKey === ownerKey
+      && (this.needsUnlockReconciliation || this.isDiskSyncScheduled)
       && !this.syncQueueToDisk(ownerKey)) return;
     this.invalidateCache();
   }
