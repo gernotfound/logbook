@@ -18,6 +18,7 @@ import { LocalCiphertextError, SEALED_LOCAL_PREFIX } from '../../src/lib/sync/se
 import { BrowserStorageError } from '../../src/lib/sync/browserStorage';
 import { activateGuestSession, GUEST_SESSION_KEY, GUEST_REVOCATION_KEY } from '../../src/lib/sync/session';
 import { collectBackupSnapshot } from '../../src/lib/db/backupSnapshot';
+import { OWNER_UI_PREFERENCES, ownerUiPreferenceKey } from '../../src/lib/uiPreferenceKeys';
 
 const owner = 'user:secure-migration';
 const day = '2026-10-12';
@@ -76,6 +77,31 @@ describe('durable secure archive migration', () => {
         expect(readVaultControl(owner)?.phase).toBe('active');
         expect(localStorage.getItem(consentCacheKey)).toBe('2');
         expect((await readLocal(owner))?.data.nutrition?.[day]?.weight).toBe(75);
+    });
+
+    it('recognizes only the registered owner-scoped UI flags without blocking vault activation', async () => {
+        await initializeLocal(owner, base());
+        const preferences = new Map(OWNER_UI_PREFERENCES.map(preference => [
+            ownerUiPreferenceKey(owner, preference),
+            JSON.stringify(preference.startsWith('creating-') ? false : 'session'),
+        ]));
+        for (const [key, value] of preferences) localStorage.setItem(key, value);
+
+        await createAndMigrateVault(owner);
+        expect(readVaultControl(owner)?.phase).toBe('active');
+        expect((await readLocal(owner))?.data.profile?.height).toBe('170');
+        for (const [key, value] of preferences) {
+            expect(localStorage.getItem(key)).toBe(value);
+        }
+    });
+
+    it('continues to reject unknown owner UI keys before transforming an archive', async () => {
+        await initializeLocal(owner, base());
+        const unknown = 'logbook:v2:' + owner + ':ui:unknown-field';
+        localStorage.setItem(unknown, 'true');
+        await expect(createAndMigrateVault(owner)).rejects.toThrow('chiavi sconosciute');
+        expect(localStorage.getItem(unknown)).toBe('true');
+        expect(readVaultControl(owner)?.phase).toBe('migrating');
     });
 
     it('serializes simultaneous provisioning attempts without replacing a durable key', async () => {

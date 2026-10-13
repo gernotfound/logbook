@@ -1,7 +1,8 @@
 import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, screen } from '@testing-library/react';
-import { renderWithProviders } from './setup';
+import { renderWithProviders, mockFirebaseAuth } from './setup';
+import { ownerUiPreferenceKey } from '../src/lib/uiPreferenceKeys';
 
 const mocks = vi.hoisted(() => ({
     useTrainingExercises: vi.fn(),
@@ -53,6 +54,22 @@ describe('TrainingExercises decomposition parity', () => {
             handleRestoreExercise: vi.fn(),
             handleDuplicate: vi.fn(),
         });
+    });
+
+    it('does not resume an exercise creation from a previous account', () => {
+        localStorage.setItem('logbook_creating_exercise', 'true');
+        localStorage.setItem(ownerUiPreferenceKey('user:previous', 'creating-exercise'), 'true');
+        const first = renderWithProviders(<TrainingExercises />);
+        expect(screen.getByRole('button', { name: 'Crea esercizio' })).toBeDefined();
+        fireEvent.click(screen.getByRole('button', { name: 'Crea esercizio' }));
+        expect(localStorage.getItem(ownerUiPreferenceKey('user:test-user-id', 'creating-exercise'))).toBe('true');
+        first.unmount();
+
+        if (!mockFirebaseAuth.currentUser) throw new Error('Test authentication fixture missing');
+        mockFirebaseAuth.currentUser = { ...mockFirebaseAuth.currentUser, uid: 'new-account' };
+        renderWithProviders(<TrainingExercises />);
+        expect(screen.getByRole('button', { name: 'Crea esercizio' })).toBeDefined();
+        expect(screen.queryByRole('heading', { name: 'Nuovo esercizio' })).toBeNull();
     });
 
     it('opens and cancels the creation form through the existing reset callback', () => {

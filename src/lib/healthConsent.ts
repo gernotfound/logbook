@@ -241,11 +241,19 @@ export async function refreshHealthConsent(user: User): Promise<HealthConsentSta
     setStatus(uid, 'active');
     return true;
   };
-  // Every refresh fences in-flight writes; only a completed, active server
-  // check may grant a new writable generation.
-  verifiedRevisions.delete(uid);
+  // A periodic recheck must fence cloud writes without falsely presenting a
+  // confirmed local consent as revoked. Locally committed edits retain the
+  // last verified generation, like an offline session, until the response
+  // either confirms it or fences it with a newer generation/withdrawal.
+  // Cold-start checks and durable withdrawal intents remain fail-closed.
+  const locallyVerified = saved === null
+    && entries.get(uid) === 'active'
+    && isHealthConsentWritable('user:' + uid);
+  if (!locallyVerified) verifiedRevisions.delete(uid);
   onlineVerifiedRevisions.delete(uid);
-  setStatus(uid, saved === null ? 'checking' : (parsePendingRevision(saved) !== null ? 'pending' : parseReacceptRevision(saved) !== null ? 'reaccepting' : saved as HealthConsentStatus));
+  if (!locallyVerified) {
+    setStatus(uid, saved === null ? 'checking' : (parsePendingRevision(saved) !== null ? 'pending' : parseReacceptRevision(saved) !== null ? 'reaccepting' : saved as HealthConsentStatus));
+  }
   try {
     // An already authorized device may continue locally with its most recent
     // server-confirmed generation while disconnected. New accounts, pending

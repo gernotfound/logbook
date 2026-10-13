@@ -2,6 +2,7 @@ import { useState, useEffect, useEffectEvent, useRef, useSyncExternalStore, Susp
 import { useAuth } from './hooks/useAuth';
 import { useAppStore } from './store/useAppStore';
 import { useLocalStorage } from './hooks/useLocalStorage';
+import { ownerUiPreferenceKey } from './lib/uiPreferenceKeys';
 import {
   LOCAL_STORAGE_ACTIVE_TAB,
   LOCAL_STORAGE_TRAINING_TAB,
@@ -119,14 +120,11 @@ function App() {
         reconcile();
       }
     };
-    const onFocus = () => { if (document.visibilityState === 'visible') reconcile(); };
+    // AuthProvider owns focus/online/visibility rechecks. Running a second
+    // check here would supersede the first result and briefly fence the UI.
     window.addEventListener('storage', onStorage);
-    window.addEventListener('online', onFocus);
-    window.addEventListener('focus', onFocus);
     return () => {
       window.removeEventListener('storage', onStorage);
-      window.removeEventListener('online', onFocus);
-      window.removeEventListener('focus', onFocus);
     };
   }, [currentUser, isGuest, emailVerificationRequired]);
   useEffect(() => {
@@ -158,10 +156,13 @@ function App() {
   const initialTabOverride: AppTab | undefined = startupTab === 'settings'
     ? 'home'
     : parsedStartupTab.success ? parsedStartupTab.data : undefined;
-  const [activeTab, setActiveTab] = useLocalStorage<AppTab>(LOCAL_STORAGE_ACTIVE_TAB, 'home', AppTabSchema, initialTabOverride);
-  const [trainingSubTab, setTrainingSubTab] = useLocalStorage<TrainingSubTab>(LOCAL_STORAGE_TRAINING_TAB, 'session', TrainingSubTabSchema);
-  const [nutritionSubTab, setNutritionSubTab] = useLocalStorage<NutritionSubTab>(LOCAL_STORAGE_NUTRITION_TAB, 'meals', NutritionSubTabSchema);
-  const [dataSubTab, setDataSubTab] = useLocalStorage<DataSubTab>(LOCAL_STORAGE_DATA_TAB, 'measurements', DataSubTabSchema);
+  // Retain navigation across reloads only for the same owner. The unbound
+  // startup scope cannot inherit the previous account's selection.
+  const navigationOwner = isGuest ? 'guest' : currentUser ? `user:${currentUser.uid}` : 'unbound';
+  const [activeTab, setActiveTab] = useLocalStorage<AppTab>(ownerUiPreferenceKey(navigationOwner, LOCAL_STORAGE_ACTIVE_TAB), 'home', AppTabSchema, initialTabOverride);
+  const [trainingSubTab, setTrainingSubTab] = useLocalStorage<TrainingSubTab>(ownerUiPreferenceKey(navigationOwner, LOCAL_STORAGE_TRAINING_TAB), 'session', TrainingSubTabSchema);
+  const [nutritionSubTab, setNutritionSubTab] = useLocalStorage<NutritionSubTab>(ownerUiPreferenceKey(navigationOwner, LOCAL_STORAGE_NUTRITION_TAB), 'meals', NutritionSubTabSchema);
+  const [dataSubTab, setDataSubTab] = useLocalStorage<DataSubTab>(ownerUiPreferenceKey(navigationOwner, LOCAL_STORAGE_DATA_TAB), 'measurements', DataSubTabSchema);
   const [settingsOpen, setSettingsOpen] = useState(() => startupTab === 'settings');
   const [requiredUpdateReloading, setRequiredUpdateReloading] = useState(false);
   const [requiredUpdateReloadError, setRequiredUpdateReloadError] = useState<string | null>(null);

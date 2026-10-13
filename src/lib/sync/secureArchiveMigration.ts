@@ -11,11 +11,13 @@ import {
 import { assertLegacyEnvelopeValidForSecureMigration } from './localRepository';
 import { withGuestLifecycleLock } from './guestLifecycleLock';
 import { isAccountDeletionPending } from './accountGate';
+import { OWNER_UI_PREFERENCES } from '../uiPreferenceKeys';
 
 const SAFE_PLAINTEXT_NAMES = new Set([
     'health-consent-withdrawal', 'health-consent-generation', 'health-consent-last-active',
     'account-deletion', 'secure-vault-control',
     'storage_marker', 'storage_anomaly_reported',
+    ...OWNER_UI_PREFERENCES.map(preference => 'ui:' + preference),
 ]);
 
 /** Explicitly inventory all current device-critical writers. Unknown keys halt migration. */

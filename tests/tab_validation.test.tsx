@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { screen, renderHook, fireEvent } from '@testing-library/react';
+import { screen, renderHook, fireEvent, act, waitFor } from '@testing-library/react';
 import App from '../src/App';
 import HeaderDashboard from '../src/components/Home/widgets/HeaderDashboard';
 import { defaultMockUserData, renderWithProviders } from './setup';
@@ -13,7 +13,10 @@ import {
     DataSubTabSchema 
 } from '../src/lib/schema';
 import { useLocalStorage } from '../src/hooks/useLocalStorage';
-import { LOCAL_STORAGE_ACTIVE_TAB } from '../src/constants';
+import { LOCAL_STORAGE_ACTIVE_TAB, LOCAL_STORAGE_TRAINING_TAB } from '../src/constants';
+import { ownerUiPreferenceKey } from '../src/lib/uiPreferenceKeys';
+import { refreshHealthConsent } from '../src/lib/healthConsent';
+const accountTabKey = ownerUiPreferenceKey('user:test-user-id', LOCAL_STORAGE_ACTIVE_TAB);
 
 describe('R4: Tab Zod Schema & LocalStorage Fallback Resilience (ARCH-05)', () => {
     beforeEach(async () => {
@@ -107,8 +110,31 @@ describe('R4: Tab Zod Schema & LocalStorage Fallback Resilience (ARCH-05)', () =
     });
 
     describe('App Component Fallback on Corrupted LocalStorage', () => {
+        it('issues only one consent check when focus returns to a mounted App', async () => {
+            renderWithProviders(<App />);
+            await screen.findByRole('button', { name: /^home$/i });
+            const beforeFocus = vi.mocked(refreshHealthConsent).mock.calls.length;
+            await act(async () => { window.dispatchEvent(new Event('focus')); });
+            await waitFor(() => expect(vi.mocked(refreshHealthConsent).mock.calls.length).toBe(beforeFocus + 1));
+        });
+
+        it('never adopts legacy or another account navigation preferences', async () => {
+            window.localStorage.setItem(LOCAL_STORAGE_ACTIVE_TAB, JSON.stringify('training'));
+            window.localStorage.setItem(LOCAL_STORAGE_TRAINING_TAB, JSON.stringify('exercises'));
+            window.localStorage.setItem(ownerUiPreferenceKey('user:other-account', LOCAL_STORAGE_ACTIVE_TAB), JSON.stringify('training'));
+            window.localStorage.setItem(ownerUiPreferenceKey('user:other-account', LOCAL_STORAGE_TRAINING_TAB), JSON.stringify('exercises'));
+
+            renderWithProviders(<App />);
+            const home = await screen.findByRole('button', { name: /^home$/i });
+            expect(home.classList.contains('active')).toBe(true);
+            fireEvent.click(screen.getByRole('button', { name: /allenamento/i }));
+            const session = await screen.findByRole('tab', { name: 'Sessione' });
+            expect(session.getAttribute('aria-selected')).toBe('true');
+            expect(window.localStorage.getItem(ownerUiPreferenceKey('user:test-user-id', LOCAL_STORAGE_TRAINING_TAB))).toBe(JSON.stringify('session'));
+        });
+
         it('falls back to "home" tab when localStorage has a corrupted tab string', async () => {
-            window.localStorage.setItem(LOCAL_STORAGE_ACTIVE_TAB, JSON.stringify('corrupted_tab_xyz'));
+            window.localStorage.setItem(accountTabKey, JSON.stringify('corrupted_tab_xyz'));
             
             renderWithProviders(<App />);
 
@@ -117,7 +143,7 @@ describe('R4: Tab Zod Schema & LocalStorage Fallback Resilience (ARCH-05)', () =
         });
 
         it('falls back to "home" tab when localStorage has an empty string or invalid JSON', async () => {
-            window.localStorage.setItem(LOCAL_STORAGE_ACTIVE_TAB, JSON.stringify(''));
+            window.localStorage.setItem(accountTabKey, JSON.stringify(''));
             
             renderWithProviders(<App />);
 
@@ -126,16 +152,16 @@ describe('R4: Tab Zod Schema & LocalStorage Fallback Resilience (ARCH-05)', () =
         });
 
         it('preserves valid primary tab when localStorage is valid', async () => {
-            window.localStorage.setItem(LOCAL_STORAGE_ACTIVE_TAB, JSON.stringify('training'));
+            window.localStorage.setItem(accountTabKey, JSON.stringify('training'));
             
             renderWithProviders(<App />);
 
-            const trainingBtn = await screen.findByRole('button', { name: /allenamento/i });
+            const trainingBtn = await screen.findByRole('button', { name: /^allenamento$/i });
             expect(trainingBtn.classList.contains('active')).toBe(true);
         });
 
         it('falls back to Home when localStorage contains the legacy settings tab', async () => {
-            window.localStorage.setItem(LOCAL_STORAGE_ACTIVE_TAB, JSON.stringify('settings'));
+            window.localStorage.setItem(accountTabKey, JSON.stringify('settings'));
             
             renderWithProviders(<App />);
 
@@ -164,7 +190,7 @@ describe('R4: Tab Zod Schema & LocalStorage Fallback Resilience (ARCH-05)', () =
         });
 
         it('makes a settings PWA shortcut override a previously saved training tab at startup', async () => {
-            window.localStorage.setItem(LOCAL_STORAGE_ACTIVE_TAB, JSON.stringify('training'));
+            window.localStorage.setItem(accountTabKey, JSON.stringify('training'));
             window.history.replaceState({}, '', '/?tab=settings');
 
             renderWithProviders(<App />, {
@@ -182,7 +208,7 @@ describe('R4: Tab Zod Schema & LocalStorage Fallback Resilience (ARCH-05)', () =
 
             expect(await screen.findByRole('heading', { name: 'Impostazioni' })).toBeDefined();
             expect(screen.getByRole('button', { name: /^home$/i }).classList.contains('active')).toBe(true);
-            expect(window.localStorage.getItem(LOCAL_STORAGE_ACTIVE_TAB)).toBe(JSON.stringify('home'));
+            expect(window.localStorage.getItem(accountTabKey)).toBe(JSON.stringify('home'));
             expect(window.location.search).toBe('');
         });
 

@@ -73,6 +73,10 @@ describe('suspended health-consent screen', () => {
       expect(screen.queryByRole('checkbox')).toBeNull();
       expect(screen.queryByRole('button', { name: 'Presta un nuovo consenso' })).toBeNull();
       expect(screen.getByRole('button', { name: 'Esporta i tuoi dati (backup JSON)' })).toBeDefined();
+      if (status === 'checking' || status === 'error') {
+        expect(screen.queryByRole('heading', { name: 'Accesso a TheLogBook sospeso' })).toBeNull();
+        expect(screen.getByText(/non significa che tu abbia revocato il consenso/)).toBeDefined();
+      }
     }
   });
 

@@ -29,7 +29,7 @@ export function useLocalStorage<T>(
         }
     };
     const [stored, setStored] = useState(() => ({ key, value: initialOverride === undefined ? readStoredValue() : initialOverride }));
-    if (stored.key !== key) setStored({ key, value: readStoredValue() });
+    if (stored.key !== key) setStored({ key, value: initialOverride === undefined ? readStoredValue() : initialOverride });
 
     useEffect(() => {
         if (stored.key !== key) return;
