@@ -17,7 +17,7 @@ import type { WorkoutSession, WorkoutRoutine, Exercise, WorkoutReadiness } from 
 import { auth } from '../lib/firebase';
 import { draftRegistry } from '../lib/utils/draftRegistry';
 import { readLocal } from '../lib/sync/localRepository';
-import { writeDeviceValue } from '../lib/sync/deviceStorage';
+import { readDeviceValueStrict, writeDeviceValue } from '../lib/sync/deviceStorage';
 import { captureSession, isCurrentSession } from '../lib/sync/session';
 import { claimHistorySave, HISTORY_EDITOR_CONTEXT, isHistorySavePending, releaseHistorySave, restoreSessionAfterHistoryEdit } from './workout/historyEditorContext';
 import { isWorkoutClockAnomalyError, resetWorkoutClockGuard } from '../lib/workoutClockGuard';
@@ -194,32 +194,35 @@ export function useWorkoutSession() {
         }
 
         if (!isCurrentSession(session)) return false;
+        if (!result?.ok && result?.status !== 'local-pending') {
+            await showAlert('Impossibile iniziare la sessione: il salvataggio non è stato confermato.');
+            return false;
+        }
         try {
             const durable = await readLocal(session.owner);
             if (!isCurrentSession(session)) return false;
             const persistedWorkout = durable?.data.activeWorkout;
-            if (persistedWorkout && persistedWorkout.id === currentWorkout.id
-                && persistedWorkout.globalStartTime === startedAt
-                && useAppStore.getState().localWorkout?.id === currentWorkout.id) {
-                if (!resetGlobalWorkoutTimer(session.owner)) {
-                    useAppStore.setState({
-                        localPersistenceBlocked: true, syncHealth: 'failed',
-                        saveError: 'Allenamento salvato, ma il timer locale non è stato azzerato. Riapri TheLogBook.',
-                    });
-                    await showAlert('Allenamento salvato, ma il timer locale non è stato aggiornato. Riapri TheLogBook.');
-                    return false;
-                }
+            // A cloud-pending response is a successful local start only when the
+            // exact start transition is proven durable, not merely present in UI.
+            if (!persistedWorkout || persistedWorkout.id !== currentWorkout.id
+                || persistedWorkout.globalStartTime !== startedAt
+                || useAppStore.getState().localWorkout?.id !== currentWorkout.id) {
+                await showAlert('Impossibile confermare il salvataggio locale dell’avvio. Riprova dopo il recupero.');
+                return false;
+            }
+            if (!resetGlobalWorkoutTimer(session.owner)) {
+                useAppStore.setState({
+                    localPersistenceBlocked: true, syncHealth: 'failed',
+                    saveError: 'Allenamento salvato, ma il timer locale non è stato azzerato. Riapri TheLogBook.',
+                });
+                await showAlert('Allenamento salvato, ma il timer locale non è stato aggiornato. Riapri TheLogBook.');
+                return false;
             }
         } catch (error) {
             console.error('Verifica avvio workout duraturo non riuscita:', error);
             useAppStore.setState({ localPersistenceBlocked: true, syncHealth: 'failed',
                 saveError: 'Impossibile verificare il salvataggio dell’avvio. Riapri TheLogBook.' });
             await showAlert('Impossibile verificare il salvataggio dell’allenamento. Riapri TheLogBook.');
-            return false;
-        }
-
-        if (!result?.ok) {
-            await showAlert('Impossibile iniziare la sessione: il salvataggio non è stato confermato.');
             return false;
         }
         return true;
@@ -250,12 +253,24 @@ export function useWorkoutSession() {
         try {
             // Preserve the device's authoritative session (including unsynced sets)
             // before replacing the visible snapshot with a history editor.
-            writeDeviceValue(HISTORY_EDITOR_CONTEXT, JSON.stringify({
+            const previousContext = readDeviceValueStrict(HISTORY_EDITOR_CONTEXT, session.owner);
+            const nextContext = JSON.stringify({
                 version: 1,
                 editorId: editingWorkout.id,
                 suspended,
-            }), session.owner);
-            setLocalWorkout(editingWorkout);
+            });
+            writeDeviceValue(HISTORY_EDITOR_CONTEXT, nextContext, session.owner);
+            try {
+                setLocalWorkout(editingWorkout);
+            } catch (error) {
+                // Context and device workout are separate Web Storage keys.
+                // Roll back only our own context; do not discard a newer tab's copy.
+                if (isCurrentSession(session)
+                    && readDeviceValueStrict(HISTORY_EDITOR_CONTEXT, session.owner) === nextContext) {
+                    writeDeviceValue(HISTORY_EDITOR_CONTEXT, previousContext, session.owner);
+                }
+                throw error;
+            }
             // The live timer belongs to the suspended session, not to the editor.
             return true;
         } catch (error) {
@@ -385,8 +400,11 @@ export function useWorkoutSession() {
                 setLocalWorkout(null);
             } catch (error) {
                 console.error('Workout completato ma cleanup device-local non riuscito:', error);
+                // The authoritative closure is durable in IndexedDB. Keep the
+                // failure barrier and retire only the in-memory obsolete workout.
+                useAppStore.setState({ localWorkout: null });
                 await showAlert('Allenamento salvato nello storico, ma non è stato possibile rimuovere la copia temporanea. Riapri TheLogBook per recuperare lo stato aggiornato.');
-                return null;
+                return finishedWorkout;
             }
             if (!resetGlobalWorkoutTimer()) {
                 useAppStore.setState({ localPersistenceBlocked: true, syncHealth: 'failed',
@@ -423,8 +441,17 @@ export function useWorkoutSession() {
                 setLocalWorkout(null);
             } catch (error) {
                 console.error('Workout eliminato ma cleanup device-local non riuscito:', error);
+                useAppStore.setState({ localWorkout: null });
                 await showAlert('Sessione eliminata dall’archivio locale, ma la copia temporanea non è stata rimossa. Riapri TheLogBook per completare il recupero.');
-                return false;
+                return true;
+            }
+            // This draft belongs exclusively to the deleted session, not a new
+            // workout. Failed best-effort cleanup must not undo a durable deletion.
+            try {
+                writeDeviceValue('draft:post-session:' + deletedWorkoutId, null, expectedSession.owner);
+            } catch (error) {
+                console.warn('Impossibile pulire la bozza finale di una sessione eliminata:', error);
+                useAppStore.getState().setSaveError('Sessione eliminata, ma una copia locale della valutazione finale non è stata rimossa.');
             }
             if (!resetGlobalWorkoutTimer()) {
                 useAppStore.setState({ localPersistenceBlocked: true, syncHealth: 'failed',
