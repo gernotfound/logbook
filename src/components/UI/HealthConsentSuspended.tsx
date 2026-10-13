@@ -5,19 +5,20 @@ import { useSettings } from '../../hooks/useSettings';
 import { recoverOldLocalEditsAfterConsent } from '../../lib/healthConsentRecovery';
 import { useDialogStore } from '../../store/useDialogStore';
 import { LEGAL_VERSIONS } from '../../lib/legalVersions';
-import { beginGuestHealthReacceptance, completeGuestHealthReacceptance, finishHealthConsentReacceptance, reacceptHealthConsent, reconfirmStaleHealthWithdrawal, retainNewerHealthConsent, refreshHealthConsent, type HealthConsentStatus } from '../../lib/healthConsent';
+import { beginGuestHealthReacceptance, completeGuestHealthReacceptance, finishHealthConsentReacceptance, registerInitialHealthConsent, reacceptHealthConsent, reconfirmStaleHealthWithdrawal, retainNewerHealthConsent, refreshHealthConsent, type HealthConsentStatus } from '../../lib/healthConsent';
+import { safeHardReload } from '../../lib/sync/safeReload';
 import { PrivacyPolicy } from '../../pages/PrivacyPolicy';
 import { TermsAndConditions } from '../../pages/TermsAndConditions';
 
 // The form has its own selection state: switching from pending to confirmed,
  // or back to pending, creates a fresh opt-in without a render-time reset.
-function ReacceptanceForm({ enabled, busy, onReaccept }: { enabled: boolean; busy: boolean; onReaccept: () => Promise<void> }) {
+function ReacceptanceForm({ enabled, busy, onReaccept, firstAcceptance = false }: { enabled: boolean; busy: boolean; onReaccept: () => Promise<void>; firstAcceptance?: boolean }) {
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [acceptedHealth, setAcceptedHealth] = useState(false);
 
   return <>
-    <h2>Per tornare a usare la PWA</h2>
-    <p>Esamina i documenti e scegli liberamente se prestare un nuovo consenso. I dati già presenti non vengono cancellati automaticamente.</p>
+    <h2>{firstAcceptance ? 'Prima di iniziare a usare TheLogBook' : 'Per tornare a usare la PWA'}</h2>
+    <p>{firstAcceptance ? 'Esamina i documenti e presta il primo consenso esplicito per usare il tuo account. Il consenso viene registrato dal server prima di permettere la sincronizzazione.' : 'Esamina i documenti e scegli liberamente se prestare un nuovo consenso. I dati già presenti non vengono cancellati automaticamente.'}</p>
     <label style={{ display: 'block', marginBlock: 12 }}>
       <input type="checkbox" disabled={!enabled || busy} checked={acceptedTerms} onChange={e => setAcceptedTerms(e.target.checked)} />
       {' '}Ho almeno 18 anni, ho letto l'informativa e accetto i termini.
@@ -28,7 +29,7 @@ function ReacceptanceForm({ enabled, busy, onReaccept }: { enabled: boolean; bus
     </label>
     <button className="btn btn-primary" type="button" disabled={!enabled || busy || !acceptedTerms || !acceptedHealth}
       onClick={() => { if (enabled && !busy && acceptedTerms && acceptedHealth) void onReaccept(); }}>
-      {busy ? 'Salvataggio in corso…' : 'Presta un nuovo consenso'}
+      {busy ? 'Salvataggio in corso…' : firstAcceptance ? 'Accetta e continua' : 'Presta un nuovo consenso'}
     </button>
   </>;
 }
@@ -41,9 +42,27 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
   const [recoveryBusy, setRecoveryBusy] = useState(false);
   const [privacy, setPrivacy] = useState(false);
   const [terms, setTerms] = useState(false);
+  const initialAcceptance = status === 'unregistered' && user !== null;
   const canReaccept = status === 'withdrawn' || status === 'reaccepting';
-  const showReacceptForm = status === 'pending' || canReaccept;
+  const showReacceptForm = status === 'pending' || canReaccept || initialAcceptance;
   const statusUnverified = status === 'checking' || status === 'error';
+
+  const acceptInitial = async () => {
+    if (!user || !initialAcceptance || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await registerInitialHealthConsent(user, {
+        acceptedTerms: true, acceptedHealthData: true,
+        privacyVersion: LEGAL_VERSIONS.privacy, termsVersion: LEGAL_VERSIONS.terms,
+      });
+      // Preserve the guest-to-account migration intent and re-enter the normal
+      // authenticated bootstrap only after the safe local flush.
+      await safeHardReload();
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Registrazione del primo consenso non riuscita.');
+    } finally { setBusy(false); }
+  };
 
   const reaccept = async () => {
     if (!canReaccept || busy) return;
@@ -100,10 +119,10 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
 
   return <main id="auth-overlay" role="main">
     <section className="auth-panel" aria-label="Accesso sospeso" style={{ maxWidth: 560, maxHeight: '90vh', overflowY: 'auto' }}>
-      <h1>{status === 'checking' ? 'Verifica del consenso in corso' : status === 'error' ? 'Verifica del consenso non riuscita' : 'Accesso a TheLogBook sospeso'}</h1>
+      <h1>{initialAcceptance ? 'Primo consenso richiesto' : status === 'checking' ? 'Verifica del consenso in corso' : status === 'error' ? 'Verifica del consenso non riuscita' : 'Accesso a TheLogBook sospeso'}</h1>
       <p>{statusUnverified
         ? 'L’accesso ai dati è temporaneamente sospeso perché non è stato possibile completare la verifica. Questo stato non significa che tu abbia revocato il consenso.'
-        : 'Allenamenti, nutrizione e diario sono sospesi. Per riattivarli serve un nuovo consenso esplicito dopo la conferma della revoca.'}</p>
+        : initialAcceptance ? 'Il tuo account non ha ancora un primo consenso registrato sul server. L’accesso fitness e la sincronizzazione restano sospesi fino all’accettazione esplicita.' : 'Allenamenti, nutrizione e diario sono sospesi. Per riattivarli serve un nuovo consenso esplicito dopo la conferma della revoca.'}</p>
       {user === null && <p>Modalità locale: i dati sono salvati solo su questo dispositivo. Non è necessario contattare il server per la revoca.</p>}
       {status === 'checking' && <p role="status">Verifica dello stato sul server in corso…</p>}
       {status === 'error' && <p role="alert">Non è stato possibile verificare lo stato del consenso. L’accesso fitness resta sospeso.</p>}
@@ -145,10 +164,11 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
       {status === 'reaccepting' && <p role="status">Nuovo consenso in fase di completamento. Riconferma qui sotto per completare.</p>}
       {showReacceptForm &&
         <ReacceptanceForm
-          key={canReaccept ? 'confirmed' : 'awaiting-confirmation'}
-          enabled={canReaccept}
+          key={initialAcceptance ? 'initial' : canReaccept ? 'confirmed' : 'awaiting-confirmation'}
+          enabled={canReaccept || initialAcceptance}
           busy={busy}
-          onReaccept={reaccept}
+          onReaccept={initialAcceptance ? acceptInitial : reaccept}
+          firstAcceptance={initialAcceptance}
         />}
       <h2>Gestisci i tuoi dati e i tuoi diritti</h2>
       <p>Puoi farlo anche senza prestare un nuovo consenso.</p>

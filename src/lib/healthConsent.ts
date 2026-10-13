@@ -3,8 +3,8 @@ import { auth, ensureAppCheck } from './firebase';
 import { getLimitedUseAppCheckToken } from './appCheck';
 import { readBrowserValueStrict, removeBrowserValue, writeBrowserValue } from './sync/browserStorage';
 
-export type HealthConsentStatus = 'checking' | 'active' | 'withdrawn' | 'pending' | 'reaccepting' | 'recovery-required' | 'stale-request' | 'error';
-type ServerStatus = { status: 'active' | 'withdrawn'; revision: number; acceptedAt?: string };
+export type HealthConsentStatus = 'unregistered' | 'checking' | 'active' | 'withdrawn' | 'pending' | 'reaccepting' | 'recovery-required' | 'stale-request' | 'error';
+type ServerStatus = { status: 'unregistered' | 'active' | 'withdrawn'; revision: number; acceptedAt?: string };
 const API = (import.meta.env.VITE_ACCOUNT_DELETION_API_ORIGIN || 'https://logbook-gnf.vercel.app').replace(/\/$/, '');
 const entries = new Map<string, HealthConsentStatus>();
 const listeners = new Set<() => void>();
@@ -49,7 +49,7 @@ function readCachedActiveRevision(uid: string): number | null {
   const revision = Number(saved);
   if (!Number.isSafeInteger(revision)) return null;
   const generation = readBrowserValueStrict(generationMarker(uid));
-  return (generation === null && revision === 0) || generation === String(revision) ? revision : null;
+  return revision >= 1 && generation === String(revision) ? revision : null;
 }
 function notify() { for (const listener of listeners) listener(); }
 export function beginHealthConsentVerification(uid: string): void {
@@ -137,11 +137,11 @@ export function isHealthConsentWritable(owner: string): boolean {
   if (currentHealthConsentStatus(uid) !== 'active') return false;
   // A real authenticated session may not write on the default/unknown revision.
   // Node-only pure sync tests have no Firebase currentUser and use rev 0 fixtures.
-  if (auth?.currentUser?.uid === uid && !verifiedRevisions.has(uid)) return false;
+  if (auth?.currentUser?.uid === uid && (!verifiedRevisions.has(uid) || (verifiedRevisions.get(uid) ?? 0) < 1)) return false;
   try {
     const persisted = readBrowserValueStrict(generationMarker(uid));
     const verified = verifiedRevisions.get(uid) ?? 0;
-    return (persisted === null && verified === 0) || persisted === String(verified);
+    return verified === 0 ? auth?.currentUser?.uid !== uid && persisted === null : persisted === String(verified);
   } catch { return false; }
 }
 /** Cloud operations require a fresh server check in THIS online session. */
@@ -186,6 +186,7 @@ async function serverRequest(user: User, method: 'GET' | 'POST', body?: unknown)
       headers: {
         authorization: 'Bearer ' + idToken,
         'x-firebase-appcheck': token,
+        'x-consent-contract': '2',
         ...(method === 'POST' ? { 'content-type': 'application/json' } : {}),
       },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
@@ -204,11 +205,32 @@ async function serverRequest(user: User, method: 'GET' | 'POST', body?: unknown)
   const result: unknown = await response.json();
   if (!result || typeof result !== 'object') throw new Error('Risposta server non valida.');
   const state = result as Partial<ServerStatus>;
-  if ((state.status !== 'active' && state.status !== 'withdrawn')
-    || !Number.isSafeInteger(state.revision) || Number(state.revision) < 0) {
+  if ((state.status !== 'active' && state.status !== 'withdrawn' && state.status !== 'unregistered')
+    || !Number.isSafeInteger(state.revision) || Number(state.revision) < 0
+    || (state.status === 'unregistered' && state.revision !== 0)
+    || (state.status !== 'unregistered' && state.revision < 1)) {
     throw new Error('Stato del consenso server non valido.');
   }
   return state as ServerStatus;
+}
+
+/**
+ * Explicit, server-authenticated first acceptance: no cloud business access
+ * is granted by the POST response alone. Bootstrap must revalidate consent
+ * and the local causal journal before resuming.
+ */
+export async function registerInitialHealthConsent(user: User, acceptance: {
+  acceptedTerms: true; acceptedHealthData: true; privacyVersion: string; termsVersion: string;
+}): Promise<string> {
+  if (auth.currentUser?.uid !== user.uid || currentHealthConsentStatus(user.uid) !== 'unregistered') {
+    throw new Error('Sessione cambiata o primo consenso non richiesto.');
+  }
+  const accepted = await serverRequest(user, 'POST', { action: 'accept-initial', acceptance, expectedRevision: 0 });
+  if (auth.currentUser?.uid !== user.uid) throw new Error('Sessione cambiata durante la registrazione.');
+  if (accepted.status !== 'active' || accepted.revision !== 1 || typeof accepted.acceptedAt !== 'string') {
+    throw new Error('Primo consenso non confermato dal server.');
+  }
+  return accepted.acceptedAt;
 }
 
 /** Export is permitted in suspended mode, but the Admin-only transport is
@@ -268,6 +290,15 @@ export async function refreshHealthConsent(user: User): Promise<HealthConsentSta
     }
     const state = await serverRequest(user, 'GET');
     if (!isSameDecision()) return currentHealthConsentStatus(uid);
+    if (state.status === 'unregistered') {
+      // A missing server record never authorizes cloud access or restores
+      // an unsent local withdrawal by accident.
+      verifiedRevisions.delete(uid);
+      onlineVerifiedRevisions.delete(uid);
+      if (saved !== null) return currentHealthConsentStatus(uid);
+      setStatus(uid, 'unregistered');
+      return 'unregistered';
+    }
     if (state.status === 'withdrawn') {
       writeBrowserValue(marker(uid), 'withdrawn');
       setStatus(uid, 'withdrawn');

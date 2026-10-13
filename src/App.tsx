@@ -113,13 +113,13 @@ function App() {
   const { currentUser, isGuest } = useAuth();
   // Capture the PWA shortcut once, before the URL is consumed by the child.
   const [startupTab] = useState(readStartupTabShortcut);
-  const owner = isGuest ? 'guest' : currentUser ? `user:${currentUser.uid}` : 'unbound';
+  const owner = currentUser ? `user:${currentUser.uid}` : isGuest ? 'guest' : 'unbound';
   return <OwnerBoundApp key={owner} startupTab={startupTab} />;
 }
 
 function OwnerBoundApp({ startupTab }: { startupTab: string | null }) {
   const { currentUser, loading, isGuest, guestMigrationStatus, retryGuestMigration, emailVerificationRequired } = useAuth();
-  const healthConsentStatus = useSyncExternalStore(subscribeHealthConsent, () => isGuest ? getGuestHealthConsentStatus() : currentHealthConsentStatus(currentUser?.uid), () => 'checking' as const);
+  const healthConsentStatus = useSyncExternalStore(subscribeHealthConsent, () => currentUser ? currentHealthConsentStatus(currentUser.uid) : isGuest ? getGuestHealthConsentStatus() : currentHealthConsentStatus(undefined), () => 'checking' as const);
   useEffect(() => {
     if (!currentUser || isGuest || emailVerificationRequired) return;
     const reconcile = () => { void refreshHealthConsent(currentUser); };
@@ -481,7 +481,7 @@ function OwnerBoundApp({ startupTab }: { startupTab: string | null }) {
   }
 
   if ((isGuest || currentUser) && healthConsentStatus !== 'active') {
-    return <><GlobalDialog /><HealthConsentSuspended key={isGuest ? 'guest' : `user:${currentUser?.uid}`} status={healthConsentStatus} user={isGuest ? null : currentUser} /></>;
+    return <><GlobalDialog /><HealthConsentSuspended key={currentUser ? `user:${currentUser.uid}` : 'guest'} status={healthConsentStatus} user={currentUser} /></>;
   }
 
   // Never render an unowned/foreign snapshot in a newly authenticated view.
