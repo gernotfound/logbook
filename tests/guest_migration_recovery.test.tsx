@@ -34,7 +34,7 @@ function fixtures() {
     const cloud = parse({
         profile: { gender: 'M' },
         routines: [{ id: 'cloud-routine', name: 'Cloud', exercises: [] }],
-        legalConsent: { hasAcceptedTerms: true, hasAcceptedHealthData: true, acceptedAt: '2026-10-11T10:00:00.000Z', privacyVersion: '1.3.3', termsVersion: '1.2.1' }
+        legalConsent: { hasAcceptedTerms: true, hasAcceptedHealthData: true, acceptedAt: '2026-10-11T10:00:00.000Z', privacyVersion: '1.3.4', termsVersion: '1.2.1' }
     });
     const guest = parse({
         profile: { height: '175' },

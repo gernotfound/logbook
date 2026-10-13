@@ -6,10 +6,10 @@ Decisione UX del product owner (12 ottobre 2026): dopo la revoca nessuna funzion
 
 `health_consent_withdrawals/{uid}` è esclusivamente server-managed. Il backend autentica UID Firebase, verifica App Check limited-use e origini consentite. Lo stato `withdrawn` blocca tramite Security Rules tutte le nuove scritture della zona fitness e della telemetria; le letture dirette dell'owner sono bloccate in stato revocato anche per client obsoleti; per esercitare i diritti e produrre il backup cloud il server espone un endpoint separato autenticato e paginato, senza aprire Firestore ai vecchi client. `active` richiede una nuova scelta esplicita con versioni legali correnti, mai un ripristino automatico da backup o da `legalConsent` client. La registrazione della revoca è idempotente. Nessuna revoca cancella dati o account in modo implicito; l'account deletion elimina il marker come parte del suo cleanup.
 
-## Verifiche ancora richieste prima della distribuzione
+## Verifiche ancora richieste prima del pilot con utenti reali
 
 - Enforcement locale e cross-tab del blocco; avvio autenticato, offline, dispositivi secondari e sospensione di writer in-flight.
-- Riattivazione di un account revocato: impedire replay di journal creati prima della nuova accettazione, inclusi i client vecchi ancora aperti. Uno stato `active` da solo non basta a distinguere generazioni di consenso: **non distribuire il ripristino senza un fence di generazione verificato dalle Rules**.
+- Riattivazione di un account revocato: il fence di generazione è implementato nelle Rules e coperto da regressioni; verificare il percorso autenticato multi-dispositivo e l'assenza di replay dei journal precedenti nel runtime Production.
 - Esportazione/diritti/account deletion anche in caso di backend indisponibile, senza dichiarare successo non verificato.
 - Verifica canonica, review sullo SHA candidato, deploy coordinato frontend/backend/rules e smoke autenticato.
 - Validazione con avvocato: basi art. 6/9 GDPR, libertà del consenso, conseguenze del diniego, conservazione residua dopo revoca, informativa, DPIA, DPA/trasferimenti.
@@ -28,7 +28,7 @@ Le regole di accesso e il fence delle revisioni sono stati integrati con la PR #
 
 Dopo la prima revoca, il marker server non viene eliminato al re-consenso: la revisione cresce monotonicamente. Le Rules accettano un nuovo `sync_control` e le scritture con `_sync.writer` soltanto se dichiarano esplicitamente `consentRevision` uguale alla revisione server `active`. Un vecchio client Protocol 3 privo di tale campo non può né ri-registrare la replica né scrivere un vecchio journal. Il parser TypeScript riconosce il campo opzionale senza incrementare artificialmente il Sync Protocol 3.
 
-**Implementazione candidata:** il client conserva la revisione in IndexedDB e nel marker browser, isola il journal precedente e offre un recupero attivabile esclusivamente con una scelta aggiuntiva esplicita. La riapertura della replica avviene dopo nuova conferma del server e controllo dei pending; i test e il runtime multi-dispositivo restano verifiche obbligatorie prima del rilascio.
+**Implementazione integrata con PR #366:** il client conserva la revisione in IndexedDB e nel marker browser, isola il journal precedente e offre un recupero attivabile esclusivamente con una scelta aggiuntiva esplicita. La riapertura della replica avviene dopo nuova conferma del server e controllo dei pending; i test e il runtime multi-dispositivo restano verifiche obbligatorie prima del rilascio.
 
 ## Quarantena non distruttiva del journal locale
 
@@ -52,4 +52,4 @@ Quando vi sono pending precedenti, non vengono spediti. La schermata `recovery-r
 
 Una riconferma della revoca già superata verifica nuovamente il marker e la generazione del dispositivo **dopo** la GET server: una richiesta vecchia non può convertire in `pending` una scelta locale sopravvenuta. Ogni richiesta trusted `withdraw` oppure `reaccept` contiene la revisione server che l'ha originata; il backend la confronta all'interno della transazione Firestore e risponde con conflitto su uno stato più recente. Le richieste offline di revoca conservano in modo durevole `pending:<revisione>`; il client non ripresenta automaticamente una richiesta più vecchia del consenso aggiornato. La schermata offre due scelte esplicite: riconfermare la revoca oppure mantenere il consenso più recente verificato server-side. Analogamente un vecchio retry di nuova accettazione non può riaprire il trattamento dopo una successiva revoca. Le ripetizioni idempotenti dello **stesso** cambiamento sono consentite solo rispetto alla revisione originale e alle versioni legali correnti.
 
-**Residuo prima del merge:** anche con CI verde occorrono verifica effettiva multi-dispositivo, smoke autenticato backend/Rules/Hosting coordinati, verifica accessibilità UI/viewport, e approvazione della base giuridica, del trattamento dopo revoca e dei contatti/documenti privacy. CI, codice e compliance non sono equivalenti.
+**Residuo prima del pilot con utenti reali:** verifica effettiva multi-dispositivo, smoke autenticato backend/Rules/Hosting coordinati, verifica accessibilità UI/viewport e approvazione della base giuridica, del trattamento dopo revoca e dei contatti/documenti privacy. CI, codice e compliance non sono equivalenti.

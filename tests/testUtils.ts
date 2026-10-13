@@ -53,7 +53,7 @@ export const ConsentedTestDB = {
                 hasAcceptedTerms: true,
                 hasAcceptedHealthData: true,
                 acceptedAt: '2026-10-11T10:00:00.000Z',
-                privacyVersion: '1.3.3',
+                privacyVersion: '1.3.4',
                 termsVersion: '1.2.1',
             },
     }, revision),

@@ -6,6 +6,8 @@ const currentSha = process.env.VERCEL_GIT_COMMIT_SHA || 'HEAD';
 const backendPaths = [
   'api',
   'server',
+  // Server health-consent acceptance imports this shared version contract.
+  'src/lib/legalVersions.ts',
   'vercel.json',
   'package.json',
   'package-lock.json',

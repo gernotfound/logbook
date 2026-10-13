@@ -7,11 +7,11 @@
 | Area | Misura | Evidenza/stato |
 |---|---|---|
 | Separazione account | Dati Firestore owner-scoped; account deletion barrier | Security Rules + test emulator |
-| Persistenza locale | Envelope owner-scoped, journal semantico, recovery fail-closed | Implementato e testato |
+| Persistenza locale | Envelope e snapshot device owner-scoped cifrati tramite vault locale; journal semantico e recovery fail-closed | Implementato e testato nel repository; limiti del modello crittografico in `docs/architecture/secure-local-archive-design.md` |
 | Cache Firestore | Cache locale persistente Firebase non usata; runtime memory-only | Implementato |
 | Sync | Local durability prima della replica cloud; recovery lost-ack | Implementato/testato |
 | Validazione | Gateway Zod ai boundary persistiti | Implementato |
-| Telemetria | Sanitizzazione PII, allowlist dettagli, queue bounded | Implementato |
+| Telemetria | Sanitizzazione PII, allowlist dettagli, coda locale owner-scoped AEAD dopo sblocco del vault (solo RAM prima), massimo 50 report e scadenza logica a sette giorni | Implementato e testato nel repository; comportamento autenticato Production da verificare |
 | Analytics di utilizzo | Google Analytics 4/Firebase Analytics e Vercel Analytics/Speed Insights dismessi; Firebase scollegato da GA4 e variabile Measurement ID eliminata; Sentry resta error monitoring tecnico | Codice verificato su GitHub; dismissione esterna confermata dal product owner |
 | Account deletion | Workflow server-mediated, idempotente, Auth cancellata per ultima | Implementato/testato |
 | Segreti | Firebase Admin/cron server-only, esclusi dal bundle | Contratto repository |

@@ -40,9 +40,9 @@
 ## Misure già presenti da verificare
 
 - owner scoping Firestore e test Security Rules;
-- persistenza locale owner-scoped e recovery fail-closed;
+- persistenza locale owner-scoped cifrata con vault e recovery fail-closed; la coda diagnostica usa AEAD solo dopo sblocco, altrimenti RAM best-effort;
 - cache Firestore runtime solo in memoria;
-- sanitizzazione/allowlist della telemetria;
+- sanitizzazione/allowlist della telemetria, isolamento owner, limite locale di 50 report e sette giorni applicato al successivo accesso;
 - account deletion server-mediated e tombstone recovery;
 - CI exact-SHA e branch protection workflow;
 - nessuna integrazione di analytics di utilizzo né consenso GA4 nel frontend; Sentry limitato alla telemetria tecnica;
@@ -51,8 +51,8 @@
 
 ## Blocker noti per lo screening
 
-- `[ ]` flusso completo di revoca consenso salute deciso e implementato;
-- `[ ]` retention telemetria tecnicamente enforced;
+- `[ ]` revoca consenso salute: implementazione e regressioni integrate; completare collaudo autenticato multi-dispositivo e validazione legale pre-pilot;
+- `[ ]` retention telemetria: distinguere coda locale (sette giorni logici, pruning al successivo accesso), Firestore legacy (30 giorni) e Sentry (configurazione esterna ancora da verificare);
 - `[ ]` stato live di App Check/Rules/API restrictions verificato;
 - `[ ]` restore/backup policy decisa;
 - `[ ]` ruoli provider/palestra firmati;

@@ -48,7 +48,7 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               Informativa sulla privacy
             </h2>
             <p style={{ margin: '4px 0 0', fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)' }}>
-              Aggiornata al 12 ottobre 2026
+              Aggiornata al 13 ottobre 2026
             </p>
           </div>
           <button
@@ -145,6 +145,9 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
             </p>
             <p>
               La telemetria tecnica Sentry è separata dalle statistiche di utilizzo e riguarda soltanto errori e anomalie tecniche minimizzati secondo quanto descritto sopra. La rimozione degli analytics non comporta la cancellazione automatica di dati eventualmente trasmessi in passato al precedente fornitore.
+            </p>
+            <p>
+              Per gli errori tecnici che non possono essere inviati subito, l'app può conservare sul dispositivo fino a 50 report temporanei, separati per account. Quando la chiave locale è disponibile, sono salvati con cifratura autenticata; prima restano nella memoria della scheda e possono andare persi se la chiudi. Dopo sette giorni non vengono più usati né inviati. I report cifrati scaduti vengono rimossi quando l'app accede di nuovo alla coda: se resta chiusa, possono rimanere sul dispositivo oltre sette giorni. Questa durata non riguarda i dati fitness né la conservazione presso Sentry.
             </p>
           </Section>
 

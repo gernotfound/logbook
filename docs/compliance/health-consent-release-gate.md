@@ -89,7 +89,7 @@ Il product owner ha chiesto espressamente di **pubblicare le modifiche tecniche 
 **NON CHIUSO AI FINI DEL PILOT CON UTENTI REALI.** Il merge richiesto dal product owner non chiude le verifiche legali e non va rappresentato come prova di conformità. Prima del pilot con utenti reali:
 - [ ] classificazione delle finalità e delle basi artt. 6/9 approvata da professionista competente;
 - [x] decisione esplicita di prodotto: sospensione totale delle funzioni fitness, accesso a diritti/esportazione/cancellazione e facoltà di nuovo consenso esplicito (12 ottobre 2026);
-- [x] protocollo tecnico **candidato** documentato per ospite, account, offline, multi-device e recovery; verifica empirica con dispositivi distinti ancora aperta;
+- [x] protocollo tecnico documentato e integrato per ospite, account, offline, multi-device e recovery; verifica empirica con dispositivi distinti ancora aperta;
 - [x] implementazione con protezioni server-side e regressioni automatizzate integrata tramite PR #366; CI main e deploy Hosting/Rules osservati sul commit di rilascio; review indipendente e smoke autenticato multi-dispositivo non ancora certificati;
 - [x] deploy/riallineamento Firestore Rules, backend Vercel e Firebase Hosting Production verificati sul release SHA `5d21dc0`; **restano** browser fisici, smoke autenticato multi-dispositivo e verifica visiva;
 - [ ] informativa, registro, DPIA screening, retention e procedura diritti aggiornati e validati.

@@ -88,7 +88,7 @@ function data(height: number, name?: string): UserData {
             height: String(height),
             ...(name ? { name } : {}),
         },
-        legalConsent: { hasAcceptedTerms: true, hasAcceptedHealthData: true, acceptedAt: '2026-10-11T10:00:00.000Z', privacyVersion: '1.3.3', termsVersion: '1.2.1' },
+        legalConsent: { hasAcceptedTerms: true, hasAcceptedHealthData: true, acceptedAt: '2026-10-11T10:00:00.000Z', privacyVersion: '1.3.4', termsVersion: '1.2.1' },
     }) as unknown as UserData;
 }
 

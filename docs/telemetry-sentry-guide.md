@@ -1,6 +1,6 @@
 # Telemetria Sentry — guida operativa TheLogBook
 
-> Stato: guida tecnica stabile | Ultima verifica: 2026-10-02 | Fonti eseguibili: `src/lib/sentryClient.ts`, `src/lib/telemetry/`, `src/lib/telemetrySanitizer.ts`, `src/lib/storageTelemetry.ts`, `vite.config.ts`, `firebase.json`.
+> Stato: guida tecnica stabile | Ultima verifica repository: 2026-10-13 | Fonti eseguibili: `src/lib/sentryClient.ts`, `src/lib/telemetry/`, `src/lib/telemetrySanitizer.ts`, `src/lib/storageTelemetry.ts`, `vite.config.ts`, `firebase.json`.
 
 TheLogBook usa Sentry esclusivamente come **Error Monitoring** tecnico della Production. Google Analytics 4/Firebase Analytics è dismesso anche sul provider (scollegato dal progetto Firebase, proprietà ritirata); Vercel Analytics e Speed Insights sono ritirati. TheLogBook non invia eventi di utilizzo a servizi analytics.
 
@@ -27,7 +27,7 @@ Le impostazioni Sentry di Data Scrubbing, Default Scrubbers, IP scrubbing e Spik
 
 La finestra di deduplica client è 15 minuti per fingerprint. Il primo errore della finestra viene inviato; ripetizioni successive vengono aggregate localmente ma non generano un secondo evento alla scadenza della finestra. Questo limita l'impatto di hot loop sulla quota Sentry.
 
-La coda locale best-effort resta bounded a 50 elementi per compatibilità/offline. Gli elementi guest privi di UID autenticato non vengono riassegnati dopo il login.
+La coda diagnostica locale best-effort conserva al massimo 50 report; gli elementi più vecchi di sette giorni non vengono restituiti o inviati. I nuovi payload sono persistiti in `localStorage` soltanto come ciphertext AEAD owner-scoped quando il vault locale è sbloccato; prima restano nella RAM della scheda. Con vault bloccato, una vecchia coda plaintext viene ritirata dal disco dopo aver trattenuto in RAM i report validi, che possono andare persi alla chiusura della scheda. Il pruning del ciphertext avviene al successivo accesso alla coda, non automaticamente mentre la PWA è chiusa. Gli elementi guest privi di UID autenticato non vengono riassegnati dopo il login. Questa durata locale non determina la retention di Sentry né quella delle collection Firestore legacy.
 
 ## Release e source map
 

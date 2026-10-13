@@ -39,12 +39,12 @@ Usare come riferimento l'Art. 12 GDPR: risposta senza ingiustificato ritardo e, 
 | Portabilità | Backup JSON / export CSV; verificare che il formato copra il perimetro richiesto |
 | Limitazione | `[DEFINE_IF_REQUIRED]`; non esiste oggi un flag generico di restriction |
 | Opposizione | Valutare per i trattamenti basati sul legittimo interesse, inclusa telemetria tecnica |
-| Revoca consenso dati salute | **Soluzione A decisa (9 ottobre 2026): sospensione completa delle funzioni fitness, accesso a esportazione/diritti/account deletion e nuova accettazione esplicita possibile (decisione aggiornata il 12 ottobre).** Implementazione tecnica candidata nella PR #366; valutazione delle basi giuridiche, dei contatti e della retention **ancora bloccante prima del pilot con utenti reali**; vedi `health-consent-release-gate.md`. |
+| Revoca consenso dati salute | **Soluzione A decisa (9 ottobre 2026): sospensione completa delle funzioni fitness, accesso a esportazione/diritti/account deletion e nuova accettazione esplicita possibile (decisione aggiornata il 12 ottobre).** Implementazione tecnica e regressioni integrate con PR #366; collaudo autenticato multi-dispositivo e valutazione delle basi giuridiche, dei contatti e della retention **ancora bloccanti prima del pilot con utenti reali**; vedi `health-consent-release-gate.md`. |
 | Reclamo | Informare del diritto di rivolgersi all'autorità di controllo competente |
 
-## Revoca consenso dati salute — decisione prodotto A, blocker tecnici e legali ancora aperti
+## Revoca consenso dati salute — decisione prodotto A, verifiche runtime e legali ancora aperte
 
-Il product owner ha scelto la **soluzione A** (sospensione di tutte le funzioni fitness, con accesso a diritti, esportazione, cancellazione account e facoltà di accettare nuovamente in modo esplicito). Prima del pilot servono validazione legale, soluzione tecnica autorevole e test, come specificato in `health-consent-release-gate.md`. In particolare occorre definire e dimostrare:
+Il product owner ha scelto la **soluzione A** (sospensione di tutte le funzioni fitness, con accesso a diritti, esportazione, cancellazione account e facoltà di accettare nuovamente in modo esplicito). Il protocollo tecnico autorevole e le regressioni sono integrati con PR #366; prima del pilot restano il collaudo autenticato multi-dispositivo e la validazione legale, come specificato in `health-consent-release-gate.md`. In particolare occorre confermare con evidenza runtime e definire sul piano giuridico:
 
 1. da quale momento cessano i trattamenti che dipendono dal consenso Art. 9;
 2. che le sole funzionalità rimaste disponibili siano informativa, gestione dei diritti, esportazione e cancellazione account (soluzione A);
@@ -54,7 +54,7 @@ Il product owner ha scelto la **soluzione A** (sospensione di tutte le funzioni 
 6. gestione di una revoca effettuata mentre esistono modifiche locali pendenti;
 7. testo UI che non presenti il consenso come irrevocabile o artificiosamente obbligatorio.
 
-Non descrivere questo diritto come pienamente implementato finché il relativo comportamento non è definito e coperto da regressioni.
+Distinguere implementazione e regressioni nel repository dalla prova runtime autenticata e dalla validazione legale ancora aperte.
 
 ## Flusso operativo
 

@@ -1,6 +1,6 @@
 # TheLogBook — istruzioni operative per agenti AI
 
-Ultimo aggiornamento: 2026-10-08 | App: 1.1.0 | Progetto: PWA fitness tracking (allenamento, nutrizione, misurazioni corporee).
+Ultimo aggiornamento: 2026-10-13 | App: 1.1.0 | Progetto: PWA fitness tracking (allenamento, nutrizione, misurazioni corporee).
 
 ## Convenzioni
 
@@ -226,7 +226,7 @@ Distinguere due sistemi:
 - **MUST:** non aggiungere eventi comportamentali workout/PWA alla telemetria tecnica per ricreare di fatto analytics di utilizzo.
 - **MUST:** il client corrente non crea nuove scritture nelle collection Firestore `telemetry_errors`, `telemetry_events` o `telemetry_anomalies`; Rules e retention di 30 giorni restano attive per client precedenti e dati legacy finché il relativo cleanup non viene ritirato deliberatamente.
 - **MUST:** errori/stack sottoposti alla telemetria tecnica passano dai sanitizzatori che rimuovono email, IP, token, API key, path utente e chiavi sensibili riconosciute prima del boundary Sentry.
-- **MUST:** la coda tecnica offline owner-scoped non crea nuovi JSON diagnostici in chiaro: persistenza soltanto AEAD con la chiave locale owner già sbloccata; se il vault non è pronto la telemetria resta best-effort in memoria. Copie plaintext delle build precedenti vengono cifrate/verificate prima della rimozione, senza contaminazione cross-owner. Scadenza massima dei report locali: sette giorni (50 elementi al massimo), incluso il replay, senza scambiare scadenza telemetrica con eliminazione dati utente.
+- **MUST:** la coda tecnica offline owner-scoped non crea nuovi JSON diagnostici in chiaro: persistenza soltanto AEAD con la chiave locale owner già sbloccata; se il vault non è pronto la telemetria resta best-effort in memoria. Le code plaintext delle build precedenti vengono cifrate e verificate prima della rimozione quando il vault è disponibile. Se il vault non è sbloccato, i report validi restano soltanto nella RAM della scheda e la vecchia copia plaintext viene rimossa: la chiusura della scheda può perderli. Nessun report passa a un altro owner. Le voci più vecchie di sette giorni non vengono restituite né inviate (50 elementi al massimo); il pruning del ciphertext avviene al successivo accesso alla coda, non necessariamente alla scadenza mentre la PWA è chiusa. Questa scadenza telemetrica è distinta dall'eliminazione dei dati utente.
 - **MUST:** source map Sentry sono generate solo nella build frontend Firebase Hosting Production (`FIREBASE_HOSTING_DEPLOY=production`), caricate con `SENTRY_AUTH_TOKEN` e rimosse dagli asset pubblici dopo l'upload; il token non entra mai nel bundle client.
 - **MUST:** documentazione privacy, UI e codice devono usare terminologia coerente: non promettere anonimato se esiste un identificativo tecnico/pseudonimo.
 - **MUST:** nessun documento pubblico/normativo deve incorporare email, indirizzi o altre informazioni private del maintainer. Usare soltanto canali di contatto pubblicamente predisposti dall'app quando esistono.
@@ -297,7 +297,7 @@ npm run verify:m8
 `vercel.json` è la configurazione repository canonica. Nel contratto corrente:
 
 - **MUST:** `main` è il solo branch abilitato ai deployment Vercel tramite `git.deploymentEnabled`; i branch di sviluppo sono disabilitati.
-- **MUST:** `ignoreCommand` deve saltare i deployment Git che non modificano il boundary backend Vercel; cambi a `api/`, `server/`, configurazione Vercel, dipendenze/runtime o configurazione TypeScript server devono invece continuare a generare un deployment Production.
+- **MUST:** `ignoreCommand` deve saltare i deployment Git che non modificano il boundary backend Vercel; cambi a `api/`, `server/`, moduli condivisi importati dal backend (oggi `src/lib/legalVersions.ts`), configurazione Vercel, dipendenze/runtime o configurazione TypeScript server devono invece continuare a generare un deployment Production.
 - **MUST:** in assenza di uno SHA precedente affidabile o se il confronto Git fallisce, il selettore deve fallire aperto verso il deployment, mai saltare un possibile aggiornamento backend.
 - **MUST:** non indebolire questa barriera per ottenere una Preview; la CI GitHub è il gate del branch.
 - Il deployment di produzione Vercel, quando necessario, deve derivare da `main`.

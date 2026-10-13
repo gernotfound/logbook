@@ -28,7 +28,8 @@ describe('RISK-02: Legal Consent Lifecycle', () => {
     };
 
     it('richiede un nuovo consenso quando una versione legale precedente non coincide', () => {
-        expect(LEGAL_VERSIONS.privacy).toBe('1.3.3');
+        expect(LEGAL_VERSIONS.privacy).toBe('1.3.4');
+        expect(needsLegalUpdate({ ...mockConsent, privacyVersion: '1.3.3' })).toBe(true);
         expect(LEGAL_VERSIONS.terms).toBe('1.2.1');
         expect(needsLegalUpdate({
             ...mockConsent,
@@ -143,11 +144,19 @@ describe('RISK-02: ConsentOverlay UI Behavior', () => {
 
     it('descrive la rimozione di GA4 e la data dell’informativa aggiornata', () => {
         render(<PrivacyPolicy onClose={vi.fn()} />);
-        expect(screen.getByText('Aggiornata al 12 ottobre 2026')).toBeDefined();
+        expect(screen.getByText('Aggiornata al 13 ottobre 2026')).toBeDefined();
         expect(screen.getByText(/non integra Google Analytics 4/i)).toBeDefined();
         expect(screen.queryByText(/cookie first-party tecnici\/analitici/i)).toBeNull();
     });
 
+
+    it('descrive cifratura, retention locale e limite del pruning dei report tecnici', () => {
+        render(<PrivacyPolicy onClose={vi.fn()} />);
+        expect(screen.getByText(/fino a 50 report temporanei/)).toBeDefined();
+        expect(screen.getByText(/salvati con cifratura autenticata/)).toBeDefined();
+        expect(screen.getByText(/Dopo sette giorni non vengono più usati né inviati/)).toBeDefined();
+        expect(screen.getByText(/se resta chiusa, possono rimanere sul dispositivo oltre sette giorni/)).toBeDefined();
+    });
 
     it('documenta l’effetto della revoca e lascia identificabili i dati legali non ancora definiti', () => {
         render(<PrivacyPolicy onClose={vi.fn()} />);
