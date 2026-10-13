@@ -11,6 +11,7 @@ describe('RISK-02: Legal Consent Lifecycle', () => {
         vi.restoreAllMocks();
         // Reset store con dati fittizi
         useAppStore.setState({
+            dataOwner: 'user:test-user-id',
             userData: defaultUserDataFallback,
             localWorkout: null,
             saveError: null,
@@ -102,6 +103,7 @@ describe('RISK-02: ConsentOverlay UI Behavior', () => {
         vi.restoreAllMocks();
         useDialogStore.setState({ isOpen: false, message: '' });
         useAppStore.setState({
+            dataOwner: 'user:test-user-id',
             userData: defaultUserDataFallback,
             localWorkout: null,
             saveError: null,

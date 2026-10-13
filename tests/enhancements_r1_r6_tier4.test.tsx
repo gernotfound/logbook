@@ -51,6 +51,7 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
             ];
 
             useAppStore.setState({
+                dataOwner: captureSession().owner,
                 userData: {
                     ...emptyUserData,
                     library,
@@ -113,6 +114,7 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
             ];
 
             useAppStore.setState({
+                dataOwner: captureSession().owner,
                 userData: {
                     ...emptyUserData,
                     library,
@@ -238,6 +240,7 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
             }
 
             useAppStore.setState({
+                dataOwner: captureSession().owner,
                 userData: {
                     ...emptyUserData,
                     nutrition: weekNutrition

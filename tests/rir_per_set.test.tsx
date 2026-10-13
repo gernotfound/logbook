@@ -1,3 +1,4 @@
+import { captureSession } from '../src/lib/sync/session';
 import React from 'react';
 import { act, fireEvent, render, renderHook, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -58,7 +59,7 @@ const session = (rir?: number): WorkoutSession => ({
 describe('RIR reale per singola serie', () => {
     beforeEach(() => {
         localStorage.clear();
-        useAppStore.setState({ userData: parseUserData({}), localWorkout: null });
+        useAppStore.setState({ userData: parseUserData({}), dataOwner: captureSession().owner, localWorkout: null });
     });
 
     afterEach(() => {
@@ -257,6 +258,7 @@ describe('RIR reale per singola serie', () => {
         const current = session(0);
         const legacy = { ...session(), id: 'legacy', date: '2026-09-20' };
         useAppStore.setState({
+            dataOwner: captureSession().owner,
             userData: parseUserData({
                 library: [{ id: 'bench', name: 'Panca', setsCount: 3, sets: [] }],
                 history: [current, legacy],

@@ -1,3 +1,4 @@
+import { captureSession } from '../src/lib/sync/session';
 import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -29,6 +30,7 @@ describe('pre-session readiness contract', () => {
     beforeEach(() => {
         localStorage.clear();
         useAppStore.setState({
+            dataOwner: captureSession().owner,
             userData: parseUserData({
                 nutrition: { '2026-09-24': { date: '2026-09-24', sleepHours: '06:18' } },
                 activePains: ['shoulders', 'elbow'],
@@ -133,6 +135,7 @@ describe('pre-session readiness contract', () => {
         };
 
         useAppStore.setState({
+            dataOwner: captureSession().owner,
             userData: parseUserData({ activeWorkout: active, activePains: [] }),
             localWorkout: active,
             syncing: false,

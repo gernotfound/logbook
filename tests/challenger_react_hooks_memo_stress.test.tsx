@@ -98,6 +98,7 @@ describe('Empirical Challenger: React Hooks, Memoization & Re-render Loop Stress
         localStorage.clear();
         useAppStore.setState({
             userData: JSON.parse(JSON.stringify(baseUserData)),
+            dataOwner: 'user:test-user-id',
             localWorkout: null,
             syncing: false,
             saveError: null

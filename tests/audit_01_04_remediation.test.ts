@@ -187,6 +187,7 @@ describe('AUDIT 01-04 remediation invariants', () => {
         const live = workout('live');
         const historical = { ...workout('history'), isEditingHistory: true };
         useAppStore.setState({
+            dataOwner: storageOwner(),
             userData: parse({ activeWorkout: live }),
             localWorkout: live,
             localPersistenceBlocked: false,

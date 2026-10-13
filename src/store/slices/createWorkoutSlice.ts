@@ -5,6 +5,7 @@ import { normalizeBusinessId } from '../../lib/businessIdentity';
 import type { WorkoutSession, SyncResult } from '../../types';
 import { readDeviceValueStrict, writeDeviceValue } from '../../lib/sync/deviceStorage';
 import type { AppState } from '../useAppStore';
+import { captureSession } from '../../lib/sync/session';
 import { assertWorkoutSessionIdentities } from '../../lib/sync/domainOperations/validation';
 
 export interface WorkoutSlice {
@@ -138,6 +139,10 @@ export const createWorkoutSlice: StateCreator<AppState, [], [], WorkoutSlice> = 
     localWorkout: null,
 
     setLocalWorkout: (workoutOrUpdater) => {
+        const current = get();
+        if ((current.userData !== null || current.localWorkout !== null) && current.dataOwner !== captureSession().owner) {
+            throw new Error('Allenamento in memoria non attribuito alla sessione corrente.');
+        }
         const currentWorkout = get().localWorkout;
         const nextWorkout = typeof workoutOrUpdater === 'function'
             ? (workoutOrUpdater as (prev: WorkoutSession | null) => WorkoutSession | null)(currentWorkout)
@@ -152,6 +157,7 @@ export const createWorkoutSlice: StateCreator<AppState, [], [], WorkoutSlice> = 
     },
 
     setSyncedLocalWorkout: async (workoutOrUpdater) => {
+        if (get().dataOwner !== captureSession().owner) throw new Error('Allenamento di un altro proprietario.');
         if (get().localPersistenceBlocked) throw new Error(DEVICE_WORKOUT_PERSISTENCE_MESSAGE);
 
         const currentWorkout = get().localWorkout;

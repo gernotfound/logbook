@@ -42,6 +42,7 @@ beforeEach(() => {
     vi.mocked(DB.saveUserData).mockResolvedValue({ ok: true, status: 'synced' });
     useAppStore.setState({
         userData: fixture(),
+        dataOwner: 'user:nutrition-hardening-user',
         localWorkout: null,
         syncing: false,
         saveError: null,

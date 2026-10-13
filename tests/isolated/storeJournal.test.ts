@@ -47,7 +47,7 @@ beforeEach(async () => {
     await clear();
     sdk.auth.currentUser = { uid: 'A' };
     sdk.save.mockReset().mockImplementation(async () => { const saved = await readLocal(`user:${sdk.auth.currentUser?.uid}`); if (saved) await acknowledgeThrough(saved.owner, saved.revision, saved.data); return { ok: true, status: 'synced' }; });
-    store.setState({ userData: data(170) });
+    store.setState({ userData: data(170), dataOwner: 'user:A' });
     await initializeLocal('user:A', data(170));
 });
 afterEach(() => { store.getState().cancelPendingSyncs(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
@@ -182,7 +182,7 @@ describe('store with real IndexedDB commits', () => {
         await vi.waitFor(() => expect(sdk.save).toHaveBeenCalledTimes(1));
         sdk.auth.currentUser = { uid: 'B' }; store.getState().resetStore();
         sdk.auth.currentUser = { uid: 'A' }; store.getState().resetStore();
-        store.setState({ userData: data(180), syncHealth: 'local-pending' });
+        store.setState({ userData: data(180), dataOwner: 'user:A', syncHealth: 'local-pending' });
         remote.resolve({ ok: true, status: 'synced' });
         await flushing; await observed;
         expect(store.getState().userData?.profile?.height).toBe('180');

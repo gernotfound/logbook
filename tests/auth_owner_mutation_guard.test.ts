@@ -22,7 +22,7 @@ describe('authenticated owner mutation guard', () => {
                 type: 'profile.patch',
                 patch: { height: '180' },
             }),
-        ).rejects.toThrow('Dati locali non allineati');
+        ).rejects.toThrow('Dati in memoria senza proprietario valido');
 
         expect(useAppStore.getState().dataOwner).toBe('user:account-a');
     });

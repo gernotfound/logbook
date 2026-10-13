@@ -108,7 +108,16 @@ function GuestBanner({ onLogin }: { onLogin: () => void }) {
   );
 }
 
+// Reset every ephemeral view/hook on an identity boundary, not only persisted tabs.
 function App() {
+  const { currentUser, isGuest } = useAuth();
+  // Capture the PWA shortcut once, before the URL is consumed by the child.
+  const [startupTab] = useState(readStartupTabShortcut);
+  const owner = isGuest ? 'guest' : currentUser ? `user:${currentUser.uid}` : 'unbound';
+  return <OwnerBoundApp key={owner} startupTab={startupTab} />;
+}
+
+function OwnerBoundApp({ startupTab }: { startupTab: string | null }) {
   const { currentUser, loading, isGuest, guestMigrationStatus, retryGuestMigration, emailVerificationRequired } = useAuth();
   const healthConsentStatus = useSyncExternalStore(subscribeHealthConsent, () => isGuest ? getGuestHealthConsentStatus() : currentHealthConsentStatus(currentUser?.uid), () => 'checking' as const);
   useEffect(() => {
@@ -144,6 +153,8 @@ function App() {
   }, [isGuest]);
   const syncing = useAppStore(state => state.syncing);
   const userData = useAppStore(state => state.userData);
+  const dataOwner = useAppStore(state => state.dataOwner);
+  const localWorkout = useAppStore(state => state.localWorkout);
   const saveError = useAppStore(state => state.saveError);
   const syncHealth = useAppStore(state => state.syncHealth);
   const syncPresentation = useAppStore(state => state.syncPresentation);
@@ -151,7 +162,6 @@ function App() {
   const setSaveError = useAppStore(state => state.setSaveError);
   const compatibilityStatus = useAppStore(state => state.compatibilityStatus);
   const compatibilityError = useAppStore(state => state.compatibilityError);
-  const [startupTab] = useState(readStartupTabShortcut);
   const parsedStartupTab = AppTabSchema.safeParse(startupTab);
   const initialTabOverride: AppTab | undefined = startupTab === 'settings'
     ? 'home'
@@ -169,8 +179,8 @@ function App() {
 
   const [showGuestLogin, setShowGuestLogin] = useState(readGuestLoginOverlayState);
 
-  const hasUserData = Boolean(userData);
-  const showConsentOverlay = userData && needsLegalUpdate(userData.legalConsent);
+  const hasUserData = Boolean(userData) && dataOwner === navigationOwner;
+  const showConsentOverlay = hasUserData && userData && needsLegalUpdate(userData.legalConsent);
   const guestLoginOverlayVisible = showGuestLogin && (!currentUser || (isGuest && guestMigrationStatus === 'idle'));
   const guestLoginMigrationPending = !!currentUser && guestMigrationStatus === 'pending';
   const guestLoginMigrationFailed = !!currentUser && guestMigrationStatus === 'failed';
@@ -472,6 +482,11 @@ function App() {
 
   if ((isGuest || currentUser) && healthConsentStatus !== 'active') {
     return <><GlobalDialog /><HealthConsentSuspended key={isGuest ? 'guest' : `user:${currentUser?.uid}`} status={healthConsentStatus} user={isGuest ? null : currentUser} /></>;
+  }
+
+  // Never render an unowned/foreign snapshot in a newly authenticated view.
+  if ((currentUser || isGuest) && (userData !== null || localWorkout !== null) && dataOwner !== navigationOwner) {
+    return <BrandLoadingScreen label="Preparazione account in corso" />;
   }
 
   return (

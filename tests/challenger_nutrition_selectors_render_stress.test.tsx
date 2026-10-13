@@ -71,6 +71,7 @@ describe('Challenger 2: Zustand Fine-Grained Selectors & Background Render Isola
         vi.clearAllMocks();
         useAppStore.setState({
             userData: JSON.parse(JSON.stringify(initialTestUserData)),
+            dataOwner: 'user:test-user-id',
             localWorkout: null,
             syncing: false,
             saveError: null

@@ -322,7 +322,7 @@ describe('EMPIRICAL CHALLENGER: Adversarial Stress & Robustness Suite (R2, R3, R
         it('ASYNC PROPAGATION: updateUserData properly propagates promise rejection to caller try/catch', async () => {
             const dbError = new Error('Permission denied on update');
             vi.spyOn(DB, 'saveUserData').mockRejectedValueOnce(dbError);
-            useAppStore.setState({ userData: createMockUserData(1) });
+            useAppStore.setState({ userData: createMockUserData(1), dataOwner: 'user:test-user-id' });
 
             const updatePromise = useAppStore.getState().updateUserData((prev: UserData) => ({
                 ...prev,

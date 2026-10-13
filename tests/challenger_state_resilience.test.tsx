@@ -28,6 +28,7 @@ describe('Challenger 2: Adversarial State Management, Schemas, Guest Merge & UI 
         localStorage.clear();
         useAppStore.setState({
             userData: { ...defaultMockUserData, activePains: ['chest', 'back_lats'] },
+            dataOwner: 'user:test-user-id',
             localWorkout: null,
             syncing: false,
             saveError: null,

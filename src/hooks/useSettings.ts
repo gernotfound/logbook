@@ -31,10 +31,12 @@ export function useSettings() {
     const profile = localProfile ?? storeProfile ?? { dob: '', height: '', gender: '' };
 
     const handleLogout = async () => {
+        const session = captureSession();
         if (isGuest) {
-            await logout({ mode: 'normal' });
+            if (isCurrentSession(session)) await logout({ mode: 'normal' });
         } else if (await showConfirm("Sei sicuro di voler uscire dal tuo account?")) {
-            await logout({ mode: 'normal' });
+            // A confirmation from A must never sign out B after an auth change.
+            if (isCurrentSession(session)) await logout({ mode: 'normal' });
         }
     };
 
@@ -68,10 +70,13 @@ export function useSettings() {
     };
 
     const handleExportCSV = async () => {
-        const userData = useAppStore.getState().userData;
-        if (!userData) return;
+        const session = captureSession();
+        const state = useAppStore.getState();
+        const userData = state.userData;
+        if (!userData || state.dataOwner !== session.owner) return;
         try {
             const { Exporter } = await import('../lib/export');
+            if (!isCurrentSession(session)) return;
             await Exporter.exportToCSV(userData.history || [], userData.nutrition || {}, userData.library || []);
         } catch (error) {
             console.error('Errore esportazione CSV:', error);
@@ -80,10 +85,13 @@ export function useSettings() {
     };
 
     const handleExportShare = async (options?: { exportLibrary?: boolean | string[], exportRoutines?: boolean | string[], exportTrainingCycles?: boolean | string[] }) => {
-        const userData = useAppStore.getState().userData;
-        if (!userData) return;
+        const session = captureSession();
+        const state = useAppStore.getState();
+        const userData = state.userData;
+        if (!userData || state.dataOwner !== session.owner) return;
         try {
             const { Exporter } = await import('../lib/export');
+            if (!isCurrentSession(session)) return;
             const result = await Exporter.exportShareJson(userData, options);
             if (result) {
                 await showAlert(`Esportati con successo: ${result.cyclesCount} cicli, ${result.routinesCount} schede, ${result.libraryCount} esercizi.`);
@@ -97,7 +105,9 @@ export function useSettings() {
     const handleExportBackup = async () => {
         if (exportBusy.current) return;
         const session = captureSession();
-        const stateData = useAppStore.getState().userData;
+        const state = useAppStore.getState();
+        if (state.userData !== null && state.dataOwner !== session.owner) return;
+        const stateData = state.userData;
         if (!stateData && (session.owner === 'guest' || currentHealthConsentStatus(session.owner.slice(5)) === 'active')) return;
         exportBusy.current = true;
         setExportingData(true);

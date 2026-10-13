@@ -1,3 +1,4 @@
+import { captureSession } from '../src/lib/sync/session';
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useTrainingHistory } from '../src/hooks/useTrainingHistory';
@@ -26,6 +27,7 @@ describe('useTrainingHistory deleteWorkout', () => {
         });
 
         useAppStore.setState({
+            dataOwner: captureSession().owner,
             userData: initial,
             localWorkout: { id: 'w-to-delete', routineName: 'Full Body', exercises: [] } as any,
             syncing: false,
