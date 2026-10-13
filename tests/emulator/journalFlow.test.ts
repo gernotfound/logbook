@@ -7,7 +7,7 @@ import { doc, getDoc, setDoc, waitForPendingWrites } from 'firebase/firestore';
 const sdk = vi.hoisted(() => ({ db: null as any, auth: { currentUser: { uid: 'a' } } }));
 vi.mock('../../src/lib/firebase', () => ({ auth: sdk.auth, getDb: () => sdk.db, ensureAppCheck: async () => {}, waitForPendingWrites: (db: any) => waitForPendingWrites(db) }));
 // This suite exercises legacy sync/reconciliation under an already-authorized
-// authenticated account (server revision 0). Consent revocation and epoch
+// authenticated account (server revision 1). Consent revocation and epoch
 // enforcement are tested separately with the real policy and emulator Rules.
 vi.mock('../../src/lib/healthConsent', async () => {
     const actual = await vi.importActual<typeof import('../../src/lib/healthConsent')>('../../src/lib/healthConsent');
@@ -19,13 +19,13 @@ vi.mock('../../src/lib/healthConsent', async () => {
         requireHealthConsentWritable: (owner: string) => {
             if (!writable(owner)) throw new Error('Utente non autorizzato dal consenso');
         },
-        getVerifiedHealthConsentRevision: () => 0,
+        getVerifiedHealthConsentRevision: () => 1,
     };
 });
 vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackEvent: vi.fn(), trackError: vi.fn() } }));
 import { DB as RealDB } from '../../src/lib/db';
 import { adoptReplicaCheckpoint, readLocal, initializeLocal, commitLocal } from '../../src/lib/sync/localRepository';
-import { registerReplica } from './replicaHarness';
+import { seedTrustedConsent, registerReplica } from './replicaHarness';
 import { CURRENT_DATA_SCHEMA, CURRENT_SYNC_PROTOCOL } from '../../src/lib/schemaEvolution';
 const DB = {
     ...RealDB
@@ -41,7 +41,7 @@ beforeAll(async () => {
     vi.stubGlobal('navigator', { onLine: true });
     env = await initializeTestEnvironment({ projectId: 'demo-logbook-audit', firestore: { host: '127.0.0.1', port: 8080, rules: readFileSync('firestore.rules', 'utf8') } });
 });
-beforeEach(async () => { await env.clearFirestore(); await clear(); DB.resetCache(); sdk.db = env.authenticatedContext('a', { email_verified: true }).firestore(); sdk.auth.currentUser = { uid: 'a' }; });
+beforeEach(async () => { await env.clearFirestore(); await seedTrustedConsent(env); await clear(); DB.resetCache(); sdk.db = env.authenticatedContext('a', { email_verified: true }).firestore(); sdk.auth.currentUser = { uid: 'a' }; });
 afterAll(async () => { await env?.cleanup(); vi.unstubAllGlobals(); });
 async function prepareReplica() {
     const replica = await registerReplica(sdk.db, 'a');

@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { afterAll, beforeAll, beforeEach, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, expect, it, vi } from 'vitest';
 import {
     assertFails,
     assertSucceeds,
@@ -7,8 +7,12 @@ import {
     type RulesTestEnvironment,
 } from '@firebase/rules-unit-testing';
 import { doc, getDoc, setDoc, writeBatch } from 'firebase/firestore';
+vi.mock('../../src/lib/healthConsent', async () => ({
+    ...(await vi.importActual<typeof import('../../src/lib/healthConsent')>('../../src/lib/healthConsent')),
+    getVerifiedHealthConsentRevision: () => 1,
+}));
 import { claimReplicaCheckpoint } from '../../src/lib/sync/replicaProtocol';
-import { asModularFirestore } from './replicaHarness';
+import { seedTrustedConsent, asModularFirestore } from './replicaHarness';
 
 let env: RulesTestEnvironment;
 
@@ -22,7 +26,7 @@ beforeAll(async () => {
     });
 });
 
-beforeEach(() => env.clearFirestore());
+beforeEach(async () => { await env.clearFirestore(); await seedTrustedConsent(env); });
 afterAll(async () => { await env?.cleanup(); });
 
 it('deduplicates concurrent first claims from tabs sharing one local actor identity', async () => {
