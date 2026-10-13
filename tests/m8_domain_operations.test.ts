@@ -44,6 +44,21 @@ describe('M8 Domain Operations V4', () => {
         expect(CURRENT_BACKUP_SCHEMA).toBe(3);
     });
 
+    it('compiles and replays a prototype-named workout identity without dropping its monthly shard entry', () => {
+        const before = base({ history: [] });
+        const workout: WorkoutSession = {
+            id: '__proto__', date: '2026-09-15', exercises: [], routineName: 'Sicuro',
+        };
+        const { after, operations, replay } = compile(before, { type: 'history.upsert', workout });
+        expect(after.history?.find(item => item.id === '__proto__')).toBeDefined();
+        expect(operations.length).toBeGreaterThan(0);
+        expect(operations.every(op => op.docPath === 'history_months/2026-09' && op.path[0] === '__proto__')).toBe(true);
+        const month = replay.get('history_months/2026-09')!;
+        expect(Object.hasOwn(month, '__proto__')).toBe(true);
+        expect(Object.getPrototypeOf(month)).toBe(Object.prototype);
+        expect(month['__proto__']).toMatchObject({ id: '__proto__', date: '2026-09-15' });
+    });
+
     it('compiles a profile patch only inside the profile root scope', () => {
         const before = base({ profile: { height: '170', gender: 'M' }, activePains: ['shoulder'] });
         const { after, operations, replay } = compile(before, { type: 'profile.patch', patch: { height: '171' } });
