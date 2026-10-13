@@ -56,9 +56,8 @@ describe('Empirical Challenger M4.2: Offline Queue, Circuit Breaker & Poison Pil
         }
       }
 
-      const raw = localStorage.getItem(telemetryHub.getQueueStorageKey());
-      expect(raw).not.toBeNull();
-      const storedQueue: QueuedTelemetryItem[] = JSON.parse(raw!);
+      expect(localStorage.getItem(telemetryHub.getQueueStorageKey())).toBeNull();
+      const storedQueue: QueuedTelemetryItem[] = telemetryHub.getQueuedEvents();
       expect(storedQueue.length).toBe(TELEMETRY_QUEUE_CAPACITY);
       expect(storedQueue.length).toBe(50);
 
@@ -100,7 +99,7 @@ describe('Empirical Challenger M4.2: Offline Queue, Circuit Breaker & Poison Pil
       // Populate queue with 20 items
       const initialItems: QueuedTelemetryItem[] = Array.from({ length: 20 }, (_, i) => ({
         id: `item_${i + 1}`,
-        timestamp: 1724486400000 + i * 100,
+        timestamp: Date.now() - 2000 + i * 100,
         itemType: 'event',
         payload: {
           id: `evt_${i + 1}`,
@@ -108,7 +107,7 @@ describe('Empirical Challenger M4.2: Offline Queue, Circuit Breaker & Poison Pil
           context: getTelemetryContext(),
           userId: 'user_circuit_breaker',
           sessionId: 'sess_cb',
-          timestamp: 1724486400000 + i * 100,
+          timestamp: Date.now() - 2000 + i * 100,
         },
       }));
       localStorage.setItem(telemetryHub.getQueueStorageKey(), JSON.stringify(initialItems));
@@ -230,7 +229,7 @@ describe('Empirical Challenger M4.2: Offline Queue, Circuit Breaker & Poison Pil
       const items: QueuedTelemetryItem[] = [
         {
           id: 'poison_item',
-          timestamp: 1000,
+          timestamp: Date.now(),
           itemType: 'error',
           payload: {
             id: 'err_poison',
@@ -241,14 +240,14 @@ describe('Empirical Challenger M4.2: Offline Queue, Circuit Breaker & Poison Pil
             userId: 'user_poison_hetero',
             sessionId: 'sess_1',
             count: 1,
-            firstSeen: 1000,
-            lastSeen: 1000,
+            firstSeen: Date.now(),
+            lastSeen: Date.now(),
           },
           retryCount: 0,
         },
         {
           id: 'valid_item_after',
-          timestamp: 2000,
+          timestamp: Date.now() + 1,
           itemType: 'event',
           payload: {
             id: 'evt_valid_after',
@@ -256,7 +255,7 @@ describe('Empirical Challenger M4.2: Offline Queue, Circuit Breaker & Poison Pil
             context: getTelemetryContext(),
             userId: 'user_poison_hetero',
             sessionId: 'sess_1',
-            timestamp: 2000,
+            timestamp: Date.now() + 1,
           },
           retryCount: 0,
         },
@@ -332,9 +331,10 @@ describe('Empirical Challenger M4.2: Offline Queue, Circuit Breaker & Poison Pil
           telemetryHub.trackEvent('recovery_event_check', { corruptPayloadTested: true });
         }).not.toThrow();
 
-        const repairedRaw = localStorage.getItem(telemetryHub.getQueueStorageKey());
-        expect(repairedRaw).not.toBeNull();
-        const parsed = JSON.parse(repairedRaw!);
+        // Diagnostic state stays in RAM if the account key is not ready;
+        // recovering from invalid legacy JSON must never write new plaintext.
+        expect(localStorage.getItem(telemetryHub.getQueueStorageKey())).toBeNull();
+        const parsed = telemetryHub.getQueuedEvents();
         expect(Array.isArray(parsed)).toBe(true);
         expect(parsed.length).toBe(1);
         expect(parsed[0].payload.type).toBe('recovery_event_check');

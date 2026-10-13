@@ -480,12 +480,14 @@ export class TelemetryHub {
       const now = Date.now();
       const eventId = createTelemetryId('evt', now);
       const context = getTelemetryContext();
+      const userId = this.getUserId();
+      const ownerEpoch = this.ownerEpoch;
       const payload: TelemetryEventPayload = {
         timestamp: now,
         id: eventId,
         type: type as TelemetryEventType,
         context,
-        userId: this.getUserId(),
+        userId,
         sessionId: this.getSessionId(),
       };
 
@@ -496,16 +498,22 @@ export class TelemetryHub {
       if (this.isOffline()) {
         this.queue.enqueueItem('event', payload);
       } else {
+        // Async transport completion must never persist the previous owner's
+        // diagnostics under a newly authenticated account.
+        const stillCurrentOwner = (): boolean => {
+          const currentUserId = this.getUserId();
+          return currentUserId === userId && this.ownerEpoch === ownerEpoch;
+        };
+        const queueOnlyForCurrentOwner = (): void => {
+          if (stillCurrentOwner()) this.queue.enqueueItem('event', payload);
+        };
         queueMicrotask(() => {
+          if (!stillCurrentOwner()) return;
           this.dispatchEventExternally(payload)
-            .then((success) => {
-              if (!success) {
-                this.queue.enqueueItem('event', payload);
-              }
+            .then(success => {
+              if (!success) queueOnlyForCurrentOwner();
             })
-            .catch(() => {
-              this.queue.enqueueItem('event', payload);
-            });
+            .catch(queueOnlyForCurrentOwner);
         });
       }
     } catch (err) {
@@ -636,7 +644,7 @@ export class TelemetryHub {
 
       // Never reconcile a completed old-owner flush into a new-owner queue.
       if (!this.isQueueOwnerCurrent(ownerKey, ownerEpoch)) return;
-      this.queue.invalidateCache();
+      this.queue.refreshAfterFlush();
       const currentLiveQueue = this.queue.getQueuedEvents();
       const updatedQueue: QueuedTelemetryItem[] = [];
 

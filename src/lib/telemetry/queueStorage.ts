@@ -1,7 +1,9 @@
 import { deviceKey } from '../sync/deviceStorage';
 import { storageOwner } from '../sync/session';
+import { isVaultUnlocked } from '../sync/secureArchiveSession';
 import {
   TELEMETRY_QUEUE_CAPACITY,
+  TELEMETRY_QUEUE_MAX_AGE_MS,
   TELEMETRY_QUEUE_KEY,
   type QueuedTelemetryItem,
   type TelemetryErrorPayload,
@@ -9,6 +11,7 @@ import {
 } from './contracts';
 import { sanitizeTelemetryDetails } from './detailSanitizer';
 import { createTelemetryId } from './id';
+import { readEncryptedTelemetry, storeEncryptedTelemetry, discardLegacyUnscopedTelemetry } from './secureQueueDevice';
 
 function minimizeEventPayload(payload: TelemetryEventPayload): TelemetryEventPayload {
   if (payload.details === undefined) return payload;
@@ -42,78 +45,142 @@ function parseQueuedItems(raw: string | null): QueuedTelemetryItem[] {
     .map((item) => minimizeQueuedItem(item as QueuedTelemetryItem));
 }
 
+// The timestamp is the fallback for queues saved by previous builds without queuedAt.
+// An absent, malformed or implausibly future timestamp must not extend retention.
+function retainUnexpiredItems(items: QueuedTelemetryItem[], now = Date.now()): QueuedTelemetryItem[] {
+  return items.filter((item) => {
+    const enqueuedAt = item.queuedAt === undefined ? item.timestamp : item.queuedAt;
+    return typeof enqueuedAt === 'number'
+      && Number.isFinite(enqueuedAt)
+      && enqueuedAt > 0
+      && enqueuedAt <= now + 24 * 60 * 60 * 1000
+      && now - enqueuedAt < TELEMETRY_QUEUE_MAX_AGE_MS;
+  }).slice(-TELEMETRY_QUEUE_CAPACITY);
+}
+
 export class TelemetryQueueStorage {
   private cachedQueue: QueuedTelemetryItem[] | null = null;
   private cachedQueueKey: string | null = null;
   private isDiskSyncScheduled = false;
+  // Reports collected while locked must be merged with any pre-existing
+  // ciphertext after unlock, not overwrite it blindly.
+  private needsUnlockReconciliation = false;
 
   constructor(private readonly getUserId: () => string | null) {}
 
-  public getQueueStorageKey(): string {
+  private getOwner(): string {
     const uid = this.getUserId();
-    const owner = uid && uid !== 'anonymous' ? `user:${uid}` : (storageOwner() || 'guest');
-    return deviceKey('telemetry_queue', owner);
+    return uid && uid !== 'anonymous' ? `user:${uid}` : (storageOwner() || 'guest');
+  }
+
+  public getQueueStorageKey(): string {
+    // Logical owner identity, retained for lifecycle fencing and old-tab
+    // migration; new reports are stored ONLY under the sealed namespace.
+    return deviceKey('telemetry_queue', this.getOwner());
   }
 
   public getQueuedEvents(): QueuedTelemetryItem[] {
     const ownerKey = this.getQueueStorageKey();
+    const owner = this.getOwner();
     if (this.cachedQueue !== null && this.cachedQueueKey === ownerKey) {
-      return this.cachedQueue;
+      const recent = retainUnexpiredItems(this.cachedQueue);
+      if (recent.length !== this.cachedQueue.length) this.saveQueuedEvents(recent, true);
+      else this.syncQueueToDisk(ownerKey); // Persist an in-memory pre-unlock queue once the vault is ready.
+      return this.cachedQueue ?? recent;
     }
 
     try {
       if (typeof localStorage !== 'undefined') {
-        const ownerRaw = localStorage.getItem(ownerKey);
-        if (ownerRaw !== null) return parseQueuedItems(ownerRaw);
+        const protectedRaw = readEncryptedTelemetry(owner);
+        if (protectedRaw !== null) {
+          const parsed = parseQueuedItems(protectedRaw);
+          const recent = retainUnexpiredItems(parsed);
+          if (recent.length !== parsed.length) storeEncryptedTelemetry(owner, JSON.stringify(recent));
+          // An obsolete tab can recreate the old plaintext queue after a
+          // sealed write. Only the protected copy is authoritative.
+          localStorage.removeItem(ownerKey);
+          discardLegacyUnscopedTelemetry();
+          return recent;
+        }
 
-        // One-way migration from the pre-owner-scoped queue. Telemetry is
-        // best-effort, so entries are migrated only when their embedded UID
-        // proves that they belong to the current owner. Everything else is
-        // discarded rather than attributed to another account.
-        const legacyRaw = localStorage.getItem(TELEMETRY_QUEUE_KEY);
-        if (legacyRaw !== null) {
+        // One-way migration of existing unencrypted technical reports.
+        // Never erase the last owner-scoped copy until AEAD read-back succeeds.
+        const legacyRaw = localStorage.getItem(ownerKey);
+        const globalRaw = localStorage.getItem(TELEMETRY_QUEUE_KEY);
+        const source = legacyRaw ?? globalRaw;
+        if (source !== null) {
           const uid = this.getUserId();
-          const legacyItems = parseQueuedItems(legacyRaw);
-          const migrated = legacyItems.filter((item) => {
-            const payloadUid = item.payload?.userId;
-            return uid && uid !== 'anonymous'
-              ? payloadUid === uid
-              : !payloadUid || payloadUid === 'anonymous';
-          });
-          localStorage.setItem(ownerKey, JSON.stringify(migrated));
-          localStorage.removeItem(TELEMETRY_QUEUE_KEY);
-          return migrated;
+          let items: QueuedTelemetryItem[];
+          try {
+            items = retainUnexpiredItems(parseQueuedItems(source));
+          } catch {
+            // Only obsolete plaintext diagnostics are expendable. Never treat
+            // an encrypted read/decryption failure as authorization to erase.
+            localStorage.removeItem(ownerKey);
+            discardLegacyUnscopedTelemetry();
+            return [];
+          }
+          const filtered = items.filter(item => uid && uid !== 'anonymous'
+            ? item.payload?.userId === uid
+            : !item.payload?.userId || item.payload.userId === 'anonymous');
+          if (storeEncryptedTelemetry(owner, JSON.stringify(filtered))) {
+            discardLegacyUnscopedTelemetry();
+          } else if (!isVaultUnlocked(owner)) {
+            // Previously saved plaintext diagnostics must not stay on disk
+            // indefinitely while the account/guest vault is unavailable.
+            // Retain the valid remainder in RAM, then erase only the legacy
+            // best-effort copy; business snapshots are never handled here.
+            this.cachedQueue = filtered;
+            this.cachedQueueKey = ownerKey;
+            this.needsUnlockReconciliation = true;
+            localStorage.removeItem(ownerKey);
+            discardLegacyUnscopedTelemetry();
+          }
+          return filtered;
         }
       }
     } catch {
-      try {
-        localStorage.removeItem(TELEMETRY_QUEUE_KEY);
-      } catch {
-        // Corrupted/unavailable storage remains non-blocking telemetry state.
-      }
+      // A missing key, corrupted ciphertext, quota error or unavailable
+      // localStorage is not proof that the encrypted copy can be discarded.
+      // Technical telemetry is best-effort; business data is unaffected.
     }
-
     return [];
   }
 
   private saveQueuedEvents(items: QueuedTelemetryItem[], immediateDiskSync: boolean = true): void {
     const ownerKey = this.getQueueStorageKey();
-    this.cachedQueue = items;
+    this.cachedQueue = retainUnexpiredItems(items);
     this.cachedQueueKey = ownerKey;
+    if (!isVaultUnlocked(this.getOwner())) this.needsUnlockReconciliation = true;
     if (immediateDiskSync) {
       this.syncQueueToDisk(ownerKey);
     }
   }
 
-  private syncQueueToDisk(ownerKey: string): void {
-    if (this.cachedQueueKey !== ownerKey || this.cachedQueue === null) return;
+  private syncQueueToDisk(ownerKey: string): boolean {
+    if (this.cachedQueueKey !== ownerKey || this.cachedQueue === null) return false;
     try {
-      if (typeof localStorage !== 'undefined') {
-        localStorage.setItem(ownerKey, JSON.stringify(this.cachedQueue));
-        localStorage.removeItem(TELEMETRY_QUEUE_KEY);
+      // Never create new plaintext report storage, even before vault setup.
+      // In-memory diagnostics still work if the archive is locked or unavailable.
+      const owner = this.getOwner();
+      if (!isVaultUnlocked(owner)) return false;
+      if (this.needsUnlockReconciliation) {
+        const persisted = readEncryptedTelemetry(owner);
+        if (persisted !== null) {
+          const previous = retainUnexpiredItems(parseQueuedItems(persisted));
+          const knownIds = new Set(previous.map(item => item.id));
+          const additions = this.cachedQueue.filter(item => !knownIds.has(item.id));
+          this.cachedQueue = retainUnexpiredItems([...previous, ...additions]);
+        }
       }
+      const saved = storeEncryptedTelemetry(owner, JSON.stringify(this.cachedQueue));
+      // A failed save may conceal durable reports that become readable again.
+      // Reconcile on the next attempt rather than blindly replacing them.
+      this.needsUnlockReconciliation = !saved;
+      return saved;
     } catch {
-      // QuotaExceededError and SecurityError must not block the application.
+      this.needsUnlockReconciliation = true;
+      return false;
     }
   }
 
@@ -143,9 +210,10 @@ export class TelemetryQueueStorage {
           // A delayed microtask must not persist or discard another account's cache.
           if (!this.isDiskSyncScheduled || this.cachedQueueKey !== ownerKey) return;
           this.isDiskSyncScheduled = false;
-          this.syncQueueToDisk(ownerKey);
-          this.cachedQueue = null;
-          this.cachedQueueKey = null;
+          if (this.syncQueueToDisk(ownerKey)) {
+            this.cachedQueue = null;
+            this.cachedQueueKey = null;
+          }
         });
       }
     } catch {
@@ -186,15 +254,31 @@ export class TelemetryQueueStorage {
     if (!this.isDiskSyncScheduled) return;
 
     this.isDiskSyncScheduled = false;
-    if (this.cachedQueueKey !== null) this.syncQueueToDisk(this.cachedQueueKey);
-    this.cachedQueue = null;
-    this.cachedQueueKey = null;
+    if (this.cachedQueueKey !== null && this.syncQueueToDisk(this.cachedQueueKey)) {
+      this.cachedQueue = null;
+      this.cachedQueueKey = null;
+    }
+  }
+
+  /** Re-read the durable queue after cloud delivery. Do not discard reports
+   * retained in RAM if their encrypted write has not succeeded yet.
+   */
+  public refreshAfterFlush(): void {
+    if (!isVaultUnlocked(this.getOwner())) return;
+    const ownerKey = this.getQueueStorageKey();
+    // A successfully persisted cache can be discarded: reread disk so we
+    // do not overwrite reports added by another tab. Only retry a dirty cache.
+    if (this.cachedQueue !== null && this.cachedQueueKey === ownerKey
+      && (this.needsUnlockReconciliation || this.isDiskSyncScheduled)
+      && !this.syncQueueToDisk(ownerKey)) return;
+    this.invalidateCache();
   }
 
   public invalidateCache(): void {
     this.cachedQueue = null;
     this.cachedQueueKey = null;
     this.isDiskSyncScheduled = false;
+    this.needsUnlockReconciliation = false;
   }
 
   public replaceQueue(items: QueuedTelemetryItem[]): void {

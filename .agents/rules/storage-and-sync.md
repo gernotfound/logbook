@@ -41,6 +41,8 @@ L'app utilizza quattro livelli di storage con ruoli distinti:
 
 **MAY:** preferenze, hint e code telemetriche possono restare best-effort quando il loro contratto non influenza l'integrità dei dati business.
 
+**MUST:** per la coda diagnostica, best-effort **non** significa storage in chiaro: errori/stack, session ID e UID possono essere presenti nel payload tecnico. I nuovi report persistono esclusivamente cifrati con chiave owner-scoped sbloccata e AEAD autenticata; prima dello sblocco restano in RAM. La migrazione delle code owner e globali precedenti conserva gli elementi validi, cifrando e verificando prima del cleanup plaintext; un cipher/key illeggibile non autorizza una cancellazione. Le voci locali scadono dopo sette giorni e il replay non può reintrodurle. Tale retention tecnica è distinta da quella Firestore legacy di 30 giorni e da Sentry Production.
+
 Non dedurre da questa regola che ogni singolo accesso `localStorage` debba necessariamente passare dallo stesso helper: timer/workout e code specializzate possono avere boundary propri. La semantica strict vs best-effort deve però essere esplicita.
 
 ## Versioni indipendenti e Schema Evolution

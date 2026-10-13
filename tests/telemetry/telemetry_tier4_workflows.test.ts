@@ -128,8 +128,11 @@ describe('Unified Telemetry Hub E2E Suite — Tier 4', () => {
       telemetryHub.setUserId(null); // Guest mode
 
       telemetryHub.trackEvent('guest_offline_action', { action: 'view_catalog' });
-      expect(telemetryHub.getQueuedEvents().length).toBe(1);
+      const guestBeforeLogin = telemetryHub.getQueuedEvents();
+      expect(guestBeforeLogin).toHaveLength(1);
+      expect(guestBeforeLogin[0].payload.userId).toBeNull();
       const guestQueueKey = telemetryHub.getQueueStorageKey();
+      expect(localStorage.getItem(guestQueueKey)).toBeNull();
 
       // 2. User signs in with Google account
       Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
@@ -140,9 +143,9 @@ describe('Unified Telemetry Hub E2E Suite — Tier 4', () => {
 
       expect(mockSetDoc).not.toHaveBeenCalled();
       expect(telemetryHub.getQueuedEvents()).toHaveLength(0);
-      const guestQueue = JSON.parse(localStorage.getItem(guestQueueKey) || '[]');
-      expect(guestQueue).toHaveLength(1);
-      expect(guestQueue[0].payload.userId).toBeNull();
+      // Without an unlocked guest vault the old guest report existed only in
+      // memory; the Auth switch discards it rather than reassigning ownership.
+      expect(localStorage.getItem(guestQueueKey)).toBeNull();
     });
   });
 });

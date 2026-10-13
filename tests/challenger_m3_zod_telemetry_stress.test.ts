@@ -408,9 +408,8 @@ describe('Empirical Challenger: Milestone 3 (R1: Zod Integration) Adversarial St
                 });
             }
 
-            const rawQueue = localStorage.getItem(telemetryHub.getQueueStorageKey());
-            expect(rawQueue).toBeDefined();
-            const queue = JSON.parse(rawQueue!);
+            expect(localStorage.getItem(telemetryHub.getQueueStorageKey())).toBeNull();
+            const queue = telemetryHub.getQueuedEvents();
             expect(Array.isArray(queue)).toBe(true);
             expect(queue.length).toBeLessThanOrEqual(TELEMETRY_QUEUE_CAPACITY);
             expect(queue.length).toBe(TELEMETRY_QUEUE_CAPACITY);

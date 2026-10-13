@@ -64,7 +64,8 @@ describe('Telemetry owner isolation at the production boundary', () => {
     telemetryHub.trackError(new Error('Temporary Sentry rejection'));
     await vi.advanceTimersByTimeAsync(0);
 
-    const saved = JSON.parse(localStorage.getItem(queueKey) || '[]') as Array<{ payload: TelemetryErrorPayload }>;
+    expect(localStorage.getItem(queueKey)).toBeNull();
+    const saved = telemetryHub.getQueuedEvents() as Array<{ payload: TelemetryErrorPayload }>;
     expect(saved).toHaveLength(1);
     expect(saved[0].payload.userId).toBe('owner-a');
     expect(saved[0].payload.message).toContain('Temporary Sentry rejection');
@@ -86,6 +87,37 @@ describe('Telemetry owner isolation at the production boundary', () => {
 
     expect(JSON.parse(localStorage.getItem(queueKeyA) || '[]')).toHaveLength(0);
     expect(JSON.parse(localStorage.getItem(queueKeyB) || '[]')).toHaveLength(0);
+  });
+
+  it('never attributes a late failed online event to another authenticated owner', async () => {
+    changeAuth('owner-a');
+    telemetryHub.init();
+    let finish!: (accepted: boolean) => void;
+    dispatch.mockImplementationOnce(() => new Promise<boolean>(resolve => { finish = resolve; }));
+
+    telemetryHub.trackEvent('custom_event', { source: 'owner-a-only' });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(dispatch).toHaveBeenCalledTimes(1);
+
+    changeAuth('owner-b');
+    const ownerBKey = telemetryHub.getQueueStorageKey();
+    finish(false);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(localStorage.getItem(ownerBKey)).toBeNull();
+    expect(telemetryHub.getQueuedEvents()).toEqual([]);
+  });
+
+  it('does not dispatch a scheduled online event after the auth owner changes', async () => {
+    changeAuth('owner-a');
+    telemetryHub.init();
+    telemetryHub.trackEvent('custom_event', { source: 'owner-a-only' });
+    changeAuth('owner-b');
+    telemetryHub.getQueueStorageKey();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(dispatch).not.toHaveBeenCalled();
+    expect(telemetryHub.getQueuedEvents()).toEqual([]);
   });
 
   it('does not send a previous owner pending microtask after an auth switch', async () => {
@@ -115,10 +147,12 @@ describe('Telemetry owner isolation at the production boundary', () => {
     await vi.advanceTimersByTimeAsync(0);
 
     expect(keyA).not.toBe(keyB);
-    const queueA = JSON.parse(localStorage.getItem(keyA) || '[]') as Array<{ payload: TelemetryErrorPayload }>;
-    const queueB = JSON.parse(localStorage.getItem(keyB) || '[]') as Array<{ payload: TelemetryErrorPayload }>;
-    expect(queueA).toHaveLength(1);
-    expect(queueA[0].payload.userId).toBe('owner-a');
+    // Before vault readiness there must be no diagnostic plaintext on disk.
+    // Changing Auth invalidates the volatile old-owner cache instead of
+    // attributing those reports to the new identity.
+    expect(localStorage.getItem(keyA)).toBeNull();
+    expect(localStorage.getItem(keyB)).toBeNull();
+    const queueB = telemetryHub.getQueuedEvents() as Array<{ payload: TelemetryErrorPayload }>;
     expect(queueB).toHaveLength(1);
     expect(queueB[0].payload.userId).toBe('owner-b');
     expect(queueB[0].payload.count).toBe(1);
@@ -144,11 +178,12 @@ describe('Telemetry owner isolation at the production boundary', () => {
     finish(true);
     await inFlightA;
 
-    const ownerA = JSON.parse(localStorage.getItem(keyA) || '[]') as Array<{ payload: TelemetryErrorPayload }>;
-    const ownerB = JSON.parse(localStorage.getItem(keyB) || '[]') as Array<{ payload: TelemetryErrorPayload }>;
-    expect(ownerA).toHaveLength(1); // Retain on auth switch; a lost-ack is safer than cross-owner deletion.
+    // An old in-flight completion cannot mutate the newly active owner's
+    // volatile queue, and no plaintext crosses the owner boundary.
+    expect(localStorage.getItem(keyA)).toBeNull();
+    expect(localStorage.getItem(keyB)).toBeNull();
+    const ownerB = telemetryHub.getQueuedEvents() as Array<{ payload: TelemetryErrorPayload }>;
     expect(ownerB).toHaveLength(1);
-    expect(ownerA[0].payload.userId).toBe('owner-a');
     expect(ownerB[0].payload.userId).toBe('owner-b');
     expect(dispatch).toHaveBeenCalledTimes(1);
   });
