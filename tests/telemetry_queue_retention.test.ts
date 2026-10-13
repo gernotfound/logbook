@@ -194,6 +194,26 @@ describe('Offline technical telemetry data minimization', () => {
     expect(storage.getQueuedEvents()).toHaveLength(1);
   });
 
+  it('merges reports collected during ciphertext failure after the encrypted backup is restored', () => {
+    const sealedKey = protectedDeviceKey('telemetry_queue', 'user:owner-a');
+    const original = new TelemetryQueueStorage(() => 'owner-a');
+    original.replaceQueue([queued('durable', Date.now())]);
+    const savedCiphertext = localStorage.getItem(sealedKey);
+    expect(savedCiphertext).toMatch(/^tlb-sealed:v1:/);
+
+    localStorage.setItem(sealedKey, 'tlb-sealed:v1:invalid-ciphertext');
+    const recovering = new TelemetryQueueStorage(() => 'owner-a');
+    recovering.enqueueItem('event', { ...queued('new', Date.now()).payload, id: 'new' });
+    expect(localStorage.getItem(sealedKey)).toBe('tlb-sealed:v1:invalid-ciphertext');
+    expect(recovering.getQueuedEvents().map(item => item.id)).toEqual(['new']);
+
+    // An independent recovery mechanism restored a valid encrypted backup.
+    localStorage.setItem(sealedKey, savedCiphertext!);
+    expect(recovering.getQueuedEvents().map(item => item.id)).toEqual(['durable', 'new']);
+    expect(JSON.parse(readEncryptedTelemetry('user:owner-a') || '[]')
+      .map((item: QueuedTelemetryItem) => item.id)).toEqual(['durable', 'new']);
+  });
+
   it('does not replace an authenticated but incompatible queue format', () => {
     const storage = new TelemetryQueueStorage(() => 'owner-a');
     const sealedKey = protectedDeviceKey('telemetry_queue', 'user:owner-a');
