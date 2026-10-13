@@ -160,6 +160,27 @@ export function useWorkoutSession() {
         if (currentWorkout.globalStartTime) return true;
         const session = captureSession();
 
+        try {
+            // Preparing a workout is itself an asynchronous domain commit. Starting
+            // it before that write finishes can let the older unstarted snapshot
+            // overwrite the start that follows, even inside the same browser tab.
+            await useAppStore.getState().flushPendingSyncs();
+            if (!isCurrentSession(session) || useAppStore.getState().localPersistenceBlocked
+                || useAppStore.getState().localWorkout?.id !== currentWorkout.id) return false;
+            const prepared = await readLocal(session.owner);
+            if (!isCurrentSession(session) || prepared?.data.activeWorkout?.id !== currentWorkout.id
+                || prepared.data.activeWorkout.globalStartTime) {
+                await showAlert('Impossibile confermare la preparazione locale della sessione. Riapri TheLogBook e riprova.');
+                return false;
+            }
+        } catch (error) {
+            console.error('Preparazione locale del workout non confermata:', error);
+            if (isCurrentSession(session)) {
+                await showAlert('Impossibile confermare il salvataggio locale. La sessione non verrà avviata.');
+            }
+            return false;
+        }
+
         const startedAt = Date.now();
         const hasReadiness = readiness && Object.values(readiness).some(value => value !== undefined);
         const startedWorkout: WorkoutSession = {

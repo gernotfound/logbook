@@ -596,4 +596,21 @@ describe('Workout lifecycle durable recovery regressions', () => {
         expect(readDeviceValueStrict('draft:post-session:' + target.id, owner)).toBeNull();
     });
 
+
+    it('serializes a rapid start after its preparation without requiring an explicit UI flush', async () => {
+        const initial = userData({ activeWorkout: null });
+        await initializeLocal(owner, initial);
+        useAppStore.setState({ userData: initial, dataOwner: owner, localWorkout: null });
+        const { result } = renderHook(() => useWorkoutSession());
+        await act(async () => { await result.current.startFreeWorkout(); });
+        const prepared = useAppStore.getState().localWorkout;
+        expect(prepared?.id).toBeTruthy();
+        await act(async () => { expect(await result.current.confirmWorkoutStart()).toBe(true); });
+        const durable = await readLocal(owner);
+        expect(durable?.data.activeWorkout?.id).toBe(prepared?.id);
+        expect(durable?.data.activeWorkout?.globalStartTime).toBeGreaterThan(0);
+        expect(useAppStore.getState().localPersistenceBlocked).toBe(false);
+        expect(useDialogStore.getState().showAlert).not.toHaveBeenCalled();
+    });
+
 });
