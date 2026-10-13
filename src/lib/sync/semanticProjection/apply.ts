@@ -1,4 +1,5 @@
 import { CURRENT_SYNC_PROTOCOL } from '../../schemaEvolution';
+import { setOwnDataProperty } from '../../utils/object';
 import type { DocumentData } from '../documentProjection';
 import { calculateLoggedMealTotals } from '../../nutrition/calculateLoggedMealTotals';
 import type { FieldStamp, SemanticOperation, StampLike, SyncMeta, VectorClock } from './contracts';
@@ -49,6 +50,7 @@ function guardMatches(doc: DocumentData, operation: SemanticOperation): boolean 
     let target: any = doc;
     for (const segment of operation.guard.path) {
         if (target === null || target === undefined) return false;
+        if (!Object.hasOwn(target, segment)) return false;
         target = target[segment];
     }
     return target === operation.guard.equals;
@@ -89,7 +91,7 @@ function readSemanticValue(doc: DocumentData, docPath: string, path: string[]): 
         const policy = getMergePolicy(docPath, currentPath);
 
         if (policy === 'keyed' || policy === 'ordered-keyed') {
-            const arr = current[path[i]];
+            const arr = Object.hasOwn(current, path[i]) ? current[path[i]] : undefined;
             if (!Array.isArray(arr)) return undefined;
             if (i + 1 >= path.length) return arr;
             const itemId = path[i + 1];
@@ -99,6 +101,7 @@ function readSemanticValue(doc: DocumentData, docPath: string, path: string[]): 
             current = item;
             i++;
         } else {
+            if (!Object.hasOwn(current, path[i])) return undefined;
             if (i === path.length - 1) return current[path[i]];
             current = current[path[i]];
         }
@@ -124,7 +127,7 @@ function applyWinnerToDocument(
         const pol = getMergePolicy(operation.docPath, currentPath);
 
         if (pol === 'keyed' || pol === 'ordered-keyed') {
-            if (!Array.isArray(current[p[i]])) current[p[i]] = [];
+            if (!Object.hasOwn(current, p[i]) || !Array.isArray(current[p[i]])) setOwnDataProperty(current, p[i], []);
             const arr = current[p[i]] as any[];
             const itemId = p[i + 1];
 
@@ -148,7 +151,9 @@ function applyWinnerToDocument(
             current = arr[idx];
             i++;
         } else {
-            if (current[p[i]] === undefined || current[p[i]] === null) current[p[i]] = {};
+            if (!Object.hasOwn(current, p[i]) || current[p[i]] === undefined || current[p[i]] === null) {
+                setOwnDataProperty(current, p[i], {});
+            }
             current = current[p[i]];
         }
     }
@@ -169,7 +174,7 @@ function applyWinnerToDocument(
         return;
     }
     if (operation.isDelete) delete current[lastSeg];
-    else current[lastSeg] = operation.value;
+    else setOwnDataProperty(current, lastSeg, operation.value);
 }
 
 type UpdateCandidate = {
@@ -204,6 +209,7 @@ function candidateGuardMatches(doc: DocumentData, guard: SemanticOperation['guar
     let target: any = doc;
     for (const segment of guard.path) {
         if (target === null || target === undefined) return false;
+        if (!Object.hasOwn(target, segment)) return false;
         target = target[segment];
     }
     return target === guard.equals;
@@ -532,10 +538,10 @@ export function applySemanticOperations(
             for (const [key] of Object.entries(meta.fields)) {
                 if (key.startsWith(prefix)) delete meta.fields[key];
             }
-            for (const item of protectedDescendants) meta.fields[item.key] = item.stamp;
+            for (const item of protectedDescendants) setOwnDataProperty(meta.fields, item.key, item.stamp);
         }
 
-        meta.fields[fk] = nextStamp;
+        setOwnDataProperty(meta.fields, fk, nextStamp);
 
         if (selectedOperation) {
             protectedDescendants

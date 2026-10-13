@@ -16,6 +16,14 @@ export function isPlainObject(value: unknown): value is Record<string, any> {
 }
 
 /**
+ * Preserves dynamic keys as own enumerable data properties, without invoking
+ * inherited setters such as "__proto__" on normal JavaScript objects.
+ */
+export function setOwnDataProperty<T>(target: Record<string, T>, key: string, value: T): void {
+    Object.defineProperty(target, key, { value, enumerable: true, configurable: true, writable: true });
+}
+
+/**
  * Recursively sanitizes data structures by removing properties with `undefined` values.
  * Designed for Firestore payloads to avoid "Unsupported field value: undefined" errors
  * without the CPU and GC overhead of JSON.parse(JSON.stringify(...)).
@@ -61,7 +69,7 @@ export function removeUndefinedValues<T>(value: T, seen?: WeakSet<object>): T {
             const key = keys[i];
             const val = (value as Record<string, any>)[key];
             if (val !== undefined) {
-                result[key] = removeUndefinedValues(val, visited);
+                setOwnDataProperty(result, key, removeUndefinedValues(val, visited));
             }
         }
         return result as unknown as T;

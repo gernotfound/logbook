@@ -24,7 +24,8 @@ export function diffDocuments(
 
         const allProps = new Set([...Object.keys(bDoc), ...Object.keys(dDoc)]);
         for (const prop of allProps) {
-            traverseAndDiff(docPath, [prop], bDoc[prop], dDoc[prop], actorId, seq, clock, ops);
+            traverseAndDiff(docPath, [prop], Object.hasOwn(bDoc, prop) ? bDoc[prop] : undefined,
+                Object.hasOwn(dDoc, prop) ? dDoc[prop] : undefined, actorId, seq, clock, ops);
         }
     }
 
@@ -116,7 +117,9 @@ function traverseAndDiff(
 
         const allKeys = new Set([...Object.keys(effBVal), ...Object.keys(effDVal)]);
         for (const k of allKeys) {
-            traverseAndDiff(docPath, [...currentPath, k], effBVal[k], effDVal[k], actorId, seq, clock, ops);
+            traverseAndDiff(docPath, [...currentPath, k],
+                Object.hasOwn(effBVal, k) ? effBVal[k] : undefined,
+                Object.hasOwn(effDVal, k) ? effDVal[k] : undefined, actorId, seq, clock, ops);
         }
     } else if (policy === 'keyed' || policy === 'ordered-keyed') {
         const bArr = Array.isArray(bVal) ? bVal : [];

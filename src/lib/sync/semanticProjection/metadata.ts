@@ -1,4 +1,5 @@
 import { CURRENT_SYNC_PROTOCOL } from '../../schemaEvolution';
+import { setOwnDataProperty } from '../../utils/object';
 import type { FieldCandidate, FieldStamp, OperationGuard, ReplicaWriter, SemanticOperation, StampLike, SyncMeta, VectorClock } from './contracts';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -15,17 +16,17 @@ export function parseVectorClock(raw: unknown, context: string): VectorClock {
     const clock: VectorClock = {};
     for (const [actor, seq] of Object.entries(raw)) {
         if (!actor.trim()) throw new Error(`Invalid actor ID in ${context}`);
-        clock[actor] = parseSafeSeq(seq, context);
+        setOwnDataProperty(clock, actor, parseSafeSeq(seq, context));
     }
     return clock;
 }
 
 export function coversVectorClock(cover: VectorClock, covered: VectorClock): boolean {
-    return Object.entries(covered).every(([actor, seq]) => (cover[actor] ?? 0) >= seq);
+    return Object.entries(covered).every(([actor, seq]) => (Object.hasOwn(cover, actor) ? cover[actor] : 0) >= seq);
 }
 
 function assertDotCovered(clock: VectorClock, actorId: string, seq: number, context: string): void {
-    if ((clock[actorId] ?? 0) < seq) throw new Error(`Invalid causal dot in ${context}`);
+    if (!Object.hasOwn(clock, actorId) || clock[actorId] < seq) throw new Error(`Invalid causal dot in ${context}`);
 }
 
 function parseGuard(raw: unknown, context: string): OperationGuard | undefined {
@@ -142,7 +143,7 @@ export function parseSyncMeta(raw: unknown): SyncMeta {
             if (candidates.length) fieldStamp.candidates = candidates;
         }
 
-        fields[path] = fieldStamp;
+        setOwnDataProperty(fields, path, fieldStamp);
     }
 
     return {
@@ -198,7 +199,7 @@ export function mergeVectors(...clocks: VectorClock[]): VectorClock {
     const res: VectorClock = {};
     for (const c of clocks) {
         for (const [a, s] of Object.entries(c)) {
-            res[a] = Math.max(res[a] || 0, s);
+            setOwnDataProperty(res, a, Math.max(Object.hasOwn(res, a) ? res[a] : 0, s));
         }
     }
     return res;
