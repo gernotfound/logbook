@@ -18,6 +18,16 @@ beforeAll(async () => {
 beforeEach(async () => { await env.clearFirestore(); });
 afterAll(async () => { await env?.cleanup(); });
 
+it('refuses cloud business reads and writes before first trusted acceptance', async () => {
+  await env.withSecurityRulesDisabled(async context => {
+    await setDoc(doc(context.firestore(), 'users/u'), { profile: { name: 'Preserved' } });
+  });
+  const db = env.authenticatedContext('u', { email_verified: true }).firestore();
+  await assertFails(getDoc(doc(db, 'users/u')));
+  await assertFails(getDoc(doc(db, 'users/u/sync_control/state')));
+  await assertFails(setDoc(doc(db, 'health_consent_withdrawals/u'), mark('active')));
+});
+
 it('keeps withdrawal records server-only even for their owner', async () => {
   const db = env.authenticatedContext('u', { email_verified: true }).firestore();
   await assertFails(getDoc(doc(db, 'health_consent_withdrawals/u')));

@@ -7,7 +7,7 @@ vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackEvent: vi.fn
 
 import { applyDocumentChanges, CloudDataIntegrityError } from '../../src/lib/sync/transactionWriter';
 import type { SemanticOperation } from '../../src/lib/sync/semanticProjection';
-import { registerReplica, asModularFirestore } from './replicaHarness';
+import { registerReplica, seedTrustedConsent, asModularFirestore } from './replicaHarness';
 
 let env: RulesTestEnvironment;
 
@@ -19,7 +19,7 @@ beforeAll(async () => {
     });
 });
 
-beforeEach(() => env.clearFirestore());
+beforeEach(async () => { await env.clearFirestore(); await seedTrustedConsent(env); });
 afterAll(async () => { await env?.cleanup(); });
 
 const profileHeightOp = (seq = 1): SemanticOperation => ({
