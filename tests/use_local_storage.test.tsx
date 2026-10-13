@@ -14,6 +14,18 @@ describe('R4: useLocalStorage Safe Fallback & Strict Serialization Suite', () =>
         vi.restoreAllMocks();
     });
 
+    it('applies an explicit startup override after the preference key changes to the authenticated owner', () => {
+        localStorage.setItem('user:account-navigation', JSON.stringify('training'));
+        const { result, rerender } = renderHook(
+            ({ key, override }: { key: string; override?: 'home' }) =>
+                useLocalStorage<'home' | 'training'>(key, 'home', undefined, override),
+            { initialProps: { key: 'unbound:navigation', override: 'home' as const } },
+        );
+        rerender({ key: 'user:account-navigation', override: 'home' });
+        expect(result.current[0]).toBe('home');
+        expect(localStorage.getItem('user:account-navigation')).toBe(JSON.stringify('home'));
+    });
+
     describe('Valid JSON Retrieval', () => {
         it('returns initialValue when localStorage item is null (key not present)', () => {
             const consoleErrorSpy = vi.spyOn(console, 'error');

@@ -156,7 +156,7 @@ describe('R4: Tab Zod Schema & LocalStorage Fallback Resilience (ARCH-05)', () =
             
             renderWithProviders(<App />);
 
-            const trainingBtn = await screen.findByRole('button', { name: /allenamento/i });
+            const trainingBtn = await screen.findByRole('button', { name: /^allenamento$/i });
             expect(trainingBtn.classList.contains('active')).toBe(true);
         });
 
