@@ -102,7 +102,7 @@ describe('F-004 training history identity integrity', () => {
         const hydrated = applyRemoteDocuments(base, new Map([['history_months/2026-09', month]]), catalog);
         expect(hydrated.history?.find(item => item.id === unusualId)).toMatchObject(workout);
         const projected = projectDocuments(hydrated, catalog).get('history_months/2026-09');
-        expect(Object.hasOwn(projected, unusualId)).toBe(true);
+        expect(Object.hasOwn(projected ?? {}, unusualId)).toBe(true);
         expect(projected?.[unusualId]).toMatchObject(workout);
     });
 
