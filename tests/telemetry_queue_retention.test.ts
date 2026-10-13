@@ -6,7 +6,7 @@ import {
   type QueuedTelemetryItem,
 } from '../src/lib/telemetry/contracts';
 import { TelemetryQueueStorage } from '../src/lib/telemetry/queueStorage';
-import { readEncryptedTelemetry } from '../src/lib/telemetry/secureQueueDevice';
+import { readEncryptedTelemetry, storeEncryptedTelemetry } from '../src/lib/telemetry/secureQueueDevice';
 import { protectedDeviceKey } from '../src/lib/sync/deviceStorage';
 import { createAndMigrateVault } from '../src/lib/sync/secureArchiveMigration';
 import { lockAllVaults, unlockVaultForOwner } from '../src/lib/sync/secureArchiveSession';
@@ -179,6 +179,31 @@ describe('Offline technical telemetry data minimization', () => {
     expect(volatile.getQueuedEvents().map(item => item.id)).toEqual(['durable', 'new']);
     expect(JSON.parse(readEncryptedTelemetry('user:owner-a') || '[]')
       .map((item: QueuedTelemetryItem) => item.id)).toEqual(['durable', 'new']);
+  });
+
+  it('preserves unreadable ciphertext instead of overwriting it on a new report', () => {
+    const storage = new TelemetryQueueStorage(() => 'owner-a');
+    const sealedKey = protectedDeviceKey('telemetry_queue', 'user:owner-a');
+    const tampered = 'tlb-sealed:v1:invalid-ciphertext';
+    localStorage.setItem(sealedKey, tampered);
+
+    storage.enqueueItem('event', queued('new', Date.now()).payload);
+
+    expect(localStorage.getItem(sealedKey)).toBe(tampered);
+    expect(localStorage.getItem(storage.getQueueStorageKey())).toBeNull();
+    expect(storage.getQueuedEvents()).toHaveLength(1);
+  });
+
+  it('does not replace an authenticated but incompatible queue format', () => {
+    const storage = new TelemetryQueueStorage(() => 'owner-a');
+    const sealedKey = protectedDeviceKey('telemetry_queue', 'user:owner-a');
+    expect(storeEncryptedTelemetry('user:owner-a', '{"version":2}')).toBe(true);
+    const previous = localStorage.getItem(sealedKey);
+
+    storage.enqueueItem('event', queued('new', Date.now()).payload);
+
+    expect(localStorage.getItem(sealedKey)).toBe(previous);
+    expect(storage.getQueuedEvents()).toHaveLength(1);
   });
 
   it('never drops unexpired encrypted ciphertext when the wrapping key is locked', () => {
