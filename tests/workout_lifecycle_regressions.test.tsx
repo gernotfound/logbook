@@ -552,10 +552,12 @@ describe('Workout lifecycle durable recovery regressions', () => {
         await initializeLocal(owner, initial);
         useAppStore.setState({ userData: initial, dataOwner: owner, localWorkout: prepared });
         const originalSetter = useAppStore.getState().setSyncedLocalWorkout;
-        const localPending = vi.fn(async (started: WorkoutSession) => {
+        const localPending = vi.fn(async (input: Parameters<typeof originalSetter>[0]) => {
+            const started = typeof input === 'function' ? input(useAppStore.getState().localWorkout) : input;
+            if (!started) throw new Error('Workout atteso non disponibile.');
             await commitDomainOperations(owner, { type: 'active-workout.set', workout: started }, initial);
             useAppStore.setState({ localWorkout: started, userData: userData({ activeWorkout: started }) });
-            return { ok: false as const, status: 'local-pending' as const };
+            return { ok: false as const, status: 'local-pending' as const, error: new Error('offline') };
         });
         useAppStore.setState({ setSyncedLocalWorkout: localPending });
         try {
@@ -572,7 +574,7 @@ describe('Workout lifecycle durable recovery regressions', () => {
         await initializeLocal(owner, initial);
         useAppStore.setState({ userData: initial, dataOwner: owner, localWorkout: prepared });
         const originalSetter = useAppStore.getState().setSyncedLocalWorkout;
-        useAppStore.setState({ setSyncedLocalWorkout: vi.fn(async () => ({ ok: false as const, status: 'local-pending' as const })) });
+        useAppStore.setState({ setSyncedLocalWorkout: vi.fn(async (_input: Parameters<typeof originalSetter>[0]) => ({ ok: false as const, status: 'local-pending' as const, error: new Error('offline') })) });
         vi.mocked(useDialogStore.getState().showAlert).mockResolvedValue();
         try {
             const { result } = renderHook(() => useWorkoutSession());
