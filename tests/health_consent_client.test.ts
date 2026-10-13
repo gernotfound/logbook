@@ -10,7 +10,7 @@ import {
   beginHealthConsentVerification, currentHealthConsentStatus,
   finishHealthConsentReacceptance, isHealthConsentWritable, isHealthConsentCloudWritable,
   getVerifiedHealthConsentRevision,
-  reacceptHealthConsent, refreshHealthConsent, requireHealthConsentWritable,
+  reacceptHealthConsent, refreshHealthConsent, registerInitialHealthConsent, requireHealthConsentWritable,
   withdrawHealthConsent, retainNewerHealthConsent, reconfirmStaleHealthWithdrawal,
   withdrawGuestHealthConsent, beginGuestHealthReacceptance,
   completeGuestHealthReacceptance, getGuestHealthConsentStatus,
@@ -22,26 +22,72 @@ const accepted = { acceptedTerms: true as const, acceptedHealthData: true as con
 
 beforeEach(() => { localStorage.clear(); vi.unstubAllGlobals(); (auth as { currentUser: unknown }).currentUser = null; });
 
+describe('first trusted consent registration', () => {
+  it('denies cloud and offline data access before first server acceptance', async () => {
+    const uid = 'unregistered-' + crypto.randomUUID();
+    const actor = user(uid);
+    (auth as { currentUser: unknown }).currentUser = actor;
+    const fetchMock = vi.fn(async () => Response.json({ status: 'unregistered', revision: 0 }));
+    vi.stubGlobal('fetch', fetchMock);
+    beginHealthConsentVerification(uid);
+    expect(await refreshHealthConsent(actor)).toBe('unregistered');
+    expect(isHealthConsentWritable('user:' + uid)).toBe(false);
+    expect(isHealthConsentCloudWritable('user:' + uid)).toBe(false);
+    expect(() => getVerifiedHealthConsentRevision(uid)).toThrow();
+    expect(fetchMock.mock.calls).toHaveLength(1);
+  });
+
+  it('requires a deliberate POST then a fresh server GET before enabling cloud access', async () => {
+    const uid = 'initial-' + crypto.randomUUID();
+    const actor = user(uid);
+    (auth as { currentUser: unknown }).currentUser = actor;
+    const fetchMock = vi.fn(async (_url: string, init: RequestInit) => init.method === 'POST'
+      ? Response.json({ status: 'active', revision: 1, acceptedAt: '2026-10-13T10:00:00.000Z' })
+      : Response.json(fetchMock.mock.calls.length <= 1 ? { status: 'unregistered', revision: 0 }
+        : { status: 'active', revision: 1, acceptedAt: '2026-10-13T10:00:00.000Z' }));
+    vi.stubGlobal('fetch', fetchMock);
+    beginHealthConsentVerification(uid);
+    expect(await refreshHealthConsent(actor)).toBe('unregistered');
+    expect(await registerInitialHealthConsent(actor, accepted)).toBe('2026-10-13T10:00:00.000Z');
+    expect(isHealthConsentCloudWritable('user:' + uid)).toBe(false);
+    expect(fetchMock.mock.calls[1]?.[1]?.headers).toMatchObject({ 'x-consent-contract': '2' });
+    expect(await refreshHealthConsent(actor)).toBe('active');
+    expect(getVerifiedHealthConsentRevision(uid)).toBe(1);
+    expect(isHealthConsentCloudWritable('user:' + uid)).toBe(true);
+  });
+
+  it('rejects contradictory server states and a changed Firebase owner', async () => {
+    const uid = 'invalid-' + crypto.randomUUID();
+    const actor = user(uid);
+    (auth as { currentUser: unknown }).currentUser = actor;
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json({ status: 'active', revision: 0 })));
+    beginHealthConsentVerification(uid);
+    expect(await refreshHealthConsent(actor)).toBe('error');
+    expect(isHealthConsentCloudWritable('user:' + uid)).toBe(false);
+    await expect(registerInitialHealthConsent(actor, accepted)).rejects.toThrow();
+  });
+});
+
 describe('durable health-consent client barrier', () => {
   it('suspends writes before server verification and when local intent is pending', () => {
     const uid = 'check-' + crypto.randomUUID();
     beginHealthConsentVerification(uid);
     expect(currentHealthConsentStatus(uid)).toBe('checking');
     expect(() => requireHealthConsentWritable('user:' + uid)).toThrow('Accesso fitness sospeso');
-    localStorage.setItem(key(uid), 'pending:0');
+    localStorage.setItem(key(uid), 'pending:1');
     expect(currentHealthConsentStatus(uid)).toBe('pending');
     expect(isHealthConsentWritable('user:' + uid)).toBe(false);
   });
 
   it('does not discard an unsent withdrawal when the server initially reports active', async () => {
     const uid = 'pending-' + crypto.randomUUID();
-    localStorage.setItem(key(uid), 'pending:0');
+    localStorage.setItem(key(uid), 'pending:1');
     const calls: string[] = [];
     vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
       calls.push(init.method ?? 'GET');
       return Response.json(init.method === 'GET'
-        ? { status: 'active', revision: 0 }
-        : { status: 'withdrawn', revision: 1 });
+        ? { status: 'active', revision: 1 }
+        : { status: 'withdrawn', revision: 2 });
     }));
     expect(await refreshHealthConsent(user(uid))).toBe('withdrawn');
     expect(localStorage.getItem(key(uid))).toBe('withdrawn');
@@ -60,12 +106,12 @@ describe('durable health-consent client barrier', () => {
   it('keeps revocation durable across uncertain server failures', async () => {
     const uid = 'offline-' + crypto.randomUUID();
     vi.stubGlobal('fetch', vi.fn(async (_url: string, request: RequestInit) => {
-      if (request.method === 'GET') return Response.json({ status: 'active', revision: 0 });
+      if (request.method === 'GET') return Response.json({ status: 'active', revision: 1 });
       throw new Error('offline');
     }));
     expect(await refreshHealthConsent(user(uid))).toBe('active');
     await expect(withdrawHealthConsent(user(uid))).rejects.toThrow('offline');
-    expect(localStorage.getItem(key(uid))).toBe('pending:0');
+    expect(localStorage.getItem(key(uid))).toBe('pending:1');
     expect(isHealthConsentWritable('user:' + uid)).toBe(false);
   });
 
@@ -131,7 +177,7 @@ describe('overlapping consent verification', () => {
     vi.stubGlobal('fetch', vi.fn(async () => {
       requests += 1;
       if (requests === 1) return new Promise<Response>(resolve => { resolveOlder = resolve; });
-      return Response.json({ status: 'active', revision: 0 });
+      return Response.json({ status: 'active', revision: 1 });
     }));
     const older = refreshHealthConsent(user(uid));
     await vi.waitFor(() => expect(requests).toBe(1));
@@ -144,7 +190,7 @@ describe('overlapping consent verification', () => {
 
   it('preserves a newer pending revocation while keeping remote consent', async () => {
     const uid = 'retain-race-' + crypto.randomUUID();
-    localStorage.setItem(key(uid), 'pending:0');
+    localStorage.setItem(key(uid), 'pending:1');
     let resolveServer!: (response: Response) => void;
     let requests = 0;
     vi.stubGlobal('fetch', vi.fn(async () => {
@@ -166,7 +212,7 @@ describe('overlapping consent verification', () => {
 describe('stale withdrawal explicit reconfirmation', () => {
   it('does not overwrite a newer local decision when the server check was delayed', async () => {
     const uid = 'stale-reconfirm-race-' + crypto.randomUUID();
-    localStorage.setItem(key(uid), 'pending:0');
+    localStorage.setItem(key(uid), 'pending:1');
     let resolveCheck!: (response: Response) => void;
     const methods: string[] = [];
     vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
@@ -207,18 +253,18 @@ describe('withdrawal acknowledgement racing with a newer consent', () => {
     let latestRevision = 0;
     vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
       if (init.method === 'POST') {
-        // The withdrawal committed at rev 1, but another device reaccepted
-        // at rev 2 before this acknowledgement reached the browser.
-        latestRevision = 2;
-        return Response.json({ status: 'withdrawn', revision: 1 });
+        // The withdrawal committed at rev 2, but another device reaccepted
+        // at rev 3 before this acknowledgement reached the browser.
+        latestRevision = 3;
+        return Response.json({ status: 'withdrawn', revision: 2 });
       }
       return Response.json(latestRevision === 0
-        ? { status: 'active', revision: 0 }
-        : { status: 'active', revision: 2, acceptedAt: '2026-10-12T05:00:00.000Z' });
+        ? { status: 'active', revision: 1 }
+        : { status: 'active', revision: 3, acceptedAt: '2026-10-12T05:00:00.000Z' });
     }));
     expect(await refreshHealthConsent(user(uid))).toBe('active');
     await withdrawHealthConsent(user(uid));
-    expect(localStorage.getItem(key(uid))).toBe('pending:0');
+    expect(localStorage.getItem(key(uid))).toBe('pending:1');
     expect(currentHealthConsentStatus(uid)).toBe('stale-request');
     expect(isHealthConsentWritable('user:' + uid)).toBe(false);
     expect(await retainNewerHealthConsent(user(uid))).toBe('active');
@@ -268,7 +314,7 @@ describe('guest reconsent crash recovery', () => {
 describe('stale withdrawal race', () => {
   it('does not retry an outdated withdrawal after another device reaccepted', async () => {
     const uid = 'stale-' + crypto.randomUUID();
-    localStorage.setItem(key(uid), 'pending:0');
+    localStorage.setItem(key(uid), 'pending:1');
     const calls: string[] = [];
     vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
       calls.push(init.method ?? 'GET');
@@ -283,7 +329,7 @@ describe('stale withdrawal race', () => {
 describe('explicit acknowledgement of newer consent from another device', () => {
   it('retains the newer server acceptance without retrying a stale withdrawal', async () => {
     const uid = 'keep-' + crypto.randomUUID();
-    localStorage.setItem(key(uid), 'pending:0');
+    localStorage.setItem(key(uid), 'pending:1');
     const methods: string[] = [];
     vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
       methods.push(init.method ?? 'GET');
@@ -304,7 +350,7 @@ describe('offline consent cache and reconnect privacy boundary', () => {
     (auth as { currentUser: unknown }).currentUser = actor;
     let resolveRecheck!: (response: Response) => void;
     const fetchMock = vi.fn()
-      .mockResolvedValueOnce(Response.json({ status: 'active', revision: 0 }))
+      .mockResolvedValueOnce(Response.json({ status: 'active', revision: 1 }))
       .mockImplementationOnce(() => new Promise<Response>(resolve => { resolveRecheck = resolve; }));
     vi.stubGlobal('fetch', fetchMock);
     const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
@@ -331,7 +377,7 @@ describe('offline consent cache and reconnect privacy boundary', () => {
     const uid = 'cached-' + crypto.randomUUID();
     const actor = user(uid);
     (auth as { currentUser: unknown }).currentUser = actor;
-    const fetchMock = vi.fn(async () => Response.json({ status: 'active', revision: 0 }));
+    const fetchMock = vi.fn(async () => Response.json({ status: 'active', revision: 1 }));
     vi.stubGlobal('fetch', fetchMock);
     const onLine = vi.spyOn(navigator, 'onLine', 'get');
     try {
@@ -399,7 +445,7 @@ describe('offline consent cache and reconnect privacy boundary', () => {
     const actor = user(uid);
     (auth as { currentUser: unknown }).currentUser = actor;
     vi.stubGlobal('fetch', vi.fn()
-      .mockResolvedValueOnce(Response.json({ status: 'active', revision: 0 }))
+      .mockResolvedValueOnce(Response.json({ status: 'active', revision: 1 }))
       .mockRejectedValueOnce(new TypeError('Failed to fetch')));
     const onLine = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
     try {
@@ -418,7 +464,7 @@ describe('offline consent cache and reconnect privacy boundary', () => {
     const actor = user(uid);
     (auth as { currentUser: unknown }).currentUser = actor;
     const fetchMock = vi.fn()
-      .mockResolvedValueOnce(Response.json({ status: 'active', revision: 0 }))
+      .mockResolvedValueOnce(Response.json({ status: 'active', revision: 1 }))
       .mockRejectedValueOnce(new Error('unavailable'));
     vi.stubGlobal('fetch', fetchMock);
     const onLine = vi.spyOn(navigator, 'onLine', 'get');
