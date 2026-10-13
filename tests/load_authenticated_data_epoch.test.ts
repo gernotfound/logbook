@@ -233,4 +233,26 @@ describe('authenticated hydration session fencing', () => {
         expect((await readLocal('user-a'))?.data.profile?.height).toBe('183');
         expect(firstSetUserData).not.toHaveBeenCalled();
     });
+
+    it('does not overwrite an unsaved UI draft with an older readable owner envelope', async () => {
+        await clear();
+        const { loadAuthenticatedData, initializeLocal, invalidateSession } = await loadModules();
+        invalidateSession();
+        await initializeLocal('user:user-a', data('170'));
+        storeState.current = { userData: data('199'), localWorkout: null, localPersistenceBlocked: true };
+        const setSyncing = vi.fn();
+        await loadAuthenticatedData({
+            user: { uid: 'user-a' } as any,
+            isGuestActive: () => false,
+            setUserData: vi.fn(),
+            setSyncing,
+            setSaveError: vi.fn(),
+        });
+        expect(storeState.current.userData?.profile?.height).toBe('199');
+        expect(storeState.current.localPersistenceBlocked).toBe(true);
+        expect(dbState.loadCloudPayload).not.toHaveBeenCalled();
+        expect(setSyncing).not.toHaveBeenCalled();
+        await clear();
+    });
+
 });
