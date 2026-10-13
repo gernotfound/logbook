@@ -12,6 +12,8 @@ export type HealthConsentState = {
   status: 'active' | 'withdrawn' | 'unregistered';
   revision: number;
   acceptedAt?: string;
+  privacyVersion?: string;
+  termsVersion?: string;
 };
 
 function validUid(uid: string): void {
@@ -41,6 +43,9 @@ export async function readHealthConsentState(uid: string, requireRegistration = 
     revision: data.revision,
     ...(data.status === 'active' && typeof data.acceptedAt === 'string'
       ? { acceptedAt: data.acceptedAt } : {}),
+    ...(data.status === 'active' && typeof data.privacyVersion === 'string'
+      && typeof data.termsVersion === 'string'
+      ? { privacyVersion: data.privacyVersion, termsVersion: data.termsVersion } : {}),
   };
 }
 

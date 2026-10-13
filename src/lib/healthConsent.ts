@@ -1,14 +1,17 @@
 import type { User } from 'firebase/auth';
+import type { UserData } from '../types';
+import { LEGAL_VERSIONS } from './legalVersions';
 import { auth, ensureAppCheck } from './firebase';
 import { getLimitedUseAppCheckToken } from './appCheck';
 import { readBrowserValueStrict, removeBrowserValue, writeBrowserValue } from './sync/browserStorage';
 
 export type HealthConsentStatus = 'unregistered' | 'checking' | 'active' | 'withdrawn' | 'pending' | 'reaccepting' | 'recovery-required' | 'stale-request' | 'error';
-type ServerStatus = { status: 'unregistered' | 'active' | 'withdrawn'; revision: number; acceptedAt?: string };
+type ServerStatus = { status: 'unregistered' | 'active' | 'withdrawn'; revision: number; acceptedAt?: string; privacyVersion?: string; termsVersion?: string };
 const API = (import.meta.env.VITE_ACCOUNT_DELETION_API_ORIGIN || 'https://logbook-gnf.vercel.app').replace(/\/$/, '');
 const entries = new Map<string, HealthConsentStatus>();
 const listeners = new Set<() => void>();
 const verifiedReacceptance = new Map<string, string>();
+const serverConfirmedLegal = new Map<string, NonNullable<UserData['legalConsent']>>();
 class ConsentTransportUnavailableError extends Error {
   constructor() { super('Connessione al servizio consensi non disponibile.'); }
 }
@@ -56,6 +59,7 @@ export function beginHealthConsentVerification(uid: string): void {
   invalidateConsentChecks(uid);
   verifiedRevisions.delete(uid);
   onlineVerifiedRevisions.delete(uid);
+  serverConfirmedLegal.delete(uid);
   setStatus(uid, 'checking');
 }
 
@@ -152,6 +156,16 @@ export function isHealthConsentCloudWritable(owner: string): boolean {
   if (auth?.currentUser?.uid !== uid || (typeof navigator !== 'undefined' && navigator.onLine === false)) return false;
   return onlineVerifiedRevisions.get(uid) === verifiedRevisions.get(uid)
     && verifiedRevisions.has(uid);
+}
+
+/**
+ * Only the current online, server-confirmed legal versions can populate the
+ * already-explicitly-accepted legalConsent field without a second prompt.
+ * An untrusted local marker or a cached offline revision cannot do this.
+ */
+export function getServerConfirmedLegalConsent(uid: string): NonNullable<UserData['legalConsent']> | null {
+  if (!isHealthConsentCloudWritable('user:' + uid)) return null;
+  return serverConfirmedLegal.get(uid) ?? null;
 }
 
 /** Keep local editing available when the network drops, but withdraw the
@@ -295,11 +309,13 @@ export async function refreshHealthConsent(user: User): Promise<HealthConsentSta
       // an unsent local withdrawal by accident.
       verifiedRevisions.delete(uid);
       onlineVerifiedRevisions.delete(uid);
+      serverConfirmedLegal.delete(uid);
       if (saved !== null) return currentHealthConsentStatus(uid);
       setStatus(uid, 'unregistered');
       return 'unregistered';
     }
     if (state.status === 'withdrawn') {
+      serverConfirmedLegal.delete(uid);
       writeBrowserValue(marker(uid), 'withdrawn');
       setStatus(uid, 'withdrawn');
       return 'withdrawn';
@@ -354,6 +370,17 @@ export async function refreshHealthConsent(user: User): Promise<HealthConsentSta
     if (!isSameDecision()) return currentHealthConsentStatus(uid);
     verifiedRevisions.set(uid, state.revision);
     onlineVerifiedRevisions.set(uid, state.revision);
+    if (state.privacyVersion === LEGAL_VERSIONS.privacy
+      && state.termsVersion === LEGAL_VERSIONS.terms
+      && typeof state.acceptedAt === 'string' && Number.isFinite(Date.parse(state.acceptedAt))) {
+      serverConfirmedLegal.set(uid, {
+        hasAcceptedTerms: true, hasAcceptedHealthData: true,
+        acceptedAt: state.acceptedAt, privacyVersion: state.privacyVersion,
+        termsVersion: state.termsVersion,
+      });
+    } else {
+      serverConfirmedLegal.delete(uid);
+    }
     if (saved !== null) removeBrowserValue(marker(uid));
     setStatus(uid, 'active');
     return 'active';
