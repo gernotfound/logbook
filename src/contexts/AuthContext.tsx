@@ -596,6 +596,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         };
         document.addEventListener('visibilitychange', handleVisibilityChange);
         window.addEventListener('online', handleVisibilityChange);
+        window.addEventListener('focus', handleVisibilityChange);
         window.addEventListener('offline', handleOffline);
 
         return () => {
@@ -611,6 +612,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             document.removeEventListener('visibilitychange', handleAuthVisibilityChange);
             document.removeEventListener('visibilitychange', handleVisibilityChange);
             window.removeEventListener('online', handleVisibilityChange);
+            window.removeEventListener('focus', handleVisibilityChange);
             window.removeEventListener('offline', handleOffline);
             window.removeEventListener('logbook:health-consent-reactivated', handleConsentReactivated);
         };

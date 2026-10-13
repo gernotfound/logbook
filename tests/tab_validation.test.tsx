@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { screen, renderHook, fireEvent } from '@testing-library/react';
+import { screen, renderHook, fireEvent, act, waitFor } from '@testing-library/react';
 import App from '../src/App';
 import HeaderDashboard from '../src/components/Home/widgets/HeaderDashboard';
 import { defaultMockUserData, renderWithProviders } from './setup';
@@ -15,6 +15,7 @@ import {
 import { useLocalStorage } from '../src/hooks/useLocalStorage';
 import { LOCAL_STORAGE_ACTIVE_TAB, LOCAL_STORAGE_TRAINING_TAB } from '../src/constants';
 import { ownerUiPreferenceKey } from '../src/lib/uiPreferenceKeys';
+import { refreshHealthConsent } from '../src/lib/healthConsent';
 const accountTabKey = ownerUiPreferenceKey('user:test-user-id', LOCAL_STORAGE_ACTIVE_TAB);
 
 describe('R4: Tab Zod Schema & LocalStorage Fallback Resilience (ARCH-05)', () => {
@@ -109,6 +110,14 @@ describe('R4: Tab Zod Schema & LocalStorage Fallback Resilience (ARCH-05)', () =
     });
 
     describe('App Component Fallback on Corrupted LocalStorage', () => {
+        it('issues only one consent check when focus returns to a mounted App', async () => {
+            renderWithProviders(<App />);
+            await screen.findByRole('button', { name: /^home$/i });
+            const beforeFocus = vi.mocked(refreshHealthConsent).mock.calls.length;
+            await act(async () => { window.dispatchEvent(new Event('focus')); });
+            await waitFor(() => expect(vi.mocked(refreshHealthConsent).mock.calls.length).toBe(beforeFocus + 1));
+        });
+
         it('never adopts legacy or another account navigation preferences', async () => {
             window.localStorage.setItem(LOCAL_STORAGE_ACTIVE_TAB, JSON.stringify('training'));
             window.localStorage.setItem(LOCAL_STORAGE_TRAINING_TAB, JSON.stringify('exercises'));

@@ -120,14 +120,11 @@ function App() {
         reconcile();
       }
     };
-    const onFocus = () => { if (document.visibilityState === 'visible') reconcile(); };
+    // AuthProvider owns focus/online/visibility rechecks. Running a second
+    // check here would supersede the first result and briefly fence the UI.
     window.addEventListener('storage', onStorage);
-    window.addEventListener('online', onFocus);
-    window.addEventListener('focus', onFocus);
     return () => {
       window.removeEventListener('storage', onStorage);
-      window.removeEventListener('online', onFocus);
-      window.removeEventListener('focus', onFocus);
     };
   }, [currentUser, isGuest, emailVerificationRequired]);
   useEffect(() => {
