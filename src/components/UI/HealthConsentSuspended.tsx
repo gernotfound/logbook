@@ -43,6 +43,7 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
   const [terms, setTerms] = useState(false);
   const canReaccept = status === 'withdrawn' || status === 'reaccepting';
   const showReacceptForm = status === 'pending' || canReaccept;
+  const statusUnverified = status === 'checking' || status === 'error';
 
   const reaccept = async () => {
     if (!canReaccept || busy) return;
@@ -99,8 +100,10 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
 
   return <main id="auth-overlay" role="main">
     <section className="auth-panel" aria-label="Accesso sospeso" style={{ maxWidth: 560, maxHeight: '90vh', overflowY: 'auto' }}>
-      <h1>Accesso a TheLogBook sospeso</h1>
-      <p>Allenamenti, nutrizione e diario sono sospesi. Per riattivarli serve un nuovo consenso esplicito dopo la conferma della revoca.</p>
+      <h1>{status === 'checking' ? 'Verifica del consenso in corso' : status === 'error' ? 'Verifica del consenso non riuscita' : 'Accesso a TheLogBook sospeso'}</h1>
+      <p>{statusUnverified
+        ? 'L’accesso ai dati è temporaneamente sospeso perché non è stato possibile completare la verifica. Questo stato non significa che tu abbia revocato il consenso.'
+        : 'Allenamenti, nutrizione e diario sono sospesi. Per riattivarli serve un nuovo consenso esplicito dopo la conferma della revoca.'}</p>
       {user === null && <p>Modalità locale: i dati sono salvati solo su questo dispositivo. Non è necessario contattare il server per la revoca.</p>}
       {status === 'checking' && <p role="status">Verifica dello stato sul server in corso…</p>}
       {status === 'error' && <p role="alert">Non è stato possibile verificare lo stato del consenso. L’accesso fitness resta sospeso.</p>}
