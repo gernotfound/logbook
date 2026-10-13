@@ -223,12 +223,14 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
                 }
                 jobs.forEach(job => job.resolve(result));
             } catch (error) {
+                // Preserve the original failing IndexedDB/transport error for the
+                // owning operation before a fail-closed store update notifies listeners.
+                jobs.forEach(job => job.reject(error));
                 if (current() && get().syncGeneration === last.generation && !get().localPersistenceBlocked) {
                     if (isUpdateRequiredError(error)) enterUpdateRequired(error);
                     else if (blockLocalPersistence) set({ localPersistenceBlocked: true, syncHealth: 'failed', saveError: LOCAL_PERSISTENCE_BLOCKED_MESSAGE });
                     else set({ syncHealth: failureStatus, saveError: error instanceof Error ? error.message : 'Impossibile salvare i dati.' });
                 }
-                jobs.forEach(job => job.reject(error));
             } finally {
                 active = [];
                 if (current() && !pending.length && get().compatibilityStatus !== 'update-required') set({ syncing: false });
