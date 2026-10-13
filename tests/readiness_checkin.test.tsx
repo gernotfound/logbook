@@ -110,13 +110,31 @@ describe('pre-session readiness contract', () => {
         // Isolate the clock-boundary check from archive initialization and
         // its asynchronous security bookkeeping.
         const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(startedAt);
-        fireEvent.click(screen.getByRole('button', { name: 'Salta check-in e inizia' }));
-        await waitFor(() => {
-            const started = useAppStore.getState().localWorkout;
-            expect(started?.globalStartTime).toBe(startedAt);
-            expect(started?.date).toBe('2026-09-25');
+        // Diagnostic (temporary): locate the writer of any unexpected persistence
+        // barrier rather than bypassing the boundary in a test.
+        const stopTrace = useAppStore.subscribe((state, previous) => {
+            if (state.localPersistenceBlocked && !previous.localPersistenceBlocked) {
+                console.error('MIDNIGHT TEST blocked-transition', {
+                    saveError: state.saveError,
+                    trace: new Error('blocking writer').stack,
+                });
+            }
         });
-        nowSpy.mockRestore();
+        console.error('MIDNIGHT TEST before start', {
+            blocked: useAppStore.getState().localPersistenceBlocked,
+            saveError: useAppStore.getState().saveError,
+        });
+        try {
+            fireEvent.click(screen.getByRole('button', { name: 'Salta check-in e inizia' }));
+            await waitFor(() => {
+                const started = useAppStore.getState().localWorkout;
+                expect(started?.globalStartTime).toBe(startedAt);
+                expect(started?.date).toBe('2026-09-25');
+            });
+        } finally {
+            stopTrace();
+            nowSpy.mockRestore();
+        }
     });
 
     it('skips the check-in without inventing values', async () => {
