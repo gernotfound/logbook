@@ -13,6 +13,7 @@ import { mergeUserData } from '../src/lib/merge';
 import { applyDomainOperations } from '../src/lib/sync/domainOperations';
 import { applyRemoteDocuments, projectDocuments } from '../src/lib/sync/documentProjection';
 import { initializeLocal, readLocal } from '../src/lib/sync/localRepository';
+import { sanitizeHistoryMonthDocument } from '../src/lib/sync/monthlyIntegrity';
 
 const catalog: CachedGlobalCatalog = {
     manifest: {
@@ -82,6 +83,27 @@ describe('F-004 training history identity integrity', () => {
         const envelope = await readLocal('guest');
         expect(envelope?.data.history?.map(item => item.id)).toEqual(expectedIds);
         expect(envelope?.baseline.history?.map(item => item.id)).toEqual(expectedIds);
+    });
+
+    it('preserves a prototype-named workout identity as an own monthly record without changing the object prototype', () => {
+        // Dynamic business IDs must remain data keys when a remote shard is read.
+        // A normal property assignment would invoke the "__proto__" setter and
+        // silently drop this record from Object.values() during hydration.
+        const unusualId = '__proto__';
+        const workout = { ...validWorkout, id: unusualId };
+        const month = Object.fromEntries([[unusualId, workout]]);
+        const sanitized = sanitizeHistoryMonthDocument('2026-09', month);
+        expect(Object.keys(sanitized)).toEqual([unusualId]);
+        expect(Object.getPrototypeOf(sanitized)).toBe(Object.prototype);
+        expect(Object.hasOwn(sanitized, unusualId)).toBe(true);
+        expect(sanitized[unusualId]).toMatchObject(workout);
+
+        const base = UserDataSchema.parse({}) as unknown as UserData;
+        const hydrated = applyRemoteDocuments(base, new Map([['history_months/2026-09', month]]), catalog);
+        expect(hydrated.history?.find(item => item.id === unusualId)).toMatchObject(workout);
+        const projected = projectDocuments(hydrated, catalog).get('history_months/2026-09');
+        expect(Object.hasOwn(projected ?? {}, unusualId)).toBe(true);
+        expect(projected?.[unusualId]).toMatchObject(workout);
     });
 
     it('does not re-project or re-sync quarantined workouts from history_months', () => {
