@@ -217,7 +217,16 @@ export function useWorkoutSession() {
 
         if (!isCurrentSession(session)) return false;
         if (!result?.ok && result?.status !== 'local-pending') {
-            await showAlert('Impossibile iniziare la sessione: il salvataggio non è stato confermato.');
+            // The device snapshot is already optimistic. A rejected or failed
+            // domain commit must never expose it as a safely started workout.
+            if (useAppStore.getState().localWorkout?.id === currentWorkout.id
+                && useAppStore.getState().localWorkout?.globalStartTime === startedAt) {
+                useAppStore.setState({
+                    localPersistenceBlocked: true, syncHealth: 'failed', syncPresentation: 'normal',
+                    saveError: 'Avvio non confermato nell’archivio locale. Riapri TheLogBook per recuperare la sessione.',
+                });
+            }
+            await showAlert('Impossibile iniziare la sessione: il salvataggio non è stato confermato. Riapri TheLogBook per verificare i dati.');
             return false;
         }
         try {

@@ -2,6 +2,7 @@ import { captureSession } from '../src/lib/sync/session';
 import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { update as updateIndexedDb } from 'idb-keyval';
 import { WorkoutSessionSchema } from '../src/lib/schema';
 import { Exporter } from '../src/lib/export';
 import { createBackup, decodeImport, prepareImport } from '../src/lib/backup';
@@ -212,6 +213,32 @@ describe('pre-session readiness contract', () => {
         const backup = JSON.parse(JSON.stringify(createBackup(data, 'guest')));
         const restored = prepareImport(parseUserData({}), decodeImport(backup, 'guest').data, 'restore').data;
         expect(restored.history?.[0].readiness).toEqual({ capturedAt: 123, energy: 5, muscleRecovery: 3 });
+    });
+
+    it('does not expose a started workout if the optimistic device update outlives a failed IndexedDB commit', async () => {
+        const prepared: WorkoutSession = { id: 'failed-start', date: '2026-09-24', routineName: 'Push', exercises: [] };
+        const data = parseUserData({ activeWorkout: prepared });
+        const owner = captureSession().owner;
+        await initializeLocal(owner, data);
+        useAppStore.setState({
+            userData: data, dataOwner: owner, localWorkout: prepared,
+            localPersistenceBlocked: false, syncHealth: 'synced', saveError: null,
+        });
+        render(<TrainingSession />);
+
+        // Inject a real local commit failure, not a mock SyncResult pretending
+        // persistence succeeded. The original prepared record must survive.
+        vi.mocked(updateIndexedDb).mockRejectedValueOnce(new Error('Injected IndexedDB write failure'));
+        fireEvent.click(screen.getByRole('button', { name: 'Salta check-in e inizia' }));
+        await waitFor(() => expect(useAppStore.getState().localWorkout?.globalStartTime).toBeTypeOf('number'));
+        await act(async () => { await useAppStore.getState().flushPendingSyncs(); });
+
+        await waitFor(() => expect(screen.getByRole('heading', { name: 'Persistenza dell’allenamento non confermata' })).toBeTruthy());
+        expect(screen.queryByRole('button', { name: 'Termina allenamento' })).toBeNull();
+        expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
+        const durable = await readLocal(owner);
+        expect(durable?.data.activeWorkout?.id).toBe('failed-start');
+        expect(durable?.data.activeWorkout?.globalStartTime).toBeUndefined();
     });
 
     it('exports the four readiness dimensions and leaves absent dimensions empty', async () => {
