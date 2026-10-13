@@ -4,7 +4,7 @@ import { useAuth } from './useAuth';
 import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
 import { DB } from '../lib/db';
-import { captureSession, isCurrentSession } from '../lib/sync/session';
+import { captureSession, isCurrentSession, isActiveGuestSession } from '../lib/sync/session';
 import { collectBackupSnapshot } from '../lib/db/backupSnapshot';
 import { readLocal } from '../lib/sync/localRepository';
 import { UserDataSchema } from '../lib/schema';
@@ -184,7 +184,10 @@ export function useSettings() {
             setDeletionPhase('verifying');
             assertCurrent();
             const user = auth.currentUser;
-            if (!user || 'user:' + user.uid !== session.owner) throw new Error('Account cambiato.');
+            if (!user || (session.owner !== 'user:' + user.uid
+                && !(session.owner === 'guest' && isActiveGuestSession()))) {
+                throw new Error('Account cambiato.');
+            }
 
             let reauth = await reauthenticateForSensitiveAction(user);
             if (reauth === 'password-required') {
