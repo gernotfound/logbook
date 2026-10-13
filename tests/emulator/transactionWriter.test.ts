@@ -184,11 +184,12 @@ it('4. V3 API: remote FieldStamp can defeat a concurrent local operation', async
         await setDoc(doc(asModularFirestore(context.firestore()), 'users/a'), {
             profile: { height: '190' },
             _schemaVersion: CURRENT_DATA_SCHEMA,
+            // The remote winner belongs to another valid Protocol 3 replica slot.
             _sync: {
                 protocolVersion: CURRENT_SYNC_PROTOCOL,
-                clock: { z: 1 },
+                clock: { s15: 1 },
                 fields: {
-                    'profile/height': { clock: { z: 1 }, actorId: 'z', seq: 1 }
+                    'profile/height': { clock: { s15: 1 }, actorId: 's15', seq: 1 }
                 },
                 writer: { slot: 's01', replicaId: 'remote-seed', generation: 1, seq: 1 },
             }
