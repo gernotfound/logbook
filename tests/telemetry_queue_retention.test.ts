@@ -214,6 +214,30 @@ describe('Offline technical telemetry data minimization', () => {
       .map((item: QueuedTelemetryItem) => item.id)).toEqual(['durable', 'new']);
   });
 
+  it('does not discard RAM-only reports on a failed post-flush persistence refresh', () => {
+    const sealedKey = protectedDeviceKey('telemetry_queue', 'user:owner-a');
+    const existing = new TelemetryQueueStorage(() => 'owner-a');
+    existing.replaceQueue([queued('durable', Date.now())]);
+    const validCiphertext = localStorage.getItem(sealedKey);
+    expect(validCiphertext).toMatch(/^tlb-sealed:v1:/);
+
+    localStorage.setItem(sealedKey, 'tlb-sealed:v1:invalid-ciphertext');
+    const pending = new TelemetryQueueStorage(() => 'owner-a');
+    pending.enqueueItem('event', { ...queued('volatile', Date.now()).payload, id: 'volatile' });
+    expect(pending.getQueuedEvents().map(item => item.id)).toEqual(['volatile']);
+
+    // A completed transport must not clear a volatile queue when the
+    // durable reconciliation still fails.
+    pending.refreshAfterFlush();
+    expect(localStorage.getItem(sealedKey)).toBe('tlb-sealed:v1:invalid-ciphertext');
+    expect(pending.getQueuedEvents().map(item => item.id)).toEqual(['volatile']);
+
+    localStorage.setItem(sealedKey, validCiphertext!);
+    expect(pending.getQueuedEvents().map(item => item.id)).toEqual(['durable', 'volatile']);
+    expect(JSON.parse(readEncryptedTelemetry('user:owner-a') || '[]')
+      .map((item: QueuedTelemetryItem) => item.id)).toEqual(['durable', 'volatile']);
+  });
+
   it('does not replace an authenticated but incompatible queue format', () => {
     const storage = new TelemetryQueueStorage(() => 'owner-a');
     const sealedKey = protectedDeviceKey('telemetry_queue', 'user:owner-a');
