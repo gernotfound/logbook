@@ -1,5 +1,6 @@
 import type { CachedGlobalCatalog, UserData, WorkoutSession } from '../../../types';
 import { getLocalDateString } from '../../utils/date';
+import { setOwnDataProperty } from '../../utils/object';
 import { projectDocuments, type DocumentData } from '../documentProjection';
 import {
     diffDocuments,
@@ -112,7 +113,7 @@ function collectScope(before: UserData, after: UserData, operations: readonly Do
 function pickDocument(source: DocumentData, keys: Iterable<string>): DocumentData {
     const result: DocumentData = {};
     for (const key of keys) {
-        if (Object.hasOwn(source, key)) result[key] = source[key];
+        if (Object.hasOwn(source, key)) setOwnDataProperty(result, key, source[key]);
     }
     return result;
 }
