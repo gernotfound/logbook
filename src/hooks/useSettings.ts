@@ -182,7 +182,6 @@ export function useSettings() {
             assertCurrent();
             setDeletingAccount(true);
             setDeletionPhase('verifying');
-            const { auth } = await import('../lib/firebase');
             assertCurrent();
             const user = auth.currentUser;
             if (!user || 'user:' + user.uid !== session.owner) throw new Error('Account cambiato.');
