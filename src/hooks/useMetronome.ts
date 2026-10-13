@@ -28,6 +28,10 @@ export function useMetronome(bpm: number): MetronomeController {
     const schedulerRef = useRef<number | null>(null);
     const nextBeatTimeRef = useRef(0);
     const runningRef = useRef(false);
+    // Fences an AudioContext.resume() that completes after stop or unmount.
+    const startGenerationRef = useRef(0);
+    // Rapid taps must share one pending activation, not create two schedulers.
+    const startInFlightRef = useRef<Promise<boolean> | null>(null);
     const bpmRef = useRef(bpm);
     const scheduledOscillatorsRef = useRef(new Set<OscillatorNode>());
 
@@ -93,6 +97,8 @@ export function useMetronome(bpm: number): MetronomeController {
     }, [scheduleClick]);
 
     const stop = useCallback(() => {
+        startGenerationRef.current += 1;
+        startInFlightRef.current = null;
         runningRef.current = false;
         clearScheduler();
         stopScheduledClicks();
@@ -101,43 +107,61 @@ export function useMetronome(bpm: number): MetronomeController {
 
     const start = useCallback(async (): Promise<boolean> => {
         if (runningRef.current) return true;
+        if (startInFlightRef.current) return startInFlightRef.current;
 
-        const AudioContextCtor = getAudioContextConstructor();
-        if (!AudioContextCtor) {
-            setError('Audio non disponibile su questo dispositivo.');
-            return false;
-        }
+        const generation = ++startGenerationRef.current;
+        const activate = async (): Promise<boolean> => {
+            const AudioContextCtor = getAudioContextConstructor();
+            if (!AudioContextCtor) {
+                if (startGenerationRef.current === generation) {
+                    setError('Audio non disponibile su questo dispositivo.');
+                }
+                return false;
+            }
 
+            try {
+                let context = contextRef.current;
+                if (!context || context.state === 'closed') {
+                    context = new AudioContextCtor();
+                    contextRef.current = context;
+                }
+
+                if (context.state !== 'running') {
+                    await context.resume();
+                }
+
+                // A suspended resume can finish after Stop, visibility hide or unmount.
+                // Only the latest start attempt may schedule clicks or mutate UI state.
+                if (startGenerationRef.current !== generation) return false;
+                if (context.state !== 'running') {
+                    throw new Error('Contesto audio non attivo');
+                }
+
+                setError(null);
+                runningRef.current = true;
+                setIsRunning(true);
+                nextBeatTimeRef.current = context.currentTime + 0.03;
+                runScheduler();
+                schedulerRef.current = window.setInterval(runScheduler, LOOKAHEAD_MS);
+                return true;
+            } catch (cause) {
+                if (startGenerationRef.current !== generation) return false;
+                console.error('Impossibile avviare il metronomo:', cause);
+                runningRef.current = false;
+                clearScheduler();
+                stopScheduledClicks();
+                setIsRunning(false);
+                setError('Impossibile avviare il metronomo. Tocca di nuovo Avvia.');
+                return false;
+            }
+        };
+
+        const attempt = activate();
+        startInFlightRef.current = attempt;
         try {
-            let context = contextRef.current;
-            if (!context || context.state === 'closed') {
-                context = new AudioContextCtor();
-                contextRef.current = context;
-            }
-
-            if (context.state !== 'running') {
-                await context.resume();
-            }
-
-            if (context.state !== 'running') {
-                throw new Error('Contesto audio non attivo');
-            }
-
-            setError(null);
-            runningRef.current = true;
-            setIsRunning(true);
-            nextBeatTimeRef.current = context.currentTime + 0.03;
-            runScheduler();
-            schedulerRef.current = window.setInterval(runScheduler, LOOKAHEAD_MS);
-            return true;
-        } catch (cause) {
-            console.error('Impossibile avviare il metronomo:', cause);
-            runningRef.current = false;
-            clearScheduler();
-            stopScheduledClicks();
-            setIsRunning(false);
-            setError('Impossibile avviare il metronomo. Tocca di nuovo Avvia.');
-            return false;
+            return await attempt;
+        } finally {
+            if (startInFlightRef.current === attempt) startInFlightRef.current = null;
         }
     }, [clearScheduler, runScheduler, stopScheduledClicks]);
 
@@ -154,6 +178,8 @@ export function useMetronome(bpm: number): MetronomeController {
 
     useEffect(() => {
         return () => {
+            startGenerationRef.current += 1;
+            startInFlightRef.current = null;
             runningRef.current = false;
             clearScheduler();
             stopScheduledClicks();
