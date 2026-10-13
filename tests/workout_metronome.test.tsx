@@ -1,10 +1,12 @@
 import React from 'react';
-import { act, fireEvent, screen } from '@testing-library/react';
+import { act, fireEvent, renderHook, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import WorkoutTimer from '../src/components/Training/WorkoutTimer';
+import { useMetronome } from '../src/hooks/useMetronome';
 import { renderWithProviders } from './setup';
 
 let audioContextInstance: FakeAudioContext | null = null;
+let releaseResume: (() => void) | null = null;
 let originalAudioContextDescriptor: PropertyDescriptor | undefined;
 
 class FakeAudioContext {
@@ -42,6 +44,16 @@ class FakeAudioContext {
     }
 }
 
+class SlowAudioContext extends FakeAudioContext {
+    state = 'suspended';
+    resume = vi.fn(() => new Promise<void>(resolve => {
+        releaseResume = () => {
+            this.state = 'running';
+            resolve();
+        };
+    }));
+}
+
 const setAudioContext = (value: unknown) => {
     Object.defineProperty(window, 'AudioContext', {
         configurable: true,
@@ -59,6 +71,7 @@ describe('Workout metronome', () => {
     beforeEach(() => {
         localStorage.clear();
         audioContextInstance = null;
+        releaseResume = null;
         originalAudioContextDescriptor = Object.getOwnPropertyDescriptor(window, 'AudioContext');
     });
 
@@ -124,4 +137,87 @@ describe('Workout metronome', () => {
         expect(screen.getByText('Audio non disponibile su questo dispositivo.')).toBeDefined();
         expect(audioContextInstance).toBeNull();
     });
+    it('starts only one scheduler when activation is requested twice before audio resume', async () => {
+        vi.useFakeTimers();
+        setAudioContext(SlowAudioContext as unknown as typeof AudioContext);
+        const { result } = renderHook(() => useMetronome(120));
+        let first!: Promise<boolean>;
+        let second!: Promise<boolean>;
+        act(() => {
+            first = result.current.start();
+            second = result.current.start();
+        });
+        expect((audioContextInstance as SlowAudioContext | null)?.resume).toHaveBeenCalledTimes(1);
+        expect(vi.getTimerCount()).toBe(0);
+
+        await act(async () => {
+            releaseResume?.();
+            expect(await Promise.all([first, second])).toEqual([true, true]);
+        });
+        expect(result.current.isRunning).toBe(true);
+        expect(vi.getTimerCount()).toBe(1);
+        expect((audioContextInstance as SlowAudioContext | null)?.createOscillator).toHaveBeenCalledTimes(1);
+
+        act(() => result.current.stop());
+        expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it('does not resurrect playback when stopped before audio resume settles', async () => {
+        vi.useFakeTimers();
+        setAudioContext(SlowAudioContext as unknown as typeof AudioContext);
+        const { result } = renderHook(() => useMetronome(120));
+        let startPromise!: Promise<boolean>;
+        act(() => {
+            startPromise = result.current.start();
+            result.current.stop();
+        });
+        await act(async () => {
+            releaseResume?.();
+            expect(await startPromise).toBe(false);
+        });
+        expect(result.current.isRunning).toBe(false);
+        expect((audioContextInstance as SlowAudioContext | null)?.createOscillator).not.toHaveBeenCalled();
+        expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it('does not schedule audio after the metronome has unmounted', async () => {
+        vi.useFakeTimers();
+        setAudioContext(SlowAudioContext as unknown as typeof AudioContext);
+        const { result, unmount } = renderHook(() => useMetronome(120));
+        let startPromise!: Promise<boolean>;
+        act(() => { startPromise = result.current.start(); });
+        unmount();
+        await act(async () => {
+            releaseResume?.();
+            expect(await startPromise).toBe(false);
+        });
+        expect((audioContextInstance as SlowAudioContext | null)?.createOscillator).not.toHaveBeenCalled();
+        expect((audioContextInstance as SlowAudioContext | null)?.close).toHaveBeenCalledTimes(1);
+        expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it('cancels a pending audio activation when the page becomes hidden', async () => {
+        vi.useFakeTimers();
+        setAudioContext(SlowAudioContext as unknown as typeof AudioContext);
+        const { result } = renderHook(() => useMetronome(120));
+        let startPromise!: Promise<boolean>;
+        act(() => { startPromise = result.current.start(); });
+
+        const previousVisibility = Object.getOwnPropertyDescriptor(document, 'visibilityState');
+        Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' });
+        try {
+            act(() => { document.dispatchEvent(new Event('visibilitychange')); });
+            await act(async () => {
+                releaseResume?.();
+                expect(await startPromise).toBe(false);
+            });
+            expect(result.current.isRunning).toBe(false);
+            expect((audioContextInstance as SlowAudioContext | null)?.createOscillator).not.toHaveBeenCalled();
+            expect(vi.getTimerCount()).toBe(0);
+        } finally {
+            if (previousVisibility) Object.defineProperty(document, 'visibilityState', previousVisibility);
+            else Reflect.deleteProperty(document, 'visibilityState');
+        }
+    });
+
 });
