@@ -29,10 +29,11 @@ describe('M7 logout isolation with stale deletion receipts', () => {
     const authContext = readFileSync(resolve(process.cwd(), 'src/contexts/AuthContext.tsx'), 'utf8');
     const forcedResets = authContext.match(/resetStore\(\{ force: true \}\)/g) ?? [];
 
+    // Ownerless guest bootstrap adds an explicit, reviewed force-reset path.
     // Every force reset belongs to an explicitly reviewed lifecycle path:
     // cross-tab revocation, recovery cleanup before a new guest generation,
     // a revoked tab's stale UI, guest logout, authenticated logout, or safe unverified-email handoff.
-    expect(forcedResets).toHaveLength(6);
+    expect(forcedResets).toHaveLength(7);
     expect(authContext).toMatch(/const reconcileGuestSession[\s\S]*?resetStore\(\{ force: true \}\)/);
     expect(authContext).toMatch(/if \(readBrowserValueStrict\(GUEST_REVOCATION_KEY\) !== null\)[\s\S]{0,350}await DB\.purgeAllLocalUserData\('guest'\);[\s\S]{0,350}resetStore\(\{ force: true \}\)/);
     expect(authContext).toMatch(/if \(isGuestRef\.current && !isActiveGuestSession\(\)\)[\s\S]{0,300}resetStore\(\{ force: true \}\)/);

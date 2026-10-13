@@ -16,6 +16,7 @@ describe('ARCH-02: createSyncSlice', () => {
         vi.useFakeTimers();
         
         useAppStore.setState({
+            dataOwner: 'user:test-user-id',
             userData: {
                 profile: {},
                 library: [],

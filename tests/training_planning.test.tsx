@@ -178,7 +178,7 @@ describe('Training Planning & Volume Calculations', () => {
                 ],
                 activeCycleId: 'cycle_active'
             };
-            useAppStore.setState({ userData: initialUserData, localWorkout: null });
+            useAppStore.setState({ userData: initialUserData, dataOwner: 'user:test-user-id', localWorkout: null });
         });
 
         it('renders active cycle, MuscleModel, and weekly volume list', () => {
@@ -290,6 +290,7 @@ describe('Training Planning & Volume Calculations', () => {
         it('supports duplicating and deleting a cycle while preserving its strategy', async () => {
             const current = useAppStore.getState().userData!;
             useAppStore.setState({
+                dataOwner: 'user:test-user-id',
                 userData: {
                     ...current,
                     trainingCycles: current.trainingCycles?.map(cycle => ({
@@ -345,6 +346,7 @@ describe('Training Planning & Volume Calculations', () => {
         it('lets an already-used cycle change strategy without rewriting historical session context', async () => {
             const current = useAppStore.getState().userData!;
             useAppStore.setState({
+                dataOwner: 'user:test-user-id',
                 userData: {
                     ...current,
                     trainingCycles: current.trainingCycles?.map(cycle => cycle.id === 'cycle_active'
@@ -440,6 +442,7 @@ describe('Training Planning & Volume Calculations', () => {
 
         it('shows message and navigation to planning when no active cycle is set', () => {
             useAppStore.setState({
+                dataOwner: 'user:test-user-id',
                 userData: {
                     ...useAppStore.getState().userData!,
                     activeCycleId: null

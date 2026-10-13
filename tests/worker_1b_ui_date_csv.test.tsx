@@ -17,6 +17,7 @@ describe('Worker 1B: UI/UX, Date Navigation, CSV Export & PWA Fixes', () => {
         vi.clearAllMocks();
         localStorage.clear();
         useAppStore.setState({
+            dataOwner: 'user:test-user-id',
             userData: {
                 profile: { gender: 'M' },
                 library: [{ id: 'ex_1', name: 'Panca piana', setsCount: 3, sets: [] }],
@@ -260,6 +261,7 @@ describe('Worker 1B: UI/UX, Date Navigation, CSV Export & PWA Fixes', () => {
             };
 
             useAppStore.setState({
+                dataOwner: 'user:test-user-id',
                 userData: {
                     ...useAppStore.getState().userData!,
                     history: [historicalWorkout]
