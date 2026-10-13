@@ -179,6 +179,8 @@ describe('trusted initial account health consent registration', () => {
       privacyVersion: acceptance.privacyVersion, termsVersion: acceptance.termsVersion,
       acceptedAt: value.acceptedAt });
     expect(await recordInitialHealthConsentAcceptance('account-1', acceptance)).toEqual(value);
+    expect(await readHealthConsentState('account-1', true)).toMatchObject({ status: 'active', revision: 1,
+      acceptedAt: value.acceptedAt, privacyVersion: acceptance.privacyVersion, termsVersion: acceptance.termsVersion });
     expect(storage.documents.size).toBe(1);
   });
 

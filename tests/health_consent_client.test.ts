@@ -8,7 +8,7 @@ vi.mock('../src/lib/appCheck', () => ({ getLimitedUseAppCheckToken: vi.fn(async 
 
 import {
   beginHealthConsentVerification, currentHealthConsentStatus,
-  finishHealthConsentReacceptance, isHealthConsentWritable, isHealthConsentCloudWritable,
+  finishHealthConsentReacceptance, isHealthConsentWritable, isHealthConsentCloudWritable, getServerConfirmedLegalConsent,
   getVerifiedHealthConsentRevision,
   reacceptHealthConsent, refreshHealthConsent, registerInitialHealthConsent, requireHealthConsentWritable,
   withdrawHealthConsent, retainNewerHealthConsent, reconfirmStaleHealthWithdrawal,
@@ -44,7 +44,8 @@ describe('first trusted consent registration', () => {
     const fetchMock = vi.fn(async (_url: string, init: RequestInit) => init.method === 'POST'
       ? Response.json({ status: 'active', revision: 1, acceptedAt: '2026-10-13T10:00:00.000Z' })
       : Response.json(fetchMock.mock.calls.length <= 1 ? { status: 'unregistered', revision: 0 }
-        : { status: 'active', revision: 1, acceptedAt: '2026-10-13T10:00:00.000Z' }));
+        : { status: 'active', revision: 1, acceptedAt: '2026-10-13T10:00:00.000Z',
+          privacyVersion: accepted.privacyVersion, termsVersion: accepted.termsVersion }));
     vi.stubGlobal('fetch', fetchMock);
     beginHealthConsentVerification(uid);
     expect(await refreshHealthConsent(actor)).toBe('unregistered');
@@ -53,6 +54,9 @@ describe('first trusted consent registration', () => {
     expect(fetchMock.mock.calls[1]?.[1]?.headers).toMatchObject({ 'x-consent-contract': '2' });
     expect(await refreshHealthConsent(actor)).toBe('active');
     expect(getVerifiedHealthConsentRevision(uid)).toBe(1);
+    expect(getServerConfirmedLegalConsent(uid)).toMatchObject({ hasAcceptedTerms: true,
+      hasAcceptedHealthData: true, acceptedAt: '2026-10-13T10:00:00.000Z',
+      privacyVersion: accepted.privacyVersion, termsVersion: accepted.termsVersion });
     expect(isHealthConsentCloudWritable('user:' + uid)).toBe(true);
   });
 

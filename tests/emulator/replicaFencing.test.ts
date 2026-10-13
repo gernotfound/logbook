@@ -56,6 +56,7 @@ it('fences an old replica generation after an expired slot is reused', async () 
     await env.withSecurityRulesDisabled(async context => {
         await setDoc(doc(asModularFirestore(context.firestore()), 'users/' + uid + '/sync_control/state'), {
             protocolVersion: 3,
+            consentRevision: 1,
             replicas: {
                 s00: {
                     replicaId: 'old-replica',
@@ -83,6 +84,7 @@ it('fences an old replica generation after an expired slot is reused', async () 
 
     await assertSucceeds(setDoc(controlRef, {
         protocolVersion: 3,
+        consentRevision: 1,
         replicas: { s00: newReplica },
         mutation: { slot: 's00', action: 'reuse-expired' },
     }));
@@ -140,6 +142,7 @@ it('rejects Protocol 1/2 writers both before and after the account creates its r
     const controlRef = doc(db, 'users/' + uid + '/sync_control/state');
     await assertSucceeds(setDoc(controlRef, {
         protocolVersion: 3,
+        consentRevision: 1,
         replicas: {
             s00: {
                 replicaId: 'current-replica',
