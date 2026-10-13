@@ -3,6 +3,10 @@ import { afterAll, beforeAll, beforeEach, expect, it, vi } from 'vitest';
 import { initializeTestEnvironment, type RulesTestEnvironment } from '@firebase/rules-unit-testing';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 
+vi.mock('../../src/lib/healthConsent', async () => ({
+    ...(await vi.importActual<typeof import('../../src/lib/healthConsent')>('../../src/lib/healthConsent')),
+    getVerifiedHealthConsentRevision: () => 1,
+}));
 vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackEvent: vi.fn(), trackError: vi.fn() } }));
 
 import { applyDocumentChanges, CloudDataIntegrityError } from '../../src/lib/sync/transactionWriter';

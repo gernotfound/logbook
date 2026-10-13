@@ -69,6 +69,7 @@ import {
     adoptReplicaCheckpoint,
     commitLocal,
     initializeLocal,
+    advanceLocalConsentRevisionIfClean,
     readLocal,
     type LocalEnvelope,
 } from '../../src/lib/sync/localRepository';
@@ -113,6 +114,7 @@ beforeEach(async () => {
     acknowledgeHarness.before = undefined;
     acknowledgeHarness.after = undefined;
     await initializeLocal(owner, data(170));
+    if (!await advanceLocalConsentRevisionIfClean(owner, 1)) throw new Error('Consent fixture is not clean');
 });
 
 afterEach(async () => {

@@ -24,7 +24,7 @@ vi.mock('../../src/lib/healthConsent', async () => {
 });
 vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackEvent: vi.fn(), trackError: vi.fn() } }));
 import { DB as RealDB } from '../../src/lib/db';
-import { adoptReplicaCheckpoint, readLocal, initializeLocal, commitLocal } from '../../src/lib/sync/localRepository';
+import { adoptReplicaCheckpoint, advanceLocalConsentRevisionIfClean, readLocal, initializeLocal, commitLocal } from '../../src/lib/sync/localRepository';
 import { seedTrustedConsent, registerReplica } from './replicaHarness';
 import { CURRENT_DATA_SCHEMA, CURRENT_SYNC_PROTOCOL } from '../../src/lib/schemaEvolution';
 const DB = {
@@ -44,6 +44,7 @@ beforeAll(async () => {
 beforeEach(async () => { await env.clearFirestore(); await seedTrustedConsent(env); await clear(); DB.resetCache(); sdk.db = env.authenticatedContext('a', { email_verified: true }).firestore(); sdk.auth.currentUser = { uid: 'a' }; });
 afterAll(async () => { await env?.cleanup(); vi.unstubAllGlobals(); });
 async function prepareReplica() {
+    if (!await advanceLocalConsentRevisionIfClean('user:a', 1)) throw new Error('Consent fixture is not clean');
     const replica = await registerReplica(sdk.db, 'a');
     await adoptReplicaCheckpoint('user:a', { identity: replica, baseSeq: 0 }, { clock: {}, syncMetaByDocument: {} });
 }
