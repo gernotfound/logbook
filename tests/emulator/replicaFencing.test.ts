@@ -107,7 +107,7 @@ it('fences an old replica generation after an expired slot is reused', async () 
                 protocolVersion: 3,
                 clock: { s00: seq },
                 fields: {},
-                writer: { slot: 's00', replicaId, generation, seq },
+                writer: { slot: 's00', replicaId, generation, seq, consentRevision: 1 },
             },
         });
         return batch.commit();
@@ -174,7 +174,7 @@ it('rejects Protocol 1/2 writers both before and after the account creates its r
             protocolVersion: 3,
             clock: { s00: 1 },
             fields: {},
-            writer: { slot: 's00', replicaId: 'current-replica', generation: 1, seq: 1 },
+            writer: { slot: 's00', replicaId: 'current-replica', generation: 1, consentRevision: 1, seq: 1 },
         },
     });
     await assertSucceeds(baselineBatch.commit());
@@ -197,7 +197,7 @@ it('rejects Protocol 1/2 writers both before and after the account creates its r
                 protocolVersion,
                 clock: { s00: 2 },
                 fields: {},
-                writer: { slot: 's00', replicaId: 'current-replica', generation: 1, seq: 2 },
+                writer: { slot: 's00', replicaId: 'current-replica', generation: 1, consentRevision: 1, seq: 2 },
             },
         });
         await assertFails(legacyBatch.commit());
