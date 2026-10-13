@@ -56,6 +56,16 @@ service cloud.firestore {
       return monthId.matches('^[0-9]{4}-(0[1-9]|1[0-2])$');
     }
 
+    // Dynamic monthly entries cannot be traversed by Firestore Rules.
+    // Bound shard cardinality and continue validating individual entries in Zod.
+    function boundedHistoryMonth(docData) {
+      return docData.keys().size() >= 2 && docData.keys().size() <= 258;
+    }
+
+    function boundedNutritionMonth(docData) {
+      return docData.keys().size() >= 2 && docData.keys().size() <= 33;
+    }
+
     function incomingData() {
       return request.resource.data;
     }
@@ -548,6 +558,7 @@ service cloud.firestore {
         allow create, update: if isWritableOwner(userId)
           && isValidMonthId(monthId)
           && incomingData() is map
+          && boundedHistoryMonth(incomingData())
           && isValidDataSchema(incomingData())
           && preservesDataSchema()
           && isValidSync(incomingData())
@@ -561,6 +572,7 @@ service cloud.firestore {
         allow create, update: if isWritableOwner(userId)
           && isValidMonthId(monthId)
           && incomingData() is map
+          && boundedNutritionMonth(incomingData())
           && isValidDataSchema(incomingData())
           && preservesDataSchema()
           && isValidSync(incomingData())
