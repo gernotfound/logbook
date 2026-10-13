@@ -68,7 +68,11 @@ export function sanitizeHistoryMonthDocument(month: string, data: Record<string,
             const workout = WorkoutSessionSchema.parse(raw) as WorkoutSession;
             assertWorkoutSessionIdentities(workout, `Shard storico ${month}/${key}`);
             if (requireCanonicalWorkoutDate(workout).slice(0, 7) !== month) continue;
-            sanitized[id] = { ...workout, id };
+            // Dynamic workout IDs are business keys, not object prototype setters.
+            // Object.defineProperty preserves e.g. "__proto__" as an own, enumerable entry.
+            Object.defineProperty(sanitized, id, {
+                value: { ...workout, id }, enumerable: true, configurable: true, writable: true,
+            });
         } catch {
             continue;
         }
