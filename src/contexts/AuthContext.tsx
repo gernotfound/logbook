@@ -431,6 +431,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 if (!isCurrentRun()) return;
             }
             // Expose identity only after the local archive can be safely read.
+            if (user) setEmailVerificationRequired(false);
             setCurrentUser(user);
             if (user) {
                 // Hydration/migration and all cloud business writes must wait for

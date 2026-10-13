@@ -2,12 +2,16 @@ import { readFileSync } from 'node:fs';
 import { afterAll, beforeAll, beforeEach, expect, it, vi } from 'vitest';
 import { initializeTestEnvironment, type RulesTestEnvironment } from '@firebase/rules-unit-testing';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
+vi.mock('../../src/lib/healthConsent', async () => ({
+    ...(await vi.importActual<typeof import('../../src/lib/healthConsent')>('../../src/lib/healthConsent')),
+    getVerifiedHealthConsentRevision: () => 1,
+}));
 vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackEvent: vi.fn(), trackError: vi.fn() } }));
 
 import { applyDocumentChanges } from '../../src/lib/sync/transactionWriter';
 import { type SemanticOperation } from '../../src/lib/sync/semanticProjection';
 import { CURRENT_DATA_SCHEMA, CURRENT_SYNC_PROTOCOL, FutureVersionError, LegacyVersionError } from '../../src/lib/schemaEvolution';
-import { registerReplica, asModularFirestore } from './replicaHarness';
+import { seedTrustedConsent, registerReplica, asModularFirestore } from './replicaHarness';
 
 let env: RulesTestEnvironment;
 
@@ -16,7 +20,7 @@ beforeAll(async () => {
     env = await initializeTestEnvironment({ projectId: 'demo-logbook-audit', firestore: { host: '127.0.0.1', port: 8080, rules: readFileSync('firestore.rules', 'utf8') } });
 });
 
-beforeEach(() => env.clearFirestore());
+beforeEach(async () => { await env.clearFirestore(); await seedTrustedConsent(env); });
 afterAll(async () => { await env?.cleanup(); });
 
 it('1. V3 API: writes business data, FieldStamp metadata and the current data schema marker', async () => {

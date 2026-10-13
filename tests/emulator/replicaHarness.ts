@@ -1,4 +1,16 @@
 import { doc, getDoc, setDoc, type Firestore } from 'firebase/firestore';
+import type { RulesTestEnvironment } from '@firebase/rules-unit-testing';
+
+/** Test-only Firebase Admin fixture. A normal client cannot write this proof. */
+export async function seedTrustedConsent(env: RulesTestEnvironment, uid = 'a', revision = 1): Promise<void> {
+    await env.withSecurityRulesDisabled(async context => {
+        await setDoc(doc(asModularFirestore(context.firestore()), `health_consent_withdrawals/${uid}`), {
+            uid, status: 'active', revision,
+            privacyVersion: '1.3.4', termsVersion: '1.2.1',
+            acceptedAt: '2026-10-13T00:00:00.000Z',
+        });
+    });
+}
 import type { ReplicaIdentity } from '../../src/lib/sync/replicaProtocol';
 import type { VectorClock } from '../../src/lib/sync/semanticProjection';
 
@@ -30,6 +42,7 @@ export async function registerReplica(
     const previous = snapshot.exists() ? snapshot.data() : undefined;
     await setDoc(ref, {
         protocolVersion: 3,
+        consentRevision: 1,
         replicas: {
             ...(previous?.replicas ?? {}),
             [slot]: {

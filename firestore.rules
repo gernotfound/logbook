@@ -22,11 +22,10 @@ service cloud.firestore {
     // A server-only revocation record cannot be undone by a stale client update
     // to users/{uid}. Reads remain available for lawful export and account rights.
     function consentWithdrawn(userId) {
-      // Absence means this account has never withdrawn. Once a record exists,
-      // ONLY a valid 'active' revision may resume reads or writes; a corrupt
-      // server record must not silently bypass revocation.
+      // Missing first-acceptance evidence fails closed. Only the trusted
+      // backend may create or reactivate a consent record for this UID.
       let record = /databases/$(database)/documents/health_consent_withdrawals/$(userId);
-      return exists(record) && (
+      return !exists(record) || (
         !('status' in get(record).data)
         || get(record).data.status != 'active'
         || !('revision' in get(record).data)
@@ -40,7 +39,7 @@ service cloud.firestore {
     // their old queued journal after the user has explicitly reaccepted.
     function matchesConsentEpoch(userId, candidate) {
       let record = /databases/$(database)/documents/health_consent_withdrawals/$(userId);
-      return !exists(record) || (
+      return exists(record) && (
         get(record).data.status == 'active'
         && 'consentRevision' in candidate
         && candidate.consentRevision is int
@@ -391,6 +390,7 @@ service cloud.firestore {
           'count',
           'firstSeen',
           'lastSeen',
+          'consentRevision',
           'expireAt'
         ])
         && 'timestamp' in docData
@@ -444,6 +444,7 @@ service cloud.firestore {
           'userId',
           'sessionId',
           'details',
+          'consentRevision',
           'expireAt'
         ])
         && 'timestamp' in docData
@@ -468,6 +469,7 @@ service cloud.firestore {
           'platform',
           'standalone',
           'persisted',
+          'consentRevision',
           'expireAt'
         ])
         && 'type' in docData

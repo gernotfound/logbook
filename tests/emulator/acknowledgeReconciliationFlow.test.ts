@@ -34,7 +34,7 @@ vi.mock('../../src/lib/firebase', () => ({
     waitForPendingWrites: async () => {},
 }));
 // This suite exercises legacy sync/reconciliation under an already-authorized
-// authenticated account (server revision 0). Consent revocation and epoch
+// authenticated account (server revision 1). Consent revocation and epoch
 // enforcement are tested separately with the real policy and emulator Rules.
 vi.mock('../../src/lib/healthConsent', async () => {
     const actual = await vi.importActual<typeof import('../../src/lib/healthConsent')>('../../src/lib/healthConsent');
@@ -46,7 +46,7 @@ vi.mock('../../src/lib/healthConsent', async () => {
         requireHealthConsentWritable: (owner: string) => {
             if (!writable(owner)) throw new Error('Utente non autorizzato dal consenso');
         },
-        getVerifiedHealthConsentRevision: () => 0,
+        getVerifiedHealthConsentRevision: () => 1,
     };
 });
 vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackEvent: vi.fn(), trackError: vi.fn() } }));
@@ -69,6 +69,7 @@ import {
     adoptReplicaCheckpoint,
     commitLocal,
     initializeLocal,
+    advanceLocalConsentRevisionIfClean,
     readLocal,
     type LocalEnvelope,
 } from '../../src/lib/sync/localRepository';
@@ -77,7 +78,7 @@ import { invalidateSession } from '../../src/lib/sync/session';
 import { projectDocuments, type DocumentData } from '../../src/lib/sync/documentProjection';
 import { diffDocuments } from '../../src/lib/sync/semanticProjection';
 import { applyDocumentChanges } from '../../src/lib/sync/transactionWriter';
-import { registerReplica, asModularFirestore } from './replicaHarness';
+import { seedTrustedConsent, registerReplica, asModularFirestore } from './replicaHarness';
 
 const owner = 'user:a';
 const remoteActor = 's01';
@@ -106,12 +107,14 @@ beforeAll(async () => {
 beforeEach(async () => {
     await clear();
     await env.clearFirestore();
+    await seedTrustedConsent(env);
     invalidateSession();
     firebaseHarness.auth.currentUser = { uid: 'a' };
     firebaseHarness.db = asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore());
     acknowledgeHarness.before = undefined;
     acknowledgeHarness.after = undefined;
     await initializeLocal(owner, data(170));
+    if (!await advanceLocalConsentRevisionIfClean(owner, 1)) throw new Error('Consent fixture is not clean');
 });
 
 afterEach(async () => {

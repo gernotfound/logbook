@@ -30,6 +30,8 @@ Object.defineProperty(navigator, 'locks', {
 vi.mock('../src/lib/healthConsent', () => ({
   subscribeHealthConsent: vi.fn(() => () => {}),
   currentHealthConsentStatus: vi.fn(() => 'active'),
+  getServerConfirmedLegalConsent: vi.fn(() => null),
+  registerInitialHealthConsent: vi.fn(),
   beginHealthConsentVerification: vi.fn(),
   refreshHealthConsent: vi.fn(async () => 'active'),
   refreshHealthConsentFromStorage: vi.fn(),

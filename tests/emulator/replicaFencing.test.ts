@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { afterAll, beforeAll, beforeEach, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, expect, it, vi } from 'vitest';
 import {
     assertFails,
     assertSucceeds,
@@ -7,8 +7,12 @@ import {
     type RulesTestEnvironment,
 } from '@firebase/rules-unit-testing';
 import { doc, getDoc, setDoc, writeBatch } from 'firebase/firestore';
+vi.mock('../../src/lib/healthConsent', async () => ({
+    ...(await vi.importActual<typeof import('../../src/lib/healthConsent')>('../../src/lib/healthConsent')),
+    getVerifiedHealthConsentRevision: () => 1,
+}));
 import { claimReplicaCheckpoint } from '../../src/lib/sync/replicaProtocol';
-import { asModularFirestore } from './replicaHarness';
+import { seedTrustedConsent, asModularFirestore } from './replicaHarness';
 
 let env: RulesTestEnvironment;
 
@@ -22,7 +26,7 @@ beforeAll(async () => {
     });
 });
 
-beforeEach(() => env.clearFirestore());
+beforeEach(async () => { await env.clearFirestore(); await seedTrustedConsent(env); });
 afterAll(async () => { await env?.cleanup(); });
 
 it('deduplicates concurrent first claims from tabs sharing one local actor identity', async () => {
@@ -52,6 +56,7 @@ it('fences an old replica generation after an expired slot is reused', async () 
     await env.withSecurityRulesDisabled(async context => {
         await setDoc(doc(asModularFirestore(context.firestore()), 'users/' + uid + '/sync_control/state'), {
             protocolVersion: 3,
+            consentRevision: 1,
             replicas: {
                 s00: {
                     replicaId: 'old-replica',
@@ -79,6 +84,7 @@ it('fences an old replica generation after an expired slot is reused', async () 
 
     await assertSucceeds(setDoc(controlRef, {
         protocolVersion: 3,
+        consentRevision: 1,
         replicas: { s00: newReplica },
         mutation: { slot: 's00', action: 'reuse-expired' },
     }));
@@ -101,7 +107,7 @@ it('fences an old replica generation after an expired slot is reused', async () 
                 protocolVersion: 3,
                 clock: { s00: seq },
                 fields: {},
-                writer: { slot: 's00', replicaId, generation, seq },
+                writer: { slot: 's00', replicaId, generation, seq, consentRevision: 1 },
             },
         });
         return batch.commit();
@@ -136,6 +142,7 @@ it('rejects Protocol 1/2 writers both before and after the account creates its r
     const controlRef = doc(db, 'users/' + uid + '/sync_control/state');
     await assertSucceeds(setDoc(controlRef, {
         protocolVersion: 3,
+        consentRevision: 1,
         replicas: {
             s00: {
                 replicaId: 'current-replica',
@@ -167,7 +174,7 @@ it('rejects Protocol 1/2 writers both before and after the account creates its r
             protocolVersion: 3,
             clock: { s00: 1 },
             fields: {},
-            writer: { slot: 's00', replicaId: 'current-replica', generation: 1, seq: 1 },
+            writer: { slot: 's00', replicaId: 'current-replica', generation: 1, consentRevision: 1, seq: 1 },
         },
     });
     await assertSucceeds(baselineBatch.commit());
@@ -190,7 +197,7 @@ it('rejects Protocol 1/2 writers both before and after the account creates its r
                 protocolVersion,
                 clock: { s00: 2 },
                 fields: {},
-                writer: { slot: 's00', replicaId: 'current-replica', generation: 1, seq: 2 },
+                writer: { slot: 's00', replicaId: 'current-replica', generation: 1, consentRevision: 1, seq: 2 },
             },
         });
         await assertFails(legacyBatch.commit());
