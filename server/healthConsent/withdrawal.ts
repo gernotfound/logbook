@@ -9,7 +9,7 @@ export class HealthConsentRevisionConflictError extends Error {
 }
 
 export type HealthConsentState = {
-  status: 'active' | 'withdrawn';
+  status: 'active' | 'withdrawn' | 'unregistered';
   revision: number;
   acceptedAt?: string;
 };
@@ -24,10 +24,13 @@ function consentRef(uid: string) {
   return adminDb().collection(CONSENT_COLLECTION).doc(uid);
 }
 
-export async function readHealthConsentState(uid: string): Promise<HealthConsentState> {
+export async function readHealthConsentState(uid: string, requireRegistration = false): Promise<HealthConsentState> {
   validUid(uid);
   const snap = await consentRef(uid).get();
-  if (!snap.exists) return { status: 'active', revision: 0 };
+  // Older deployed clients still read the legacy revision-0 state during
+  // phase one. Versioned clients explicitly request the authoritative state;
+  // Rules enforcement is activated only after this backend is Production-ready.
+  if (!snap.exists) return { status: requireRegistration ? 'unregistered' : 'active', revision: 0 };
   const data = snap.data();
   if (!data || (data.status !== 'active' && data.status !== 'withdrawn')
     || !Number.isSafeInteger(data.revision) || data.revision < 1) {
@@ -92,6 +95,48 @@ export function validateExplicitAcceptance(value: unknown): asserts value is Exp
     || input.termsVersion !== LEGAL_VERSIONS.terms) {
     throw new Error('Accettazione esplicita e versioni legali correnti obbligatorie.');
   }
+}
+
+
+/**
+ * First consent is a server-authenticated, explicit one-time transition.
+ * A client-controlled users/{uid}.legalConsent field is never evidence.
+ * Revision 1 makes all later withdrawals/reacceptances use the same CAS
+ * and stale-epoch fencing already used by the established protocol.
+ */
+export async function recordInitialHealthConsentAcceptance(
+  uid: string, acceptance: ExplicitConsentAcceptance,
+): Promise<HealthConsentState> {
+  validUid(uid);
+  validateExplicitAcceptance(acceptance);
+  const db = adminDb();
+  return db.runTransaction(async tx => {
+    const deletion = db.collection('account_deletions').doc(uid);
+    const consent = consentRef(uid);
+    const [job, previousSnap] = await Promise.all([tx.get(deletion), tx.get(consent)]);
+    if (job.exists) throw new Error('Cancellazione account in corso.');
+    const previous = previousSnap.data();
+    if (previousSnap.exists) {
+      // Retry only the same first acceptance. A later withdrawal must not be
+      // silently overturned by a delayed registration POST.
+      if (previous?.status === 'active'
+        && previous.revision === 1
+        && previous.privacyVersion === acceptance.privacyVersion
+        && previous.termsVersion === acceptance.termsVersion
+        && typeof previous.acceptedAt === 'string') {
+        return { status: 'active', revision: 1, acceptedAt: previous.acceptedAt };
+      }
+      throw new HealthConsentRevisionConflictError();
+    }
+    const now = Timestamp.now();
+    const acceptedAt = now.toDate().toISOString();
+    tx.create(consent, {
+      uid, status: 'active', revision: 1, acceptedAt, updatedAt: now,
+      privacyVersion: acceptance.privacyVersion,
+      termsVersion: acceptance.termsVersion,
+    });
+    return { status: 'active', revision: 1, acceptedAt };
+  });
 }
 
 /** Re-consent is explicit, server-authenticated and monotonic; no client may edit the marker. */

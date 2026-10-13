@@ -45,6 +45,7 @@ vi.mock('../server/accountDeletion/firebaseAdmin', () => ({
 import { GET, OPTIONS, POST } from '../api/health-consent';
 import {
   readHealthConsentState, recordHealthConsentWithdrawal,
+  recordInitialHealthConsentAcceptance,
   recordHealthConsentReacceptance, removeHealthConsentStateForDeletedAccount,
 } from '../server/healthConsent/withdrawal';
 
@@ -148,5 +149,58 @@ describe('reacceptance compare-and-set', () => {
     expect(response.status).toBe(409);
     expect((await readHealthConsentState('account-1')).status).toBe('withdrawn');
     expect(await recordHealthConsentReacceptance('account-1', acceptance, 3)).toMatchObject({ status: 'active', revision: 4 });
+  });
+});
+
+
+// New clients use the explicit server registration contract; legacy GET is
+// retained only during the staged rollout before Rules enforce a record.
+describe('trusted initial account health consent registration', () => {
+  beforeEach(() => { storage.documents.clear(); vi.clearAllMocks(); });
+
+  it('distinguishes unregistered users without disclosing anyone else\'s state', async () => {
+    const request = new Request('https://backend.test/api/health-consent', {
+      method: 'GET',
+      headers: { origin: 'https://thelogbook.web.app', 'x-consent-contract': '2' },
+    });
+    const response = await GET(request);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ status: 'unregistered', revision: 0 });
+    expect(storage.documents.size).toBe(0);
+  });
+
+  it('accepts initial consent once, with server time, legal versions and owned UID', async () => {
+    const response = await POST(req('POST', { action: 'accept-initial', expectedRevision: 0, acceptance }));
+    expect(response.status).toBe(200);
+    const value = await response.json() as { status: string; revision: number; acceptedAt: string };
+    expect(value).toMatchObject({ status: 'active', revision: 1, acceptedAt: expect.any(String) });
+    const record = storage.documents.get('health_consent_withdrawals/account-1');
+    expect(record).toMatchObject({ uid: 'account-1', status: 'active', revision: 1,
+      privacyVersion: acceptance.privacyVersion, termsVersion: acceptance.termsVersion,
+      acceptedAt: value.acceptedAt });
+    expect(await recordInitialHealthConsentAcceptance('account-1', acceptance)).toEqual(value);
+    expect(storage.documents.size).toBe(1);
+  });
+
+  it('rejects forged/incomplete acceptance, deletion, withdrawal and an old registration replay', async () => {
+    for (const a of [null, {}, { ...acceptance, acceptedHealthData: false }, { ...acceptance, termsVersion: 'old' }]) {
+      const response = await POST(req('POST', { action: 'accept-initial', expectedRevision: 0, acceptance: a }));
+      expect(response.status).toBe(400);
+    }
+    storage.documents.set('account_deletions/account-1', { status: 'requested' });
+    await expect(recordInitialHealthConsentAcceptance('account-1', acceptance)).rejects.toThrow('Cancellazione');
+    storage.documents.delete('account_deletions/account-1');
+    await recordInitialHealthConsentAcceptance('account-1', acceptance);
+    expect(await recordHealthConsentWithdrawal('account-1', 1)).toEqual({ status: 'withdrawn', revision: 2 });
+    const stale = await POST(req('POST', { action: 'accept-initial', expectedRevision: 0, acceptance }));
+    expect(stale.status).toBe(409);
+    expect((await readHealthConsentState('account-1')).status).toBe('withdrawn');
+  });
+
+  it('does not allow account-specific fields to choose the owner instead of the verified token', async () => {
+    const response = await POST(req('POST', { action: 'accept-initial', uid: 'other', expectedRevision: 0, acceptance }));
+    expect(response.status).toBe(200);
+    expect(storage.documents.has('health_consent_withdrawals/other')).toBe(false);
+    expect(storage.documents.has('health_consent_withdrawals/account-1')).toBe(true);
   });
 });

@@ -4,12 +4,13 @@ import {
   readHealthConsentState,
   recordHealthConsentWithdrawal,
   recordHealthConsentReacceptance,
+  recordInitialHealthConsentAcceptance,
   validateExplicitAcceptance,
   HealthConsentRevisionConflictError,
 } from '../server/healthConsent/withdrawal.js';
 
 export const maxDuration = 30;
-const HEADERS = 'authorization, content-type, x-firebase-appcheck';
+const HEADERS = 'authorization, content-type, x-firebase-appcheck, x-consent-contract';
 
 function json(body: unknown, status: number, origin: string | null): Response {
   return Response.json(body, { status, headers: { ...accountDeletionCorsHeaders(origin, HEADERS), 'cache-control': 'no-store' } });
@@ -38,7 +39,7 @@ export async function GET(request: Request): Promise<Response> {
   try {
     requireAccountDeletionOrigin(request);
     const { uid } = await verifyRecoveryRegistrationRequester(request);
-    return json(await readHealthConsentState(uid), 200, origin);
+    return json(await readHealthConsentState(uid, request.headers.get('x-consent-contract') === '2'), 200, origin);
   } catch (error) { return errorResponse(error, origin); }
 }
 
@@ -54,6 +55,12 @@ export async function POST(request: Request): Promise<Response> {
       body = parsed as Record<string, unknown>;
     } catch { throw new ConsentInputError('Richiesta di consenso non valida.'); }
 
+    if (body.action === 'accept-initial') {
+      try { validateExplicitAcceptance(body.acceptance); }
+      catch { throw new ConsentInputError('È richiesta la prima accettazione esplicita dei documenti correnti.'); }
+      if (body.expectedRevision !== 0) throw new ConsentInputError('Revisione iniziale non valida.');
+      return json(await recordInitialHealthConsentAcceptance(uid, body.acceptance), 200, origin);
+    }
     if (body.action === 'withdraw') {
       if (typeof body.expectedRevision !== 'number' || !Number.isSafeInteger(body.expectedRevision) || body.expectedRevision < 0) {
         throw new ConsentInputError('Revisione consenso mancante o non valida.');
