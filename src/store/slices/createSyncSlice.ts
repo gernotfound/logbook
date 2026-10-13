@@ -83,6 +83,10 @@ export function clearSyncTimers() {
 
 export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, get) => {
     const assertLocalPersistenceWritable = () => {
+        const state = get();
+        if (state.userData !== null && state.dataOwner !== captureSession().owner) {
+            throw new Error('Dati in memoria senza proprietario valido per questa sessione.');
+        }
         // Refuse the intent BEFORE advancing optimistic Zustand state. The
         // IDB commit also repeats this check for late cross-tab races.
         if (get().dataOwner === 'guest' && !isActiveGuestSession()) {
@@ -287,7 +291,7 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
 
             const session = captureSession();
             const dataOwner = get().dataOwner;
-            if (dataOwner && dataOwner !== session.owner) {
+            if (dataOwner !== session.owner) {
                 throw new Error('Dati locali non allineati con la sessione corrente. Attendi il completamento dell’accesso.');
             }
 

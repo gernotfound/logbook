@@ -378,7 +378,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 // Do not claim an owner, hydrate cloud data or transfer guest data
                 // until verification is complete; preserve the guest migration intent.
                 const current = useAppStore.getState();
-                if (!isGuestActiveStrict() && current.dataOwner && current.dataOwner !== userOwner(user.uid)) {
+                if (!isGuestActiveStrict() && (current.userData !== null || current.localWorkout !== null) && current.dataOwner !== userOwner(user.uid)) {
                     // Discard only the stale in-memory owner; retain both IndexedDB archives.
                     useAppStore.setState({ userData: null, dataOwner: null, localWorkout: null });
                 }
@@ -394,7 +394,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 const expectedOwner = userOwner(user.uid);
                 const current = useAppStore.getState();
                 const guestActiveBeforeAuth = isGuestActiveStrict();
-                if (current.userData && current.dataOwner && current.dataOwner !== expectedOwner && !guestActiveBeforeAuth) {
+                if (!guestActiveBeforeAuth && (current.userData !== null || current.localWorkout !== null) && current.dataOwner !== expectedOwner) {
                     useAppStore.setState({ userData: null, dataOwner: null, localWorkout: null });
                 }
                 try {
@@ -758,6 +758,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         isGuestRef.current = true;
         setIsGuest(true);
         setGuestMigrationStatus('idle');
+        const previous = useAppStore.getState();
+        // An ownerless/foreign snapshot must not seed a new guest generation.
+        if ((previous.userData !== null || previous.localWorkout !== null) && previous.dataOwner !== 'guest') {
+            previous.resetStore({ force: true });
+        }
         const currentData = useAppStore.getState().userData;
         if (!currentData) {
             const catalog = isCatalogInMemory() ? getInMemoryCatalog() : (await getCachedCatalog());

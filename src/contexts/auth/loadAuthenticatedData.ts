@@ -68,9 +68,9 @@ export async function loadAuthenticatedData({
             markTabSnapshotClean(session, localEnvelope.data);
         } else {
             const current = useAppStore.getState();
-            // Only a dataset explicitly tagged to another owner is stale. Untagged
-            // in-memory state (tests/first-run transient state) is not destroyed here.
-            if (current.userData && current.dataOwner && current.dataOwner !== expectedOwner) {
+            // Ownerless memory is untrusted, not an account-creation default.
+            // Without a matching durable envelope it must not survive into B.
+            if ((current.userData !== null || current.localWorkout !== null) && current.dataOwner !== expectedOwner) {
                 useAppStore.setState({ userData: null, dataOwner: null, localWorkout: null });
             }
         }

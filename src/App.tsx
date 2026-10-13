@@ -153,6 +153,8 @@ function OwnerBoundApp({ startupTab }: { startupTab: string | null }) {
   }, [isGuest]);
   const syncing = useAppStore(state => state.syncing);
   const userData = useAppStore(state => state.userData);
+  const dataOwner = useAppStore(state => state.dataOwner);
+  const localWorkout = useAppStore(state => state.localWorkout);
   const saveError = useAppStore(state => state.saveError);
   const syncHealth = useAppStore(state => state.syncHealth);
   const syncPresentation = useAppStore(state => state.syncPresentation);
@@ -177,8 +179,8 @@ function OwnerBoundApp({ startupTab }: { startupTab: string | null }) {
 
   const [showGuestLogin, setShowGuestLogin] = useState(readGuestLoginOverlayState);
 
-  const hasUserData = Boolean(userData);
-  const showConsentOverlay = userData && needsLegalUpdate(userData.legalConsent);
+  const hasUserData = Boolean(userData) && dataOwner === navigationOwner;
+  const showConsentOverlay = hasUserData && userData && needsLegalUpdate(userData.legalConsent);
   const guestLoginOverlayVisible = showGuestLogin && (!currentUser || (isGuest && guestMigrationStatus === 'idle'));
   const guestLoginMigrationPending = !!currentUser && guestMigrationStatus === 'pending';
   const guestLoginMigrationFailed = !!currentUser && guestMigrationStatus === 'failed';
@@ -480,6 +482,11 @@ function OwnerBoundApp({ startupTab }: { startupTab: string | null }) {
 
   if ((isGuest || currentUser) && healthConsentStatus !== 'active') {
     return <><GlobalDialog /><HealthConsentSuspended key={isGuest ? 'guest' : `user:${currentUser?.uid}`} status={healthConsentStatus} user={isGuest ? null : currentUser} /></>;
+  }
+
+  // Never render an unowned/foreign snapshot in a newly authenticated view.
+  if ((currentUser || isGuest) && (userData !== null || localWorkout !== null) && dataOwner !== navigationOwner) {
+    return <BrandLoadingScreen label="Preparazione account in corso" />;
   }
 
   return (

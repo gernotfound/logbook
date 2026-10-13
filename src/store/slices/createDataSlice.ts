@@ -107,6 +107,11 @@ export const createDataSlice: StateCreator<AppState, [], [], DataSlice> = (set, 
         }
 
         const session = captureSession();
+        if (state.userData !== null && state.dataOwner !== session.owner) {
+            set({ localPersistenceBlocked: true, syncHealth: 'failed',
+                saveError: 'Dati in memoria non attribuiti alla sessione corrente. Riapri TheLogBook.' });
+            return;
+        }
         if (!isCurrentSession(session)) {
             set({ localPersistenceBlocked: true, syncHealth: 'failed', saveError: 'Sessione locale non più attiva. Riapri TheLogBook per continuare.' });
             return;
