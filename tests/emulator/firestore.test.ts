@@ -39,6 +39,7 @@ it('gates every private owner path on the Firebase verified-email token claim', 
     }
 
     const validEvent = {
+        consentRevision: 1,
         timestamp: 1000,
         type: 'workout_started',
         context: { appVersion: '1.1.0', platform: 'other', displayMode: 'browser', online: true },

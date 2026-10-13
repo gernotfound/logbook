@@ -122,6 +122,12 @@ Configurazione client/build:
 
 Le collection `users/{uid}/telemetry_errors`, `telemetry_events` e `telemetry_anomalies` sono **legacy**: il client corrente non vi scrive nuova telemetria, ma Security Rules, account deletion e maintenance cron restano operativi per client PWA precedenti e documenti già esistenti. Le Rules continuano a richiedere ownership, payload bounded e `expireAt`; la retention legacy nominale resta 30 giorni. Ritirare questi boundary richiede prima evidenza che i client vecchi non possano più produrre dati e che il dataset residuo sia stato smaltito.
 
+### Primo consenso sanitario trusted
+
+**MUST:** le Rules negano ogni accesso business privato a un account finché non esiste il record server-only valido `health_consent_withdrawals/{uid}`, `status: active`, `revision >= 1` per lo stesso UID. Il backend trusted registra il primo consenso esplicito tramite `POST /api/health-consent` (`accept-initial`, revision attesa zero, Firebase Auth + App Check limited-use). Il client verifica il contratto GET v2 e la sua epoch prima di qualsiasi lettura/scrittura cloud. L'assenza del record non è un consenso implicito; `legalConsent` sul root client non costituisce prova trusted. Registro repliche e `_sync.writer` richiedono `consentRevision` coerente; le vecchie collection telemetriche, ove accettino ancora scritture, devono includere `consentRevision` e rispettare comunque il gate server.
+
+**MUST:** l'accesso locale offline è consentito soltanto a una generazione già verificata e riaperta dal vault sicuro; la cache locale non può autorizzare un primo consenso o cloud I/O. Le revisioni ritardate/revocate non possono essere rietichettate o caricate silenziosamente. Il flusso guest→account preserva intenzioni e dati, e la prima accettazione viene salvata una sola volta sul server prima del cutover client/Rules coordinato.
+
 ### Metadati `_sync`
 
 Per gli shard mensili di history e nutrizione, le Rules limitano anche la cardinalità dei campi dinamici rispettivamente a **256 sessioni** e **31 giornate** per mese (esclusi i due marker `_schemaVersion` e `_sync`). È un limite di integrità/abuso, **non** la validazione approfondita di ogni elemento. Le Security Rules non supportano un ciclo sulle chiavi dinamiche o il parser Zod; il gateway `src/lib/sync/monthlyIntegrity.ts` deve verificare date, identità e normalizzazione dei record remoti. Non attribuire alle Rules una validazione per-elemento inesistente.
