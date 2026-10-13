@@ -196,4 +196,28 @@ describe('Workout metronome', () => {
         expect(vi.getTimerCount()).toBe(0);
     });
 
+    it('cancels a pending audio activation when the page becomes hidden', async () => {
+        vi.useFakeTimers();
+        setAudioContext(SlowAudioContext as unknown as typeof AudioContext);
+        const { result } = renderHook(() => useMetronome(120));
+        let startPromise!: Promise<boolean>;
+        act(() => { startPromise = result.current.start(); });
+
+        const previousVisibility = Object.getOwnPropertyDescriptor(document, 'visibilityState');
+        Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' });
+        try {
+            act(() => document.dispatchEvent(new Event('visibilitychange')));
+            await act(async () => {
+                releaseResume?.();
+                expect(await startPromise).toBe(false);
+            });
+            expect(result.current.isRunning).toBe(false);
+            expect((audioContextInstance as SlowAudioContext | null)?.createOscillator).not.toHaveBeenCalled();
+            expect(vi.getTimerCount()).toBe(0);
+        } finally {
+            if (previousVisibility) Object.defineProperty(document, 'visibilityState', previousVisibility);
+            else Reflect.deleteProperty(document, 'visibilityState');
+        }
+    });
+
 });

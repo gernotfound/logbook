@@ -167,7 +167,8 @@ export function useMetronome(bpm: number): MetronomeController {
 
     useEffect(() => {
         const handleVisibilityChange = () => {
-            if (document.visibilityState === 'hidden' && runningRef.current) {
+            // A hidden page must also cancel an AudioContext.resume() still pending.
+            if (document.visibilityState === 'hidden' && (runningRef.current || startInFlightRef.current)) {
                 stop();
             }
         };
