@@ -466,7 +466,7 @@ describe('Milestone 2: PWA, offline workout and telemetry boundaries', () => {
   // 3. Offline Queueing & Auto-Replay Engine
   // =========================================================================
   describe('3. Offline Queueing & Auto-Replay Engine', () => {
-    it('buffers multiple offline events in localStorage in FIFO order', () => {
+    it('buffers offline events in FIFO order without storing diagnostic plaintext', () => {
       Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
       telemetryHub.init();
       telemetryHub.setUserId('user_offline_queue');
@@ -475,13 +475,14 @@ describe('Milestone 2: PWA, offline workout and telemetry boundaries', () => {
       telemetryHub.trackEvent('event_beta', { item: 2 });
       telemetryHub.trackEvent('event_gamma', { item: 3 });
 
-      const raw = localStorage.getItem(telemetryHub.getQueueStorageKey());
-      expect(raw).not.toBeNull();
-      const parsed = JSON.parse(raw!);
-      expect(parsed.length).toBe(3);
-      expect(parsed[0].payload.type).toBe('event_alpha');
-      expect(parsed[1].payload.type).toBe('event_beta');
-      expect(parsed[2].payload.type).toBe('event_gamma');
+      // A locked vault keeps technical reports in memory; it must never
+      // recreate the obsolete owner-scoped plaintext localStorage queue.
+      expect(localStorage.getItem(telemetryHub.getQueueStorageKey())).toBeNull();
+      const queued = telemetryHub.getQueuedEvents();
+      expect(queued).toHaveLength(3);
+      expect(queued.map(item => item.payload.type)).toEqual([
+        'event_alpha', 'event_beta', 'event_gamma',
+      ]);
     });
 
     it('enforces maximum capacity of 50 items, dropping oldest items (FIFO eviction)', () => {
