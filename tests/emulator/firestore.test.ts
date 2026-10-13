@@ -3,14 +3,14 @@ import { afterAll, beforeAll, beforeEach, expect, it } from 'vitest';
 import { initializeTestEnvironment, assertFails, assertSucceeds, type RulesTestEnvironment } from '@firebase/rules-unit-testing';
 import { doc, setDoc, getDoc, deleteDoc, updateDoc, writeBatch } from 'firebase/firestore';
 import { CURRENT_SYNC_PROTOCOL } from '../../src/lib/schemaEvolution';
-import { registerReplica, asModularFirestore } from './replicaHarness';
+import { seedTrustedConsent, registerReplica, asModularFirestore } from './replicaHarness';
 
 let env: RulesTestEnvironment;
 beforeAll(async () => {
     if (process.env.FIRESTORE_EMULATOR_HOST !== '127.0.0.1:8080') throw new Error('Run via test:rules: only the isolated local emulator is allowed');
     env = await initializeTestEnvironment({ projectId: 'demo-logbook-audit', firestore: { host: '127.0.0.1', port: 8080, rules: readFileSync('firestore.rules', 'utf8') } });
 });
-beforeEach(() => env.clearFirestore());
+beforeEach(async () => { await env.clearFirestore(); await seedTrustedConsent(env); });
 afterAll(async () => { await env?.cleanup(); });
 
 it('gates every private owner path on the Firebase verified-email token claim', async () => {

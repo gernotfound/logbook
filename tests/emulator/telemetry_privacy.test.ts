@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { seedTrustedConsent } from './replicaHarness';
 import { afterAll, beforeAll, beforeEach, it } from 'vitest';
 import {
   assertFails,
@@ -24,7 +25,7 @@ beforeAll(async () => {
   });
 });
 
-beforeEach(() => env.clearFirestore());
+beforeEach(async () => { await env.clearFirestore(); await seedTrustedConsent(env); });
 afterAll(async () => { await env?.cleanup(); });
 
 const baseEvent = {

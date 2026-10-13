@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { beforeAll, beforeEach, afterAll, it } from 'vitest';
 import { initializeTestEnvironment, assertFails, assertSucceeds, type RulesTestEnvironment } from '@firebase/rules-unit-testing';
 import { collection, deleteDoc, doc, getDoc, getDocs, setDoc } from 'firebase/firestore';
-import { asModularFirestore, registerReplica } from './replicaHarness';
+import { seedTrustedConsent, asModularFirestore, registerReplica } from './replicaHarness';
 
 let env: RulesTestEnvironment;
 const privatePaths = [
@@ -27,7 +27,7 @@ beforeAll(async () => {
     firestore: { host: '127.0.0.1', port: 8080, rules: readFileSync('firestore.rules', 'utf8') },
   });
 });
-beforeEach(() => env.clearFirestore());
+beforeEach(async () => { await env.clearFirestore(); await seedTrustedConsent(env); });
 afterAll(async () => { await env?.cleanup(); });
 
 it('denies foreign owner access on every private root/shard/control/telemetry document and query', async () => {
