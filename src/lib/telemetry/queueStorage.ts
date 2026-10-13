@@ -174,9 +174,12 @@ export class TelemetryQueueStorage {
         }
       }
       const saved = storeEncryptedTelemetry(owner, JSON.stringify(this.cachedQueue));
-      if (saved) this.needsUnlockReconciliation = false;
+      // A failed save may conceal durable reports that become readable again.
+      // Reconcile on the next attempt rather than blindly replacing them.
+      this.needsUnlockReconciliation = !saved;
       return saved;
     } catch {
+      this.needsUnlockReconciliation = true;
       return false;
     }
   }
