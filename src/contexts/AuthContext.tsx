@@ -934,13 +934,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 isGuestRef.current = false;
                 setIsGuest(false);
                 useAppStore.getState().resetStore({ force: true });
+                if (initialUid) {
+                    try { await signOut(auth); }
+                    catch { await useDialogStore.getState().showAlert('Uscita dall’account non riuscita. Riprova.'); }
+                }
                 return;
             }
 
             if (initialUid && isGuestActiveStrict()) {
                 // During deferred guest migration, signing out Firebase must not
                 // revoke or purge the still-owned guest archive.
-                await signOut(auth);
+                try { await signOut(auth); }
+                catch { await useDialogStore.getState().showAlert('Uscita dall’account non riuscita. Riprova.'); }
                 return;
             }
 
