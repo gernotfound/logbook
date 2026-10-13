@@ -238,6 +238,21 @@ describe('Offline technical telemetry data minimization', () => {
       .map((item: QueuedTelemetryItem) => item.id)).toEqual(['durable', 'volatile']);
   });
 
+  it('does not overwrite another tab\'s newer durable queue after a successful local save', () => {
+    const firstTab = new TelemetryQueueStorage(() => 'owner-a');
+    firstTab.enqueueItem('event', { ...queued('first', Date.now()).payload, id: 'first' });
+
+    const secondTab = new TelemetryQueueStorage(() => 'owner-a');
+    secondTab.enqueueItem('event', { ...queued('second', Date.now()).payload, id: 'second' });
+    const beforeRefresh = readEncryptedTelemetry('user:owner-a');
+
+    firstTab.refreshAfterFlush();
+
+    expect(readEncryptedTelemetry('user:owner-a')).toBe(beforeRefresh);
+    expect(new TelemetryQueueStorage(() => 'owner-a').getQueuedEvents()
+      .map(item => item.id)).toEqual(['first', 'second']);
+  });
+
   it('does not replace an authenticated but incompatible queue format', () => {
     const storage = new TelemetryQueueStorage(() => 'owner-a');
     const sealedKey = protectedDeviceKey('telemetry_queue', 'user:owner-a');
