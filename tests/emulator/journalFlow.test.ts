@@ -34,7 +34,7 @@ import { UserDataSchema } from '../../src/lib/schema';
 import { projectDocuments } from '../../src/lib/sync/documentProjection';
 import type { UserData, CachedGlobalCatalog } from '../../src/types';
 const catalog = { exercises: [], foods: [] } as unknown as CachedGlobalCatalog;
-const data = (input: Partial<UserData> = {}) => UserDataSchema.parse({ legalConsent: { hasAcceptedTerms: true, hasAcceptedHealthData: true, acceptedAt: '2026-10-11T10:00:00.000Z', privacyVersion: '1.3.3', termsVersion: '1.2.1' }, ...input }) as unknown as UserData;
+const data = (input: Partial<UserData> = {}) => UserDataSchema.parse({ legalConsent: { hasAcceptedTerms: true, hasAcceptedHealthData: true, acceptedAt: '2026-10-11T10:00:00.000Z', privacyVersion: '1.3.4', termsVersion: '1.2.1' }, ...input }) as unknown as UserData;
 let env: RulesTestEnvironment;
 beforeAll(async () => {
     if (process.env.FIRESTORE_EMULATOR_HOST !== '127.0.0.1:8080') throw new Error('Only the local emulator is allowed');

@@ -1,8 +1,8 @@
 # Dati salute e revoca del consenso — decisione e gate pre-pilot
 
 > Stato aggiornato il **12 ottobre 2026**: soluzione A approvata dal product owner; implementazione della [PR #366](https://github.com/gernotfound/logbook/pull/366) **integrata** il 12 ottobre 2026. Il successivo rilascio dell'archivio cifrato ([PR #369](https://github.com/gernotfound/logbook/pull/369)) è in Production sul commit `5d21dc0b32a12676e1a08cc35611d96e5b18c3f3`. Restano separati il collaudo autenticato multi-dispositivo e i gate legali pre-pilot. Il gate automatizzato e la verifica giuridica/runtime sono evidenze distinte.
-> La fotografia di partenza seguente riguarda la baseline storica `main` `5a9394649977cae4e2261e530312f5121818ce12` (9 ottobre 2026), **non descrive lo stato corrente della PR**.
-> Questo documento non costituisce un parere legale, una DPIA conclusa o una specifica di implementazione approvata.
+> La fotografia di partenza seguente riguarda la baseline storica `main` `5a9394649977cae4e2261e530312f5121818ce12` (9 ottobre 2026), **non descrive lo stato distribuito corrente**.
+> Questo documento non costituisce un parere legale, una DPIA conclusa o una prova di collaudo autenticato multi-dispositivo.
 > Non certifica configurazioni Firebase/Vercel/Sentry Production.
 
 ## Perché esiste
@@ -17,7 +17,7 @@ Fonti istituzionali da utilizzare nella revisione:
 - Garante Privacy, principi fondamentali: https://garanteprivacy.it/web/guest/home/principi-fondamentali-del-trattamento
 - Garante Privacy, dispositivi e app fitness tracker: https://www.garanteprivacy.it/home/docweb/-/docweb-display/docweb/9968193
 
-## Analisi della baseline storica del 9 ottobre — non dello SHA candidato attuale
+## Analisi della baseline storica del 9 ottobre — non dello stato distribuito attuale
 
 | Confine | Evidenza nel codice | Conseguenza |
 |---|---|---|
@@ -44,7 +44,7 @@ La PR #366, già integrata, implementa il marker trusted `health_consent_withdra
 5. **Ospite:** distinguere l'uso locale e la raccolta presso i fornitori; stabilire le modalità necessarie a esercitare i diritti nella modalità priva di account.
 6. **Informativa e titolare:** correggere la descrizione della revoca, il canale di contatto e le basi giuridiche prima dei trattamenti per cui tali informazioni sono obbligatorie, non soltanto prima della vendita.
 
-La scelta A **non autorizza cancellazioni automatiche e irreversibili** né la conservazione indefinita. Un consenso ritirato non giustifica il proseguimento di trattamenti fondati esclusivamente su di esso, inclusa la conservazione senza altra base valida. La gestione dei dati residui e delle richieste di cancellazione deve essere validata sotto i profili degli artt. 6, 9 e 17 GDPR prima del rilascio.
+La scelta A **non autorizza cancellazioni automatiche e irreversibili** né la conservazione indefinita. Un consenso ritirato non giustifica il proseguimento di trattamenti fondati esclusivamente su di esso, inclusa la conservazione senza altra base valida. La gestione dei dati residui e delle richieste di cancellazione deve essere validata sotto i profili degli artt. 6, 9 e 17 GDPR prima del pilot con utenti reali.
 
 ## Comportamento UX approvato per la soluzione A
 
@@ -58,7 +58,7 @@ La scelta A **non autorizza cancellazioni automatiche e irreversibili** né la c
 
 ## Vincoli giuridici non risolti
 
-Secondo GDPR art. 7(3) e Linee guida EDPB 05/2020, la revoca deve essere facile quanto il consenso; cessano le operazioni fondate solo su quel consenso, **compresa l'ulteriore conservazione se non esiste altra base valida**. La soluzione A non può promettere dati esportabili per un periodo indefinito senza una base giuridica appropriata. Prima della modifica runtime, la revisione privacy deve definire chiaramente i trattamenti residui e i termini minimi strettamente necessari, le eccezioni legittime, la notifica ai fornitori applicabili e i testi rivolti all'utente.
+Secondo GDPR art. 7(3) e Linee guida EDPB 05/2020, la revoca deve essere facile quanto il consenso; cessano le operazioni fondate solo su quel consenso, **compresa l'ulteriore conservazione se non esiste altra base valida**. La soluzione A non può promettere dati esportabili per un periodo indefinito senza una base giuridica appropriata. Prima del pilot con utenti reali, la revisione privacy deve definire chiaramente i trattamenti residui e i termini minimi strettamente necessari, le eccezioni legittime, la notifica ai fornitori applicabili e i testi rivolti all'utente.
 
 ## Invarianti richiesti a qualunque implementazione approvata
 
@@ -89,7 +89,7 @@ Il product owner ha chiesto espressamente di **pubblicare le modifiche tecniche 
 **NON CHIUSO AI FINI DEL PILOT CON UTENTI REALI.** Il merge richiesto dal product owner non chiude le verifiche legali e non va rappresentato come prova di conformità. Prima del pilot con utenti reali:
 - [ ] classificazione delle finalità e delle basi artt. 6/9 approvata da professionista competente;
 - [x] decisione esplicita di prodotto: sospensione totale delle funzioni fitness, accesso a diritti/esportazione/cancellazione e facoltà di nuovo consenso esplicito (12 ottobre 2026);
-- [x] protocollo tecnico **candidato** documentato per ospite, account, offline, multi-device e recovery; verifica empirica con dispositivi distinti ancora aperta;
+- [x] protocollo tecnico documentato e integrato per ospite, account, offline, multi-device e recovery; verifica empirica con dispositivi distinti ancora aperta;
 - [x] implementazione con protezioni server-side e regressioni automatizzate integrata tramite PR #366; CI main e deploy Hosting/Rules osservati sul commit di rilascio; review indipendente e smoke autenticato multi-dispositivo non ancora certificati;
 - [x] deploy/riallineamento Firestore Rules, backend Vercel e Firebase Hosting Production verificati sul release SHA `5d21dc0`; **restano** browser fisici, smoke autenticato multi-dispositivo e verifica visiva;
 - [ ] informativa, registro, DPIA screening, retention e procedura diritti aggiornati e validati.

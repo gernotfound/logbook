@@ -18,7 +18,7 @@ import {
 
 const user = (uid: string) => ({ uid, getIdToken: vi.fn(async () => 'id-token') }) as any;
 const key = (uid: string) => `logbook:v2:user:${uid}:health-consent-withdrawal`;
-const accepted = { acceptedTerms: true as const, acceptedHealthData: true as const, privacyVersion: '1.3.3', termsVersion: '1.2.1' };
+const accepted = { acceptedTerms: true as const, acceptedHealthData: true as const, privacyVersion: '1.3.4', termsVersion: '1.2.1' };
 
 beforeEach(() => { localStorage.clear(); vi.unstubAllGlobals(); (auth as { currentUser: unknown }).currentUser = null; });
 

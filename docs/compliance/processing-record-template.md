@@ -47,12 +47,12 @@
 | Campo | Contenuto da validare |
 |---|---|
 | Finalità | Sicurezza, affidabilità, diagnosi errori, integrità/recovery |
-| Dati | Session ID tecnico, versione/release/build SHA, piattaforma derivata, stato online, errori/stack sanitizzati e anomalie tecniche bounded; nessun Firebase UID/email deliberatamente allegato a Sentry |
+| Dati | Session ID tecnico, versione/release/build SHA, piattaforma derivata, stato online, errori/stack sanitizzati e anomalie tecniche bounded; la coda locale può contenere UID per isolamento owner, ma nessun Firebase UID/email è deliberatamente allegato a Sentry |
 | Esclusioni | Nessun tracking proprietario di avvio/salvataggio workout o funnel installazione PWA; niente Replay, tracing, logging o Application Metrics Sentry |
 | Base | Legittimo interesse dichiarato nell'informativa corrente; eseguire/archiviare LIA prima del pilot |
-| Retention | Configurazione/piano Sentry da verificare; legacy Firestore 30 giorni, vedi `retention-schedule.md` |
+| Retention | Coda locale: massimo sette giorni per report e 50 elementi, con pruning al successivo accesso; Sentry: configurazione/piano da verificare; legacy Firestore: 30 giorni. Vedi `retention-schedule.md` |
 | Destinatari | Sentry / personale autorizzato strettamente necessario; Firestore solo per cleanup legacy |
-| Misure | Sanitizzazione PII client, `beforeSend` restrittivo, deduplica/rate limit, data scrubbing Sentry configurato esternamente; legacy Firestore owner-scoped |
+| Misure | Sanitizzazione PII client, `beforeSend` restrittivo, deduplica/rate limit; coda locale owner-scoped con AEAD dopo sblocco del vault, sola RAM prima dello sblocco e isolamento fra account; data scrubbing Sentry da verificare esternamente; legacy Firestore owner-scoped |
 
 ## Attività 4 — Account deletion e recovery
 

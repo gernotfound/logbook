@@ -48,7 +48,7 @@ if (vercel.ignoreCommand !== 'node scripts/vercel-ignore-build.mjs') failures.pu
 if (!existsSync('scripts/vercel-ignore-build.mjs')) failures.push('missing Vercel selective deployment guard');
 else {
   const vercelIgnoreBuild = readFileSync('scripts/vercel-ignore-build.mjs', 'utf8');
-  for (const requiredPath of ['api', 'server', 'vercel.json', 'package.json', 'package-lock.json', 'tsconfig.json', 'tsconfig.m7-server.json', 'scripts/prepare-vercel-backend-static.mjs']) {
+  for (const requiredPath of ['api', 'server', 'src/lib/legalVersions.ts', 'vercel.json', 'package.json', 'package-lock.json', 'tsconfig.json', 'tsconfig.m7-server.json', 'scripts/prepare-vercel-backend-static.mjs']) {
     if (!vercelIgnoreBuild.includes(`'${requiredPath}'`)) failures.push(`Vercel selective deployment guard missing backend-sensitive path: ${requiredPath}`);
   }
   if (!vercelIgnoreBuild.includes('VERCEL_GIT_PREVIOUS_SHA') || !vercelIgnoreBuild.includes('VERCEL_GIT_COMMIT_SHA')) {
