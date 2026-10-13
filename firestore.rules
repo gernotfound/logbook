@@ -107,6 +107,9 @@ service cloud.firestore {
         && docData._sync is map
         && docData._sync.protocolVersion == 3
         && docData._sync.clock is map
+        // A Protocol 3 causal actor is one of the sixteen replica slots.
+        // Do not let a modified client persist arbitrary actors into cloud metadata.
+        && docData._sync.clock.keys().hasOnly(['s00', 's01', 's02', 's03', 's04', 's05', 's06', 's07', 's08', 's09', 's10', 's11', 's12', 's13', 's14', 's15'])
         && docData._sync.fields is map
         && docData._sync.keys().hasOnly(['protocolVersion', 'clock', 'fields', 'writer'])
         && 'writer' in docData._sync

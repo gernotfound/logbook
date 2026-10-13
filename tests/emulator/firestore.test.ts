@@ -349,6 +349,56 @@ it('rejects malformed sync envelopes while allowing the current structural contr
     await assertFails(authorizedWrite({ ...validSync, clock: { s00: 2 }, writer: nextWriter, unexpected: true }, 'extra sync key', 2));
 });
 
+it('rejects unknown causal clock actors on fenced root and monthly writes without disturbing valid slots', async () => {
+    const db = asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore());
+    const replica = await registerReplica(db, 'a');
+    const controlRef = doc(db, 'users/a/sync_control/state');
+    const targets = [
+        ['users/a', { profile: { name: 'Clock validation' } }],
+        ['users/a/history_months/2026-10', {
+            workoutA: { id: 'workoutA', date: '2026-10-01', exercises: [] },
+        }],
+        ['users/a/nutrition_months/2026-10', {
+            '2026-10-01': { date: '2026-10-01' },
+        }],
+    ] as const;
+
+    const commitWithClock = async (path: string, business: Record<string, unknown>, unexpectedActor: boolean) => {
+        const control = (await getDoc(controlRef)).data()!;
+        const entry = control.replicas[replica.slot];
+        const seq = entry.lastSeq + 1;
+        const batch = writeBatch(db);
+        batch.set(controlRef, {
+            ...control,
+            replicas: { ...control.replicas, [replica.slot]: { ...entry, lastSeq: seq } },
+            mutation: { slot: replica.slot, action: 'advance' },
+        });
+        batch.set(doc(db, path), {
+            ...business,
+            _schemaVersion: 1,
+            _sync: {
+                protocolVersion: CURRENT_SYNC_PROTOCOL,
+                // A retired replica slot is a valid causal actor; a client-defined
+                // alias is not, even when the active writer is properly fenced.
+                clock: { [replica.slot]: seq, [unexpectedActor ? 'unregistered-client' : 's15']: 1 },
+                fields: {},
+                writer: { slot: replica.slot, replicaId: replica.replicaId,
+                    generation: replica.generation, seq, consentRevision: 1 },
+            },
+        });
+        await batch.commit();
+    };
+
+    for (const [path, business] of targets) {
+        await assertFails(commitWithClock(path, business, true));
+        expect((await getDoc(doc(db, path))).exists()).toBe(false);
+    }
+    for (const [path, business] of targets) {
+        await assertSucceeds(commitWithClock(path, business, false));
+        expect((await getDoc(doc(db, path))).exists()).toBe(true);
+    }
+});
+
 it('permits public catalog reads but denies client writes', async () => {
     for (const db of [asModularFirestore(env.unauthenticatedContext().firestore()), asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore())]) {
         const ref = doc(db, 'global_catalog/manifest');
