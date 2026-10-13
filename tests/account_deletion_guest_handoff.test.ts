@@ -24,13 +24,14 @@ const makeUser = (uid: string) => ({
     })),
 });
 
+const mutableAuth = auth as { currentUser: typeof auth.currentUser };
 let priorUser: typeof auth.currentUser;
 
 beforeEach(() => {
     localStorage.clear();
     vi.clearAllMocks();
     priorUser = auth.currentUser;
-    auth.currentUser = makeUser('pre-consent-account') as unknown as typeof auth.currentUser;
+    mutableAuth.currentUser = makeUser('pre-consent-account') as unknown as typeof auth.currentUser;
     localStorage.setItem('logbook_is_guest', 'true');
     localStorage.setItem('logbook_guest_session_id_v1', 'guest-pre-consent-session');
     activateGuestSession('guest-pre-consent-session');
@@ -38,7 +39,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-    auth.currentUser = priorUser;
+    mutableAuth.currentUser = priorUser;
     vi.unstubAllGlobals();
 });
 
@@ -82,10 +83,10 @@ describe('account deletion before guest-to-account migration', () => {
     it('rejects an authenticated UID change while preparing deletion', async () => {
         const signedIn = makeUser('pre-consent-account');
         signedIn.getIdTokenResult.mockImplementation(async () => {
-            auth.currentUser = makeUser('other-account') as unknown as typeof auth.currentUser;
+            mutableAuth.currentUser = makeUser('other-account') as unknown as typeof auth.currentUser;
             return { token: 'firebase-test-id-token', authTime: new Date().toISOString() };
         });
-        auth.currentUser = signedIn as unknown as typeof auth.currentUser;
+        mutableAuth.currentUser = signedIn as unknown as typeof auth.currentUser;
         const fetchMock = vi.fn();
         vi.stubGlobal('fetch', fetchMock);
 
