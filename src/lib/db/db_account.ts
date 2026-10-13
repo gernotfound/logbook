@@ -1,11 +1,11 @@
-import { auth, getDb, ensureAppCheck, waitForPendingWrites } from '../firebase';
+import { auth, getDb, ensureAppCheck, waitForPendingWrites, signOut } from '../firebase';
 import { del, get } from 'idb-keyval';
 import { lockVault } from '../sync/secureArchiveSession';
 import { deviceVaultKeyId } from '../sync/secureArchiveKeys';
 import { withTimeout } from './db_core';
 import { assertDeletionDeadlineActive, withDeletionDeadline } from '../deletionDeadline';
 import { readBrowserValueStrict } from '../sync/browserStorage';
-import { storageOwner, captureSession, isCurrentSession } from '../sync/session';
+import { storageOwner, captureSession, isCurrentSession, isActiveGuestSession } from '../sync/session';
 import {
     clearAccountDeletion,
     findPendingAccountDeletion,
@@ -386,30 +386,36 @@ async function performDeletion(context: AccountDeletionContext): Promise<Account
     if (!user) throw new Error('Nessun utente autenticato.');
     const before = captureSession();
     const owner = 'user:' + user.uid;
-    if (before.owner !== owner) throw new Error('Esci dalla modalità ospite prima di eliminare l’account.');
+    // A new account can be authenticated while its guest archive remains the
+    // active local owner, before the first explicit health consent.
+    const preservingGuest = before.owner === 'guest' && isActiveGuestSession();
+    if (before.owner !== owner && !preservingGuest) {
+        throw new Error('Sessione non valida per la cancellazione account.');
+    }
+    const isCurrentDeletion = () => isCurrentSession(before) && auth.currentUser?.uid === user.uid;
 
     const token = await withTimeout(user.getIdTokenResult(true), 10000, 'Verifica identità non disponibile.');
-    if (!isCurrentSession(before) || auth.currentUser?.uid !== user.uid) throw new Error('Sessione cambiata.');
+    if (!isCurrentDeletion()) throw new Error('Sessione cambiata.');
     const authenticatedAt = new Date(token.authTime).getTime();
     if (!Number.isFinite(authenticatedAt) || authenticatedAt > Date.now() + 60000 || Date.now() - authenticatedAt > 5 * 60 * 1000) {
         throw new Error('Per eliminare l’account devi effettuare di nuovo il login. Nessun dato è stato cancellato.');
     }
 
     await withTimeout(waitForJournalIdle(owner), 10000, 'Scritture precedenti ancora in corso.');
-    if (!isCurrentSession(before)) throw new Error('Sessione cambiata.');
+    if (!isCurrentDeletion()) throw new Error('Sessione cambiata.');
     await withTimeout(waitForPendingWrites(getDb()), 10000, 'Scritture Firebase precedenti ancora in corso.');
-    if (!isCurrentSession(before)) throw new Error('Sessione cambiata.');
+    if (!isCurrentDeletion()) throw new Error('Sessione cambiata.');
 
     const appToken = await withDeletionDeadline(async signal => {
         const token = await appCheckToken();
         assertDeletionDeadlineActive(signal);
         return token;
     }, ACCOUNT_DELETION_HTTP_TIMEOUT_MS, () => new AccountDeletionRequestTimeoutError());
-    if (!isCurrentSession(before)) throw new Error('Sessione cambiata.');
+    if (!isCurrentDeletion()) throw new Error('Sessione cambiata.');
 
     const existing = readAccountDeletionMarker(owner);
     const marker = markAccountDeletion(owner, { receiptToken: existing?.receiptToken ?? createReceiptToken() });
-    context.cancelPendingSyncs();
+    if (!preservingGuest) context.cancelPendingSyncs();
 
     try {
         await requestServerDeletion(marker, token.token, appToken);
@@ -426,7 +432,14 @@ async function performDeletion(context: AccountDeletionContext): Promise<Account
             : new Error('Cancellazione non avviata. Verifica la connessione e riprova.', { cause: error });
     }
 
-    return observeDeletion(markAccountDeletion(owner), context, ACCOUNT_DELETION_INITIAL_OBSERVE_MS);
+    const outcome = await observeDeletion(markAccountDeletion(owner), context, ACCOUNT_DELETION_INITIAL_OBSERVE_MS);
+    if (preservingGuest && auth.currentUser?.uid === user.uid) {
+        // Only AFTER the backend accepted the durable job may Auth be released.
+        // Keep the guest owner and the account receipt; owner-local purge is
+        // deferred until there is no other active local identity.
+        await signOut(auth);
+    }
+    return outcome;
 }
 
 export async function resumeAccountDeletion(context: AccountDeletionCompletionContext): Promise<AccountDeletionOutcome | null> {

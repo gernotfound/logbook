@@ -525,6 +525,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                     if (isCurrentRun()) setLoading(false);
                 }
             } else {
+                setCurrentUser(null);
                 setEmailVerificationRequired(false);
                 setGuestMigrationStatus('idle');
                 const isGuestActive = isGuestActiveStrict();
@@ -933,6 +934,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 isGuestRef.current = false;
                 setIsGuest(false);
                 useAppStore.getState().resetStore({ force: true });
+                return;
+            }
+
+            if (initialUid && isGuestActiveStrict()) {
+                // During deferred guest migration, signing out Firebase must not
+                // revoke or purge the still-owned guest archive.
+                await signOut(auth);
                 return;
             }
 

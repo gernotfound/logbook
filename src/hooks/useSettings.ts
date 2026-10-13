@@ -9,6 +9,7 @@ import { collectBackupSnapshot } from '../lib/db/backupSnapshot';
 import { readLocal } from '../lib/sync/localRepository';
 import { UserDataSchema } from '../lib/schema';
 import { currentHealthConsentStatus } from '../lib/healthConsent';
+import { auth } from '../lib/firebase';
 import type { ImportMode } from '../lib/backup';
 import { isAccountDeletionPending } from '../lib/sync/accountGate';
 import {
@@ -160,12 +161,16 @@ export function useSettings() {
         if (deleteBusy.current) return;
         deleteBusy.current = true;
         let session: ReturnType<typeof captureSession> | null = null;
+        const expectedUid = currentUser?.uid ?? null;
         try {
             session = captureSession();
             const assertCurrent = () => {
-                if (!session || !isCurrentSession(session)) throw new Error('Sessione cambiata: cancellazione annullata.');
+                if (!session || !isCurrentSession(session)
+                    || (expectedUid !== null && auth.currentUser?.uid !== expectedUid)) {
+                    throw new Error('Sessione cambiata: cancellazione annullata.');
+                }
             };
-            if (isGuest) {
+            if (isGuest && !currentUser) {
                 if (!(await showConfirm('Eliminare permanentemente i dati ospite di questo dispositivo?'))) return;
                 assertCurrent();
                 await logout({ mode: 'force' });
