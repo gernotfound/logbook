@@ -96,6 +96,12 @@ describe('pre-session readiness contract', () => {
 
         await waitFor(() => expect(useAppStore.getState().localWorkout?.globalStartTime).toBeTruthy());
         await waitFor(() => expect(scrollToSpy).toHaveBeenCalledWith({ top: 0, left: 0, behavior: 'auto' }));
+        // An optimistic timestamp is not durable evidence. Finish the async
+        // start before this test releases its owner and starts the next scenario.
+        await waitFor(() => expect(screen.getByRole('button', { name: 'Termina allenamento' })).toBeTruthy());
+        const saved = await readLocal(captureSession().owner);
+        expect(saved?.data.activeWorkout?.id).toBe('pending-scroll');
+        expect(saved?.data.activeWorkout?.globalStartTime).toBe(useAppStore.getState().localWorkout?.globalStartTime);
         scrollToSpy.mockRestore();
     });
 
@@ -110,45 +116,16 @@ describe('pre-session readiness contract', () => {
         // Isolate the clock-boundary check from archive initialization and
         // its asynchronous security bookkeeping.
         const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(startedAt);
-        // Diagnostic (temporary): locate the writer of any unexpected persistence
-        // barrier rather than bypassing the boundary in a test.
-        const stopTrace = useAppStore.subscribe((state, previous) => {
-            if (state.localPersistenceBlocked && !previous.localPersistenceBlocked) {
-                console.error('MIDNIGHT TEST blocked-transition', {
-                    saveError: state.saveError,
-                    trace: new Error('blocking writer').stack,
-                });
-            }
-        });
-        console.error('MIDNIGHT TEST before start', {
-            blocked: useAppStore.getState().localPersistenceBlocked,
-            saveError: useAppStore.getState().saveError,
-        });
         try {
             fireEvent.click(screen.getByRole('button', { name: 'Salta check-in e inizia' }));
-            try {
-                await waitFor(() => {
-                    const started = useAppStore.getState().localWorkout;
-                    expect(started?.globalStartTime).toBe(startedAt);
-                    expect(started?.date).toBe('2026-09-25');
-                });
-            } catch (assertion) {
-                const state = useAppStore.getState();
-                const durable = await readLocal(captureSession().owner);
-                console.error('MIDNIGHT TEST persistence discrepancy', {
-                    expectedTime: startedAt,
-                    localId: state.localWorkout?.id,
-                    localTime: state.localWorkout?.globalStartTime,
-                    durableId: durable?.data.activeWorkout?.id,
-                    durableTime: durable?.data.activeWorkout?.globalStartTime,
-                    syncHealth: state.syncHealth,
-                    saveError: state.saveError,
-                    pendingOperations: durable?.pending.length,
-                });
-                throw assertion;
-            }
+            await waitFor(() => expect(screen.getByRole('button', { name: 'Termina allenamento' })).toBeTruthy());
+            const started = useAppStore.getState().localWorkout;
+            expect(started?.globalStartTime).toBe(startedAt);
+            expect(started?.date).toBe('2026-09-25');
+            const saved = await readLocal(captureSession().owner);
+            expect(saved?.data.activeWorkout?.globalStartTime).toBe(startedAt);
+            expect(saved?.data.activeWorkout?.date).toBe('2026-09-25');
         } finally {
-            stopTrace();
             nowSpy.mockRestore();
         }
     });
