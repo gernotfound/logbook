@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { beforeAll, beforeEach, afterAll, expect, it } from 'vitest';
+import { beforeAll, beforeEach, afterAll, it } from 'vitest';
 import { initializeTestEnvironment, assertFails, assertSucceeds, type RulesTestEnvironment } from '@firebase/rules-unit-testing';
 import { collection, deleteDoc, doc, getDoc, getDocs, setDoc } from 'firebase/firestore';
 import { asModularFirestore, registerReplica } from './replicaHarness';

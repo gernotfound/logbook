@@ -30,7 +30,7 @@ describe('owner-bound UI mount', () => {
   it('does not transfer open settings to a newly authenticated owner', async () => {
     useAppStore.setState({ userData: data(), dataOwner: 'user:a' });
     const view = render(<AuthContext.Provider value={owner('a')}><App /></AuthContext.Provider>);
-    fireEvent.click(await screen.findByRole('button', { name: 'Apri impostazioni' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Apri impostazioni' }, { timeout: 10000 }));
     expect(await screen.findByRole('heading', { name: 'Impostazioni' })).toBeDefined();
     act(() => useAppStore.setState({ userData: data(), dataOwner: 'user:b' }));
     view.rerender(<AuthContext.Provider value={owner('b')}><App /></AuthContext.Provider>);

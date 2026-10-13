@@ -50,6 +50,7 @@ beforeEach(async () => {
 
     useAppStore.setState({
         userData: userData(),
+        dataOwner: 'user:logout-user',
         localWorkout: null,
         syncing: false,
         saveError: null,
@@ -84,6 +85,8 @@ describe('M5 logout protection through AuthProvider', () => {
             callback(null);
             return () => {};
         });
+        // The guest fixture must be explicitly owned; no authenticated payload is transferable.
+        useAppStore.setState({ dataOwner: 'guest' });
         dialogs.showConfirm.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
 
         const { result } = renderAuth();
