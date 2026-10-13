@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { renderHook, act, render, screen, fireEvent } from '@testing-library/react';
+import { renderHook, act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { useAppStore } from '../src/store/useAppStore';
 import { useDialogStore } from '../src/store/useDialogStore';
 import { useNutritionPlanning } from '../src/hooks/useNutritionPlanning';
@@ -11,6 +11,9 @@ import SessionSetRow from '../src/components/Training/session/SessionSetRow';
 import { Logic } from '../src/lib/logic';
 import { DB } from '../src/lib/db';
 import type { UserData, WorkoutSession } from '../src/types';
+import { captureSession } from '../src/lib/sync/session';
+import { initializeLocal } from '../src/lib/sync/localRepository';
+import { UserDataSchema } from '../src/lib/schema';
 
 describe('Empirical Challenger: React Hooks, Memoization & Re-render Loop Stress Suite', () => {
     const baseUserData: UserData = {
@@ -510,6 +513,12 @@ describe('Empirical Challenger: React Hooks, Memoization & Re-render Loop Stress
         });
 
         it('2.5 Full Live Workout Session Lifecycle (Start -> Update Sets -> Special Sets -> End)', async () => {
+            // Prepared and started sessions must be proven durable in the same
+            // owner-scoped IndexedDB repository that production uses.
+            const owner = captureSession().owner;
+            const initial = UserDataSchema.parse(baseUserData) as UserData;
+            await initializeLocal(owner, initial);
+            useAppStore.setState({ userData: initial, dataOwner: owner, localPersistenceBlocked: false });
             render(<TrainingSession />);
 
             // 1. Start workout from planned routine (first Avvia button)
@@ -527,7 +536,7 @@ describe('Empirical Challenger: React Hooks, Memoization & Re-render Loop Stress
                 fireEvent.click(screen.getByRole('button', { name: 'Salta check-in e inizia' }));
                 await new Promise(r => setTimeout(r, 0));
             });
-            expect(screen.getByRole('heading', { name: 'Panca Piana' })).toBeDefined();
+            await waitFor(() => expect(screen.getByRole('heading', { name: 'Panca Piana' })).toBeDefined());
             expect(screen.getByRole('heading', { name: 'Squat' })).toBeDefined();
 
             // 2. Add set to Exercise 0
