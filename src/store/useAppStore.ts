@@ -23,17 +23,25 @@ if (typeof window !== 'undefined') {
     });
 }
 
+// A failed device-critical write invalidates outstanding sync completions,
+ // without deleting the owner's durable journal or invalidating its session.
+useAppStore.subscribe((state, previous) => {
+    if (state.localPersistenceBlocked && !previous.localPersistenceBlocked) {
+        state.settleBlockedSyncJobs();
+    }
+});
+
 // PWA FIX: Synchronously save the local workout to localStorage when the app goes into the background.
 // This ensures that if the OS suspends or kills the PWA immediately, the last keystrokes are not lost
 // due to the 300ms debounce timer.
 if (typeof document !== 'undefined') {
     document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'hidden') {
-            const state = useAppStore.getState();
             try {
-                // Flush registered drafts even when the current screen has no owner.
-                // Only the owner-bound workout snapshot can be skipped for an empty login screen.
+                // Draft callbacks can update the workout synchronously: capture only after the flush.
                 draftRegistry.flushAll({ strict: true });
+                const state = useAppStore.getState();
+                if (state.localPersistenceBlocked) throw new Error('Persistenza locale bloccata.');
                 if (state.userData === null && state.dataOwner === null && state.localWorkout === null) return;
                 const session = captureSession();
                 persistOwnerBoundWorkoutSnapshot(session, state.dataOwner, state.localWorkout);

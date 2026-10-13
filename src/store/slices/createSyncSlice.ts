@@ -36,6 +36,7 @@ export interface SyncSlice {
     submitLegalConsent: (consent: NonNullable<UserData['legalConsent']>) => Promise<void>;
     flushPendingSyncs: () => Promise<void>;
     cancelPendingSyncs: () => void;
+    settleBlockedSyncJobs: () => void;
     resetStore: (options?: { force?: boolean }) => void;
 }
 
@@ -53,6 +54,15 @@ let active: Job[] = [];
 let running: Promise<void> | null = null;
 const synced: SyncResult = { ok: true, status: 'synced' };
 const LOCAL_PERSISTENCE_BLOCKED_MESSAGE = 'Archivio locale non leggibile dopo un errore di salvataggio. Le modifiche sono bloccate per evitare perdita di dati; riapri TheLogBook prima di continuare.';
+const localPersistenceFailure = () => new Error(LOCAL_PERSISTENCE_BLOCKED_MESSAGE);
+
+function rejectBlockedJobs(): void {
+    if (timer) clearTimeout(timer);
+    timer = null;
+    const blocked = [...pending, ...active];
+    pending = [];
+    blocked.forEach(job => job.reject(localPersistenceFailure()));
+}
 const updateRequiredMessage = (error: unknown) => error instanceof Error
     ? error.message
     : 'Questi dati sono stati scritti da una versione più recente di TheLogBook. Aggiorna l’app prima di continuare.';
@@ -144,7 +154,8 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
             if (pending.length) await run();
             return;
         }
-        if (!pending.length || get().compatibilityStatus === 'update-required' || get().localPersistenceBlocked) return;
+        if (get().localPersistenceBlocked) { get().settleBlockedSyncJobs(); return; }
+        if (!pending.length || get().compatibilityStatus === 'update-required') return;
         const jobs = pending;
         pending = [];
         active = jobs;
@@ -156,6 +167,7 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
             let blockLocalPersistence = false;
             try {
                 const commits = await Promise.all(jobs.map(job => job.cache));
+                if (get().localPersistenceBlocked) throw localPersistenceFailure();
                 const failed = commits.find(result => !result.ok);
                 if (failed && !failed.ok) {
                     if (current() && get().syncGeneration === last.generation) {
@@ -179,7 +191,9 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
                 const envelope = await readLocal(session.owner);
                 if (!current()) throw new Error('Sessione cambiata durante il salvataggio');
                 if (!envelope) throw new Error('Copia locale non disponibile');
+                if (get().localPersistenceBlocked) throw localPersistenceFailure();
                 const result = await DB.saveUserData(envelope.data, envelope.revision);
+                if (get().localPersistenceBlocked) throw localPersistenceFailure();
                 if (!current()) throw new Error('Sessione cambiata durante la sincronizzazione');
                 if (result.ok) {
                     const saved = await readLocal(session.owner);
@@ -209,7 +223,7 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
                 }
                 jobs.forEach(job => job.resolve(result));
             } catch (error) {
-                if (current() && get().syncGeneration === last.generation) {
+                if (current() && get().syncGeneration === last.generation && !get().localPersistenceBlocked) {
                     if (isUpdateRequiredError(error)) enterUpdateRequired(error);
                     else if (blockLocalPersistence) set({ localPersistenceBlocked: true, syncHealth: 'failed', saveError: LOCAL_PERSISTENCE_BLOCKED_MESSAGE });
                     else set({ syncHealth: failureStatus, saveError: error instanceof Error ? error.message : 'Impossibile salvare i dati.' });
@@ -329,7 +343,8 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
         },
         flushPendingSyncs: async () => {
             if (!isHealthConsentWritable(captureSession().owner)) return;
-            if (get().compatibilityStatus === 'update-required' || get().localPersistenceBlocked) return;
+            if (get().localPersistenceBlocked) { get().settleBlockedSyncJobs(); return; }
+            if (get().compatibilityStatus === 'update-required') return;
             if (timer) clearTimeout(timer);
             timer = null;
             if (pending.length || running) {
@@ -350,6 +365,13 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
             void observed.catch(() => {});
             await run();
             await observed;
+        },
+        settleBlockedSyncJobs: () => {
+            if (!get().localPersistenceBlocked) return;
+            rejectBlockedJobs();
+            set({ syncing: false, syncHealth: 'failed', syncPresentation: 'normal',
+                syncGeneration: get().syncGeneration + 1,
+                saveError: get().saveError ?? LOCAL_PERSISTENCE_BLOCKED_MESSAGE });
         },
         cancelPendingSyncs: () => {
             invalidateSession();

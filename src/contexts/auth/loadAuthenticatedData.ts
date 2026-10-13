@@ -45,7 +45,9 @@ export async function loadAuthenticatedData({
         && isCurrentSession(session)
         && loadGenerationByOwner.get(expectedOwner) === generation
         && auth.currentUser?.uid === user.uid
-        && !isGuestActive();
+        && !isGuestActive()
+        // A readable old envelope cannot prove that a failed UI draft was saved.
+        && !useAppStore.getState().localPersistenceBlocked;
 
     if (!isCurrent()) return;
 
@@ -63,7 +65,6 @@ export async function loadAuthenticatedData({
                 userData: localEnvelope.data,
                 dataOwner: expectedOwner,
                 localWorkout,
-                localPersistenceBlocked: false,
             });
             markTabSnapshotClean(session, localEnvelope.data);
         } else {
@@ -137,7 +138,7 @@ export async function loadAuthenticatedData({
                 if (!cloudAllowed()) return;
                 useAppStore.setState({
                     userData: hydratedEnv.data, dataOwner: expectedOwner,
-                    localWorkout: hydratedWorkout, localPersistenceBlocked: false,
+                    localWorkout: hydratedWorkout,
                 });
                 markTabSnapshotClean(session, hydratedEnv.data);
             } catch (mergeError) {
