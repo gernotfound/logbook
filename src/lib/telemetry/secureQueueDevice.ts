@@ -20,6 +20,13 @@ export function storeEncryptedTelemetry(owner: string, serialized: string): bool
   if (!isVaultUnlocked(owner)) return false;
   const key = protectedDeviceKey('telemetry_queue', owner);
   const secret = requireUnlockedLocalKey(owner);
+  // A corrupt or incompatible sealed queue must not be overwritten just
+  // because a best-effort read returned no usable events.
+  const previous = readBrowserValueStrict(key);
+  if (previous !== null) {
+    const original = openLocalText(secret, owner, key, previous);
+    if (!Array.isArray(JSON.parse(original))) return false;
+  }
   const ciphertext = sealLocalText(secret, owner, key, serialized);
   writeBrowserValue(key, ciphertext);
   // Do not remove any plaintext left by an older tab unless the new copy
