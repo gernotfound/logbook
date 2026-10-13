@@ -1,7 +1,7 @@
 # Dati salute e revoca del consenso — decisione e gate pre-pilot
 
 > Stato aggiornato il **12 ottobre 2026**: soluzione A approvata dal product owner; implementazione della [PR #366](https://github.com/gernotfound/logbook/pull/366) **integrata** il 12 ottobre 2026. Il successivo rilascio dell'archivio cifrato ([PR #369](https://github.com/gernotfound/logbook/pull/369)) è in Production sul commit `5d21dc0b32a12676e1a08cc35611d96e5b18c3f3`. Restano separati il collaudo autenticato multi-dispositivo e i gate legali pre-pilot. Il gate automatizzato e la verifica giuridica/runtime sono evidenze distinte.
-> La fotografia di partenza seguente riguarda la baseline storica `main` `5a9394649977cae4e2261e530312f5121818ce12` (9 ottobre 2026), **non descrive lo stato corrente della PR**.
+> La fotografia di partenza seguente riguarda la baseline storica `main` `5a9394649977cae4e2261e530312f5121818ce12` (9 ottobre 2026), **non descrive lo stato distribuito corrente**.
 > Questo documento non costituisce un parere legale, una DPIA conclusa o una prova di collaudo autenticato multi-dispositivo.
 > Non certifica configurazioni Firebase/Vercel/Sentry Production.
 
@@ -17,7 +17,7 @@ Fonti istituzionali da utilizzare nella revisione:
 - Garante Privacy, principi fondamentali: https://garanteprivacy.it/web/guest/home/principi-fondamentali-del-trattamento
 - Garante Privacy, dispositivi e app fitness tracker: https://www.garanteprivacy.it/home/docweb/-/docweb-display/docweb/9968193
 
-## Analisi della baseline storica del 9 ottobre — non dello SHA candidato attuale
+## Analisi della baseline storica del 9 ottobre — non dello stato distribuito attuale
 
 | Confine | Evidenza nel codice | Conseguenza |
 |---|---|---|
@@ -44,7 +44,7 @@ La PR #366, già integrata, implementa il marker trusted `health_consent_withdra
 5. **Ospite:** distinguere l'uso locale e la raccolta presso i fornitori; stabilire le modalità necessarie a esercitare i diritti nella modalità priva di account.
 6. **Informativa e titolare:** correggere la descrizione della revoca, il canale di contatto e le basi giuridiche prima dei trattamenti per cui tali informazioni sono obbligatorie, non soltanto prima della vendita.
 
-La scelta A **non autorizza cancellazioni automatiche e irreversibili** né la conservazione indefinita. Un consenso ritirato non giustifica il proseguimento di trattamenti fondati esclusivamente su di esso, inclusa la conservazione senza altra base valida. La gestione dei dati residui e delle richieste di cancellazione deve essere validata sotto i profili degli artt. 6, 9 e 17 GDPR prima del rilascio.
+La scelta A **non autorizza cancellazioni automatiche e irreversibili** né la conservazione indefinita. Un consenso ritirato non giustifica il proseguimento di trattamenti fondati esclusivamente su di esso, inclusa la conservazione senza altra base valida. La gestione dei dati residui e delle richieste di cancellazione deve essere validata sotto i profili degli artt. 6, 9 e 17 GDPR prima del pilot con utenti reali.
 
 ## Comportamento UX approvato per la soluzione A
 
