@@ -236,3 +236,11 @@ it('does not erase a concurrent guest change from a clean stale tab', async () =
     expect(durable?.data.routines?.map(routine => routine.id)).toContain('guest-routine-a');
     expect(durable?.pending).toHaveLength(0);
 });
+
+it('blocks reload with a readable envelope while an unsaved UI draft has blocked local persistence', async () => {
+    app.flush.mockResolvedValue(undefined);
+    (app.state as typeof app.state & { localPersistenceBlocked?: boolean }).localPersistenceBlocked = true;
+    await expect(prepareForReload()).rejects.toThrow('Persistenza locale bloccata');
+    expect(app.flush).not.toHaveBeenCalled();
+    expect((await readLocal('user:a'))?.data.profile?.height).toBe('170');
+});

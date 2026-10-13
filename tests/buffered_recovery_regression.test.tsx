@@ -77,8 +77,8 @@ describe.each(['input', 'textarea'] as const)('owner-scoped buffered %s recovery
 
         let committed = false;
         const phaseOfBlock: boolean[] = [];
-        const unsubscribe = useAppStore.subscribe(state => {
-            if (state.localPersistenceBlocked) phaseOfBlock.push(committed);
+        const unsubscribe = useAppStore.subscribe((state, previous) => {
+            if (state.localPersistenceBlocked && !previous.localPersistenceBlocked) phaseOfBlock.push(committed);
         });
         function CommitBoundary() {
             useLayoutEffect(() => { committed = true; }, []);

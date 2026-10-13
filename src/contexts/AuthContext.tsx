@@ -1004,6 +1004,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 return;
             }
 
+            if (useAppStore.getState().localPersistenceBlocked) {
+                await useDialogStore.getState().showAlert('Le ultime modifiche sul dispositivo non risultano salvate. Per evitare di perderle, il logout è bloccato: riapri TheLogBook e verifica il recupero.');
+                return;
+            }
+
             if (mode === 'normal') {
                 setSyncing(true);
                 const state = useAppStore.getState();
@@ -1076,6 +1081,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 }
             }
 
+            // A draft can fail while a confirmation dialog or cloud check is open.
+            if (useAppStore.getState().localPersistenceBlocked) {
+                await useDialogStore.getState().showAlert('Logout sospeso: una modifica locale non è stata salvata sul dispositivo.');
+                return;
+            }
             setSyncing(true);
             try {
                 useAppStore.getState().cancelPendingSyncs();

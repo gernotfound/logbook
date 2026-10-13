@@ -40,10 +40,14 @@ export function prepareForRequiredUpdateReload() {
 export async function prepareForReload() {
     const session = captureSession();
     flushSync(() => draftRegistry.flushAll({ strict: true }));
+    if (useAppStore.getState().localPersistenceBlocked) {
+        throw new Error('Persistenza locale bloccata: le ultime bozze non sono state salvate. Riapri TheLogBook senza eliminare i dati.');
+    }
     if (isUnauthenticatedReloadSession(session)) return session;
     try { await useAppStore.getState().flushPendingSyncs(); }
     catch { /* Remote rejection is compatible with reload only if the local copy is verified below. */ }
     if (!isCurrentSession(session)) throw new Error('Sessione cambiata. Ripeti l’aggiornamento.');
+    if (useAppStore.getState().localPersistenceBlocked) throw new Error('Persistenza locale bloccata: aggiornamento sospeso.');
     let envelope = await readLocal(session.owner);
     if (!isCurrentSession(session)) throw new Error('Sessione cambiata. Ripeti l’aggiornamento.');
     let state = useAppStore.getState();
@@ -74,6 +78,7 @@ export async function prepareForReload() {
         throw new Error('Le ultime modifiche non sono ancora salvate sul dispositivo. Riprova tra poco.');
     }
     if (state.userData && envelope) markTabSnapshotClean(session, state.userData);
+    if (useAppStore.getState().localPersistenceBlocked) throw new Error('Persistenza locale bloccata: aggiornamento sospeso.');
     persistOwnerBoundWorkoutSnapshot(session, state.dataOwner, state.localWorkout);
     return session;
 }

@@ -264,4 +264,21 @@ describe('Audit 18 device-critical persistence', () => {
         expect(useAppStore.getState().saveError).toContain('mettere al sicuro');
     });
 
+
+    it('persists the workout produced by a synchronous draft flush, not its previous snapshot', () => {
+        const updated = workout('w-current', '12');
+        const flushDraft = () => { useAppStore.setState({ localWorkout: updated }); };
+        draftRegistry.register(flushDraft);
+        try {
+            Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });
+            document.dispatchEvent(new Event('visibilitychange'));
+            const raw = localStorage.getItem(deviceKey('workout', owner));
+            expect(raw).not.toBeNull();
+            expect(JSON.parse(raw!).exercises[0].sets[0].reps).toBe('12');
+            expect(useAppStore.getState().localPersistenceBlocked).toBe(false);
+        } finally {
+            draftRegistry.unregister(flushDraft);
+        }
+    });
+
 });

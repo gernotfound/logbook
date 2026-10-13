@@ -189,4 +189,34 @@ describe('store with real IndexedDB commits', () => {
         expect(store.getState().syncHealth).toBe('local-pending');
         expect((await readLocal('user:A'))?.pending).toHaveLength(1);
     });
+
+    it('settles a debounced save on local persistence failure without contacting Firestore', async () => {
+        const saving = store.getState().saveUserData(data(171));
+        const observed = expect(saving).rejects.toThrow('Archivio locale non leggibile');
+        store.setState({ localPersistenceBlocked: true, syncHealth: 'failed' });
+        store.getState().settleBlockedSyncJobs();
+        await observed;
+        await store.getState().flushPendingSyncs();
+        expect(sdk.save).not.toHaveBeenCalled();
+        expect(store.getState().syncing).toBe(false);
+        expect(store.getState().syncHealth).toBe('failed');
+    });
+
+    it('does not publish an old cloud success after a later local draft failure', async () => {
+        const remote = deferred<{ ok: true; status: 'synced' }>();
+        sdk.save.mockReturnValueOnce(remote.promise);
+        const saving = store.getState().saveUserData(data(171));
+        const observed = expect(saving).rejects.toThrow('Archivio locale non leggibile');
+        const flushing = store.getState().flushPendingSyncs();
+        await vi.waitFor(() => expect(sdk.save).toHaveBeenCalledTimes(1));
+        store.setState({ localPersistenceBlocked: true, syncHealth: 'failed', saveError: 'Bozza non salvata' });
+        store.getState().settleBlockedSyncJobs();
+        remote.resolve({ ok: true, status: 'synced' });
+        await flushing;
+        await observed;
+        expect(store.getState().syncHealth).toBe('failed');
+        expect(store.getState().saveError).toBe('Bozza non salvata');
+        expect(store.getState().localPersistenceBlocked).toBe(true);
+    });
+
 });
