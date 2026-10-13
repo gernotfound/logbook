@@ -87,11 +87,14 @@ describe('monthly Firestore read boundaries', () => {
 
         await loadNutritionMonths(owner, ['2026-05'], data, documents);
 
-        expect(data.nutrition).toEqual({ '2026-05-03': { date: '2026-05-03', weight: 74 } });
-        expect(documents.get('nutrition_months/2026-05')).toEqual({
+        expect(Object.keys(data.nutrition)).toEqual(['2026-05-03']);
+        expect(data.nutrition).toMatchObject({ '2026-05-03': { date: '2026-05-03', weight: 74 } });
+        expect(data.nutrition['2026-05-03']).toHaveProperty('meals', []);
+        expect(documents.get('nutrition_months/2026-05')).toMatchObject({
             '2026-05-03': { date: '2026-05-03', weight: 74 },
             _sync: syncMeta,
         });
+        expect(Object.keys(documents.get('nutrition_months/2026-05') ?? {}).sort()).toEqual(['2026-05-03', '_sync']);
     });
 
     it('fails closed on an unsupported future data schema, then succeeds after correction', async () => {
@@ -153,7 +156,9 @@ describe('monthly Firestore read boundaries', () => {
             '2026-05-03': { date: '2026-05-03', weight: 74 },
         }));
         await loadNutritionMonths(owner, ['2026-05'], data, documents);
-        expect(data.nutrition).toEqual({ '2026-05-03': { date: '2026-05-03', weight: 74 } });
+        expect(Object.keys(data.nutrition)).toEqual(['2026-05-03']);
+        expect(data.nutrition).toMatchObject({ '2026-05-03': { date: '2026-05-03', weight: 74 } });
+        expect(data.nutrition['2026-05-03']).toHaveProperty('meals', []);
         expect(documents.get('nutrition_months/2026-05')).toMatchObject({
             '2026-05-03': { date: '2026-05-03' },
             _sync: syncMeta,
