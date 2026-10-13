@@ -206,7 +206,7 @@ async function serverRequest(user: User, method: 'GET' | 'POST', body?: unknown)
   if (!result || typeof result !== 'object') throw new Error('Risposta server non valida.');
   const state = result as Partial<ServerStatus>;
   if ((state.status !== 'active' && state.status !== 'withdrawn' && state.status !== 'unregistered')
-    || !Number.isSafeInteger(state.revision) || Number(state.revision) < 0
+    || typeof state.revision !== 'number' || !Number.isSafeInteger(state.revision) || state.revision < 0
     || (state.status === 'unregistered' && state.revision !== 0)
     || (state.status !== 'unregistered' && state.revision < 1)) {
     throw new Error('Stato del consenso server non valido.');
