@@ -30,7 +30,7 @@ import BottomNav from './components/UI/BottomNav';
 import { GlobalDialog } from './components/UI/GlobalDialog';
 import { ConsentOverlay } from './components/UI/ConsentOverlay';
 import { HealthConsentSuspended } from './components/UI/HealthConsentSuspended';
-import { currentHealthConsentStatus, getGuestHealthConsentStatus, refreshHealthConsent, refreshHealthConsentFromStorage, subscribeHealthConsent } from './lib/healthConsent';
+import { currentHealthConsentStatus, getGuestHealthConsentStatus, getServerConfirmedLegalConsent, refreshHealthConsent, refreshHealthConsentFromStorage, subscribeHealthConsent } from './lib/healthConsent';
 import { needsLegalUpdate } from './lib/legalVersions';
 import { LoginBox } from './components/UI/LoginBox';
 import { EmailVerificationGate } from './components/UI/EmailVerificationGate';
@@ -160,6 +160,7 @@ function OwnerBoundApp({ startupTab }: { startupTab: string | null }) {
   const syncPresentation = useAppStore(state => state.syncPresentation);
   const localPersistenceBlocked = useAppStore(state => state.localPersistenceBlocked);
   const setSaveError = useAppStore(state => state.setSaveError);
+  const submitLegalConsent = useAppStore(state => state.submitLegalConsent);
   const compatibilityStatus = useAppStore(state => state.compatibilityStatus);
   const compatibilityError = useAppStore(state => state.compatibilityError);
   const parsedStartupTab = AppTabSchema.safeParse(startupTab);
@@ -180,7 +181,27 @@ function OwnerBoundApp({ startupTab }: { startupTab: string | null }) {
   const [showGuestLogin, setShowGuestLogin] = useState(readGuestLoginOverlayState);
 
   const hasUserData = Boolean(userData) && dataOwner === navigationOwner;
-  const showConsentOverlay = hasUserData && userData && needsLegalUpdate(userData.legalConsent);
+  const [serverConsentSyncFailed, setServerConsentSyncFailed] = useState(false);
+  const serverConsentSyncAttempted = useRef(false);
+  const acceptedOnServer = currentUser && !isGuest && healthConsentStatus === 'active'
+    ? getServerConfirmedLegalConsent(currentUser.uid) : null;
+  const persistTrustedLegal = !!acceptedOnServer && hasUserData && userData
+    && needsLegalUpdate(userData.legalConsent) && !serverConsentSyncFailed
+    && guestMigrationStatus === 'idle';
+  useEffect(() => {
+    if (!persistTrustedLegal || !acceptedOnServer || serverConsentSyncAttempted.current) return;
+    serverConsentSyncAttempted.current = true;
+    // The explicit acceptance already exists in the trusted record for this UID
+    // and these exact versions. Persist the matching local legalConsent once,
+    // through the canonical durable Domain Operation rather than a second form.
+    void submitLegalConsent(acceptedOnServer).catch(error => {
+      console.error('Consenso server registrato ma cache locale non aggiornata:', error);
+      setServerConsentSyncFailed(true);
+      setSaveError('Consenso server confermato ma salvataggio locale non riuscito. Riprova dalla schermata dei termini.');
+    });
+  }, [persistTrustedLegal, acceptedOnServer, submitLegalConsent, setSaveError]);
+  const showConsentOverlay = hasUserData && userData && needsLegalUpdate(userData.legalConsent)
+    && !persistTrustedLegal;
   const guestLoginOverlayVisible = showGuestLogin && (!currentUser || (isGuest && guestMigrationStatus === 'idle'));
   const guestLoginMigrationPending = !!currentUser && guestMigrationStatus === 'pending';
   const guestLoginMigrationFailed = !!currentUser && guestMigrationStatus === 'failed';
@@ -488,6 +509,8 @@ function OwnerBoundApp({ startupTab }: { startupTab: string | null }) {
   if ((currentUser || isGuest) && (userData !== null || localWorkout !== null) && dataOwner !== navigationOwner) {
     return <BrandLoadingScreen label="Preparazione account in corso" />;
   }
+
+  if (persistTrustedLegal) return <BrandLoadingScreen label="Registrazione del consenso sul dispositivo" />;
 
   return (
     <>
