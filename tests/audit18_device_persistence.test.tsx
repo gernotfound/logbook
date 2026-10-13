@@ -13,6 +13,7 @@ import { draftRegistry } from '../src/lib/utils/draftRegistry';
 import PreSessionCheckIn from '../src/components/Training/PreSessionCheckIn';
 import { useWorkoutSession } from '../src/hooks/useWorkoutSession';
 import { captureSession } from '../src/lib/sync/session';
+import { initializeLocal } from '../src/lib/sync/localRepository';
 
 const parseUserData = (value: unknown): UserData => UserDataSchema.parse(value) as unknown as UserData;
 let owner: string;
@@ -120,6 +121,9 @@ describe('Audit 18 device-critical persistence', () => {
             syncHealth: 'synced',
             saveError: null,
         });
+        // Start validation now requires a real durable prepared workout. The
+        // timer failure must be tested after that prerequisite is satisfied.
+        await initializeLocal(owner, parseUserData({ activeWorkout: pending }));
         const timerKey = deviceKey('timer', owner);
         localStorageMock.setItem.mockImplementationOnce((writtenKey: string) => {
             if (writtenKey === timerKey) throw new DOMException('full', 'QuotaExceededError');

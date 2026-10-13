@@ -10,6 +10,7 @@ import { useAppStore } from '../src/store/useAppStore';
 import PreSessionCheckIn from '../src/components/Training/PreSessionCheckIn';
 import TrainingSession from '../src/components/Training/TrainingSession';
 import type { UserData, WorkoutSession } from '../src/types';
+import { initializeLocal } from '../src/lib/sync/localRepository';
 
 vi.mock('../src/lib/telemetryHub', () => ({ telemetryHub: { trackEvent: vi.fn(), trackError: vi.fn() } }));
 
@@ -83,9 +84,11 @@ describe('pre-session readiness contract', () => {
 
     it('scrolls to the top after confirming the pre-session check-in', async () => {
         const scrollToSpy = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
-        useAppStore.setState({
-            localWorkout: { id: 'pending-scroll', date: '2026-09-24', routineName: 'Push', exercises: [] },
-        });
+        const prepared: WorkoutSession = { id: 'pending-scroll', date: '2026-09-24', routineName: 'Push', exercises: [] };
+        const data = parseUserData({ activeWorkout: prepared });
+        await initializeLocal(captureSession().owner, data);
+        useAppStore.setState({ userData: data, dataOwner: captureSession().owner,
+            localWorkout: prepared, localPersistenceBlocked: false });
 
         render(<TrainingSession />);
         fireEvent.click(screen.getByRole('button', { name: 'Energia: 4 su 5' }));
@@ -99,9 +102,11 @@ describe('pre-session readiness contract', () => {
     it('anchors the workout date to the actual local start time when check-in crosses midnight', async () => {
         const startedAt = new Date(2026, 8, 25, 0, 0, 5).getTime();
         const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(startedAt);
-        useAppStore.setState({
-            localWorkout: { id: 'pending-midnight', date: '2026-09-24', routineName: 'Push', ratingScale: 5, exercises: [] },
-        });
+        const prepared: WorkoutSession = { id: 'pending-midnight', date: '2026-09-24', routineName: 'Push', ratingScale: 5, exercises: [] };
+        const data = parseUserData({ activeWorkout: prepared });
+        await initializeLocal(captureSession().owner, data);
+        useAppStore.setState({ userData: data, dataOwner: captureSession().owner,
+            localWorkout: prepared, localPersistenceBlocked: false });
         render(<TrainingSession />);
         fireEvent.click(screen.getByRole('button', { name: 'Salta check-in e inizia' }));
         await waitFor(() => {

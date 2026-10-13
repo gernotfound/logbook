@@ -80,6 +80,15 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
         activeWorkout, history, library, confirmWorkoutStart, deleteWorkout, endWorkout,
     } = useWorkoutSession();
     const [reportWorkout, setReportWorkout] = useState<WorkoutSession | null>(null);
+    const [startPending, setStartPending] = useState(false);
+    const confirmStartWithGate = useCallback(async (...args: Parameters<typeof confirmWorkoutStart>) => {
+        setStartPending(true);
+        try {
+            return await confirmWorkoutStart(...args);
+        } finally {
+            setStartPending(false);
+        }
+    }, [confirmWorkoutStart]);
     const [pendingEndTime, setPendingEndTime] = useState<number | null>(null);
     const pendingEndTimeRef = useRef<number | null>(null);
     const [postSessionDraft, setPostSessionDraft] = useState<PostSessionDraft | null>(null);
@@ -312,6 +321,15 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
         );
     }
 
+    // The device snapshot becomes optimistic before the IndexedDB/cloud outcome
+    // is known. Do not expose completion controls until the start is verified.
+    if (startPending) {
+        return <section role="status" aria-live="polite" className="pre-session-checkin">
+            <h2>Avvio dell’allenamento</h2>
+            <p>Verifica del salvataggio sul dispositivo in corso…</p>
+        </section>;
+    }
+
     if (reportWorkout) {
         return (
             <WorkoutReportModal
@@ -330,7 +348,7 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
                 workoutId={String(activeWorkout.id ?? '')}
                 routineName={activeWorkout.routineName}
                 date={activeWorkout.date}
-                onStart={confirmWorkoutStart}
+                onStart={confirmStartWithGate}
                 onCancel={deleteWorkout}
             />
         );

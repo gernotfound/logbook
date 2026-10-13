@@ -229,7 +229,13 @@ export function useWorkoutSession() {
             if (!persistedWorkout || persistedWorkout.id !== currentWorkout.id
                 || persistedWorkout.globalStartTime !== startedAt
                 || useAppStore.getState().localWorkout?.id !== currentWorkout.id) {
-                await showAlert('Impossibile confermare il salvataggio locale dell’avvio. Riprova dopo il recupero.');
+                // The visible workout was already updated optimistically. A mismatch
+                // must fence further edits until recovery resolves the durable state.
+                useAppStore.setState({
+                    localPersistenceBlocked: true, syncHealth: 'failed', syncPresentation: 'normal',
+                    saveError: 'Avvio workout non allineato con l’archivio locale. Riapri TheLogBook per il recupero.',
+                });
+                await showAlert('Impossibile confermare il salvataggio locale dell’avvio. Riapri TheLogBook per il recupero.');
                 return false;
             }
             if (!resetGlobalWorkoutTimer(session.owner)) {
