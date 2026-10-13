@@ -1,4 +1,4 @@
-import { auth, onAuthStateChanged } from '../src/lib/firebase';
+import { auth, onAuthStateChanged, signOut } from '../src/lib/firebase';
 import React from 'react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, act, waitFor, renderHook } from '@testing-library/react';
@@ -12,6 +12,7 @@ import { resolveEffectiveExercises, resolveEffectiveFoods } from '../src/lib/cat
 import type { UserData, Exercise, Food } from '../src/types';
 import { activateGuestSession, captureSession, GUEST_REVOCATION_KEY, GUEST_SESSION_KEY, isCurrentSession } from '../src/lib/sync/session';
 import { isVaultUnlocked } from '../src/lib/sync/secureArchiveSession';
+import { refreshHealthConsent } from '../src/lib/healthConsent';
 
 /** Verify real silent encryption bootstrap rather than simulating a bypass. */
 async function confirmRealGuestVault() {
@@ -72,6 +73,46 @@ describe('Milestone M2: Guest Bootstrap & Cold Start Lifecycle', () => {
         expect(state?.customFoods?.length).toBe(0);
         expect(parseInt(screen.getByTestId('exercise-count').textContent || '0')).toBe(0);
         expect(parseInt(screen.getByTestId('food-count').textContent || '0')).toBe(0);
+    });
+
+    it('signs out Firebase without deleting the guest archive while first consent is pending', async () => {
+        let listener!: (user: unknown) => Promise<void>;
+        vi.mocked(onAuthStateChanged).mockImplementation((_auth, callback: any) => {
+            listener = callback;
+            void callback(null);
+            return () => {};
+        });
+        const { result } = renderHook(() => useAuth(), {
+            wrapper: ({ children }) => <AuthProvider>{children}</AuthProvider>,
+        });
+        await act(async () => { await result.current.loginAsGuest(); });
+        await confirmRealGuestVault();
+        await waitFor(() => expect(useAppStore.getState().userData).not.toBeNull());
+        const preserved = useAppStore.getState().userData;
+        const account = {
+            uid: 'test-user-id', emailVerified: true, getIdToken: vi.fn(async () => 'id-token'),
+        } as any;
+        (auth as any).currentUser = account;
+        vi.mocked(refreshHealthConsent).mockResolvedValueOnce('unregistered');
+        await act(async () => { await listener(account); });
+        await waitFor(() => expect(result.current.currentUser?.uid).toBe(account.uid));
+        expect(result.current.isGuest).toBe(true);
+        expect(captureSession().owner).toBe('guest');
+
+        const purge = vi.spyOn(DB, 'purgeAllLocalUserData');
+        vi.mocked(signOut).mockImplementationOnce(async () => {
+            (auth as any).currentUser = null;
+            await listener(null);
+        });
+        await act(async () => { await result.current.logout({ mode: 'normal' }); });
+
+        expect(vi.mocked(signOut)).toHaveBeenCalledTimes(1);
+        expect(purge).not.toHaveBeenCalled();
+        expect(result.current.currentUser).toBeNull();
+        expect(result.current.isGuest).toBe(true);
+        expect(captureSession().owner).toBe('guest');
+        expect(useAppStore.getState().userData).toEqual(preserved);
+        expect(localStorage.getItem('logbook_is_guest')).toBe('true');
     });
 
     it('invalidates a second guest view after cross-tab revocation', async () => {
