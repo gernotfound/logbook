@@ -10,7 +10,7 @@ import { useAppStore } from '../src/store/useAppStore';
 import PreSessionCheckIn from '../src/components/Training/PreSessionCheckIn';
 import TrainingSession from '../src/components/Training/TrainingSession';
 import type { UserData, WorkoutSession } from '../src/types';
-import { initializeLocal } from '../src/lib/sync/localRepository';
+import { initializeLocal, readLocal } from '../src/lib/sync/localRepository';
 
 vi.mock('../src/lib/telemetryHub', () => ({ telemetryHub: { trackEvent: vi.fn(), trackError: vi.fn() } }));
 
@@ -126,11 +126,27 @@ describe('pre-session readiness contract', () => {
         });
         try {
             fireEvent.click(screen.getByRole('button', { name: 'Salta check-in e inizia' }));
-            await waitFor(() => {
-                const started = useAppStore.getState().localWorkout;
-                expect(started?.globalStartTime).toBe(startedAt);
-                expect(started?.date).toBe('2026-09-25');
-            });
+            try {
+                await waitFor(() => {
+                    const started = useAppStore.getState().localWorkout;
+                    expect(started?.globalStartTime).toBe(startedAt);
+                    expect(started?.date).toBe('2026-09-25');
+                });
+            } catch (assertion) {
+                const state = useAppStore.getState();
+                const durable = await readLocal(captureSession().owner);
+                console.error('MIDNIGHT TEST persistence discrepancy', {
+                    expectedTime: startedAt,
+                    localId: state.localWorkout?.id,
+                    localTime: state.localWorkout?.globalStartTime,
+                    durableId: durable?.data.activeWorkout?.id,
+                    durableTime: durable?.data.activeWorkout?.globalStartTime,
+                    syncHealth: state.syncHealth,
+                    saveError: state.saveError,
+                    pendingOperations: durable?.pending.length,
+                });
+                throw assertion;
+            }
         } finally {
             stopTrace();
             nowSpy.mockRestore();
