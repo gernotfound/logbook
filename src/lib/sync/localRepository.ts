@@ -459,6 +459,13 @@ export async function commitDomainOperations(owner: string, batch: DomainOperati
                 throw new Error('Workout attivo cambiato: intento device non applicabile.');
             }
             if (applied?.generation === workoutIntent.generation && applied.sequence >= workoutIntent.sequence) {
+                // A repeated sequence is idempotent only if it represents the
+                // same workout. Different tabs can race on localStorage read/write
+                // and independently allocate the same next sequence.
+                if (applied.sequence === workoutIntent.sequence
+                    && !equivalentWorkoutSnapshot(current?.data.activeWorkout, domainOperations[0].workout)) {
+                    throw new Error('Conflitto tra modifiche concorrenti del workout: journal preservato.');
+                }
                 savedData = current!.data;
                 operations = [];
                 return current;

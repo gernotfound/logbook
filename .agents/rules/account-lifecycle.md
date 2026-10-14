@@ -10,7 +10,7 @@ La lettura di tutti i documenti non costituisce uno snapshot atomico fra disposi
 
 La baseline clean-cut corrente **non importa Backup Schema V1/V2**: `decodeImport()` li rifiuta tramite `LegacyVersionError`. Anche versioni future sconosciute falliscono chiuso e richiedono aggiornamento. Non esiste più un percorso prodotto che legga, preservi o esporti la vecchia cache locale non attribuita `logbook_cached_user_data`: prima dell'esistenza di account reali quel compatibility layer è stato rimosso intenzionalmente.
 
-- **Importa JSON:** opera soltanto su formati supportati e applica l'unione prevista senza mutazioni in place. Le collisioni e i ricalcoli seguono il contratto corrente dell'importer.
+- **Importa JSON:** opera soltanto su formati supportati e applica l'unione prevista senza mutazioni in place. Un `activeWorkout` non nullo ma invalido nel backup blocca l'importazione con un errore esplicito, senza scartarlo in silenzio; il file sorgente resta invariato. Le collisioni e i ricalcoli seguono il contratto corrente dell'importer.
 - **Ripristina:** sostituisce i campi presenti nel formato supportato rispetto allo stato locale disponibile; non autorizza a trattare dati cloud mai caricati come assenti.
 - L'anteprima/commit deve invalidarsi se cambia sessione o baseline rilevante durante l'operazione.
 - La conferma segue la persistenza locale; offline non va presentata come conferma cloud.

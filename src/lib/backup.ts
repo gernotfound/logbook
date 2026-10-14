@@ -179,12 +179,15 @@ export function decodeImport(payload: unknown, owner: string) {
     const sanitizedData = structuredClone(data);
     if (sanitizedData.activeWorkout !== undefined && sanitizedData.activeWorkout !== null) {
         const activeWorkout = DomainParsers.parseActiveWorkout(sanitizedData.activeWorkout);
-        try {
-            if (activeWorkout) assertWorkoutSessionIdentities(activeWorkout, 'activeWorkout');
-            sanitizedData.activeWorkout = activeWorkout;
-        } catch {
-            sanitizedData.activeWorkout = null;
+        if (!activeWorkout) {
+            throw new Error('Il backup contiene un allenamento attivo non valido: importazione annullata senza modificare i dati.');
         }
+        try {
+            assertWorkoutSessionIdentities(activeWorkout, 'activeWorkout');
+        } catch (error) {
+            throw new Error('Il backup contiene un allenamento attivo con identificativi non validi: importazione annullata.', { cause: error });
+        }
+        sanitizedData.activeWorkout = activeWorkout;
     }
     const selected = share
         ? Object.fromEntries(arrays.filter(key => ['library', 'routines', 'trainingCycles'].includes(key) && sanitizedData[key] !== undefined).map(key => [key, sanitizedData[key]]))

@@ -61,6 +61,45 @@ describe('authenticated device-intent replay into semantic journal', () => {
         expect(readWorkoutDeviceIntent(owner)?.workout.exercises[0].sets[0].kg).toBe('57');
     });
 
+    it('refuses different concurrent workouts with the same generation and sequence without losing either durable record', async () => {
+        for (const [committedKg, competingKg] of [['55', '60'], ['60', '55']]) {
+            const parallelOwner = 'user:device-intent-collision-' + committedKg;
+            const original = data(workout('50'));
+            await initializeLocal(parallelOwner, original);
+            const first = saveWorkoutDeviceIntent(parallelOwner, original.activeWorkout, workout(committedKg), original.activeWorkout);
+            const competing = { ...first, workout: workout(competingKg) };
+
+            await commitDomainOperations(parallelOwner, { type: 'active-workout.set', workout: first.workout },
+                original, undefined, { generation: first.generation, sequence: first.sequence, baseline: first.baseline });
+            const committed = await readLocal(parallelOwner);
+            // A second tab wrote after reading the same prior sequence.
+            writeDeviceValue('workout', JSON.stringify(competing), parallelOwner);
+            const deviceCopy = readDeviceValueStrict('workout', parallelOwner);
+            await expect(commitDomainOperations(parallelOwner, { type: 'active-workout.set', workout: competing.workout },
+                original, undefined, { generation: competing.generation, sequence: competing.sequence, baseline: competing.baseline }))
+                .rejects.toThrow('Conflitto tra modifiche concorrenti');
+            await expect(recoverWorkoutDeviceIntent(parallelOwner, () => true))
+                .rejects.toThrow('Conflitto tra modifiche concorrenti');
+            expect(await readLocal(parallelOwner)).toEqual(committed);
+            expect(readDeviceValueStrict('workout', parallelOwner)).toBe(deviceCopy);
+        }
+    });
+
+    it('allows an equivalent retry at the same generation/sequence without duplicate journal entries', async () => {
+        const initial = data(workout('50'));
+        await initializeLocal(owner, initial);
+        const intent = saveWorkoutDeviceIntent(owner, initial.activeWorkout, workout('55'), initial.activeWorkout);
+        await recoverWorkoutDeviceIntent(owner, () => true);
+        const before = (await readLocal(owner))!;
+        const expanded = DomainParsers.parseActiveWorkout(intent.workout);
+        if (!expanded) throw new Error('Expected valid workout');
+        await commitDomainOperations(owner, { type: 'active-workout.set', workout: expanded }, initial, undefined,
+            { generation: intent.generation, sequence: intent.sequence, baseline: intent.baseline });
+        await recoverWorkoutDeviceIntent(owner, () => true);
+        expect((await readLocal(owner))?.pending).toEqual(before.pending);
+        expect((await readLocal(owner))?.revision).toBe(before.revision);
+    });
+
     it('accepts semantically identical serialized and Zod-expanded snapshots without masking competing edits', async () => {
         const initial = data(workout('50'));
         await initializeLocal(owner, initial);

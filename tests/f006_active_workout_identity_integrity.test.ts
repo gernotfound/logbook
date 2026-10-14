@@ -133,7 +133,7 @@ describe('F-006 active workout persisted business identity', () => {
         expect(projectDocuments(validHydrated, catalog).get('')?.activeWorkout).toMatchObject(validWorkout);
     });
 
-    it('quarantines malformed activeWorkout during backup restore while preserving the rest of the backup', () => {
+    it('rejects malformed activeWorkout during backup restore without changing or sanitizing the source backup', () => {
         const current = UserDataSchema.parse({ profile: { height: '180' } }) as unknown as UserData;
         const backup = createBackup(current, 'guest') as any;
         backup.userData = {
@@ -142,10 +142,13 @@ describe('F-006 active workout persisted business identity', () => {
             activeWorkout: { date: '2026-09-29', exercises: [] },
         };
 
-        const decoded = decodeImport(backup, 'guest');
-        const restored = prepareImport(current, decoded.data, 'restore').data;
-        expect(restored.profile?.height).toBe('181');
-        expect(restored.activeWorkout).toBeNull();
+        const original = structuredClone(backup);
+        expect(() => decodeImport(backup, 'guest')).toThrow('allenamento attivo non valido');
+        expect(backup).toEqual(original);
+        expect(current.profile?.height).toBe('180');
+
+        backup.userData = { ...current, activeWorkout: null };
+        expect(prepareImport(current, decodeImport(backup, 'guest').data, 'restore').data.activeWorkout).toBeNull();
 
         backup.userData = { ...current, activeWorkout: validWorkout };
         const validRestored = prepareImport(current, decodeImport(backup, 'guest').data, 'restore').data;

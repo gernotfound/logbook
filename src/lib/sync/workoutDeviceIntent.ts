@@ -120,7 +120,17 @@ export async function recoverWorkoutDeviceIntent(owner: string, guard: LocalWrit
         return;
     }
     const applied = envelope.lastWorkoutDeviceIntent;
-    if (applied?.generation === intent.generation && applied.sequence >= intent.sequence) return;
+    if (applied?.generation === intent.generation) {
+        if (applied.sequence > intent.sequence) return;
+        if (applied.sequence === intent.sequence) {
+            // A concurrent tab can publish different workout bytes with the same
+            // generation/sequence. Sequence equality alone is not idempotence.
+            if (!equivalentWorkoutSnapshot(envelope.data.activeWorkout, intent.workout)) {
+                throw new Error('Conflitto tra modifiche concorrenti del workout: snapshot device preservato.');
+            }
+            return;
+        }
+    }
 
     if (applied?.generation !== intent.generation && !equivalentWorkoutSnapshot(envelope.data.activeWorkout, intent.baseline)) {
         if (equivalentWorkoutSnapshot(envelope.data.activeWorkout, intent.workout)) return;
