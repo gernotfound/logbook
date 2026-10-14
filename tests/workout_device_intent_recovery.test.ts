@@ -143,6 +143,46 @@ describe('authenticated device-intent replay into semantic journal', () => {
         }
     });
 
+    it('rejects a newer sequence from a divergent tab branch before changing IndexedDB', async () => {
+        const testOwner = 'user:divergent-ancestry';
+        const initial = data(workout('50'));
+        await initializeLocal(testOwner, initial);
+        const first = saveWorkoutDeviceIntent(testOwner, initial.activeWorkout ?? null, workout('55'), initial.activeWorkout ?? null);
+        await commitDomainOperations(testOwner, { type: 'active-workout.set', workout: first.workout },
+            initial, undefined, { generation: first.generation, sequence: first.sequence,
+                intentId: first.intentId, baseline: first.baseline });
+        const alreadyCommitted = await readLocal(testOwner);
+        const competingParent = { ...first, intentId: 'b'.repeat(32), workout: workout('60') };
+        writeDeviceValue('workout-intent:' + competingParent.intentId, JSON.stringify(competingParent), testOwner);
+        const divergent = { ...first, intentId: 'c'.repeat(32), sequence: 2,
+            parentIntentId: competingParent.intentId, workout: workout('65') };
+        writeDeviceValue('workout-intent:' + divergent.intentId, JSON.stringify(divergent), testOwner);
+
+        await expect(commitDomainOperations(testOwner, { type: 'active-workout.set', workout: divergent.workout },
+            initial, undefined, { generation: divergent.generation, sequence: divergent.sequence,
+                intentId: divergent.intentId, parentIntentId: divergent.parentIntentId, baseline: divergent.baseline }))
+            .rejects.toThrow('non discendente');
+        expect(await readLocal(testOwner)).toEqual(alreadyCommitted);
+        expect(readDeviceValueStrict('workout-intent:' + divergent.intentId, testOwner))
+            .toBe(JSON.stringify(divergent));
+    });
+
+    it('accepts a newer snapshot whose intervening intent is still uncommitted', async () => {
+        const testOwner = 'user:linear-ancestry';
+        const initial = data(workout('50'));
+        await initializeLocal(testOwner, initial);
+        const first = saveWorkoutDeviceIntent(testOwner, initial.activeWorkout ?? null, workout('52'), initial.activeWorkout ?? null);
+        const middle = saveWorkoutDeviceIntent(testOwner, first.workout, workout('55'), first.baseline);
+        const latest = saveWorkoutDeviceIntent(testOwner, middle.workout, workout('60'), middle.baseline);
+        await commitDomainOperations(testOwner, { type: 'active-workout.set', workout: first.workout },
+            initial, undefined, { generation: first.generation, sequence: first.sequence,
+                intentId: first.intentId, baseline: first.baseline });
+        await commitDomainOperations(testOwner, { type: 'active-workout.set', workout: latest.workout },
+            initial, undefined, { generation: latest.generation, sequence: latest.sequence,
+                intentId: latest.intentId, parentIntentId: latest.parentIntentId, baseline: latest.baseline });
+        expect((await readLocal(testOwner))?.data.activeWorkout?.exercises[0].sets[0].kg).toBe('60');
+    });
+
     it('allows an equivalent retry at the same generation/sequence without duplicate journal entries', async () => {
         const initial = data(workout('50'));
         await initializeLocal(owner, initial);
