@@ -5,6 +5,7 @@ import * as idb from 'idb-keyval';
 import { useAppStore } from '../src/store/useAppStore';
 import { storageOwner } from '../src/lib/sync/session';
 import { isLocalPurgePending } from '../src/lib/sync/localPurgeFence';
+import * as localRepository from '../src/lib/sync/localRepository';
 import { localStorageMock } from './setup';
 import { markAccountDeletion, isAccountDeletionPending } from '../src/lib/sync/accountGate';
 
@@ -33,6 +34,47 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
         vi.clearAllMocks();
         Object.defineProperty(navigator, 'locks', { configurable: true, value: { request: async (_key: string, _options: unknown, action: () => Promise<unknown>) => action() } });
         localStorage.clear();
+    });
+
+    it('rejects an ordinary authenticated logout when the durable journal has pending operations', async () => {
+        const { auth } = await import('../src/lib/firebase');
+        const read = vi.spyOn(localRepository, 'readLocal').mockResolvedValue({ pending: [{ seq: 1 }] } as any);
+        try {
+            await expect(DB.secureLogOut()).rejects.toThrow('modifiche');
+            expect(auth.signOut).not.toHaveBeenCalled();
+            expect(idb.del).not.toHaveBeenCalled();
+            expect(isLocalPurgePending(storageOwner())).toBe(false);
+        } finally { read.mockRestore(); }
+    });
+
+    it('allows explicitly discarded pending changes but still completes the fenced sign-out', async () => {
+        const { auth } = await import('../src/lib/firebase');
+        const read = vi.spyOn(localRepository, 'readLocal').mockResolvedValue({ pending: [{ seq: 1 }] } as any);
+        try {
+            await DB.secureLogOut({ discardUnsynced: true });
+            expect(auth.signOut).toHaveBeenCalledTimes(1);
+            expect(idb.del).toHaveBeenCalledWith('logbook:v2:' + storageOwner());
+            expect(isLocalPurgePending(storageOwner())).toBe(true);
+        } finally { read.mockRestore(); }
+    });
+
+    it('restores write access when Firebase sign-out fails before deleting anything', async () => {
+        const { auth } = await import('../src/lib/firebase');
+        vi.mocked(auth.signOut).mockRejectedValueOnce(new Error('Network offline'));
+        await expect(DB.secureLogOut()).rejects.toThrow('Network offline');
+        expect(idb.del).not.toHaveBeenCalled();
+        expect(isLocalPurgePending(storageOwner())).toBe(false);
+    });
+
+    it('rechecks the journal after pending UI drafts have flushed', async () => {
+        const { auth } = await import('../src/lib/firebase');
+        const read = vi.spyOn(localRepository, 'readLocal').mockResolvedValue({ pending: [{ seq: 2 }] } as any);
+        const verifyCurrentDrafts = vi.fn(async () => undefined);
+        try {
+            await expect(DB.secureLogOut({ verifyCurrentDrafts })).rejects.toThrow('modifiche');
+            expect(verifyCurrentDrafts).toHaveBeenCalledTimes(1);
+            expect(auth.signOut).not.toHaveBeenCalled();
+        } finally { read.mockRestore(); }
     });
 
     it('purgeAllLocalUserData removes all sensitive keys from localStorage and preserves device-specific ones', async () => {

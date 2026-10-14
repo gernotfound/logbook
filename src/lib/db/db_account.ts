@@ -151,11 +151,13 @@ export async function logoutAndPurgeAccount(
     owner: string,
     signOutAccount: () => Promise<void>,
     discardUnsynced = false,
+    verifyCurrentDrafts?: () => Promise<void>,
 ): Promise<void> {
     if (!owner.startsWith('user:')) throw new Error('Logout autenticato: proprietario non valido');
     return purgeOwnerLocalData(owner, false, {
         preflight: async () => {
             assertOrdinaryPurgeAllowed(owner);
+            if (!discardUnsynced) await verifyCurrentDrafts?.();
             await assertNoOutdatedConsentJournal(owner);
             if (!discardUnsynced) {
                 const { readLocal } = await import('../sync/localRepository');
@@ -182,7 +184,11 @@ async function purgeOwnerLocalData(owner: string, resumeOnly = false, gate?: Pur
     return navigator.locks.request('thelogbook:secure-archive:' + owner, { mode: 'exclusive' }, async () => {
         // A second tab must not purge newly activated guest data after the
         // previous generation's deletion was already completed.
-        if (isLocalPurgePending(owner) && !isLocalPurgeIncomplete(owner)) return;
+        if (isLocalPurgePending(owner) && !isLocalPurgeIncomplete(owner)) {
+            // Already fully purged. A new sign-out may still need to invalidate Auth.
+            if (gate) await gate.afterFence();
+            return;
+        }
         if (resumeOnly && !isLocalPurgeIncomplete(owner)) return;
         if (gate && !isLocalPurgeIncomplete(owner)) await gate.preflight();
         const previouslyIncomplete = isLocalPurgeIncomplete(owner);

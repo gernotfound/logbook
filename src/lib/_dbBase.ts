@@ -30,7 +30,7 @@ export const DB = {
     async purgeCompletedAccountLocalData(owner: string) {
         return purgeCompletedAccountLocalData(owner);
     },
-    async secureLogOut(options?: { discardUnsynced?: boolean }) {
+    async secureLogOut(options?: { discardUnsynced?: boolean; verifyCurrentDrafts?: () => Promise<void> }) {
         console.log("Eseguo il Log Out protetto...");
         const owner = storageOwner();
         const uid = owner.startsWith('user:') ? owner.slice('user:'.length) : null;
@@ -40,7 +40,7 @@ export const DB = {
         if (!uid || auth.currentUser?.uid !== uid) throw new Error('Logout autenticato: sessione non valida');
         // Journal preflight, sign-out and protected purge are serialized across tabs.
         // The durable fence is established before auth is invalidated.
-        await logoutAndPurgeAccount(owner, () => auth.signOut(), options?.discardUnsynced === true);
+        await logoutAndPurgeAccount(owner, () => auth.signOut(), options?.discardUnsynced === true, options?.verifyCurrentDrafts);
         if (uid) removeDeletionRecoveryCredential(uid);
         this.resetCache();
     },
