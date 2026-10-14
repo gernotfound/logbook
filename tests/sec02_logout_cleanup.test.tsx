@@ -98,7 +98,7 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
         // Deleting drafts before the IndexedDB failure is resolved can orphan
         // the encrypted journal. All remaining local bytes stay recoverable.
         expect(localStorage.getItem('draft_measurement')).toBe('draft_data');
-        expect(isLocalPurgePending('user:user123')).toBe(true);
+        expect(isLocalPurgePending(storageOwner())).toBe(true);
 
         consoleWarnSpy.mockRestore();
     });

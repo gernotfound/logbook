@@ -31,11 +31,11 @@ export function readDeviceValue(name: string, owner?: string): string | null {
 
 export function readDeviceValueStrict(name: string, owner?: string): string | null {
     const resolvedOwner = owner ?? storageOwner();
-    assertNoLocalPurge(resolvedOwner);
     const storageKey = deviceKey(name, resolvedOwner);
     // The device-critical read must be the first strict storage access: an
     // unreadable workout/timer cannot be masked by an earlier metadata probe.
     const legacy = readBrowserValueStrict(storageKey);
+    assertNoLocalPurge(resolvedOwner);
     const control = readVaultControl(resolvedOwner);
     if (!control) {
         if (legacy?.startsWith(SEALED_LOCAL_PREFIX)) throw new LocalCiphertextError();

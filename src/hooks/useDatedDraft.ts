@@ -6,6 +6,7 @@ import { requiredUpdateRecoveryRegistry } from '../lib/sync/requiredUpdateRecove
 import { useAppStore } from '../store/useAppStore';
 import { BrowserStorageError } from '../lib/sync/browserStorage';
 import { LocalCiphertextError } from '../lib/sync/secureArchiveCipher';
+import { LocalPurgePendingError } from '../lib/sync/localPurgeFence';
 import { LocalVaultLockedError, readVaultControl } from '../lib/sync/secureArchiveSession';
 
 function readDraft(name: string, owner: string): Record<string, string> | null {
@@ -25,7 +26,7 @@ function readDraft(name: string, owner: string): Record<string, string> | null {
         return Object.fromEntries(entries) as Record<string, string>;
     } catch (error) {
         if (error instanceof BrowserStorageError || error instanceof LocalVaultLockedError
-            || error instanceof LocalCiphertextError) throw error;
+            || error instanceof LocalPurgePendingError || error instanceof LocalCiphertextError) throw error;
         if (readVaultControl(owner)) throw error;
         console.warn('Bozza non leggibile, originale conservato:', error);
         return null;
