@@ -8,7 +8,7 @@ const authMocks = vi.hoisted(() => ({
     registerWithEmail: vi.fn(async () => {}),
     loginAsGuest: vi.fn(async () => {}),
     linkGoogleAccount: vi.fn(async () => {}),
-    showAlert: vi.fn(async () => {}),
+    showAlert: vi.fn(async (_message: string) => {}),
 }));
 
 const authState = vi.hoisted(() => ({
@@ -211,7 +211,7 @@ describe('LoginBox guest Google authentication', () => {
             await waitFor(() => expect(authMocks.showAlert).toHaveBeenCalledTimes(1));
             messages.push(String(authMocks.showAlert.mock.calls[0][0]));
             expect(screen.queryByRole('alert')).toBeNull();
-            await waitFor(() => expect(screen.getByRole('button', { name: 'Invia Link di Recupero' }).isConnected).toBe(false));
+            await waitFor(() => expect(screen.queryByRole('button', { name: 'Invia Link di Recupero' })).toBeNull());
             view.unmount();
             authMocks.showAlert.mockClear();
         }
