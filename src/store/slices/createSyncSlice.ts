@@ -7,7 +7,8 @@ import { saveUserDataToCache } from './createDataSlice';
 import { clearWorkoutTimer } from './createWorkoutSlice';
 import type { AppState } from '../useAppStore';
 import { captureSession, invalidateSession, isActiveGuestSession, isCurrentSession } from '../../lib/sync/session';
-import { commitDomainOperations, readLocal, revertRejectedConsent } from '../../lib/sync/localRepository';
+import { commitDomainOperations, readLocal, revertRejectedConsent, WorkoutIntentConflictError } from '../../lib/sync/localRepository';
+import { releaseCommittedWorkoutSlot } from '../../lib/sync/workoutDeviceIntent';
 import { findPendingAccountDeletion, isAccountDeletionPending } from '../../lib/sync/accountGate';
 import { UserDataSchema } from '../../lib/schema';
 import { isUpdateRequiredError } from '../../lib/schemaEvolution';
@@ -32,7 +33,7 @@ export interface SyncSlice {
     setUpdateRequired: (error: unknown) => void;
     saveUserData: (data: UserData | null | ((previous: UserData | null) => UserData | null), options?: { expectedRevision?: number }) => Promise<SyncResult>;
     updateUserData: (updater: (previous: UserData) => UserData) => Promise<SyncResult>;
-    dispatchDomainOperation: (operation: DomainOperationBatch, options?: { workoutIntent?: { generation: string; sequence: number; baseline: import('../../types').WorkoutSession | null } }) => Promise<SyncResult>;
+    dispatchDomainOperation: (operation: DomainOperationBatch, options?: { workoutIntent?: { generation: string; sequence: number; intentId?: string; parentIntentId?: string; ancestorIds?: string[]; baseline: import('../../types').WorkoutSession | null } }) => Promise<SyncResult>;
     submitLegalConsent: (consent: NonNullable<UserData['legalConsent']>) => Promise<void>;
     flushPendingSyncs: () => Promise<void>;
     cancelPendingSyncs: () => void;
@@ -165,11 +166,18 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
         running = (async () => {
             let failureStatus: SyncHealth = 'failed';
             let blockLocalPersistence = false;
+            let blockedReason = LOCAL_PERSISTENCE_BLOCKED_MESSAGE;
             try {
                 const commits = await Promise.all(jobs.map(job => job.cache));
                 if (get().localPersistenceBlocked) throw localPersistenceFailure();
                 const failed = commits.find(result => !result.ok);
                 if (failed && !failed.ok) {
+                    if (failed.error instanceof WorkoutIntentConflictError) {
+                        // A different payload with the same device-intent sequence
+                        // cannot be repaired by adopting the durable envelope alone.
+                        blockLocalPersistence = true;
+                        blockedReason = failed.error.message;
+                    }
                     if (current() && get().syncGeneration === last.generation) {
                         try {
                             const durable = await readLocal(session.owner);
@@ -228,7 +236,7 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
                 jobs.forEach(job => job.reject(error));
                 if (current() && get().syncGeneration === last.generation && !get().localPersistenceBlocked) {
                     if (isUpdateRequiredError(error)) enterUpdateRequired(error);
-                    else if (blockLocalPersistence) set({ localPersistenceBlocked: true, syncHealth: 'failed', saveError: LOCAL_PERSISTENCE_BLOCKED_MESSAGE });
+                    else if (blockLocalPersistence) set({ localPersistenceBlocked: true, syncHealth: 'failed', saveError: blockedReason });
                     else set({ syncHealth: failureStatus, saveError: error instanceof Error ? error.message : 'Impossibile salvare i dati.' });
                 }
             } finally {
@@ -322,7 +330,14 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
 
             // The business state and compiled SemanticOperation batch are committed by one IndexedDB update.
             const cache = commitDomainOperations(session.owner, operation, userData, () => isCurrentSession(session), options?.workoutIntent)
-                .then<CacheResult>(() => ({ ok: true }))
+                .then<CacheResult>(async () => {
+                    if (options?.workoutIntent?.intentId) {
+                        // A cleanup error must not turn a committed edit into a failed save.
+                        try { await releaseCommittedWorkoutSlot(session.owner, options.workoutIntent); }
+                        catch { /* encrypted recovery witnesses remain available */ }
+                    }
+                    return { ok: true };
+                })
                 .catch<CacheResult>(error => ({ ok: false, error }));
             return enqueue(session, generation, cache);
         },

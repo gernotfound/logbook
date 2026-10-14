@@ -27,7 +27,7 @@ import { createDataSlice } from '../../src/store/slices/createDataSlice';
 import { createWorkoutSlice } from '../../src/store/slices/createWorkoutSlice';
 import { createSyncSlice } from '../../src/store/slices/createSyncSlice';
 import type { AppState } from '../../src/store/useAppStore';
-import { readLocal, initializeLocal, acknowledgeThrough } from '../../src/lib/sync/localRepository';
+import { readLocal, initializeLocal, acknowledgeThrough, commitDomainOperations } from '../../src/lib/sync/localRepository';
 import { UserDataSchema } from '../../src/lib/schema';
 import type { UserData } from '../../src/types';
 import { getNutritionConflictFingerprint } from '../../src/lib/utils/object';
@@ -83,6 +83,34 @@ describe('store with real IndexedDB commits', () => {
         await store.getState().flushPendingSyncs();
         await expect(saving).resolves.toEqual({ ok: true, status: 'synced' });
     });
+    it('blocks further edits after a same-sequence workout collision instead of clearing the unsaved draft', async () => {
+        const workout = { id: 'w-collision', date: '2026-10-14', routineName: 'Base', exercises: [] };
+        const base = UserDataSchema.parse({ activeWorkout: workout }) as unknown as UserData;
+        await clear();
+        await initializeLocal('user:A', base);
+        store.setState({ userData: base, dataOwner: 'user:A', localWorkout: workout });
+        const intent = { generation: 'a'.repeat(32), sequence: 1, intentId: 'b'.repeat(32), baseline: workout };
+        await commitDomainOperations('user:A', {
+            type: 'active-workout.set', workout: { ...workout, routineName: 'Scheda A' },
+        }, base, undefined, intent);
+        const committed = await readLocal('user:A');
+
+        const pending = store.getState().dispatchDomainOperation({
+            type: 'active-workout.set', workout: { ...workout, routineName: 'Scheda B' },
+        }, { workoutIntent: { ...intent, intentId: 'c'.repeat(32) } });
+        const observed = expect(pending).rejects.toThrow('Conflitto tra modifiche concorrenti');
+        await store.getState().flushPendingSyncs();
+        await observed;
+
+        expect(sdk.save).not.toHaveBeenCalled();
+        expect(await readLocal('user:A')).toEqual(committed);
+        expect(store.getState().localPersistenceBlocked).toBe(true);
+        expect(store.getState().saveError).toContain('Conflitto tra modifiche concorrenti');
+        await expect(store.getState().dispatchDomainOperation({
+            type: 'profile.patch', patch: { height: '190' },
+        })).rejects.toThrow('Archivio locale non leggibile');
+    });
+
     it('never calls the cloud or confirms success after a local quota failure', async () => {
         vi.spyOn(IDBObjectStore.prototype, 'put').mockImplementationOnce(() => { throw new DOMException('quota', 'QuotaExceededError'); });
         const saving = store.getState().saveUserData(data(171));
