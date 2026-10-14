@@ -73,6 +73,25 @@ describe('durable secure archive migration', () => {
         expect(readDeviceValueStrict('workout', owner)).toBe(workout);
     });
 
+    it('migrates and seals immutable workout-intent copies with owner-bound authenticated ciphertext', async () => {
+        await initializeLocal(owner, base());
+        const oldName = 'workout-intent:' + 'a'.repeat(32);
+        const oldValue = '{"notes":"private recovery record"}';
+        localStorage.setItem(deviceKey(oldName, owner), oldValue);
+        await createAndMigrateVault(owner);
+        expect(localStorage.getItem(deviceKey(oldName, owner))).toBeNull();
+        expect(localStorage.getItem(protectedDeviceKey(oldName, owner))).toMatch(/^tlb-sealed:v1:/);
+        expect(localStorage.getItem(protectedDeviceKey(oldName, owner))).not.toContain('private recovery record');
+        expect(readDeviceValueStrict(oldName, owner)).toBe(oldValue);
+
+        const name = 'workout-intent:' + 'b'.repeat(32);
+        const payload = '{"notes":"confidential exercise session"}';
+        writeDeviceValue(name, payload, owner);
+        expect(localStorage.getItem(protectedDeviceKey(name, owner))).toMatch(/^tlb-sealed:v1:/);
+        expect(localStorage.getItem(protectedDeviceKey(name, owner))).not.toContain('confidential exercise session');
+        expect(readDeviceValueStrict(name, owner)).toBe(payload);
+    });
+
     it('fences stale encrypted and legacy writers and provisions a new vault only after purge', async () => {
         await initializeLocal(owner, base());
         await createAndMigrateVault(owner);
