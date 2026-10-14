@@ -24,7 +24,7 @@ const SAFE_PLAINTEXT_NAMES = new Set([
 
 /** Explicitly inventory all current device-critical writers. Unknown keys halt migration. */
 function isSensitiveDeviceName(name: string): boolean {
-    return name === 'telemetry_queue' || name === 'workout' || /^workout-slot:[a-f0-9]{32}$/.test(name)
+    return name === 'telemetry_queue' || name === 'workout' || /^workout-intent:[a-f0-9]{32}$/.test(name)
         || name === 'timer' || name === 'draft_exercise'
         || name === 'draft_routine' || name === 'history-editor-context'
         || (name.startsWith('draft:') && name.length > 'draft:'.length);
