@@ -1,6 +1,7 @@
-import { get } from 'idb-keyval';
+import { del, get } from 'idb-keyval';
 import { createAndMigrateVault, resumeVaultMigration } from '../src/lib/sync/secureArchiveMigration';
 import { deviceVaultKeyId } from '../src/lib/sync/secureArchiveKeys';
+import { vaultControlMirrorId } from '../src/lib/sync/secureArchiveControlRecovery';
 import { isVaultUnlocked, lockAllVaults, readVaultControl, unlockVaultForOwner, vaultControlKey } from '../src/lib/sync/secureArchiveSession';
 import { removeBrowserValue } from '../src/lib/sync/browserStorage';
 
@@ -24,6 +25,12 @@ async function clearEmptyOrphanedTestControl(owner: string): Promise<void> {
     for (let i = 0; i < localStorage.length; i++) {
         if (localStorage.key(i)?.startsWith(prefix)) return;
     }
+    // The shared UI fixture deliberately simulates an IDB reset with no
+    // ciphertext. Its mirrored wrapped control is now an orphan too. This is
+    // test-only cleanup; Production MUST retain both controls on key loss.
+    const mirrorId = vaultControlMirrorId(owner);
+    await del(mirrorId);
+    if (await get<unknown>(mirrorId) !== undefined) throw new Error('Mock vault mirror cleanup failed');
     removeBrowserValue(vaultControlKey(owner));
 }
 
