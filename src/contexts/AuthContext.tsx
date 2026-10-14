@@ -260,9 +260,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
         getRedirectResult(auth).then(() => {
             tryRemoveBrowserValue(AWAITING_REDIRECT_KEY);
-        }).catch(err => {
+        }).catch(() => {
             tryRemoveBrowserValue(AWAITING_REDIRECT_KEY);
-            console.error("Ripresa redirect Google fallita:", err);
+            console.error('Ripresa redirect Google non riuscita.');
             setSaveError("Accesso Google non completato. Riprova.");
         });
 
