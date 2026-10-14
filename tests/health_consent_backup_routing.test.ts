@@ -12,6 +12,11 @@ const boundary = vi.hoisted(() => ({
     },
     profile: { height: '178' },
   }]])),
+  // Replica-control reads bracket every direct full-cloud backup scan.
+  controlRead: vi.fn(async () => ({
+    exists: () => true,
+    data: () => ({ protocolVersion: 3, replicas: { s00: { lastSeq: 1 } } }),
+  })),
   directRootRead: vi.fn(async () => ({
     exists: () => true,
     data: () => ({
@@ -50,7 +55,8 @@ vi.mock('../src/lib/db/withdrawnBackupTransport', () => ({
 vi.mock('firebase/firestore', () => ({
   doc: (_db: unknown, ...parts: string[]) => ({ path: parts.join('/') }),
   collection: (_db: unknown, ...parts: string[]) => ({ path: parts.join('/') }),
-  getDocFromServer: boundary.directRootRead,
+  getDocFromServer: (ref: { path: string }) => ref.path.endsWith('/sync_control/state')
+    ? boundary.controlRead(ref) : boundary.directRootRead(ref),
   getDocsFromServer: vi.fn(async () => ({ docs: [], size: 0 })),
   documentId: () => '__name__',
   orderBy: () => ({}),
@@ -86,6 +92,7 @@ describe('health consent rights export transport routing', () => {
     expect(boundary.serverRead).toHaveBeenCalledTimes(1);
     expect(boundary.trustedExport).toHaveBeenCalledTimes(1);
     expect(boundary.directRootRead).not.toHaveBeenCalled();
+    expect(boundary.controlRead).not.toHaveBeenCalled();
   });
 
   it('uses ordinary Firestore reads once a reacceptance is already active remotely', async () => {
@@ -95,6 +102,7 @@ describe('health consent rights export transport routing', () => {
     expect(boundary.serverRead).toHaveBeenCalledTimes(1);
     expect(boundary.trustedExport).not.toHaveBeenCalled();
     expect(boundary.directRootRead).toHaveBeenCalledTimes(1);
+    expect(boundary.controlRead).toHaveBeenCalledTimes(2);
   });
 
   it('honours a server withdrawal even when a local stale-request was set while active', async () => {
@@ -103,6 +111,7 @@ describe('health consent rights export transport routing', () => {
     expect(snapshot.coverage.scope).toBe('cloud-and-device');
     expect(boundary.trustedExport).toHaveBeenCalledTimes(1);
     expect(boundary.directRootRead).not.toHaveBeenCalled();
+    expect(boundary.controlRead).not.toHaveBeenCalled();
   });
 
   it('keeps verified active sessions on the ordinary least-privileged read path', async () => {
@@ -111,5 +120,6 @@ describe('health consent rights export transport routing', () => {
     expect(boundary.serverRead).not.toHaveBeenCalled();
     expect(boundary.trustedExport).not.toHaveBeenCalled();
     expect(boundary.directRootRead).toHaveBeenCalledTimes(1);
+    expect(boundary.controlRead).toHaveBeenCalledTimes(2);
   });
 });

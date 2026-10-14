@@ -304,26 +304,22 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
         const owner = storageOwner();
         const uid = owner.startsWith('user:') ? owner.slice('user:'.length) : 'unexpected-guest';
         localStorage.setItem(recoveryKey, JSON.stringify([{ uid, token: 'A'.repeat(43) }]));
-        const purgeSpy = vi.spyOn(DB, 'purgeAllLocalUserData').mockRejectedValueOnce(new Error('local purge failed'));
+        // The guarded logout owns the purge directly under the Web Lock; fail
+        // its actual IndexedDB deletion boundary instead of spying on the old hook.
+        vi.mocked(idb.del).mockRejectedValueOnce(new Error('local purge failed'));
 
-        await expect(DB.secureLogOut()).rejects.toThrow('local purge failed');
+        await expect(DB.secureLogOut()).rejects.toThrow('Pulizia locale incompleta');
         expect(localStorage.getItem(recoveryKey)).not.toBeNull();
-
-        purgeSpy.mockRestore();
+        expect(isLocalPurgePending(owner)).toBe(true);
     });
 
     it('secureLogOut preserves the local archive and rejects when auth.signOut fails', async () => {
         const { auth } = await import('../src/lib/firebase');
         vi.mocked(auth.signOut).mockRejectedValueOnce(new Error('Network offline'));
         
-        const purgeSpy = vi.spyOn(DB, 'purgeAllLocalUserData').mockResolvedValue(undefined);
-        const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-
         await expect(DB.secureLogOut()).rejects.toThrow('Network offline');
-        expect(purgeSpy).not.toHaveBeenCalled();
-
-        purgeSpy.mockRestore();
-        consoleErrorSpy.mockRestore();
+        expect(idb.del).not.toHaveBeenCalled();
+        expect(isLocalPurgePending(storageOwner())).toBe(false);
     });
 
     it('cancelPendingSyncs stops debouncer and sets syncing to false to prevent race conditions during logout', () => {
