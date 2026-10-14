@@ -1121,7 +1121,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 const localStorageFailure = error instanceof AggregateError
                     || error instanceof BrowserStorageError
                     || error?.name === 'BrowserStorageError';
-                await useDialogStore.getState().showAlert(error instanceof Error && error.name === 'HealthConsentTransitionPendingError'
+                await useDialogStore.getState().showAlert(error instanceof Error && (error.name === 'HealthConsentTransitionPendingError' || error.name === 'UnsyncedLogoutError')
                     ? error.message
                     : localStorageFailure
                         ? 'Impossibile completare il logout perché la memoria locale del dispositivo non è disponibile o non è stata pulita completamente. I dati locali potrebbero essere ancora presenti. Riprova.'

@@ -11,6 +11,7 @@ import { useDialogStore } from '../src/store/useDialogStore';
 import { useAppStore } from '../src/store/useAppStore';
 import { BrowserStorageError } from '../src/lib/sync/browserStorage';
 import { createAndMigrateVault } from '../src/lib/sync/secureArchiveMigration';
+import { initializeLocal, commitLocal } from '../src/lib/sync/localRepository';
 import { lockAllVaults } from '../src/lib/sync/secureArchiveSession';
 import type { UserData } from '../src/types';
 
@@ -109,6 +110,32 @@ describe('M5 logout protection through AuthProvider', () => {
         expect(localStorage.getItem('logbook_is_guest')).toBeNull();
         expect(useAppStore.getState().userData).toBeNull();
         expect(result.current.isGuest).toBe(false);
+    });
+
+    it('notifies about a durable pending journal even when volatile sync status says synced', async () => {
+        const initial = userData();
+        await initializeLocal('user:logout-user', initial);
+        await commitLocal('user:logout-user', {
+            ...initial, profile: { ...initial.profile, height: '190' },
+        }, initial);
+        const { result } = renderAuth();
+        await waitFor(() => expect(result.current.currentUser?.uid).toBe('logout-user'));
+        useAppStore.setState({ syncHealth: 'synced', localWorkout: null });
+
+        await act(async () => { await result.current.logout({ mode: 'normal' }); });
+
+        expect(dialogs.showUnsyncedDataLogout).toHaveBeenCalledWith('offline');
+        expect(DB.secureLogOut).not.toHaveBeenCalled();
+    });
+
+    it('shows the persisted-journal refusal without mislabeling it as a network error', async () => {
+        const unsynced = Object.assign(new Error('Modifiche locali non sincronizzate.'), { name: 'UnsyncedLogoutError' });
+        vi.mocked(DB.secureLogOut).mockRejectedValueOnce(unsynced);
+        const { result } = renderAuth();
+        await waitFor(() => expect(result.current.currentUser?.uid).toBe('logout-user'));
+
+        await act(async () => { await result.current.logout({ mode: 'normal' }); });
+        expect(dialogs.showAlert).toHaveBeenCalledWith('Modifiche locali non sincronizzate.');
     });
 
     it('executes the authenticated safe logout through DB and resets the in-memory session', async () => {
