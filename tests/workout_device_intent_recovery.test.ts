@@ -25,7 +25,7 @@ describe('authenticated device-intent replay into semantic journal', () => {
         const before = data(workout('50'));
         await initializeLocal(owner, before);
         const changed = workout('55');
-        const intent = saveWorkoutDeviceIntent(owner, before.activeWorkout ?? null, changed, before.activeWorkout);
+        const intent = saveWorkoutDeviceIntent(owner, before.activeWorkout ?? null, changed, before.activeWorkout ?? null);
         const encoded = readDeviceValueStrict('workout', owner);
         expect(intent.sequence).toBe(1);
         expect((await readLocal(owner))?.data.activeWorkout?.exercises[0].sets[0].kg).toBe('50');
@@ -63,7 +63,7 @@ describe('authenticated device-intent replay into semantic journal', () => {
     it('rejects an unrelated durable workout without deleting the saved device intent', async () => {
         const before = data(workout('50'));
         await initializeLocal(owner, before);
-        saveWorkoutDeviceIntent(owner, before.activeWorkout ?? null, workout('55'), before.activeWorkout);
+        saveWorkoutDeviceIntent(owner, before.activeWorkout ?? null, workout('55'), before.activeWorkout ?? null);
         await commitDomainOperations(owner, { type: 'active-workout.set', workout: { ...workout('60'), id: 'other-workout' } }, before);
         const saved = readDeviceValueStrict('workout', owner);
         await expect(recoverWorkoutDeviceIntent(owner, () => true)).rejects.toThrow('stato locale è cambiato');
