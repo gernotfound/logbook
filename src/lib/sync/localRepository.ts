@@ -62,7 +62,7 @@ interface LocalEnvelopeV5 {
     // Owner-local closure ledger fences snapshots from suspended old tabs.
     closedWorkoutIds?: string[];
     // Synchronous device-workout write-ahead intent, journaled atomically with its business edit.
-    lastWorkoutDeviceIntent?: { generation: string; sequence: number; intentId?: string; parentIntentId?: string };
+    lastWorkoutDeviceIntent?: { generation: string; sequence: number; intentId?: string; parentIntentId?: string; ancestorIds?: string[] };
 }
 
 export type LocalEnvelope = LocalEnvelopeV5;
@@ -191,6 +191,12 @@ function validate(value: any, owner: string): LocalEnvelope | undefined {
         || ((record.lastWorkoutDeviceIntent as { parentIntentId?: unknown }).parentIntentId !== undefined
             && (typeof (record.lastWorkoutDeviceIntent as { parentIntentId: unknown }).parentIntentId !== 'string'
                 || !/^[a-f0-9]{32}$/.test((record.lastWorkoutDeviceIntent as { parentIntentId: string }).parentIntentId)))
+        || ((record.lastWorkoutDeviceIntent as { ancestorIds?: unknown }).ancestorIds !== undefined
+            && (!Array.isArray((record.lastWorkoutDeviceIntent as { ancestorIds: unknown }).ancestorIds)
+                || (record.lastWorkoutDeviceIntent as { ancestorIds: string[] }).ancestorIds.length > 64
+                || (record.lastWorkoutDeviceIntent as { ancestorIds: string[] }).ancestorIds.some(id => typeof id !== 'string' || !/^[a-f0-9]{32}$/.test(id))
+                || new Set((record.lastWorkoutDeviceIntent as { ancestorIds: string[] }).ancestorIds).size
+                    !== (record.lastWorkoutDeviceIntent as { ancestorIds: string[] }).ancestorIds.length))
     )) throw new Error('Controllo journal workout locale non valido');
 
     if (record.consentRevision !== undefined && (
@@ -488,7 +494,7 @@ function hasCommittedWorkoutAncestor(
 export interface DomainCommitResult { operations: SemanticOperation[]; data: UserData; }
 
 export async function commitDomainOperations(owner: string, batch: DomainOperationBatch, initialBase: UserData, guard?: LocalWriteGuard,
-    workoutIntent?: { generation: string; sequence: number; intentId?: string; parentIntentId?: string; baseline: import('../../types').WorkoutSession | null },
+    workoutIntent?: { generation: string; sequence: number; intentId?: string; parentIntentId?: string; ancestorIds?: string[]; baseline: import('../../types').WorkoutSession | null },
 ): Promise<DomainCommitResult> {
     owner = normalizeStorageOwner(owner);
     const domainOperations = normalizeDomainOperationBatch(batch);
@@ -505,12 +511,22 @@ export async function commitDomainOperations(owner: string, batch: DomainOperati
                 || !/^[a-f0-9]{32}$/.test(workoutIntent.generation)
                 || !Number.isSafeInteger(workoutIntent.sequence) || workoutIntent.sequence < 1
                 || (workoutIntent.intentId !== undefined && !/^[a-f0-9]{32}$/.test(workoutIntent.intentId))
-                || (workoutIntent.parentIntentId !== undefined && !/^[a-f0-9]{32}$/.test(workoutIntent.parentIntentId))) {
+                || (workoutIntent.parentIntentId !== undefined && !/^[a-f0-9]{32}$/.test(workoutIntent.parentIntentId))
+                || (workoutIntent.ancestorIds !== undefined && (!Array.isArray(workoutIntent.ancestorIds)
+                    || workoutIntent.ancestorIds.length > 64
+                    || workoutIntent.ancestorIds.some(id => typeof id !== 'string' || !/^[a-f0-9]{32}$/.test(id))
+                    || new Set(workoutIntent.ancestorIds).size !== workoutIntent.ancestorIds.length
+                    || (workoutIntent.parentIntentId !== undefined && workoutIntent.ancestorIds[0] !== workoutIntent.parentIntentId)))) {
                 throw new Error('Intento workout non valido per il journal');
             }
             const applied = current?.lastWorkoutDeviceIntent;
             if (current?.data.activeWorkout && current.data.activeWorkout.id !== domainOperations[0].workout.id) {
                 throw new Error('Workout attivo cambiato: intento device non applicabile.');
+            }
+            if (applied?.generation === workoutIntent.generation && applied.sequence > workoutIntent.sequence
+                && applied.intentId && workoutIntent.intentId
+                && !applied.ancestorIds?.includes(workoutIntent.intentId)) {
+                throw new WorkoutIntentConflictError('Intento workout obsoleto ma non riconosciuto come antenato: dati preservati.');
             }
             if (applied?.generation === workoutIntent.generation && applied.sequence >= workoutIntent.sequence) {
                 // A repeated sequence is idempotent only if it represents the
@@ -528,7 +544,8 @@ export async function commitDomainOperations(owner: string, batch: DomainOperati
             }
             if (applied?.generation === workoutIntent.generation
                 && applied.sequence < workoutIntent.sequence && applied.intentId
-                && (!workoutIntent.intentId || !hasCommittedWorkoutAncestor(owner, workoutIntent, applied))) {
+                && (!workoutIntent.intentId || !(workoutIntent.ancestorIds?.includes(applied.intentId)
+                    || hasCommittedWorkoutAncestor(owner, workoutIntent, applied)))) {
                 throw new WorkoutIntentConflictError('Modifica workout non discendente dallo stato già registrato. Copie preservate.');
             }
             if (applied?.generation !== workoutIntent.generation
@@ -539,7 +556,8 @@ export async function commitDomainOperations(owner: string, batch: DomainOperati
         const intentPatch = workoutIntent
             ? { lastWorkoutDeviceIntent: { generation: workoutIntent.generation, sequence: workoutIntent.sequence,
                 ...(workoutIntent.intentId ? { intentId: workoutIntent.intentId } : {}),
-                ...(workoutIntent.parentIntentId ? { parentIntentId: workoutIntent.parentIntentId } : {}) } }
+                ...(workoutIntent.parentIntentId ? { parentIntentId: workoutIntent.parentIntentId } : {}),
+                ...(workoutIntent.ancestorIds ? { ancestorIds: workoutIntent.ancestorIds } : {}) } }
             : {};
         const base = current?.data ?? fallback;
         // A retry after a durable local completion can deliver an outstanding
