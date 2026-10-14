@@ -46,6 +46,13 @@ export function markLocalPurgeComplete(owner: string): void {
     if (isLocalPurgeIncomplete(owner)) throw new LocalPurgePendingError();
 }
 
+/** The sign-out callback failed before any storage deletion began. */
+export function cancelUnstartedLocalPurge(owner: string): void {
+    if (!isLocalPurgeIncomplete(owner)) throw new LocalPurgePendingError();
+    removeBrowserValue(keyFor(owner));
+    assertNoLocalPurge(owner);
+}
+
 /** Only after a replacement migrating vault control is durable. */
 export function releaseLocalPurgeFence(owner: string): void {
     if (readPhase(owner) !== RETIRED) throw new LocalPurgePendingError();

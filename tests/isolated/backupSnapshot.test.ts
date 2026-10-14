@@ -1,14 +1,16 @@
 import 'fake-indexeddb/auto';
 import { clear } from 'idb-keyval';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-const sdk = vi.hoisted(() => ({ auth: { currentUser: { uid: 'a' } }, root: vi.fn(), page: vi.fn() }));
+const sdk = vi.hoisted(() => ({ auth: { currentUser: { uid: 'a' } }, root: vi.fn(), control: vi.fn(), page: vi.fn() }));
 vi.mock('../../src/lib/firebase', () => ({ auth: sdk.auth, getDb: () => ({}), ensureAppCheck: async () => {} }));
 vi.mock('../../src/lib/catalog/catalogService', () => ({ getCachedCatalog: async () => ({ exercises: [], foods: [] }) }));
 vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackEvent: vi.fn(), trackError: vi.fn() } }));
 vi.mock('firebase/firestore', () => ({
     doc: (_db: unknown, ...path: string[]) => path.join('/'), collection: (_db: unknown, ...path: string[]) => path.join('/'),
     documentId: () => 'id', orderBy: () => ({}), limit: (count: number) => ({ count }), startAfter: (item: { id: string }) => ({ after: item.id }),
-    query: (path: string, ...parts: object[]) => Object.assign({ path }, ...parts), getDocFromServer: sdk.root, getDocsFromServer: sdk.page,
+    query: (path: string, ...parts: object[]) => Object.assign({ path }, ...parts),
+    getDocFromServer: (path: string) => path.endsWith('/sync_control/state') ? sdk.control(path) : sdk.root(path),
+    getDocsFromServer: sdk.page,
 }));
 import { collectBackupSnapshot } from '../../src/lib/db/backupSnapshot';
 import { acknowledgeThrough, initializeLocal, commitLocal, readLocal } from '../../src/lib/sync/localRepository';
@@ -24,6 +26,7 @@ beforeEach(async () => {
     await clear(); vi.resetAllMocks(); invalidateSession(); sdk.auth.currentUser = { uid: 'a' };
     vi.stubGlobal('localStorage', { length: 0, getItem: () => null });
     sdk.root.mockResolvedValue({ exists: () => true, data: () => currentCloudDoc({ profile: { height: '170', gender: 'M' } }) });
+    sdk.control.mockResolvedValue({ exists: () => true, data: () => ({ protocolVersion: 3, replicas: { s00: { lastSeq: 1 } } }) });
     sdk.page.mockResolvedValue({ size: 0, docs: [] });
 });
 afterEach(() => vi.unstubAllGlobals());
@@ -72,6 +75,34 @@ it('retries when an edit is acknowledged while the cloud scan is in flight', asy
     const backup = await collectBackupSnapshot(base, true);
     expect(backup.data.profile?.height).toBe('175');
     expect(sdk.root).toHaveBeenCalledTimes(2);
+});
+
+it('retries when another device updates the replica control during the cloud scan', async () => {
+    const data = parse({ profile: { height: '170' } });
+    await initializeLocal('user:a', data);
+    let reads = 0;
+    sdk.control.mockImplementation(async () => {
+        reads += 1;
+        const lastSeq = reads === 1 ? 1 : 2;
+        return { exists: () => true, data: () => ({ protocolVersion: 3, replicas: { s00: { lastSeq } } }) };
+    });
+
+    const backup = await collectBackupSnapshot(data, true);
+    expect(backup.coverage.scope).toBe('cloud-and-device');
+    expect(sdk.control).toHaveBeenCalledTimes(4);
+    expect(sdk.page).toHaveBeenCalledTimes(4);
+});
+
+it('fails closed after repeated concurrent remote changes instead of exporting mixed data', async () => {
+    const data = parse({});
+    await initializeLocal('user:a', data);
+    let revision = 0;
+    sdk.control.mockImplementation(async () => ({
+        exists: () => true,
+        data: () => ({ lastSeq: ++revision }),
+    }));
+    await expect(collectBackupSnapshot(data, true)).rejects.toThrow('cloud è cambiato durante il backup');
+    expect(sdk.page).toHaveBeenCalledTimes(4);
 });
 
 it('uses root _sync metadata when replaying pending local operations', async () => {

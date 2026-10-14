@@ -159,7 +159,15 @@ export const createDataSlice: StateCreator<AppState, [], [], DataSlice> = (set, 
             .catch(error => {
                 if (!isCurrentSession(session)) return;
                 if (isUpdateRequiredError(error)) get().setUpdateRequired(error);
-                else set({ saveError: 'Impossibile salvare i dati su questo dispositivo.', syncHealth: 'failed' });
+                else set({
+                    // The optimistic snapshot may be ahead of IndexedDB. Until
+                    // recovery re-establishes a durable base, more edits or a
+                    // destructive logout could silently discard its intent.
+                    localPersistenceBlocked: true,
+                    saveError: 'Impossibile salvare i dati su questo dispositivo. Riapri TheLogBook prima di continuare.',
+                    syncHealth: 'failed',
+                    syncPresentation: 'normal',
+                });
             });
     },
 

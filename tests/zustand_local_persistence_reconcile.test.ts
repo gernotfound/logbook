@@ -71,6 +71,22 @@ describe('optimistic Zustand state vs local IndexedDB durability', () => {
         expect(durable?.pending).toHaveLength(0);
     });
 
+    it('blocks further mutations after an asynchronous snapshot save fails', async () => {
+        const data = baseData();
+        await seedDurableState(data);
+        vi.mocked(idbUpdate).mockRejectedValueOnce(new Error('IndexedDB write failed'));
+
+        useAppStore.getState().setUserData({ ...data, profile: { ...data.profile, height: '190' } });
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(useAppStore.getState().userData?.profile?.height).toBe('190');
+        expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
+        expect(useAppStore.getState().syncHealth).toBe('failed');
+        await expect(useAppStore.getState().dispatchDomainOperation({
+            type: 'profile.patch', patch: { height: '195' },
+        })).rejects.toThrow('Archivio locale non leggibile');
+    });
+
     it('fails closed and blocks later mutations when the durable envelope cannot be read after a local commit failure', async () => {
         const data = baseData();
         await seedDurableState(data);

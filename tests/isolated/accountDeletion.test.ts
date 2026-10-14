@@ -327,7 +327,7 @@ it('waits for earlier writers and rejects an intervening identity change before 
     expect(boundary.auth.signOut).not.toHaveBeenCalled();
 });
 
-it('reports storage deletion failures while continuing cleanup of other keys', async () => {
+it('reports storage deletion failures during a verified account-deletion cleanup', async () => {
     disk.set('logbook:v2:user:a:workout', 'draft');
     disk.set('logbook:v2:user:a:timer_state', 'running');
     vi.spyOn(localStorage, 'removeItem').mockImplementation(key => {
@@ -335,7 +335,7 @@ it('reports storage deletion failures while continuing cleanup of other keys', a
         disk.delete(key);
     });
 
-    await expect(purgeAllLocalUserData('user:a')).rejects.toThrow('Pulizia locale incompleta');
+    await expect(purgeCompletedAccountLocalData('user:a')).rejects.toThrow('Pulizia locale incompleta');
 
     expect(disk.has('logbook:v2:user:a:workout')).toBe(true);
     expect(disk.has('logbook:v2:user:a:timer_state')).toBe(false);

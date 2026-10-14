@@ -446,6 +446,7 @@ export const Exporter = {
                     ? '\nIl backup è parziale: storico e nutrizione non presenti nel file saranno conservati.'
                     : '') +
                 (decoded.ownerUnknown ? '\nIl backup non identifica un proprietario. Conferma solo se questi dati sono tuoi.' : '') +
+                (decoded.hasDeviceRecovery ? '\nIl file contiene anche dati tecnici di recupero (bozze, timer o archivio locale): questa importazione NON li ripristina. Conserva il file originale per un eventuale recupero assistito.' : '') +
                 '\nI consensi importati non verranno applicati.\nProcedere?';
             if (!(await useDialogStore.getState().showConfirm(summary, 'Anteprima importazione'))) return;
             assertCurrent();

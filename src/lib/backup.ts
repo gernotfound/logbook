@@ -193,7 +193,8 @@ export function decodeImport(payload: unknown, owner: string) {
         ? Object.fromEntries(arrays.filter(key => ['library', 'routines', 'trainingCycles'].includes(key) && sanitizedData[key] !== undefined).map(key => [key, sanitizedData[key]]))
         : sanitizedData;
 
-    return { data: selected, share, ownerUnknown: !share && !sourceOwner, coverage };
+    return { data: selected, share, ownerUnknown: !share && !sourceOwner, coverage,
+        hasDeviceRecovery: !share && normalized.recovery !== undefined };
 }
 
 function mergeMissing(local: unknown, incoming: unknown): unknown {

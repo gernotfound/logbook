@@ -1,7 +1,7 @@
 import { auth, getDb, ensureAppCheck, waitForPendingWrites, signOut } from '../firebase';
 import { del, get } from 'idb-keyval';
 import { lockVault } from '../sync/secureArchiveSession';
-import { beginLocalPurge, isLocalPurgeIncomplete, isLocalPurgePending, markLocalPurgeComplete } from '../sync/localPurgeFence';
+import { beginLocalPurge, cancelUnstartedLocalPurge, isLocalPurgeIncomplete, isLocalPurgePending, markLocalPurgeComplete } from '../sync/localPurgeFence';
 import { deviceVaultKeyId } from '../sync/secureArchiveKeys';
 import { vaultControlMirrorId } from '../sync/secureArchiveControlRecovery';
 import { withTimeout } from './db_core';
@@ -85,7 +85,7 @@ class HealthConsentTransitionPendingError extends Error {
     }
 }
 
-export function assertOrdinaryPurgeAllowed(owner: string): void {
+function assertOrdinaryPurgeAllowed(owner: string): void {
     // A sign-out or an ordinary purge must not erase the only durable copy
     // of a withdrawal not yet confirmed by the trusted server.
     const consent = readBrowserValueStrict(`logbook:v2:${owner}:health-consent-withdrawal`);
@@ -105,7 +105,7 @@ export function assertOrdinaryPurgeAllowed(owner: string): void {
 }
 
 /** A new server consent epoch never authorizes discarding an older offline journal. */
-export async function assertNoOutdatedConsentJournal(owner: string): Promise<void> {
+async function assertNoOutdatedConsentJournal(owner: string): Promise<void> {
     if (!owner.startsWith('user:')) return;
     const generation = readBrowserValueStrict(`logbook:v2:${owner}:health-consent-generation`);
     const withdrawal = readBrowserValueStrict(`logbook:v2:${owner}:health-consent-withdrawal`);
@@ -122,14 +122,21 @@ export async function assertNoOutdatedConsentJournal(owner: string): Promise<voi
 }
 
 export async function purgeAllLocalUserData(owner = storageOwner()) {
-    // A durable purge intent was already authorized before it was published;
-    // retrying it must not attempt to read the now partially removed journal.
+    // Recovery of a previously started purge must never require an archive
+    // that may already be partially deleted.
     if (isLocalPurgePending(owner)) return purgeOwnerLocalData(owner, true);
-    assertOrdinaryPurgeAllowed(owner);
-    await assertNoOutdatedConsentJournal(owner);
-    // Recheck the synchronous intent after the IndexedDB read.
-    assertOrdinaryPurgeAllowed(owner);
-    return purgeOwnerLocalData(owner);
+    return purgeOwnerLocalData(owner, false, {
+        preflight: async () => {
+            assertOrdinaryPurgeAllowed(owner);
+            await assertNoOutdatedConsentJournal(owner);
+            if (owner.startsWith('user:')) {
+                const { readLocal } = await import('../sync/localRepository');
+                if ((await readLocal(owner))?.pending.length) throw new UnsyncedLogoutError();
+            }
+            assertOrdinaryPurgeAllowed(owner);
+        },
+        afterFence: async () => {},
+    });
 }
 
 /** Only a verified server-complete account deletion may use this boundary. */
@@ -138,21 +145,72 @@ export async function purgeCompletedAccountLocalData(owner: string) {
     return purgeOwnerLocalData(owner);
 }
 
+/** A clean-looking UI cannot prove that its durable offline journal is empty. */
+class UnsyncedLogoutError extends Error {
+    constructor() {
+        super('Logout sospeso: alcune modifiche sono ancora salvate solo sul dispositivo. Attendi la sincronizzazione o scegli esplicitamente di perderle.');
+        this.name = 'UnsyncedLogoutError';
+    }
+}
+
+/** Sign-out and purge share one owner lock, with a persistent writer fence. */
+export async function logoutAndPurgeAccount(
+    owner: string,
+    signOutAccount: () => Promise<void>,
+    discardUnsynced = false,
+    verifyCurrentDrafts?: () => Promise<void>,
+): Promise<void> {
+    if (!owner.startsWith('user:')) throw new Error('Logout autenticato: proprietario non valido');
+    return purgeOwnerLocalData(owner, false, {
+        preflight: async () => {
+            assertOrdinaryPurgeAllowed(owner);
+            if (!discardUnsynced) await verifyCurrentDrafts?.();
+            await assertNoOutdatedConsentJournal(owner);
+            if (!discardUnsynced) {
+                const { readLocal } = await import('../sync/localRepository');
+                const local = await readLocal(owner);
+                if (local?.pending.length) throw new UnsyncedLogoutError();
+            }
+            assertOrdinaryPurgeAllowed(owner);
+        },
+        afterFence: signOutAccount,
+    });
+}
+
 export async function resumeInterruptedLocalPurge(owner: string): Promise<void> {
     if (!isLocalPurgeIncomplete(owner)) return;
     await purgeOwnerLocalData(owner, true);
 }
 
-async function purgeOwnerLocalData(owner: string, resumeOnly = false) {
+type PurgeGate = { preflight: () => Promise<void>; afterFence: () => Promise<void> };
+
+async function purgeOwnerLocalData(owner: string, resumeOnly = false, gate?: PurgeGate) {
     if (typeof navigator === 'undefined' || !navigator.locks?.request) {
         throw new Error('Coordinamento sicuro multi-scheda non disponibile: pulizia locale sospesa.');
     }
     return navigator.locks.request('thelogbook:secure-archive:' + owner, { mode: 'exclusive' }, async () => {
         // A second tab must not purge newly activated guest data after the
         // previous generation's deletion was already completed.
-        if (isLocalPurgePending(owner) && !isLocalPurgeIncomplete(owner)) return;
+        if (isLocalPurgePending(owner) && !isLocalPurgeIncomplete(owner)) {
+            // Already fully purged. A new sign-out may still need to invalidate Auth.
+            if (gate) await gate.afterFence();
+            return;
+        }
         if (resumeOnly && !isLocalPurgeIncomplete(owner)) return;
+        if (gate && !isLocalPurgeIncomplete(owner)) await gate.preflight();
+        const previouslyIncomplete = isLocalPurgeIncomplete(owner);
         beginLocalPurge(owner);
+        if (gate) {
+            try {
+                await gate.afterFence();
+            } catch (error) {
+                // No deletion occurred yet. Restore write access only if this
+                // invocation created the fence; a previous interrupted purge
+                // must remain fenced for recovery.
+                if (!previouslyIncomplete) cancelUnstartedLocalPurge(owner);
+                throw error;
+            }
+        }
         lockVault(owner);
         const failures: unknown[] = [];
         const storageKeys = ['logbook:v2:' + owner, 'logbook_cached_user_data',

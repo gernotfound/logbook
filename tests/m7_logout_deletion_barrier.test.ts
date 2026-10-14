@@ -39,8 +39,8 @@ describe('M7 logout isolation with stale deletion receipts', () => {
     expect(authContext).toMatch(/if \(isGuestRef\.current && !isActiveGuestSession\(\)\)[\s\S]{0,300}resetStore\(\{ force: true \}\)/);
     expect(authContext).toMatch(/await DB\.purgeAllLocalUserData\('guest'\);[\s\S]{0,650}setIsGuest\(false\);[\s\S]{0,250}resetStore\(\{ force: true \}\)/);
     expect(authContext).toMatch(/const continueUnverifiedLocally[\s\S]*?await signOut\(auth\);[\s\S]{0,350}resetStore\(\{ force: true \}\)/);
-    expect(authContext).toContain('await DB.secureLogOut();');
-    expect(authContext).toMatch(/await DB\.secureLogOut\(\);[\s\S]{0,200}resetStore\(\{ force: true \}\)/);
+    expect(authContext).toContain('await DB.secureLogOut({ discardUnsynced,');
+    expect(authContext).toMatch(/await DB\.secureLogOut\(\{ discardUnsynced,[\s\S]{0,180}verifyCurrentDrafts:[\s\S]{0,150}\}\);[\s\S]{0,200}resetStore\(\{ force: true \}\)/);
     expect(authContext).toMatch(/setIsGuest\(false\);[\s\S]{0,200}resetStore\(\{ force: true \}\)/);
     expect(authContext).toMatch(/if \(!isGuestActive\) \{[\s\S]{0,500}clearAuthenticatedOwnerHint\(\);[\s\S]{0,300}resetStore\(\);/);
   });

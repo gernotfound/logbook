@@ -86,6 +86,9 @@ L'accesso account/cloud richiede che Firebase Auth riporti `emailVerified === tr
 
 ## Logout e pulizia locale
 
+Il logout autenticato ordinario deve verificare il journal IndexedDB durabile, non solo lo stato di sincronizzazione in memoria. Il preflight finale avviene sotto Web Lock di owner: prima si consolidano le bozze correnti, poi si verifica che il journal non abbia pending, si persiste il purge fence e soltanto allora si invalida Firebase Auth. I writer di altre schede devono rifiutare la fence. Un sign-out fallito prima della prima cancellazione revoca soltanto la nuova fence; una cancellazione incompleta la conserva per il recovery. Il percorso esplicitamente distruttivo del dialogo può scartare pending dopo scelta consapevole, ma deve preservare gli altri gate di consenso e cancellazione account.
+
+
 `secureLogOut` propaga un errore di `auth.signOut` e conserva il locale. **Prima di invalidare Firebase Auth**, il logout autenticato rifiuta intenti di revoca/riaccettazione salute non ancora riconciliati, journal non inviati dopo una revoca confermata e journal di una generazione di consenso precedente ancora da recuperare. Il purge ordinario ripete queste verifiche, anche se chiamato direttamente; un errore di lettura del marker o dell'envelope non autorizza la cancellazione. Dopo sign-out riuscito, purga l'archivio dell'owner catturato prima del logout. Gli archivi owner-scoped degli altri utenti restano separati. L'eliminazione volontaria dell'account ha un boundary di finalizzazione separato, autorizzato solo dal completamento verificato del server.
 
 `purgeAllLocalUserData` tenta ogni rimozione e rigetta con un errore aggregato se alcune falliscono: la UI comunica la pulizia incompleta. Durante una cancellazione server la receipt viene esclusa dal purge ordinario e rimossa solo dopo il successo di tutte le altre operazioni locali.
