@@ -1,6 +1,7 @@
 import { auth, getDb, ensureAppCheck, waitForPendingWrites, signOut } from '../firebase';
 import { del, get } from 'idb-keyval';
 import { lockVault } from '../sync/secureArchiveSession';
+import { beginLocalPurge, isLocalPurgePending } from '../sync/localPurgeFence';
 import { deviceVaultKeyId } from '../sync/secureArchiveKeys';
 import { withTimeout } from './db_core';
 import { assertDeletionDeadlineActive, withDeletionDeadline } from '../deletionDeadline';
@@ -120,6 +121,9 @@ export async function assertNoOutdatedConsentJournal(owner: string): Promise<voi
 }
 
 export async function purgeAllLocalUserData(owner = storageOwner()) {
+    // A durable purge intent was already authorized before it was published;
+    // retrying it must not attempt to read the now partially removed journal.
+    if (isLocalPurgePending(owner)) return purgeOwnerLocalData(owner, true);
     assertOrdinaryPurgeAllowed(owner);
     await assertNoOutdatedConsentJournal(owner);
     // Recheck the synchronous intent after the IndexedDB read.
@@ -133,16 +137,36 @@ export async function purgeCompletedAccountLocalData(owner: string) {
     return purgeOwnerLocalData(owner);
 }
 
-async function purgeOwnerLocalData(owner: string) {
-    const failures: unknown[] = [];
-    const results = await Promise.allSettled([
-        del('logbook:v2:' + owner), del('logbook_cached_user_data'),
-        del('pending_sync_token'), del('pending_sync_payload'), del('sync_failed')
-    ]);
+export async function resumeInterruptedLocalPurge(owner: string): Promise<void> {
+    if (!isLocalPurgePending(owner)) return;
+    await purgeOwnerLocalData(owner, true);
+}
+
+async function purgeOwnerLocalData(owner: string, resumeOnly = false) {
+    if (typeof navigator === 'undefined' || !navigator.locks?.request) {
+        throw new Error('Coordinamento sicuro multi-scheda non disponibile: pulizia locale sospesa.');
+    }
+    return navigator.locks.request('thelogbook:secure-archive:' + owner, { mode: 'exclusive' }, async () => {
+        if (resumeOnly && !isLocalPurgePending(owner)) return;
+        beginLocalPurge(owner);
+        lockVault(owner);
+        const failures: unknown[] = [];
+        const storageKeys = ['logbook:v2:' + owner, 'logbook_cached_user_data',
+            'pending_sync_token', 'pending_sync_payload', 'sync_failed'];
+        const results = await Promise.allSettled(storageKeys.map(key => del(key)));
     for (const result of results) if (result.status === 'rejected') failures.push(result.reason);
 
     // Wrapped DEK metadata must survive an IndexedDB purge failure. Deleting
     // it first would leave the remaining ciphertext permanently undecryptable.
+    if (!failures.length) {
+        for (const key of storageKeys) {
+            try {
+                if (await get<unknown>(key) !== undefined) {
+                    failures.push(new Error('Verifica cancellazione IndexedDB fallita: ' + key));
+                }
+            } catch (error) { failures.push(error); }
+        }
+    }
     if (failures.length) {
         throw new AggregateError(failures, 'Pulizia locale incompleta (IndexedDB). Chiave cifrata e copie residue conservate per il recupero.');
     }
@@ -190,6 +214,10 @@ async function purgeOwnerLocalData(owner: string) {
     // Drop the resident DEK only once all encrypted and device records have
     // been verified removed. An incomplete deletion remains recoverable.
     lockVault(owner);
+    // Keep the non-secret fence after removal. If the last suspended tab sees
+    // no vault control, it must not fall back to plaintext legacy storage.
+    // The next verified owner will release it only AFTER installing a new vault.
+    });
 }
 
 const ACCOUNT_DELETION_API_ORIGIN = (import.meta.env.VITE_ACCOUNT_DELETION_API_ORIGIN || 'https://logbook-gnf.vercel.app').replace(/\/$/, '');

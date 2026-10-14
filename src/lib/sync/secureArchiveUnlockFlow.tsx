@@ -3,6 +3,7 @@ import { SecureVaultPrompt } from './SecureVaultPrompt';
 import { isVaultUnlocked, lockVault, readVaultControl, unlockVaultForOwner } from './secureArchiveSession';
 import { createAndMigrateVault, resumeVaultMigration } from './secureArchiveMigration';
 import { normalizeStorageOwner } from './owner';
+import { isLocalPurgePending } from './localPurgeFence';
 
 type PendingReadiness = { promise: Promise<void>; cancel: () => void };
 const active = new Map<string, PendingReadiness>();
@@ -47,6 +48,10 @@ export function ensureLocalVaultReady(requestedOwner: string): Promise<void> {
         if (finished || busy) return;
         busy = true;
         try {
+            if (isLocalPurgePending(owner)) {
+                const { resumeInterruptedLocalPurge } = await import('../db/db_account');
+                await resumeInterruptedLocalPurge(owner);
+            }
             const control = readVaultControl(owner);
             if (!control) await createAndMigrateVault(owner);
             else if (control.phase === 'migrating') await resumeVaultMigration(owner);
