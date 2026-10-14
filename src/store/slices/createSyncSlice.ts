@@ -8,6 +8,7 @@ import { clearWorkoutTimer } from './createWorkoutSlice';
 import type { AppState } from '../useAppStore';
 import { captureSession, invalidateSession, isActiveGuestSession, isCurrentSession } from '../../lib/sync/session';
 import { commitDomainOperations, readLocal, revertRejectedConsent, WorkoutIntentConflictError } from '../../lib/sync/localRepository';
+import { releaseCommittedWorkoutSlot } from '../../lib/sync/workoutDeviceIntent';
 import { findPendingAccountDeletion, isAccountDeletionPending } from '../../lib/sync/accountGate';
 import { UserDataSchema } from '../../lib/schema';
 import { isUpdateRequiredError } from '../../lib/schemaEvolution';
@@ -32,7 +33,7 @@ export interface SyncSlice {
     setUpdateRequired: (error: unknown) => void;
     saveUserData: (data: UserData | null | ((previous: UserData | null) => UserData | null), options?: { expectedRevision?: number }) => Promise<SyncResult>;
     updateUserData: (updater: (previous: UserData) => UserData) => Promise<SyncResult>;
-    dispatchDomainOperation: (operation: DomainOperationBatch, options?: { workoutIntent?: { generation: string; sequence: number; intentId?: string; baseline: import('../../types').WorkoutSession | null } }) => Promise<SyncResult>;
+    dispatchDomainOperation: (operation: DomainOperationBatch, options?: { workoutIntent?: { generation: string; sequence: number; intentId?: string; parentIntentId?: string; baseline: import('../../types').WorkoutSession | null } }) => Promise<SyncResult>;
     submitLegalConsent: (consent: NonNullable<UserData['legalConsent']>) => Promise<void>;
     flushPendingSyncs: () => Promise<void>;
     cancelPendingSyncs: () => void;
