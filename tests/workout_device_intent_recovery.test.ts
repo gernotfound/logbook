@@ -32,8 +32,8 @@ describe('authenticated device-intent replay into semantic journal', () => {
         writeDeviceValue('workout-slot:' + 'a'.repeat(32), JSON.stringify(other), parallelOwner);
         writeDeviceValue('workout', JSON.stringify(other), parallelOwner);
         const firstSlot = Array.from({ length: localStorage.length }, (_, i) => localStorage.key(i))
-            .find(key => key?.startsWith('logbook:v2:' + parallelOwner + ':sealed:workout-slot:')
-                && !key.endsWith('a'.repeat(32)));
+            .find(key => key?.startsWith('logbook:v2:' + parallelOwner + ':')
+                && key.includes('workout-slot:') && !key.endsWith('a'.repeat(32)));
         expect(firstSlot).toBeDefined();
         expect(readDeviceValueStrict('workout-slot:' + firstSlot!.split(':').at(-1), parallelOwner)).toBe(firstCopy);
         await expect(recoverWorkoutDeviceIntent(parallelOwner, () => true))

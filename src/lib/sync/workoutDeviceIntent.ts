@@ -2,7 +2,7 @@ import { DomainParsers } from '../schema';
 import { equivalentWorkoutSnapshot } from './workoutSnapshotEquality';
 import type { WorkoutSession } from '../../types';
 import { requireHealthConsentWritable } from '../healthConsent';
-import { protectedDeviceKey, readDeviceValueStrict, writeDeviceValue } from './deviceStorage';
+import { deviceKey, protectedDeviceKey, readDeviceValueStrict, writeDeviceValue } from './deviceStorage';
 import { commitDomainOperations, readLocal, WorkoutIntentConflictError, type LocalWriteGuard } from './localRepository';
 import { assertWorkoutSessionIdentities } from './domainOperations/validation';
 
@@ -66,14 +66,14 @@ function parseIntent(value: unknown, owner: string): WorkoutDeviceIntent | null 
  * Only one latest draft per tab is retained, so rapid edits remain bounded.
  */
 function readRecoverySlots(owner: string): Array<{ name: string; intent: WorkoutDeviceIntent }> {
-    const prefix = protectedDeviceKey(SLOT_PREFIX, owner);
-    const keys: string[] = [];
+    const prefixes = [protectedDeviceKey(SLOT_PREFIX, owner), deviceKey(SLOT_PREFIX, owner)];
+    const keys: Array<{ key: string; id: string }> = [];
     for (let index = 0; index < localStorage.length; index++) {
-        const name = localStorage.key(index);
-        if (name?.startsWith(prefix)) keys.push(name);
+        const key = localStorage.key(index);
+        const prefix = prefixes.find(candidate => key?.startsWith(candidate));
+        if (key && prefix) keys.push({ key, id: key.slice(prefix.length) });
     }
-    return keys.sort().map(key => {
-        const id = key.slice(prefix.length);
+    return keys.sort((a, b) => a.key.localeCompare(b.key)).map(({ id }) => {
         if (!tokenPattern.test(id)) throw new Error('Slot workout di recupero incompatibile: dati preservati.');
         const name = slotName(id);
         const raw = readDeviceValueStrict(name, owner);
@@ -180,15 +180,9 @@ export async function recoverWorkoutDeviceIntent(owner: string, guard: LocalWrit
         if (applied?.generation === slot.intent.generation && applied.sequence === slot.intent.sequence
             && applied.intentId === slot.intent.intentId) {
             // A crashed process may not have cleaned its already-journaled slot.
-            if (readDeviceValueStrict(slot.name, owner) === JSON.stringify(slot.intent)) {
+            const latestRaw = readDeviceValueStrict(slot.name, owner);
+            if (latestRaw && parseIntent(JSON.parse(latestRaw) as unknown, owner)?.intentId === slot.intent.intentId) {
                 writeDeviceValue(slot.name, null, owner);
-            } else {
-                // Compare canonical parsed form; encryption is intentionally not
-                // deterministic, but the decoded JSON is.
-                const latestRaw = readDeviceValueStrict(slot.name, owner);
-                if (latestRaw !== null && parseIntent(JSON.parse(latestRaw) as unknown, owner)?.intentId === slot.intent.intentId) {
-                    writeDeviceValue(slot.name, null, owner);
-                }
             }
         } else unresolved.push(slot);
     }
