@@ -1,5 +1,5 @@
-import equal from 'fast-deep-equal';
 import { DomainParsers } from '../schema';
+import { equivalentWorkoutSnapshot } from './workoutSnapshotEquality';
 import type { WorkoutSession } from '../../types';
 import { requireHealthConsentWritable } from '../healthConsent';
 import { readDeviceValueStrict, writeDeviceValue } from './deviceStorage';
@@ -32,19 +32,6 @@ function validatedWorkout(value: unknown, strictIdentity = true): WorkoutSession
     return value as WorkoutSession;
 }
 
-export function equivalentDeviceWorkout(a: WorkoutSession | null, b: WorkoutSession | null): boolean {
-    if (equal(a, b)) return true;
-    // Device intents travel through JSON inside the authenticated AEAD record.
-    // Undefined optional values are omitted and therefore differ under a deep
-    // object comparison even when the same tab has never changed the workout.
-    if (JSON.stringify(a) === JSON.stringify(b)) return true;
-    // A validated boot may normalize historical optional fields. Compare the
-    // canonical forms only if both still describe the same session/identities.
-    if (!a || !b) return false;
-    const left = DomainParsers.parseActiveWorkout(a);
-    const right = DomainParsers.parseActiveWorkout(b);
-    return !!left?.id && left.id === right?.id && equal(left, right);
-}
 
 function parseIntent(value: unknown, owner: string): WorkoutDeviceIntent | null {
     if (!value || typeof value !== 'object' || Array.isArray(value)
@@ -91,12 +78,12 @@ export function saveWorkoutDeviceIntent(
         const raw = readDeviceValueStrict('workout', owner);
         if (raw !== null) {
             const legacy = validatedWorkout(JSON.parse(raw) as unknown, false);
-            if (!equivalentDeviceWorkout(legacy, previous)) {
+            if (!equivalentWorkoutSnapshot(legacy, previous)) {
                 throw new Error('Snapshot workout cambiato da un’altra scheda: dati preservati.');
             }
         }
     }
-    if (existing && !equivalentDeviceWorkout(existing.workout, previous)) {
+    if (existing && !equivalentWorkoutSnapshot(existing.workout, previous)) {
         throw new Error('Workout modificato da un’altra scheda: recupero protetto senza sovrascrivere i dati.');
     }
     if (existing && existing.sequence >= MAX_SEQUENCE) throw new Error('Contatore recupero workout esaurito.');

@@ -1,7 +1,8 @@
 import type { WorkoutSession } from '../../types';
 import { writeDeviceValue } from './deviceStorage';
 import { captureSession, isCurrentSession } from './session';
-import { equivalentDeviceWorkout, readWorkoutDeviceIntent } from './workoutDeviceIntent';
+import { readWorkoutDeviceIntent } from './workoutDeviceIntent';
+import { equivalentWorkoutSnapshot } from './workoutSnapshotEquality';
 
 type SessionSnapshot = ReturnType<typeof captureSession>;
 
@@ -24,7 +25,7 @@ export function persistOwnerBoundWorkoutSnapshot(
     if (session.owner.startsWith('user:')) {
         const intent = readWorkoutDeviceIntent(session.owner);
         if (intent) {
-            if (!equivalentDeviceWorkout(intent.workout, localWorkout)) {
+            if (!equivalentWorkoutSnapshot(intent.workout, localWorkout)) {
                 throw new Error('Snapshot workout non coerente con la copia di recupero sul dispositivo.');
             }
             return;

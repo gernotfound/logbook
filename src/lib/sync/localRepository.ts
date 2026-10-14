@@ -1,5 +1,6 @@
 import { getArchiveRecord, updateArchiveRecord } from './secureArchiveRepository';
 import { UserDataSchema } from '../schema';
+import { equivalentWorkoutSnapshot } from './workoutSnapshotEquality';
 import type { UserData } from '../../types';
 import { generateId } from '../utils/date';
 import { getNutritionConflictFingerprint } from '../utils/object';
@@ -463,7 +464,7 @@ export async function commitDomainOperations(owner: string, batch: DomainOperati
                 return current;
             }
             if (applied?.generation !== workoutIntent.generation
-                && !equal(current?.data.activeWorkout ?? null, workoutIntent.baseline)) {
+                && !equivalentWorkoutSnapshot(current?.data.activeWorkout, workoutIntent.baseline)) {
                 throw new Error('Intento workout non collegato alla versione locale corrente');
             }
         }
