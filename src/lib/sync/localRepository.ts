@@ -59,6 +59,8 @@ interface LocalEnvelopeV5 {
     lastClosedWorkoutId?: string;
     // Owner-local closure ledger fences snapshots from suspended old tabs.
     closedWorkoutIds?: string[];
+    // Synchronous device-workout write-ahead intent, journaled atomically with its business edit.
+    lastWorkoutDeviceIntent?: { generation: string; sequence: number };
 }
 
 export type LocalEnvelope = LocalEnvelopeV5;
@@ -164,6 +166,15 @@ function validate(value: any, owner: string): LocalEnvelope | undefined {
         || record.closedWorkoutIds.some(id => typeof id !== 'string' || normalizeBusinessId(id) !== id)
         || new Set(record.closedWorkoutIds).size !== record.closedWorkoutIds.length
     )) throw new Error('Registro workout chiusi non valido');
+
+    if (record.lastWorkoutDeviceIntent !== undefined && (
+        !record.lastWorkoutDeviceIntent || typeof record.lastWorkoutDeviceIntent !== 'object'
+        || Array.isArray(record.lastWorkoutDeviceIntent)
+        || typeof (record.lastWorkoutDeviceIntent as { generation?: unknown }).generation !== 'string'
+        || !/^[a-f0-9]{32}$/.test((record.lastWorkoutDeviceIntent as { generation: string }).generation)
+        || !Number.isSafeInteger((record.lastWorkoutDeviceIntent as { sequence?: unknown }).sequence)
+        || Number((record.lastWorkoutDeviceIntent as { sequence: number }).sequence) < 1
+    )) throw new Error('Controllo journal workout locale non valido');
 
     if (record.consentRevision !== undefined && (
         typeof record.consentRevision !== 'number' || !Number.isSafeInteger(record.consentRevision) || record.consentRevision < 0
@@ -423,7 +434,9 @@ export async function commitLocal(owner: string, data: UserData, initialBase: Us
 
 export interface DomainCommitResult { operations: SemanticOperation[]; data: UserData; }
 
-export async function commitDomainOperations(owner: string, batch: DomainOperationBatch, initialBase: UserData, guard?: LocalWriteGuard): Promise<DomainCommitResult> {
+export async function commitDomainOperations(owner: string, batch: DomainOperationBatch, initialBase: UserData, guard?: LocalWriteGuard,
+    workoutIntent?: { generation: string; sequence: number; baseline: import('../../types').WorkoutSession | null },
+): Promise<DomainCommitResult> {
     owner = normalizeStorageOwner(owner);
     const domainOperations = normalizeDomainOperationBatch(batch);
     const fallback = structuredClone(parse(initialBase));
@@ -433,6 +446,27 @@ export async function commitDomainOperations(owner: string, batch: DomainOperati
     await updateArchiveRecord<any>(owner, raw => {
         if (guard && !guard()) throw new Error('Commit locale invalidato dal cambio sessione');
         const current = validate(raw, owner);
+        if (workoutIntent) {
+            if (domainOperations.length !== 1 || domainOperations[0].type !== 'active-workout.set'
+                || !domainOperations[0].workout || !owner.startsWith('user:')
+                || !/^[a-f0-9]{32}$/.test(workoutIntent.generation)
+                || !Number.isSafeInteger(workoutIntent.sequence) || workoutIntent.sequence < 1) {
+                throw new Error('Intento workout non valido per il journal');
+            }
+            const applied = current?.lastWorkoutDeviceIntent;
+            if (applied?.generation === workoutIntent.generation && applied.sequence >= workoutIntent.sequence) {
+                savedData = current!.data;
+                operations = [];
+                return current;
+            }
+            if (applied?.generation !== workoutIntent.generation
+                && !equal(current?.data.activeWorkout ?? null, workoutIntent.baseline)) {
+                throw new Error('Intento workout non collegato alla versione locale corrente');
+            }
+        }
+        const intentPatch = workoutIntent
+            ? { lastWorkoutDeviceIntent: { generation: workoutIntent.generation, sequence: workoutIntent.sequence } }
+            : {};
         const base = current?.data ?? fallback;
         // A retry after a durable local completion can deliver an outstanding
         // journal without completing the same workout twice.
@@ -494,10 +528,10 @@ export async function commitDomainOperations(owner: string, batch: DomainOperati
         const provisionalClock = { ...(current?.clock ?? {}), [actorId]: provisionalSeq };
         operations = compileDomainOperations(base, desired, effectiveDomainOperations, catalog, actorId, provisionalSeq, provisionalClock);
         savedData = desired;
-        if (operations.length === 0) return { ...(current ?? { completeMonths: [], replica: null }), ...currentEnvelopeVersions(), ...closure, owner, actorId, actorSeq: current?.actorSeq ?? 0, clock: current?.clock ?? {}, data: desired, baseline: current?.baseline ?? fallback, completeMonths: current?.completeMonths ?? [], pending: current?.pending ?? [], syncMetaByDocument: current?.syncMetaByDocument ?? {}, replica: current?.replica ?? null, revision: (current?.revision ?? 0) + (closureChanged ? 1 : 0) };
+        if (operations.length === 0) return { ...(current ?? { completeMonths: [], replica: null }), ...currentEnvelopeVersions(), ...closure, ...intentPatch, owner, actorId, actorSeq: current?.actorSeq ?? 0, clock: current?.clock ?? {}, data: desired, baseline: current?.baseline ?? fallback, completeMonths: current?.completeMonths ?? [], pending: current?.pending ?? [], syncMetaByDocument: current?.syncMetaByDocument ?? {}, replica: current?.replica ?? null, revision: (current?.revision ?? 0) + (closureChanged || workoutIntent ? 1 : 0) };
         const sequenced = sequenceOperationsForBoundedTransactions(operations, actorId, baseSeq, current?.clock ?? {});
         operations = sequenced.operations;
-        return { ...(current ?? { completeMonths: [], replica: null }), ...currentEnvelopeVersions(), ...closure, owner, actorId, actorSeq: sequenced.actorSeq, clock: sequenced.clock, data: desired, baseline: current?.baseline ?? fallback, completeMonths: current?.completeMonths ?? [], pending: owner === 'guest' ? [] : [...(current?.pending ?? []), ...operations], syncMetaByDocument: current?.syncMetaByDocument ?? {}, replica: current?.replica ?? null, revision: (current?.revision ?? 0) + 1 };
+        return { ...(current ?? { completeMonths: [], replica: null }), ...currentEnvelopeVersions(), ...closure, ...intentPatch, owner, actorId, actorSeq: sequenced.actorSeq, clock: sequenced.clock, data: desired, baseline: current?.baseline ?? fallback, completeMonths: current?.completeMonths ?? [], pending: owner === 'guest' ? [] : [...(current?.pending ?? []), ...operations], syncMetaByDocument: current?.syncMetaByDocument ?? {}, replica: current?.replica ?? null, revision: (current?.revision ?? 0) + 1 };
     });
     return { operations, data: savedData };
 }

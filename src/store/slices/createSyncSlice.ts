@@ -32,7 +32,7 @@ export interface SyncSlice {
     setUpdateRequired: (error: unknown) => void;
     saveUserData: (data: UserData | null | ((previous: UserData | null) => UserData | null), options?: { expectedRevision?: number }) => Promise<SyncResult>;
     updateUserData: (updater: (previous: UserData) => UserData) => Promise<SyncResult>;
-    dispatchDomainOperation: (operation: DomainOperationBatch) => Promise<SyncResult>;
+    dispatchDomainOperation: (operation: DomainOperationBatch, options?: { workoutIntent?: { generation: string; sequence: number; baseline: import('../../types').WorkoutSession | null } }) => Promise<SyncResult>;
     submitLegalConsent: (consent: NonNullable<UserData['legalConsent']>) => Promise<void>;
     flushPendingSyncs: () => Promise<void>;
     cancelPendingSyncs: () => void;
@@ -296,7 +296,7 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
             if (!data) return Promise.reject(new Error('Dati utente non caricati'));
             return get().saveUserData(updater(data));
         },
-        dispatchDomainOperation: async operation => {
+        dispatchDomainOperation: async (operation, options) => {
             if (get().compatibilityStatus === 'update-required') {
                 return updateRequiredResult(get().compatibilityError ?? 'Aggiornamento richiesto.');
             }
@@ -321,7 +321,7 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
             set({ userData: data, dataOwner: session.owner, syncing: true, syncHealth: 'saving', syncPresentation, saveError: null, syncGeneration: generation });
 
             // The business state and compiled SemanticOperation batch are committed by one IndexedDB update.
-            const cache = commitDomainOperations(session.owner, operation, userData, () => isCurrentSession(session))
+            const cache = commitDomainOperations(session.owner, operation, userData, () => isCurrentSession(session), options?.workoutIntent)
                 .then<CacheResult>(() => ({ ok: true }))
                 .catch<CacheResult>(error => ({ ok: false, error }));
             return enqueue(session, generation, cache);
