@@ -17,6 +17,7 @@ import {
     reauthenticateForSensitiveAction,
 } from '../lib/auth/recentAuth';
 import { reportError } from '../lib/errorHandler';
+import { revokeSessionsOnServer } from '../lib/auth/revokeSessions';
 
 export function useSettings() {
     const { currentUser, isGuest, logout } = useAuth();
@@ -38,6 +39,90 @@ export function useSettings() {
         } else if (await showConfirm("Sei sicuro di voler uscire dal tuo account?")) {
             // A confirmation from A must never sign out B after an auth change.
             if (isCurrentSession(session)) await logout({ mode: 'normal' });
+        }
+    };
+
+    const [revokingSessions, setRevokingSessions] = useState(false);
+    const revokingSessionsBusy = useRef(false);
+
+    const handleLogoutEverywhere = async () => {
+        if (revokingSessionsBusy.current || !currentUser) return;
+        revokingSessionsBusy.current = true;
+        const expectedUid = currentUser.uid;
+        try {
+            const session = captureSession();
+            const assertCurrent = () => {
+                if (!isCurrentSession(session) || auth.currentUser?.uid !== expectedUid) {
+                    throw new Error('Sessione cambiata: operazione annullata.');
+                }
+            };
+            const assertSafeLocalState = async () => {
+                assertCurrent();
+                const state = useAppStore.getState();
+                if (state.localPersistenceBlocked || state.localWorkout || state.userData?.pendingConflicts) {
+                    throw new Error('Completa l’allenamento e risolvi i salvataggi locali prima di disconnettere tutti i dispositivi.');
+                }
+                if (session.owner === 'user:' + expectedUid) {
+                    const local = await readLocal(session.owner);
+                    assertCurrent();
+                    if ((local?.pending.length ?? 0) !== 0 || (state.userData !== null && state.syncHealth !== 'synced')) {
+                        throw new Error('Ci sono dati non ancora sincronizzati. Sincronizzali oppure esporta un backup prima di proseguire.');
+                    }
+                }
+            };
+
+            await assertSafeLocalState();
+            if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+                throw new Error('Connettiti a Internet per disconnettere tutti i dispositivi.');
+            }
+            if (isAccountDeletionPending('user:' + expectedUid)) {
+                throw new Error('Completa prima la cancellazione account in sospeso.');
+            }
+            if (!(await showConfirm(
+                'Disconnettere tutte le sessioni del tuo account, incluso questo dispositivo? Dovrai accedere di nuovo. I dispositivi offline potrebbero ancora avere copie locali: questa funzione non le cancella. Continua?'
+            ))) return;
+            await assertSafeLocalState();
+            setRevokingSessions(true);
+
+            let reauth = await reauthenticateForSensitiveAction(auth.currentUser!);
+            assertCurrent();
+            if (reauth === 'password-required') {
+                const password = await showPasswordPrompt('Per disconnettere tutti i dispositivi, inserisci la password attuale.', 'Verifica identità');
+                if (password === null) return;
+                assertCurrent();
+                reauth = await reauthenticateForSensitiveAction(auth.currentUser!, password);
+            }
+            assertCurrent();
+            if (reauth === 'redirect-started') {
+                await showAlert('Verifica Google avviata. Completa l’accesso e ripeti l’operazione.');
+                return;
+            }
+            if (reauth !== 'reauthenticated') {
+                throw new Error('Non è stato possibile verificare nuovamente l’identità.');
+            }
+
+            await assertSafeLocalState();
+            await revokeSessionsOnServer(auth.currentUser!);
+            // The server barrier now rejects the previous sessions at the
+            // Firestore boundary. Use the ordinary guarded logout so no local
+            // pending journal or vault metadata is discarded inappropriately.
+            if (auth.currentUser?.uid === expectedUid) {
+                await logout({ mode: 'normal' });
+            }
+            if (auth.currentUser?.uid === expectedUid) {
+                await showAlert('Accesso cloud dagli altri dispositivi revocato. Il logout locale non è completo: verifica i dati non sincronizzati e ripeti “Esci dall’account”.');
+            }
+        } catch (error) {
+            if (isSensitiveReauthCancellation(error)) return;
+            const code = (error as { code?: unknown } | null)?.code;
+            if (code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
+                await showAlert('Password attuale non corretta.');
+            } else {
+                await showAlert(error instanceof Error ? error.message : 'Revoca non confermata. Riprova dopo aver verificato la connessione.');
+            }
+        } finally {
+            revokingSessionsBusy.current = false;
+            setRevokingSessions(false);
         }
     };
 
@@ -237,7 +322,7 @@ export function useSettings() {
         }
     };
     return {
-        currentUser, handleLogout,
+        currentUser, handleLogout, handleLogoutEverywhere, revokingSessions,
         dob, setDob,
         height, setHeight,
         gender, setGender,

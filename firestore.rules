@@ -13,10 +13,23 @@ service cloud.firestore {
       return exists(/databases/$(database)/documents/account_deletions/$(userId));
     }
 
+    // Only the trusted backend may set this per-UID revocation barrier.
+    // Existing Firebase ID tokens can remain cryptographically valid for up
+    // to an hour; auth_time fences them immediately at the Firestore boundary.
+    function hasCurrentSession(userId) {
+      let record = /databases/$(database)/documents/session_revocations/$(userId);
+      return !exists(record) || (
+        get(record).data.revokedAfterSeconds is int
+        && request.auth.token.auth_time is int
+        && request.auth.token.auth_time > get(record).data.revokedAfterSeconds
+      );
+    }
+
     function isActiveOwner(userId) {
       return isOwner(userId)
         && request.auth.token.email_verified == true
-        && !deletionJobExists(userId);
+        && !deletionJobExists(userId)
+        && hasCurrentSession(userId);
     }
 
     // A server-only revocation record cannot be undone by a stale client update
@@ -508,6 +521,10 @@ service cloud.firestore {
     }
 
     match /account_deletions/{userId} {
+      allow read, write: if false;
+    }
+
+    match /session_revocations/{userId} {
       allow read, write: if false;
     }
 
