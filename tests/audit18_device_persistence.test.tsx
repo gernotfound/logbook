@@ -61,9 +61,10 @@ describe('Audit 18 device-critical persistence', () => {
         ['SecurityError', 'blocked'],
         ['QuotaExceededError', 'full'],
     ])('does not publish a workout edit when the device write fails with %s', async (name, message) => {
-        const key = deviceKey('workout', owner);
-        localStorageMock.setItem.mockImplementationOnce((writtenKey: string) => {
-            if (writtenKey === key) throw new DOMException(message, name);
+        // The first durable edit write is now the immutable AEAD witness;
+        // failing it must prevent both shared-snapshot publication and IDB.
+        localStorageMock.setItem.mockImplementationOnce(() => {
+            throw new DOMException(message, name);
         });
 
         const next = workout('w-current', '9');
