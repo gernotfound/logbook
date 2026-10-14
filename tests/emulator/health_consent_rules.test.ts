@@ -115,3 +115,45 @@ it('rejects legacy telemetry without consent epoch even after a new explicit acc
     expireAt: new Date(Date.now() + 86400000),
   }));
 });
+
+it('rejects revoked Firebase sessions immediately in every private collection while permitting a new login', async () => {
+  await env.withSecurityRulesDisabled(async context => {
+    const db = context.firestore();
+    await setDoc(doc(db, 'health_consent_withdrawals/u'), mark('active'));
+    await setDoc(doc(db, 'users/u'), { profile: { name: 'Keep' } });
+    await setDoc(doc(db, 'users/u/history_months/2026-10'), { sample: true });
+  });
+
+  const prior = env.authenticatedContext('u', { email_verified: true, auth_time: 100 }).firestore();
+  await assertSucceeds(getDoc(doc(prior, 'users/u')));
+  await env.withSecurityRulesDisabled(async context => {
+    await setDoc(doc(context.firestore(), 'session_revocations/u'), { revokedAfterSeconds: 120 });
+  });
+  await assertFails(getDoc(doc(prior, 'users/u')));
+  await assertFails(getDoc(doc(prior, 'users/u/history_months/2026-10')));
+  await assertFails(getDoc(doc(prior, 'users/u/sync_control/state')));
+  await assertFails(getDoc(doc(prior, 'users/u/telemetry_events/one')));
+
+  const equalSecond = env.authenticatedContext('u', { email_verified: true, auth_time: 120 }).firestore();
+  await assertFails(getDoc(doc(equalSecond, 'users/u')));
+  const fresh = env.authenticatedContext('u', { email_verified: true, auth_time: 121 }).firestore();
+  await assertSucceeds(getDoc(doc(fresh, 'users/u')));
+  await assertSucceeds(getDoc(doc(fresh, 'users/u/history_months/2026-10')));
+  await assertFails(setDoc(doc(fresh, 'session_revocations/u'), { revokedAfterSeconds: 0 }));
+  await assertFails(getDoc(doc(fresh, 'session_revocations/u')));
+  const other = env.authenticatedContext('other', { email_verified: true, auth_time: 999 }).firestore();
+  await assertFails(getDoc(doc(other, 'users/u')));
+});
+
+it('fails closed for malformed revocation metadata and preserves unrelated accounts', async () => {
+  await env.withSecurityRulesDisabled(async context => {
+    const db = context.firestore();
+    await setDoc(doc(db, 'health_consent_withdrawals/u'), mark('active'));
+    await setDoc(doc(db, 'users/u'), { profile: { name: 'Preserved' } });
+    await setDoc(doc(db, 'session_revocations/u'), { revokedAfterSeconds: 'invalid' });
+    await setDoc(doc(db, 'health_consent_withdrawals/other'), { uid: 'other', status: 'active', revision: 1 });
+    await setDoc(doc(db, 'users/other'), { profile: { name: 'Unrelated' } });
+  });
+  await assertFails(getDoc(doc(env.authenticatedContext('u', { email_verified: true, auth_time: 10000 }).firestore(), 'users/u')));
+  await assertSucceeds(getDoc(doc(env.authenticatedContext('other', { email_verified: true, auth_time: 10000 }).firestore(), 'users/other')));
+});
