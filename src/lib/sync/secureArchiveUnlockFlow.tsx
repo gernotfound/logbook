@@ -54,7 +54,10 @@ export function ensureLocalVaultReady(requestedOwner: string): Promise<void> {
             }
             const control = readVaultControl(owner);
             if (!control) await createAndMigrateVault(owner);
-            else if (control.phase === 'migrating') await resumeVaultMigration(owner);
+            else if (control.phase === 'migrating') {
+                if (isLocalPurgePending(owner)) await createAndMigrateVault(owner);
+                else await resumeVaultMigration(owner);
+            }
             else await unlockVaultForOwner(owner);
             if (finished) { lockVault(owner); return; }
             if (!isVaultUnlocked(owner)) throw new Error('La sessione locale non è più valida.');

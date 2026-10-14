@@ -12,7 +12,7 @@ import { assertLegacyEnvelopeValidForSecureMigration } from './localRepository';
 import { withGuestLifecycleLock } from './guestLifecycleLock';
 import { isAccountDeletionPending } from './accountGate';
 import { OWNER_UI_PREFERENCES } from '../uiPreferenceKeys';
-import { assertNoLocalPurge, isLocalPurgePending, releaseLocalPurgeFence, LocalPurgePendingError } from './localPurgeFence';
+import { assertNoLocalPurge, isLocalPurgeIncomplete, isLocalPurgePending, releaseLocalPurgeFence, LocalPurgePendingError } from './localPurgeFence';
 
 const SAFE_PLAINTEXT_NAMES = new Set([
     'health-consent-withdrawal', 'health-consent-generation', 'health-consent-last-active',
@@ -149,7 +149,8 @@ export async function createAndMigrateVault(requestedOwner: string): Promise<voi
         // Reuse its existing device key/DEK; never create a competing archive.
         const existing = readVaultControl(owner);
         const finishingPriorPurge = isLocalPurgePending(owner);
-        if (finishingPriorPurge && existing) throw new LocalPurgePendingError();
+        if (finishingPriorPurge && isLocalPurgeIncomplete(owner)) throw new LocalPurgePendingError();
+        if (finishingPriorPurge && existing?.phase === 'active') throw new LocalPurgePendingError();
         if (finishingPriorPurge) {
             // A crash before the final cleanup must not create a second key
             // above remaining user data. An orphaned device key is harmless
@@ -164,6 +165,9 @@ export async function createAndMigrateVault(requestedOwner: string): Promise<voi
             return;
         }
         if (existing?.phase === 'migrating') {
+            // Crash between publishing the replacement control and releasing
+            // the retired fence: the empty new vault is recoverable in place.
+            if (finishingPriorPurge) releaseLocalPurgeFence(owner);
             const dataKey = await unlockLocalKeyVault(existing.wrappedKey, owner);
             try {
                 await migrateAndFinalize(owner, existing, dataKey);

@@ -1,7 +1,7 @@
 import { auth, getDb, ensureAppCheck, waitForPendingWrites, signOut } from '../firebase';
 import { del, get } from 'idb-keyval';
 import { lockVault } from '../sync/secureArchiveSession';
-import { beginLocalPurge, isLocalPurgePending } from '../sync/localPurgeFence';
+import { beginLocalPurge, isLocalPurgeIncomplete, isLocalPurgePending, markLocalPurgeComplete } from '../sync/localPurgeFence';
 import { deviceVaultKeyId } from '../sync/secureArchiveKeys';
 import { withTimeout } from './db_core';
 import { assertDeletionDeadlineActive, withDeletionDeadline } from '../deletionDeadline';
@@ -138,7 +138,7 @@ export async function purgeCompletedAccountLocalData(owner: string) {
 }
 
 export async function resumeInterruptedLocalPurge(owner: string): Promise<void> {
-    if (!isLocalPurgePending(owner)) return;
+    if (!isLocalPurgeIncomplete(owner)) return;
     await purgeOwnerLocalData(owner, true);
 }
 
@@ -147,7 +147,10 @@ async function purgeOwnerLocalData(owner: string, resumeOnly = false) {
         throw new Error('Coordinamento sicuro multi-scheda non disponibile: pulizia locale sospesa.');
     }
     return navigator.locks.request('thelogbook:secure-archive:' + owner, { mode: 'exclusive' }, async () => {
-        if (resumeOnly && !isLocalPurgePending(owner)) return;
+        // A second tab must not purge newly activated guest data after the
+        // previous generation's deletion was already completed.
+        if (isLocalPurgePending(owner) && !isLocalPurgeIncomplete(owner)) return;
+        if (resumeOnly && !isLocalPurgeIncomplete(owner)) return;
         beginLocalPurge(owner);
         lockVault(owner);
         const failures: unknown[] = [];
@@ -214,6 +217,7 @@ async function purgeOwnerLocalData(owner: string, resumeOnly = false) {
     // Drop the resident DEK only once all encrypted and device records have
     // been verified removed. An incomplete deletion remains recoverable.
     lockVault(owner);
+    markLocalPurgeComplete(owner);
     // Keep the non-secret fence after removal. If the last suspended tab sees
     // no vault control, it must not fall back to plaintext legacy storage.
     // The next verified owner will release it only AFTER installing a new vault.
