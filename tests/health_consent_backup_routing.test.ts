@@ -56,7 +56,7 @@ vi.mock('firebase/firestore', () => ({
   doc: (_db: unknown, ...parts: string[]) => ({ path: parts.join('/') }),
   collection: (_db: unknown, ...parts: string[]) => ({ path: parts.join('/') }),
   getDocFromServer: (ref: { path: string }) => ref.path.endsWith('/sync_control/state')
-    ? boundary.controlRead(ref) : boundary.directRootRead(ref),
+    ? boundary.controlRead() : boundary.directRootRead(),
   getDocsFromServer: vi.fn(async () => ({ docs: [], size: 0 })),
   documentId: () => '__name__',
   orderBy: () => ({}),
