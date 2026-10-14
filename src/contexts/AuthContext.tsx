@@ -1009,10 +1009,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 return;
             }
 
+            let discardUnsynced = mode === 'force';
             if (mode === 'normal') {
                 setSyncing(true);
+                // The Firestore SDK tracks only its own in-flight writes, not
+                // TheLogBook's IndexedDB journal. Inspect the durable source.
+                let durablePending = false;
+                try {
+                    const { readLocal } = await import('../lib/sync/localRepository');
+                    const envelope = await readLocal(userOwner(initialUid!));
+                    durablePending = (envelope?.pending.length ?? 0) > 0;
+                } catch (error) {
+                    setSyncing(false);
+                    await useDialogStore.getState().showAlert('Non posso verificare i dati locali prima del logout. Archivio preservato: riprova dopo aver riaperto TheLogBook.');
+                    return;
+                }
                 const state = useAppStore.getState();
-                let isSafe = state.syncHealth === 'synced' && !state.userData?.pendingConflicts;
+                let isSafe = state.syncHealth === 'synced' && !state.localWorkout && !state.userData?.pendingConflicts && !durablePending;
                 let pendingWriteStatus: 'local-pending' | 'rejected' | 'failed' | null = null;
 
                 if (!isSafe) {
@@ -1039,7 +1052,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                     }
 
                     const finalState = useAppStore.getState();
-                    isSafe = finalState.syncHealth === 'synced' && !finalState.userData?.pendingConflicts && pendingWriteStatus === null;
+                    isSafe = finalState.syncHealth === 'synced' && !finalState.localWorkout && !finalState.userData?.pendingConflicts && !durablePending && pendingWriteStatus === null;
                 }
                 setSyncing(false);
 
@@ -1074,9 +1087,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                         return;
                     } else if (action === 'safe-exit') {
                         const finalCheck = useAppStore.getState();
-                        if (finalCheck.syncHealth !== 'synced' || finalCheck.userData?.pendingConflicts) {
+                        if (finalCheck.syncHealth !== 'synced' || finalCheck.localWorkout || finalCheck.userData?.pendingConflicts) {
                             return;
                         }
+                    } else if (action === 'force-exit') {
+                        discardUnsynced = true;
+                    } else {
+                        return;
                     }
                 }
             }
@@ -1089,7 +1106,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             setSyncing(true);
             try {
                 useAppStore.getState().cancelPendingSyncs();
-                await DB.secureLogOut();
+                await DB.secureLogOut({ discardUnsynced });
                 DB.resetCache();
                 useAppStore.getState().resetStore({ force: true });
                 if (initialUid) {
