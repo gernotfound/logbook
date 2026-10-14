@@ -20,6 +20,9 @@ export async function GET(request: Request): Promise<Response> {
   const origin = request.headers.get('origin');
   try {
     requireAccountDeletionOrigin(request);
+    // Deliberate rights/recovery exception: a non-revoked identity may export
+    // only its own data after confirmed withdrawal, even if email verification
+    // cannot currently be renewed. Never accept a client-selected UID.
     const { uid } = await verifyRecoveryRegistrationRequester(request);
     const params = new URL(request.url).searchParams;
     const name = params.get('collection');
