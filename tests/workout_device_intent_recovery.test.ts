@@ -22,6 +22,27 @@ const owner = 'user:test-user-id';
 describe('authenticated device-intent replay into semantic journal', () => {
     beforeEach(() => { vi.clearAllMocks(); });
 
+    it('preserves a losing tab draft in an independent slot when two tabs overwrite their shared snapshot', async () => {
+        const parallelOwner = 'user:slot-overwrite-test';
+        const original = data(workout('50'));
+        await initializeLocal(parallelOwner, original);
+        const first = saveWorkoutDeviceIntent(parallelOwner, original.activeWorkout ?? null, workout('55'), original.activeWorkout ?? null);
+        const firstCopy = JSON.stringify(first);
+        const other = { ...first, intentId: 'c'.repeat(32), workout: workout('60') };
+        writeDeviceValue('workout-slot:' + 'a'.repeat(32), JSON.stringify(other), parallelOwner);
+        writeDeviceValue('workout', JSON.stringify(other), parallelOwner);
+        const firstSlot = Array.from({ length: localStorage.length }, (_, i) => localStorage.key(i))
+            .find(key => key?.startsWith('logbook:v2:' + parallelOwner + ':sealed:workout-slot:')
+                && !key.endsWith('a'.repeat(32)));
+        expect(firstSlot).toBeDefined();
+        expect(readDeviceValueStrict('workout-slot:' + firstSlot!.split(':').at(-1), parallelOwner)).toBe(firstCopy);
+        await expect(recoverWorkoutDeviceIntent(parallelOwner, () => true))
+            .rejects.toThrow('Più schede');
+        expect((await readLocal(parallelOwner))?.data.activeWorkout?.exercises[0].sets[0].kg).toBe('50');
+        expect(readDeviceValueStrict('workout', parallelOwner)).toBe(JSON.stringify(other));
+        expect(readDeviceValueStrict('workout-slot:' + 'a'.repeat(32), parallelOwner)).toBe(JSON.stringify(other));
+    });
+
     it('replays the same encrypted device snapshot into IndexedDB and the pending journal after a crash', async () => {
         const before = data(workout('50'));
         await initializeLocal(owner, before);

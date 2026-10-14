@@ -7,7 +7,7 @@ import { readDeviceValueStrict, writeDeviceValue } from '../../lib/sync/deviceSt
 import type { AppState } from '../useAppStore';
 import { captureSession } from '../../lib/sync/session';
 import { assertWorkoutSessionIdentities } from '../../lib/sync/domainOperations/validation';
-import { readWorkoutDeviceIntent, saveWorkoutDeviceIntent, unwrapWorkoutDeviceSnapshot } from '../../lib/sync/workoutDeviceIntent';
+import { readWorkoutDeviceIntent, releaseCommittedWorkoutSlot, saveWorkoutDeviceIntent, unwrapWorkoutDeviceSnapshot } from '../../lib/sync/workoutDeviceIntent';
 
 export interface WorkoutSlice {
     localWorkout: WorkoutSession | null;
@@ -199,7 +199,13 @@ export const createWorkoutSlice: StateCreator<AppState, [], [], WorkoutSlice> = 
             throw error;
         }
         set({ localWorkout: persistedWorkout });
-        return get().dispatchDomainOperation({ type: 'active-workout.set', workout: persistedWorkout },
+        const sessionOwner = captureSession().owner;
+        const outcome = await get().dispatchDomainOperation({ type: 'active-workout.set', workout: persistedWorkout },
             intent ? { workoutIntent: { generation: intent.generation, sequence: intent.sequence, intentId: intent.intentId, baseline: intent.baseline } } : undefined);
+        if (intent && (outcome.ok || outcome.status === 'local-pending')) {
+            // Cleanup cannot turn an already committed edit into a failed save.
+            try { await releaseCommittedWorkoutSlot(sessionOwner, intent); } catch { /* retain redundant encrypted copy */ }
+        }
+        return outcome;
     },
 });
