@@ -89,7 +89,7 @@ describe('store with real IndexedDB commits', () => {
         await clear();
         await initializeLocal('user:A', base);
         store.setState({ userData: base, dataOwner: 'user:A', localWorkout: workout });
-        const intent = { generation: 'a'.repeat(32), sequence: 1, baseline: workout };
+        const intent = { generation: 'a'.repeat(32), sequence: 1, intentId: 'b'.repeat(32), baseline: workout };
         await commitDomainOperations('user:A', {
             type: 'active-workout.set', workout: { ...workout, routineName: 'Scheda A' },
         }, base, undefined, intent);
@@ -97,7 +97,7 @@ describe('store with real IndexedDB commits', () => {
 
         const pending = store.getState().dispatchDomainOperation({
             type: 'active-workout.set', workout: { ...workout, routineName: 'Scheda B' },
-        }, { workoutIntent: intent });
+        }, { workoutIntent: { ...intent, intentId: 'c'.repeat(32) } });
         const observed = expect(pending).rejects.toThrow('Conflitto tra modifiche concorrenti');
         await store.getState().flushPendingSyncs();
         await observed;

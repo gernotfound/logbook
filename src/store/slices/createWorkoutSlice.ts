@@ -200,6 +200,6 @@ export const createWorkoutSlice: StateCreator<AppState, [], [], WorkoutSlice> = 
         }
         set({ localWorkout: persistedWorkout });
         return get().dispatchDomainOperation({ type: 'active-workout.set', workout: persistedWorkout },
-            intent ? { workoutIntent: { generation: intent.generation, sequence: intent.sequence, baseline: intent.baseline } } : undefined);
+            intent ? { workoutIntent: { generation: intent.generation, sequence: intent.sequence, intentId: intent.intentId, baseline: intent.baseline } } : undefined);
     },
 });

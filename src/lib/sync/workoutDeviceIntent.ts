@@ -15,6 +15,9 @@ export type WorkoutDeviceIntent = {
     owner: string;
     generation: string;
     sequence: number;
+    // Old device intents omit this; new writes identify individual edits even
+    // if two browser tabs allocate the same sequence concurrently.
+    intentId?: string;
     // Frozen when the first synchronous snapshot is written. Used to fence an
     // untracked pre-upgrade or cross-tab envelope, not to replace the journal.
     baseline: WorkoutSession | null;
@@ -41,12 +44,14 @@ function parseIntent(value: unknown, owner: string): WorkoutDeviceIntent | null 
         || typeof raw.generation !== 'string' || !tokenPattern.test(raw.generation)
         || typeof raw.sequence !== 'number' || !Number.isSafeInteger(raw.sequence)
         || raw.sequence < 1 || raw.sequence > MAX_SEQUENCE
+        || (raw.intentId !== undefined && (typeof raw.intentId !== 'string' || !tokenPattern.test(raw.intentId)))
         || (raw.baseline !== null && (!raw.baseline || typeof raw.baseline !== 'object'))) {
         throw new Error('Metadati workout di recupero incompatibili: archivio preservato.');
     }
     const workout = validatedWorkout(raw.workout);
     const baseline = raw.baseline === null ? null : validatedWorkout(raw.baseline, false);
-    return { __logbookWorkoutIntent: 1, owner, generation: raw.generation, sequence: raw.sequence, baseline, workout };
+    return { __logbookWorkoutIntent: 1, owner, generation: raw.generation, sequence: raw.sequence,
+        ...(raw.intentId ? { intentId: raw.intentId } : {}), baseline, workout };
 }
 
 /** The complete intent and the latest workout live in ONE synchronous AEAD record. */
@@ -87,12 +92,13 @@ export function saveWorkoutDeviceIntent(
         throw new Error('Workout modificato da un’altra scheda: recupero protetto senza sovrascrivere i dati.');
     }
     if (existing && existing.sequence >= MAX_SEQUENCE) throw new Error('Contatore recupero workout esaurito.');
-    const random = crypto.getRandomValues(new Uint8Array(16));
-    const generation = existing?.generation
-        ?? Array.from(random, byte => byte.toString(16).padStart(2, '0')).join('');
+    const token = () => Array.from(crypto.getRandomValues(new Uint8Array(16)),
+        byte => byte.toString(16).padStart(2, '0')).join('');
+    const generation = existing?.generation ?? token();
     const intent: WorkoutDeviceIntent = {
         __logbookWorkoutIntent: 1, owner, generation,
         sequence: (existing?.sequence ?? 0) + 1,
+        intentId: token(),
         baseline: existing ? existing.baseline : observedBase,
         workout,
     };
@@ -125,7 +131,9 @@ export async function recoverWorkoutDeviceIntent(owner: string, guard: LocalWrit
         if (applied.sequence === intent.sequence) {
             // A concurrent tab can publish different workout bytes with the same
             // generation/sequence. Sequence equality alone is not idempotence.
-            if (!equivalentWorkoutSnapshot(envelope.data.activeWorkout, intent.workout)) {
+            if (applied.intentId !== undefined && intent.intentId !== undefined
+                ? applied.intentId !== intent.intentId
+                : !equivalentWorkoutSnapshot(envelope.data.activeWorkout, intent.workout)) {
                 throw new WorkoutIntentConflictError('Conflitto tra modifiche concorrenti del workout: snapshot device preservato.');
             }
             return;
