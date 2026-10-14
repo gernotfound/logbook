@@ -22,25 +22,25 @@ const owner = 'user:test-user-id';
 describe('authenticated device-intent replay into semantic journal', () => {
     beforeEach(() => { vi.clearAllMocks(); });
 
-    it('preserves a losing tab draft in an independent slot when two tabs overwrite their shared snapshot', async () => {
+    it('preserves a losing tab draft in immutable copies when two tabs overwrite their shared snapshot', async () => {
         const parallelOwner = 'user:slot-overwrite-test';
         const original = data(workout('50'));
         await initializeLocal(parallelOwner, original);
         const first = saveWorkoutDeviceIntent(parallelOwner, original.activeWorkout ?? null, workout('55'), original.activeWorkout ?? null);
         const firstCopy = JSON.stringify(first);
         const other = { ...first, intentId: 'c'.repeat(32), workout: workout('60') };
-        writeDeviceValue('workout-slot:' + 'a'.repeat(32), JSON.stringify(other), parallelOwner);
+        writeDeviceValue('workout-intent:' + other.intentId, JSON.stringify(other), parallelOwner);
         writeDeviceValue('workout', JSON.stringify(other), parallelOwner);
         const firstSlot = Array.from({ length: localStorage.length }, (_, i) => localStorage.key(i))
             .find(key => key?.startsWith('logbook:v2:' + parallelOwner + ':')
-                && key.includes('workout-slot:') && !key.endsWith('a'.repeat(32)));
+                && key.includes('workout-intent:') && !key.endsWith(other.intentId));
         expect(firstSlot).toBeDefined();
-        expect(readDeviceValueStrict('workout-slot:' + firstSlot!.split(':').at(-1), parallelOwner)).toBe(firstCopy);
+        expect(readDeviceValueStrict('workout-intent:' + firstSlot!.split(':').at(-1), parallelOwner)).toBe(firstCopy);
         await expect(recoverWorkoutDeviceIntent(parallelOwner, () => true))
             .rejects.toThrow('Più schede');
         expect((await readLocal(parallelOwner))?.data.activeWorkout?.exercises[0].sets[0].kg).toBe('50');
         expect(readDeviceValueStrict('workout', parallelOwner)).toBe(JSON.stringify(other));
-        expect(readDeviceValueStrict('workout-slot:' + 'a'.repeat(32), parallelOwner)).toBe(JSON.stringify(other));
+        expect(readDeviceValueStrict('workout-intent:' + other.intentId, parallelOwner)).toBe(JSON.stringify(other));
     });
 
     it('recovers a private draft when the shared snapshot write was interrupted', async () => {
@@ -59,7 +59,7 @@ describe('authenticated device-intent replay into semantic journal', () => {
         expect(await readLocal(testOwner)).toEqual(beforeRetry);
     });
 
-    it('bounds the recovery slots to one per tab across rapid edits', async () => {
+    it('retains a linked immutable chain until the latest edit is journalled', async () => {
         const testOwner = 'user:slot-rapid-edits';
         const initial = data(workout('50'));
         await initializeLocal(testOwner, initial);
@@ -70,10 +70,13 @@ describe('authenticated device-intent replay into semantic journal', () => {
             previous = next;
         }
         const slots = Array.from({ length: localStorage.length }, (_, i) => localStorage.key(i))
-            .filter(key => key?.startsWith('logbook:v2:' + testOwner + ':') && key.includes('workout-slot:'));
-        expect(slots).toHaveLength(1);
+            .filter(key => key?.startsWith('logbook:v2:' + testOwner + ':') && key.includes('workout-intent:'));
+        expect(slots).toHaveLength(24);
         await recoverWorkoutDeviceIntent(testOwner, () => true);
         expect((await readLocal(testOwner))?.data.activeWorkout?.exercises[0].sets[0].kg).toBe('74');
+        const remaining = Array.from({ length: localStorage.length }, (_, i) => localStorage.key(i))
+            .filter(key => key?.startsWith('logbook:v2:' + testOwner + ':') && key.includes('workout-intent:'));
+        expect(remaining).toHaveLength(0);
     });
 
     it('replays the same encrypted device snapshot into IndexedDB and the pending journal after a crash', async () => {
