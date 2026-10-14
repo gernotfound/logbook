@@ -11,7 +11,7 @@ vi.mock('../../src/lib/healthConsent', () => ({
 }));
 
 import { commitDomainOperations, initializeLocal, readLocal } from '../../src/lib/sync/localRepository';
-import { deviceKey, protectedDeviceKey, readDeviceValue, readDeviceValueStrict } from '../../src/lib/sync/deviceStorage';
+import { deviceKey, protectedDeviceKey, readDeviceValue, readDeviceValueStrict, writeDeviceValue } from '../../src/lib/sync/deviceStorage';
 import { createAndMigrateVault, resumeVaultMigration } from '../../src/lib/sync/secureArchiveMigration';
 import { LocalVaultLockedError, lockAllVaults, lockVault, readVaultControl, unlockVaultForOwner } from '../../src/lib/sync/secureArchiveSession';
 import { LocalCiphertextError, SEALED_LOCAL_PREFIX } from '../../src/lib/sync/secureArchiveCipher';
@@ -158,6 +158,21 @@ describe('durable secure archive migration', () => {
         expect(readVaultControl(owner)?.phase).toBe('active');
         expect(localStorage.getItem(deviceKey('draft:measurement:' + day, owner))).toBeNull();
         expect(readDeviceValueStrict('draft:measurement:' + day, owner)).toBe('{"weight":"77"}');
+    });
+
+    it('preserves corrupted encrypted drafts against replacements and deletions', async () => {
+        await createAndMigrateVault(owner);
+        const name = 'draft:measurement:' + day;
+        writeDeviceValue(name, '{"weight":"76"}', owner);
+        const sealedKey = protectedDeviceKey(name, owner);
+        const original = localStorage.getItem(sealedKey)!;
+        const damaged = original.slice(0, -1) + (original.endsWith('A') ? 'B' : 'A');
+        localStorage.setItem(sealedKey, damaged);
+        expect(() => readDeviceValueStrict(name, owner)).toThrow(LocalCiphertextError);
+        expect(() => writeDeviceValue(name, '{"weight":"77"}', owner)).toThrow(LocalCiphertextError);
+        expect(() => writeDeviceValue(name, null, owner)).toThrow(LocalCiphertextError);
+        expect(localStorage.getItem(sealedKey)).toBe(damaged);
+        expect(localStorage.getItem(deviceKey(name, owner))).toBeNull();
     });
 
     it('never converts an unreadable sealed draft into an empty best-effort value', async () => {

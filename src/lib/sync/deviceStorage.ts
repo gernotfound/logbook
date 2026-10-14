@@ -66,6 +66,11 @@ export function writeDeviceValue(name: string, value: string | null, owner?: str
         // overwrite a newer draft or lose unacknowledged legacy edits.
         if (readBrowserValueStrict(storageKey) !== null) throw new LocalCiphertextError();
         const sealedKey = protectedDeviceKey(name, resolvedOwner);
+        const previous = readBrowserValueStrict(sealedKey);
+        // A failed draft read must not make an unreadable ciphertext overwriteable.
+        // Authenticate the existing bytes before *either* replacement or deletion.
+        if (previous !== null) openLocalText(key, resolvedOwner, sealedKey, previous);
+        if (requireUnlockedLocalKey(resolvedOwner) !== key) throw new LocalVaultLockedError();
         if (value === null) removeBrowserValue(sealedKey);
         else writeBrowserValue(sealedKey, sealLocalText(key, resolvedOwner, sealedKey, value));
         if (requireUnlockedLocalKey(resolvedOwner) !== key) throw new LocalVaultLockedError();
