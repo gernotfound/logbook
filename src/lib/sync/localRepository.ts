@@ -11,6 +11,7 @@ import { projectDocuments, applyRemoteDocuments, type DocumentData } from './doc
 import { getCachedCatalog } from '../catalog/catalogService';
 import { normalizeStorageOwner } from './owner';
 import { readBrowserValueStrict } from './browserStorage';
+import { readDeviceValueStrict } from './deviceStorage';
 import { normalizeBusinessId, requireBusinessId } from '../businessIdentity';
 import {
     applyDomainOperations,
@@ -448,6 +449,42 @@ export async function commitLocal(owner: string, data: UserData, initialBase: Us
     return operations;
 }
 
+/**
+ * IndexedDB writes are serialized but the synchronous Web Storage snapshot is
+ * not. Verify ancestry INSIDE the same IDB transaction before accepting a
+ * higher sequence from a different tab. Missing/corrupt parents are conflicts,
+ * not evidence that an edit was superseded.
+ */
+function hasCommittedWorkoutAncestor(
+    owner: string,
+    candidate: { generation: string; sequence: number; parentIntentId?: string },
+    applied: { generation: string; sequence: number; intentId?: string },
+): boolean {
+    if (!applied.intentId) return false;
+    let parent = candidate.parentIntentId;
+    let expectedSeq = candidate.sequence - 1;
+    const seen = new Set<string>();
+    while (parent && expectedSeq >= applied.sequence && !seen.has(parent)) {
+        if (parent === applied.intentId) return expectedSeq === applied.sequence;
+        seen.add(parent);
+        const raw = readDeviceValueStrict('workout-intent:' + parent, owner);
+        if (!raw) return false;
+        let parsed: Record<string, unknown>;
+        try { parsed = JSON.parse(raw) as Record<string, unknown>; }
+        catch { throw new WorkoutIntentConflictError('Catena degli intenti workout non leggibile.'); }
+        if (!parsed || parsed.__logbookWorkoutIntent !== 1 || parsed.owner !== owner
+            || parsed.intentId !== parent || parsed.generation !== candidate.generation
+            || parsed.sequence !== expectedSeq
+            || (parsed.parentIntentId !== undefined
+                && (typeof parsed.parentIntentId !== 'string' || !/^[a-f0-9]{32}$/.test(parsed.parentIntentId)))) {
+            throw new WorkoutIntentConflictError('Catena degli intenti workout non valida.');
+        }
+        parent = parsed.parentIntentId as string | undefined;
+        expectedSeq--;
+    }
+    return false;
+}
+
 export interface DomainCommitResult { operations: SemanticOperation[]; data: UserData; }
 
 export async function commitDomainOperations(owner: string, batch: DomainOperationBatch, initialBase: UserData, guard?: LocalWriteGuard,
@@ -488,6 +525,11 @@ export async function commitDomainOperations(owner: string, batch: DomainOperati
                 savedData = current!.data;
                 operations = [];
                 return current;
+            }
+            if (applied?.generation === workoutIntent.generation
+                && applied.sequence < workoutIntent.sequence && applied.intentId
+                && (!workoutIntent.intentId || !hasCommittedWorkoutAncestor(owner, workoutIntent, applied))) {
+                throw new WorkoutIntentConflictError('Modifica workout non discendente dallo stato già registrato. Copie preservate.');
             }
             if (applied?.generation !== workoutIntent.generation
                 && !equivalentWorkoutSnapshot(current?.data.activeWorkout, workoutIntent.baseline)) {
