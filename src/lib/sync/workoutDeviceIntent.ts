@@ -94,6 +94,8 @@ export function saveWorkoutDeviceIntent(
                 persistedSetIds: existing.workout.exercises.map(ex => ex.sets.map(s => s.id)),
                 memorySetIds: previous?.exercises.map(ex => ex.sets.map(s => s.id)),
                 persistedKeys: Object.keys(existing.workout).sort(), memoryKeys: previous ? Object.keys(previous).sort() : [],
+                normalizedPersisted: JSON.stringify(DomainParsers.parseActiveWorkout(existing.workout)),
+                normalizedMemory: JSON.stringify(DomainParsers.parseActiveWorkout(previous)),
             });
         }
         throw new Error('Workout modificato da un’altra scheda: recupero protetto senza sovrascrivere i dati.');
