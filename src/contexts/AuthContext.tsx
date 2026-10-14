@@ -641,7 +641,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 try {
                     await startGoogleRedirect();
                 } catch (redirectError) {
-                    console.error("Errore login redirect", redirectError);
+                    console.error('Accesso Google tramite redirect non riuscito.');
                     setSaveError("Accesso fallito. Riprova.");
                 }
             } else if (failure === 'cancelled') {
@@ -651,8 +651,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 setSaveError("Connessione non disponibile. Riprova quando sei online.");
             } else if (failure === 'error') {
                 try { clearGuestMigrationIntent(); } catch { /* best effort */ }
-                console.error("Errore di login", error);
-                setSaveError("Errore di accesso: " + error.message);
+                console.error('Accesso Google non riuscito.');
+                setSaveError('Accesso Google non riuscito. Riprova.');
             }
         }
     }, [isGuestActiveStrict, setSaveError, startGoogleRedirect]);
@@ -833,7 +833,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 try {
                     await startGoogleRedirect();
                 } catch (redirectError) {
-                    console.error("Errore collegamento redirect:", redirectError);
+                    console.error('Collegamento Google tramite redirect non riuscito.');
                     setSaveError("Accesso fallito. Riprova.");
                 }
                 return;
@@ -849,7 +849,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             }
             if (failure === 'error') {
                 try { clearGuestMigrationIntent(); } catch { /* best effort */ }
-                console.error("Errore collegamento account Google:", error);
+                console.error('Collegamento account Google non riuscito.');
                 setSaveError("Collegamento fallito. Riprova.");
             }
         }
