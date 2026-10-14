@@ -40,9 +40,10 @@ export function equivalentDeviceWorkout(a: WorkoutSession | null, b: WorkoutSess
     if (JSON.stringify(a) === JSON.stringify(b)) return true;
     // A validated boot may normalize historical optional fields. Compare the
     // canonical forms only if both still describe the same session/identities.
+    if (!a || !b) return false;
     const left = DomainParsers.parseActiveWorkout(a);
     const right = DomainParsers.parseActiveWorkout(b);
-    return equal(left, right);
+    return !!left?.id && left.id === right?.id && equal(left, right);
 }
 
 function parseIntent(value: unknown, owner: string): WorkoutDeviceIntent | null {
@@ -105,7 +106,7 @@ export function saveWorkoutDeviceIntent(
     const intent: WorkoutDeviceIntent = {
         __logbookWorkoutIntent: 1, owner, generation,
         sequence: (existing?.sequence ?? 0) + 1,
-        baseline: existing?.baseline ?? observedBase,
+        baseline: existing ? existing.baseline : observedBase,
         workout,
     };
     writeDeviceValue('workout', JSON.stringify(intent), owner);
