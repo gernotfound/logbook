@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 type Stored = Record<string, unknown>;
 const storage = vi.hoisted(() => ({ documents: new Map<string, Stored>() }));
 const auth = vi.hoisted(() => ({
-  verifyRecoveryRegistrationRequester: vi.fn(async () => ({ uid: 'account-1' })),
+  verifyHealthConsentRequester: vi.fn(async () => ({ uid: 'account-1' })),
   RequestAuthError: class RequestAuthError extends Error {
     constructor(message: string, public readonly status: 401 | 403 = 401) {
       super(message);
@@ -70,7 +70,7 @@ describe('trusted health consent boundary', () => {
     expect(response.status).toBe(200);
     expect(response.headers.get('cache-control')).toBe('no-store');
     expect(await response.json()).toEqual({ status: 'active', revision: 0 });
-    expect(auth.verifyRecoveryRegistrationRequester).toHaveBeenCalledTimes(1);
+    expect(auth.verifyHealthConsentRequester).toHaveBeenCalledTimes(1);
   });
 
   it('records withdrawal idempotently, monotonically and keeps the data intact', async () => {
@@ -123,7 +123,7 @@ describe('trusted health consent boundary', () => {
   it('enforces allowed origin before authenticated work', async () => {
     expect((await OPTIONS(req('OPTIONS', undefined, 'https://evil.example'))).status).toBe(403);
     expect((await POST(req('POST', { action: 'withdraw', expectedRevision: 0 }, 'https://evil.example'))).status).toBe(403);
-    expect(auth.verifyRecoveryRegistrationRequester).not.toHaveBeenCalled();
+    expect(auth.verifyHealthConsentRequester).not.toHaveBeenCalled();
   });
 });
 
