@@ -85,7 +85,7 @@ class HealthConsentTransitionPendingError extends Error {
     }
 }
 
-export function assertOrdinaryPurgeAllowed(owner: string): void {
+function assertOrdinaryPurgeAllowed(owner: string): void {
     // A sign-out or an ordinary purge must not erase the only durable copy
     // of a withdrawal not yet confirmed by the trusted server.
     const consent = readBrowserValueStrict(`logbook:v2:${owner}:health-consent-withdrawal`);
@@ -105,7 +105,7 @@ export function assertOrdinaryPurgeAllowed(owner: string): void {
 }
 
 /** A new server consent epoch never authorizes discarding an older offline journal. */
-export async function assertNoOutdatedConsentJournal(owner: string): Promise<void> {
+async function assertNoOutdatedConsentJournal(owner: string): Promise<void> {
     if (!owner.startsWith('user:')) return;
     const generation = readBrowserValueStrict(`logbook:v2:${owner}:health-consent-generation`);
     const withdrawal = readBrowserValueStrict(`logbook:v2:${owner}:health-consent-withdrawal`);
