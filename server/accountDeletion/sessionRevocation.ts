@@ -23,6 +23,10 @@ function validSeconds(value: unknown): number {
 async function advanceBarrier(uid: string, seconds: number): Promise<number> {
   const marker = sessionMarker(uid);
   return adminDb().runTransaction(async (transaction: Transaction) => {
+    // A concurrent account deletion owns this UID. The transaction's read
+    // dependency prevents recreating an orphan marker after its cleanup.
+    const deletion = await transaction.get(adminDb().collection('account_deletions').doc(uid));
+    if (deletion.exists) throw new Error('Account deletion in progress.');
     const old = await transaction.get(marker);
     const previous = old.exists ? validSeconds(old.data()?.revokedAfterSeconds) : 0;
     const next = Math.max(previous, validSeconds(seconds));
