@@ -3,7 +3,9 @@ import { update as idbUpdate } from 'idb-keyval';
 import { DomainParsers, UserDataSchema } from '../src/lib/schema';
 import { equivalentWorkoutSnapshot } from '../src/lib/sync/workoutSnapshotEquality';
 import { captureSession } from '../src/lib/sync/session';
-import { readDeviceValueStrict, writeDeviceValue } from '../src/lib/sync/deviceStorage';
+import { deviceKey, readDeviceValueStrict, writeDeviceValue } from '../src/lib/sync/deviceStorage';
+import { BrowserStorageError } from '../src/lib/sync/browserStorage';
+import { localStorageMock } from './setup';
 import { commitDomainOperations, initializeLocal, readLocal } from '../src/lib/sync/localRepository';
 import {
     readWorkoutDeviceIntent, recoverWorkoutDeviceIntent, saveWorkoutDeviceIntent,
@@ -77,6 +79,34 @@ describe('authenticated device-intent replay into semantic journal', () => {
         const remaining = Array.from({ length: localStorage.length }, (_, i) => localStorage.key(i))
             .filter(key => key?.startsWith('logbook:v2:' + testOwner + ':') && key.includes('workout-intent:'));
         expect(remaining).toHaveLength(0);
+    });
+
+    it('retains its immutable witness if the shared snapshot write is denied after the first write', async () => {
+        const testOwner = 'user:shared-write-denied';
+        const initial = data(workout('50'));
+        await initializeLocal(testOwner, initial);
+        const write = localStorageMock.setItem.getMockImplementation();
+        if (!write) throw new Error('Expected storage implementation');
+        const sharedKey = deviceKey('workout', testOwner);
+        localStorageMock.setItem.mockImplementation((key: string, value: string) => {
+            if (key === sharedKey) throw new DOMException('Storage full', 'QuotaExceededError');
+            return write(key, value);
+        });
+        try {
+            expect(() => saveWorkoutDeviceIntent(testOwner, initial.activeWorkout ?? null,
+                workout('55'), initial.activeWorkout ?? null)).toThrow(BrowserStorageError);
+        } finally {
+            localStorageMock.setItem.mockImplementation(write);
+        }
+        expect(readWorkoutDeviceIntent(testOwner)).toBeNull();
+        const witnesses = Array.from({ length: localStorage.length }, (_, i) => localStorage.key(i))
+            .filter(key => key?.startsWith('logbook:v2:' + testOwner + ':') && key.includes('workout-intent:'));
+        expect(witnesses).toHaveLength(1);
+        await recoverWorkoutDeviceIntent(testOwner, () => true);
+        const recovered = await readLocal(testOwner);
+        expect(recovered?.data.activeWorkout?.exercises[0].sets[0].kg).toBe('55');
+        expect(recovered?.pending.length).toBeGreaterThan(0);
+        expect(readWorkoutDeviceIntent(testOwner)?.workout.exercises[0].sets[0].kg).toBe('55');
     });
 
     it('replays the same encrypted device snapshot into IndexedDB and the pending journal after a crash', async () => {
