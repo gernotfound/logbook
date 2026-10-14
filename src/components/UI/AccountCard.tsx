@@ -127,7 +127,7 @@ export const AccountCard = () => {
             setShowCurrentPassword(false);
             setShowNewPassword(false);
             if (shouldReload) await reloadAfterAccountChange();
-        } catch (error: any) {
+        } catch {
             console.error('Operazione account non riuscita.');
             await showAlert('Operazione account non riuscita. Riprova.');
         } finally {
@@ -178,7 +178,7 @@ export const AccountCard = () => {
             // La migrazione avviene automaticamente in onAuthStateChanged. Un hard
             // reload è consentito solo dopo che la barriera ha verificato la copia locale.
             await reloadAfterAccountChange();
-        } catch (error: any) {
+        } catch {
             // Errori gestiti da AuthContext (handleAuthError)
             console.error('Registrazione guest non riuscita.');
         } finally {
