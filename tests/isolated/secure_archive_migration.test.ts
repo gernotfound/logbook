@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { clear, get, set } from 'idb-keyval';
+import { clear, del, get, set } from 'idb-keyval';
 import { UserDataSchema } from '../../src/lib/schema';
 import type { UserData } from '../../src/types';
 
@@ -15,6 +15,8 @@ import { deviceKey, protectedDeviceKey, readDeviceValue, readDeviceValueStrict, 
 import { createAndMigrateVault, resumeVaultMigration } from '../../src/lib/sync/secureArchiveMigration';
 import { purgeCompletedAccountLocalData } from '../../src/lib/db/db_account';
 import { isLocalPurgePending } from '../../src/lib/sync/localPurgeFence';
+import { vaultControlMirrorId } from '../../src/lib/sync/secureArchiveControlRecovery';
+import { deviceVaultKeyId } from '../../src/lib/sync/secureArchiveKeys';
 import { LocalVaultLockedError, lockAllVaults, lockVault, readVaultControl, unlockVaultForOwner, vaultControlKey } from '../../src/lib/sync/secureArchiveSession';
 import { LocalCiphertextError, SEALED_LOCAL_PREFIX } from '../../src/lib/sync/secureArchiveCipher';
 import { BrowserStorageError } from '../../src/lib/sync/browserStorage';
@@ -77,6 +79,7 @@ describe('durable secure archive migration', () => {
         writeDeviceValue('draft_exercise', '{"name":"private"}', owner);
         await purgeCompletedAccountLocalData(owner);
         expect(isLocalPurgePending(owner)).toBe(true);
+        expect(await get(vaultControlMirrorId(owner))).toBeUndefined();
         await expect(readLocal(owner)).rejects.toThrow('Pulizia archivio locale');
         expect(() => writeDeviceValue('draft_exercise', '{"name":"stale"}', owner)).toThrow('Pulizia archivio locale');
         await createAndMigrateVault(owner);
@@ -89,18 +92,131 @@ describe('durable secure archive migration', () => {
         await initializeLocal(owner, base());
         await createAndMigrateVault(owner);
         writeDeviceValue('draft_exercise', '{"name":"recoverable"}', owner);
+        const pendingResult = await commitDomainOperations(owner, { type: 'profile.patch', patch: { height: '173' } }, base());
+        expect(pendingResult.operations).toHaveLength(1);
         const ciphertext = await get<string>('logbook:v2:' + owner);
         const sealedDevice = localStorage.getItem(protectedDeviceKey('draft_exercise', owner));
         localStorage.removeItem(vaultControlKey(owner));
         lockVault(owner);
 
-        await expect(createAndMigrateVault(owner)).rejects.toBeInstanceOf(LocalVaultLockedError);
-        await expect(readLocal(owner)).rejects.toBeInstanceOf(LocalCiphertextError);
-        expect(() => readDeviceValueStrict('draft_exercise', owner)).toThrow(LocalCiphertextError);
-        expect(() => writeDeviceValue('draft_exercise', '{"name":"stale"}', owner)).toThrow(LocalCiphertextError);
+        // The authenticated mirror reconstructs the missing synchronous
+        // control without minting a different DEK or touching any ciphertext.
+        await createAndMigrateVault(owner);
+        expect(readVaultControl(owner)?.phase).toBe('active');
+        const recovered = await readLocal(owner);
+        expect(recovered?.data.nutrition?.[day]?.weight).toBe(75);
+        expect(recovered?.data.profile?.height).toBe('173');
+        expect(recovered?.pending).toEqual(pendingResult.operations);
+        expect(readDeviceValueStrict('draft_exercise', owner)).toBe('{"name":"recoverable"}');
         expect(await get('logbook:v2:' + owner)).toEqual(ciphertext);
         expect(localStorage.getItem(protectedDeviceKey('draft_exercise', owner))).toBe(sealedDevice);
+    });
+
+    it('recovers an interruption after writing the first-ever mirror but before localStorage control', async () => {
+        await initializeLocal(owner, base());
+        const originalEnvelope = await get('logbook:v2:' + owner);
+        const originalSet = localStorage.setItem.bind(localStorage);
+        const failure = vi.spyOn(localStorage, 'setItem').mockImplementation((key, value) => {
+            if (key === vaultControlKey(owner)) throw new Error('crash at control publication');
+            originalSet(key, value);
+        });
+        await expect(createAndMigrateVault(owner)).rejects.toBeInstanceOf(BrowserStorageError);
+        expect(readVaultControl(owner)).toBeNull();
+        expect((await get<{ phase: string }>(vaultControlMirrorId(owner)))?.phase).toBe('migrating');
+        expect(await get('logbook:v2:' + owner)).toEqual(originalEnvelope);
+        failure.mockRestore();
+        await createAndMigrateVault(owner);
+        expect(readVaultControl(owner)?.phase).toBe('active');
+        expect((await readLocal(owner))?.data.nutrition?.[day]?.weight).toBe(75);
+    });
+
+    it('rebuilds an absent mirror only after authenticating the primary control', async () => {
+        await initializeLocal(owner, base());
+        await createAndMigrateVault(owner);
+        const original = readVaultControl(owner);
+        await del(vaultControlMirrorId(owner));
+        lockVault(owner);
+        await createAndMigrateVault(owner);
+        expect(await get(vaultControlMirrorId(owner))).toEqual(original);
+        expect((await readLocal(owner))?.data.profile?.height).toBe('170');
+    });
+
+    it('preserves ciphertext and fails closed when BOTH controls disappear', async () => {
+        await initializeLocal(owner, base());
+        await createAndMigrateVault(owner);
+        const ciphertext = await get('logbook:v2:' + owner);
+        await del(vaultControlMirrorId(owner));
+        localStorage.removeItem(vaultControlKey(owner));
+        lockVault(owner);
+        await expect(createAndMigrateVault(owner)).rejects.toBeInstanceOf(LocalVaultLockedError);
+        expect(await get('logbook:v2:' + owner)).toEqual(ciphertext);
         expect(localStorage.getItem(vaultControlKey(owner))).toBeNull();
+    });
+
+    it('rejects different control epochs instead of selecting a conflicting key', async () => {
+        await initializeLocal(owner, base());
+        await createAndMigrateVault(owner);
+        const primary = readVaultControl(owner)!;
+        const ciphertext = await get('logbook:v2:' + owner);
+        await set(vaultControlMirrorId(owner), { ...primary, epoch: 'b'.repeat(32) });
+        lockVault(owner);
+        await expect(createAndMigrateVault(owner)).rejects.toBeInstanceOf(LocalVaultLockedError);
+        expect(await get('logbook:v2:' + owner)).toEqual(ciphertext);
+        expect(readVaultControl(owner)).toEqual(primary);
+    });
+
+    it('does not misclassify a missing device key as an empty archive', async () => {
+        await initializeLocal(owner, base());
+        await createAndMigrateVault(owner);
+        const before = await get('logbook:v2:' + owner);
+        await del(deviceVaultKeyId(owner));
+        lockVault(owner);
+        await expect(createAndMigrateVault(owner)).rejects.toThrow();
+        expect(await get('logbook:v2:' + owner)).toEqual(before);
+    });
+
+    it('resumes activation if the mirror is active but synchronous control is still migrating', async () => {
+        await initializeLocal(owner, base());
+        const nativeSet = localStorage.setItem.bind(localStorage);
+        const stop = vi.spyOn(localStorage, 'setItem').mockImplementation((key, value) => {
+            if (key === vaultControlKey(owner) && value.includes('"phase":"active"')) throw new Error('interrupted activation');
+            nativeSet(key, value);
+        });
+        await expect(createAndMigrateVault(owner)).rejects.toThrow();
+        expect(readVaultControl(owner)?.phase).toBe('migrating');
+        expect((await get<{ phase: string }>(vaultControlMirrorId(owner)))?.phase).toBe('active');
+        stop.mockRestore();
+        await createAndMigrateVault(owner);
+        expect(readVaultControl(owner)?.phase).toBe('active');
+        expect((await readLocal(owner))?.data.nutrition?.[day]?.weight).toBe(75);
+    });
+
+    it('refuses to overwrite malformed primary control even with a good mirror', async () => {
+        await initializeLocal(owner, base());
+        await createAndMigrateVault(owner);
+        localStorage.setItem(vaultControlKey(owner), '{broken');
+        lockVault(owner);
+        await expect(createAndMigrateVault(owner)).rejects.toBeInstanceOf(LocalVaultLockedError);
+        expect(localStorage.getItem(vaultControlKey(owner))).toBe('{broken');
+    });
+
+    it('resumes a retired-fence crash after the mirror write but before publishing control', async () => {
+        await createAndMigrateVault(owner);
+        await purgeCompletedAccountLocalData(owner);
+        const originalSet = localStorage.setItem.bind(localStorage);
+        const fail = vi.spyOn(localStorage, 'setItem').mockImplementation((key, value) => {
+            if (key === vaultControlKey(owner)) throw new Error('crash after writing mirror');
+            originalSet(key, value);
+        });
+        await expect(createAndMigrateVault(owner)).rejects.toBeInstanceOf(BrowserStorageError);
+        expect(readVaultControl(owner)).toBeNull();
+        expect((await get<{ phase: string }>(vaultControlMirrorId(owner)))?.phase).toBe('migrating');
+        expect(isLocalPurgePending(owner)).toBe(true);
+        fail.mockRestore();
+        await createAndMigrateVault(owner);
+        expect(readVaultControl(owner)?.phase).toBe('active');
+        expect((await get<{ phase: string }>(vaultControlMirrorId(owner)))?.phase).toBe('active');
+        expect(isLocalPurgePending(owner)).toBe(false);
     });
 
     it('recovers a crash between replacement control and retired fence release', async () => {

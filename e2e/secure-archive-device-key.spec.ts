@@ -78,4 +78,19 @@ test('real browser retains non-exportable guest device key across a new document
   await page.reload();
   await expect(page.locator('.guest-banner')).toBeVisible();
   expect(await inspectPersistedGuestKey(page)).toEqual(before);
+
+  // Deliberately lose ONLY the synchronous control. A new JS realm must
+  // reconstruct precisely the same wrapped DEK from IndexedDB, not provision
+  // an empty competing vault. This is exercised in Chromium and WebKit.
+  const originalControl = await page.evaluate(() => {
+    const key = 'logbook:v2:guest:secure-vault-control';
+    const value = localStorage.getItem(key);
+    if (!value) throw new Error('Guest vault control disappeared before recovery test');
+    localStorage.removeItem(key);
+    return value;
+  });
+  await page.reload();
+  await expect(page.locator('.guest-banner')).toBeVisible();
+  expect(await page.evaluate(() => localStorage.getItem('logbook:v2:guest:secure-vault-control'))).toBe(originalControl);
+  expect(await inspectPersistedGuestKey(page)).toEqual(before);
 });

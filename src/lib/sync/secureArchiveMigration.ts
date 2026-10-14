@@ -4,9 +4,10 @@ import { normalizeStorageOwner } from './owner';
 import { deviceKey, protectedDeviceKey } from './deviceStorage';
 import { openLocalJson, openLocalText, sealLocalJson, sealLocalText, SEALED_LOCAL_PREFIX, LocalCiphertextError } from './secureArchiveCipher';
 import { createLocalKeyVault, unlockLocalKeyVault } from './secureArchiveKeys';
+import { publishVaultControl, reconcileVaultControl } from './secureArchiveControlRecovery';
 import {
     readVaultControl, unlockVaultForOwner, LocalVaultLockedError,
-    vaultControlKey, verifyMigrationCapability, type PersistedVaultControl,
+    verifyMigrationCapability, type PersistedVaultControl,
 } from './secureArchiveSession';
 import { assertLegacyEnvelopeValidForSecureMigration } from './localRepository';
 import { withGuestLifecycleLock } from './guestLifecycleLock';
@@ -122,7 +123,7 @@ async function migrateAndFinalize(owner: string, control: PersistedVaultControl,
         assertLegacyEnvelopeValidForSecureMigration(openLocalJson(dataKey, owner, 'logbook:v2:' + owner, stored), owner);
     }
     assertMigrationAvailable(owner, control, dataKey);
-    writeBrowserValue(vaultControlKey(owner), JSON.stringify({ ...control, phase: 'active' }));
+    await publishVaultControl(owner, { ...control, phase: 'active' });
     if (readVaultControl(owner)?.phase !== 'active') throw new Error('Attivazione archivio locale non verificata.');
 }
 
@@ -147,19 +148,20 @@ export async function createAndMigrateVault(requestedOwner: string): Promise<voi
         // Another tab may have provisioned this owner after the caller checked
         // for missing metadata, but before it acquired the exclusive Web Lock.
         // Reuse its existing device key/DEK; never create a competing archive.
-        const existing = readVaultControl(owner);
         const finishingPriorPurge = isLocalPurgePending(owner);
         if (finishingPriorPurge && isLocalPurgeIncomplete(owner)) throw new LocalPurgePendingError();
-        if (finishingPriorPurge && existing?.phase === 'active') throw new LocalPurgePendingError();
         if (finishingPriorPurge) {
-            // A crash before the final cleanup must not create a second key
-            // above remaining user data. An orphaned device key is harmless
-            // and may be reused if absolutely no ciphertext survives.
+            // The retained fence can be released ONLY with an empty archive.
+            // A crash after persisting the new mirror but before localStorage
+            // must reuse that same generation, rather than minting a new DEK.
             if (await get<unknown>('logbook:v2:' + owner) !== undefined
                 || assertKnownDeviceNames(owner).length > 0) {
                 throw new LocalPurgePendingError();
             }
         }
+        await reconcileVaultControl(owner, finishingPriorPurge);
+        const existing = readVaultControl(owner);
+        if (finishingPriorPurge && existing?.phase === 'active') throw new LocalPurgePendingError();
         if (!existing && !finishingPriorPurge) {
             // A lost localStorage control is not permission to install a new
             // DEK over an existing authenticated ciphertext. Preserve bytes.
@@ -192,11 +194,11 @@ export async function createAndMigrateVault(requestedOwner: string): Promise<voi
         };
         // Durable marker FIRST; no plain or encrypted business data is touched
         // unless recovery credentials are present for crash resume.
-        writeBrowserValue(vaultControlKey(owner), JSON.stringify(control));
-        // Retain the fence during provisioning. Only a durable new migrating
-        // control can exclude a stale tab from the no-control legacy path.
-        if (finishingPriorPurge) releaseLocalPurgeFence(owner);
         try {
+            await publishVaultControl(owner, control, finishingPriorPurge);
+            // Retain the fence during provisioning. Only a durable new migrating
+            // control can exclude a stale tab from the no-control legacy path.
+            if (finishingPriorPurge) releaseLocalPurgeFence(owner);
             await migrateAndFinalize(owner, control, dataKey);
             await unlockVaultForOwner(owner);
         } finally { dataKey.fill(0); }
@@ -206,6 +208,7 @@ export async function createAndMigrateVault(requestedOwner: string): Promise<voi
 export async function resumeVaultMigration(requestedOwner: string): Promise<void> {
     const owner = normalizeStorageOwner(requestedOwner);
     await withSecureMigrationLock(owner, async () => {
+        await reconcileVaultControl(owner);
         const control = readVaultControl(owner);
         if (!control || control.phase !== 'migrating') throw new Error('Nessuna migrazione riprendibile.');
         const dataKey = await unlockLocalKeyVault(control.wrappedKey, owner);

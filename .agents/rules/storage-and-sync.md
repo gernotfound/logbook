@@ -21,6 +21,8 @@ L'app utilizza quattro livelli di storage con ruoli distinti:
 
 **MUST:** il vault `logbook:v2:${owner}:secure-vault-control` esiste in tre stati distinti: assente, `migrating`, `active`. Controlli corrotti/versioni future, una chiave IndexedDB persa o un record non autenticato **non sono** assenza dati. Nessun nuovo provisioning sopra ciphertext preesistente.
 
+**MUST:** il controllo DEK wrappato in `localStorage` possiede un mirror owner-scoped in IndexedDB. Il bootstrap, sotto lo stesso Web Lock di provisioning/purge, verifica entrambe le copie e può recuperare un controllo solo realmente mancante previa decifratura autenticata con la KEK non esportabile. Corruzione, versione futura e divergenza di epoch/DEK sono fail-closed. Le fasi `migrating` → `active` vanno pubblicate nel mirror e poi nel controllo sincrono, con verifica e recovery a crash; durante il purge il mirror è eliminato solo dopo tutte le copie cifrate, prima della KEK. La seconda copia del wrapped control NON è backup indipendente da IndexedDB/KEK.
+
 **MUST:** una DEK per owner/device è wrappata con AES-GCM mediante `CryptoKey` non esportabile persistito in IndexedDB, dopo aver verificato proprietario Firebase o guest generation. Il contenitore cifrato locale non deve essere associato a password, token o UID usati come chiavi. Alla ripresa offline, il runtime riapre automaticamente il vault *dello stesso browser/profilo*.
 
 **MUST:** `localRepository` conserva la singola transazione `idb-keyval.update`, con cifratura e decifratura **sincrone**; `deviceStorage` conserva salvataggi sincroni e namespace `sealed:` separato dai vecchi writer. Ogni ciphertext usa AAD owner/key/version e nonce distinto.
