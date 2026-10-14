@@ -49,7 +49,7 @@ vi.mock('../src/store/useDialogStore', () => ({
 }));
 
 import { LoginBox } from '../src/components/UI/LoginBox';
-import { validatePassword } from '../src/lib/firebase';
+import { sendPasswordResetEmail, validatePassword } from '../src/lib/firebase';
 import { useAppStore } from '../src/store/useAppStore';
 
 describe('LoginBox guest Google authentication', () => {
@@ -67,6 +67,8 @@ describe('LoginBox guest Google authentication', () => {
         authMocks.loginAsGuest.mockClear();
         authMocks.linkGoogleAccount.mockClear();
         authMocks.showAlert.mockClear();
+        vi.mocked(sendPasswordResetEmail).mockReset();
+        vi.mocked(sendPasswordResetEmail).mockResolvedValue(undefined);
     });
 
     it('identifies the email input as the username for autofill and password managers', () => {
@@ -188,6 +190,49 @@ describe('LoginBox guest Google authentication', () => {
         fireEvent.click(screen.getAllByRole('button', { name: 'Registrati' }).at(-1)!);
         await waitFor(() => expect(authMocks.registerWithEmail).toHaveBeenCalledWith('valid@example.com', 'SecurePassword123!', undefined));
         expect(screen.queryByRole('alert')).toBeNull();
+    });
+
+    it('does not distinguish a non-existent email from a successful password reset request', async () => {
+        authState.isGuest = false;
+        const messages: string[] = [];
+
+        for (const unknownAddress of [false, true]) {
+            if (unknownAddress) {
+                vi.mocked(sendPasswordResetEmail).mockRejectedValueOnce(
+                    Object.assign(new Error('EMAIL_NOT_FOUND'), { code: 'auth/user-not-found' }),
+                );
+            }
+            const view = render(<LoginBox />);
+            fireEvent.click(screen.getByRole('button', { name: 'Hai dimenticato la password?' }));
+            fireEvent.change(screen.getByRole('textbox', { name: 'Email' }), {
+                target: { value: unknownAddress ? 'missing@example.com' : 'known@example.com' },
+            });
+            fireEvent.click(screen.getByRole('button', { name: 'Invia Link di Recupero' }));
+            await waitFor(() => expect(authMocks.showAlert).toHaveBeenCalledTimes(1));
+            messages.push(String(authMocks.showAlert.mock.calls[0][0]));
+            expect(screen.queryByRole('alert')).toBeNull();
+            await waitFor(() => expect(screen.getByRole('button', { name: 'Invia Link di Recupero' }).isConnected).toBe(false));
+            view.unmount();
+            authMocks.showAlert.mockClear();
+        }
+
+        expect(messages[0]).toBe(messages[1]);
+        expect(messages[0]).toContain("Se l'email è registrata");
+        expect(sendPasswordResetEmail).toHaveBeenCalledTimes(2);
+    });
+
+    it('continues to report genuine password reset delivery failures without disclosing provider errors', async () => {
+        authState.isGuest = false;
+        vi.mocked(sendPasswordResetEmail).mockRejectedValueOnce(new Error('Private provider details'));
+        render(<LoginBox />);
+        fireEvent.click(screen.getByRole('button', { name: 'Hai dimenticato la password?' }));
+        fireEvent.change(screen.getByRole('textbox', { name: 'Email' }), {
+            target: { value: 'someone@example.com' },
+        });
+        fireEvent.click(screen.getByRole('button', { name: 'Invia Link di Recupero' }));
+        await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('Controlla la connessione'));
+        expect(screen.queryByText('Private provider details')).toBeNull();
+        expect(authMocks.showAlert).not.toHaveBeenCalled();
     });
 
 });
