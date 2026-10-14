@@ -9,11 +9,8 @@ import { assertWorkoutSessionIdentities } from './domainOperations/validation';
 const VERSION = 1;
 const MAX_SEQUENCE = Number.MAX_SAFE_INTEGER - 1;
 const tokenPattern = /^[a-f0-9]{32}$/;
-const SLOT_PREFIX = 'workout-slot:';
-let tabSlot: string | undefined;
+const SLOT_PREFIX = 'workout-intent:';
 const slotName = (id: string) => SLOT_PREFIX + id;
-const currentSlot = () => slotName(tabSlot ??= Array.from(crypto.getRandomValues(new Uint8Array(16)),
-    byte => byte.toString(16).padStart(2, '0')).join(''));
 
 export type WorkoutDeviceIntent = {
     __logbookWorkoutIntent: 1;
@@ -23,6 +20,9 @@ export type WorkoutDeviceIntent = {
     // Old device intents omit this; new writes identify individual edits even
     // if two browser tabs allocate the same sequence concurrently.
     intentId?: string;
+    // Every snapshot names its predecessor, so committed descendants can prove
+    // which unacknowledged versions they supersede without a shared write lock.
+    parentIntentId?: string;
     // Frozen when the first synchronous snapshot is written. Used to fence an
     // untracked pre-upgrade or cross-tab envelope, not to replace the journal.
     baseline: WorkoutSession | null;
@@ -50,20 +50,21 @@ function parseIntent(value: unknown, owner: string): WorkoutDeviceIntent | null 
         || typeof raw.sequence !== 'number' || !Number.isSafeInteger(raw.sequence)
         || raw.sequence < 1 || raw.sequence > MAX_SEQUENCE
         || (raw.intentId !== undefined && (typeof raw.intentId !== 'string' || !tokenPattern.test(raw.intentId)))
+        || (raw.parentIntentId !== undefined && (typeof raw.parentIntentId !== 'string' || !tokenPattern.test(raw.parentIntentId)))
         || (raw.baseline !== null && (!raw.baseline || typeof raw.baseline !== 'object'))) {
         throw new Error('Metadati workout di recupero incompatibili: archivio preservato.');
     }
     const workout = validatedWorkout(raw.workout);
     const baseline = raw.baseline === null ? null : validatedWorkout(raw.baseline, false);
     return { __logbookWorkoutIntent: 1, owner, generation: raw.generation, sequence: raw.sequence,
-        ...(raw.intentId ? { intentId: raw.intentId } : {}), baseline, workout };
+        ...(raw.intentId ? { intentId: raw.intentId } : {}),
+        ...(raw.parentIntentId ? { parentIntentId: raw.parentIntentId } : {}), baseline, workout };
 }
 
 /**
- * Per-browser-context overwrite-resistant recovery slot. The shared workout
- * snapshot can be replaced by another tab between read and write; a different
- * tab cannot overwrite this randomly named, separately authenticated slot.
- * Only one latest draft per tab is retained, so rapid edits remain bounded.
+ * One immutable AEAD witness per synchronous edit. Different browser tabs can
+ * overwrite the shared workout key, but never each other's random intent key.
+ * Journalled descendants supersede their full predecessor chain.
  */
 function readRecoverySlots(owner: string): Array<{ name: string; intent: WorkoutDeviceIntent }> {
     const prefixes = [protectedDeviceKey(SLOT_PREFIX, owner), deviceKey(SLOT_PREFIX, owner)];
@@ -74,36 +75,48 @@ function readRecoverySlots(owner: string): Array<{ name: string; intent: Workout
         if (key && prefix) keys.push({ key, id: key.slice(prefix.length) });
     }
     return keys.sort((a, b) => a.key.localeCompare(b.key)).map(({ id }) => {
-        if (!tokenPattern.test(id)) throw new Error('Slot workout di recupero incompatibile: dati preservati.');
+        if (!tokenPattern.test(id)) throw new Error('Copia workout di recupero incompatibile: dati preservati.');
         const name = slotName(id);
         const raw = readDeviceValueStrict(name, owner);
-        if (raw === null) throw new Error('Slot workout modificato durante il recupero: dati preservati.');
+        if (!raw) throw new Error('Copia workout modificata durante il recupero: dati preservati.');
         let parsed: unknown;
         try { parsed = JSON.parse(raw); }
-        catch { throw new Error('Slot workout corrotto: dati preservati.'); }
+        catch { throw new Error('Copia workout corrotta: dati preservati.'); }
         const intent = parseIntent(parsed, owner);
-        if (!intent?.intentId) throw new Error('Slot workout senza identità valida: dati preservati.');
+        if (!intent || intent.intentId !== id) throw new Error('Identità della copia workout incoerente: dati preservati.');
         return { name, intent };
     });
 }
 
-/** Remove a slot only after its exact intent is proven committed in IndexedDB. */
-export async function releaseCommittedWorkoutSlot(owner: string, intent: WorkoutDeviceIntent): Promise<void> {
-    if (!intent.intentId || !tabSlot) return;
-    const name = currentSlot();
-    const persisted = readDeviceValueStrict(name, owner);
-    if (persisted === null) return;
-    const slot = parseIntent(JSON.parse(persisted) as unknown, owner);
-    if (slot?.intentId !== intent.intentId) return;
+/** Never delete an independent edit: only a proved committed ancestry is pruned. */
+export async function releaseCommittedWorkoutSlot(
+    owner: string,
+    intent: Pick<WorkoutDeviceIntent, 'generation' | 'sequence' | 'intentId' | 'parentIntentId'>,
+): Promise<void> {
+    if (!intent.intentId) return;
     const envelope = await readLocal(owner);
     const marker = envelope?.lastWorkoutDeviceIntent;
     if (marker?.generation !== intent.generation || marker.sequence !== intent.sequence
         || marker.intentId !== intent.intentId) return;
-    // Recheck before removing: an even newer keystroke may have replaced this slot.
-    if (readDeviceValueStrict(name, owner) === persisted) writeDeviceValue(name, null, owner);
+    const slots = new Map(readRecoverySlots(owner).map(slot => [slot.intent.intentId!, slot]));
+    const visited = new Set<string>();
+    let id: string | undefined = intent.intentId;
+    let parent: string | undefined = intent.parentIntentId;
+    while (id && !visited.has(id)) {
+        visited.add(id);
+        const slot = slots.get(id);
+        if (slot) {
+            if (slot.intent.generation !== intent.generation) throw new WorkoutIntentConflictError('Catena copie workout incoerente.');
+            parent = slot.intent.parentIntentId;
+            // This key is immutable; no editor can reuse it for a future edit.
+            writeDeviceValue(slot.name, null, owner);
+        }
+        id = parent;
+        parent = undefined;
+    }
 }
 
-/** Shared synchronous snapshot, complemented by an independent per-tab recovery slot. */
+/** Shared synchronous snapshot, complemented by immutable recovery witnesses. */
 export function readWorkoutDeviceIntent(owner: string): WorkoutDeviceIntent | null {
     const raw = readDeviceValueStrict('workout', owner);
     if (raw === null) return null;
@@ -148,12 +161,13 @@ export function saveWorkoutDeviceIntent(
         __logbookWorkoutIntent: 1, owner, generation,
         sequence: (existing?.sequence ?? 0) + 1,
         intentId: token(),
+        ...(existing?.intentId ? { parentIntentId: existing.intentId } : {}),
         baseline: existing ? existing.baseline : observedBase,
         workout,
     };
     // Persist the private copy FIRST. If another tab races on the shared key
     // or this second write fails, the new workout still survives the crash.
-    writeDeviceValue(currentSlot(), JSON.stringify(intent), owner);
+    writeDeviceValue(slotName(intent.intentId!), JSON.stringify(intent), owner);
     writeDeviceValue('workout', JSON.stringify(intent), owner);
     return intent;
 }
@@ -175,28 +189,38 @@ export async function recoverWorkoutDeviceIntent(owner: string, guard: LocalWrit
     if (!envelope) throw new Error('Workout locale presente senza archivio principale verificabile. Dati preservati.');
 
     const applied = envelope.lastWorkoutDeviceIntent;
-    const unresolved: typeof slots = [];
-    for (const slot of slots) {
-        if (applied?.generation === slot.intent.generation && applied.sequence === slot.intent.sequence
-            && applied.intentId === slot.intent.intentId) {
-            // A crashed process may not have cleaned its already-journaled slot.
-            const latestRaw = readDeviceValueStrict(slot.name, owner);
-            if (latestRaw && parseIntent(JSON.parse(latestRaw) as unknown, owner)?.intentId === slot.intent.intentId) {
-                writeDeviceValue(slot.name, null, owner);
-            }
-        } else unresolved.push(slot);
+    if (applied?.intentId) {
+        const committed = slots.find(slot => slot.intent.intentId === applied.intentId);
+        if (committed) await releaseCommittedWorkoutSlot(owner, committed.intent);
     }
-    if (unresolved.length > 1) {
+    const unresolved = readRecoverySlots(owner);
+    const byId = new Map(unresolved.map(slot => [slot.intent.intentId!, slot.intent]));
+    const parents = new Set(unresolved.flatMap(slot => slot.intent.parentIntentId ? [slot.intent.parentIntentId] : []));
+    const heads = unresolved.filter(slot => !parents.has(slot.intent.intentId!));
+    if (heads.length > 1 || (unresolved.length > 0 && heads.length !== 1)) {
         throw new WorkoutIntentConflictError('Più schede hanno modifiche workout non riconciliate. Le copie sono preservate.');
     }
-    const candidate = unresolved[0]?.intent ?? shared;
+    const candidate = heads[0]?.intent ?? shared;
     if (!candidate) return;
+    const descendsFrom = (ancestorId: string): boolean => {
+        let cursor: WorkoutDeviceIntent | undefined = candidate;
+        const seen = new Set<string>();
+        while (cursor?.parentIntentId && !seen.has(cursor.parentIntentId)) {
+            if (cursor.parentIntentId === ancestorId) return true;
+            seen.add(cursor.parentIntentId);
+            cursor = byId.get(cursor.parentIntentId);
+        }
+        return false;
+    };
     if (shared && candidate !== shared && shared.intentId !== candidate.intentId) {
-        // Earlier shared snapshots can be superseded by the sole newer slot.
-        // Equal-sequence or unrelated branches must never be chosen silently.
-        if (shared.generation !== candidate.generation || shared.sequence >= candidate.sequence) {
+        if (shared.generation !== candidate.generation || shared.sequence >= candidate.sequence
+            || (shared.intentId && !descendsFrom(shared.intentId))) {
             throw new WorkoutIntentConflictError('Snapshot workout di più schede divergenti. Copie preservate.');
         }
+    }
+    if (applied?.generation === candidate.generation && applied.sequence < candidate.sequence
+        && applied.intentId && !descendsFrom(applied.intentId)) {
+        throw new WorkoutIntentConflictError('Modifica workout senza ascendenza verificabile: copie preservate.');
     }
     const intent = candidate;
     if (envelope.lastClosedWorkoutId === intent.workout.id || envelope.closedWorkoutIds?.includes(intent.workout.id!)) {
@@ -228,7 +252,8 @@ export async function recoverWorkoutDeviceIntent(owner: string, guard: LocalWrit
         throw new Error('Recupero workout sospeso: lo stato locale è cambiato in un’altra scheda. La copia originale è preservata.');
     }
     await commitDomainOperations(owner, { type: 'active-workout.set', workout: intent.workout }, envelope.data, guard,
-        { generation: intent.generation, sequence: intent.sequence, intentId: intent.intentId, baseline: intent.baseline });
+        { generation: intent.generation, sequence: intent.sequence, intentId: intent.intentId,
+            parentIntentId: intent.parentIntentId, baseline: intent.baseline });
     if (!guard()) throw new Error('Sessione cambiata durante il recupero del workout.');
     // Repair the shared snapshot if this tab crashed after writing its private
     // slot but before publishing the common device key.
@@ -239,6 +264,6 @@ export async function recoverWorkoutDeviceIntent(owner: string, guard: LocalWrit
         }
         writeDeviceValue('workout', JSON.stringify(intent), owner);
     }
-    // Slot cleanup is best-effort: a failure retains an extra encrypted copy.
+    // Cleanup failure only retains an authenticated duplicate, never loses a journal.
     try { await releaseCommittedWorkoutSlot(owner, intent); } catch { /* keep the backup */ }
 }
