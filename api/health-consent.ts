@@ -1,4 +1,4 @@
-import { RequestAuthError, verifyRecoveryRegistrationRequester } from '../server/accountDeletion/httpAuth.js';
+import { RequestAuthError, verifyHealthConsentRequester } from '../server/accountDeletion/httpAuth.js';
 import { accountDeletionCorsHeaders, requireAccountDeletionOrigin } from '../server/accountDeletion/cors.js';
 import {
   readHealthConsentState,
@@ -38,7 +38,7 @@ export async function GET(request: Request): Promise<Response> {
   const origin = request.headers.get('origin');
   try {
     requireAccountDeletionOrigin(request);
-    const { uid } = await verifyRecoveryRegistrationRequester(request);
+    const { uid } = await verifyHealthConsentRequester(request);
     return json(await readHealthConsentState(uid, request.headers.get('x-consent-contract') === '2'), 200, origin);
   } catch (error) { return errorResponse(error, origin); }
 }
@@ -47,7 +47,7 @@ export async function POST(request: Request): Promise<Response> {
   const origin = request.headers.get('origin');
   try {
     requireAccountDeletionOrigin(request);
-    const { uid } = await verifyRecoveryRegistrationRequester(request);
+    const { uid } = await verifyHealthConsentRequester(request);
     let body: Record<string, unknown>;
     try {
       const parsed: unknown = await request.json();
