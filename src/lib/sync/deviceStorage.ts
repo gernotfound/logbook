@@ -3,6 +3,7 @@ import { readBrowserValue, readBrowserValueStrict, removeBrowserValue, writeBrow
 import { LocalCiphertextError, openLocalText, sealLocalText, SEALED_LOCAL_PREFIX } from './secureArchiveCipher';
 import { LocalVaultLockedError, readVaultControl, requireUnlockedLocalKey } from './secureArchiveSession';
 import { isActiveGuestSession, storageOwner } from './session';
+import { assertNoLocalPurge, LocalPurgePendingError } from './localPurgeFence';
 
 export const deviceKey = (name: string, owner = storageOwner()) => `logbook:v2:${owner}:${name}`;
 
@@ -18,7 +19,8 @@ export function readDeviceValue(name: string, owner?: string): string | null {
     } catch (error) {
         // An unavailable or tampered ENCRYPTED record must not look like an
         // empty draft/workout: that could silently erase the only local copy.
-        if (error instanceof LocalVaultLockedError || error instanceof LocalCiphertextError) throw error;
+        if (error instanceof LocalVaultLockedError || error instanceof LocalCiphertextError
+            || error instanceof LocalPurgePendingError) throw error;
         // Legacy best-effort draft reads may still treat transient storage
         // failures as absent, but a provisioned sealed vault must NEVER do so:
         // a follow-up write could overwrite a newer encrypted draft.
@@ -29,6 +31,7 @@ export function readDeviceValue(name: string, owner?: string): string | null {
 
 export function readDeviceValueStrict(name: string, owner?: string): string | null {
     const resolvedOwner = owner ?? storageOwner();
+    assertNoLocalPurge(resolvedOwner);
     const storageKey = deviceKey(name, resolvedOwner);
     // The device-critical read must be the first strict storage access: an
     // unreadable workout/timer cannot be masked by an earlier metadata probe.
@@ -53,6 +56,7 @@ export function readDeviceValueStrict(name: string, owner?: string): string | nu
 export function writeDeviceValue(name: string, value: string | null, owner?: string): void {
     // Callers decide the UI feedback; failure must not be mistaken for a successful save.
     const resolvedOwner = owner ?? storageOwner();
+    assertNoLocalPurge(resolvedOwner);
     if (resolvedOwner === 'guest' && !isActiveGuestSession()) {
         throw new Error('Sessione guest revocata: scrittura locale non consentita.');
     }
