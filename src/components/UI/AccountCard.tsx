@@ -64,7 +64,7 @@ export const AccountCard = () => {
             return false;
         } catch (error: any) {
             if (isSensitiveReauthCancellation(error)) return false;
-            console.error("Reauth error", error);
+            console.error('Reautenticazione non riuscita.');
             await showAlert("Autenticazione fallita. Controlla le credenziali e riprova.");
             return false;
         }
@@ -128,8 +128,8 @@ export const AccountCard = () => {
             setShowNewPassword(false);
             if (shouldReload) await reloadAfterAccountChange();
         } catch (error: any) {
-            console.error("Action error", error);
-            await showAlert("Errore durante l'operazione: " + error.message);
+            console.error('Operazione account non riuscita.');
+            await showAlert('Operazione account non riuscita. Riprova.');
         } finally {
             setLoadingAction(null);
         }
@@ -180,7 +180,7 @@ export const AccountCard = () => {
             await reloadAfterAccountChange();
         } catch (error: any) {
             // Errori gestiti da AuthContext (handleAuthError)
-            console.error("Registrazione guest fallita", error);
+            console.error('Registrazione guest non riuscita.');
         } finally {
             setLoadingAction(null);
         }
