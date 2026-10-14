@@ -205,7 +205,12 @@ export async function recoverWorkoutDeviceIntent(owner: string, guard: LocalWrit
         return;
     }
     if (applied?.generation === intent.generation) {
-        if (applied.sequence > intent.sequence) return;
+        if (applied.sequence > intent.sequence) {
+            if (unresolved.length) {
+                throw new WorkoutIntentConflictError('Intento workout di un’altra scheda non riconciliato. Copia privata preservata.');
+            }
+            return;
+        }
         if (applied.sequence === intent.sequence) {
             // A concurrent tab can publish different workout bytes with the same
             // generation/sequence. Sequence equality alone is not idempotence.
