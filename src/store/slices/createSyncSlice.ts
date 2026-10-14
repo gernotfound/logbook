@@ -330,7 +330,14 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
 
             // The business state and compiled SemanticOperation batch are committed by one IndexedDB update.
             const cache = commitDomainOperations(session.owner, operation, userData, () => isCurrentSession(session), options?.workoutIntent)
-                .then<CacheResult>(() => ({ ok: true }))
+                .then<CacheResult>(async () => {
+                    if (options?.workoutIntent?.intentId) {
+                        // A cleanup error must not turn a committed edit into a failed save.
+                        try { await releaseCommittedWorkoutSlot(session.owner, options.workoutIntent); }
+                        catch { /* encrypted recovery witnesses remain available */ }
+                    }
+                    return { ok: true };
+                })
                 .catch<CacheResult>(error => ({ ok: false, error }));
             return enqueue(session, generation, cache);
         },
