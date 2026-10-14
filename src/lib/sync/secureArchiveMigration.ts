@@ -5,7 +5,7 @@ import { deviceKey, protectedDeviceKey } from './deviceStorage';
 import { openLocalJson, openLocalText, sealLocalJson, sealLocalText, SEALED_LOCAL_PREFIX, LocalCiphertextError } from './secureArchiveCipher';
 import { createLocalKeyVault, unlockLocalKeyVault } from './secureArchiveKeys';
 import {
-    readVaultControl, unlockVaultForOwner,
+    readVaultControl, unlockVaultForOwner, LocalVaultLockedError,
     vaultControlKey, verifyMigrationCapability, type PersistedVaultControl,
 } from './secureArchiveSession';
 import { assertLegacyEnvelopeValidForSecureMigration } from './localRepository';
@@ -158,6 +158,15 @@ export async function createAndMigrateVault(requestedOwner: string): Promise<voi
             if (await get<unknown>('logbook:v2:' + owner) !== undefined
                 || assertKnownDeviceNames(owner).length > 0) {
                 throw new LocalPurgePendingError();
+            }
+        }
+        if (!existing && !finishingPriorPurge) {
+            // A lost localStorage control is not permission to install a new
+            // DEK over an existing authenticated ciphertext. Preserve bytes.
+            const raw = await get<unknown>('logbook:v2:' + owner);
+            if ((typeof raw === 'string' && raw.startsWith(SEALED_LOCAL_PREFIX))
+                || ownerStorageNames(owner).some(name => name.startsWith('sealed:'))) {
+                throw new LocalVaultLockedError();
             }
         }
         if (existing?.phase === 'active') {

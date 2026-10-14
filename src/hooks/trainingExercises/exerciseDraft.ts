@@ -1,5 +1,7 @@
 import type { MuscleDef } from '../../lib/constants/muscles';
 import { readDeviceValue, writeDeviceValue } from '../../lib/sync/deviceStorage';
+import { LocalCiphertextError } from '../../lib/sync/secureArchiveCipher';
+import { readVaultControl } from '../../lib/sync/secureArchiveSession';
 
 const EXERCISE_DRAFT_KEY = 'draft_exercise';
 
@@ -21,7 +23,8 @@ export function readExerciseDraft(owner?: string): Record<string, any> | null {
 
     try {
         return JSON.parse(raw);
-    } catch {
+    } catch (error) {
+        if (readVaultControl(owner ?? 'guest')) throw new LocalCiphertextError();
         return null;
     }
 }

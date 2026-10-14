@@ -38,7 +38,10 @@ export function readDeviceValueStrict(name: string, owner?: string): string | nu
     assertNoLocalPurge(resolvedOwner);
     const control = readVaultControl(resolvedOwner);
     if (!control) {
-        if (legacy?.startsWith(SEALED_LOCAL_PREFIX)) throw new LocalCiphertextError();
+        if (legacy?.startsWith(SEALED_LOCAL_PREFIX)
+            || readBrowserValueStrict(protectedDeviceKey(name, resolvedOwner)) !== null) {
+            throw new LocalCiphertextError();
+        }
         return legacy;
     }
     if (control.phase !== 'active') throw new LocalVaultLockedError();
@@ -81,6 +84,9 @@ export function writeDeviceValue(name: string, value: string | null, owner?: str
         return;
     }
 
+    // A disappeared control cannot authorize replacing a surviving sealed draft
+    // with plaintext, even if the legacy key is absent.
+    if (readBrowserValueStrict(protectedDeviceKey(name, resolvedOwner)) !== null) throw new LocalCiphertextError();
     // Pre-provisioning legacy path, to be retired after every device has passed
     // the secure vault setup. A ciphertext without control metadata is invalid.
     if (readBrowserValue(storageKey)?.startsWith(SEALED_LOCAL_PREFIX)) throw new LocalCiphertextError();
