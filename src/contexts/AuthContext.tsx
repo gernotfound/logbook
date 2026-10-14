@@ -1107,6 +1107,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             try {
                 useAppStore.getState().cancelPendingSyncs();
                 await DB.secureLogOut({ discardUnsynced,
+                    expectedUid: initialUid ?? undefined,
                     verifyCurrentDrafts: discardUnsynced ? undefined : async () => { await prepareForReload(); },
                 });
                 DB.resetCache();

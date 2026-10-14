@@ -67,6 +67,13 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
         } finally { read.mockRestore(); }
     });
 
+    it('never signs out or purges a different account than the requester', async () => {
+        const { auth } = await import('../src/lib/firebase');
+        await expect(DB.secureLogOut({ expectedUid: 'another-account' })).rejects.toThrow('sessione non valida');
+        expect(auth.signOut).not.toHaveBeenCalled();
+        expect(idb.del).not.toHaveBeenCalled();
+    });
+
     it('restores write access when Firebase sign-out fails before deleting anything', async () => {
         const { auth } = await import('../src/lib/firebase');
         vi.mocked(auth.signOut).mockRejectedValueOnce(new Error('Network offline'));
