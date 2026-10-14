@@ -282,8 +282,8 @@ export const AccountCard = () => {
                                     setLoadingAction('verifyEmail');
                                     try {
                                         await refreshEmailVerification();
-                                    } catch (error: any) {
-                                        await showAlert(error?.message || 'Verifica email non riuscita.');
+                                    } catch {
+                                        await showAlert('Verifica email non riuscita. Riprova.');
                                     } finally {
                                         setLoadingAction(null);
                                     }
@@ -300,8 +300,8 @@ export const AccountCard = () => {
                                     try {
                                         await resendEmailVerification();
                                         await showAlert('Email di verifica inviata. Controlla anche la cartella spam.');
-                                    } catch (error: any) {
-                                        await showAlert(error?.message || 'Invio email non riuscito.');
+                                    } catch {
+                                        await showAlert('Invio email non riuscito. Riprova.');
                                     } finally {
                                         setLoadingAction(null);
                                     }
