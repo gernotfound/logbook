@@ -3,7 +3,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 type Stored = Record<string, unknown>;
 const storage = vi.hoisted(() => ({ documents: new Map<string, Stored>() }));
 const auth = vi.hoisted(() => ({
-  verifyHealthConsentRequester: vi.fn(async () => ({ uid: 'account-1' })),
+  verifyHealthConsentRequester: vi.fn(async () => ({ uid: 'account-1', emailVerified: true })),
+  requireVerifiedHealthConsentWrite: vi.fn((identity: { emailVerified: boolean }) => {
+    if (!identity.emailVerified) throw new auth.RequestAuthError('Indirizzo email non verificato.', 403);
+  }),
   RequestAuthError: class RequestAuthError extends Error {
     constructor(message: string, public readonly status: 401 | 403 = 401) {
       super(message);
@@ -71,6 +74,29 @@ describe('trusted health consent boundary', () => {
     expect(response.headers.get('cache-control')).toBe('no-store');
     expect(await response.json()).toEqual({ status: 'active', revision: 0 });
     expect(auth.verifyHealthConsentRequester).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps consent-status and withdrawal rights but forbids acceptance without verified email', async () => {
+    auth.verifyHealthConsentRequester.mockResolvedValueOnce({ uid: 'account-1', emailVerified: false });
+    const status = await GET(req('GET'));
+    expect(status.status).toBe(200);
+
+    auth.verifyHealthConsentRequester.mockResolvedValueOnce({ uid: 'account-1', emailVerified: false });
+    const withdrawal = await POST(req('POST', { action: 'withdraw', expectedRevision: 0 }));
+    expect(withdrawal.status).toBe(200);
+    expect((await readHealthConsentState('account-1')).status).toBe('withdrawn');
+
+    auth.verifyHealthConsentRequester.mockResolvedValueOnce({ uid: 'account-1', emailVerified: false });
+    const reaccept = await POST(req('POST', { action: 'reaccept', expectedRevision: 1, acceptance }));
+    expect(reaccept.status).toBe(403);
+    expect((await readHealthConsentState('account-1')).status).toBe('withdrawn');
+
+    storage.documents.clear();
+    auth.verifyHealthConsentRequester.mockResolvedValueOnce({ uid: 'account-1', emailVerified: false });
+    const initial = await POST(req('POST', { action: 'accept-initial', expectedRevision: 0, acceptance }));
+    expect(initial.status).toBe(403);
+    expect(storage.documents.size).toBe(0);
+    expect(auth.requireVerifiedHealthConsentWrite).toHaveBeenCalledTimes(2);
   });
 
   it('records withdrawal idempotently, monotonically and keeps the data intact', async () => {
