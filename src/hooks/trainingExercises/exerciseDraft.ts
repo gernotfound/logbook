@@ -24,7 +24,7 @@ export function readExerciseDraft(owner?: string): Record<string, any> | null {
 
     try {
         return JSON.parse(raw);
-    } catch (error) {
+    } catch {
         if (readVaultControl(owner ?? storageOwner())) throw new LocalCiphertextError();
         return null;
     }
