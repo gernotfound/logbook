@@ -145,5 +145,5 @@ export async function recoverWorkoutDeviceIntent(owner: string, guard: LocalWrit
         throw new Error('Recupero workout sospeso: lo stato locale è cambiato in un’altra scheda. La copia originale è preservata.');
     }
     await commitDomainOperations(owner, { type: 'active-workout.set', workout: intent.workout }, envelope.data, guard,
-        { generation: intent.generation, sequence: intent.sequence, baseline: intent.baseline });
+        { generation: intent.generation, sequence: intent.sequence, intentId: intent.intentId, baseline: intent.baseline });
 }
