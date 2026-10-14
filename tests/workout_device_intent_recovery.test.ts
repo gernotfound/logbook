@@ -60,6 +60,25 @@ describe('authenticated device-intent replay into semantic journal', () => {
         expect(readWorkoutDeviceIntent(owner)?.workout.exercises[0].sets[0].kg).toBe('57');
     });
 
+    it('accepts a durable baseline with Zod-expanded optional fields without losing its session identity', async () => {
+        const rawBaseline: WorkoutSession = { ...workout('50'), pains: undefined };
+        await initializeLocal(owner, data(rawBaseline));
+        saveWorkoutDeviceIntent(owner, rawBaseline, workout('55'), rawBaseline);
+        await recoverWorkoutDeviceIntent(owner, () => true);
+        expect((await readLocal(owner))?.data.activeWorkout?.exercises[0].sets[0].kg).toBe('55');
+    });
+
+    it('preserves an intentionally null first baseline through subsequent synchronous edits', async () => {
+        await initializeLocal(owner, data(null));
+        const first = saveWorkoutDeviceIntent(owner, null, workout('50'), null);
+        const second = saveWorkoutDeviceIntent(owner, first.workout, workout('55'), workout('50'));
+        expect(second.baseline).toBeNull();
+        await recoverWorkoutDeviceIntent(owner, () => true);
+        const saved = (await readLocal(owner))!;
+        expect(saved.data.activeWorkout?.exercises[0].sets[0].kg).toBe('55');
+        expect(saved.lastWorkoutDeviceIntent?.sequence).toBe(2);
+    });
+
     it('rejects an unrelated durable workout without deleting the saved device intent', async () => {
         const before = data(workout('50'));
         await initializeLocal(owner, before);
