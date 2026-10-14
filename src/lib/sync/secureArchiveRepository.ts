@@ -1,6 +1,7 @@
 import { get, update } from 'idb-keyval';
 import { LocalCiphertextError, openLocalJson, sealLocalJson, SEALED_LOCAL_PREFIX } from './secureArchiveCipher';
 import { readVaultControl, requireUnlockedLocalKey, LocalVaultLockedError } from './secureArchiveSession';
+import { assertNoLocalPurge } from './localPurgeFence';
 
 /**
  * The ONE LocalEnvelope IndexedDB gateway, used by localRepository.
@@ -12,6 +13,7 @@ import { readVaultControl, requireUnlockedLocalKey, LocalVaultLockedError } from
  */
 export async function getArchiveRecord<T>(owner: string): Promise<T | undefined> {
     const storageKey = 'logbook:v2:' + owner;
+    assertNoLocalPurge(owner);
     const control = readVaultControl(owner);
     if (control) {
         if (control.phase !== 'active') throw new LocalVaultLockedError();
@@ -24,6 +26,7 @@ export async function getArchiveRecord<T>(owner: string): Promise<T | undefined>
         return openLocalJson(sessionKey, owner, storageKey, stored) as T;
     }
     const stored = await get<unknown>(storageKey);
+    assertNoLocalPurge(owner);
     if (readVaultControl(owner)) throw new LocalVaultLockedError();
     if (typeof stored === 'string' && stored.startsWith(SEALED_LOCAL_PREFIX)) throw new LocalCiphertextError();
     return stored as T | undefined;
@@ -34,6 +37,7 @@ export async function updateArchiveRecord<T>(
     owner: string, transform: (current: T | undefined) => T | undefined,
 ): Promise<void> {
     const storageKey = 'logbook:v2:' + owner;
+    assertNoLocalPurge(owner);
     const control = readVaultControl(owner);
     if (control) {
         if (control.phase !== 'active') throw new LocalVaultLockedError();
@@ -60,6 +64,7 @@ export async function updateArchiveRecord<T>(
     // Existing pre-migration behavior for a legacy account. Fail on any late
     // vault setup or already-sealed record instead of writing plaintext.
     await update<unknown>(storageKey, raw => {
+        assertNoLocalPurge(owner);
         if (readVaultControl(owner)) throw new LocalVaultLockedError();
         if (typeof raw === 'string' && raw.startsWith(SEALED_LOCAL_PREFIX)) {
             throw new LocalCiphertextError();

@@ -39,6 +39,7 @@ export function ExportSettingsTab(props: ExportSettingsTabProps) {
                 <h2><Archive size={20} aria-hidden="true" /> Backup personale</h2>
                 <p className="settings-help">Il backup legge tutto lo storico disponibile nel cloud e include la copia locale. Senza connessione puoi scegliere una copia parziale del dispositivo.</p>
                 <p className="settings-help">“Importa JSON” aggiunge i dati mancanti. “Ripristina” sostituisce i campi presenti nel file, dopo un’anteprima. Le modifiche su altri dispositivi durante l’esportazione possono richiedere un nuovo backup.</p>
+                <p className="settings-help settings-warning">Il backup JSON è un file non cifrato: chi lo apre può leggere i tuoi dati personali e relativi alla salute. Conservalo in un luogo protetto ed elimina le copie non necessarie.</p>
                 <p className="settings-help settings-warning">L'importazione da altri utenti non ripristinerà cronologie personali per sicurezza.</p>
                 <div className="settings-actions">
                     <button type="button" className="btn" onClick={onExportBackup} disabled={exportingData}><Archive size={18} aria-hidden="true" /> {exportingData ? 'Preparazione backup…' : 'Backup JSON'}</button>
@@ -48,6 +49,7 @@ export function ExportSettingsTab(props: ExportSettingsTabProps) {
             <div className="settings-detail-card">
                 <h2><FileSpreadsheet size={20} aria-hidden="true" /> Esportazione CSV</h2>
                 <p className="settings-help">Crea file tabellari dai dati attualmente caricati su questo dispositivo. Il CSV è pensato per analisi in un foglio di calcolo e non sostituisce il Backup JSON completo del cloud.</p>
+                <p className="settings-help settings-warning">I CSV non sono cifrati e possono contenere informazioni sulla salute: conservali in modo protetto.</p>
                 <button type="button" className="btn settings-full" onClick={onExportCSV}><FileSpreadsheet size={18} aria-hidden="true" /> Esporta dati (CSV)</button>
             </div>
         </section>

@@ -5,13 +5,14 @@ import { deviceKey, protectedDeviceKey } from './deviceStorage';
 import { openLocalJson, openLocalText, sealLocalJson, sealLocalText, SEALED_LOCAL_PREFIX, LocalCiphertextError } from './secureArchiveCipher';
 import { createLocalKeyVault, unlockLocalKeyVault } from './secureArchiveKeys';
 import {
-    readVaultControl, unlockVaultForOwner,
+    readVaultControl, unlockVaultForOwner, LocalVaultLockedError,
     vaultControlKey, verifyMigrationCapability, type PersistedVaultControl,
 } from './secureArchiveSession';
 import { assertLegacyEnvelopeValidForSecureMigration } from './localRepository';
 import { withGuestLifecycleLock } from './guestLifecycleLock';
 import { isAccountDeletionPending } from './accountGate';
 import { OWNER_UI_PREFERENCES } from '../uiPreferenceKeys';
+import { assertNoLocalPurge, isLocalPurgeIncomplete, isLocalPurgePending, releaseLocalPurgeFence, LocalPurgePendingError } from './localPurgeFence';
 
 const SAFE_PLAINTEXT_NAMES = new Set([
     'health-consent-withdrawal', 'health-consent-generation', 'health-consent-last-active',
@@ -48,6 +49,7 @@ function assertKnownDeviceNames(owner: string): string[] {
 }
 
 function assertMigrationAvailable(owner: string, control: PersistedVaultControl, key: Uint8Array): void {
+    assertNoLocalPurge(owner);
     verifyMigrationCapability(owner, control.epoch, key);
     if (owner.startsWith('user:') && isAccountDeletionPending(owner)) {
         throw new Error('Cancellazione account in corso: migrazione archivio sospesa.');
@@ -146,11 +148,35 @@ export async function createAndMigrateVault(requestedOwner: string): Promise<voi
         // for missing metadata, but before it acquired the exclusive Web Lock.
         // Reuse its existing device key/DEK; never create a competing archive.
         const existing = readVaultControl(owner);
+        const finishingPriorPurge = isLocalPurgePending(owner);
+        if (finishingPriorPurge && isLocalPurgeIncomplete(owner)) throw new LocalPurgePendingError();
+        if (finishingPriorPurge && existing?.phase === 'active') throw new LocalPurgePendingError();
+        if (finishingPriorPurge) {
+            // A crash before the final cleanup must not create a second key
+            // above remaining user data. An orphaned device key is harmless
+            // and may be reused if absolutely no ciphertext survives.
+            if (await get<unknown>('logbook:v2:' + owner) !== undefined
+                || assertKnownDeviceNames(owner).length > 0) {
+                throw new LocalPurgePendingError();
+            }
+        }
+        if (!existing && !finishingPriorPurge) {
+            // A lost localStorage control is not permission to install a new
+            // DEK over an existing authenticated ciphertext. Preserve bytes.
+            const raw = await get<unknown>('logbook:v2:' + owner);
+            if ((typeof raw === 'string' && raw.startsWith(SEALED_LOCAL_PREFIX))
+                || ownerStorageNames(owner).some(name => name.startsWith('sealed:'))) {
+                throw new LocalVaultLockedError();
+            }
+        }
         if (existing?.phase === 'active') {
             await unlockVaultForOwner(owner);
             return;
         }
         if (existing?.phase === 'migrating') {
+            // Crash between publishing the replacement control and releasing
+            // the retired fence: the empty new vault is recoverable in place.
+            if (finishingPriorPurge) releaseLocalPurgeFence(owner);
             const dataKey = await unlockLocalKeyVault(existing.wrappedKey, owner);
             try {
                 await migrateAndFinalize(owner, existing, dataKey);
@@ -167,6 +193,9 @@ export async function createAndMigrateVault(requestedOwner: string): Promise<voi
         // Durable marker FIRST; no plain or encrypted business data is touched
         // unless recovery credentials are present for crash resume.
         writeBrowserValue(vaultControlKey(owner), JSON.stringify(control));
+        // Retain the fence during provisioning. Only a durable new migrating
+        // control can exclude a stale tab from the no-control legacy path.
+        if (finishingPriorPurge) releaseLocalPurgeFence(owner);
         try {
             await migrateAndFinalize(owner, control, dataKey);
             await unlockVaultForOwner(owner);

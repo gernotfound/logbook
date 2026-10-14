@@ -26,6 +26,7 @@ import { deleteAccount, purgeAllLocalUserData, purgeCompletedAccountLocalData, r
 import { invalidateSession } from '../../src/lib/sync/session';
 import { createLocalKeyVault, deviceVaultKeyId } from '../../src/lib/sync/secureArchiveKeys';
 import { isVaultUnlocked } from '../../src/lib/sync/secureArchiveSession';
+import { assertNoLocalPurge, isLocalPurgePending } from '../../src/lib/sync/localPurgeFence';
 import { sealLocalText } from '../../src/lib/sync/secureArchiveCipher';
 import {
     isAccountDeletionPending,
@@ -84,6 +85,7 @@ beforeEach(async () => {
         removeItem: (key: string) => disk.delete(key),
     });
     vi.stubGlobal('fetch', boundary.fetch);
+    vi.stubGlobal('navigator', { locks: { request: async (_name: string, _options: unknown, action: () => Promise<unknown>) => action() } });
     boundary.token.mockResolvedValue({ authTime: new Date().toISOString(), token: 'firebase-id-token' });
     boundary.appCheck.mockResolvedValue('app-check-token');
     boundary.idle.mockResolvedValue(undefined);
@@ -116,6 +118,30 @@ it('retains the wrapped data-encryption key when a sealed local snapshot cannot 
     await purgeCompletedAccountLocalData('user:a');
     expect(disk.has(sealedWorkout)).toBe(false);
     expect(disk.has(control)).toBe(false);
+});
+
+it('keeps an interrupted purge fenced until the remaining ciphertext has been removed', async () => {
+    const owner = 'user:a';
+    const { vault } = await createLocalKeyVault(owner);
+    disk.set('logbook:v2:user:a:secure-vault-control', JSON.stringify({
+        format: 'thelogbook-local-vault-control', version: 2,
+        owner, phase: 'active', epoch: 'a'.repeat(32), wrappedKey: vault,
+    }));
+    const protectedKey = 'logbook:v2:user:a:sealed:workout';
+    disk.set(protectedKey, 'tlb-sealed:v1:protected');
+    const originalRemove = localStorage.removeItem.bind(localStorage);
+    const failing = vi.spyOn(localStorage, 'removeItem').mockImplementation(key => {
+        if (key === protectedKey) throw new Error('device denied');
+        originalRemove(key);
+    });
+    await expect(purgeCompletedAccountLocalData(owner)).rejects.toThrow('Pulizia locale incompleta');
+    expect(isLocalPurgePending(owner)).toBe(true);
+    expect(() => assertNoLocalPurge(owner)).toThrow('Pulizia archivio locale');
+    expect(await get(deviceVaultKeyId(owner))).toBeDefined();
+    failing.mockRestore();
+    await purgeCompletedAccountLocalData(owner);
+    expect(await get(deviceVaultKeyId(owner))).toBeUndefined();
+    expect(isLocalPurgePending(owner)).toBe(true);
 });
 
 it('purges server-confirmed deleted account ciphertext without unlocking its protected DEK', async () => {

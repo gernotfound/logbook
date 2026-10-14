@@ -4,6 +4,8 @@ import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
 import { Logic } from '../lib/logic';
 import { readDeviceValue, writeDeviceValue } from '../lib/sync/deviceStorage';
+import { LocalCiphertextError } from '../lib/sync/secureArchiveCipher';
+import { readVaultControl } from '../lib/sync/secureArchiveSession';
 import { storageOwner } from '../lib/sync/session';
 import { PlannedSetTechnique, ProgressionContract, RoutineExercise, SetTechnique, WorkoutRoutine } from '../types';
 
@@ -26,6 +28,7 @@ export function useTrainingRoutines() {
             const parsed: unknown = JSON.parse(raw);
             return parsed && typeof parsed === 'object' ? parsed as { name?: string; exercises?: RoutineExercise[] } : null;
         } catch {
+            if (readVaultControl(draftOwner)) throw new LocalCiphertextError();
             return null;
         }
     });

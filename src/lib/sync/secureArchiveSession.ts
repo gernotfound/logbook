@@ -1,4 +1,5 @@
 import { readBrowserValueStrict } from './browserStorage';
+import { assertNoLocalPurge } from './localPurgeFence';
 import { normalizeStorageOwner } from './owner';
 import { captureSessionForOwner, isActiveGuestSession } from './session';
 import {
@@ -63,6 +64,7 @@ export function lockAllVaults(): void {
 /** Read by every sensitive storage gateway, including inside IDB update(). */
 export function requireUnlockedLocalKey(owner: string): Uint8Array {
     const normalized = normalizeStorageOwner(owner);
+    assertNoLocalPurge(normalized);
     const control = readVaultControl(normalized);
     const capability = capabilities.get(normalized);
     // Guest revocation is a separate durable session fence; retaining valid
@@ -83,6 +85,7 @@ export function isVaultUnlocked(owner: string): boolean {
 /** Automatic same-device unlock after the caller verifies current owner identity. */
 export async function unlockVaultForOwner(owner: string): Promise<void> {
     const normalized = normalizeStorageOwner(owner);
+    assertNoLocalPurge(normalized);
     const control = readVaultControl(normalized);
     if (!control || control.phase !== 'active') throw new LocalVaultLockedError();
     const unwrapped = await unlockLocalKeyVault(control.wrappedKey, normalized);

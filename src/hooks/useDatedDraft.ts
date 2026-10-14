@@ -5,18 +5,29 @@ import { draftRegistry } from '../lib/utils/draftRegistry';
 import { requiredUpdateRecoveryRegistry } from '../lib/sync/requiredUpdateRecovery';
 import { useAppStore } from '../store/useAppStore';
 import { BrowserStorageError } from '../lib/sync/browserStorage';
+import { LocalCiphertextError } from '../lib/sync/secureArchiveCipher';
+import { LocalPurgePendingError } from '../lib/sync/localPurgeFence';
+import { LocalVaultLockedError, readVaultControl } from '../lib/sync/secureArchiveSession';
 
 function readDraft(name: string, owner: string): Record<string, string> | null {
     try {
         const raw = readDeviceValueStrict(name, owner);
         if (!raw) return null;
         const parsed: unknown = JSON.parse(raw);
-        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+            if (readVaultControl(owner)) throw new LocalCiphertextError();
+            return null;
+        }
         const entries = Object.entries(parsed);
-        if (entries.some(([, value]) => typeof value !== 'string')) return null;
+        if (entries.some(([, value]) => typeof value !== 'string')) {
+            if (readVaultControl(owner)) throw new LocalCiphertextError();
+            return null;
+        }
         return Object.fromEntries(entries) as Record<string, string>;
     } catch (error) {
-        if (error instanceof BrowserStorageError) throw error;
+        if (error instanceof BrowserStorageError || error instanceof LocalVaultLockedError
+            || error instanceof LocalPurgePendingError || error instanceof LocalCiphertextError) throw error;
+        if (readVaultControl(owner)) throw error;
         console.warn('Bozza non leggibile, originale conservato:', error);
         return null;
     }

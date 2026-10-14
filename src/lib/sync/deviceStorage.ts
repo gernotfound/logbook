@@ -3,6 +3,7 @@ import { readBrowserValue, readBrowserValueStrict, removeBrowserValue, writeBrow
 import { LocalCiphertextError, openLocalText, sealLocalText, SEALED_LOCAL_PREFIX } from './secureArchiveCipher';
 import { LocalVaultLockedError, readVaultControl, requireUnlockedLocalKey } from './secureArchiveSession';
 import { isActiveGuestSession, storageOwner } from './session';
+import { assertNoLocalPurge, LocalPurgePendingError } from './localPurgeFence';
 
 export const deviceKey = (name: string, owner = storageOwner()) => `logbook:v2:${owner}:${name}`;
 
@@ -18,7 +19,8 @@ export function readDeviceValue(name: string, owner?: string): string | null {
     } catch (error) {
         // An unavailable or tampered ENCRYPTED record must not look like an
         // empty draft/workout: that could silently erase the only local copy.
-        if (error instanceof LocalVaultLockedError || error instanceof LocalCiphertextError) throw error;
+        if (error instanceof LocalVaultLockedError || error instanceof LocalCiphertextError
+            || error instanceof LocalPurgePendingError) throw error;
         // Legacy best-effort draft reads may still treat transient storage
         // failures as absent, but a provisioned sealed vault must NEVER do so:
         // a follow-up write could overwrite a newer encrypted draft.
@@ -33,9 +35,13 @@ export function readDeviceValueStrict(name: string, owner?: string): string | nu
     // The device-critical read must be the first strict storage access: an
     // unreadable workout/timer cannot be masked by an earlier metadata probe.
     const legacy = readBrowserValueStrict(storageKey);
+    assertNoLocalPurge(resolvedOwner);
     const control = readVaultControl(resolvedOwner);
     if (!control) {
-        if (legacy?.startsWith(SEALED_LOCAL_PREFIX)) throw new LocalCiphertextError();
+        if (legacy?.startsWith(SEALED_LOCAL_PREFIX)
+            || readBrowserValueStrict(protectedDeviceKey(name, resolvedOwner)) !== null) {
+            throw new LocalCiphertextError();
+        }
         return legacy;
     }
     if (control.phase !== 'active') throw new LocalVaultLockedError();
@@ -53,6 +59,7 @@ export function readDeviceValueStrict(name: string, owner?: string): string | nu
 export function writeDeviceValue(name: string, value: string | null, owner?: string): void {
     // Callers decide the UI feedback; failure must not be mistaken for a successful save.
     const resolvedOwner = owner ?? storageOwner();
+    assertNoLocalPurge(resolvedOwner);
     if (resolvedOwner === 'guest' && !isActiveGuestSession()) {
         throw new Error('Sessione guest revocata: scrittura locale non consentita.');
     }
@@ -66,12 +73,20 @@ export function writeDeviceValue(name: string, value: string | null, owner?: str
         // overwrite a newer draft or lose unacknowledged legacy edits.
         if (readBrowserValueStrict(storageKey) !== null) throw new LocalCiphertextError();
         const sealedKey = protectedDeviceKey(name, resolvedOwner);
+        const previous = readBrowserValueStrict(sealedKey);
+        // A failed draft read must not make an unreadable ciphertext overwriteable.
+        // Authenticate the existing bytes before *either* replacement or deletion.
+        if (previous !== null) openLocalText(key, resolvedOwner, sealedKey, previous);
+        if (requireUnlockedLocalKey(resolvedOwner) !== key) throw new LocalVaultLockedError();
         if (value === null) removeBrowserValue(sealedKey);
         else writeBrowserValue(sealedKey, sealLocalText(key, resolvedOwner, sealedKey, value));
         if (requireUnlockedLocalKey(resolvedOwner) !== key) throw new LocalVaultLockedError();
         return;
     }
 
+    // A disappeared control cannot authorize replacing a surviving sealed draft
+    // with plaintext, even if the legacy key is absent.
+    if (readBrowserValueStrict(protectedDeviceKey(name, resolvedOwner)) !== null) throw new LocalCiphertextError();
     // Pre-provisioning legacy path, to be retired after every device has passed
     // the secure vault setup. A ciphertext without control metadata is invalid.
     if (readBrowserValue(storageKey)?.startsWith(SEALED_LOCAL_PREFIX)) throw new LocalCiphertextError();
