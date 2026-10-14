@@ -1,4 +1,3 @@
-import equal from 'fast-deep-equal';
 import { DomainParsers } from '../schema';
 import { equivalentWorkoutSnapshot } from './workoutSnapshotEquality';
 import type { WorkoutSession } from '../../types';
@@ -123,8 +122,8 @@ export async function recoverWorkoutDeviceIntent(owner: string, guard: LocalWrit
     const applied = envelope.lastWorkoutDeviceIntent;
     if (applied?.generation === intent.generation && applied.sequence >= intent.sequence) return;
 
-    if (applied?.generation !== intent.generation && !equal(envelope.data.activeWorkout, intent.baseline)) {
-        if (equal(envelope.data.activeWorkout, intent.workout)) return;
+    if (applied?.generation !== intent.generation && !equivalentWorkoutSnapshot(envelope.data.activeWorkout, intent.baseline)) {
+        if (equivalentWorkoutSnapshot(envelope.data.activeWorkout, intent.workout)) return;
         throw new Error('Recupero workout sospeso: lo stato locale è cambiato in un’altra scheda. La copia originale è preservata.');
     }
     await commitDomainOperations(owner, { type: 'active-workout.set', workout: intent.workout }, envelope.data, guard,
