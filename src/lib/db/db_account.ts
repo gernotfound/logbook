@@ -122,14 +122,21 @@ export async function assertNoOutdatedConsentJournal(owner: string): Promise<voi
 }
 
 export async function purgeAllLocalUserData(owner = storageOwner()) {
-    // A durable purge intent was already authorized before it was published;
-    // retrying it must not attempt to read the now partially removed journal.
+    // Recovery of a previously started purge must never require an archive
+    // that may already be partially deleted.
     if (isLocalPurgePending(owner)) return purgeOwnerLocalData(owner, true);
-    assertOrdinaryPurgeAllowed(owner);
-    await assertNoOutdatedConsentJournal(owner);
-    // Recheck the synchronous intent after the IndexedDB read.
-    assertOrdinaryPurgeAllowed(owner);
-    return purgeOwnerLocalData(owner);
+    return purgeOwnerLocalData(owner, false, {
+        preflight: async () => {
+            assertOrdinaryPurgeAllowed(owner);
+            await assertNoOutdatedConsentJournal(owner);
+            if (owner.startsWith('user:')) {
+                const { readLocal } = await import('../sync/localRepository');
+                if ((await readLocal(owner))?.pending.length) throw new UnsyncedLogoutError();
+            }
+            assertOrdinaryPurgeAllowed(owner);
+        },
+        afterFence: async () => {},
+    });
 }
 
 /** Only a verified server-complete account deletion may use this boundary. */

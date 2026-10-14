@@ -36,6 +36,15 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
         localStorage.clear();
     });
 
+    it('also refuses a direct ordinary authenticated purge with a pending journal', async () => {
+        const read = vi.spyOn(localRepository, 'readLocal').mockResolvedValue({ pending: [{ seq: 1 }] } as any);
+        try {
+            await expect(DB.purgeAllLocalUserData('user:user123')).rejects.toThrow('modifiche');
+            expect(idb.del).not.toHaveBeenCalled();
+            expect(isLocalPurgePending('user:user123')).toBe(false);
+        } finally { read.mockRestore(); }
+    });
+
     it('rejects an ordinary authenticated logout when the durable journal has pending operations', async () => {
         const { auth } = await import('../src/lib/firebase');
         const read = vi.spyOn(localRepository, 'readLocal').mockResolvedValue({ pending: [{ seq: 1 }] } as any);
