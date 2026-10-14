@@ -34,6 +34,10 @@ function validatedWorkout(value: unknown, strictIdentity = true): WorkoutSession
 
 export function equivalentDeviceWorkout(a: WorkoutSession | null, b: WorkoutSession | null): boolean {
     if (equal(a, b)) return true;
+    // Device intents travel through JSON inside the authenticated AEAD record.
+    // Undefined optional values are omitted and therefore differ under a deep
+    // object comparison even when the same tab has never changed the workout.
+    if (JSON.stringify(a) === JSON.stringify(b)) return true;
     // A validated boot may normalize historical optional fields. Compare the
     // canonical forms only if both still describe the same session/identities.
     const left = DomainParsers.parseActiveWorkout(a);
