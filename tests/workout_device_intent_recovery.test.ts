@@ -43,6 +43,39 @@ describe('authenticated device-intent replay into semantic journal', () => {
         expect(readDeviceValueStrict('workout-slot:' + 'a'.repeat(32), parallelOwner)).toBe(JSON.stringify(other));
     });
 
+    it('recovers a private draft when the shared snapshot write was interrupted', async () => {
+        const testOwner = 'user:slot-before-shared';
+        const initial = data(workout('50'));
+        await initializeLocal(testOwner, initial);
+        const intent = saveWorkoutDeviceIntent(testOwner, initial.activeWorkout ?? null,
+            workout('57'), initial.activeWorkout ?? null);
+        writeDeviceValue('workout', null, testOwner);
+        expect(readWorkoutDeviceIntent(testOwner)).toBeNull();
+        await recoverWorkoutDeviceIntent(testOwner, () => true);
+        expect((await readLocal(testOwner))?.data.activeWorkout?.exercises[0].sets[0].kg).toBe('57');
+        expect(readWorkoutDeviceIntent(testOwner)?.intentId).toBe(intent.intentId);
+        const beforeRetry = await readLocal(testOwner);
+        await recoverWorkoutDeviceIntent(testOwner, () => true);
+        expect(await readLocal(testOwner)).toEqual(beforeRetry);
+    });
+
+    it('bounds the recovery slots to one per tab across rapid edits', async () => {
+        const testOwner = 'user:slot-rapid-edits';
+        const initial = data(workout('50'));
+        await initializeLocal(testOwner, initial);
+        let previous = initial.activeWorkout ?? null;
+        for (let i = 1; i <= 24; i++) {
+            const next = workout(String(50 + i));
+            saveWorkoutDeviceIntent(testOwner, previous, next, initial.activeWorkout ?? null);
+            previous = next;
+        }
+        const slots = Array.from({ length: localStorage.length }, (_, i) => localStorage.key(i))
+            .filter(key => key?.startsWith('logbook:v2:' + testOwner + ':') && key.includes('workout-slot:'));
+        expect(slots).toHaveLength(1);
+        await recoverWorkoutDeviceIntent(testOwner, () => true);
+        expect((await readLocal(testOwner))?.data.activeWorkout?.exercises[0].sets[0].kg).toBe('74');
+    });
+
     it('replays the same encrypted device snapshot into IndexedDB and the pending journal after a crash', async () => {
         const before = data(workout('50'));
         await initializeLocal(owner, before);
