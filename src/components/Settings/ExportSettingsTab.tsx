@@ -38,6 +38,7 @@ export function ExportSettingsTab(props: ExportSettingsTabProps) {
             <div className="settings-detail-card">
                 <h2><Archive size={20} aria-hidden="true" /> Backup personale</h2>
                 <p className="settings-help">Il backup legge tutto lo storico disponibile nel cloud e include la copia locale. Senza connessione puoi scegliere una copia parziale del dispositivo.</p>
+                <p className="settings-help">Per proteggere gli allenamenti non ancora sincronizzati, salva periodicamente il Backup JSON <strong>fuori dai dati del browser</strong> (per esempio nei file del dispositivo o in un archivio personale protetto). Se il browser o il dispositivo perde tutte le copie locali prima della sincronizzazione, TheLogBook non può recuperare automaticamente quelle modifiche.</p>
                 <p className="settings-help">“Importa JSON” aggiunge i dati mancanti. “Ripristina” sostituisce i campi presenti nel file, dopo un’anteprima. Le modifiche su altri dispositivi durante l’esportazione possono richiedere un nuovo backup.</p>
                 <p className="settings-help settings-warning">Il backup JSON è un file non cifrato: chi lo apre può leggere i tuoi dati personali e relativi alla salute. Conservalo in un luogo protetto ed elimina le copie non necessarie.</p>
                 <p className="settings-help settings-warning">L'importazione da altri utenti non ripristinerà cronologie personali per sicurezza.</p>

@@ -3,6 +3,7 @@ import { del, get } from 'idb-keyval';
 import { lockVault } from '../sync/secureArchiveSession';
 import { beginLocalPurge, isLocalPurgeIncomplete, isLocalPurgePending, markLocalPurgeComplete } from '../sync/localPurgeFence';
 import { deviceVaultKeyId } from '../sync/secureArchiveKeys';
+import { vaultControlMirrorId } from '../sync/secureArchiveControlRecovery';
 import { withTimeout } from './db_core';
 import { assertDeletionDeadlineActive, withDeletionDeadline } from '../deletionDeadline';
 import { readBrowserValueStrict } from '../sync/browserStorage';
@@ -206,7 +207,10 @@ async function purgeOwnerLocalData(owner: string, resumeOnly = false) {
     // and every localStorage snapshot were verifiably removed.
     const controlKey = 'logbook:v2:' + owner + ':secure-vault-control';
     const keyId = deviceVaultKeyId(owner);
+    const mirrorId = vaultControlMirrorId(owner);
     try {
+        await del(mirrorId);
+        if ((await get(mirrorId)) !== undefined) throw new Error('La copia di recupero del controllo locale non è stata eliminata.');
         await del(keyId);
         if ((await get(keyId)) !== undefined) throw new Error('La chiave locale del dispositivo non è stata eliminata.');
         localStorage.removeItem(controlKey);

@@ -1,7 +1,7 @@
 import { createRoot, type Root } from 'react-dom/client';
 import { SecureVaultPrompt } from './SecureVaultPrompt';
-import { isVaultUnlocked, lockVault, readVaultControl, unlockVaultForOwner } from './secureArchiveSession';
-import { createAndMigrateVault, resumeVaultMigration } from './secureArchiveMigration';
+import { isVaultUnlocked, lockVault } from './secureArchiveSession';
+import { createAndMigrateVault } from './secureArchiveMigration';
 import { normalizeStorageOwner } from './owner';
 import { isLocalPurgePending } from './localPurgeFence';
 
@@ -52,13 +52,9 @@ export function ensureLocalVaultReady(requestedOwner: string): Promise<void> {
                 const { resumeInterruptedLocalPurge } = await import('../db/db_account');
                 await resumeInterruptedLocalPurge(owner);
             }
-            const control = readVaultControl(owner);
-            if (!control) await createAndMigrateVault(owner);
-            else if (control.phase === 'migrating') {
-                if (isLocalPurgePending(owner)) await createAndMigrateVault(owner);
-                else await resumeVaultMigration(owner);
-            }
-            else await unlockVaultForOwner(owner);
+            // Always reconcile the mirrored control under the vault Web Lock
+            // before considering a missing primary to be an empty archive.
+            await createAndMigrateVault(owner);
             if (finished) { lockVault(owner); return; }
             if (!isVaultUnlocked(owner)) throw new Error('La sessione locale non è più valida.');
             complete();

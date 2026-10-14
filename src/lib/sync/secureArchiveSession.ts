@@ -32,13 +32,9 @@ export function vaultControlKey(owner: string): string {
     return `logbook:v2:${normalizeStorageOwner(owner)}:secure-vault-control`;
 }
 
-/** A corrupt or unknown-version control must NEVER be interpreted as absent. */
-export function readVaultControl(owner: string): PersistedVaultControl | null {
+/** Strict validator shared with the independent IndexedDB control mirror. */
+export function parsePersistedVaultControl(owner: string, value: unknown): PersistedVaultControl {
     const normalized = normalizeStorageOwner(owner);
-    const raw = readBrowserValueStrict(vaultControlKey(normalized));
-    if (raw === null) return null;
-    let value: unknown;
-    try { value = JSON.parse(raw); } catch { throw new LocalVaultLockedError(); }
     if (!value || typeof value !== 'object' || Array.isArray(value)) throw new LocalVaultLockedError();
     const parsed = value as Partial<PersistedVaultControl>;
     if (parsed.format !== 'thelogbook-local-vault-control' || parsed.version !== 2
@@ -48,6 +44,16 @@ export function readVaultControl(owner: string): PersistedVaultControl | null {
         || !parsed.wrappedKey || parsed.wrappedKey.owner !== normalized
     ) throw new LocalVaultLockedError();
     return parsed as PersistedVaultControl;
+}
+
+/** A corrupt or unknown-version control must NEVER be interpreted as absent. */
+export function readVaultControl(owner: string): PersistedVaultControl | null {
+    const normalized = normalizeStorageOwner(owner);
+    const raw = readBrowserValueStrict(vaultControlKey(normalized));
+    if (raw === null) return null;
+    let value: unknown;
+    try { value = JSON.parse(raw); } catch { throw new LocalVaultLockedError(); }
+    return parsePersistedVaultControl(normalized, value);
 }
 
 export function lockVault(owner: string): void {
