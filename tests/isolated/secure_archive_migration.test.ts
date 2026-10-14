@@ -92,6 +92,8 @@ describe('durable secure archive migration', () => {
         await initializeLocal(owner, base());
         await createAndMigrateVault(owner);
         writeDeviceValue('draft_exercise', '{"name":"recoverable"}', owner);
+        const pendingResult = await commitDomainOperations(owner, { type: 'profile.patch', patch: { height: '173' } }, base());
+        expect(pendingResult.operations).toHaveLength(1);
         const ciphertext = await get<string>('logbook:v2:' + owner);
         const sealedDevice = localStorage.getItem(protectedDeviceKey('draft_exercise', owner));
         localStorage.removeItem(vaultControlKey(owner));
@@ -101,10 +103,31 @@ describe('durable secure archive migration', () => {
         // control without minting a different DEK or touching any ciphertext.
         await createAndMigrateVault(owner);
         expect(readVaultControl(owner)?.phase).toBe('active');
-        expect((await readLocal(owner))?.data.nutrition?.[day]?.weight).toBe(75);
+        const recovered = await readLocal(owner);
+        expect(recovered?.data.nutrition?.[day]?.weight).toBe(75);
+        expect(recovered?.data.profile?.height).toBe('173');
+        expect(recovered?.pending).toEqual(pendingResult.operations);
         expect(readDeviceValueStrict('draft_exercise', owner)).toBe('{"name":"recoverable"}');
         expect(await get('logbook:v2:' + owner)).toEqual(ciphertext);
         expect(localStorage.getItem(protectedDeviceKey('draft_exercise', owner))).toBe(sealedDevice);
+    });
+
+    it('recovers an interruption after writing the first-ever mirror but before localStorage control', async () => {
+        await initializeLocal(owner, base());
+        const originalEnvelope = await get('logbook:v2:' + owner);
+        const originalSet = localStorage.setItem.bind(localStorage);
+        const failure = vi.spyOn(localStorage, 'setItem').mockImplementation((key, value) => {
+            if (key === vaultControlKey(owner)) throw new Error('crash at control publication');
+            originalSet(key, value);
+        });
+        await expect(createAndMigrateVault(owner)).rejects.toBeInstanceOf(BrowserStorageError);
+        expect(readVaultControl(owner)).toBeNull();
+        expect((await get<{ phase: string }>(vaultControlMirrorId(owner)))?.phase).toBe('migrating');
+        expect(await get('logbook:v2:' + owner)).toEqual(originalEnvelope);
+        failure.mockRestore();
+        await createAndMigrateVault(owner);
+        expect(readVaultControl(owner)?.phase).toBe('active');
+        expect((await readLocal(owner))?.data.nutrition?.[day]?.weight).toBe(75);
     });
 
     it('rebuilds an absent mirror only after authenticating the primary control', async () => {
@@ -185,7 +208,7 @@ describe('durable secure archive migration', () => {
             if (key === vaultControlKey(owner)) throw new Error('crash after writing mirror');
             originalSet(key, value);
         });
-        await expect(createAndMigrateVault(owner)).rejects.toThrow('crash after writing mirror');
+        await expect(createAndMigrateVault(owner)).rejects.toBeInstanceOf(BrowserStorageError);
         expect(readVaultControl(owner)).toBeNull();
         expect((await get<{ phase: string }>(vaultControlMirrorId(owner)))?.phase).toBe('migrating');
         expect(isLocalPurgePending(owner)).toBe(true);

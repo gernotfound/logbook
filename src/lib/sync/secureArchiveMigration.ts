@@ -194,11 +194,11 @@ export async function createAndMigrateVault(requestedOwner: string): Promise<voi
         };
         // Durable marker FIRST; no plain or encrypted business data is touched
         // unless recovery credentials are present for crash resume.
-        await publishVaultControl(owner, control, finishingPriorPurge);
-        // Retain the fence during provisioning. Only a durable new migrating
-        // control can exclude a stale tab from the no-control legacy path.
-        if (finishingPriorPurge) releaseLocalPurgeFence(owner);
         try {
+            await publishVaultControl(owner, control, finishingPriorPurge);
+            // Retain the fence during provisioning. Only a durable new migrating
+            // control can exclude a stale tab from the no-control legacy path.
+            if (finishingPriorPurge) releaseLocalPurgeFence(owner);
             await migrateAndFinalize(owner, control, dataKey);
             await unlockVaultForOwner(owner);
         } finally { dataKey.fill(0); }
