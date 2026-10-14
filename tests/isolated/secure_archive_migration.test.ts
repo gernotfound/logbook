@@ -115,7 +115,7 @@ describe('durable secure archive migration', () => {
         lockVault(owner);
         await createAndMigrateVault(owner);
         expect(await get(vaultControlMirrorId(owner))).toEqual(original);
-        expect((await readLocal(owner))?.data.profile.height).toBe('170');
+        expect((await readLocal(owner))?.data.profile?.height).toBe('170');
     });
 
     it('preserves ciphertext and fails closed when BOTH controls disappear', async () => {
