@@ -7,6 +7,7 @@ import { readDeviceValueStrict, writeDeviceValue } from '../../lib/sync/deviceSt
 import type { AppState } from '../useAppStore';
 import { captureSession } from '../../lib/sync/session';
 import { assertWorkoutSessionIdentities } from '../../lib/sync/domainOperations/validation';
+import { readWorkoutDeviceIntent, saveWorkoutDeviceIntent, unwrapWorkoutDeviceSnapshot } from '../../lib/sync/workoutDeviceIntent';
 
 export interface WorkoutSlice {
     localWorkout: WorkoutSession | null;
@@ -115,8 +116,10 @@ export const getInitialLocalWorkout = (owner?: string, fallback?: WorkoutSession
         );
     }
     if (!parsed || typeof parsed !== 'object') throw new DeviceWorkoutCorruptError();
-
-    const normalized = normalizeDeviceWorkout(parsed as WorkoutSession);
+    // A pending synchronous intent must not be destroyed by bootstrap
+    // normalization before its IndexedDB/journal reconciliation.
+    const { workout: savedWorkout, isIntent } = unwrapWorkoutDeviceSnapshot(parsed, owner ?? captureSession().owner);
+    const normalized = normalizeDeviceWorkout(savedWorkout as WorkoutSession);
     if (!normalized) throw new DeviceWorkoutCorruptError('Snapshot workout locale privo di identità valida.');
     const validated = DomainParsers.parseActiveWorkout(normalized) as WorkoutSession | null;
     if (!validated) throw new DeviceWorkoutCorruptError('Snapshot workout locale non valido.');
@@ -129,7 +132,7 @@ export const getInitialLocalWorkout = (owner?: string, fallback?: WorkoutSession
         persistLocalWorkout(null, owner);
         return recoverFallback();
     }
-    persistLocalWorkout(validated, owner);
+    if (!isIntent) persistLocalWorkout(validated, owner);
     return validated;
 };
 
@@ -148,6 +151,13 @@ export const createWorkoutSlice: StateCreator<AppState, [], [], WorkoutSlice> = 
             ? (workoutOrUpdater as (prev: WorkoutSession | null) => WorkoutSession | null)(currentWorkout)
             : workoutOrUpdater;
         try {
+            // Generic device-only UI state (history editor, cleanup) must never
+            // silently retire a write-ahead workout intent before journal commit.
+            const existingIntent = captureSession().owner.startsWith('user:')
+                ? readWorkoutDeviceIntent(captureSession().owner) : null;
+            if (existingIntent && nextWorkout !== null && !nextWorkout.isEditingHistory) {
+                throw new Error('Intento workout ancora in recupero: salvataggio generico non consentito.');
+            }
             persistLocalWorkout(nextWorkout);
         } catch (error) {
             blockWorkoutPersistence(set, error);
@@ -175,13 +185,21 @@ export const createWorkoutSlice: StateCreator<AppState, [], [], WorkoutSlice> = 
         if (persistedWorkout) assertWorkoutSessionIdentities(persistedWorkout, 'Allenamento attivo');
 
         // Device-critical durability precedes the optimistic in-memory update.
+        let intent: ReturnType<typeof saveWorkoutDeviceIntent> | undefined;
         try {
-            persistLocalWorkout(persistedWorkout);
+            if (persistedWorkout && captureSession().owner.startsWith('user:')) {
+                intent = saveWorkoutDeviceIntent(
+                    captureSession().owner, currentWorkout, persistedWorkout, get().userData?.activeWorkout ?? null,
+                );
+            } else {
+                persistLocalWorkout(persistedWorkout);
+            }
         } catch (error) {
             blockWorkoutPersistence(set, error);
             throw error;
         }
         set({ localWorkout: persistedWorkout });
-        return get().dispatchDomainOperation({ type: 'active-workout.set', workout: persistedWorkout });
+        return get().dispatchDomainOperation({ type: 'active-workout.set', workout: persistedWorkout },
+            intent ? { workoutIntent: { generation: intent.generation, sequence: intent.sequence, baseline: intent.baseline } } : undefined);
     },
 });

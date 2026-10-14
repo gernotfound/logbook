@@ -31,6 +31,8 @@ L'app utilizza quattro livelli di storage con ruoli distinti:
 
 **VERIFY:** l'assenza di passphrase aggiuntiva limita la confidenzialità contro furto integrale del profilo browser o codice malevolo same-origin, che può raggiungere anche la wrapping key. Non è E2EE; dati solo offline possono andare persi se si perde il device/key. Non promettere recupero senza replica cloud.
 
+**MUST (CRITICAL):** le modifiche a un workout autenticato utilizzano uno snapshot device-critical unico che comprende workout e intento monotono, senza seconda coda indipendente. Il commit IndexedDB del workout e del journal registra atomicamente generazione e sequenza dell'intento; al bootstrap autenticato, prima della hydration cloud, l'intento più recente viene riapplicato solo quando il legame col journal locale è dimostrabile. Commit ritardati e vecchie tab non possono regredire la sequenza. Disaccordi fra generazioni/ownership e record alterati bloccano il replay conservando la copia device, mai overwrite silenzioso. Il guest conserva la semplice persistenza locale preesistente.
+
 **MUST (UX):** nessun backup periodico manuale richiesto: lo storage cifrato e la replica cloud dei dati business autorizzati sono automatici. Backup JSON resta una funzione volontaria di portabilità. Non descriverlo come requisito ordinario di protezione, né promettere che sessioni guest, bozze device-only o modifiche mai sincronizzate sopravvivano alla perdita totale del profilo.
 
 ## Browser storage boundary

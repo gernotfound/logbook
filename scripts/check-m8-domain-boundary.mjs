@@ -56,7 +56,7 @@ for (const [label, source, pattern] of [
   ['active workout synced selector', workoutSession, /state => state\.setSyncedLocalWorkout/],
   ['active workout mutation adapter', workoutSession, /setLocalWorkout:\s*mutateActiveWorkout/],
   ['active workout start path', workoutSession, /mutateActiveWorkout\(newActiveWorkout\)/],
-  ['active workout domain dispatch', workoutSlice, /dispatchDomainOperation\(\{ type: 'active-workout\.set', workout: persistedWorkout \}\)/],
+  ['active workout domain dispatch', workoutSlice, /dispatchDomainOperation\(\{ type: 'active-workout\.set', workout: persistedWorkout \}(?:,\s*intent\s*\?\s*\{\s*workoutIntent:\s*\{[^}]+\}\s*\}\s*:\s*undefined)?\)/],
 ]) {
   if (!pattern.test(source)) violations.push(`${label}: missing M8 active-workout DomainOperation boundary`);
 }

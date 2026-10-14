@@ -17,6 +17,7 @@ import {
 } from '../../lib/sync/replicaProtocol';
 import { getInitialLocalWorkout } from '../../store/slices/createWorkoutSlice';
 import { markTabSnapshotClean } from '../../lib/sync/tabSnapshotCausality';
+import { recoverWorkoutDeviceIntent } from '../../lib/sync/workoutDeviceIntent';
 
 type LoadAuthenticatedDataOptions = {
     user: User;
@@ -56,6 +57,8 @@ export async function loadAuthenticatedData({
     try {
         // Once Firebase identifies the authenticated owner, fence any pre-auth snapshot
         // and install exactly that owner's durable envelope before doing network work.
+        await recoverWorkoutDeviceIntent(expectedOwner, isCurrent);
+        if (!isCurrent()) return;
         const localEnvelope = await readLocal(expectedOwner);
         if (!isCurrent()) return;
 

@@ -21,6 +21,7 @@ import { readDeviceValueStrict, writeDeviceValue } from '../lib/sync/deviceStora
 import { captureSession, isCurrentSession } from '../lib/sync/session';
 import { claimHistorySave, HISTORY_EDITOR_CONTEXT, isHistorySavePending, releaseHistorySave, restoreSessionAfterHistoryEdit } from './workout/historyEditorContext';
 import { isWorkoutClockAnomalyError, resetWorkoutClockGuard } from '../lib/workoutClockGuard';
+import { readWorkoutDeviceIntent, recoverWorkoutDeviceIntent } from '../lib/sync/workoutDeviceIntent';
 
 const EMPTY_ROUTINES: WorkoutRoutine[] = [];
 const EMPTY_LIBRARY: Exercise[] = [];
@@ -288,6 +289,20 @@ export function useWorkoutSession() {
 
         const editingWorkout = prepareHistoricalWorkoutForEditing(workout);
         try {
+            // The history editor temporarily takes over the same device workout
+            // key. First durably journal any outstanding authenticated intent;
+            // otherwise opening the editor would erase its only recovery proof.
+            if (session.owner.startsWith('user:') && readWorkoutDeviceIntent(session.owner)) {
+                await recoverWorkoutDeviceIntent(session.owner, () => isCurrentSession(session));
+                if (!isCurrentSession(session)) return false;
+                const afterRecovery = await readLocal(session.owner);
+                const latestIntent = readWorkoutDeviceIntent(session.owner);
+                if (!afterRecovery || !latestIntent
+                    || afterRecovery.lastWorkoutDeviceIntent?.generation !== latestIntent.generation
+                    || afterRecovery.lastWorkoutDeviceIntent.sequence < latestIntent.sequence) {
+                    throw new Error('Recupero sessione corrente non ancora durevole.');
+                }
+            }
             // Preserve the device's authoritative session (including unsynced sets)
             // before replacing the visible snapshot with a history editor.
             const previousContext = readDeviceValueStrict(HISTORY_EDITOR_CONTEXT, session.owner);
