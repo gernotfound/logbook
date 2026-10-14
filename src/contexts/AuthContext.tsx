@@ -1019,7 +1019,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                     const { readLocal } = await import('../lib/sync/localRepository');
                     const envelope = await readLocal(userOwner(initialUid!));
                     durablePending = (envelope?.pending.length ?? 0) > 0;
-                } catch (error) {
+                } catch {
                     setSyncing(false);
                     await useDialogStore.getState().showAlert('Non posso verificare i dati locali prima del logout. Archivio preservato: riprova dopo aver riaperto TheLogBook.');
                     return;

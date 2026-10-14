@@ -30,6 +30,8 @@ describe('versioned backup and non-mutating restore', () => {
         expect(backup.userData).toEqual(JSON.parse(JSON.stringify(data)));
         expect(restored).toEqual(parse(data));
         expect(backup.recovery.device.workout).toBe('draft');
+        expect(decodeImport(backup, 'user:A').hasDeviceRecovery).toBe(true);
+        expect(decodeImport(createBackup(parse({}), 'user:A'), 'user:A').hasDeviceRecovery).toBe(false);
         expect(restored.history).toHaveLength(24);
     });
 
