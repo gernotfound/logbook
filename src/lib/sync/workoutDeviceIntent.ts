@@ -3,7 +3,7 @@ import { equivalentWorkoutSnapshot } from './workoutSnapshotEquality';
 import type { WorkoutSession } from '../../types';
 import { requireHealthConsentWritable } from '../healthConsent';
 import { readDeviceValueStrict, writeDeviceValue } from './deviceStorage';
-import { commitDomainOperations, readLocal, type LocalWriteGuard } from './localRepository';
+import { commitDomainOperations, readLocal, WorkoutIntentConflictError, type LocalWriteGuard } from './localRepository';
 import { assertWorkoutSessionIdentities } from './domainOperations/validation';
 
 const VERSION = 1;
@@ -126,7 +126,7 @@ export async function recoverWorkoutDeviceIntent(owner: string, guard: LocalWrit
             // A concurrent tab can publish different workout bytes with the same
             // generation/sequence. Sequence equality alone is not idempotence.
             if (!equivalentWorkoutSnapshot(envelope.data.activeWorkout, intent.workout)) {
-                throw new Error('Conflitto tra modifiche concorrenti del workout: snapshot device preservato.');
+                throw new WorkoutIntentConflictError('Conflitto tra modifiche concorrenti del workout: snapshot device preservato.');
             }
             return;
         }

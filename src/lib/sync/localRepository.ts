@@ -77,6 +77,15 @@ class InvalidCloudSyncMetadataError extends Error {
     }
 }
 
+export class WorkoutIntentConflictError extends Error {
+    readonly code = 'workout-intent-conflict';
+
+    constructor(detail: string) {
+        super(detail);
+        this.name = 'WorkoutIntentConflictError';
+    }
+}
+
 export class StaleLocalRevisionError extends Error {
     readonly code = 'stale-local-revision';
 
@@ -464,7 +473,7 @@ export async function commitDomainOperations(owner: string, batch: DomainOperati
                 // and independently allocate the same next sequence.
                 if (applied.sequence === workoutIntent.sequence
                     && !equivalentWorkoutSnapshot(current?.data.activeWorkout, domainOperations[0].workout)) {
-                    throw new Error('Conflitto tra modifiche concorrenti del workout: journal preservato.');
+                    throw new WorkoutIntentConflictError('Conflitto tra modifiche concorrenti del workout: journal preservato. Riapri TheLogBook per recuperare lo stato.');
                 }
                 savedData = current!.data;
                 operations = [];
