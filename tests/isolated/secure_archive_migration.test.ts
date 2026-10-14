@@ -13,6 +13,8 @@ vi.mock('../../src/lib/healthConsent', () => ({
 import { commitDomainOperations, initializeLocal, readLocal } from '../../src/lib/sync/localRepository';
 import { deviceKey, protectedDeviceKey, readDeviceValue, readDeviceValueStrict, writeDeviceValue } from '../../src/lib/sync/deviceStorage';
 import { createAndMigrateVault, resumeVaultMigration } from '../../src/lib/sync/secureArchiveMigration';
+import { purgeCompletedAccountLocalData } from '../../src/lib/db/db_account';
+import { isLocalPurgePending } from '../../src/lib/sync/localPurgeFence';
 import { LocalVaultLockedError, lockAllVaults, lockVault, readVaultControl, unlockVaultForOwner } from '../../src/lib/sync/secureArchiveSession';
 import { LocalCiphertextError, SEALED_LOCAL_PREFIX } from '../../src/lib/sync/secureArchiveCipher';
 import { BrowserStorageError } from '../../src/lib/sync/browserStorage';
@@ -67,6 +69,20 @@ describe('durable secure archive migration', () => {
         expect(() => readDeviceValueStrict('workout', owner)).toThrow(LocalVaultLockedError);
         await unlockVaultForOwner(owner);
         expect(readDeviceValueStrict('workout', owner)).toBe(workout);
+    });
+
+    it('fences stale encrypted and legacy writers and provisions a new vault only after purge', async () => {
+        await initializeLocal(owner, base());
+        await createAndMigrateVault(owner);
+        writeDeviceValue('draft_exercise', '{"name":"private"}', owner);
+        await purgeCompletedAccountLocalData(owner);
+        expect(isLocalPurgePending(owner)).toBe(true);
+        await expect(readLocal(owner)).rejects.toThrow('Pulizia archivio locale');
+        expect(() => writeDeviceValue('draft_exercise', '{"name":"stale"}', owner)).toThrow('Pulizia archivio locale');
+        await createAndMigrateVault(owner);
+        expect(isLocalPurgePending(owner)).toBe(false);
+        expect((await readLocal(owner))).toBeUndefined();
+        expect(readDeviceValueStrict('draft_exercise', owner)).toBeNull();
     });
 
     it('treats last confirmed consent revision as a safe lifecycle marker, not private plaintext', async () => {
@@ -166,7 +182,8 @@ describe('durable secure archive migration', () => {
         writeDeviceValue(name, '{"weight":"76"}', owner);
         const sealedKey = protectedDeviceKey(name, owner);
         const original = localStorage.getItem(sealedKey)!;
-        const damaged = original.slice(0, -1) + (original.endsWith('A') ? 'B' : 'A');
+        const at = SEALED_LOCAL_PREFIX.length;
+        const damaged = original.slice(0, at) + (original[at] === 'A' ? 'B' : 'A') + original.slice(at + 1);
         localStorage.setItem(sealedKey, damaged);
         expect(() => readDeviceValueStrict(name, owner)).toThrow(LocalCiphertextError);
         expect(() => writeDeviceValue(name, '{"weight":"77"}', owner)).toThrow(LocalCiphertextError);

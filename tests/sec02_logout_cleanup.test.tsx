@@ -4,6 +4,7 @@ import { TestDB as DB } from './testUtils';
 import * as idb from 'idb-keyval';
 import { useAppStore } from '../src/store/useAppStore';
 import { storageOwner } from '../src/lib/sync/session';
+import { isLocalPurgePending } from '../src/lib/sync/localPurgeFence';
 import { localStorageMock } from './setup';
 import { markAccountDeletion, isAccountDeletionPending } from '../src/lib/sync/accountGate';
 
@@ -30,6 +31,7 @@ vi.mock('../src/lib/firebase', async () => {
 describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        Object.defineProperty(navigator, 'locks', { configurable: true, value: { request: async (_key: string, _options: unknown, action: () => Promise<unknown>) => action() } });
         localStorage.clear();
     });
 
@@ -96,6 +98,7 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
         // Deleting drafts before the IndexedDB failure is resolved can orphan
         // the encrypted journal. All remaining local bytes stay recoverable.
         expect(localStorage.getItem('draft_measurement')).toBe('draft_data');
+        expect(isLocalPurgePending('user:user123')).toBe(true);
 
         consoleWarnSpy.mockRestore();
     });
