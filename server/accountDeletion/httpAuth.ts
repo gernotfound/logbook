@@ -54,6 +54,16 @@ export async function verifyRecoveryRegistrationRequester(request: Request): Pro
   return { uid: decoded.uid };
 }
 
+// Ordinary health-consent access follows the same verified-email gate as Firestore.
+// Deletion and withdrawn-data recovery use separate identity/recovery policies.
+export async function verifyHealthConsentRequester(request: Request): Promise<{ uid: string }> {
+  const decoded = await verifyAuthenticatedRequester(request);
+  if (decoded.email_verified !== true) {
+    throw new RequestAuthError('Indirizzo email non verificato.', 403);
+  }
+  return { uid: decoded.uid };
+}
+
 export async function verifyDeletionRequester(request: Request): Promise<{ uid: string }> {
   const decoded = await verifyAuthenticatedRequester(request);
 
