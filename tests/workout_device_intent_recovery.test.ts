@@ -108,7 +108,8 @@ describe('authenticated device-intent replay into semantic journal', () => {
         const latest = saveWorkoutDeviceIntent(owner, workout('52'), workout('57'), initial.activeWorkout ?? null);
         expect(latest.intentId).not.toBe(first.intentId);
         await commitDomainOperations(owner, { type: 'active-workout.set', workout: latest.workout }, initial, undefined,
-            { generation: latest.generation, sequence: latest.sequence, intentId: latest.intentId, baseline: latest.baseline });
+            { generation: latest.generation, sequence: latest.sequence, intentId: latest.intentId, parentIntentId: latest.parentIntentId,
+                ancestorIds: latest.ancestorIds, baseline: latest.baseline });
         const afterLatest = (await readLocal(owner))!;
         await commitDomainOperations(owner, { type: 'active-workout.set', workout: first.workout }, initial, undefined,
             { generation: first.generation, sequence: first.sequence, intentId: first.intentId, baseline: first.baseline });
@@ -179,7 +180,8 @@ describe('authenticated device-intent replay into semantic journal', () => {
                 intentId: first.intentId, baseline: first.baseline });
         await commitDomainOperations(testOwner, { type: 'active-workout.set', workout: latest.workout },
             initial, undefined, { generation: latest.generation, sequence: latest.sequence,
-                intentId: latest.intentId, parentIntentId: latest.parentIntentId, baseline: latest.baseline });
+                intentId: latest.intentId, parentIntentId: latest.parentIntentId,
+                ancestorIds: latest.ancestorIds, baseline: latest.baseline });
         expect((await readLocal(testOwner))?.data.activeWorkout?.exercises[0].sets[0].kg).toBe('60');
     });
 
@@ -224,7 +226,8 @@ describe('authenticated device-intent replay into semantic journal', () => {
         await recoverWorkoutDeviceIntent(owner, () => true);
         const saved = await readLocal(owner);
         expect(saved?.data.activeWorkout?.exercises[0].sets[0].kg).toBe('60');
-        expect(saved?.lastWorkoutDeviceIntent).toEqual({ generation: first.generation, sequence: 2, intentId: second.intentId });
+        expect(saved?.lastWorkoutDeviceIntent).toMatchObject({ generation: first.generation, sequence: 2,
+            intentId: second.intentId, parentIntentId: first.intentId });
         expect(saved?.pending.length).toBeGreaterThan(0);
     });
 
@@ -246,6 +249,7 @@ describe('authenticated device-intent replay into semantic journal', () => {
         expect(saved.data.activeWorkout?.exercises[0].sets[0].kg).toBe('55');
         expect(saved.lastWorkoutDeviceIntent?.sequence).toBe(2);
         expect(saved.lastWorkoutDeviceIntent?.intentId).toBe(second.intentId);
+        expect(saved.lastWorkoutDeviceIntent?.ancestorIds).toContain(first.intentId);
     });
 
     it('rejects an unrelated durable workout without deleting the saved device intent', async () => {
