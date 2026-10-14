@@ -4,7 +4,7 @@ export function describeEmailAuthError(error: unknown): string {
     const code = error && typeof error === 'object' && 'code' in error
         ? (error as { code?: unknown }).code : undefined;
     switch (code) {
-        case 'auth/email-already-in-use': return 'Questa email è già registrata. Prova ad accedere o recupera la password.';
+        case 'auth/email-already-in-use': return 'Registrazione non completata. Controlla i dati oppure prova ad accedere o recuperare la password.';
         case 'auth/invalid-email': return 'Formato email non valido.';
         case 'auth/weak-password': return PASSWORD_POLICY_SUMMARY;
         case 'auth/user-not-found':

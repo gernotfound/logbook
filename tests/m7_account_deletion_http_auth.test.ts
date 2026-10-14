@@ -13,6 +13,8 @@ vi.mock('../server/accountDeletion/firebaseAdmin', () => ({
 import {
   RequestAuthError,
   verifyDeletionRequester,
+  verifyHealthConsentRequester,
+  requireVerifiedHealthConsentWrite,
   verifyRecoveryRegistrationRequester,
   verifyStatusAppCheck,
 } from '../server/accountDeletion/httpAuth';
@@ -31,6 +33,7 @@ describe('M7 App Check replay protection for account deletion', () => {
     vi.clearAllMocks();
     admin.verifyIdToken.mockResolvedValue({
       uid: 'user-a',
+      email_verified: true,
       auth_time: Math.floor(Date.now() / 1000),
     });
     admin.verifyToken.mockResolvedValue({ alreadyConsumed: false });
@@ -40,6 +43,33 @@ describe('M7 App Check replay protection for account deletion', () => {
     await expect(verifyDeletionRequester(requesterRequest())).resolves.toEqual({ uid: 'user-a' });
     expect(admin.verifyIdToken).toHaveBeenCalledWith('id-token', true);
     expect(admin.verifyToken).toHaveBeenCalledWith('limited-use-app-check', { consume: true });
+  });
+
+  it('verifies identity and exposes the email claim for action-specific consent authorization', async () => {
+    const verified = await verifyHealthConsentRequester(requesterRequest());
+    expect(verified).toEqual({ uid: 'user-a', emailVerified: true });
+    expect(() => requireVerifiedHealthConsentWrite(verified)).not.toThrow();
+    admin.verifyIdToken.mockResolvedValueOnce({
+      uid: 'user-a', email_verified: false,
+      auth_time: Math.floor(Date.now() / 1000),
+    });
+    const unverified = await verifyHealthConsentRequester(requesterRequest());
+    expect(unverified).toEqual({ uid: 'user-a', emailVerified: false });
+    expect(() => requireVerifiedHealthConsentWrite(unverified)).toThrow(RequestAuthError);
+    expect(() => requireVerifiedHealthConsentWrite(unverified)).toThrow('Indirizzo email non verificato.');
+    expect(admin.verifyIdToken).toHaveBeenCalledWith('id-token', true);
+    expect(admin.verifyToken).toHaveBeenCalledWith('limited-use-app-check', { consume: true });
+  });
+
+  it('fails closed for missing email claims while preserving revocation/deletion/recovery authorization', async () => {
+    admin.verifyIdToken.mockResolvedValue({
+      uid: 'user-a', auth_time: Math.floor(Date.now() / 1000),
+    });
+    const identity = await verifyHealthConsentRequester(requesterRequest());
+    expect(identity.emailVerified).toBe(false);
+    expect(() => requireVerifiedHealthConsentWrite(identity)).toThrow(RequestAuthError);
+    await expect(verifyRecoveryRegistrationRequester(requesterRequest())).resolves.toEqual({ uid: 'user-a' });
+    await expect(verifyDeletionRequester(requesterRequest())).resolves.toEqual({ uid: 'user-a' });
   });
 
   it('rejects an already consumed App Check token', async () => {
