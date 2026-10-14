@@ -13,6 +13,7 @@ vi.mock('../server/accountDeletion/firebaseAdmin', () => ({
 import {
   RequestAuthError,
   verifyDeletionRequester,
+  verifyHealthConsentRequester,
   verifyRecoveryRegistrationRequester,
   verifyStatusAppCheck,
 } from '../server/accountDeletion/httpAuth';
@@ -31,6 +32,7 @@ describe('M7 App Check replay protection for account deletion', () => {
     vi.clearAllMocks();
     admin.verifyIdToken.mockResolvedValue({
       uid: 'user-a',
+      email_verified: true,
       auth_time: Math.floor(Date.now() / 1000),
     });
     admin.verifyToken.mockResolvedValue({ alreadyConsumed: false });
@@ -40,6 +42,30 @@ describe('M7 App Check replay protection for account deletion', () => {
     await expect(verifyDeletionRequester(requesterRequest())).resolves.toEqual({ uid: 'user-a' });
     expect(admin.verifyIdToken).toHaveBeenCalledWith('id-token', true);
     expect(admin.verifyToken).toHaveBeenCalledWith('limited-use-app-check', { consume: true });
+  });
+
+  it('requires verified email for ordinary health-consent access with non-revoked auth and App Check', async () => {
+    await expect(verifyHealthConsentRequester(requesterRequest())).resolves.toEqual({ uid: 'user-a' });
+    admin.verifyIdToken.mockResolvedValueOnce({
+      uid: 'user-a',
+      email_verified: false,
+      auth_time: Math.floor(Date.now() / 1000),
+    });
+    await expect(verifyHealthConsentRequester(requesterRequest())).rejects.toMatchObject({
+      name: 'RequestAuthError', status: 403,
+    });
+    expect(admin.verifyIdToken).toHaveBeenCalledWith('id-token', true);
+    expect(admin.verifyToken).toHaveBeenCalledWith('limited-use-app-check', { consume: true });
+  });
+
+  it('rejects a missing email_verified claim but preserves separate deletion/recovery authorization', async () => {
+    admin.verifyIdToken.mockResolvedValue({
+      uid: 'user-a',
+      auth_time: Math.floor(Date.now() / 1000),
+    });
+    await expect(verifyHealthConsentRequester(requesterRequest())).rejects.toMatchObject({ status: 403 });
+    await expect(verifyRecoveryRegistrationRequester(requesterRequest())).resolves.toEqual({ uid: 'user-a' });
+    await expect(verifyDeletionRequester(requesterRequest())).resolves.toEqual({ uid: 'user-a' });
   });
 
   it('rejects an already consumed App Check token', async () => {
