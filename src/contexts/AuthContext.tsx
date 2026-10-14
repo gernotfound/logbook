@@ -640,7 +640,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             if (failure === 'redirect') {
                 try {
                     await startGoogleRedirect();
-                } catch (redirectError) {
+                } catch {
                     console.error('Accesso Google tramite redirect non riuscito.');
                     setSaveError("Accesso fallito. Riprova.");
                 }
@@ -832,7 +832,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             if (failure === 'redirect') {
                 try {
                     await startGoogleRedirect();
-                } catch (redirectError) {
+                } catch {
                     console.error('Collegamento Google tramite redirect non riuscito.');
                     setSaveError("Accesso fallito. Riprova.");
                 }
