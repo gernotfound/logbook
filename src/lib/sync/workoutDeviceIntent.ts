@@ -1,3 +1,4 @@
+import equal from 'fast-deep-equal';
 import { DomainParsers } from '../schema';
 import { equivalentWorkoutSnapshot } from './workoutSnapshotEquality';
 import type { WorkoutSession } from '../../types';
