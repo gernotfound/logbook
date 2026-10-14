@@ -149,19 +149,19 @@ export async function createAndMigrateVault(requestedOwner: string): Promise<voi
         // for missing metadata, but before it acquired the exclusive Web Lock.
         // Reuse its existing device key/DEK; never create a competing archive.
         const finishingPriorPurge = isLocalPurgePending(owner);
-        if (!finishingPriorPurge) await reconcileVaultControl(owner);
-        const existing = readVaultControl(owner);
         if (finishingPriorPurge && isLocalPurgeIncomplete(owner)) throw new LocalPurgePendingError();
-        if (finishingPriorPurge && existing?.phase === 'active') throw new LocalPurgePendingError();
         if (finishingPriorPurge) {
-            // A crash before the final cleanup must not create a second key
-            // above remaining user data. An orphaned device key is harmless
-            // and may be reused if absolutely no ciphertext survives.
+            // The retained fence can be released ONLY with an empty archive.
+            // A crash after persisting the new mirror but before localStorage
+            // must reuse that same generation, rather than minting a new DEK.
             if (await get<unknown>('logbook:v2:' + owner) !== undefined
                 || assertKnownDeviceNames(owner).length > 0) {
                 throw new LocalPurgePendingError();
             }
         }
+        await reconcileVaultControl(owner, finishingPriorPurge);
+        const existing = readVaultControl(owner);
+        if (finishingPriorPurge && existing?.phase === 'active') throw new LocalPurgePendingError();
         if (!existing && !finishingPriorPurge) {
             // A lost localStorage control is not permission to install a new
             // DEK over an existing authenticated ciphertext. Preserve bytes.

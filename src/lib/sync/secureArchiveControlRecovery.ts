@@ -86,9 +86,9 @@ export async function publishVaultControl(
  * Only a genuinely absent primary is reconstructed from an authenticated
  * wrapped-key mirror, without generating a new DEK.
  */
-export async function reconcileVaultControl(owner: string): Promise<void> {
+export async function reconcileVaultControl(owner: string, allowRetiredFence = false): Promise<void> {
     const normalized = normalizeStorageOwner(owner);
-    assertNoLocalPurge(normalized);
+    assertPublishPermitted(normalized, allowRetiredFence);
     const primary = readVaultControl(normalized);
     const mirror = await readMirror(normalized);
     if (!primary && !mirror) return;
@@ -98,20 +98,22 @@ export async function reconcileVaultControl(owner: string): Promise<void> {
         // migration if primary is still migrating. No premature promotion.
         if (primary.phase === 'active' && mirror.phase === 'migrating') {
             await confirmKey(normalized, primary);
-            await writeMirror(normalized, primary);
+            await writeMirror(normalized, primary, allowRetiredFence);
         }
         return;
     }
     const surviving = (primary ?? mirror)!;
     await confirmKey(normalized, surviving);
     if (primary) {
-        await writeMirror(normalized, primary);
+        await writeMirror(normalized, primary, allowRetiredFence);
     } else {
+        assertPublishPermitted(normalized, allowRetiredFence);
         if (readBrowserValueStrict(vaultControlKey(normalized)) !== null) throw new LocalVaultLockedError();
         writeBrowserValue(vaultControlKey(normalized), JSON.stringify(surviving));
         const restored = readVaultControl(normalized);
         if (!restored || !sameGeneration(restored, surviving) || restored.phase !== surviving.phase) {
             throw new LocalVaultLockedError();
         }
+        assertPublishPermitted(normalized, allowRetiredFence);
     }
 }

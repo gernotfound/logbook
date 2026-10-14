@@ -177,6 +177,25 @@ describe('durable secure archive migration', () => {
         expect(localStorage.getItem(vaultControlKey(owner))).toBe('{broken');
     });
 
+    it('resumes a retired-fence crash after the mirror write but before publishing control', async () => {
+        await createAndMigrateVault(owner);
+        await purgeCompletedAccountLocalData(owner);
+        const originalSet = localStorage.setItem.bind(localStorage);
+        const fail = vi.spyOn(localStorage, 'setItem').mockImplementation((key, value) => {
+            if (key === vaultControlKey(owner)) throw new Error('crash after writing mirror');
+            originalSet(key, value);
+        });
+        await expect(createAndMigrateVault(owner)).rejects.toThrow('crash after writing mirror');
+        expect(readVaultControl(owner)).toBeNull();
+        expect((await get<{ phase: string }>(vaultControlMirrorId(owner)))?.phase).toBe('migrating');
+        expect(isLocalPurgePending(owner)).toBe(true);
+        fail.mockRestore();
+        await createAndMigrateVault(owner);
+        expect(readVaultControl(owner)?.phase).toBe('active');
+        expect((await get<{ phase: string }>(vaultControlMirrorId(owner)))?.phase).toBe('active');
+        expect(isLocalPurgePending(owner)).toBe(false);
+    });
+
     it('recovers a crash between replacement control and retired fence release', async () => {
         await createAndMigrateVault(owner);
         await purgeCompletedAccountLocalData(owner);
