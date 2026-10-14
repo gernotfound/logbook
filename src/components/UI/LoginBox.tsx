@@ -85,7 +85,14 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
                     setFormError('Inserisci la tua email.');
                     return;
                 }
-                await sendPasswordResetEmail(auth, email);
+                try {
+                    await sendPasswordResetEmail(auth, email);
+                } catch (error) {
+                    // Identity Platform normally masks unknown addresses when email
+                    // enumeration protection is enabled. Preserve the same neutral
+                    // outcome if a legacy provider configuration returns this code.
+                    if ((error as { code?: unknown } | null)?.code !== 'auth/user-not-found') throw error;
+                }
                 setResetSent(true);
                 await showAlert("Se l'email è registrata, riceverai un link per reimpostare la password. Controlla anche la cartella spam.");
                 setTimeout(() => setResetSent(false), 60000);
