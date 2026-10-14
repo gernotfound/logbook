@@ -20,10 +20,9 @@ vi.mock('../src/lib/firebase', async () => {
     const actual = await vi.importActual('../src/lib/firebase');
     return {
         ...actual,
-        auth: {
-            signOut: vi.fn(),
-            currentUser: { uid: 'user123' }
-        },
+        // Share the exact Auth instance already used by session.ts. An
+        // independently fabricated Auth would bypass the production UID fence.
+        auth: Object.assign(actual.auth, { signOut: vi.fn() }),
         ensureAppCheck: vi.fn(),
         getDb: vi.fn()
     };
