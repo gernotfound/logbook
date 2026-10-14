@@ -21,13 +21,24 @@ export type WorkoutDeviceIntent = {
     workout: WorkoutSession;
 };
 
-export type AppliedWorkoutIntent = { generation: string; sequence: number };
+function validatedWorkout(value: unknown, strictIdentity = true): WorkoutSession {
+    const parsed = DomainParsers.parseActiveWorkout(value);
+    if (!parsed || !parsed.id || !value || typeof value !== 'object' || Array.isArray(value)) {
+        throw new Error('Snapshot workout di recupero non valido.');
+    }
+    if (strictIdentity) assertWorkoutSessionIdentities(parsed, 'Recupero allenamento');
+    // Keep the precise snapshot bytes. Zod's field sanitizers must not silently
+    // discard a device draft or make the next edit look like a competing tab.
+    return value as WorkoutSession;
+}
 
-function validatedWorkout(value: unknown): WorkoutSession {
-    const workout = DomainParsers.parseActiveWorkout(value);
-    if (!workout || !workout.id) throw new Error('Snapshot workout di recupero non valido.');
-    assertWorkoutSessionIdentities(workout, 'Recupero allenamento');
-    return workout;
+export function equivalentDeviceWorkout(a: WorkoutSession | null, b: WorkoutSession | null): boolean {
+    if (equal(a, b)) return true;
+    // A validated boot may normalize historical optional fields. Compare the
+    // canonical forms only if both still describe the same session/identities.
+    const left = DomainParsers.parseActiveWorkout(a);
+    const right = DomainParsers.parseActiveWorkout(b);
+    return equal(left, right);
 }
 
 function parseIntent(value: unknown, owner: string): WorkoutDeviceIntent | null {
@@ -42,7 +53,7 @@ function parseIntent(value: unknown, owner: string): WorkoutDeviceIntent | null 
         throw new Error('Metadati workout di recupero incompatibili: archivio preservato.');
     }
     const workout = validatedWorkout(raw.workout);
-    const baseline = raw.baseline === null ? null : validatedWorkout(raw.baseline);
+    const baseline = raw.baseline === null ? null : validatedWorkout(raw.baseline, false);
     return { __logbookWorkoutIntent: 1, owner, generation: raw.generation, sequence: raw.sequence, baseline, workout };
 }
 
@@ -74,13 +85,13 @@ export function saveWorkoutDeviceIntent(
     if (!existing) {
         const raw = readDeviceValueStrict('workout', owner);
         if (raw !== null) {
-            const legacy = validatedWorkout(JSON.parse(raw) as unknown);
-            if (!equal(legacy, previous)) {
+            const legacy = validatedWorkout(JSON.parse(raw) as unknown, false);
+            if (!equivalentDeviceWorkout(legacy, previous)) {
                 throw new Error('Snapshot workout cambiato da un’altra scheda: dati preservati.');
             }
         }
     }
-    if (existing && !equal(existing.workout, previous)) {
+    if (existing && !equivalentDeviceWorkout(existing.workout, previous)) {
         throw new Error('Workout modificato da un’altra scheda: recupero protetto senza sovrascrivere i dati.');
     }
     if (existing && existing.sequence >= MAX_SEQUENCE) throw new Error('Contatore recupero workout esaurito.');
