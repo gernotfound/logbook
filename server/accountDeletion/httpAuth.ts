@@ -54,14 +54,20 @@ export async function verifyRecoveryRegistrationRequester(request: Request): Pro
   return { uid: decoded.uid };
 }
 
-// Ordinary health-consent access follows the same verified-email gate as Firestore.
-// Deletion and withdrawn-data recovery use separate identity/recovery policies.
-export async function verifyHealthConsentRequester(request: Request): Promise<{ uid: string }> {
+// Verify once with a consumable App Check token; return the verified-email claim
+// for action-specific authorization without consuming a second token.
+export async function verifyHealthConsentRequester(request: Request): Promise<{ uid: string; emailVerified: boolean }> {
   const decoded = await verifyAuthenticatedRequester(request);
-  if (decoded.email_verified !== true) {
+  return { uid: decoded.uid, emailVerified: decoded.email_verified === true };
+}
+
+// Initial acceptance/reacceptance permits new fitness processing and requires a
+// verified address. Reading consent state and withdrawing it remain accessible
+// to the authenticated owner even if their email can no longer be verified.
+export function requireVerifiedHealthConsentWrite(identity: { emailVerified: boolean }): void {
+  if (!identity.emailVerified) {
     throw new RequestAuthError('Indirizzo email non verificato.', 403);
   }
-  return { uid: decoded.uid };
 }
 
 export async function verifyDeletionRequester(request: Request): Promise<{ uid: string }> {
