@@ -177,7 +177,7 @@ export function decodeImport(payload: unknown, owner: string) {
     const data = normalized.userData;
     validateImportData(data);
     const sanitizedData = structuredClone(data);
-    if (sanitizedData.activeWorkout !== undefined && sanitizedData.activeWorkout !== null) {
+    if (!share && sanitizedData.activeWorkout !== undefined && sanitizedData.activeWorkout !== null) {
         const activeWorkout = DomainParsers.parseActiveWorkout(sanitizedData.activeWorkout);
         if (!activeWorkout) {
             throw new Error('Il backup contiene un allenamento attivo non valido: importazione annullata senza modificare i dati.');

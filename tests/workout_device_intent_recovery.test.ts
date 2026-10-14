@@ -66,7 +66,7 @@ describe('authenticated device-intent replay into semantic journal', () => {
             const parallelOwner = 'user:device-intent-collision-' + committedKg;
             const original = data(workout('50'));
             await initializeLocal(parallelOwner, original);
-            const first = saveWorkoutDeviceIntent(parallelOwner, original.activeWorkout, workout(committedKg), original.activeWorkout);
+            const first = saveWorkoutDeviceIntent(parallelOwner, original.activeWorkout ?? null, workout(committedKg), original.activeWorkout ?? null);
             const competing = { ...first, workout: workout(competingKg) };
 
             await commitDomainOperations(parallelOwner, { type: 'active-workout.set', workout: first.workout },
@@ -88,7 +88,7 @@ describe('authenticated device-intent replay into semantic journal', () => {
     it('allows an equivalent retry at the same generation/sequence without duplicate journal entries', async () => {
         const initial = data(workout('50'));
         await initializeLocal(owner, initial);
-        const intent = saveWorkoutDeviceIntent(owner, initial.activeWorkout, workout('55'), initial.activeWorkout);
+        const intent = saveWorkoutDeviceIntent(owner, initial.activeWorkout ?? null, workout('55'), initial.activeWorkout ?? null);
         await recoverWorkoutDeviceIntent(owner, () => true);
         const before = (await readLocal(owner))!;
         const expanded = DomainParsers.parseActiveWorkout(intent.workout);
