@@ -51,7 +51,11 @@ export function readWorkoutDeviceIntent(owner: string): WorkoutDeviceIntent | nu
     const raw = readDeviceValueStrict('workout', owner);
     if (raw === null) return null;
     let value: unknown;
-    try { value = JSON.parse(raw); } catch { return null; } // Legacy parse errors handled by normal workout bootstrap.
+    try { value = JSON.parse(raw); }
+    catch { throw new Error('Snapshot workout esistente corrotto: non può essere sovrascritto.'); }
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+        throw new Error('Snapshot workout esistente non valido: non può essere sovrascritto.');
+    }
     return parseIntent(value, owner);
 }
 
@@ -67,6 +71,15 @@ export function saveWorkoutDeviceIntent(
     observedBase: WorkoutSession | null,
 ): WorkoutDeviceIntent {
     const existing = readWorkoutDeviceIntent(owner);
+    if (!existing) {
+        const raw = readDeviceValueStrict('workout', owner);
+        if (raw !== null) {
+            const legacy = validatedWorkout(JSON.parse(raw) as unknown);
+            if (!equal(legacy, previous)) {
+                throw new Error('Snapshot workout cambiato da un’altra scheda: dati preservati.');
+            }
+        }
+    }
     if (existing && !equal(existing.workout, previous)) {
         throw new Error('Workout modificato da un’altra scheda: recupero protetto senza sovrascrivere i dati.');
     }

@@ -454,6 +454,9 @@ export async function commitDomainOperations(owner: string, batch: DomainOperati
                 throw new Error('Intento workout non valido per il journal');
             }
             const applied = current?.lastWorkoutDeviceIntent;
+            if (current?.data.activeWorkout && current.data.activeWorkout.id !== domainOperations[0].workout.id) {
+                throw new Error('Workout attivo cambiato: intento device non applicabile.');
+            }
             if (applied?.generation === workoutIntent.generation && applied.sequence >= workoutIntent.sequence) {
                 savedData = current!.data;
                 operations = [];
