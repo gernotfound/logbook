@@ -15,7 +15,7 @@ import { deviceKey, protectedDeviceKey, readDeviceValue, readDeviceValueStrict, 
 import { createAndMigrateVault, resumeVaultMigration } from '../../src/lib/sync/secureArchiveMigration';
 import { purgeCompletedAccountLocalData } from '../../src/lib/db/db_account';
 import { isLocalPurgePending } from '../../src/lib/sync/localPurgeFence';
-import { LocalVaultLockedError, lockAllVaults, lockVault, readVaultControl, unlockVaultForOwner } from '../../src/lib/sync/secureArchiveSession';
+import { LocalVaultLockedError, lockAllVaults, lockVault, readVaultControl, unlockVaultForOwner, vaultControlKey } from '../../src/lib/sync/secureArchiveSession';
 import { LocalCiphertextError, SEALED_LOCAL_PREFIX } from '../../src/lib/sync/secureArchiveCipher';
 import { BrowserStorageError } from '../../src/lib/sync/browserStorage';
 import { activateGuestSession, GUEST_SESSION_KEY, GUEST_REVOCATION_KEY } from '../../src/lib/sync/session';
@@ -83,6 +83,42 @@ describe('durable secure archive migration', () => {
         expect(isLocalPurgePending(owner)).toBe(false);
         expect((await readLocal(owner))).toBeUndefined();
         expect(readDeviceValueStrict('draft_exercise', owner)).toBeNull();
+    });
+
+    it('does not provision a competing key after control metadata disappears', async () => {
+        await initializeLocal(owner, base());
+        await createAndMigrateVault(owner);
+        writeDeviceValue('draft_exercise', '{"name":"recoverable"}', owner);
+        const ciphertext = await get<string>('logbook:v2:' + owner);
+        const sealedDevice = localStorage.getItem(protectedDeviceKey('draft_exercise', owner));
+        localStorage.removeItem(vaultControlKey(owner));
+        lockVault(owner);
+
+        await expect(createAndMigrateVault(owner)).rejects.toBeInstanceOf(LocalVaultLockedError);
+        await expect(readLocal(owner)).rejects.toBeInstanceOf(LocalCiphertextError);
+        expect(() => readDeviceValueStrict('draft_exercise', owner)).toThrow(LocalCiphertextError);
+        expect(() => writeDeviceValue('draft_exercise', '{"name":"stale"}', owner)).toThrow(LocalCiphertextError);
+        expect(await get('logbook:v2:' + owner)).toEqual(ciphertext);
+        expect(localStorage.getItem(protectedDeviceKey('draft_exercise', owner))).toBe(sealedDevice);
+        expect(localStorage.getItem(vaultControlKey(owner))).toBeNull();
+    });
+
+    it('recovers a crash between replacement control and retired fence release', async () => {
+        await createAndMigrateVault(owner);
+        await purgeCompletedAccountLocalData(owner);
+        const remove = localStorage.removeItem.bind(localStorage);
+        const fence = 'logbook:local-purge-fence:v1:' + owner;
+        const failure = vi.spyOn(localStorage, 'removeItem').mockImplementation(key => {
+            if (key === fence) throw new Error('storage transient');
+            remove(key);
+        });
+        await expect(createAndMigrateVault(owner)).rejects.toThrow();
+        expect(readVaultControl(owner)?.phase).toBe('migrating');
+        expect(isLocalPurgePending(owner)).toBe(true);
+        failure.mockRestore();
+        await createAndMigrateVault(owner);
+        expect(readVaultControl(owner)?.phase).toBe('active');
+        expect(isLocalPurgePending(owner)).toBe(false);
     });
 
     it('treats last confirmed consent revision as a safe lifecycle marker, not private plaintext', async () => {

@@ -2,6 +2,7 @@ import type { MuscleDef } from '../../lib/constants/muscles';
 import { readDeviceValue, writeDeviceValue } from '../../lib/sync/deviceStorage';
 import { LocalCiphertextError } from '../../lib/sync/secureArchiveCipher';
 import { readVaultControl } from '../../lib/sync/secureArchiveSession';
+import { storageOwner } from '../../lib/sync/session';
 
 const EXERCISE_DRAFT_KEY = 'draft_exercise';
 
@@ -24,7 +25,7 @@ export function readExerciseDraft(owner?: string): Record<string, any> | null {
     try {
         return JSON.parse(raw);
     } catch (error) {
-        if (readVaultControl(owner ?? 'guest')) throw new LocalCiphertextError();
+        if (readVaultControl(owner ?? storageOwner())) throw new LocalCiphertextError();
         return null;
     }
 }
