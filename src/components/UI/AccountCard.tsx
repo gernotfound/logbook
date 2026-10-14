@@ -12,7 +12,7 @@ import { classifyGooglePopupFailure } from '../../contexts/auth/googlePopup';
 
 export const AccountCard = () => {
     const { currentUser, isGuest, emailVerificationRequired, resendEmailVerification, refreshEmailVerification, linkGoogleAccount, registerWithEmail } = useAuth();
-    const { handleLogout } = useSettings();
+    const { handleLogout, handleLogoutEverywhere, revokingSessions } = useSettings();
     const { showAlert } = useDialogStore();
 
     const [loadingAction, setLoadingAction] = useState<string | null>(null);
@@ -333,7 +333,20 @@ export const AccountCard = () => {
                 )}
 
                 <hr className="ui-account-card-25" style={{ margin: "0.625rem 0" }} />
-                <button className="btn ui-account-card-26"  onClick={() => handleLogout()}>Esci dall'account</button>
+                <button className="btn ui-account-card-26" onClick={() => handleLogout()}>Esci dall'account</button>
+                <div className="ui-account-card-17" style={{ padding: '0.625rem', marginTop: '0.5rem' }}>
+                    <p style={{ margin: '0 0 0.625rem' }}>
+                        Hai perso un dispositivo? Puoi revocare tutte le sessioni cloud. I dati salvati solo offline sugli altri dispositivi non possono essere cancellati da remoto.
+                    </p>
+                    <button
+                        type="button"
+                        className="btn"
+                        disabled={!currentUser || !!loadingAction || !!revokingSessions}
+                        onClick={() => { void handleLogoutEverywhere(); }}
+                    >
+                        {revokingSessions ? 'Disconnessione in corso...' : 'Disconnetti tutti i dispositivi'}
+                    </button>
+                </div>
             </div>
 
             {showReauthModal && (
