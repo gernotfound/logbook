@@ -31,6 +31,8 @@ L'app utilizza quattro livelli di storage con ruoli distinti:
 
 **VERIFY:** l'assenza di passphrase aggiuntiva limita la confidenzialità contro furto integrale del profilo browser o codice malevolo same-origin, che può raggiungere anche la wrapping key. Non è E2EE; dati solo offline possono andare persi se si perde il device/key. Non promettere recupero senza replica cloud.
 
+**MUST (UX):** nessun backup periodico manuale richiesto: lo storage cifrato e la replica cloud dei dati business autorizzati sono automatici. Backup JSON resta una funzione volontaria di portabilità. Non descriverlo come requisito ordinario di protezione, né promettere che sessioni guest, bozze device-only o modifiche mai sincronizzate sopravvivano alla perdita totale del profilo.
+
 ## Browser storage boundary
 
 `src/lib/sync/browserStorage.ts` centralizza i casi in cui è necessario distinguere accesso strict da best-effort:

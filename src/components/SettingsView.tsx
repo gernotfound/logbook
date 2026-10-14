@@ -204,7 +204,7 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
                     exportLibrary={exportLibrary} exportRoutines={exportRoutines} exportTrainingCycles={exportTrainingCycles}
                     onLibrarySelectionChange={setExportLibrary} onRoutinesSelectionChange={setExportRoutines} onTrainingCyclesSelectionChange={setExportTrainingCycles}
                     onExportShare={handleExportShare} onExportBackup={handleExportBackup} onExportCSV={handleExportCSV} onImportFile={handleImportFile}
-                    importingData={importingData} exportingData={exportingData}
+                    importingData={importingData} exportingData={exportingData} isGuest={isGuest}
                 />
             )}
 
