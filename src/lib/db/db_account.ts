@@ -146,7 +146,7 @@ export async function purgeCompletedAccountLocalData(owner: string) {
 }
 
 /** A clean-looking UI cannot prove that its durable offline journal is empty. */
-export class UnsyncedLogoutError extends Error {
+class UnsyncedLogoutError extends Error {
     constructor() {
         super('Logout sospeso: alcune modifiche sono ancora salvate solo sul dispositivo. Attendi la sincronizzazione o scegli esplicitamente di perderle.');
         this.name = 'UnsyncedLogoutError';
