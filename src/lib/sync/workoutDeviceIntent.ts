@@ -23,6 +23,8 @@ export type WorkoutDeviceIntent = {
     // Every snapshot names its predecessor, so committed descendants can prove
     // which unacknowledged versions they supersede without a shared write lock.
     parentIntentId?: string;
+    // Bounded ancestry proves stale retries without retaining unbounded keys.
+    ancestorIds?: string[];
     // Frozen when the first synchronous snapshot is written. Used to fence an
     // untracked pre-upgrade or cross-tab envelope, not to replace the journal.
     baseline: WorkoutSession | null;
@@ -51,6 +53,10 @@ function parseIntent(value: unknown, owner: string): WorkoutDeviceIntent | null 
         || raw.sequence < 1 || raw.sequence > MAX_SEQUENCE
         || (raw.intentId !== undefined && (typeof raw.intentId !== 'string' || !tokenPattern.test(raw.intentId)))
         || (raw.parentIntentId !== undefined && (typeof raw.parentIntentId !== 'string' || !tokenPattern.test(raw.parentIntentId)))
+        || (raw.ancestorIds !== undefined && (!Array.isArray(raw.ancestorIds) || raw.ancestorIds.length > 64
+            || raw.ancestorIds.some(id => typeof id !== 'string' || !tokenPattern.test(id))
+            || new Set(raw.ancestorIds).size !== raw.ancestorIds.length
+            || (raw.parentIntentId !== undefined && raw.ancestorIds[0] !== raw.parentIntentId)))
         || (raw.baseline !== null && (!raw.baseline || typeof raw.baseline !== 'object'))) {
         throw new Error('Metadati workout di recupero incompatibili: archivio preservato.');
     }
@@ -58,7 +64,8 @@ function parseIntent(value: unknown, owner: string): WorkoutDeviceIntent | null 
     const baseline = raw.baseline === null ? null : validatedWorkout(raw.baseline, false);
     return { __logbookWorkoutIntent: 1, owner, generation: raw.generation, sequence: raw.sequence,
         ...(raw.intentId ? { intentId: raw.intentId } : {}),
-        ...(raw.parentIntentId ? { parentIntentId: raw.parentIntentId } : {}), baseline, workout };
+        ...(raw.parentIntentId ? { parentIntentId: raw.parentIntentId } : {}),
+        ...(raw.ancestorIds ? { ancestorIds: raw.ancestorIds } : {}), baseline, workout };
 }
 
 /**
@@ -91,7 +98,7 @@ function readRecoverySlots(owner: string): Array<{ name: string; intent: Workout
 /** Never delete an independent edit: only a proved committed ancestry is pruned. */
 export async function releaseCommittedWorkoutSlot(
     owner: string,
-    intent: Pick<WorkoutDeviceIntent, 'generation' | 'sequence' | 'intentId' | 'parentIntentId'>,
+    intent: Pick<WorkoutDeviceIntent, 'generation' | 'sequence' | 'intentId' | 'parentIntentId' | 'ancestorIds'>,
 ): Promise<void> {
     if (!intent.intentId) return;
     const envelope = await readLocal(owner);
@@ -113,6 +120,13 @@ export async function releaseCommittedWorkoutSlot(
         }
         id = parent;
         parent = undefined;
+    }
+    for (const ancestorId of intent.ancestorIds ?? []) {
+        if (visited.has(ancestorId)) continue;
+        const slot = slots.get(ancestorId);
+        if (!slot) continue;
+        if (slot.intent.generation !== intent.generation) throw new WorkoutIntentConflictError('Ascendenza workout non valida.');
+        writeDeviceValue(slot.name, null, owner);
     }
 }
 
@@ -161,7 +175,10 @@ export function saveWorkoutDeviceIntent(
         __logbookWorkoutIntent: 1, owner, generation,
         sequence: (existing?.sequence ?? 0) + 1,
         intentId: token(),
-        ...(existing?.intentId ? { parentIntentId: existing.intentId } : {}),
+        ...(existing?.intentId ? {
+            parentIntentId: existing.intentId,
+            ancestorIds: [existing.intentId, ...(existing.ancestorIds ?? [])].slice(0, 64),
+        } : {}),
         baseline: existing ? existing.baseline : observedBase,
         workout,
     };
@@ -203,6 +220,7 @@ export async function recoverWorkoutDeviceIntent(owner: string, guard: LocalWrit
     const candidate = heads[0]?.intent ?? shared;
     if (!candidate) return;
     const descendsFrom = (ancestorId: string): boolean => {
+        if (candidate.ancestorIds?.includes(ancestorId)) return true;
         let cursor: WorkoutDeviceIntent | undefined = candidate;
         const seen = new Set<string>();
         while (cursor?.parentIntentId && !seen.has(cursor.parentIntentId)) {
@@ -253,7 +271,7 @@ export async function recoverWorkoutDeviceIntent(owner: string, guard: LocalWrit
     }
     await commitDomainOperations(owner, { type: 'active-workout.set', workout: intent.workout }, envelope.data, guard,
         { generation: intent.generation, sequence: intent.sequence, intentId: intent.intentId,
-            parentIntentId: intent.parentIntentId, baseline: intent.baseline });
+            parentIntentId: intent.parentIntentId, ancestorIds: intent.ancestorIds, baseline: intent.baseline });
     if (!guard()) throw new Error('Sessione cambiata durante il recupero del workout.');
     // Repair the shared snapshot if this tab crashed after writing its private
     // slot but before publishing the common device key.
