@@ -1,6 +1,8 @@
 import type { WorkoutSession } from '../../types';
 import { writeDeviceValue } from './deviceStorage';
 import { captureSession, isCurrentSession } from './session';
+import { readWorkoutDeviceIntent } from './workoutDeviceIntent';
+import equal from 'fast-deep-equal';
 
 type SessionSnapshot = ReturnType<typeof captureSession>;
 
@@ -18,6 +20,17 @@ export function persistOwnerBoundWorkoutSnapshot(
         return;
     }
 
+    // Background flush is not allowed to erase a newer, crash-replayable
+    // intent before its IndexedDB journal commit. Both live in one AEAD record.
+    if (session.owner.startsWith('user:')) {
+        const intent = readWorkoutDeviceIntent(session.owner);
+        if (intent) {
+            if (!equal(intent.workout, localWorkout)) {
+                throw new Error('Snapshot workout non coerente con la copia di recupero sul dispositivo.');
+            }
+            return;
+        }
+    }
     writeDeviceValue(
         'workout',
         localWorkout ? JSON.stringify(localWorkout) : null,

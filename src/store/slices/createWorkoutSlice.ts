@@ -7,7 +7,7 @@ import { readDeviceValueStrict, writeDeviceValue } from '../../lib/sync/deviceSt
 import type { AppState } from '../useAppStore';
 import { captureSession } from '../../lib/sync/session';
 import { assertWorkoutSessionIdentities } from '../../lib/sync/domainOperations/validation';
-import { saveWorkoutDeviceIntent, unwrapWorkoutDeviceSnapshot } from '../../lib/sync/workoutDeviceIntent';
+import { readWorkoutDeviceIntent, saveWorkoutDeviceIntent, unwrapWorkoutDeviceSnapshot } from '../../lib/sync/workoutDeviceIntent';
 
 export interface WorkoutSlice {
     localWorkout: WorkoutSession | null;
@@ -151,6 +151,13 @@ export const createWorkoutSlice: StateCreator<AppState, [], [], WorkoutSlice> = 
             ? (workoutOrUpdater as (prev: WorkoutSession | null) => WorkoutSession | null)(currentWorkout)
             : workoutOrUpdater;
         try {
+            // Generic device-only UI state (history editor, cleanup) must never
+            // silently retire a write-ahead workout intent before journal commit.
+            const existingIntent = captureSession().owner.startsWith('user:')
+                ? readWorkoutDeviceIntent(captureSession().owner) : null;
+            if (existingIntent && nextWorkout !== null && !nextWorkout.isEditingHistory) {
+                throw new Error('Intento workout ancora in recupero: salvataggio generico non consentito.');
+            }
             persistLocalWorkout(nextWorkout);
         } catch (error) {
             blockWorkoutPersistence(set, error);
