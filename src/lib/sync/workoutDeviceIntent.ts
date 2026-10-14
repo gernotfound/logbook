@@ -84,6 +84,18 @@ export function saveWorkoutDeviceIntent(
         }
     }
     if (existing && !equivalentWorkoutSnapshot(existing.workout, previous)) {
+        if (import.meta.env.MODE === 'test') {
+            const persisted = JSON.stringify(existing.workout);
+            const memory = JSON.stringify(previous);
+            console.error('Workout intent comparison diagnostic', {
+                persistedLength: persisted.length, memoryLength: memory.length,
+                persistedExerciseIds: existing.workout.exercises.map(ex => ex.id),
+                memoryExerciseIds: previous?.exercises.map(ex => ex.id),
+                persistedSetIds: existing.workout.exercises.map(ex => ex.sets.map(s => s.id)),
+                memorySetIds: previous?.exercises.map(ex => ex.sets.map(s => s.id)),
+                persistedKeys: Object.keys(existing.workout).sort(), memoryKeys: previous ? Object.keys(previous).sort() : [],
+            });
+        }
         throw new Error('Workout modificato da un’altra scheda: recupero protetto senza sovrascrivere i dati.');
     }
     if (existing && existing.sequence >= MAX_SEQUENCE) throw new Error('Contatore recupero workout esaurito.');
