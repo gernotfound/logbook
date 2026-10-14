@@ -17,7 +17,7 @@ vi.mock('idb-keyval', () => ({
 
 // Mock firebase auth
 vi.mock('../src/lib/firebase', async () => {
-    const actual = await vi.importActual('../src/lib/firebase');
+    const actual = await vi.importActual<typeof import('../src/lib/firebase')>('../src/lib/firebase');
     return {
         ...actual,
         // Share the exact Auth instance already used by session.ts. An
