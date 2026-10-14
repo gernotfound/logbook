@@ -74,6 +74,16 @@ L'accesso account/cloud richiede che Firebase Auth riporti `emailVerified === tr
 
 **MUST:** lasciare un account non verificato per usare la modalità locale esegue sign-out Firebase senza il purge dell'owner account; eventuali copie IndexedDB dell'account, progressi guest e intento di migrazione restano preservati. Prima di iniziare un nuovo guest, lo store in memoria non deve riciclare dati di un altro owner. La migrazione riprende soltanto dopo verifica e con scelta guest ancora valida o richiesta nuovamente se scaduta.
 
+## Revoca globale delle sessioni (F-03)
+
+«Disconnetti tutti i dispositivi» è un'azione distinta dal logout ordinario. Richiede conferma dell'utente, autenticazione Firebase recente, token ID verificato con revocation check e App Check limited-use consumato. Il backend determina l'UID dal token validato, non da un input client, e revoca i refresh token tramite Firebase Admin.
+
+**MUST:** il backend registra prima della revoca il limite temporale monotono `session_revocations/{uid}.revokedAfterSeconds`. Dopo la revoca lo aggiorna con il timestamp autorevole Firebase. Firestore Rules negano l'accesso ai documenti privati se `auth_time <= revokedAfterSeconds`, anche con un ID token ancora formalmente valido; il record è server-only e un record malformato blocca l'accesso. Una ripetizione dell'operazione non può arretrare il limite.
+
+**MUST:** una risposta incompleta o un errore non equivale a successo; un limite già scritto non deve essere rimosso dopo un fallimento. La cancellazione account impedisce la creazione concorrente di nuovi marker, li elimina sotto transazione e ne verifica l'assenza prima di rimuovere Firebase Auth. Il client non avvia la revoca se riscontra modifiche locali non sincronizzate o condizioni che rendono insicura la pulizia del vault; dopo una revoca confermata usa il logout ordinario protetto, senza purge forzato.
+
+**LIMITAZIONE:** la revoca blocca l'accesso cloud alle sessioni precedenti ma non elimina i dati già conservati su dispositivi offline né ne impedisce l'uso locale finché restano offline. Nessuna interfaccia deve promettere una cancellazione remota dei dati locali. Il controllo del consenso sanitario resta un requisito indipendente.
+
 ## Logout e pulizia locale
 
 `secureLogOut` propaga un errore di `auth.signOut` e conserva il locale. **Prima di invalidare Firebase Auth**, il logout autenticato rifiuta intenti di revoca/riaccettazione salute non ancora riconciliati, journal non inviati dopo una revoca confermata e journal di una generazione di consenso precedente ancora da recuperare. Il purge ordinario ripete queste verifiche, anche se chiamato direttamente; un errore di lettura del marker o dell'envelope non autorizza la cancellazione. Dopo sign-out riuscito, purga l'archivio dell'owner catturato prima del logout. Gli archivi owner-scoped degli altri utenti restano separati. L'eliminazione volontaria dell'account ha un boundary di finalizzazione separato, autorizzato solo dal completamento verificato del server.
