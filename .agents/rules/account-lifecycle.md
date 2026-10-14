@@ -70,6 +70,8 @@ L'accesso account/cloud richiede che Firebase Auth riporti `emailVerified === tr
 
 **MUST:** il blocco UI precede tutte le schermate di dati account; le Security Rules richiedono `request.auth.token.email_verified == true` su root e collezioni private e non si affidano soltanto alla UI. Le letture pubbliche del catalogo restano accessibili senza account.
 
+**MUST:** `GET/POST /api/health-consent` impone server-side il claim `email_verified === true` oltre a ID token non revocato e App Check limited-use consumato. I percorsi di cancellazione account, registrazione credenziale di recovery ed esportazione durante consenso revocato non devono ereditare questo gate indiscriminatamente: un titolare autenticato deve poter cancellare l'account o esportare solo i propri dati dopo la revoca anche quando l'email non è più verificabile. L'export trusted richiede comunque UID derivato dal token, stato `withdrawn` attestato dal server e App Check; non accetta UID forniti dal client.
+
 **MUST:** lasciare un account non verificato per usare la modalità locale esegue sign-out Firebase senza il purge dell'owner account; eventuali copie IndexedDB dell'account, progressi guest e intento di migrazione restano preservati. Prima di iniziare un nuovo guest, lo store in memoria non deve riciclare dati di un altro owner. La migrazione riprende soltanto dopo verifica e con scelta guest ancora valida o richiesta nuovamente se scaduta.
 
 ## Logout e pulizia locale
