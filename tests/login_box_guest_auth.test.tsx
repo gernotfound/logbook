@@ -163,7 +163,7 @@ describe('LoginBox guest Google authentication', () => {
         fireEvent.change(screen.getByLabelText('Conferma password'), { target: { value: 'SecurePassword123!' } });
         fireEvent.click(screen.getAllByRole('button', { name: 'Registrati' }).at(-1)!);
         await waitFor(() => expect(authMocks.registerWithEmail).toHaveBeenCalledTimes(1));
-        await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('già registrata'));
+        await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('Registrazione non completata'));
         expect(screen.queryByText('Firebase internal exception')).toBeNull();
         expect(screen.getAllByRole('button', { name: 'Registrati' }).at(-1)!.hasAttribute('disabled')).toBe(false);
     });
