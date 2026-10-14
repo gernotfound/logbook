@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const state = vi.hoisted(() => ({
   seconds: null as number | string | null,
+  deletionJobExists: false,
   revoke: vi.fn(),
   getUser: vi.fn(),
   transaction: vi.fn(),
@@ -23,15 +24,15 @@ describe('trusted all-device Firebase session revocation', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     state.seconds = null;
+    state.deletionJobExists = false;
     state.revoke.mockResolvedValue(undefined);
     state.getUser.mockResolvedValue({ tokensValidAfterTime: '1970-01-01T00:02:01.000Z' });
     state.transaction.mockImplementation(async (callback: (transaction: any) => Promise<number>) => {
       let staged: number | undefined;
       const result = await callback({
-        get: async () => ({
-          exists: state.seconds !== null,
-          data: () => ({ revokedAfterSeconds: state.seconds }),
-        }),
+        get: async (ref: { path: string }) => ref.path.startsWith('account_deletions/')
+          ? { exists: state.deletionJobExists, data: () => ({}) }
+          : { exists: state.seconds !== null, data: () => ({ revokedAfterSeconds: state.seconds }) },
         set: (_ref: unknown, data: { revokedAfterSeconds: number }) => {
           staged = data.revokedAfterSeconds;
         },
@@ -56,6 +57,13 @@ describe('trusted all-device Firebase session revocation', () => {
     } finally {
       now.mockRestore();
     }
+  });
+
+  it('rejects a concurrent account deletion before touching Auth or creating an orphan', async () => {
+    state.deletionJobExists = true;
+    await expect(revokeAllUserSessions('owner')).rejects.toThrow('Account deletion in progress.');
+    expect(state.seconds).toBeNull();
+    expect(state.revoke).not.toHaveBeenCalled();
   });
 
   it('does not erase an existing stronger barrier on retry', async () => {
