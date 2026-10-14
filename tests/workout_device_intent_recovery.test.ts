@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { update as idbUpdate } from 'idb-keyval';
-import { UserDataSchema } from '../src/lib/schema';
+import { DomainParsers, UserDataSchema } from '../src/lib/schema';
+import { equivalentWorkoutSnapshot } from '../src/lib/sync/workoutSnapshotEquality';
 import { captureSession } from '../src/lib/sync/session';
 import { readDeviceValueStrict, writeDeviceValue } from '../src/lib/sync/deviceStorage';
 import { commitDomainOperations, initializeLocal, readLocal } from '../src/lib/sync/localRepository';
@@ -58,6 +59,36 @@ describe('authenticated device-intent replay into semantic journal', () => {
         expect(final.pending).toEqual(afterLatest.pending);
         expect(final.lastWorkoutDeviceIntent?.sequence).toBe(2);
         expect(readWorkoutDeviceIntent(owner)?.workout.exercises[0].sets[0].kg).toBe('57');
+    });
+
+    it('accepts semantically identical serialized and Zod-expanded snapshots without masking competing edits', async () => {
+        const initial = data(workout('50'));
+        await initializeLocal(owner, initial);
+        const first = saveWorkoutDeviceIntent(owner, initial.activeWorkout ?? null, workout('55'), initial.activeWorkout ?? null);
+        const expanded = DomainParsers.parseActiveWorkout(first.workout);
+        if (!expanded) throw new Error('Test workout must be valid');
+
+        // Browser JSON omits undefined; the in-memory store can contain Zod defaults
+        // and optional undefined fields. These must not look like a competing tab.
+        expect(JSON.stringify(expanded)).not.toBe(JSON.stringify(first.workout));
+        expect(equivalentWorkoutSnapshot(first.workout, expanded)).toBe(true);
+        const second = saveWorkoutDeviceIntent(owner, expanded, workout('60'), initial.activeWorkout ?? null);
+        expect(second.sequence).toBe(2);
+        expect(second.generation).toBe(first.generation);
+
+        // A genuinely different value must still fail closed, preserving the
+        // latest device record rather than manufacturing a new journal intent.
+        expect(equivalentWorkoutSnapshot(second.workout, workout('61'))).toBe(false);
+        const durable = readDeviceValueStrict('workout', owner);
+        expect(() => saveWorkoutDeviceIntent(owner, workout('61'), workout('70'), initial.activeWorkout ?? null))
+            .toThrow('altra scheda');
+        expect(readDeviceValueStrict('workout', owner)).toBe(durable);
+
+        await recoverWorkoutDeviceIntent(owner, () => true);
+        const saved = await readLocal(owner);
+        expect(saved?.data.activeWorkout?.exercises[0].sets[0].kg).toBe('60');
+        expect(saved?.lastWorkoutDeviceIntent).toEqual({ generation: first.generation, sequence: 2 });
+        expect(saved?.pending.length).toBeGreaterThan(0);
     });
 
     it('accepts a durable baseline with Zod-expanded optional fields without losing its session identity', async () => {

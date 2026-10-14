@@ -3,15 +3,14 @@ import { DomainParsers } from '../schema';
 import type { WorkoutSession } from '../../types';
 
 /**
- * Browser JSON drops optional undefined fields. Zod reconstructs defaults in
- * persisted envelopes. Compare semantic workout identity, not object shape.
- * A malformed or mismatched identity never becomes an equal baseline.
+ * Device JSON omits undefined fields; Zod may materialize those same optional
+ * fields as undefined while expanding defaults. Compare the canonical persisted
+ * representation, but only after both workouts pass identity validation.
  */
 export function equivalentWorkoutSnapshot(a: WorkoutSession | null | undefined, b: WorkoutSession | null | undefined): boolean {
-    if (equal(a ?? null, b ?? null)) return true;
-    if (JSON.stringify(a ?? null) === JSON.stringify(b ?? null)) return true;
-    if (!a || !b) return false;
+    if (!a || !b) return (a ?? null) === (b ?? null);
     const left = DomainParsers.parseActiveWorkout(a);
     const right = DomainParsers.parseActiveWorkout(b);
-    return !!left?.id && left.id === right?.id && equal(left, right);
+    if (!left?.id || left.id !== right?.id) return false;
+    return equal(JSON.parse(JSON.stringify(left)), JSON.parse(JSON.stringify(right)));
 }
