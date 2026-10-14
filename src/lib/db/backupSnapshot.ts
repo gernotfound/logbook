@@ -62,6 +62,12 @@ export async function collectBackupSnapshot(fallback: UserData, includeCloud: bo
             for (const [path, raw] of withdrawnDocuments) { assertCurrent(); addRawDoc(path, raw); }
         } else {
             const db = getDb();
+            // Every supported client business transaction also advances the
+            // replica control. Compare it around this non-atomic page scan so
+            // that a concurrent device write cannot yield a mixed-state backup.
+            const controlRef = doc(db, 'users', uid, 'sync_control', 'state');
+            const beforeControl = await withTimeout(getDocFromServer(controlRef), 10000, 'Controllo versione cloud non disponibile.');
+            assertCurrent();
             const root = await withTimeout(getDocFromServer(doc(db, 'users', uid)), 10000, 'Cloud non disponibile per il backup completo.');
             assertCurrent();
             if (root.exists()) addRawDoc('', root.data());
@@ -74,6 +80,13 @@ export async function collectBackupSnapshot(fallback: UserData, includeCloud: bo
                     for (const item of page.docs) addRawDoc(name + '/' + item.id, item.data());
                     cursor = page.size === 50 ? page.docs[page.docs.length - 1] : undefined;
                 } while (cursor);
+            }
+            const afterControl = await withTimeout(getDocFromServer(controlRef), 10000, 'Controllo versione cloud non disponibile.');
+            assertCurrent();
+            if (beforeControl.exists() !== afterControl.exists()
+                || (beforeControl.exists() && !equal(beforeControl.data(), afterControl.data()))) {
+                if (consistencyAttempt === 0) return collectBackupSnapshot(fallback, includeCloud, 1);
+                throw new Error('Il cloud è cambiato durante il backup: non è possibile garantire una copia completa coerente. Riprova quando gli altri dispositivi sono inattivi.');
             }
         }
         const catalog = await getCachedCatalog();
