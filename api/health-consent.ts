@@ -1,4 +1,4 @@
-import { RequestAuthError, verifyHealthConsentRequester } from '../server/accountDeletion/httpAuth.js';
+import { RequestAuthError, requireVerifiedHealthConsentWrite, verifyHealthConsentRequester } from '../server/accountDeletion/httpAuth.js';
 import { accountDeletionCorsHeaders, requireAccountDeletionOrigin } from '../server/accountDeletion/cors.js';
 import {
   readHealthConsentState,
@@ -47,7 +47,8 @@ export async function POST(request: Request): Promise<Response> {
   const origin = request.headers.get('origin');
   try {
     requireAccountDeletionOrigin(request);
-    const { uid } = await verifyHealthConsentRequester(request);
+    const identity = await verifyHealthConsentRequester(request);
+    const { uid } = identity;
     let body: Record<string, unknown>;
     try {
       const parsed: unknown = await request.json();
@@ -56,6 +57,7 @@ export async function POST(request: Request): Promise<Response> {
     } catch { throw new ConsentInputError('Richiesta di consenso non valida.'); }
 
     if (body.action === 'accept-initial') {
+      requireVerifiedHealthConsentWrite(identity);
       try { validateExplicitAcceptance(body.acceptance); }
       catch { throw new ConsentInputError('È richiesta la prima accettazione esplicita dei documenti correnti.'); }
       if (body.expectedRevision !== 0) throw new ConsentInputError('Revisione iniziale non valida.');
@@ -68,6 +70,7 @@ export async function POST(request: Request): Promise<Response> {
       return json(await recordHealthConsentWithdrawal(uid, body.expectedRevision), 200, origin);
     }
     if (body.action === 'reaccept') {
+      requireVerifiedHealthConsentWrite(identity);
       try { validateExplicitAcceptance(body.acceptance); }
       catch { throw new ConsentInputError('È richiesta una nuova accettazione esplicita dei documenti correnti.'); }
       if (typeof body.expectedRevision !== 'number' || !Number.isSafeInteger(body.expectedRevision) || body.expectedRevision < 1) {
