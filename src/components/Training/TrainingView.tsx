@@ -1,12 +1,18 @@
+import { lazy, Suspense } from 'react';
 import TrainingSession from './TrainingSession';
-import TrainingPlanning from './planning/TrainingPlanning';
-import TrainingRoutines from './TrainingRoutines';
-import TrainingExercises from './TrainingExercises';
-import TrainingHistory from './TrainingHistory';
 import SubNav from '../UI/SubNav';
 import { useWorkoutSession } from '../../hooks/useWorkoutSession';
 import type { WorkoutSession, TrainingSubTab } from '../../types';
 import './training.css';
+
+// The active workout must remain immediately available. Secondary panels are
+// loaded only on demand; the PWA precache still covers their chunks offline.
+const TrainingPlanning = lazy(() => import('./planning/TrainingPlanning'));
+const TrainingRoutines = lazy(() => import('./TrainingRoutines'));
+const TrainingExercises = lazy(() => import('./TrainingExercises'));
+const TrainingHistory = lazy(() => import('./TrainingHistory'));
+
+const SUBTAB_LOADING = <p role="status" className="text-muted">Caricamento sottosezione in corso…</p>;
 
 const TRAINING_TABS: ReadonlyArray<{ id: TrainingSubTab; label: string }> = [
     { id: 'session', label: 'Sessione' },
@@ -51,12 +57,14 @@ const TrainingView = ({ subTab = 'session', setSubTab }: TrainingViewProps) => {
             )}
             {subTab === 'planning' && (
                 <div id="training-panel-planning" role="tabpanel" aria-labelledby="training-tab-planning">
-                    <TrainingPlanning onOpenSession={() => setSubTab?.('session')} />
+                    <Suspense fallback={SUBTAB_LOADING}>
+                        <TrainingPlanning onOpenSession={() => setSubTab?.('session')} />
+                    </Suspense>
                 </div>
             )}
-            {subTab === 'routines' && <div id="training-panel-routines" role="tabpanel" aria-labelledby="training-tab-routines"><TrainingRoutines /></div>}
-            {subTab === 'exercises' && <div id="training-panel-exercises" role="tabpanel" aria-labelledby="training-tab-exercises"><TrainingExercises /></div>}
-            {subTab === 'history' && <div id="training-panel-history" role="tabpanel" aria-labelledby="training-tab-history"><TrainingHistory onEditWorkout={handleEditWorkout} /></div>}
+            {subTab === 'routines' && <div id="training-panel-routines" role="tabpanel" aria-labelledby="training-tab-routines"><Suspense fallback={SUBTAB_LOADING}><TrainingRoutines /></Suspense></div>}
+            {subTab === 'exercises' && <div id="training-panel-exercises" role="tabpanel" aria-labelledby="training-tab-exercises"><Suspense fallback={SUBTAB_LOADING}><TrainingExercises /></Suspense></div>}
+            {subTab === 'history' && <div id="training-panel-history" role="tabpanel" aria-labelledby="training-tab-history"><Suspense fallback={SUBTAB_LOADING}><TrainingHistory onEditWorkout={handleEditWorkout} /></Suspense></div>}
         </div>
     );
 };
