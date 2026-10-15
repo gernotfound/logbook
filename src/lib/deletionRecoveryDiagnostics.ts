@@ -71,7 +71,7 @@ export function classifyRecoveryFailure(operation: RecoveryOperation, error: unk
         return { operation: 'local-finalization', phase: 'local-finalization', kind: 'integrity', transient: false };
     }
     if (code === 'account-deletion-marker-corrupt' || code === 'account-deletion-device-credential-corrupt'
-        || code === 'browser-storage-error') {
+        || code === 'browser-storage-error' || error instanceof Error && error.name === 'BrowserStorageError') {
         return { operation, phase: 'storage', kind: 'integrity', transient: false };
     }
     if (error instanceof DeletionDeadlineExceededError || error instanceof Error && /TimeoutError$/.test(error.name)) {
