@@ -297,8 +297,17 @@ class AccountDeletionRequestTimeoutError extends Error {
     }
 }
 
+class AccountDeletionLocalFinalizationError extends Error {
+    readonly code = 'account-deletion-local-finalization-failed';
+
+    constructor(message: string, cause?: unknown) {
+        super(message, cause instanceof Error ? { cause } : undefined);
+        this.name = 'AccountDeletionLocalFinalizationError';
+    }
+}
+
 export class AccountDeletionReceiptNotFoundError extends Error {
-    constructor() {
+    constructor(readonly uid?: string) {
         super('La ricevuta locale non è più riconosciuta dal server. La copia locale resta conservata fino alla verifica del dispositivo.');
         this.name = 'AccountDeletionReceiptNotFoundError';
     }
@@ -385,7 +394,7 @@ async function fetchAccountDeletionStatus(marker: AccountDeletionMarker, timeout
         assertDeletionDeadlineActive(signal);
         return { response, body };
     }, timeoutMs, () => new AccountDeletionRequestTimeoutError());
-    if (response.status === 404) throw new AccountDeletionReceiptNotFoundError();
+    if (response.status === 404) throw new AccountDeletionReceiptNotFoundError(marker.uid);
     if (!response.ok) {
         throw new Error(typeof body.error === 'string'
             ? body.error
@@ -412,7 +421,7 @@ export async function finalizeCompletedDeletionForUid(uid: string, context: Acco
         try {
             await auth.signOut();
         } catch (error) {
-            throw new Error('Account cloud eliminato, ma la sessione locale non è stata chiusa. Copia locale conservata; riapri LogBook per completare la pulizia.', { cause: error });
+            throw new AccountDeletionLocalFinalizationError('Account cloud eliminato, ma la sessione locale non è stata chiusa. Copia locale conservata; riapri LogBook per completare la pulizia.', error);
         }
     }
 
@@ -430,7 +439,7 @@ export async function finalizeCompletedDeletionForUid(uid: string, context: Acco
         }
         return { status: 'complete' };
     } catch (error) {
-        throw new Error('Account cloud eliminato, ma pulizia locale incompleta. Riapri LogBook per completare la pulizia dei dati su questo dispositivo.', { cause: error });
+        throw new AccountDeletionLocalFinalizationError('Account cloud eliminato, ma pulizia locale incompleta. Riapri LogBook per completare la pulizia dei dati su questo dispositivo.', error);
     }
 }
 

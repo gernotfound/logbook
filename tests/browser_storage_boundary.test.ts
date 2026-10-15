@@ -124,7 +124,7 @@ describe('browser storage boundary', () => {
 
     it('keeps deletion-recovery credential writes on the strict browser-storage boundary', () => {
         localStorage.setItem('logbook_deletion_recovery_devices_v1', JSON.stringify([
-            { uid: 'test-user', token: 'token' },
+            { uid: 'test-user', token: 'A'.repeat(43) },
         ]));
         localStorageMock.removeItem.mockImplementationOnce(storageFailure);
 

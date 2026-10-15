@@ -6,7 +6,7 @@ import {
     resumeAccountDeletion,
     type AccountDeletionCompletionContext,
 } from '../lib/db/db_account';
-import { listPendingAccountDeletions } from '../lib/sync/accountGate';
+import { isAccountDeletionPending, listPendingAccountDeletions } from '../lib/sync/accountGate';
 import { useDialogStore } from '../store/useDialogStore';
 import { useAppStore } from '../store/useAppStore';
 import {
@@ -14,6 +14,7 @@ import {
     recoverDeletedAccountOnThisDevice,
 } from '../lib/deletionDeviceRecovery';
 import { reportError } from '../lib/errorHandler';
+import { RecoveryDiagnosticTracker } from '../lib/deletionRecoveryDiagnostics';
 
 export const DEVICE_RECOVERY_RECHECK_INTERVAL_MS = 5 * 1000;
 const DEVICE_RECOVERY_FAILURE_RETRY_MS = 30 * 1000;
@@ -31,6 +32,8 @@ export function AccountDeletionRecovery() {
         let disposed = false;
         let running = false;
         let nextDeviceRecoveryAt = 0;
+        const diagnostics = new RecoveryDiagnosticTracker();
+        const lastAlertAt = new Map<string, number>();
 
         const completionContext: AccountDeletionCompletionContext = {
             purgeAllLocalUserData: owner => DB.purgeCompletedAccountLocalData(owner),
@@ -40,7 +43,7 @@ export function AccountDeletionRecovery() {
 
         const recoverByDevice = async (force: boolean) => {
             const now = Date.now();
-            if (!force && now < nextDeviceRecoveryAt) return { status: 'none' as const };
+            if (!force && now < nextDeviceRecoveryAt) return null;
 
             nextDeviceRecoveryAt = now + DEVICE_RECOVERY_FAILURE_RETRY_MS;
             try {
@@ -55,60 +58,88 @@ export function AccountDeletionRecovery() {
             }
         };
 
-        const showPending = (message: string) => {
-            // A dialog left open must not hold the recovery mutex.
+        const showPending = (message: string, category: string) => {
+            // Lifecycle events may repeat the same incomplete recovery; do not
+            // continually interrupt the user. The server/local safety gates remain active.
+            const now = Date.now();
+            if (now - (lastAlertAt.get(category) ?? -Infinity) < 60_000) return;
+            lastAlertAt.set(category, now);
             if (!disposed) void useDialogStore.getState().showAlert(message).catch(error => {
                 reportError(error, { source: 'account_deletion_recovery_dialog' });
             });
         };
+
+        const recordFailure = (operation: 'routine-check' | 'pending-deletion' | 'local-finalization', error: unknown) =>
+            diagnostics.recordFailure(operation, error, (summary, source) => {
+                reportError(summary, { source });
+                console.warn('Diagnostica tecnica recupero account:', summary.message);
+            });
 
         const reconcile = async (forceDeviceRecovery = false) => {
             if (disposed || running) return;
             if (typeof navigator !== 'undefined' && !navigator.onLine) return;
 
             running = true;
-            let pendingDeletion: boolean | null = null;
             try {
-                const snapshot = listPendingAccountDeletions();
-                pendingDeletion = snapshot.markers.length > 0 || snapshot.corrupt.length > 0;
+                let pendingDeletion = false;
                 let markerError: unknown;
-                if (pendingDeletion) {
-                    try {
+                try {
+                    const snapshot = listPendingAccountDeletions();
+                    pendingDeletion = snapshot.markers.length > 0 || snapshot.corrupt.length > 0;
+                    if (pendingDeletion) {
                         const outcome = await resumeAccountDeletion(completionContext);
-                        if (outcome?.status === 'pending') showPending(outcome.message);
-                    } catch (error) {
-                        markerError = error;
+                        diagnostics.recordSuccess('pending-deletion');
+                        if (outcome?.status === 'complete') diagnostics.recordSuccess('local-finalization');
+                        if (outcome?.status === 'pending') showPending(outcome.message, 'pending-deletion');
+                    } else {
+                        diagnostics.recordSuccess('pending-deletion');
                     }
+                } catch (error) {
+                    markerError = error;
                 }
 
-                // Check device receipts independently of any local marker. A newer,
-                // incomplete deletion must not starve an older completed one.
+                // A device can prove that a different owner's deletion completed.
+                // Always attempt it even if another marker is corrupt or failed.
                 let deviceError: unknown;
                 let deviceOutcome: Awaited<ReturnType<typeof recoverDeletedAccountOnThisDevice>> = { status: 'none' };
                 try {
-                    deviceOutcome = await recoverByDevice(forceDeviceRecovery || markerError instanceof AccountDeletionReceiptNotFoundError);
-                    if (deviceOutcome.status === 'pending') showPending(deviceOutcome.message);
+                    const result = await recoverByDevice(forceDeviceRecovery || markerError instanceof AccountDeletionReceiptNotFoundError);
+                    if (result) {
+                        deviceOutcome = result;
+                        diagnostics.recordSuccess('routine-check');
+                        if (deviceOutcome.status === 'pending') showPending(deviceOutcome.message, 'local-finalization-pending');
+                    }
                 } catch (error) {
                     deviceError = error;
                 }
-                if (markerError && !(markerError instanceof AccountDeletionReceiptNotFoundError && deviceOutcome.status !== 'none')) {
-                    throw markerError;
-                }
-                if (deviceError) throw deviceError;
-            } catch (error) {
-                reportError(error, { source: 'account_deletion_recovery' });
-                console.warn('Recovery cancellazione account non completato:', error);
 
-                const shouldSurface = pendingDeletion !== false
-                    || error instanceof DeletionRecoveryFinalizationError;
-                if (shouldSurface && !disposed) {
-                    const message = error instanceof DeletionRecoveryFinalizationError
-                        ? error.message
-                        : pendingDeletion === true && error instanceof Error
-                            ? error.message
-                            : UNKNOWN_RECOVERY_MESSAGE;
-                    showPending(message);
+                // A successful proof for owner B cannot clear an unrecognized
+                // receipt belonging to A. Suppress a 404 only if that exact
+                // owner's local marker was actually finalized.
+                const markerWasFinalized = markerError instanceof AccountDeletionReceiptNotFoundError
+                    && Boolean(markerError.uid) && deviceOutcome.status !== 'none'
+                    && !isAccountDeletionPending('user:' + markerError.uid);
+                if (deviceError) {
+                    const operation = deviceError instanceof DeletionRecoveryFinalizationError
+                        ? 'local-finalization' : 'routine-check';
+                    const failure = recordFailure(operation, deviceError);
+                    if (deviceError instanceof DeletionRecoveryFinalizationError) {
+                        showPending(deviceError.message, 'local-finalization-error');
+                    } else if (failure.kind === 'remote-failed') {
+                        showPending('La cancellazione cloud non è stata completata. Alcuni dati potrebbero già essere stati eliminati; la copia locale è conservata. Riprova dalle impostazioni.', 'cloud-deletion-failed');
+                    } else if (failure.kind === 'integrity' || failure.kind === 'invalid-response'
+                        || (pendingDeletion && !markerError && !failure.transient)) {
+                        showPending(UNKNOWN_RECOVERY_MESSAGE, 'device-recovery-error');
+                    }
                 }
+
+                if (markerError && !markerWasFinalized) {
+                    recordFailure('pending-deletion', markerError);
+                    const message = markerError instanceof Error && pendingDeletion
+                        ? markerError.message : UNKNOWN_RECOVERY_MESSAGE;
+                    showPending(message, 'pending-deletion-error');
+                }
+
             } finally {
                 running = false;
             }
