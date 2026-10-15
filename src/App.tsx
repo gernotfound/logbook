@@ -30,7 +30,7 @@ import BottomNav from './components/UI/BottomNav';
 import { GlobalDialog } from './components/UI/GlobalDialog';
 import { ConsentOverlay } from './components/UI/ConsentOverlay';
 import { HealthConsentSuspended } from './components/UI/HealthConsentSuspended';
-import { currentHealthConsentStatus, getGuestHealthConsentStatus, getServerConfirmedLegalConsent, refreshHealthConsent, refreshHealthConsentFromStorage, subscribeHealthConsent } from './lib/healthConsent';
+import { currentHealthConsentStatus, getGuestHealthConsentStatus, getServerConfirmedLegalConsent, isHealthConsentLocalOnly, refreshHealthConsent, refreshHealthConsentFromStorage, subscribeHealthConsent } from './lib/healthConsent';
 import { needsLegalUpdate } from './lib/legalVersions';
 import { LoginBox } from './components/UI/LoginBox';
 import { EmailVerificationGate } from './components/UI/EmailVerificationGate';
@@ -522,6 +522,11 @@ function OwnerBoundApp({ startupTab }: { startupTab: string | null }) {
         </div>
       )}
       {isGuest && <GuestBanner onLogin={openGuestLogin} />}
+      {currentUser && isHealthConsentLocalOnly(currentUser.uid) && (
+        <div className="guest-banner" role="status" aria-live="polite">
+          <span className="guest-banner-text">Solo su questo dispositivo · Consenso riattivato offline. Il cloud resta sospeso fino alla verifica del server; eventuali modifiche da recuperare saranno conservate.</span>
+        </div>
+      )}
       {showSyncIndicator && (
         <div
           className="sync-indicator"

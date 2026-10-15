@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const boundary = vi.hoisted(() => ({
   localStatus: 'reaccepting' as string,
+  offlineReaccept: false,
   serverStatus: 'withdrawn' as string,
   serverRead: vi.fn(async () => 'withdrawn' as string),
   trustedExport: vi.fn(async () => new Map([['', {
@@ -32,6 +33,7 @@ const boundary = vi.hoisted(() => ({
 
 vi.mock('../src/lib/healthConsent', () => ({
   currentHealthConsentStatus: () => boundary.localStatus,
+  hasUnreconciledOfflineReaccept: () => boundary.offlineReaccept,
   readHealthConsentServerStatus: boundary.serverRead,
 }));
 vi.mock('../src/lib/firebase', () => ({
@@ -71,6 +73,7 @@ import { UserDataSchema } from '../src/lib/schema';
 beforeEach(() => {
   vi.clearAllMocks();
   boundary.localStatus = 'reaccepting';
+  boundary.offlineReaccept = false;
   boundary.serverStatus = 'withdrawn';
   boundary.serverRead.mockImplementation(async () => boundary.serverStatus);
   boundary.trustedExport.mockResolvedValue(new Map([['', {
@@ -112,6 +115,25 @@ describe('health consent rights export transport routing', () => {
     expect(boundary.trustedExport).toHaveBeenCalledTimes(1);
     expect(boundary.directRootRead).not.toHaveBeenCalled();
     expect(boundary.controlRead).not.toHaveBeenCalled();
+  });
+
+  it('blocks every cloud backup request before the offline local-only consent reconciles', async () => {
+    boundary.localStatus = 'active';
+    boundary.offlineReaccept = true;
+    await expect(exportSnapshot()).rejects.toThrow('solo sul dispositivo');
+    expect(boundary.serverRead).not.toHaveBeenCalled();
+    expect(boundary.trustedExport).not.toHaveBeenCalled();
+    expect(boundary.directRootRead).not.toHaveBeenCalled();
+    expect(boundary.controlRead).not.toHaveBeenCalled();
+  });
+
+  it('allows verified server reacceptance recovery to read cloud even with the local intent retained', async () => {
+    boundary.localStatus = 'recovery-required';
+    boundary.offlineReaccept = true;
+    boundary.serverStatus = 'active';
+    await exportSnapshot();
+    expect(boundary.serverRead).toHaveBeenCalledTimes(1);
+    expect(boundary.directRootRead).toHaveBeenCalledTimes(1);
   });
 
   it('keeps verified active sessions on the ordinary least-privileged read path', async () => {

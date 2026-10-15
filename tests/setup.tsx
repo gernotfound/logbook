@@ -31,6 +31,8 @@ vi.mock('../src/lib/healthConsent', () => ({
   subscribeHealthConsent: vi.fn(() => () => {}),
   currentHealthConsentStatus: vi.fn(() => 'active'),
   getServerConfirmedLegalConsent: vi.fn(() => null),
+  isHealthConsentLocalOnly: vi.fn(() => false),
+  hasUnreconciledOfflineReaccept: vi.fn(() => false),
   registerInitialHealthConsent: vi.fn(),
   beginHealthConsentVerification: vi.fn(),
   refreshHealthConsent: vi.fn(async () => 'active'),
@@ -46,6 +48,7 @@ vi.mock('../src/lib/healthConsent', () => ({
   requireHealthConsentWritable: vi.fn(),
   withdrawHealthConsent: vi.fn(),
   reacceptHealthConsent: vi.fn(),
+  reacceptHealthConsentLocally: vi.fn(),
   finishHealthConsentReacceptance: vi.fn(),
 }));
 

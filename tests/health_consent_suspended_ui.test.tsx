@@ -3,7 +3,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { User } from 'firebase/auth';
 import { HealthConsentSuspended } from '../src/components/UI/HealthConsentSuspended';
-import { finishHealthConsentReacceptance, registerInitialHealthConsent, reacceptHealthConsent, refreshHealthConsent } from '../src/lib/healthConsent';
+import { finishHealthConsentReacceptance, registerInitialHealthConsent, reacceptHealthConsent, reacceptHealthConsentLocally, refreshHealthConsent } from '../src/lib/healthConsent';
+import { safeHardReload } from '../src/lib/sync/safeReload';
+vi.mock('../src/lib/sync/safeReload', () => ({ safeHardReload: vi.fn(async () => {}) }));
 
 vi.mock('../src/hooks/useSettings', () => ({
   useSettings: () => ({
@@ -126,5 +128,63 @@ describe('suspended health-consent screen', () => {
     expect(checkboxInputs().every(input => !input.disabled)).toBe(true);
     expect(reacceptButton().disabled).toBe(true);
     expect(screen.getByRole('status').textContent).toContain('Nuovo consenso in fase di completamento');
+  });
+});
+
+describe('account consent withdrawal offline', () => {
+  it('offers a separate local-only consent after pending withdrawal and checks both boxes', async () => {
+    const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    try {
+      render(<HealthConsentSuspended status="pending" user={account} />);
+      const button = screen.getByRole('button', { name: 'Riattiva solo su questo dispositivo' }) as HTMLButtonElement;
+      expect(button.disabled).toBe(true);
+      const [terms, health] = checkboxInputs();
+      expect(terms.disabled).toBe(false);
+      expect(health.disabled).toBe(false);
+      expect(screen.getByText(/cloud resterà sospeso/i)).toBeDefined();
+      expect(screen.getByRole('button', { name: 'Ricarica TheLogBook' })).toBeDefined();
+      fireEvent.click(terms);
+      expect(button.disabled).toBe(true);
+      fireEvent.click(health);
+      expect(button.disabled).toBe(false);
+      fireEvent.click(button);
+      await waitFor(() => expect(reacceptHealthConsentLocally).toHaveBeenCalledTimes(1));
+      expect(reacceptHealthConsent).not.toHaveBeenCalled();
+      expect(vi.mocked(reacceptHealthConsentLocally).mock.calls[0][1]).toMatchObject({
+        acceptedTerms: true, acceptedHealthData: true,
+      });
+    } finally {
+      online.mockRestore();
+    }
+  });
+
+  it('uses the safe persistence barrier for a visible reload action, including after reconnect', async () => {
+    const onLine = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
+    try {
+      vi.mocked(safeHardReload).mockRejectedValueOnce(new Error('Salvataggi non completati.'));
+      render(<HealthConsentSuspended status="pending" user={account} />);
+      fireEvent.click(screen.getByRole('button', { name: 'Ricarica TheLogBook' }));
+      await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('Salvataggi non completati.'));
+      expect(safeHardReload).toHaveBeenCalledTimes(1);
+    } finally { onLine.mockRestore(); }
+  });
+
+  it('retries the trusted verification when connectivity returns to a suspended screen', async () => {
+    const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    try {
+      render(<HealthConsentSuspended status="pending" user={account} />);
+      online.mockReturnValue(true);
+      fireEvent(window, new Event('online'));
+      const verify = screen.getByRole('button', { name: 'Riprova a verificare il consenso' });
+      expect(verify).toBeDefined();
+      // AuthProvider owns automatic rechecks; the suspended screen only
+      // exposes a manual retry instead of racing that foreground listener.
+      expect(refreshHealthConsent).not.toHaveBeenCalled();
+      fireEvent.click(verify);
+      await waitFor(() => expect(refreshHealthConsent).toHaveBeenCalledWith(account));
+      expect(screen.getByRole('button', { name: 'Ricarica TheLogBook' })).toBeDefined();
+    } finally {
+      online.mockRestore();
+    }
   });
 });
