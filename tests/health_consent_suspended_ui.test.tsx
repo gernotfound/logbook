@@ -4,6 +4,8 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { User } from 'firebase/auth';
 import { HealthConsentSuspended } from '../src/components/UI/HealthConsentSuspended';
 import { finishHealthConsentReacceptance, registerInitialHealthConsent, reacceptHealthConsent, reacceptHealthConsentLocally, refreshHealthConsent } from '../src/lib/healthConsent';
+import { safeHardReload } from '../src/lib/sync/safeReload';
+vi.mock('../src/lib/sync/safeReload', () => ({ safeHardReload: vi.fn(async () => {}) }));
 
 vi.mock('../src/hooks/useSettings', () => ({
   useSettings: () => ({
@@ -154,6 +156,17 @@ describe('account consent withdrawal offline', () => {
     } finally {
       online.mockRestore();
     }
+  });
+
+  it('uses the safe persistence barrier for a visible reload action, including after reconnect', async () => {
+    const onLine = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
+    try {
+      vi.mocked(safeHardReload).mockRejectedValueOnce(new Error('Salvataggi non completati.'));
+      render(<HealthConsentSuspended status="pending" user={account} />);
+      fireEvent.click(screen.getByRole('button', { name: 'Ricarica TheLogBook' }));
+      await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('Salvataggi non completati.'));
+      expect(safeHardReload).toHaveBeenCalledTimes(1);
+    } finally { onLine.mockRestore(); }
   });
 
   it('retries the trusted verification when connectivity returns to a suspended screen', async () => {
