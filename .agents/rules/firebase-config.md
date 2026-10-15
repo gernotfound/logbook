@@ -1,5 +1,8 @@
 # Configurazione Firebase — TheLogBook
 
+**Quando leggere:** Firebase Auth, App Check, Firestore Rules/indici, WIF, CSP e deployment.
+**Non inferire:** `permission-denied` non discrimina da solo Auth, Rules o App Check; Emulator e Production sono prove differenti.
+
 > Stato: normativo | Ricognizione originaria: 2026-09-30; stato live da verificare nel provider | File allora verificati: `src/lib/firebase.ts`, `src/lib/appCheck.ts`, `server/accountDeletion/firebaseAdmin.ts`, `api/account-deletion-cron.ts`, `firestore.rules`, `firebase.json`, `.firebaserc`, `vercel.json`, `.env.example`
 
 ## Tre contratti di configurazione distinti

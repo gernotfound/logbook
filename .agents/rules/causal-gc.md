@@ -1,5 +1,8 @@
 # Causal Metadata Garbage Collection - TheLogBook
 
+**Quando leggere:** vector clock, tombstone, stable frontier, compaction e replica retirement.
+**Non inferire:** vincere un tie-break non prova la copertura causale necessaria per eliminare metadata.
+
 > Stato: normativo da M4 | Baseline M3: `359e3bfdb45952ccce8a00478e2157f53f468dea`
 
 ## Obiettivo

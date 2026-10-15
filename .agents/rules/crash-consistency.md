@@ -1,5 +1,8 @@
 # Crash Consistency e Recovery - TheLogBook
 
+**Quando leggere:** commit locale, replay, lost acknowledgement, interruzioni e concorrenza remote-to-ack.
+**Non inferire:** esito remoto ambiguo non è né ack certo né prova di fallimento: preservare e verificare il journal.
+
 > Stato: normativo da M3 | Baseline: `17fa94ce2c7b436b4b382f88acf05eddcb624efc`
 
 ## Obiettivo
@@ -30,7 +33,8 @@ Firestore applica il batch semantico tramite transazione.
 
 **MUST:** in questo caso la pending operation resta durevole e può essere reinviata.
 
-**MUST:** `replicateJournal()` classifica il risultato come `local-pending` dopo qualunque esito remoto ambiguo — inclusi perdita della risposta di `runTransaction`, `unavailable`/`deadline-exceeded` dopo la consegna e timeout del chiamante — solo dopo aver riletto IndexedDB e verificato che l'intero batch di operation consegnato sia ancora presente nel journal con payload semantico completo identico, inclusi value, clock e guard. Se l'envelope è assente, corrotto, incompatibile o conserva solo una parte del batch consegnato, l'esito è `failed`. Un timeout non cancella il writer in-flight e deve quindi usare la stessa prova durevole del batch prima di essere presentato come pending sicuro.
+**MUST:** `replicateJournal()` classifica il risultato come `local-pending` dopo qualunque esito remoto ambiguo — inclusi perdita della risposta di `runTransaction`, `unavailable`/`deadline-exceeded` dopo la consegna e timeout del chiamante — solo dopo aver riletto IndexedDB e verificato che l'intero batch di operation consegnato sia ancora presente nel journal con payload semantico completo identico, inclusi value, clock e guard.
+Se l'envelope è assente, corrotto, incompatibile o conserva solo una parte del batch consegnato, l'esito è `failed`. Un timeout non cancella il writer in-flight e deve quindi usare la stessa prova durevole del batch prima di essere presentato come pending sicuro.
 
 **MUST:** il replay della stessa operation non deve modificare nuovamente il business winner né produrre causal metadata differenti.
 

@@ -1,5 +1,8 @@
 # Modello Dati e Validazione Zod — TheLogBook
 
+**Quando leggere:** nuove chiavi, identità business, UserData, Zod, proiezioni Firestore e shard mensili.
+**Non inferire:** record remoto invalido non equivale a cancellazione business; sanitizzazione parziale non dimostra completezza del mese.
+
 > Stato: normativo | Ricognizione originaria: 2026-09-20; rivalidare implementazione e contratti all'HEAD attuale | File allora verificati: `src/types.ts`, `src/lib/schema.ts`, `src/lib/schemas/*.ts`, `src/lib/merge.ts`, `src/lib/db.ts`, `src/lib/sync/documentProjection.ts`, `src/lib/sync/domainOperations.ts`, `firestore.rules`
 
 ## Quattro piani distinti

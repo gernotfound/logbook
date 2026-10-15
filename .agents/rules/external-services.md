@@ -1,5 +1,8 @@
 # Servizi esterni e configurazione fuori repository
 
+**Quando leggere:** GitHub/ruleset, Firebase, Google Cloud, Vercel, Sentry, Snyk, IAM, domini e dismissioni.
+**Non inferire:** configurazione nel repository, CI e deploy riusciti non certificano da soli quote, permessi o stato runtime del provider.
+
 Questa regola disciplina i sistemi esterni la cui configurazione effettiva non è rappresentata integralmente dal repository Git.
 
 Il registro decisionale stabile e leggibile anche fuori dal codice è `docs/operations/external-services-register.md`.

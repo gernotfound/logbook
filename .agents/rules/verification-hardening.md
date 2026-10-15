@@ -1,5 +1,8 @@
 # Verification hardening — M5
 
+**Quando leggere:** test normativi, boundary produzione, mock, oracle e assert osservabili.
+**Non inferire:** un test che reimplementa la funzione può passare senza verificare il runtime.
+
 ## Scope normativo
 
 M5 distingue tra test normativi di accettazione e suite legacy/stress. Un test normativo è una prova del comportamento solo se attraversa il codice di produzione responsabile del comportamento oppure usa un oracle indipendente.
