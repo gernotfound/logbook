@@ -32,6 +32,9 @@ describe('scala tipografica canonica', () => {
     expect(tokens).toMatch(/--font-size-body:\s*0\.9375rem/);
     expect(tokens).toMatch(/--font-size-control:\s*1rem/);
     expect(tokens).toMatch(/--font-size-page:\s*1\.375rem/);
+    expect(tokens).toMatch(/--font-size-brand-title:\s*2rem/);
+    const uiSurfaces = fs.readFileSync(path.join(ROOT, 'src/styles/ui-surfaces.css'), 'utf8');
+    expect(uiSurfaces).toMatch(/\.auth-entry-title\s*\{[^}]*font-size:\s*var\(--font-size-brand-title\)/);
   });
 
   it('non introduce dimensioni CSS arbitrarie nel codice applicativo', () => {
