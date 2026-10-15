@@ -11,3 +11,5 @@ Supporta backup, importazione ed esportazione dei dati.
 **Apri la PWA:** https://thelogbook.web.app/
 
 **Documentazione:** [Indice completo](docs/README.md) · [Regole AI](AGENTS.md) · [Contratti specialistici](.agents/rules/)
+
+**Lavori da pianificare e seguire:** [GitHub Issues](https://github.com/gernotfound/logbook/issues) (es. [ambiente Firebase Test isolato](https://github.com/gernotfound/logbook/issues/426)).

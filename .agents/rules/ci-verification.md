@@ -36,6 +36,7 @@ La parallelizzazione riguarda l'orchestrazione, non la semantica del gate. Unit,
 - MUST: la CI parallela include lo stesso `test:repo-hygiene` tra i leaf command obbligatori.
 - MUST: modifiche tracciate o file non tracciati non ignorati presenti prima della verifica rendono il risultato non autorevole e fanno fallire il gate.
 - MUST: i file testuali controllati dal gate sono UTF-8 valido senza BOM.
+- MUST: `test:repo-hygiene` verifica anche i collegamenti interni relativi nei Markdown tracciati; un target locale mancante o un path che esce dal repository blocca la CI. I link web esterni e i frammenti/anchor non costituiscono prova live e sono esclusi da questo controllo.
 - MUST: il gate non riscrive automaticamente file malformati.
 
 ### Repository documentation hygiene
