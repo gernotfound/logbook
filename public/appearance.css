@@ -8,6 +8,7 @@
     --font-size-control: 1rem;       /* 16px: titoli di riga/controlli */
     --font-size-section: 1.125rem;   /* 18px: titoli di sezione */
     --font-size-page: 1.375rem;      /* 22px: titoli pagina */
+    --font-size-brand-title: 2rem;   /* 32px: titolo introduttivo del marchio */
     --font-size-display-sm: 1.25rem; /* 20px: dati in evidenza */
     --font-size-display-md: 1.5rem;  /* 24px: dati/display */
     --font-size-display-xl: 1.75rem; /* 28px: dati/display */
