@@ -91,6 +91,8 @@ const NutritionHistory: React.FC<NutritionHistoryProps> = ({ nutritionHistory, o
                     {displayedCount < nutritionHistory.length && (
                         <button
                             type="button"
+                            className="btn btn-secondary"
+                            style={{ alignSelf: 'center' }}
                             onClick={() => onShowMore ? onShowMore() : setLocalVisibleCount(count => count + NUTRITION_HISTORY_PAGE_SIZE)}
                             aria-label={`Mostra altri giorni dello storico pasti (${nutritionHistory.length - displayedCount} rimanenti)`}
                         >
