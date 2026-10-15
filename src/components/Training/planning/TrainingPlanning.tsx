@@ -1,5 +1,6 @@
 import { dispatchDurableOperation } from '../../../lib/sync/dispatchDurableOperation';
 import { useMemo, useState } from 'react';
+import { useLocalToday } from '../../../hooks/useLocalToday';
 import { Copy, Dumbbell, Pencil, Trash2 } from 'lucide-react';
 import { useAppStore } from '../../../store/useAppStore';
 import { useDialogStore } from '../../../store/useDialogStore';
@@ -72,7 +73,8 @@ export default function TrainingPlanning({ onOpenSession }: TrainingPlanningProp
         () => calculateCycleMacroVolume(activeCycle, routines, library),
         [activeCycle, library, routines]
     );
-    const activeCycleTimeline = useMemo(() => Logic.calculateCycleTimeline(activeCycle), [activeCycle]);
+    const today = useLocalToday();
+    const activeCycleTimeline = useMemo(() => Logic.calculateCycleTimeline(activeCycle, today), [activeCycle, today]);
     const nextScheduled = useMemo(
         () => Logic.getNextScheduledRoutine(activeCycle, routines, history),
         [activeCycle, history, routines]
