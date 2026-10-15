@@ -105,6 +105,23 @@ describe('monthly Firestore read boundaries', () => {
         expect(documents.size).toBe(0);
     });
 
+    it('refuses damaged nested workout sets and segments before treating a shard as complete', async () => {
+        const state = draft();
+        const docs = cloudDocuments();
+        firestore.getDoc.mockResolvedValue(snapshot({
+            w: { id: 'w', date: '2026-05-11', exercises: [
+                { exId: 'e1', sets: [{ id: 's1', segments: [
+                    { id: 'good', kg: '10', reps: '10' },
+                    { id: '', kg: '12', reps: '8' },
+                ] }] },
+            ] },
+        }));
+        await expect(loadHistoryMonths(owner, ['2026-05'], state, docs))
+            .rejects.toThrow('elenco w/sets/segments incompleto');
+        expect(state.history).toEqual([]);
+        expect(docs.size).toBe(0);
+    });
+
     it('does not publish an earlier valid shard if a later history shard is malformed', async () => {
         const state = draft();
         const docs = cloudDocuments();

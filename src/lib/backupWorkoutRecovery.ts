@@ -5,13 +5,13 @@ import { readDeviceValueStrict } from './sync/deviceStorage';
 import { writeWorkoutTimerSnapshot, type WorkoutTimerSnapshot } from './utils/timer';
 import type { SyncResult, UserData, WorkoutSession } from '../types';
 
-export interface PortableWorkoutRecoveryState {
+interface PortableWorkoutRecoveryState {
     dataOwner: string | null;
     userData: UserData | null;
     localWorkout: WorkoutSession | null;
     localPersistenceBlocked: boolean;
 }
-export type WorkoutRecoveryOutcome = 'restored' | 'already-present' | 'completed' | 'conflict';
+type WorkoutRecoveryOutcome = 'restored' | 'already-present' | 'completed' | 'conflict';
 
 /** The original device intent is evidence, NOT a portable causal journal. */
 export function decodePortableWorkout(raw: string, owner: string): WorkoutSession {
@@ -40,7 +40,7 @@ export async function restorePortableWorkout(
     }
     if (state.userData.history?.some(item => item.id === workout.id)) return 'completed';
     // A different active session must never be displaced by an old backup.
-    if (state.userData.activeWorkout && state.userData.activeWorkout.id !== workout.id) return 'conflict';
+    if (state.userData.activeWorkout) return 'conflict';
     if (state.localWorkout !== null || readDeviceValueStrict('workout', owner) !== null) return 'already-present';
     assertCurrent();
     // Commits as a fresh owner-scoped Domain Operation, atomically updating

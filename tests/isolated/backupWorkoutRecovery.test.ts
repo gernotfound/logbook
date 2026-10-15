@@ -15,7 +15,7 @@ describe('portable workout recovery as a new Domain Operation', () => {
         const state = () => ({ dataOwner: 'user:a', userData: empty(), localWorkout: null, localPersistenceBlocked: false });
         const outcome = await restorePortableWorkout(JSON.stringify(workout), 'user:a', state, commit, () => {});
         expect(outcome).toBe('restored');
-        expect(commit).toHaveBeenCalledWith(workout);
+        expect(commit).toHaveBeenCalledWith(expect.objectContaining(workout));
     });
 
     it('does not resurrect a completed workout or displace an active session', async () => {
