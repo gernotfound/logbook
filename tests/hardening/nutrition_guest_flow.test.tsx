@@ -53,15 +53,16 @@ beforeEach(() => {
 });
 
 describe('M5 nutrition guest flow through useNutritionMeals', () => {
-    it('routes food search through Logic.searchFoods and exposes production results', () => {
-        const searchSpy = vi.spyOn(Logic, 'searchFoods');
+    it('returns the same ranked production results using the prepared search index', () => {
         const { result } = renderHook(() => useNutritionMeals(DATE));
 
         act(() => {
             result.current.handleSearch('pollo');
         });
 
-        expect(searchSpy).toHaveBeenCalledWith(useAppStore.getState().userData?.customFoods, 'pollo');
+        expect(result.current.searchResults).toEqual(
+            Logic.searchFoods(useAppStore.getState().userData?.customFoods ?? [], 'pollo').slice(0, 15)
+        );
         expect(result.current.searchQuery).toBe('pollo');
         expect(result.current.searchResults.map(food => food.id)).toContain('food-chicken');
         expect(result.current.searchResults.map(food => food.id)).not.toContain('food-rice');
