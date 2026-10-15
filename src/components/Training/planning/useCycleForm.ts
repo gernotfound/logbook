@@ -81,8 +81,8 @@ export function useCycleForm({ initialCycle, routines, onSave, showAlert }: UseC
     const handleDurationWeeksChange = (val: string) => {
         setDurationWeeks(val);
         const w = Number(val);
-        if (Number.isSafeInteger(w) && w >= 1 && startDate) {
-            const newEnd = computeEndDate(startDate, w);
+        if (val.trim() !== '' && Number.isSafeInteger(w) && startDate) {
+            const newEnd = computeEndDate(startDate, Math.max(1, w));
             setEndDate(newEnd);
             setEndDateTextInput(Logic.formatItalianDate(newEnd));
         }
@@ -262,10 +262,14 @@ export function useCycleForm({ initialCycle, routines, onSave, showAlert }: UseC
             return;
         }
 
-        const weeks = Number(durationWeeks);
-        const freqPerWeek = Number(sessionsPerWeek);
-        if (!Number.isSafeInteger(weeks) || weeks < 1 || weeks > MAX_EDITABLE_CYCLE_WEEKS
-            || !Number.isSafeInteger(freqPerWeek) || freqPerWeek < 1 || freqPerWeek > MAX_CYCLE_SESSIONS_PER_WEEK) {
+        // Keep the existing editor behavior: nonpositive integers snap to the
+        // minimum. Out-of-range positive values and fractions cannot be saved.
+        const rawWeeks = durationWeeks.trim() === '' ? 4 : Number(durationWeeks);
+        const rawFreq = sessionsPerWeek.trim() === '' ? cycleRoutines.length : Number(sessionsPerWeek);
+        const weeks = Math.max(1, rawWeeks);
+        const freqPerWeek = Math.max(1, rawFreq);
+        if (!Number.isSafeInteger(weeks) || weeks > MAX_EDITABLE_CYCLE_WEEKS
+            || !Number.isSafeInteger(freqPerWeek) || freqPerWeek > MAX_CYCLE_SESSIONS_PER_WEEK) {
             await showAlert('Il ciclo deve durare da 1 a 52 settimane e prevedere da 1 a 14 sedute intere a settimana.');
             return;
         }
