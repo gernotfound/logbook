@@ -11,32 +11,32 @@ function expectedLockfile() {
   };
 }
 
-test('accepts only approved lifecycle scripts at approved versions', () => {
+void test('accepts only approved lifecycle scripts at approved versions', () => {
   assert.deepEqual(checkInstallScripts(expectedLockfile()), []);
 });
 
-test('rejects a newly introduced install script', () => {
+void test('rejects a newly introduced install script', () => {
   const lockfile = expectedLockfile();
   lockfile.packages['node_modules/unreviewed'] = { version: '1.0.0', hasInstallScript: true };
   assert.match(checkInstallScripts(lockfile).join('\n'), /Unreviewed lifecycle script/);
 });
 
-test('rejects changes to previously approved script versions', () => {
+void test('rejects changes to previously approved script versions', () => {
   const lockfile = expectedLockfile();
   lockfile.packages['node_modules/protobufjs'].version = '7.6.6';
   assert.match(checkInstallScripts(lockfile).join('\n'), /version changed/);
 });
 
-test('rejects removal of a previously approved script', () => {
+void test('rejects removal of a previously approved script', () => {
   const lockfile = expectedLockfile();
   lockfile.packages['node_modules/protobufjs'].hasInstallScript = false;
   assert.match(checkInstallScripts(lockfile).join('\n'), /no longer present/);
 });
 
-test('rejects malformed lockfiles', () => {
+void test('rejects malformed lockfiles', () => {
   assert.notDeepEqual(checkInstallScripts({ lockfileVersion: 2 }), []);
 });
 
-test('rejects a root prepare or postinstall script', () => {
+void test('rejects a root prepare or postinstall script', () => {
   assert.match(checkInstallScripts(expectedLockfile(), { scripts: { prepare: 'node arbitrary.js' } }).join('; '), /root npm ci lifecycle hook/);
 });
