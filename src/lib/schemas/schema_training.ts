@@ -10,6 +10,7 @@ import {
     reportZodSchemaFallback 
 } from './schema_utils';
 import { normalizeBusinessId } from '../businessIdentity';
+import { MAX_EDITABLE_CYCLE_WEEKS, MAX_CYCLE_SESSIONS_PER_WEEK } from '../calc/cycleLimits';
 
 export const ExerciseSetSchema = z.object({
     weight: safeString(''),
@@ -298,3 +299,11 @@ export const TrainingCycleSchema = z.object({
     });
     return { id: '', name: '', durationWeeks: 4, routines: [] };
 }).default({ id: '', name: '', durationWeeks: 4, routines: [] });
+
+// Persisted/imported cycles retain their original values for recovery. Only a
+// new domain write must satisfy the stricter editor contract: do not let the
+// tolerant read schema quarantine a historical cycle just for being out of range.
+export const TrainingCycleWriteSchema = TrainingCycleSchema.pipe(z.object({
+    durationWeeks: z.number().int().min(1).max(MAX_EDITABLE_CYCLE_WEEKS),
+    sessionsPerWeek: z.number().int().min(1).max(MAX_CYCLE_SESSIONS_PER_WEEK).optional(),
+}).passthrough());
