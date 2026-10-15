@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const boundary = vi.hoisted(() => ({
     findPending: vi.fn(),
+    isPending: vi.fn(),
     recoverByDevice: vi.fn(),
     resume: vi.fn(),
     finalize: vi.fn(),
@@ -21,7 +22,9 @@ vi.mock('../src/lib/db', () => ({
 }));
 
 vi.mock('../src/lib/db/db_account', () => {
-    class AccountDeletionReceiptNotFoundError extends Error {}
+    class AccountDeletionReceiptNotFoundError extends Error {
+        constructor(readonly uid?: string) { super('Ricevuta non riconosciuta'); }
+    }
     return {
         AccountDeletionReceiptNotFoundError,
         finalizeCompletedDeletionForUid: boundary.finalize,
@@ -31,6 +34,7 @@ vi.mock('../src/lib/db/db_account', () => {
 
 vi.mock('../src/lib/sync/accountGate', () => ({
     listPendingAccountDeletions: boundary.findPending,
+    isAccountDeletionPending: boundary.isPending,
 }));
 
 vi.mock('../src/lib/deletionDeviceRecovery', () => {
@@ -65,6 +69,7 @@ import {
 } from '../src/components/AccountDeletionRecovery';
 import { DeletionRecoveryFinalizationError } from '../src/lib/deletionDeviceRecovery';
 import { DeletionDeviceOperationError } from '../src/lib/deletionRecoveryDiagnostics';
+import { AccountDeletionReceiptNotFoundError } from '../src/lib/db/db_account';
 
 function setOnline(value: boolean) {
     Object.defineProperty(navigator, 'onLine', { configurable: true, value });
@@ -82,6 +87,7 @@ describe('account deletion recovery foreground lifecycle', () => {
         vi.clearAllMocks();
         setOnline(true);
         boundary.findPending.mockReturnValue({ markers: [], corrupt: [] });
+        boundary.isPending.mockReturnValue(true);
         boundary.recoverByDevice.mockResolvedValue({ status: 'none' });
         boundary.resume.mockResolvedValue(undefined);
         boundary.showAlert.mockResolvedValue(undefined);
@@ -248,6 +254,41 @@ describe('account deletion recovery foreground lifecycle', () => {
             { source: 'account_deletion_routine_check' },
         );
         expect(boundary.showAlert).toHaveBeenCalledWith(expect.stringContaining('copia locale'));
+    });
+
+    it('preserves a receipt-not-found warning when another owner completes', async () => {
+        boundary.findPending.mockReturnValue({
+            markers: [{ owner: 'user:a', uid: 'a', startedAt: 1, receiptToken: 'receipt-a' }],
+            corrupt: [],
+        });
+        boundary.resume.mockRejectedValueOnce(new AccountDeletionReceiptNotFoundError('a'));
+        boundary.recoverByDevice.mockResolvedValueOnce({ status: 'complete' });
+        boundary.isPending.mockReturnValue(true);
+
+        render(<AccountDeletionRecovery />);
+        await settle();
+
+        expect(boundary.reportError).toHaveBeenCalledWith(
+            expect.objectContaining({ message: expect.stringContaining('operation=pending-deletion') }),
+            { source: 'account_deletion_pending_deletion' },
+        );
+        expect(boundary.showAlert).toHaveBeenCalledWith('Ricevuta non riconosciuta');
+    });
+
+    it('does not warn about an old receipt when that same owner was fully finalized', async () => {
+        boundary.findPending.mockReturnValue({
+            markers: [{ owner: 'user:a', uid: 'a', startedAt: 1, receiptToken: 'receipt-a' }],
+            corrupt: [],
+        });
+        boundary.resume.mockRejectedValueOnce(new AccountDeletionReceiptNotFoundError('a'));
+        boundary.recoverByDevice.mockResolvedValueOnce({ status: 'complete' });
+        boundary.isPending.mockReturnValue(false);
+
+        render(<AccountDeletionRecovery />);
+        await settle();
+
+        expect(boundary.showAlert).not.toHaveBeenCalled();
+        expect(boundary.reportError).not.toHaveBeenCalled();
     });
 
 });
