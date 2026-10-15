@@ -591,6 +591,34 @@ describe('account offline withdrawal and explicit local-only reacceptance', () =
     } finally { online.mockRestore(); }
   });
 
+  it('preserves local-only use across retryable App Check token outages without allowing cloud', async () => {
+    const uid = 'offline-appcheck-' + crypto.randomUUID();
+    const actor = user(uid);
+    (auth as { currentUser: unknown }).currentUser = actor;
+    const online = vi.spyOn(navigator, 'onLine', 'get');
+    try {
+      online.mockReturnValue(true);
+      beginHealthConsentVerification(uid);
+      vi.stubGlobal('fetch', vi.fn(async () => Response.json({ status: 'active', revision: 1 })));
+      expect(await refreshHealthConsent(actor)).toBe('active');
+      online.mockReturnValue(false);
+      vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('offline'); }));
+      await expect(withdrawHealthConsent(actor)).rejects.toThrow();
+      reacceptHealthConsentLocally(actor, accepted);
+      online.mockReturnValue(true);
+      const { getLimitedUseAppCheckToken } = await import('../src/lib/appCheck');
+      vi.mocked(getLimitedUseAppCheckToken).mockRejectedValueOnce(
+        Object.assign(new Error('App Check temporairement unavailable'), {
+          code: 'app-check-limited-use-unavailable', retryable: true,
+        }),
+      );
+      expect(await refreshHealthConsent(actor)).toBe('active');
+      expect(isHealthConsentWritable('user:' + uid)).toBe(true);
+      expect(isHealthConsentCloudWritable('user:' + uid)).toBe(false);
+      expect(localStorage.getItem(key(uid))).toContain('offline-reaccepted:');
+    } finally { online.mockRestore(); }
+  });
+
   it('persists a server CAS conflict as a safe withdrawal barrier across reload', async () => {
     const uid = 'conflict-reconnect-' + crypto.randomUUID();
     const actor = user(uid);
