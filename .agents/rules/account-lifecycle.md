@@ -1,6 +1,6 @@
 # Ciclo di vita account — TheLogBook
 
-> Stato: normativo | Ultima verifica: 2026-09-20
+> Stato: normativo | Ricognizione originaria: 2026-09-20; rivalidare all'HEAD attuale
 
 ## Backup JSON e importazione
 
@@ -8,7 +8,7 @@
 
 La lettura di tutti i documenti non costituisce uno snapshot atomico fra dispositivi. Il file registra la propria copertura; con modifiche concorrenti può essere necessario ripetere l'esportazione. Un errore di rete non deve produrre un backup dichiarato completo se la copertura richiesta non è stata acquisita.
 
-La baseline clean-cut corrente **non importa Backup Schema V1/V2**: `decodeImport()` li rifiuta tramite `LegacyVersionError`. Anche versioni future sconosciute falliscono chiuso e richiedono aggiornamento. Non esiste più un percorso prodotto che legga, preservi o esporti la vecchia cache locale non attribuita `logbook_cached_user_data`: prima dell'esistenza di account reali quel compatibility layer è stato rimosso intenzionalmente.
+La baseline clean-cut corrente **non importa Backup Schema V1/V2**: `decodeImport()` li rifiuta tramite `LegacyVersionError`. Anche versioni future sconosciute falliscono chiuso e richiedono aggiornamento. Non esiste più un percorso prodotto che legga, preservi o esporti la vecchia cache locale non attribuita `logbook_cached_user_data`: il compatibility layer fu rimosso nella baseline pre-lancio. La motivazione è storica, non certifica l'assenza odierna di utenti o copie locali e non autorizza ulteriori rimozioni senza verifica.
 
 - **Importa JSON:** opera soltanto su formati supportati e applica l'unione prevista senza mutazioni in place. Un `activeWorkout` non nullo ma invalido nel backup blocca l'importazione con un errore esplicito, senza scartarlo in silenzio; il file sorgente resta invariato. Le collisioni e i ricalcoli seguono il contratto corrente dell'importer. Dopo l'importazione business, un consenso separato permette di recuperare solo bozze device presenti nel backup e ancora assenti sul dispositivo: il flush delle bozze correnti precede il controllo strict e le write cifrate owner-scoped, senza sovrascrivere copie locali. Fallimenti parziali delle bozze sono segnalati e il backup originale rimane fonte di recovery. Un recupero separato e confermato dell'allenamento device-local può eseguire una nuova DomainOperation solo se non esiste una sessione locale, non è già nello storico e non sostituisce un diverso activeWorkout. I vecchi intenti/generazioni e il journal NON vengono trapiantati: il commit locale crea il journal corrente. Solo dopo quel commit è ammesso ripristinare un timer mancante, convertendo lo stato running in paused all'istante dell'export. Non promettere continuità temporale tra dispositivi e non sovrascrivere alcun record esistente.
 - **Ripristina:** sostituisce i campi presenti nel formato supportato rispetto allo stato locale disponibile; non autorizza a trattare dati cloud mai caricati come assenti.

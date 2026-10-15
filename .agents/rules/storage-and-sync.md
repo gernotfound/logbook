@@ -1,6 +1,6 @@
 # Storage e Sincronizzazione - TheLogBook
 
-> Stato: normativo | Ultima verifica: 2026-09-23 | File verificati: `src/store/useAppStore.ts`, `src/lib/firebase.ts`, `src/lib/schemaEvolution.ts`, `src/lib/sync/transactionWriter.ts`, `src/lib/sync/replicateJournal.ts`, `src/lib/sync/semanticProjection.ts`, `src/lib/sync/documentProjection.ts`, `src/lib/sync/localRepository.ts`, `src/lib/sync/deviceStorage.ts`, `src/lib/sync/browserStorage.ts`, `src/lib/utils/timer.ts`, `src/hooks/useSettings.ts`, `src/contexts/AuthContext.tsx`, `src/main.tsx`
+> Stato: normativo | Ricognizione originaria: 2026-09-23; non attesta l'HEAD attuale | File allora verificati: `src/store/useAppStore.ts`, `src/lib/firebase.ts`, `src/lib/schemaEvolution.ts`, `src/lib/sync/transactionWriter.ts`, `src/lib/sync/replicateJournal.ts`, `src/lib/sync/semanticProjection.ts`, `src/lib/sync/documentProjection.ts`, `src/lib/sync/localRepository.ts`, `src/lib/sync/deviceStorage.ts`, `src/lib/sync/browserStorage.ts`, `src/lib/utils/timer.ts`, `src/hooks/useSettings.ts`, `src/contexts/AuthContext.tsx`, `src/main.tsx`
 
 ## Architettura di storage
 
@@ -62,7 +62,7 @@ CURRENT_LOCAL_ENVELOPE = 5
 CURRENT_BACKUP_SCHEMA = 3
 ```
 
-Le quattro dimensioni NON devono essere riutilizzate come se fossero una sola versione:
+Le quattro dimensioni NON devono essere riutilizzate come una sola versione, né incrementate per il semplice bump della versione PWA in `package.json`:
 
 - `data schema`: shape business persistita su Firestore;
 - `sync protocol`: shape e semantica di `_sync` / Vector Clock;
@@ -95,7 +95,7 @@ RAW STORAGE
 
 ### Baseline clean-cut M1
 
-Non esistono utenti/account reali da migrare da build precedenti. Per questo M1 stabilisce una baseline intenzionalmente clean-cut:
+**Contesto storico, non presupposto attuale:** la baseline clean-cut M1 fu definita prima degli account reali. Non è prova che oggi manchino utenti, backup o dati legacy. Prima di rimuovere compatibilità, verificare formati realmente persistiti, client distribuiti e recovery. M1 stabilì:
 
 - la baseline M1 non introdusse una migrazione prodotto da local envelope V3 a V4;
 - nessuna importazione compatibile di backup V1/V2;

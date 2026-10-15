@@ -1,6 +1,6 @@
 # Design System — TheLogBook
 
-> Stato: normativo | Ultima verifica: 2026-09-21 | File verificati: `src/styles/global.css`, `src/styles/tokens.css`, `public/appearance.js`, `public/appearance.css`, `index.html`
+> Stato: normativo | Ricognizione originaria: 2026-09-21; verificare i token CSS attuali | File allora verificati: `src/styles/global.css`, `src/styles/tokens.css`, `public/appearance.js`, `public/appearance.css`, `index.html`
 
 ## Tema adattivo
 
