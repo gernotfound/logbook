@@ -28,7 +28,7 @@ const control = (): ReplicaControl => ({
             lastSeq: 4,
             checkpointAtMs: 1_000,
             leaseUntilMs: 10_000,
-            checkpointClock: { s00: 4, s01: 2, legacy: 7 },
+            checkpointClock: { s00: 4, s01: 2 },
         },
         s01: {
             replicaId: 'replica-s01-g2',
@@ -37,7 +37,7 @@ const control = (): ReplicaControl => ({
             lastSeq: 3,
             checkpointAtMs: 1_000,
             leaseUntilMs: 10_000,
-            checkpointClock: { s00: 3, s01: 3, legacy: 7 },
+            checkpointClock: { s00: 3, s01: 3 },
         },
         s02: {
             replicaId: 'retired',
@@ -46,7 +46,7 @@ const control = (): ReplicaControl => ({
             lastSeq: 9,
             checkpointAtMs: 1_000,
             leaseUntilMs: 2_000,
-            checkpointClock: { s00: 1, s01: 1, legacy: 1 },
+            checkpointClock: { s00: 1, s01: 1 },
         },
     },
     mutation: { slot: 's00', action: 'checkpoint' },
@@ -54,7 +54,7 @@ const control = (): ReplicaControl => ({
 
 describe('Sync Protocol 3 replica registry', () => {
     it('computes the stable frontier from active replicas only', () => {
-        expect(stableFrontierFromControl(control())).toEqual({ s00: 3, s01: 2, legacy: 7 });
+        expect(stableFrontierFromControl(control())).toEqual({ s00: 3, s01: 2 });
     });
 
     it('fences a stale generation and advances only the current replica sequence', () => {
@@ -117,6 +117,12 @@ describe('Sync Protocol 3 replica registry', () => {
     it('rejects malformed or over-capacity control state', () => {
         const valid = control();
         expect(parseReplicaControl(valid).replicas.s00.lastSeq).toBe(4);
+        expect(() => parseReplicaControl({
+            ...valid,
+            replicas: { ...valid.replicas, s00: {
+                ...valid.replicas.s00, checkpointClock: { injectedActor: 1 },
+            } },
+        })).toThrow(/slot/i);
         expect(() => parseReplicaControl({
             protocolVersion: 3,
             replicas: { bad: valid.replicas.s00 },
