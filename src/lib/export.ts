@@ -2,6 +2,7 @@ import { useDialogStore } from '../store/useDialogStore';
 import { useAppStore } from '../store/useAppStore';
 import { Logic } from './logic';
 import { createBackup, decodeImport, prepareImport, type BackupCoverage, type ImportMode } from './backup';
+import { restoreMissingBackupDeviceDrafts } from './backupDeviceRecovery';
 import { captureSession, isCurrentSession } from './sync/session';
 import { readLocal } from './sync/localRepository';
 import equal from 'fast-deep-equal';
@@ -446,7 +447,7 @@ export const Exporter = {
                     ? '\nIl backup è parziale: storico e nutrizione non presenti nel file saranno conservati.'
                     : '') +
                 (decoded.ownerUnknown ? '\nIl backup non identifica un proprietario. Conferma solo se questi dati sono tuoi.' : '') +
-                (decoded.hasDeviceRecovery ? '\nIl file contiene anche dati tecnici di recupero (bozze, timer o archivio locale): questa importazione NON li ripristina. Conserva il file originale per un eventuale recupero assistito.' : '') +
+                (decoded.hasDeviceRecovery ? '\nIl file contiene dati di recupero: dopo l’importazione potrai recuperare le bozze mancanti. Il timer, gli intenti workout e il journal tecnico NON vengono trasferiti automaticamente: conserva il file originale.' : '') +
                 '\nI consensi importati non verranno applicati.\nProcedere?';
             if (!(await useDialogStore.getState().showConfirm(summary, 'Anteprima importazione'))) return;
             assertCurrent();
@@ -461,10 +462,24 @@ export const Exporter = {
                 return prepared.data;
             }, { expectedRevision });
             assertCurrent();
+            let draftReport = '';
+            if (decoded.deviceDrafts.length && await useDialogStore.getState().showConfirm(
+                'Il backup contiene ' + decoded.deviceDrafts.length + ' bozze recuperabili. Ripristinare soltanto quelle assenti dal dispositivo? Le bozze esistenti non saranno sovrascritte.')) {
+                try {
+                    assertCurrent();
+                    const { restored, preserved } = restoreMissingBackupDeviceDrafts(
+                        decoded.deviceDrafts, session.owner, assertCurrent);
+                    draftReport = ' Bozze recuperate: ' + restored + '; bozze già presenti conservate: ' + preserved + '.';
+                } catch (error) {
+                    draftReport = ' Il recupero delle bozze non è terminato: conserva il backup e riprova. ' +
+                        (error instanceof Error ? error.message : '');
+                }
+            }
+            assertCurrent();
             const status = useAppStore.getState().syncHealth;
-            void useDialogStore.getState().showAlert(status === 'local-pending'
+            void useDialogStore.getState().showAlert((status === 'local-pending'
                 ? 'Importazione salvata sul dispositivo. Sincronizzazione cloud in attesa.'
-                : 'Importazione completata.');
+                : 'Importazione completata.') + draftReport);
         } catch (error) {
             if (isCurrentSession(session)) void useDialogStore.getState().showAlert(error instanceof Error ? error.message : "Errore durante l'importazione.");
             throw error;

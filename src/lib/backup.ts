@@ -5,6 +5,7 @@ import { getLocalDateString } from './utils/date';
 import { normalizeBusinessId } from './businessIdentity';
 import { requireCanonicalWorkoutDate } from './sync/monthlyIntegrity';
 import { assertWorkoutSessionIdentities } from './sync/domainOperations/validation';
+import { selectBackupDeviceDrafts } from './backupDeviceRecovery';
 import {
     CURRENT_BACKUP_SCHEMA,
     CURRENT_DATA_SCHEMA,
@@ -194,7 +195,8 @@ export function decodeImport(payload: unknown, owner: string) {
         : sanitizedData;
 
     return { data: selected, share, ownerUnknown: !share && !sourceOwner, coverage,
-        hasDeviceRecovery: !share && normalized.recovery !== undefined };
+        hasDeviceRecovery: !share && normalized.recovery !== undefined,
+        deviceDrafts: share ? [] : selectBackupDeviceDrafts(normalized.recovery) };
 }
 
 function mergeMissing(local: unknown, incoming: unknown): unknown {
