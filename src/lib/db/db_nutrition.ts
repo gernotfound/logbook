@@ -2,7 +2,7 @@ import { getDb } from '../firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { normalizeCloudDocument } from '../schemaEvolution';
 import { withTimeout } from './db_core';
-import { sanitizeNutritionMonthDocument } from '../sync/monthlyIntegrity';
+import { requireCompleteNutritionMonthDocument } from '../sync/monthlyIntegrity';
 
 // Keep data untrusted until the caller's final business schema gateway.
 export async function loadNutritionMonths(
@@ -20,7 +20,7 @@ export async function loadNutritionMonths(
         const month = targetMonths[index];
         if (d && typeof d.exists === 'function' && d.exists()) {
             const normalized = normalizeCloudDocument(d.data(), `Nutrition ${month} data schema`);
-            const monthData = sanitizeNutritionMonthDocument(month, normalized.business);
+            const monthData = requireCompleteNutritionMonthDocument(month, normalized.business);
             if (cloudDocuments) {
                 cloudDocuments.set('nutrition_months/' + month, { ...monthData, _sync: normalized.sync });
             }

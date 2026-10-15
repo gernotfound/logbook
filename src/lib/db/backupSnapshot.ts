@@ -14,6 +14,7 @@ import type { BackupCoverage } from '../backup';
 import equal from 'fast-deep-equal';
 import { currentHealthConsentStatus, readHealthConsentServerStatus } from '../healthConsent';
 import { fetchWithdrawnCloudBackup } from './withdrawnBackupTransport';
+import { requireCompleteHistoryMonthDocument, requireCompleteNutritionMonthDocument } from '../sync/monthlyIntegrity';
 
 const RECOVERY_DEVICE_KEYS = new Set(['workout', 'timer', 'draft_exercise', 'draft_routine']);
 const isRecoveryDeviceKey = (name: string) => RECOVERY_DEVICE_KEYS.has(name) || name.startsWith('draft:');
@@ -31,7 +32,12 @@ export async function collectBackupSnapshot(fallback: UserData, includeCloud: bo
     const addRawDoc = (path: string, raw: unknown) => {
         documents.set(path, structuredClone((raw ?? {}) as DocumentData));
         const normalized = normalizeCloudDocument(raw ?? {}, `Backup ${path || 'root'} data schema`);
-        businessDocuments.set(path, normalized.business);
+        const business = path.startsWith('history_months/')
+            ? requireCompleteHistoryMonthDocument(path.slice('history_months/'.length), normalized.business)
+            : path.startsWith('nutrition_months/')
+                ? requireCompleteNutritionMonthDocument(path.slice('nutrition_months/'.length), normalized.business)
+                : normalized.business;
+        businessDocuments.set(path, business);
         try {
             syncMetaByDocument[path] = parseSyncMeta(normalized.sync);
         } catch (error) {

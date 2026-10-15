@@ -92,3 +92,24 @@ export function sanitizeNutritionMonthDocument(month: string, data: Record<strin
     }
     return sanitized;
 }
+
+
+/**
+ * Firestore is an untrusted recovery source. A missing business key is not an
+ * authorised delete: halt hydration/export before a sanitizer can turn damage
+ * into an apparently complete month. The tolerant helpers remain available
+ * for explicit quarantine/recovery flows.
+ */
+export function requireCompleteHistoryMonthDocument(month: string, data: Record<string, unknown>): Record<string, unknown> {
+    const cleaned = sanitizeHistoryMonthDocument(month, data);
+    const omitted = Object.keys(data).filter(key => !Object.hasOwn(cleaned, key));
+    if (omitted.length) throw new Error(`Shard storico ${month} non integro: ${omitted.length} record non validi (es. ${omitted[0]}). Copia cloud conservata; recupero necessario.`);
+    return cleaned;
+}
+
+export function requireCompleteNutritionMonthDocument(month: string, data: Record<string, unknown>): Record<string, unknown> {
+    const cleaned = sanitizeNutritionMonthDocument(month, data);
+    const omitted = Object.keys(data).filter(key => !Object.hasOwn(cleaned, key));
+    if (omitted.length) throw new Error(`Shard nutrizione ${month} non integro: ${omitted.length} giornate non valide (es. ${omitted[0]}). Copia cloud conservata; recupero necessario.`);
+    return cleaned;
+}
