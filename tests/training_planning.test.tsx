@@ -458,12 +458,12 @@ describe('Training Planning & Volume Calculations', () => {
             expect(onNavPlanning).toHaveBeenCalled();
         });
 
-        it('integrates seamlessly inside TrainingView under subTab planning', () => {
+        it('integrates seamlessly inside TrainingView under subTab planning', async () => {
             const setSubTab = vi.fn();
             render(<TrainingView subTab="planning" setSubTab={setSubTab} />);
 
             expect(screen.getAllByText(/Pianificazione/).length).toBeGreaterThanOrEqual(1);
-            expect(screen.getAllByText('Mesociclo Massa').length).toBeGreaterThanOrEqual(1);
+            expect((await screen.findAllByText('Mesociclo Massa')).length).toBeGreaterThanOrEqual(1);
 
             // Check sub nav buttons
             const subNavBtns = screen.getAllByText(/Sessione|Pianificazione|Schede|Esercizi|Storico/);
