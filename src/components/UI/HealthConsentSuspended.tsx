@@ -51,12 +51,12 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
   const [offline, setOffline] = useState(() => typeof navigator !== 'undefined' && navigator.onLine === false);
   useEffect(() => {
     const onOffline = () => setOffline(true);
-    const onOnline = () => {
-      setOffline(false);
-      if (user) void refreshHealthConsent(user);
-    };
+    // AuthProvider already performs the authoritative online/foreground
+    // refresh. A second concurrent UI refresh would supersede its result
+    // and could leave the cloud hydrate idle after consent reconciliation.
+    const onOnline = () => setOffline(false);
     const onVisible = () => {
-      if (document.visibilityState === 'visible' && navigator.onLine && user) void refreshHealthConsent(user);
+      if (document.visibilityState === 'visible') setOffline(navigator.onLine === false);
     };
     window.addEventListener('offline', onOffline);
     window.addEventListener('online', onOnline);
@@ -66,7 +66,7 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
       window.removeEventListener('online', onOnline);
       document.removeEventListener('visibilitychange', onVisible);
     };
-  }, [user]);
+  }, []);
   const initialAcceptance = status === 'unregistered' && user !== null;
   const canReaccept = status === 'withdrawn' || status === 'reaccepting';
   const localOnlyReaccept = offline && user !== null && (status === 'pending' || status === 'withdrawn');
@@ -215,10 +215,10 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
         <button type="button" className="btn" onClick={() => void handleLogout()}>Esci dall'account</button>
         <button type="button" className="btn" onClick={() => void handleDeleteAccount()}>Elimina definitivamente l'account</button>
         {user !== null && <button type="button" className="btn" disabled={busy || offline} onClick={() => { void refreshHealthConsent(user); }}>Riprova a verificare il consenso</button>}
-        {offline && <button type="button" className="btn" disabled={busy} onClick={() => {
+        <button type="button" className="btn" disabled={busy} onClick={() => {
           void safeHardReload().catch(error => setError(error instanceof Error
             ? error.message : 'Ricaricamento non sicuro: i dati locali sono stati conservati.'));
-        }}>Ricarica TheLogBook</button>}
+        }}>Ricarica TheLogBook</button>
       </div>
       {error && <p role="alert">{error}</p>}
     </section>
