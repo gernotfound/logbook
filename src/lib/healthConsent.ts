@@ -420,11 +420,20 @@ export async function refreshHealthConsent(user: User): Promise<HealthConsentSta
       }
       if (state.status !== 'active' || state.revision !== sourceRevision + 2
         || typeof state.acceptedAt !== 'string') {
-        // A newer trusted withdrawal overrides this device's older offline
-        // reacceptance. Persist a distinct conflict fence across reloads.
-        // Keep all local ciphertext/journal for explicit recovery, but do not
-        // allow the cached older consent to re-enable fitness automatically.
-        writeBrowserValue(marker(uid), saved!.replace('offline-reaccepted:', 'offline-conflict:'));
+        // A newer server withdrawal supersedes the stale offline reacceptance.
+        // The account stays suspended and must explicitly accept again.
+        if (state.status === 'withdrawn' && state.revision > sourceRevision + 1) {
+          writeBrowserValue(marker(uid), 'withdrawn');
+          setStatus(uid, 'withdrawn');
+          return 'withdrawn';
+        }
+        // A newer acceptance on another device requires a fresh explicit
+        // KEEP or WITHDRAW choice; never silently submit this older intent.
+        if (state.status === 'active' && state.revision > sourceRevision + 2
+          && typeof state.acceptedAt === 'string') {
+          setStatus(uid, 'stale-request');
+          return 'stale-request';
+        }
         setStatus(uid, 'error');
         return 'error';
       }
@@ -548,7 +557,7 @@ export async function retainNewerHealthConsent(user: User): Promise<HealthConsen
   const uid = user.uid;
   if (currentHealthConsentStatus(uid) !== 'stale-request') throw new Error('Nessuna scelta recente da confermare.');
   const saved = readMarker(uid);
-  const originalRevision = parsePendingRevision(saved);
+  const originalRevision = parsePendingRevision(saved) ?? parseOfflineReaccept(saved)?.revision ?? null;
   if (originalRevision === null && saved !== 'withdrawn') throw new Error('Richiesta precedente non riconosciuta.');
   const live = await serverRequest(user, 'GET');
   if (readMarker(uid) !== saved || currentHealthConsentStatus(uid) !== 'stale-request') {
