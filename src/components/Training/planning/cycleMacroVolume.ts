@@ -52,7 +52,7 @@ export function calculateCycleMacroVolume(
         for (const routineExercise of routine.exercises ?? []) {
             const exercise = exerciseMap.get(routineExercise.exId);
             if (!exercise) continue;
-            const setsCount = routineExercise.setsCount ?? 3;
+            const setsCount = Number(routineExercise.setsCount ?? 3);
             if (!Number.isSafeInteger(setsCount) || setsCount < 1) return [];
             const weeklySets = setsCount * effectiveFrequency;
             if (!Number.isFinite(weeklySets)) return [];

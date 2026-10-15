@@ -21,7 +21,7 @@ export function getSetTechnique(set: SessionExerciseSet): SetTechnique {
     let firstAdvanced: Exclude<SetTechnique, 'straight'> | undefined;
     for (const segment of set.segments ?? []) {
         const technique = segment.technique;
-        if (technique && technique !== 'isometry' && technique !== 'straight') {
+        if (technique && technique !== 'isometry') {
             firstAdvanced = technique;
             break;
         }
