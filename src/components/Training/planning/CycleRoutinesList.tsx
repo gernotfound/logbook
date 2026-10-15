@@ -25,6 +25,7 @@ export const CycleRoutinesList = memo(function CycleRoutinesList({
     const [isSearchOpen, setIsSearchOpen] = useState(false);
     const resultsId = useId();
     const exerciseNames = useMemo(() => new Map(library.map(exercise => [exercise.id, exercise.name])), [library]);
+    const routineMap = useMemo(() => new Map(routines.map(routine => [routine.id, routine])), [routines]);
 
     const matches = useMemo(() => {
         const normalized = query.trim().toLocaleLowerCase('it');
@@ -74,7 +75,7 @@ export const CycleRoutinesList = memo(function CycleRoutinesList({
                         }}
                         onChange={event => {
                             const value = event.target.value;
-                            const exactRoutine = routines.find(routine => routine.id === value);
+                            const exactRoutine = routineMap.get(value);
                             if (exactRoutine) {
                                 addRoutine(exactRoutine.id);
                                 return;
@@ -117,7 +118,7 @@ export const CycleRoutinesList = memo(function CycleRoutinesList({
             ) : (
                 <div className="planning-sequence-list">
                     {cycleRoutines.map((item, index) => {
-                        const routine = routines.find(candidate => candidate.id === item.routineId);
+                        const routine = routineMap.get(item.routineId);
                         const name = routine?.name ?? 'Scheda';
                         return (
                             <div key={`${item.routineId}-${index}`} className="planning-sequence-row">

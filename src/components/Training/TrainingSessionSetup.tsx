@@ -34,9 +34,10 @@ export const TrainingSessionSetup = ({ onNavigateToPlanning }: TrainingSessionSe
 
     const plannedRoutines: PlannedRoutineItem[] = useMemo(() => {
         if (!activeCycle?.routines) return [];
+        const routineMap = new Map(routines.map(routine => [routine.id, routine]));
         return activeCycle.routines
             .map((item, index) => {
-                const routine = routines.find(candidate => candidate.id === item.routineId);
+                const routine = routineMap.get(item.routineId);
                 if (!routine) return null;
                 return {
                     routine,

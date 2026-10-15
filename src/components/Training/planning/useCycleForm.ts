@@ -330,8 +330,8 @@ export function useCycleForm({ initialCycle, routines, onSave, showAlert }: UseC
             startDate: startDate || undefined,
             endDate: endDate || undefined,
             routines: cycleRoutines
-        }, routines);
-    }, [name, tempWeeks, tempFreq, startDate, endDate, cycleRoutines, routines]);
+        }, routines, showSchedulePreview);
+    }, [name, tempWeeks, tempFreq, startDate, endDate, cycleRoutines, routines, showSchedulePreview]);
 
     return {
         refs: { startDatePickerRef, endDatePickerRef },

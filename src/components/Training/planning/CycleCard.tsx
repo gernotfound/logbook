@@ -31,7 +31,11 @@ export const CycleCard: React.FC<CycleCardProps> = ({
     const [showSchedule, setShowSchedule] = useState(false);
     const sessionsPerWeek = cycle.sessionsPerWeek || cycle.routines?.length || 1;
     const timeline = Logic.calculateCycleTimeline(cycle);
-    const schedule = useMemo(() => Logic.calculateCycleSchedule(cycle, routines), [cycle, routines]);
+    const routineNames = useMemo(() => new Map(routines.map(routine => [routine.id, routine.name])), [routines]);
+    const schedule = useMemo(
+        () => Logic.calculateCycleSchedule(cycle, routines, isExpanded && showSchedule),
+        [cycle, routines, isExpanded, showSchedule],
+    );
 
     const menuItems: ContextMenuItem[] = [
         { id: 'edit-cycle', label: 'Modifica', icon: <Pencil size={16} />, onClick: () => onEdit(cycle) },
@@ -65,10 +69,10 @@ export const CycleCard: React.FC<CycleCardProps> = ({
 
                 <div className="planning-routine-chips" aria-label="Sequenza schede del ciclo">
                     {(cycle.routines ?? []).map((item, index) => {
-                        const routine = routines.find(candidate => candidate.id === item.routineId);
+                        const routineName = routineNames.get(item.routineId);
                         return (
                             <span key={`${item.routineId}-${index}`}>
-                                <b>{String.fromCharCode(65 + (index % 26))}</b> {routine?.name ?? 'Scheda'}
+                                <b>{String.fromCharCode(65 + (index % 26))}</b> {routineName ?? 'Scheda'}
                             </span>
                         );
                     })}
