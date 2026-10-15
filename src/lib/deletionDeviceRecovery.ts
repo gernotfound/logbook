@@ -66,7 +66,7 @@ export async function registerDeletionRecoveryDevice(user:User):Promise<void>{
      phase='http';
      const response=await fetch(API+'/api/account-deletion-device',{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+idToken,'x-firebase-appcheck':check},body:JSON.stringify({deviceToken:cred.token}),cache:'no-store',signal});
      assertDeletionDeadlineActive(signal);
-     if(!response.ok)throw deviceOperationFailure('device-registration','http',undefined,response.status);
+     if(response.status!==200)throw deviceOperationFailure('device-registration','http',undefined,response.status);
      phase='response-body';
      const body:unknown=await response.json();
      assertDeletionDeadlineActive(signal);
