@@ -119,13 +119,6 @@ export function AccountDeletionRecovery() {
                 const markerWasFinalized = markerError instanceof AccountDeletionReceiptNotFoundError
                     && Boolean(markerError.uid) && deviceOutcome.status !== 'none'
                     && !isAccountDeletionPending('user:' + markerError.uid);
-                if (markerError && !markerWasFinalized) {
-                    recordFailure('pending-deletion', markerError);
-                    const message = markerError instanceof Error && pendingDeletion
-                        ? markerError.message : UNKNOWN_RECOVERY_MESSAGE;
-                    showPending(message, 'pending-deletion-error');
-                }
-
                 if (deviceError) {
                     const operation = deviceError instanceof DeletionRecoveryFinalizationError
                         ? 'local-finalization' : 'routine-check';
@@ -139,6 +132,14 @@ export function AccountDeletionRecovery() {
                         showPending(UNKNOWN_RECOVERY_MESSAGE, 'device-recovery-error');
                     }
                 }
+
+                if (markerError && !markerWasFinalized) {
+                    recordFailure('pending-deletion', markerError);
+                    const message = markerError instanceof Error && pendingDeletion
+                        ? markerError.message : UNKNOWN_RECOVERY_MESSAGE;
+                    showPending(message, 'pending-deletion-error');
+                }
+
             } finally {
                 running = false;
             }
