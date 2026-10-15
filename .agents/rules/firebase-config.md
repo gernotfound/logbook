@@ -188,3 +188,8 @@ Gli header browser del frontend sono configurati in `firebase.json`; `vercel.jso
 **MUST:** `service-account.json` resta nel `.gitignore` e non va mai committato.
 
 **MUST:** nessuna credenziale Firebase Admin privata deve essere copiata in Markdown, `.env.example`, codice client o test fixture committate.
+
+## Riferimenti operativi
+
+- [Registro dei servizi esterni](../../docs/operations/external-services-register.md): decisioni e configurazioni esterne da verificare direttamente nei provider.
+- [Cutover Firebase Hosting](../../docs/operations/firebase-hosting-cutover.md): documento **storico completato**, non usare come procedura di deploy corrente senza rivalidare workflow e provider.

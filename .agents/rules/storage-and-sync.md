@@ -327,3 +327,9 @@ npm run verify:m8
 ```
 
 `verify:m8` include transitivamente M7 → M6 → M5 e i gate/suite precedenti. Un conteggio parziale di test verdi o il superamento del solo `verify:m0` non equivale alla validazione canonica corrente. Vedi `.agents/rules/ci-verification.md`.
+
+## Documentazione complementare
+
+- [Protezione automatica dell'archivio locale](../../docs/architecture/secure-local-archive-design.md): specifica approvata e modello di minaccia; verificare sempre il codice corrente.
+- [Debug Background Sync](../../docs/BACKGROUND_SYNC_DEBUG.md): procedura diagnostica per journal e browser, non prova di funzionamento Production.
+- [Indice documentazione](../../docs/README.md): ulteriori riferimenti con stato distinto dai presenti contratti normativi.

@@ -134,3 +134,8 @@ Gli aggiornamenti PWA sono differibili. Prima del reload: flush delle bozze, att
 **MUST:** il purge di un tombstone scaduto e del corrispondente registro delle credenziali device usa una singola transazione Firestore; un errore non può eliminare solo uno dei due record. Le fasi indipendenti del cron devono proseguire se una query o una manutenzione fallisce, conservando log aggregati privi di dati personali.
 
 **MUST:** il cron preserva una finestra temporale dedicata alla retention telemetrica legacy quando i job di cancellazione occupano il budget, senza interrompere deliberatamente una transazione Firestore in corso.
+
+## Riferimenti per consenso e accountability
+
+- [Decisione e gate sul consenso salute](../../docs/compliance/health-consent-release-gate.md) e [protocollo tecnico della revoca](../../docs/compliance/health-consent-technical-protocol.md): distinguere comportamenti documentati, verifiche manuali pendenti e questioni legali aperte.
+- [Pacchetto compliance pre-pilot](../../docs/compliance/README.md): procedure e template non automaticamente approvati, né sostituti di Rules, codice e contratti di questo file.
