@@ -5,13 +5,16 @@ import { Logic } from '../../lib/logic';
 interface NutritionHistoryProps {
     nutritionHistory: any[];
     onDayClick?: (dateStr: string) => void;
+    visibleCount?: number;
+    onShowMore?: () => void;
 }
 
-const NUTRITION_HISTORY_PAGE_SIZE = 30;
+export const NUTRITION_HISTORY_PAGE_SIZE = 30;
 
-const NutritionHistory: React.FC<NutritionHistoryProps> = ({ nutritionHistory, onDayClick }) => {
-    const [visibleCount, setVisibleCount] = useState(NUTRITION_HISTORY_PAGE_SIZE);
-    const visibleDays = nutritionHistory.slice(0, visibleCount);
+const NutritionHistory: React.FC<NutritionHistoryProps> = ({ nutritionHistory, onDayClick, visibleCount, onShowMore }) => {
+    const [localVisibleCount, setLocalVisibleCount] = useState(NUTRITION_HISTORY_PAGE_SIZE);
+    const displayedCount = visibleCount ?? localVisibleCount;
+    const visibleDays = nutritionHistory.slice(0, displayedCount);
 
     return (
         <div>
@@ -85,11 +88,11 @@ const NutritionHistory: React.FC<NutritionHistoryProps> = ({ nutritionHistory, o
                             </div>
                         </div>
                     ))}
-                    {visibleCount < nutritionHistory.length && (
+                    {displayedCount < nutritionHistory.length && (
                         <button
                             type="button"
-                            onClick={() => setVisibleCount(count => count + NUTRITION_HISTORY_PAGE_SIZE)}
-                            aria-label={`Mostra altri giorni dello storico pasti (${nutritionHistory.length - visibleCount} rimanenti)`}
+                            onClick={() => onShowMore ? onShowMore() : setLocalVisibleCount(count => count + NUTRITION_HISTORY_PAGE_SIZE)}
+                            aria-label={`Mostra altri giorni dello storico pasti (${nutritionHistory.length - displayedCount} rimanenti)`}
                         >
                             Mostra altri giorni
                         </button>
