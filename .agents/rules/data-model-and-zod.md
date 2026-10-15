@@ -113,3 +113,9 @@ Il mese deriva dalla data locale della registrazione. Hydration parziale/complet
 ## Domain Operations
 
 La classificazione storage non cambia il mutation boundary M8. Le normali mutazioni business UI/hook devono usare Domain Operations; snapshot-save resta confinato ai boundary bulk/compatibility allowlisted in `.agents/rules/domain-operations.md`.
+
+## Limiti dei cicli di allenamento
+
+La forma persistita `TrainingCycleSchema` resta tollerante per leggere e conservare cicli importati o già presenti senza eliminarli a causa di un solo numero fuori limite. Le nuove scritture tramite `training-cycle.upsert` validano invece **prima di qualsiasi fallback** settimane intere fra 1 e 52 e sedute settimanali intere fra 1 e 14, con `TrainingCycleWriteSchema` e un controllo dell'input raw in `domainOperations/reducer.ts`. Non trasformare un valore invalido in una correzione silenziosa durante il commit.
+
+Le anteprime dell'editor hanno gli stessi limiti di lavoro ma lasciano visibile l'input originale finché non viene corretto. `calculateCycleSchedule`, `calculateCycleTimeline` e `getNextScheduledRoutine` non elaborano quantità malformate o superiori a 104 settimane/14 sedute; il limite storico di 104 conserva la possibilità di leggere cicli di 100 settimane già coperti dai test. In caso di dati non sicuri, evitare di generare sessioni; non cancellare o riscrivere il ciclo persistito. Ogni modifica a queste soglie richiede test di lettura, scrittura, import ed editor.
