@@ -448,7 +448,10 @@ function OwnerBoundApp({ startupTab }: { startupTab: string | null }) {
     return (
       <div id="auth-overlay">
         <GlobalDialog />
-        <LoginBox />
+        <div className="auth-entry">
+          <h1 className="auth-entry-title">TheLogBook</h1>
+          <LoginBox />
+        </div>
       </div>
     );
   }
