@@ -190,13 +190,15 @@ describe('account deletion recovery foreground lifecycle', () => {
         );
     });
 
-    it('aggregates repeated network failures, then resets after a successful check', async () => {
-        const timeout = new DeletionDeviceOperationError('routine-check', 'response-body', 'timeout');
-        boundary.recoverByDevice.mockRejectedValueOnce(timeout)
-            .mockRejectedValueOnce(timeout)
-            .mockRejectedValueOnce(timeout)
+    it.each([
+        ['network timeout', new DeletionDeviceOperationError('routine-check', 'response-body', 'timeout')],
+        ['temporary App Check provider failure', new DeletionDeviceOperationError('routine-check', 'app-check', 'provider')],
+    ])('aggregates repeated %s failures, then resets after a successful check', async (_scenario, failure) => {
+        boundary.recoverByDevice.mockRejectedValueOnce(failure)
+            .mockRejectedValueOnce(failure)
+            .mockRejectedValueOnce(failure)
             .mockResolvedValueOnce({ status: 'none' })
-            .mockRejectedValueOnce(timeout);
+            .mockRejectedValueOnce(failure);
 
         render(<AccountDeletionRecovery />);
         await settle();
