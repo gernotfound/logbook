@@ -574,6 +574,11 @@ export async function withdrawHealthConsent(user: User, freezeWriters?: () => vo
   // The durable local barrier precedes cancellation, network I/O and any
   // other async transition. An error must never silently undo the intent.
   freezeWriters?.();
+  // The local pending marker is already durable and immediately fences writes.
+  // A known offline device must not request an App Check token or attempt a
+  // server POST merely to record that same local intent. AuthProvider will
+  // reconcile the exact revision on the next online/foreground check.
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
   const server = await serverRequest(user, 'POST', { action: 'withdraw', expectedRevision: verified });
   if (server.status !== 'withdrawn') throw new Error('Revoca non registrata dal server.');
   // A successful POST may arrive after another device has reaccepted.

@@ -488,6 +488,77 @@ describe('offline consent cache and reconnect privacy boundary', () => {
 });
 
 describe('account offline withdrawal and explicit local-only reacceptance', () => {
+  it('blocks offline account writes durably without requesting App Check or calling the network', async () => {
+    const uid = 'no-offline-network-' + crypto.randomUUID();
+    const actor = user(uid);
+    (auth as { currentUser: unknown }).currentUser = actor;
+    const online = vi.spyOn(navigator, 'onLine', 'get');
+    const requests = vi.fn(async () => Response.json({
+      status: 'active', revision: 1, acceptedAt: '2026-10-14T10:00:00.000Z',
+      privacyVersion: accepted.privacyVersion, termsVersion: accepted.termsVersion,
+    }));
+    vi.stubGlobal('fetch', requests);
+    try {
+      online.mockReturnValue(true);
+      beginHealthConsentVerification(uid);
+      expect(await refreshHealthConsent(actor)).toBe('active');
+      expect(requests).toHaveBeenCalledTimes(1);
+      online.mockReturnValue(false);
+      const { getLimitedUseAppCheckToken } = await import('../src/lib/appCheck');
+      vi.mocked(getLimitedUseAppCheckToken).mockClear();
+      await expect(withdrawHealthConsent(actor)).resolves.toBeUndefined();
+      expect(localStorage.getItem(key(uid))).toBe('pending:1');
+      expect(isHealthConsentWritable('user:' + uid)).toBe(false);
+      expect(isHealthConsentCloudWritable('user:' + uid)).toBe(false);
+      expect(requests).toHaveBeenCalledTimes(1);
+      expect(getLimitedUseAppCheckToken).not.toHaveBeenCalled();
+    } finally { online.mockRestore(); }
+  });
+
+  it('accepts a server-confirmed online withdrawal locally offline without replaying the withdrawal', async () => {
+    const uid = 'server-withdrawn-local-' + crypto.randomUUID();
+    const actor = user(uid);
+    (auth as { currentUser: unknown }).currentUser = actor;
+    const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
+    const actions: string[] = [];
+    let state: 'active' | 'withdrawn' = 'active';
+    let revision = 1;
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
+      const payload = init.body ? JSON.parse(init.body as string) as { action: string } : undefined;
+      const action = payload?.action ?? 'GET';
+      actions.push(action);
+      if (action === 'withdraw') {
+        state = 'withdrawn'; revision = 2;
+      } else if (action === 'reaccept') {
+        state = 'active'; revision = 3;
+      }
+      return Response.json({
+        status: state, revision,
+        ...(state === 'active'
+          ? { acceptedAt: '2026-10-15T09:00:00.000Z',
+              privacyVersion: accepted.privacyVersion, termsVersion: accepted.termsVersion }
+          : {}),
+      });
+    }));
+    try {
+      beginHealthConsentVerification(uid);
+      expect(await refreshHealthConsent(actor)).toBe('active');
+      await expect(withdrawHealthConsent(actor)).resolves.toBeUndefined();
+      expect(currentHealthConsentStatus(uid)).toBe('withdrawn');
+      expect(localStorage.getItem(key(uid))).toBe('withdrawn');
+      online.mockReturnValue(false);
+      expect(() => reacceptHealthConsentLocally(actor, accepted)).not.toThrow();
+      expect(currentHealthConsentStatus(uid)).toBe('active');
+      expect(isHealthConsentCloudWritable('user:' + uid)).toBe(false);
+      expect(localStorage.getItem(key(uid))).toContain('offline-reaccepted:1:');
+      online.mockReturnValue(true);
+      expect(await refreshHealthConsent(actor)).toBe('active');
+      expect(localStorage.getItem(key(uid))).toBeNull();
+      expect(isHealthConsentCloudWritable('user:' + uid)).toBe(true);
+      expect(actions).toEqual(['GET', 'withdraw', 'GET', 'GET', 'reaccept', 'GET']);
+    } finally { online.mockRestore(); }
+  });
+
   it('restores device editing after a pending offline revocation, never cloud, and survives cold boot', async () => {
     const uid = 'local-consent-' + crypto.randomUUID();
     const actor = user(uid);
@@ -515,7 +586,7 @@ describe('account offline withdrawal and explicit local-only reacceptance', () =
 
       online.mockReturnValue(false);
       disconnected = true;
-      await expect(withdrawHealthConsent(actor)).rejects.toThrow();
+      await expect(withdrawHealthConsent(actor)).resolves.toBeUndefined();
       expect(currentHealthConsentStatus(uid)).toBe('pending');
       expect(() => reacceptHealthConsentLocally(actor, accepted)).not.toThrow();
       expect(currentHealthConsentStatus(uid)).toBe('active');
@@ -574,7 +645,7 @@ describe('account offline withdrawal and explicit local-only reacceptance', () =
       expect(await refreshHealthConsent(actor)).toBe('active');
       online.mockReturnValue(false);
       vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('offline'); }));
-      await expect(withdrawHealthConsent(actor)).rejects.toThrow();
+      await expect(withdrawHealthConsent(actor)).resolves.toBeUndefined();
       reacceptHealthConsentLocally(actor, accepted);
       online.mockReturnValue(true);
       const network = vi.fn(async () => Response.json({ status: 'active', revision: 5,
@@ -603,7 +674,7 @@ describe('account offline withdrawal and explicit local-only reacceptance', () =
       expect(await refreshHealthConsent(actor)).toBe('active');
       online.mockReturnValue(false);
       vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('offline'); }));
-      await expect(withdrawHealthConsent(actor)).rejects.toThrow();
+      await expect(withdrawHealthConsent(actor)).resolves.toBeUndefined();
       reacceptHealthConsentLocally(actor, accepted);
       online.mockReturnValue(true);
       const { getLimitedUseAppCheckToken } = await import('../src/lib/appCheck');
@@ -631,7 +702,7 @@ describe('account offline withdrawal and explicit local-only reacceptance', () =
       expect(await refreshHealthConsent(actor)).toBe('active');
       online.mockReturnValue(false);
       vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('offline'); }));
-      await expect(withdrawHealthConsent(actor)).rejects.toThrow();
+      await expect(withdrawHealthConsent(actor)).resolves.toBeUndefined();
       reacceptHealthConsentLocally(actor, accepted);
       expect(isHealthConsentWritable('user:' + uid)).toBe(true);
       online.mockReturnValue(true);
@@ -681,7 +752,7 @@ describe('account offline withdrawal and explicit local-only reacceptance', () =
       expect(await refreshHealthConsent(actor)).toBe('active');
       onLine.mockReturnValue(false);
       vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('offline'); }));
-      await expect(withdrawHealthConsent(actor)).rejects.toThrow();
+      await expect(withdrawHealthConsent(actor)).resolves.toBeUndefined();
       reacceptHealthConsentLocally(actor, accepted);
       onLine.mockReturnValue(true);
       const newer = vi.fn(async () => Response.json({ status: 'withdrawn', revision: 4 }));

@@ -23,7 +23,7 @@ function ReacceptanceForm({ enabled, busy, onReaccept, firstAcceptance = false, 
     <p>{firstAcceptance
       ? 'Esamina i documenti e presta il primo consenso esplicito per usare il tuo account. Il consenso viene registrato dal server prima di permettere la sincronizzazione.'
       : localOnly
-        ? 'Puoi riprendere a usare i dati soltanto su questo dispositivo. La revoca e il nuovo consenso saranno registrati sul server dopo la riconnessione; fino ad allora non verrà effettuata alcuna sincronizzazione cloud.'
+        ? 'Puoi riprendere a usare TheLogBook su questo dispositivo anche senza Internet. I dati locali restano conservati.'
         : 'Esamina i documenti e scegli liberamente se prestare un nuovo consenso. I dati già presenti non vengono cancellati automaticamente.'}</p>
     <label style={{ display: 'block', marginBlock: 12 }}>
       <input type="checkbox" disabled={!enabled || busy} checked={acceptedTerms} onChange={e => setAcceptedTerms(e.target.checked)} />
@@ -111,10 +111,19 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
         return;
       }
       if (localOnlyReaccept) {
+        // Only 'withdrawn' represents an earlier server-confirmed revocation.
+        // 'pending' means both choices were made offline: no intrusive notice.
+        const serverAlreadyWithdrawn = status === 'withdrawn';
         reacceptHealthConsentLocally(user, {
           acceptedTerms: true, acceptedHealthData: true,
           privacyVersion: LEGAL_VERSIONS.privacy, termsVersion: LEGAL_VERSIONS.terms,
         });
+        if (serverAlreadyWithdrawn) {
+          void useDialogStore.getState().showAlert(
+            'Il consenso era stato revocato sul server. Adesso puoi usare TheLogBook su questo dispositivo; il nuovo consenso verrà verificato quando tornerai online. Fino ad allora la sincronizzazione resta sospesa.',
+            'Uso offline riattivato',
+          );
+        }
         return;
       }
       await reacceptHealthConsent(user, {
