@@ -402,11 +402,18 @@ export async function refreshHealthConsent(user: User): Promise<HealthConsentSta
         if (!isSameDecision()) return currentHealthConsentStatus(uid);
       }
       if (state.status === 'withdrawn' && state.revision === sourceRevision + 1) {
-        state = await serverRequest(user, 'POST', {
+        const acknowledged = await serverRequest(user, 'POST', {
           action: 'reaccept', expectedRevision: state.revision,
           acceptance: { acceptedTerms: true, acceptedHealthData: true,
             privacyVersion: offlineReaccept.privacyVersion, termsVersion: offlineReaccept.termsVersion },
         });
+        if (!isSameDecision()) return currentHealthConsentStatus(uid);
+        if (acknowledged.status !== 'active' || acknowledged.revision !== sourceRevision + 2) {
+          throw new Error('Nuovo consenso non attestato dal server.');
+        }
+        // The POST receipt does not include legal versions. An authoritative
+        // GET is required before publishing legalConsent or enabling cloud I/O.
+        state = await serverRequest(user, 'GET');
         if (!isSameDecision()) return currentHealthConsentStatus(uid);
       } else if (state.status === 'active' && state.revision === sourceRevision + 2) {
         // A lost POST acknowledgement is safe to finish only when the server
@@ -417,6 +424,13 @@ export async function refreshHealthConsent(user: User): Promise<HealthConsentSta
           setStatus(uid, 'error');
           return 'error';
         }
+      }
+      if (state.status === 'active' && state.revision === sourceRevision + 2
+        && (state.privacyVersion !== offlineReaccept.privacyVersion
+          || state.termsVersion !== offlineReaccept.termsVersion
+          || typeof state.acceptedAt !== 'string')) {
+        setStatus(uid, 'error');
+        return 'error';
       }
       if (state.status !== 'active' || state.revision !== sourceRevision + 2
         || typeof state.acceptedAt !== 'string') {
