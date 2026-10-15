@@ -3,7 +3,7 @@
  * local-pending. No new queue: IndexedDB stays authoritative. Callers must
  * gate account identity, connectivity and verified cloud consent.
  */
-export type JournalRetryHealth = 'saving' | 'synced' | 'local-pending' | 'rejected' | 'failed';
+type JournalRetryHealth = 'saving' | 'synced' | 'local-pending' | 'rejected' | 'failed';
 export interface JournalRetryState {
     syncHealth: JournalRetryHealth;
     syncing: boolean;

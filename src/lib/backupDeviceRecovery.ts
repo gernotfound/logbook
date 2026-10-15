@@ -6,7 +6,7 @@ const draftKey = (name: string) => name === 'draft_exercise' || name === 'draft_
 const isRecord = (value: unknown): value is Record<string, unknown> =>
     value !== null && typeof value === 'object' && !Array.isArray(value);
 
-export interface BackupDeviceDraft {
+interface BackupDeviceDraft {
     name: string;
     value: string;
 }
