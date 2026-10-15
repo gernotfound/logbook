@@ -114,7 +114,11 @@ Le versioni persistite sono quattro dimensioni indipendenti con fonte eseguibile
 - **MUST:** cifratura AEAD sincrona dei record nel **medesimo** `idb-keyval.update` e salvataggi device-critical sincroni, con owner/AAD autenticati e fail-closed se storage/key/ciphertext non sono leggibili.
 - **MUST:** migrazione interrompibile/riprendibile, key control versionati, purge key soltanto dopo eliminazione verificata delle copie cifrate. Perdere la chiave non equivale ad avere l'archivio vuoto; conservare ciphertext offline non recuperabile.
 - **VERIFY:** una chiave non esportabile dentro lo *stesso profilo browser* non protegge dal furto dell'intero profilo o da XSS. Non è crittografia end-to-end né sblocco mediante hardware remoto.
-- **MUST:** una sessione autenticata già verificata può operare **solo localmente** offline con la generazione di consenso attivo in cache. Dopo una revoca locale offline l'accesso fitness resta sospeso, salvo che la persona presti **esplicitamente** un nuovo consenso valido per il solo dispositivo e la revisione precedente sia già attestata dal server; l'intento di revoca precedente rimane durevole. Il primo accesso senza consenso verificato resta bloccato. Il primo `online`/foreground deve interrogare e riconciliare il consenso server **prima** di letture/write cloud, checkpoint o journal; una revoca remota più recente blocca le attività e preserva il journal locale senza upload. Nessun cache marker locale autorizza replica/cloud. Una nuova revisione dopo riaccettazione non può ri-etichettare pending del consenso precedente senza recupero separato ed esplicito.
+- **MUST:** una sessione autenticata già verificata può operare **solo localmente** offline con la generazione di consenso attivo in cache.
+- **MUST:** dopo una revoca locale offline l'accesso fitness resta sospeso. Eccezione: la persona presta **esplicitamente** un nuovo consenso valido per il solo dispositivo **e** la revisione precedente è già attestata dal server; l'intento di revoca precedente rimane durevole.
+- **MUST:** il primo accesso senza consenso verificato resta bloccato.
+- **MUST:** il primo `online`/foreground deve interrogare e riconciliare il consenso server **prima** di letture/write cloud, checkpoint o journal. Una revoca remota più recente blocca le attività e preserva il journal locale senza upload.
+- **MUST:** nessun cache marker locale autorizza replica/cloud. Una nuova revisione dopo riaccettazione non può ri-etichettare pending del consenso precedente senza recupero separato ed esplicito.
 - **MUST:** documentazione completa e limiti nel file `docs/architecture/secure-local-archive-design.md`.
 
 ### Accesso browser storage
@@ -271,7 +275,7 @@ Il gate canonico locale è `npm run verify:m8`. Su GitHub l'equivalente richiede
 ## Repository hygiene ed encoding
 
 - **MUST:** documenti task-specific (`implementation_plan*.md`, report audit/remediation generati, directory legacy di report) non restano nel candidato finale salvo che siano deliberatamente documentazione stabile nel path canonico.
-- Istruzioni normative: `AGENTS.md` + `.agents/rules/`; guide stabili: `docs/`; audit storici deliberati: `docs/audits/`.
+- Istruzioni normative: `AGENTS.md` + `.agents/rules/`; guide stabili e registri operativi: `docs/`. Audit e report di una singola revisione restano nella cronologia Git/PR; conservarne copie in `docs/audits/` solo quando servono ancora come evidenze storiche datate, chiaramente separate dallo stato corrente.
 - **MUST:** Markdown e sorgenti UTF-8 senza BOM; non introdurre mojibake.
 
 ## Riferimenti normativi
