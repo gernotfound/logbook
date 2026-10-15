@@ -238,7 +238,8 @@ describe('account deletion recovery foreground lifecycle', () => {
             expect.objectContaining({ message: expect.stringContaining('operation=local-finalization') }),
             { source: 'account_deletion_local_finalization' },
         );
-        expect(boundary.showAlert).toHaveBeenCalledWith('Pulizia A incompleta');
+        expect(boundary.showAlert).toHaveBeenNthCalledWith(1, 'Pulizia A incompleta');
+        expect(boundary.showAlert).toHaveBeenNthCalledWith(2, 'B failed');
     });
 
     it('surfaces a failed cloud deletion returned by a valid device proof', async () => {
@@ -253,7 +254,9 @@ describe('account deletion recovery foreground lifecycle', () => {
             expect.objectContaining({ message: expect.stringContaining('kind=remote-failed') }),
             { source: 'account_deletion_routine_check' },
         );
-        expect(boundary.showAlert).toHaveBeenCalledWith(expect.stringContaining('copia locale'));
+        expect(boundary.showAlert).toHaveBeenCalledWith(
+            expect.stringContaining('cancellazione cloud non è stata completata'),
+        );
     });
 
     it('preserves a receipt-not-found warning when another owner completes', async () => {
