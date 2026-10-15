@@ -39,10 +39,10 @@ describe('Empirical Challenger M4.2: Offline Queue, Circuit Breaker & Poison Pil
   });
 
   // -------------------------------------------------------------------------
-  // Challenge 1: Offline 100-Item Enqueue and Strict FIFO Eviction (50 Cap)
+  // Challenge 1: Offline 100-Item Enqueue with Error Priority (50 Cap)
   // -------------------------------------------------------------------------
-  describe('Challenge 1: Offline Enqueue & Strict FIFO Eviction', () => {
-    it('enqueues 100 items while offline and verifies queue strictly retains the newest 50 items (FIFO eviction)', () => {
+  describe('Challenge 1: Offline Enqueue & Error-Priority Eviction', () => {
+    it('enqueues 100 mixed items without letting dropped event telemetry evict error diagnostics', () => {
       Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
       telemetryHub.init();
       telemetryHub.setUserId('user_fifo_stress');
@@ -64,23 +64,11 @@ describe('Empirical Challenger M4.2: Offline Queue, Circuit Breaker & Poison Pil
       const inMemoryQueue = telemetryHub.getQueuedEvents();
       expect(inMemoryQueue.length).toBe(50);
 
-      // Verify that items 1..50 were evicted, and items 51..100 are strictly preserved in order
-      expect(inMemoryQueue[0].payload.type).toBe('Error');
-      expect((inMemoryQueue[0].payload as TelemetryErrorPayload).message).toBe('test_error_51');
-
-      expect(inMemoryQueue[49].payload.type).toBe('test_event_100');
-      expect((inMemoryQueue[49].payload as TelemetryEventPayload).details?.index).toBeUndefined();
-
-      // Verify intermediate sequence order; arbitrary test metadata is intentionally minimized away.
+      // All 50 distinct errors are retained in FIFO order, not displaced by events.
+      expect(inMemoryQueue.every(item => item.itemType === 'error')).toBe(true);
       for (let idx = 0; idx < 50; idx++) {
-        const itemNumber = 51 + idx;
-        const item = inMemoryQueue[idx];
-        if (itemNumber % 2 === 0) {
-          expect(item.payload.type).toBe(`test_event_${itemNumber}`);
-        } else {
-          expect(item.payload.type).toBe('Error');
-          expect((item.payload as TelemetryErrorPayload).message).toBe(`test_error_${itemNumber}`);
-        }
+        expect((inMemoryQueue[idx].payload as TelemetryErrorPayload).message)
+          .toBe(`test_error_${idx * 2 + 1}`);
       }
 
       Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
