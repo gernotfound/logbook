@@ -80,7 +80,7 @@ export function useCycleForm({ initialCycle, routines, onSave, showAlert }: UseC
 
     const handleDurationWeeksChange = (val: string) => {
         setDurationWeeks(val);
-        const w = parseInt(val, 10);
+        const w = Number(val);
         if (Number.isSafeInteger(w) && w >= 1 && startDate) {
             const newEnd = computeEndDate(startDate, w);
             setEndDate(newEnd);
