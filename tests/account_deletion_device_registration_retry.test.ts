@@ -350,7 +350,7 @@ describe('account deletion recovery device registration retries', () => {
     expect(finalize).toHaveBeenCalledWith('user-b');
   });
 
-  it.each([400, 401, 403, 500])('classifies HTTP %i registration failure without deleting the local proof', async status => {
+  it.each([201, 400, 401, 403, 500])('classifies HTTP %i registration failure without deleting the local proof', async status => {
     const { registerDeletionRecoveryDevice } = await loadSubject();
     const current = user();
     firebase.auth.currentUser = current;
