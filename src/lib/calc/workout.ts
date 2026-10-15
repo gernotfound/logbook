@@ -346,9 +346,16 @@ export function calculateWorkoutVolume(
     if (!session || !Array.isArray(session.exercises)) return 0;
     // Callers analyzing multiple sessions may share an immutable catalog lookup.
     // An array keeps the original last-ID-wins lookup semantics.
-    const libMap = Array.isArray(library)
-        ? new Map<string, VolumeExerciseRef>(library.filter(ex => ex?.id).map(ex => [ex.id, ex]))
-        : library as ReadonlyMap<string, VolumeExerciseRef>;
+    let libMap: ReadonlyMap<string, VolumeExerciseRef>;
+    if (Array.isArray(library)) {
+        const entries = new Map<string, VolumeExerciseRef>();
+        for (const entry of library) {
+            if (entry?.id) entries.set(entry.id, entry);
+        }
+        libMap = entries;
+    } else {
+        libMap = library as ReadonlyMap<string, VolumeExerciseRef>;
+    }
 
     let totalVolume = 0;
     for (const ex of session.exercises) {

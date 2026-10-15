@@ -175,7 +175,10 @@ export function computeWeeklyVolumeSeries(
     const safeUserWeight = typeof userWeight === 'number' && userWeight > 0 ? userWeight : 80;
 
     const intervals = generateWeekIntervals(numWeeks, referenceDate);
-    const libraryLookup = new Map(safeLibrary.filter(ex => ex?.id).map(ex => [ex.id, ex]));
+    const libraryLookup = new Map<string, Exercise>();
+    for (const exercise of safeLibrary) {
+        if (exercise?.id) libraryLookup.set(exercise.id, exercise);
+    }
 
     const firstDay = intervals[0].weekStart;
     const lastDay = intervals[intervals.length - 1].weekEnd;

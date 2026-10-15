@@ -794,3 +794,20 @@ describe('Home analytics weekly bucketing regression', () => {
         expect(points).toHaveLength(52);
     });
 });
+
+describe('Weekly catalog lookup compatibility', () => {
+    it('uses the last catalog entry for duplicate exercise IDs, for arrays and prebuilt maps', () => {
+        const catalog: Exercise[] = [
+            { id: 'same', name: 'Old', equipmentWeight: 10, muscles: [], setsCount: 1, sets: [] },
+            { id: 'same', name: 'New', equipmentWeight: 20, muscles: [], setsCount: 1, sets: [] },
+        ];
+        const workout: WorkoutSession = {
+            id: 'w', date: '2026-08-18',
+            exercises: [{ exId: 'same', sessionNote: '', sets: [{ id: 's1', kg: '10', reps: '10' }] }],
+        };
+        const map = new Map(catalog.map(exercise => [exercise.id, exercise]));
+        expect(calculateWorkoutVolume(workout, catalog, 80)).toBe(300);
+        expect(calculateWorkoutVolume(workout, map, 80)).toBe(300);
+        expect(computeWeeklyVolumeSeries([workout], catalog, 80, 4, '2026-08-22').stats.totalVolumeKg).toBe(300);
+    });
+});
