@@ -48,7 +48,7 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               Informativa sulla privacy
             </h2>
             <p style={{ margin: '4px 0 0', fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)' }}>
-              Aggiornata al 13 ottobre 2026
+              Aggiornata al 15 ottobre 2026
             </p>
           </div>
           <button

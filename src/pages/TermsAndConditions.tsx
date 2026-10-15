@@ -48,7 +48,7 @@ export const TermsAndConditions: React.FC<{ onClose: () => void }> = ({ onClose 
               Termini e condizioni
             </h2>
             <p style={{ margin: '4px 0 0', fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)' }}>
-              Aggiornati al 12 ottobre 2026
+              Aggiornati al 15 ottobre 2026
             </p>
           </div>
           <button

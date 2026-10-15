@@ -148,7 +148,7 @@ describe('RISK-02: ConsentOverlay UI Behavior', () => {
 
     it('descrive la rimozione di GA4 e la data dell’informativa aggiornata', () => {
         render(<PrivacyPolicy onClose={vi.fn()} />);
-        expect(screen.getByText('Aggiornata al 13 ottobre 2026')).toBeDefined();
+        expect(screen.getByText('Aggiornata al 15 ottobre 2026')).toBeDefined();
         expect(screen.getByText(/non integra Google Analytics 4/i)).toBeDefined();
         expect(screen.queryByText(/cookie first-party tecnici\/analitici/i)).toBeNull();
     });
