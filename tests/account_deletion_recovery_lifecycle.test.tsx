@@ -92,12 +92,7 @@ describe('account deletion recovery foreground lifecycle', () => {
     });
 
     it('does not classify an isolated routine timeout as an account deletion failure', async () => {
-        const timeout = Object.assign(new Error('private network info'), {
-            operation: 'routine-check',
-            phase: 'app-check',
-            kind: 'timeout',
-            code: 'account-deletion-device-operation-failed',
-        });
+        const timeout = new DeletionDeviceOperationError('routine-check', 'app-check', 'timeout');
         boundary.recoverByDevice.mockRejectedValueOnce(timeout);
 
         render(<AccountDeletionRecovery />);
