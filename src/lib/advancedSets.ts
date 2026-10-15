@@ -97,7 +97,7 @@ export function formatAdvancedSetSummary(set: SessionExerciseSet): string | null
     }
     const seen = new Map<SetContinuationTechnique, number>();
 
-    return segments.map((segment, index) => {
+    return segments.map(segment => {
         const segmentTechnique = getContinuationTechnique(set, segment);
         const baseLabel = segmentTechnique ? continuationTechniqueLabel(segmentTechnique) : 'Tecnica';
         let label = baseLabel;
