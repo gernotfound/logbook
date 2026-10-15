@@ -297,7 +297,7 @@ class AccountDeletionRequestTimeoutError extends Error {
     }
 }
 
-export class AccountDeletionLocalFinalizationError extends Error {
+class AccountDeletionLocalFinalizationError extends Error {
     readonly code = 'account-deletion-local-finalization-failed';
 
     constructor(message: string, cause?: unknown) {
