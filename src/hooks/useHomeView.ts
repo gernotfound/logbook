@@ -91,7 +91,7 @@ const EMPTY_NUTRITION: Record<string, any> = {};
 const EMPTY_LIBRARY: any[] = [];
 const EMPTY_PAINS: string[] = [];
 
-export function useHomeView(): HomeViewState {
+export function useHomeView(isActive = true): HomeViewState {
     const hasUserData = useAppStore(state => !!state.userData);
     const history = useAppStore(state => state.userData?.history || EMPTY_HISTORY);
     const nutrition = useAppStore(state => state.userData?.nutrition || EMPTY_NUTRITION);
@@ -103,7 +103,9 @@ export function useHomeView(): HomeViewState {
     const homeDay = Logic.getLocalDateString(homeClockNow);
 
     useEffect(() => {
+        if (!isActive) return;
         let timeoutId: ReturnType<typeof setTimeout> | null = null;
+        let immediateId: ReturnType<typeof setTimeout> | null = null;
         let active = true;
 
         const scheduleNextRefresh = () => {
@@ -118,14 +120,19 @@ export function useHomeView(): HomeViewState {
             if (document.visibilityState === 'visible') setHomeClockNow(Date.now());
         };
 
+        // Mounted tabs remain alive while hidden; refresh on return, without a hidden timer.
+        immediateId = setTimeout(() => {
+            if (active) setHomeClockNow(Date.now());
+        }, 0);
         scheduleNextRefresh();
         document.addEventListener('visibilitychange', handleVisibilityChange);
         return () => {
             active = false;
             if (timeoutId) clearTimeout(timeoutId);
+            if (immediateId) clearTimeout(immediateId);
             document.removeEventListener('visibilitychange', handleVisibilityChange);
         };
-    }, []);
+    }, [isActive]);
 
     const painColors = useMemo(() => {
         const colors: Record<string, string> = {};

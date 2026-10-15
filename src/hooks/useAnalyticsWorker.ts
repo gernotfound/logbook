@@ -4,12 +4,13 @@ import AnalyticsWorker from '../workers/analytics.worker?worker';
 
 let messageIdCounter = 0;
 
-export function useAnalyticsWorker() {
+export function useAnalyticsWorker(enabled = true) {
     const workerRef = useRef<Worker | null>(null);
     const mounted = useRef(false);
     const pendingPromises = useRef<Map<number, { resolve: (val: any) => void, reject: (err: any) => void, timeoutId: ReturnType<typeof setTimeout> }>>(new Map());
 
     useEffect(() => {
+        if (!enabled) return;
         mounted.current = true;
         const pendingForThisMount = pendingPromises.current;
         try {
@@ -58,7 +59,7 @@ export function useAnalyticsWorker() {
                 handlers.reject(new Error('Worker terminated on unmount'));
             }
         };
-    }, []);
+    }, [enabled]);
 
     const executeTask = useCallback(async (type: string, payload: any, fallbackFn: () => any, timeoutMs = 8000) => {
         if (!mounted.current) throw new Error('Calcolo annullato: vista chiusa');

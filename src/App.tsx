@@ -567,7 +567,7 @@ function OwnerBoundApp({ startupTab }: { startupTab: string | null }) {
               {(visitedTabs.home || activeTab === 'home') && (
                 settingsOpen
                   ? <SettingsView onClose={handleCloseSettings} />
-                  : <HomeView onNavigate={handleHomeNavigate} onOpenSettings={handleOpenSettings} />
+                  : <HomeView onNavigate={handleHomeNavigate} onOpenSettings={handleOpenSettings} isActive={activeTab === 'home'} />
               )}
             </div>
             <div style={{ display: activeTab === 'training' ? 'block' : 'none' }}>

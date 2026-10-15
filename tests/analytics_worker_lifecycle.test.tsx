@@ -44,3 +44,30 @@ it('terminates a stalled worker and resolves all pending tasks through one fallb
     expect(worker.fallback).toHaveBeenCalledTimes(3);
     hook.unmount();
 });
+
+it('does not run workers for hidden tabs and restarts safely on reactivation', async () => {
+    const hook = renderHook(({ enabled }) => useAnalyticsWorker(enabled), { initialProps: { enabled: false } });
+    await expect(hook.result.current.calculateVolumeStats([], [], 80, 8)).rejects.toThrow('annullato');
+    expect(worker.post).not.toHaveBeenCalled();
+
+    hook.rerender({ enabled: true });
+    const pending = hook.result.current.calculateVolumeStats([], [], 80, 8).catch(error => error);
+    expect(worker.post).toHaveBeenCalledTimes(1);
+    hook.rerender({ enabled: false });
+    expect(await pending).toBeInstanceOf(Error);
+    expect(worker.terminate).toHaveBeenCalledTimes(1);
+
+    hook.rerender({ enabled: true });
+    const second = hook.result.current.calculateVolumeStats([], [], 80, 8);
+    await act(async () => {
+        worker.instance.onmessage({
+            data: {
+                id: worker.post.mock.calls[worker.post.mock.calls.length - 1][0].id,
+                type: 'SUCCESS',
+                result: { points: [], stats: {} },
+            },
+        });
+    });
+    expect(await second).toEqual({ points: [], stats: {} });
+    hook.unmount();
+});
