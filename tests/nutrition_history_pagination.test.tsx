@@ -30,6 +30,31 @@ describe('meal history incremental rendering', () => {
         expect(onDayClick).toHaveBeenCalledWith(days[65].date);
     });
 
+    it('retains expanded history when a parent temporarily unmounts the history tab', () => {
+        function HistoryParent() {
+            const [open, setOpen] = React.useState(true);
+            const [visibleCount, setVisibleCount] = React.useState(30);
+            return (
+                <>
+                    <button type="button" onClick={() => setOpen(!open)}>Cambia scheda</button>
+                    {open && <NutritionHistory
+                        nutritionHistory={days}
+                        visibleCount={visibleCount}
+                        onShowMore={() => setVisibleCount(count => count + 30)}
+                    />}
+                </>
+            );
+        }
+        const { container } = render(<HistoryParent />);
+        const countCards = () => container.querySelectorAll('.clickable-card').length;
+        fireEvent.click(screen.getByRole('button', { name: /Mostra altri giorni/i }));
+        expect(countCards()).toBe(60);
+        fireEvent.click(screen.getByRole('button', { name: 'Cambia scheda' }));
+        expect(countCards()).toBe(0);
+        fireEvent.click(screen.getByRole('button', { name: 'Cambia scheda' }));
+        expect(countCards()).toBe(60);
+    });
+
     it('shows an empty state and no pagination controls', () => {
         render(<NutritionHistory nutritionHistory={[]} />);
         expect(screen.getByText('Nessun pasto registrato finora.')).toBeDefined();
