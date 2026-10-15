@@ -35,7 +35,7 @@ describe('Global catalog hydration timeout', () => {
         await new Promise(resolve => setTimeout(resolve, 600));
         return { exists: () => true, data: () => newManifest } as any;
       })
-      .mockImplementationOnce(() => new Promise(() => {}))
+      .mockImplementationOnce(() => new Promise<Awaited<ReturnType<typeof getDoc>>>(() => {}))
       .mockResolvedValueOnce({ exists: () => true, data: () => ({ items: [] }) } as any);
 
     const settled = vi.fn();
