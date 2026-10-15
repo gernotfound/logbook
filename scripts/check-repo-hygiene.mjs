@@ -100,4 +100,6 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-console.log(`M6 repository hygiene OK: clean worktree; ${checked} tracked text files are UTF-8 without BOM; no task-specific analysis artifacts.`);
+// Run the link-parser regression suite without changing the protected CI leaf command.
+execFileSync(process.execPath, ['--test', 'scripts/markdown-links.test.mjs'], { stdio: 'inherit' });
+console.log(`M6 repository hygiene OK: clean worktree; ${checked} tracked text files are UTF-8 without BOM; ${markdownFiles.length} Markdown files checked for local links; no task-specific analysis artifacts.`);
