@@ -298,7 +298,7 @@ class AccountDeletionRequestTimeoutError extends Error {
 }
 
 export class AccountDeletionReceiptNotFoundError extends Error {
-    constructor() {
+    constructor(readonly uid?: string) {
         super('La ricevuta locale non è più riconosciuta dal server. La copia locale resta conservata fino alla verifica del dispositivo.');
         this.name = 'AccountDeletionReceiptNotFoundError';
     }
@@ -385,7 +385,7 @@ async function fetchAccountDeletionStatus(marker: AccountDeletionMarker, timeout
         assertDeletionDeadlineActive(signal);
         return { response, body };
     }, timeoutMs, () => new AccountDeletionRequestTimeoutError());
-    if (response.status === 404) throw new AccountDeletionReceiptNotFoundError();
+    if (response.status === 404) throw new AccountDeletionReceiptNotFoundError(marker.uid);
     if (!response.ok) {
         throw new Error(typeof body.error === 'string'
             ? body.error
