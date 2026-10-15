@@ -5,6 +5,7 @@
 import { useState, useRef, useMemo } from 'react';
 import { addDays, differenceInCalendarDays, parseISO, format, isValid, startOfDay } from 'date-fns';
 import { Logic } from '../../../lib/logic';
+import { MAX_EDITABLE_CYCLE_WEEKS, MAX_CYCLE_SESSIONS_PER_WEEK, previewCycleCount } from '../../../lib/calc/cycleLimits';
 import type {
     TrainingCycle,
     TrainingCycleIntent,
@@ -18,7 +19,7 @@ function computeEndDate(startIso: string, weeks: number): string {
     try {
         const parsed = typeof startIso === 'string' && !startIso.includes('T') ? parseISO(startIso) : new Date(startIso);
         if (!isValid(parsed)) return startIso;
-        const totalWeeks = Math.max(1, weeks);
+        const totalWeeks = Math.min(MAX_EDITABLE_CYCLE_WEEKS, Math.max(1, weeks));
         const end = addDays(startOfDay(parsed), totalWeeks * 7 - 1);
         return format(end, 'yyyy-MM-dd');
     } catch {
@@ -80,7 +81,7 @@ export function useCycleForm({ initialCycle, routines, onSave, showAlert }: UseC
     const handleDurationWeeksChange = (val: string) => {
         setDurationWeeks(val);
         const w = parseInt(val, 10);
-        if (!isNaN(w) && w >= 1 && startDate) {
+        if (Number.isSafeInteger(w) && w >= 1 && startDate) {
             const newEnd = computeEndDate(startDate, w);
             setEndDate(newEnd);
             setEndDateTextInput(Logic.formatItalianDate(newEnd));
@@ -93,7 +94,7 @@ export function useCycleForm({ initialCycle, routines, onSave, showAlert }: UseC
         const parsedIso = Logic.parseDateInput(val);
         if (parsedIso) {
             setStartDate(parsedIso);
-            const w = Math.max(1, parseInt(durationWeeks, 10) || 4);
+            const w = previewCycleCount(durationWeeks, 4, MAX_EDITABLE_CYCLE_WEEKS);
             const newEnd = computeEndDate(parsedIso, w);
             setEndDate(newEnd);
             setEndDateTextInput(Logic.formatItalianDate(newEnd));
@@ -105,7 +106,7 @@ export function useCycleForm({ initialCycle, routines, onSave, showAlert }: UseC
         if (parsedIso) {
             setStartDate(parsedIso);
             setDateTextInput(Logic.formatItalianDate(parsedIso));
-            const w = Math.max(1, parseInt(durationWeeks, 10) || 4);
+            const w = previewCycleCount(durationWeeks, 4, MAX_EDITABLE_CYCLE_WEEKS);
             const newEnd = computeEndDate(parsedIso, w);
             setEndDate(newEnd);
             setEndDateTextInput(Logic.formatItalianDate(newEnd));
@@ -119,7 +120,7 @@ export function useCycleForm({ initialCycle, routines, onSave, showAlert }: UseC
         if (val) {
             setStartDate(val);
             setDateTextInput(Logic.formatItalianDate(val));
-            const w = Math.max(1, parseInt(durationWeeks, 10) || 4);
+            const w = previewCycleCount(durationWeeks, 4, MAX_EDITABLE_CYCLE_WEEKS);
             const newEnd = computeEndDate(val, w);
             setEndDate(newEnd);
             setEndDateTextInput(Logic.formatItalianDate(newEnd));
@@ -261,8 +262,13 @@ export function useCycleForm({ initialCycle, routines, onSave, showAlert }: UseC
             return;
         }
 
-        const weeks = Math.max(1, parseInt(durationWeeks, 10) || 4);
-        const freqPerWeek = Math.max(1, parseInt(sessionsPerWeek, 10) || cycleRoutines.length);
+        const weeks = Number(durationWeeks);
+        const freqPerWeek = Number(sessionsPerWeek);
+        if (!Number.isSafeInteger(weeks) || weeks < 1 || weeks > MAX_EDITABLE_CYCLE_WEEKS
+            || !Number.isSafeInteger(freqPerWeek) || freqPerWeek < 1 || freqPerWeek > MAX_CYCLE_SESSIONS_PER_WEEK) {
+            await showAlert('Il ciclo deve durare da 1 a 52 settimane e prevedere da 1 a 14 sedute intere a settimana.');
+            return;
+        }
         const validStartDate = Logic.parseDateInput(dateTextInput) || startDate || undefined;
         const validEndDate = Logic.parseDateInput(endDateTextInput) || endDate || (validStartDate ? computeEndDate(validStartDate, weeks) : undefined);
         const hasStrategyDetails = Boolean(strategyIntent || primaryMuscles.length || secondaryMuscles.length);
@@ -294,8 +300,10 @@ export function useCycleForm({ initialCycle, routines, onSave, showAlert }: UseC
         await onSave(cycle);
     };
 
-    const tempWeeks = Math.max(1, parseInt(durationWeeks, 10) || 4);
-    const tempFreq = Math.max(1, parseInt(sessionsPerWeek, 10) || cycleRoutines.length || 1);
+    // Preview may be bounded while the form keeps the original invalid input
+    // visible so it can be corrected rather than silently saved or truncated.
+    const tempWeeks = previewCycleCount(durationWeeks, 4, MAX_EDITABLE_CYCLE_WEEKS);
+    const tempFreq = previewCycleCount(sessionsPerWeek, cycleRoutines.length || 1, MAX_CYCLE_SESSIONS_PER_WEEK);
 
     const timeline = useMemo(() => {
         return Logic.calculateCycleTimeline({
