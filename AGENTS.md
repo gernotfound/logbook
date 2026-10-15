@@ -28,13 +28,13 @@ Un `MUST` è un contratto da rispettare, non prova che codice o Production lo so
 ## Quali documenti leggere
 
 - **Ogni task:** questo file, HEAD GitHub di `main`, regole pertinenti e codice/test coinvolti.
-- **Archivio locale, journal, replica e workout:** `.agents/rules/storage-and-sync.md`; integrare `crash-consistency.md`, `causal-gc.md`, `domain-operations.md` dove pertinenti.
-- **Modello dati, proiezioni, nuove mutazioni:** `.agents/rules/data-model-and-zod.md`, `domain-operations.md`.
-- **Backup, import/export, guest, consenso, Auth, logout, cancellazione:** `.agents/rules/account-lifecycle.md`; integrare `storage-and-sync.md` e `firebase-config.md`.
-- **Firestore Rules, App Check e servizi/deploy:** `.agents/rules/firebase-config.md`, `external-services.md`, `ci-verification.md`.
-- **UI, temi, PWA, Service Worker, accessibilità:** `.agents/rules/design-system.md`; per update/reload anche `storage-and-sync.md`, `account-lifecycle.md`.
-- **Catalogo e seeding:** `.agents/rules/catalog-operations.md`; per custom item `data-model-and-zod.md`.
-- **CI, oracle, fuzz:** `.agents/rules/ci-verification.md`, `verification-hardening.md`, `distributed-fuzz.md` secondo il cambiamento.
+- **Archivio locale, journal, replica e workout:** `.agents/rules/storage-and-sync.md`; integrare `.agents/rules/crash-consistency.md`, `.agents/rules/causal-gc.md`, `.agents/rules/domain-operations.md` dove pertinenti.
+- **Modello dati, proiezioni, nuove mutazioni:** `.agents/rules/data-model-and-zod.md`, `.agents/rules/domain-operations.md`.
+- **Backup, import/export, guest, consenso, Auth, logout, cancellazione:** `.agents/rules/account-lifecycle.md`; integrare `.agents/rules/storage-and-sync.md` e `.agents/rules/firebase-config.md`.
+- **Firestore Rules, App Check e servizi/deploy:** `.agents/rules/firebase-config.md`, `.agents/rules/external-services.md`, `.agents/rules/ci-verification.md`.
+- **UI, temi, PWA, Service Worker, accessibilità:** `.agents/rules/design-system.md`; per update/reload anche `.agents/rules/storage-and-sync.md`, `.agents/rules/account-lifecycle.md`.
+- **Catalogo e seeding:** `.agents/rules/catalog-operations.md`; per custom item `.agents/rules/data-model-and-zod.md`.
+- **CI, oracle, fuzz:** `.agents/rules/ci-verification.md`, `.agents/rules/verification-hardening.md`, `.agents/rules/distributed-fuzz.md` secondo il cambiamento.
 
 Se la modifica attraversa più boundary, leggere **l'unione** dei contratti pertinenti. L'indice non è un'allowlist di file da ignorare.
 
@@ -60,6 +60,8 @@ Sono **CRITICAL** almeno: dati utente, IndexedDB/persistenza, sincronizzazione, 
 Quando il product owner autorizza a procedere, risolvere o completare un task, l'autorizzazione copre l'intero normale ciclo tecnico pertinente: analisi → root cause → branch → implementazione → test → commit → PR → correzione CI → review → merge → verifica post-merge → verifica Firebase Hosting e Vercel runtime.
 
 Non richiedere una nuova approvazione per scelte di implementazione, test falliti, CI rossa, conflitti tecnici o correzioni necessarie lungo quel ciclo. Fermarsi solo se serve una vera decisione di prodotto/UX non deducibile, un'azione distruttiva/irreversibile sui dati utente non già autorizzata, oppure mancano permessi/strumenti indispensabili.
+
+**MUST:** la delega tecnica non supera restrizioni esplicite sui connettori o autorizzazioni specifiche della chat. Non usare strumenti disabilitati per default senza consenso operativo esplicito e non aggirare un rifiuto di sicurezza cambiando canale.
 
 Per task strutturali o CRITICAL preparare un piano di lavoro prima delle modifiche. Il piano può vivere nel reasoning, nella descrizione PR o temporaneamente nel branch; non richiede una seconda autorizzazione dopo un mandato generale a procedere. Eventuali `implementation_plan*.md` task-specific sono artefatti temporanei e **MUST** essere rimossi prima del candidato finale, in accordo con `.agents/rules/ci-verification.md`.
 
