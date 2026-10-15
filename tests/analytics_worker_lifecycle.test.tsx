@@ -1,5 +1,5 @@
 import { act, renderHook } from '@testing-library/react';
-import { beforeEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 const worker = vi.hoisted(() => ({ post: vi.fn(), terminate: vi.fn(), fallback: vi.fn(() => ({ points: [], stats: {} })), instance: null as any }));
 vi.mock('../src/workers/analytics.worker?worker', () => ({ default: class {
     postMessage = worker.post; terminate = worker.terminate; onerror: any; onmessage: any;
@@ -21,4 +21,26 @@ it('uses the fallback for a real worker failure while the view is still mounted'
     const result = hook.result.current.calculateVolumeStats([], [], 80, 8);
     await act(async () => { worker.instance.onerror(new Error('crash')); });
     expect(await result).toEqual({ points: [], stats: {} }); expect(worker.fallback).toHaveBeenCalledTimes(1);
+});
+
+afterEach(() => { vi.useRealTimers(); });
+
+it('terminates a stalled worker and resolves all pending tasks through one fallback each', async () => {
+    vi.useFakeTimers();
+    const hook = renderHook(() => useAnalyticsWorker());
+    const first = hook.result.current.calculateVolumeStats([], [], 80, 8);
+    const second = hook.result.current.calculateVolumeStats([], [], 80, 12);
+
+    expect(worker.post).toHaveBeenCalledTimes(2);
+    await act(async () => { vi.advanceTimersByTime(8000); });
+
+    expect(await first).toEqual({ points: [], stats: {} });
+    expect(await second).toEqual({ points: [], stats: {} });
+    expect(worker.terminate).toHaveBeenCalledTimes(1);
+    expect(worker.fallback).toHaveBeenCalledTimes(2);
+
+    expect(await hook.result.current.calculateVolumeStats([], [], 80, 4)).toEqual({ points: [], stats: {} });
+    expect(worker.post).toHaveBeenCalledTimes(2);
+    expect(worker.fallback).toHaveBeenCalledTimes(3);
+    hook.unmount();
 });

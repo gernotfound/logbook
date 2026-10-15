@@ -11,6 +11,8 @@ import {
     getWorkoutDateString
 } from './analytics';
 import { getLocalDateString } from '../utils/date';
+import { calculateWorkoutVolume } from './workout';
+import { format, subDays } from 'date-fns';
 import type { WorkoutSession, Exercise, NutritionDay } from '../../types';
 
 describe('Analytics Engine 4-Tier Test Suite (src/lib/calc/analytics.ts)', () => {
@@ -751,5 +753,44 @@ describe('Analytics Engine 4-Tier Test Suite (src/lib/calc/analytics.ts)', () =>
             expect(points[0]).not.toHaveProperty('fatigue');
         });
 
+    });
+});
+describe('Home analytics weekly bucketing regression', () => {
+    it('matches the historical per-week filter on a large unordered archive, including session order and DST', () => {
+        const referenceDate = '2026-04-12';
+        const library: Exercise[] = [{
+            id: 'ex-1', name: 'Test exercise', muscles: ['petto'],
+            trackingType: 'weight_reps', setsCount: 1, sets: [],
+        }];
+        const date = new Date('2026-04-12T12:00:00');
+        const history: WorkoutSession[] = Array.from({ length: 1500 }, (_, i) => ({
+            id: `s-${i}`,
+            date: format(subDays(date, (i * 37) % 382), 'yyyy-MM-dd'),
+            exercises: [{
+                exId: 'ex-1', sessionNote: '',
+                sets: [{ id: `set-${i}`, kg: '1.25', reps: String((i % 9) + 1) }],
+            }],
+        }));
+        const intervals = generateWeekIntervals(52, referenceDate);
+        const expected = intervals.map(interval => {
+            const matching = history.filter(session => {
+                const d = getWorkoutDateString(session);
+                return d !== null && d >= interval.weekStart && d <= interval.weekEnd;
+            });
+            return {
+                workoutCount: matching.length,
+                sessionIds: matching.map(session => session.id).filter(Boolean),
+                volumeKg: Math.round(matching.reduce(
+                    (sum, session) => sum + calculateWorkoutVolume(session, library, 80), 0,
+                )),
+            };
+        });
+        const { points } = computeWeeklyVolumeSeries(history, library, 80, 52, referenceDate);
+        expect(points.map(point => ({
+            workoutCount: point.workoutCount,
+            sessionIds: point.sessionIds,
+            volumeKg: point.volumeKg,
+        }))).toEqual(expected);
+        expect(points).toHaveLength(52);
     });
 });

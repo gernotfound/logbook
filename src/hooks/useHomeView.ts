@@ -268,7 +268,7 @@ export function useHomeView(): HomeViewState {
     const { recentWeight, recentNutritionWithBf } = useMemo(() => {
         const dates = Object.keys(nutrition).sort((a, b) => b.localeCompare(a));
         let weight: string | number | undefined;
-        let bfDay: Record<string, any> | undefined;
+        let bfDay: (typeof nutrition)[string] | undefined;
         for (const date of dates) {
             const day = nutrition[date];
             if (weight === undefined && day?.weight) weight = day.weight;
