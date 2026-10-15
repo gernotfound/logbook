@@ -314,8 +314,8 @@ describe('Unified Telemetry Hub E2E Suite — Tier 5', () => {
       });
     });
 
-    describe('5.3: Offline Queue Strict FIFO Cap (50 Items) & Eviction under Stress', () => {
-      it('T5-9: avalanche stress of 500 mixed items offline strictly enforces 50-item cap and evicts oldest items FIFO', () => {
+    describe('5.3: Offline Queue Capacity (50 Items) & Diagnostic Priority', () => {
+      it('T5-9: an offline storm preserves the last 50 errors before dropped standalone events', () => {
         Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
         telemetryHub.init();
         telemetryHub.setUserId('user_t5_9');
@@ -332,11 +332,26 @@ describe('Unified Telemetry Hub E2E Suite — Tier 5', () => {
         expect(queue.length).toBe(TELEMETRY_QUEUE_CAPACITY);
         expect(queue.length).toBe(50);
 
-        // Items 1..450 evicted; item 451 is the oldest remaining
-        expect(queue[0].payload.type).toBe('Error');
-        expect((queue[0].payload as TelemetryErrorPayload).message).toBe('avalanche_error_451');
-        expect(queue[49].payload.type).toBe('avalanche_event_500');
+        // Events are not externally dispatched; they may never evict actionable errors.
+        expect(queue.every(item => item.itemType === 'error')).toBe(true);
+        expect((queue[0].payload as TelemetryErrorPayload).message).toBe('avalanche_error_401');
+        expect((queue[49].payload as TelemetryErrorPayload).message).toBe('avalanche_error_499');
 
+        Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
+      });
+
+      it('never discards an error when a full offline queue receives standalone events', () => {
+        Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
+        telemetryHub.init();
+        telemetryHub.setUserId('user_t5_priority');
+        for (let i = 0; i < TELEMETRY_QUEUE_CAPACITY; i++) {
+          telemetryHub.trackError(new Error(`must_preserve_${i}`));
+        }
+        telemetryHub.trackEvent('discarded_when_queue_full');
+        const queue = telemetryHub.getQueuedEvents();
+        expect(queue).toHaveLength(TELEMETRY_QUEUE_CAPACITY);
+        expect(queue.every(item => item.itemType === 'error')).toBe(true);
+        expect((queue[0].payload as TelemetryErrorPayload).message).toBe('must_preserve_0');
         Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
       });
 
