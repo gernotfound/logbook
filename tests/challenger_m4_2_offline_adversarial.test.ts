@@ -4,7 +4,6 @@ import {
   telemetryHub,
   TELEMETRY_QUEUE_CAPACITY,
   type TelemetryErrorPayload,
-  type TelemetryEventPayload,
   type QueuedTelemetryItem,
 } from '../src/lib/telemetryHub';
 import { getTelemetryContext } from '../src/lib/telemetrySanitizer';
