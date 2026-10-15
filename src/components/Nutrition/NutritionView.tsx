@@ -3,7 +3,7 @@ import { useNutritionMeals } from '../../hooks/useNutritionMeals';
 import NutritionPlanning from './NutritionPlanning';
 import NutritionMeals from './NutritionMeals';
 import NutritionFoodArchive from './NutritionFoodArchive';
-import NutritionHistory from './NutritionHistory';
+import NutritionHistory, { NUTRITION_HISTORY_PAGE_SIZE } from './NutritionHistory';
 import NutritionSupplements from './NutritionSupplements';
 import { NutritionConflictBanner } from './NutritionConflictBanner';
 import { NutritionConflictDialog } from '../UI/NutritionConflictDialog';
@@ -34,6 +34,7 @@ const NutritionView = ({ subTab = 'meals', setSubTab }: NutritionViewProps) => {
     const activeSubTab = (subTab === 'planning' || subTab === 'archive' || subTab === 'history' || subTab === 'supplements') ? subTab : 'meals';
 
     const [selectedDate, setSelectedDate] = useState<string>(Logic.getLocalDateString());
+    const [historyVisibleCount, setHistoryVisibleCount] = useState(NUTRITION_HISTORY_PAGE_SIZE);
     const mealsHook = useNutritionMeals(selectedDate);
     const historyHook = useNutritionHistory();
 
@@ -143,6 +144,8 @@ const NutritionView = ({ subTab = 'meals', setSubTab }: NutritionViewProps) => {
                 <div id="nutrition-panel-history" role="tabpanel" aria-labelledby="nutrition-tab-history" className="nutrition-sub-view active">
                     <NutritionHistory
                         nutritionHistory={historyHook.nutritionHistory}
+                        visibleCount={historyVisibleCount}
+                        onShowMore={() => setHistoryVisibleCount(count => count + NUTRITION_HISTORY_PAGE_SIZE)}
                         onDayClick={handleHistoryDayClick}
                     />
                 </div>
