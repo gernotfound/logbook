@@ -490,4 +490,20 @@ describe('account deletion recovery device registration retries', () => {
     }
   });
 
+  it('reports a failed remote deletion despite completing an independent device', async () => {
+    const { recoverDeletedAccountOnThisDevice } = await loadSubject();
+    localStorage.setItem('logbook_deletion_recovery_devices_v1', JSON.stringify([
+      { uid: 'user-a', token: 'A'.repeat(43) },
+      { uid: 'user-b', token: 'B'.repeat(43) },
+    ]));
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ status: 'failed' }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ status: 'complete' }), { status: 200 })));
+    const finalize = vi.fn(async () => ({ status: 'complete' as const }));
+
+    await expect(recoverDeletedAccountOnThisDevice(finalize)).rejects.toMatchObject({ kind: 'remote-failed' });
+    expect(finalize).toHaveBeenCalledExactlyOnceWith('user-b');
+    expect(localStorage.getItem('logbook_deletion_recovery_devices_v1')).not.toBeNull();
+  });
+
 });
