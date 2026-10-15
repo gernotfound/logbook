@@ -370,7 +370,16 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
             }
             const session = captureSession();
             const saved = await readLocal(session.owner);
-            if (!isCurrentSession(session) || !saved?.pending.length) return;
+            if (!isCurrentSession(session) || !saved) return;
+            if (!saved.pending.length) {
+                // A previous ambiguous cloud outcome can have completed and
+                // acknowledged while the UI was suspended. An empty durable
+                // journal is the recovery proof; do not retry indefinitely.
+                if (get().syncHealth === 'local-pending') {
+                    set({ syncHealth: 'synced', saveError: null });
+                }
+                return;
+            }
             const generation = get().syncGeneration + 1;
             const localWorkout = get().localWorkout;
             const syncPresentation: SyncPresentation = localWorkout && !localWorkout.isEditingHistory

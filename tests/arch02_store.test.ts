@@ -55,9 +55,11 @@ describe('ARCH-02: createSyncSlice', () => {
         
         const promise = useAppStore.getState().updateUserData((prev) => ({ ...prev, profile: { ...prev.profile, height: '180' } }));
         
-        await vi.runAllTimersAsync();
+        // Only the initial 1s debounce belongs to this assertion. Draining
+        // all future timers would also run the new 20s foreground recovery.
+        await vi.advanceTimersByTimeAsync(1_100);
         const result = await promise;
-        
+
         expect(result.ok).toBe(false);
         expect(result.status).toBe('local-pending');
         
