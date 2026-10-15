@@ -100,6 +100,15 @@ test.describe('Offline scenarios & Background suspension', () => {
     await page.goto('/?tab=training');
     await expect(page.locator('#view-training')).toBeVisible();
     await expect.poll(() => new URL(page.url()).search).toBe('');
+
+    // History has never been visited in this browser session. Its lazily loaded
+    // chunk must still be available from the Service Worker precache offline.
+    await page.getByRole('tab', { name: 'Storico' }).click();
+    await expect(page.locator('#training-panel-history')).toBeVisible();
+    await expect(page.getByText('Storico Allenamenti')).toBeVisible();
+
+    await page.getByRole('tab', { name: 'Sessione' }).click();
+    await expect(page.locator('#training-panel-session')).toBeVisible();
   });
 
 });
