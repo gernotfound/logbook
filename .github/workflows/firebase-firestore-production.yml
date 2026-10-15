@@ -77,6 +77,13 @@ jobs:
         with:
           node-version: '24'
 
+      - name: Use pinned npm release
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --global --ignore-scripts npm@11.21.0
+          test "$(npm --version)" = "11.21.0"
+
       - name: Authenticate dedicated Firestore deployer
         id: gcp_auth
         uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3

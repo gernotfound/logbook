@@ -37,7 +37,6 @@ jobs:
       VITE_ACCOUNT_DELETION_API_ORIGIN: ${{ vars.VITE_ACCOUNT_DELETION_API_ORIGIN }}
       VITE_RECAPTCHA_ENTERPRISE_SITE_KEY: ${{ vars.VITE_RECAPTCHA_ENTERPRISE_SITE_KEY }}
       VITE_SENTRY_DSN: ${{ vars.VITE_SENTRY_DSN }}
-      SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
       SENTRY_ORG: ${{ vars.SENTRY_ORG }}
       SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
 
@@ -65,6 +64,8 @@ jobs:
           fi
 
       - name: Require production build configuration
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
@@ -112,10 +113,22 @@ jobs:
           workload_identity_provider: ${{ env.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ env.GCP_FIREBASE_DEPLOY_SERVICE_ACCOUNT }}
 
+      - name: Use pinned npm release
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --global --ignore-scripts npm@11.21.0
+          test "$(npm --version)" = "11.21.0"
+
+      - name: Reject unreviewed dependency install scripts
+        run: node scripts/check-install-scripts.mjs
+
       - name: Install dependencies
         run: npm ci
 
       - name: Build exact production frontend
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
         run: npm run build
 
       - name: Deploy Firebase Hosting only
