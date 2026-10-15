@@ -99,6 +99,9 @@ export function currentHealthConsentStatus(uid: string | undefined): HealthConse
     if (parseReacceptRevision(saved) !== null) return 'reaccepting';
     const offline = parseOfflineReaccept(saved);
     if (offline !== null) {
+      // A failed or conflicting trusted reconciliation must fence even local
+      // access; the durable marker is not itself a server authorization.
+      if (entries.get(uid) === 'error') return 'error';
       return matchesCurrentLegalVersions(offline)
         && readCachedActiveRevision(uid) === offline.revision
         && verifiedRevisions.get(uid) === offline.revision ? 'active' : 'checking';
@@ -402,8 +405,11 @@ export async function refreshHealthConsent(user: User): Promise<HealthConsentSta
       }
       if (state.status !== 'active' || state.revision !== sourceRevision + 2
         || typeof state.acceptedAt !== 'string') {
-        // Another device advanced/revoked consent: do not override its newer
-        // decision, drop the durable marker or replay old local writes.
+        // A newer trusted withdrawal overrides this device's older offline
+        // reacceptance. Persist a distinct conflict fence across reloads.
+        // Keep all local ciphertext/journal for explicit recovery, but do not
+        // allow the cached older consent to re-enable fitness automatically.
+        writeBrowserValue(marker(uid), saved!.replace('offline-reaccepted:', 'offline-conflict:'));
         setStatus(uid, 'error');
         return 'error';
       }
