@@ -65,3 +65,7 @@ Il [pacchetto compliance](compliance/README.md) contiene le decisioni aperte e l
 - Ogni nuovo documento deve dichiarare scopo, stato (attivo, storico, proposta o bozza) e limiti delle verifiche. Non confondere evidenze di un commit storico con lo stato corrente del runtime.
 - Aggiornare il relativo contratto specialistico solo se muta davvero una regola. Gli indici facilitano la scoperta, non sono automaticamente caricati dall'AI.
 - Non aggiungere credenziali, dati personali né report task-specific temporanei. Questi ultimi restano normalmente nella cronologia Git/PR.
+
+## Attività pianificate
+
+Le attività future si gestiscono in [GitHub Issues](https://github.com/gernotfound/logbook/issues), non in file `ToDo.md` della root. L'[ambiente Firebase Test isolato](https://github.com/gernotfound/logbook/issues/426) è una proposta operativa da verificare; la presenza dell'issue non prova che l'ambiente esista.

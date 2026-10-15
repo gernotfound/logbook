@@ -62,7 +62,7 @@ Non trattare il solo valore di sync_control.lastSeq come prova del payload: cert
 
 **Fase A — core/test condiviso, senza cambiare il runtime Production.** Estrarre il pure merge/validation contract in moduli usabili nel server e nel client; fixture identiche a transactionWriter e test di equivalenza/fuzz. Conservare invariati salvataggio IndexedDB, Firestore Rules e flusso cloud esistente. Non creare un nuovo writer Production.
 
-**Fase B — gateway soltanto su Firebase Test isolato.** Implementare autentificazione, App Check, consent/revision, barriera deletion, rate limit, strict validation, idempotenza, transactional commits e recovery. Firebase Test è ancora da creare (ToDo.md). Validare permessi Firebase Admin e limiti reali/costi Vercel. Non attivare piani con fatturazione senza decisione esplicita del product owner.
+**Fase B — gateway soltanto su Firebase Test isolato.** Implementare autentificazione, App Check, consent/revision, barriera deletion, rate limit, strict validation, idempotenza, transactional commits e recovery. Firebase Test risultava da creare nella baseline della proposta; verificarne lo stato live e seguire l'[issue #426](https://github.com/gernotfound/logbook/issues/426) prima di procedere. Validare permessi Firebase Admin e limiti reali/costi Vercel. Non attivare piani con fatturazione senza decisione esplicita del product owner.
 
 **Fase C — collaudi avversariali e compatibilità.** Emulator Rules, API Firebase Test reale, Playwright login, worker/reload, dati sintetici, due dispositivi, tre o più replay, failover e richiamo del consenso. Verificare tempi, quota, cold start, regione/privacy. Nessun dual-write verso Production come test.
 

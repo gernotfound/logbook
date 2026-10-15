@@ -1,7 +1,7 @@
 {
   "name": "logbook",
   "private": true,
-  "version": "1.6.0",
+  "version": "1.7.0",
   "type": "module",
   "packageManager": "npm@11.21.0",
   "engines": {
@@ -40,7 +40,7 @@
     "test:typecheck-coverage": "node --test scripts/typecheck-coverage-regressions.mjs && node scripts/check-typecheck-coverage.mjs",
     "test:typecheck:m5": "tsc --noEmit -p tsconfig.m5-tests.json",
     "test:quality:m5": "node scripts/check-m5-test-quality.mjs",
-    "test:repo-hygiene": "node scripts/check-repo-hygiene.mjs",
+    "test:repo-hygiene": "node --test scripts/markdown-links.test.mjs && node scripts/check-repo-hygiene.mjs",
     "test:ci-contract": "node scripts/check-ci-contract.mjs",
     "test:dead-code": "node scripts/run-knip.mjs --no-progress --include files,dependencies,unlisted,exports,types",
     "analyze:dead-exports": "node scripts/run-knip.mjs --no-progress --production --include exports,types",
