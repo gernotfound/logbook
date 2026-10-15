@@ -340,6 +340,12 @@ export async function refreshHealthConsent(user: User): Promise<HealthConsentSta
   const offlineReacceptValid = offlineReaccept !== null
     && matchesCurrentLegalVersions(offlineReaccept)
     && readCachedActiveRevision(uid) === offlineReaccept.revision;
+  // After the server accepts the later consent, the epoch fence advances
+  // before old pending operations are rebased. A reload must resume the
+  // explicit recovery, not retry the already completed withdrawal.
+  const offlineRecoveryEpoch = offlineReaccept !== null
+    && matchesCurrentLegalVersions(offlineReaccept)
+    && readBrowserValueStrict(generationMarker(uid)) === String(offlineReaccept.revision + 2);
   // A delayed server check must not overwrite a newer local decision or
   // the consent generation published by another tab during network I/O.
   let observedGeneration = readBrowserValueStrict(generationMarker(uid));
@@ -384,7 +390,7 @@ export async function refreshHealthConsent(user: User): Promise<HealthConsentSta
     let state = await serverRequest(user, 'GET');
     if (!isSameDecision()) return currentHealthConsentStatus(uid);
     if (offlineReaccept !== null) {
-      if (!offlineReacceptValid) {
+      if (!offlineReacceptValid && !offlineRecoveryEpoch) {
         setStatus(uid, 'error');
         return 'error';
       }
