@@ -515,6 +515,50 @@ describe('account offline withdrawal and explicit local-only reacceptance', () =
     } finally { online.mockRestore(); }
   });
 
+  it('accepts a server-confirmed online withdrawal locally offline without replaying the withdrawal', async () => {
+    const uid = 'server-withdrawn-local-' + crypto.randomUUID();
+    const actor = user(uid);
+    (auth as { currentUser: unknown }).currentUser = actor;
+    const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
+    const actions: string[] = [];
+    let state: 'active' | 'withdrawn' = 'active';
+    let revision = 1;
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
+      const payload = init.body ? JSON.parse(init.body as string) as { action: string } : undefined;
+      const action = payload?.action ?? 'GET';
+      actions.push(action);
+      if (action === 'withdraw') {
+        state = 'withdrawn'; revision = 2;
+      } else if (action === 'reaccept') {
+        state = 'active'; revision = 3;
+      }
+      return Response.json({
+        status: state, revision,
+        ...(state === 'active'
+          ? { acceptedAt: '2026-10-15T09:00:00.000Z',
+              privacyVersion: accepted.privacyVersion, termsVersion: accepted.termsVersion }
+          : {}),
+      });
+    }));
+    try {
+      beginHealthConsentVerification(uid);
+      expect(await refreshHealthConsent(actor)).toBe('active');
+      await expect(withdrawHealthConsent(actor)).resolves.toBeUndefined();
+      expect(currentHealthConsentStatus(uid)).toBe('withdrawn');
+      expect(localStorage.getItem(key(uid))).toBe('withdrawn');
+      online.mockReturnValue(false);
+      expect(() => reacceptHealthConsentLocally(actor, accepted)).not.toThrow();
+      expect(currentHealthConsentStatus(uid)).toBe('active');
+      expect(isHealthConsentCloudWritable('user:' + uid)).toBe(false);
+      expect(localStorage.getItem(key(uid))).toContain('offline-reaccepted:1:');
+      online.mockReturnValue(true);
+      expect(await refreshHealthConsent(actor)).toBe('active');
+      expect(localStorage.getItem(key(uid))).toBeNull();
+      expect(isHealthConsentCloudWritable('user:' + uid)).toBe(true);
+      expect(actions).toEqual(['GET', 'withdraw', 'GET', 'GET', 'reaccept', 'GET']);
+    } finally { online.mockRestore(); }
+  });
+
   it('restores device editing after a pending offline revocation, never cloud, and survives cold boot', async () => {
     const uid = 'local-consent-' + crypto.randomUUID();
     const actor = user(uid);
