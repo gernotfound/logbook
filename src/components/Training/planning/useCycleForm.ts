@@ -81,8 +81,8 @@ export function useCycleForm({ initialCycle, routines, onSave, showAlert }: UseC
     const handleDurationWeeksChange = (val: string) => {
         setDurationWeeks(val);
         const w = Number(val);
-        if (val.trim() !== '' && Number.isSafeInteger(w) && startDate) {
-            const newEnd = computeEndDate(startDate, Math.max(1, w));
+        if (Number.isSafeInteger(w) && w >= 1 && startDate) {
+            const newEnd = computeEndDate(startDate, w);
             setEndDate(newEnd);
             setEndDateTextInput(Logic.formatItalianDate(newEnd));
         }
