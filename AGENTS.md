@@ -38,6 +38,8 @@ Un `MUST` è un contratto da rispettare, non prova che codice o Production lo so
 
 Se la modifica attraversa più boundary, leggere **l'unione** dei contratti pertinenti. L'indice non è un'allowlist di file da ignorare.
 
+Per specifiche, guide operative, compliance e storico consultare l'[indice `docs/`](docs/README.md), che distingue stato e ambito. **Non** leggere automaticamente tutti i documenti né considerare proposte o checklist storiche come contratti attivi.
+
 ## Classificazione del rischio
 
 Classificare internamente ogni task almeno come STANDARD, SENSITIVE o CRITICAL.

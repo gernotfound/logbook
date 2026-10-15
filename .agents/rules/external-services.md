@@ -92,3 +92,9 @@ Prima di sostituire, rimuovere o riconfigurare materialmente un servizio esterno
 5. aggiornare codice/config/test;
 6. aggiornare questa regola se cambia un invariante;
 7. aggiornare `docs/operations/external-services-register.md` con motivo della decisione e data di verifica.
+
+## Documenti collegati
+
+- [Registro dei servizi esterni](../../docs/operations/external-services-register.md): decisioni e stato da rivalidare in console.
+- [Guida Sentry](../../docs/telemetry-sentry-guide.md): minimizzazione diagnostica, privacy e source map.
+- [Cutover Firebase Hosting](../../docs/operations/firebase-hosting-cutover.md): **storico**, non checklist di deployment attuale.
