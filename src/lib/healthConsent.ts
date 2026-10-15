@@ -36,6 +36,20 @@ const parseReacceptRevision = (saved: string | null): number | null => {
   return Number.isSafeInteger(parsed) ? parsed : null;
 };
 const pendingMarker = (revision: number) => `pending:${revision}`;
+// A local reacceptance NEVER cancels the pending server withdrawal or authorizes
+// Firestore. Its explicit legal versions travel with the durable local decision.
+const offlineReacceptMarker = (revision: number) =>
+  `offline-reaccepted:${revision}:${LEGAL_VERSIONS.privacy}:${LEGAL_VERSIONS.terms}`;
+function parseOfflineReaccept(saved: string | null): { revision: number; privacyVersion: string; termsVersion: string } | null {
+  const match = /^offline-reaccepted:([1-9]\\d*):([0-9.]+):([0-9.]+)$/.exec(saved ?? '');
+  if (!match) return null;
+  const revision = Number(match[1]);
+  return Number.isSafeInteger(revision)
+    ? { revision, privacyVersion: match[2], termsVersion: match[3] } : null;
+}
+function matchesCurrentLegalVersions(intent: NonNullable<ReturnType<typeof parseOfflineReaccept>>): boolean {
+  return intent.privacyVersion === LEGAL_VERSIONS.privacy && intent.termsVersion === LEGAL_VERSIONS.terms;
+}
 const parsePendingRevision = (saved: string | null): number | null => {
   if (!saved?.startsWith('pending:')) return null;
   const revision = saved.slice('pending:'.length);
@@ -83,6 +97,12 @@ export function currentHealthConsentStatus(uid: string | undefined): HealthConse
     if (parsePendingRevision(saved) !== null) return 'pending';
     if (saved === 'withdrawn') return saved;
     if (parseReacceptRevision(saved) !== null) return 'reaccepting';
+    const offline = parseOfflineReaccept(saved);
+    if (offline !== null) {
+      return matchesCurrentLegalVersions(offline)
+        && readCachedActiveRevision(uid) === offline.revision
+        && verifiedRevisions.get(uid) === offline.revision ? 'active' : 'checking';
+    }
     if (saved !== null) return 'error';
     // Test/recovery tooling can operate before AuthProvider begins verification.
     // AuthProvider synchronously fences the real session at each auth boundary.
@@ -154,6 +174,9 @@ export function isHealthConsentCloudWritable(owner: string): boolean {
   if (!owner.startsWith('user:')) return owner !== 'guest';
   const uid = owner.slice(5);
   if (auth?.currentUser?.uid !== uid || (typeof navigator !== 'undefined' && navigator.onLine === false)) return false;
+  // The offline opt-in is local-only even when the network returns; the
+  // server withdrawal and new acceptance must first reconcile in order.
+  try { if (readMarker(uid) !== null) return false; } catch { return false; }
   return onlineVerifiedRevisions.get(uid) === verifiedRevisions.get(uid)
     && verifiedRevisions.has(uid);
 }
@@ -163,6 +186,11 @@ export function isHealthConsentCloudWritable(owner: string): boolean {
  * already-explicitly-accepted legalConsent field without a second prompt.
  * An untrusted local marker or a cached offline revision cannot do this.
  */
+export function isHealthConsentLocalOnly(uid: string): boolean {
+  try { return parseOfflineReaccept(readMarker(uid)) !== null && currentHealthConsentStatus(uid) === 'active'; }
+  catch { return false; }
+}
+
 export function getServerConfirmedLegalConsent(uid: string): NonNullable<UserData['legalConsent']> | null {
   if (!isHealthConsentCloudWritable('user:' + uid)) return null;
   return serverConfirmedLegal.get(uid) ?? null;
@@ -260,9 +288,46 @@ export async function readActiveHealthConsentRevision(user: User): Promise<numbe
   return state.revision;
 }
 
+/**
+ * Permit a deliberate, authenticated, *device-only* reacceptance while offline.
+ * The older server withdrawal remains encoded in the same durable owner marker.
+ * Sync stays fenced until both remote transitions and the local journal reconcile.
+ */
+export function reacceptHealthConsentLocally(user: User, acceptance: {
+  acceptedTerms: true; acceptedHealthData: true; privacyVersion: string; termsVersion: string;
+}): void {
+  if (typeof navigator === 'undefined' || navigator.onLine !== false) {
+    throw new Error('La riattivazione locale è riservata alla modalità offline.');
+  }
+  if (auth.currentUser?.uid !== user.uid || acceptance.acceptedTerms !== true
+    || acceptance.acceptedHealthData !== true
+    || acceptance.privacyVersion !== LEGAL_VERSIONS.privacy
+    || acceptance.termsVersion !== LEGAL_VERSIONS.terms) {
+    throw new Error('Account o accettazione esplicita non validi.');
+  }
+  const saved = readMarker(user.uid);
+  const pending = parsePendingRevision(saved);
+  if (pending === null && saved !== 'withdrawn') throw new Error('Nessuna revoca locale da riattivare.');
+  const cachedRevision = readCachedActiveRevision(user.uid);
+  if (cachedRevision === null || (pending !== null && pending !== cachedRevision)
+    || (verifiedRevisions.has(user.uid) && verifiedRevisions.get(user.uid) !== cachedRevision)) {
+    throw new Error('Consenso precedente non verificabile su questo dispositivo.');
+  }
+  // This single durable write preserves the source revision of the withdrawal
+  // across crashes, tabs and reloads; NEVER remove it on local acceptance.
+  writeBrowserValue(marker(user.uid), offlineReacceptMarker(cachedRevision));
+  onlineVerifiedRevisions.delete(user.uid);
+  verifiedRevisions.set(user.uid, cachedRevision);
+  setStatus(user.uid, 'active');
+}
+
 export async function refreshHealthConsent(user: User): Promise<HealthConsentStatus> {
   const uid = user.uid;
   const saved = readMarker(uid);
+  const offlineReaccept = parseOfflineReaccept(saved);
+  const offlineReacceptValid = offlineReaccept !== null
+    && matchesCurrentLegalVersions(offlineReaccept)
+    && readCachedActiveRevision(uid) === offlineReaccept.revision;
   // A delayed server check must not overwrite a newer local decision or
   // the consent generation published by another tab during network I/O.
   let observedGeneration = readBrowserValueStrict(generationMarker(uid));
@@ -271,7 +336,8 @@ export async function refreshHealthConsent(user: User): Promise<HealthConsentSta
     && readMarker(uid) === saved
     && readBrowserValueStrict(generationMarker(uid)) === observedGeneration;
   const recoverCachedOfflineConsent = (): boolean => {
-    const cached = saved === null ? readCachedActiveRevision(uid) : null;
+    const cached = saved === null ? readCachedActiveRevision(uid)
+      : offlineReacceptValid ? offlineReaccept!.revision : null;
     if (cached === null || !isSameDecision()) return false;
     verifiedRevisions.set(uid, cached);
     setStatus(uid, 'active');
@@ -282,13 +348,14 @@ export async function refreshHealthConsent(user: User): Promise<HealthConsentSta
   // last verified generation, like an offline session, until the response
   // either confirms it or fences it with a newer generation/withdrawal.
   // Cold-start checks and durable withdrawal intents remain fail-closed.
-  const locallyVerified = saved === null
+  const locallyVerified = (saved === null || offlineReacceptValid)
     && entries.get(uid) === 'active'
     && isHealthConsentWritable('user:' + uid);
   if (!locallyVerified) verifiedRevisions.delete(uid);
   onlineVerifiedRevisions.delete(uid);
   if (!locallyVerified) {
-    setStatus(uid, saved === null ? 'checking' : (parsePendingRevision(saved) !== null ? 'pending' : parseReacceptRevision(saved) !== null ? 'reaccepting' : saved as HealthConsentStatus));
+    setStatus(uid, saved === null || offlineReaccept !== null ? 'checking'
+      : (parsePendingRevision(saved) !== null ? 'pending' : parseReacceptRevision(saved) !== null ? 'reaccepting' : saved as HealthConsentStatus));
   }
   try {
     // An already authorized device may continue locally with its most recent
@@ -296,14 +363,53 @@ export async function refreshHealthConsent(user: User): Promise<HealthConsentSta
     // withdrawal/reacceptance and unknown generations remain suspended.
     if (typeof navigator !== 'undefined' && navigator.onLine === false) {
       if (recoverCachedOfflineConsent()) return 'active';
-      if (saved === null) {
+      if (saved === null || offlineReaccept !== null) {
         setStatus(uid, 'error');
         return 'error';
       }
       return currentHealthConsentStatus(uid);
     }
-    const state = await serverRequest(user, 'GET');
+    let state = await serverRequest(user, 'GET');
     if (!isSameDecision()) return currentHealthConsentStatus(uid);
+    if (offlineReaccept !== null) {
+      if (!offlineReacceptValid) {
+        setStatus(uid, 'error');
+        return 'error';
+      }
+      const sourceRevision = offlineReaccept.revision;
+      // An uncertain offline withdrawal can already have reached the backend.
+      // Always settle that precise transition before replaying the later opt-in.
+      if (state.status === 'active' && state.revision === sourceRevision) {
+        state = await serverRequest(user, 'POST', { action: 'withdraw', expectedRevision: sourceRevision });
+        if (!isSameDecision()) return currentHealthConsentStatus(uid);
+      }
+      if (state.status === 'withdrawn' && state.revision === sourceRevision + 1) {
+        state = await serverRequest(user, 'POST', {
+          action: 'reaccept', expectedRevision: state.revision,
+          acceptance: { acceptedTerms: true, acceptedHealthData: true,
+            privacyVersion: offlineReaccept.privacyVersion, termsVersion: offlineReaccept.termsVersion },
+        });
+        if (!isSameDecision()) return currentHealthConsentStatus(uid);
+      } else if (state.status === 'active' && state.revision === sourceRevision + 2) {
+        // A lost POST acknowledgement is safe to finish only when the server
+        // still attests the versions that were explicitly accepted offline.
+        if (state.privacyVersion !== offlineReaccept.privacyVersion
+          || state.termsVersion !== offlineReaccept.termsVersion
+          || typeof state.acceptedAt !== 'string') {
+          setStatus(uid, 'error');
+          return 'error';
+        }
+      }
+      if (state.status !== 'active' || state.revision !== sourceRevision + 2
+        || typeof state.acceptedAt !== 'string') {
+        // Another device advanced/revoked consent: do not override its newer
+        // decision, drop the durable marker or replay old local writes.
+        setStatus(uid, 'error');
+        return 'error';
+      }
+      // No cloud permission is published until the existing journal/epoch
+      // validation below finishes. A pending old journal requires explicit recovery.
+    }
     if (state.status === 'unregistered') {
       // A missing server record never authorizes cloud access or restores
       // an unsent local withdrawal by accident.
@@ -387,7 +493,7 @@ export async function refreshHealthConsent(user: User): Promise<HealthConsentSta
   } catch (error) {
     if (!isSameDecision()) return currentHealthConsentStatus(uid);
     if (error instanceof ConsentTransportUnavailableError && recoverCachedOfflineConsent()) return 'active';
-    setStatus(uid, saved === null ? 'error' : saved as HealthConsentStatus);
+    setStatus(uid, saved === null || offlineReaccept !== null ? 'error' : saved as HealthConsentStatus);
     return currentHealthConsentStatus(uid);
   }
 }
