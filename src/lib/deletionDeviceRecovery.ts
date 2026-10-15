@@ -49,7 +49,8 @@ async function appToken(signal:AbortSignal){
 }
 
 export async function registerDeletionRecoveryDevice(user:User):Promise<void>{
- if(!API||!navigator.onLine)return;
+ if(!API)throw new DeletionDeviceOperationError('device-registration','http','unknown');
+ if(!navigator.onLine)throw new DeletionDeviceOperationError('device-registration','http','transport');
  const all=readAll();let cred=all.find(x=>x.uid===user.uid);
  if(!cred){cred={uid:user.uid,token:randomToken()};writeAll([...all.filter(x=>x.uid!==user.uid),cred]);}
  let phase:RecoveryPhase='auth-token';
