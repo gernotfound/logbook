@@ -67,12 +67,18 @@ const journalRetry = typeof window !== 'undefined' ? createJournalRetry(
     () => useAppStore.getState(),
     listener => useAppStore.subscribe(listener),
     () => {
-        const session = captureSession();
-        return session.owner.startsWith('user:')
+        try {
+            const session = captureSession();
+            return session.owner.startsWith('user:')
             && navigator.onLine !== false
             && document.visibilityState === 'visible'
             && isHealthConsentCloudWritable(session.owner)
-            && !isAccountDeletionPending(session.owner);
+                && !isAccountDeletionPending(session.owner);
+        } catch {
+            // Unreadable lifecycle storage is never interpreted as permission
+            // to replay or resume a pending account journal.
+            return false;
+        }
     },
     () => useAppStore.getState().flushPendingSyncs(),
 ) : null;
@@ -83,7 +89,7 @@ if (typeof window !== 'undefined') {
         journalRetry?.reset();
         void useAppStore.getState().flushPendingSyncs().catch(error => {
             console.warn('Ripresa sincronizzazione non completata:', error);
-        });
+        }).finally(() => journalRetry?.refresh());
     };
     window.addEventListener('online', replay);
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') replay(); });

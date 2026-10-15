@@ -62,6 +62,7 @@ export function createJournalRetry(
     return {
         /** Foreground/online event: let the caller flush immediately, without waiting for a backoff timer. */
         reset: () => { attempts = 0; clear(); },
+        refresh: () => { schedule(); },
         dispose: () => { disposed = true; clear(); unsubscribe(); },
     };
 }

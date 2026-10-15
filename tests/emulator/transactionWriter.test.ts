@@ -120,6 +120,35 @@ it('2b. V3 API: contention smoke test converges to the semantic operation', asyn
     expect(saved._schemaVersion).toBe(CURRENT_DATA_SCHEMA);
 });
 
+it('2c. two independent authenticated emulator clients converge after a staged offline edit and idempotent replay', async () => {
+    // Two independent authenticated Firebase contexts emulate two different
+    // clients; the second operation is held in its owner journal while offline.
+    const clientA = asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore());
+    const clientB = asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore());
+    expect(clientA).not.toBe(clientB);
+    const replicaA = await registerReplica(clientA, 'a', 's00', 'device-a');
+    const replicaB = await registerReplica(clientB, 'a', 's01', 'device-b');
+    const editA: SemanticOperation = {
+        docPath: '', path: ['profile', 'height'], value: '183', isDelete: false,
+        actorId: 's00', seq: 1, clock: { s00: 1 },
+    };
+    const stagedWhileOfflineB: SemanticOperation = {
+        docPath: '', path: ['profile', 'gender'], value: 'M', isDelete: false,
+        actorId: 's01', seq: 1, clock: { s01: 1 },
+    };
+
+    await applyDocumentChanges(clientA, 'a', [editA], () => true, replicaA);
+    // Device B reconnects and sends its original idempotent operation twice.
+    await applyDocumentChanges(clientB, 'a', [stagedWhileOfflineB], () => true, replicaB);
+    await applyDocumentChanges(clientB, 'a', [stagedWhileOfflineB], () => true, replicaB);
+    const [fromA, fromB] = await Promise.all([
+        getDoc(doc(clientA, 'users/a')), getDoc(doc(clientB, 'users/a')),
+    ]);
+    expect(fromA.data()?.profile).toMatchObject({ height: '183', gender: 'M' });
+    expect(fromB.data()?.profile).toEqual(fromA.data()?.profile);
+    expect(fromB.data()?._sync.clock).toMatchObject({ s00: 1, s01: 1 });
+});
+
 it('3. V3 API: parent tombstone keeps an otherwise empty shard and permits causally later recreation', async () => {
     const db = asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore());
     const replica = await registerReplica(db, 'a');
