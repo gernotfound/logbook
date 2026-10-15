@@ -25,17 +25,17 @@ describe('training cycle local-day progress', () => {
         vi.useRealTimers();
     });
 
-    it('updates without a data mutation on local midnight and focus', () => {
+    it('updates without a data mutation on local midnight and focus', async () => {
         vi.useFakeTimers();
         vi.setSystemTime(new Date(2026, 9, 19, 23, 59, 58));
         render(<ProgressProbe />);
         expect(screen.getByTestId('day-progress').textContent).toBe('2026-10-19 / 1');
 
-        act(() => vi.advanceTimersByTime(3000));
+        await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
         expect(screen.getByTestId('day-progress').textContent).toBe('2026-10-20 / 2');
 
         vi.setSystemTime(new Date(2026, 9, 21, 12, 0));
-        act(() => window.dispatchEvent(new Event('focus')));
+        await act(async () => { window.dispatchEvent(new Event('focus')); });
         expect(screen.getByTestId('day-progress').textContent).toBe('2026-10-21 / 2');
     });
 });
