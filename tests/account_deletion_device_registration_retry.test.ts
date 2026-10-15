@@ -480,9 +480,12 @@ describe('account deletion recovery device registration retries', () => {
       const finalize = vi.fn();
 
       const operation = recoverDeletedAccountOnThisDevice(finalize);
+      // Attach the rejection observer before fake timers reach the deadline.
+      // Otherwise Vitest can observe a transient unhandled rejection.
+      const observedFailure = operation.then(() => ({ unexpectedSuccess: true }), error => error);
       await vi.waitFor(() => expect(readBody).toHaveBeenCalledTimes(1));
       await vi.advanceTimersByTimeAsync(7_500);
-      await expect(operation).rejects.toMatchObject({ phase: 'response-body', kind: 'timeout' });
+      expect(await observedFailure).toMatchObject({ phase: 'response-body', kind: 'timeout' });
       expect(finalize).not.toHaveBeenCalled();
       expect(localStorage.getItem('logbook_deletion_recovery_devices_v1')).not.toBeNull();
     } finally {
