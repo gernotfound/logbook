@@ -16,17 +16,17 @@ export async function loadNutritionMonths(
         6000,
         "Timeout recupero nutrizione"
     );
-    nutritionDocs.forEach((d, index) => {
+    // Validate the entire requested window before publishing any day or
+    // causal metadata. A damaged later shard cannot leak a partial window.
+    const staged = nutritionDocs.flatMap((d, index) => {
         const month = targetMonths[index];
-        if (d && typeof d.exists === 'function' && d.exists()) {
-            const normalized = normalizeCloudDocument(d.data(), `Nutrition ${month} data schema`);
-            const monthData = requireCompleteNutritionMonthDocument(month, normalized.business);
-            if (cloudDocuments) {
-                cloudDocuments.set('nutrition_months/' + month, { ...monthData, _sync: normalized.sync });
-            }
-            Object.entries(monthData).forEach(([date, day]) => {
-                state.nutrition[date] = day;
-            });
-        }
+        if (!d || typeof d.exists !== 'function' || !d.exists()) return [];
+        const normalized = normalizeCloudDocument(d.data(), `Nutrition ${month} data schema`);
+        const business = requireCompleteNutritionMonthDocument(month, normalized.business);
+        return [{ month, business, sync: normalized.sync }];
     });
+    for (const { month, business, sync } of staged) {
+        if (cloudDocuments) cloudDocuments.set('nutrition_months/' + month, { ...business, _sync: sync });
+        Object.assign(state.nutrition, business);
+    }
 }

@@ -16,17 +16,17 @@ export async function loadHistoryMonths(
         6000,
         "Timeout recupero storico"
     );
-    historyDocs.forEach((d, index) => {
+    // Stage every month before publication: a later corrupt shard must not
+    // leave an earlier month partially installed in the hydration state.
+    const staged = historyDocs.flatMap((d, index) => {
         const month = targetMonths[index];
-        if (d && typeof d.exists === 'function' && d.exists()) {
-            const normalized = normalizeCloudDocument(d.data(), `History ${month} data schema`);
-            const monthData = requireCompleteHistoryMonthDocument(month, normalized.business);
-            if (cloudDocuments) {
-                cloudDocuments.set('history_months/' + month, { ...monthData, _sync: normalized.sync });
-            }
-            Object.values(monthData).forEach(h => {
-                state.history.push(h);
-            });
-        }
+        if (!d || typeof d.exists !== 'function' || !d.exists()) return [];
+        const normalized = normalizeCloudDocument(d.data(), `History ${month} data schema`);
+        const business = requireCompleteHistoryMonthDocument(month, normalized.business);
+        return [{ month, business, sync: normalized.sync }];
     });
+    for (const { month, business, sync } of staged) {
+        if (cloudDocuments) cloudDocuments.set('history_months/' + month, { ...business, _sync: sync });
+        state.history.push(...Object.values(business));
+    }
 }

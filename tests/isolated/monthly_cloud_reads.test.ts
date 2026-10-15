@@ -105,6 +105,28 @@ describe('monthly Firestore read boundaries', () => {
         expect(documents.size).toBe(0);
     });
 
+    it('does not publish an earlier valid shard if a later history shard is malformed', async () => {
+        const state = draft();
+        const docs = cloudDocuments();
+        firestore.getDoc.mockImplementation(async (path: string) => path.endsWith('2026-05')
+            ? snapshot({ safe: { id: 'safe', date: '2026-05-10', exercises: [] } })
+            : snapshot({ corrupt: { id: 'wrong', date: '2026-06-10', exercises: [] } }));
+        await expect(loadHistoryMonths(owner, ['2026-05', '2026-06'], state, docs)).rejects.toThrow('Shard storico 2026-06 non integro');
+        expect(state.history).toEqual([]);
+        expect(docs.size).toBe(0);
+    });
+
+    it('does not publish an earlier nutrition month if a later month contains damaged nested data', async () => {
+        const state = draft();
+        const docs = cloudDocuments();
+        firestore.getDoc.mockImplementation(async (path: string) => path.endsWith('2026-05')
+            ? snapshot({ '2026-05-01': { date: '2026-05-01', weight: 70 } })
+            : snapshot({ '2026-06-01': { date: '2026-06-02', weight: 71 } }));
+        await expect(loadNutritionMonths(owner, ['2026-05', '2026-06'], state, docs)).rejects.toThrow('Shard nutrizione 2026-06 non integro');
+        expect(state.nutrition).toEqual({});
+        expect(docs.size).toBe(0);
+    });
+
     it('fails closed on an unsupported future data schema, then succeeds after correction', async () => {
         const data = draft();
         const documents = cloudDocuments();
