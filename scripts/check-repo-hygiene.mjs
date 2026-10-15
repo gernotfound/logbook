@@ -1,6 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { checkMarkdownLinks } from './markdown-links.mjs';
+import './markdown-links-regressions.mjs';
 import { basename, extname } from 'node:path';
 import { TextDecoder } from 'node:util';
 
@@ -100,6 +101,4 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-// Run the link-parser regression suite without changing the protected CI leaf command.
-execFileSync(process.execPath, ['--test', 'scripts/markdown-links-regressions.mjs'], { stdio: 'inherit' });
 console.log(`M6 repository hygiene OK: clean worktree; ${checked} tracked text files are UTF-8 without BOM; ${markdownFiles.length} Markdown files checked for local links; no task-specific analysis artifacts.`);
