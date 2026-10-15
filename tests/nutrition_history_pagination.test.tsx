@@ -5,7 +5,7 @@ import NutritionHistory from '../src/components/Nutrition/NutritionHistory';
 
 describe('meal history incremental rendering', () => {
     const days = Array.from({ length: 66 }, (_, index) => ({
-        date: `2026-09-${String(index + 1).padStart(2, '0')}`,
+        date: new Date(Date.UTC(2026, 0, index + 1)).toISOString().slice(0, 10),
         meals: [{ id: `meal-${index}` }],
         kcal: index,
         pro: index,
