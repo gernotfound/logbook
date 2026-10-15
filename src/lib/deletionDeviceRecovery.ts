@@ -20,6 +20,11 @@ export class DeletionRecoveryCredentialCorruptError extends Error {
  constructor(error?:unknown){super('Credenziali locali di recovery account non leggibili.',error instanceof Error?{cause:error}:undefined);this.name='DeletionRecoveryCredentialCorruptError';}
 }
 
+export class DeletionRecoveryCredentialCapacityError extends Error {
+ readonly code='account-deletion-device-credential-capacity';
+ constructor(){super('Questo browser conserva già il massimo di credenziali di recupero account. Nessuna credenziale esistente è stata rimossa.');this.name='DeletionRecoveryCredentialCapacityError';}
+}
+
 function randomToken():string{const bytes=crypto.getRandomValues(new Uint8Array(32));let s='';for(const b of bytes)s+=String.fromCharCode(b);return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/g,'');}
 function readAll():Credential[]{
  const raw=readBrowserValueStrict(KEY);
@@ -34,9 +39,9 @@ function readAll():Credential[]{
    if(typeof candidate.uid!=='string'||candidate.uid.length===0||typeof candidate.token!=='string'||!/^[A-Za-z0-9_-]{43}$/.test(candidate.token))throw new DeletionRecoveryCredentialCorruptError();
    credentials.push({uid:candidate.uid,token:candidate.token});
  }
- return credentials.slice(-MAX_DEVICES);
+ return credentials;
 }
-function writeAll(v:Credential[]){const bounded=v.slice(-MAX_DEVICES);if(bounded.length===0)removeBrowserValue(KEY);else writeBrowserJson(KEY,bounded);}
+function writeAll(v:Credential[]){if(v.length===0)removeBrowserValue(KEY);else writeBrowserJson(KEY,v);}
 export function removeDeletionRecoveryCredential(uid:string):void{writeAll(readAll().filter(x=>x.uid!==uid));}
 async function appToken(signal:AbortSignal){
  await ensureAppCheck();
@@ -52,7 +57,11 @@ export async function registerDeletionRecoveryDevice(user:User):Promise<void>{
  if(!API)throw new DeletionDeviceOperationError('device-registration','http','unknown');
  if(!navigator.onLine)throw new DeletionDeviceOperationError('device-registration','http','transport');
  const all=readAll();let cred=all.find(x=>x.uid===user.uid);
- if(!cred){cred={uid:user.uid,token:randomToken()};writeAll([...all.filter(x=>x.uid!==user.uid),cred]);}
+ if(!cred){
+    // Replacing an older account's proof would silently destroy its recovery path.
+    if(all.length>=MAX_DEVICES)throw new DeletionRecoveryCredentialCapacityError();
+    cred={uid:user.uid,token:randomToken()};writeAll([...all,cred]);
+  }
  let phase:RecoveryPhase='auth-token';
  try{
    await withDeletionDeadline(async signal=>{
