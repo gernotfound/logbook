@@ -10,4 +10,4 @@ Supporta backup, importazione ed esportazione dei dati.
 
 **Apri la PWA:** https://thelogbook.web.app/
 
-**Documentazione tecnica:** [AGENTS.md](AGENTS.md) · [.agents/rules/](.agents/rules/)
+**Documentazione:** [Indice completo](docs/README.md) · [Regole AI](AGENTS.md) · [Contratti specialistici](.agents/rules/)
