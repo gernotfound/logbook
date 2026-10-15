@@ -291,37 +291,78 @@ export function createFoodSearcher<T extends SearchableFood>(foodsList: T[], cat
     if (categoryFilter && categoryFilter !== 'all') {
         results = results.filter(item => item && item.category === categoryFilter);
     }
-    const prepared = results.map(item => item ? {
-        item,
-        name: normalizeFoodStr(item.name),
-        category: normalizeFoodStr(item.category),
-        servingUnit: normalizeFoodStr(item.servingUnit || item.unit),
-        brand: normalizeFoodStr(item.brand)
-    } : null);
+    type PreparedFood = { item: T; name: string; category: string; servingUnit: string; brand: string } | null;
+    let prepared: PreparedFood[] | undefined;
     const normalizedNames = new Map<T, string>();
-    for (const entry of prepared) {
-        if (entry) normalizedNames.set(entry.item, entry.name);
-    }
+    let fuse: Fuse<T> | undefined;
     const nameOf = (item: T) => normalizedNames.get(item) ?? normalizeFoodStr(item.name);
-    const fuse = new Fuse(results, FUSE_FOOD_OPTIONS);
     return (query: string): T[] => {
-    if (!query || typeof query !== 'string' || !query.trim()) {
-        return results;
-    }
-    const q = normalizeFoodStr(query);
-    if (!q) return results;
-
-    // Direct substring matches
-    const directMatched: T[] = [];
-    for (const entry of prepared) {
-        if (entry && (entry.name.includes(q) || entry.category.includes(q)
-            || entry.servingUnit.includes(q) || entry.brand.includes(q))) {
-            directMatched.push(entry.item);
+        if (!query || typeof query !== 'string' || !query.trim()) {
+            return results;
         }
-    }
+        const q = normalizeFoodStr(query);
+        if (!q) return results;
 
-    if (q.length < 2) {
-        return directMatched.sort((a, b) => {
+        if (!prepared) {
+            prepared = results.map(item => item ? {
+                item,
+                name: normalizeFoodStr(item.name),
+                category: normalizeFoodStr(item.category),
+                servingUnit: normalizeFoodStr(item.servingUnit || item.unit),
+                brand: normalizeFoodStr(item.brand)
+            } : null);
+            for (const entry of prepared) {
+                if (entry) normalizedNames.set(entry.item, entry.name);
+            }
+        }
+
+        // Direct substring matches
+        const directMatched: T[] = [];
+        for (const entry of prepared) {
+            if (entry && (entry.name.includes(q) || entry.category.includes(q)
+                || entry.servingUnit.includes(q) || entry.brand.includes(q))) {
+                directMatched.push(entry.item);
+            }
+        }
+
+        if (q.length < 2) {
+            return directMatched.sort((a, b) => {
+                const aName = nameOf(a);
+                const bName = nameOf(b);
+                const aStarts = aName.startsWith(q);
+                const bStarts = bName.startsWith(q);
+                if (aStarts && !bStarts) return -1;
+                if (!aStarts && bStarts) return 1;
+                return aName.localeCompare(bName, 'it');
+            });
+        }
+
+        // Build Fuse only if the query actually needs fuzzy matching.
+        fuse ??= new Fuse(results, FUSE_FOOD_OPTIONS);
+
+        const tokens = query.trim().split(/\s+/).filter(t => t.length >= 2);
+        let fuzzyMatched: T[] = [];
+        if (tokens.length > 1) {
+            // Find items that match all tokens
+            const tokenMatches = tokens.map(tok => new Set(fuse.search(tok).map(r => r.item)));
+            const allMatch = results.filter(item => tokenMatches.every(set => set.has(item)));
+            const singleMatches = fuse.search(query.trim()).map(res => res.item);
+            fuzzyMatched = [...allMatch, ...singleMatches];
+        } else {
+            fuzzyMatched = fuse.search(query.trim()).map(res => res.item);
+        }
+
+        const seen = new Set<string | number>();
+        const merged: T[] = [];
+        for (const f of [...directMatched, ...fuzzyMatched]) {
+            const key = f.id ?? f.name;
+            if (!seen.has(key)) {
+                seen.add(key);
+                merged.push(f);
+            }
+        }
+
+        return merged.sort((a, b) => {
             const aName = nameOf(a);
             const bName = nameOf(b);
             const aStarts = aName.startsWith(q);
@@ -330,41 +371,6 @@ export function createFoodSearcher<T extends SearchableFood>(foodsList: T[], cat
             if (!aStarts && bStarts) return 1;
             return aName.localeCompare(bName, 'it');
         });
-    }
-
-    // Fuzzy matches with Fuse.js
-
-    const tokens = query.trim().split(/\s+/).filter(t => t.length >= 2);
-    let fuzzyMatched: T[] = [];
-    if (tokens.length > 1) {
-        // Find items that match all tokens
-        const tokenMatches = tokens.map(tok => new Set(fuse.search(tok).map(r => r.item)));
-        const allMatch = results.filter(item => tokenMatches.every(set => set.has(item)));
-        const singleMatches = fuse.search(query.trim()).map(res => res.item);
-        fuzzyMatched = [...allMatch, ...singleMatches];
-    } else {
-        fuzzyMatched = fuse.search(query.trim()).map(res => res.item);
-    }
-
-    const seen = new Set<string | number>();
-    const merged: T[] = [];
-    for (const f of [...directMatched, ...fuzzyMatched]) {
-        const key = f.id ?? f.name;
-        if (!seen.has(key)) {
-            seen.add(key);
-            merged.push(f);
-        }
-    }
-
-    return merged.sort((a, b) => {
-        const aName = nameOf(a);
-        const bName = nameOf(b);
-        const aStarts = aName.startsWith(q);
-        const bStarts = bName.startsWith(q);
-        if (aStarts && !bStarts) return -1;
-        if (!aStarts && bStarts) return 1;
-        return aName.localeCompare(bName, 'it');
-    });
     };
 }
 

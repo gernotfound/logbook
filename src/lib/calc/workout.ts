@@ -45,7 +45,7 @@ interface SearchableExercise {
     trackingType?: string;
 }
 
-export function createExerciseLibrarySearcher<T extends SearchableExercise>(library: T[]): (query: string) => T[] {
+function buildExerciseLibrarySearcher<T extends SearchableExercise>(library: T[]): (query: string) => T[] {
     if (!Array.isArray(library)) return () => [];
     const sortedLibrary = [...library].sort((a, b) => (a?.name || '').localeCompare(b?.name || '', 'it'));
 
@@ -158,6 +158,18 @@ export function createExerciseLibrarySearcher<T extends SearchableExercise>(libr
         }
 
         return results;
+    };
+}
+
+export function createExerciseLibrarySearcher<T extends SearchableExercise>(library: T[]): (query: string) => T[] {
+    if (!Array.isArray(library)) return () => [];
+    let prepared: ((query: string) => T[]) | null = null;
+    return (query: string): T[] => {
+        if (!query || typeof query !== 'string' || !query.trim()) {
+            return [...library].sort((a, b) => (a?.name || '').localeCompare(b?.name || '', 'it'));
+        }
+        if (!prepared) prepared = buildExerciseLibrarySearcher(library);
+        return prepared(query);
     };
 }
 
