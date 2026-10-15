@@ -156,6 +156,27 @@ describe('Challenger 2: Zustand Fine-Grained Selectors & Background Render Isola
         });
     });
 
+        it('does not rescan weight history for local UI changes but does after nutrition updates', () => {
+            const weightSpy = vi.spyOn(Logic, 'getLatestUserWeight');
+            try {
+                const { result } = renderHook(() => useNutritionMeals('2026-08-16'));
+                const initialCalls = weightSpy.mock.calls.length;
+                expect(initialCalls).toBeGreaterThan(0);
+
+                act(() => result.current.setSearchQuery('riso'));
+                expect(weightSpy).toHaveBeenCalledTimes(initialCalls);
+
+                act(() => useAppStore.setState(state => ({
+                    userData: state.userData
+                        ? { ...state.userData, nutrition: { ...state.userData.nutrition } }
+                        : null,
+                })));
+                expect(weightSpy).toHaveBeenCalledTimes(initialCalls + 1);
+            } finally {
+                weightSpy.mockRestore();
+            }
+        });
+
     describe('2. useNutritionPlanning Hook Isolation & TDEE Calculation Insulation', () => {
         it('does NOT trigger TDEE recalculation or hook re-renders during active workout keystrokes', () => {
             let hookRenderCount = 0;
