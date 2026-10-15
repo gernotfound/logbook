@@ -111,5 +111,18 @@ export function requireCompleteNutritionMonthDocument(month: string, data: Recor
     const cleaned = sanitizeNutritionMonthDocument(month, data);
     const omitted = Object.keys(data).filter(key => !Object.hasOwn(cleaned, key));
     if (omitted.length) throw new Error(`Shard nutrizione ${month} non integro: ${omitted.length} giornate non valide (es. ${omitted[0]}). Copia cloud conservata; recupero necessario.`);
+    // NutritionDaySchema deliberately quarantines invalid nested identities.
+    // That is useful for explicit recovery, but a normal hydration/export must
+    // not turn such omissions into an implicit deletion on the next projection.
+    for (const [date, raw] of Object.entries(data)) {
+        const original = raw as Record<string, unknown>;
+        const validated = cleaned[date] as Record<string, unknown>;
+        for (const key of ['meals', 'supplementsIntake', 'cardioSessions']) {
+            if (Array.isArray(original[key]) && Array.isArray(validated[key])
+                && (original[key] as unknown[]).length !== (validated[key] as unknown[]).length) {
+                throw new Error(`Shard nutrizione ${month}: record annidati non validi in ${date}/${key}. Cloud conservato; recupero necessario.`);
+            }
+        }
+    }
     return cleaned;
 }

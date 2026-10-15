@@ -87,6 +87,24 @@ describe('monthly Firestore read boundaries', () => {
         expect(documents.get('nutrition_months/2026-05')).toHaveProperty('_sync', syncMeta);
     });
 
+    it('blocks a nutrition day with quarantined nested meal identities before any hydration', async () => {
+        const data = draft();
+        const documents = cloudDocuments();
+        firestore.getDoc.mockResolvedValue(snapshot({
+            '2026-05-03': {
+                date: '2026-05-03',
+                meals: [
+                    { id: 'valid', name: 'Riso', meal: 'pranzo', quantity: 100, kcal: 100, carbs: 20, pro: 2, fat: 0 },
+                    { id: '', name: 'Corrotto', meal: 'pranzo', quantity: 100, kcal: 100, carbs: 20, pro: 2, fat: 0 },
+                ],
+            },
+        }));
+        await expect(loadNutritionMonths(owner, ['2026-05'], data, documents))
+            .rejects.toThrow('record annidati non validi');
+        expect(data.nutrition).toEqual({});
+        expect(documents.size).toBe(0);
+    });
+
     it('fails closed on an unsupported future data schema, then succeeds after correction', async () => {
         const data = draft();
         const documents = cloudDocuments();
