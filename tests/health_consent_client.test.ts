@@ -503,8 +503,8 @@ describe('account offline withdrawal and explicit local-only reacceptance', () =
       if (payload?.action === 'reaccept') return Response.json({
         status: 'active', revision: 3, acceptedAt: '2026-10-15T10:00:00.000Z',
       });
-      return Response.json({ status: 'active', revision: 1,
-        acceptedAt: '2026-10-14T10:00:00.000Z',
+      return Response.json({ status: 'active', revision: methods.includes('reaccept') ? 3 : 1,
+        acceptedAt: methods.includes('reaccept') ? '2026-10-15T10:00:00.000Z' : '2026-10-14T10:00:00.000Z',
         privacyVersion: accepted.privacyVersion, termsVersion: accepted.termsVersion });
     }));
     try {
@@ -534,7 +534,8 @@ describe('account offline withdrawal and explicit local-only reacceptance', () =
       disconnected = false;
       expect(isHealthConsentCloudWritable('user:' + uid)).toBe(false);
       expect(await refreshHealthConsent(actor)).toBe('active');
-      expect(methods).toEqual(['GET', 'GET', 'withdraw', 'reaccept']);
+      expect(methods).toEqual(['GET', 'GET', 'withdraw', 'reaccept', 'GET']);
+      expect(getServerConfirmedLegalConsent(uid)).toMatchObject({ privacyVersion: accepted.privacyVersion, termsVersion: accepted.termsVersion });
       expect(localStorage.getItem(key(uid))).toBeNull();
       expect(isHealthConsentLocalOnly(uid)).toBe(false);
       expect(getVerifiedHealthConsentRevision(uid)).toBe(3);
