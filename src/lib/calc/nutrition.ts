@@ -291,6 +291,18 @@ export function createFoodSearcher<T extends SearchableFood>(foodsList: T[], cat
     if (categoryFilter && categoryFilter !== 'all') {
         results = results.filter(item => item && item.category === categoryFilter);
     }
+    const prepared = results.map(item => item ? {
+        item,
+        name: normalizeFoodStr(item.name),
+        category: normalizeFoodStr(item.category),
+        servingUnit: normalizeFoodStr(item.servingUnit || item.unit),
+        brand: normalizeFoodStr(item.brand)
+    } : null);
+    const normalizedNames = new Map<T, string>();
+    for (const entry of prepared) {
+        if (entry) normalizedNames.set(entry.item, entry.name);
+    }
+    const nameOf = (item: T) => normalizedNames.get(item) ?? normalizeFoodStr(item.name);
     const fuse = new Fuse(results, FUSE_FOOD_OPTIONS);
     return (query: string): T[] => {
     if (!query || typeof query !== 'string' || !query.trim()) {
@@ -300,19 +312,18 @@ export function createFoodSearcher<T extends SearchableFood>(foodsList: T[], cat
     if (!q) return results;
 
     // Direct substring matches
-    const directMatched = results.filter(item => {
-        if (!item) return false;
-        const name = normalizeFoodStr(item.name);
-        const category = normalizeFoodStr(item.category);
-        const servingUnit = normalizeFoodStr(item.servingUnit || item.unit);
-        const brand = normalizeFoodStr(item.brand);
-        return name.includes(q) || category.includes(q) || servingUnit.includes(q) || brand.includes(q);
-    });
+    const directMatched: T[] = [];
+    for (const entry of prepared) {
+        if (entry && (entry.name.includes(q) || entry.category.includes(q)
+            || entry.servingUnit.includes(q) || entry.brand.includes(q))) {
+            directMatched.push(entry.item);
+        }
+    }
 
     if (q.length < 2) {
         return directMatched.sort((a, b) => {
-            const aName = normalizeFoodStr(a.name);
-            const bName = normalizeFoodStr(b.name);
+            const aName = nameOf(a);
+            const bName = nameOf(b);
             const aStarts = aName.startsWith(q);
             const bStarts = bName.startsWith(q);
             if (aStarts && !bStarts) return -1;
@@ -346,14 +357,15 @@ export function createFoodSearcher<T extends SearchableFood>(foodsList: T[], cat
     }
 
     return merged.sort((a, b) => {
-        const aName = normalizeFoodStr(a.name);
-        const bName = normalizeFoodStr(b.name);
+        const aName = nameOf(a);
+        const bName = nameOf(b);
         const aStarts = aName.startsWith(q);
         const bStarts = bName.startsWith(q);
         if (aStarts && !bStarts) return -1;
         if (!aStarts && bStarts) return 1;
         return aName.localeCompare(bName, 'it');
     });
+    };
 }
 
 export function searchFoods<T extends SearchableFood>(foodsList: T[], query: string, categoryFilter?: string): T[] {

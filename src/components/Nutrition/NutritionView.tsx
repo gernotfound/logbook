@@ -8,7 +8,7 @@ import NutritionSupplements from './NutritionSupplements';
 import { NutritionConflictBanner } from './NutritionConflictBanner';
 import { NutritionConflictDialog } from '../UI/NutritionConflictDialog';
 import { useNutritionHistory } from '../../hooks/useNutritionHistory';
-import { Logic } from '../../lib/logic';
+import { useLocalToday } from '../../hooks/useLocalToday';
 import { getNutritionConflictFingerprint } from '../../lib/utils/object';
 import { useAppStore } from '../../store/useAppStore';
 import { useAuth } from '../../hooks/useAuth';
@@ -33,7 +33,10 @@ interface NutritionViewProps {
 const NutritionView = ({ subTab = 'meals', setSubTab }: NutritionViewProps) => {
     const activeSubTab = (subTab === 'planning' || subTab === 'archive' || subTab === 'history' || subTab === 'supplements') ? subTab : 'meals';
 
-    const [selectedDate, setSelectedDate] = useState<string>(Logic.getLocalDateString());
+    const today = useLocalToday();
+    const [chosenDate, setChosenDate] = useState<string | null>(null);
+    const selectedDate = chosenDate ?? today;
+    const setSelectedDate = (date: string) => setChosenDate(date === today ? null : date);
     const [historyVisibleCount, setHistoryVisibleCount] = useState(NUTRITION_HISTORY_PAGE_SIZE);
     const mealsHook = useNutritionMeals(selectedDate);
     const historyHook = useNutritionHistory();
