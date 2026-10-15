@@ -1,6 +1,6 @@
 # TheLogBook — istruzioni operative per agenti AI
 
-Ultimo aggiornamento: 2026-10-13 | App: 1.1.0 | Progetto: PWA fitness tracking (allenamento, nutrizione, misurazioni corporee).
+Ultimo aggiornamento: 2026-10-15 | App: 1.2.0 | Progetto: PWA fitness tracking (allenamento, nutrizione, misurazioni corporee).
 
 ## Convenzioni
 
