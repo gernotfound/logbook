@@ -16,6 +16,9 @@ La parallelizzazione riguarda l'orchestrazione, non la semantica del gate. Unit,
 
 ## Exact HEAD
 
+- MUST: il bump minor applicativo richiesto per ogni integrazione in `main` deve essere incluso **prima** della verifica candidata; ogni merge concorrente richiede nuovo calcolo della versione, nuovo SHA e nuova validazione.
+- MUST: non creare workflow che riscrivano automaticamente commit dopo il gate. Un eventuale controllo automatico della versione deve essere read-only e confrontare la base Git appropriata.
+
 - MUST: ogni shard che esegue codice della PR fa checkout esplicito di `github.event.pull_request.head.sha`, non del merge ref sintetico.
 - MUST: in ogni shard, prima dei test, `git rev-parse HEAD` viene confrontato con lo SHA atteso; una divergenza termina lo shard.
 - MUST: nel job container E2E, la verifica usa `git -c safe.directory="$GITHUB_WORKSPACE" rev-parse HEAD` per gestire il mount del workspace senza modificare globalmente la trust policy Git; il confronto con lo SHA atteso resta identico.
