@@ -100,6 +100,7 @@ describe('shared Firebase Auth UI fixture contract', () => {
     expect(watcher).toHaveBeenCalledWith(
       expect.objectContaining({ uid: 'test-user-id', getIdToken: expect.any(Function) }),
       expect.any(Function),
+      expect.any(Function),
     );
     expect(fetchSpy).not.toHaveBeenCalled();
     fetchSpy.mockRestore();
