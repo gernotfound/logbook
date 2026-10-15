@@ -132,8 +132,10 @@ export function AccountDeletionRecovery() {
                     const failure = recordFailure(operation, deviceError);
                     if (deviceError instanceof DeletionRecoveryFinalizationError) {
                         showPending(deviceError.message, 'local-finalization-error');
-                    } else if (failure.kind === 'remote-failed' || failure.kind === 'integrity'
-                        || failure.kind === 'invalid-response' || (pendingDeletion && !markerError && !failure.transient)) {
+                    } else if (failure.kind === 'remote-failed') {
+                        showPending('La cancellazione cloud non è stata completata. Alcuni dati potrebbero già essere stati eliminati; la copia locale è conservata. Riprova dalle impostazioni.', 'cloud-deletion-failed');
+                    } else if (failure.kind === 'integrity' || failure.kind === 'invalid-response'
+                        || (pendingDeletion && !markerError && !failure.transient)) {
                         showPending(UNKNOWN_RECOVERY_MESSAGE, 'device-recovery-error');
                     }
                 }
