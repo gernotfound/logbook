@@ -591,6 +591,40 @@ describe('account offline withdrawal and explicit local-only reacceptance', () =
     } finally { online.mockRestore(); }
   });
 
+  it('persists a server CAS conflict as a safe withdrawal barrier across reload', async () => {
+    const uid = 'conflict-reconnect-' + crypto.randomUUID();
+    const actor = user(uid);
+    (auth as { currentUser: unknown }).currentUser = actor;
+    const online = vi.spyOn(navigator, 'onLine', 'get');
+    try {
+      online.mockReturnValue(true);
+      beginHealthConsentVerification(uid);
+      vi.stubGlobal('fetch', vi.fn(async () => Response.json({ status: 'active', revision: 1 })));
+      expect(await refreshHealthConsent(actor)).toBe('active');
+      online.mockReturnValue(false);
+      vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('offline'); }));
+      await expect(withdrawHealthConsent(actor)).rejects.toThrow();
+      reacceptHealthConsentLocally(actor, accepted);
+      expect(isHealthConsentWritable('user:' + uid)).toBe(true);
+      online.mockReturnValue(true);
+      vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) =>
+        init.method === 'GET'
+          ? Response.json({ status: 'active', revision: 1 })
+          : Response.json({ error: 'consent revision conflict' }, { status: 409 })));
+      expect(await refreshHealthConsent(actor)).toBe('pending');
+      expect(localStorage.getItem(key(uid))).toBe('pending:1');
+      expect(isHealthConsentWritable('user:' + uid)).toBe(false);
+      expect(isHealthConsentCloudWritable('user:' + uid)).toBe(false);
+      beginHealthConsentVerification(uid);
+      vi.stubGlobal('fetch', vi.fn(async () => Response.json({
+        status: 'active', revision: 5, acceptedAt: '2026-10-15T12:00:00.000Z',
+        privacyVersion: accepted.privacyVersion, termsVersion: accepted.termsVersion,
+      })));
+      expect(await refreshHealthConsent(actor)).toBe('stale-request');
+      expect(localStorage.getItem(key(uid))).toBe('pending:1');
+    } finally { online.mockRestore(); }
+  });
+
   it('rejects local reopening for unregistered users, stale legal versions and absent cached server proof', () => {
     const uid = 'no-offline-consent-' + crypto.randomUUID();
     const actor = user(uid);
