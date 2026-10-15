@@ -338,18 +338,18 @@ export function createFoodSearcher<T extends SearchableFood>(foodsList: T[], cat
         }
 
         // Build Fuse only if the query actually needs fuzzy matching.
-        fuse ??= new Fuse(results, FUSE_FOOD_OPTIONS);
+        const currentFuse = fuse ?? (fuse = new Fuse(results, FUSE_FOOD_OPTIONS));
 
         const tokens = query.trim().split(/\s+/).filter(t => t.length >= 2);
         let fuzzyMatched: T[] = [];
         if (tokens.length > 1) {
             // Find items that match all tokens
-            const tokenMatches = tokens.map(tok => new Set(fuse.search(tok).map(r => r.item)));
+            const tokenMatches = tokens.map(tok => new Set(currentFuse.search(tok).map(r => r.item)));
             const allMatch = results.filter(item => tokenMatches.every(set => set.has(item)));
-            const singleMatches = fuse.search(query.trim()).map(res => res.item);
+            const singleMatches = currentFuse.search(query.trim()).map(res => res.item);
             fuzzyMatched = [...allMatch, ...singleMatches];
         } else {
-            fuzzyMatched = fuse.search(query.trim()).map(res => res.item);
+            fuzzyMatched = currentFuse.search(query.trim()).map(res => res.item);
         }
 
         const seen = new Set<string | number>();
