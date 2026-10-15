@@ -35,10 +35,10 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
   });
 
   // =========================================================================
-  // 1. Queue Overflow & FIFO Eviction Stress Test
+  // 1. Queue Overflow & Error-Priority Eviction Stress Test
   // =========================================================================
-  describe('1. Queue Overflow & FIFO Eviction Stress', () => {
-    it('handles heavy queue overflow (150 items) maintaining strictly <= 50 capacity and exact FIFO eviction', () => {
+  describe('1. Queue Overflow & Error-Priority Eviction Stress', () => {
+    it('keeps the last fifty errors during 150 mixed events', () => {
       Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
       telemetryHub.init();
       telemetryHub.setUserId('user_overflow_stress');
@@ -58,30 +58,11 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
       // Capacity must be strictly bounded at TELEMETRY_QUEUE_CAPACITY (50)
       expect(queued.length).toBe(TELEMETRY_QUEUE_CAPACITY);
 
-      // The first remaining item must be item 101 (items 1..100 evicted)
-      const firstItem = queued[0];
-      const lastItem = queued[queued.length - 1];
-
-      // Item 101 was odd -> error_101
-      expect(firstItem.itemType).toBe('error');
-      expect((firstItem.payload as TelemetryErrorPayload).message).toBe('error_101');
-
-      // Item 150 was even -> event_150. Test-only arbitrary metadata is minimized away.
-      expect(lastItem.itemType).toBe('event');
-      expect((lastItem.payload as TelemetryEventPayload).type).toBe('event_150');
-      expect((lastItem.payload as TelemetryEventPayload).details?.sequence).toBeUndefined();
-
-      // Verify continuous monotonic sequence from 101 to 150
+      // Event telemetry has no external destination and must not displace errors.
+      expect(queued.every(item => item.itemType === 'error')).toBe(true);
       for (let idx = 0; idx < queued.length; idx++) {
-        const expectedSeq = 101 + idx;
-        const item = queued[idx];
-        if (expectedSeq % 2 === 0) {
-          expect(item.itemType).toBe('event');
-          expect((item.payload as TelemetryEventPayload).type).toBe(`event_${expectedSeq}`);
-        } else {
-          expect(item.itemType).toBe('error');
-          expect((item.payload as TelemetryErrorPayload).message).toBe(`error_${expectedSeq}`);
-        }
+        expect((queued[idx].payload as TelemetryErrorPayload).message)
+          .toBe(`error_${51 + idx * 2}`);
       }
     });
   });
