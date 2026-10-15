@@ -15,6 +15,9 @@ const serverConfirmedLegal = new Map<string, NonNullable<UserData['legalConsent'
 class ConsentTransportUnavailableError extends Error {
   constructor() { super('Connessione al servizio consensi non disponibile.'); }
 }
+class ConsentRevisionConflictError extends Error {
+  constructor() { super('Una decisione sul consenso più recente richiede un nuovo controllo.'); }
+}
 const verifiedRevisions = new Map<string, number>();
 // Offline access is local-only: a cached server approval must never authorize cloud I/O.
 const onlineVerifiedRevisions = new Map<string, number>();
@@ -255,6 +258,7 @@ async function serverRequest(user: User, method: 'GET' | 'POST', body?: unknown)
     }
     throw error;
   }
+  if (response.status === 409) throw new ConsentRevisionConflictError();
   if (!response.ok) throw new Error('Verifica del consenso non disponibile (HTTP ' + response.status + ').');
   const result: unknown = await response.json();
   if (!result || typeof result !== 'object') throw new Error('Risposta server non valida.');
@@ -536,6 +540,14 @@ export async function refreshHealthConsent(user: User): Promise<HealthConsentSta
     return 'active';
   } catch (error) {
     if (!isSameDecision()) return currentHealthConsentStatus(uid);
+    if (offlineReaccept !== null && error instanceof ConsentRevisionConflictError) {
+      // A trusted CAS conflict proves that this device's cached epoch is
+      // stale. Preserve the original withdrawal revision and block local use
+      // durably across crashes; the next GET offers the ordinary stale choice.
+      writeBrowserValue(marker(uid), pendingMarker(offlineReaccept.revision));
+      setStatus(uid, 'pending');
+      return 'pending';
+    }
     if (error instanceof ConsentTransportUnavailableError && recoverCachedOfflineConsent()) return 'active';
     setStatus(uid, saved === null || offlineReaccept !== null ? 'error' : saved as HealthConsentStatus);
     return currentHealthConsentStatus(uid);
