@@ -222,7 +222,7 @@ describe('Workout Improvements & History Edit Suite', () => {
         }
       );
 
-      const triggerBtn = screen.getByRole('button', { name: /opzioni/i });
+      const triggerBtn = await screen.findByRole('button', { name: /opzioni/i });
       await act(async () => {
         fireEvent.click(triggerBtn);
       });
