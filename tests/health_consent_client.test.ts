@@ -577,7 +577,8 @@ describe('account offline withdrawal and explicit local-only reacceptance', () =
       vi.stubGlobal('fetch', newer);
       expect(await refreshHealthConsent(actor)).toBe('error');
       expect(newer).toHaveBeenCalledTimes(1);
-      expect(localStorage.getItem(key(uid))).toBe('offline-reaccepted:1:1.3.4:1.2.1');
+      expect(localStorage.getItem(key(uid))).toBe('offline-conflict:1:1.3.4:1.2.1');
+      expect(isHealthConsentWritable('user:' + uid)).toBe(false);
       expect(isHealthConsentCloudWritable('user:' + uid)).toBe(false);
     } finally { onLine.mockRestore(); }
   });
