@@ -55,7 +55,7 @@ export async function registerDeletionRecoveryDevice(user:User):Promise<void>{
  if(!cred){cred={uid:user.uid,token:randomToken()};writeAll([...all.filter(x=>x.uid!==user.uid),cred]);}
  let phase:RecoveryPhase='auth-token';
  try{
-   const response=await withDeletionDeadline(async signal=>{
+   await withDeletionDeadline(async signal=>{
      const idToken=await user.getIdToken();
      assertDeletionDeadlineActive(signal);
      if(auth.currentUser?.uid!==user.uid)throw new DeletionDeviceOperationError('device-registration','auth-token','stale-session');
@@ -64,11 +64,19 @@ export async function registerDeletionRecoveryDevice(user:User):Promise<void>{
      assertDeletionDeadlineActive(signal);
      if(auth.currentUser?.uid!==user.uid)throw new DeletionDeviceOperationError('device-registration','auth-token','stale-session');
      phase='http';
-     const result=await fetch(API+'/api/account-deletion-device',{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+idToken,'x-firebase-appcheck':check},body:JSON.stringify({deviceToken:cred.token}),cache:'no-store',signal});
+     const response=await fetch(API+'/api/account-deletion-device',{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+idToken,'x-firebase-appcheck':check},body:JSON.stringify({deviceToken:cred.token}),cache:'no-store',signal});
      assertDeletionDeadlineActive(signal);
-     return result;
+     if(!response.ok)throw deviceOperationFailure('device-registration','http',undefined,response.status);
+     phase='response-body';
+     const body:unknown=await response.json();
+     assertDeletionDeadlineActive(signal);
+     phase='server-status';
+     if(!body||typeof body!=='object'||Array.isArray(body)
+       || (body as {registered?:unknown}).registered!==true){
+       throw new DeletionDeviceOperationError('device-registration','server-status','invalid-response');
+     }
+     if(auth.currentUser?.uid!==user.uid)throw new DeletionDeviceOperationError('device-registration','auth-token','stale-session');
    },RECOVERY_REQUEST_TIMEOUT_MS);
-   if(!response.ok)throw deviceOperationFailure('device-registration','http',undefined,response.status);
  }catch(error){
    throw deviceOperationFailure('device-registration',phase,error);
  }
