@@ -2,7 +2,8 @@
  * Deadline for the complete request, including token providers and body parsing.
  * Abort is best effort: late continuations must check the signal before side effects.
  */
-class DeletionDeadlineExceededError extends Error {
+export class DeletionDeadlineExceededError extends Error {
+    readonly code = 'account-deletion-deadline-exceeded';
     constructor() {
         super('La verifica della cancellazione non ha risposto entro il limite previsto.');
         this.name = 'DeletionDeadlineExceededError';
