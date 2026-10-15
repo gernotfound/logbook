@@ -89,6 +89,7 @@ export function AccountDeletionRecovery() {
                     if (pendingDeletion) {
                         const outcome = await resumeAccountDeletion(completionContext);
                         diagnostics.recordSuccess('pending-deletion');
+                        if (outcome?.status === 'complete') diagnostics.recordSuccess('local-finalization');
                         if (outcome?.status === 'pending') showPending(outcome.message, 'pending-deletion');
                     } else {
                         diagnostics.recordSuccess('pending-deletion');
