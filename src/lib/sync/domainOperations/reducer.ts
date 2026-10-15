@@ -221,7 +221,7 @@ function applyOne(input: UserData, operation: DomainOperation): UserData {
             break;
         }
         case 'training-cycle.upsert': {
-            const cycle = { ...operation.cycle, id: requireId(operation.cycle.id, 'Ciclo') };
+            const cycle = TrainingCycleWriteSchema.parse({ ...operation.cycle, id: requireId(operation.cycle.id, 'Ciclo') });
             assertUnique(cycle.routines ?? [], item => requireId(item.routineId, 'Routine ciclo'), 'Routine ciclo');
             data.trainingCycles = upsertById(data.trainingCycles, cycle, item => requireId(item.id, 'Ciclo'), 'Cicli');
             break;
