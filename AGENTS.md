@@ -197,7 +197,7 @@ La cancellazione account è un workflow CRITICAL server-mediated. Il client non 
 
 - **MUST:** dialoghi tramite `GlobalDialog`/`useDialogStore`, non `window.alert`/`window.confirm`. Preferire superfici inline/full-screen per editor mobili complessi.
 - **MUST:** input anti-zoom iOS, target touch e safe area accessibili; verificare light/dark, viewport, overlay e comportamento su dispositivi quando pertinente.
-- **MUST:** non creare nuove referenze a ogni render nei selettori Zustand. Sotto `Suspense` preservare il pattern testato di tab visibility.
+- **MUST:** non creare nuove referenze a ogni render nei selettori Zustand. Nelle schede mantenute vive sotto `Suspense`, non usare l'attributo HTML `hidden` come meccanismo di tab visibility: preservare il pattern `style={{ display: ... }}` salvo migrazione esplicitamente testata.
 - **MUST:** recovery e render React non mutano lo store globale. `useRef(initialValue)` non è lazy initialization: preservare owner/session fencing e commit React per bozze device-critical.
 
 → Specifiche: `.agents/rules/design-system.md`.
@@ -214,7 +214,7 @@ Per modifiche non banali:
 
 ### Versionamento della PWA
 
-- **MUST (decisione prodotto):** a ogni commit che entra in `main` tramite normale squash merge incrementare di uno la componente minor della versione applicativa in `package.json` e azzerare la patch (`1.2.0 → 1.3.0 → 1.4.0`). Calcolare il numero dal vero HEAD remoto di `main`, non dalla versione iniziale del branch; in caso di merge concorrente riallineare e rivalidare.
+- **MUST (decisione prodotto):** a ogni commit che entra in `main` tramite normale squash merge incrementare di uno la componente minor della versione applicativa in `package.json` e azzerare la patch (da `MAJOR.MINOR.PATCH` a `MAJOR.(MINOR+1).0`). Calcolare il numero dal vero HEAD remoto di `main`, non dalla versione iniziale del branch; in caso di merge concorrente riallineare e rivalidare.
 - **MUST:** includere il bump e la sincronizzazione dei due campi root in `package-lock.json` nel candidato PR **prima** della CI exact-SHA e review. Non introdurre bump post-verifica, commit CI automatici o push diretti a `main` e non incrementare per commit intermedi del branch.
 - **MUST:** non duplicare la versione pubblica in `AGENTS.md`. Il bump non modifica automaticamente Data Schema, Sync Protocol, Local Envelope, Backup Schema, manifest catalogo o versioni dei documenti legali.
 - **VERIFY:** i manifest package sono input del selettore Vercel backend; anche un bump senza modifiche di codice può provocare un deploy. Verificarne l'esito senza indebolire il rilevamento dei cambi alle dipendenze server.
