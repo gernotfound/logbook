@@ -31,7 +31,7 @@ function readAll():Credential[]{
  for(const item of parsed){
    if(!item||typeof item!=='object')throw new DeletionRecoveryCredentialCorruptError();
    const candidate=item as {uid?:unknown;token?:unknown};
-   if(typeof candidate.uid!=='string'||candidate.uid.length===0||typeof candidate.token!=='string'||candidate.token.length===0)throw new DeletionRecoveryCredentialCorruptError();
+   if(typeof candidate.uid!=='string'||candidate.uid.length===0||typeof candidate.token!=='string'||!/^[A-Za-z0-9_-]{43}$/.test(candidate.token))throw new DeletionRecoveryCredentialCorruptError();
    credentials.push({uid:candidate.uid,token:candidate.token});
  }
  return credentials.slice(-MAX_DEVICES);
