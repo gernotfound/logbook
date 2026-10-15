@@ -12,8 +12,9 @@ export function isBoundedCycleCount(value: unknown, max: number): value is numbe
 }
 
 export function previewCycleCount(value: string, fallback: number, max: number): number {
+    if (value.trim() === '') return Math.min(max, Math.max(1, fallback));
     const parsed = Number(value);
-    return Number.isSafeInteger(parsed) && parsed >= 1
-        ? Math.min(parsed, max)
+    return Number.isSafeInteger(parsed)
+        ? Math.min(max, Math.max(1, parsed))
         : Math.min(max, Math.max(1, fallback));
 }
