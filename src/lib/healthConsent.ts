@@ -41,7 +41,7 @@ const pendingMarker = (revision: number) => `pending:${revision}`;
 const offlineReacceptMarker = (revision: number) =>
   `offline-reaccepted:${revision}:${LEGAL_VERSIONS.privacy}:${LEGAL_VERSIONS.terms}`;
 function parseOfflineReaccept(saved: string | null): { revision: number; privacyVersion: string; termsVersion: string } | null {
-  const match = /^offline-reaccepted:([1-9]\\d*):([0-9.]+):([0-9.]+)$/.exec(saved ?? '');
+  const match = /^offline-reaccepted:([1-9]\d*):([0-9.]+):([0-9.]+)$/.exec(saved ?? '');
   if (!match) return null;
   const revision = Number(match[1]);
   return Number.isSafeInteger(revision)
