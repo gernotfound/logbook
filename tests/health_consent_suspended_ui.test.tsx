@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { User } from 'firebase/auth';
 import { HealthConsentSuspended } from '../src/components/UI/HealthConsentSuspended';
-import { finishHealthConsentReacceptance, registerInitialHealthConsent, reacceptHealthConsent, refreshHealthConsent } from '../src/lib/healthConsent';
+import { finishHealthConsentReacceptance, registerInitialHealthConsent, reacceptHealthConsent, reacceptHealthConsentLocally, refreshHealthConsent } from '../src/lib/healthConsent';
 
 vi.mock('../src/hooks/useSettings', () => ({
   useSettings: () => ({
@@ -126,5 +126,46 @@ describe('suspended health-consent screen', () => {
     expect(checkboxInputs().every(input => !input.disabled)).toBe(true);
     expect(reacceptButton().disabled).toBe(true);
     expect(screen.getByRole('status').textContent).toContain('Nuovo consenso in fase di completamento');
+  });
+});
+
+describe('account consent withdrawal offline', () => {
+  it('offers a separate local-only consent after pending withdrawal and checks both boxes', async () => {
+    const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    try {
+      render(<HealthConsentSuspended status="pending" user={account} />);
+      const button = screen.getByRole('button', { name: 'Riattiva solo su questo dispositivo' }) as HTMLButtonElement;
+      expect(button.disabled).toBe(true);
+      const [terms, health] = checkboxInputs();
+      expect(terms.disabled).toBe(false);
+      expect(health.disabled).toBe(false);
+      expect(screen.getByText(/cloud resterà sospeso/i)).toBeDefined();
+      expect(screen.getByRole('button', { name: 'Ricarica TheLogBook' })).toBeDefined();
+      fireEvent.click(terms);
+      expect(button.disabled).toBe(true);
+      fireEvent.click(health);
+      expect(button.disabled).toBe(false);
+      fireEvent.click(button);
+      await waitFor(() => expect(reacceptHealthConsentLocally).toHaveBeenCalledTimes(1));
+      expect(reacceptHealthConsent).not.toHaveBeenCalled();
+      expect(vi.mocked(reacceptHealthConsentLocally).mock.calls[0][1]).toMatchObject({
+        acceptedTerms: true, acceptedHealthData: true,
+      });
+    } finally {
+      online.mockRestore();
+    }
+  });
+
+  it('retries the trusted verification when connectivity returns to a suspended screen', async () => {
+    const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    try {
+      render(<HealthConsentSuspended status="pending" user={account} />);
+      online.mockReturnValue(true);
+      fireEvent(window, new Event('online'));
+      expect(screen.getByRole('button', { name: 'Riprova a verificare il consenso' })).toBeDefined();
+      await waitFor(() => expect(refreshHealthConsent).toHaveBeenCalledWith(account));
+    } finally {
+      online.mockRestore();
+    }
   });
 });
