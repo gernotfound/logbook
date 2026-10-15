@@ -25,6 +25,15 @@ describe('training cycle local-day progress', () => {
         vi.useRealTimers();
     });
 
+    it('keeps one local-day clock for multiple subscribers and cleans up on unmount', () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date(2026, 9, 19, 12, 0, 0));
+        const view = render(<><ProgressProbe /><ProgressProbe /></>);
+        expect(vi.getTimerCount()).toBe(1);
+        view.unmount();
+        expect(vi.getTimerCount()).toBe(0);
+    });
+
     it('updates without a data mutation on local midnight and focus', async () => {
         vi.useFakeTimers();
         vi.setSystemTime(new Date(2026, 9, 19, 23, 59, 58));

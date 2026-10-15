@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { X, Plus, Search, Activity, Timer } from 'lucide-react';
 import { ExerciseLibraryItem } from '../../types';
-import { Logic, getDetailedMuscleCategory } from '../../lib/logic';
+import { getDetailedMuscleCategory } from '../../lib/logic';
 import { createExerciseLibrarySearcher } from '../../lib/calc/workout';
 
 export interface ExerciseSearchDropdownProps {
