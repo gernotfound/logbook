@@ -6,7 +6,7 @@ import {
     resumeAccountDeletion,
     type AccountDeletionCompletionContext,
 } from '../lib/db/db_account';
-import { listPendingAccountDeletions } from '../lib/sync/accountGate';
+import { isAccountDeletionPending, listPendingAccountDeletions } from '../lib/sync/accountGate';
 import { useDialogStore } from '../store/useDialogStore';
 import { useAppStore } from '../store/useAppStore';
 import {
@@ -112,7 +112,13 @@ export function AccountDeletionRecovery() {
                     deviceError = error;
                 }
 
-                if (markerError && !(markerError instanceof AccountDeletionReceiptNotFoundError && deviceOutcome.status !== 'none')) {
+                // A successful proof for owner B cannot clear an unrecognized
+                // receipt belonging to A. Suppress a 404 only if that exact
+                // owner's local marker was actually finalized.
+                const markerWasFinalized = markerError instanceof AccountDeletionReceiptNotFoundError
+                    && Boolean(markerError.uid) && deviceOutcome.status !== 'none'
+                    && !isAccountDeletionPending('user:' + markerError.uid);
+                if (markerError && !markerWasFinalized) {
                     recordFailure('pending-deletion', markerError);
                     const message = markerError instanceof Error && pendingDeletion
                         ? markerError.message : UNKNOWN_RECOVERY_MESSAGE;
