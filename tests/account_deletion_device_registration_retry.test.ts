@@ -507,4 +507,21 @@ describe('account deletion recovery device registration retries', () => {
     expect(localStorage.getItem('logbook_deletion_recovery_devices_v1')).not.toBeNull();
   });
 
+  it('does not let an earlier transient failure mask a later failed deletion', async () => {
+    const { recoverDeletedAccountOnThisDevice } = await loadSubject();
+    localStorage.setItem('logbook_deletion_recovery_devices_v1', JSON.stringify([
+      { uid: 'user-a', token: 'A'.repeat(43) },
+      { uid: 'user-b', token: 'B'.repeat(43) },
+      { uid: 'user-c', token: 'C'.repeat(43) },
+    ]));
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce(new Response('{}', { status: 503 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ status: 'failed' }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ status: 'complete' }), { status: 200 })));
+    const finalize = vi.fn(async () => ({ status: 'complete' as const }));
+
+    await expect(recoverDeletedAccountOnThisDevice(finalize)).rejects.toMatchObject({ kind: 'remote-failed' });
+    expect(finalize).toHaveBeenCalledWith('user-c');
+  });
+
 });
