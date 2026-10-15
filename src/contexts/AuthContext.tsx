@@ -32,6 +32,7 @@ import { safeHardReload } from '../lib/sync/safeReload';
 import { prepareForReload } from '../lib/sync/reloadBarrier';
 import { classifyGooglePopupFailure } from './auth/googlePopup';
 import { watchDeletionRecoveryDeviceRegistration } from '../lib/deletionDeviceRecovery';
+import { RecoveryDiagnosticTracker } from '../lib/deletionRecoveryDiagnostics';
 import { validatePasswordAgainstPolicy } from '../lib/auth/passwordPolicy';
 import { describeEmailAuthError } from '../lib/auth/emailAuthError';
 import { reportError } from '../lib/errorHandler';
@@ -209,12 +210,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     useEffect(() => {
         if (!currentUser || emailVerificationRequired) return;
+        const diagnostics = new RecoveryDiagnosticTracker();
         return watchDeletionRecoveryDeviceRegistration(
             currentUser,
             error => {
-                reportError(error, { source: 'account_deletion_device_registration' });
-                console.warn('Recovery device non registrato; nuovo tentativo al prossimo ritorno online/in primo piano.', error);
+                diagnostics.recordFailure('device-registration', error, (summary, source) => {
+                    reportError(summary, { source });
+                    console.warn('Registrazione recovery device: diagnostica tecnica:', summary.message);
+                });
             },
+            () => diagnostics.recordSuccess('device-registration'),
         );
     }, [currentUser, emailVerificationRequired]);
 
