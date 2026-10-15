@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { Exporter } from '../src/lib/export';
+import { Exporter, MAX_JSON_IMPORT_BYTES } from '../src/lib/export';
 import { createBackup } from '../src/lib/backup';
 import { useDialogStore } from '../src/store/useDialogStore';
 import { CURRENT_BACKUP_SCHEMA, CURRENT_DATA_SCHEMA, CURRENT_SYNC_PROTOCOL } from '../src/lib/schemaEvolution';
@@ -148,4 +148,61 @@ describe('JSON Export/Import Logic', () => {
         expect(parsed.routines).toHaveLength(1);
         expect(parsed.library).toHaveLength(0);
     });
+    it('shares selected data without cloning unrelated uncloneable health history', async () => {
+        const userData: any = {
+            library: [{ id: 'ex1', name: 'Squat' }],
+            routines: [],
+            trainingCycles: [],
+            history: [{ id: 'private-session', fn: () => 'must never be cloned or shared' }],
+        };
+        const download = vi.spyOn(Exporter, 'downloadFile').mockResolvedValue(true);
+        download.mockClear();
+
+        await expect(Exporter.exportShareJson(userData)).resolves.toMatchObject({ libraryCount: 1 });
+        const payload = JSON.parse(download.mock.lastCall![1]);
+        expect(payload.userData).toEqual({
+            library: [{ id: 'ex1', name: 'Squat' }], routines: [], trainingCycles: [],
+        });
+        expect(payload.coverage).toEqual({ scope: 'device', months: [] });
+        expect(payload.owner).toBeNull();
+    });
+
+    it('rejects oversized JSON before starting FileReader or modifying local data', async () => {
+        const file = new File(['{}'], 'huge.json', { type: 'application/json' });
+        Object.defineProperty(file, 'size', { value: MAX_JSON_IMPORT_BYTES + 1 });
+        const save = vi.fn();
+        const read = vi.spyOn(FileReader.prototype, 'readAsText');
+        const alert = vi.spyOn(useDialogStore.getState(), 'showAlert').mockResolvedValue(undefined);
+        try {
+            await expect(Exporter.importFromJson(file, null, save)).rejects.toThrow('64 MiB');
+            expect(read).not.toHaveBeenCalled();
+            expect(save).not.toHaveBeenCalled();
+            expect(alert).toHaveBeenCalledWith(expect.stringContaining('file originale resta intatto'));
+        } finally {
+            read.mockRestore();
+            alert.mockRestore();
+        }
+    });
+
+    it('rejects malformed small JSON without invoking the durable save', async () => {
+        const file = new File(['{"broken":'], 'invalid.json', { type: 'application/json' });
+        const save = vi.fn();
+        await expect(Exporter.importFromJson(file, null, save)).rejects.toThrow();
+        expect(save).not.toHaveBeenCalled();
+    });
+
+    it('rejects a cancelled FileReader before parsing or committing', async () => {
+        const file = new File(['{"unused":true}'], 'cancelled.json', { type: 'application/json' });
+        const save = vi.fn();
+        const reader = vi.spyOn(FileReader.prototype, 'readAsText').mockImplementation(function (this: FileReader) {
+            queueMicrotask(() => this.dispatchEvent(new Event('abort')));
+        });
+        try {
+            await expect(Exporter.importFromJson(file, null, save)).rejects.toThrow('Lettura del file annullata.');
+            expect(save).not.toHaveBeenCalled();
+        } finally {
+            reader.mockRestore();
+        }
+    });
+
 });
