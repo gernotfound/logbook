@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';\nimport { checkMarkdownLinks } from './markdown-links.mjs';
+import { existsSync, readFileSync } from 'node:fs';
+import { checkMarkdownLinks } from './markdown-links.mjs';
 import { basename, extname } from 'node:path';
 import { TextDecoder } from 'node:util';
 
@@ -18,7 +19,16 @@ const tracked = execFileSync('git', ['ls-files', '-z'])
   .split('\0')
   .filter(Boolean);
 
-const markdownFiles = tracked.filter(path => path.endsWith('.md'));\nconst linkFailures = checkMarkdownLinks(markdownFiles, {\n  read: path => readFileSync(path, 'utf8'),\n  exists: path => existsSync(path),\n});\nif (linkFailures.length) {\n  failures.push(`broken internal documentation links:\\n${linkFailures.map(x => `  ${x}`).join('\\n')}`);\n}\n\nconst taskSpecificAnalysisArtifacts = tracked.filter(path => (
+const markdownFiles = tracked.filter(path => path.endsWith('.md'));
+const linkFailures = checkMarkdownLinks(markdownFiles, {
+  read: path => readFileSync(path, 'utf8'),
+  exists: path => existsSync(path),
+});
+if (linkFailures.length) {
+  failures.push('broken internal documentation links:' + String.fromCharCode(10) + linkFailures.map(x => '  ' + x).join(String.fromCharCode(10)));
+}
+
+const taskSpecificAnalysisArtifacts = tracked.filter(path => (
   /^implementation_plan(?:_.*)?\.md$/.test(path)
   || /^audit_logbook_.*\.md$/.test(path)
   || /^remediation_logbook_.*\.md$/.test(path)
