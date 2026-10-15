@@ -194,9 +194,14 @@ export function decodeImport(payload: unknown, owner: string) {
         ? Object.fromEntries(arrays.filter(key => ['library', 'routines', 'trainingCycles'].includes(key) && sanitizedData[key] !== undefined).map(key => [key, sanitizedData[key]]))
         : sanitizedData;
 
+    const device = !share && isRecord(normalized.recovery) && isRecord(normalized.recovery.device)
+        ? normalized.recovery.device : null;
     return { data: selected, share, ownerUnknown: !share && !sourceOwner, coverage,
         hasDeviceRecovery: !share && normalized.recovery !== undefined,
-        deviceDrafts: share ? [] : selectBackupDeviceDrafts(normalized.recovery) };
+        deviceDrafts: share ? [] : selectBackupDeviceDrafts(normalized.recovery),
+        deviceWorkoutRaw: typeof device?.workout === 'string' ? device.workout : null,
+        deviceTimerRaw: typeof device?.timer === 'string' ? device.timer : null,
+        exportedAt: typeof normalized.exportedAt === 'string' ? normalized.exportedAt : '' };
 }
 
 function mergeMissing(local: unknown, incoming: unknown): unknown {

@@ -3,6 +3,7 @@ import { useAppStore } from '../store/useAppStore';
 import { Logic } from './logic';
 import { createBackup, decodeImport, prepareImport, type BackupCoverage, type ImportMode } from './backup';
 import { restoreMissingBackupDeviceDrafts } from './backupDeviceRecovery';
+import { restorePortableWorkout, restorePortableTimerAsPaused } from './backupWorkoutRecovery';
 import { captureSession, isCurrentSession } from './sync/session';
 import { readLocal } from './sync/localRepository';
 import equal from 'fast-deep-equal';
@@ -447,7 +448,7 @@ export const Exporter = {
                     ? '\nIl backup è parziale: storico e nutrizione non presenti nel file saranno conservati.'
                     : '') +
                 (decoded.ownerUnknown ? '\nIl backup non identifica un proprietario. Conferma solo se questi dati sono tuoi.' : '') +
-                (decoded.hasDeviceRecovery ? '\nIl file contiene dati di recupero: dopo l’importazione potrai recuperare le bozze mancanti. Il timer, gli intenti workout e il journal tecnico NON vengono trasferiti automaticamente: conserva il file originale.' : '') +
+                (decoded.hasDeviceRecovery ? '\nIl file contiene dati di recupero: potrai recuperare le bozze mancanti e, se possibile, l’allenamento interrotto con il timer in pausa. Il journal causale originale NON viene trapiantato; conserva il backup.' : '') +
                 '\nI consensi importati non verranno applicati.\nProcedere?';
             if (!(await useDialogStore.getState().showConfirm(summary, 'Anteprima importazione'))) return;
             assertCurrent();
@@ -472,6 +473,32 @@ export const Exporter = {
                     draftReport = ' Bozze recuperate: ' + restored + '; bozze già presenti conservate: ' + preserved + '.';
                 } catch (error) {
                     draftReport = ' Il recupero delle bozze non è terminato: conserva il backup e riprova. ' +
+                        (error instanceof Error ? error.message : '');
+                }
+            }
+            if (decoded.deviceWorkoutRaw && await useDialogStore.getState().showConfirm(
+                'Il backup contiene un allenamento rimasto sul vecchio dispositivo. Provare a recuperarlo come nuova modifica locale, solo se nessun allenamento è già aperto? Il timer eventualmente incluso verrà ripristinato IN PAUSA, senza continuare a contare il tempo trascorso dopo il backup.')) {
+                try {
+                    assertCurrent();
+                    const outcome = await restorePortableWorkout(
+                        decoded.deviceWorkoutRaw, session.owner,
+                        () => useAppStore.getState(),
+                        workout => useAppStore.getState().setSyncedLocalWorkout(workout),
+                        assertCurrent,
+                    );
+                    if (outcome === 'restored') {
+                        const timerRestored = restorePortableTimerAsPaused(
+                            decoded.deviceTimerRaw, decoded.exportedAt, session.owner, assertCurrent);
+                        draftReport += ' Allenamento recuperato nel journal del dispositivo corrente.' +
+                            (timerRestored ? ' Timer recuperato in pausa.' : '');
+                    } else {
+                        draftReport += ' Allenamento del backup non sovrascritto: ' +
+                            (outcome === 'already-present' ? 'esiste già una sessione locale.' :
+                             outcome === 'completed' ? 'la sessione è già nello storico.' : 'è attiva un’altra sessione.') +
+                            ' Conserva il backup.';
+                    }
+                } catch (error) {
+                    draftReport += ' Recupero allenamento incompleto: mantieni il backup originale. ' +
                         (error instanceof Error ? error.message : '');
                 }
             }
