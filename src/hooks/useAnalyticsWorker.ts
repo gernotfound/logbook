@@ -76,15 +76,16 @@ export function useAnalyticsWorker() {
             const timeoutId = setTimeout(() => {
                 const handlers = pendingPromises.current.get(id);
                 if (handlers) {
-                    pendingPromises.current.delete(id);
+                    // Stop the timed-out computation before running synchronous fallbacks.
+                    // Other in-flight tasks must also settle; this worker is no longer usable.
+                    workerRef.current?.terminate();
+                    workerRef.current = null;
+                    const pending = Array.from(pendingPromises.current.values());
+                    pendingPromises.current.clear();
                     console.warn(`Worker task ${type} timed out after ${timeoutMs}ms, falling back to synchronous execution`);
-                    try {
-                        const start = performance.now();
-                        const res = fallbackFn();
-                        console.info(`Fallback sync for ${type} after timeout took ${(performance.now() - start).toFixed(2)}ms`);
-                        resolve(res);
-                    } catch (fallbackErr) {
-                        reject(fallbackErr);
+                    for (const task of pending) {
+                        clearTimeout(task.timeoutId);
+                        task.reject(new Error('Worker timed out'));
                     }
                 }
             }, timeoutMs);

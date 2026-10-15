@@ -84,8 +84,6 @@ export type HomeViewState =
         bfSource: string | null;
         streak: number;
         totalWorkouts: number;
-        tdeeCalc: any;
-        recentDates: string[];
         chartData: any;
         weightPeriod: string;
         setWeightPeriod: (p: any) => void;
@@ -266,17 +264,22 @@ export function useHomeView(): HomeViewState {
         return { muscleColors: colors, volumeChartData: vChartData };
     }, [history, libraryMap, homeClockNow]);
 
-    // Chronological array for charts and TDEE calc
-    const { sortedDates, tdeeCalc } = useMemo(() => {
-        const dates = Object.keys(nutrition).sort((a,b) => new Date(a).getTime() - new Date(b).getTime());
-        const cData = dates.map(d => ({ ...nutrition[d], date: d }));
-        const tCalc = Logic.calculateTDEE(cData);
-        return { sortedDates: dates, tdeeCalc: tCalc };
+    // Resolve the latest observations once per nutrition update, not on every clock refresh.
+    const { recentWeight, recentNutritionWithBf } = useMemo(() => {
+        const dates = Object.keys(nutrition).sort((a, b) => b.localeCompare(a));
+        let weight: string | number | undefined;
+        let bfDay: Record<string, any> | undefined;
+        for (const date of dates) {
+            const day = nutrition[date];
+            if (weight === undefined && day?.weight) weight = day.weight;
+            if (!bfDay && day?.bf !== undefined && day?.bf !== null && day?.bf !== '') bfDay = day;
+            if (weight !== undefined && bfDay) break;
+        }
+        return { recentWeight: weight, recentNutritionWithBf: bfDay };
     }, [nutrition]);
 
     // Chart Logic (Configured period: 7d, 30d, 180d, 365d)
     const [weightPeriod, setWeightPeriod] = useState<'7d' | '30d' | '180d' | '365d'>('7d');
-    const recentDates = useMemo(() => sortedDates.slice(-14), [sortedDates]);
 
     const { chartData, weightStats } = useMemo(() => {
         const daysMap: Record<string, number> = {
@@ -401,16 +404,7 @@ export function useHomeView(): HomeViewState {
     if (nutritionPlanning) {
         const isDayOn = todayNutrition.isDayOn;
         
-        // Find latest weight
-        const sortedDates = Object.keys(nutrition).sort((a, b) => b.localeCompare(a));
-        let latestWeight = 80;
-        for (const d of sortedDates) {
-            if (nutrition[d].weight) {
-                latestWeight = parseFloat(nutrition[d].weight as string) || latestWeight;
-                break;
-            }
-        }
-        
+        const latestWeight = parseFloat(String(recentWeight)) || 80;
         const w = nutritionPlanning.weight || latestWeight;
         const targetMacros = isDayOn === true
             ? nutritionPlanning.onMacros
@@ -425,8 +419,6 @@ export function useHomeView(): HomeViewState {
     }
     
     // Get BF % — use today's or most recent measurement
-    const sortedNutritionDates = Object.keys(nutrition).sort((a, b) => b.localeCompare(a));
-    const recentWeight = sortedNutritionDates.map(d => nutrition[d]).find(n => n?.weight)?.weight;
     const currentWeight = todayNutrition.weight || 
                           recentWeight || 
                           nutritionPlanning?.weight || 80;
@@ -434,9 +426,6 @@ export function useHomeView(): HomeViewState {
     
     let bf = "--";
     let bfSource: string | null = null;
-    const recentNutritionWithBf = sortedNutritionDates
-        .map(d => nutrition[d])
-        .find(n => n?.bf !== undefined && n?.bf !== null && n?.bf !== '');
     const selectedBfDay = (todayNutrition.bf !== undefined && todayNutrition.bf !== null && todayNutrition.bf !== '')
         ? todayNutrition
         : recentNutritionWithBf;
@@ -459,7 +448,7 @@ export function useHomeView(): HomeViewState {
         isRestDay, todaysWorkout,
         kcalEaten, carbs, pro, fat, kcalTarget,
         bf, bfSource, streak, totalWorkouts,
-        tdeeCalc, recentDates, chartData,
+        chartData,
         weightPeriod, setWeightPeriod, weightStats,
         muscleColors, volumeChartData,
         activePains, painColors, toggleActivePain,

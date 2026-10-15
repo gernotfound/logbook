@@ -178,22 +178,29 @@ export function computeWeeklyVolumeSeries(
 
     const firstDay = intervals[0].weekStart;
     const lastDay = intervals[intervals.length - 1].weekEnd;
-    const workoutsWithData = safeHistory.flatMap(w => {
-        const dateStr = getWorkoutDateString(w);
-        if (!dateStr || dateStr < firstDay || dateStr > lastDay) return [];
-        const volume = calculateWorkoutVolume(w, safeLibrary, safeUserWeight);
-        return [{
-            session: w,
-            dateStr,
-            volume: isNaN(volume) ? 0 : volume
-        }];
-    });
+    // Bucket sessions once, preserving history order (including sessionIds).
+    // A binary search retains the original string-range behavior for legacy dates.
+    const weeks: Array<Array<{ session: WorkoutSession; volume: number }>> = intervals.map(() => []);
+    for (const session of safeHistory) {
+        const dateStr = getWorkoutDateString(session);
+        if (!dateStr || dateStr < firstDay || dateStr > lastDay) continue;
+        let low = 0;
+        let high = intervals.length - 1;
+        while (low <= high) {
+            const mid = Math.floor((low + high) / 2);
+            const interval = intervals[mid];
+            if (dateStr < interval.weekStart) high = mid - 1;
+            else if (dateStr > interval.weekEnd) low = mid + 1;
+            else {
+                const volume = calculateWorkoutVolume(session, safeLibrary, safeUserWeight);
+                weeks[mid].push({ session, volume: isNaN(volume) ? 0 : volume });
+                break;
+            }
+        }
+    }
 
     const points: WeeklyVolumePoint[] = intervals.map((interval, idx) => {
-        const matching = workoutsWithData.filter(w => {
-            if (!w.dateStr) return false;
-            return w.dateStr >= interval.weekStart && w.dateStr <= interval.weekEnd;
-        });
+        const matching = weeks[idx];
 
         const volumeKg = Math.round(matching.reduce((acc, curr) => acc + curr.volume, 0));
         const volumeTon = Math.round((volumeKg / 1000) * 100) / 100;
