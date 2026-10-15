@@ -71,3 +71,15 @@ it('does not run workers for hidden tabs and restarts safely on reactivation', a
     expect(await second).toEqual({ points: [], stats: {} });
     hook.unmount();
 });
+
+it('does not post another task to an analytics worker after it crashes', async () => {
+    const hook = renderHook(() => useAnalyticsWorker());
+    const first = hook.result.current.calculateVolumeStats([], [], 80, 8);
+    await act(async () => { worker.instance.onerror(new Error('crash')); });
+    expect(await first).toEqual({ points: [], stats: {} });
+    const count = worker.post.mock.calls.length;
+    expect(await hook.result.current.calculateVolumeStats([], [], 80, 12)).toEqual({ points: [], stats: {} });
+    expect(worker.post).toHaveBeenCalledTimes(count);
+    expect(worker.fallback).toHaveBeenCalledTimes(2);
+    hook.unmount();
+});

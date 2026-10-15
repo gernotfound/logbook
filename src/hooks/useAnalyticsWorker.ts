@@ -32,8 +32,10 @@ export function useAnalyticsWorker(enabled = true) {
             
             workerRef.current.onerror = (e) => {
                 console.warn("Analytics Worker encountered an error:", e);
-                // We don't reject here because the task specific reject logic handles fallbacks.
-                // But we need to clean up pending promises and trigger their fallback.
+                // A failed worker is not retried: terminate it and use the established
+                // synchronous fallback for current and subsequent requests.
+                workerRef.current?.terminate();
+                workerRef.current = null;
                 const pending = Array.from(pendingForThisMount.entries());
                 pendingForThisMount.clear();
                 for (const [, handlers] of pending) {
