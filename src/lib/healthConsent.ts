@@ -189,9 +189,18 @@ export function isHealthConsentCloudWritable(owner: string): boolean {
  * already-explicitly-accepted legalConsent field without a second prompt.
  * An untrusted local marker or a cached offline revision cannot do this.
  */
+export function hasUnreconciledOfflineReaccept(uid: string): boolean {
+  try {
+    const saved = readMarker(uid);
+    return parseOfflineReaccept(saved) !== null || saved?.startsWith('offline-conflict:') === true;
+  } catch {
+    // An unreadable consent marker must never authorize ordinary cloud reads.
+    return true;
+  }
+}
+
 export function isHealthConsentLocalOnly(uid: string): boolean {
-  try { return parseOfflineReaccept(readMarker(uid)) !== null && currentHealthConsentStatus(uid) === 'active'; }
-  catch { return false; }
+  return hasUnreconciledOfflineReaccept(uid) && currentHealthConsentStatus(uid) === 'active';
 }
 
 export function getServerConfirmedLegalConsent(uid: string): NonNullable<UserData['legalConsent']> | null {
