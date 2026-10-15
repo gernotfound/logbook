@@ -117,7 +117,7 @@ describe('monthly Firestore read boundaries', () => {
             ] },
         }));
         await expect(loadHistoryMonths(owner, ['2026-05'], state, docs))
-            .rejects.toThrow('elenco w/sets/segments incompleto');
+            .rejects.toThrow('Shard storico 2026-05 non integro');
         expect(state.history).toEqual([]);
         expect(docs.size).toBe(0);
     });
