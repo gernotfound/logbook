@@ -162,8 +162,14 @@ describe('account consent withdrawal offline', () => {
       render(<HealthConsentSuspended status="pending" user={account} />);
       online.mockReturnValue(true);
       fireEvent(window, new Event('online'));
-      expect(screen.getByRole('button', { name: 'Riprova a verificare il consenso' })).toBeDefined();
+      const verify = screen.getByRole('button', { name: 'Riprova a verificare il consenso' });
+      expect(verify).toBeDefined();
+      // AuthProvider owns automatic rechecks; the suspended screen only
+      // exposes a manual retry instead of racing that foreground listener.
+      expect(refreshHealthConsent).not.toHaveBeenCalled();
+      fireEvent.click(verify);
       await waitFor(() => expect(refreshHealthConsent).toHaveBeenCalledWith(account));
+      expect(screen.getByRole('button', { name: 'Ricarica TheLogBook' })).toBeDefined();
     } finally {
       online.mockRestore();
     }
