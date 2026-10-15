@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Utensils } from 'lucide-react';
 import { Logic } from '../../lib/logic';
 
@@ -7,14 +7,19 @@ interface NutritionHistoryProps {
     onDayClick?: (dateStr: string) => void;
 }
 
+const NUTRITION_HISTORY_PAGE_SIZE = 30;
+
 const NutritionHistory: React.FC<NutritionHistoryProps> = ({ nutritionHistory, onDayClick }) => {
+    const [visibleCount, setVisibleCount] = useState(NUTRITION_HISTORY_PAGE_SIZE);
+    const visibleDays = nutritionHistory.slice(0, visibleCount);
+
     return (
         <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
                 <h1 style={{margin: 0,color: 'var(--text-main)'}}>Storico pasti ({nutritionHistory.length})</h1>
             </div>
             <p style={{ fontSize: 'var(--font-size-body)', color: 'var(--text-muted)', marginBottom: '15px' }}>
-                Tutti i pasti registrati in ordine cronologico.
+                Tutti i pasti registrati, dal più recente al meno recente.
             </p>
 
             {nutritionHistory.length === 0 ? (
@@ -24,7 +29,7 @@ const NutritionHistory: React.FC<NutritionHistoryProps> = ({ nutritionHistory, o
                 </div>
             ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                    {nutritionHistory.map((day: any, idx: number) => (
+                    {visibleDays.map((day: any, idx: number) => (
                         <div 
                             key={`hist-nutr-${day.date}-${idx}`} 
                             className="card clickable-card" 
@@ -80,6 +85,15 @@ const NutritionHistory: React.FC<NutritionHistoryProps> = ({ nutritionHistory, o
                             </div>
                         </div>
                     ))}
+                    {visibleCount < nutritionHistory.length && (
+                        <button
+                            type="button"
+                            onClick={() => setVisibleCount(count => count + NUTRITION_HISTORY_PAGE_SIZE)}
+                            aria-label={`Mostra altri giorni dello storico pasti (${nutritionHistory.length - visibleCount} rimanenti)`}
+                        >
+                            Mostra altri giorni
+                        </button>
+                    )}
                 </div>
             )}
         </div>
