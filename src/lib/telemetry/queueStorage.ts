@@ -241,7 +241,11 @@ export class TelemetryQueueStorage {
       items.push(newItem);
 
       while (items.length > TELEMETRY_QUEUE_CAPACITY) {
-        items.shift();
+        // Standalone events are accepted but not emitted by the Sentry boundary.
+        // They must never evict actionable error diagnostics from the offline queue.
+        const eventIndex = items.findIndex(item => item.itemType === 'event');
+        if (eventIndex >= 0) items.splice(eventIndex, 1);
+        else items.shift();
       }
 
       this.saveQueuedEvents(items, true);

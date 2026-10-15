@@ -1,5 +1,6 @@
 import { format, isValid, parseISO, addDays, startOfDay, differenceInCalendarDays } from 'date-fns';
 import { GROUP_MAP } from '../constants/muscles';
+import { isBoundedCycleCount, MAX_CALCULATED_CYCLE_WEEKS, MAX_CYCLE_SESSIONS_PER_WEEK } from './cycleLimits';
 import type { TrainingCycle, WorkoutRoutine, Exercise, WorkoutSession } from '../../types';
 
 interface MuscleVolumeDetail {
@@ -37,6 +38,14 @@ export function calculateCycleTimeline(
     currentDate: Date | string = new Date()
 ): CycleTimelineInfo {
     let totalWeeks = Math.max(1, Number(cycle?.durationWeeks) || 4);
+    if (!isBoundedCycleCount(totalWeeks, MAX_CALCULATED_CYCLE_WEEKS)) {
+        return {
+            formattedStartDate: '', formattedEndDate: '',
+            formattedRange: 'Parametri del ciclo non validi',
+            currentWeek: 0, totalWeeks: 0, isStarted: false, isEnded: false,
+            progressPercent: 0, statusLabel: 'Parametri del ciclo da correggere',
+        };
+    }
 
     if (!cycle?.startDate) {
         return {
@@ -243,6 +252,9 @@ export function calculateCycleSchedule(
     if (N === 0) return emptyResult;
 
     const durationWeeks = Math.max(1, Number(cycle.durationWeeks) || 4);
+    if (!isBoundedCycleCount(durationWeeks, MAX_CALCULATED_CYCLE_WEEKS)) {
+        return { ...emptyResult, summaryText: 'Parametri del ciclo da correggere' };
+    }
     
     let sessionsPerWeek = Number(cycle.sessionsPerWeek);
     if (!sessionsPerWeek || sessionsPerWeek < 1) {
@@ -250,6 +262,9 @@ export function calculateCycleSchedule(
         sessionsPerWeek = sumFreq > 0 ? sumFreq : N;
     }
 
+    if (!isBoundedCycleCount(sessionsPerWeek, MAX_CYCLE_SESSIONS_PER_WEEK)) {
+        return { ...emptyResult, summaryText: 'Parametri del ciclo da correggere' };
+    }
     const totalSessions = durationWeeks * sessionsPerWeek;
     const fullRotationsCount = Math.floor(totalSessions / N);
     const remainderSessions = totalSessions % N;
@@ -362,11 +377,13 @@ export function getNextScheduledRoutine(
 
     const N = validCycleRoutines.length;
     const durationWeeks = Math.max(1, Number(cycle.durationWeeks) || 4);
+    if (!isBoundedCycleCount(durationWeeks, MAX_CALCULATED_CYCLE_WEEKS)) return null;
     let sessionsPerWeek = Number(cycle.sessionsPerWeek);
     if (!sessionsPerWeek || sessionsPerWeek < 1) {
         const sumFreq = validCycleRoutines.reduce((sum, r) => sum + (Number(r.frequencyPerWeek) || 1), 0);
         sessionsPerWeek = sumFreq > 0 ? sumFreq : N;
     }
+    if (!isBoundedCycleCount(sessionsPerWeek, MAX_CYCLE_SESSIONS_PER_WEEK)) return null;
     const totalSessions = durationWeeks * sessionsPerWeek;
 
     // Filter history for completed sessions that belong to this cycle

@@ -147,7 +147,7 @@ describe('Milestone 4 Challenger: Empirical Stress & Burst Verification', () => 
     expect(p2.count).toBe(1000);
   });
 
-  it('Stress 4: Offline queue under 1,000 mixed item barrage guarantees <= 50 FIFO capacity and zero data corruption', () => {
+  it('Stress 4: Offline queue under 1,000 mixed items retains newest 50 errors without corruption', () => {
     Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
     telemetryHub.init();
     telemetryHub.setUserId('user_offline_flood');
@@ -162,9 +162,9 @@ describe('Milestone 4 Challenger: Empirical Stress & Burst Verification', () => 
 
     const queue = telemetryHub.getQueuedEvents();
     expect(queue.length).toBe(50);
-    // Oldest 950 items evicted; earliest item should be item 950 (flood_event_950)
-    expect(queue[0].payload.type).toBe('flood_event_950');
-    expect(queue[49].payload.type).toBe('Error');
+    // Events have no external destination: they must not displace technical errors.
+    expect(queue.every(item => item.itemType === 'error')).toBe(true);
+    expect((queue[0].payload as TelemetryErrorPayload).message).toBe('flood_error_901');
     expect((queue[49].payload as TelemetryErrorPayload).message).toBe('flood_error_999');
 
     Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });

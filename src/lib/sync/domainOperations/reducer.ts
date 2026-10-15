@@ -6,6 +6,8 @@ import type {
 } from '../../../types';
 import { UserDataSchema } from '../../schema';
 import { CardioSessionSchema } from '../../schemas/schema_nutrition';
+import { TrainingCycleWriteSchema } from '../../schemas/schema_training';
+import { isBoundedCycleCount, MAX_EDITABLE_CYCLE_WEEKS, MAX_CYCLE_SESSIONS_PER_WEEK } from '../../calc/cycleLimits';
 import { calculateLoggedMealTotals } from '../../nutrition/calculateLoggedMealTotals';
 import { getLocalDateString } from '../../utils/date';
 import type { DomainOperation, DomainOperationBatch } from './contracts';
@@ -221,7 +223,14 @@ function applyOne(input: UserData, operation: DomainOperation): UserData {
             break;
         }
         case 'training-cycle.upsert': {
-            const cycle = { ...operation.cycle, id: requireId(operation.cycle.id, 'Ciclo') };
+            // Validate the raw operation first: tolerant read schemas must not turn
+            // malformed input into a successful write by applying number fallbacks.
+            if (!isBoundedCycleCount(operation.cycle.durationWeeks, MAX_EDITABLE_CYCLE_WEEKS)
+                || (operation.cycle.sessionsPerWeek !== undefined
+                    && !isBoundedCycleCount(operation.cycle.sessionsPerWeek, MAX_CYCLE_SESSIONS_PER_WEEK))) {
+                throw new Error('Durata o frequenza del ciclo non valida');
+            }
+            const cycle = TrainingCycleWriteSchema.parse({ ...operation.cycle, id: requireId(operation.cycle.id, 'Ciclo') });
             assertUnique(cycle.routines ?? [], item => requireId(item.routineId, 'Routine ciclo'), 'Routine ciclo');
             data.trainingCycles = upsertById(data.trainingCycles, cycle, item => requireId(item.id, 'Ciclo'), 'Cicli');
             break;

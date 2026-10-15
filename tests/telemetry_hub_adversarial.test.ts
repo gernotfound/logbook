@@ -232,9 +232,9 @@ describe('Adversarial Stress & Edge-Case Suite: TelemetryHub', () => {
   });
 
   // =========================================================================
-  // 4. Offline Capacity, FIFO Trimming & Flapping Network
+  // 4. Offline Capacity, Error-Priority Trimming & Flapping Network
   // =========================================================================
-  describe('4. Offline Capacity, FIFO Trimming & Flapping Network', () => {
+  describe('4. Offline Capacity, Error-Priority Trimming & Flapping Network', () => {
     it('strictly maintains TELEMETRY_QUEUE_CAPACITY (50) under an avalanche of 300 offline items', () => {
       Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
       telemetryHub.init();
@@ -251,21 +251,13 @@ describe('Adversarial Stress & Edge-Case Suite: TelemetryHub', () => {
       const queue = telemetryHub.getQueuedEvents();
       expect(queue.length).toBe(TELEMETRY_QUEUE_CAPACITY); // 50 items
 
-      // Check FIFO: first item in queue must be item #251
-      const firstItem = queue[0];
-      if (firstItem.itemType === 'event') {
-        expect(firstItem.payload.type).toBe('offline_event_251');
-      } else {
-        expect((firstItem.payload as TelemetryErrorPayload).message).toContain('251');
+      // Keep the newest fifty errors ordered 202, 204, ... 300.
+      expect(queue.every(item => item.itemType === 'error')).toBe(true);
+      for (let idx = 0; idx < queue.length; idx++) {
+        expect((queue[idx].payload as TelemetryErrorPayload).message)
+          .toBe(`Offline error ${202 + idx * 2}`);
       }
 
-      // Last item in queue must be item #300
-      const lastItem = queue[queue.length - 1];
-      if (lastItem.itemType === 'error') {
-        expect((lastItem.payload as TelemetryErrorPayload).message).toContain('300');
-      } else {
-        expect(lastItem.payload.type).toBe('offline_event_300');
-      }
 
       Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
     });
