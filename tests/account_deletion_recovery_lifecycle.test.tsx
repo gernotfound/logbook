@@ -291,4 +291,24 @@ describe('account deletion recovery foreground lifecycle', () => {
         expect(boundary.reportError).not.toHaveBeenCalled();
     });
 
+    it('reports failed local cleanup via a pending marker as a critical finalization error', async () => {
+        boundary.findPending.mockReturnValue({
+            markers: [{ owner: 'user:a', uid: 'a', startedAt: 1, receiptToken: 'receipt-a' }],
+            corrupt: [],
+        });
+        const failure = Object.assign(new Error('Pulizia locale incompleta'), {
+            code: 'account-deletion-local-finalization-failed',
+        });
+        boundary.resume.mockRejectedValueOnce(failure);
+
+        render(<AccountDeletionRecovery />);
+        await settle();
+
+        expect(boundary.reportError).toHaveBeenCalledWith(
+            expect.objectContaining({ message: expect.stringContaining('operation=local-finalization') }),
+            { source: 'account_deletion_local_finalization' },
+        );
+        expect(boundary.showAlert).toHaveBeenCalledWith('Pulizia locale incompleta');
+    });
+
 });
