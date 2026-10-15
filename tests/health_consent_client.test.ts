@@ -542,6 +542,26 @@ describe('account offline withdrawal and explicit local-only reacceptance', () =
     } finally { online.mockRestore(); }
   });
 
+  it('finishes a server-confirmed reacceptance after reload without sending another withdrawal', async () => {
+    const uid = 'resumed-offline-consent-' + crypto.randomUUID();
+    const actor = user(uid);
+    (auth as { currentUser: unknown }).currentUser = actor;
+    localStorage.setItem(key(uid), 'offline-reaccepted:1:1.3.4:1.2.1');
+    localStorage.setItem('logbook:v2:user:' + uid + ':health-consent-generation', '3');
+    localStorage.setItem('logbook:v2:user:' + uid + ':health-consent-last-active', '1');
+    const fetchMock = vi.fn(async () => Response.json({
+      status: 'active', revision: 3, acceptedAt: '2026-10-15T10:00:00.000Z',
+      privacyVersion: accepted.privacyVersion, termsVersion: accepted.termsVersion,
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+    beginHealthConsentVerification(uid);
+    expect(currentHealthConsentStatus(uid)).not.toBe('active');
+    expect(await refreshHealthConsent(actor)).toBe('active');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(localStorage.getItem(key(uid))).toBeNull();
+    expect(getVerifiedHealthConsentRevision(uid)).toBe(3);
+  });
+
   it('rejects local reopening for unregistered users, stale legal versions and absent cached server proof', () => {
     const uid = 'no-offline-consent-' + crypto.randomUUID();
     const actor = user(uid);
