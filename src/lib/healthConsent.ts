@@ -18,6 +18,17 @@ class ConsentTransportUnavailableError extends Error {
 class ConsentRevisionConflictError extends Error {
   constructor() { super('Una decisione sul consenso più recente richiede un nuovo controllo.'); }
 }
+function isRetryableConsentTransportError(error: unknown): boolean {
+  if (error instanceof ConsentTransportUnavailableError) return true;
+  if (!error || typeof error !== 'object') return false;
+  const candidate = error as { code?: unknown; retryable?: unknown };
+  // Firebase can fail to acquire the App Check or Auth token before fetch
+  // starts. These transient outages are not proof of server withdrawal.
+  if (candidate.code === 'auth/network-request-failed') return true;
+  return candidate.retryable === true
+    && (candidate.code === 'app-check-unavailable'
+      || candidate.code === 'app-check-limited-use-unavailable');
+}
 const verifiedRevisions = new Map<string, number>();
 // Offline access is local-only: a cached server approval must never authorize cloud I/O.
 const onlineVerifiedRevisions = new Map<string, number>();
@@ -548,7 +559,7 @@ export async function refreshHealthConsent(user: User): Promise<HealthConsentSta
       setStatus(uid, 'pending');
       return 'pending';
     }
-    if (error instanceof ConsentTransportUnavailableError && recoverCachedOfflineConsent()) return 'active';
+    if (isRetryableConsentTransportError(error) && recoverCachedOfflineConsent()) return 'active';
     setStatus(uid, saved === null || offlineReaccept !== null ? 'error' : saved as HealthConsentStatus);
     return currentHealthConsentStatus(uid);
   }
