@@ -577,4 +577,33 @@ describe('account deletion recovery device registration retries', () => {
     }
   });
 
+  it('refuses a fifth account without evicting any existing recovery proof', async () => {
+    const { registerDeletionRecoveryDevice, DeletionRecoveryCredentialCapacityError } = await loadSubject();
+    const existing = Array.from({ length: 4 }, (_, index) => ({
+      uid: 'past-owner-' + index, token: 'A'.repeat(43),
+    }));
+    const serialized = JSON.stringify(existing);
+    localStorage.setItem('logbook_deletion_recovery_devices_v1', serialized);
+    const current = user('new-owner');
+    firebase.auth.currentUser = current;
+    const network = vi.fn();
+    vi.stubGlobal('fetch', network);
+
+    await expect(registerDeletionRecoveryDevice(current)).rejects.toBeInstanceOf(DeletionRecoveryCredentialCapacityError);
+    expect(localStorage.getItem('logbook_deletion_recovery_devices_v1')).toBe(serialized);
+    expect(network).not.toHaveBeenCalled();
+  });
+
+  it('preserves every unrelated legacy recovery proof when removing one from an over-capacity registry', async () => {
+    const { removeDeletionRecoveryCredential } = await loadSubject();
+    const existing = Array.from({ length: 5 }, (_, index) => ({
+      uid: 'past-owner-' + index, token: 'B'.repeat(43),
+    }));
+    localStorage.setItem('logbook_deletion_recovery_devices_v1', JSON.stringify(existing));
+    removeDeletionRecoveryCredential('past-owner-4');
+
+    expect(JSON.parse(localStorage.getItem('logbook_deletion_recovery_devices_v1')!))
+      .toEqual(existing.slice(0, 4));
+  });
+
 });
