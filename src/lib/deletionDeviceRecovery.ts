@@ -128,7 +128,11 @@ export async function recoverDeletedAccountOnThisDevice(finalize:(uid:string)=>P
      }
      if(remoteStatus!=='complete')continue;
    }catch(error){
-     if(!firstRequestError)firstRequestError=deviceOperationFailure('routine-check',phase,error);
+     const failure=deviceOperationFailure('routine-check',phase,error);
+     // A transient failure for owner A cannot mask a definitive failure for B.
+     const significant=(value:DeletionDeviceOperationError)=>['remote-failed','invalid-response','rejected'].includes(value.kind);
+     if(!firstRequestError
+       || (significant(failure) && !(firstRequestError instanceof DeletionDeviceOperationError && significant(firstRequestError))))firstRequestError=failure;
      continue;
    }
    try{
