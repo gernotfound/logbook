@@ -1,24 +1,30 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import type { User } from 'firebase/auth';
 import { useSettings } from '../../hooks/useSettings';
 import { recoverOldLocalEditsAfterConsent } from '../../lib/healthConsentRecovery';
 import { useDialogStore } from '../../store/useDialogStore';
 import { LEGAL_VERSIONS } from '../../lib/legalVersions';
-import { beginGuestHealthReacceptance, completeGuestHealthReacceptance, finishHealthConsentReacceptance, registerInitialHealthConsent, reacceptHealthConsent, reconfirmStaleHealthWithdrawal, retainNewerHealthConsent, refreshHealthConsent, type HealthConsentStatus } from '../../lib/healthConsent';
+import { beginGuestHealthReacceptance, completeGuestHealthReacceptance, finishHealthConsentReacceptance, registerInitialHealthConsent, reacceptHealthConsent, reacceptHealthConsentLocally, reconfirmStaleHealthWithdrawal, retainNewerHealthConsent, refreshHealthConsent, type HealthConsentStatus } from '../../lib/healthConsent';
 import { safeHardReload } from '../../lib/sync/safeReload';
 import { PrivacyPolicy } from '../../pages/PrivacyPolicy';
 import { TermsAndConditions } from '../../pages/TermsAndConditions';
 
 // The form has its own selection state: switching from pending to confirmed,
  // or back to pending, creates a fresh opt-in without a render-time reset.
-function ReacceptanceForm({ enabled, busy, onReaccept, firstAcceptance = false }: { enabled: boolean; busy: boolean; onReaccept: () => Promise<void>; firstAcceptance?: boolean }) {
+function ReacceptanceForm({ enabled, busy, onReaccept, firstAcceptance = false, localOnly = false }: {
+  enabled: boolean; busy: boolean; onReaccept: () => Promise<void>; firstAcceptance?: boolean; localOnly?: boolean;
+}) {
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [acceptedHealth, setAcceptedHealth] = useState(false);
 
   return <>
     <h2>{firstAcceptance ? 'Prima di iniziare a usare TheLogBook' : 'Per tornare a usare la PWA'}</h2>
-    <p>{firstAcceptance ? 'Esamina i documenti e presta il primo consenso esplicito per usare il tuo account. Il consenso viene registrato dal server prima di permettere la sincronizzazione.' : 'Esamina i documenti e scegli liberamente se prestare un nuovo consenso. I dati già presenti non vengono cancellati automaticamente.'}</p>
+    <p>{firstAcceptance
+      ? 'Esamina i documenti e presta il primo consenso esplicito per usare il tuo account. Il consenso viene registrato dal server prima di permettere la sincronizzazione.'
+      : localOnly
+        ? 'Puoi riprendere a usare i dati soltanto su questo dispositivo. La revoca e il nuovo consenso saranno registrati sul server dopo la riconnessione; fino ad allora non verrà effettuata alcuna sincronizzazione cloud.'
+        : 'Esamina i documenti e scegli liberamente se prestare un nuovo consenso. I dati già presenti non vengono cancellati automaticamente.'}</p>
     <label style={{ display: 'block', marginBlock: 12 }}>
       <input type="checkbox" disabled={!enabled || busy} checked={acceptedTerms} onChange={e => setAcceptedTerms(e.target.checked)} />
       {' '}Ho almeno 18 anni, ho letto l'informativa e accetto i termini.
@@ -29,7 +35,7 @@ function ReacceptanceForm({ enabled, busy, onReaccept, firstAcceptance = false }
     </label>
     <button className="btn btn-primary" type="button" disabled={!enabled || busy || !acceptedTerms || !acceptedHealth}
       onClick={() => { if (enabled && !busy && acceptedTerms && acceptedHealth) void onReaccept(); }}>
-      {busy ? 'Salvataggio in corso…' : firstAcceptance ? 'Accetta e continua' : 'Presta un nuovo consenso'}
+      {busy ? 'Salvataggio in corso…' : firstAcceptance ? 'Accetta e continua' : localOnly ? 'Riattiva solo su questo dispositivo' : 'Presta un nuovo consenso'}
     </button>
   </>;
 }
@@ -42,8 +48,28 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
   const [recoveryBusy, setRecoveryBusy] = useState(false);
   const [privacy, setPrivacy] = useState(false);
   const [terms, setTerms] = useState(false);
+  const [offline, setOffline] = useState(() => typeof navigator !== 'undefined' && navigator.onLine === false);
+  useEffect(() => {
+    const onOffline = () => setOffline(true);
+    const onOnline = () => {
+      setOffline(false);
+      if (user) void refreshHealthConsent(user);
+    };
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && navigator.onLine && user) void refreshHealthConsent(user);
+    };
+    window.addEventListener('offline', onOffline);
+    window.addEventListener('online', onOnline);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.removeEventListener('offline', onOffline);
+      window.removeEventListener('online', onOnline);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [user]);
   const initialAcceptance = status === 'unregistered' && user !== null;
   const canReaccept = status === 'withdrawn' || status === 'reaccepting';
+  const localOnlyReaccept = offline && user !== null && (status === 'pending' || status === 'withdrawn');
   const showReacceptForm = status === 'pending' || canReaccept || initialAcceptance;
   const statusUnverified = status === 'checking' || status === 'error';
 
@@ -65,7 +91,7 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
   };
 
   const reaccept = async () => {
-    if (!canReaccept || busy) return;
+    if ((!canReaccept && !localOnlyReaccept) || busy) return;
     setBusy(true);
     setError(null);
     try {
@@ -82,6 +108,13 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
           completeGuestHealthReacceptance(false);
           throw error;
         }
+        return;
+      }
+      if (localOnlyReaccept) {
+        reacceptHealthConsentLocally(user, {
+          acceptedTerms: true, acceptedHealthData: true,
+          privacyVersion: LEGAL_VERSIONS.privacy, termsVersion: LEGAL_VERSIONS.terms,
+        });
         return;
       }
       await reacceptHealthConsent(user, {
@@ -128,7 +161,9 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
       {status === 'error' && <p role="alert">Non è stato possibile verificare lo stato del consenso. L’accesso fitness resta sospeso.</p>}
       {(status === 'pending' || (status === 'withdrawn' && user !== null)) && <p role="status">
         {status === 'pending'
-          ? 'Revoca registrata su questo dispositivo. In attesa della conferma cloud: la nuova accettazione sarà disponibile soltanto dopo la conferma.'
+          ? offline
+            ? 'Revoca registrata solo sul dispositivo. Puoi prestare nuovamente il consenso per continuare offline; l’accesso cloud resterà sospeso fino alla riconciliazione.'
+            : 'Revoca registrata su questo dispositivo. In attesa della conferma cloud: riprova la verifica se la connessione è tornata.'
           : 'Revoca confermata sul server. Puoi prestare un nuovo consenso se desideri riattivare la PWA.'}
       </p>}
       {status === 'stale-request' && <section aria-label="Revoca da riconfermare">
@@ -165,10 +200,11 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
       {showReacceptForm &&
         <ReacceptanceForm
           key={initialAcceptance ? 'initial' : canReaccept ? 'confirmed' : 'awaiting-confirmation'}
-          enabled={canReaccept || initialAcceptance}
+          enabled={canReaccept || initialAcceptance || localOnlyReaccept}
           busy={busy}
           onReaccept={initialAcceptance ? acceptInitial : reaccept}
           firstAcceptance={initialAcceptance}
+          localOnly={localOnlyReaccept}
         />}
       <h2>Gestisci i tuoi dati e i tuoi diritti</h2>
       <p>Puoi farlo anche senza prestare un nuovo consenso.</p>
@@ -178,7 +214,11 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
         <button type="button" className="btn" onClick={() => void handleExportBackup()} disabled={exportingData}>{exportingData ? 'Preparazione…' : 'Esporta i tuoi dati (backup JSON)'}</button>
         <button type="button" className="btn" onClick={() => void handleLogout()}>Esci dall'account</button>
         <button type="button" className="btn" onClick={() => void handleDeleteAccount()}>Elimina definitivamente l'account</button>
-        {user !== null && <button type="button" className="btn" disabled={busy} onClick={() => { void refreshHealthConsent(user); }}>Riprova a verificare il consenso</button>}
+        {user !== null && <button type="button" className="btn" disabled={busy || offline} onClick={() => { void refreshHealthConsent(user); }}>Riprova a verificare il consenso</button>}
+        {offline && <button type="button" className="btn" disabled={busy} onClick={() => {
+          void safeHardReload().catch(error => setError(error instanceof Error
+            ? error.message : 'Ricaricamento non sicuro: i dati locali sono stati conservati.'));
+        }}>Ricarica TheLogBook</button>}
       </div>
       {error && <p role="alert">{error}</p>}
     </section>
