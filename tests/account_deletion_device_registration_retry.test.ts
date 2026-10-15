@@ -50,7 +50,7 @@ describe('account deletion recovery device registration retries', () => {
     const { watchDeletionRecoveryDeviceRegistration } = await loadSubject();
     const current = user();
     firebase.auth.currentUser = current;
-    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response('{}', { status: 200 }));
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({ registered: true }), { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
 
     const dispose = watchDeletionRecoveryDeviceRegistration(current);
@@ -76,7 +76,7 @@ describe('account deletion recovery device registration retries', () => {
     const current = user();
     firebase.auth.currentUser = current;
     setOnline(false);
-    const fetchMock = vi.fn(async () => new Response('{}', { status: 200 }));
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ registered: true }), { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
 
     const dispose = watchDeletionRecoveryDeviceRegistration(current);
@@ -95,7 +95,7 @@ describe('account deletion recovery device registration retries', () => {
     firebase.auth.currentUser = current;
     const fetchMock = vi.fn()
       .mockRejectedValueOnce(new Error('temporary offline failure'))
-      .mockResolvedValueOnce(new Response('{}', { status: 200 }));
+      .mockResolvedValueOnce(new Response(JSON.stringify({ registered: true }), { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
     const onError = vi.fn();
 
@@ -136,7 +136,7 @@ describe('account deletion recovery device registration retries', () => {
     const { watchDeletionRecoveryDeviceRegistration } = await loadSubject();
     const stale = user('user-a');
     firebase.auth.currentUser = user('user-b');
-    const fetchMock = vi.fn(async () => new Response('{}', { status: 200 }));
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ registered: true }), { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
 
     const dispose = watchDeletionRecoveryDeviceRegistration(stale);
@@ -273,7 +273,7 @@ describe('account deletion recovery device registration retries', () => {
       firebase.auth.currentUser = current;
       let release!: (token: string) => void;
       current.getIdToken.mockImplementationOnce(() => new Promise<string>(resolve => { release = resolve; }));
-      const fetchMock = vi.fn(async () => new Response('{}', { status: 200 }));
+      const fetchMock = vi.fn(async () => new Response(JSON.stringify({ registered: true }), { status: 200 }));
       vi.stubGlobal('fetch', fetchMock);
       const onError = vi.fn();
 
@@ -525,6 +525,56 @@ describe('account deletion recovery device registration retries', () => {
 
     await expect(recoverDeletedAccountOnThisDevice(finalize)).rejects.toMatchObject({ kind: 'remote-failed' });
     expect(finalize).toHaveBeenCalledWith('user-c');
+  });
+
+  it('does not mark registration successful when HTTP 200 lacks the backend acknowledgement', async () => {
+    const { watchDeletionRecoveryDeviceRegistration } = await loadSubject();
+    const current = user();
+    firebase.auth.currentUser = current;
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response('{}', { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ registered: true }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const onError = vi.fn();
+    const onSuccess = vi.fn();
+
+    const dispose = watchDeletionRecoveryDeviceRegistration(current, onError, onSuccess);
+    await vi.waitFor(() => expect(onError).toHaveBeenCalledTimes(1));
+    expect(onError).toHaveBeenCalledWith(expect.objectContaining({
+      operation: 'device-registration', phase: 'server-status', kind: 'invalid-response',
+    }));
+    expect(onSuccess).not.toHaveBeenCalled();
+    expect(localStorage.getItem('logbook_deletion_recovery_devices_v1')).not.toBeNull();
+
+    window.dispatchEvent(new Event('online'));
+    await vi.waitFor(() => expect(onSuccess).toHaveBeenCalledTimes(1));
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    window.dispatchEvent(new Event('online'));
+    await Promise.resolve();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    dispose();
+  });
+
+  it('bounds registration acknowledgement body parsing without discarding device credentials', async () => {
+    vi.useFakeTimers();
+    try {
+      const { registerDeletionRecoveryDevice } = await loadSubject();
+      const current = user();
+      firebase.auth.currentUser = current;
+      const readBody = vi.fn(() => new Promise<unknown>(() => {}));
+      vi.stubGlobal('fetch', vi.fn(async () => ({
+        ok: true, status: 200, json: readBody,
+      } as unknown as Response)));
+
+      const operation = registerDeletionRecoveryDevice(current);
+      const failure = operation.then(() => ({ unexpectedSuccess: true }), error => error);
+      await vi.waitFor(() => expect(readBody).toHaveBeenCalledTimes(1));
+      await vi.advanceTimersByTimeAsync(7_500);
+      expect(await failure).toMatchObject({ operation: 'device-registration', phase: 'response-body', kind: 'timeout' });
+      expect(localStorage.getItem('logbook_deletion_recovery_devices_v1')).not.toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
 });
