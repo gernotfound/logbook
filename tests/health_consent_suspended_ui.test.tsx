@@ -5,6 +5,7 @@ import type { User } from 'firebase/auth';
 import { HealthConsentSuspended } from '../src/components/UI/HealthConsentSuspended';
 import { finishHealthConsentReacceptance, registerInitialHealthConsent, reacceptHealthConsent, reacceptHealthConsentLocally, refreshHealthConsent } from '../src/lib/healthConsent';
 import { safeHardReload } from '../src/lib/sync/safeReload';
+import { useDialogStore } from '../src/store/useDialogStore';
 vi.mock('../src/lib/sync/safeReload', () => ({ safeHardReload: vi.fn(async () => {}) }));
 
 vi.mock('../src/hooks/useSettings', () => ({
@@ -141,7 +142,7 @@ describe('account consent withdrawal offline', () => {
       const [terms, health] = checkboxInputs();
       expect(terms.disabled).toBe(false);
       expect(health.disabled).toBe(false);
-      expect(screen.getByText(/cloud resterà sospeso/i)).toBeDefined();
+      expect(screen.getByText(/I dati locali restano conservati/i)).toBeDefined();
       expect(screen.getByRole('button', { name: 'Ricarica TheLogBook' })).toBeDefined();
       fireEvent.click(terms);
       expect(button.disabled).toBe(true);
@@ -150,12 +151,44 @@ describe('account consent withdrawal offline', () => {
       fireEvent.click(button);
       await waitFor(() => expect(reacceptHealthConsentLocally).toHaveBeenCalledTimes(1));
       expect(reacceptHealthConsent).not.toHaveBeenCalled();
+      expect(useDialogStore.getState().showAlert).not.toHaveBeenCalled();
       expect(vi.mocked(reacceptHealthConsentLocally).mock.calls[0][1]).toMatchObject({
         acceptedTerms: true, acceptedHealthData: true,
       });
     } finally {
       online.mockRestore();
     }
+  });
+
+  it('shows a single transient notice if a server-confirmed revocation is reaccepted offline', async () => {
+    const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    try {
+      render(<HealthConsentSuspended status="withdrawn" user={account} />);
+      expect(screen.getByRole('button', { name: 'Riattiva solo su questo dispositivo' })).toBeDefined();
+      const [terms, health] = checkboxInputs();
+      fireEvent.click(terms);
+      fireEvent.click(health);
+      fireEvent.click(screen.getByRole('button', { name: 'Riattiva solo su questo dispositivo' }));
+      await waitFor(() => expect(reacceptHealthConsentLocally).toHaveBeenCalledTimes(1));
+      expect(useDialogStore.getState().showAlert).toHaveBeenCalledTimes(1);
+      expect(useDialogStore.getState().showAlert).toHaveBeenCalledWith(
+        expect.stringContaining('revocato sul server'), 'Uso offline riattivato',
+      );
+    } finally { online.mockRestore(); }
+  });
+
+  it('does not display the cross-mode notice when local reacceptance is rejected', async () => {
+    const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    try {
+      vi.mocked(reacceptHealthConsentLocally).mockImplementationOnce(() => { throw new Error('Test storage write failed'); });
+      render(<HealthConsentSuspended status="withdrawn" user={account} />);
+      const [terms, health] = checkboxInputs();
+      fireEvent.click(terms);
+      fireEvent.click(health);
+      fireEvent.click(screen.getByRole('button', { name: 'Riattiva solo su questo dispositivo' }));
+      await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('Non è stato possibile completare'));
+      expect(useDialogStore.getState().showAlert).not.toHaveBeenCalled();
+    } finally { online.mockRestore(); }
   });
 
   it('uses the safe persistence barrier for a visible reload action, including after reconnect', async () => {
