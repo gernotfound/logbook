@@ -37,6 +37,26 @@ const compile = (before: UserData, operation: DomainOperation | DomainOperation[
 };
 
 describe('M8 Domain Operations V4', () => {
+    it('preserves source data and batch isolation when a later operation fails', () => {
+        const before = base({ nutrition: {} });
+        const original = structuredClone(before);
+        const after = applyDomainOperations(before, [
+            { type: 'activity-steps.set', date: '2026-09-15', steps: 4500 },
+            { type: 'activity-steps.set', date: '2026-09-16', steps: 6200 },
+        ]);
+
+        expect(after).not.toBe(before);
+        expect(before).toEqual(original);
+        expect(after.nutrition?.['2026-09-15']?.steps).toBe(4500);
+        expect(after.nutrition?.['2026-09-16']?.steps).toBe(6200);
+
+        expect(() => applyDomainOperations(before, [
+            { type: 'activity-steps.set', date: '2026-09-15', steps: 9999 },
+            { type: 'activity-steps.set', date: '2026-09-16', steps: -1 },
+        ])).toThrow('Passi: valore non valido');
+        expect(before).toEqual(original);
+    });
+
     it('keeps all persisted version dimensions unchanged', () => {
         expect(CURRENT_DATA_SCHEMA).toBe(1);
         expect(CURRENT_SYNC_PROTOCOL).toBe(3);
