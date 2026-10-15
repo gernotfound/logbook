@@ -6,6 +6,7 @@ import type {
 } from '../../../types';
 import { UserDataSchema } from '../../schema';
 import { CardioSessionSchema } from '../../schemas/schema_nutrition';
+import { TrainingCycleWriteSchema } from '../../schemas/schema_training';
 import { calculateLoggedMealTotals } from '../../nutrition/calculateLoggedMealTotals';
 import { getLocalDateString } from '../../utils/date';
 import type { DomainOperation, DomainOperationBatch } from './contracts';
