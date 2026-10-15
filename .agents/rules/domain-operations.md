@@ -23,7 +23,7 @@ UI / hook
 
 ## Versioni
 
-M8 non introdusse nuove versioni persistite. La fonte eseguibile attuale è `src/lib/schemaEvolution.ts` con `CURRENT_DATA_SCHEMA`, `CURRENT_SYNC_PROTOCOL`, `CURRENT_LOCAL_ENVELOPE` e `CURRENT_BACKUP_SCHEMA`: non derivare questi numeri dalla versione PWA né da questa nota storica.
+M8 non ha introdotto nuove versioni persistite. La fonte eseguibile attuale è `src/lib/schemaEvolution.ts` con `CURRENT_DATA_SCHEMA`, `CURRENT_SYNC_PROTOCOL`, `CURRENT_LOCAL_ENVELOPE` e `CURRENT_BACKUP_SCHEMA`: non derivare questi numeri dalla versione PWA né da questa nota storica.
 
 La sigla “V4” di Domain Operations indica che il layer opera sopra il journal/envelope V5 corrente. Le DomainOperation vengono compilate in `SemanticOperation` prima della persistenza del journal.
 
