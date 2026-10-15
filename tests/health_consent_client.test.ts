@@ -562,6 +562,34 @@ describe('account offline withdrawal and explicit local-only reacceptance', () =
     expect(getVerifiedHealthConsentRevision(uid)).toBe(3);
   });
 
+  it('asks before keeping an acceptance newer than an offline device decision', async () => {
+    const uid = 'newer-online-consent-' + crypto.randomUUID();
+    const actor = user(uid);
+    (auth as { currentUser: unknown }).currentUser = actor;
+    const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
+    try {
+      beginHealthConsentVerification(uid);
+      vi.stubGlobal('fetch', vi.fn(async () => Response.json({ status: 'active', revision: 1 })));
+      expect(await refreshHealthConsent(actor)).toBe('active');
+      online.mockReturnValue(false);
+      vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('offline'); }));
+      await expect(withdrawHealthConsent(actor)).rejects.toThrow();
+      reacceptHealthConsentLocally(actor, accepted);
+      online.mockReturnValue(true);
+      const network = vi.fn(async () => Response.json({ status: 'active', revision: 5,
+        acceptedAt: '2026-10-15T12:00:00.000Z',
+        privacyVersion: accepted.privacyVersion, termsVersion: accepted.termsVersion }));
+      vi.stubGlobal('fetch', network);
+      expect(await refreshHealthConsent(actor)).toBe('stale-request');
+      expect(network).toHaveBeenCalledTimes(1);
+      expect(localStorage.getItem(key(uid))).toContain('offline-reaccepted:');
+      expect(isHealthConsentCloudWritable('user:' + uid)).toBe(false);
+      expect(await retainNewerHealthConsent(actor)).toBe('active');
+      expect(localStorage.getItem(key(uid))).toBeNull();
+      expect(getVerifiedHealthConsentRevision(uid)).toBe(5);
+    } finally { online.mockRestore(); }
+  });
+
   it('rejects local reopening for unregistered users, stale legal versions and absent cached server proof', () => {
     const uid = 'no-offline-consent-' + crypto.randomUUID();
     const actor = user(uid);
@@ -595,9 +623,9 @@ describe('account offline withdrawal and explicit local-only reacceptance', () =
       onLine.mockReturnValue(true);
       const newer = vi.fn(async () => Response.json({ status: 'withdrawn', revision: 4 }));
       vi.stubGlobal('fetch', newer);
-      expect(await refreshHealthConsent(actor)).toBe('error');
+      expect(await refreshHealthConsent(actor)).toBe('withdrawn');
       expect(newer).toHaveBeenCalledTimes(1);
-      expect(localStorage.getItem(key(uid))).toBe('offline-conflict:1:1.3.4:1.2.1');
+      expect(localStorage.getItem(key(uid))).toBe('withdrawn');
       expect(isHealthConsentWritable('user:' + uid)).toBe(false);
       expect(isHealthConsentCloudWritable('user:' + uid)).toBe(false);
     } finally { onLine.mockRestore(); }
