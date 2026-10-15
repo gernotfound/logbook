@@ -1,6 +1,6 @@
 # TheLogBook — istruzioni operative per agenti AI
 
-Ambito: PWA TheLogBook. Questo documento contiene invarianti trasversali; i dettagli specialistici sono in `.agents/rules/`. La versione applicativa si legge da `package.json`, non da questa intestazione.
+Ambito: soltanto la PWA TheLogBook (`gernotfound/logbook`). Questo file è la mappa dei vincoli trasversali, non una fotografia completa del runtime. Le specifiche sono in `.agents/rules/`, le versioni effettive nei manifest eseguibili.
 
 ## Convenzioni
 
@@ -10,6 +10,8 @@ Ogni regola in questo documento è classificata:
 - **SHOULD:** preferenza forte. Derogare solo con motivazione tecnica esplicita.
 - **VERIFY:** controllare codice, test o dashboard prima di assumere che sia vero.
 - **NOTE:** contesto storico o informativo, non istruzione esecutiva.
+
+Un `MUST` è un contratto da rispettare, non prova che codice o Production lo soddisfino già. Se codice, test e documentazione divergono, raccogliere evidenze prima di decidere quale fonte riallineare.
 
 ## Fonte di verità e gestione del drift
 
@@ -21,6 +23,20 @@ Ogni regola in questo documento è classificata:
 6. **MUST:** quando un refactor rimuove o rinomina funzioni/contratti o cambia i gate di CI, cercare i riferimenti normativi collegati in `AGENTS.md`, `.agents/rules/` e nella documentazione operativa; riallinearli nello stesso task. Descrivere prioritariamente gli invarianti, senza citare come esistenti helper rimossi o classificare advisory verifiche realmente bloccanti.
 7. **MUST:** non dichiarare mai letto, testato, deployato o verificato ciò che non è stato realmente osservato.
 8. **MUST:** distinguere contratti vigenti, motivazioni storiche e osservazioni live. Date e SHA di baseline non dimostrano l'assenza attuale di dati/utenti o la configurazione corrente dei provider.
+9. **MUST:** `.agents/rules/*.md` contiene documenti **da aprire esplicitamente** secondo il task: non presumere che ogni agente o connettore li carichi automaticamente. Leggere regole, implementazione, chiamanti, test e configurazioni sullo SHA corrente.
+
+## Quali documenti leggere
+
+- **Ogni task:** questo file, HEAD GitHub di `main`, regole pertinenti e codice/test coinvolti.
+- **Archivio locale, journal, replica e workout:** `.agents/rules/storage-and-sync.md`; integrare `crash-consistency.md`, `causal-gc.md`, `domain-operations.md` dove pertinenti.
+- **Modello dati, proiezioni, nuove mutazioni:** `.agents/rules/data-model-and-zod.md`, `domain-operations.md`.
+- **Backup, import/export, guest, consenso, Auth, logout, cancellazione:** `.agents/rules/account-lifecycle.md`; integrare `storage-and-sync.md` e `firebase-config.md`.
+- **Firestore Rules, App Check e servizi/deploy:** `.agents/rules/firebase-config.md`, `external-services.md`, `ci-verification.md`.
+- **UI, temi, PWA, Service Worker, accessibilità:** `.agents/rules/design-system.md`; per update/reload anche `storage-and-sync.md`, `account-lifecycle.md`.
+- **Catalogo e seeding:** `.agents/rules/catalog-operations.md`; per custom item `data-model-and-zod.md`.
+- **CI, oracle, fuzz:** `.agents/rules/ci-verification.md`, `verification-hardening.md`, `distributed-fuzz.md` secondo il cambiamento.
+
+Se la modifica attraversa più boundary, leggere **l'unione** dei contratti pertinenti. L'indice non è un'allowlist di file da ignorare.
 
 ## Classificazione del rischio
 
@@ -31,6 +47,8 @@ Sono **CRITICAL** almeno: dati utente, IndexedDB/persistenza, sincronizzazione, 
 - **MUST:** maggiore è il rischio, maggiore è la profondità di ricerca, test e review.
 - **MUST:** risolvere la root cause, non applicare workaround locali che lasciano invarianti incoerenti.
 - **MUST:** mantenere il diff minimo rispetto all'obiettivo e aggiungere test di regressione quando appropriato.
+- **MUST:** analisi in sola lettura = nessuna modifica. Un incarico operativo non autorizza cancellazioni irreversibili di dati reali, bypass di protezioni o modifiche IAM/secret live estranee.
+- **MUST:** una motivazione storica pre-lancio non dimostra assenza attuale di account, dati, backup o vecchie PWA installate.
 
 ## Diagnosi e audit
 
@@ -162,16 +180,14 @@ Repository e provider esterni sono fonti distinte. GitHub ruleset, Firebase/Goog
 
 ## Account lifecycle e cancellazione account
 
-La cancellazione account è un workflow CRITICAL server-mediated. Il client non elimina direttamente il root `/users/{uid}`.
+**CRITICAL:** cancellazione account server-mediated; il client non elimina direttamente `/users/{uid}`.
 
-- Vercel Functions autenticano la richiesta e il backend trusted usa Firebase Admin.
-- Il job pulisce dati privati/telemetria e cancella Firebase Auth per ultimo.
-- `account_deletions/{uid}` è server-only e agisce da barriera cross-device.
-- Dopo completamento viene conservato un tombstone tecnico server-only limitato a 30 giorni; il cron autenticato giornaliero elimina i record scaduti.
-- La copia locale non viene eliminata finché il client non ha prova del completamento cloud secondo il protocollo di recovery.
-- **MUST:** non reintrodurre cancellazioni client-side che bypassino questo workflow.
+- **MUST:** Functions Vercel autenticano la richiesta, Firebase Admin gestisce il job, elimina i dati privati e cancella Firebase Auth **per ultima**. `account_deletions/{uid}` è un marker server-only cross-device.
+- **MUST:** la copia locale resta fino alla prova di completamento server. Timeout, risposta assente, Auth mancante o tombstone scaduto non sono prova sufficiente.
+- **MUST:** il tombstone tecnico server-only viene conservato fino a 30 giorni; il cron autenticato esegue il cleanup senza indebolire i percorsi di recovery.
+- **MUST:** consenso revocato, email non verificata, guest→account, logout e cancellazione hanno failure path distinti e non devono essere confusi.
 
-→ Dettagli: `.agents/rules/account-lifecycle.md`.
+→ Dettagli: `.agents/rules/account-lifecycle.md`, `.agents/rules/storage-and-sync.md`.
 
 ## Telemetria tecnica e privacy
 
@@ -221,25 +237,15 @@ Per modifiche non banali:
 
 ## Test e CI
 
-### Gate canonico
+Il gate canonico locale è `npm run verify:m8`. Su GitHub l'equivalente richiede `Milestone Verification` sullo SHA esatto: tutti gli shard, E2E, CodeQL e `Canonical Verification` verdi.
 
-Il gate repository completo è:
+- **MUST:** i subset `lint`, `test`, `build`, `test:e2e` sono diagnostici, non sostituti del gate finale.
+- **MUST:** ogni nuovo commit invalida le verifiche relative allo SHA precedente.
+- **MUST:** non indebolire test/no-skips, sicurezza, baseline warning, Emulator o protezioni GitHub per ottenere CI verde.
+- **MUST:** i test normativi attraversano il boundary reale e hanno oracle indipendenti; un mock che replica la logica testata non è una prova sufficiente.
+- **MUST:** distinguere test locale, CI PR, merge, CI post-merge, deploy e stato runtime; dichiarare esplicitamente ogni verifica mancante.
 
-```bash
-npm run verify:m8
-```
-
-`verify:m8` include transitivamente M7 → M6 → M5 e le suite/gate precedenti: lint, typecheck/hardening, unit/integration/isolated/fuzz/recovery/GC/stress, Firebase Rules emulator, Playwright E2E, no-skips, build e controlli M7/M8.
-
-- `npm run lint`, `npm run test`, `npm run build` e `npm run test:e2e` sono diagnostici/sotto-gate; non sostituiscono M8 per il candidato finale.
-- `.github/workflows/verification.yml` distribuisce i leaf command di M8 su shard exact-SHA paralleli e mantiene **Canonical Verification** come check aggregato stabile; `scripts/check-ci-contract.mjs` deve provare che la matrice CI è leaf-equivalente a `npm run verify:m8`.
-- Java/Firebase Emulator e Chromium Playwright vengono predisposti solo negli shard che li richiedono; i limiti single-worker delle suite sensibili restano invariati.
-- **MUST:** non dichiarare verde un gate non realmente eseguito.
-- **MUST:** warning inattesi, `act(...)`, unhandled rejection e framework warning nel candidato vanno corretti o spiegati, non soppressi cosmeticamente.
-- **MUST:** `test:quality-guardrails` impedisce che la PR aggiunga o sostituisca warning rispetto allo SHA base, indebolisca lint/TypeScript/leaf canonici o introduca nuove soppressioni. La baseline può solo diminuire; rigenerarla per accettare warning nuovi non è consentito.
-- **MUST:** test normativi devono attraversare il boundary di produzione che dichiarano di verificare; mock e oracle non possono reimplementare il comportamento sotto test.
-
-→ Contratto completo: `.agents/rules/ci-verification.md` e `.agents/rules/verification-hardening.md`.
+→ `.agents/rules/ci-verification.md`, `.agents/rules/verification-hardening.md`.
 
 ## Vercel e deployment
 
@@ -267,6 +273,8 @@ npm run verify:m8
 - **MUST:** Markdown e sorgenti UTF-8 senza BOM; non introdurre mojibake.
 
 ## Riferimenti normativi
+
+I sottofile non sono caricati automaticamente in ogni ambiente; i loro dettagli, eccezioni e failure path devono essere consultati e confrontati con il codice corrente prima di apportare modifiche.
 
 | Documento | Contenuto |
 |---|---|
