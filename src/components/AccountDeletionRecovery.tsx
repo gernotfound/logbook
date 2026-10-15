@@ -43,7 +43,7 @@ export function AccountDeletionRecovery() {
 
         const recoverByDevice = async (force: boolean) => {
             const now = Date.now();
-            if (!force && now < nextDeviceRecoveryAt) return { status: 'none' as const };
+            if (!force && now < nextDeviceRecoveryAt) return null;
 
             nextDeviceRecoveryAt = now + DEVICE_RECOVERY_FAILURE_RETRY_MS;
             try {
@@ -102,9 +102,12 @@ export function AccountDeletionRecovery() {
                 let deviceError: unknown;
                 let deviceOutcome: Awaited<ReturnType<typeof recoverDeletedAccountOnThisDevice>> = { status: 'none' };
                 try {
-                    deviceOutcome = await recoverByDevice(forceDeviceRecovery || markerError instanceof AccountDeletionReceiptNotFoundError);
-                    diagnostics.recordSuccess('routine-check');
-                    if (deviceOutcome.status === 'pending') showPending(deviceOutcome.message, 'local-finalization-pending');
+                    const result = await recoverByDevice(forceDeviceRecovery || markerError instanceof AccountDeletionReceiptNotFoundError);
+                    if (result) {
+                        deviceOutcome = result;
+                        diagnostics.recordSuccess('routine-check');
+                        if (deviceOutcome.status === 'pending') showPending(deviceOutcome.message, 'local-finalization-pending');
+                    }
                 } catch (error) {
                     deviceError = error;
                 }
