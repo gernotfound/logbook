@@ -187,6 +187,18 @@ describe('store with real IndexedDB commits', () => {
         expect(store.getState().saveError).toBeNull();
     });
 
+    it('clears stale local-pending feedback after durable acknowledgement already drained the journal', async () => {
+        expect((await readLocal('user:A'))?.pending).toHaveLength(0);
+        store.setState({
+            syncHealth: 'local-pending',
+            saveError: 'Salvato localmente. Sincronizzazione in attesa.',
+        });
+        await store.getState().flushPendingSyncs();
+        expect(store.getState().syncHealth).toBe('synced');
+        expect(store.getState().saveError).toBeNull();
+        expect(sdk.save).not.toHaveBeenCalled();
+    });
+
     it('keeps a newer edit dirty while an older remote request completes', async () => {
         const remote = deferred<{ ok: true; status: 'synced' }>();
         sdk.save.mockReturnValueOnce(remote.promise);

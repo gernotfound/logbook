@@ -44,7 +44,7 @@ afterEach(() => {
 });
 
 describe('monthly Firestore read boundaries', () => {
-    it('loads only existing history shards, preserves valid records and their causal metadata', async () => {
+    it('fails closed on a damaged history entry without publishing an incomplete month, then recovers on retry', async () => {
         const data = draft();
         const documents = cloudDocuments();
         firestore.getDoc.mockImplementation(async (path: string) => {
@@ -52,49 +52,96 @@ describe('monthly Firestore read boundaries', () => {
             return snapshot({
                 good: { id: 'good', date: '2026-05-10', exercises: [] },
                 damaged: { id: 'another-id', date: '2026-05-11', exercises: [] },
-                nullEntry: null,
-                wrongMonth: { id: 'wrongMonth', date: '2026-04-10', exercises: [] },
             });
         });
 
-        await loadHistoryMonths(owner, ['2026-06', '2026-05'], data, documents);
+        await expect(loadHistoryMonths(owner, ['2026-06', '2026-05'], data, documents))
+            .rejects.toThrow('Shard storico 2026-05 non integro');
+        expect(data.history).toEqual([]);
+        expect(documents.size).toBe(0);
 
-        expect(firestore.getDoc).toHaveBeenCalledTimes(2);
-        expect(firestore.getDoc.mock.calls.map(([path]) => path)).toEqual([
-            'users/owner-1/history_months/2026-06',
-            'users/owner-1/history_months/2026-05',
-        ]);
+        firestore.getDoc.mockReset();
+        firestore.getDoc.mockResolvedValue(snapshot({ good: { id: 'good', date: '2026-05-10', exercises: [] } }));
+        await loadHistoryMonths(owner, ['2026-05'], data, documents);
         expect(data.history).toHaveLength(1);
-        expect(data.history[0]).toMatchObject({ id: 'good', date: '2026-05-10' });
-        expect(documents.has('history_months/2026-06')).toBe(false);
-        expect(documents.get('history_months/2026-05')).toMatchObject({
-            good: { id: 'good' },
-            _sync: syncMeta,
-        });
-        expect(documents.get('history_months/2026-05')).not.toHaveProperty('damaged');
+        expect(documents.get('history_months/2026-05')).toMatchObject({ good: { id: 'good' }, _sync: syncMeta });
     });
 
-    it('keeps only canonical nutrition dates in their original monthly shard', async () => {
+    it('fails closed on a damaged nutrition date without publishing partial days, then recovers on retry', async () => {
         const data = draft();
         const documents = cloudDocuments();
         firestore.getDoc.mockResolvedValue(snapshot({
             '2026-05-03': { date: '2026-05-03', weight: 74 },
             '2026-05-04': { date: '2026-05-05', weight: 75 },
-            '2026-04-30': { date: '2026-04-30', weight: 73 },
-            '2026-05-99': { date: '2026-05-99', weight: 75 },
-            '2026-05-07': null,
         }));
 
-        await loadNutritionMonths(owner, ['2026-05'], data, documents);
+        await expect(loadNutritionMonths(owner, ['2026-05'], data, documents))
+            .rejects.toThrow('Shard nutrizione 2026-05 non integro');
+        expect(data.nutrition).toEqual({});
+        expect(documents.size).toBe(0);
 
-        expect(Object.keys(data.nutrition)).toEqual(['2026-05-03']);
-        expect(data.nutrition).toMatchObject({ '2026-05-03': { date: '2026-05-03', weight: 74 } });
-        expect(data.nutrition['2026-05-03']).toHaveProperty('meals', []);
-        expect(documents.get('nutrition_months/2026-05')).toMatchObject({
-            '2026-05-03': { date: '2026-05-03', weight: 74 },
-            _sync: syncMeta,
-        });
-        expect(Object.keys(documents.get('nutrition_months/2026-05') ?? {}).sort()).toEqual(['2026-05-03', '_sync']);
+        firestore.getDoc.mockReset();
+        firestore.getDoc.mockResolvedValue(snapshot({ '2026-05-03': { date: '2026-05-03', weight: 74 } }));
+        await loadNutritionMonths(owner, ['2026-05'], data, documents);
+        expect(data.nutrition['2026-05-03']).toMatchObject({ date: '2026-05-03', weight: 74 });
+        expect(documents.get('nutrition_months/2026-05')).toHaveProperty('_sync', syncMeta);
+    });
+
+    it('blocks a nutrition day with quarantined nested meal identities before any hydration', async () => {
+        const data = draft();
+        const documents = cloudDocuments();
+        firestore.getDoc.mockResolvedValue(snapshot({
+            '2026-05-03': {
+                date: '2026-05-03',
+                meals: [
+                    { id: 'valid', name: 'Riso', meal: 'pranzo', quantity: 100, kcal: 100, carbs: 20, pro: 2, fat: 0 },
+                    { id: '', name: 'Corrotto', meal: 'pranzo', quantity: 100, kcal: 100, carbs: 20, pro: 2, fat: 0 },
+                ],
+            },
+        }));
+        await expect(loadNutritionMonths(owner, ['2026-05'], data, documents))
+            .rejects.toThrow('record annidati non validi');
+        expect(data.nutrition).toEqual({});
+        expect(documents.size).toBe(0);
+    });
+
+    it('refuses damaged nested workout sets and segments before treating a shard as complete', async () => {
+        const state = draft();
+        const docs = cloudDocuments();
+        firestore.getDoc.mockResolvedValue(snapshot({
+            w: { id: 'w', date: '2026-05-11', exercises: [
+                { exId: 'e1', sets: [{ id: 's1', segments: [
+                    { id: 'good', kg: '10', reps: '10' },
+                    { id: '', kg: '12', reps: '8' },
+                ] }] },
+            ] },
+        }));
+        await expect(loadHistoryMonths(owner, ['2026-05'], state, docs))
+            .rejects.toThrow('Shard storico 2026-05 non integro');
+        expect(state.history).toEqual([]);
+        expect(docs.size).toBe(0);
+    });
+
+    it('does not publish an earlier valid shard if a later history shard is malformed', async () => {
+        const state = draft();
+        const docs = cloudDocuments();
+        firestore.getDoc.mockImplementation(async (path: string) => path.endsWith('2026-05')
+            ? snapshot({ safe: { id: 'safe', date: '2026-05-10', exercises: [] } })
+            : snapshot({ corrupt: { id: 'wrong', date: '2026-06-10', exercises: [] } }));
+        await expect(loadHistoryMonths(owner, ['2026-05', '2026-06'], state, docs)).rejects.toThrow('Shard storico 2026-06 non integro');
+        expect(state.history).toEqual([]);
+        expect(docs.size).toBe(0);
+    });
+
+    it('does not publish an earlier nutrition month if a later month contains damaged nested data', async () => {
+        const state = draft();
+        const docs = cloudDocuments();
+        firestore.getDoc.mockImplementation(async (path: string) => path.endsWith('2026-05')
+            ? snapshot({ '2026-05-01': { date: '2026-05-01', weight: 70 } })
+            : snapshot({ '2026-06-01': { date: '2026-06-02', weight: 71 } }));
+        await expect(loadNutritionMonths(owner, ['2026-05', '2026-06'], state, docs)).rejects.toThrow('Shard nutrizione 2026-06 non integro');
+        expect(state.nutrition).toEqual({});
+        expect(docs.size).toBe(0);
     });
 
     it('fails closed on an unsupported future data schema, then succeeds after correction', async () => {

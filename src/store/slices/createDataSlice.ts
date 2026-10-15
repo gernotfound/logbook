@@ -94,7 +94,9 @@ export const createDataSlice: StateCreator<AppState, [], [], DataSlice> = (set, 
 
     setUserData: (dataOrUpdater) => {
         const state = get();
-        if (state.compatibilityStatus === 'update-required') return;
+        // A failed asynchronous snapshot save may have left Zustand ahead of
+        // IndexedDB. Never accept a second optimistic edit until recovery.
+        if (state.localPersistenceBlocked || state.compatibilityStatus === 'update-required') return;
 
         const rawNextData = typeof dataOrUpdater === 'function'
             ? (dataOrUpdater as (prev: UserData | null) => UserData | null)(state.userData)

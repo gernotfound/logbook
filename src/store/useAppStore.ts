@@ -6,6 +6,9 @@ import { captureSession } from '../lib/sync/session';
 import { persistOwnerBoundWorkoutSnapshot } from '../lib/sync/deviceCriticalState';
 import { draftRegistry } from '../lib/utils/draftRegistry';
 import { UPDATE_REQUIRED_EVENT } from '../lib/schemaEvolution';
+import { isHealthConsentCloudWritable } from '../lib/healthConsent';
+import { isAccountDeletionPending } from '../lib/sync/accountGate';
+import { createJournalRetry } from '../lib/sync/journalRetry';
 
 export interface AppState extends DataSlice, WorkoutSlice, SyncSlice {}
 
@@ -58,12 +61,35 @@ if (typeof document !== 'undefined') {
     });
 }
 
+// Retry only transient foreground cloud delays. A rejected/fenced journal is
+// never retried on a timer and consent/account-deletion gates remain authoritative.
+const journalRetry = typeof window !== 'undefined' ? createJournalRetry(
+    () => useAppStore.getState(),
+    listener => useAppStore.subscribe(listener),
+    () => {
+        try {
+            const session = captureSession();
+            return session.owner.startsWith('user:')
+            && navigator.onLine !== false
+            && document.visibilityState === 'visible'
+            && isHealthConsentCloudWritable(session.owner)
+                && !isAccountDeletionPending(session.owner);
+        } catch {
+            // Unreadable lifecycle storage is never interpreted as permission
+            // to replay or resume a pending account journal.
+            return false;
+        }
+    },
+    () => useAppStore.getState().flushPendingSyncs(),
+) : null;
+
 // Reopening, reconnection and foreground resume all use the same durable journal.
 if (typeof window !== 'undefined') {
     const replay = () => {
+        journalRetry?.reset();
         void useAppStore.getState().flushPendingSyncs().catch(error => {
             console.warn('Ripresa sincronizzazione non completata:', error);
-        });
+        }).finally(() => journalRetry?.refresh());
     };
     window.addEventListener('online', replay);
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') replay(); });

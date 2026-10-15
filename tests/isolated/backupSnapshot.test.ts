@@ -172,6 +172,19 @@ it('keeps schema/sync metadata out of history and nutrition business data while 
     expect(rawHistory._sync).toEqual(emptySync);
 });
 
+it('refuses to label a cloud backup complete if any monthly record would be silently omitted', async () => {
+    const data = parse({});
+    await initializeLocal('user:a', data);
+    sdk.page.mockImplementation(async ({ path }) => path.endsWith('history_months')
+        ? { size: 1, docs: [{ id: '2026-09', data: () => currentCloudDoc({
+            good: { id: 'good', date: '2026-09-10', exercises: [] },
+            damaged: { id: 'different', date: '2026-09-11', exercises: [] },
+        }) }] }
+        : { size: 0, docs: [] });
+    await expect(collectBackupSnapshot(data, true)).rejects.toThrow('Shard storico 2026-09 non integro');
+    expect((await collectBackupSnapshot(data, false)).coverage.scope).toBe('device');
+});
+
 it('fails safe when cloud causal metadata is malformed', async () => {
     const base = parse({ profile: { height: '170' } });
     await initializeLocal('user:a', base);

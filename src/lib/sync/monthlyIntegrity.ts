@@ -92,3 +92,71 @@ export function sanitizeNutritionMonthDocument(month: string, data: Record<strin
     }
     return sanitized;
 }
+
+
+/**
+ * Firestore is an untrusted recovery source. A missing business key is not an
+ * authorised delete: halt hydration/export before a sanitizer can turn damage
+ * into an apparently complete month. The tolerant helpers remain available
+ * for explicit quarantine/recovery flows.
+ */
+export function requireCompleteHistoryMonthDocument(month: string, data: Record<string, unknown>): Record<string, unknown> {
+    if (!MONTH_RE.test(month)) throw new Error(`Shard storico non valido: ${month}`);
+    const cleaned = sanitizeHistoryMonthDocument(month, data);
+    const omitted = Object.keys(data).filter(key => !Object.hasOwn(cleaned, key));
+    if (omitted.length) throw new Error(`Shard storico ${month} non integro: ${omitted.length} record non validi (es. ${omitted[0]}). Copia cloud conservata; recupero necessario.`);
+    // Zod can quarantine malformed nested set/segment arrays while retaining
+    // their parent workout. That silent data loss is also unsafe on an
+    // authoritative cloud hydration or a backup declared complete.
+    const checkArray = (raw: Record<string, unknown>, parsed: Record<string, unknown>, field: string, label: string) => {
+        if (Array.isArray(raw[field]) && (!Array.isArray(parsed[field])
+            || raw[field].length !== (parsed[field] as unknown[]).length)) {
+            throw new Error(`Shard storico ${month}: elenco ${label} incompleto. Cloud conservato; recupero necessario.`);
+        }
+    };
+    for (const [id, raw] of Object.entries(data)) {
+        const original = raw as Record<string, unknown>;
+        const parsed = cleaned[id] as Record<string, unknown>;
+        checkArray(original, parsed, 'exercises', id + '/exercises');
+        const sourceExercises = Array.isArray(original.exercises) ? original.exercises : [];
+        const validExercises = Array.isArray(parsed.exercises) ? parsed.exercises : [];
+        for (let i = 0; i < Math.min(sourceExercises.length, validExercises.length); i++) {
+            const rawExercise = sourceExercises[i] as Record<string, unknown>;
+            const validExercise = validExercises[i] as Record<string, unknown>;
+            if (!rawExercise || typeof rawExercise !== 'object' || !validExercise || typeof validExercise !== 'object') continue;
+            checkArray(rawExercise, validExercise, 'sets', id + '/sets');
+            const sourceSets = Array.isArray(rawExercise.sets) ? rawExercise.sets : [];
+            const validSets = Array.isArray(validExercise.sets) ? validExercise.sets : [];
+            for (let j = 0; j < Math.min(sourceSets.length, validSets.length); j++) {
+                const rawSet = sourceSets[j] as Record<string, unknown>;
+                const validSet = validSets[j] as Record<string, unknown>;
+                if (!rawSet || typeof rawSet !== 'object' || !validSet || typeof validSet !== 'object') continue;
+                for (const nested of ['segments', 'dropsets', 'isometrics']) {
+                    checkArray(rawSet, validSet, nested, id + '/sets/' + nested);
+                }
+            }
+        }
+    }
+    return cleaned;
+}
+
+export function requireCompleteNutritionMonthDocument(month: string, data: Record<string, unknown>): Record<string, unknown> {
+    if (!MONTH_RE.test(month)) throw new Error(`Shard nutrizione non valido: ${month}`);
+    const cleaned = sanitizeNutritionMonthDocument(month, data);
+    const omitted = Object.keys(data).filter(key => !Object.hasOwn(cleaned, key));
+    if (omitted.length) throw new Error(`Shard nutrizione ${month} non integro: ${omitted.length} giornate non valide (es. ${omitted[0]}). Copia cloud conservata; recupero necessario.`);
+    // NutritionDaySchema deliberately quarantines invalid nested identities.
+    // That is useful for explicit recovery, but a normal hydration/export must
+    // not turn such omissions into an implicit deletion on the next projection.
+    for (const [date, raw] of Object.entries(data)) {
+        const original = raw as Record<string, unknown>;
+        const validated = cleaned[date] as Record<string, unknown>;
+        for (const key of ['meals', 'supplementsIntake', 'cardioSessions']) {
+            if (Array.isArray(original[key]) && Array.isArray(validated[key])
+                && (original[key] as unknown[]).length !== (validated[key] as unknown[]).length) {
+                throw new Error(`Shard nutrizione ${month}: record annidati non validi in ${date}/${key}. Cloud conservato; recupero necessario.`);
+            }
+        }
+    }
+    return cleaned;
+}

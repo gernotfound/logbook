@@ -82,6 +82,9 @@ describe('optimistic Zustand state vs local IndexedDB durability', () => {
         expect(useAppStore.getState().userData?.profile?.height).toBe('190');
         expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
         expect(useAppStore.getState().syncHealth).toBe('failed');
+        const volatileAfterFailure = useAppStore.getState().userData;
+        useAppStore.getState().setUserData({ ...data, profile: { ...data.profile, height: '200' } });
+        expect(useAppStore.getState().userData).toBe(volatileAfterFailure);
         await expect(useAppStore.getState().dispatchDomainOperation({
             type: 'profile.patch', patch: { height: '195' },
         })).rejects.toThrow('Archivio locale non leggibile');
