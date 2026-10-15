@@ -67,7 +67,8 @@ export function classifyRecoveryFailure(operation: RecoveryOperation, error: unk
     }
     const code = error && typeof error === 'object' && 'code' in error
         ? (error as { code?: unknown }).code : undefined;
-    if (operation === 'local-finalization' || code === 'account-deletion-device-finalization-failed') {
+    if (operation === 'local-finalization' || code === 'account-deletion-device-finalization-failed'
+        || code === 'account-deletion-local-finalization-failed') {
         return { operation: 'local-finalization', phase: 'local-finalization', kind: 'integrity', transient: false };
     }
     if (code === 'account-deletion-marker-corrupt' || code === 'account-deletion-device-credential-corrupt'
@@ -97,15 +98,15 @@ export class RecoveryDiagnosticTracker {
         const failure = classifyRecoveryFailure(operation, error);
         if (failure.kind === 'stale-session') return failure;
         const key = [failure.phase, failure.kind, failure.httpStatus ?? ''].join(':');
-        const previous = this.streaks.get(operation);
+        const previous = this.streaks.get(failure.operation);
         const count = previous?.key === key ? previous.count + 1 : 1;
-        this.streaks.set(operation, { key, count });
+        this.streaks.set(failure.operation, { key, count });
         if ((!failure.transient && count === 1) || (failure.transient && count === 3) || count % 10 === 0) {
             const summary = new Error(
-                `operation=${operation}; phase=${failure.phase}; kind=${failure.kind}; http=${failure.httpStatus ?? 'none'}; consecutive=${count}`,
+                `operation=${failure.operation}; phase=${failure.phase}; kind=${failure.kind}; http=${failure.httpStatus ?? 'none'}; consecutive=${count}`,
             );
             summary.name = 'AccountDeletionRecoveryDiagnostic';
-            report(summary, `account_deletion_${operation.replaceAll('-', '_')}`);
+            report(summary, `account_deletion_${failure.operation.replaceAll('-', '_')}`);
         }
         return failure;
     }
