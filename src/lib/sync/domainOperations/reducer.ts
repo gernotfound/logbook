@@ -7,6 +7,7 @@ import type {
 import { UserDataSchema } from '../../schema';
 import { CardioSessionSchema } from '../../schemas/schema_nutrition';
 import { TrainingCycleWriteSchema } from '../../schemas/schema_training';
+import { isBoundedCycleCount, MAX_EDITABLE_CYCLE_WEEKS, MAX_CYCLE_SESSIONS_PER_WEEK } from '../../calc/cycleLimits';
 import { calculateLoggedMealTotals } from '../../nutrition/calculateLoggedMealTotals';
 import { getLocalDateString } from '../../utils/date';
 import type { DomainOperation, DomainOperationBatch } from './contracts';
