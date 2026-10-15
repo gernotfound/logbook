@@ -285,12 +285,14 @@ interface SearchableFood {
     unit?: string;
 }
 
-export function searchFoods<T extends SearchableFood>(foodsList: T[], query: string, categoryFilter?: string): T[] {
-    if (!Array.isArray(foodsList) || foodsList.length === 0) return [];
+export function createFoodSearcher<T extends SearchableFood>(foodsList: T[], categoryFilter?: string): (query: string) => T[] {
+    if (!Array.isArray(foodsList) || foodsList.length === 0) return () => [];
     let results = foodsList;
     if (categoryFilter && categoryFilter !== 'all') {
         results = results.filter(item => item && item.category === categoryFilter);
     }
+    const fuse = new Fuse(results, FUSE_FOOD_OPTIONS);
+    return (query: string): T[] => {
     if (!query || typeof query !== 'string' || !query.trim()) {
         return results;
     }
@@ -320,7 +322,6 @@ export function searchFoods<T extends SearchableFood>(foodsList: T[], query: str
     }
 
     // Fuzzy matches with Fuse.js
-    const fuse = new Fuse(results, FUSE_FOOD_OPTIONS);
 
     const tokens = query.trim().split(/\s+/).filter(t => t.length >= 2);
     let fuzzyMatched: T[] = [];
@@ -353,6 +354,10 @@ export function searchFoods<T extends SearchableFood>(foodsList: T[], query: str
         if (!aStarts && bStarts) return 1;
         return aName.localeCompare(bName, 'it');
     });
+}
+
+export function searchFoods<T extends SearchableFood>(foodsList: T[], query: string, categoryFilter?: string): T[] {
+    return createFoodSearcher(foodsList, categoryFilter)(query);
 }
 
 export function validateCustomFood(foodData: any) {
