@@ -103,4 +103,50 @@ describe('bounded causal sync batching', () => {
         expect(batch.every(item => item.seq === 3)).toBe(true);
         expect(distinctDocumentCount(batch)).toBe(MAX_SYNC_DOCUMENTS_PER_TRANSACTION);
     });
+
+    it('matches the previous causal selection for long, interleaved journal sequences', () => {
+        // Reference behavior: each sequence is filtered from the full pending array
+        // in its original order, and the first oversized union stops delivery.
+        const previousSelection = (pending: SemanticOperation[], maxDocuments: number) => {
+            const sequences = [...new Set(pending.map(item => item.seq))].sort((a, b) => a - b);
+            const selected: SemanticOperation[] = [];
+            const paths = new Set<string>();
+            for (const sequence of sequences) {
+                const group = pending.filter(item => item.seq === sequence);
+                const groupPaths = new Set(group.map(item => item.docPath));
+                const count = new Set([...paths, ...groupPaths]).size;
+                if (selected.length && count > maxDocuments) break;
+                if (!selected.length && count > maxDocuments) {
+                    throw new Error(`Gruppo causale troppo grande: ${count} documenti, massimo ${maxDocuments}.`);
+                }
+                selected.push(...group);
+                for (const path of groupPaths) paths.add(path);
+            }
+            return selected;
+        };
+
+        // Repeated non-contiguous sequences and document paths deliberately test
+        // ordering; operations carry unique values to detect reordering within a group.
+        const combinations: Array<[number, string]> = [
+            [9, 'history/0'], [3, 'history/0'], [7, 'history/1'], [3, 'history/1'],
+            [11, 'history/2'], [7, 'history/2'], [9, 'history/3'], [11, 'history/4'],
+        ];
+        const pending = Array.from({ length: 2048 }, (_, index) => {
+            const [seq, docPath] = combinations[index % combinations.length];
+            return { ...operation(docPath, seq), value: `edit-${index}` };
+        });
+        const originalOrder = pending.map(item => item.value);
+
+        for (const maxDocuments of [2, 3, 4, 5]) {
+            const expected = previousSelection(pending, maxDocuments);
+            const actual = boundedPendingTransactionBatch(pending, maxDocuments);
+            expect(actual).toEqual(expected);
+            expect(actual.map(item => item.value)).toEqual(expected.map(item => item.value));
+            expect(distinctDocumentCount(actual)).toBeLessThanOrEqual(maxDocuments);
+        }
+        expect(() => boundedPendingTransactionBatch(pending, 1)).toThrow(
+            'Gruppo causale troppo grande: 2 documenti, massimo 1.',
+        );
+        expect(pending.map(item => item.value)).toEqual(originalOrder);
+    });
 });
