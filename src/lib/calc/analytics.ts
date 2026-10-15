@@ -175,6 +175,7 @@ export function computeWeeklyVolumeSeries(
     const safeUserWeight = typeof userWeight === 'number' && userWeight > 0 ? userWeight : 80;
 
     const intervals = generateWeekIntervals(numWeeks, referenceDate);
+    const libraryLookup = new Map(safeLibrary.filter(ex => ex?.id).map(ex => [ex.id, ex]));
 
     const firstDay = intervals[0].weekStart;
     const lastDay = intervals[intervals.length - 1].weekEnd;
@@ -192,7 +193,7 @@ export function computeWeeklyVolumeSeries(
             if (dateStr < interval.weekStart) high = mid - 1;
             else if (dateStr > interval.weekEnd) low = mid + 1;
             else {
-                const volume = calculateWorkoutVolume(session, safeLibrary, safeUserWeight);
+                const volume = calculateWorkoutVolume(session, libraryLookup, safeUserWeight);
                 weeks[mid].push({ session, volume: isNaN(volume) ? 0 : volume });
                 break;
             }
