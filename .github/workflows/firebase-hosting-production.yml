@@ -113,12 +113,16 @@ jobs:
           workload_identity_provider: ${{ env.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ env.GCP_FIREBASE_DEPLOY_SERVICE_ACCOUNT }}
 
-      - name: Use pinned npm release
+      - name: Verify npm 11 runtime
         shell: bash
         run: |
           set -euo pipefail
-          npm install --global --ignore-scripts npm@11.21.0
-          test "$(npm --version)" = "11.21.0"
+          npm_version="$(npm --version)"
+          echo "npm runtime: ${npm_version}"
+          if [[ "${npm_version}" != 11.* ]]; then
+            echo "Expected npm 11.x; found ${npm_version}" >&2
+            exit 1
+          fi
 
       - name: Reject unreviewed dependency install scripts
         run: node scripts/check-install-scripts.mjs
