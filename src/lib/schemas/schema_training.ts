@@ -303,7 +303,13 @@ export const TrainingCycleSchema = z.object({
 // Persisted/imported cycles retain their original values for recovery. Only a
 // new domain write must satisfy the stricter editor contract: do not let the
 // tolerant read schema quarantine a historical cycle just for being out of range.
-export const TrainingCycleWriteSchema = TrainingCycleSchema.pipe(z.object({
-    durationWeeks: z.number().int().min(1).max(MAX_EDITABLE_CYCLE_WEEKS),
-    sessionsPerWeek: z.number().int().min(1).max(MAX_CYCLE_SESSIONS_PER_WEEK).optional(),
-}).passthrough());
+export const TrainingCycleWriteSchema = TrainingCycleSchema.refine(
+    cycle => Number.isSafeInteger(cycle.durationWeeks)
+        && cycle.durationWeeks >= 1
+        && cycle.durationWeeks <= MAX_EDITABLE_CYCLE_WEEKS
+        && (cycle.sessionsPerWeek === undefined
+            || (Number.isSafeInteger(cycle.sessionsPerWeek)
+                && cycle.sessionsPerWeek >= 1
+                && cycle.sessionsPerWeek <= MAX_CYCLE_SESSIONS_PER_WEEK)),
+    { message: 'Durata o frequenza del ciclo non valida' },
+);
