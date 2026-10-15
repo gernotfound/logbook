@@ -36,3 +36,7 @@ test('rejects removal of a previously approved script', () => {
 test('rejects malformed lockfiles', () => {
   assert.notDeepEqual(checkInstallScripts({ lockfileVersion: 2 }), []);
 });
+
+test('rejects a root prepare or postinstall script', () => {
+  assert.match(checkInstallScripts(expectedLockfile(), { scripts: { prepare: 'node arbitrary.js' } }).join('; '), /root npm ci lifecycle hook/);
+});

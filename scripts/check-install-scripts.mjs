@@ -11,8 +11,13 @@ export const approvedInstallScripts = Object.freeze({
   'node_modules/protobufjs': '7.6.5',
 });
 
-export function checkInstallScripts(lockfile) {
+export function checkInstallScripts(lockfile, manifest = {}) {
   const failures = [];
+  for (const name of ['preinstall', 'install', 'postinstall', 'prepublish', 'preprepare', 'prepare', 'postprepare']) {
+    if (Object.hasOwn(manifest.scripts ?? {}, name)) {
+      failures.push('Unreviewed root npm ci lifecycle hook: ' + name);
+    }
+  }
   if (lockfile?.lockfileVersion !== 3 || !lockfile.packages) {
     return ['Expected a v3 npm lockfile with a packages map'];
   }
@@ -36,7 +41,10 @@ export function checkInstallScripts(lockfile) {
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const failures = checkInstallScripts(JSON.parse(readFileSync('package-lock.json', 'utf8')));
+  const failures = checkInstallScripts(
+    JSON.parse(readFileSync('package-lock.json', 'utf8')),
+    JSON.parse(readFileSync('package.json', 'utf8')),
+  );
   if (failures.length) {
     console.error('npm lifecycle-script review required:\n' + failures.map(issue => '- ' + issue).join('\n'));
     process.exitCode = 1;
