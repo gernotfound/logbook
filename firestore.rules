@@ -275,6 +275,19 @@ service cloud.firestore {
         && newData.replicas.diff(oldData.replicas).affectedKeys().hasOnly([slot])
         && (
           (
+            existed
+            && newData.mutation.action == 'reuse-expired'
+            && (
+              oldData.replicas[slot].status == 'retired'
+              || oldData.replicas[slot].leaseUntilMs < request.time.toMillis()
+            )
+            && next.status == 'active'
+            && next.replicaId != oldData.replicas[slot].replicaId
+            && next.generation == oldData.replicas[slot].generation + 1
+            && next.lastSeq >= oldData.replicas[slot].lastSeq
+            && isFreshReplicaLease(next)
+          )
+          || (
             newData.mutation.action == 'register'
             && !existed
             && next.generation == 1
@@ -306,19 +319,6 @@ service cloud.firestore {
             && oldData.replicas[slot].leaseUntilMs < request.time.toMillis()
             && next.diff(oldData.replicas[slot]).affectedKeys().hasOnly(['status'])
             && next.status == 'retired'
-          )
-          || (
-            existed
-            && newData.mutation.action == 'reuse-expired'
-            && (
-              oldData.replicas[slot].status == 'retired'
-              || oldData.replicas[slot].leaseUntilMs < request.time.toMillis()
-            )
-            && next.status == 'active'
-            && next.replicaId != oldData.replicas[slot].replicaId
-            && next.generation == oldData.replicas[slot].generation + 1
-            && next.lastSeq >= oldData.replicas[slot].lastSeq
-            && isFreshReplicaLease(next)
           )
         );
     }
