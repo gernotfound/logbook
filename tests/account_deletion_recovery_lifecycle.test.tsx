@@ -64,6 +64,7 @@ import {
     DEVICE_RECOVERY_RECHECK_INTERVAL_MS,
 } from '../src/components/AccountDeletionRecovery';
 import { DeletionRecoveryFinalizationError } from '../src/lib/deletionDeviceRecovery';
+import { DeletionDeviceOperationError } from '../src/lib/deletionRecoveryDiagnostics';
 
 function setOnline(value: boolean) {
     Object.defineProperty(navigator, 'onLine', { configurable: true, value });
@@ -90,19 +91,19 @@ describe('account deletion recovery foreground lifecycle', () => {
         vi.useRealTimers();
     });
 
-    it('reports a routine background App Check failure without interrupting the user', async () => {
-        const appCheckError = Object.assign(new Error('limited-use failed'), {
-            code: 'app-check-limited-use-unavailable',
-            firebaseCode: 'appCheck/recaptcha-error',
+    it('does not classify an isolated routine timeout as an account deletion failure', async () => {
+        const timeout = Object.assign(new Error('private network info'), {
+            operation: 'routine-check',
+            phase: 'app-check',
+            kind: 'timeout',
+            code: 'account-deletion-device-operation-failed',
         });
-        boundary.recoverByDevice.mockRejectedValueOnce(appCheckError);
+        boundary.recoverByDevice.mockRejectedValueOnce(timeout);
 
         render(<AccountDeletionRecovery />);
         await settle();
 
-        expect(boundary.reportError).toHaveBeenCalledWith(appCheckError, {
-            source: 'account_deletion_recovery',
-        });
+        expect(boundary.reportError).not.toHaveBeenCalled();
         expect(boundary.showAlert).not.toHaveBeenCalled();
     });
 
@@ -113,9 +114,10 @@ describe('account deletion recovery foreground lifecycle', () => {
         render(<AccountDeletionRecovery />);
         await settle();
 
-        expect(boundary.reportError).toHaveBeenCalledWith(finalizationError, {
-            source: 'account_deletion_recovery',
-        });
+        expect(boundary.reportError).toHaveBeenCalledWith(
+            expect.objectContaining({ name: 'AccountDeletionRecoveryDiagnostic', message: expect.stringContaining('operation=local-finalization') }),
+            { source: 'account_deletion_local_finalization' },
+        );
         expect(boundary.showAlert).toHaveBeenCalledWith('Pulizia locale incompleta');
     });
 
@@ -148,9 +150,10 @@ describe('account deletion recovery foreground lifecycle', () => {
         render(<AccountDeletionRecovery />);
         await settle();
 
-        expect(boundary.reportError).toHaveBeenCalledWith(failure, {
-            source: 'account_deletion_recovery',
-        });
+        expect(boundary.reportError).toHaveBeenCalledWith(
+            expect.objectContaining({ name: 'AccountDeletionRecoveryDiagnostic', message: expect.stringContaining('operation=pending-deletion') }),
+            { source: 'account_deletion_pending_deletion' },
+        );
         expect(boundary.showAlert).toHaveBeenCalledWith('Cancellazione cloud incompleta');
     });
     it('checks device credentials despite another owner having a pending marker', async () => {
@@ -180,9 +183,76 @@ describe('account deletion recovery foreground lifecycle', () => {
         await settle();
 
         expect(boundary.recoverByDevice).toHaveBeenCalledTimes(1);
-        expect(boundary.reportError).toHaveBeenCalledWith(failure, {
-            source: 'account_deletion_recovery',
+        expect(boundary.reportError).toHaveBeenCalledWith(
+            expect.objectContaining({ message: expect.stringContaining('operation=pending-deletion') }),
+            { source: 'account_deletion_pending_deletion' },
+        );
+    });
+
+    it('aggregates repeated network failures, then resets after a successful check', async () => {
+        const timeout = new DeletionDeviceOperationError('routine-check', 'response-body', 'timeout');
+        boundary.recoverByDevice.mockRejectedValueOnce(timeout)
+            .mockRejectedValueOnce(timeout)
+            .mockRejectedValueOnce(timeout)
+            .mockResolvedValueOnce({ status: 'none' })
+            .mockRejectedValueOnce(timeout);
+
+        render(<AccountDeletionRecovery />);
+        await settle();
+        expect(boundary.reportError).not.toHaveBeenCalled();
+
+        window.dispatchEvent(new Event('online'));
+        await settle();
+        expect(boundary.reportError).not.toHaveBeenCalled();
+
+        window.dispatchEvent(new Event('online'));
+        await settle();
+        expect(boundary.reportError).toHaveBeenCalledTimes(1);
+        expect(boundary.reportError).toHaveBeenLastCalledWith(
+            expect.objectContaining({ message: expect.stringContaining('consecutive=3') }),
+            { source: 'account_deletion_routine_check' },
+        );
+
+        window.dispatchEvent(new Event('online'));
+        await settle();
+        window.dispatchEvent(new Event('online'));
+        await settle();
+        expect(boundary.reportError).toHaveBeenCalledTimes(1);
+        expect(boundary.showAlert).not.toHaveBeenCalled();
+    });
+
+    it('does not lose a confirmed-cloud local-finalization failure behind another marker failure', async () => {
+        boundary.findPending.mockReturnValue({
+            markers: [{ owner: 'user:b', uid: 'b', startedAt: 2, receiptToken: 'receipt-b' }],
+            corrupt: [],
         });
+        boundary.resume.mockRejectedValueOnce(new Error('B failed'));
+        boundary.recoverByDevice.mockRejectedValueOnce(new DeletionRecoveryFinalizationError('Pulizia A incompleta'));
+
+        render(<AccountDeletionRecovery />);
+        await settle();
+
+        expect(boundary.reportError).toHaveBeenCalledTimes(2);
+        expect(boundary.reportError).toHaveBeenCalledWith(
+            expect.objectContaining({ message: expect.stringContaining('operation=local-finalization') }),
+            { source: 'account_deletion_local_finalization' },
+        );
+        expect(boundary.showAlert).toHaveBeenCalledWith('Pulizia A incompleta');
+    });
+
+    it('surfaces a failed cloud deletion returned by a valid device proof', async () => {
+        boundary.recoverByDevice.mockRejectedValueOnce(
+            new DeletionDeviceOperationError('routine-check', 'server-status', 'remote-failed'),
+        );
+
+        render(<AccountDeletionRecovery />);
+        await settle();
+
+        expect(boundary.reportError).toHaveBeenCalledWith(
+            expect.objectContaining({ message: expect.stringContaining('kind=remote-failed') }),
+            { source: 'account_deletion_routine_check' },
+        );
+        expect(boundary.showAlert).toHaveBeenCalledWith(expect.stringContaining('copia locale'));
     });
 
 });
