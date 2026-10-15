@@ -217,6 +217,7 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
         />}
       <h2>Gestisci i tuoi dati e i tuoi diritti</h2>
       <p>Puoi farlo anche senza prestare un nuovo consenso.</p>
+      <p>Il backup JSON esportato non è cifrato e, se il cloud non è disponibile, può essere parziale. Conservalo in un luogo protetto.</p>
       <div style={{ display: 'grid', gap: 12 }}>
         <button type="button" className="btn" onClick={() => setPrivacy(true)}>Leggi l’informativa privacy</button>
         <button type="button" className="btn" onClick={() => setTerms(true)}>Leggi i termini e condizioni</button>

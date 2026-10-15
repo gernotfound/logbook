@@ -137,6 +137,8 @@ describe('RISK-02: ConsentOverlay UI Behavior', () => {
         expect(screen.getByRole('button', { name: /Informativa sulla Privacy/i })).toBeDefined();
         expect(screen.getByRole('button', { name: /Termini e Condizioni/i })).toBeDefined();
         expect(screen.queryByText(/essere conformi/i)).toBeNull();
+        expect(screen.getByText(/Il file JSON esportato non è cifrato/i)).toBeDefined();
+        expect(screen.getByRole('button', { name: /Backup JSON dei tuoi dati/i })).toBeDefined();
     });
 
     it('chiarisce che una palestra non riceve automaticamente accesso ai dati degli iscritti', () => {

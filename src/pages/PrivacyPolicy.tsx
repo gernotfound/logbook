@@ -184,7 +184,7 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               Dopo il completamento della cancellazione, TheLogBook conserva temporaneamente un record tecnico server-only di recovery privo dei dati di allenamento, nutrizione e misurazioni. Il record contiene l'identificativo tecnico del job, stato/timestamp e l'hash non reversibile della ricevuta di cancellazione. Serve a permettere a un dispositivo rimasto offline di verificare che la cancellazione cloud sia realmente terminata prima di eliminare la propria copia locale. È programmato per la rimozione dopo 30 giorni e viene eliminato dal successivo ciclo giornaliero di manutenzione applicabile.
             </p>
             <p style={{ marginTop: '8px', color: 'var(--warning-color)' }}>
-              <strong>Attenzione:</strong> il servizio non garantisce backup di livello enterprise. È consigliato effettuare periodicamente un backup JSON e/o un'esportazione CSV tramite le funzioni dell'app.
+              <strong>Attenzione:</strong> i dati vengono salvati automaticamente sul dispositivo e, con un account, quelli supportati sono sincronizzati con il cloud quando connessione e autorizzazioni lo consentono. Solo i dati già sincronizzati possono essere recuperati dal cloud se l'archivio locale viene perso completamente; i dati ospite e le modifiche ancora offline potrebbero non essere recuperabili. Il backup JSON e l'esportazione CSV sono facoltativi, non necessari periodicamente per il normale utilizzo, e generano file non cifrati da conservare in modo protetto. Il servizio non garantisce backup gestiti di livello enterprise.
             </p>
           </Section>
 
