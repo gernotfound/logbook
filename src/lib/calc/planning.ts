@@ -37,7 +37,7 @@ export function calculateCycleTimeline(
     cycle: TrainingCycle | null | undefined,
     currentDate: Date | string = new Date()
 ): CycleTimelineInfo {
-    const totalWeeks = Math.max(1, Number(cycle?.durationWeeks) || 4);
+    let totalWeeks = Math.max(1, Number(cycle?.durationWeeks) || 4);
     if (!isBoundedCycleCount(totalWeeks, MAX_CALCULATED_CYCLE_WEEKS)) {
         return {
             formattedStartDate: '', formattedEndDate: '',
