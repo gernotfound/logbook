@@ -140,6 +140,10 @@ export async function recoverDeletedAccountOnThisDevice(finalize:(uid:string)=>P
    }
  }
  if(firstFinalizationError)throw firstFinalizationError;
+ // A completed device must not conceal another verified device whose cloud
+ // deletion failed or whose response violates the server status contract.
+ if(firstRequestError instanceof DeletionDeviceOperationError
+   && (firstRequestError.kind==='remote-failed'||firstRequestError.kind==='invalid-response'||firstRequestError.kind==='rejected'))throw firstRequestError;
  if(completed)return{status:'complete'};
  if(pendingMessage)return{status:'pending',message:pendingMessage};
  if(firstRequestError)throw firstRequestError;
