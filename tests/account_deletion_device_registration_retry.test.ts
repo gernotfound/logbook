@@ -502,7 +502,8 @@ describe('account deletion recovery device registration retries', () => {
     const finalize = vi.fn(async () => ({ status: 'complete' as const }));
 
     await expect(recoverDeletedAccountOnThisDevice(finalize)).rejects.toMatchObject({ kind: 'remote-failed' });
-    expect(finalize).toHaveBeenCalledExactlyOnceWith('user-b');
+    expect(finalize).toHaveBeenCalledTimes(1);
+    expect(finalize).toHaveBeenCalledWith('user-b');
     expect(localStorage.getItem('logbook_deletion_recovery_devices_v1')).not.toBeNull();
   });
 
