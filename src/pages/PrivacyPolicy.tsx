@@ -144,6 +144,9 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               IndexedDB e localStorage sono utilizzati per il funzionamento offline, la persistenza locale, i workout in corso e le preferenze tecniche. TheLogBook non integra Google Analytics 4, Firebase Analytics, Vercel Analytics o Speed Insights e non invia eventi di utilizzo a tali servizi.
             </p>
             <p>
+              Gli archivi locali principali dei dati fitness e le bozze del dispositivo sono protetti con cifratura autenticata. Le chiavi sono conservate nello stesso profilo del browser: questa protezione non impedisce l'accesso a chi compromette il profilo o esegue codice malevolo nell'app, e non costituisce cifratura end-to-end. I file JSON e CSV esportati sono invece leggibili in chiaro.
+            </p>
+            <p>
               La telemetria tecnica Sentry è separata dalle statistiche di utilizzo e riguarda soltanto errori e anomalie tecniche minimizzati secondo quanto descritto sopra. La rimozione degli analytics non comporta la cancellazione automatica di dati eventualmente trasmessi in passato al precedente fornitore.
             </p>
             <p>
