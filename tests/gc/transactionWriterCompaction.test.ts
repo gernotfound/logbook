@@ -29,6 +29,17 @@ vi.mock('firebase/firestore', () => ({
                                 checkpointAtMs: Date.now(),
                                 checkpointClock: harness.checkpointClock,
                             },
+                            // Historical slot can be retired while its causal dot
+                            // remains necessary until all active replicas acknowledge it.
+                            s01: {
+                                replicaId: 'retired-s01',
+                                generation: 1,
+                                status: 'retired',
+                                lastSeq: 2,
+                                leaseUntilMs: Date.now() - 24 * 60 * 60 * 1000,
+                                checkpointAtMs: Date.now() - 360 * 24 * 60 * 60 * 1000,
+                                checkpointClock: { s01: 2 },
+                            },
                         },
                         mutation: { slot: 's00', action: 'checkpoint' },
                     }),
@@ -39,10 +50,10 @@ vi.mock('firebase/firestore', () => ({
                     _schemaVersion: 1,
                     _sync: {
                         protocolVersion: 3,
-                        clock: { legacy: 2 },
+                        clock: { s01: 2 },
                         fields: {
-                            '2026-09-14': { actorId: 'legacy', seq: 2, clock: { legacy: 2 }, deleted: true },
-                            '2026-09-14/weight': { actorId: 'legacy', seq: 1, clock: { legacy: 1 } },
+                            '2026-09-14': { actorId: 's01', seq: 2, clock: { s01: 2 }, deleted: true },
+                            '2026-09-14/weight': { actorId: 's01', seq: 1, clock: { s01: 1 } },
                         },
                         writer: { slot: 's00', replicaId: 'replica-s00', generation: 1, seq: 0 },
                     },
@@ -85,29 +96,29 @@ describe('M4 transaction write-boundary compaction', () => {
         expect(harness.writes).toHaveLength(2);
         expect(harness.writes.find(write => write.path.includes('nutrition_months'))!.deleted).not.toBe(true);
         expect(harness.writes.find(write => write.path.includes('nutrition_months'))!.data._sync.fields['2026-09-14']).toMatchObject({
-            actorId: 'legacy',
+            actorId: 's01',
             seq: 2,
             deleted: true,
-            clock: { legacy: 2 },
-            deleteClock: { legacy: 2 },
+            clock: { s01: 2 },
+            deleteClock: { s01: 2 },
         });
-        expect(harness.writes.find(write => write.path.includes('nutrition_months'))!.data._sync.clock).toEqual({ legacy: 2, s00: 1 });
+        expect(harness.writes.find(write => write.path.includes('nutrition_months'))!.data._sync.clock).toEqual({ s01: 2, s00: 1 });
         expect(harness.writes.find(write => write.path.includes('nutrition_months'))!.data._sync.fields['2026-09-14/weight']).toBeUndefined();
 
         expect(outcome.syncMeta['']).toBeUndefined();
         expect(outcome.syncMeta['nutrition_months/2026-09'].fields['2026-09-14']).toMatchObject({
             deleted: true,
-            clock: { legacy: 2 },
-            deleteClock: { legacy: 2 },
+            clock: { s01: 2 },
+            deleteClock: { s01: 2 },
         });
-        expect(outcome.syncMeta['nutrition_months/2026-09'].clock).toEqual({ legacy: 2, s00: 1 });
+        expect(outcome.syncMeta['nutrition_months/2026-09'].clock).toEqual({ s01: 2, s00: 1 });
         expect(outcome.syncMeta['nutrition_months/2026-09'].fields['2026-09-14/weight']).toBeUndefined();
         expect(harness.checkDocSize).toHaveBeenCalledTimes(1);
     });
 
     it('persists a fenced empty shell after stable-frontier retirement instead of issuing an un-attributed delete', async () => {
         harness.checkDocSize.mockClear();
-        harness.checkpointClock = { legacy: 2, s00: 1 };
+        harness.checkpointClock = { s01: 2, s00: 1 };
         harness.lastSeq = 1;
 
         const duplicateBlockedOperation: SemanticOperation = {
@@ -135,7 +146,7 @@ describe('M4 transaction write-boundary compaction', () => {
             _schemaVersion: 1,
             _sync: {
                 protocolVersion: 3,
-                clock: { legacy: 2, s00: 1 },
+                clock: { s01: 2, s00: 1 },
                 fields: {},
                 writer: { slot: 's00', replicaId: 'replica-s00', generation: 1, seq: 1 },
             },
