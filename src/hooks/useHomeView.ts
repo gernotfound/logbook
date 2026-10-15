@@ -25,18 +25,6 @@ function getWorkoutDateStr(w: any): string | null {
     return ts ? Logic.getLocalDateString(ts) : null;
 }
 
-function getMuscleCategory(mId: string): { key: string; label: string } {
-    if (!mId) return { key: 'other', label: 'Altro' };
-    const low = mId.toLowerCase();
-    if (low.includes('pett') || low.includes('chest')) return { key: 'chest', label: 'Petto' };
-    if (low.includes('dors') || low.includes('schien') || low.includes('lat') || low.includes('back')) return { key: 'back', label: 'Dorso' };
-    if (low.includes('spall') || low.includes('delt') || low.includes('shoulder')) return { key: 'shoulders', label: 'Spalle' };
-    if (low.includes('quad') || low.includes('femoral') || low.includes('glute') || low.includes('polp') || low.includes('leg') || low.includes('gamb')) return { key: 'legs', label: 'Gambe' };
-    if (low.includes('bicip') || low.includes('tricip') || low.includes('avambr') || low.includes('arm') || low.includes('bracc')) return { key: 'arms', label: 'Braccia' };
-    if (low.includes('addom') || low.includes('core') || low.includes('abs')) return { key: 'core', label: 'Addome' };
-    return { key: 'other', label: 'Altro' };
-}
-
 function calcStreak(history: any[], nowMs: number): number {
     if (!history || history.length === 0) return 0;
     const workoutDates = new Set<string>(
@@ -89,7 +77,6 @@ export type HomeViewState =
         setWeightPeriod: (p: any) => void;
         weightStats: any;
         muscleColors: any;
-        volumeChartData: any;
         activePains: string[];
         painColors: Record<string, string>;
         toggleActivePain: (muscleId: string) => void;
@@ -113,6 +100,7 @@ export function useHomeView(): HomeViewState {
     const dispatchDomainOperation = useAppStore(state => state.dispatchDomainOperation);
     const nutritionPlanning = useAppStore(state => state.userData?.nutritionPlanning);
     const [homeClockNow, setHomeClockNow] = useState(() => Date.now());
+    const homeDay = Logic.getLocalDateString(homeClockNow);
 
     useEffect(() => {
         let timeoutId: ReturnType<typeof setTimeout> | null = null;
@@ -167,79 +155,36 @@ export function useHomeView(): HomeViewState {
     }, [activePains, dispatchDomainOperation]);
 
     // useMemo hooks MUST be called unconditionally (before any conditional return)
-    const streak = useMemo(() => calcStreak(history, homeClockNow), [history, homeClockNow]);
+    const streak = useMemo(() => calcStreak(history, new Date(`${homeDay}T12:00:00`).getTime()), [history, homeDay]);
     const totalWorkouts = history.length;
 
     // Pre-calcola una Map per cercare gli esercizi in O(1) invece di O(n) ad ogni iterazione dello storico
     const libraryMap = useMemo(() => new Map(library.map((l: any) => [l.id, l])), [library]);
 
-    // Calculate Heatmap & Volume
-    const { muscleColors, volumeChartData } = useMemo(() => {
-        const MAX_HOURS = 72;
-        const now = homeClockNow;
-        const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
-        
+    // The Home recovery map only uses factual exposure within the last 72 hours.
+    // Weekly volume for charts is calculated separately by the analytics engine.
+    const muscleColors = useMemo(() => {
         const recentExposure = new Set<string>();
-        const volume = new Map<string, number>();
-
         history.forEach((w: any) => {
             const workoutTime = getWorkoutTimestamp(w);
             if (!workoutTime) return;
-
-            const msPassed = now - workoutTime;
-            const hoursPassed = msPassed / (1000 * 60 * 60);
-            
-            const isRecent72h = hoursPassed >= 0 && hoursPassed <= MAX_HOURS;
-            const isRecent7d = msPassed >= 0 && msPassed <= SEVEN_DAYS;
-            
-            if (!isRecent72h && !isRecent7d) return;
-
+            const hoursPassed = (homeClockNow - workoutTime) / (1000 * 60 * 60);
+            if (!(hoursPassed >= 0 && hoursPassed <= 72)) return;
 
             (w.exercises || []).forEach((ex: any) => {
                 const libEx = libraryMap.get(ex.exId);
                 if (!libEx) return;
-
-                // A composed advanced set is still one work set.
-                let completedSets = 0;
-                (ex.sets || []).forEach((s: any) => {
+                const hasWorkSet = (ex.sets || []).some((s: any) => {
                     const hasValues = (s.kg !== undefined && s.kg !== '') || (s.reps !== undefined && s.reps !== '') || (s.time !== undefined && s.time !== '');
-                    const isDone = s.done === true || hasValues || s.done === undefined;
-                    if (isDone) {
-                        completedSets += 1;
-                    }
+                    return s.done === true || hasValues || s.done === undefined;
                 });
+                if (!hasWorkSet) return;
 
-                if (isRecent7d && completedSets > 0) {
-                    const uniqueCategories = new Set<string>();
-                    (libEx.muscles || []).forEach((mId: string) => {
-                        if (!mId || typeof mId !== 'string') return;
-                        const { label } = getMuscleCategory(mId);
-                        uniqueCategories.add(label);
-                    });
-                    uniqueCategories.forEach((label) => {
-                        volume.set(label, (volume.get(label) || 0) + completedSets);
-                    });
-                }
-
-                if (isRecent72h && completedSets > 0) {
-                    // Primary muscles
-                    (libEx.muscles || []).forEach((mId: string) => {
-                        if (!mId || typeof mId !== 'string') return;
-                        const atomicPaths = (Logic.GROUP_MAP as any)[mId] || [mId];
-                        atomicPaths.forEach((path: string) => {
-                            recentExposure.add(path);
-                        });
-                        recentExposure.add(mId);
-                    });
-                    // Secondary muscles are still factual exposure: no physiological weighting is inferred.
-                    (libEx.secondaryMuscles || []).forEach((mId: string) => {
-                        if (!mId || typeof mId !== 'string') return;
-                        const atomicPaths = (Logic.GROUP_MAP as any)[mId] || [mId];
-                        atomicPaths.forEach((path: string) => {
-                            recentExposure.add(path);
-                        });
-                        recentExposure.add(mId);
-                    });
+                for (const mId of [...(libEx.muscles || []), ...(libEx.secondaryMuscles || [])]) {
+                    if (!mId || typeof mId !== 'string') continue;
+                    const atomicPaths = (Logic.GROUP_MAP as any)[mId] || [mId];
+                    atomicPaths.forEach((path: string) => recentExposure.add(path));
+                    recentExposure.add(mId);
                 }
             });
         });
@@ -248,20 +193,7 @@ export function useHomeView(): HomeViewState {
         recentExposure.forEach(pathOrId => {
             colors[pathOrId] = 'var(--muscle-recent)';
         });
-
-        const sortedVolume = Array.from(volume.entries()).sort((a, b) => b[1] - a[1]).slice(0, 7);
-        const vChartData = {
-            labels: sortedVolume.map(v => v[0]),
-            datasets: [{
-                data: sortedVolume.map(v => v[1]),
-                backgroundColor: 'rgba(14, 165, 233, 0.6)',
-                borderColor: 'var(--primary-color)',
-                borderWidth: 1,
-                borderRadius: 4
-            }]
-        };
-
-        return { muscleColors: colors, volumeChartData: vChartData };
+        return colors;
     }, [history, libraryMap, homeClockNow]);
 
     // Resolve the latest observations once per nutrition update, not on every clock refresh.
@@ -289,7 +221,7 @@ export function useHomeView(): HomeViewState {
             '365d': 365
         };
         const numDays = daysMap[weightPeriod] || 7;
-        const today = new Date(homeClockNow);
+        const today = new Date(`${homeDay}T12:00:00`);
 
         const dateRange: string[] = [];
         for (let i = numDays - 1; i >= 0; i--) {
@@ -376,19 +308,19 @@ export function useHomeView(): HomeViewState {
                 recentWeeklyAverages
             }
         };
-    }, [nutrition, weightPeriod, homeClockNow]);
+    }, [nutrition, weightPeriod, homeDay]);
+
+    const todaysWorkout = useMemo(
+        () => history.find((s: any) => getWorkoutDateStr(s) === homeDay),
+        [history, homeDay]
+    );
 
     // Early return AFTER all hooks
     if (!hasUserData) {
         return { loading: true };
     }
 
-    const todayStr = Logic.getLocalDateString(homeClockNow);
-    
-    // Calculate today's workout
-    const todaysWorkout = history.find((s: any) => {
-        return getWorkoutDateStr(s) === todayStr;
-    });
+    const todayStr = homeDay;
     const isRestDay = !todaysWorkout;
 
     // Calculate today's nutrition
@@ -450,7 +382,7 @@ export function useHomeView(): HomeViewState {
         bf, bfSource, streak, totalWorkouts,
         chartData,
         weightPeriod, setWeightPeriod, weightStats,
-        muscleColors, volumeChartData,
+        muscleColors,
         activePains, painColors, toggleActivePain,
         history, nutrition, library,
         userWeight: resolvedUserWeight
