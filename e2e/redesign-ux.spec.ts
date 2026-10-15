@@ -2,6 +2,31 @@ import { expect, test, type Page } from '@playwright/test';
 
 test.use({ viewport: { width: 320, height: 850 } });
 
+test('welcome heading stays above the login card on narrow screens in both themes', async ({ page }) => {
+  for (const theme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme: theme });
+    await page.goto('/');
+    const title = page.getByRole('heading', { name: 'TheLogBook', level: 1 });
+    const card = page.locator('#auth-login-box');
+    await expect(title).toBeVisible();
+    await expect(card).toBeVisible();
+    await expect(card.getByRole('heading', { name: 'TheLogBook' })).toHaveCount(0);
+    const titleBounds = await title.boundingBox();
+    const cardBounds = await card.boundingBox();
+    expect(titleBounds).not.toBeNull();
+    expect(cardBounds).not.toBeNull();
+    expect(titleBounds!.y + titleBounds!.height).toBeLessThan(cardBounds!.y);
+    const titleSize = await title.evaluate(element => Number.parseFloat(getComputedStyle(element).fontSize));
+    expect(titleSize).toBeGreaterThan(22);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)).toBe(false);
+
+    await page.setViewportSize({ width: 320, height: 568 });
+    await expect(title).toBeVisible();
+    await expect(card).toBeVisible();
+    await page.setViewportSize({ width: 320, height: 850 });
+  }
+});
+
 async function continueAsGuest(page: Page) {
   await page.goto('/');
   await page.getByRole('button', { name: 'Continua senza account' }).click();

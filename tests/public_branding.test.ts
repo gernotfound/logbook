@@ -60,6 +60,7 @@ describe('public TheLogBook branding', () => {
     expect(appearanceCss).not.toContain('.brand-loading-screen--content .brand-loading-screen__mascot');
     expect(appearanceCss).toContain('animation: brand-loading-bloom-pulse 1.9s ease-in-out infinite;');
     expect(homeHeader).toContain('<h1>TheLogBook</h1>');
+    expect(app).toContain('<h1 className="auth-entry-title">TheLogBook</h1>');
     expect(loginBox).toContain('>TheLogBook</h1>');
   });
 });
