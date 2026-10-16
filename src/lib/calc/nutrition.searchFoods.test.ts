@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { searchFoods } from './nutrition';
+import { createFoodSearcher, searchFoods } from './nutrition';
 import type { Food } from '../../types';
 
 describe('typed food search', () => {
@@ -12,6 +12,23 @@ describe('typed food search', () => {
         expect(matches).toHaveLength(1);
         expect(matches[0].pro).toBe(22);
     });
+    it('reuses normalized data while preserving fuzzy ranking and owner isolation', () => {
+        const catalog = [
+            { ...foods[0], brand: 'Marca', category: 'carne' },
+            { ...foods[1], brand: 'Extra', category: 'olio' },
+            { id: 'c', name: 'Pollo arrosto', kcal: 180, carbs: 0, pro: 28, fat: 7, category: 'carne' }
+        ];
+        const search = createFoodSearcher(catalog);
+        for (const query of ['', 'pollo', 'POLLO', 'polo', 'pollo arrosto', 'ma']) {
+            expect(search(query)).toEqual(searchFoods(catalog, query));
+        }
+        expect(createFoodSearcher(catalog, 'carne')('pollo')).toEqual(searchFoods(catalog, 'pollo', 'carne'));
+        expect(search('pollo').map(item => item.id)).toEqual(['c', 'a']);
+        const anotherOwner = createFoodSearcher([{ ...catalog[1], id: 'private' }]);
+        expect(anotherOwner('pollo')).toEqual([]);
+        expect(search('pollo')).toHaveLength(2);
+    });
+
     it('preserves the category filter, case folding and empty-query contract', () => {
         const withCategory = foods.map((f, i) => ({ ...f, category: i ? 'olio' : 'carne' }));
         expect(searchFoods(withCategory, '', 'carne').map(x => x.id)).toEqual(['a']);

@@ -1,3 +1,4 @@
+import { MAX_ROUTINE_SEGMENTS, MAX_ROUTINE_SETS, previewRoutineSets } from '../../../lib/routineSessionLimits';
 import React, { useId } from 'react';
 import { ArrowUp, ArrowDown, Trash2, Activity, CircleHelp } from 'lucide-react';
 import { ExerciseLibraryItem, PlannedSetTechnique, ProgressionContract, SetTechnique } from '../../../types';
@@ -149,7 +150,7 @@ export const RoutineExerciseItem: React.FC<RoutineExerciseItemProps> = ({
                         </label>
                         <input
                             id={setsId}
-                            type="number" min="1" max="20"
+                            type="number" min="1" max={MAX_ROUTINE_SETS}
                             placeholder="3"
                             value={exercise.setsCount !== undefined && exercise.setsCount !== null ? exercise.setsCount : ''}
                             onChange={e => onUpdateSetsCount(index, e.target.value)}
@@ -254,7 +255,7 @@ export const RoutineExerciseItem: React.FC<RoutineExerciseItemProps> = ({
                     {!isCardio && (
                         <div>
                             <div className="routine-technique-set-list">
-                                {Array.from({ length: Math.max(1, Number.parseInt(String(exercise.setsCount || 3), 10) || 3) }, (_, setIndex) => {
+                                {Array.from({ length: previewRoutineSets(exercise.setsCount) }, (_, setIndex) => {
                                     const plan: PlannedSetTechnique | undefined = exercise.setPlans?.[setIndex];
                                     const technique: SetTechnique = plan?.technique || 'straight';
                                     const hasParameters = technique !== 'straight' && technique !== 'dropset';
@@ -294,6 +295,7 @@ export const RoutineExerciseItem: React.FC<RoutineExerciseItemProps> = ({
                                                             <input
                                                                 type="number"
                                                                 min="2"
+                                                                max={MAX_ROUTINE_SEGMENTS}
                                                                 aria-label={`Segmenti serie ${setIndex + 1}`}
                                                                 value={plan?.segmentCount ?? ''}
                                                                 onChange={event => onUpdateSetPlanField(index, setIndex, 'segmentCount', event.target.value)}

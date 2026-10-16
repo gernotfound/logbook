@@ -1,3 +1,4 @@
+import { InvalidRoutineSessionPlanError } from '../lib/routineSessionLimits';
 import { useState, useCallback, useRef } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
@@ -140,7 +141,14 @@ export function useWorkoutSession() {
             return;
         }
         
-        const newActiveWorkout = buildRoutineWorkout(userData, routine, cycleInfo);
+        let newActiveWorkout: WorkoutSession;
+        try {
+            newActiveWorkout = buildRoutineWorkout(userData, routine, cycleInfo);
+        } catch (error) {
+            if (!(error instanceof InvalidRoutineSessionPlanError)) throw error;
+            await showAlert(error.message);
+            return;
+        }
         mutateActiveWorkout(newActiveWorkout);
     }, [selectedRoutine, showAlert, mutateActiveWorkout]);
 
