@@ -111,6 +111,24 @@ Il product owner desidera che le automazioni e ChatGPT possano amministrare in m
 - Proposta di protezione: impedire cancellazione accidentale e force-push, mantenendo normale avanzamento via commit; verificare eventuali vincoli GitHub già presenti e i permessi amministrativi prima di applicarli.
 - **Nessuna PR o merge autorizzati** per questa fase di sola infrastruttura Test. Ogni eventuale integrazione in `main` va concordata esplicitamente col product owner.
 
+## Implementazione keyless sul branch Test — candidata, da validare
+
+Lavoro aggiunto su `testing/00-firebase-test-critical`, **non distribuito né integrato in `main`**:
+
+- `server/accountDeletion/testOidcCredential.ts`: il backend recupera con `@vercel/oidc` un OIDC JWT con audience specifica del provider GCP; scambia il token con STS (`sts.googleapis.com`), impersona **solo** l'account `logbook-test-vercel-runtime@thelogbook-test.iam.gserviceaccount.com` tramite IAM Credentials e restituisce a Firebase Admin un access token temporaneo. Non salva né richiede chiavi private.
+- `server/accountDeletion/firebaseAdmin.ts`: se `FIREBASE_ADMIN_AUTH_MODE=vercel-oidc`, verifica rigorosamente il project ID Firebase Test, email account Test, `VERCEL_PROJECT_ID` Test, ambiente Vercel `production`, flag Vercel e origin frontend `https://thelogbook-test.web.app`; rifiuta la presenza di una chiave Admin privata. **Per i progetti non Test** lascia attivo il percorso `cert()` preesistente e rifiuta auth mode sconosciuti; anche un deployment configurato per il progetto `thelogbook-test` senza OIDC fallisce chiuso.
+- `vercel.test.json`: profilo backend-only usabile tramite **`--local-config vercel.test.json`**, con tutti i deploy Git automatici disabilitati, nessun redirect a frontend Production, nessuna schedulazione automatica cron, nessun service worker legacy. Non sostituisce `vercel.json` Production, che resta immutato. Il cron esiste come endpoint da invocare **solo manualmente e con `CRON_SECRET` Test** durante i test controllati.
+- `scripts/check-vercel-test-safety.mjs` e `tests/m7_firebase_test_oidc.test.ts`: guardrail su isolamento e regressioni del token exchange, expiry, caching, failure paths.
+- `package.json`/`package-lock.json` ora dichiarano e fissano `@vercel/oidc` e relativi pacchetti; installazione, lint, tipo, gate canonico e runtime **non ancora osservati** alla stesura.
+
+### Prerequisiti e verifica prima del primo deploy
+
+1. **GitHub:** verificare il gate canonico sullo SHA esatto del branch dopo le modifiche e correggere eventuali errori senza ridurre i controlli. La CI di default gira su PR verso `main`, push su `main` o `workflow_dispatch`: un semplice commit sul branch Test non significa CI verde.
+2. **Vercel Test:** usare esclusivamente il progetto `prj_o232EaPmYkrn04zev3Sw9iL2ympj`. Il progetto è senza collegamento Git; eseguire soltanto un deploy manuale, da un checkout exact-SHA del branch Test e con `--local-config vercel.test.json`. Verificare gli override nella dashboard e disabilitare Preview automatici; **non usare mai il `vercel.json` Production** per il progetto Test.
+3. **Variabili server-only Vercel Test:** `FIREBASE_ADMIN_AUTH_MODE=vercel-oidc`, `FIREBASE_ADMIN_PROJECT_ID=thelogbook-test`, `FIREBASE_ADMIN_CLIENT_EMAIL=logbook-test-vercel-runtime@thelogbook-test.iam.gserviceaccount.com`, `PUBLIC_APP_ORIGIN=https://thelogbook-test.web.app`; `CRON_SECRET` lungo e generato nel provider, se si provano endpoint di recupero. `FIREBASE_ADMIN_PRIVATE_KEY` **non impostata**. Le env Vercel di sistema `VERCEL`, `VERCEL_ENV` e `VERCEL_PROJECT_ID` devono corrispondere al profilo Test; non sovrascriverle.
+4. **Google Cloud Test:** verificare che **IAM Service Account Credentials API** (`iamcredentials.googleapis.com`) e **Security Token Service API** (`sts.googleapis.com`) siano attive in `thelogbook-test`, e la conferma IAM della sola identità `principal://.../subject/owner:gnfcreator:project:thelogbook-test-backend:environment:production`. Non aggiungere privilegi su Production.
+5. **Test runtime:** effettuare una richiesta di stato autenticata da un **account fittizio**, osservare la federazione WIF, verificare che i vecchi token/altro progetto Vercel siano rifiutati, quindi testare consensi, salvataggio e cancellazione dati solo nel database Test. La CI, i token validi e i deploy sono evidenze distinte.
+
 ## Prossime verifiche
 
 - [ ] Verifica stato/protezioni GitHub del branch dedicato.
