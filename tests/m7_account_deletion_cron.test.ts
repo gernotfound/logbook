@@ -16,6 +16,7 @@ const telemetryRetention = vi.hoisted(() => ({
 const healthErasure = vi.hoisted(() => ({
   listRecoverableHealthErasures: vi.fn(),
   processHealthDataErasure: vi.fn(),
+  purgeExpiredCompletedHealthErasures: vi.fn(),
 }));
 
 vi.mock('../server/accountDeletion/jobStore', () => store);
@@ -42,6 +43,7 @@ describe('M7 daily account deletion recovery cron', () => {
     runner.processAccountDeletion.mockResolvedValue('complete');
     healthErasure.listRecoverableHealthErasures.mockResolvedValue([]);
     healthErasure.processHealthDataErasure.mockResolvedValue('complete');
+    healthErasure.purgeExpiredCompletedHealthErasures.mockResolvedValue(0);
     retention.purgeExpiredCompletedDeletionJobs.mockResolvedValue(0);
     telemetryRetention.purgeExpiredTelemetry.mockResolvedValue({
       documentsScanned: 0,
@@ -116,6 +118,7 @@ describe('M7 daily account deletion recovery cron', () => {
       erasureScanned: 0,
       erasureProcessed: 0,
       erasureErrors: 0,
+      erasureReceiptsPurged: 0,
       recoveryErrors: 0,
       retentionErrors: 0,
       purged: 0,
