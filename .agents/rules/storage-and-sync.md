@@ -1,6 +1,9 @@
 # Storage e Sincronizzazione - TheLogBook
 
-> Stato: normativo | Ultima verifica: 2026-09-23 | File verificati: `src/store/useAppStore.ts`, `src/lib/firebase.ts`, `src/lib/schemaEvolution.ts`, `src/lib/sync/transactionWriter.ts`, `src/lib/sync/replicateJournal.ts`, `src/lib/sync/semanticProjection.ts`, `src/lib/sync/documentProjection.ts`, `src/lib/sync/localRepository.ts`, `src/lib/sync/deviceStorage.ts`, `src/lib/sync/browserStorage.ts`, `src/lib/utils/timer.ts`, `src/hooks/useSettings.ts`, `src/contexts/AuthContext.tsx`, `src/main.tsx`
+**Quando leggere:** vault, IndexedDB, journal, hydration, replica, consenso offline, logout e PWA update.
+**Non inferire:** stato memoria, durabilità locale, ack cloud e recupero completo sono prove distinte.
+
+> Stato: normativo | Ricognizione originaria: 2026-09-23; non attesta l'HEAD attuale | File allora verificati: `src/store/useAppStore.ts`, `src/lib/firebase.ts`, `src/lib/schemaEvolution.ts`, `src/lib/sync/transactionWriter.ts`, `src/lib/sync/replicateJournal.ts`, `src/lib/sync/semanticProjection.ts`, `src/lib/sync/documentProjection.ts`, `src/lib/sync/localRepository.ts`, `src/lib/sync/deviceStorage.ts`, `src/lib/sync/browserStorage.ts`, `src/lib/utils/timer.ts`, `src/hooks/useSettings.ts`, `src/contexts/AuthContext.tsx`, `src/main.tsx`
 
 ## Architettura di storage
 
@@ -21,7 +24,11 @@ L'app utilizza quattro livelli di storage con ruoli distinti:
 
 **MUST:** il vault `logbook:v2:${owner}:secure-vault-control` esiste in tre stati distinti: assente, `migrating`, `active`. Controlli corrotti/versioni future, una chiave IndexedDB persa o un record non autenticato **non sono** assenza dati. Nessun nuovo provisioning sopra ciphertext preesistente.
 
-**MUST:** il controllo DEK wrappato in `localStorage` possiede un mirror owner-scoped in IndexedDB. Il bootstrap, sotto lo stesso Web Lock di provisioning/purge, verifica entrambe le copie e può recuperare un controllo solo realmente mancante previa decifratura autenticata con la KEK non esportabile. Corruzione, versione futura e divergenza di epoch/DEK sono fail-closed. Le fasi `migrating` → `active` vanno pubblicate nel mirror e poi nel controllo sincrono, con verifica e recovery a crash; durante il purge il mirror è eliminato solo dopo tutte le copie cifrate, prima della KEK. La seconda copia del wrapped control NON è backup indipendente da IndexedDB/KEK.
+**MUST:** il controllo DEK wrappato in `localStorage` possiede un mirror owner-scoped in IndexedDB.
+Il bootstrap, sotto lo stesso Web Lock di provisioning/purge, verifica entrambe le copie e può recuperare un controllo solo realmente mancante previa decifratura autenticata con la KEK non esportabile.
+Corruzione, versione futura e divergenza di epoch/DEK sono fail-closed.
+Le fasi `migrating` → `active` vanno pubblicate nel mirror e poi nel controllo sincrono, con verifica e recovery a crash; durante il purge il mirror è eliminato solo dopo tutte le copie cifrate, prima della KEK.
+La seconda copia del wrapped control NON è backup indipendente da IndexedDB/KEK.
 
 **MUST:** una DEK per owner/device è wrappata con AES-GCM mediante `CryptoKey` non esportabile persistito in IndexedDB, dopo aver verificato proprietario Firebase o guest generation. Il contenitore cifrato locale non deve essere associato a password, token o UID usati come chiavi. Alla ripresa offline, il runtime riapre automaticamente il vault *dello stesso browser/profilo*.
 
@@ -31,7 +38,16 @@ L'app utilizza quattro livelli di storage con ruoli distinti:
 
 **VERIFY:** l'assenza di passphrase aggiuntiva limita la confidenzialità contro furto integrale del profilo browser o codice malevolo same-origin, che può raggiungere anche la wrapping key. Non è E2EE; dati solo offline possono andare persi se si perde il device/key. Non promettere recupero senza replica cloud.
 
-**MUST (CRITICAL):** le modifiche a un workout autenticato utilizzano un intento monotono nel record workout device-critical e una copia sincrona AEAD immutabile per ogni modifica (chiave casuale owner-scoped, non secondo journal). La copia è scritta PRIMA dello snapshot condiviso: due schede non possono sovrascrivere l'unica evidenza prima del commit. Ogni intento contiene il riferimento alla versione precedente; copie antenate vengono eliminate solo dopo prova che il discendente è stato registrato in IndexedDB insieme al journal. Rami divergenti falliscono chiusi preservando le copie, mentre le modifiche rapide della stessa linea vengono riconciliate senza duplicazione. Il commit IndexedDB del workout e del journal registra atomicamente generazione e sequenza dell'intento; al bootstrap autenticato, prima della hydration cloud, l'intento più recente viene riapplicato solo quando il legame col journal locale è dimostrabile. Commit ritardati e vecchie tab non possono regredire la sequenza. La stessa generazione e sequenza non provano l'idempotenza: i nuovi intenti portano un identificativo casuale per ogni modifica, salvato atomicamente nel journal; identità divergenti bloccano commit e recovery preservando journal e snapshot. Gli intenti già presenti senza identificativo usano il confronto canonico come fallback fail-closed. Disaccordi fra generazioni/ownership e record alterati bloccano il replay conservando la copia device, mai overwrite silenzioso. Il guest conserva la semplice persistenza locale preesistente.
+**MUST (CRITICAL):** le modifiche a un workout autenticato utilizzano un intento monotono nel record workout device-critical e una copia sincrona AEAD immutabile per ogni modifica (chiave casuale owner-scoped, non secondo journal).
+La copia è scritta PRIMA dello snapshot condiviso: due schede non possono sovrascrivere l'unica evidenza prima del commit.
+Ogni intento contiene il riferimento alla versione precedente; copie antenate vengono eliminate solo dopo prova che il discendente è stato registrato in IndexedDB insieme al journal.
+Rami divergenti falliscono chiusi preservando le copie, mentre le modifiche rapide della stessa linea vengono riconciliate senza duplicazione.
+Il commit IndexedDB del workout e del journal registra atomicamente generazione e sequenza dell'intento; al bootstrap autenticato, prima della hydration cloud, l'intento più recente viene riapplicato solo quando il legame col journal locale è dimostrabile.
+Commit ritardati e vecchie tab non possono regredire la sequenza.
+La stessa generazione e sequenza non provano l'idempotenza: i nuovi intenti portano un identificativo casuale per ogni modifica, salvato atomicamente nel journal; identità divergenti bloccano commit e recovery preservando journal e snapshot.
+Gli intenti già presenti senza identificativo usano il confronto canonico come fallback fail-closed.
+Disaccordi fra generazioni/ownership e record alterati bloccano il replay conservando la copia device, mai overwrite silenzioso.
+Il guest conserva la semplice persistenza locale preesistente.
 
 **MUST (UX):** nessun backup periodico manuale richiesto: lo storage cifrato e la replica cloud dei dati business autorizzati sono automatici. Backup JSON resta una funzione volontaria di portabilità. Non descriverlo come requisito ordinario di protezione, né promettere che sessioni guest, bozze device-only o modifiche mai sincronizzate sopravvivano alla perdita totale del profilo.
 
@@ -47,7 +63,13 @@ L'app utilizza quattro livelli di storage con ruoli distinti:
 
 **MAY:** preferenze, hint e code telemetriche possono restare best-effort quando il loro contratto non influenza l'integrità dei dati business.
 
-**MUST:** per la coda diagnostica, best-effort **non** significa storage in chiaro: errori/stack, session ID e UID possono essere presenti nel payload tecnico. I nuovi report persistono esclusivamente cifrati con chiave owner-scoped sbloccata e AEAD autenticata; prima dello sblocco restano in RAM. Quando il vault è disponibile, le code plaintext precedenti vengono cifrate e verificate prima del cleanup. Se il vault è bloccato, gli elementi validi sono trattenuti soltanto nella RAM della scheda e il vecchio plaintext diagnostico viene rimosso; la chiusura della scheda può perderli. Un ciphertext illeggibile non autorizza la sua cancellazione o sovrascrittura. Le voci oltre sette giorni non vengono restituite né inviate e il replay non può reintrodurle; il pruning dello storage avviene al successivo accesso alla coda. Tale retention tecnica è distinta da quella Firestore legacy di 30 giorni e da Sentry Production.
+**MUST:** per la coda diagnostica, best-effort **non** significa storage in chiaro: errori/stack, session ID e UID possono essere presenti nel payload tecnico.
+I nuovi report persistono esclusivamente cifrati con chiave owner-scoped sbloccata e AEAD autenticata; prima dello sblocco restano in RAM.
+Quando il vault è disponibile, le code plaintext precedenti vengono cifrate e verificate prima del cleanup.
+Se il vault è bloccato, gli elementi validi sono trattenuti soltanto nella RAM della scheda e il vecchio plaintext diagnostico viene rimosso; la chiusura della scheda può perderli.
+Un ciphertext illeggibile non autorizza la sua cancellazione o sovrascrittura.
+Le voci oltre sette giorni non vengono restituite né inviate e il replay non può reintrodurle; il pruning dello storage avviene al successivo accesso alla coda.
+Tale retention tecnica è distinta da quella Firestore legacy di 30 giorni e da Sentry Production.
 
 Non dedurre da questa regola che ogni singolo accesso `localStorage` debba necessariamente passare dallo stesso helper: timer/workout e code specializzate possono avere boundary propri. La semantica strict vs best-effort deve però essere esplicita.
 
@@ -62,7 +84,7 @@ CURRENT_LOCAL_ENVELOPE = 5
 CURRENT_BACKUP_SCHEMA = 3
 ```
 
-Le quattro dimensioni NON devono essere riutilizzate come se fossero una sola versione:
+Le quattro dimensioni NON devono essere riutilizzate come una sola versione, né incrementate per il semplice bump della versione PWA in `package.json`:
 
 - `data schema`: shape business persistita su Firestore;
 - `sync protocol`: shape e semantica di `_sync` / Vector Clock;
@@ -95,7 +117,7 @@ RAW STORAGE
 
 ### Baseline clean-cut M1
 
-Non esistono utenti/account reali da migrare da build precedenti. Per questo M1 stabilisce una baseline intenzionalmente clean-cut:
+**Contesto storico, non presupposto attuale:** la baseline clean-cut M1 fu definita prima degli account reali. Non è prova che oggi manchino utenti, backup o dati legacy. Prima di rimuovere compatibilità, verificare formati realmente persistiti, client distribuiti e recovery. M1 stabilì:
 
 - la baseline M1 non introdusse una migrazione prodotto da local envelope V3 a V4;
 - nessuna importazione compatibile di backup V1/V2;
@@ -106,7 +128,10 @@ Non esistono utenti/account reali da migrare da build precedenti. Per questo M1 
 - L'editor dello storico usa `history-editor-context` owner-scoped per conservare la sessione device-local sospesa: modifica e annullamento dello storico non eliminano `activeWorkout` né resettano il timer attivo. Il contesto è scritto prima di pubblicare l'editor; al termine la sessione sospesa viene ripristinata prima del cleanup della chiave. Le chiavi owner-scoped vengono eliminate dal purge tramite il prefisso completo `logbook:v2:${owner}:`.
 - Durante il salvataggio dello storico, l'editor resta operativo fino alla conferma locale; una modifica successiva non deve essere scartata al completamento di una write precedente. Il ripristino della sessione sospesa verifica la chiusura durevole (ledger in IndexedDB) per impedire la riapertura dopo cancellazione/completamento in un'altra scheda.
 - L'avvio workout verifica la scrivibilità del timer senza azzerarlo; il reset avviene soltanto dopo verifica dell'avvio durevole in IndexedDB.
-- **MUST:** il commit IndexedDB di completamento o cancellazione del workout conserva `lastClosedWorkoutId` nell'envelope locale owner-scoped insieme allo stato business; ogni nuova chiusura incorpora anche il precedente `lastClosedWorkoutId` nel registro additivo `closedWorkoutIds` per preservare la protezione dei vecchi envelope V5; il bootstrap usa queste evidenze, lo storico e il registro per non ripristinare uno snapshot `localStorage` obsoleto (anche quando una tab sospesa riscrive un vecchio workout dopo successive chiusure). Un cleanup device-critical fallito non può essere presentato come errore del commit già durevole. I commit locali e le Domain Operations rifiutano il ripristino di un'identità già chiusa, anche se una tab sospesa tenta una nuova scrittura; un retry di `workout.complete` già durevole ritenta il delivery del journal senza riscrivere lo storico. I metadati opzionali restano device-local e non vengono replicati in Firestore.
+- **MUST:** il commit IndexedDB di completamento o cancellazione del workout conserva `lastClosedWorkoutId` nell'envelope locale owner-scoped insieme allo stato business; ogni nuova chiusura incorpora anche il precedente `lastClosedWorkoutId` nel registro additivo `closedWorkoutIds` per preservare la protezione dei vecchi envelope V5; il bootstrap usa queste evidenze, lo storico e il registro per non ripristinare uno snapshot `localStorage` obsoleto (anche quando una tab sospesa riscrive un vecchio workout dopo successive chiusure).
+Un cleanup device-critical fallito non può essere presentato come errore del commit già durevole.
+I commit locali e le Domain Operations rifiutano il ripristino di un'identità già chiusa, anche se una tab sospesa tenta una nuova scrittura; un retry di `workout.complete` già durevole ritenta il delivery del journal senza riscrivere lo storico.
+I metadati opzionali restano device-local e non vengono replicati in Firestore.
 - un documento Firestore senza `_schemaVersion` o `_sync` Protocol 3 viene rifiutato fail-closed: le Rules e il gateway cloud richiedono entrambi i marker, e non si inventa causalità per dati legacy;
 - ogni documento Firestore realmente toccato da una semantic write viene riscritto lazy con `_schemaVersion: CURRENT_DATA_SCHEMA`;
 - non esiste una scansione cloud solo per aggiornare i marker.
@@ -302,3 +327,9 @@ npm run verify:m8
 ```
 
 `verify:m8` include transitivamente M7 → M6 → M5 e i gate/suite precedenti. Un conteggio parziale di test verdi o il superamento del solo `verify:m0` non equivale alla validazione canonica corrente. Vedi `.agents/rules/ci-verification.md`.
+
+## Documentazione complementare
+
+- [Protezione automatica dell'archivio locale](../../docs/architecture/secure-local-archive-design.md): specifica approvata e modello di minaccia; verificare sempre il codice corrente.
+- [Debug Background Sync](../../docs/BACKGROUND_SYNC_DEBUG.md): procedura diagnostica per journal e browser, non prova di funzionamento Production.
+- [Indice documentazione](../../docs/README.md): ulteriori riferimenti con stato distinto dai presenti contratti normativi.

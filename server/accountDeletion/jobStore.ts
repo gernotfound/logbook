@@ -266,6 +266,9 @@ export async function deleteUserRoot(uidValue: string, leaseOwner: string): Prom
     // not leave it orphaned after account deletion; the deletion job fences
     // old clients throughout cleanup.
     transaction.delete(adminDb().collection('session_revocations').doc(uid));
+    // A data-only erasure keeps Auth, but when the entire account is deleted
+    // its server-owned erasure receipt must be removed as well.
+    transaction.delete(adminDb().collection('health_data_erasures').doc(uid));
     transaction.update(ref, {
       status: 'deleting', cursor: { phase: 'root' }, updatedAt: Timestamp.now(),
     });
@@ -294,6 +297,9 @@ export async function verifyNoAccountResidue(uidValue: string): Promise<void> {
     const residual = await root.collection(name).limit(1).select().get();
     if (!residual.empty) throw new Error(`Residual documents remain in ${name}.`);
   }
+
+  const erasureMarker = await adminDb().collection('health_data_erasures').doc(uid).get();
+  if (erasureMarker.exists) throw new Error('Health-data erasure receipt remains after account deletion.');
 
   const revocationMarker = await adminDb().collection('session_revocations').doc(uid).get();
   if (revocationMarker.exists) throw new Error('Session revocation marker still exists after deletion.');

@@ -44,8 +44,11 @@ async function refreshServiceWorkerForRequiredUpdate(): Promise<void> {
  * The reload callback is injectable so the safety contract can be tested
  * without mutating jsdom's Location object.
  */
-export async function safeHardReload(reload: () => void = () => window.location.reload()): Promise<void> {
-    const session = await prepareForReload();
+export async function safeHardReload(
+    reload: () => void = () => window.location.reload(),
+    options: { discardUnverifiedInMemoryData?: boolean } = {},
+): Promise<void> {
+    const session = await prepareForReload(options);
     if (!isReloadSessionCurrent(session)) {
         throw new Error('Sessione cambiata. Ripeti l’operazione.');
     }

@@ -1,5 +1,8 @@
 # Distributed Property Fuzzing — TheLogBook
 
+**Quando leggere:** test causali distribuiti, seed riproducibili, oracle e convergenza.
+**Non inferire:** uguale stato business finale non implica stato causale equivalente.
+
 > Stato: normativo | Milestone: M2 | Baseline: M1 `1c3dce06745327d0622ab606afbb21ea0de906ad`
 
 ## Scopo

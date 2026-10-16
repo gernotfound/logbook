@@ -401,9 +401,14 @@ export const Exporter = {
         };
     },
 
-    async exportBackupJson(userData: UserData, currentUser: { uid: string } | null, coverage?: BackupCoverage, recovery?: unknown) {
+    prepareBackupJsonUrl(userData: UserData, currentUser: { uid: string } | null, coverage?: BackupCoverage, recovery?: unknown): string {
         const payload = createBackup(userData, currentUser ? 'user:' + currentUser.uid : 'guest', coverage, recovery);
-        await this.downloadFile("logbook_backup.json", JSON.stringify(payload, null, 2), 'application/json');
+        return URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }));
+    },
+
+    async exportBackupJson(userData: UserData, currentUser: { uid: string } | null, coverage?: BackupCoverage, recovery?: unknown): Promise<boolean> {
+        const payload = createBackup(userData, currentUser ? 'user:' + currentUser.uid : 'guest', coverage, recovery);
+        return this.downloadFile("logbook_backup.json", JSON.stringify(payload, null, 2), 'application/json');
     },
 
     async importFromJson(

@@ -20,6 +20,7 @@ import {
     requireDate,
     requireId,
     upsertById,
+    assertNeverDomainOperation,
 } from './validation';
 
 function ensureNutritionDay(data: UserData, date: string): NutritionDay {
@@ -69,8 +70,7 @@ function findCycle(data: UserData, id: string): { index: number; value: Training
     return { index, value: cycles[index] };
 }
 
-function applyOne(input: UserData, operation: DomainOperation): UserData {
-    const data = structuredClone(input);
+function applyOne(data: UserData, operation: DomainOperation): UserData {
 
     switch (operation.type) {
         case 'profile.patch':
@@ -368,6 +368,7 @@ function applyOne(input: UserData, operation: DomainOperation): UserData {
         case 'legal-consent.set':
             data.legalConsent = structuredClone(operation.consent);
             break;
+        default: return assertNeverDomainOperation(operation);
     }
 
     return UserDataSchema.parse(data) as unknown as UserData;
@@ -380,5 +381,9 @@ export function normalizeDomainOperationBatch(batch: DomainOperationBatch): Doma
 }
 
 export function applyDomainOperations(input: UserData, batch: DomainOperationBatch): UserData {
-    return normalizeDomainOperationBatch(batch).reduce((state, operation) => applyOne(state, operation), structuredClone(input));
+    const operations = normalizeDomainOperationBatch(batch);
+    // Each operation parses a fresh snapshot; intermediate states never escape this batch.
+    // Clone once up front so even a later validation failure cannot mutate the caller's state.
+    const draft = structuredClone(input);
+    return operations.reduce((state, operation) => applyOne(state, operation), draft);
 }
