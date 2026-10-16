@@ -77,6 +77,18 @@ Le Functions native account deletion mantengono `maxDuration = 300`; le richiest
 Il cron giornaliero è recovery, non il percorso primario. **MUST:** il budget interattivo e il relativo headroom devono restare definiti da un contratto condiviso e testato insieme: il runner non può considerare esaurito un budget POST/GET appena creato. **VERIFY:** piano Vercel effettivo, limiti commerciali e configurazione runtime sono esterni al repository e non vanno assunti senza verifica.
 Non introdurre Nitro, Workflow, `waitUntil` come sostituto di durability, o una migrazione di piattaforma/backend senza un nuovo piano esplicito.
 
+## Cancellazione dei soli dati dopo revoca (mantenendo Firebase Auth)
+
+**MUST:** l'azione distinta «Elimina definitivamente i miei dati» è visibile solo al titolare di account con revoca salute confermata dal server, mai come effetto implicito della revoca. Richiede rete, due conferme consapevoli, recente autenticazione Firebase, verifica ID token con revocation check e App Check limited-use consumato. Il server determina sempre l'UID dal token, non dall'input.
+
+`health_data_erasures/{uid}` è un job amministrativo server-only, riprendibile con lease, pagine bounded e cron. Il job non cancella **Firebase Auth, il marker di consenso o il marker di revoca delle sessioni**. Elimina le collection business e telemetriche Firestore dell'account e il root, poi verifica l'assenza anche di collection inattese. Un residuo sconosciuto impedisce il completamento; una cancellazione parziale non equivale a successo. `recordHealthConsentReacceptance` rifiuta qualsiasi job non completato.
+
+**MUST:** al completamento il backend avanza **atomicamente** la revisione di consenso ancora `withdrawn` e registra `erasedBeforeRevision`. Una vecchia replica non può scrivere con la generazione cancellata. I retry dello stesso job sono idempotenti anche dopo l'avanzamento della revisione. La retention del job completo è 30 giorni; solo il cron con prova persistente dell'epoch può rimuoverlo.
+
+**MUST:** il client può cancellare IndexedDB, device-critical e chiavi soltanto dopo stato `complete` letto dal proprio endpoint trusted; il purge locale resta fenced fino alla prova di rimozione delle copie cifrate. Dopo la pulizia, effettua sign-out **senza eliminare Firebase Auth**. Se la connessione, la verifica del server o la pulizia locale fallisce, nessun messaggio deve dichiarare cancellazione completa.
+
+**LIMITAZIONE:** dispositivi offline possono conservare copie vecchie impossibili da eliminare da remoto. Il protocollo impedisce la replica delle generazioni vecchie nel cloud; un successivo recupero esplicito di archivi precedenti richiede attenzione per non reintrodurre dati eliminati. Non dichiarare cancellazione universale di copie offline, fornitori esterni o backup non verificati.
+
 ## Verifica email e accesso account
 
 L'accesso account/cloud richiede che Firebase Auth riporti `emailVerified === true`. Una sessione non verificata non deve avviare idratazione Firestore, replica, registrazione del dispositivo né migrazione guest→account. Per gli account email/password, la registrazione richiede l'invio del link di verifica; alla conferma il client esegue `reload(user)`, aggiorna il token ID con `getIdToken(true)` e riprende il bootstrap tramite ricaricamento protetto.

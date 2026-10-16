@@ -42,7 +42,7 @@ function ReacceptanceForm({ enabled, busy, onReaccept, firstAcceptance = false, 
 }
 
 export function HealthConsentSuspended({ status, user }: { status: HealthConsentStatus; user: User | null }) {
-  const { handlePrepareBackup, preparedBackupUrl, releasePreparedBackup, handleDeleteAccount, handleLogout, exportingData } = useSettings();
+  const { handlePrepareBackup, preparedBackupUrl, releasePreparedBackup, handleDeleteAccount, handleDeleteHealthData, erasingHealthData, handleLogout, exportingData } = useSettings();
   const submitLegalConsent = useAppStore(state => state.submitLegalConsent);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -233,7 +233,7 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
         <ReacceptanceForm
           key={initialAcceptance ? 'initial' : canReaccept ? 'confirmed' : 'awaiting-confirmation'}
           enabled={canReaccept || initialAcceptance || localOnlyReaccept}
-          busy={busy}
+          busy={busy || erasingHealthData}
           onReaccept={initialAcceptance ? acceptInitial : reaccept}
           firstAcceptance={initialAcceptance}
           localOnly={localOnlyReaccept}
@@ -244,15 +244,23 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
       <div style={{ display: 'grid', gap: 12 }}>
         <button type="button" className="btn" onClick={() => setPrivacy(true)}>Leggi l’informativa privacy</button>
         <button type="button" className="btn" onClick={() => setTerms(true)}>Leggi i termini e condizioni</button>
-        <button type="button" className="btn" onClick={() => { void handlePrepareBackup().catch(error => setError(error instanceof Error ? error.message : 'Backup non riuscito.')); }} disabled={exportingData}>{exportingData ? 'Preparazione…' : 'Prepara backup JSON'}</button>
+        <button type="button" className="btn" onClick={() => { void handlePrepareBackup().catch(error => setError(error instanceof Error ? error.message : 'Backup non riuscito.')); }} disabled={exportingData || erasingHealthData}>{exportingData ? 'Preparazione…' : 'Prepara backup JSON'}</button>
+        {erasingHealthData && <p role="status">Cancellazione e verifica dei dati cloud in corso. Non chiudere TheLogBook finché è possibile attendere l'esito.</p>}
         {preparedBackupUrl && <>
           <p role="status">Backup pronto. Tocca il collegamento qui sotto per scaricare il file sul dispositivo.</p>
           <a className="btn btn-primary" href={preparedBackupUrl} download="logbook_backup.json">Scarica backup JSON</a>
           <button type="button" className="btn" onClick={releasePreparedBackup}>Elimina il download preparato</button>
         </>}
-        <button type="button" className="btn" onClick={() => void handleLogout()}>Esci dall'account</button>
-        <button type="button" className="btn" onClick={() => void handleDeleteAccount()}>Elimina definitivamente l'account</button>
-        <button type="button" className="btn" disabled={busy || recoveryBusy || exportingData} onClick={() => { void reloadPage(); }}>Ricarica pagina</button>
+        {user !== null && status === 'withdrawn' && <>
+          <p>Puoi eliminare dal database operativo i tuoi dati fitness e nutrizione mantenendo il tuo account. Servono Internet, verifica dell’identità e due conferme. Copie offline, backup esportati e backup tecnici del fornitore potrebbero permanere secondo le rispettive politiche di conservazione.</p>
+          <button type="button" className="btn" disabled={busy || exportingData || erasingHealthData || offline}
+            onClick={() => { void handleDeleteHealthData(); }}>
+            {erasingHealthData ? 'Cancellazione in corso…' : 'Elimina definitivamente i miei dati'}
+          </button>
+        </>}
+        <button type="button" className="btn" disabled={erasingHealthData} onClick={() => void handleLogout()}>Esci dall'account</button>
+        <button type="button" className="btn" disabled={erasingHealthData} onClick={() => void handleDeleteAccount()}>Elimina definitivamente l'account</button>
+        <button type="button" className="btn" disabled={busy || recoveryBusy || exportingData || erasingHealthData} onClick={() => { void reloadPage(); }}>Ricarica pagina</button>
       </div>
       {error && <p role="alert">{error}</p>}
     </section>

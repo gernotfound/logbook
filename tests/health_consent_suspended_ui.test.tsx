@@ -13,6 +13,7 @@ const backupUi = vi.hoisted(() => ({
   url: null as string | null,
   prepare: vi.fn(async () => {}),
   release: vi.fn(),
+  erase: vi.fn(async () => {}),
 }));
 vi.mock('../src/hooks/useSettings', () => ({
   useSettings: () => ({
@@ -20,6 +21,8 @@ vi.mock('../src/hooks/useSettings', () => ({
     preparedBackupUrl: backupUi.url,
     releasePreparedBackup: backupUi.release,
     handleDeleteAccount: vi.fn(),
+    handleDeleteHealthData: backupUi.erase,
+    erasingHealthData: false,
     handleLogout: vi.fn(),
     exportingData: false,
   }),
@@ -32,6 +35,22 @@ const reacceptButton = () => screen.getByRole('button', { name: 'Presta un nuovo
 beforeEach(() => { vi.clearAllMocks(); backupUi.url = null; });
 
 describe('suspended health-consent screen', () => {
+  it('allows data-only erasure only after verified account withdrawal, not offline or for guests', async () => {
+    const { rerender } = render(<HealthConsentSuspended status="pending" user={account} />);
+    expect(screen.queryByRole('button', { name: 'Elimina definitivamente i miei dati' })).toBeNull();
+    rerender(<HealthConsentSuspended status="withdrawn" user={null} />);
+    expect(screen.queryByRole('button', { name: 'Elimina definitivamente i miei dati' })).toBeNull();
+    rerender(<HealthConsentSuspended status="withdrawn" user={account} />);
+    const button = screen.getByRole('button', { name: 'Elimina definitivamente i miei dati' });
+    fireEvent.click(button);
+    await waitFor(() => expect(backupUi.erase).toHaveBeenCalledTimes(1));
+    const offline = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    try {
+      fireEvent(window, new Event('offline'));
+      await waitFor(() => expect((button as HTMLButtonElement).disabled).toBe(true));
+    } finally { offline.mockRestore(); }
+  });
+
   it('renders explicit first acceptance separately from revocation and does not submit unchecked choices', async () => {
     vi.mocked(registerInitialHealthConsent).mockRejectedValue(new Error('Rete non disponibile'));
     render(<HealthConsentSuspended status="unregistered" user={account} />);
@@ -65,6 +84,7 @@ describe('suspended health-consent screen', () => {
 
     rerender(<HealthConsentSuspended status="withdrawn" user={account} />);
     expect(screen.getByRole('status').textContent).toContain('Revoca confermata sul server');
+    expect(screen.getByRole('button', { name: 'Elimina definitivamente i miei dati' })).toBeDefined();
     const [enabledTerms, enabledHealth] = checkboxInputs();
     const enabledSubmit = reacceptButton();
     expect(enabledTerms.disabled).toBe(false);

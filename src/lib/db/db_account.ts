@@ -153,6 +153,38 @@ class UnsyncedLogoutError extends Error {
     }
 }
 
+/**
+ * Data-only erasure: caller MUST have an authenticated, server-confirmed
+ * `health_data_erasures/{uid}.status=complete` response for this exact owner.
+ * Unlike ordinary logout, old pending changes are deliberately discarded:
+ * the user requested erasure and the cloud revision has advanced to fence them.
+ * This boundary does NOT delete Firebase Auth.
+ */
+export async function purgeCompletedHealthDataLocal(owner: string): Promise<void> {
+    if (!owner.startsWith('user:')) throw new Error('Cancellazione dati: proprietario account richiesto.');
+    const session = captureSession();
+    if (session.owner !== owner || !isCurrentSession(session)) {
+        throw new Error('Sessione non attribuibile al proprietario della cancellazione.');
+    }
+    // Verify inside the infrastructure boundary, not just in the UI caller.
+    // A stale complete receipt must not purge data added in a later consent cycle.
+    const { assertCurrentHealthDataErasureCompleted } = await import('../healthDataErasure');
+    await assertCurrentHealthDataErasureCompleted(owner.slice('user:'.length));
+    if (!isCurrentSession(session)) {
+        throw new Error('Il consenso o la sessione sono cambiati prima della pulizia.');
+    }
+    // If interrupted, preserve the existing purge fence and resume its cleanup.
+    // Re-check the same session INSIDE the owner's exclusive lock, just before
+    // fencing every writer and erasing the durable local bytes.
+    return purgeOwnerLocalData(owner, isLocalPurgeIncomplete(owner), {
+        preflight: async () => {
+            if (!isCurrentSession(session)) throw new Error('Sessione cambiata prima della pulizia locale.');
+            if (isAccountDeletionPending(owner)) throw new Error('Cancellazione account concorrente in corso.');
+        },
+        afterFence: async () => {},
+    });
+}
+
 /** Sign-out and purge share one owner lock, with a persistent writer fence. */
 export async function logoutAndPurgeAccount(
     owner: string,
