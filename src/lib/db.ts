@@ -13,26 +13,30 @@ import {
     type QueryDocumentSnapshot,
 } from 'firebase/firestore';
 import type { UserData } from '../types';
-import { DomainParsers } from './schema';
+import { DomainParsers, UserDataSchema } from './schema';
+import { rootDocument } from './sync/documentProjection';
+import { assertCloudBusinessPreserved, CloudDataIntegrityError } from './sync/cloudBusinessIntegrity';
 import { syncGlobalCatalog, getCachedCatalog } from './catalog/catalogService';
 import { resolveEffectiveExercises, resolveEffectiveFoods } from './catalog/deltaResolver';
 import { normalizeCloudDocument } from './schemaEvolution';
 import { withTimeout } from './db/db_core';
 import { loadHistoryMonths } from './db/db_training';
 import { loadNutritionMonths } from './db/db_nutrition';
-import { sanitizeHistoryMonthDocument, sanitizeNutritionMonthDocument } from './sync/monthlyIntegrity';
+import { requireCompleteHistoryMonthDocument, requireCompleteNutritionMonthDocument } from './sync/monthlyIntegrity';
 import { assertWorkoutSessionIdentities } from './sync/domainOperations/validation';
 import { DB as baseDB } from './_dbBase';
 
 function parsePersistedActiveWorkout(value: unknown) {
+    if (value === null || value === undefined) return null;
     const parsed = DomainParsers.parseActiveWorkout(value);
-    if (!parsed) return null;
+    if (!parsed) throw new CloudDataIntegrityError('', ['activeWorkout']);
     try {
         assertWorkoutSessionIdentities(parsed, 'Allenamento attivo cloud');
-        return parsed;
     } catch {
-        return null;
+        // An invalid session identity is not an authorized cloud deletion.
+        throw new CloudDataIntegrityError('', ['activeWorkout', 'id']);
     }
+    return parsed;
 }
 
 async function loadCloudPayload(options?: { allMonths?: boolean }): Promise<{
@@ -88,6 +92,9 @@ async function loadCloudPayload(options?: { allMonths?: boolean }): Promise<{
         if (root && typeof root.exists === 'function' && root.exists()) {
             const normalizedRoot = normalizeCloudDocument(root.data(), 'Firestore root data schema');
             const data = normalizedRoot.business as Record<string, any>;
+            // Reject lossy Zod normalization before declaring the cloud root authoritative.
+            // The transaction writer already enforces this invariant on remote writes.
+            assertCloudBusinessPreserved('', data, rootDocument(UserDataSchema.parse(data) as unknown as UserData));
             cloudDocuments.set('', { ...data, _sync: normalizedRoot.sync });
             if (data.profile) state.profile = data.profile;
             state.catalogOverrides = data.catalogOverrides || {};
@@ -127,8 +134,10 @@ async function loadCloudPayload(options?: { allMonths?: boolean }): Promise<{
                         const normalized = normalizeCloudDocument(item.data(), `${colName}/${item.id} data schema`);
                         const rawMonthData = normalized.business;
                         const monthData = colName === 'history_months'
-                            ? sanitizeHistoryMonthDocument(item.id, rawMonthData)
-                            : sanitizeNutritionMonthDocument(item.id, rawMonthData);
+                            ? requireCompleteHistoryMonthDocument(item.id, rawMonthData)
+                            : requireCompleteNutritionMonthDocument(item.id, rawMonthData);
+                        // A full checkpoint must never treat discarded or rewritten entries as complete.
+                        assertCloudBusinessPreserved(`${colName}/${item.id}`, rawMonthData, monthData);
                         cloudDocuments.set(`${colName}/${item.id}`, { ...monthData, _sync: normalized.sync });
                         if (!completeMonths.includes(item.id)) completeMonths.push(item.id);
                         if (colName === 'history_months') {
