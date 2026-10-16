@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 
 test('guest logout revokes another live tab and its background persistence', async ({ page, context }) => {
   await page.goto('/');
