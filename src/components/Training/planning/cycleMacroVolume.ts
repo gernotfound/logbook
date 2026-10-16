@@ -1,4 +1,5 @@
 import type { Exercise, TrainingCycle, WorkoutRoutine } from '../../../types';
+import { getCycleVolumeFrequencies } from '../../../lib/calc/cycleLimits';
 
 export interface CycleMacroVolumeItem {
     key: string;
@@ -39,20 +40,22 @@ export function calculateCycleMacroVolume(
     const validItems = cycle.routines.filter(item => routineMap.has(item.routineId));
     if (validItems.length === 0) return [];
 
-    const frequencySum = validItems.reduce((sum, item) => sum + (Number(item.frequencyPerWeek) || 1), 0);
-    const sessionsPerWeek = cycle.sessionsPerWeek ?? frequencySum;
-    const scaleRatio = sessionsPerWeek / Math.max(1, frequencySum);
+    const counts = getCycleVolumeFrequencies(cycle.routines, cycle.sessionsPerWeek);
+    if (!counts) return [];
     const totals = new Map<string, CycleMacroVolumeItem>();
 
-    for (const item of validItems) {
+    for (const [index, item] of cycle.routines.entries()) {
         const routine = routineMap.get(item.routineId);
         if (!routine) continue;
-        const effectiveFrequency = Math.max(0.01, (Number(item.frequencyPerWeek) || 1) * scaleRatio);
+        const effectiveFrequency = counts.frequencies[index];
 
         for (const routineExercise of routine.exercises ?? []) {
             const exercise = exerciseMap.get(routineExercise.exId);
             if (!exercise) continue;
-            const weeklySets = Math.max(1, Number(routineExercise.setsCount) || 3) * effectiveFrequency;
+            const setsCount = Number(routineExercise.setsCount || 3);
+            if (!Number.isSafeInteger(setsCount) || setsCount < 1) return [];
+            const weeklySets = setsCount * effectiveFrequency;
+            if (!Number.isFinite(weeklySets)) return [];
             const uniqueAreas = new Map<string, { key: string; label: string }>();
 
             for (const muscleId of exercise.muscles ?? []) {
@@ -63,7 +66,9 @@ export function calculateCycleMacroVolume(
 
             for (const area of uniqueAreas.values()) {
                 const previous = totals.get(area.key)?.sets ?? 0;
-                totals.set(area.key, { ...area, sets: previous + weeklySets });
+                const nextSets = previous + weeklySets;
+                if (!Number.isFinite(nextSets)) return [];
+                totals.set(area.key, { ...area, sets: nextSets });
             }
         }
     }

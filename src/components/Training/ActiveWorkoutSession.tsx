@@ -20,14 +20,17 @@ const remapIndexAfterMove = (index: number | null, fromIndex: number, toIndex: n
     return index;
 };
 
-const GlobalTimer = ({ workoutId, startTime }: { workoutId: string; startTime?: number }) => {
+export const GlobalTimer = ({ workoutId, startTime }: { workoutId: string; startTime?: number }) => {
     const [display, setDisplay] = useState('00:00:00');
     const [clockAnomaly, setClockAnomaly] = useState(false);
 
     useEffect(() => {
         if (!startTime) return;
 
+        let anomalyReported = false;
         const surfaceClockAnomaly = () => {
+            if (anomalyReported) return;
+            anomalyReported = true;
             setClockAnomaly(true);
             useAppStore.getState().setSaveError(
                 'L’orologio del dispositivo è cambiato durante l’allenamento. Correggi data/ora e riapri TheLogBook prima di terminare la sessione.',

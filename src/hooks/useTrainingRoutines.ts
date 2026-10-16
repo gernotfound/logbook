@@ -1,3 +1,4 @@
+import { MAX_ROUTINE_SEGMENTS, MAX_ROUTINE_SETS, previewRoutineSets } from '../lib/routineSessionLimits';
 import { dispatchDurableOperation } from '../lib/sync/dispatchDurableOperation';
 import { useState, useEffect } from 'react';
 import { useAppStore } from '../store/useAppStore';
@@ -102,12 +103,25 @@ export function useTrainingRoutines() {
             return false;
         }
 
+        if (routineExercises.some(ex => {
+            const count = Number(ex.setsCount || 3);
+            return !Number.isSafeInteger(count) || count < 1 || count > MAX_ROUTINE_SETS;
+        })) {
+            await showAlert('Ogni esercizio può contenere da 1 a 20 serie. Correggi il valore prima di salvare la scheda.');
+            return false;
+        }
+        if (routineExercises.some(ex => ex.setPlans?.some(plan => plan.segmentCount !== undefined
+            && (!Number.isSafeInteger(plan.segmentCount) || plan.segmentCount < 2 || plan.segmentCount > MAX_ROUTINE_SEGMENTS)))) {
+            await showAlert('Ogni serie avanzata può avere da 2 a 20 segmenti. Correggi il valore prima di salvare la scheda.');
+            return false;
+        }
+
         try {
             const sanitizedExercises: RoutineExercise[] = routineExercises.map(ex => {
                 const num = typeof ex.setsCount === 'number' ? ex.setsCount : parseInt(String(ex.setsCount), 10);
                 return {
                     ...ex,
-                    setsCount: !isNaN(num) && num >= 1 ? Math.min(20, Math.floor(num)) : 3
+                    setsCount: !isNaN(num) && num >= 1 ? Math.min(MAX_ROUTINE_SETS, Math.floor(num)) : 3
                 };
             });
 
@@ -176,7 +190,7 @@ export function useTrainingRoutines() {
                 return newExs;
             }
 
-            const normalizedCount = Math.max(1, Math.min(20, parsed));
+            const normalizedCount = Math.max(1, Math.min(MAX_ROUTINE_SETS, parsed));
             const currentPlans = Array.isArray(currentExercise.setPlans) ? currentExercise.setPlans : [];
             const setPlans: PlannedSetTechnique[] = Array.from({ length: normalizedCount }, (_, setIndex) => ({
                 ...(currentPlans[setIndex] || { technique: 'straight' as const }),
@@ -214,7 +228,7 @@ export function useTrainingRoutines() {
         setRoutineExercises(prev => {
             const exercises = [...prev];
             const exercise = { ...exercises[exerciseIndex] };
-            const count = Math.max(1, Number.parseInt(String(exercise.setsCount || 3), 10) || 3);
+            const count = previewRoutineSets(exercise.setsCount);
             const plans: PlannedSetTechnique[] = Array.from({ length: count }, (_, index) => ({
                 ...(exercise.setPlans?.[index] || { technique: 'straight' as const }),
             }));
@@ -234,12 +248,13 @@ export function useTrainingRoutines() {
         setRoutineExercises(prev => {
             const exercises = [...prev];
             const exercise = { ...exercises[exerciseIndex] };
-            const count = Math.max(1, Number.parseInt(String(exercise.setsCount || 3), 10) || 3);
+            const count = previewRoutineSets(exercise.setsCount);
             const plans: PlannedSetTechnique[] = Array.from({ length: count }, (_, index) => ({
                 ...(exercise.setPlans?.[index] || { technique: 'straight' as const }),
             }));
             const plan = { ...plans[setIndex] };
-            const parsed = value.trim() === '' ? undefined : Number.parseInt(value, 10);
+            const parsed = value.trim() === '' ? undefined
+                : field === 'segmentCount' ? Number(value) : Number.parseInt(value, 10);
 
             if (field === 'targetReps') {
                 if (parsed === undefined || !Number.isFinite(parsed) || parsed < 1) delete plan.target;
