@@ -401,10 +401,10 @@ describe('Training Planning & Volume Calculations', () => {
             });
         });
 
-        it('renders "Avvia sessione pianificata" in TrainingSession and starts planned routine', async () => {
+        it('renders the optional suggested routine in TrainingSession and starts it', async () => {
             render(<TrainingSession />);
 
-            expect(screen.getByText(/Avvia sessione pianificata/i)).toBeDefined();
+            expect(screen.getByText(/Scheda suggerita · Rotazione flessibile/i)).toBeDefined();
             expect(screen.getAllByText(/Mesociclo Massa/).length).toBeGreaterThanOrEqual(1);
 
             // Check next scheduled routine button
