@@ -104,7 +104,8 @@ export const TrainingSessionSetup = ({ onNavigateToPlanning }: TrainingSessionSe
         );
     };
 
-    const nextRoutine = nextScheduled?.nextRoutine;
+    // Reaching the indicative session target ends automatic suggestions, not the ability to train.
+    const nextRoutine = nextScheduled?.isCycleCompleted ? undefined : nextScheduled?.nextRoutine;
     const nextEstimate = nextRoutine ? durationEstimates.get(nextRoutine.id) : undefined;
     const nextPlannedItem = nextRoutine
         ? plannedRoutines.find(item => item.routine.id === nextRoutine.id)
@@ -125,7 +126,7 @@ export const TrainingSessionSetup = ({ onNavigateToPlanning }: TrainingSessionSe
                 <section className="session-next-card section-divider" aria-labelledby="session-next-title">
                     <div className="session-next-top">
                         <div>
-                            <p className="session-eyebrow">Avvia sessione pianificata · Prossima nel ciclo</p>
+                            <p className="session-eyebrow">Scheda suggerita · Rotazione flessibile</p>
                             <h2 id="session-next-title" style={{ fontSize: 'var(--font-size-control)' }}>
                                 {nextScheduled?.nextRoutine ? nextScheduled.nextRoutine.name : nextRoutine.name}
                             </h2>
@@ -195,7 +196,46 @@ export const TrainingSessionSetup = ({ onNavigateToPlanning }: TrainingSessionSe
                 </section>
             )}
 
-            {activeCycle && !nextRoutine && (
+            {activeCycle && nextScheduled?.isCycleCompleted && plannedRoutines.length > 0 && (
+                <section className="session-next-card section-divider" aria-labelledby="session-cycle-goal-title">
+                    <div className="session-next-top">
+                        <div>
+                            <p className="session-eyebrow">Obiettivo indicativo raggiunto</p>
+                            <h2 id="session-cycle-goal-title" style={{ fontSize: 'var(--font-size-control)' }}>
+                                {activeCycle.name}
+                            </h2>
+                            <span>Puoi continuare ad allenarti scegliendo qualsiasi scheda del ciclo.</span>
+                        </div>
+                        <span className="session-next-icon" aria-hidden="true"><Dumbbell size={24} /></span>
+                    </div>
+                    <div className="session-rotation-picker">
+                        <label htmlFor="completed-cycle-routine-select">Scegli una scheda del ciclo</label>
+                        <select
+                            id="completed-cycle-routine-select"
+                            aria-label="Seleziona scheda del ciclo"
+                            value={selectedRotationId}
+                            onChange={event => setSelectedPlannedRoutine(event.target.value)}
+                        >
+                            {plannedRoutines.map(item => (
+                                <option key={`${item.routine.id}-${item.position}`} value={item.routine.id}>
+                                    {item.letter}. {item.routine.name}
+                                </option>
+                            ))}
+                        </select>
+                        {selectedRotationRoutine && (
+                            <button
+                                type="button"
+                                className="btn btn-primary session-secondary-action"
+                                onClick={() => startPlannedRoutine(selectedRotationRoutine.id)}
+                            >
+                                Avvia {selectedRotationRoutine.name}
+                            </button>
+                        )}
+                    </div>
+                </section>
+            )}
+
+            {activeCycle && !nextRoutine && (!nextScheduled?.isCycleCompleted || plannedRoutines.length === 0) && (
                 <section className="session-setup-message">
                     <strong>{activeCycle.name}</strong>
                     <span>Il ciclo attivo non contiene una scheda disponibile per l’avvio.</span>

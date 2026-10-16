@@ -190,9 +190,13 @@ export default function TrainingPlanning({ onOpenSession }: TrainingPlanningProp
         { id: 'delete-active-cycle', label: 'Elimina', icon: <Trash2 size={16} />, variant: 'danger', onClick: () => void handleDeleteCycle(activeCycle) }
     ] : [];
 
-    const totalSessions = activeCycle
-        ? activeCycle.durationWeeks * (activeCycle.sessionsPerWeek || activeCycle.routines?.length || 1)
-        : 0;
+    // Read-only summary shares the bounded cycle calculation; historical invalid input stays unchanged.
+    const plannedSchedule = useMemo(
+        () => Logic.calculateCycleSchedule(activeCycle, routines, false),
+        [activeCycle, routines],
+    );
+    const isInvalidSchedule = plannedSchedule.summaryText === 'Parametri del ciclo da correggere';
+    const totalSessions = isInvalidSchedule ? '—' : plannedSchedule.totalSessions;
 
     return (
         <div className="planning-page">
@@ -240,7 +244,7 @@ export default function TrainingPlanning({ onOpenSession }: TrainingPlanningProp
                         <div className="planning-next-session">
                             <span className="planning-next-icon" aria-hidden="true"><Dumbbell size={24} /></span>
                             <div>
-                                <span>Prossima seduta nella rotazione</span>
+                                <span>Scheda suggerita nella rotazione</span>
                                 <strong>{nextScheduled.nextRoutineName}</strong>
                                 <span>Seduta #{nextScheduled.nextSessionIndex} · scheda {nextScheduled.positionInRotation} di {nextScheduled.totalRoutinesInCycle}</span>
                             </div>
@@ -248,10 +252,14 @@ export default function TrainingPlanning({ onOpenSession }: TrainingPlanningProp
                     ) : null}
 
                     <div className="planning-kpis" aria-label="Metriche ciclo attivo">
-                        <div><strong>{cycleVolumeData.totalWorkoutsPerWeek}×</strong><span>Sedute / sett.</span></div>
+                        <div><strong>{cycleVolumeData.totalWorkoutsPerWeek}×</strong><span>Sedute / sett. (stima)</span></div>
                         <div><strong>{cycleVolumeData.totalSetsPerWeek}</strong><span>Serie / sett.</span></div>
-                        <div><strong>{totalSessions}</strong><span>Sedute totali</span></div>
+                        <div><strong>{totalSessions}</strong><span>Sedute previste</span></div>
                     </div>
+
+                    {isInvalidSchedule ? (
+                        <p className="planning-helper" role="status">Parametri del ciclo da correggere: le sedute previste non sono calcolabili.</p>
+                    ) : null}
 
                     <div className="planning-progress-copy">
                         <span><strong>{activeCycleTimeline.statusLabel}</strong></span>
