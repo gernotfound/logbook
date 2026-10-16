@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { Exporter } from '../src/lib/export';
+import { Exporter, MAX_JSON_IMPORT_BYTES } from '../src/lib/export';
 import { createBackup } from '../src/lib/backup';
 import { useDialogStore } from '../src/store/useDialogStore';
 import { CURRENT_BACKUP_SCHEMA, CURRENT_DATA_SCHEMA, CURRENT_SYNC_PROTOCOL } from '../src/lib/schemaEvolution';
@@ -169,4 +169,67 @@ describe('JSON Export/Import Logic', () => {
         expect(parsed.routines).toHaveLength(1);
         expect(parsed.library).toHaveLength(0);
     });
+    it('shares selected data without cloning unrelated uncloneable health history', async () => {
+        const userData: any = {
+            library: [{ id: 'ex1', name: 'Squat' }],
+            routines: [],
+            trainingCycles: [],
+            history: [{ id: 'private-session', fn: () => 'must never be cloned or shared' }],
+        };
+        const download = vi.spyOn(Exporter, 'downloadFile').mockResolvedValue(true);
+        download.mockClear();
+
+        await expect(Exporter.exportShareJson(userData)).resolves.toMatchObject({ libraryCount: 1 });
+        const payload = JSON.parse(download.mock.lastCall![1]);
+        expect(payload.userData).toEqual({
+            library: [{ id: 'ex1', name: 'Squat' }], routines: [], trainingCycles: [],
+        });
+        expect(payload.coverage).toEqual({ scope: 'device', months: [] });
+        expect(payload.owner).toBeNull();
+    });
+
+    it('streams a backup over 64 MiB without excluding a valid archive or committing another owner data', async () => {
+        const payload = JSON.stringify(createBackup({ history: [] } as any, 'user:other'));
+        const file = new File([payload], 'huge.json', { type: 'application/json' });
+        // Simulate the large archive without allocating 64 MiB in the test.
+        Object.defineProperty(file, 'size', { value: MAX_JSON_IMPORT_BYTES + 1 });
+        const slices = vi.spyOn(file, 'slice').mockImplementation((start?: number) =>
+            new Blob([!start ? payload : ' '], { type: 'application/json' }));
+        const save = vi.fn();
+        const readText = vi.spyOn(FileReader.prototype, 'readAsText');
+        const readChunk = vi.spyOn(FileReader.prototype, 'readAsArrayBuffer');
+        try {
+            await expect(Exporter.importFromJson(file, null, save)).rejects.toThrow('Non puoi importare il backup di un altro utente');
+            expect(slices).toHaveBeenCalled();
+            expect(readChunk).toHaveBeenCalled();
+            expect(readText).not.toHaveBeenCalled();
+            expect(save).not.toHaveBeenCalled();
+        } finally {
+            slices.mockRestore();
+            readText.mockRestore();
+            readChunk.mockRestore();
+        }
+    });
+
+    it('rejects malformed small JSON without invoking the durable save', async () => {
+        const file = new File(['{"broken":'], 'invalid.json', { type: 'application/json' });
+        const save = vi.fn();
+        await expect(Exporter.importFromJson(file, null, save)).rejects.toThrow();
+        expect(save).not.toHaveBeenCalled();
+    });
+
+    it('rejects a cancelled FileReader before parsing or committing', async () => {
+        const file = new File(['{"unused":true}'], 'cancelled.json', { type: 'application/json' });
+        const save = vi.fn();
+        const reader = vi.spyOn(FileReader.prototype, 'readAsText').mockImplementation(function (this: FileReader) {
+            queueMicrotask(() => this.dispatchEvent(new Event('abort')));
+        });
+        try {
+            await expect(Exporter.importFromJson(file, null, save)).rejects.toThrow('Lettura del file annullata.');
+            expect(save).not.toHaveBeenCalled();
+        } finally {
+            reader.mockRestore();
+        }
+    });
+
 });
