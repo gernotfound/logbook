@@ -342,7 +342,11 @@ export function useSettings() {
             // Auth may still be live, but user data must not be republished.
             // Purge verifies IndexedDB removal before erasing encryption keys.
             await purgeCompletedHealthDataLocal(session.owner);
-            assertCurrent();
+            // The completed purge removes the consent marker itself; this
+            // intentionally invalidates the pre-erasure session snapshot.
+            if (auth.currentUser?.uid !== user.uid) {
+                throw new Error('Account cambiato dopo la pulizia locale.');
+            }
             DB.resetCache();
             useAppStore.getState().resetStore({ force: true });
             await signOut(auth);
