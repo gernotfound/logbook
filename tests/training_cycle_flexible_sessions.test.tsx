@@ -51,10 +51,10 @@ describe('flexible training cycles', () => {
         expect(screen.getByText('Scheda suggerita · Rotazione flessibile')).toBeDefined();
         expect(screen.getByText(/Seduta 2 di 8/)).toBeDefined();
         fireEvent.change(screen.getByRole('combobox', { name: 'Seleziona scheda della rotazione' }), {
-            target: { value: 'second' },
+            target: { value: 'first' },
         });
-        fireEvent.click(screen.getByRole('button', { name: 'Avvia Scheda B' }));
-        expect(startWorkout).toHaveBeenCalledWith('second', {
+        fireEvent.click(screen.getByRole('button', { name: 'Avvia Scheda A' }));
+        expect(startWorkout).toHaveBeenCalledWith('first', {
             cycleId: cycle.id, cycleName: cycle.name,
         });
     });
