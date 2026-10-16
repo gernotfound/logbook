@@ -134,6 +134,17 @@ Nel progetto Vercel Test **`prj_o232EaPmYkrn04zev3Sw9iL2ympj`** sono state creat
 
 `FIREBASE_ADMIN_PRIVATE_KEY` **non è presente** e non deve essere aggiunta. L'elenco del progetto prima della creazione era vuoto, quello dopo contiene solo queste quattro chiavi. Mancano ancora, per testare il cron manualmente, un `CRON_SECRET` dedicato e tutte le condizioni di deploy/runtime. Non sono presenti deployment al momento del read-back.
 
+### Google Cloud Test: API federazione abilitate — conferma console del product owner (2026-10-16)
+
+Il product owner ha aperto nel progetto `thelogbook-test` le pagine API di Google Cloud e riportato il pulsante **«Gestisci»** per entrambe:
+
+- **IAM Service Account Credentials API** — `iamcredentials.googleapis.com`: riferita come **abilitata** dalla console.
+- **Security Token Service API** — `sts.googleapis.com`: riferita come **abilitata** dalla console.
+
+Non è stata eseguita una lettura dello stato enablement via Cloud API da questa conversazione. Il pulsante «Gestisci» è un riscontro sufficiente per procedere a preparare un collaudo, ma **non prova** l'effettivo scambio di credenziali, l'assenza di blocchi org/IAM o l'accesso Firestore/App Check nel runtime.
+
+**Blocco operativo successivo:** il progetto Vercel Test `prj_o232EaPmYkrn04zev3Sw9iL2ympj` è tuttora scollegato da Git e senza deployment (letto direttamente dal connettore Vercel). La prima pubblicazione deve usare solo un artefatto/exact-SHA del branch Test e `vercel.test.json`; importare il repository direttamente in UI senza guardrail potrebbe attivare il `vercel.json` principale e non è consentito. Senza accesso locale autorizzato/strumenti che permettano upload isolato dei sorgenti e scelta della config, non sostenere che il deploy sia stato eseguito.
+
 ### Prerequisiti e verifica prima del primo deploy
 
 1. **GitHub:** verificare il gate canonico sullo SHA esatto del branch dopo le modifiche e correggere eventuali errori senza ridurre i controlli. La CI di default gira su PR verso `main`, push su `main` o `workflow_dispatch`: un semplice commit sul branch Test non significa CI verde.
