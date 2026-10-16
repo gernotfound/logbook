@@ -66,13 +66,14 @@ export async function parseLargeBackupJson(
                 if (escaped) { escaped = false; continue; }
                 if (char === '\\') { escaped = true; continue; }
                 if (char !== '"') continue;
-                let value: string;
+                let value = '';
                 try { value = JSON.parse(raw) as string; } catch { invalid(); }
                 token = null;
                 raw = '';
                 if (stringIsKey) {
                     const frame = stack[stack.length - 1];
-                    if (!frame || frame.kind !== 'object' || (frame.state !== 'first' && frame.state !== 'next')) invalid();
+                    if (frame?.kind !== 'object') invalid();
+                    if (frame.state !== 'first' && frame.state !== 'next') invalid();
                     frame.key = value;
                     frame.state = 'colon';
                 } else {
