@@ -17,7 +17,8 @@ export async function requestHealthDataErasure(user: User): Promise<HealthDataEr
   await ensureAppCheck();
   const token = await getLimitedUseAppCheckToken();
   if (!token) throw new Error('Verifica App Check non disponibile.');
-  const idToken = await user.getIdToken();
+  // Force a fresh ID token so the server can enforce recent auth_time.
+  const idToken = await user.getIdToken(true);
   if (!isCurrentSession(session) || auth.currentUser?.uid !== user.uid) {
     throw new Error('Sessione cambiata. Verifica se la cancellazione è già stata avviata.');
   }
