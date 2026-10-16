@@ -1,5 +1,8 @@
 # CI Verification — contratto canonico corrente
 
+**Quando leggere:** gate canonico, check richiesti, exact-SHA, sicurezza workflow e deployment derivati da CI.
+**Non inferire:** subset verde o run precedente non certificano il candidato attuale né Production.
+
 ## Scope
 
 Questa regola disciplina il gate canonico di verifica automatica corrente dopo M8. Le milestone M0–M8 restano composte transitivamente nel comando repository; GitHub Actions può distribuire i leaf command equivalenti su runner indipendenti senza ridurre la copertura.
@@ -16,6 +19,9 @@ La parallelizzazione riguarda l'orchestrazione, non la semantica del gate. Unit,
 
 ## Exact HEAD
 
+- MUST: il bump minor applicativo richiesto per ogni integrazione in `main` deve essere incluso **prima** della verifica candidata; ogni merge concorrente richiede nuovo calcolo della versione, nuovo SHA e nuova validazione.
+- MUST: non creare workflow che riscrivano automaticamente commit dopo il gate. Un eventuale controllo automatico della versione deve essere read-only e confrontare la base Git appropriata.
+
 - MUST: ogni shard che esegue codice della PR fa checkout esplicito di `github.event.pull_request.head.sha`, non del merge ref sintetico.
 - MUST: in ogni shard, prima dei test, `git rev-parse HEAD` viene confrontato con lo SHA atteso; una divergenza termina lo shard.
 - MUST: nel job container E2E, la verifica usa `git -c safe.directory="$GITHUB_WORKSPACE" rev-parse HEAD` per gestire il mount del workspace senza modificare globalmente la trust policy Git; il confronto con lo SHA atteso resta identico.
@@ -30,6 +36,7 @@ La parallelizzazione riguarda l'orchestrazione, non la semantica del gate. Unit,
 - MUST: la CI parallela include lo stesso `test:repo-hygiene` tra i leaf command obbligatori.
 - MUST: modifiche tracciate o file non tracciati non ignorati presenti prima della verifica rendono il risultato non autorevole e fanno fallire il gate.
 - MUST: i file testuali controllati dal gate sono UTF-8 valido senza BOM.
+- MUST: `test:repo-hygiene` verifica anche i collegamenti interni relativi nei Markdown tracciati; un target locale mancante o un path che esce dal repository blocca la CI. I link web esterni e i frammenti/anchor non costituiscono prova live e sono esclusi da questo controllo.
 - MUST: il gate non riscrive automaticamente file malformati.
 
 ### Repository documentation hygiene
@@ -44,9 +51,9 @@ La parallelizzazione riguarda l'orchestrazione, non la semantica del gate. Unit,
 - MUST: `npm run verify:m8` resta il comando repository umbrella e continua a comporre integralmente `verify:m7`, quindi M6/M5 e i gate precedenti richiesti.
 - MUST: GitHub Actions può appiattire quella composizione tra matrice di shard e job E2E dedicato soltanto se `test:ci-contract` prova meccanicamente che il multiset complessivo dei leaf command è equivalente all'espansione corrente di `verify:m8`.
 - MUST: gli shard non invocano umbrella `verify:mN` seriali; eseguono leaf command per ottenere parallelismo reale.
-- MUST: `test:install-scripts` controlla l'allowlist di package e versioni con lifecycle script nel lockfile. Gli shard CI effettuano inoltre il controllo prima di `npm ci`: la presenza di una voce `allowScripts` in `package.json` non disabilita da sola gli script npm. Gli aggiornamenti della lista devono essere revisionati e testati.
-- MUST: la CI e i workflow Firebase Production verificano l'uso effettivo di npm 11.x e ne registrano la versione; `packageManager: npm@11.21.0` è una preferenza dichiarativa e NON prova il pin esatto del runtime. Per evitare un download globale non lockato (rilevato e bloccato da zizmor), non installare npm ad hoc in un job privilegiato. La riproducibilità esatta di npm richiederebbe una toolchain preprovisioned o un meccanismo verificato separatamente. Il token Sentry di upload delle source map è limitato agli step di validazione configurazione e build Hosting, e non va ereditato da `npm ci`.
-- NOTE: il job core pubblica un SBOM CycloneDX delle dipendenze risolte per lo SHA verificato. Un SBOM non equivale a un'attestazione firmata di provenance del build o del deploy.
+- MUST: `test:install-scripts` confronta i pacchetti con lifecycle script nel lockfile con un elenco di versioni esplicitamente approvate. La matrice CI e Hosting verificano anche il lockfile prima di `npm ci`; `allowScripts` in `package.json` non disabilita automaticamente gli script di npm.
+- MUST: la CI e i workflow Firebase Production controllano la major npm 11.x effettiva. `packageManager: npm@11.21.0` è una dichiarazione, non prova che il runner usi quella versione esatta: non aggiungere installazioni globali non lockate. Il token Sentry di build è limitato agli step di validazione e build e non viene esposto a `npm ci`.
+- NOTE: il job core genera e conserva per 30 giorni un SBOM CycloneDX dello SHA della PR, senza attribuire a questo inventario una firma o provenance del deployment.
 - MUST: `npm audit --audit-level=high` e `test:security-static` (Gitleaks + zizmor) restano bloccanti nella CI ma non appartengono alla semantica deterministica di `verify:m8`, perché dipendono da registry/release esterni.
 - MUST: `test:typecheck-coverage` confronta tutti i file `.ts`, `.tsx`, `.mts` e `.cts` tracciati da Git (incluse le dichiarazioni) con i file effettivamente inclusi dai progetti `tsconfig.m5-tests.json` e `tsconfig.m7-server.json`, usando `tsc --listFilesOnly` di TypeScript 7. Un nuovo file fuori da entrambi o una modifica alle configurazioni che riduce la copertura fa fallire `verify:m8` e il job canonico CI. La stessa verifica esegue regressioni su repository Git temporanei.
 - MUST: `test:dead-code` è un leaf deterministico e bloccante di `verify:m8`: Knip verifica `files,dependencies,unlisted,exports,types`, inclusi export e tipi inutilizzati. Solo eventuali analisi separate dal gate (per esempio `analyze:dead-exports`) restano advisory.
@@ -134,7 +141,9 @@ ${{ matrix.command }} 2>&1 | tee "verification-${{ matrix.id }}.log"
 - MUST: Firebase Hosting Production parte soltanto dopo il completamento riuscito di `Firebase Firestore Production`, che a sua volta deriva da `Milestone Verification` verde su push a `main`; usa lo stesso exact SHA e rifiuta di deployare se `origin/main` è già avanzato. Questo serializza i cutover che cambiano contemporaneamente Rules e client.
 - MUST: il workflow Hosting usa `firebase deploy --only hosting`; Rules e indici Firestore non sono side effect del deploy frontend.
 - MUST: Firebase Firestore Production è un workflow separato, parte soltanto dopo lo stesso gate canonico su push a `main`, ricontrolla l'exact SHA e riconcilia sempre lo stato desiderato con il provider live; non usa il commit padre come proxy dell'ultimo stato distribuito.
-- MUST: il deploy Firestore avviene solo quando la riconciliazione rileva Rules divergenti o configurazione indice desiderata realmente mancante/divergente; indici compositi già presenti ma non `READY` e field exemption già associate a una Long Running Operation attiva di soli delta `REMOVE` richiedono attesa/verifica senza un deploy ridondante, mentre uno stato live non determinabile è failure. Il read-back delle exemption single-field MUST usare la lista esplicita database-wide `collectionGroups/-/fields` con filtro `indexConfig.usesAncestorConfig=false OR ttlConfig:*`; una lettura per singolo collection group non è un oracolo valido per le wildcard collection-level. Il confronto MUST tollerare l'omissione JSON di `usesAncestorConfig: false` prevista dalla serializzazione protobuf, ma deve continuare a rifiutare `usesAncestorConfig: true` e qualunque override con indici residui.
+- MUST: il deploy Firestore avviene solo quando la riconciliazione rileva Rules divergenti o configurazione indice desiderata realmente mancante/divergente; indici compositi già presenti ma non `READY` e field exemption già associate a una Long Running Operation attiva di soli delta `REMOVE` richiedono attesa/verifica senza un deploy ridondante, mentre uno stato live non determinabile è failure.
+Il read-back delle exemption single-field MUST usare la lista esplicita database-wide `collectionGroups/-/fields` con filtro `indexConfig.usesAncestorConfig=false OR ttlConfig:*`; una lettura per singolo collection group non è un oracolo valido per le wildcard collection-level.
+Il confronto MUST tollerare l'omissione JSON di `usesAncestorConfig: false` prevista dalla serializzazione protobuf, ma deve continuare a rifiutare `usesAncestorConfig: true` e qualunque override con indici residui.
 - MUST: il deploy Firestore usa `--only firestore:rules,firestore:indexes`, non usa `--force`, autentica una identità WIF dedicata distinta dall'Hosting deployer e verifica il provider dopo la mutazione.
 - MUST: le action privilegiate dei workflow Hosting e Firestore sono pin-nate a commit SHA immutabili; il commento di versione serve solo alla manutenzione/Dependabot.
 - VERIFY: Vercel Preview verifica build/routing ma non sostituisce il gate repository.

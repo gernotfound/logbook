@@ -3,6 +3,7 @@ import { doc, getDoc } from 'firebase/firestore';
 import { normalizeCloudDocument } from '../schemaEvolution';
 import { withTimeout } from './db_core';
 import { requireCompleteHistoryMonthDocument } from '../sync/monthlyIntegrity';
+import { assertCloudBusinessPreserved } from '../sync/cloudBusinessIntegrity';
 
 // Monthly snapshots are untrusted until the final DomainParsers gateway runs.
 export async function loadHistoryMonths(
@@ -23,6 +24,7 @@ export async function loadHistoryMonths(
         if (!d || typeof d.exists !== 'function' || !d.exists()) return [];
         const normalized = normalizeCloudDocument(d.data(), `History ${month} data schema`);
         const business = requireCompleteHistoryMonthDocument(month, normalized.business);
+        assertCloudBusinessPreserved(`history_months/${month}`, normalized.business, business);
         return [{ month, business, sync: normalized.sync }];
     });
     for (const { month, business, sync } of staged) {
