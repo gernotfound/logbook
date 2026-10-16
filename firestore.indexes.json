@@ -1,6 +1,20 @@
 {
   "indexes": [
     {
+      "collectionGroup": "health_data_erasures",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "retryable",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "account_deletions",
       "queryScope": "COLLECTION",
       "fields": [
