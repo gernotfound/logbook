@@ -301,6 +301,27 @@ it.each([
     await assertFails(deleteDoc(existingRef));
 });
 
+it.each([
+    ['anonymous', null],
+    ['owner', 'a'],
+    ['other user', 'b'],
+])('keeps health_data_erasures server-only for %s clients', async (_label, uid) => {
+    const db = uid === null
+        ? asModularFirestore(env.unauthenticatedContext().firestore())
+        : asModularFirestore(env.authenticatedContext(uid, { email_verified: true }).firestore());
+    await env.withSecurityRulesDisabled(async context => {
+        const adminDb = asModularFirestore(context.firestore());
+        await setDoc(doc(adminDb, 'health_data_erasures/a'), {
+            uid: 'a', status: 'requested', consentRevision: 1,
+        });
+    });
+    const existingRef = doc(db, 'health_data_erasures/a');
+    await assertFails(getDoc(existingRef));
+    await assertFails(setDoc(doc(db, 'health_data_erasures/new'), { status: 'complete' }));
+    await assertFails(updateDoc(existingRef, { status: 'complete' }));
+    await assertFails(deleteDoc(existingRef));
+});
+
 it('rejects unknown root fields, invalid origin and malformed month paths inside fenced writes', async () => {
     const db = asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore());
     const replica = await registerReplica(db, 'a');
