@@ -60,6 +60,17 @@ describe('flexible training cycles', () => {
         });
     });
 
+    it('shows an invalid-date warning but still allows a manual in-cycle workout', () => {
+        setup(0, { ...cycle, startDate: 'not-a-date' });
+        render(<TrainingSessionSetup />);
+        expect(screen.getByText('Parametri del ciclo da correggere')).toBeDefined();
+        expect(screen.queryByText('Scheda suggerita · Rotazione flessibile')).toBeNull();
+        fireEvent.click(screen.getByRole('button', { name: 'Avvia Scheda A' }));
+        expect(startWorkout).toHaveBeenCalledWith('first', {
+            cycleId: cycle.id, cycleName: cycle.name,
+        });
+    });
+
     it('stops suggesting session 9 of 8 but still starts an optional routine within the cycle', () => {
         setup(8);
         render(<TrainingSessionSetup />);

@@ -31,6 +31,17 @@ describe('training planning residual regressions', () => {
         }
     });
 
+    it('rejects malformed historical start dates rather than assuming they mean today', () => {
+        for (const startDate of ['not-a-date', '2026-13-42']) {
+            const malformed = { ...cycle, startDate };
+            const timeline = calculateCycleTimeline(malformed, '2026-10-16');
+            expect(timeline.isStarted).toBe(false);
+            expect(timeline.statusLabel).toBe('Parametri del ciclo da correggere');
+            expect(timeline.progressPercent).toBe(0);
+            expect(malformed.startDate).toBe(startDate);
+        }
+    });
+
     it('computes the same summary without constructing all week entries', () => {
         const full = calculateCycleSchedule(cycle, routines);
         const closed = calculateCycleSchedule(cycle, routines, false);

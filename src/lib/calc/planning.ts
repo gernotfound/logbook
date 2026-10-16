@@ -61,16 +61,21 @@ export function calculateCycleTimeline(
         };
     }
 
-    let parsedStart: Date;
+    let parsedStart: Date | null = null;
     try {
         parsedStart = typeof cycle.startDate === 'string' && !cycle.startDate.includes('T')
             ? parseISO(cycle.startDate)
             : new Date(cycle.startDate);
-        if (!isValid(parsedStart)) {
-            parsedStart = new Date();
-        }
     } catch {
-        parsedStart = new Date();
+        // An invalid persisted date must not be misrepresented as starting today.
+    }
+    if (!parsedStart || !isValid(parsedStart)) {
+        return {
+            formattedStartDate: '', formattedEndDate: '',
+            formattedRange: 'Data di inizio del ciclo non valida',
+            currentWeek: 0, totalWeeks: 0, isStarted: false, isEnded: false,
+            progressPercent: 0, statusLabel: 'Parametri del ciclo da correggere',
+        };
     }
 
     let today: Date;

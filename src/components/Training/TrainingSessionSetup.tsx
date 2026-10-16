@@ -54,10 +54,12 @@ export const TrainingSessionSetup = ({ onNavigateToPlanning }: TrainingSessionSe
         [activeCycle, routines, history],
     );
     const today = useLocalToday();
-    const isCyclePeriodEnded = useMemo(
-        () => Boolean(activeCycle?.startDate && Logic.calculateCycleTimeline(activeCycle, today).isEnded),
+    const cycleTimeline = useMemo(
+        () => Logic.calculateCycleTimeline(activeCycle, today),
         [activeCycle, today],
     );
+    const isCyclePeriodEnded = Boolean(activeCycle?.startDate && cycleTimeline.isEnded);
+    const hasInvalidCycleDates = cycleTimeline.statusLabel === 'Parametri del ciclo da correggere';
     const hasInvalidCycleCounts = useMemo(
         () => activeCycle
             ? Logic.calculateCycleSchedule(activeCycle, routines, false).summaryText === 'Parametri del ciclo da correggere'
@@ -117,7 +119,7 @@ export const TrainingSessionSetup = ({ onNavigateToPlanning }: TrainingSessionSe
     };
 
     // Reaching the indicative session target ends automatic suggestions, not the ability to train.
-    const nextRoutine = isCyclePeriodEnded || nextScheduled?.isCycleCompleted
+    const nextRoutine = isCyclePeriodEnded || hasInvalidCycleDates || nextScheduled?.isCycleCompleted
         ? undefined : nextScheduled?.nextRoutine;
     const nextEstimate = nextRoutine ? durationEstimates.get(nextRoutine.id) : undefined;
     const nextPlannedItem = nextRoutine
@@ -209,17 +211,20 @@ export const TrainingSessionSetup = ({ onNavigateToPlanning }: TrainingSessionSe
                 </section>
             )}
 
-            {activeCycle && (isCyclePeriodEnded || nextScheduled?.isCycleCompleted) && plannedRoutines.length > 0 && (
+            {activeCycle && (isCyclePeriodEnded || hasInvalidCycleDates || nextScheduled?.isCycleCompleted) && plannedRoutines.length > 0 && (
                 <section className="session-next-card section-divider" aria-labelledby="session-cycle-goal-title">
                     <div className="session-next-top">
                         <div>
-                            <p className="session-eyebrow">{isCyclePeriodEnded ? 'Periodo del ciclo concluso' : 'Obiettivo indicativo raggiunto'}</p>
+                            <p className="session-eyebrow">{hasInvalidCycleDates ? 'Parametri del ciclo da correggere'
+                                : isCyclePeriodEnded ? 'Periodo del ciclo concluso' : 'Obiettivo indicativo raggiunto'}</p>
                             <h2 id="session-cycle-goal-title" style={{ fontSize: 'var(--font-size-control)' }}>
                                 {activeCycle.name}
                             </h2>
-                            <span>{isCyclePeriodEnded
-                                ? 'Le sedute non svolte non sono obbligatorie. Puoi continuare con qualsiasi scheda.'
-                                : 'Puoi continuare ad allenarti scegliendo qualsiasi scheda del ciclo.'}</span>
+                            <span>{hasInvalidCycleDates
+                                ? 'Correggi le date in Pianificazione. Puoi comunque scegliere una scheda del ciclo.'
+                                : isCyclePeriodEnded
+                                    ? 'Le sedute non svolte non sono obbligatorie. Puoi continuare con qualsiasi scheda.'
+                                    : 'Puoi continuare ad allenarti scegliendo qualsiasi scheda del ciclo.'}</span>
                         </div>
                         <span className="session-next-icon" aria-hidden="true"><Dumbbell size={24} /></span>
                     </div>
@@ -250,7 +255,7 @@ export const TrainingSessionSetup = ({ onNavigateToPlanning }: TrainingSessionSe
                 </section>
             )}
 
-            {activeCycle && !nextRoutine && (!isCyclePeriodEnded && !nextScheduled?.isCycleCompleted || plannedRoutines.length === 0) && (
+            {activeCycle && !nextRoutine && (!isCyclePeriodEnded && !hasInvalidCycleDates && !nextScheduled?.isCycleCompleted || plannedRoutines.length === 0) && (
                 <section className="session-setup-message">
                     <strong>{activeCycle.name}</strong>
                     <span>{hasInvalidCycleCounts
