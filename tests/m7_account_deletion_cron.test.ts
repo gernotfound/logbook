@@ -113,6 +113,9 @@ describe('M7 daily account deletion recovery cron', () => {
     expect(info).toHaveBeenCalledWith('[account-deletion-cron] completed', {
       scanned: 2,
       processed: 2,
+      erasureScanned: 0,
+      erasureProcessed: 0,
+      erasureErrors: 0,
       recoveryErrors: 0,
       retentionErrors: 0,
       purged: 0,
