@@ -1,3 +1,4 @@
+import { BACKEND_API_ORIGIN as API } from './backendApi';
 import type { User } from 'firebase/auth';
 import { auth, ensureAppCheck } from './firebase';
 import { getLimitedUseAppCheckToken } from './appCheck';
@@ -6,8 +7,6 @@ import { captureSession, isCurrentSession } from './sync/session';
 export type HealthDataErasureOutcome =
   | { status: 'complete'; complete: true }
   | { status: 'requested' | 'deleting' | 'verifying' | 'failed'; complete: false; retryable?: boolean; error?: string };
-
-const API = (import.meta.env.VITE_ACCOUNT_DELETION_API_ORIGIN || 'https://logbook-gnf.vercel.app').replace(/\/$/, '');
 
 export async function requestHealthDataErasure(user: User): Promise<HealthDataErasureOutcome> {
   const session = captureSession();

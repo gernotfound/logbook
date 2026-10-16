@@ -1,3 +1,4 @@
+import { BACKEND_API_ORIGIN as ACCOUNT_DELETION_API_ORIGIN } from '../backendApi';
 import { auth, getDb, ensureAppCheck, waitForPendingWrites, signOut } from '../firebase';
 import { del, get } from 'idb-keyval';
 import { lockVault } from '../sync/secureArchiveSession';
@@ -318,7 +319,6 @@ async function purgeOwnerLocalData(owner: string, resumeOnly = false, gate?: Pur
     });
 }
 
-const ACCOUNT_DELETION_API_ORIGIN = (import.meta.env.VITE_ACCOUNT_DELETION_API_ORIGIN || 'https://logbook-gnf.vercel.app').replace(/\/$/, '');
 const ACCOUNT_DELETION_HTTP_TIMEOUT_MS = 7500;
 const ACCOUNT_DELETION_INITIAL_OBSERVE_MS = 7500;
 
