@@ -300,3 +300,18 @@ it('keeps storage failures blocking consent-suspended reload even with explicit 
         .rejects.toThrow('Persistenza locale bloccata');
     expect(reload).not.toHaveBeenCalled();
 });
+
+
+it('does not erase a stored workout while reloading a consent-suspended screen', async () => {
+    const saved = JSON.stringify({ id: 'saved-workout', exercises: [] });
+    disk.set('logbook:v2:user:a:workout', saved);
+    disk.set('logbook:v2:user:a:health-consent-withdrawal', 'withdrawn');
+    app.state.localWorkout = null; // Suspended UI has no active RAM workout.
+    app.flush.mockRejectedValue(new Error('offline'));
+
+    const reload = vi.fn();
+    await safeHardReload(reload);
+
+    expect(reload).toHaveBeenCalledTimes(1);
+    expect(disk.get('logbook:v2:user:a:workout')).toBe(saved);
+});
