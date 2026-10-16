@@ -52,6 +52,18 @@ L'allestimento **non** autorizza merge su `main`, modifica delle credenziali Pro
 - **Decisione di sicurezza:** non riutilizzare l'account Firebase Admin SDK predefinito, non concedere Proprietario/Editor, non creare chiavi in questa fase. I ruoli IAM verranno verificati dopo il salvataggio e prima di qualsiasi deploy.
 - L'implementazione attuale di `server/accountDeletion/firebaseAdmin.ts` usa `FIREBASE_ADMIN_PROJECT_ID`, `FIREBASE_ADMIN_CLIENT_EMAIL` e `FIREBASE_ADMIN_PRIVATE_KEY` tramite `cert()`. **Non generare alcuna chiave privata per ora**: prima valutare provisioning sicuro/possibile identità federata e configurazione Test isolata. Non inserire credenziali nel repository o in chat.
 
+### Accessi per automazioni ChatGPT e GitHub — decisione progettuale (non ancora applicata)
+
+Il product owner desidera che le automazioni e ChatGPT possano amministrare in modo più autonomo **soltanto il progetto Test**. Questo **non equivale** ad allargare i ruoli del service account runtime Vercel: i permessi di un service account non diventano automaticamente accessibili a ChatGPT.
+
+- **Identità runtime** `logbook-test-vercel-runtime`: accesso dati Firestore, Auth e verifica token App Check richiesti dalle Functions Vercel, limitato al progetto `thelogbook-test`. I tre ruoli IAM proposti sono `roles/datastore.user`, `roles/firebaseauth.admin`, `roles/firebaseappcheck.tokenVerifier` (da verificare in IAM prima del deploy).
+- **Identità distinta per operazioni automatizzate**, proposta `logbook-test-automation`: provisioning e deployment Test di Firestore Rules/indici, Firebase Hosting e, solo se necessario, account di prova. Ruoli separati per attività e con condizioni sugli ambienti; preferire workload identity federation / identità temporanee e gate su SHA esatto. Concedere permessi amministrativi soltanto per la specifica operazione autorizzata. Non aggiungere Proprietario, Editor, IAM Security Admin, Service Account Key Admin o permessi Production.
+- **Accesso interattivo di ChatGPT**: richiede un connettore/app effettivamente disponibile e autenticato con le opportune capacità; non deriva dai ruoli assegnati agli account di servizio. Alla data attuale in questa conversazione non sono stati eseguiti comandi IAM sul provider attraverso ChatGPT; ruoli e accesso diretto non sono ancora verificati.
+- **Azioni critiche** come cancellare il progetto, cancellare utenti o dati reali, rimuovere regole protettive o abilitare costi richiedono un confine d'autorizzazione distinto, anche se l'ambiente è Test. Usare esclusivamente dati fittizi per i collaudi E2E.
+- **Evidenze**: screenshot del product owner mostrano l'identità dedicata e l'assenza di chiavi, **non** i ruoli. Le fonti normative per i ruoli sono la documentazione IAM Google Cloud e i contratti runtime presenti nel repository; ogni ruolo effettivo deve essere riconciliato direttamente nella schermata IAM o tramite API autorizzate.
+
+
+
 
 4. Definire `PUBLIC_APP_ORIGIN` e origini CORS Test; evitare accessi cross-environment. Tenere separate le env client `VITE_FIREBASE_*`, `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY` e `VITE_ACCOUNT_DELETION_API_ORIGIN`. Verificare CSP, OAuth e domini di origine.
 5. Effettuare controlli fail-closed della destinazione prima dei deploy Firestore/Hosting; distribuire Rules e indici Test dal commit verificato, poi frontend Test e backend Test. Nessun workflow Test deve cambiare il workflow o le risorse Production.
