@@ -66,6 +66,21 @@ describe('Pianificazione redesign', () => {
         expect(screen.getByRole('button', { name: /Rotazione flessibile.*ON/i }).getAttribute('aria-expanded')).toBe('true');
     });
 
+    it('does not let the same routine be added twice to a training cycle', () => {
+        const onSave = vi.fn();
+        render(<CycleEditor routines={routines} library={library} onSave={onSave} onCancel={vi.fn()} />);
+        const search = screen.getByRole('combobox', { name: 'Aggiungi scheda alla sequenza' });
+        fireEvent.change(search, { target: { value: 'upper' } });
+        expect(screen.getByText('Upper body')).toBeDefined();
+
+        fireEvent.focus(search);
+        expect(screen.queryByRole('option', { name: /Upper body/i })).toBeNull();
+        fireEvent.change(search, { target: { value: 'upper' } });
+        expect(screen.getByText('Sequenza rotazione schede (1)')).toBeDefined();
+        expect(screen.queryByRole('option', { name: /Upper body/i })).toBeNull();
+        expect(onSave).not.toHaveBeenCalled();
+    });
+
     it('chiude l’editor con Chiudi senza salvare', () => {
         const onCancel = vi.fn();
         render(

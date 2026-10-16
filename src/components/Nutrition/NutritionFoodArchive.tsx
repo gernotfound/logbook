@@ -4,6 +4,7 @@ import { Plus, Search, Utensils } from 'lucide-react';
 import { useAppStore } from '../../store/useAppStore';
 import { useDialogStore } from '../../store/useDialogStore';
 import { Logic } from '../../lib/logic';
+import { createFoodSearcher } from '../../lib/calc/nutrition';
 import CustomFoodForm from './CustomFoodForm';
 import { FoodArchiveSearch } from './archive/FoodArchiveSearch';
 import { FoodItemRow } from './archive/FoodItemRow';
@@ -31,9 +32,8 @@ export default function NutritionFoodArchive({ onEditFood }: NutritionFoodArchiv
         kcal: '', carbs: '', pro: '', fat: ''
     });
 
-    const filteredFoods = useMemo(() => {
-        return Logic.searchFoods(customFoods, searchQuery);
-    }, [customFoods, searchQuery]);
+    const searchFoods = useMemo(() => createFoodSearcher(customFoods), [customFoods]);
+    const filteredFoods = useMemo(() => searchFoods(searchQuery), [searchFoods, searchQuery]);
 
     const openCreateModal = () => {
         setEditingFoodId(null);

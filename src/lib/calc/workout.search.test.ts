@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { searchExerciseLibrary, filterItems } from './workout';
+import { searchExerciseLibrary, createExerciseLibrarySearcher, filterItems, getLatestUserWeight } from './workout';
 
 describe('typed workout search contracts', () => {
     const exercises = [
@@ -32,6 +32,43 @@ describe('typed workout search contracts', () => {
         expect(filtered[0]).toBe(items[0]);
         expect(filtered[0].priority).toBe(9);
         expect(filterItems(items, '')).toBe(items);
+    });
+
+    it('reuses an exercise search index, retaining ranking and separating different owners', () => {
+        const search = createExerciseLibrarySearcher(exercises);
+        for (const query of ['', 'panca', 'pancca', 'panca piana', 'quadricipiti']) {
+            expect(search(query)).toEqual(searchExerciseLibrary(exercises, query));
+        }
+        const otherOwner = createExerciseLibrarySearcher([{ id: 'private', name: 'Rematore' }]);
+        expect(otherOwner('panca')).toEqual([]);
+        expect(search('panca').map(item => item.id)).toEqual(['a']);
+    });
+
+    it('selects the latest valid weight in unsorted nutrition history', () => {
+        const nutrition = {
+            '2026-10-15': { weight: '78,5' },
+            '2025-01-01': { weight: 90 },
+            '2026-11-01': { weight: 'invalid' },
+            '2026-09-01': { weight: '79' }
+        };
+        expect(getLatestUserWeight(nutrition)).toBe(78.5);
+        expect(getLatestUserWeight({ '2026-01-01': { weight: 0 } }, { weight: '82,5' })).toBe(82.5);
+    });
+
+    it('orders imported unpadded and Italian dates chronologically, ignoring invalid day keys', () => {
+        const nutrition = {
+            '2026-2-10': { weight: 81 },
+            '2026-10-01': { weight: 78.5 },
+            '15/09/2026': { weight: '79,5' },
+            '2026-02-30': { weight: 110 },
+            'not-a-date': { weight: 200 },
+        };
+        expect(getLatestUserWeight(nutrition)).toBe(78.5);
+        expect(getLatestUserWeight({
+            '2026-02-31': { weight: 999 },
+            '2026-09-05': { weight: 'invalid' },
+        }, { weight: 74 })).toBe(74);
+        expect(getLatestUserWeight({ '2026-10-03': { weight: '82,1' }, '2026-10-2': { weight: 85 } })).toBe(82.1);
     });
 
     it('supports caller-selected fields without changing empty-query semantics', () => {

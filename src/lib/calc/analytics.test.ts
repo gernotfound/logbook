@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
     computeWeeklyVolumeSeries,
+    computeWeeklyVolumeSeriesCooperative,
+    computeVolumeCaloriesCorrelationCooperative,
     computeWeeklyNutritionSeries,
     computeVolumeCaloriesCorrelation,
     computeWeeklyWeightSeries,
@@ -11,6 +13,8 @@ import {
     getWorkoutDateString
 } from './analytics';
 import { getLocalDateString } from '../utils/date';
+import { calculateWorkoutVolume } from './workout';
+import { format, subDays } from 'date-fns';
 import type { WorkoutSession, Exercise, NutritionDay } from '../../types';
 
 describe('Analytics Engine 4-Tier Test Suite (src/lib/calc/analytics.ts)', () => {
@@ -751,5 +755,97 @@ describe('Analytics Engine 4-Tier Test Suite (src/lib/calc/analytics.ts)', () =>
             expect(points[0]).not.toHaveProperty('fatigue');
         });
 
+    });
+});
+describe('Home analytics weekly bucketing regression', () => {
+    it('matches the historical per-week filter on a large unordered archive, including session order and DST', () => {
+        const referenceDate = '2026-04-12';
+        const library: Exercise[] = [{
+            id: 'ex-1', name: 'Test exercise', muscles: ['petto'],
+            trackingType: 'weight_reps', setsCount: 1, sets: [],
+        }];
+        const date = new Date('2026-04-12T12:00:00');
+        const history: WorkoutSession[] = Array.from({ length: 1500 }, (_, i) => ({
+            id: `s-${i}`,
+            date: format(subDays(date, (i * 37) % 382), 'yyyy-MM-dd'),
+            exercises: [{
+                exId: 'ex-1', sessionNote: '',
+                sets: [{ id: `set-${i}`, kg: '1.25', reps: String((i % 9) + 1) }],
+            }],
+        }));
+        const intervals = generateWeekIntervals(52, referenceDate);
+        const expected = intervals.map(interval => {
+            const matching = history.filter(session => {
+                const d = getWorkoutDateString(session);
+                return d !== null && d >= interval.weekStart && d <= interval.weekEnd;
+            });
+            return {
+                workoutCount: matching.length,
+                sessionIds: matching.map(session => session.id).filter(Boolean),
+                volumeKg: Math.round(matching.reduce(
+                    (sum, session) => sum + calculateWorkoutVolume(session, library, 80), 0,
+                )),
+            };
+        });
+        const { points } = computeWeeklyVolumeSeries(history, library, 80, 52, referenceDate);
+        expect(points.map(point => ({
+            workoutCount: point.workoutCount,
+            sessionIds: point.sessionIds,
+            volumeKg: point.volumeKg,
+        }))).toEqual(expected);
+        expect(points).toHaveLength(52);
+    });
+});
+
+describe('Weekly catalog lookup compatibility', () => {
+    it('uses the last catalog entry for duplicate exercise IDs, for arrays and prebuilt maps', () => {
+        const catalog: Exercise[] = [
+            { id: 'same', name: 'Old', equipmentWeight: 10, muscles: [], setsCount: 1, sets: [] },
+            { id: 'same', name: 'New', equipmentWeight: 20, muscles: [], setsCount: 1, sets: [] },
+        ];
+        const workout: WorkoutSession = {
+            id: 'w', date: '2026-08-18',
+            exercises: [{ exId: 'same', sessionNote: '', sets: [{ id: 's1', kg: '10', reps: '10' }] }],
+        };
+        const map = new Map(catalog.map(exercise => [exercise.id, exercise]));
+        expect(calculateWorkoutVolume(workout, catalog, 80)).toBe(300);
+        expect(calculateWorkoutVolume(workout, map, 80)).toBe(300);
+        expect(computeWeeklyVolumeSeries([workout], catalog, 80, 4, '2026-08-22').stats.totalVolumeKg).toBe(300);
+    });
+});
+
+describe('Large archive cooperative analytics fallback', () => {
+    const reference = new Date(2026, 7, 22);
+    const library: Exercise[] = [{
+        id: 'archive_ex', name: 'Archivio', muscles: ['petto'], trackingType: 'weight_reps', setsCount: 1, sets: []
+    }];
+    const sessions: WorkoutSession[] = Array.from({ length: 6_000 }, (_, i) => ({
+        id: `large_${i}`,
+        date: format(subDays(reference, i % 330), 'yyyy-MM-dd'),
+        routineName: 'Test archivio',
+        exercises: [{ exId: 'archive_ex', sessionNote: '', sets: [{ id: `set_${i}`, kg: String(40 + i % 40), reps: '8' }] }]
+    }));
+    const nutrition: Record<string, NutritionDay> = Object.fromEntries(Array.from({ length: 200 }, (_, i) => {
+        const date = format(subDays(reference, i), 'yyyy-MM-dd');
+        return [date, { date, kcal: 2200 + i % 200, carbs: 220, pro: 130, fat: 60 }];
+    }));
+
+    it('produces exactly the synchronous result and yields to the event loop for a large volume series', async () => {
+        const expected = computeWeeklyVolumeSeries(sessions, library, 80, 52, reference);
+        let inputProcessed = false;
+        setTimeout(() => { inputProcessed = true; }, 0);
+        const actual = await computeWeeklyVolumeSeriesCooperative(sessions, library, 80, 52, reference);
+        expect(actual).toEqual(expected);
+        expect(inputProcessed).toBe(true);
+    });
+
+    it('preserves correlation and cancels long computations when the view closes', async () => {
+        const expected = computeVolumeCaloriesCorrelation(sessions, nutrition, library, 80, 52, reference);
+        const actual = await computeVolumeCaloriesCorrelationCooperative(sessions, nutrition, library, 80, 52, reference);
+        expect(actual).toEqual(expected);
+        const abort = new AbortController();
+        const pending = computeWeeklyVolumeSeriesCooperative(sessions, library, 80, 52, reference, abort.signal);
+        abort.abort();
+        await expect(pending).rejects.toThrow('annullato');
     });
 });

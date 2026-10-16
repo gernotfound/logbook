@@ -81,23 +81,27 @@ export function ExerciseArchive({
         return counts;
     }, [routines]);
 
+    const searchableLibrary = useMemo(() => library.map(exercise => ({
+        exercise,
+        searchable: normalizeSearch([
+            exercise.name,
+            ...(exercise.muscles || []).map(muscleName),
+            ...(exercise.secondaryMuscles || []).map(muscleName),
+            trackingLabel(exercise),
+            exercise.isDefault ? 'Catalogo' : 'Personale',
+            exercise.notes || '',
+        ].join(' ')),
+    })), [library]);
+
     const filteredLibrary = useMemo(() => {
         const normalized = normalizeSearch(query);
         if (!normalized) return library;
 
         const terms = normalized.split(/\s+/).filter(Boolean);
-        return library.filter(exercise => {
-            const searchable = normalizeSearch([
-                exercise.name,
-                ...(exercise.muscles || []).map(muscleName),
-                ...(exercise.secondaryMuscles || []).map(muscleName),
-                trackingLabel(exercise),
-                exercise.isDefault ? 'Catalogo' : 'Personale',
-                exercise.notes || '',
-            ].join(' '));
-            return terms.every(term => searchable.includes(term));
-        });
-    }, [library, query]);
+        return searchableLibrary
+            .filter(({ searchable }) => terms.every(term => searchable.includes(term)))
+            .map(({ exercise }) => exercise);
+    }, [library, searchableLibrary, query]);
 
     const selectedExercise = useMemo(
         () => library.find(exercise => exercise.id === selectedExId) || null,

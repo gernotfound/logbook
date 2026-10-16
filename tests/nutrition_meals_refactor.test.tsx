@@ -2,6 +2,7 @@ import React from 'react';
 import { fireEvent, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import NutritionMeals from '../src/components/Nutrition/NutritionMeals';
+import { Logic } from '../src/lib/logic';
 import { renderWithProviders } from './setup';
 
 describe('NutritionMeals decomposition parity', () => {
@@ -55,9 +56,13 @@ describe('NutritionMeals decomposition parity', () => {
             targetDateStr: '2026-08-16',
         };
 
+        const weightLookup = vi.spyOn(Logic, 'getLatestUserWeight');
         renderWithProviders(
             <NutritionMeals mealsHook={mockHook} selectedDate="2026-08-16" setSelectedDate={setSelectedDate} />
         );
+        // The supplied parent hook owns nutrition data: do not mount an unused second hook.
+        expect(weightLookup).not.toHaveBeenCalled();
+        weightLookup.mockRestore();
 
         fireEvent.click(screen.getByRole('button', { name: 'Giorno precedente' }));
         expect(setSelectedDate).toHaveBeenCalledWith('2026-08-15');

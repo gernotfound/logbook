@@ -1,4 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs';
+import { checkProductionBuildSecrets } from './check-production-build-secrets.mjs';
 
 const workflowPath = '.github/workflows/verification.yml';
 const failures = [];
@@ -9,6 +10,9 @@ if (!existsSync(workflowPath)) {
 }
 
 const workflow = readFileSync(workflowPath, 'utf8');
+const hostingWorkflow = readFileSync('.github/workflows/firebase-hosting-production.yml', 'utf8');
+const firestoreWorkflow = readFileSync('.github/workflows/firebase-firestore-production.yml', 'utf8');
+failures.push(...checkProductionBuildSecrets(hostingWorkflow, firestoreWorkflow));
 const packageJson = JSON.parse(readFileSync('package.json', 'utf8'));
 const packageLock = JSON.parse(readFileSync('package-lock.json', 'utf8'));
 const lockedPlaywrightVersion = packageLock.packages?.['node_modules/@playwright/test']?.version;

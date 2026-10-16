@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useLocalToday } from '../../hooks/useLocalToday';
 import {
     CalendarRange,
     ChevronLeft,
@@ -86,7 +87,7 @@ const DataHistory: React.FC<DataHistoryProps> = ({
     onSelectEdit,
     onDeleteMeasurement,
 }) => {
-    const today = Logic.getLocalDateString();
+    const today = useLocalToday();
     const datedHistory = useMemo(
         () => measurementsHistory
             .filter(day => typeof day?.date === 'string' && Logic.parseDateInput(day.date))
