@@ -119,6 +119,7 @@ service cloud.firestore {
       return '_sync' in docData
         && docData._sync is map
         && docData._sync.protocolVersion == 3
+        && docData._sync.clock is map
         // Rules have a strict expression budget. Validate canonical actor names
         // and the active writer's coordinate here; the TypeScript parser validates
         // every clock coordinate before hydration/replay.

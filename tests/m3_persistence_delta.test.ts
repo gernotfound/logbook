@@ -277,8 +277,7 @@ describe('M3: Storage & Persistence Delta Isolation Suite', () => {
                     hiddenExerciseIds: ['panca-declinata-bilanciere']
                 },
                 routines: [],
-                history: [],
-                nutrition: {},
+                // Cloud root contains only root keys; history/nutrition are monthly shards.
                 trainingCycles: [],
                 activeCycleId: null,
                 supplements: []
