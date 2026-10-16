@@ -55,6 +55,10 @@ describe('training planning residual regressions', () => {
             expect(calculateCycleVolume(cycle, historicRoutines, library).muscleVolumes).toEqual([]);
             expect(calculateCycleMacroVolume(cycle, historicRoutines, library)).toEqual([]);
         }
+        const historicalZero = [{ ...routines[0], exercises: [{ exId: 'bench', setsCount: 0 }] }];
+        const historicalBlank = [{ ...routines[0], exercises: [{ exId: 'bench', setsCount: '' }] }];
+        expect(calculateCycleVolume(cycle, historicalZero, library).totalSetsPerWeek).toBe(9);
+        expect(calculateCycleMacroVolume(cycle, historicalBlank, library)[0]?.sets).toBe(9);
         expect(calculateCycleVolume(cycle, routines, library).totalSetsPerWeek).toBe(12);
         expect(calculateCycleMacroVolume(cycle, routines, library)[0]?.sets).toBe(12);
     });

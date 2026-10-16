@@ -1,3 +1,4 @@
+import { MAX_ROUTINE_SEGMENTS } from '../../../lib/routineSessionLimits';
 import React, { useId } from 'react';
 import { ArrowUp, ArrowDown, Trash2, Activity, CircleHelp } from 'lucide-react';
 import { ExerciseLibraryItem, PlannedSetTechnique, ProgressionContract, SetTechnique } from '../../../types';
@@ -294,6 +295,7 @@ export const RoutineExerciseItem: React.FC<RoutineExerciseItemProps> = ({
                                                             <input
                                                                 type="number"
                                                                 min="2"
+                                                                max={MAX_ROUTINE_SEGMENTS}
                                                                 aria-label={`Segmenti serie ${setIndex + 1}`}
                                                                 value={plan?.segmentCount ?? ''}
                                                                 onChange={event => onUpdateSetPlanField(index, setIndex, 'segmentCount', event.target.value)}

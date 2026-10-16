@@ -479,7 +479,7 @@ export function calculateCycleVolume(
             const libEx = libraryMap.get(routineEx.exId);
             if (!libEx) return;
 
-            const sets = Number(routineEx.setsCount ?? 3);
+            const sets = Number(routineEx.setsCount || 3);
             if (!Number.isSafeInteger(sets) || sets < 1) { invalidVolume = true; return; }
             const weeklySetsForEx = sets * effectiveFreq;
             if (!Number.isFinite(weeklySetsForEx)) { invalidVolume = true; return; }

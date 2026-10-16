@@ -1,3 +1,4 @@
+import { MAX_ROUTINE_SEGMENTS, MAX_ROUTINE_SETS, requireRoutineSessionCount } from '../../lib/routineSessionLimits';
 import { Logic } from '../../lib/logic';
 import type { UserData, WorkoutRoutine, WorkoutSession } from '../../types';
 import { assertWorkoutClockHealthy } from '../../lib/workoutClockGuard';
@@ -91,6 +92,8 @@ export function buildRoutineWorkout(
     const assignedCycleName = cycleInfo?.cycleName || assignedCycle?.name || (belongsToActiveCycle ? activeCycle.name : undefined);
     const assignedCycleStrategy = assignedCycle?.strategy ? structuredClone(assignedCycle.strategy) : undefined;
 
+    const libraryMap = new Map((userData?.library ?? []).map(exercise => [exercise.id, exercise]));
+
     return {
         id: runtime.generateId('w'),
         routineId: routine.id,
@@ -101,9 +104,11 @@ export function buildRoutineWorkout(
         date: runtime.getLocalDateString(),
         ratingScale: 5,
         exercises: (routine.exercises || []).map((ex: any) => {
-            const libDef = (userData?.library || []).find(l => l.id === ex.exId);
+            const libDef = libraryMap.get(ex.exId);
             const isCardio = libDef?.trackingType === 'cardio';
-            const setsCount = isCardio ? 1 : (ex.setsCount || 3);
+            // Preserve the legacy default for absent/zero values, but reject
+            // oversized counts before creating sets or per-set segments.
+            const setsCount = isCardio ? 1 : requireRoutineSessionCount(Number(ex.setsCount || 3), MAX_ROUTINE_SETS);
             const sets = [];
             for (let i = 0; i < setsCount; i++) {
                 const setObj: any = { id: runtime.generateId('s'), kg: '', reps: '' };
@@ -111,9 +116,9 @@ export function buildRoutineWorkout(
                 const plannedTechnique = plan?.technique || ex.defaultTechnique;
                 if (plannedTechnique === 'dropset' || ['rest_pause', 'cluster', 'rep_match', 'diminishing'].includes(plannedTechnique)) {
                     setObj.technique = plannedTechnique;
-                    const extraSegments = plan?.segmentCount
-                        ? Math.max(1, plan.segmentCount - 1)
-                        : 1;
+                    const extraSegments = plan?.segmentCount === undefined
+                        ? 1
+                        : Math.max(1, requireRoutineSessionCount(plan.segmentCount, MAX_ROUTINE_SEGMENTS) - 1);
                     setObj.segments = Array.from({ length: extraSegments }, () => ({
                         id: runtime.generateId('seg'),
                         kg: '',

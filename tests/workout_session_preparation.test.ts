@@ -20,6 +20,28 @@ function createRuntime(): WorkoutPreparationRuntime {
 }
 
 describe('workout session preparation', () => {
+    it('fails before creating a session from excessive imported set or segment counts without altering the routine', () => {
+        const badSegment = { id: 'unsafe', name: 'Storica', exercises: [{
+            exId: 'bench', setsCount: 1,
+            setPlans: [{ technique: 'cluster' as const, segmentCount: 1_000_000_000 }],
+        }] };
+        const oversizedSets = { ...badSegment, exercises: [{ exId: 'bench', setsCount: 1_000_000_000 }] };
+        const snapshot = JSON.stringify(badSegment);
+        expect(() => buildRoutineWorkout({}, badSegment, undefined, createRuntime()))
+            .toThrow('La scheda contiene troppe serie o segmenti');
+        expect(() => buildRoutineWorkout({}, oversizedSets, undefined, createRuntime()))
+            .toThrow('La scheda contiene troppe serie o segmenti');
+        expect(JSON.stringify(badSegment)).toBe(snapshot);
+
+        const safe = { ...badSegment, exercises: [{
+            exId: 'bench', setsCount: 20,
+            setPlans: [{ technique: 'cluster' as const, segmentCount: 20 }],
+        }] };
+        const workout = buildRoutineWorkout({}, safe, undefined, createRuntime());
+        expect(workout.exercises[0].sets).toHaveLength(20);
+        expect(workout.exercises[0].sets[0].segments).toHaveLength(19);
+    });
+
     it('builds a routine workout with the same cycle and set semantics as the hook', () => {
         const routine = {
             id: 'routine-a',
