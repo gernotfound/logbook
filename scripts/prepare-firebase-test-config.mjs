@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 export const TEST_FIREBASE_PROJECT = 'thelogbook-test';
 export const TEST_HOSTING_SITE = 'thelogbook-test';
-export const TEST_CONFIG_PATH = '.firebase.test.local.json';
+const TEST_CONFIG_PATH = '.firebase.test.local.json';
 
 export function testFirebaseConfig(source, projectId) {
   assert.equal(projectId, TEST_FIREBASE_PROJECT,
