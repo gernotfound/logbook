@@ -85,6 +85,7 @@ describe('JSON Export/Import Logic', () => {
         const create = vi.fn((_blob: Blob | MediaSource) => blobUrl);
         URL.createObjectURL = create;
         const downloadSpy = vi.spyOn(Exporter, 'downloadFile');
+        downloadSpy.mockClear(); // Earlier export tests leave this spy active.
         const data: any = { profile: { dob: '2000-01-01' }, history: [] };
         const url = Exporter.prepareBackupJsonUrl(data, { uid: 'user123' },
             { scope: 'cloud-and-device', months: ['2026-09'] }, { envelope: { revision: 2 } });
