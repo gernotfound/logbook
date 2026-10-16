@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { Timestamp } from 'firebase-admin/firestore';
 
 type Entry = Record<string, unknown>;
 const fixture = vi.hoisted(() => ({
@@ -21,6 +22,7 @@ vi.mock('../server/accountDeletion/firebaseAdmin', () => {
       where: (field: string, op: string, value: unknown) => query(path, [...constraints, [field, op, value]], max),
       limit: (count: number) => query(path, constraints, count),
       select: () => query(path, constraints, max),
+      orderBy: () => query(path, constraints, max),
       get: async () => {
         if (fixture.failQueryOnce === path) {
           fixture.failQueryOnce = '';
@@ -33,6 +35,9 @@ vi.mock('../server/accountDeletion/firebaseAdmin', () => {
           return constraints.every(([field, op, value]) => {
             if (op === '==') return data[field] === value;
             if (op === 'in' && Array.isArray(value)) return value.includes(data[field]);
+            if (op === '<=' && value instanceof Timestamp && data[field] instanceof Timestamp) {
+              return (data[field] as Timestamp).toMillis() <= value.toMillis();
+            }
             return false;
           });
         }).sort().slice(0, max).map(key => getSnapshot(key));
@@ -83,6 +88,7 @@ vi.mock('../server/accountDeletion/firebaseAdmin', () => {
 
 import {
   createHealthDataErasureJob, processHealthDataErasure, readHealthDataErasureStatus,
+  purgeExpiredCompletedHealthErasures,
 } from '../server/healthConsent/erasure';
 import { recordHealthConsentReacceptance, recordHealthConsentWithdrawal } from '../server/healthConsent/withdrawal';
 import { LEGAL_VERSIONS } from '../src/lib/legalVersions';
@@ -138,6 +144,20 @@ describe('trusted data-only erasure worker', () => {
     expect(await processHealthDataErasure('a', Date.now() + 30000)).toBe('complete');
     expect(fixture.records.get(consentPath('a'))).toMatchObject({ status: 'withdrawn', revision: 7 });
     expect(fixture.records.has('users/a')).toBe(false);
+  });
+
+  it('retires a completed receipt only after its erasure epoch is durably attested', async () => {
+    await createHealthDataErasureJob('a');
+    expect(await processHealthDataErasure('a', Date.now() + 30000)).toBe('complete');
+    const job = fixture.records.get(markerPath('a'))!;
+    job.purgeAfter = Timestamp.fromMillis(Date.now() - 1);
+    fixture.records.get(consentPath('a'))!.erasedBeforeRevision = 2;
+    expect(await purgeExpiredCompletedHealthErasures(Date.now() + 30000)).toBe(0);
+    expect(fixture.records.has(markerPath('a'))).toBe(true);
+    fixture.records.get(consentPath('a'))!.erasedBeforeRevision = 3;
+    expect(await purgeExpiredCompletedHealthErasures(Date.now() + 30000)).toBe(1);
+    expect(fixture.records.has(markerPath('a'))).toBe(false);
+    expect(fixture.records.has(consentPath('a'))).toBe(true);
   });
 
   it('denies new requests while consent is active or full account deletion is pending', async () => {
