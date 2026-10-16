@@ -102,13 +102,14 @@ export const ConsentOverlay: React.FC = () => {
                     <p className="ui-consent-overlay-12" style={{ margin: "0 0 0.75rem 0" }}>
                         Se non desideri accettare, puoi comunque esercitare i tuoi diritti sui dati:
                     </p>
+                    <p className="ui-consent-overlay-12" style={{ margin: "0 0 0.75rem 0" }}>Il file JSON esportato non è cifrato e, se il cloud non è disponibile, può contenere soltanto i dati locali. Conservalo in un luogo protetto.</p>
                     <div style={{ display: "flex", flexDirection: "column", gap: "0.625rem" }}>
                         <button
                             className="btn ui-consent-overlay-13"
                             onClick={() => void handleExportBackup()}
                             disabled={exportingData}
                         >
-                            <span aria-hidden="true">📥</span> {exportingData ? 'Preparazione backup…' : (isGuest ? 'Backup JSON dei dati locali' : 'Backup JSON completo')}
+                            <span aria-hidden="true">📥</span> {exportingData ? 'Preparazione backup…' : (isGuest ? 'Backup JSON dei dati locali' : 'Backup JSON dei tuoi dati')}
                         </button>
                         <button className="btn ui-consent-overlay-14"  onClick={handleDeleteAccount}>
                             <Trash2 size={16} aria-hidden="true" /> {isGuest ? 'Elimina dati locali' : 'Elimina account permanentemente'}

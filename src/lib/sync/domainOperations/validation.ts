@@ -4,6 +4,10 @@ import { requireBusinessId } from '../../businessIdentity';
 
 export const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
+export function assertNeverDomainOperation(_operation: never): never {
+    throw new Error('Operazione di dominio non supportata');
+}
+
 export function requireId(value: unknown, label: string): string {
     return requireBusinessId(value, label);
 }
@@ -87,7 +91,8 @@ export function reorderByIds<T>(
     const normalized = ids.map(id => requireId(id, label));
     if (new Set(normalized).size !== normalized.length) throw new Error(`${label}: ordine duplicato`);
     const currentIds = current.map(identity);
-    if (normalized.length !== currentIds.length || currentIds.some(id => !normalized.includes(id))) {
+    const requestedIds = new Set(normalized);
+    if (normalized.length !== currentIds.length || currentIds.some(id => !requestedIds.has(id))) {
         throw new Error(`${label}: l'ordine deve contenere esattamente le entità correnti`);
     }
     const byId = new Map(current.map(item => [identity(item), item]));

@@ -152,9 +152,10 @@ function OwnerBoundApp({ startupTab }: { startupTab: string | null }) {
     };
   }, [isGuest]);
   const syncing = useAppStore(state => state.syncing);
-  const userData = useAppStore(state => state.userData);
+  const hasStoredUserData = useAppStore(state => state.userData !== null);
+  const needsLocalLegalUpdate = useAppStore(state => needsLegalUpdate(state.userData?.legalConsent));
   const dataOwner = useAppStore(state => state.dataOwner);
-  const localWorkout = useAppStore(state => state.localWorkout);
+  const hasLocalWorkout = useAppStore(state => state.localWorkout !== null);
   const saveError = useAppStore(state => state.saveError);
   const syncHealth = useAppStore(state => state.syncHealth);
   const syncPresentation = useAppStore(state => state.syncPresentation);
@@ -180,13 +181,13 @@ function OwnerBoundApp({ startupTab }: { startupTab: string | null }) {
 
   const [showGuestLogin, setShowGuestLogin] = useState(readGuestLoginOverlayState);
 
-  const hasUserData = Boolean(userData) && dataOwner === navigationOwner;
+  const hasUserData = hasStoredUserData && dataOwner === navigationOwner;
   const [serverConsentSyncFailed, setServerConsentSyncFailed] = useState(false);
   const serverConsentSyncAttempted = useRef(false);
   const acceptedOnServer = currentUser && !isGuest && healthConsentStatus === 'active'
     ? getServerConfirmedLegalConsent(currentUser.uid) : null;
-  const persistTrustedLegal = !!acceptedOnServer && hasUserData && userData
-    && needsLegalUpdate(userData.legalConsent) && !serverConsentSyncFailed
+  const persistTrustedLegal = !!acceptedOnServer && hasUserData
+    && needsLocalLegalUpdate && !serverConsentSyncFailed
     && guestMigrationStatus === 'idle';
   useEffect(() => {
     if (!persistTrustedLegal || !acceptedOnServer || serverConsentSyncAttempted.current) return;
@@ -200,8 +201,7 @@ function OwnerBoundApp({ startupTab }: { startupTab: string | null }) {
       setSaveError('Consenso server confermato ma salvataggio locale non riuscito. Riprova dalla schermata dei termini.');
     });
   }, [persistTrustedLegal, acceptedOnServer, submitLegalConsent, setSaveError]);
-  const showConsentOverlay = hasUserData && userData && needsLegalUpdate(userData.legalConsent)
-    && !persistTrustedLegal;
+  const showConsentOverlay = hasUserData && needsLocalLegalUpdate && !persistTrustedLegal;
   const guestLoginOverlayVisible = showGuestLogin && (!currentUser || (isGuest && guestMigrationStatus === 'idle'));
   const guestLoginMigrationPending = !!currentUser && guestMigrationStatus === 'pending';
   const guestLoginMigrationFailed = !!currentUser && guestMigrationStatus === 'failed';
@@ -509,7 +509,7 @@ function OwnerBoundApp({ startupTab }: { startupTab: string | null }) {
   }
 
   // Never render an unowned/foreign snapshot in a newly authenticated view.
-  if ((currentUser || isGuest) && (userData !== null || localWorkout !== null) && dataOwner !== navigationOwner) {
+  if ((currentUser || isGuest) && (hasStoredUserData || hasLocalWorkout) && dataOwner !== navigationOwner) {
     return <BrandLoadingScreen label="Preparazione account in corso" />;
   }
 

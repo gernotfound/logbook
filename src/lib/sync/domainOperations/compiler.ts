@@ -1,7 +1,6 @@
 import type { CachedGlobalCatalog, UserData, WorkoutSession } from '../../../types';
 import { getLocalDateString } from '../../utils/date';
-import { setOwnDataProperty } from '../../utils/object';
-import { projectDocuments, type DocumentData } from '../documentProjection';
+import { projectDocuments } from '../documentProjection';
 import {
     diffDocuments,
     type SemanticOperation,
@@ -9,7 +8,7 @@ import {
 } from '../semanticProjection';
 import type { DomainOperation, DomainOperationBatch } from './contracts';
 import { normalizeDomainOperationBatch } from './reducer';
-import { DATE_RE, requireDate, requireId } from './validation';
+import { DATE_RE, requireDate, requireId, assertNeverDomainOperation } from './validation';
 
 type Scope = {
     rootKeys: Set<string>;
@@ -104,29 +103,11 @@ function collectScope(before: UserData, after: UserData, operations: readonly Do
                 if (newMonth) addMonthly(scope, `history_months/${newMonth}`, id);
                 break;
             }
+            default: assertNeverDomainOperation(operation);
         }
     }
 
     return scope;
-}
-
-function pickDocument(source: DocumentData, keys: Iterable<string>): DocumentData {
-    const result: DocumentData = {};
-    for (const key of keys) {
-        if (Object.hasOwn(source, key)) setOwnDataProperty(result, key, source[key]);
-    }
-    return result;
-}
-
-function projectScoped(data: UserData, catalog: CachedGlobalCatalog, scope: Scope): Map<string, DocumentData> {
-    const full = projectDocuments(data, catalog);
-    const scoped = new Map<string, DocumentData>();
-
-    if (scope.rootKeys.size) scoped.set('', pickDocument(full.get('') ?? {}, scope.rootKeys));
-    for (const [path, ids] of scope.monthly.entries()) {
-        scoped.set(path, pickDocument(full.get(path) ?? {}, ids));
-    }
-    return scoped;
 }
 
 export function compileDomainOperations(
@@ -140,7 +121,7 @@ export function compileDomainOperations(
 ): SemanticOperation[] {
     const operations = normalizeDomainOperationBatch(batch);
     const scope = collectScope(before, after, operations);
-    const baseDocuments = projectScoped(before, catalog, scope);
-    const desiredDocuments = projectScoped(after, catalog, scope);
+    const baseDocuments = projectDocuments(before, catalog, scope);
+    const desiredDocuments = projectDocuments(after, catalog, scope);
     return diffDocuments(baseDocuments, desiredDocuments, actorId, seq, clock);
 }

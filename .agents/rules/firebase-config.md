@@ -1,6 +1,9 @@
 # Configurazione Firebase — TheLogBook
 
-> Stato: normativo | Ultima verifica: 2026-09-30 | File verificati: `src/lib/firebase.ts`, `src/lib/appCheck.ts`, `server/accountDeletion/firebaseAdmin.ts`, `api/account-deletion-cron.ts`, `firestore.rules`, `firebase.json`, `.firebaserc`, `vercel.json`, `.env.example`
+**Quando leggere:** Firebase Auth, App Check, Firestore Rules/indici, WIF, CSP e deployment.
+**Non inferire:** `permission-denied` non discrimina da solo Auth, Rules o App Check; Emulator e Production sono prove differenti.
+
+> Stato: normativo | Ricognizione originaria: 2026-09-30; stato live da verificare nel provider | File allora verificati: `src/lib/firebase.ts`, `src/lib/appCheck.ts`, `server/accountDeletion/firebaseAdmin.ts`, `api/account-deletion-cron.ts`, `firestore.rules`, `firebase.json`, `.firebaserc`, `vercel.json`, `.env.example`
 
 ## Tre contratti di configurazione distinti
 
@@ -34,7 +37,7 @@ Google Cloud può presentare reCAPTCHA Enterprise dentro il prodotto più ampio 
 - **Stato:** `src/lib/appCheck.ts` distingue provider non inizializzato, disabled, unsupported, provider-ready, token-ready, token-error ed errore di inizializzazione. Un provider senza token non è considerato App Check attivo.
 - **Support check:** manuale su runtime browser (`window.crypto`, `window.fetch`).
 - **Site key canonica:** `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY`.
-- **Compatibilità:** il cutover Production alla variabile canonica `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY` è stato completato e verificato il 2026-09-30; i precedenti alias `VITE_RECAPTCHA_V3_SITE_KEY` e `VITE_RECAPTCHA_SITE_KEY` non fanno più parte del contratto runtime e non devono essere reintrodotti.
+- **Compatibilità storica:** il cutover Production alla variabile canonica `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY` risultava verificato il 2026-09-30; lo stato odierno va controllato nel provider. I precedenti alias `VITE_RECAPTCHA_V3_SITE_KEY` e `VITE_RECAPTCHA_SITE_KEY` non fanno più parte del contratto runtime e non devono essere reintrodotti.
 - **Semantica se manca la site key:** App Check entra in stato `disabled/fallback`; questa condizione **non** fa parte del fail-fast delle quattro env Firebase core e non impedisce `initializeApp` né il funzionamento locale/offline.
 - **Token iniziale:** un failure di acquisizione porta a `token-error/fallback` e non viene dichiarato healthy. Non trasformare genericamente ogni `permission-denied` Firestore in “normale bootstrap noise”.
 
@@ -132,7 +135,7 @@ Le collection `users/{uid}/telemetry_errors`, `telemetry_events` e `telemetry_an
 
 Per gli shard mensili di history e nutrizione, le Rules limitano anche la cardinalità dei campi dinamici rispettivamente a **256 sessioni** e **31 giornate** per mese (esclusi i due marker `_schemaVersion` e `_sync`). È un limite di integrità/abuso, **non** la validazione approfondita di ogni elemento. Le Security Rules non supportano un ciclo sulle chiavi dinamiche o il parser Zod; il gateway `src/lib/sync/monthlyIntegrity.ts` deve verificare date, identità e normalizzazione dei record remoti. Non attribuire alle Rules una validazione per-elemento inesistente.
 
-Il Protocol 3 ammette nei causal clock cloud solo le 16 chiavi di slot replica `s00`–`s15`; Firestore Rules rifiuta actor ID arbitrari anche se la firma del writer e il registro replica sono validi. Questa protezione riguarda i **metadati causali**; non verifica i valori di ogni stamp né gli identificativi business dinamici dei documenti mensili, che restano gestiti dai gateway applicativi.
+Il Protocol 3 ammette nei causal clock cloud solo le 16 chiavi di slot replica `s00`–`s15`; le Rules rifiutano actor ID arbitrari e validano anche la coordinata dell'attuale writer come intero non negativo entro il safe integer. Il limite di 1000 espressioni delle Rules impedisce di validare nello stesso boundary tutte e 16 le coordinate senza bloccare write lecite: la validazione completa resta obbligatoria nel parser TypeScript prima di hydration e replay. Questa protezione riguarda i **metadati causali**; non verifica i valori di ogni stamp né gli identificativi business dinamici dei documenti mensili, che restano gestiti dai gateway applicativi.
 
 Le Rules verificano gli invarianti top-level del protocollo che appartengono al boundary di autorizzazione. Sync Protocol 3 è la baseline del primo account reale: Protocol 1/2 non sono più accettati né migrati. Non esiste un percorso bootstrap Firestore business privo di causal metadata: prima di qualsiasi write business il client crea `users/{uid}/sync_control/state`; ogni documento root/mensile deve contenere `_schemaVersion: 1`, `_sync` Protocol 3 e `_sync.writer` (`slot`, `replicaId`, `generation`, `seq`) coerente con la replica attiva e con l'avanzamento atomico di `lastSeq`. Un documento persistito privo dei marker correnti è incompatibile e viene rifiutato fail-closed, mentre un documento realmente assente è una normale baseline vuota. Le delete fisiche client-side dei documenti mensili sono sempre negate; la cancellazione fisica resta nel backend trusted di account deletion. `request.time` è la prova autorevole della lease; la validazione completa di Vector Clock/`FieldStamp` e la completezza del full checkpoint restano nel protocollo TypeScript e nei relativi test.
 
@@ -185,3 +188,8 @@ Gli header browser del frontend sono configurati in `firebase.json`; `vercel.jso
 **MUST:** `service-account.json` resta nel `.gitignore` e non va mai committato.
 
 **MUST:** nessuna credenziale Firebase Admin privata deve essere copiata in Markdown, `.env.example`, codice client o test fixture committate.
+
+## Riferimenti operativi
+
+- [Registro dei servizi esterni](../../docs/operations/external-services-register.md): decisioni e configurazioni esterne da verificare direttamente nei provider.
+- [Cutover Firebase Hosting](../../docs/operations/firebase-hosting-cutover.md): documento **storico completato**, non usare come procedura di deploy corrente senza rivalidare workflow e provider.

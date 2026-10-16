@@ -7,6 +7,7 @@ import { useDialogStore } from '../../store/useDialogStore';
 import { LEGAL_VERSIONS } from '../../lib/legalVersions';
 import { beginGuestHealthReacceptance, completeGuestHealthReacceptance, finishHealthConsentReacceptance, registerInitialHealthConsent, reacceptHealthConsent, reacceptHealthConsentLocally, reconfirmStaleHealthWithdrawal, retainNewerHealthConsent, refreshHealthConsent, type HealthConsentStatus } from '../../lib/healthConsent';
 import { safeHardReload } from '../../lib/sync/safeReload';
+import { UnverifiedTabSnapshotError } from '../../lib/sync/reloadBarrier';
 import { PrivacyPolicy } from '../../pages/PrivacyPolicy';
 import { TermsAndConditions } from '../../pages/TermsAndConditions';
 
@@ -41,7 +42,7 @@ function ReacceptanceForm({ enabled, busy, onReaccept, firstAcceptance = false, 
 }
 
 export function HealthConsentSuspended({ status, user }: { status: HealthConsentStatus; user: User | null }) {
-  const { handleExportBackup, handleDeleteAccount, handleLogout, exportingData } = useSettings();
+  const { handlePrepareBackup, preparedBackupUrl, releasePreparedBackup, handleDeleteAccount, handleDeleteHealthData, erasingHealthData, handleLogout, exportingData } = useSettings();
   const submitLegalConsent = useAppStore(state => state.submitLegalConsent);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -159,6 +160,28 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
     }
   };
 
+  const reloadPage = async () => {
+    if (busy || recoveryBusy || exportingData) return;
+    setError(null);
+    try {
+      await safeHardReload();
+    } catch (error) {
+      if (!(error instanceof UnverifiedTabSnapshotError)) {
+        setError(error instanceof Error ? error.message : 'Impossibile ricaricare in sicurezza.');
+        return;
+      }
+      const confirmed = await useDialogStore.getState().showConfirm(
+        'Alcuni dati presenti solo in memoria non corrispondono all’archivio salvato. Non possiamo verificare che tutte le modifiche siano state conservate.\\n\\nSe continui, questi dati in memoria potrebbero andare persi; l’archivio salvato sul dispositivo e le modifiche ancora pendenti non verranno cancellati.\\n\\nVuoi ricaricare comunque?'
+      );
+      if (!confirmed) return;
+      try {
+        await safeHardReload(undefined, { discardUnverifiedInMemoryData: true });
+      } catch (retryError) {
+        setError(retryError instanceof Error ? retryError.message : 'Impossibile ricaricare in sicurezza.');
+      }
+    }
+  };
+
   return <main id="auth-overlay" role="main">
     <section className="auth-panel" aria-label="Accesso sospeso" style={{ maxWidth: 560, maxHeight: '90vh', overflowY: 'auto' }}>
       <h1>{initialAcceptance ? 'Primo consenso richiesto' : status === 'checking' ? 'Verifica del consenso in corso' : status === 'error' ? 'Verifica del consenso non riuscita' : 'Accesso a TheLogBook sospeso'}</h1>
@@ -210,24 +233,34 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
         <ReacceptanceForm
           key={initialAcceptance ? 'initial' : canReaccept ? 'confirmed' : 'awaiting-confirmation'}
           enabled={canReaccept || initialAcceptance || localOnlyReaccept}
-          busy={busy}
+          busy={busy || erasingHealthData}
           onReaccept={initialAcceptance ? acceptInitial : reaccept}
           firstAcceptance={initialAcceptance}
           localOnly={localOnlyReaccept}
         />}
       <h2>Gestisci i tuoi dati e i tuoi diritti</h2>
       <p>Puoi farlo anche senza prestare un nuovo consenso.</p>
+      <p>Il backup JSON esportato non è cifrato e, se il cloud non è disponibile, può essere parziale. Conservalo in un luogo protetto.</p>
       <div style={{ display: 'grid', gap: 12 }}>
         <button type="button" className="btn" onClick={() => setPrivacy(true)}>Leggi l’informativa privacy</button>
         <button type="button" className="btn" onClick={() => setTerms(true)}>Leggi i termini e condizioni</button>
-        <button type="button" className="btn" onClick={() => void handleExportBackup()} disabled={exportingData}>{exportingData ? 'Preparazione…' : 'Esporta i tuoi dati (backup JSON)'}</button>
-        <button type="button" className="btn" onClick={() => void handleLogout()}>Esci dall'account</button>
-        <button type="button" className="btn" onClick={() => void handleDeleteAccount()}>Elimina definitivamente l'account</button>
-        {user !== null && <button type="button" className="btn" disabled={busy || offline} onClick={() => { void refreshHealthConsent(user); }}>Riprova a verificare il consenso</button>}
-        <button type="button" className="btn" disabled={busy} onClick={() => {
-          void safeHardReload().catch(error => setError(error instanceof Error
-            ? error.message : 'Ricaricamento non sicuro: i dati locali sono stati conservati.'));
-        }}>Ricarica TheLogBook</button>
+        <button type="button" className="btn" onClick={() => { void handlePrepareBackup().catch(error => setError(error instanceof Error ? error.message : 'Backup non riuscito.')); }} disabled={exportingData || erasingHealthData}>{exportingData ? 'Preparazione…' : 'Prepara backup JSON'}</button>
+        {erasingHealthData && <p role="status">Cancellazione e verifica dei dati cloud in corso. Non chiudere TheLogBook finché è possibile attendere l'esito.</p>}
+        {preparedBackupUrl && <>
+          <p role="status">Backup pronto. Tocca il collegamento qui sotto per scaricare il file sul dispositivo.</p>
+          <a className="btn btn-primary" href={preparedBackupUrl} download="logbook_backup.json">Scarica backup JSON</a>
+          <button type="button" className="btn" onClick={releasePreparedBackup}>Elimina il download preparato</button>
+        </>}
+        {user !== null && status === 'withdrawn' && <>
+          <p>Puoi eliminare dal database operativo i tuoi dati fitness e nutrizione mantenendo il tuo account. Servono Internet, verifica dell’identità e due conferme. Copie offline, backup esportati e backup tecnici del fornitore potrebbero permanere secondo le rispettive politiche di conservazione.</p>
+          <button type="button" className="btn" disabled={busy || exportingData || erasingHealthData || offline}
+            onClick={() => { void handleDeleteHealthData(); }}>
+            {erasingHealthData ? 'Cancellazione in corso…' : 'Elimina definitivamente i miei dati'}
+          </button>
+        </>}
+        <button type="button" className="btn" disabled={erasingHealthData} onClick={() => void handleLogout()}>Esci dall'account</button>
+        <button type="button" className="btn" disabled={erasingHealthData} onClick={() => void handleDeleteAccount()}>Elimina definitivamente l'account</button>
+        <button type="button" className="btn" disabled={busy || recoveryBusy || exportingData || erasingHealthData} onClick={() => { void reloadPage(); }}>Ricarica pagina</button>
       </div>
       {error && <p role="alert">{error}</p>}
     </section>

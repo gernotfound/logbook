@@ -301,6 +301,27 @@ it.each([
     await assertFails(deleteDoc(existingRef));
 });
 
+it.each([
+    ['anonymous', null],
+    ['owner', 'a'],
+    ['other user', 'b'],
+])('keeps health_data_erasures server-only for %s clients', async (_label, uid) => {
+    const db = uid === null
+        ? asModularFirestore(env.unauthenticatedContext().firestore())
+        : asModularFirestore(env.authenticatedContext(uid, { email_verified: true }).firestore());
+    await env.withSecurityRulesDisabled(async context => {
+        const adminDb = asModularFirestore(context.firestore());
+        await setDoc(doc(adminDb, 'health_data_erasures/a'), {
+            uid: 'a', status: 'requested', consentRevision: 1,
+        });
+    });
+    const existingRef = doc(db, 'health_data_erasures/a');
+    await assertFails(getDoc(existingRef));
+    await assertFails(setDoc(doc(db, 'health_data_erasures/new'), { status: 'complete' }));
+    await assertFails(updateDoc(existingRef, { status: 'complete' }));
+    await assertFails(deleteDoc(existingRef));
+});
+
 it('rejects unknown root fields, invalid origin and malformed month paths inside fenced writes', async () => {
     const db = asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore());
     const replica = await registerReplica(db, 'a');
@@ -399,11 +420,45 @@ it('rejects unknown causal clock actors on fenced root and monthly writes withou
     }
 });
 
+it('rejects unsafe Protocol 3 clock coordinates in otherwise fenced business writes', async () => {
+    const db = asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore());
+    const replica = await registerReplica(db, 'a');
+    const controlRef = doc(db, 'users/a/sync_control/state');
+    const invalidCoordinates = [-1, '1', 9007199254740992];
+    for (const invalid of invalidCoordinates) {
+        const control = (await getDoc(controlRef)).data()!;
+        const entry = control.replicas[replica.slot];
+        const seq = entry.lastSeq + 1;
+        const batch = writeBatch(db);
+        batch.set(controlRef, {
+            ...control,
+            replicas: { ...control.replicas, [replica.slot]: { ...entry, lastSeq: seq } },
+            mutation: { slot: replica.slot, action: 'advance' },
+        });
+        batch.set(doc(db, 'users/a'), {
+            profile: { height: '175' },
+            _schemaVersion: 1,
+            _sync: {
+                protocolVersion: CURRENT_SYNC_PROTOCOL,
+                clock: { [replica.slot]: invalid },
+                fields: {},
+                writer: { slot: replica.slot, replicaId: replica.replicaId,
+                    generation: replica.generation, seq, consentRevision: 1 },
+            },
+        });
+        await assertFails(batch.commit());
+        expect((await getDoc(doc(db, 'users/a'))).exists()).toBe(false);
+    }
+    await assertSucceeds(fencedWrite(db, 'users/a', { profile: { height: '175' } }, replica));
+});
+
 it('permits public catalog reads but denies client writes', async () => {
     for (const db of [asModularFirestore(env.unauthenticatedContext().firestore()), asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore())]) {
-        const ref = doc(db, 'global_catalog/manifest');
-        await assertSucceeds(getDoc(ref));
-        await assertFails(setDoc(ref, { version: 'tampered' }));
+        for (const path of ['global_catalog/manifest', 'global_catalog/versioned/items/private']) {
+            const ref = doc(db, path);
+            await assertSucceeds(getDoc(ref));
+            await assertFails(setDoc(ref, { version: 'tampered' }));
+        }
     }
 });
 

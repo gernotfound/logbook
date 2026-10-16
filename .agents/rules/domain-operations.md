@@ -1,5 +1,8 @@
 # Domain Operations V4 — TheLogBook
 
+**Quando leggere:** mutazioni UI/hook, reducer, compiler, identità e commit di dominio.
+**Non inferire:** Domain Operations è un layer di intento locale, non un nuovo sync protocol persistito.
+
 > Stato: normativo da M8 | Baseline M7: `4d6b5d1f306587c16ee15e3ddb7386a63c5b94bd`
 
 ## Obiettivo
@@ -23,14 +26,7 @@ UI / hook
 
 ## Versioni
 
-M8 NON modifica le versioni persistite:
-
-```text
-CURRENT_DATA_SCHEMA = 1
-CURRENT_SYNC_PROTOCOL = 3
-CURRENT_LOCAL_ENVELOPE = 5
-CURRENT_BACKUP_SCHEMA = 3
-```
+M8 non ha introdotto nuove versioni persistite. La fonte eseguibile attuale è `src/lib/schemaEvolution.ts` con `CURRENT_DATA_SCHEMA`, `CURRENT_SYNC_PROTOCOL`, `CURRENT_LOCAL_ENVELOPE` e `CURRENT_BACKUP_SCHEMA`: non derivare questi numeri dalla versione PWA né da questa nota storica.
 
 La sigla “V4” di Domain Operations indica che il layer opera sopra il journal/envelope V5 corrente. Le DomainOperation vengono compilate in `SemanticOperation` prima della persistenza del journal.
 

@@ -137,6 +137,8 @@ describe('RISK-02: ConsentOverlay UI Behavior', () => {
         expect(screen.getByRole('button', { name: /Informativa sulla Privacy/i })).toBeDefined();
         expect(screen.getByRole('button', { name: /Termini e Condizioni/i })).toBeDefined();
         expect(screen.queryByText(/essere conformi/i)).toBeNull();
+        expect(screen.getByText(/Il file JSON esportato non è cifrato/i)).toBeDefined();
+        expect(screen.getByRole('button', { name: /Backup JSON dei tuoi dati/i })).toBeDefined();
     });
 
     it('chiarisce che una palestra non riceve automaticamente accesso ai dati degli iscritti', () => {
@@ -146,7 +148,7 @@ describe('RISK-02: ConsentOverlay UI Behavior', () => {
 
     it('descrive la rimozione di GA4 e la data dell’informativa aggiornata', () => {
         render(<PrivacyPolicy onClose={vi.fn()} />);
-        expect(screen.getByText('Aggiornata al 13 ottobre 2026')).toBeDefined();
+        expect(screen.getByText('Aggiornata al 15 ottobre 2026')).toBeDefined();
         expect(screen.getByText(/non integra Google Analytics 4/i)).toBeDefined();
         expect(screen.queryByText(/cookie first-party tecnici\/analitici/i)).toBeNull();
     });
@@ -159,6 +161,8 @@ describe('RISK-02: ConsentOverlay UI Behavior', () => {
         expect(screen.getByText(/può contenere l'identificativo Firebase dell'account/)).toBeDefined();
         expect(screen.getByText(/esclude i report più vecchi di sette giorni/)).toBeDefined();
         expect(screen.getByText(/se la PWA resta chiusa, i byte possono restare sul dispositivo oltre sette giorni/)).toBeDefined();
+        expect(screen.getByText(/Le chiavi sono conservate nello stesso profilo del browser/)).toBeDefined();
+        expect(screen.getByText(/non costituisce cifratura end-to-end/)).toBeDefined();
     });
 
     it('documenta l’effetto della revoca e lascia identificabili i dati legali non ancora definiti', () => {

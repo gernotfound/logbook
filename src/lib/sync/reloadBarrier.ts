@@ -5,8 +5,13 @@ import { draftRegistry } from '../utils/draftRegistry';
 import { commitLocal, readLocal } from './localRepository';
 import { captureSession, isActiveGuestSession, isCurrentSession } from './session';
 import { auth } from '../firebase';
+import { currentHealthConsentStatus, getGuestHealthConsentStatus } from '../healthConsent';
 import { readBrowserValueStrict } from './browserStorage';
 import { persistOwnerBoundWorkoutSnapshot } from './deviceCriticalState';
+import { readDeviceValueStrict } from './deviceStorage';
+import { readWorkoutDeviceIntent } from './workoutDeviceIntent';
+import { equivalentWorkoutSnapshot } from './workoutSnapshotEquality';
+import type { WorkoutSession } from '../../types';
 import { UserDataSchema } from '../schema';
 import type { UserData } from '../../types';
 import { markTabSnapshotClean, readTabSnapshotState } from './tabSnapshotCausality';
@@ -37,7 +42,27 @@ export function prepareForRequiredUpdateReload() {
     return session;
 }
 
-export async function prepareForReload() {
+export class UnverifiedTabSnapshotError extends Error {
+    constructor() {
+        super('Impossibile verificare in sicurezza la provenienza delle modifiche locali. Riapri TheLogBook e riprova.');
+        this.name = 'UnverifiedTabSnapshotError';
+    }
+}
+
+type ReloadOptions = { discardUnverifiedInMemoryData?: boolean };
+
+function isConsentSuspended(owner: string): boolean {
+    const status = owner === 'guest'
+        ? getGuestHealthConsentStatus()
+        : currentHealthConsentStatus(owner.slice(5));
+    // A generic verification error or first-consent screen is NOT proof that
+    // the person deliberately withdrew consent.
+    return status === 'withdrawn' || status === 'pending'
+        || status === 'reaccepting' || status === 'recovery-required'
+        || status === 'stale-request';
+}
+
+export async function prepareForReload(options: ReloadOptions = {}) {
     const session = captureSession();
     flushSync(() => draftRegistry.flushAll({ strict: true }));
     if (useAppStore.getState().localPersistenceBlocked) {
@@ -53,11 +78,15 @@ export async function prepareForReload() {
     let state = useAppStore.getState();
     if (state.userData && envelope && !equal(UserDataSchema.parse(envelope.data), UserDataSchema.parse(state.userData))) {
         const tabSnapshot = readTabSnapshotState(session);
-        if (!tabSnapshot) {
-            throw new Error('Impossibile verificare in sicurezza la provenienza delle modifiche locali. Riapri TheLogBook e riprova.');
+        if (!tabSnapshot && !(options.discardUnverifiedInMemoryData === true
+            && state.dataOwner === session.owner && isConsentSuspended(session.owner))) {
+            throw new UnverifiedTabSnapshotError();
         }
 
-        if (tabSnapshot.dirty) {
+        // The owner explicitly accepted discarding unverified RAM state from
+        // the SUSPENDED consent screen. Do not project it into a journal or
+        // touch the durable envelope. A missing envelope is still fatal below.
+        if (tabSnapshot?.dirty) {
             // Replay only the changes made by this tab since its last known durable base.
             // commitLocal applies that causal delta over the latest shared IndexedDB envelope,
             // preserving entities written by another tab in the meantime.
@@ -79,6 +108,23 @@ export async function prepareForReload() {
     }
     if (state.userData && envelope) markTabSnapshotClean(session, state.userData);
     if (useAppStore.getState().localPersistenceBlocked) throw new Error('Persistenza locale bloccata: aggiornamento sospeso.');
-    persistOwnerBoundWorkoutSnapshot(session, state.dataOwner, state.localWorkout);
+    if (isConsentSuspended(session.owner)) {
+        // A withdrawn consent does not authorize writing device-critical data.
+        // Authenticate the existing copies, but NEVER replace them with the
+        // possibly stale suspended-screen RAM snapshot (especially null).
+        const stored = readDeviceValueStrict('workout', session.owner);
+        const intent = session.owner.startsWith('user:')
+            ? readWorkoutDeviceIntent(session.owner)
+            : null;
+        const durableWorkout: WorkoutSession | null = intent?.workout
+            ?? (stored === null ? null : JSON.parse(stored) as WorkoutSession);
+        if (state.localWorkout && !equivalentWorkoutSnapshot(state.localWorkout, durableWorkout)
+            && options.discardUnverifiedInMemoryData !== true) {
+            throw new UnverifiedTabSnapshotError();
+        }
+    } else {
+        persistOwnerBoundWorkoutSnapshot(session, state.dataOwner, state.localWorkout);
+    }
+    if (!isCurrentSession(session)) throw new Error('Sessione cambiata. Ripeti l’operazione.');
     return session;
 }

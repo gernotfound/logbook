@@ -14,6 +14,7 @@ export type HealthConsentState = {
   acceptedAt?: string;
   privacyVersion?: string;
   termsVersion?: string;
+  erasedBeforeRevision?: number;
 };
 
 function validUid(uid: string): void {
@@ -38,9 +39,17 @@ export async function readHealthConsentState(uid: string, requireRegistration = 
     || !Number.isSafeInteger(data.revision) || data.revision < 1) {
     throw new Error('Stato consenso server non valido.');
   }
+  // Server-owned floor: a journal written in a deleted consent epoch may
+  // be exported for portability, but must not be replayed as a current edit.
+  const erasedBefore = data.erasedBeforeRevision;
+  if (erasedBefore !== undefined && (!Number.isSafeInteger(erasedBefore)
+    || erasedBefore < 1 || erasedBefore >= data.revision)) {
+    throw new Error('Generazione cancellazione server non valida.');
+  }
   return {
     status: data.status,
     revision: data.revision,
+    ...(erasedBefore !== undefined ? { erasedBeforeRevision: erasedBefore } : {}),
     ...(data.status === 'active' && typeof data.acceptedAt === 'string'
       ? { acceptedAt: data.acceptedAt } : {}),
     ...(data.status === 'active' && typeof data.privacyVersion === 'string'
@@ -156,8 +165,14 @@ export async function recordHealthConsentReacceptance(
     const deletion = db.collection('account_deletions').doc(uid);
     const state = consentRef(uid);
     const root = db.collection('users').doc(uid);
-    const [job, previousSnap, userRoot] = await Promise.all([tx.get(deletion), tx.get(state), tx.get(root)]);
+    const erasure = db.collection('health_data_erasures').doc(uid);
+    const [job, previousSnap, userRoot, erasureJob] = await Promise.all([
+      tx.get(deletion), tx.get(state), tx.get(root), tx.get(erasure),
+    ]);
     if (job.exists) throw new Error('Cancellazione account in corso.');
+    if (erasureJob.exists && erasureJob.data()?.status !== 'complete') {
+      throw new HealthConsentRevisionConflictError();
+    }
     const previous = previousSnap.data();
     // Idempotent retry must prove it belongs to THIS transition and uses
     // the same legal versions; it must not resurrect a superseded acceptance.

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
 import { Logic } from '../lib/logic';
@@ -39,7 +39,7 @@ export function useNutritionMeals(dateStr?: string) {
     const isDayOn = Object.prototype.hasOwnProperty.call(localDayOnMap, targetDateStr) ? localDayOnMap[targetDateStr] : dbIsDayOn;
 
     // Use the shared parser to handle decimal commas and invalid measurements.
-    const latestWeight = Logic.getLatestUserWeight(nutritionMap);
+    const latestWeight = useMemo(() => Logic.getLatestUserWeight(nutritionMap), [nutritionMap]);
 
     let dailyTarget = { kcal: 0, carbs: 0, pro: 0, fat: 0 };
     if (planning) {
