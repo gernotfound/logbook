@@ -40,14 +40,14 @@ export function calculateCycleMacroVolume(
     const validItems = cycle.routines.filter(item => routineMap.has(item.routineId));
     if (validItems.length === 0) return [];
 
-    const counts = getCycleVolumeFrequencies(validItems, cycle.sessionsPerWeek);
+    const counts = getCycleVolumeFrequencies(cycle.routines, cycle.sessionsPerWeek);
     if (!counts) return [];
     const totals = new Map<string, CycleMacroVolumeItem>();
 
-    for (const [index, item] of validItems.entries()) {
+    for (const [index, item] of cycle.routines.entries()) {
         const routine = routineMap.get(item.routineId);
         if (!routine) continue;
-        const effectiveFrequency = Math.max(0.01, counts.frequencies[index]);
+        const effectiveFrequency = counts.frequencies[index];
 
         for (const routineExercise of routine.exercises ?? []) {
             const exercise = exerciseMap.get(routineExercise.exId);

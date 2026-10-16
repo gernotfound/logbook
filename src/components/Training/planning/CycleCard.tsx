@@ -39,8 +39,8 @@ export const CycleCard: React.FC<CycleCardProps> = ({
 
     const isInvalidSchedule = schedule.summaryText === 'Parametri del ciclo da correggere';
     const sessionsPerWeek = isInvalidSchedule ? null : schedule.sessionsPerWeek;
-    const weeksLabel = isBoundedCycleCount(cycle.durationWeeks, MAX_CALCULATED_CYCLE_WEEKS)
-        ? String(cycle.durationWeeks) : '—';
+    const weeksLabel = isBoundedCycleCount(timeline.totalWeeks, MAX_CALCULATED_CYCLE_WEEKS)
+        ? String(timeline.totalWeeks) : '—';
 
     const menuItems: ContextMenuItem[] = [
         { id: 'edit-cycle', label: 'Modifica', icon: <Pencil size={16} />, onClick: () => onEdit(cycle) },

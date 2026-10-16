@@ -1,4 +1,4 @@
-import { MAX_ROUTINE_SEGMENTS, MAX_ROUTINE_SETS, requireRoutineSessionCount } from '../../lib/routineSessionLimits';
+import { InvalidRoutineSessionPlanError, MAX_ROUTINE_SEGMENTS, MAX_ROUTINE_SETS, requireRoutineSessionCount } from '../../lib/routineSessionLimits';
 import { Logic } from '../../lib/logic';
 import type { UserData, WorkoutRoutine, WorkoutSession } from '../../types';
 import { assertWorkoutClockHealthy } from '../../lib/workoutClockGuard';
@@ -104,6 +104,11 @@ export function buildRoutineWorkout(
         date: runtime.getLocalDateString(),
         ratingScale: 5,
         exercises: (routine.exercises || []).map((ex: any) => {
+            // Imported plans may contain unused huge arrays; reject them
+            // before allocating sets or cloning their nested contents.
+            if (Array.isArray(ex.setPlans) && ex.setPlans.length > MAX_ROUTINE_SETS) {
+                throw new InvalidRoutineSessionPlanError();
+            }
             const libDef = libraryMap.get(ex.exId);
             const isCardio = libDef?.trackingType === 'cardio';
             // Preserve the legacy default for absent/zero values, but reject

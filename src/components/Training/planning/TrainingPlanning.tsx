@@ -239,7 +239,7 @@ export default function TrainingPlanning({ onOpenSession }: TrainingPlanningProp
                         <div className="planning-active-title">
                             <span className="planning-active-badge">Ciclo attivo</span>
                             <h2>{activeCycle.name}</h2>
-                            <p>{activeCycleTimeline.formattedRange}{isBoundedCycleCount(activeCycle.durationWeeks, MAX_CALCULATED_CYCLE_WEEKS) ? ` · ${activeCycle.durationWeeks} settimane` : ''}</p>
+                            <p>{activeCycleTimeline.formattedRange}{isBoundedCycleCount(activeCycleTimeline.totalWeeks, MAX_CALCULATED_CYCLE_WEEKS) ? ` · ${activeCycleTimeline.totalWeeks} settimane` : ''}</p>
                             <CycleStrategySummary strategy={activeCycle.strategy} />
                             {activeCycle.notes ? <p className="planning-active-notes">{activeCycle.notes}</p> : null}
                         </div>

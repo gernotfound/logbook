@@ -269,34 +269,30 @@ export function calculateCycleSchedule(
     if (!isBoundedCycleCount(sessionsPerWeek, MAX_CYCLE_SESSIONS_PER_WEEK)) {
         return { ...emptyResult, summaryText: 'Parametri del ciclo da correggere' };
     }
-    const totalSessions = durationWeeks * sessionsPerWeek;
+    // The explicit end date defines the period when present; durationWeeks
+    // remains a compatible fallback for undated or historical cycles.
+    const timeline = calculateCycleTimeline(cycle);
+    const effectiveWeeks = timeline.totalWeeks;
+    if (!isBoundedCycleCount(effectiveWeeks, MAX_CALCULATED_CYCLE_WEEKS)) {
+        return { ...emptyResult, summaryText: 'Parametri del ciclo da correggere' };
+    }
+    const totalSessions = effectiveWeeks * sessionsPerWeek;
     const fullRotationsCount = Math.floor(totalSessions / N);
     const remainderSessions = totalSessions % N;
 
-    let baseStartDate: Date | null = null;
-    if (includeWeeks && cycle.startDate) {
-        try {
-            const parsed = typeof cycle.startDate === 'string' && !cycle.startDate.includes('T')
-                ? parseISO(cycle.startDate)
-                : new Date(cycle.startDate);
-            if (isValid(parsed)) {
-                baseStartDate = startOfDay(parsed);
-            }
-        } catch {
-            baseStartDate = null;
-        }
-    }
-
+    const baseStartDate = includeWeeks && timeline.startDate ? parseISO(timeline.startDate) : null;
+    const finalDate = includeWeeks && timeline.endDate ? parseISO(timeline.endDate) : null;
     const weeks: WeeklyCycleSchedule[] = [];
 
-    for (let w = 1; includeWeeks && w <= durationWeeks; w++) {
+    for (let w = 1; includeWeeks && w <= effectiveWeeks; w++) {
         let startDateStr: string | undefined;
         let endDateStr: string | undefined;
         let formattedRange: string | undefined;
 
         if (baseStartDate) {
             const wStart = addDays(baseStartDate, (w - 1) * 7);
-            const wEnd = addDays(wStart, 6);
+            const nominalEnd = addDays(wStart, 6);
+            const wEnd = finalDate && nominalEnd > finalDate ? finalDate : nominalEnd;
             startDateStr = format(wStart, 'yyyy-MM-dd');
             endDateStr = format(wEnd, 'yyyy-MM-dd');
             formattedRange = `${format(wStart, 'dd/MM')} - ${format(wEnd, 'dd/MM')}`;
@@ -329,7 +325,7 @@ export function calculateCycleSchedule(
         });
     }
 
-    let summaryText = `${N} ${N === 1 ? 'scheda' : 'schede'} in rotazione • ${sessionsPerWeek} ${sessionsPerWeek === 1 ? 'seduta' : 'sedute'}/sett. • ${durationWeeks} sett. (${totalSessions} sedute totali`;
+    let summaryText = `${N} ${N === 1 ? 'scheda' : 'schede'} in rotazione • ${sessionsPerWeek} ${sessionsPerWeek === 1 ? 'seduta' : 'sedute'}/sett. • ${effectiveWeeks} sett. (${totalSessions} sedute totali`;
     if (fullRotationsCount > 0) {
         summaryText += ` = ${fullRotationsCount} ${fullRotationsCount === 1 ? 'giro completo' : 'giri completi'}`;
         if (remainderSessions > 0) {
@@ -389,25 +385,36 @@ export function getNextScheduledRoutine(
     const counts = getCycleVolumeFrequencies(validCycleRoutines, cycle.sessionsPerWeek);
     if (!counts) return null;
     const sessionsPerWeek = counts.sessionsPerWeek;
-    const totalSessions = durationWeeks * sessionsPerWeek;
+    const effectiveWeeks = calculateCycleTimeline(cycle).totalWeeks;
+    if (!isBoundedCycleCount(effectiveWeeks, MAX_CALCULATED_CYCLE_WEEKS)) return null;
+    const totalSessions = effectiveWeeks * sessionsPerWeek;
 
-    // Filter history for completed sessions that belong to this cycle
-    let completedCount = 0;
-    if (Array.isArray(history) && history.length > 0) {
-        completedCount = history.filter(w => {
-            if (!w) return false;
-            // Explicit cycleId match (if tagged with a cycle, must match this cycle.id)
-            if (w.cycleId) {
-                return w.cycleId === cycle.id;
-            }
-            return false;
-        }).length;
-    }
+    // Suggestions follow the last actually performed planned routine, not a
+    // mandatory quota or sequence. Older sessions lacking routineId retain
+    // the original count-based fallback.
+    const cycleHistory = Array.isArray(history) ? history.filter(w => w?.cycleId === cycle.id) : [];
+    const completedCount = cycleHistory.length;
+    let lastRoutineIndex: number | undefined;
+    let lastTime = Number.NEGATIVE_INFINITY;
+    let lastArrayIndex = -1;
+    cycleHistory.forEach((workout, index) => {
+        const routineIndex = availableCycleRoutines.findIndex(item => item.routineId === workout.routineId);
+        if (routineIndex < 0) return;
+        const recordedTime = [workout.globalEndTime, workout.endTime, workout.globalStartTime]
+            .find(time => typeof time === 'number' && Number.isFinite(time));
+        const parsedDate = typeof workout.date === 'string' ? parseISO(workout.date) : null;
+        const time = recordedTime ?? (parsedDate && isValid(parsedDate) ? parsedDate.getTime() : 0);
+        if (time > lastTime || (time === lastTime && index > lastArrayIndex)) {
+            lastTime = time;
+            lastArrayIndex = index;
+            lastRoutineIndex = routineIndex;
+        }
+    });
 
     const nextSessionIndex = completedCount + 1;
     const isCycleCompleted = completedCount >= totalSessions;
 
-    const routineIdx = completedCount % N;
+    const routineIdx = lastRoutineIndex === undefined ? completedCount % N : (lastRoutineIndex + 1) % N;
     const nextItem = availableCycleRoutines[routineIdx];
     const nextRoutine = nextItem ? routineMap.get(nextItem.routineId) : undefined;
     const rotationNumber = Math.floor(completedCount / N) + 1;
@@ -463,7 +470,8 @@ export function calculateCycleVolume(
         };
     }
 
-    const counts = getCycleVolumeFrequencies(validRoutines, cycle.sessionsPerWeek);
+    // Do not redistribute a missing routine's share onto other routines.
+    const counts = getCycleVolumeFrequencies(cycle.routines, cycle.sessionsPerWeek);
     if (!counts) return {
         totalWorkoutsPerWeek: 0, totalSetsPerWeek: 0,
         muscleVolumes: [], muscleColors: {}, highlightedMuscles: [],
@@ -477,11 +485,11 @@ export function calculateCycleVolume(
     const highlightedMusclesSet = new Set<string>();
     const rawMuscleSets = new Map<string, number>();
 
-    validRoutines.forEach((item, index) => {
+    cycle.routines.forEach((item, index) => {
         const routine = routineMap.get(item.routineId);
         if (!routine) return;
 
-        const effectiveFreq = Math.max(0.01, counts.frequencies[index]);
+        const effectiveFreq = counts.frequencies[index];
 
         (routine.exercises || []).forEach(routineEx => {
             if (!routineEx || !routineEx.exId) return;
