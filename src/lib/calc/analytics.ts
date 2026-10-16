@@ -268,7 +268,7 @@ export function computeWeeklyVolumeSeries(
     userWeight: number = 80,
     numWeeks: number = 8,
     referenceDate: Date | string = new Date()
-): WeeklyVolumeResult {
+): { points: WeeklyVolumePoint[]; stats: WeeklyVolumeStats } {
     return finishWeeklyVolumeSteps(computeWeeklyVolumeSteps(history, library, userWeight, numWeeks, referenceDate));
 }
 
@@ -279,7 +279,7 @@ export async function computeWeeklyVolumeSeriesCooperative(
     numWeeks: number = 8,
     referenceDate: Date | string = new Date(),
     signal?: AbortSignal
-): Promise<WeeklyVolumeResult> {
+): Promise<{ points: WeeklyVolumePoint[]; stats: WeeklyVolumeStats }> {
     if (signal?.aborted) throw new Error('Calcolo annullato: vista chiusa');
     const steps = computeWeeklyVolumeSteps(history, library, userWeight, numWeeks, referenceDate);
     let step = steps.next();
