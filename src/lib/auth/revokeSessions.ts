@@ -1,9 +1,9 @@
+import { BACKEND_API_ORIGIN as API } from '../backendApi';
 import type { User } from 'firebase/auth';
 import { auth, ensureAppCheck } from '../firebase';
 import { getLimitedUseAppCheckToken } from '../appCheck';
 import { assertDeletionDeadlineActive, withDeletionDeadline } from '../deletionDeadline';
 
-const API = (import.meta.env.VITE_ACCOUNT_DELETION_API_ORIGIN || 'https://logbook-gnf.vercel.app').replace(/\/$/, '');
 const TIMEOUT_MS = 10_000;
 
 /**

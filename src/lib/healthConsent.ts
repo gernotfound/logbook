@@ -1,3 +1,4 @@
+import { BACKEND_API_ORIGIN as API } from './backendApi';
 import type { User } from 'firebase/auth';
 import type { UserData } from '../types';
 import { LEGAL_VERSIONS } from './legalVersions';
@@ -7,7 +8,6 @@ import { readBrowserValueStrict, removeBrowserValue, writeBrowserValue } from '.
 
 export type HealthConsentStatus = 'unregistered' | 'checking' | 'active' | 'withdrawn' | 'pending' | 'reaccepting' | 'recovery-required' | 'stale-request' | 'error';
 type ServerStatus = { status: 'unregistered' | 'active' | 'withdrawn'; revision: number; acceptedAt?: string; privacyVersion?: string; termsVersion?: string; erasedBeforeRevision?: number };
-const API = (import.meta.env.VITE_ACCOUNT_DELETION_API_ORIGIN || 'https://logbook-gnf.vercel.app').replace(/\/$/, '');
 const entries = new Map<string, HealthConsentStatus>();
 const listeners = new Set<() => void>();
 const verifiedReacceptance = new Map<string, string>();
