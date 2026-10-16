@@ -273,8 +273,15 @@ export function useCycleForm({ initialCycle, routines, onSave, showAlert }: UseC
             await showAlert('Il ciclo deve durare da 1 a 52 settimane e prevedere da 1 a 14 sedute intere a settimana.');
             return;
         }
-        const validStartDate = Logic.parseDateInput(dateTextInput) || startDate || undefined;
-        const validEndDate = Logic.parseDateInput(endDateTextInput) || endDate || (validStartDate ? computeEndDate(validStartDate, weeks) : undefined);
+        // Never fall back to an old date when an edited text field is invalid.
+        // Persisting an inverted interval would make the timeline silently
+        // ignore the user's chosen endDate on subsequent reads.
+        const validStartDate = Logic.parseDateInput(dateTextInput);
+        const validEndDate = Logic.parseDateInput(endDateTextInput);
+        if (!validStartDate || !validEndDate || validEndDate < validStartDate) {
+            await showAlert('Inserisci date di inizio e fine valide, con la fine non precedente all’inizio.');
+            return;
+        }
         const hasStrategyDetails = Boolean(strategyIntent || primaryMuscles.length || secondaryMuscles.length);
         const editableStrategy: TrainingCycleStrategy | undefined = hasStrategyDetails
             ? {

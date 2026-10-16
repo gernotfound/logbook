@@ -245,7 +245,7 @@ export function calculateCycleSchedule(
             const found = routineMap.get(item.routineId);
             return {
                 routineId: item.routineId,
-                routineName: found ? found.name : 'Scheda'
+                routineName: found ? found.name : 'Scheda non disponibile'
             };
         });
 
@@ -374,7 +374,11 @@ export function getNextScheduledRoutine(
     const validCycleRoutines = cycle.routines.filter(r => r && r.routineId);
     if (validCycleRoutines.length === 0) return null;
 
-    const N = validCycleRoutines.length;
+    // The persisted plan may reference a deleted routine: keep its numeric target,
+    // but never suggest a routine which no longer exists in the library.
+    const availableCycleRoutines = validCycleRoutines.filter(item => routineMap.has(item.routineId));
+    if (availableCycleRoutines.length === 0) return null;
+    const N = availableCycleRoutines.length;
     const durationWeeks = cycle.durationWeeks;
     if (!isBoundedCycleCount(durationWeeks, MAX_CALCULATED_CYCLE_WEEKS)) return null;
     const counts = getCycleVolumeFrequencies(validCycleRoutines, cycle.sessionsPerWeek);
@@ -399,7 +403,7 @@ export function getNextScheduledRoutine(
     const isCycleCompleted = completedCount >= totalSessions;
 
     const routineIdx = completedCount % N;
-    const nextItem = validCycleRoutines[routineIdx];
+    const nextItem = availableCycleRoutines[routineIdx];
     const nextRoutine = nextItem ? routineMap.get(nextItem.routineId) : undefined;
     const rotationNumber = Math.floor(completedCount / N) + 1;
     const positionInRotation = routineIdx + 1;

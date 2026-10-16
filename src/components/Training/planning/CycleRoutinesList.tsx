@@ -119,7 +119,7 @@ export const CycleRoutinesList = memo(function CycleRoutinesList({
                 <div className="planning-sequence-list">
                     {cycleRoutines.map((item, index) => {
                         const routine = routineMap.get(item.routineId);
-                        const name = routine?.name ?? 'Scheda';
+                        const name = routine?.name ?? 'Scheda non disponibile';
                         return (
                             <div key={`${item.routineId}-${index}`} className="planning-sequence-row">
                                 <span className="planning-sequence-index" aria-hidden="true">{String.fromCharCode(65 + (index % 26))}</span>

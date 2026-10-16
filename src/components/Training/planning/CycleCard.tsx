@@ -29,13 +29,16 @@ export const CycleCard: React.FC<CycleCardProps> = ({
 }) => {
     const [isExpanded, setIsExpanded] = useState(false);
     const [showSchedule, setShowSchedule] = useState(false);
-    const sessionsPerWeek = cycle.sessionsPerWeek || cycle.routines?.length || 1;
     const timeline = Logic.calculateCycleTimeline(cycle);
     const routineNames = useMemo(() => new Map(routines.map(routine => [routine.id, routine.name])), [routines]);
     const schedule = useMemo(
         () => Logic.calculateCycleSchedule(cycle, routines, isExpanded && showSchedule),
         [cycle, routines, isExpanded, showSchedule],
     );
+
+    const isInvalidSchedule = schedule.summaryText === 'Parametri del ciclo da correggere';
+    const sessionsPerWeek = isInvalidSchedule ? null : schedule.sessionsPerWeek;
+    const weeksLabel = timeline.totalWeeks > 0 ? String(timeline.totalWeeks) : '—';
 
     const menuItems: ContextMenuItem[] = [
         { id: 'edit-cycle', label: 'Modifica', icon: <Pencil size={16} />, onClick: () => onEdit(cycle) },
@@ -55,7 +58,7 @@ export const CycleCard: React.FC<CycleCardProps> = ({
                     <span className="planning-cycle-icon" aria-hidden="true"><Repeat2 size={22} /></span>
                     <span className="planning-cycle-copy">
                         <strong>{cycle.name}</strong>
-                        <span>{cycle.durationWeeks} settimane · {sessionsPerWeek} {sessionsPerWeek === 1 ? 'seduta' : 'sedute'} / sett.</span>
+                        <span>{weeksLabel} settimane · {sessionsPerWeek ?? '—'} {sessionsPerWeek === 1 ? 'seduta' : 'sedute'} / sett. (stima)</span>
                     </span>
                     <ChevronDown className={isExpanded ? 'is-open' : ''} size={20} aria-hidden="true" />
                 </button>
@@ -64,6 +67,7 @@ export const CycleCard: React.FC<CycleCardProps> = ({
 
             <div className="planning-cycle-expanded" hidden={!isExpanded}>
                 {cycle.startDate ? <p className="planning-cycle-period">{timeline.formattedRange}</p> : null}
+                {isInvalidSchedule ? <p className="planning-helper" role="status">Parametri del ciclo da correggere.</p> : null}
                 <CycleStrategySummary strategy={cycle.strategy} />
                 {cycle.notes ? <p className="planning-cycle-notes">“{cycle.notes}”</p> : null}
 
@@ -72,7 +76,7 @@ export const CycleCard: React.FC<CycleCardProps> = ({
                         const routineName = routineNames.get(item.routineId);
                         return (
                             <span key={`${item.routineId}-${index}`}>
-                                <b>{String.fromCharCode(65 + (index % 26))}</b> {routineName ?? 'Scheda'}
+                                <b>{String.fromCharCode(65 + (index % 26))}</b> {routineName ?? 'Scheda non disponibile'}
                             </span>
                         );
                     })}

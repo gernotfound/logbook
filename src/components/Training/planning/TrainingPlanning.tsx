@@ -75,6 +75,11 @@ export default function TrainingPlanning({ onOpenSession }: TrainingPlanningProp
     );
     const today = useLocalToday();
     const activeCycleTimeline = useMemo(() => Logic.calculateCycleTimeline(activeCycle, today), [activeCycle, today]);
+    const missingRoutineCount = useMemo(() => {
+        if (!activeCycle) return 0;
+        const availableIds = new Set(routines.map(routine => routine.id));
+        return activeCycle.routines.filter(item => !availableIds.has(item.routineId)).length;
+    }, [activeCycle, routines]);
     const nextScheduled = useMemo(
         () => Logic.getNextScheduledRoutine(activeCycle, routines, history),
         [activeCycle, history, routines]
@@ -233,14 +238,14 @@ export default function TrainingPlanning({ onOpenSession }: TrainingPlanningProp
                         <div className="planning-active-title">
                             <span className="planning-active-badge">Ciclo attivo</span>
                             <h2>{activeCycle.name}</h2>
-                            <p>{activeCycleTimeline.formattedRange} · {activeCycle.durationWeeks} settimane</p>
+                            <p>{activeCycleTimeline.formattedRange}{activeCycleTimeline.totalWeeks > 0 ? ` · ${activeCycleTimeline.totalWeeks} settimane` : ''}</p>
                             <CycleStrategySummary strategy={activeCycle.strategy} />
                             {activeCycle.notes ? <p className="planning-active-notes">{activeCycle.notes}</p> : null}
                         </div>
                         <ContextMenu items={activeMenuItems} />
                     </header>
 
-                    {nextScheduled && !nextScheduled.isCycleCompleted ? (
+                    {nextScheduled?.nextRoutine && !nextScheduled.isCycleCompleted && !activeCycleTimeline.isEnded ? (
                         <div className="planning-next-session">
                             <span className="planning-next-icon" aria-hidden="true"><Dumbbell size={24} /></span>
                             <div>
@@ -249,6 +254,18 @@ export default function TrainingPlanning({ onOpenSession }: TrainingPlanningProp
                                 <span>Seduta #{nextScheduled.nextSessionIndex} · scheda {nextScheduled.positionInRotation} di {nextScheduled.totalRoutinesInCycle}</span>
                             </div>
                         </div>
+                    ) : null}
+
+                    {activeCycleTimeline.isEnded ? (
+                        <p className="planning-helper" role="status">
+                            Periodo del ciclo concluso. Le sedute non svolte restano facoltative.
+                        </p>
+                    ) : null}
+                    {missingRoutineCount > 0 ? (
+                        <p className="planning-helper" role="status">
+                            {missingRoutineCount} {missingRoutineCount === 1 ? 'scheda del ciclo non è più disponibile' : 'schede del ciclo non sono più disponibili'}:
+                            la rotazione suggerisce soltanto quelle esistenti. Puoi correggere il ciclo da Modifica.
+                        </p>
                     ) : null}
 
                     <div className="planning-kpis" aria-label="Metriche ciclo attivo">
@@ -299,7 +316,7 @@ export default function TrainingPlanning({ onOpenSession }: TrainingPlanningProp
                                 const routine = routines.find(candidate => candidate.id === item.routineId);
                                 return (
                                     <span key={`${item.routineId}-${index}`}>
-                                        <b>{String.fromCharCode(65 + (index % 26))}</b> {routine?.name ?? 'Scheda'}
+                                        <b>{String.fromCharCode(65 + (index % 26))}</b> {routine?.name ?? 'Scheda non disponibile'}
                                     </span>
                                 );
                             })}

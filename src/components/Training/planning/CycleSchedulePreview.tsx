@@ -14,6 +14,7 @@ export const CycleSchedulePreview = memo(function CycleSchedulePreview({
     onTogglePreview
 }: CycleSchedulePreviewProps) {
     if (!schedule?.weeks) return null;
+    const isInvalidSchedule = schedule.summaryText === 'Parametri del ciclo da correggere';
 
     return (
         <section className="planning-rotation-preview">
@@ -22,9 +23,9 @@ export const CycleSchedulePreview = memo(function CycleSchedulePreview({
                 className="planning-accordion planning-stateful"
                 onClick={onTogglePreview}
                 aria-expanded={showPreview}
-                aria-label={`Rotazione flessibile, ${schedule.totalSessions} sedute, ${showPreview ? 'ON' : 'OFF'}`}
+                aria-label={`Rotazione flessibile, ${isInvalidSchedule ? 'parametri da correggere' : `${schedule.totalSessions} sedute indicative`}, ${showPreview ? 'ON' : 'OFF'}`}
             >
-                <span>Rotazione flessibile · {schedule.totalSessions} sedute</span>
+                <span>Rotazione flessibile · {isInvalidSchedule ? 'parametri da correggere' : `${schedule.totalSessions} sedute indicative`}</span>
                 <span className="planning-accordion-meta">
                     <span className={showPreview ? 'planning-state-badge is-on' : 'planning-state-badge'}>
                         {showPreview ? 'ON' : 'OFF'}

@@ -3,6 +3,7 @@ import { CalendarRange, ChevronRight, Dumbbell, Search } from 'lucide-react';
 import { useAppStore } from '../../store/useAppStore';
 import { useWorkoutSession } from '../../hooks/useWorkoutSession';
 import { Logic } from '../../lib/logic';
+import { useLocalToday } from '../../hooks/useLocalToday';
 import type { TrainingCycle, WorkoutRoutine } from '../../types';
 import { getRoutineDurationEstimate, type RoutineDurationEstimate } from './session/sessionDurationEstimate';
 
@@ -51,6 +52,11 @@ export const TrainingSessionSetup = ({ onNavigateToPlanning }: TrainingSessionSe
     const nextScheduled = useMemo(
         () => Logic.getNextScheduledRoutine(activeCycle, routines, history),
         [activeCycle, routines, history],
+    );
+    const today = useLocalToday();
+    const isCyclePeriodEnded = useMemo(
+        () => Boolean(activeCycle?.startDate && Logic.calculateCycleTimeline(activeCycle, today).isEnded),
+        [activeCycle, today],
     );
 
     const durationEstimates = useMemo(() => {
@@ -105,7 +111,8 @@ export const TrainingSessionSetup = ({ onNavigateToPlanning }: TrainingSessionSe
     };
 
     // Reaching the indicative session target ends automatic suggestions, not the ability to train.
-    const nextRoutine = nextScheduled?.isCycleCompleted ? undefined : nextScheduled?.nextRoutine;
+    const nextRoutine = isCyclePeriodEnded || nextScheduled?.isCycleCompleted
+        ? undefined : nextScheduled?.nextRoutine;
     const nextEstimate = nextRoutine ? durationEstimates.get(nextRoutine.id) : undefined;
     const nextPlannedItem = nextRoutine
         ? plannedRoutines.find(item => item.routine.id === nextRoutine.id)
@@ -196,15 +203,17 @@ export const TrainingSessionSetup = ({ onNavigateToPlanning }: TrainingSessionSe
                 </section>
             )}
 
-            {activeCycle && nextScheduled?.isCycleCompleted && plannedRoutines.length > 0 && (
+            {activeCycle && (isCyclePeriodEnded || nextScheduled?.isCycleCompleted) && plannedRoutines.length > 0 && (
                 <section className="session-next-card section-divider" aria-labelledby="session-cycle-goal-title">
                     <div className="session-next-top">
                         <div>
-                            <p className="session-eyebrow">Obiettivo indicativo raggiunto</p>
+                            <p className="session-eyebrow">{isCyclePeriodEnded ? 'Periodo del ciclo concluso' : 'Obiettivo indicativo raggiunto'}</p>
                             <h2 id="session-cycle-goal-title" style={{ fontSize: 'var(--font-size-control)' }}>
                                 {activeCycle.name}
                             </h2>
-                            <span>Puoi continuare ad allenarti scegliendo qualsiasi scheda del ciclo.</span>
+                            <span>{isCyclePeriodEnded
+                                ? 'Le sedute non svolte non sono obbligatorie. Puoi continuare con qualsiasi scheda.'
+                                : 'Puoi continuare ad allenarti scegliendo qualsiasi scheda del ciclo.'}</span>
                         </div>
                         <span className="session-next-icon" aria-hidden="true"><Dumbbell size={24} /></span>
                     </div>
@@ -235,10 +244,10 @@ export const TrainingSessionSetup = ({ onNavigateToPlanning }: TrainingSessionSe
                 </section>
             )}
 
-            {activeCycle && !nextRoutine && (!nextScheduled?.isCycleCompleted || plannedRoutines.length === 0) && (
+            {activeCycle && !nextRoutine && (!isCyclePeriodEnded && !nextScheduled?.isCycleCompleted || plannedRoutines.length === 0) && (
                 <section className="session-setup-message">
                     <strong>{activeCycle.name}</strong>
-                    <span>Il ciclo attivo non contiene una scheda disponibile per l’avvio.</span>
+                    <span>Il ciclo attivo non contiene schede disponibili: verifica le schede eliminate o mancanti. Puoi comunque scegliere dall’archivio.</span>
                 </section>
             )}
 
