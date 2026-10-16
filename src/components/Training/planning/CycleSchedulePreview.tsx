@@ -36,7 +36,7 @@ export const CycleSchedulePreview = memo(function CycleSchedulePreview({
 
             {showPreview ? (
                 <div className="planning-accordion-panel">
-                    <p className="planning-helper">Nessun giorno della settimana è assegnato: conta soltanto l'ordine delle prossime schede.</p>
+                    <p className="planning-helper">Anteprima indicativa: puoi svolgere anche una sola seduta delle programmate. Nessun giorno è obbligatorio e puoi scegliere liberamente la scheda.</p>
                     <div className="planning-schedule-weeks">
                         {schedule.weeks.map(week => (
                             <div key={week.weekNumber} className="planning-schedule-week">

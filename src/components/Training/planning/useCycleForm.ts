@@ -193,11 +193,9 @@ export function useCycleForm({ initialCycle, routines, onSave, showAlert }: UseC
     };
 
     const handleAddRoutineById = (routineId: string) => {
-        if (!routineId) return;
-        setCycleRoutines(prev => [
-            ...prev,
-            { routineId, frequencyPerWeek: 1 }
-        ]);
+        if (!routineId || cycleRoutines.some(item => item.routineId === routineId)) return;
+        setCycleRoutines(prev => prev.some(item => item.routineId === routineId)
+            ? prev : [...prev, { routineId, frequencyPerWeek: 1 }]);
         const newCount = cycleRoutines.length + 1;
         if (!initialCycle?.sessionsPerWeek && parseInt(sessionsPerWeek, 10) === cycleRoutines.length) {
             setSessionsPerWeek(String(newCount));

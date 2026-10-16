@@ -29,7 +29,9 @@ export const CycleRoutinesList = memo(function CycleRoutinesList({
 
     const matches = useMemo(() => {
         const normalized = query.trim().toLocaleLowerCase('it');
+        const selectedIds = new Set(cycleRoutines.map(item => item.routineId));
         return routines.filter(routine => {
+            if (selectedIds.has(routine.id)) return false;
             if (!normalized) return true;
             const names = (routine.exercises ?? [])
                 .map(item => exerciseNames.get(item.exId) ?? '')
@@ -39,7 +41,7 @@ export const CycleRoutinesList = memo(function CycleRoutinesList({
                 .toLocaleLowerCase('it')
                 .includes(normalized);
         });
-    }, [exerciseNames, query, routines]);
+    }, [cycleRoutines, exerciseNames, query, routines]);
 
     const addRoutine = (routineId: string) => {
         onAdd(routineId);
