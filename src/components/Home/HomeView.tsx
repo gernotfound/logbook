@@ -28,8 +28,8 @@ const CHART_LOADING = (
     </div>
 );
 
-const HomeView = ({ onNavigate, onOpenSettings }: any) => {
-  const homeState = useHomeView();
+const HomeView = ({ onNavigate, onOpenSettings, isActive = true }: any) => {
+  const homeState = useHomeView(isActive);
   const activeWorkout = useAppStore(state => state.localWorkout);
   
   if (homeState.loading) {
@@ -95,6 +95,7 @@ const HomeView = ({ onNavigate, onOpenSettings }: any) => {
         <div className="bento-full home-analytics" id="home-analytics-section">
             <Suspense fallback={CHART_LOADING}>
                 <WeeklyVolumeChart
+                    isActive={isActive}
                     history={history}
                     library={library}
                     userWeight={userWeight}
@@ -103,6 +104,7 @@ const HomeView = ({ onNavigate, onOpenSettings }: any) => {
 
             <Suspense fallback={CHART_LOADING}>
                 <VolumeCaloriesCorrelationChart
+                    isActive={isActive}
                     history={history}
                     nutrition={nutrition}
                     library={library}

@@ -263,6 +263,38 @@ describe('Training Cycle End Date & Two-Way Binding (Milestone 2 - Requirement R
             expect(endDateInput.value).toBe('11/11/2026');
         });
 
+        it('recovers from malformed typed dates and refuses inverted intervals on save', () => {
+            const onSave = vi.fn();
+            render(<CycleEditor
+                initialCycle={{
+                    id: 'bad-typed-dates', name: 'Date da validare', durationWeeks: 4,
+                    startDate: '2026-09-01', routines: [{ routineId: 'r_push', frequencyPerWeek: 1 }],
+                }}
+                routines={mockRoutines} onSave={onSave} onCancel={vi.fn()}
+            />);
+
+            const startInput = screen.getByLabelText('Data di inizio') as HTMLInputElement;
+            const endInput = screen.getByLabelText('Data di fine') as HTMLInputElement;
+            const form = document.querySelector('#cycle-editor-form') as HTMLFormElement;
+
+            fireEvent.change(startInput, { target: { value: '32/09/2026' } });
+            fireEvent.blur(startInput);
+            expect(startInput.value).toBe('01/09/2026');
+            expect(onSave).not.toHaveBeenCalled();
+
+            fireEvent.change(startInput, { target: { value: '01/09/2026' } });
+            fireEvent.blur(startInput);
+            fireEvent.change(endInput, { target: { value: '31/02/2026' } });
+            fireEvent.blur(endInput);
+            expect(endInput.value).toBe('28/09/2026');
+            expect(onSave).not.toHaveBeenCalled();
+
+            fireEvent.change(endInput, { target: { value: '31/08/2026' } });
+            fireEvent.blur(endInput);
+            fireEvent.submit(form);
+            expect(onSave).not.toHaveBeenCalled();
+        });
+
         it('submits cycle with both startDate and endDate on save', () => {
             const onSave = vi.fn();
             const onCancel = vi.fn();

@@ -18,9 +18,14 @@ export function getContinuationTechnique(
 
 export function getSetTechnique(set: SessionExerciseSet): SetTechnique {
     if (set.technique && set.technique !== 'straight') return set.technique;
-    const firstAdvanced = set.segments
-        ?.map(segment => segment.technique)
-        .find((technique): technique is Exclude<SetTechnique, 'straight'> => Boolean(technique && technique !== 'isometry'));
+    let firstAdvanced: Exclude<SetTechnique, 'straight'> | undefined;
+    for (const segment of set.segments ?? []) {
+        const technique = segment.technique;
+        if (technique && technique !== 'isometry') {
+            firstAdvanced = technique;
+            break;
+        }
+    }
     if (firstAdvanced) return firstAdvanced;
     if (set.dropsets?.length) return 'dropset';
     return 'straight';
@@ -85,15 +90,15 @@ export function formatAdvancedSetSummary(set: SessionExerciseSet): string | null
         return techniqueLabel(technique) + target;
     }
 
-    const effectiveTechniques = segments.map(segment => getContinuationTechnique(set, segment));
-    const totals = effectiveTechniques.reduce((counts, current) => {
-        if (current) counts.set(current, (counts.get(current) ?? 0) + 1);
-        return counts;
-    }, new Map<SetContinuationTechnique, number>());
+    const totals = new Map<SetContinuationTechnique, number>();
+    for (const segment of segments) {
+        const current = getContinuationTechnique(set, segment);
+        if (current) totals.set(current, (totals.get(current) ?? 0) + 1);
+    }
     const seen = new Map<SetContinuationTechnique, number>();
 
-    return segments.map((segment, index) => {
-        const segmentTechnique = effectiveTechniques[index];
+    return segments.map(segment => {
+        const segmentTechnique = getContinuationTechnique(set, segment);
         const baseLabel = segmentTechnique ? continuationTechniqueLabel(segmentTechnique) : 'Tecnica';
         let label = baseLabel;
         if (segmentTechnique && (totals.get(segmentTechnique) ?? 0) > 1) {

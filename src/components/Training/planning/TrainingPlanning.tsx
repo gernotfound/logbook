@@ -5,6 +5,7 @@ import { Copy, Dumbbell, Pencil, Trash2 } from 'lucide-react';
 import { useAppStore } from '../../../store/useAppStore';
 import { useDialogStore } from '../../../store/useDialogStore';
 import { Logic } from '../../../lib/logic';
+import { isBoundedCycleCount, MAX_CALCULATED_CYCLE_WEEKS } from '../../../lib/calc/cycleLimits';
 import { CycleEditor } from './CycleEditor';
 import { CycleCard } from './CycleCard';
 import { CycleMuscleMap } from './CycleMuscleMap';
@@ -75,6 +76,11 @@ export default function TrainingPlanning({ onOpenSession }: TrainingPlanningProp
     );
     const today = useLocalToday();
     const activeCycleTimeline = useMemo(() => Logic.calculateCycleTimeline(activeCycle, today), [activeCycle, today]);
+    const missingRoutineCount = useMemo(() => {
+        if (!activeCycle) return 0;
+        const availableIds = new Set(routines.map(routine => routine.id));
+        return activeCycle.routines.filter(item => !availableIds.has(item.routineId)).length;
+    }, [activeCycle, routines]);
     const nextScheduled = useMemo(
         () => Logic.getNextScheduledRoutine(activeCycle, routines, history),
         [activeCycle, history, routines]
@@ -190,9 +196,13 @@ export default function TrainingPlanning({ onOpenSession }: TrainingPlanningProp
         { id: 'delete-active-cycle', label: 'Elimina', icon: <Trash2 size={16} />, variant: 'danger', onClick: () => void handleDeleteCycle(activeCycle) }
     ] : [];
 
-    const totalSessions = activeCycle
-        ? activeCycle.durationWeeks * (activeCycle.sessionsPerWeek || activeCycle.routines?.length || 1)
-        : 0;
+    // Read-only summary shares the bounded cycle calculation; historical invalid input stays unchanged.
+    const plannedSchedule = useMemo(
+        () => Logic.calculateCycleSchedule(activeCycle, routines, false),
+        [activeCycle, routines],
+    );
+    const isInvalidSchedule = plannedSchedule.summaryText === 'Parametri del ciclo da correggere';
+    const totalSessions = isInvalidSchedule ? '—' : plannedSchedule.totalSessions;
 
     return (
         <div className="planning-page">
@@ -229,38 +239,54 @@ export default function TrainingPlanning({ onOpenSession }: TrainingPlanningProp
                         <div className="planning-active-title">
                             <span className="planning-active-badge">Ciclo attivo</span>
                             <h2>{activeCycle.name}</h2>
-                            <p>{activeCycleTimeline.formattedRange} · {activeCycle.durationWeeks} settimane</p>
+                            <p>{activeCycleTimeline.formattedRange}{isBoundedCycleCount(activeCycleTimeline.totalWeeks, MAX_CALCULATED_CYCLE_WEEKS) ? ` · ${activeCycleTimeline.totalWeeks} settimane` : ''}</p>
                             <CycleStrategySummary strategy={activeCycle.strategy} />
                             {activeCycle.notes ? <p className="planning-active-notes">{activeCycle.notes}</p> : null}
                         </div>
                         <ContextMenu items={activeMenuItems} />
                     </header>
 
-                    {nextScheduled && !nextScheduled.isCycleCompleted ? (
+                    {nextScheduled?.nextRoutine && !nextScheduled.isCycleCompleted && !activeCycleTimeline.isEnded ? (
                         <div className="planning-next-session">
                             <span className="planning-next-icon" aria-hidden="true"><Dumbbell size={24} /></span>
                             <div>
-                                <span>Prossima seduta nella rotazione</span>
+                                <span>Scheda suggerita nella rotazione</span>
                                 <strong>{nextScheduled.nextRoutineName}</strong>
                                 <span>Seduta #{nextScheduled.nextSessionIndex} · scheda {nextScheduled.positionInRotation} di {nextScheduled.totalRoutinesInCycle}</span>
                             </div>
                         </div>
                     ) : null}
 
+                    {activeCycleTimeline.isEnded ? (
+                        <p className="planning-helper" role="status">
+                            Periodo del ciclo concluso. Le sedute non svolte restano facoltative.
+                        </p>
+                    ) : null}
+                    {missingRoutineCount > 0 ? (
+                        <p className="planning-helper" role="status">
+                            {missingRoutineCount} {missingRoutineCount === 1 ? 'scheda del ciclo non è più disponibile' : 'schede del ciclo non sono più disponibili'}:
+                            la rotazione suggerisce soltanto quelle esistenti. Puoi correggere il ciclo da Modifica.
+                        </p>
+                    ) : null}
+
                     <div className="planning-kpis" aria-label="Metriche ciclo attivo">
-                        <div><strong>{cycleVolumeData.totalWorkoutsPerWeek}×</strong><span>Sedute / sett.</span></div>
+                        <div><strong>{cycleVolumeData.totalWorkoutsPerWeek}×</strong><span>Sedute / sett. (stima)</span></div>
                         <div><strong>{cycleVolumeData.totalSetsPerWeek}</strong><span>Serie / sett.</span></div>
-                        <div><strong>{totalSessions}</strong><span>Sedute totali</span></div>
+                        <div><strong>{totalSessions}</strong><span>Sedute previste</span></div>
                     </div>
 
+                    {isInvalidSchedule ? (
+                        <p className="planning-helper" role="status">Parametri del ciclo da correggere: le sedute previste non sono calcolabili.</p>
+                    ) : null}
+
                     <div className="planning-progress-copy">
-                        <span><strong>{activeCycleTimeline.statusLabel}</strong></span>
-                        <span>{activeCycleTimeline.progressPercent}% completato</span>
+                        <span><strong>{activeCycleTimeline.isEnded ? 'Periodo concluso' : activeCycleTimeline.statusLabel}</strong></span>
+                        <span>{activeCycleTimeline.progressPercent}% del periodo trascorso</span>
                     </div>
                     <div
                         className="planning-progress"
                         role="progressbar"
-                        aria-label="Avanzamento del ciclo"
+                        aria-label="Avanzamento del periodo del ciclo"
                         aria-valuenow={activeCycleTimeline.progressPercent}
                         aria-valuemin={0}
                         aria-valuemax={100}
@@ -291,7 +317,7 @@ export default function TrainingPlanning({ onOpenSession }: TrainingPlanningProp
                                 const routine = routines.find(candidate => candidate.id === item.routineId);
                                 return (
                                     <span key={`${item.routineId}-${index}`}>
-                                        <b>{String.fromCharCode(65 + (index % 26))}</b> {routine?.name ?? 'Scheda'}
+                                        <b>{String.fromCharCode(65 + (index % 26))}</b> {routine?.name ?? 'Scheda non disponibile'}
                                     </span>
                                 );
                             })}
