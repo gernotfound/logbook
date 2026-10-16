@@ -44,3 +44,37 @@ export async function requestHealthDataErasure(user: User): Promise<HealthDataEr
   }
   throw new Error('Stato cancellazione ricevuto non valido.');
 }
+
+/**
+ * Second, non-destructive trusted read required at the local purge boundary.
+ * Old receipts are valid for status history, NOT for deleting a newer archive.
+ */
+export async function assertCurrentHealthDataErasureCompleted(uid: string): Promise<void> {
+  const session = captureSession();
+  const user = auth.currentUser;
+  if (!user || user.uid !== uid || session.owner !== 'user:' + uid || !isCurrentSession(session)) {
+    throw new Error('Proprietario della cancellazione dati non verificabile.');
+  }
+  await ensureAppCheck();
+  const token = await getLimitedUseAppCheckToken();
+  if (!token) throw new Error('Verifica App Check non disponibile.');
+  const idToken = await user.getIdToken(true);
+  if (!isCurrentSession(session) || auth.currentUser?.uid !== uid) {
+    throw new Error('Sessione cambiata prima della pulizia locale.');
+  }
+  const response = await fetch(API + '/api/health-data-erasure', {
+    method: 'GET', cache: 'no-store', signal: AbortSignal.timeout(12000),
+    headers: { authorization: 'Bearer ' + idToken, 'x-firebase-appcheck': token },
+  });
+  if (!response.ok) throw new Error('Non è stato possibile verificare la ricevuta della cancellazione cloud.');
+  const value: unknown = await response.json();
+  if (!value || typeof value !== 'object'
+    || (value as { status?: unknown }).status !== 'complete'
+    || (value as { complete?: unknown }).complete !== true
+    || (value as { localPurgeAuthorized?: unknown }).localPurgeAuthorized !== true) {
+    throw new Error('La cancellazione cloud non è verificata per l’attuale consenso. I dati locali restano conservati.');
+  }
+  if (!isCurrentSession(session) || auth.currentUser?.uid !== uid) {
+    throw new Error('Sessione cambiata prima della pulizia locale.');
+  }
+}
