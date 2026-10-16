@@ -303,7 +303,7 @@ export function useSettings() {
                 throw new Error('Per cancellare i dati cloud devi essere connesso a Internet.');
             }
             if (!(await showConfirm(
-                'Verranno eliminati definitivamente dal cloud e da questo dispositivo allenamenti, nutrizione, misurazioni, schede, bozze e copie di recupero.\\n\\nIl tuo account Firebase (email e accesso) resterà esistente, ma verrai disconnesso. Dispositivi offline possono ancora conservare copie locali: non possono essere cancellati a distanza.\\n\\nEsporta prima un backup solo se desideri conservare una copia dei dati. Vuoi procedere?'
+                'Verranno eliminati definitivamente dal cloud e da questo dispositivo allenamenti, nutrizione, misurazioni, schede, bozze e copie di recupero.\\n\\nIl tuo account Firebase (email e accesso) resterà esistente, ma verrai disconnesso. Dispositivi offline e backup JSON già scaricati possono ancora conservare copie: non possono essere cancellati da TheLogBook a distanza.\\n\\nEsporta prima un backup solo se desideri conservare una copia dei dati. Vuoi procedere?'
             ))) return;
             assertCurrent();
             if (!(await showConfirm(
