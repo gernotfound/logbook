@@ -34,6 +34,12 @@ Il repository è pubblico. Questo registro non contiene token, private key, emai
 | Snyk | OPTIONAL | controllo security supplementare | integrazione Snyk esterna |
 | Google Search Console | EXTERNAL-ONLY | verifica proprietà, sitemap e indicizzazione | Search Console + asset SEO repo |
 
+## Ambiente isolato Firebase/Vercel Test — preparazione 2026-10-16
+
+**Stato: EXTERNAL-ONLY / NON PRONTO PER E2E.** Il product owner ha configurato il progetto Firebase separato `thelogbook-test`, Firestore `(default)` a Torino, Authentication Email/Password con soli domini Test e localhost, Hosting Test, reCAPTCHA Enterprise Web e registrazione App Check. Le regole Firestore comunicate negano ancora ogni read/write client; nella console App Check le protezioni Firestore/Auth risultavano non applicate. Questi fatti sono riferiti tramite screenshot e messaggi, non verificati direttamente dalle API provider. Il backend separato `thelogbook-test-backend` è ancora nella schermata di creazione Vercel, **non risulta deployato**. Nessuna delle configurazioni Test autorizza riutilizzo di credenziali Production o deploy dal branch `main`.
+
+I dettagli, i checkpoint di sicurezza e le verifiche mancanti sono nel [registro dedicato dell'ambiente Test](firebase-test-environment.md). Le informazioni di questo paragrafo **non** modificano lo stato Production registrato nel resto del documento.
+
 ## Firebase Hosting
 
 Firebase Hosting è il provider del frontend/PWA Production di TheLogBook dal cutover verificato del 2026-10-02. Vercel resta esclusivamente backend trusted/cron e redirect del vecchio root.
