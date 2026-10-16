@@ -3,6 +3,7 @@ import { CalendarRange, ChevronRight, Dumbbell, Search } from 'lucide-react';
 import { useAppStore } from '../../store/useAppStore';
 import { useWorkoutSession } from '../../hooks/useWorkoutSession';
 import { Logic } from '../../lib/logic';
+import { useLocalToday } from '../../hooks/useLocalToday';
 import type { TrainingCycle, WorkoutRoutine } from '../../types';
 import { getRoutineDurationEstimate, type RoutineDurationEstimate } from './session/sessionDurationEstimate';
 
@@ -34,9 +35,10 @@ export const TrainingSessionSetup = ({ onNavigateToPlanning }: TrainingSessionSe
 
     const plannedRoutines: PlannedRoutineItem[] = useMemo(() => {
         if (!activeCycle?.routines) return [];
+        const routineMap = new Map(routines.map(routine => [routine.id, routine]));
         return activeCycle.routines
             .map((item, index) => {
-                const routine = routines.find(candidate => candidate.id === item.routineId);
+                const routine = routineMap.get(item.routineId);
                 if (!routine) return null;
                 return {
                     routine,
@@ -50,6 +52,19 @@ export const TrainingSessionSetup = ({ onNavigateToPlanning }: TrainingSessionSe
     const nextScheduled = useMemo(
         () => Logic.getNextScheduledRoutine(activeCycle, routines, history),
         [activeCycle, routines, history],
+    );
+    const today = useLocalToday();
+    const cycleTimeline = useMemo(
+        () => Logic.calculateCycleTimeline(activeCycle, today),
+        [activeCycle, today],
+    );
+    const isCyclePeriodEnded = Boolean(activeCycle?.startDate && cycleTimeline.isEnded);
+    const hasInvalidCycleDates = cycleTimeline.statusLabel === 'Parametri del ciclo da correggere';
+    const hasInvalidCycleCounts = useMemo(
+        () => activeCycle
+            ? Logic.calculateCycleSchedule(activeCycle, routines, false).summaryText === 'Parametri del ciclo da correggere'
+            : false,
+        [activeCycle, routines],
     );
 
     const durationEstimates = useMemo(() => {
@@ -103,7 +118,9 @@ export const TrainingSessionSetup = ({ onNavigateToPlanning }: TrainingSessionSe
         );
     };
 
-    const nextRoutine = nextScheduled?.nextRoutine;
+    // Reaching the indicative session target ends automatic suggestions, not the ability to train.
+    const nextRoutine = isCyclePeriodEnded || hasInvalidCycleDates || nextScheduled?.isCycleCompleted
+        ? undefined : nextScheduled?.nextRoutine;
     const nextEstimate = nextRoutine ? durationEstimates.get(nextRoutine.id) : undefined;
     const nextPlannedItem = nextRoutine
         ? plannedRoutines.find(item => item.routine.id === nextRoutine.id)
@@ -124,7 +141,7 @@ export const TrainingSessionSetup = ({ onNavigateToPlanning }: TrainingSessionSe
                 <section className="session-next-card section-divider" aria-labelledby="session-next-title">
                     <div className="session-next-top">
                         <div>
-                            <p className="session-eyebrow">Avvia sessione pianificata · Prossima nel ciclo</p>
+                            <p className="session-eyebrow">Scheda suggerita · Rotazione flessibile</p>
                             <h2 id="session-next-title" style={{ fontSize: 'var(--font-size-control)' }}>
                                 {nextScheduled?.nextRoutine ? nextScheduled.nextRoutine.name : nextRoutine.name}
                             </h2>
@@ -194,10 +211,56 @@ export const TrainingSessionSetup = ({ onNavigateToPlanning }: TrainingSessionSe
                 </section>
             )}
 
-            {activeCycle && !nextRoutine && (
+            {activeCycle && (isCyclePeriodEnded || hasInvalidCycleDates || nextScheduled?.isCycleCompleted) && plannedRoutines.length > 0 && (
+                <section className="session-next-card section-divider" aria-labelledby="session-cycle-goal-title">
+                    <div className="session-next-top">
+                        <div>
+                            <p className="session-eyebrow">{hasInvalidCycleDates ? 'Parametri del ciclo da correggere'
+                                : isCyclePeriodEnded ? 'Periodo del ciclo concluso' : 'Obiettivo indicativo raggiunto'}</p>
+                            <h2 id="session-cycle-goal-title" style={{ fontSize: 'var(--font-size-control)' }}>
+                                {activeCycle.name}
+                            </h2>
+                            <span>{hasInvalidCycleDates
+                                ? 'Correggi le date in Pianificazione. Puoi comunque scegliere una scheda del ciclo.'
+                                : isCyclePeriodEnded
+                                    ? 'Le sedute non svolte non sono obbligatorie. Puoi continuare con qualsiasi scheda.'
+                                    : 'Puoi continuare ad allenarti scegliendo qualsiasi scheda del ciclo.'}</span>
+                        </div>
+                        <span className="session-next-icon" aria-hidden="true"><Dumbbell size={24} /></span>
+                    </div>
+                    <div className="session-rotation-picker">
+                        <label htmlFor="completed-cycle-routine-select">Scegli una scheda del ciclo</label>
+                        <select
+                            id="completed-cycle-routine-select"
+                            aria-label="Seleziona scheda del ciclo"
+                            value={selectedRotationId}
+                            onChange={event => setSelectedPlannedRoutine(event.target.value)}
+                        >
+                            {plannedRoutines.map(item => (
+                                <option key={`${item.routine.id}-${item.position}`} value={item.routine.id}>
+                                    {item.letter}. {item.routine.name}
+                                </option>
+                            ))}
+                        </select>
+                        {selectedRotationRoutine && (
+                            <button
+                                type="button"
+                                className="btn btn-primary session-secondary-action"
+                                onClick={() => startPlannedRoutine(selectedRotationRoutine.id)}
+                            >
+                                Avvia {selectedRotationRoutine.name}
+                            </button>
+                        )}
+                    </div>
+                </section>
+            )}
+
+            {activeCycle && !nextRoutine && (!isCyclePeriodEnded && !hasInvalidCycleDates && !nextScheduled?.isCycleCompleted || plannedRoutines.length === 0) && (
                 <section className="session-setup-message">
                     <strong>{activeCycle.name}</strong>
-                    <span>Il ciclo attivo non contiene una scheda disponibile per l’avvio.</span>
+                    <span>{hasInvalidCycleCounts
+                        ? 'I parametri del ciclo vanno corretti in Pianificazione. Puoi comunque scegliere una scheda dall’archivio.'
+                        : 'Il ciclo attivo non contiene schede disponibili: verifica le schede eliminate o mancanti. Puoi comunque scegliere dall’archivio.'}</span>
                 </section>
             )}
 

@@ -42,7 +42,7 @@ describe('Adversarial Stress Test: Milestone 2 Two-Way Binding & Timeline Edge C
             expect(timeline.formattedEndDate).toBe('25/01/2027');
         });
 
-        it('falls back gracefully when cycle has malformed or corrupted startDate', () => {
+        it('flags malformed historical cycle startDate without inventing a start day', () => {
             const malformedCycle: TrainingCycle = {
                 id: 'c_bad_start',
                 name: 'Bad Start',
@@ -52,8 +52,10 @@ describe('Adversarial Stress Test: Milestone 2 Two-Way Binding & Timeline Edge C
             };
 
             const timeline = calculateCycleTimeline(malformedCycle);
-            expect(timeline.totalWeeks).toBe(4);
-            expect(timeline.formattedRange).toBeDefined();
+            expect(timeline.totalWeeks).toBe(0);
+            expect(timeline.isStarted).toBe(false);
+            expect(timeline.statusLabel).toBe('Parametri del ciclo da correggere');
+            expect(malformedCycle.startDate).toBe('invalid-date-string');
         });
 
         it('falls back to calculated end date when endDate is before startDate', () => {

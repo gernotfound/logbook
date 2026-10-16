@@ -315,8 +315,9 @@ describe('Challenger 1 Empirical Verification: Cycle Planning Mathematics & Edge
             // Should not throw or crash
             expect(() => calculateCycleTimeline(cycleInvalidDate)).not.toThrow();
             const timeline = calculateCycleTimeline(cycleInvalidDate);
-            expect(timeline.totalWeeks).toBe(4);
-            expect(timeline.isStarted).toBe(true);
+            expect(timeline.totalWeeks).toBe(0);
+            expect(timeline.isStarted).toBe(false);
+            expect(timeline.statusLabel).toBe('Parametri del ciclo da correggere');
         });
 
         it('gracefully handles inverted dates (endDate < startDate)', () => {
