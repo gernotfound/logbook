@@ -397,9 +397,10 @@ export function getNextScheduledRoutine(
     let lastRoutineIndex: number | undefined;
     let lastTime = Number.NEGATIVE_INFINITY;
     let lastArrayIndex = -1;
+    const routineIndexById = new Map(availableCycleRoutines.map((item, index) => [item.routineId, index]));
     cycleHistory.forEach((workout, index) => {
-        const routineIndex = availableCycleRoutines.findIndex(item => item.routineId === workout.routineId);
-        if (routineIndex < 0) return;
+        const routineIndex = routineIndexById.get(workout.routineId ?? '');
+        if (routineIndex === undefined) return;
         const recordedTime = [workout.globalEndTime, workout.endTime, workout.globalStartTime]
             .find(time => typeof time === 'number' && Number.isFinite(time));
         const parsedDate = typeof workout.date === 'string' ? parseISO(workout.date) : null;

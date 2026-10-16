@@ -110,7 +110,9 @@ describe('Training Planning & Volume Calculations', () => {
         };
 
         const result = calculateCycleVolume(cycleWithMissingRefs, mockRoutines, mockLibrary);
-        expect(result.totalWorkoutsPerWeek).toBe(1);
+        // The missing routine still belongs to the planned four-session target,
+        // but its lost sets are not reassigned to the remaining routine.
+        expect(result.totalWorkoutsPerWeek).toBe(4);
         expect(result.totalSetsPerWeek).toBe(7); // 4 bench + 3 ohp
     });
 
