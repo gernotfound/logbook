@@ -64,6 +64,6 @@ describe('trusted health data erasure client proof', () => {
       status: 'deleting', complete: false, localPurgeAuthorized: false,
     }, 202)));
     expect(await requestHealthDataErasure(state.currentUser as never)).toMatchObject({ status: 'deleting', complete: false });
-    await expect(assertCurrentHealthDataErasureCompleted('owner')).rejects.toThrow('ricevuta');
+    await expect(assertCurrentHealthDataErasureCompleted('owner')).rejects.toThrow('non è verificata');
   });
 });
