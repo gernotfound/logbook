@@ -606,4 +606,49 @@ describe('account deletion recovery device registration retries', () => {
       .toEqual(existing.slice(0, 4));
   });
 
+  it('retains all four account proofs across login switches and repeated registration', async () => {
+    const { registerDeletionRecoveryDevice } = await loadSubject();
+    const request = vi.fn(async () => new Response(JSON.stringify({ registered: true }), { status: 200 }));
+    vi.stubGlobal('fetch', request);
+    const original = new Map<string, string>();
+    for (const id of ['a', 'b', 'c', 'd']) {
+      const current = user(id);
+      firebase.auth.currentUser = current;
+      await registerDeletionRecoveryDevice(current);
+      const credentials = JSON.parse(localStorage.getItem('logbook_deletion_recovery_devices_v1')!);
+      const proof = credentials.find((entry: { uid: string }) => entry.uid === id);
+      expect(proof).toBeDefined();
+      original.set(id, proof.token);
+    }
+    // Reentering a known identity must reuse its proof even at capacity.
+    const again = user('b');
+    firebase.auth.currentUser = again;
+    await Promise.all([registerDeletionRecoveryDevice(again), registerDeletionRecoveryDevice(again)]);
+    const credentials = JSON.parse(localStorage.getItem('logbook_deletion_recovery_devices_v1')!);
+    expect(credentials).toHaveLength(4);
+    expect(new Set(credentials.map((entry: { uid: string }) => entry.uid)).size).toBe(4);
+    for (const entry of credentials) expect(entry.token).toBe(original.get(entry.uid));
+    expect(request).toHaveBeenCalledTimes(6);
+  });
+
+  it('uses an exclusive browser lock to avoid concurrent proof overwrites when supported', async () => {
+    const { registerDeletionRecoveryDevice } = await loadSubject();
+    const descriptor = Object.getOwnPropertyDescriptor(navigator, 'locks');
+    const requestLock = vi.fn(async (_name: string, _options: unknown, task: () => unknown) => task());
+    Object.defineProperty(navigator, 'locks', { configurable: true, value: { request: requestLock } });
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ registered: true }), { status: 200 })));
+    const current = user('lock-owner');
+    firebase.auth.currentUser = current;
+    try {
+      await Promise.all([registerDeletionRecoveryDevice(current), registerDeletionRecoveryDevice(current)]);
+      expect(requestLock).toHaveBeenCalledTimes(2);
+      expect(requestLock.mock.calls[0][1]).toEqual({ mode: 'exclusive' });
+      const credentials = JSON.parse(localStorage.getItem('logbook_deletion_recovery_devices_v1')!);
+      expect(credentials).toHaveLength(1);
+    } finally {
+      if (descriptor) Object.defineProperty(navigator, 'locks', descriptor);
+      else delete (navigator as Navigator & { locks?: LockManager }).locks;
+    }
+  });
+
 });
