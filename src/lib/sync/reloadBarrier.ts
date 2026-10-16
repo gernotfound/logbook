@@ -55,7 +55,11 @@ function isConsentSuspended(owner: string): boolean {
     const status = owner === 'guest'
         ? getGuestHealthConsentStatus()
         : currentHealthConsentStatus(owner.slice(5));
-    return status !== 'active';
+    // A generic verification error or first-consent screen is NOT proof that
+    // the person deliberately withdrew consent.
+    return status === 'withdrawn' || status === 'pending'
+        || status === 'reaccepting' || status === 'recovery-required'
+        || status === 'stale-request';
 }
 
 export async function prepareForReload(options: ReloadOptions = {}) {
