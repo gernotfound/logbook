@@ -119,9 +119,11 @@ service cloud.firestore {
       return '_sync' in docData
         && docData._sync is map
         && docData._sync.protocolVersion == 3
-        // Coordinates of the sixteen canonical actors must be nonnegative safe
-        // integers, just like the replica checkpoints and the TypeScript parser.
-        && isValidCheckpointClock(docData._sync.clock)
+        // Rules have a strict expression budget. Validate canonical actor names
+        // and the active writer's coordinate here; the TypeScript parser validates
+        // every clock coordinate before hydration/replay.
+        && docData._sync.clock.keys().hasOnly(['s00', 's01', 's02', 's03', 's04', 's05', 's06', 's07', 's08', 's09', 's10', 's11', 's12', 's13', 's14', 's15'])
+        && isValidCheckpointCoordinate(docData._sync.clock, docData._sync.writer.slot)
         && docData._sync.fields is map
         && docData._sync.keys().hasOnly(['protocolVersion', 'clock', 'fields', 'writer'])
         && 'writer' in docData._sync
