@@ -2,6 +2,7 @@ import Fuse from 'fuse.js';
 import { MUSCLES } from '../constants/muscles';
 import { getDetailedMuscleCategory } from './planning';
 import { getSetSegments } from '../advancedSets';
+import { parseDateInput } from '../utils/date';
 
 export const normalizeStem = (str: string): string => {
     if (!str || typeof str !== 'string') return '';
@@ -304,13 +305,15 @@ export function getLatestUserWeight(
     if (nutrition && typeof nutrition === 'object') {
         let latestDate: string | null = null;
         for (const [date, day] of Object.entries(nutrition)) {
-            if (day && day.weight !== undefined && day.weight !== null && day.weight !== '') {
-                const raw = typeof day.weight === 'string' ? day.weight.trim().replace(',', '.') : day.weight;
-                const num = parseFloat(String(raw));
-                if (!isNaN(num) && num > 0 && (latestDate === null || date >= latestDate)) {
-                    latestDate = date;
-                    latestWeight = num;
-                }
+            // Stored day keys are not guaranteed to be zero-padded after legacy imports.
+            // Normalize dates before comparing; malformed keys cannot establish recency.
+            const canonicalDate = parseDateInput(date);
+            if (!canonicalDate || !day || day.weight === undefined || day.weight === null || day.weight === '') continue;
+            const raw = typeof day.weight === 'string' ? day.weight.trim().replace(',', '.') : day.weight;
+            const num = parseFloat(String(raw));
+            if (Number.isFinite(num) && num > 0 && (latestDate === null || canonicalDate >= latestDate)) {
+                latestDate = canonicalDate;
+                latestWeight = num;
             }
         }
     }

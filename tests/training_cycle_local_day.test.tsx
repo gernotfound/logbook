@@ -23,6 +23,7 @@ function ProgressProbe() {
 describe('training cycle local-day progress', () => {
     afterEach(() => {
         vi.useRealTimers();
+        vi.unstubAllEnvs();
     });
 
     it('keeps one local-day clock for multiple subscribers and cleans up on unmount', () => {
@@ -32,6 +33,40 @@ describe('training cycle local-day progress', () => {
         expect(vi.getTimerCount()).toBe(1);
         view.unmount();
         expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it('reconciles an actual timezone change on visibility and keeps one clock', async () => {
+        vi.useFakeTimers();
+        vi.stubEnv('TZ', 'Europe/Rome');
+        vi.setSystemTime(new Date('2026-10-19T22:30:00.000Z'));
+        const view = render(<ProgressProbe />);
+        expect(screen.getByTestId('day-progress').textContent).toContain('2026-10-20');
+        expect(vi.getTimerCount()).toBe(1);
+
+        vi.stubEnv('TZ', 'Pacific/Honolulu');
+        await act(async () => { document.dispatchEvent(new Event('visibilitychange')); });
+        expect(screen.getByTestId('day-progress').textContent).toContain('2026-10-19');
+        expect(vi.getTimerCount()).toBe(1);
+
+        view.unmount();
+        expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it('handles a DST transition without skipping or duplicating the local date', async () => {
+        vi.useFakeTimers();
+        vi.stubEnv('TZ', 'Europe/Rome');
+        vi.setSystemTime(new Date('2026-10-25T00:59:58.000Z'));
+        render(<ProgressProbe />);
+        expect(screen.getByTestId('day-progress').textContent).toContain('2026-10-25');
+
+        // Clocks move back from 03:00 CEST to 02:00 CET: still the same local day.
+        await act(async () => { await vi.advanceTimersByTimeAsync(4000); });
+        expect(screen.getByTestId('day-progress').textContent).toContain('2026-10-25');
+
+        vi.setSystemTime(new Date('2026-10-25T22:59:58.000Z'));
+        await act(async () => { window.dispatchEvent(new Event('focus')); });
+        await act(async () => { await vi.advanceTimersByTimeAsync(4000); });
+        expect(screen.getByTestId('day-progress').textContent).toContain('2026-10-26');
     });
 
     it('updates without a data mutation on local midnight and focus', async () => {
