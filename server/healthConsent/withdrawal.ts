@@ -156,8 +156,14 @@ export async function recordHealthConsentReacceptance(
     const deletion = db.collection('account_deletions').doc(uid);
     const state = consentRef(uid);
     const root = db.collection('users').doc(uid);
-    const [job, previousSnap, userRoot] = await Promise.all([tx.get(deletion), tx.get(state), tx.get(root)]);
+    const erasure = db.collection('health_data_erasures').doc(uid);
+    const [job, previousSnap, userRoot, erasureJob] = await Promise.all([
+      tx.get(deletion), tx.get(state), tx.get(root), tx.get(erasure),
+    ]);
     if (job.exists) throw new Error('Cancellazione account in corso.');
+    if (erasureJob.exists && erasureJob.data()?.status !== 'complete') {
+      throw new HealthConsentRevisionConflictError();
+    }
     const previous = previousSnap.data();
     // Idempotent retry must prove it belongs to THIS transition and uses
     // the same legal versions; it must not resurrect a superseded acceptance.
