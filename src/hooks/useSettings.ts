@@ -1,5 +1,5 @@
 import { dispatchDurableOperation } from '../lib/sync/dispatchDurableOperation';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAuth } from './useAuth';
 import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
@@ -140,6 +140,16 @@ export function useSettings() {
     const importBusy = useRef(false);
     const exportBusy = useRef(false);
     const [exportingData, setExportingData] = useState(false);
+    const [preparedBackupUrl, setPreparedBackupUrl] = useState<string | null>(null);
+    const preparedUrlRef = useRef<string | null>(null);
+    useEffect(() => () => {
+        if (preparedUrlRef.current) URL.revokeObjectURL(preparedUrlRef.current);
+    }, []);
+    const releasePreparedBackup = () => {
+        if (preparedUrlRef.current) URL.revokeObjectURL(preparedUrlRef.current);
+        preparedUrlRef.current = null;
+        setPreparedBackupUrl(null);
+    };
     let pendingAccountDeletion = false;
     try { pendingAccountDeletion = isAccountDeletionPending(captureSession().owner); }
     catch { /* The writer separately refuses an unreadable deletion marker. */ }
@@ -188,13 +198,20 @@ export function useSettings() {
         }
     };
 
-    const handleExportBackup = async () => {
+    const performBackupExport = async (prepareDownload: boolean) => {
         if (exportBusy.current) return;
         const session = captureSession();
         const state = useAppStore.getState();
-        if (state.userData !== null && state.dataOwner !== session.owner) return;
+        if (state.userData !== null && state.dataOwner !== session.owner) {
+            await showAlert('Esportazione bloccata: i dati in memoria appartengono a una sessione diversa.');
+            return;
+        }
         const stateData = state.userData;
-        if (!stateData && (session.owner === 'guest' || currentHealthConsentStatus(session.owner.slice(5)) === 'active')) return;
+        if (!stateData && (session.owner === 'guest' || currentHealthConsentStatus(session.owner.slice(5)) === 'active')) {
+            await showAlert('I dati non sono ancora disponibili. Attendi il caricamento prima di esportare.');
+            return;
+        }
+        releasePreparedBackup();
         exportBusy.current = true;
         setExportingData(true);
         try {
@@ -214,7 +231,21 @@ export function useSettings() {
             }
             if (!isCurrentSession(session)) throw new Error('Sessione cambiata.');
             const { Exporter } = await import('../lib/export');
-            await Exporter.exportBackupJson(snapshot.data, session.owner === 'guest' ? null : { uid: session.owner.slice(5) }, snapshot.coverage, snapshot.recovery);
+            const identity = session.owner === 'guest' ? null : { uid: session.owner.slice(5) };
+            if (prepareDownload) {
+                const url = Exporter.prepareBackupJsonUrl(snapshot.data, identity, snapshot.coverage, snapshot.recovery);
+                // The blob URL stays available until the user clicks the real
+                // download link or leaves the page. No picker is invoked after await.
+                if (!isCurrentSession(session)) {
+                    URL.revokeObjectURL(url);
+                    throw new Error('Sessione cambiata durante la preparazione del backup.');
+                }
+                preparedUrlRef.current = url;
+                setPreparedBackupUrl(url);
+            } else {
+                const saved = await Exporter.exportBackupJson(snapshot.data, identity, snapshot.coverage, snapshot.recovery);
+                if (!saved) await showAlert('Download annullato o non avviato. Riprova.');
+            }
         } catch (error) {
             if (isCurrentSession(session)) void showAlert(error instanceof Error ? error.message : 'Backup non riuscito.');
         } finally {
@@ -222,6 +253,9 @@ export function useSettings() {
             setExportingData(false);
         }
     };
+
+    const handleExportBackup = () => performBackupExport(false);
+    const handlePrepareBackup = () => performBackupExport(true);
 
     const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>, mode: ImportMode = 'merge') => {
         const file = e.target.files?.[0];
@@ -332,7 +366,8 @@ export function useSettings() {
         importingData,
         exportingData,
         handleSaveProfile,
-        handleExportCSV, handleExportShare, handleExportBackup, handleImportFile,
+        handleExportCSV, handleExportShare, handleExportBackup, handlePrepareBackup,
+        preparedBackupUrl, releasePreparedBackup, handleImportFile,
         handleDeleteAccount
     };
 }

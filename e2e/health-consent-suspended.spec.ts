@@ -31,7 +31,7 @@ for (const theme of ['light', 'dark'] as const) {
     await expect(heading).toBeVisible();
     await expect(secondTab.getByRole('heading', { name: 'Accesso a TheLogBook sospeso' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Allenamento', exact: true })).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Esporta i tuoi dati (backup JSON)' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Prepara backup JSON' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Elimina definitivamente l\'account' })).toBeVisible();
     await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
     const frame = await page.locator('.auth-panel').boundingBox();
