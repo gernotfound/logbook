@@ -1,4 +1,4 @@
-import { MAX_ROUTINE_SEGMENTS, MAX_ROUTINE_SETS } from '../lib/routineSessionLimits';
+import { MAX_ROUTINE_SEGMENTS, MAX_ROUTINE_SETS, previewRoutineSets } from '../lib/routineSessionLimits';
 import { dispatchDurableOperation } from '../lib/sync/dispatchDurableOperation';
 import { useState, useEffect } from 'react';
 import { useAppStore } from '../store/useAppStore';
@@ -103,6 +103,13 @@ export function useTrainingRoutines() {
             return false;
         }
 
+        if (routineExercises.some(ex => {
+            const count = Number(ex.setsCount || 3);
+            return !Number.isSafeInteger(count) || count < 1 || count > MAX_ROUTINE_SETS;
+        })) {
+            await showAlert('Ogni esercizio può contenere da 1 a 20 serie. Correggi il valore prima di salvare la scheda.');
+            return false;
+        }
         if (routineExercises.some(ex => ex.setPlans?.some(plan => plan.segmentCount !== undefined
             && (!Number.isSafeInteger(plan.segmentCount) || plan.segmentCount < 2 || plan.segmentCount > MAX_ROUTINE_SEGMENTS)))) {
             await showAlert('Ogni serie avanzata può avere da 2 a 20 segmenti. Correggi il valore prima di salvare la scheda.');
@@ -221,7 +228,7 @@ export function useTrainingRoutines() {
         setRoutineExercises(prev => {
             const exercises = [...prev];
             const exercise = { ...exercises[exerciseIndex] };
-            const count = Math.max(1, Number.parseInt(String(exercise.setsCount || 3), 10) || 3);
+            const count = previewRoutineSets(exercise.setsCount);
             const plans: PlannedSetTechnique[] = Array.from({ length: count }, (_, index) => ({
                 ...(exercise.setPlans?.[index] || { technique: 'straight' as const }),
             }));
@@ -241,7 +248,7 @@ export function useTrainingRoutines() {
         setRoutineExercises(prev => {
             const exercises = [...prev];
             const exercise = { ...exercises[exerciseIndex] };
-            const count = Math.max(1, Number.parseInt(String(exercise.setsCount || 3), 10) || 3);
+            const count = previewRoutineSets(exercise.setsCount);
             const plans: PlannedSetTechnique[] = Array.from({ length: count }, (_, index) => ({
                 ...(exercise.setPlans?.[index] || { technique: 'straight' as const }),
             }));

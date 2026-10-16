@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { previewRoutineSets } from '../src/lib/routineSessionLimits';
 import type { UserData, WorkoutRoutine, WorkoutSession } from '../src/types';
 import {
     applyWorkoutCompletionDraft,
@@ -20,6 +21,13 @@ function createRuntime(): WorkoutPreparationRuntime {
 }
 
 describe('workout session preparation', () => {
+    it('bounds rendering work for an imported routine without changing its stored count', () => {
+        const imported = { setsCount: 1_000_000_000 };
+        expect(previewRoutineSets(imported.setsCount)).toBe(20);
+        expect(previewRoutineSets(-5)).toBe(1);
+        expect(imported.setsCount).toBe(1_000_000_000);
+    });
+
     it('fails before creating a session from excessive imported set or segment counts without altering the routine', () => {
         const badSegment = { id: 'unsafe', name: 'Storica', exercises: [{
             exId: 'bench', setsCount: 1,

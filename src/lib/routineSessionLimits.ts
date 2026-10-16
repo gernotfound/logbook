@@ -17,3 +17,9 @@ export function requireRoutineSessionCount(value: unknown, max: number): number 
     }
     return value;
 }
+
+ 
+export function previewRoutineSets(value: unknown): number {
+    const parsed = Number.parseInt(String(value || 3), 10);
+    return Number.isSafeInteger(parsed) ? Math.max(1, Math.min(MAX_ROUTINE_SETS, parsed)) : 3;
+}
