@@ -42,7 +42,7 @@ function ReacceptanceForm({ enabled, busy, onReaccept, firstAcceptance = false, 
 }
 
 export function HealthConsentSuspended({ status, user }: { status: HealthConsentStatus; user: User | null }) {
-  const { handlePrepareBackup, preparedBackupUrl, releasePreparedBackup, handleDeleteAccount, handleLogout, exportingData } = useSettings();
+  const { handlePrepareBackup, preparedBackupUrl, releasePreparedBackup, handleDeleteAccount, handleDeleteHealthData, erasingHealthData, handleLogout, exportingData } = useSettings();
   const submitLegalConsent = useAppStore(state => state.submitLegalConsent);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -250,8 +250,15 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
           <a className="btn btn-primary" href={preparedBackupUrl} download="logbook_backup.json">Scarica backup JSON</a>
           <button type="button" className="btn" onClick={releasePreparedBackup}>Elimina il download preparato</button>
         </>}
-        <button type="button" className="btn" onClick={() => void handleLogout()}>Esci dall'account</button>
-        <button type="button" className="btn" onClick={() => void handleDeleteAccount()}>Elimina definitivamente l'account</button>
+        {user !== null && status === 'withdrawn' && <>
+          <p>Puoi eliminare tutti i dati del servizio mantenendo il tuo account. La cancellazione richiede Internet, verifica dell’identità e due conferme; i dispositivi offline potrebbero ancora conservare copie.</p>
+          <button type="button" className="btn" disabled={busy || exportingData || erasingHealthData || offline}
+            onClick={() => { void handleDeleteHealthData(); }}>
+            {erasingHealthData ? 'Cancellazione in corso…' : 'Elimina definitivamente i miei dati'}
+          </button>
+        </>}
+        <button type="button" className="btn" disabled={erasingHealthData} onClick={() => void handleLogout()}>Esci dall'account</button>
+        <button type="button" className="btn" disabled={erasingHealthData} onClick={() => void handleDeleteAccount()}>Elimina definitivamente l'account</button>
         <button type="button" className="btn" disabled={busy || recoveryBusy || exportingData} onClick={() => { void reloadPage(); }}>Ricarica pagina</button>
       </div>
       {error && <p role="alert">{error}</p>}
