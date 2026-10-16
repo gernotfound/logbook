@@ -17,6 +17,7 @@ import type { WorkoutSession, Exercise } from '../../types';
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
 export interface WeeklyVolumeChartProps {
+  isActive?: boolean;
   history?: WorkoutSession[];
   library?: Exercise[];
   userWeight?: number;
@@ -35,6 +36,7 @@ const PERIOD_OPTIONS = [
 ];
 
 export default function WeeklyVolumeChart({
+  isActive = true,
   history = EMPTY_HISTORY,
   library = EMPTY_LIBRARY,
   userWeight = 80,
@@ -44,7 +46,7 @@ export default function WeeklyVolumeChart({
   const { colors, reducedMotion } = useChartAppearance();
   const [selectedWeeks, setSelectedWeeks] = useState<number>(defaultWeeks);
   const [isCalculating, setIsCalculating] = useState(true);
-  const { calculateVolumeStats } = useAnalyticsWorker();
+  const { calculateVolumeStats } = useAnalyticsWorker(isActive);
 
   const [calcResult, setCalcResult] = useState<{points: any[], stats: any}>({
     points: [],
@@ -58,6 +60,7 @@ export default function WeeklyVolumeChart({
   }
 
   useEffect(() => {
+    if (!isActive) return;
     let isMounted = true;
 
     calculateVolumeStats(history, library, userWeight, selectedWeeks)
@@ -74,7 +77,7 @@ export default function WeeklyVolumeChart({
       });
 
     return () => { isMounted = false; };
-  }, [history, library, userWeight, selectedWeeks, calculateVolumeStats]);
+  }, [isActive, history, library, userWeight, selectedWeeks, calculateVolumeStats]);
 
   const { points, stats } = calcResult;
 

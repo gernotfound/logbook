@@ -365,14 +365,22 @@ export function calculateSetVolume(
 
 export function calculateWorkoutVolume(
     session: { exercises?: Array<{ exId?: string; sets?: any[] }> },
-    library: Array<{ id: string; isBodyweight?: boolean; equipmentWeight?: number }> = [],
+    library: Array<{ id: string; isBodyweight?: boolean; equipmentWeight?: number }> | ReadonlyMap<string, VolumeExerciseRef> = [],
     userWeight: number = 80
 ): number {
     if (!session || !Array.isArray(session.exercises)) return 0;
-    const libMap = new Map<string, VolumeExerciseRef>();
-    library.forEach(ex => {
-        if (ex?.id) libMap.set(ex.id, ex);
-    });
+    // Callers analyzing multiple sessions may share an immutable catalog lookup.
+    // An array keeps the original last-ID-wins lookup semantics.
+    let libMap: ReadonlyMap<string, VolumeExerciseRef>;
+    if (Array.isArray(library)) {
+        const entries = new Map<string, VolumeExerciseRef>();
+        for (const entry of library) {
+            if (entry?.id) entries.set(entry.id, entry);
+        }
+        libMap = entries;
+    } else {
+        libMap = library as ReadonlyMap<string, VolumeExerciseRef>;
+    }
 
     let totalVolume = 0;
     for (const ex of session.exercises) {
