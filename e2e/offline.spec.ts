@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 
 test.describe('Offline scenarios & Background suspension', () => {
   test('Local workout and durable UserData survive offline page loss', async ({ page, context }) => {
@@ -100,6 +100,36 @@ test.describe('Offline scenarios & Background suspension', () => {
     await page.goto('/?tab=training');
     await expect(page.locator('#view-training')).toBeVisible();
     await expect.poll(() => new URL(page.url()).search).toBe('');
+  });
+
+  test('a pending PWA update remains dismissible without losing guest data on reload', async ({ page }) => {
+    await page.goto('/');
+    await page.getByRole('button', { name: 'Continua senza account' }).click();
+    await page.getByText('Aggiornamento Termini e Privacy').waitFor();
+    for (const checkbox of await page.locator('input[type="checkbox"]').all()) {
+      await checkbox.check();
+    }
+    await page.getByRole('button', { name: 'Accetta e Continua' }).click();
+    await expect(page.locator('.guest-banner')).toBeVisible();
+
+    await page.getByRole('button', { name: 'Allenamento', exact: true }).click();
+    await page.getByRole('tab', { name: 'Schede', exact: true }).click();
+    await page.getByRole('button', { name: 'Crea scheda' }).click();
+    await page.getByPlaceholder('Nome scheda').fill('Scheda aggiornamento PWA');
+    await page.locator('#routine-creation-form').getByRole('button', { name: 'Salva', exact: true }).click();
+    await expect(page.getByText('Scheda aggiornamento PWA', { exact: true })).toBeVisible();
+
+    // This triggers the real prompt listener, not a replacement service worker.
+    await page.evaluate(() => window.dispatchEvent(new Event('logbook:pwa-update-waiting')));
+    await expect(page.getByText('Nuova versione disponibile')).toBeVisible();
+    await page.getByRole('button', { name: 'Chiudi notifica' }).click();
+    await expect(page.getByText('Nuova versione disponibile')).toHaveCount(0);
+
+    await page.reload();
+    await expect(page.locator('.guest-banner')).toBeVisible();
+    await page.getByRole('button', { name: 'Allenamento', exact: true }).click();
+    await page.getByRole('tab', { name: 'Schede', exact: true }).click();
+    await expect(page.getByText('Scheda aggiornamento PWA', { exact: true })).toBeVisible();
   });
 
 });

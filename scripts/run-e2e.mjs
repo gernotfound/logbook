@@ -2,19 +2,18 @@ import { build, preview } from 'vite';
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { generateIcons } from './resize_icons.mjs';
+import { createIsolatedE2eEnvironment } from './e2e-environment.mjs';
 
 const require = createRequire(import.meta.url);
-// E2E always injects synthetic Firebase/App Check values; real Production config lives only in the deployment environment.
-Object.assign(process.env, {
-  VITE_FIREBASE_API_KEY: 'dummy-key',
-  VITE_FIREBASE_AUTH_DOMAIN: 'dummy-domain.firebaseapp.com',
-  VITE_FIREBASE_PROJECT_ID: 'demo-logbook-audit',
-  VITE_FIREBASE_APP_ID: '1:1234567890:web:123456',
-  VITE_RECAPTCHA_ENTERPRISE_SITE_KEY: 'dummy-recaptcha-key',
-});
+// Suppress inherited VITE_*, secrets and deployment flags before Vite runs.
+const safeEnvironment = createIsolatedE2eEnvironment(process.env);
+for (const key of Object.keys(process.env)) {
+  if (!(key in safeEnvironment)) delete process.env[key];
+}
+Object.assign(process.env, safeEnvironment);
 
 await generateIcons();
-await build();
+await build({ envDir: false });
 const server = await preview({ preview: { host: '127.0.0.1', port: 0, strictPort: true } });
 try {
   const address = server.httpServer.address();
