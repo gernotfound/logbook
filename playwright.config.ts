@@ -1,4 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
+import { assertLoopbackE2eUrl } from './scripts/e2e-environment.mjs';
+
+const testBaseURL = process.env.LOGBOOK_TEST_URL || 'http://127.0.0.1:4173';
+assertLoopbackE2eUrl(testBaseURL);
 
 export default defineConfig({
   testDir: './e2e',
@@ -8,7 +12,7 @@ export default defineConfig({
   workers: process.env.CI ? 1 : undefined,
   reporter: 'html',
   use: {
-    baseURL: process.env.LOGBOOK_TEST_URL || 'http://127.0.0.1:4173',
+    baseURL: testBaseURL,
     trace: 'on-first-retry',
   },
   projects: [
