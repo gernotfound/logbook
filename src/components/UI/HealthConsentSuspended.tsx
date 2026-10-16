@@ -41,7 +41,7 @@ function ReacceptanceForm({ enabled, busy, onReaccept, firstAcceptance = false, 
 }
 
 export function HealthConsentSuspended({ status, user }: { status: HealthConsentStatus; user: User | null }) {
-  const { handleExportBackup, handleDeleteAccount, handleLogout, exportingData } = useSettings();
+  const { handlePrepareBackup, preparedBackupUrl, releasePreparedBackup, handleDeleteAccount, handleLogout, exportingData } = useSettings();
   const submitLegalConsent = useAppStore(state => state.submitLegalConsent);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -221,7 +221,12 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
       <div style={{ display: 'grid', gap: 12 }}>
         <button type="button" className="btn" onClick={() => setPrivacy(true)}>Leggi l’informativa privacy</button>
         <button type="button" className="btn" onClick={() => setTerms(true)}>Leggi i termini e condizioni</button>
-        <button type="button" className="btn" onClick={() => void handleExportBackup()} disabled={exportingData}>{exportingData ? 'Preparazione…' : 'Esporta i tuoi dati (backup JSON)'}</button>
+        <button type="button" className="btn" onClick={() => void handlePrepareBackup()} disabled={exportingData}>{exportingData ? 'Preparazione…' : 'Prepara backup JSON'}</button>
+        {preparedBackupUrl && <>
+          <p role="status">Backup pronto. Tocca il collegamento qui sotto per scaricare il file sul dispositivo.</p>
+          <a className="btn btn-primary" href={preparedBackupUrl} download="logbook_backup.json">Scarica backup JSON</a>
+          <button type="button" className="btn" onClick={releasePreparedBackup}>Elimina il download preparato</button>
+        </>}
         <button type="button" className="btn" onClick={() => void handleLogout()}>Esci dall'account</button>
         <button type="button" className="btn" onClick={() => void handleDeleteAccount()}>Elimina definitivamente l'account</button>
         {user !== null && <button type="button" className="btn" disabled={busy || offline} onClick={() => { void refreshHealthConsent(user); }}>Riprova a verificare il consenso</button>}
