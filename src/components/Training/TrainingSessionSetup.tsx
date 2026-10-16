@@ -58,6 +58,12 @@ export const TrainingSessionSetup = ({ onNavigateToPlanning }: TrainingSessionSe
         () => Boolean(activeCycle?.startDate && Logic.calculateCycleTimeline(activeCycle, today).isEnded),
         [activeCycle, today],
     );
+    const hasInvalidCycleCounts = useMemo(
+        () => activeCycle
+            ? Logic.calculateCycleSchedule(activeCycle, routines, false).summaryText === 'Parametri del ciclo da correggere'
+            : false,
+        [activeCycle, routines],
+    );
 
     const durationEstimates = useMemo(() => {
         const estimates = new Map<string, RoutineDurationEstimate>();
@@ -247,7 +253,9 @@ export const TrainingSessionSetup = ({ onNavigateToPlanning }: TrainingSessionSe
             {activeCycle && !nextRoutine && (!isCyclePeriodEnded && !nextScheduled?.isCycleCompleted || plannedRoutines.length === 0) && (
                 <section className="session-setup-message">
                     <strong>{activeCycle.name}</strong>
-                    <span>Il ciclo attivo non contiene schede disponibili: verifica le schede eliminate o mancanti. Puoi comunque scegliere dall’archivio.</span>
+                    <span>{hasInvalidCycleCounts
+                        ? 'I parametri del ciclo vanno corretti in Pianificazione. Puoi comunque scegliere una scheda dall’archivio.'
+                        : 'Il ciclo attivo non contiene schede disponibili: verifica le schede eliminate o mancanti. Puoi comunque scegliere dall’archivio.'}</span>
                 </section>
             )}
 

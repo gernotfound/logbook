@@ -110,9 +110,8 @@ export function useCycleForm({ initialCycle, routines, onSave, showAlert }: UseC
             const newEnd = computeEndDate(parsedIso, w);
             setEndDate(newEnd);
             setEndDateTextInput(Logic.formatItalianDate(newEnd));
-        } else if (startDate) {
-            setDateTextInput(Logic.formatItalianDate(startDate));
         }
+        // Invalid typed dates stay visible so Save can report the problem.
     };
 
     const handleStartCalendarDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -149,9 +148,8 @@ export function useCycleForm({ initialCycle, routines, onSave, showAlert }: UseC
                 const w = computeWeeksFromDates(startDate, parsedIso);
                 setDurationWeeks(String(w));
             }
-        } else if (endDate) {
-            setEndDateTextInput(Logic.formatItalianDate(endDate));
         }
+        // Do not silently restore an older end date when the text is invalid.
     };
 
     const handleEndCalendarDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {

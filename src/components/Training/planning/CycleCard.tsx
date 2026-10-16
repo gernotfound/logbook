@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { ChevronDown, Copy, Pencil, Repeat2, Trash2 } from 'lucide-react';
 import { Logic } from '../../../lib/logic';
 import type { TrainingCycle, WorkoutRoutine } from '../../../types';
+import { isBoundedCycleCount, MAX_CALCULATED_CYCLE_WEEKS } from '../../../lib/calc/cycleLimits';
 import { ContextMenu, type ContextMenuItem } from '../../UI/ContextMenu';
 import { CycleStrategySummary } from './CycleStrategySummary';
 import { CycleSchedulePreview } from './CycleSchedulePreview';
@@ -38,7 +39,8 @@ export const CycleCard: React.FC<CycleCardProps> = ({
 
     const isInvalidSchedule = schedule.summaryText === 'Parametri del ciclo da correggere';
     const sessionsPerWeek = isInvalidSchedule ? null : schedule.sessionsPerWeek;
-    const weeksLabel = timeline.totalWeeks > 0 ? String(timeline.totalWeeks) : '—';
+    const weeksLabel = isBoundedCycleCount(cycle.durationWeeks, MAX_CALCULATED_CYCLE_WEEKS)
+        ? String(cycle.durationWeeks) : '—';
 
     const menuItems: ContextMenuItem[] = [
         { id: 'edit-cycle', label: 'Modifica', icon: <Pencil size={16} />, onClick: () => onEdit(cycle) },

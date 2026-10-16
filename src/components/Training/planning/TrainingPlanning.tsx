@@ -5,6 +5,7 @@ import { Copy, Dumbbell, Pencil, Trash2 } from 'lucide-react';
 import { useAppStore } from '../../../store/useAppStore';
 import { useDialogStore } from '../../../store/useDialogStore';
 import { Logic } from '../../../lib/logic';
+import { isBoundedCycleCount, MAX_CALCULATED_CYCLE_WEEKS } from '../../../lib/calc/cycleLimits';
 import { CycleEditor } from './CycleEditor';
 import { CycleCard } from './CycleCard';
 import { CycleMuscleMap } from './CycleMuscleMap';
@@ -238,7 +239,7 @@ export default function TrainingPlanning({ onOpenSession }: TrainingPlanningProp
                         <div className="planning-active-title">
                             <span className="planning-active-badge">Ciclo attivo</span>
                             <h2>{activeCycle.name}</h2>
-                            <p>{activeCycleTimeline.formattedRange}{activeCycleTimeline.totalWeeks > 0 ? ` · ${activeCycleTimeline.totalWeeks} settimane` : ''}</p>
+                            <p>{activeCycleTimeline.formattedRange}{isBoundedCycleCount(activeCycle.durationWeeks, MAX_CALCULATED_CYCLE_WEEKS) ? ` · ${activeCycle.durationWeeks} settimane` : ''}</p>
                             <CycleStrategySummary strategy={activeCycle.strategy} />
                             {activeCycle.notes ? <p className="planning-active-notes">{activeCycle.notes}</p> : null}
                         </div>
