@@ -87,11 +87,13 @@ export async function createHealthDataErasureJob(uid: string): Promise<void> {
     if (previous && (!isPositiveRevision(previous.consentRevision) || previous.uid !== uid)) {
       throw new Error('Stato cancellazione precedente non verificabile.');
     }
-    if (previous && previous.consentRevision === state.revision) {
+    if (previous && (previous.consentRevision === state.revision
+        || (previous.status === 'complete' && previous.completedRevision === state.revision))) {
       if (previous.status === 'failed' && previous.retryable === false) {
         throw new HealthDataErasureConflict('Cancellazione interrotta per dati non riconosciuti: è necessario un controllo.');
       }
-      // Same consent generation: retries must never create another destructive job.
+      // The completion itself advances the withdrawn consent revision once.
+      // Repeated POSTs at that revision cannot start another erasure.
       return;
     }
     if (previous && previous.status !== 'complete') {
