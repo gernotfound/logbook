@@ -82,7 +82,7 @@ describe('JSON Export/Import Logic', () => {
     it('prepares a full JSON backup as a blob URL without launching a file picker or download', () => {
         const blobUrl = 'blob:https://example.test/backup';
         const previousCreate = URL.createObjectURL;
-        const create = vi.fn(() => blobUrl);
+        const create = vi.fn((_blob: Blob | MediaSource) => blobUrl);
         URL.createObjectURL = create;
         const downloadSpy = vi.spyOn(Exporter, 'downloadFile');
         const data: any = { profile: { dob: '2000-01-01' }, history: [] };
