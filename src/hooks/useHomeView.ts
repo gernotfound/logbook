@@ -3,6 +3,7 @@ import { subDays, format } from 'date-fns';
 import { useAppStore } from '../store/useAppStore';
 import { Logic } from '../lib/logic';
 import { computeWeeklyWeightSeries } from '../lib/calc/analytics';
+import { parseDateInput } from '../lib/utils/date';
 
 const HOME_CLOCK_REFRESH_MS = 60 * 1000;
 
@@ -203,14 +204,20 @@ export function useHomeView(isActive = true): HomeViewState {
         return colors;
     }, [history, libraryMap, homeClockNow]);
 
-    // Resolve the latest observations once per nutrition update, not on every clock refresh.
+    // Apply the same canonical local-date ordering as getLatestUserWeight.
+    // Legacy unpadded and DD/MM/YYYY keys must not outrank newer valid measurements.
     const { recentWeight, recentNutritionWithBf } = useMemo(() => {
-        const dates = Object.keys(nutrition).sort((a, b) => b.localeCompare(a));
-        let weight: string | number | undefined;
+        const days = Object.entries(nutrition)
+            .map(([date, day], index) => ({ date: parseDateInput(date), day, index }))
+            .filter((item): item is typeof item & { date: string } => item.date !== null)
+            .sort((a, b) => b.date.localeCompare(a.date) || b.index - a.index);
+        let weight: number | undefined;
         let bfDay: (typeof nutrition)[string] | undefined;
-        for (const date of dates) {
-            const day = nutrition[date];
-            if (weight === undefined && day?.weight) weight = day.weight;
+        for (const { day } of days) {
+            if (weight === undefined && day?.weight !== undefined && day?.weight !== null && day?.weight !== '') {
+                const candidate = Number.parseFloat(String(day.weight).trim().replace(',', '.'));
+                if (Number.isFinite(candidate) && candidate > 0) weight = candidate;
+            }
             if (!bfDay && day?.bf !== undefined && day?.bf !== null && day?.bf !== '') bfDay = day;
             if (weight !== undefined && bfDay) break;
         }
