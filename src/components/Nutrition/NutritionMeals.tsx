@@ -18,9 +18,19 @@ interface NutritionMealsProps {
     setSelectedDate?: (d: string) => void;
 }
 
-export default function NutritionMeals({ mealsHook, selectedDate, setSelectedDate }: NutritionMealsProps) {
-    const internalHook = useNutritionMeals(selectedDate);
-    const hook = mealsHook || internalHook;
+export default function NutritionMeals(props: NutritionMealsProps) {
+    if (props.mealsHook) return <NutritionMealsContent {...props} hook={props.mealsHook} />;
+    return <NutritionMealsFromStore {...props} />;
+}
+
+function NutritionMealsFromStore(props: NutritionMealsProps) {
+    const hook = useNutritionMeals(props.selectedDate);
+    return <NutritionMealsContent {...props} hook={hook} />;
+}
+
+function NutritionMealsContent({
+    hook, selectedDate, setSelectedDate,
+}: NutritionMealsProps & { hook: ReturnType<typeof useNutritionMeals> }) {
     const {
         todayNutrition, dailyTarget, isDayOn, setDayType,
         searchQuery, handleSearch, searchResults, clearSearch,

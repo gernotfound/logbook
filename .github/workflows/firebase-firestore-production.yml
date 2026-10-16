@@ -77,6 +77,17 @@ jobs:
         with:
           node-version: '24'
 
+      - name: Verify npm 11 runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm_version="$(npm --version)"
+          echo "npm runtime: ${npm_version}"
+          if [[ "${npm_version}" != 11.* ]]; then
+            echo "Expected npm 11.x; found ${npm_version}" >&2
+            exit 1
+          fi
+
       - name: Authenticate dedicated Firestore deployer
         id: gcp_auth
         uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3

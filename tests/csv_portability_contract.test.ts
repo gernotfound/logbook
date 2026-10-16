@@ -91,4 +91,39 @@ describe('CSV portability contract', () => {
         expect(result).toBe(true);
         expect(calls).toEqual(['allenamenti.csv', 'misurazioni.csv', 'passi.csv', 'cardio.csv']);
     });
+    it('keeps complete output and stable row order for large datasets', async () => {
+        const exported: Record<string, string> = {};
+        vi.spyOn(Exporter, 'downloadFile').mockImplementation(async (name, content) => {
+            exported[name] = content;
+            return true;
+        });
+        const history: WorkoutSession[] = Array.from({ length: 1500 }, (_, index) => ({
+            id: 'workout-' + index,
+            date: '2026-01-01',
+            routineName: index === 1499 ? '=injection' : 'Session ' + index,
+            exercises: [],
+        }));
+        expect(await Exporter.exportToCSV(history, {}, [])).toBe(true);
+        const rows = exported['allenamenti.csv'].trimEnd().split('\n');
+        expect(rows).toHaveLength(1501);
+        expect(rows[1]).toContain('"workout-0"');
+        expect(rows[1500]).toContain('"workout-1499"');
+        expect(rows[1500]).toContain('"\'=injection"');
+    });
+
+    it('stops saving later CSV files if one is cancelled, without reporting completion', async () => {
+        const save = vi.spyOn(Exporter, 'downloadFile')
+            .mockResolvedValueOnce(true)
+            .mockResolvedValueOnce(false);
+        const history: WorkoutSession[] = [{ id: 'w1', date: '2026-10-04', exercises: [] }];
+        const nutrition: Record<string, NutritionDay> = {
+            '2026-10-04': {
+                date: '2026-10-04', kcal: 0, carbs: 0, pro: 0, fat: 0,
+                steps: 400, cardioSessions: [{ id: 'c1', modality: 'walk', durationMinutes: 20 }],
+            },
+        };
+        expect(await Exporter.exportToCSV(history, nutrition, [])).toBe(false);
+        expect(save.mock.calls.map(call => call[0])).toEqual(['allenamenti.csv', 'misurazioni.csv']);
+    });
+
 });

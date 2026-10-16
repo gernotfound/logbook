@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { createFoodSearcher } from '../lib/calc/nutrition';
 import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
 import { Logic } from '../lib/logic';
@@ -22,7 +23,11 @@ export function useNutritionMeals(dateStr?: string) {
     };
 
     const [searchQuery, setSearchQuery] = useState('');
-    const [searchResults, setSearchResults] = useState<any[]>([]);
+    const searchFoods = useMemo(() => createFoodSearcher(customFoods), [customFoods]);
+    const searchResults = useMemo(
+        () => searchQuery.trim() ? searchFoods(searchQuery).slice(0, 15) : [],
+        [searchFoods, searchQuery]
+    );
 
     const [showCustomModal, setShowCustomModal] = useState(false);
     const [editingFoodId, setEditingFoodId] = useState<string | number | null>(null);
@@ -126,15 +131,7 @@ export function useNutritionMeals(dateStr?: string) {
         catch { void showAlert("Errore durante il salvataggio dell'alimento."); }
     };
 
-    const handleSearch = (query: string) => {
-        setSearchQuery(query);
-        if (query.trim().length > 0) {
-            const res = Logic.searchFoods(customFoods, query).slice(0, 15);
-            setSearchResults(res);
-        } else {
-            setSearchResults([]);
-        }
-    };
+    const handleSearch = (query: string) => setSearchQuery(query);
 
     const addFood = async (food: any, mealType: string) => {
         const addedItem: LoggedMealItem = {
@@ -160,10 +157,7 @@ export function useNutritionMeals(dateStr?: string) {
         }
     };
 
-    const clearSearch = () => {
-        setSearchQuery('');
-        setSearchResults([]);
-    };
+    const clearSearch = () => setSearchQuery('');
 
     const updateMealItem = async (updatedItem: any) => {
         const targetId = updatedItem.itemId || updatedItem.time || updatedItem.id;

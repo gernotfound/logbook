@@ -103,6 +103,24 @@ describe('Workout lifecycle durable recovery regressions', () => {
     });
 
 
+    it('refuses an oversized historical plan without publishing any local workout', async () => {
+        const initial = userData({
+            routines: [{ id: 'oversized', name: 'Importata', exercises: [
+                { exId: 'bench', setsCount: 1, setPlans: [{ technique: 'cluster', segmentCount: 1_000_000_000 }] },
+            ] }],
+            activeWorkout: null,
+        });
+        useAppStore.setState({ userData: initial, dataOwner: owner, localWorkout: null });
+        const alert = vi.mocked(useDialogStore.getState().showAlert);
+        alert.mockResolvedValueOnce(undefined);
+        const hook = renderHook(() => useWorkoutSession());
+        await act(async () => { await hook.result.current.startWorkout('oversized'); });
+        expect(useAppStore.getState().localWorkout).toBeNull();
+        expect(alert).toHaveBeenCalledWith(expect.stringContaining('troppe serie o segmenti'));
+        expect(useAppStore.getState().userData?.routines?.[0]?.exercises?.[0]?.setPlans?.[0]?.segmentCount)
+            .toBe(1_000_000_000);
+    });
+
     it('verifies the owner-scoped IndexedDB snapshot after starting a planned workout', async () => {
         const initial = userData({
             routines: [{ id: 'routine-durable', name: 'Durable routine', exercises: [] }],

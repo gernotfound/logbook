@@ -1,16 +1,19 @@
 import { useEffect, useRef, useCallback } from 'react';
-import { computeWeeklyVolumeSeries, computeVolumeCaloriesCorrelation } from '../lib/calc/analytics';
+import { computeWeeklyVolumeSeries, computeWeeklyVolumeSeriesCooperative, computeVolumeCaloriesCorrelation, computeVolumeCaloriesCorrelationCooperative } from '../lib/calc/analytics';
 import AnalyticsWorker from '../workers/analytics.worker?worker';
 
 let messageIdCounter = 0;
 
-export function useAnalyticsWorker() {
+export function useAnalyticsWorker(enabled = true) {
     const workerRef = useRef<Worker | null>(null);
     const mounted = useRef(false);
+    const abortControllerRef = useRef<AbortController | null>(null);
     const pendingPromises = useRef<Map<number, { resolve: (val: any) => void, reject: (err: any) => void, timeoutId: ReturnType<typeof setTimeout> }>>(new Map());
 
     useEffect(() => {
+        if (!enabled) return;
         mounted.current = true;
+        abortControllerRef.current = new AbortController();
         const pendingForThisMount = pendingPromises.current;
         try {
             workerRef.current = new AnalyticsWorker();
@@ -31,8 +34,10 @@ export function useAnalyticsWorker() {
             
             workerRef.current.onerror = (e) => {
                 console.warn("Analytics Worker encountered an error:", e);
-                // We don't reject here because the task specific reject logic handles fallbacks.
-                // But we need to clean up pending promises and trigger their fallback.
+                // A failed worker is not retried: terminate it and use the established
+                // synchronous fallback for current and subsequent requests.
+                workerRef.current?.terminate();
+                workerRef.current = null;
                 const pending = Array.from(pendingForThisMount.entries());
                 pendingForThisMount.clear();
                 for (const [, handlers] of pending) {
@@ -47,6 +52,8 @@ export function useAnalyticsWorker() {
 
         return () => {
             mounted.current = false;
+            abortControllerRef.current?.abort();
+            abortControllerRef.current = null;
             if (workerRef.current) {
                 workerRef.current.terminate();
                 workerRef.current = null;
@@ -58,34 +65,35 @@ export function useAnalyticsWorker() {
                 handlers.reject(new Error('Worker terminated on unmount'));
             }
         };
-    }, []);
+    }, [enabled]);
 
-    const executeTask = useCallback(async (type: string, payload: any, fallbackFn: () => any, timeoutMs = 8000) => {
+    const executeTask = useCallback(async (
+        type: string, payload: any, fallbackFn: () => any | Promise<any>, timeoutMs = 8000
+    ) => {
         if (!mounted.current) throw new Error('Calcolo annullato: vista chiusa');
-        if (!workerRef.current) {
-            console.info(`Worker not available for ${type}, falling back to synchronous execution`);
+        const runFallback = async () => {
             const start = performance.now();
-            const result = fallbackFn();
-            console.info(`Fallback sync for ${type} took ${(performance.now() - start).toFixed(2)}ms`);
+            const result = await fallbackFn();
+            if (!mounted.current) throw new Error('Calcolo annullato: vista chiusa');
+            console.info(`Analytics fallback for ${type} took ${(performance.now() - start).toFixed(2)}ms`);
             return result;
-        }
+        };
+
+        if (!workerRef.current) return runFallback();
 
         return new Promise((resolve, reject) => {
             const id = ++messageIdCounter;
-            
             const timeoutId = setTimeout(() => {
-                const handlers = pendingPromises.current.get(id);
-                if (handlers) {
-                    pendingPromises.current.delete(id);
-                    console.warn(`Worker task ${type} timed out after ${timeoutMs}ms, falling back to synchronous execution`);
-                    try {
-                        const start = performance.now();
-                        const res = fallbackFn();
-                        console.info(`Fallback sync for ${type} after timeout took ${(performance.now() - start).toFixed(2)}ms`);
-                        resolve(res);
-                    } catch (fallbackErr) {
-                        reject(fallbackErr);
-                    }
+                if (!pendingPromises.current.has(id)) return;
+                // Terminate the stalled Worker before scheduling bounded fallback work.
+                workerRef.current?.terminate();
+                workerRef.current = null;
+                const pending = Array.from(pendingPromises.current.values());
+                pendingPromises.current.clear();
+                console.warn(`Worker task ${type} timed out after ${timeoutMs}ms`);
+                for (const task of pending) {
+                    clearTimeout(task.timeoutId);
+                    task.reject(new Error('Worker timed out'));
                 }
             }, timeoutMs);
 
@@ -93,19 +101,11 @@ export function useAnalyticsWorker() {
                 resolve,
                 reject: (err) => {
                     if (!mounted.current) { reject(err); return; }
-                    console.warn(`Worker task ${type} failed/rejected, falling back to synchronous execution. Reason:`, err.message);
-                    try {
-                        const start = performance.now();
-                        const res = fallbackFn();
-                        console.info(`Fallback sync for ${type} after error took ${(performance.now() - start).toFixed(2)}ms`);
-                        resolve(res);
-                    } catch (fallbackErr) {
-                        reject(fallbackErr);
-                    }
+                    console.warn(`Worker task ${type} failed, using fallback:`, err);
+                    void runFallback().then(resolve, reject);
                 },
                 timeoutId
             });
-
             try {
                 workerRef.current!.postMessage({ id, type, payload });
             } catch (err) {
@@ -113,15 +113,7 @@ export function useAnalyticsWorker() {
                 if (handlers) {
                     clearTimeout(handlers.timeoutId);
                     pendingPromises.current.delete(id);
-                    console.warn(`Worker postMessage failed for ${type}, falling back to synchronous execution`, err);
-                    try {
-                        const start = performance.now();
-                        const res = fallbackFn();
-                        console.info(`Fallback sync for ${type} after postMessage error took ${(performance.now() - start).toFixed(2)}ms`);
-                        resolve(res);
-                    } catch (fallbackErr) {
-                        reject(fallbackErr);
-                    }
+                    handlers.reject(err);
                 }
             }
         });
@@ -131,7 +123,9 @@ export function useAnalyticsWorker() {
         return executeTask(
             'CALCULATE_VOLUME_STATS', 
             { history, library, userWeight, numWeeks, referenceDate },
-            () => computeWeeklyVolumeSeries(history, library, userWeight, numWeeks, referenceDate)
+            () => Array.isArray(history) && history.length > 512
+                ? computeWeeklyVolumeSeriesCooperative(history, library, userWeight, numWeeks, referenceDate, abortControllerRef.current?.signal)
+                : computeWeeklyVolumeSeries(history, library, userWeight, numWeeks, referenceDate)
         );
     }, [executeTask]);
 
@@ -139,7 +133,9 @@ export function useAnalyticsWorker() {
         return executeTask(
             'CALCULATE_CORRELATION_STATS',
             { history, nutrition, library, userWeight, numWeeks, referenceDate },
-            () => computeVolumeCaloriesCorrelation(history, nutrition, library, userWeight, numWeeks, referenceDate)
+            () => Array.isArray(history) && history.length > 512
+                ? computeVolumeCaloriesCorrelationCooperative(history, nutrition, library, userWeight, numWeeks, referenceDate, abortControllerRef.current?.signal)
+                : computeVolumeCaloriesCorrelation(history, nutrition, library, userWeight, numWeeks, referenceDate)
         );
     }, [executeTask]);
 

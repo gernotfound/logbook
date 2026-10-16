@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import type { Supplement, SupplementIntake } from '../../../types';
 
 interface NutritionSupplementIntakesProps {
@@ -11,6 +12,14 @@ export function NutritionSupplementIntakes({
     supplementsLibrary,
     onRemoveIntake,
 }: NutritionSupplementIntakesProps) {
+    const supplementsById = useMemo(() => {
+        const byId = new Map<string, Supplement>();
+        for (const item of supplementsLibrary) {
+            if (!byId.has(item.id)) byId.set(item.id, item);
+        }
+        return byId;
+    }, [supplementsLibrary]);
+
     if (intakes.length === 0) return null;
 
     return (
@@ -23,7 +32,7 @@ export function NutritionSupplementIntakes({
             </div>
 
             {intakes.map(intake => {
-                const supplement = supplementsLibrary.find(item => item.id === intake.supplementId);
+                const supplement = supplementsById.get(intake.supplementId);
                 const timeStr = new Date(intake.time).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
                 return (
                     <div

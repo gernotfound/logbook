@@ -27,7 +27,7 @@ jobs:
         include:
           - id: core
             label: Static, isolated and recovery
-            command: "npm audit --audit-level=high && npm run test:security-static && npm run lint && npm run lint:a11y && npm run lint:type-aware && npm run lint:baseline && npm run test:quality-guardrails && npm run test:typecheck-coverage && npm run test:typecheck:m5 && npm run test:quality:m5 && npm run test:repo-hygiene && npm run test:ci-contract && npm run test:dead-code && npm run test:no-skips && npm run test:isolated && npm run test:fuzz && npm run test:recovery && npm run test:gc"
+            command: "npm run test:ci-production-secrets && npm run test:install-scripts && npm audit --audit-level=high && npm run test:security-static && npm run lint && npm run lint:a11y && npm run lint:type-aware && npm run lint:baseline && npm run test:quality-guardrails && npm run test:typecheck-coverage && npm run test:typecheck:m5 && npm run test:quality:m5 && npm run test:repo-hygiene && npm run test:ci-contract && npm run test:dead-code && npm run test:no-skips && npm run test:isolated && npm run test:fuzz && npm run test:recovery && npm run test:gc"
             java: false
           - id: unit-1
             label: Unit and integration 1/2
@@ -87,6 +87,20 @@ jobs:
           distribution: temurin
           java-version: '21'
 
+      - name: Verify npm 11 runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm_version="$(npm --version)"
+          echo "npm runtime: ${npm_version}"
+          if [[ "${npm_version}" != 11.* ]]; then
+            echo "Expected npm 11.x; found ${npm_version}" >&2
+            exit 1
+          fi
+
+      - name: Reject unreviewed dependency install scripts
+        run: node scripts/check-install-scripts.mjs
+
       - name: Install dependencies
         run: npm ci
 
@@ -95,6 +109,20 @@ jobs:
         run: |
           set -o pipefail
           ${{ matrix.command }} 2>&1 | tee "verification-${{ matrix.id }}.log"
+
+      - name: Generate CycloneDX dependency SBOM
+        if: matrix.id == 'core'
+        shell: bash
+        run: npm sbom --sbom-format cyclonedx --sbom-type application > sbom.cdx.json
+
+      - name: Upload dependency SBOM
+        if: matrix.id == 'core'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: dependency-sbom-${{ env.EXPECTED_SHA }}
+          path: sbom.cdx.json
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Upload failure artifacts
         if: failure()
@@ -150,6 +178,20 @@ jobs:
         with:
           node-version: '24'
           cache: npm
+
+      - name: Verify npm 11 runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm_version="$(npm --version)"
+          echo "npm runtime: ${npm_version}"
+          if [[ "${npm_version}" != 11.* ]]; then
+            echo "Expected npm 11.x; found ${npm_version}" >&2
+            exit 1
+          fi
+
+      - name: Reject unreviewed dependency install scripts
+        run: node scripts/check-install-scripts.mjs
 
       - name: Install dependencies
         run: npm ci

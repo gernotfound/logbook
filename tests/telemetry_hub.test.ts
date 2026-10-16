@@ -537,7 +537,7 @@ describe('Telemetry Sanitizer & Telemetry Hub Unit & Integration Suite', () => {
   // 8. Global Window Event Interception
   // =========================================================================
   describe('8. Global Window Event Interception', () => {
-    it('intercepts window.onerror and triggers trackError with window_error source', async () => {
+    it('captures a global ErrorEvent once with accurate occurrence count', async () => {
       vi.useFakeTimers();
       telemetryHub.init();
       telemetryHub.setUserId('user_win_err');
@@ -554,6 +554,35 @@ describe('Telemetry Sanitizer & Telemetry Hub Unit & Integration Suite', () => {
       const payload = mockSetDoc.mock.calls[0][1] as TelemetryErrorPayload;
       expect(payload.source).toBe('window_error');
       expect(payload.type).toBe('TypeError');
+      expect(payload.count).toBe(1);
+    });
+
+    it('does not replace or restore a third-party window.onerror callback', async () => {
+      vi.useFakeTimers();
+      const existingHandler = window.onerror;
+      const thirdPartyHandler = vi.fn(() => false);
+      window.onerror = thirdPartyHandler;
+
+      try {
+        telemetryHub.init();
+        telemetryHub.setUserId('user_onerror_coexistence');
+        expect(window.onerror).toBe(thirdPartyHandler);
+
+        window.dispatchEvent(new ErrorEvent('error', {
+          error: new Error('One global error with another handler'),
+          message: 'One global error with another handler',
+        }));
+        await vi.advanceTimersByTimeAsync(100);
+
+        expect(mockSetDoc).toHaveBeenCalledTimes(1);
+        expect((mockSetDoc.mock.calls[0][1] as TelemetryErrorPayload).count).toBe(1);
+
+        telemetryHub.destroy();
+        expect(window.onerror).toBe(thirdPartyHandler);
+      } finally {
+        telemetryHub.destroy();
+        window.onerror = existingHandler;
+      }
     });
 
     it('intercepts window.onunhandledrejection with Error or string reasons', async () => {

@@ -2,6 +2,7 @@ import Fuse from 'fuse.js';
 import { MUSCLES } from '../constants/muscles';
 import { getDetailedMuscleCategory } from './planning';
 import { getSetSegments } from '../advancedSets';
+import { parseDateInput } from '../utils/date';
 
 export const normalizeStem = (str: string): string => {
     if (!str || typeof str !== 'string') return '';
@@ -45,16 +46,9 @@ interface SearchableExercise {
     trackingType?: string;
 }
 
-export function searchExerciseLibrary<T extends SearchableExercise>(library: T[], query: string): T[] {
-    if (!Array.isArray(library)) return [];
-    if (!query || typeof query !== 'string' || !query.trim()) {
-        return [...library].sort((a, b) => (a?.name || '').localeCompare(b?.name || '', 'it'));
-    }
-
-    const q = query.trim().toLowerCase();
-    const stemmedQ = normalizeStem(q);
-    const tokens = q.split(/\s+/).filter(t => t.length >= 1);
-    const stemmedTokens = stemmedQ.split(/\s+/).filter(t => t.length >= 1);
+function buildExerciseLibrarySearcher<T extends SearchableExercise>(library: T[]): (query: string) => T[] {
+    if (!Array.isArray(library)) return () => [];
+    const sortedLibrary = [...library].sort((a, b) => (a?.name || '').localeCompare(b?.name || '', 'it'));
 
     const muscleMap = new Map<string, string>();
     if (Array.isArray(MUSCLES)) {
@@ -91,36 +85,6 @@ export function searchExerciseLibrary<T extends SearchableExercise>(library: T[]
         };
     });
 
-    // 1. Direct and multi-token substring matches
-    const directMatches = enriched.filter(item => {
-        if (!item._searchName) return false;
-        // Direct match in name or stemmed name
-        if (item._searchName.includes(q) || item._stemmedName.includes(stemmedQ)) return true;
-        // Direct match in muscles
-        if (item._searchMuscles.includes(q) || item._searchMuscles.includes(stemmedQ)) return true;
-        if (item._searchSecMuscles.includes(q) || item._searchSecMuscles.includes(stemmedQ)) return true;
-        // Direct match in notes
-        if (item._searchNotes.includes(q)) return true;
-        // Multi-token: each token matches either name, muscles, notes, or type
-        if (tokens.length > 1 && tokens.every((tok, idx) => {
-            const sTok = stemmedTokens[idx] || tok;
-            return (
-                item._searchName.includes(tok) ||
-                item._stemmedName.includes(sTok) ||
-                item._searchMuscles.includes(tok) ||
-                item._searchMuscles.includes(sTok) ||
-                item._searchSecMuscles.includes(tok) ||
-                item._searchSecMuscles.includes(sTok) ||
-                item._searchNotes.includes(tok) ||
-                item._searchType.includes(tok)
-            );
-        })) {
-            return true;
-        }
-        return false;
-    });
-
-    // 2. Fuzzy matches with Fuse.js
     const fuse = new Fuse(enriched, {
         keys: [
             { name: '_searchName', weight: 0.55 },
@@ -134,29 +98,88 @@ export function searchExerciseLibrary<T extends SearchableExercise>(library: T[]
         minMatchCharLength: 2
     });
 
-    let fuzzyMatches: typeof enriched = [];
-    if (tokens.length > 1) {
-        const tokenMatches = tokens.map(tok => new Set(fuse.search(tok).map(r => r.item)));
-        const allMatch = enriched.filter(item => tokenMatches.every(set => set.has(item)));
-        const singleMatches = fuse.search(query.trim()).map(res => res.item);
-        fuzzyMatches = [...allMatch, ...singleMatches];
-    } else {
-        fuzzyMatches = fuse.search(query.trim()).map(res => res.item);
-    }
 
-    const seen = new Set<string>();
-    const results: T[] = [];
-    for (const item of [...directMatches, ...fuzzyMatches]) {
-        const key = item.id;
-        if (key && !seen.has(key)) {
-            seen.add(key);
-            const { _searchName, _stemmedName, _searchMuscles, _searchSecMuscles, _searchNotes, _searchType, ...original } = item;
-            // Only temporary index fields are removed; the original T fields remain.
-            results.push(original as unknown as T);
+    return (query: string): T[] => {
+        if (!query || typeof query !== 'string' || !query.trim()) return [...sortedLibrary];
+
+        const q = query.trim().toLowerCase();
+        const stemmedQ = normalizeStem(q);
+        const tokens = q.split(/\s+/).filter(t => t.length >= 1);
+        const stemmedTokens = stemmedQ.split(/\s+/).filter(t => t.length >= 1);
+
+        // 1. Direct and multi-token substring matches
+        const directMatches = enriched.filter(item => {
+            if (!item._searchName) return false;
+            // Direct match in name or stemmed name
+            if (item._searchName.includes(q) || item._stemmedName.includes(stemmedQ)) return true;
+            // Direct match in muscles
+            if (item._searchMuscles.includes(q) || item._searchMuscles.includes(stemmedQ)) return true;
+            if (item._searchSecMuscles.includes(q) || item._searchSecMuscles.includes(stemmedQ)) return true;
+            // Direct match in notes
+            if (item._searchNotes.includes(q)) return true;
+            // Multi-token: each token matches either name, muscles, notes, or type
+            if (tokens.length > 1 && tokens.every((tok, idx) => {
+                const sTok = stemmedTokens[idx] || tok;
+                return (
+                    item._searchName.includes(tok) ||
+                    item._stemmedName.includes(sTok) ||
+                    item._searchMuscles.includes(tok) ||
+                    item._searchMuscles.includes(sTok) ||
+                    item._searchSecMuscles.includes(tok) ||
+                    item._searchSecMuscles.includes(sTok) ||
+                    item._searchNotes.includes(tok) ||
+                    item._searchType.includes(tok)
+                );
+            })) {
+                return true;
+            }
+            return false;
+        });
+
+        let fuzzyMatches: typeof enriched = [];
+        if (tokens.length > 1) {
+            const tokenMatches = tokens.map(tok => new Set(fuse.search(tok).map(r => r.item)));
+            const allMatch = enriched.filter(item => tokenMatches.every(set => set.has(item)));
+            const singleMatches = fuse.search(query.trim()).map(res => res.item);
+            fuzzyMatches = [...allMatch, ...singleMatches];
+        } else {
+            fuzzyMatches = fuse.search(query.trim()).map(res => res.item);
         }
-    }
 
-    return results;
+        const seen = new Set<string>();
+        const results: T[] = [];
+        for (const item of [...directMatches, ...fuzzyMatches]) {
+            const key = item.id;
+            if (key && !seen.has(key)) {
+                seen.add(key);
+                const { _searchName, _stemmedName, _searchMuscles, _searchSecMuscles, _searchNotes, _searchType, ...original } = item;
+                // Only temporary index fields are removed; the original T fields remain.
+                results.push(original as unknown as T);
+            }
+        }
+
+        return results;
+    };
+}
+
+export function createExerciseLibrarySearcher<T extends SearchableExercise>(library: T[]): (query: string) => T[] {
+    if (!Array.isArray(library)) return () => [];
+    let prepared: ((query: string) => T[]) | null = null;
+    return (query: string): T[] => {
+        if (!query || typeof query !== 'string' || !query.trim()) {
+            return [...library].sort((a, b) => (a?.name || '').localeCompare(b?.name || '', 'it'));
+        }
+        if (!prepared) prepared = buildExerciseLibrarySearcher(library);
+        return prepared(query);
+    };
+}
+
+export function searchExerciseLibrary<T extends SearchableExercise>(library: T[], query: string): T[] {
+    if (!Array.isArray(library)) return [];
+    if (!query || typeof query !== 'string' || !query.trim()) {
+        return [...library].sort((a, b) => (a?.name || '').localeCompare(b?.name || '', 'it'));
+    }
+    return createExerciseLibrarySearcher(library)(query);
 }
 
 export function filterItems<T extends object>(items: T[], query: string, searchFields: string | string[] = ['name']): T[] {
@@ -280,15 +303,17 @@ export function getLatestUserWeight(
 ): number {
     let latestWeight: number | null = null;
     if (nutrition && typeof nutrition === 'object') {
-        const dates = Object.keys(nutrition).sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
-        for (const d of dates) {
-            const day = nutrition[d];
-            if (day && day.weight !== undefined && day.weight !== null && day.weight !== '') {
-                const raw = typeof day.weight === 'string' ? day.weight.trim().replace(',', '.') : day.weight;
-                const num = parseFloat(String(raw));
-                if (!isNaN(num) && num > 0) {
-                    latestWeight = num;
-                }
+        let latestDate: string | null = null;
+        for (const [date, day] of Object.entries(nutrition)) {
+            // Stored day keys are not guaranteed to be zero-padded after legacy imports.
+            // Normalize dates before comparing; malformed keys cannot establish recency.
+            const canonicalDate = parseDateInput(date);
+            if (!canonicalDate || !day || day.weight === undefined || day.weight === null || day.weight === '') continue;
+            const raw = typeof day.weight === 'string' ? day.weight.trim().replace(',', '.') : day.weight;
+            const num = parseFloat(String(raw));
+            if (Number.isFinite(num) && num > 0 && (latestDate === null || canonicalDate >= latestDate)) {
+                latestDate = canonicalDate;
+                latestWeight = num;
             }
         }
     }
@@ -340,14 +365,22 @@ export function calculateSetVolume(
 
 export function calculateWorkoutVolume(
     session: { exercises?: Array<{ exId?: string; sets?: any[] }> },
-    library: Array<{ id: string; isBodyweight?: boolean; equipmentWeight?: number }> = [],
+    library: Array<{ id: string; isBodyweight?: boolean; equipmentWeight?: number }> | ReadonlyMap<string, VolumeExerciseRef> = [],
     userWeight: number = 80
 ): number {
     if (!session || !Array.isArray(session.exercises)) return 0;
-    const libMap = new Map<string, VolumeExerciseRef>();
-    library.forEach(ex => {
-        if (ex?.id) libMap.set(ex.id, ex);
-    });
+    // Callers analyzing multiple sessions may share an immutable catalog lookup.
+    // An array keeps the original last-ID-wins lookup semantics.
+    let libMap: ReadonlyMap<string, VolumeExerciseRef>;
+    if (Array.isArray(library)) {
+        const entries = new Map<string, VolumeExerciseRef>();
+        for (const entry of library) {
+            if (entry?.id) entries.set(entry.id, entry);
+        }
+        libMap = entries;
+    } else {
+        libMap = library as ReadonlyMap<string, VolumeExerciseRef>;
+    }
 
     let totalVolume = 0;
     for (const ex of session.exercises) {

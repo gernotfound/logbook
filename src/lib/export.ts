@@ -1,7 +1,7 @@
 import { useDialogStore } from '../store/useDialogStore';
 import { useAppStore } from '../store/useAppStore';
 import { Logic } from './logic';
-import { createBackup, decodeImport, prepareImport, type BackupCoverage, type ImportMode } from './backup';
+import { createBackup, createShareBackup, decodeImport, prepareImport, type BackupCoverage, type ImportMode } from './backup';
 import { restoreMissingBackupDeviceDrafts } from './backupDeviceRecovery';
 import { restorePortableWorkout, restorePortableTimerAsPaused } from './backupWorkoutRecovery';
 import { captureSession, isCurrentSession } from './sync/session';
@@ -9,6 +9,9 @@ import { readLocal } from './sync/localRepository';
 import equal from 'fast-deep-equal';
 import type { Exercise, ExportShareOptions, NutritionDay, SessionExercise, SessionExerciseSet, TrainingCycle, UserData, WorkoutRoutine, WorkoutSession } from '../types';
 import { requireCanonicalWorkoutDate } from './sync/monthlyIntegrity';
+import { parseLargeBackupJson } from './streamJsonImport';
+
+export const MAX_JSON_IMPORT_BYTES = 64 * 1024 * 1024;
 
 const DEFAULT_SHARE_OPTIONS: Required<ExportShareOptions> = {
     exportLibrary: true,
@@ -142,7 +145,7 @@ export const Exporter = {
             'Readiness rilevata UTC', 'Dolori', 'ID esercizio sessione', 'ID esercizio libreria',
             'Nota sessione', 'Contratto progressione', 'ID serie', 'Modalità esecuzione', 'ID segmento',
         ];
-        let workoutCsv = workoutHeaders.join(',') + '\n';
+        const workoutRows = [workoutHeaders.join(',') + '\n'];
 
         const appendWorkoutRow = (
             session: WorkoutSession,
@@ -167,7 +170,7 @@ export const Exporter = {
             const exName = exercise
                 ? (libMap.get(exercise.exId)?.name ?? exercise.exId ?? 'Sconosciuto')
                 : '';
-            workoutCsv += this.formatCsvRow([
+            workoutRows.push(this.formatCsvRow([
                 requireCanonicalWorkoutDate(session),
                 session.routineName || 'Allenamento libero',
                 exName,
@@ -210,7 +213,7 @@ export const Exporter = {
                 set?.id ?? '',
                 set?.executionMode ?? '',
                 segmentId,
-            ]);
+            ]));
         };
 
         for (const session of history) {
@@ -266,11 +269,11 @@ export const Exporter = {
             'Cosce (cm)', 'Polpacci (cm)', 'Ore sonno', 'Sonno profondo', 'Sonno leggero', 'Sonno REM', 'Tempo sveglio',
             'Ora misurazione', 'Giorno ON', 'Pasti', 'Integratori assunti', 'Input Body Fat',
         ];
-        let nutritionCsv = nutritionHeaders.join(',') + '\n';
+        const nutritionRows = [nutritionHeaders.join(',') + '\n'];
         const nutritionDates = Object.keys(nutrition).sort();
         for (const date of nutritionDates) {
             const day = nutrition[date];
-            nutritionCsv += this.formatCsvRow([
+            nutritionRows.push(this.formatCsvRow([
                 date,
                 day.weight,
                 day.kcal,
@@ -297,35 +300,35 @@ export const Exporter = {
                 jsonCell(day.meals ?? []),
                 jsonCell(day.supplementsIntake ?? []),
                 jsonCell(day.bfProvenance?.inputs),
-            ]);
+            ]));
         }
 
-        let stepsCsv = "Data,Passi,Fonte,Rilevato il\n";
-        let cardioCsv = "Data,ID,Ora inizio,Modalità,Struttura,Durata (min),Intensità,FC media (bpm),Distanza (km),Note,Fonte,ID esterno\n";
+        const stepsRowsContent = ["Data,Passi,Fonte,Rilevato il\n"];
+        const cardioRowsContent = ["Data,ID,Ora inizio,Modalità,Struttura,Durata (min),Intensità,FC media (bpm),Distanza (km),Note,Fonte,ID esterno\n"];
         let stepsRows = 0;
         let cardioRows = 0;
         for (const date of nutritionDates) {
             const day = nutrition[date];
             if (typeof day.steps === 'number' && Number.isFinite(day.steps) && day.steps >= 0) {
-                stepsCsv += this.formatCsvRow([date, day.steps, day.stepsSource ?? '', isoInstant(day.stepsCapturedAt)]);
+                stepsRowsContent.push(this.formatCsvRow([date, day.steps, day.stepsSource ?? '', isoInstant(day.stepsCapturedAt)]));
                 stepsRows++;
             }
             day.cardioSessions?.forEach(session => {
-                cardioCsv += this.formatCsvRow([
+                cardioRowsContent.push(this.formatCsvRow([
                     date, session.id, isoInstant(session.startedAt), session.modality, session.structure ?? '',
                     session.durationMinutes, session.intensity ?? '', session.averageHeartRate ?? '',
                     session.distanceKm ?? '', session.notes ?? '', session.source ?? '', session.externalId ?? '',
-                ]);
+                ]));
                 cardioRows++;
             });
         }
 
         const outputs: Array<[string, string]> = [];
-        if (history.length) outputs.push(['allenamenti.csv', workoutCsv]);
+        if (history.length) outputs.push(['allenamenti.csv', workoutRows.join('')]);
         else await useDialogStore.getState().showAlert('Nessun allenamento da esportare.');
-        if (nutritionDates.length) outputs.push(['misurazioni.csv', nutritionCsv]);
-        if (stepsRows) outputs.push(['passi.csv', stepsCsv]);
-        if (cardioRows) outputs.push(['cardio.csv', cardioCsv]);
+        if (nutritionDates.length) outputs.push(['misurazioni.csv', nutritionRows.join('')]);
+        if (stepsRows) outputs.push(['passi.csv', stepsRowsContent.join('')]);
+        if (cardioRows) outputs.push(['cardio.csv', cardioRowsContent.join('')]);
 
         for (const [filename, content] of outputs) {
             const saved = await this.downloadFile(filename, content, 'text/csv;charset=utf-8;');
@@ -382,14 +385,7 @@ export const Exporter = {
         options: ExportShareOptions = DEFAULT_SHARE_OPTIONS
     ): Promise<{ libraryCount: number; routinesCount: number; cyclesCount: number } | undefined> {
         const shareData = buildShareExportData(userData, options);
-        const base = createBackup(userData, null, { scope: 'device', months: [] });
-        const payload = {
-            ...base,
-            type: 'share' as const,
-            owner: null,
-            userData: shareData,
-            recovery: undefined,
-        };
+        const payload = createShareBackup(shareData);
 
         const content = JSON.stringify(payload, null, 2);
         if (await this.downloadFile("logbook_condivisione.json", content, 'application/json') === false) return;
@@ -425,15 +421,19 @@ export const Exporter = {
             if (!isCurrentSession(session)) throw new Error('Sessione cambiata: importazione annullata.');
         };
         try {
-            const content = await new Promise<string>((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = () => resolve(String(reader.result));
-                reader.onerror = () => reject(new Error('Impossibile leggere il file.'));
-                reader.onabort = () => reject(new Error('Lettura del file annullata.'));
-                reader.readAsText(file);
-            });
+            // The threshold selects the read strategy, never whether a genuine
+            // backup is recoverable. Large JSON is decoded in bounded chunks.
+            const parsed = file.size > MAX_JSON_IMPORT_BYTES
+                ? await parseLargeBackupJson(file, assertCurrent)
+                : JSON.parse(await new Promise<string>((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(String(reader.result));
+                    reader.onerror = () => reject(new Error('Impossibile leggere il file.'));
+                    reader.onabort = () => reject(new Error('Lettura del file annullata.'));
+                    reader.readAsText(file);
+                }));
             assertCurrent();
-            const decoded = decodeImport(JSON.parse(content), session.owner);
+            const decoded = decodeImport(parsed, session.owner);
             const durableEnvelope = await readLocal(session.owner);
             assertCurrent();
             if (!durableEnvelope) throw new Error('Dati locali non ancora disponibili.');
