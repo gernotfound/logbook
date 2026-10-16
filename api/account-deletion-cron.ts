@@ -5,7 +5,7 @@ import {
 } from '../server/accountDeletion/retention.js';
 import { processAccountDeletion } from '../server/accountDeletion/runner.js';
 import { purgeExpiredTelemetry } from '../server/telemetryRetention.js';
-import { listRecoverableHealthErasures, processHealthDataErasure } from '../server/healthConsent/erasure.js';
+import { listRecoverableHealthErasures, processHealthDataErasure, purgeExpiredCompletedHealthErasures } from '../server/healthConsent/erasure.js';
 
 export const maxDuration = 300;
 
@@ -37,6 +37,7 @@ export async function GET(request: Request): Promise<Response> {
   let erasureScanned = 0;
   let erasureProcessed = 0;
   let erasureErrors = 0;
+  let erasureReceiptsPurged = 0;
 
   // Prioritize a bounded slice of requested health-data erasures without
   // starving account deletion or the reserved telemetry retention window.
@@ -105,6 +106,19 @@ export async function GET(request: Request): Promise<Response> {
     }
   }
 
+  // Receipt retention is independent from both account-deletion and telemetry.
+  // Never spend the last telemetry-reserved window on this maintenance step.
+  if (Date.now() + SAFETY_BUFFER_MS < deletionDeadlineMs) {
+    try {
+      erasureReceiptsPurged = await purgeExpiredCompletedHealthErasures(deletionDeadlineMs);
+    } catch (error) {
+      erasureErrors++;
+      console.error('[account-deletion-cron] erasure receipt retention failed', {
+        kind: error instanceof Error ? error.name : typeof error,
+      });
+    }
+  }
+
   let telemetryRetention = {
     documentsScanned: 0,
     documentsDeleted: 0,
@@ -127,6 +141,7 @@ export async function GET(request: Request): Promise<Response> {
     erasureScanned,
     erasureProcessed,
     erasureErrors,
+    erasureReceiptsPurged,
     recoveryErrors,
     retentionErrors,
     purged,
