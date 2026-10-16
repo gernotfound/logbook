@@ -1,0 +1,24 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "git": {
+    "deploymentEnabled": {
+      "main": false,
+      "**": false
+    }
+  },
+  "functions": {
+    "api/account-deletion.ts": {
+      "maxDuration": 300
+    },
+    "api/account-deletion-cron.ts": {
+      "maxDuration": 300
+    },
+    "api/account-deletion-device.ts": {
+      "maxDuration": 30
+    }
+  },
+  "fluid": true,
+  "framework": null,
+  "buildCommand": "node scripts/prepare-vercel-backend-static.mjs",
+  "outputDirectory": "vercel-backend-static"
+}
