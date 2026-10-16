@@ -8,6 +8,7 @@ const CONSENT_COLLECTION = 'health_consent_withdrawals';
 const PAGE_SIZE = 100;
 const SAFETY_BUFFER_MS = 1000;
 const LEASE_GRACE_MS = 10000;
+const COMPLETED_JOB_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 
 type HealthDataErasureStatus = 'requested' | 'deleting' | 'verifying' | 'complete' | 'failed';
 type Job = {
@@ -23,6 +24,7 @@ type Job = {
   error?: string;
   completedRevision?: number;
   completedAt?: Timestamp;
+  purgeAfter?: Timestamp;
 };
 
 export type PublicErasureStatus = {
@@ -191,6 +193,7 @@ async function completeErasure(uid: string, leaseOwner: string): Promise<void> {
     });
     tx.update(jobRef(uid), {
       status: 'complete', completedRevision: nextRevision, completedAt: now, updatedAt: now,
+      purgeAfter: Timestamp.fromMillis(now.toMillis() + COMPLETED_JOB_RETENTION_MS),
       leaseOwner: FieldValue.delete(), leaseUntil: FieldValue.delete(),
       retryable: FieldValue.delete(), error: FieldValue.delete(),
     });
@@ -250,4 +253,31 @@ export async function listRecoverableHealthErasures(limitCount = 12): Promise<st
   const failed = await db.where('status', '==', 'failed').where('retryable', '==', true).limit(limitCount).get();
   const ids = new Set([...snapshot.docs, ...failed.docs].map(item => item.id));
   return [...ids].slice(0, limitCount);
+}
+
+/** Keep only 30 days of the full receipt; the minimal erasure epoch remains in consent evidence. */
+export async function purgeExpiredCompletedHealthErasures(deadlineMs: number, maxItems = 100): Promise<number> {
+  const db = adminDb();
+  const now = Timestamp.now();
+  const due = await db.collection(JOB_COLLECTION)
+    .where('status', '==', 'complete').where('purgeAfter', '<=', now)
+    .orderBy('purgeAfter').limit(Math.min(100, Math.max(1, maxItems))).get();
+  let purged = 0;
+  for (const item of due.docs) {
+    if (Date.now() + SAFETY_BUFFER_MS >= deadlineMs) break;
+    const deleted = await db.runTransaction(async tx => {
+      const [jobSnap, consentSnap] = await Promise.all([tx.get(item.ref), tx.get(consentRef(item.id))]);
+      const job = jobSnap.data() as Job | undefined;
+      const consent = consentSnap.data();
+      if (!jobSnap.exists || !job || job.uid !== item.id || job.status !== 'complete'
+        || !(job.purgeAfter instanceof Timestamp) || job.purgeAfter.toMillis() > Date.now()
+        || !isPositiveRevision(job.consentRevision)
+        || !consent || !isPositiveRevision(consent.erasedBeforeRevision)
+        || consent.erasedBeforeRevision < job.consentRevision) return false;
+      tx.delete(item.ref);
+      return true;
+    });
+    if (deleted) purged++;
+  }
+  return purged;
 }
