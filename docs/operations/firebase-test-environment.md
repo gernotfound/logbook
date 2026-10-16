@@ -119,7 +119,20 @@ Lavoro aggiunto su `testing/00-firebase-test-critical`, **non distribuito né in
 - `server/accountDeletion/firebaseAdmin.ts`: se `FIREBASE_ADMIN_AUTH_MODE=vercel-oidc`, verifica rigorosamente il project ID Firebase Test, email account Test, `VERCEL_PROJECT_ID` Test, ambiente Vercel `production`, flag Vercel e origin frontend `https://thelogbook-test.web.app`; rifiuta la presenza di una chiave Admin privata. **Per i progetti non Test** lascia attivo il percorso `cert()` preesistente e rifiuta auth mode sconosciuti; anche un deployment configurato per il progetto `thelogbook-test` senza OIDC fallisce chiuso.
 - `vercel.test.json`: profilo backend-only usabile tramite **`--local-config vercel.test.json`**, con tutti i deploy Git automatici disabilitati, nessun redirect a frontend Production, nessuna schedulazione automatica cron, nessun service worker legacy. Non sostituisce `vercel.json` Production, che resta immutato. Il cron esiste come endpoint da invocare **solo manualmente e con `CRON_SECRET` Test** durante i test controllati.
 - `scripts/check-vercel-test-safety.mjs` e `tests/m7_firebase_test_oidc.test.ts`: guardrail su isolamento e regressioni del token exchange, expiry, caching, failure paths.
-- `package.json`/`package-lock.json` ora dichiarano e fissano `@vercel/oidc` e relativi pacchetti; installazione, lint, tipo, gate canonico e runtime **non ancora osservati** alla stesura.
+- `package.json`/`package-lock.json` dichiarano e fissano `@vercel/oidc` e relativi pacchetti. **CI GitHub osservata sullo SHA esatto `84c0dee34a9149dc430e280da6ad03f5cc1f7671`, run [38912861341](https://github.com/gernotfound/logbook/actions/runs/38912861341): SUCCESS**, inclusi installazione npm, sei shard (statico, rules, build/M7–M8, due unit/integration, hardening/stress), Playwright E2E, CodeQL e Canonical Verification. Questo NON collauda il runtime OIDC esterno e NON prova alcun deploy.
+
+### Env Vercel Test verificate direttamente nel provider — 2026-10-16
+
+Nel progetto Vercel Test **`prj_o232EaPmYkrn04zev3Sw9iL2ympj`** sono state create via connettore Vercel quattro variabili **encrypted**, con target esclusivamente `production` dell'ambiente Vercel Test. Il read-back `filter_project_envs` ha confermato l'esistenza delle quattro chiavi e il target (non sono stati stampati né committati valori criptati):
+
+| Chiave | Valore previsto | Ambito |
+|---|---|---|
+| `FIREBASE_ADMIN_AUTH_MODE` | `vercel-oidc` | Server-only Test |
+| `FIREBASE_ADMIN_PROJECT_ID` | `thelogbook-test` | Server-only Test |
+| `FIREBASE_ADMIN_CLIENT_EMAIL` | `logbook-test-vercel-runtime@thelogbook-test.iam.gserviceaccount.com` | Server-only Test |
+| `PUBLIC_APP_ORIGIN` | `https://thelogbook-test.web.app` | Origine CORS Test |
+
+`FIREBASE_ADMIN_PRIVATE_KEY` **non è presente** e non deve essere aggiunta. L'elenco del progetto prima della creazione era vuoto, quello dopo contiene solo queste quattro chiavi. Mancano ancora, per testare il cron manualmente, un `CRON_SECRET` dedicato e tutte le condizioni di deploy/runtime. Non sono presenti deployment al momento del read-back.
 
 ### Prerequisiti e verifica prima del primo deploy
 
