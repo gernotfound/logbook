@@ -5,6 +5,7 @@ import {
 } from '../server/accountDeletion/retention.js';
 import { processAccountDeletion } from '../server/accountDeletion/runner.js';
 import { purgeExpiredTelemetry } from '../server/telemetryRetention.js';
+import { listRecoverableHealthErasures, processHealthDataErasure } from '../server/healthConsent/erasure.js';
 
 export const maxDuration = 300;
 
@@ -33,6 +34,33 @@ export async function GET(request: Request): Promise<Response> {
   const results: Array<{ uid: string; result: string }> = [];
   let recoveryErrors = 0;
   let retentionErrors = 0;
+  let erasureScanned = 0;
+  let erasureProcessed = 0;
+  let erasureErrors = 0;
+
+  // Prioritize a bounded slice of requested health-data erasures without
+  // starving account deletion or the reserved telemetry retention window.
+  try {
+    const erasureUids = await listRecoverableHealthErasures(8);
+    erasureScanned = erasureUids.length;
+    for (const uid of erasureUids) {
+      if (Date.now() + SAFETY_BUFFER_MS >= deletionDeadlineMs) break;
+      try {
+        await processHealthDataErasure(uid, Math.min(deletionDeadlineMs, Date.now() + 10_000));
+        erasureProcessed++;
+      } catch (error) {
+        erasureErrors++;
+        console.error('[account-deletion-cron] health data erasure recovery failed', {
+          kind: error instanceof Error ? error.name : typeof error,
+        });
+      }
+    }
+  } catch (error) {
+    erasureErrors++;
+    console.error('[account-deletion-cron] health erasure query failed', {
+      kind: error instanceof Error ? error.name : typeof error,
+    });
+  }
 
   try {
     jobs = await listRecoverableDeletionJobs(25);
@@ -96,6 +124,9 @@ export async function GET(request: Request): Promise<Response> {
   console.info('[account-deletion-cron] completed', {
     scanned: jobs.length,
     processed: results.length,
+    erasureScanned,
+    erasureProcessed,
+    erasureErrors,
     recoveryErrors,
     retentionErrors,
     purged,
