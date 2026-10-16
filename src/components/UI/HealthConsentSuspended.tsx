@@ -7,6 +7,7 @@ import { useDialogStore } from '../../store/useDialogStore';
 import { LEGAL_VERSIONS } from '../../lib/legalVersions';
 import { beginGuestHealthReacceptance, completeGuestHealthReacceptance, finishHealthConsentReacceptance, registerInitialHealthConsent, reacceptHealthConsent, reacceptHealthConsentLocally, reconfirmStaleHealthWithdrawal, retainNewerHealthConsent, refreshHealthConsent, type HealthConsentStatus } from '../../lib/healthConsent';
 import { safeHardReload } from '../../lib/sync/safeReload';
+import { UnverifiedTabSnapshotError } from '../../lib/sync/reloadBarrier';
 import { PrivacyPolicy } from '../../pages/PrivacyPolicy';
 import { TermsAndConditions } from '../../pages/TermsAndConditions';
 
@@ -159,6 +160,28 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
     }
   };
 
+  const reloadPage = async () => {
+    if (busy || recoveryBusy || exportingData) return;
+    setError(null);
+    try {
+      await safeHardReload();
+    } catch (error) {
+      if (!(error instanceof UnverifiedTabSnapshotError)) {
+        setError(error instanceof Error ? error.message : 'Impossibile ricaricare in sicurezza.');
+        return;
+      }
+      const confirmed = await useDialogStore.getState().showConfirm(
+        'Alcuni dati presenti solo in memoria non corrispondono all’archivio salvato. Non possiamo verificare che tutte le modifiche siano state conservate.\\n\\nSe continui, questi dati in memoria potrebbero andare persi; l’archivio salvato sul dispositivo e le modifiche ancora pendenti non verranno cancellati.\\n\\nVuoi ricaricare comunque?'
+      );
+      if (!confirmed) return;
+      try {
+        await safeHardReload(undefined, { discardUnverifiedInMemoryData: true });
+      } catch (retryError) {
+        setError(retryError instanceof Error ? retryError.message : 'Impossibile ricaricare in sicurezza.');
+      }
+    }
+  };
+
   return <main id="auth-overlay" role="main">
     <section className="auth-panel" aria-label="Accesso sospeso" style={{ maxWidth: 560, maxHeight: '90vh', overflowY: 'auto' }}>
       <h1>{initialAcceptance ? 'Primo consenso richiesto' : status === 'checking' ? 'Verifica del consenso in corso' : status === 'error' ? 'Verifica del consenso non riuscita' : 'Accesso a TheLogBook sospeso'}</h1>
@@ -229,11 +252,7 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
         </>}
         <button type="button" className="btn" onClick={() => void handleLogout()}>Esci dall'account</button>
         <button type="button" className="btn" onClick={() => void handleDeleteAccount()}>Elimina definitivamente l'account</button>
-        {user !== null && <button type="button" className="btn" disabled={busy || offline} onClick={() => { void refreshHealthConsent(user); }}>Riprova a verificare il consenso</button>}
-        <button type="button" className="btn" disabled={busy} onClick={() => {
-          void safeHardReload().catch(error => setError(error instanceof Error
-            ? error.message : 'Ricaricamento non sicuro: i dati locali sono stati conservati.'));
-        }}>Ricarica TheLogBook</button>
+        <button type="button" className="btn" disabled={busy || recoveryBusy || exportingData} onClick={() => { void reloadPage(); }}>Ricarica pagina</button>
       </div>
       {error && <p role="alert">{error}</p>}
     </section>
