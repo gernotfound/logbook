@@ -11,7 +11,7 @@ vi.mock('../src/lib/sync/safeReload', () => ({ safeHardReload: vi.fn(async () =>
 
 const backupUi = vi.hoisted(() => ({
   url: null as string | null,
-  prepare: vi.fn(),
+  prepare: vi.fn(async () => {}),
   release: vi.fn(),
 }));
 vi.mock('../src/hooks/useSettings', () => ({
