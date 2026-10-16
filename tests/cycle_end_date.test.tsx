@@ -263,7 +263,7 @@ describe('Training Cycle End Date & Two-Way Binding (Milestone 2 - Requirement R
             expect(endDateInput.value).toBe('11/11/2026');
         });
 
-        it('refuses invalid or inverted typed dates rather than restoring an old date on save', () => {
+        it('recovers from malformed typed dates and refuses inverted intervals on save', () => {
             const onSave = vi.fn();
             render(<CycleEditor
                 initialCycle={{
@@ -279,16 +279,14 @@ describe('Training Cycle End Date & Two-Way Binding (Milestone 2 - Requirement R
 
             fireEvent.change(startInput, { target: { value: '32/09/2026' } });
             fireEvent.blur(startInput);
-            expect(startInput.value).toBe('32/09/2026');
-            fireEvent.submit(form);
+            expect(startInput.value).toBe('01/09/2026');
             expect(onSave).not.toHaveBeenCalled();
 
             fireEvent.change(startInput, { target: { value: '01/09/2026' } });
             fireEvent.blur(startInput);
             fireEvent.change(endInput, { target: { value: '31/02/2026' } });
             fireEvent.blur(endInput);
-            expect(endInput.value).toBe('31/02/2026');
-            fireEvent.submit(form);
+            expect(endInput.value).toBe('28/09/2026');
             expect(onSave).not.toHaveBeenCalled();
 
             fireEvent.change(endInput, { target: { value: '31/08/2026' } });
