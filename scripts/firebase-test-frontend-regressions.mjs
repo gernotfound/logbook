@@ -11,11 +11,11 @@ const valid = {
   VITE_ACCOUNT_DELETION_API_ORIGIN: 'https://thelogbook-test-backend-gnfcreator.vercel.app',
 };
 
-test('Test frontend config accepts complete, isolated Test-only settings', () => {
+void test('Test frontend config accepts complete, isolated Test-only settings', () => {
   assert.doesNotThrow(() => checkFirebaseTestFrontendEnv(valid));
 });
 
-test('Test frontend config refuses missing App Check and cross-environment endpoints', () => {
+void test('Test frontend config refuses missing App Check and cross-environment endpoints', () => {
   const unsafe = [
     { VITE_FIREBASE_PROJECT_ID: 'logbook-db-98cc4' },
     { VITE_FIREBASE_APP_ID: '1:9999:web:other' },

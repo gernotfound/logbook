@@ -5,7 +5,7 @@ import { testFirebaseConfig, TEST_FIREBASE_PROJECT, TEST_HOSTING_SITE } from './
 
 const source = JSON.parse(readFileSync('firebase.json', 'utf8'));
 
-test('Test deployment keeps all canonical rules and hosting behavior but replaces the site', () => {
+void test('Test deployment keeps all canonical rules and hosting behavior but replaces the site', () => {
   const result = testFirebaseConfig(source, TEST_FIREBASE_PROJECT);
   assert.equal(result.hosting.site, TEST_HOSTING_SITE);
   assert.equal(source.hosting.site, 'thelogbook');
@@ -15,13 +15,13 @@ test('Test deployment keeps all canonical rules and hosting behavior but replace
   assert.equal(result.hosting.public, 'dist');
 });
 
-test('Test deployment refuses all non-Test projects, including Production', () => {
+void test('Test deployment refuses all non-Test projects, including Production', () => {
   for (const project of ['logbook-db-98cc4', '', undefined, 'thelogbook-test-other']) {
     assert.throws(() => testFirebaseConfig(source, project));
   }
 });
 
-test('Test deployment refuses unexpected changes to canonical routing or site', () => {
+void test('Test deployment refuses unexpected changes to canonical routing or site', () => {
   assert.throws(() => testFirebaseConfig({
     ...source, hosting: { ...source.hosting, site: TEST_HOSTING_SITE },
   }, TEST_FIREBASE_PROJECT));
