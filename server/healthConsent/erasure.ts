@@ -9,7 +9,7 @@ const PAGE_SIZE = 100;
 const SAFETY_BUFFER_MS = 1000;
 const LEASE_GRACE_MS = 10000;
 
-export type HealthDataErasureStatus = 'requested' | 'deleting' | 'verifying' | 'complete' | 'failed';
+type HealthDataErasureStatus = 'requested' | 'deleting' | 'verifying' | 'complete' | 'failed';
 type Job = {
   uid: string;
   consentRevision: number;
@@ -38,7 +38,7 @@ export class HealthDataErasureConflict extends Error {
     this.name = 'HealthDataErasureConflict';
   }
 }
-export class HealthDataErasureUnexpectedResidue extends Error {
+class HealthDataErasureUnexpectedResidue extends Error {
   constructor() { super('Sono presenti dati non riconosciuti che impediscono la verifica finale.'); this.name = 'HealthDataErasureUnexpectedResidue'; }
 }
 class ErasureLeaseLost extends Error {
