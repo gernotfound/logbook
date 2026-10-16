@@ -30,6 +30,7 @@ type Job = {
 export type PublicErasureStatus = {
   status: HealthDataErasureStatus;
   complete: boolean;
+  localPurgeAuthorized: boolean;
   retryable?: boolean;
   error?: string;
 };
@@ -64,9 +65,20 @@ export async function readHealthDataErasureStatus(uid: string): Promise<PublicEr
       || !['requested', 'deleting', 'verifying', 'complete', 'failed'].includes(job.status)) {
     throw new Error('Stato cancellazione non verificabile.');
   }
+  let localPurgeAuthorized = false;
+  if (job.status === 'complete' && isPositiveRevision(job.completedRevision)) {
+    // A stale completed receipt from an EARLIER consent cycle cannot authorize
+    // erasing data written after the person reaccepted on another device.
+    const consentSnap = await consentRef(uid).get();
+    const consent = consentSnap.data();
+    localPurgeAuthorized = consent?.status === 'withdrawn'
+      && consent.revision === job.completedRevision
+      && consent.erasedBeforeRevision === job.consentRevision;
+  }
   return {
     status: job.status,
     complete: job.status === 'complete',
+    localPurgeAuthorized,
     ...(job.status === 'failed' ? { retryable: job.retryable === true, error: 'Cancellazione incompleta. Alcuni dati potrebbero essere già stati eliminati.' } : {}),
   };
 }
