@@ -142,18 +142,32 @@ function validateImportData(value: unknown): asserts value is Record<string, unk
     }
 }
 
-export function createBackup(userData: UserData, owner: string | null, coverage: BackupCoverage = { scope: 'device', months: [] }, recovery?: unknown): BackupPayload {
+function backupMetadata(owner: string | null, coverage: BackupCoverage, recovery?: unknown) {
     return {
-        format: 'logbook-backup',
+        format: 'logbook-backup' as const,
         version: CURRENT_BACKUP_SCHEMA,
         dataSchemaVersion: CURRENT_DATA_SCHEMA,
         syncProtocolVersion: CURRENT_SYNC_PROTOCOL,
-        type: 'backup',
         owner,
         exportedAt: new Date().toISOString(),
         coverage,
-        userData: structuredClone(userData),
         recovery,
+    };
+}
+
+export function createBackup(userData: UserData, owner: string | null, coverage: BackupCoverage = { scope: 'device', months: [] }, recovery?: unknown): BackupPayload {
+    return {
+        ...backupMetadata(owner, coverage, recovery),
+        type: 'backup',
+        userData: structuredClone(userData),
+    };
+}
+
+export function createShareBackup(userData: Pick<UserData, 'library' | 'routines' | 'trainingCycles'>) {
+    return {
+        ...backupMetadata(null, { scope: 'device', months: [] }),
+        type: 'share' as const,
+        userData: structuredClone(userData),
     };
 }
 
