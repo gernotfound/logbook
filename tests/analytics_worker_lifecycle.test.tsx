@@ -1,13 +1,13 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-const worker = vi.hoisted(() => ({ post: vi.fn(), terminate: vi.fn(), fallback: vi.fn(() => ({ points: [], stats: {} })), instance: null as any }));
+const worker = vi.hoisted(() => ({ post: vi.fn(), terminate: vi.fn(), fallback: vi.fn(() => ({ points: [], stats: {} })), cooperative: vi.fn(async () => ({ points: [], stats: {} })), instance: null as any }));
 vi.mock('../src/workers/analytics.worker?worker', () => ({ default: class {
     postMessage = worker.post; terminate = worker.terminate; onerror: any; onmessage: any;
     constructor() { worker.instance = this; }
 } }));
-vi.mock('../src/lib/calc/analytics', async importOriginal => ({ ...await importOriginal<object>(), computeWeeklyVolumeSeries: worker.fallback }));
+vi.mock('../src/lib/calc/analytics', async importOriginal => ({ ...await importOriginal<object>(), computeWeeklyVolumeSeries: worker.fallback, computeWeeklyVolumeSeriesCooperative: worker.cooperative }));
 import { useAnalyticsWorker } from '../src/hooks/useAnalyticsWorker';
-beforeEach(() => { worker.post.mockReset(); worker.terminate.mockClear(); worker.fallback.mockClear(); });
+beforeEach(() => { worker.post.mockReset(); worker.terminate.mockClear(); worker.fallback.mockClear(); worker.cooperative.mockClear(); });
 it('cancels an outstanding task on unmount without computing the synchronous fallback', async () => {
     const hook = renderHook(() => useAnalyticsWorker());
     const result = hook.result.current.calculateVolumeStats([], [], 80, 8).catch(error => error);
@@ -81,5 +81,16 @@ it('does not post another task to an analytics worker after it crashes', async (
     expect(await hook.result.current.calculateVolumeStats([], [], 80, 12)).toEqual({ points: [], stats: {} });
     expect(worker.post).toHaveBeenCalledTimes(count);
     expect(worker.fallback).toHaveBeenCalledTimes(2);
+    hook.unmount();
+});
+
+it('uses cooperative fallback for a large archive after worker failure and preserves UI responsiveness', async () => {
+    const largeHistory = Array.from({ length: 12_000 }, (_, i) => ({ id: `archive_${i}`, date: '2026-08-20', exercises: [] }));
+    const hook = renderHook(() => useAnalyticsWorker());
+    const result = hook.result.current.calculateVolumeStats(largeHistory, [], 80, 52);
+    await act(async () => { worker.instance.onerror(new Error('crash')); });
+    expect(await result).toEqual({ points: [], stats: {} });
+    expect(worker.cooperative).toHaveBeenCalledTimes(1);
+    expect(worker.fallback).not.toHaveBeenCalled();
     hook.unmount();
 });

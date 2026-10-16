@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
     computeWeeklyVolumeSeries,
+    computeWeeklyVolumeSeriesCooperative,
+    computeVolumeCaloriesCorrelationCooperative,
     computeWeeklyNutritionSeries,
     computeVolumeCaloriesCorrelation,
     computeWeeklyWeightSeries,
@@ -809,5 +811,41 @@ describe('Weekly catalog lookup compatibility', () => {
         expect(calculateWorkoutVolume(workout, catalog, 80)).toBe(300);
         expect(calculateWorkoutVolume(workout, map, 80)).toBe(300);
         expect(computeWeeklyVolumeSeries([workout], catalog, 80, 4, '2026-08-22').stats.totalVolumeKg).toBe(300);
+    });
+});
+
+describe('Large archive cooperative analytics fallback', () => {
+    const reference = new Date(2026, 7, 22);
+    const library: Exercise[] = [{
+        id: 'archive_ex', name: 'Archivio', muscles: ['petto'], trackingType: 'weight_reps', setsCount: 1, sets: []
+    }];
+    const sessions: WorkoutSession[] = Array.from({ length: 6_000 }, (_, i) => ({
+        id: `large_${i}`,
+        date: format(subDays(reference, i % 330), 'yyyy-MM-dd'),
+        routineName: 'Test archivio',
+        exercises: [{ exId: 'archive_ex', sets: [{ id: `set_${i}`, kg: String(40 + i % 40), reps: '8' }] }]
+    }));
+    const nutrition: Record<string, NutritionDay> = Object.fromEntries(Array.from({ length: 200 }, (_, i) => {
+        const date = format(subDays(reference, i), 'yyyy-MM-dd');
+        return [date, { date, kcal: 2200 + i % 200, carbs: 220, pro: 130, fat: 60 }];
+    }));
+
+    it('produces exactly the synchronous result and yields to the event loop for a large volume series', async () => {
+        const expected = computeWeeklyVolumeSeries(sessions, library, 80, 52, reference);
+        let inputProcessed = false;
+        setTimeout(() => { inputProcessed = true; }, 0);
+        const actual = await computeWeeklyVolumeSeriesCooperative(sessions, library, 80, 52, reference);
+        expect(actual).toEqual(expected);
+        expect(inputProcessed).toBe(true);
+    });
+
+    it('preserves correlation and cancels long computations when the view closes', async () => {
+        const expected = computeVolumeCaloriesCorrelation(sessions, nutrition, library, 80, 52, reference);
+        const actual = await computeVolumeCaloriesCorrelationCooperative(sessions, nutrition, library, 80, 52, reference);
+        expect(actual).toEqual(expected);
+        const abort = new AbortController();
+        const pending = computeWeeklyVolumeSeriesCooperative(sessions, library, 80, 52, reference, abort.signal);
+        abort.abort();
+        await expect(pending).rejects.toThrow('annullato');
     });
 });

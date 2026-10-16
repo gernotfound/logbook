@@ -163,13 +163,15 @@ export function generateWeekIntervals(
     return intervals;
 }
 
-export function computeWeeklyVolumeSeries(
+type WeeklyVolumeResult = { points: WeeklyVolumePoint[]; stats: WeeklyVolumeStats };
+
+function* computeWeeklyVolumeSteps(
     history: WorkoutSession[] | null | undefined = [],
     library: Exercise[] | null | undefined = [],
     userWeight: number = 80,
     numWeeks: number = 8,
     referenceDate: Date | string = new Date()
-): { points: WeeklyVolumePoint[]; stats: WeeklyVolumeStats } {
+): Generator<void, WeeklyVolumeResult, void> {
     const safeHistory = Array.isArray(history) ? history : [];
     const safeLibrary = Array.isArray(library) ? library : [];
     const safeUserWeight = typeof userWeight === 'number' && userWeight > 0 ? userWeight : 80;
@@ -185,7 +187,10 @@ export function computeWeeklyVolumeSeries(
     // Bucket sessions once, preserving history order (including sessionIds).
     // A binary search retains the original string-range behavior for legacy dates.
     const weeks: Array<Array<{ session: WorkoutSession; volume: number }>> = intervals.map(() => []);
+    let scanned = 0;
     for (const session of safeHistory) {
+        // Keep the main thread responsive when the Worker is unavailable.
+        if (++scanned % 128 === 0) yield;
         const dateStr = getWorkoutDateString(session);
         if (!dateStr || dateStr < firstDay || dateStr > lastDay) continue;
         let low = 0;
@@ -249,6 +254,43 @@ export function computeWeeklyVolumeSeries(
     };
 
     return { points, stats };
+}
+
+function finishWeeklyVolumeSteps(steps: Generator<void, WeeklyVolumeResult, void>): WeeklyVolumeResult {
+    let step = steps.next();
+    while (!step.done) step = steps.next();
+    return step.value;
+}
+
+export function computeWeeklyVolumeSeries(
+    history: WorkoutSession[] | null | undefined = [],
+    library: Exercise[] | null | undefined = [],
+    userWeight: number = 80,
+    numWeeks: number = 8,
+    referenceDate: Date | string = new Date()
+): WeeklyVolumeResult {
+    return finishWeeklyVolumeSteps(computeWeeklyVolumeSteps(history, library, userWeight, numWeeks, referenceDate));
+}
+
+export async function computeWeeklyVolumeSeriesCooperative(
+    history: WorkoutSession[] | null | undefined = [],
+    library: Exercise[] | null | undefined = [],
+    userWeight: number = 80,
+    numWeeks: number = 8,
+    referenceDate: Date | string = new Date(),
+    signal?: AbortSignal
+): Promise<WeeklyVolumeResult> {
+    if (signal?.aborted) throw new Error('Calcolo annullato: vista chiusa');
+    const steps = computeWeeklyVolumeSteps(history, library, userWeight, numWeeks, referenceDate);
+    let step = steps.next();
+    while (!step.done) {
+        // A real timer task gives the browser a chance to process input/paint.
+        await new Promise<void>(resolve => { setTimeout(resolve, 0); });
+        if (signal?.aborted) throw new Error('Calcolo annullato: vista chiusa');
+        step = steps.next();
+    }
+    if (signal?.aborted) throw new Error('Calcolo annullato: vista chiusa');
+    return step.value;
 }
 
 export function computeWeeklyNutritionSeries(
@@ -554,15 +596,12 @@ export function calculatePearsonCorrelation(x: number[], y: number[]): number | 
     return Math.round(Math.max(-1, Math.min(1, r)) * 100) / 100;
 }
 
-export function computeVolumeCaloriesCorrelation(
-    history: WorkoutSession[] | null | undefined = [],
-    nutrition: Record<string, NutritionDay> | null | undefined = {},
-    library: Exercise[] | null | undefined = [],
-    userWeight: number = 80,
-    numWeeks: number = 8,
-    referenceDate: Date | string = new Date()
+function correlateVolumeAndNutrition(
+    volumePoints: WeeklyVolumePoint[],
+    nutrition: Record<string, NutritionDay> | null | undefined,
+    numWeeks: number,
+    referenceDate: Date | string
 ): { points: VolumeCaloriesPoint[]; stats: VolumeCaloriesCorrelationStats } {
-    const { points: volumePoints } = computeWeeklyVolumeSeries(history, library, userWeight, numWeeks, referenceDate);
     const { points: nutritionPoints } = computeWeeklyNutritionSeries(nutrition, numWeeks, referenceDate);
 
     const points: VolumeCaloriesPoint[] = volumePoints.map((vp, idx) => {
@@ -623,4 +662,30 @@ export function computeVolumeCaloriesCorrelation(
     };
 
     return { points, stats };
+}
+
+export function computeVolumeCaloriesCorrelation(
+    history: WorkoutSession[] | null | undefined = [],
+    nutrition: Record<string, NutritionDay> | null | undefined = {},
+    library: Exercise[] | null | undefined = [],
+    userWeight: number = 80,
+    numWeeks: number = 8,
+    referenceDate: Date | string = new Date()
+): { points: VolumeCaloriesPoint[]; stats: VolumeCaloriesCorrelationStats } {
+    const { points } = computeWeeklyVolumeSeries(history, library, userWeight, numWeeks, referenceDate);
+    return correlateVolumeAndNutrition(points, nutrition, numWeeks, referenceDate);
+}
+
+export async function computeVolumeCaloriesCorrelationCooperative(
+    history: WorkoutSession[] | null | undefined = [],
+    nutrition: Record<string, NutritionDay> | null | undefined = {},
+    library: Exercise[] | null | undefined = [],
+    userWeight: number = 80,
+    numWeeks: number = 8,
+    referenceDate: Date | string = new Date(),
+    signal?: AbortSignal
+): Promise<{ points: VolumeCaloriesPoint[]; stats: VolumeCaloriesCorrelationStats }> {
+    const { points } = await computeWeeklyVolumeSeriesCooperative(history, library, userWeight, numWeeks, referenceDate, signal);
+    if (signal?.aborted) throw new Error('Calcolo annullato: vista chiusa');
+    return correlateVolumeAndNutrition(points, nutrition, numWeeks, referenceDate);
 }
