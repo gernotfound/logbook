@@ -647,7 +647,7 @@ describe('account deletion recovery device registration retries', () => {
       expect(credentials).toHaveLength(1);
     } finally {
       if (descriptor) Object.defineProperty(navigator, 'locks', descriptor);
-      else delete (navigator as Navigator & { locks?: LockManager }).locks;
+      else Reflect.deleteProperty(navigator, 'locks');
     }
   });
 
