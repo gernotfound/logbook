@@ -260,11 +260,24 @@ export async function processHealthDataErasure(uid: string, deadlineMs: number):
 }
 
 export async function listRecoverableHealthErasures(limitCount = 12): Promise<string[]> {
+  const boundedLimit = Math.max(1, Math.min(50, Math.floor(limitCount)));
   const db = adminDb().collection(JOB_COLLECTION);
-  const snapshot = await db.where('status', 'in', ['requested', 'deleting', 'verifying']).limit(limitCount).get();
-  const failed = await db.where('status', '==', 'failed').where('retryable', '==', true).limit(limitCount).get();
-  const ids = new Set([...snapshot.docs, ...failed.docs].map(item => item.id));
-  return [...ids].slice(0, limitCount);
+  const [active, failed] = await Promise.all([
+    db.where('status', 'in', ['requested', 'deleting', 'verifying'])
+      .orderBy('updatedAt', 'asc').limit(boundedLimit).get(),
+    db.where('status', '==', 'failed').where('retryable', '==', true)
+      .orderBy('updatedAt', 'asc').limit(boundedLimit).get(),
+  ]);
+  // Order globally by oldest work, not alphabetic UID. A large retryable
+  // population must not indefinitely starve later account requests.
+  const unique = new Map<string, { id: string; updatedAt: number }>();
+  for (const item of [...active.docs, ...failed.docs]) {
+    const updatedAt = (item.data().updatedAt as Timestamp | undefined)?.toMillis?.() ?? 0;
+    unique.set(item.id, { id: item.id, updatedAt });
+  }
+  return [...unique.values()]
+    .sort((a, b) => a.updatedAt - b.updatedAt || a.id.localeCompare(b.id))
+    .slice(0, boundedLimit).map(item => item.id);
 }
 
 /** Keep only 30 days of the full receipt; the minimal erasure epoch remains in consent evidence. */
