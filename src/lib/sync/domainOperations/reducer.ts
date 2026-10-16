@@ -20,6 +20,7 @@ import {
     requireDate,
     requireId,
     upsertById,
+    assertNeverDomainOperation,
 } from './validation';
 
 function ensureNutritionDay(data: UserData, date: string): NutritionDay {
@@ -367,6 +368,7 @@ function applyOne(data: UserData, operation: DomainOperation): UserData {
         case 'legal-consent.set':
             data.legalConsent = structuredClone(operation.consent);
             break;
+        default: return assertNeverDomainOperation(operation);
     }
 
     return UserDataSchema.parse(data) as unknown as UserData;
