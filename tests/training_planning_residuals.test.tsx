@@ -42,6 +42,57 @@ describe('training planning residual regressions', () => {
         }
     });
 
+    it('uses actual cycle end date for full or partial weeks and keeps target consistent', () => {
+        const shortened = {
+            ...cycle, durationWeeks: 4, sessionsPerWeek: 4,
+            startDate: '2026-10-01', endDate: '2026-10-10',
+        };
+        const schedule = calculateCycleSchedule(shortened, routines);
+        expect(schedule.weeks).toHaveLength(2);
+        expect(schedule.totalSessions).toBe(8);
+        expect(schedule.weeks[0].startDateStr).toBe('2026-10-01');
+        expect(schedule.weeks[0].endDateStr).toBe('2026-10-07');
+        expect(schedule.weeks[1].startDateStr).toBe('2026-10-08');
+        expect(schedule.weeks[1].endDateStr).toBe('2026-10-10');
+        expect(calculateCycleSchedule(shortened, routines, false).totalSessions).toBe(8);
+        expect(getNextScheduledRoutine(shortened, routines, [])?.totalSessions).toBe(8);
+        expect(calculateCycleTimeline(shortened, '2026-10-11').isEnded).toBe(true);
+
+        const extended = { ...shortened, durationWeeks: 2, endDate: '2026-10-25' };
+        const extendedSchedule = calculateCycleSchedule(extended, routines);
+        expect(extendedSchedule.weeks).toHaveLength(4);
+        expect(extendedSchedule.totalSessions).toBe(16);
+        expect(extendedSchedule.weeks[3].endDateStr).toBe('2026-10-25');
+        expect(getNextScheduledRoutine(extended, routines, [])?.totalSessions).toBe(16);
+        expect(extended.durationWeeks).toBe(2);
+
+        const absurd = { ...shortened, endDate: '2030-10-10' };
+        expect(calculateCycleSchedule(absurd, routines).weeks).toEqual([]);
+        expect(calculateCycleSchedule(absurd, routines).summaryText).toBe('Parametri del ciclo da correggere');
+        expect(getNextScheduledRoutine(absurd, routines, [])).toBeNull();
+    });
+
+    it('does not redistribute a deleted routine\'s frequency or volume to surviving routines', () => {
+        const missing = {
+            ...cycle, sessionsPerWeek: undefined, routines: [
+                { routineId: 'deleted', frequencyPerWeek: 3 }, { routineId: 'r', frequencyPerWeek: 1 },
+            ],
+        };
+        const volume = calculateCycleVolume(missing, routines, library);
+        const macro = calculateCycleMacroVolume(missing, routines, library);
+        expect(calculateCycleSchedule(missing, routines).sessionsPerWeek).toBe(4);
+        expect(getNextScheduledRoutine(missing, routines, [])?.totalSessions).toBe(16);
+        expect(volume.totalWorkoutsPerWeek).toBe(4);
+        expect(volume.totalSetsPerWeek).toBe(4);
+        expect(macro.find(item => item.key === 'chest')?.sets).toBe(4);
+
+        const weighted = { ...missing, sessionsPerWeek: 8 };
+        expect(calculateCycleVolume(weighted, routines, library).totalWorkoutsPerWeek).toBe(8);
+        expect(calculateCycleVolume(weighted, routines, library).totalSetsPerWeek).toBe(8);
+        expect(calculateCycleMacroVolume(weighted, routines, library).find(item => item.key === 'chest')?.sets).toBe(8);
+        expect(missing.routines[0].routineId).toBe('deleted');
+    });
+
     it('computes the same summary without constructing all week entries', () => {
         const full = calculateCycleSchedule(cycle, routines);
         const closed = calculateCycleSchedule(cycle, routines, false);

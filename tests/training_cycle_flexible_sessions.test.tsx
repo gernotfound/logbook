@@ -22,18 +22,23 @@ const cycle: TrainingCycle = {
 const startWorkout = vi.fn();
 const startFreeWorkout = vi.fn();
 
-function setup(historyCount: number, currentCycle = cycle) {
-    const history = Array.from({ length: historyCount }, (_, index) =>
+function setup(
+    historyCount: number,
+    currentCycle = cycle,
+    currentRoutines = routines,
+    storedHistory?: WorkoutSession[],
+) {
+    const history = storedHistory ?? Array.from({ length: historyCount }, (_, index) =>
         ({ id: `completed-${index}`, cycleId: currentCycle.id }) as WorkoutSession
     );
     useAppStore.setState({
         userData: {
-            library: [], routines, history,
+            library: [], routines: currentRoutines, history,
             trainingCycles: [currentCycle], activeCycleId: currentCycle.id,
         } as UserData,
     });
     vi.mocked(useWorkoutSession).mockReturnValue({
-        routines, history, startWorkout, startFreeWorkout,
+        routines: currentRoutines, history, startWorkout, startFreeWorkout,
     } as unknown as ReturnType<typeof useWorkoutSession>);
 }
 
@@ -46,6 +51,67 @@ afterEach(() => {
 });
 
 describe('flexible training cycles', () => {
+    it('suggests the successor of the last performed routine, with no weekly reset or forced sequence', () => {
+        const fourRoutines: WorkoutRoutine[] = [
+            ...routines,
+            { id: 'third', name: 'Scheda C', exercises: [] },
+            { id: 'fourth', name: 'Scheda D', exercises: [] },
+        ];
+        const fourCycle: TrainingCycle = {
+            ...cycle, routines: fourRoutines.map(routine => ({ routineId: routine.id, frequencyPerWeek: 1 })),
+        };
+        const completed = (routineId: string, date: string, id = routineId): WorkoutSession => ({
+            id, cycleId: fourCycle.id, routineId, date,
+        });
+        const weekOneAC = [
+            completed('first', '2026-10-01'),
+            completed('third', '2026-10-02'),
+        ];
+        expect(getNextScheduledRoutine(fourCycle, fourRoutines, weekOneAC)?.nextRoutineId).toBe('fourth');
+
+        // A B on one week -> C D A B on the next, with no compulsory recovery.
+        const firstWeekAB = [
+            completed('first', '2026-10-01'),
+            completed('second', '2026-10-02'),
+        ];
+        const weekTwo: WorkoutSession[] = [...firstWeekAB];
+        for (const [index, routineId] of ['third', 'fourth', 'first', 'second'].entries()) {
+            expect(getNextScheduledRoutine(fourCycle, fourRoutines, weekTwo)?.nextRoutineId).toBe(routineId);
+            weekTwo.push(completed(routineId, `2026-10-${String(index + 8).padStart(2, '0')}`, `week2-${index}`));
+        }
+        // A C B D also finishes the four available choices with no prescribed order.
+        const reorderedWeek = [
+            completed('first', '2026-10-01'),
+            completed('third', '2026-10-02'),
+            completed('second', '2026-10-03'),
+            completed('fourth', '2026-10-04'),
+        ];
+        expect(getNextScheduledRoutine(fourCycle, fourRoutines, reorderedWeek)?.nextRoutineId).toBe('first');
+        expect(getNextScheduledRoutine(fourCycle, fourRoutines, reorderedWeek)?.completedCount).toBe(4);
+
+        // Even with D suggested after A C, manually choosing A must remain possible.
+        setup(0, fourCycle, fourRoutines, weekOneAC);
+        render(<TrainingSessionSetup />);
+        expect(screen.getByRole('heading', { name: 'Scheda D' })).toBeDefined();
+        fireEvent.change(screen.getByRole('combobox', { name: 'Seleziona scheda della rotazione' }), {
+            target: { value: 'first' },
+        });
+        fireEvent.click(screen.getByRole('button', { name: 'Avvia Scheda A' }));
+        expect(startWorkout).toHaveBeenCalledWith('first', {
+            cycleId: fourCycle.id, cycleName: fourCycle.name,
+        });
+        const afterRestartA = [...weekOneAC, completed('first', '2026-10-08', 'restart-a')];
+        expect(getNextScheduledRoutine(fourCycle, fourRoutines, afterRestartA)?.nextRoutineId).toBe('second');
+
+        // The history array itself need not be in chronological order.
+        const unsorted = [completed('third', '2026-10-12'), completed('first', '2026-10-10')];
+        expect(getNextScheduledRoutine(fourCycle, fourRoutines, unsorted)?.nextRoutineId).toBe('fourth');
+        expect(getNextScheduledRoutine(fourCycle, fourRoutines, [
+            completed('first', '2026-10-10', 'legacy-first'),
+            { id: 'unrelated-cycle', routineId: 'fourth', cycleId: 'other', date: '2026-10-15' },
+        ])?.nextRoutineId).toBe('second');
+    });
+
     it('permits choosing any planned routine after only one of four suggested weekly sessions', () => {
         setup(1);
         render(<TrainingSessionSetup />);

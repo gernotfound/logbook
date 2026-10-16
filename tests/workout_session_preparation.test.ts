@@ -50,6 +50,25 @@ describe('workout session preparation', () => {
         expect(workout.exercises[0].sets[0].segments).toHaveLength(19);
     });
 
+    it('rejects oversized imported setPlans before cloning them or preparing a session', () => {
+        const oversized: WorkoutRoutine = {
+            id: 'oversized-plans', name: 'Scheda importata',
+            exercises: [{ exId: 'bench', setsCount: 1,
+                setPlans: Array.from({ length: 21 }, () => ({ technique: 'straight' as const })) }],
+        };
+        const snapshot = JSON.stringify(oversized);
+        expect(() => buildRoutineWorkout({}, oversized, undefined, createRuntime()))
+            .toThrow('La scheda contiene troppe serie o segmenti');
+        expect(JSON.stringify(oversized)).toBe(snapshot);
+
+        const supported = {
+            ...oversized, exercises: [{ exId: 'bench', setsCount: 20, setPlans: oversized.exercises[0].setPlans?.slice(0, 20) }],
+        };
+        const result = buildRoutineWorkout({}, supported, undefined, createRuntime());
+        expect(result.exercises[0].sets).toHaveLength(20);
+        expect(result.exercises[0].setPlans).toHaveLength(20);
+    });
+
     it('builds a routine workout with the same cycle and set semantics as the hook', () => {
         const routine = {
             id: 'routine-a',
