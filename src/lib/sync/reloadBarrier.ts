@@ -5,6 +5,7 @@ import { draftRegistry } from '../utils/draftRegistry';
 import { commitLocal, readLocal } from './localRepository';
 import { captureSession, isActiveGuestSession, isCurrentSession } from './session';
 import { auth } from '../firebase';
+import { currentHealthConsentStatus, getGuestHealthConsentStatus } from '../healthConsent';
 import { readBrowserValueStrict } from './browserStorage';
 import { persistOwnerBoundWorkoutSnapshot } from './deviceCriticalState';
 import { UserDataSchema } from '../schema';
@@ -37,7 +38,23 @@ export function prepareForRequiredUpdateReload() {
     return session;
 }
 
-export async function prepareForReload() {
+export class UnverifiedTabSnapshotError extends Error {
+    constructor() {
+        super('Impossibile verificare in sicurezza la provenienza delle modifiche locali. Riapri TheLogBook e riprova.');
+        this.name = 'UnverifiedTabSnapshotError';
+    }
+}
+
+type ReloadOptions = { discardUnverifiedInMemoryData?: boolean };
+
+function isConsentSuspended(owner: string): boolean {
+    const status = owner === 'guest'
+        ? getGuestHealthConsentStatus()
+        : currentHealthConsentStatus(owner.slice(5));
+    return status !== 'active';
+}
+
+export async function prepareForReload(options: ReloadOptions = {}) {
     const session = captureSession();
     flushSync(() => draftRegistry.flushAll({ strict: true }));
     if (useAppStore.getState().localPersistenceBlocked) {
@@ -53,11 +70,15 @@ export async function prepareForReload() {
     let state = useAppStore.getState();
     if (state.userData && envelope && !equal(UserDataSchema.parse(envelope.data), UserDataSchema.parse(state.userData))) {
         const tabSnapshot = readTabSnapshotState(session);
-        if (!tabSnapshot) {
-            throw new Error('Impossibile verificare in sicurezza la provenienza delle modifiche locali. Riapri TheLogBook e riprova.');
+        if (!tabSnapshot && !(options.discardUnverifiedInMemoryData === true
+            && state.dataOwner === session.owner && isConsentSuspended(session.owner))) {
+            throw new UnverifiedTabSnapshotError();
         }
 
-        if (tabSnapshot.dirty) {
+        // The owner explicitly accepted discarding unverified RAM state from
+        // the SUSPENDED consent screen. Do not project it into a journal or
+        // touch the durable envelope. A missing envelope is still fatal below.
+        if (tabSnapshot?.dirty) {
             // Replay only the changes made by this tab since its last known durable base.
             // commitLocal applies that causal delta over the latest shared IndexedDB envelope,
             // preserving entities written by another tab in the meantime.
