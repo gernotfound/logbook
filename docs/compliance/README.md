@@ -3,6 +3,8 @@
 > Stato: struttura operativa da completare e far revisionare professionalmente prima della prima palestra.
 > Ultimo aggiornamento tecnico: 13 ottobre 2026.
 > Questo pacchetto non certifica conformità GDPR e non sostituisce consulenza legale, privacy o fiscale.
+>
+> Navigazione: [indice documentazione](../README.md). I contratti AI restano in [`AGENTS.md`](../../AGENTS.md) e [`.agents/rules/`](../../.agents/rules/).
 
 ## Obiettivo
 
@@ -25,24 +27,25 @@ Queste assunzioni devono essere riconfermate nella documentazione firmata; se ca
 
 | File | Scopo | Stato prima del pilot |
 |---|---|---|
-| `processing-record-template.md` | Registro trattamenti / RoPA | Compilare e firmare |
-| `controller-role-decision.md` | Decisione documentata sui ruoli provider/palestra | Validare professionalmente |
-| `dpia-screening-template.md` | Screening Art. 35 e decisione DPIA | Completare e firmare |
-| `retention-schedule.md` | Durate, trigger di cancellazione e verifiche | Approvare e allineare al runtime |
-| `incident-breach-runbook.md` | Gestione incidenti e data breach | Assegnare contatti e provare il flusso |
-| `vendor-transfer-register.md` | Fornitori, subprocessori e trasferimenti | Verificare contratti e localizzazioni |
-| `technical-organizational-measures.md` | TOM / misure Art. 32 | Verificare elementi esterni |
-| `legitimate-interest-assessment-template.md` | LIA della telemetria tecnica | Compilare se si mantiene Art. 6(1)(f) |
-| `dpo-assessment-template.md` | Valutazione obbligo DPO | Compilare e riesaminare su aumento scala |
-| `data-subject-rights-procedure.md` | Accesso, rettifica, portabilità, cancellazione, revoche | Assegnare canale privacy |
-| `health-consent-release-gate.md` | Specifica CRITICAL soluzione A approvata dal product owner; revoca salute e percorso di sospensione | Implementazione e regressioni integrate con PR #366; collaudo autenticato multi-dispositivo e validazione legale pre-pilot aperti |
-| `support-sla-policy-template.md` | Supporto, severità e impegni di servizio | Definire solo promesse sostenibili |
-| `exit-deletion-policy-template.md` | Cessazione B2B e dati | Allineare al ruolo privacy |
-| `gym-privacy-instructions-template.md` | Istruzioni operative alla palestra | Consegnare/adattare al pilot |
-| `first-gym-b2b-checklist.md` | Gate di consegna alla palestra | Chiudere tutti i blocker |
-| `saas-agreement-template.md` | Struttura contratto commerciale | Revisione legale + dati reali |
-| `commercial-schedule-template.md` | Allegato economico separato | Compilare con dati commerciali |
-| `dpa-art28-template.md` | Allegato Art. 28 condizionale | Usare solo se il ruolo processor è confermato |
+| [`processing-record-template.md`](processing-record-template.md) | Registro trattamenti / RoPA | Compilare e firmare |
+| [`controller-role-decision.md`](controller-role-decision.md) | Decisione documentata sui ruoli provider/palestra | Validare professionalmente |
+| [`dpia-screening-template.md`](dpia-screening-template.md) | Screening Art. 35 e decisione DPIA | Completare e firmare |
+| [`retention-schedule.md`](retention-schedule.md) | Durate, trigger di cancellazione e verifiche | Approvare e allineare al runtime |
+| [`incident-breach-runbook.md`](incident-breach-runbook.md) | Gestione incidenti e data breach | Assegnare contatti e provare il flusso |
+| [`vendor-transfer-register.md`](vendor-transfer-register.md) | Fornitori, subprocessori e trasferimenti | Verificare contratti e localizzazioni |
+| [`technical-organizational-measures.md`](technical-organizational-measures.md) | TOM / misure Art. 32 | Verificare elementi esterni |
+| [`legitimate-interest-assessment-template.md`](legitimate-interest-assessment-template.md) | LIA della telemetria tecnica | Compilare se si mantiene Art. 6(1)(f) |
+| [`dpo-assessment-template.md`](dpo-assessment-template.md) | Valutazione obbligo DPO | Compilare e riesaminare su aumento scala |
+| [`data-subject-rights-procedure.md`](data-subject-rights-procedure.md) | Accesso, rettifica, portabilità, cancellazione, revoche | Assegnare canale privacy |
+| [`health-consent-release-gate.md`](health-consent-release-gate.md) | Specifica CRITICAL soluzione A approvata dal product owner; revoca salute e percorso di sospensione | Implementazione e regressioni integrate con PR #366; collaudo autenticato multi-dispositivo e validazione legale pre-pilot aperti |
+| [`health-consent-technical-protocol.md`](health-consent-technical-protocol.md) | Protocollo tecnico revoca/riaccettazione e fence | Implementazione descritta; smoke autenticato multi-dispositivo e gate legale pre-pilot aperti |
+| [`support-sla-policy-template.md`](support-sla-policy-template.md) | Supporto, severità e impegni di servizio | Definire solo promesse sostenibili |
+| [`exit-deletion-policy-template.md`](exit-deletion-policy-template.md) | Cessazione B2B e dati | Allineare al ruolo privacy |
+| [`gym-privacy-instructions-template.md`](gym-privacy-instructions-template.md) | Istruzioni operative alla palestra | Consegnare/adattare al pilot |
+| [`first-gym-b2b-checklist.md`](first-gym-b2b-checklist.md) | Gate di consegna alla palestra | Chiudere tutti i blocker |
+| [`saas-agreement-template.md`](saas-agreement-template.md) | Struttura contratto commerciale | Revisione legale + dati reali |
+| [`commercial-schedule-template.md`](commercial-schedule-template.md) | Allegato economico separato | Compilare con dati commerciali |
+| [`dpa-art28-template.md`](dpa-art28-template.md) | Allegato Art. 28 condizionale | Usare solo se il ruolo processor è confermato |
 
 ## Placeholder standard
 

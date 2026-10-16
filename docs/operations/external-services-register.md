@@ -233,6 +233,8 @@ Il repository contiene `.snyk`, che esclude test/test files dalla relativa anali
 
 Limiti quota o indisponibilità Snyk non devono eliminare la copertura SAST bloccante, che resta affidata a CodeQL nel `Canonical Verification`.
 
+**Snyk GitHub PR checks (2026-10-15):** il product owner ha disattivato nell'interfaccia Snyk `Pull request status checks → Code analysis` a seguito di `code/snyk` in errore `Code test limit reached` (quota Snyk Code), mantenendo abilitato `Open Source security and licenses`. Sulla nuova PR #420 il primo controllo GitHub dello SHA `99e000152b7cf06b16ff2e5dfd3f358044020ad5` mostrava soltanto `security/snyk (gernotfound)` in esecuzione, senza un nuovo `code/snyk`; assenza osservata al momento della lettura, non attestazione perpetua della configurazione live. Il controllo bloccante CodeQL dentro `Canonical Verification` non cambia.
+
 ## Google Search Console e indicizzazione
 
 La precedente proprietà Search Console corrisponde al vecchio frontend Vercel. Il canonical Production è `https://thelogbook.web.app/` e la relativa proprietà URL-prefix è stata verificata il 2026-10-02 con lo stesso account Google usato per la proprietà legacy.

@@ -28,6 +28,7 @@ describe('suspended health-consent screen', () => {
     vi.mocked(registerInitialHealthConsent).mockRejectedValue(new Error('Rete non disponibile'));
     render(<HealthConsentSuspended status="unregistered" user={account} />);
     expect(screen.getByRole('heading', { name: 'Primo consenso richiesto' })).toBeDefined();
+    expect(screen.getByText(/Il backup JSON esportato non è cifrato/i)).toBeDefined();
     const submit = screen.getByRole('button', { name: 'Accetta e continua' }) as HTMLButtonElement;
     expect(submit.disabled).toBe(true);
     expect(screen.getAllByRole('checkbox')).toHaveLength(2);
