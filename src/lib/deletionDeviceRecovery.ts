@@ -1,3 +1,4 @@
+import { BACKEND_API_ORIGIN as API } from './backendApi';
 import type { User } from 'firebase/auth';
 import { auth, ensureAppCheck } from './firebase';
 import { readBrowserValueStrict, removeBrowserValue, writeBrowserJson } from './sync/browserStorage';
@@ -5,7 +6,6 @@ import { assertDeletionDeadlineActive, withDeletionDeadline } from './deletionDe
 import { DeletionDeviceOperationError, deviceOperationFailure, type RecoveryPhase } from './deletionRecoveryDiagnostics';
 
 const KEY='logbook_deletion_recovery_devices_v1';
-const API=(import.meta.env.VITE_ACCOUNT_DELETION_API_ORIGIN || 'https://logbook-gnf.vercel.app').replace(/\/$/,'');
 const MAX_DEVICES=4;
 const RECOVERY_REQUEST_TIMEOUT_MS=7_500;
 type Credential={uid:string;token:string};

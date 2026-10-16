@@ -48,7 +48,7 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               Informativa sulla privacy
             </h2>
             <p style={{ margin: '4px 0 0', fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)' }}>
-              Aggiornata al 13 ottobre 2026
+              Aggiornata al 15 ottobre 2026
             </p>
           </div>
           <button
@@ -144,6 +144,9 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               IndexedDB e localStorage sono utilizzati per il funzionamento offline, la persistenza locale, i workout in corso e le preferenze tecniche. TheLogBook non integra Google Analytics 4, Firebase Analytics, Vercel Analytics o Speed Insights e non invia eventi di utilizzo a tali servizi.
             </p>
             <p>
+              Gli archivi locali principali dei dati fitness e le bozze del dispositivo sono protetti con cifratura autenticata. Le chiavi sono conservate nello stesso profilo del browser: questa protezione non impedisce l'accesso a chi compromette il profilo o esegue codice malevolo nell'app, e non costituisce cifratura end-to-end. I file JSON e CSV esportati sono invece leggibili in chiaro.
+            </p>
+            <p>
               La telemetria tecnica Sentry è separata dalle statistiche di utilizzo e riguarda soltanto errori e anomalie tecniche minimizzati secondo quanto descritto sopra. La rimozione degli analytics non comporta la cancellazione automatica di dati eventualmente trasmessi in passato al precedente fornitore.
             </p>
             <p>
@@ -184,7 +187,7 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               Dopo il completamento della cancellazione, TheLogBook conserva temporaneamente un record tecnico server-only di recovery privo dei dati di allenamento, nutrizione e misurazioni. Il record contiene l'identificativo tecnico del job, stato/timestamp e l'hash non reversibile della ricevuta di cancellazione. Serve a permettere a un dispositivo rimasto offline di verificare che la cancellazione cloud sia realmente terminata prima di eliminare la propria copia locale. È programmato per la rimozione dopo 30 giorni e viene eliminato dal successivo ciclo giornaliero di manutenzione applicabile.
             </p>
             <p style={{ marginTop: '8px', color: 'var(--warning-color)' }}>
-              <strong>Attenzione:</strong> il servizio non garantisce backup di livello enterprise. È consigliato effettuare periodicamente un backup JSON e/o un'esportazione CSV tramite le funzioni dell'app.
+              <strong>Attenzione:</strong> i dati vengono salvati automaticamente sul dispositivo e, con un account, quelli supportati sono sincronizzati con il cloud quando connessione e autorizzazioni lo consentono. Solo i dati già sincronizzati possono essere recuperati dal cloud se l'archivio locale viene perso completamente; i dati ospite e le modifiche ancora offline potrebbero non essere recuperabili. Il backup JSON e l'esportazione CSV sono facoltativi, non necessari periodicamente per il normale utilizzo, e generano file non cifrati da conservare in modo protetto. Il servizio non garantisce backup gestiti di livello enterprise.
             </p>
           </Section>
 

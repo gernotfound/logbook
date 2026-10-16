@@ -3,7 +3,7 @@ import {
   TELEMETRY_RETENTION_DAYS,
   TELEMETRY_RETENTION_MS,
   telemetryExpiresAt,
-} from '../src/lib/telemetry/retention';
+} from '../../src/lib/telemetry/retention';
 
 describe('telemetry retention', () => {
   it('uses a deterministic 30-day expiry from the retention anchor', () => {

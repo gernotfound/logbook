@@ -138,6 +138,18 @@ describe('trusted health consent boundary', () => {
     await expect(recordHealthConsentWithdrawal('account-1', 0)).rejects.toThrow('Cancellazione');
   });
 
+  it('does not reaccept while a data-only erasure job is incomplete', async () => {
+    await recordHealthConsentWithdrawal('account-1', 0);
+    storage.documents.set('health_data_erasures/account-1', { uid: 'account-1', status: 'deleting', consentRevision: 1 });
+    await expect(recordHealthConsentReacceptance('account-1', acceptance, 1))
+      .rejects.toThrow('revoca');
+    expect((await readHealthConsentState('account-1')).status).toBe('withdrawn');
+
+    storage.documents.set('health_data_erasures/account-1', { uid: 'account-1', status: 'complete', consentRevision: 0 });
+    expect(await recordHealthConsentReacceptance('account-1', acceptance, 1))
+      .toMatchObject({ status: 'active', revision: 2 });
+  });
+
   it('cleanup erases only the specific account consent marker', async () => {
     await recordHealthConsentWithdrawal('account-1', 0);
     await recordHealthConsentWithdrawal('account-2', 0);

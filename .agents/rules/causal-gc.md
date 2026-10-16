@@ -1,5 +1,8 @@
 # Causal Metadata Garbage Collection - TheLogBook
 
+**Quando leggere:** vector clock, tombstone, stable frontier, compaction e replica retirement.
+**Non inferire:** vincere un tie-break non prova la copertura causale necessaria per eliminare metadata.
+
 > Stato: normativo da M4 | Baseline M3: `359e3bfdb45952ccce8a00478e2157f53f468dea`
 
 ## Obiettivo
@@ -77,6 +80,8 @@ Protocol 3 chiude il limite storico di M4 con un registro per-account in `users/
 - checkpoint ordinario almeno ogni 30 giorni;
 - lease massima 360 giorni;
 - una generation retired/riusata viene fenced e non può più pubblicare il vecchio journal.
+
+Le Rules e il parser client ammettono nei `checkpointClock` soltanto coordinate Protocol 3 `s00`…`s15` intere, non negative e rappresentabili senza perdita da JavaScript; i valori arbitrari e gli actor non registrati sono rifiutati. Il ritiro conserva la revisione del consenso già attestata, altrimenti il server rifiuta il cambio di stato.
 
 La `stableFrontier` è il minimo componente-per-componente dei `checkpointClock` di tutte e sole le repliche `active`. Una coordinata assente vale zero e blocca il GC dello stato che la richiede.
 

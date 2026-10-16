@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { sanitizeTelemetryDetails } from '../src/lib/telemetry/detailSanitizer';
+import { sanitizeTelemetryDetails } from '../../src/lib/telemetry/detailSanitizer';
 
 describe('telemetry event detail sanitization', () => {
   it('keeps only bounded technical metadata and drops business/free-form keys', () => {
