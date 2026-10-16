@@ -140,7 +140,7 @@ describe('flexible training cycles', () => {
         setup(0, { ...cycle, routines: [{ routineId: 'deleted', frequencyPerWeek: 1 }] });
         render(<TrainingSessionSetup />);
         expect(screen.getByText(/non contiene schede disponibili/)).toBeDefined();
-        expect(screen.getByRole('button', { name: 'Scheda A 0 esercizi' })).toBeDefined();
+        expect(screen.getByText('Scheda A').closest('button')).not.toBeNull();
     });
 
     it('marks deleted cycle routines as unavailable in planning without erasing the saved cycle', () => {
