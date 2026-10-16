@@ -244,7 +244,7 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
       <div style={{ display: 'grid', gap: 12 }}>
         <button type="button" className="btn" onClick={() => setPrivacy(true)}>Leggi l’informativa privacy</button>
         <button type="button" className="btn" onClick={() => setTerms(true)}>Leggi i termini e condizioni</button>
-        <button type="button" className="btn" onClick={() => void handlePrepareBackup()} disabled={exportingData}>{exportingData ? 'Preparazione…' : 'Prepara backup JSON'}</button>
+        <button type="button" className="btn" onClick={() => { void handlePrepareBackup().catch(error => setError(error instanceof Error ? error.message : 'Backup non riuscito.')); }} disabled={exportingData}>{exportingData ? 'Preparazione…' : 'Prepara backup JSON'}</button>
         {preparedBackupUrl && <>
           <p role="status">Backup pronto. Tocca il collegamento qui sotto per scaricare il file sul dispositivo.</p>
           <a className="btn btn-primary" href={preparedBackupUrl} download="logbook_backup.json">Scarica backup JSON</a>
