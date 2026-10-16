@@ -1,5 +1,5 @@
 import { dispatchDurableOperation } from '../../lib/sync/dispatchDurableOperation';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { shiftDateString } from '../../lib/utils/date';
 import { useAppStore } from '../../store/useAppStore';
 import { useSupplements } from '../../hooks/useSupplements';
@@ -31,6 +31,19 @@ export default function NutritionSupplements({ selectedDate, setSelectedDate }: 
 
     // Stato per gli input inline di assunzione rapida
     const [quickInputs, setQuickInputs] = useState<Record<string, string>>({});
+    const sortedSupplements = useMemo(
+        () => [...supplementsLibrary].sort((a, b) => a.name.localeCompare(b.name)),
+        [supplementsLibrary]
+    );
+    const intakesBySupplement = useMemo(() => {
+        const grouped = new Map<string, typeof supplementsIntake>();
+        for (const intake of supplementsIntake) {
+            const list = grouped.get(intake.supplementId);
+            if (list) list.push(intake);
+            else grouped.set(intake.supplementId, [intake]);
+        }
+        return grouped;
+    }, [supplementsIntake]);
 
     const handlePrevDay = () => {
         if (!setSelectedDate || !targetDateStr) return;
@@ -207,10 +220,8 @@ export default function NutritionSupplements({ selectedDate, setSelectedDate }: 
             {supplementsLibrary.length === 0 ? (
                 <p className="text-muted text-center my-20">Non hai ancora aggiunto alcun integratore. Creane uno per iniziare a tracciarlo.</p>
             ) : (
-                [...supplementsLibrary]
-                    .sort((a, b) => a.name.localeCompare(b.name))
-                    .map((supp) => {
-                    const suppIntakes = supplementsIntake.filter(i => i.supplementId === supp.id);
+                sortedSupplements.map((supp) => {
+                    const suppIntakes = intakesBySupplement.get(supp.id) || [];
                     const totalAssunto = suppIntakes.reduce((acc, curr) => acc + curr.amount, 0);
                     const progressPercent = supp.target ? Math.min((totalAssunto / supp.target) * 100, 100) : 0;
                     

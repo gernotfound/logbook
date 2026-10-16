@@ -61,7 +61,7 @@ export function useNutritionPlanning() {
     const draftRevision = useRef(0);
 
     // Use the shared parser to handle decimal commas and invalid measurements.
-    const latestWeight = Logic.getLatestUserWeight(nutritionMap);
+    const latestWeight = useMemo(() => Logic.getLatestUserWeight(nutritionMap), [nutritionMap]);
 
     const defaultPlanning: NutritionPlanningDraft = {
         weight: latestWeight,
