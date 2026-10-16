@@ -5,12 +5,20 @@ import type { User } from 'firebase/auth';
 import { HealthConsentSuspended } from '../src/components/UI/HealthConsentSuspended';
 import { finishHealthConsentReacceptance, registerInitialHealthConsent, reacceptHealthConsent, reacceptHealthConsentLocally, refreshHealthConsent } from '../src/lib/healthConsent';
 import { safeHardReload } from '../src/lib/sync/safeReload';
+import { UnverifiedTabSnapshotError } from '../src/lib/sync/reloadBarrier';
 import { useDialogStore } from '../src/store/useDialogStore';
 vi.mock('../src/lib/sync/safeReload', () => ({ safeHardReload: vi.fn(async () => {}) }));
 
+const backupUi = vi.hoisted(() => ({
+  url: null as string | null,
+  prepare: vi.fn(),
+  release: vi.fn(),
+}));
 vi.mock('../src/hooks/useSettings', () => ({
   useSettings: () => ({
-    handleExportBackup: vi.fn(),
+    handlePrepareBackup: backupUi.prepare,
+    preparedBackupUrl: backupUi.url,
+    releasePreparedBackup: backupUi.release,
     handleDeleteAccount: vi.fn(),
     handleLogout: vi.fn(),
     exportingData: false,
@@ -21,7 +29,7 @@ const account = { uid: 'consent-ui-account' } as User;
 const checkboxInputs = () => screen.getAllByRole('checkbox') as HTMLInputElement[];
 const reacceptButton = () => screen.getByRole('button', { name: 'Presta un nuovo consenso' }) as HTMLButtonElement;
 
-beforeEach(() => { vi.clearAllMocks(); });
+beforeEach(() => { vi.clearAllMocks(); backupUi.url = null; });
 
 describe('suspended health-consent screen', () => {
   it('renders explicit first acceptance separately from revocation and does not submit unchecked choices', async () => {
@@ -52,7 +60,7 @@ describe('suspended health-consent screen', () => {
     expect(submit.disabled).toBe(true);
     fireEvent.click(submit);
     expect(reacceptHealthConsent).not.toHaveBeenCalled();
-    expect(screen.getByRole('button', { name: 'Esporta i tuoi dati (backup JSON)' })).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Prepara backup JSON' })).toBeDefined();
     expect(screen.getByRole('button', { name: "Elimina definitivamente l'account" })).toBeDefined();
 
     rerender(<HealthConsentSuspended status="withdrawn" user={account} />);
@@ -92,7 +100,7 @@ describe('suspended health-consent screen', () => {
       rerender(<HealthConsentSuspended status={status} user={account} />);
       expect(screen.queryByRole('checkbox')).toBeNull();
       expect(screen.queryByRole('button', { name: 'Presta un nuovo consenso' })).toBeNull();
-      expect(screen.getByRole('button', { name: 'Esporta i tuoi dati (backup JSON)' })).toBeDefined();
+      expect(screen.getByRole('button', { name: 'Prepara backup JSON' })).toBeDefined();
       if (status === 'checking' || status === 'error') {
         expect(screen.queryByRole('heading', { name: 'Accesso a TheLogBook sospeso' })).toBeNull();
         expect(screen.getByText(/non significa che tu abbia revocato il consenso/)).toBeDefined();
@@ -144,7 +152,7 @@ describe('account consent withdrawal offline', () => {
       expect(terms.disabled).toBe(false);
       expect(health.disabled).toBe(false);
       expect(screen.getByText(/I dati locali restano conservati/i)).toBeDefined();
-      expect(screen.getByRole('button', { name: 'Ricarica TheLogBook' })).toBeDefined();
+      expect(screen.getByRole('button', { name: 'Ricarica pagina' })).toBeDefined();
       fireEvent.click(terms);
       expect(button.disabled).toBe(true);
       fireEvent.click(health);
@@ -197,28 +205,51 @@ describe('account consent withdrawal offline', () => {
     try {
       vi.mocked(safeHardReload).mockRejectedValueOnce(new Error('Salvataggi non completati.'));
       render(<HealthConsentSuspended status="pending" user={account} />);
-      fireEvent.click(screen.getByRole('button', { name: 'Ricarica TheLogBook' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Ricarica pagina' }));
       await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('Salvataggi non completati.'));
       expect(safeHardReload).toHaveBeenCalledTimes(1);
     } finally { onLine.mockRestore(); }
   });
 
-  it('retries the trusted verification when connectivity returns to a suspended screen', async () => {
-    const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
-    try {
-      render(<HealthConsentSuspended status="pending" user={account} />);
-      online.mockReturnValue(true);
-      fireEvent(window, new Event('online'));
-      const verify = screen.getByRole('button', { name: 'Riprova a verificare il consenso' });
-      expect(verify).toBeDefined();
-      // AuthProvider owns automatic rechecks; the suspended screen only
-      // exposes a manual retry instead of racing that foreground listener.
-      expect(refreshHealthConsent).not.toHaveBeenCalled();
-      fireEvent.click(verify);
-      await waitFor(() => expect(refreshHealthConsent).toHaveBeenCalledWith(account));
-      expect(screen.getByRole('button', { name: 'Ricarica TheLogBook' })).toBeDefined();
-    } finally {
-      online.mockRestore();
-    }
+  it('offers a direct download link only after the backup has been prepared', () => {
+    const { rerender } = render(<HealthConsentSuspended status="withdrawn" user={account} />);
+    expect(screen.queryByRole('link', { name: 'Scarica backup JSON' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Prepara backup JSON' }));
+    expect(backupUi.prepare).toHaveBeenCalledTimes(1);
+    backupUi.url = 'blob:https://example.test/prepared-backup';
+    rerender(<HealthConsentSuspended status="withdrawn" user={account} />);
+    const link = screen.getByRole('link', { name: 'Scarica backup JSON' }) as HTMLAnchorElement;
+    expect(link.getAttribute('href')).toBe(backupUi.url);
+    expect(link.getAttribute('download')).toBe('logbook_backup.json');
+    fireEvent.click(screen.getByRole('button', { name: 'Elimina il download preparato' }));
+    expect(backupUi.release).toHaveBeenCalledTimes(1);
+  });
+
+  it('requires an explicit choice before reloading when RAM changes cannot be attributed', async () => {
+    vi.mocked(safeHardReload).mockRejectedValueOnce(new UnverifiedTabSnapshotError());
+    const confirmation = vi.spyOn(useDialogStore.getState(), 'showConfirm').mockResolvedValueOnce(true);
+    render(<HealthConsentSuspended status="withdrawn" user={account} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Ricarica pagina' }));
+    await waitFor(() => expect(confirmation).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(safeHardReload).toHaveBeenCalledTimes(2));
+    expect(vi.mocked(safeHardReload).mock.calls[1][1]).toEqual({ discardUnverifiedInMemoryData: true });
+    expect(confirmation.mock.calls[0][0]).toContain('potrebbero andare persi');
+    confirmation.mockRestore();
+  });
+
+  it('does not discard uncertain memory when the user cancels reloading', async () => {
+    vi.mocked(safeHardReload).mockRejectedValueOnce(new UnverifiedTabSnapshotError());
+    const confirmation = vi.spyOn(useDialogStore.getState(), 'showConfirm').mockResolvedValueOnce(false);
+    render(<HealthConsentSuspended status="withdrawn" user={account} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Ricarica pagina' }));
+    await waitFor(() => expect(confirmation).toHaveBeenCalledTimes(1));
+    expect(safeHardReload).toHaveBeenCalledTimes(1);
+    confirmation.mockRestore();
+  });
+
+  it('does not start a redundant consent refresh alongside AuthProvider reconnect checks', () => {
+    render(<HealthConsentSuspended status="pending" user={account} />);
+    expect(screen.queryByRole('button', { name: 'Riprova a verificare il consenso' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Ricarica pagina' })).toBeDefined();
   });
 });
