@@ -94,11 +94,11 @@ async function loadCloudPayload(options?: { allMonths?: boolean }): Promise<{
             const data = normalizedRoot.business as Record<string, any>;
             // Reject lossy Zod normalization before declaring the cloud root authoritative.
             // The transaction writer already enforces this invariant on remote writes.
-            const normalizedRoot = rootDocument(UserDataSchema.parse(data) as unknown as UserData);
+            const projectedRoot = rootDocument(UserDataSchema.parse(data) as unknown as UserData);
             // A legacy/current root may explicitly persist null for the optional
             // plan. It denotes absence, even when the schema supplies defaults.
-            if (data.nutritionPlanning === null) normalizedRoot.nutritionPlanning = null;
-            assertCloudBusinessPreserved('', data, normalizedRoot);
+            if (data.nutritionPlanning === null) projectedRoot.nutritionPlanning = null;
+            assertCloudBusinessPreserved('', data, projectedRoot);
             cloudDocuments.set('', { ...data, _sync: normalizedRoot.sync });
             if (data.profile) state.profile = data.profile;
             state.catalogOverrides = data.catalogOverrides || {};
