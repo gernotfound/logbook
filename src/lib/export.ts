@@ -9,6 +9,7 @@ import { readLocal } from './sync/localRepository';
 import equal from 'fast-deep-equal';
 import type { Exercise, ExportShareOptions, NutritionDay, SessionExercise, SessionExerciseSet, TrainingCycle, UserData, WorkoutRoutine, WorkoutSession } from '../types';
 import { requireCanonicalWorkoutDate } from './sync/monthlyIntegrity';
+import { parseLargeBackupJson } from './streamJsonImport';
 
 export const MAX_JSON_IMPORT_BYTES = 64 * 1024 * 1024;
 
@@ -420,18 +421,19 @@ export const Exporter = {
             if (!isCurrentSession(session)) throw new Error('Sessione cambiata: importazione annullata.');
         };
         try {
-            if (file.size > MAX_JSON_IMPORT_BYTES) {
-                throw new Error('Il file JSON supera il limite di importazione di 64 MiB. Il file originale resta intatto; usa una copia più piccola oppure conserva il backup per il recupero.');
-            }
-            const content = await new Promise<string>((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = () => resolve(String(reader.result));
-                reader.onerror = () => reject(new Error('Impossibile leggere il file.'));
-                reader.onabort = () => reject(new Error('Lettura del file annullata.'));
-                reader.readAsText(file);
-            });
+            // The threshold selects the read strategy, never whether a genuine
+            // backup is recoverable. Large JSON is decoded in bounded chunks.
+            const parsed = file.size > MAX_JSON_IMPORT_BYTES
+                ? await parseLargeBackupJson(file, assertCurrent)
+                : JSON.parse(await new Promise<string>((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(String(reader.result));
+                    reader.onerror = () => reject(new Error('Impossibile leggere il file.'));
+                    reader.onabort = () => reject(new Error('Lettura del file annullata.'));
+                    reader.readAsText(file);
+                }));
             assertCurrent();
-            const decoded = decodeImport(JSON.parse(content), session.owner);
+            const decoded = decodeImport(parsed, session.owner);
             const durableEnvelope = await readLocal(session.owner);
             assertCurrent();
             if (!durableEnvelope) throw new Error('Dati locali non ancora disponibili.');
