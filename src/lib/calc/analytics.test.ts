@@ -823,7 +823,7 @@ describe('Large archive cooperative analytics fallback', () => {
         id: `large_${i}`,
         date: format(subDays(reference, i % 330), 'yyyy-MM-dd'),
         routineName: 'Test archivio',
-        exercises: [{ exId: 'archive_ex', sets: [{ id: `set_${i}`, kg: String(40 + i % 40), reps: '8' }] }]
+        exercises: [{ exId: 'archive_ex', sessionNote: '', sets: [{ id: `set_${i}`, kg: String(40 + i % 40), reps: '8' }] }]
     }));
     const nutrition: Record<string, NutritionDay> = Object.fromEntries(Array.from({ length: 200 }, (_, i) => {
         const date = format(subDays(reference, i), 'yyyy-MM-dd');
