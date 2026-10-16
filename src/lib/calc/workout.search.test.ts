@@ -68,7 +68,7 @@ describe('typed workout search contracts', () => {
             '2026-02-31': { weight: 999 },
             '2026-09-05': { weight: 'invalid' },
         }, { weight: 74 })).toBe(74);
-        expect(getLatestUserWeight({ '2026-10-03': { weight: '82,1' }, '2026-10-2': { weight: 85 })).toBe(82.1);
+        expect(getLatestUserWeight({ '2026-10-03': { weight: '82,1' }, '2026-10-2': { weight: 85 } })).toBe(82.1);
     });
 
     it('supports caller-selected fields without changing empty-query semantics', () => {
