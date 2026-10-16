@@ -32,10 +32,9 @@ export const CycleCard: React.FC<CycleCardProps> = ({
     const [showSchedule, setShowSchedule] = useState(false);
     const timeline = Logic.calculateCycleTimeline(cycle);
     const routineNames = useMemo(() => new Map(routines.map(routine => [routine.id, routine.name])), [routines]);
-    const schedule = useMemo(
-        () => Logic.calculateCycleSchedule(cycle, routines, isExpanded && showSchedule),
-        [cycle, routines, isExpanded, showSchedule],
-    );
+    // Inactive cards only compute the bounded summary. The compiler can
+    // memoize this pure calculation without an explicit useMemo dependency list.
+    const schedule = Logic.calculateCycleSchedule(cycle, routines, isExpanded && showSchedule);
 
     const isInvalidSchedule = schedule.summaryText === 'Parametri del ciclo da correggere';
     const sessionsPerWeek = isInvalidSchedule ? null : schedule.sessionsPerWeek;
