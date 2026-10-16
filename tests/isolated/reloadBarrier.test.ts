@@ -25,7 +25,7 @@ vi.mock('../../src/lib/healthConsent', async () => {
     };
 });
 vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackEvent: vi.fn(), trackError: vi.fn() } }));
-import { isReloadSessionCurrent, prepareForReload } from '../../src/lib/sync/reloadBarrier';
+import { isReloadSessionCurrent, prepareForReload, UnverifiedTabSnapshotError } from '../../src/lib/sync/reloadBarrier';
 import { requiredUpdateHardReload, safeHardReload } from '../../src/lib/sync/safeReload';
 import { commitLocal, initializeLocal, readLocal } from '../../src/lib/sync/localRepository';
 import { UserDataSchema } from '../../src/lib/schema';
@@ -243,4 +243,75 @@ it('blocks reload with a readable envelope while an unsaved UI draft has blocked
     await expect(prepareForReload()).rejects.toThrow('Persistenza locale bloccata');
     expect(app.flush).not.toHaveBeenCalled();
     expect((await readLocal('user:a'))?.data.profile?.height).toBe('170');
+});
+
+
+it('requires an explicit choice to discard unverified RAM after consent withdrawal', async () => {
+    const original = (await readLocal('user:a'))!;
+    disk.set('logbook:v2:user:a:health-consent-withdrawal', 'withdrawn');
+    invalidateSession(); // Old tab causality proof no longer belongs to this session.
+    app.state.userData = parse(171);
+    app.flush.mockRejectedValue(new Error('offline'));
+
+    const reload = vi.fn();
+    await expect(safeHardReload(reload)).rejects.toBeInstanceOf(UnverifiedTabSnapshotError);
+    expect(reload).not.toHaveBeenCalled();
+    expect(await readLocal('user:a')).toEqual(original);
+
+    await safeHardReload(reload, { discardUnverifiedInMemoryData: true });
+    expect(reload).toHaveBeenCalledTimes(1);
+    expect(await readLocal('user:a')).toEqual(original);
+    expect(app.state.userData).toEqual(original.data);
+});
+
+it('never permits an unverified RAM discard while consent is active', async () => {
+    const original = (await readLocal('user:a'))!;
+    invalidateSession();
+    app.state.userData = parse(171);
+    app.flush.mockRejectedValue(new Error('offline'));
+    const reload = vi.fn();
+
+    await expect(safeHardReload(reload, { discardUnverifiedInMemoryData: true }))
+        .rejects.toBeInstanceOf(UnverifiedTabSnapshotError);
+    expect(reload).not.toHaveBeenCalled();
+    expect(await readLocal('user:a')).toEqual(original);
+});
+
+it('never discards unverified RAM when durable local state is missing', async () => {
+    disk.set('logbook:v2:user:a:health-consent-withdrawal', 'withdrawn');
+    invalidateSession();
+    await clear();
+    app.flush.mockRejectedValue(new Error('offline'));
+    const reload = vi.fn();
+
+    await expect(safeHardReload(reload, { discardUnverifiedInMemoryData: true }))
+        .rejects.toThrow('non sono ancora salvate');
+    expect(reload).not.toHaveBeenCalled();
+});
+
+it('keeps storage failures blocking consent-suspended reload even with explicit discard choice', async () => {
+    disk.set('logbook:v2:user:a:health-consent-withdrawal', 'withdrawn');
+    invalidateSession();
+    app.state.userData = parse(171);
+    (app.state as typeof app.state & { localPersistenceBlocked?: boolean }).localPersistenceBlocked = true;
+    const reload = vi.fn();
+
+    await expect(safeHardReload(reload, { discardUnverifiedInMemoryData: true }))
+        .rejects.toThrow('Persistenza locale bloccata');
+    expect(reload).not.toHaveBeenCalled();
+});
+
+
+it('does not erase a stored workout while reloading a consent-suspended screen', async () => {
+    const saved = JSON.stringify({ id: 'saved-workout', exercises: [] });
+    disk.set('logbook:v2:user:a:workout', saved);
+    disk.set('logbook:v2:user:a:health-consent-withdrawal', 'withdrawn');
+    app.state.localWorkout = null; // Suspended UI has no active RAM workout.
+    app.flush.mockRejectedValue(new Error('offline'));
+
+    const reload = vi.fn();
+    await safeHardReload(reload);
+
+    expect(reload).toHaveBeenCalledTimes(1);
+    expect(disk.get('logbook:v2:user:a:workout')).toBe(saved);
 });

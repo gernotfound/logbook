@@ -101,6 +101,12 @@ export function parseReplicaIdentity(raw: unknown): ReplicaIdentity | null {
     };
 }
 
+function parseReplicaCheckpointClock(raw: unknown): VectorClock {
+    const clock = parseVectorClock(raw, 'replica checkpoint clock');
+    for (const actor of Object.keys(clock)) assertSlot(actor);
+    return clock;
+}
+
 function parseReplicaEntry(slot: string, raw: unknown): ReplicaControlEntry {
     assertSlot(slot);
     if (!isRecord(raw)) throw new Error('Replica control entry non valida');
@@ -112,7 +118,7 @@ function parseReplicaEntry(slot: string, raw: unknown): ReplicaControlEntry {
         ...storedIdentity,
         status: raw.status,
         lastSeq: parseSafeInteger(raw.lastSeq, 'Replica lastSeq'),
-        checkpointClock: parseVectorClock(raw.checkpointClock, 'replica checkpoint clock'),
+        checkpointClock: parseReplicaCheckpointClock(raw.checkpointClock),
     };
 }
 
@@ -213,6 +219,7 @@ export async function retireExpiredReplicas(db: Firestore, uid: string, now = Da
                 const [slot, entry] = candidate;
                 transaction.set(ref, {
                     protocolVersion: 3,
+                    ...(current.consentRevision !== undefined ? { consentRevision: current.consentRevision } : {}),
                     replicas: {
                         ...current.replicas,
                         [slot]: { ...entry, status: 'retired' },
@@ -240,7 +247,7 @@ export async function claimReplicaCheckpoint(
     candidateReplicaId?: string,
 ): Promise<ReplicaCheckpoint> {
     if (!uid || uid.includes('/')) throw new Error('Identità non valida');
-    const normalizedCheckpoint = parseVectorClock(checkpointClock, 'checkpoint cloud clock');
+    const normalizedCheckpoint = parseReplicaCheckpointClock(checkpointClock);
     const normalizedCandidate = candidateReplicaId?.trim();
     if (normalizedCandidate !== undefined && (!normalizedCandidate || normalizedCandidate.length > 128)) {
         throw new Error('Replica candidate ID non valido');

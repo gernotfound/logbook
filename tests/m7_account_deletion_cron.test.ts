@@ -13,11 +13,17 @@ const retention = vi.hoisted(() => ({
 const telemetryRetention = vi.hoisted(() => ({
   purgeExpiredTelemetry: vi.fn(),
 }));
+const healthErasure = vi.hoisted(() => ({
+  listRecoverableHealthErasures: vi.fn(),
+  processHealthDataErasure: vi.fn(),
+  purgeExpiredCompletedHealthErasures: vi.fn(),
+}));
 
 vi.mock('../server/accountDeletion/jobStore', () => store);
 vi.mock('../server/accountDeletion/runner', () => runner);
 vi.mock('../server/accountDeletion/retention', () => retention);
 vi.mock('../server/telemetryRetention', () => telemetryRetention);
+vi.mock('../server/healthConsent/erasure', () => healthErasure);
 
 import { GET } from '../api/account-deletion-cron';
 
@@ -35,6 +41,9 @@ describe('M7 daily account deletion recovery cron', () => {
     delete process.env.CRON_SECRET;
     store.listRecoverableDeletionJobs.mockResolvedValue([{ uid: 'a' }, { uid: 'b' }]);
     runner.processAccountDeletion.mockResolvedValue('complete');
+    healthErasure.listRecoverableHealthErasures.mockResolvedValue([]);
+    healthErasure.processHealthDataErasure.mockResolvedValue('complete');
+    healthErasure.purgeExpiredCompletedHealthErasures.mockResolvedValue(0);
     retention.purgeExpiredCompletedDeletionJobs.mockResolvedValue(0);
     telemetryRetention.purgeExpiredTelemetry.mockResolvedValue({
       documentsScanned: 0,
@@ -47,6 +56,20 @@ describe('M7 daily account deletion recovery cron', () => {
   afterEach(() => {
     if (originalSecret === undefined) delete process.env.CRON_SECRET;
     else process.env.CRON_SECRET = originalSecret;
+  });
+
+  it('resumes bounded health-data erasures without blocking independent account-deletion recovery', async () => {
+    process.env.CRON_SECRET = 'test-secret';
+    healthErasure.listRecoverableHealthErasures.mockResolvedValue(['health-1', 'health-2']);
+    healthErasure.processHealthDataErasure.mockResolvedValueOnce('complete').mockRejectedValueOnce(new Error('temporary'));
+    const logger = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      const response = await GET(request('test-secret'));
+      expect(response.status).toBe(200);
+      expect(healthErasure.processHealthDataErasure).toHaveBeenCalledTimes(2);
+      expect(store.listRecoverableDeletionJobs).toHaveBeenCalledTimes(1);
+      expect(runner.processAccountDeletion).toHaveBeenCalledTimes(2);
+    } finally { logger.mockRestore(); }
   });
 
   it('fails closed when CRON_SECRET is not configured', async () => {
@@ -92,6 +115,10 @@ describe('M7 daily account deletion recovery cron', () => {
     expect(info).toHaveBeenCalledWith('[account-deletion-cron] completed', {
       scanned: 2,
       processed: 2,
+      erasureScanned: 0,
+      erasureProcessed: 0,
+      erasureErrors: 0,
+      erasureReceiptsPurged: 0,
       recoveryErrors: 0,
       retentionErrors: 0,
       purged: 0,

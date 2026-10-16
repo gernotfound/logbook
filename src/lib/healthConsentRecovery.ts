@@ -26,11 +26,17 @@ export async function recoverOldLocalEditsAfterConsent(user: User): Promise<void
       throw new Error('La sessione è cambiata durante il recupero.');
     }
   };
-  const serverRevision = await readActiveHealthConsentRevision(user);
+  const serverConsent = await readActiveHealthConsentRevision(user);
   assertCurrent();
   const original = await readLocal(session.owner);
   assertCurrent();
   if (!original?.pending.length) throw new Error('Non ci sono operazioni locali da recuperare.');
+  if (serverConsent.erasedBeforeRevision !== undefined
+    && (original.consentRevision ?? 0) <= serverConsent.erasedBeforeRevision) {
+    // Never rebase a journal whose generation was explicitly erased. The
+    // existing encrypted archive stays untouched for a voluntary JSON export.
+    throw new Error('Queste modifiche appartengono a dati eliminati su richiesta. Non possono essere ripristinate tramite il recupero del consenso.');
+  }
   // The backup collector retries its own scan if the local envelope changes.
   const snapshot = await collectBackupSnapshot(original.data, true);
   assertCurrent();
@@ -48,7 +54,7 @@ export async function recoverOldLocalEditsAfterConsent(user: User): Promise<void
     UserDataSchema.parse({}) as unknown as UserData, normalized, catalog,
   );
   await rebaseConsentRecoveryWithExplicitChoice(
-    session.owner, serverRevision,
+    session.owner, serverConsent.revision,
     original.revision, cloudData, snapshot.data, cloudDocuments, () => { assertCurrent(); return true; },
   );
   // A server refresh authoritatively confirms the revision and unlocks only

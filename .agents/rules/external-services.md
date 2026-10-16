@@ -1,5 +1,8 @@
 # Servizi esterni e configurazione fuori repository
 
+**Quando leggere:** GitHub/ruleset, Firebase, Google Cloud, Vercel, Sentry, Snyk, IAM, domini e dismissioni.
+**Non inferire:** configurazione nel repository, CI e deploy riusciti non certificano da soli quote, permessi o stato runtime del provider.
+
 Questa regola disciplina i sistemi esterni la cui configurazione effettiva non è rappresentata integralmente dal repository Git.
 
 Il registro decisionale stabile e leggibile anche fuori dal codice è `docs/operations/external-services-register.md`.
@@ -51,6 +54,7 @@ Firebase Hosting, Firebase Authentication, Firestore, Firebase Admin e App Check
 - `main` resta l'unico branch abilitato al deployment salvo cambio deliberato del contratto repository.
 - Le credenziali server-only non devono mai avere prefisso `VITE_`.
 - Un deployment Vercel verde non prova la CI GitHub; la CI verde non prova il deployment Production.
+- **VERIFY:** `scripts/vercel-ignore-build.mjs` include `package.json` e `package-lock.json` fra gli input del backend. Il solo bump versione PWA può pertanto rendere eleggibile un deploy Vercel. Non escludere indiscriminatamente questi manifest: contengono anche modifiche reali delle dipendenze server.
 
 ### GitHub / CodeQL / Snyk
 
@@ -88,3 +92,9 @@ Prima di sostituire, rimuovere o riconfigurare materialmente un servizio esterno
 5. aggiornare codice/config/test;
 6. aggiornare questa regola se cambia un invariante;
 7. aggiornare `docs/operations/external-services-register.md` con motivo della decisione e data di verifica.
+
+## Documenti collegati
+
+- [Registro dei servizi esterni](../../docs/operations/external-services-register.md): decisioni e stato da rivalidare in console.
+- [Guida Sentry](../../docs/telemetry-sentry-guide.md): minimizzazione diagnostica, privacy e source map.
+- [Cutover Firebase Hosting](../../docs/operations/firebase-hosting-cutover.md): **storico**, non checklist di deployment attuale.

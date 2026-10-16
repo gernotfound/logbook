@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ComponentProps } from 'react';
 import { useNutritionMeals } from '../../hooks/useNutritionMeals';
 import NutritionPlanning from './NutritionPlanning';
 import NutritionMeals from './NutritionMeals';
@@ -39,16 +39,12 @@ const NutritionView = ({ subTab = 'meals', setSubTab }: NutritionViewProps) => {
     const setSelectedDate = (date: string) => setChosenDate(date === today ? null : date);
     const [historyVisibleCount, setHistoryVisibleCount] = useState(NUTRITION_HISTORY_PAGE_SIZE);
     const mealsHook = useNutritionMeals(selectedDate);
-    const historyHook = useNutritionHistory();
-
-    const userData = useAppStore(state => state.userData);
+    const pendingConflict = useAppStore(state => state.userData?.pendingConflicts?.nutritionPlanning);
     const resolveConflict = useAppStore(state => state.resolveNutritionConflict);
     const { currentUser } = useAuth();
     const showAlert = useDialogStore(state => state.showAlert);
     const [isConflictDialogOpen, setConflictDialogOpen] = useState(false);
     const [isResolving, setIsResolving] = useState(false);
-
-    const pendingConflict = userData?.pendingConflicts?.nutritionPlanning;
 
     const handleResolveConflict = async (resolution: 'cloud' | 'local') => {
         if (!currentUser?.uid || !pendingConflict) return;
@@ -145,8 +141,7 @@ const NutritionView = ({ subTab = 'meals', setSubTab }: NutritionViewProps) => {
 
             {activeSubTab === 'history' && (
                 <div id="nutrition-panel-history" role="tabpanel" aria-labelledby="nutrition-tab-history" className="nutrition-sub-view active">
-                    <NutritionHistory
-                        nutritionHistory={historyHook.nutritionHistory}
+                    <NutritionHistoryPanel
                         visibleCount={historyVisibleCount}
                         onShowMore={() => setHistoryVisibleCount(count => count + NUTRITION_HISTORY_PAGE_SIZE)}
                         onDayClick={handleHistoryDayClick}
@@ -164,11 +159,10 @@ const NutritionView = ({ subTab = 'meals', setSubTab }: NutritionViewProps) => {
             )}
 
             {pendingConflict && (
-                <NutritionConflictDialog
+                <StoreBoundNutritionConflictDialog
                     isOpen={isConflictDialogOpen}
                     onClose={() => setConflictDialogOpen(false)}
                     onResolve={handleResolveConflict}
-                    cloudPlan={userData?.nutritionPlanning || null}
                     localPlan={pendingConflict}
                     isSyncing={isResolving}
                 />
@@ -176,5 +170,15 @@ const NutritionView = ({ subTab = 'meals', setSubTab }: NutritionViewProps) => {
         </div>
     );
 };
+
+function NutritionHistoryPanel(props: Omit<ComponentProps<typeof NutritionHistory>, 'nutritionHistory'>) {
+    const { nutritionHistory } = useNutritionHistory();
+    return <NutritionHistory {...props} nutritionHistory={nutritionHistory} />;
+}
+
+function StoreBoundNutritionConflictDialog(props: Omit<ComponentProps<typeof NutritionConflictDialog>, 'cloudPlan'>) {
+    const cloudPlan = useAppStore(state => state.userData?.nutritionPlanning);
+    return <NutritionConflictDialog {...props} cloudPlan={cloudPlan || null} />;
+}
 
 export default NutritionView;

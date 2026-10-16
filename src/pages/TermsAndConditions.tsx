@@ -48,7 +48,7 @@ export const TermsAndConditions: React.FC<{ onClose: () => void }> = ({ onClose 
               Termini e condizioni
             </h2>
             <p style={{ margin: '4px 0 0', fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)' }}>
-              Aggiornati al 12 ottobre 2026
+              Aggiornati al 15 ottobre 2026
             </p>
           </div>
           <button
@@ -92,7 +92,7 @@ export const TermsAndConditions: React.FC<{ onClose: () => void }> = ({ onClose 
               TheLogBook è un software indipendente che può essere fornito direttamente oppure tramite organizzazioni partner, incluse palestre. Salvo eventuali livelli di servizio concordati separatamente, l'Applicazione viene resa disponibile senza garanzia di continuità assoluta o di uno specifico livello di uptime. Restano ferme le garanzie e le responsabilità che non possono essere escluse o limitate dalla legge applicabile.
             </p>
             <p style={{ marginTop: '8px' }}>
-              Il titolare può modificare, sospendere o interrompere funzionalità nei limiti consentiti dalla legge e degli eventuali accordi applicabili. È consigliato utilizzare periodicamente le funzioni di backup/esportazione disponibili per mantenere una copia personale dei dati.
+              Il titolare può modificare, sospendere o interrompere funzionalità nei limiti consentiti dalla legge e degli eventuali accordi applicabili. Il salvataggio locale è automatico e, per gli account, i dati supportati vengono sincronizzati con il cloud quando connessione e autorizzazioni lo consentono. Le esportazioni JSON e CSV sono facoltative e producono file non cifrati; dati ospite e modifiche non ancora sincronizzate potrebbero andare persi se l'archivio del dispositivo viene eliminato.
             </p>
           </Section>
 
