@@ -90,7 +90,7 @@ import {
   createHealthDataErasureJob, processHealthDataErasure, readHealthDataErasureStatus,
   purgeExpiredCompletedHealthErasures,
 } from '../server/healthConsent/erasure';
-import { recordHealthConsentReacceptance, recordHealthConsentWithdrawal } from '../server/healthConsent/withdrawal';
+import { readHealthConsentState, recordHealthConsentReacceptance, recordHealthConsentWithdrawal } from '../server/healthConsent/withdrawal';
 import { LEGAL_VERSIONS } from '../src/lib/legalVersions';
 
 const consentPath = (uid: string) => 'health_consent_withdrawals/' + uid;
@@ -137,6 +137,9 @@ describe('trusted data-only erasure worker', () => {
     await expect(recordHealthConsentReacceptance('a', acceptance, 3)).rejects.toThrow();
     const active = await recordHealthConsentReacceptance('a', acceptance, 4);
     expect(active.revision).toBe(5);
+    expect(await readHealthConsentState('a')).toMatchObject({
+      status: 'active', revision: 5, erasedBeforeRevision: 3,
+    });
     await recordHealthConsentWithdrawal('a', 5);
     fixture.records.set('users/a', { profile: { height: 165 } });
     await createHealthDataErasureJob('a');
