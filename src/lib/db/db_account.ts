@@ -162,6 +162,10 @@ class UnsyncedLogoutError extends Error {
  */
 export async function purgeCompletedHealthDataLocal(owner: string): Promise<void> {
     if (!owner.startsWith('user:')) throw new Error('Cancellazione dati: proprietario account richiesto.');
+    // Verify inside the infrastructure boundary, not just in the UI caller.
+    // A stale complete receipt must not purge data added in a later consent cycle.
+    const { assertCurrentHealthDataErasureCompleted } = await import('../healthDataErasure');
+    await assertCurrentHealthDataErasureCompleted(owner.slice('user:'.length));
     // If interrupted, preserve the existing purge fence and resume its cleanup.
     return purgeOwnerLocalData(owner, isLocalPurgeIncomplete(owner));
 }
