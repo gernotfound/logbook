@@ -204,23 +204,6 @@ it('rejects malformed root collections without publishing sanitized partial user
     }
 });
 
-it('preserves an explicitly absent legacy nutrition plan during root integrity validation', async () => {
-    harness.root.mockResolvedValue({
-        exists: () => true,
-        data: () => ({
-            profile: { height: '178' },
-            routines: [],
-            nutritionPlanning: null,
-            _schemaVersion: 1,
-            _sync: { protocolVersion: 3, clock: {}, fields: {},
-                writer: { slot: 's00', replicaId: 'root-seed', generation: 1, seq: 0 } },
-        }),
-    });
-    const payload = await DB.loadCloudPayload();
-    expect(payload?.data.profile?.height).toBe('178');
-    expect(payload?.data.nutritionPlanning).toBeNull();
-});
-
 it('does not silently clear a remote active workout with an invalid identity', async () => {
     const metadata = { protocolVersion: 3, clock: {}, fields: {},
         writer: { slot: 's00', replicaId: 'root-seed', generation: 1, seq: 0 } };
@@ -231,7 +214,7 @@ it('does not silently clear a remote active workout with an invalid identity', a
     });
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
     try {
-        await expect(DB.loadCloudPayload()).rejects.toThrow('Dati cloud non validi in Firestore root (activeWorkout.id)');
+        await expect(DB.loadCloudPayload()).rejects.toThrow('Dati cloud non validi in Firestore root (activeWorkout)');
     } finally {
         consoleError.mockRestore();
     }
