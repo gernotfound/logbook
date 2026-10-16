@@ -2,6 +2,7 @@ import { cert, getApps, initializeApp, type App } from 'firebase-admin/app';
 import { getAppCheck } from 'firebase-admin/app-check';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
+import { assertTestOidcEnvironment, createTestOidcCredential, TEST_FIREBASE_PROJECT_ID } from './testOidcCredential.js';
 
 function requiredEnv(name: string): string {
   const value = process.env[name];
@@ -10,13 +11,28 @@ function requiredEnv(name: string): string {
 }
 
 function getAdminApp(): App {
-  const existing = getApps()[0];
-  if (existing) return existing;
-
   const projectId = requiredEnv('FIREBASE_ADMIN_PROJECT_ID');
+  const mode = process.env.FIREBASE_ADMIN_AUTH_MODE;
+
+  // The test project MUST NOT fall back to the Production-style private key.
+  if (mode === 'vercel-oidc' || projectId === TEST_FIREBASE_PROJECT_ID) {
+    assertTestOidcEnvironment(process.env);
+  } else if (mode !== undefined && mode !== '') {
+    throw new Error('Unsupported Firebase Admin authentication mode.');
+  }
+
+  const existing = getApps()[0];
+  if (existing) {
+    if (existing.options.projectId !== projectId) throw new Error('Firebase Admin project mismatch.');
+    return existing;
+  }
+
+  if (mode === 'vercel-oidc') {
+    return initializeApp({ projectId, credential: createTestOidcCredential() });
+  }
+
   const clientEmail = requiredEnv('FIREBASE_ADMIN_CLIENT_EMAIL');
   const privateKey = requiredEnv('FIREBASE_ADMIN_PRIVATE_KEY').replace(/\\n/g, '\n');
-
   return initializeApp({
     projectId,
     credential: cert({ projectId, clientEmail, privateKey }),
