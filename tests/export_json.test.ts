@@ -188,20 +188,26 @@ describe('JSON Export/Import Logic', () => {
         expect(payload.owner).toBeNull();
     });
 
-    it('rejects oversized JSON before starting FileReader or modifying local data', async () => {
-        const file = new File(['{}'], 'huge.json', { type: 'application/json' });
+    it('streams a backup over 64 MiB without excluding a valid archive or committing another owner data', async () => {
+        const payload = JSON.stringify(createBackup({ history: [] } as any, 'user:other'));
+        const file = new File([payload], 'huge.json', { type: 'application/json' });
+        // Simulate the large archive without allocating 64 MiB in the test.
         Object.defineProperty(file, 'size', { value: MAX_JSON_IMPORT_BYTES + 1 });
+        const slices = vi.spyOn(file, 'slice').mockImplementation((start?: number) =>
+            new Blob([!start ? payload : ' '], { type: 'application/json' }));
         const save = vi.fn();
-        const read = vi.spyOn(FileReader.prototype, 'readAsText');
-        const alert = vi.spyOn(useDialogStore.getState(), 'showAlert').mockResolvedValue(undefined);
+        const readText = vi.spyOn(FileReader.prototype, 'readAsText');
+        const readChunk = vi.spyOn(FileReader.prototype, 'readAsArrayBuffer');
         try {
-            await expect(Exporter.importFromJson(file, null, save)).rejects.toThrow('64 MiB');
-            expect(read).not.toHaveBeenCalled();
+            await expect(Exporter.importFromJson(file, null, save)).rejects.toThrow('Non puoi importare il backup di un altro utente');
+            expect(slices).toHaveBeenCalled();
+            expect(readChunk).toHaveBeenCalled();
+            expect(readText).not.toHaveBeenCalled();
             expect(save).not.toHaveBeenCalled();
-            expect(alert).toHaveBeenCalledWith(expect.stringContaining('file originale resta intatto'));
         } finally {
-            read.mockRestore();
-            alert.mockRestore();
+            slices.mockRestore();
+            readText.mockRestore();
+            readChunk.mockRestore();
         }
     });
 
