@@ -61,7 +61,7 @@ describe('flexible training cycles', () => {
             ...cycle, routines: fourRoutines.map(routine => ({ routineId: routine.id, frequencyPerWeek: 1 })),
         };
         const completed = (routineId: string, date: string, id = routineId): WorkoutSession => ({
-            id, cycleId: fourCycle.id, routineId, date,
+            id, cycleId: fourCycle.id, routineId, date, exercises: [],
         });
         const weekOneAC = [
             completed('first', '2026-10-01'),
@@ -108,7 +108,7 @@ describe('flexible training cycles', () => {
         expect(getNextScheduledRoutine(fourCycle, fourRoutines, unsorted)?.nextRoutineId).toBe('fourth');
         expect(getNextScheduledRoutine(fourCycle, fourRoutines, [
             completed('first', '2026-10-10', 'legacy-first'),
-            { id: 'unrelated-cycle', routineId: 'fourth', cycleId: 'other', date: '2026-10-15' },
+            { id: 'unrelated-cycle', routineId: 'fourth', cycleId: 'other', date: '2026-10-15', exercises: [] },
         ])?.nextRoutineId).toBe('second');
     });
 

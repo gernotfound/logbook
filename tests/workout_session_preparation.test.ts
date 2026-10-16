@@ -66,7 +66,7 @@ describe('workout session preparation', () => {
         };
         const result = buildRoutineWorkout({}, supported, undefined, createRuntime());
         expect(result.exercises[0].sets).toHaveLength(20);
-        expect(result.exercises[0].setPlans).toHaveLength(20);
+        expect(result.exercises[0]).toHaveProperty('setPlans', supported.exercises[0].setPlans);
     });
 
     it('builds a routine workout with the same cycle and set semantics as the hook', () => {
