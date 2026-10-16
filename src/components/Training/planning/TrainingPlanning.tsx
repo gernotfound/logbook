@@ -280,13 +280,13 @@ export default function TrainingPlanning({ onOpenSession }: TrainingPlanningProp
                     ) : null}
 
                     <div className="planning-progress-copy">
-                        <span><strong>{activeCycleTimeline.statusLabel}</strong></span>
-                        <span>{activeCycleTimeline.progressPercent}% completato</span>
+                        <span><strong>{activeCycleTimeline.isEnded ? 'Periodo concluso' : activeCycleTimeline.statusLabel}</strong></span>
+                        <span>{activeCycleTimeline.progressPercent}% del periodo trascorso</span>
                     </div>
                     <div
                         className="planning-progress"
                         role="progressbar"
-                        aria-label="Avanzamento del ciclo"
+                        aria-label="Avanzamento del periodo del ciclo"
                         aria-valuenow={activeCycleTimeline.progressPercent}
                         aria-valuemin={0}
                         aria-valuemax={100}

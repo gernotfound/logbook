@@ -102,6 +102,16 @@ describe('flexible training cycles', () => {
         });
     });
 
+    it('labels timeline progress as elapsed time rather than completed training sessions', () => {
+        setup(1, { ...cycle, startDate: '2020-01-01' });
+        render(<TrainingPlanning />);
+        expect(screen.getByText('Periodo concluso')).toBeDefined();
+        expect(screen.getByText('100% del periodo trascorso')).toBeDefined();
+        expect(screen.getByRole('progressbar', { name: 'Avanzamento del periodo del ciclo' })).toBeDefined();
+        expect(screen.queryByText('100% completato')).toBeNull();
+        expect(screen.queryByText('Scheda suggerita nella rotazione')).toBeNull();
+    });
+
     it('skips deleted routines in suggestions without removing their stored cycle references', () => {
         const withMissing = {
             ...cycle, routines: [
