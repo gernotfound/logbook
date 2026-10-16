@@ -6,7 +6,7 @@
 
 ## Stato osservato e runbook isolato — 2026-10-17
 
-- GitHub `main` osservato allo SHA `d9496e94d443ea5591504ebfb0d60fad880531ca`; branch Test `testing/00-firebase-test-critical` tenuto distinto e PR #431 **draft, senza merge**. La sincronizzazione del branch con main e le nuove regressioni richiedono gate CI sul nuovo SHA prima dei prossimi deploy.
+- GitHub `main` osservato allo SHA `adc42ca034f6eec956580968080b610002afc73a`; branch Test `testing/00-firebase-test-critical` tenuto distinto e PR #431 **draft, senza merge**. La sincronizzazione del branch con main e le nuove regressioni richiedono gate CI sul nuovo SHA prima dei prossimi deploy.
 - Vercel Test: progetto **`prj_o232EaPmYkrn04zev3Sw9iL2ympj`**, deployment CLI manuale `dpl_B3chKa6BctS5NLJxKaXnhWPjsrZ6` dal commit Test `06b433387ba1f486f2b528a11da02550e4d19d41` allo stato **READY**. Smoke live: statico HTTP 200, preflight CORS dall'origin Test HTTP 204, origin Production rifiutato HTTP 403, endpoint account-deletion senza App Check HTTP 403, cron senza secret HTTP 503. Lo scambio reale Vercel OIDC → Google STS → IAM non è ancora stato dimostrato.
 - Vercel Authentication **attiva** sul progetto Test: le richieste autorizzate con `vercel curl` non dimostrano accessibilità dal browser PWA Test. Non pubblicare bypass token in un bundle frontend. La decisione tecnica di esposizione deve mantenere intatti Auth, App Check, CORS e limitazione degli endpoint.
 - Firebase CLI con sessione autorizzata ha individuato il progetto `thelogbook-test`, il sito Hosting `thelogbook-test` e la web app `1:1016481853013:web:1dbfcc122026dc757baedc`. Questo non certifica ancora Rules, OAuth, App Check o dati live.

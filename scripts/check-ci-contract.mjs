@@ -1,4 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs';
+import { checkProductionBuildSecrets } from './check-production-build-secrets.mjs';
 
 const workflowPath = '.github/workflows/verification.yml';
 const failures = [];
@@ -9,6 +10,9 @@ if (!existsSync(workflowPath)) {
 }
 
 const workflow = readFileSync(workflowPath, 'utf8');
+const hostingWorkflow = readFileSync('.github/workflows/firebase-hosting-production.yml', 'utf8');
+const firestoreWorkflow = readFileSync('.github/workflows/firebase-firestore-production.yml', 'utf8');
+failures.push(...checkProductionBuildSecrets(hostingWorkflow, firestoreWorkflow));
 const packageJson = JSON.parse(readFileSync('package.json', 'utf8'));
 const packageLock = JSON.parse(readFileSync('package-lock.json', 'utf8'));
 const lockedPlaywrightVersion = packageLock.packages?.['node_modules/@playwright/test']?.version;
@@ -120,6 +124,8 @@ if (checkoutCredentialGuards.length !== 3) failures.push(`checkout credential pe
 requirePattern('Node setup action pin', workflow, /^        uses: actions\/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7\s*$/m);
 requirePattern('Node 24 runtime', workflow, /^          node-version: ['"]?24['"]?\s*$/m);
 requirePattern('npm cache', workflow, /^          cache: npm\s*$/m);
+const preinstallReviews = workflow.match(/^      - name: Reject unreviewed dependency install scripts\n        run: node scripts\/check-install-scripts\.mjs$/gm) ?? [];
+if (preinstallReviews.length !== 2) failures.push('Missing pre-install lifecycle review in one or more CI jobs');
 const dependencyInstalls = workflow.match(/^        run: npm ci\s*$/gm) ?? [];
 if (dependencyInstalls.length !== 2) failures.push(`dependency install: expected matrix + E2E npm ci steps, found ${dependencyInstalls.length}`);
 requirePattern('failure artifact action pin', workflow, /^        uses: actions\/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7\s*$/m);
@@ -155,6 +161,7 @@ requirePattern('CodeQL analyze action pin', workflow, /^        uses: github\/co
 
 const allowedIfLines = new Set([
   'if: matrix.java == true',
+  "if: matrix.id == 'core'",
   'if: failure()',
   'if: ${{ always() }}',
 ]);
@@ -162,6 +169,11 @@ for (const line of workflow.match(/^\s+if:\s*.+$/gm) ?? []) {
   const normalized = line.trim();
   if (!allowedIfLines.has(normalized)) failures.push(`unexpected conditional gate: ${normalized}`);
 }
+
+const coreOnlyConditions = workflow.match(/^        if: matrix\.id == 'core'\s*$/gm) ?? [];
+if (coreOnlyConditions.length !== 2) failures.push('SBOM: exactly two core-only conditions required');
+requirePattern('core-only CycloneDX generation', workflow, /^      - name: Generate CycloneDX dependency SBOM\n        if: matrix\.id == 'core'\n        shell: bash\n        run: npm sbom --sbom-format cyclonedx --sbom-type application > sbom\.cdx\.json\s*$/m);
+requirePattern('core-only SBOM upload action pin', workflow, /^      - name: Upload dependency SBOM\n        if: matrix\.id == 'core'\n        uses: actions\/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7\s*$/m);
 
 const includeMatch = workflow.match(/^        include:\s*\n([\s\S]*?)(?=^    env:)/m);
 if (!includeMatch) {
