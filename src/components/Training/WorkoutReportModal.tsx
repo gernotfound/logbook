@@ -2,11 +2,11 @@ import { dispatchDurableOperation } from '../../lib/sync/dispatchDurableOperatio
 import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { X, Trophy, Activity, Clock, Layers } from 'lucide-react';
 import { computeWorkoutReport } from '../../lib/calc/workoutReport';
+import { routineFromWorkout } from '../../lib/calc/routineFromWorkout';
 import { formatProgressionReference, progressionQualityLabel, progressionTrendLabel } from '../../lib/calc/progression';
 import { getCycleStrategyLabel } from '../../lib/trainingCycleStrategy';
-import { canRepresentSetAsRoutinePlan, getContinuationTechnique, getRoutineSetPlan, getSetSegments } from '../../lib/advancedSets';
 import { Logic } from '../../lib/logic';
-import type { WorkoutSession, Exercise, RoutineExercise, WorkoutRoutine } from '../../types';
+import type { WorkoutSession, Exercise } from '../../types';
 import { useAppStore } from '../../store/useAppStore';
 import { useDialogStore } from '../../store/useDialogStore';
 import { mapFirebaseErrorCode } from '../../lib/errorHandler';
@@ -92,48 +92,8 @@ const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, histor
         try {
             const newRoutineId = Logic.generateId('r');
             
-            const routineExercises: RoutineExercise[] = workout.exercises.map(ex => {
-                let minReps = Infinity;
-                let maxReps = -Infinity;
-                let validSetsCount = 0;
-                
-                ex.sets.forEach(set => {
-                    const reps = parseInt(set.reps, 10);
-                    if (!isNaN(reps)) {
-                        if (reps < minReps) minReps = reps;
-                        if (reps > maxReps) maxReps = reps;
-                    }
-                    validSetsCount++;
-                });
-                
-                const finalMinReps = minReps !== Infinity ? minReps : undefined;
-                const finalMaxReps = maxReps !== -Infinity ? maxReps : undefined;
-                
-                const hasOnlyIsometry = ex.sets.length > 0 && ex.sets.every(set => {
-                    const segments = getSetSegments(set);
-                    return segments.length > 0 && segments.every(segment => getContinuationTechnique(set, segment) === 'isometry');
-                });
-                const hasMixedTechniqueChain = ex.sets.some(s => !canRepresentSetAsRoutinePlan(s));
-                const setPlans = hasOnlyIsometry || hasMixedTechniqueChain ? undefined : ex.sets.map(getRoutineSetPlan);
-                
-                const result: RoutineExercise = {
-                    exId: ex.exId,
-                    setsCount: Math.max(1, validSetsCount)
-                };
-                if (finalMinReps !== undefined) result.minReps = finalMinReps;
-                if (finalMaxReps !== undefined) result.maxReps = finalMaxReps;
-                if (hasOnlyIsometry) result.defaultTechnique = 'isometrics';
-                else if (setPlans?.some(plan => plan.technique !== 'straight')) result.setPlans = setPlans;
-                
-                return result;
-            });
+            const newRoutine = routineFromWorkout(workout, newRoutineId, newRoutineName.trim());
 
-            const newRoutine: WorkoutRoutine = {
-                id: newRoutineId,
-                name: newRoutineName.trim(),
-                exercises: routineExercises
-            };
-            
             await dispatchDurableOperation(dispatchDomainOperation, { type: 'routine.upsert', routine: newRoutine });
             
             setIsSavingAsRoutine(false);
