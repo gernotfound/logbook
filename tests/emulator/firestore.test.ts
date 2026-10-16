@@ -401,9 +401,11 @@ it('rejects unknown causal clock actors on fenced root and monthly writes withou
 
 it('permits public catalog reads but denies client writes', async () => {
     for (const db of [asModularFirestore(env.unauthenticatedContext().firestore()), asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore())]) {
-        const ref = doc(db, 'global_catalog/manifest');
-        await assertSucceeds(getDoc(ref));
-        await assertFails(setDoc(ref, { version: 'tampered' }));
+        for (const path of ['global_catalog/manifest', 'global_catalog/versioned/items/private']) {
+            const ref = doc(db, path);
+            await assertSucceeds(getDoc(ref));
+            await assertFails(setDoc(ref, { version: 'tampered' }));
+        }
     }
 });
 

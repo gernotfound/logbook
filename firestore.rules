@@ -166,6 +166,34 @@ service cloud.firestore {
       return '_sync' in docData && hasProtocol3Writer(userId, docData);
     }
 
+    // Checkpoints affect terminal-tombstone GC; their coordinates must be valid
+    // Protocol 3 actor sequences, not arbitrary client-defined map entries.
+    function isValidCheckpointCoordinate(clock, slot) {
+      let seq = clock.get(slot, 0);
+      return seq is int && seq >= 0 && seq <= 9007199254740991;
+    }
+
+    function isValidCheckpointClock(clock) {
+      return clock is map
+        && clock.keys().hasOnly(['s00', 's01', 's02', 's03', 's04', 's05', 's06', 's07', 's08', 's09', 's10', 's11', 's12', 's13', 's14', 's15'])
+        && isValidCheckpointCoordinate(clock, 's00')
+        && isValidCheckpointCoordinate(clock, 's01')
+        && isValidCheckpointCoordinate(clock, 's02')
+        && isValidCheckpointCoordinate(clock, 's03')
+        && isValidCheckpointCoordinate(clock, 's04')
+        && isValidCheckpointCoordinate(clock, 's05')
+        && isValidCheckpointCoordinate(clock, 's06')
+        && isValidCheckpointCoordinate(clock, 's07')
+        && isValidCheckpointCoordinate(clock, 's08')
+        && isValidCheckpointCoordinate(clock, 's09')
+        && isValidCheckpointCoordinate(clock, 's10')
+        && isValidCheckpointCoordinate(clock, 's11')
+        && isValidCheckpointCoordinate(clock, 's12')
+        && isValidCheckpointCoordinate(clock, 's13')
+        && isValidCheckpointCoordinate(clock, 's14')
+        && isValidCheckpointCoordinate(clock, 's15');
+    }
+
     function isValidReplicaEntry(entry) {
       return entry is map
         && entry.keys().hasOnly([
@@ -189,8 +217,7 @@ service cloud.firestore {
         && entry.leaseUntilMs >= 1
         && entry.checkpointAtMs is int
         && entry.checkpointAtMs >= 1
-        && entry.checkpointClock is map
-        && entry.checkpointClock.size() <= 128;
+        && isValidCheckpointClock(entry.checkpointClock);
     }
 
     function isFreshReplicaLease(entry) {
@@ -248,6 +275,19 @@ service cloud.firestore {
         && newData.replicas.diff(oldData.replicas).affectedKeys().hasOnly([slot])
         && (
           (
+            existed
+            && newData.mutation.action == 'reuse-expired'
+            && (
+              oldData.replicas[slot].status == 'retired'
+              || oldData.replicas[slot].leaseUntilMs < request.time.toMillis()
+            )
+            && next.status == 'active'
+            && next.replicaId != oldData.replicas[slot].replicaId
+            && next.generation == oldData.replicas[slot].generation + 1
+            && next.lastSeq >= oldData.replicas[slot].lastSeq
+            && isFreshReplicaLease(next)
+          )
+          || (
             newData.mutation.action == 'register'
             && !existed
             && next.generation == 1
@@ -279,19 +319,6 @@ service cloud.firestore {
             && oldData.replicas[slot].leaseUntilMs < request.time.toMillis()
             && next.diff(oldData.replicas[slot]).affectedKeys().hasOnly(['status'])
             && next.status == 'retired'
-          )
-          || (
-            existed
-            && newData.mutation.action == 'reuse-expired'
-            && (
-              oldData.replicas[slot].status == 'retired'
-              || oldData.replicas[slot].leaseUntilMs < request.time.toMillis()
-            )
-            && next.status == 'active'
-            && next.replicaId != oldData.replicas[slot].replicaId
-            && next.generation == oldData.replicas[slot].generation + 1
-            && next.lastSeq >= oldData.replicas[slot].lastSeq
-            && isFreshReplicaLease(next)
           )
         );
     }
