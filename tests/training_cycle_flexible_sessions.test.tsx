@@ -4,6 +4,7 @@ import { TrainingSessionSetup } from '../src/components/Training/TrainingSession
 import TrainingPlanning from '../src/components/Training/planning/TrainingPlanning';
 import { useWorkoutSession } from '../src/hooks/useWorkoutSession';
 import { useAppStore } from '../src/store/useAppStore';
+import { getNextScheduledRoutine } from '../src/lib/calc/planning';
 import type { TrainingCycle, UserData, WorkoutRoutine, WorkoutSession } from '../src/types';
 
 vi.mock('../src/hooks/useWorkoutSession', () => ({ useWorkoutSession: vi.fn() }));
@@ -73,6 +74,62 @@ describe('flexible training cycles', () => {
             cycleId: cycle.id, cycleName: cycle.name,
         });
         expect(screen.getByRole('button', { name: 'Allenamento libero' })).toBeDefined();
+    });
+
+    it('ends automatic suggestions when the calendar period ends, even after only one optional session', () => {
+        setup(1, { ...cycle, startDate: '2020-01-01' });
+        render(<TrainingSessionSetup />);
+        expect(screen.getByText('Periodo del ciclo concluso')).toBeDefined();
+        expect(screen.queryByText('Scheda suggerita · Rotazione flessibile')).toBeNull();
+        expect(screen.queryByText(/Seduta 2 di 8/)).toBeNull();
+        fireEvent.change(screen.getByRole('combobox', { name: 'Seleziona scheda del ciclo' }), {
+            target: { value: 'second' },
+        });
+        fireEvent.click(screen.getByRole('button', { name: 'Avvia Scheda B' }));
+        expect(startWorkout).toHaveBeenCalledWith('second', {
+            cycleId: cycle.id, cycleName: cycle.name,
+        });
+    });
+
+    it('skips deleted routines in suggestions without removing their stored cycle references', () => {
+        const withMissing = {
+            ...cycle, routines: [
+                { routineId: 'deleted', frequencyPerWeek: 1 },
+                { routineId: 'first', frequencyPerWeek: 1 },
+                { routineId: 'second', frequencyPerWeek: 1 },
+            ],
+        };
+        const first = getNextScheduledRoutine(withMissing, routines, []);
+        expect(first?.nextRoutineId).toBe('first');
+        expect(first?.totalSessions).toBe(8);
+        expect(first?.totalRoutinesInCycle).toBe(2);
+        const afterFirst = getNextScheduledRoutine(withMissing, routines, [
+            { id: 'w1', cycleId: withMissing.id } as WorkoutSession,
+        ]);
+        expect(afterFirst?.nextRoutineId).toBe('second');
+        expect(withMissing.routines[0]?.routineId).toBe('deleted');
+
+        setup(0, withMissing);
+        render(<TrainingSessionSetup />);
+        expect(screen.getByRole('heading', { name: 'Scheda A' })).toBeDefined();
+        expect(screen.getByRole('button', { name: /Avvia Scheda A/ })).toBeDefined();
+    });
+
+    it('reports the absence of any usable cycle routine while preserving archive access', () => {
+        setup(0, { ...cycle, routines: [{ routineId: 'deleted', frequencyPerWeek: 1 }] });
+        render(<TrainingSessionSetup />);
+        expect(screen.getByText(/non contiene schede disponibili/)).toBeDefined();
+        expect(screen.getByRole('button', { name: 'Scheda A 0 esercizi' })).toBeDefined();
+    });
+
+    it('marks deleted cycle routines as unavailable in planning without erasing the saved cycle', () => {
+        setup(0, { ...cycle, routines: [
+            { routineId: 'deleted', frequencyPerWeek: 1 }, { routineId: 'first', frequencyPerWeek: 1 },
+        ] });
+        render(<TrainingPlanning />);
+        expect(screen.getByText(/scheda del ciclo non è più disponibile/)).toBeDefined();
+        expect(screen.getByText('Scheda non disponibile')).toBeDefined();
+        expect(useAppStore.getState().userData?.trainingCycles?.[0]?.routines[0]?.routineId).toBe('deleted');
     });
 
     it('does not display Infinity or misleading zero as the planned total for invalid historical cycles', () => {

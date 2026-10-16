@@ -74,6 +74,20 @@ describe('training planning residual regressions', () => {
         expect(screen.getByText('Settimana 1')).toBeDefined();
     });
 
+    it('labels legacy invalid cycle cards without displaying raw Infinity or fabricated frequencies', () => {
+        render(<CycleCard
+            cycle={{ ...cycle, durationWeeks: Number.POSITIVE_INFINITY, sessionsPerWeek: Number.POSITIVE_INFINITY }}
+            isActive={false} routines={routines}
+            onSetActive={vi.fn()} onDeactivate={vi.fn()} onEdit={vi.fn()}
+            onDuplicate={vi.fn()} onDelete={vi.fn()}
+        />);
+        expect(screen.queryByText(/Infinity/)).toBeNull();
+        expect(screen.getByText(/— settimane · — sedute/)).toBeDefined();
+        fireEvent.click(screen.getByRole('button', { name: /Ciclo storico/ }));
+        expect(screen.getByText('Parametri del ciclo da correggere.')).toBeDefined();
+        expect(screen.getByRole('button', { name: /Rotazione flessibile, parametri da correggere/ })).toBeDefined();
+    });
+
     it('surfaces a persistent clock anomaly only once across timer ticks and resume', () => {
         vi.useFakeTimers();
         const errorSpy = vi.spyOn(useAppStore.getState(), 'setSaveError');
