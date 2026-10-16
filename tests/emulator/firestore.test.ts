@@ -420,6 +420,38 @@ it('rejects unknown causal clock actors on fenced root and monthly writes withou
     }
 });
 
+it('rejects unsafe Protocol 3 clock coordinates in otherwise fenced business writes', async () => {
+    const db = asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore());
+    const replica = await registerReplica(db, 'a');
+    const controlRef = doc(db, 'users/a/sync_control/state');
+    const invalidCoordinates = [-1, '1', 9007199254740992];
+    for (const invalid of invalidCoordinates) {
+        const control = (await getDoc(controlRef)).data()!;
+        const entry = control.replicas[replica.slot];
+        const seq = entry.lastSeq + 1;
+        const batch = writeBatch(db);
+        batch.set(controlRef, {
+            ...control,
+            replicas: { ...control.replicas, [replica.slot]: { ...entry, lastSeq: seq } },
+            mutation: { slot: replica.slot, action: 'advance' },
+        });
+        batch.set(doc(db, 'users/a'), {
+            profile: { height: '175' },
+            _schemaVersion: 1,
+            _sync: {
+                protocolVersion: CURRENT_SYNC_PROTOCOL,
+                clock: { [replica.slot]: invalid },
+                fields: {},
+                writer: { slot: replica.slot, replicaId: replica.replicaId,
+                    generation: replica.generation, seq, consentRevision: 1 },
+            },
+        });
+        await assertFails(batch.commit());
+        expect((await getDoc(doc(db, 'users/a'))).exists()).toBe(false);
+    }
+    await assertSucceeds(fencedWrite(db, 'users/a', { profile: { height: '175' } }, replica));
+});
+
 it('permits public catalog reads but denies client writes', async () => {
     for (const db of [asModularFirestore(env.unauthenticatedContext().firestore()), asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore())]) {
         for (const path of ['global_catalog/manifest', 'global_catalog/versioned/items/private']) {
