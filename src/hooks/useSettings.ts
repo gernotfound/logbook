@@ -303,7 +303,7 @@ export function useSettings() {
                 throw new Error('Per cancellare i dati cloud devi essere connesso a Internet.');
             }
             if (!(await showConfirm(
-                'Verranno eliminati definitivamente dal cloud e da questo dispositivo allenamenti, nutrizione, misurazioni, schede, bozze e copie di recupero.\\n\\nIl tuo account Firebase (email e accesso) resterà esistente, ma verrai disconnesso. Dispositivi offline e backup JSON già scaricati possono ancora conservare copie: non possono essere cancellati da TheLogBook a distanza.\\n\\nEsporta prima un backup solo se desideri conservare una copia dei dati. Vuoi procedere?'
+                'Verranno rimossi dal database operativo TheLogBook e da questo dispositivo allenamenti, nutrizione, misurazioni, schede, bozze e copie di recupero locali.\\n\\nIl tuo account Firebase (email e accesso) resterà esistente, ma verrai disconnesso. Dispositivi offline, backup JSON già scaricati e possibili copie tecniche del fornitore possono conservare dati soggetti a tempi di conservazione separati.\\n\\nEsporta prima un backup solo se desideri conservare una copia dei dati. Vuoi procedere?'
             ))) return;
             assertCurrent();
             if (!(await showConfirm(
@@ -350,7 +350,7 @@ export function useSettings() {
             DB.resetCache();
             useAppStore.getState().resetStore({ force: true });
             await signOut(auth);
-            await showAlert('Dati cloud e dati di questo dispositivo eliminati. Il tuo account non è stato cancellato: puoi accedere di nuovo. Eventuali dispositivi rimasti offline potrebbero conservare copie precedenti.', 'Cancellazione completata');
+            await showAlert('Dati del database operativo e di questo dispositivo eliminati. Il tuo account non è stato cancellato: puoi accedere di nuovo. Copie su dispositivi offline, backup già esportati e backup tecnici del fornitore non sono eliminabili da questo comando.', 'Cancellazione completata');
         } catch (error) {
             if (isSensitiveReauthCancellation(error)) return;
             await showAlert(
