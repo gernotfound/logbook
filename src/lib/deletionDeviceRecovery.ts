@@ -43,6 +43,33 @@ function readAll():Credential[]{
 }
 function writeAll(v:Credential[]){if(v.length===0)removeBrowserValue(KEY);else writeBrowserJson(KEY,v);}
 export function removeDeletionRecoveryCredential(uid:string):void{writeAll(readAll().filter(x=>x.uid!==uid));}
+
+// Serialize new proofs across concurrent account bootstraps, including other
+// tabs where Web Locks are supported. The lock is released before HTTP work.
+let pendingCredentialWrite:Promise<void>=Promise.resolve();
+function getOrCreateCredential(uid:string):Promise<Credential>{
+ const create=async():Promise<Credential>=>{
+   const action=()=>{
+     if(auth.currentUser?.uid!==uid)throw new DeletionDeviceOperationError('device-registration','auth-token','stale-session');
+     const all=readAll();
+     const existing=all.find(x=>x.uid===uid);
+     if(existing)return existing;
+     if(all.length>=MAX_DEVICES)throw new DeletionRecoveryCredentialCapacityError();
+     const credential={uid,token:randomToken()};
+     writeAll([...all,credential]);
+     // A lost write must never be treated as a registered recovery proof.
+     if(readAll().find(x=>x.uid===uid)?.token!==credential.token)throw new DeletionRecoveryCredentialCorruptError();
+     return credential;
+   };
+   if(typeof navigator.locks?.request==='function'){
+     return navigator.locks.request(KEY+':write',{mode:'exclusive'},action);
+   }
+   return action();
+ };
+ const result=pendingCredentialWrite.then(create,create);
+ pendingCredentialWrite=result.then(()=>undefined,()=>undefined);
+ return result;
+}
 async function appToken(signal:AbortSignal){
  await ensureAppCheck();
  assertDeletionDeadlineActive(signal);
@@ -56,12 +83,7 @@ async function appToken(signal:AbortSignal){
 export async function registerDeletionRecoveryDevice(user:User):Promise<void>{
  if(!API)throw new DeletionDeviceOperationError('device-registration','http','unknown');
  if(!navigator.onLine)throw new DeletionDeviceOperationError('device-registration','http','transport');
- const all=readAll();let cred=all.find(x=>x.uid===user.uid);
- if(!cred){
-    // Replacing an older account's proof would silently destroy its recovery path.
-    if(all.length>=MAX_DEVICES)throw new DeletionRecoveryCredentialCapacityError();
-    cred={uid:user.uid,token:randomToken()};writeAll([...all,cred]);
-  }
+ const cred=await getOrCreateCredential(user.uid);
  let phase:RecoveryPhase='auth-token';
  try{
    await withDeletionDeadline(async signal=>{
