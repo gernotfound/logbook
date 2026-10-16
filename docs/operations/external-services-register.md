@@ -168,6 +168,28 @@ Le configurazioni server-only che appartengono al runtime Vercel sono:
 
 `PUBLIC_APP_LEGACY_ORIGIN` è ritirata dal contratto applicativo post-cutover e non deve essere reintrodotta.
 
+### Inventario env del progetto Vercel — 2026-10-16 (G-21, sola lettura)
+
+Ricognizione diretta dei **soli nomi, target e tipi** delle env del progetto Vercel `logbook` (18 voci); valori e segreti non consultati. Fonte applicativa: `api/`, `server/`, `server/accountDeletion/cors.ts`, `scripts/prepare-vercel-backend-static.mjs`, `vercel.json`, `vite.config.ts` e `.github/workflows/firebase-hosting-production.yml`. L'assenza di riferimenti nel backend è stata confrontata anche con la ricerca del repository. Questa sezione **non attesta rimozioni live**.
+
+| Decisione per Vercel | Variabili attualmente configurate | Motivazione |
+| --- | --- | --- |
+| **MANTENERE — 5** | `FIREBASE_ADMIN_PROJECT_ID`, `FIREBASE_ADMIN_CLIENT_EMAIL`, `FIREBASE_ADMIN_PRIVATE_KEY`, `CRON_SECRET`, `PUBLIC_APP_ORIGIN` | Credenziali Admin, autenticazione cron e allowlist dell'origin canonico; necessarie a consenso, account deletion e recovery |
+| **CANDIDATE ALLA RIMOZIONE — 4, legacy** | `PUBLIC_APP_LEGACY_ORIGIN`, `VITE_FIREBASE_DATABASE_URL`, `VITE_FIREBASE_STORAGE_BUCKET`, `VITE_FIREBASE_MESSAGING_SENDER_ID` | Nessun uso eseguibile nel backend attuale; l'origin legacy è ritirato e Realtime Database/Storage/Messaging non sono parte del runtime client |
+| **CANDIDATE ALLA RIMOZIONE SOLO DA VERCEL — 9** | `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_APP_ID`, `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY`, `VITE_SENTRY_DSN`, `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT` | Servono al frontend Firebase Hosting o alle source map caricate dal relativo workflow GitHub Actions, non alla build backend-only Vercel |
+
+Le quattro variabili Firebase Web core sono presenti su Vercel per Production **e** Preview; le altre nove candidate sono configurate per Production. I quattro valori Firebase Web core, la site key Enterprise, il DSN Sentry e le tre impostazioni Sentry per le source map **non devono essere eliminati dal loro ambiente GitHub Actions/Firebase Hosting**: eliminare le copie Vercel non equivale a dismettere queste funzioni. `VITE_ACCOUNT_DELETION_API_ORIGIN` è presente nel contratto del frontend GitHub ma **non** nell'inventario Vercel.
+
+**Procedura necessaria prima di un'eventuale rimozione live, separata da questa PR:**
+
+1. Ricontrollare inventario e `main` correnti, output e build command effettivi del deployment Vercel Production e disponibilità delle configurazioni del workflow Firebase Hosting; non basarsi soltanto sui file o su vecchie build. Confermare che non sia in corso una migrazione/rollback che richieda una ricostruzione storica del frontend su Vercel.
+2. Preservare un meccanismo di ripristino **fuori dal repository** per eventuali valori critici senza stamparli nei log o nei report; l'eliminazione delle env dal provider non viene annullata da un revert Git e potrebbe influire sui prossimi deploy.
+3. Solo con autorizzazione esplicita per le impostazioni live, rimuovere da Vercel prima le 4 env legacy, quindi le 9 copie frontend, rispettandone gli scope Production/Preview. **Non** toccare le 5 env runtime backend, le repository variables/secrets di GitHub, il provider Firebase o l'autenticazione App Check.
+4. Dopo la modifica e al successivo deploy backend legittimo da `main`, controllare gli endpoint consenso, sessioni, cancellazione/recovery e cron con richieste sicure, oltre a redirect HTTP 301 e Service Worker di ritiro. Verificare separatamente il successivo workflow Firebase Hosting e Sentry source map; la sola CI verde non prova questo comportamento live.
+
+**Stato dell'inventario:** prima di seguire questa procedura, verificare lo stato attuale del provider. La cancellazione live delle env non è rappresentabile da un commit Git.
+
+
 ## Firebase Hosting build configuration
 
 La configurazione pubblica del frontend Production viene fornita al workflow GitHub Actions che costruisce e distribuisce Firebase Hosting, non al runtime Vercel:
@@ -232,6 +254,8 @@ Snyk è un controllo security **supplementare**, non la fonte canonica della dec
 Il repository contiene `.snyk`, che esclude test/test files dalla relativa analisi. Non esiste un workflow Snyk nel repository corrente: l'eventuale check deriva dall'integrazione esterna.
 
 Limiti quota o indisponibilità Snyk non devono eliminare la copertura SAST bloccante, che resta affidata a CodeQL nel `Canonical Verification`.
+
+**Snyk GitHub PR checks (2026-10-15):** il product owner ha disattivato nell'interfaccia Snyk `Pull request status checks → Code analysis` a seguito di `code/snyk` in errore `Code test limit reached` (quota Snyk Code), mantenendo abilitato `Open Source security and licenses`. Sulla nuova PR #420 il primo controllo GitHub dello SHA `99e000152b7cf06b16ff2e5dfd3f358044020ad5` mostrava soltanto `security/snyk (gernotfound)` in esecuzione, senza un nuovo `code/snyk`; assenza osservata al momento della lettura, non attestazione perpetua della configurazione live. Il controllo bloccante CodeQL dentro `Canonical Verification` non cambia.
 
 ## Google Search Console e indicizzazione
 

@@ -1,6 +1,6 @@
 # TheLogBook — istruzioni operative per agenti AI
 
-Ultimo aggiornamento: 2026-10-13 | App: 1.1.0 | Progetto: PWA fitness tracking (allenamento, nutrizione, misurazioni corporee).
+Ambito: soltanto la PWA TheLogBook (`gernotfound/logbook`). Questo file è la mappa dei vincoli trasversali, non una fotografia completa del runtime. Le specifiche sono in `.agents/rules/`, le versioni effettive nei manifest eseguibili.
 
 ## Convenzioni
 
@@ -11,6 +11,8 @@ Ogni regola in questo documento è classificata:
 - **VERIFY:** controllare codice, test o dashboard prima di assumere che sia vero.
 - **NOTE:** contesto storico o informativo, non istruzione esecutiva.
 
+Un `MUST` è un contratto da rispettare, non prova che codice o Production lo soddisfino già. Se codice, test e documentazione divergono, raccogliere evidenze prima di decidere quale fonte riallineare.
+
 ## Fonte di verità e gestione del drift
 
 1. Il repository GitHub `gernotfound/logbook`, al commit realmente letto, è la fonte di verità tecnica.
@@ -20,6 +22,23 @@ Ogni regola in questo documento è classificata:
 5. Una regola documentale obsoleta non deve bloccare un upgrade tecnicamente corretto: va aggiornata o rimossa con evidenza e regressioni adeguate.
 6. **MUST:** quando un refactor rimuove o rinomina funzioni/contratti o cambia i gate di CI, cercare i riferimenti normativi collegati in `AGENTS.md`, `.agents/rules/` e nella documentazione operativa; riallinearli nello stesso task. Descrivere prioritariamente gli invarianti, senza citare come esistenti helper rimossi o classificare advisory verifiche realmente bloccanti.
 7. **MUST:** non dichiarare mai letto, testato, deployato o verificato ciò che non è stato realmente osservato.
+8. **MUST:** distinguere contratti vigenti, motivazioni storiche e osservazioni live. Date e SHA di baseline non dimostrano l'assenza attuale di dati/utenti o la configurazione corrente dei provider.
+9. **MUST:** `.agents/rules/*.md` contiene documenti **da aprire esplicitamente** secondo il task: non presumere che ogni agente o connettore li carichi automaticamente. Leggere regole, implementazione, chiamanti, test e configurazioni sullo SHA corrente.
+
+## Quali documenti leggere
+
+- **Ogni task:** questo file, HEAD GitHub di `main`, regole pertinenti e codice/test coinvolti.
+- **Archivio locale, journal, replica e workout:** `.agents/rules/storage-and-sync.md`; integrare `.agents/rules/crash-consistency.md`, `.agents/rules/causal-gc.md`, `.agents/rules/domain-operations.md` dove pertinenti.
+- **Modello dati, proiezioni, nuove mutazioni:** `.agents/rules/data-model-and-zod.md`, `.agents/rules/domain-operations.md`.
+- **Backup, import/export, guest, consenso, Auth, logout, cancellazione:** `.agents/rules/account-lifecycle.md`; integrare `.agents/rules/storage-and-sync.md` e `.agents/rules/firebase-config.md`.
+- **Firestore Rules, App Check e servizi/deploy:** `.agents/rules/firebase-config.md`, `.agents/rules/external-services.md`, `.agents/rules/ci-verification.md`.
+- **UI, temi, PWA, Service Worker, accessibilità:** `.agents/rules/design-system.md`; per update/reload anche `.agents/rules/storage-and-sync.md`, `.agents/rules/account-lifecycle.md`.
+- **Catalogo e seeding:** `.agents/rules/catalog-operations.md`; per custom item `.agents/rules/data-model-and-zod.md`.
+- **CI, oracle, fuzz:** `.agents/rules/ci-verification.md`, `.agents/rules/verification-hardening.md`, `.agents/rules/distributed-fuzz.md` secondo il cambiamento.
+
+Se la modifica attraversa più boundary, leggere **l'unione** dei contratti pertinenti. L'indice non è un'allowlist di file da ignorare.
+
+Per specifiche, guide operative, compliance e storico consultare l'[indice `docs/`](docs/README.md), che distingue stato e ambito. **Non** leggere automaticamente tutti i documenti né considerare proposte o checklist storiche come contratti attivi.
 
 ## Classificazione del rischio
 
@@ -30,6 +49,8 @@ Sono **CRITICAL** almeno: dati utente, IndexedDB/persistenza, sincronizzazione, 
 - **MUST:** maggiore è il rischio, maggiore è la profondità di ricerca, test e review.
 - **MUST:** risolvere la root cause, non applicare workaround locali che lasciano invarianti incoerenti.
 - **MUST:** mantenere il diff minimo rispetto all'obiettivo e aggiungere test di regressione quando appropriato.
+- **MUST:** analisi in sola lettura = nessuna modifica. Un incarico operativo non autorizza cancellazioni irreversibili di dati reali, bypass di protezioni o modifiche IAM/secret live estranee.
+- **MUST:** una motivazione storica pre-lancio non dimostra assenza attuale di account, dati, backup o vecchie PWA installate.
 
 ## Diagnosi e audit
 
@@ -42,24 +63,19 @@ Quando il product owner autorizza a procedere, risolvere o completare un task, l
 
 Non richiedere una nuova approvazione per scelte di implementazione, test falliti, CI rossa, conflitti tecnici o correzioni necessarie lungo quel ciclo. Fermarsi solo se serve una vera decisione di prodotto/UX non deducibile, un'azione distruttiva/irreversibile sui dati utente non già autorizzata, oppure mancano permessi/strumenti indispensabili.
 
+**MUST:** la delega tecnica non supera restrizioni esplicite sui connettori o autorizzazioni specifiche della chat. Non usare strumenti disabilitati per default senza consenso operativo esplicito e non aggirare un rifiuto di sicurezza cambiando canale.
+
 Per task strutturali o CRITICAL preparare un piano di lavoro prima delle modifiche. Il piano può vivere nel reasoning, nella descrizione PR o temporaneamente nel branch; non richiede una seconda autorizzazione dopo un mandato generale a procedere. Eventuali `implementation_plan*.md` task-specific sono artefatti temporanei e **MUST** essere rimossi prima del candidato finale, in accordo con `.agents/rules/ci-verification.md`.
 
 ## Stack e runtime correnti
 
-- **Framework:** React 19 + Vite 8 + TypeScript 7.
-- **Nome pubblico/PWA:** **TheLogBook**. I namespace tecnici/persistiti storici (`logbook:*`, package/repository e chiavi storage) restano invariati salvo migrazione esplicita: un rebranding non deve rinominare chiavi persistite.
-- **Runtime CI/Vercel:** Node.js 24.x.
-- **Hosting frontend/PWA:** Firebase Hosting, site `thelogbook`, frontend Vite/PWA alla radice `/`; il progetto Firebase resta sul piano Spark.
-- **Boundary server trusted:** Vercel Hobby resta backend-only con Functions native in `/api/` per Server Account Deletion e cron giornaliero; Firebase Admin è server-only.
-- **State management:** Zustand 5 (`src/store/useAppStore.ts`).
-- **Validazione runtime:** Zod 4 (`src/lib/schema.ts`, `src/lib/schemas/*.ts`).
-- **Persistenza:** IndexedDB (`idb-keyval`), `localStorage` sincrono e Firestore cloud.
-- **Backend client:** Firebase Modular SDK (`firestore`, `auth`, `app-check`). La versione effettiva è definita in `package.json` e `package-lock.json`.
-- **Styling:** CSS nativo modulare aggregato da `src/styles/global.css`, con token semantici in `src/styles/tokens.css`; **MUST:** niente Tailwind.
-- **Icone UI:** `lucide-react`.
-- **PWA:** `vite-plugin-pwa`; asset applicativi generati dalla pipeline `scripts/resize_icons.mjs` a partire dalla sorgente approvata.
-- **Monitoring:** Sentry Error Monitoring per errori/anomalie tecniche. Google Analytics 4/Firebase Analytics e Vercel Analytics/Speed Insights sono ritirati; nessun tracciamento di utilizzo è integrato nel frontend. Le vecchie collection telemetriche Firestore restano solo per compatibilità/cleanup dei client precedenti.
-- **Testing:** Vitest + Testing Library, Playwright E2E (Chromium + copertura Mobile Safari/WebKit mirata), `@axe-core/playwright`, Firebase Emulator, oxlint type-aware/JSX-a11y e Knip; `npm audit`, Gitleaks e zizmor sono gate workflow separati dal comando canonico M8.
+**Architettura:** frontend React/Vite/TypeScript, stato Zustand, validazione Zod, PWA offline-first, IndexedDB/localStorage e replica Firestore. Versioni delle librerie e dei runtime si verificano nei manifest/configurazioni eseguibili, non in un elenco duplicato qui.
+
+- **Nome pubblico:** TheLogBook. Namespace tecnici e persistiti storici (`logbook:*`, package e chiavi storage) non cambiano senza migrazione esplicita.
+- **Hosting:** frontend Firebase Hosting alla radice `/`; backend trusted con Functions native Vercel in `/api/` e Firebase Admin soltanto server-side. Non spostare un boundary per comodità.
+- **UI:** CSS nativo e token semantici; **MUST:** niente Tailwind. Seguire `.agents/rules/design-system.md`.
+- **Telemetria:** solo monitoraggio errori tecnici Sentry. Non reintrodurre Analytics comportamentali ritirati.
+- **Toolchain e test:** `package.json`, `.node-version`, workflow e `.agents/rules/ci-verification.md` sono le fonti da consultare per versioni e comandi.
 
 ## Avvio locale
 
@@ -70,23 +86,9 @@ Per task strutturali o CRITICAL preparare un piano di lavoro prima delle modific
 
 ## File canonici del modello dati
 
-Per ogni nuova chiave cloud-root, MUST verificare e aggiornare dove applicabile:
+**MUST:** classificare ogni dato come effimero, device-local, cloud-root o mensilizzato prima di modificarlo; `UserData` non coincide automaticamente con il documento root Firestore.
 
-| File | Responsabilità |
-|---|---|
-| `src/types.ts` | Tipo applicativo |
-| `src/lib/schema.ts`, `src/lib/schemas/*.ts` | Gateway Zod |
-| `src/lib/sync/documentProjection.ts` | Proiezione `UserData` → root/shard Firestore |
-| `src/lib/sync/domainOperations.ts` e boundary correlati | Mutazioni business tipizzate |
-| `src/contexts/AuthContext.tsx` | Auth, hydration e merge |
-| `src/lib/db.ts` e moduli DB correlati | Lettura/scrittura Firestore |
-| `firestore.rules` | Autorizzazione e validazione server-side |
-| `tests/firestore_security_rules.test.ts` | Regressioni Rules |
-| `src/lib/merge.ts`, `src/lib/export.ts` e boundary backup | Merge/import/export |
-
-Prima di modificare un dato, classificarlo come effimero, application/local-only, cloud-root oppure mensilizzato. `UserData` applicativo non coincide automaticamente con il documento root Firestore.
-
-→ Contratto completo: `.agents/rules/data-model-and-zod.md`.
+**MUST:** per una nuova chiave cloud-root verificare congiuntamente tipi, gateway Zod, proiezione, Domain Operations, hydration/merge, Rules, backup e regressioni. La matrice di file e responsabilità vive in `.agents/rules/data-model-and-zod.md`.
 
 ## Storage, persistenza e sincronizzazione
 
@@ -97,7 +99,7 @@ Prima di modificare un dato, classificarlo come effimero, application/local-only
 | **`localStorage`** | Persistenza sincrona/device-critical, preferenze e code boundary-specific |
 | **Firestore** | Replica remota e sincronizzazione cloud |
 
-Versioni persistite correnti e indipendenti: Data Schema 1, Sync Protocol 3, Local Envelope 5, Backup Schema 3. Non incrementare una dimensione per compensare modifiche in un'altra.
+Le versioni persistite sono quattro dimensioni indipendenti con fonte eseguibile in `src/lib/schemaEvolution.ts`. Il bump della PWA non le incrementa: modificarle soltanto con la specifica migrazione e le verifiche di compatibilità.
 
 - **MUST:** offline l'app deve potersi avviare e operare dai dati locali.
 - **MUST:** le normali mutazioni business UI/hook attraversano Domain Operations. Snapshot-save è riservato ai boundary bulk/compatibility allowlisted.
@@ -105,8 +107,7 @@ Versioni persistite correnti e indipendenti: Data Schema 1, Sync Protocol 3, Loc
 - **MUST:** una write Firestore rifiutata non deve essere esposta come confermata.
 - **MUST:** le Promise di persistenza critica rigettano in caso di failure; vietato trasformare un errore critico in successo silenzioso.
 - **MUST:** il reload barrier è fail-safe: dati in memoria senza envelope leggibile = sessione unsafe, quindi niente reload automatico.
-- **MUST:** una conferma cloud attraverso `acknowledgeThrough()` elimina solo le operation con `seq <= expectedSeq`, assorbe il causal context remoto e rigioca sullo snapshot remoto soltanto le operation locali ancora pending. Una modifica locale avvenuta fra remote commit e acknowledge non può essere sovrascritta da uno snapshot remoto stantio.
-- **MUST:** una classificazione `local-pending` dopo un possibile lost-ack richiede evidenza che l'intero batch consegnato sia ancora presente nel journal con payload semantico completo identico; stato assente/corrotto/parziale è failure, non pending sicuro.
+- **MUST:** una conferma cloud o lost-ack non può eliminare/sovrascrivere operazioni locali ancora pending. `local-pending` richiede prova dell'intero batch integro nel journal. Sequenze, causal context e recovery sono definiti in `.agents/rules/crash-consistency.md` e `.agents/rules/storage-and-sync.md`.
 
 ### Protezione automatica dell'archivio locale (CRITICAL)
 
@@ -115,7 +116,11 @@ Versioni persistite correnti e indipendenti: Data Schema 1, Sync Protocol 3, Loc
 - **MUST:** cifratura AEAD sincrona dei record nel **medesimo** `idb-keyval.update` e salvataggi device-critical sincroni, con owner/AAD autenticati e fail-closed se storage/key/ciphertext non sono leggibili.
 - **MUST:** migrazione interrompibile/riprendibile, key control versionati, purge key soltanto dopo eliminazione verificata delle copie cifrate. Perdere la chiave non equivale ad avere l'archivio vuoto; conservare ciphertext offline non recuperabile.
 - **VERIFY:** una chiave non esportabile dentro lo *stesso profilo browser* non protegge dal furto dell'intero profilo o da XSS. Non è crittografia end-to-end né sblocco mediante hardware remoto.
-- **MUST:** una sessione autenticata già verificata può operare **solo localmente** offline con la generazione di consenso attivo in cache. Dopo una revoca locale offline l'accesso fitness resta sospeso, salvo che la persona presti **esplicitamente** un nuovo consenso valido per il solo dispositivo e la revisione precedente sia già attestata dal server; l'intento di revoca precedente rimane durevole. Il primo accesso senza consenso verificato resta bloccato. Il primo `online`/foreground deve interrogare e riconciliare il consenso server **prima** di letture/write cloud, checkpoint o journal; una revoca remota più recente blocca le attività e preserva il journal locale senza upload. Nessun cache marker locale autorizza replica/cloud. Una nuova revisione dopo riaccettazione non può ri-etichettare pending del consenso precedente senza recupero separato ed esplicito.
+- **MUST:** una sessione autenticata già verificata può operare **solo localmente** offline con la generazione di consenso attivo in cache.
+- **MUST:** dopo una revoca locale offline l'accesso fitness resta sospeso. Eccezione: la persona presta **esplicitamente** un nuovo consenso valido per il solo dispositivo **e** la revisione precedente è già attestata dal server; l'intento di revoca precedente rimane durevole.
+- **MUST:** il primo accesso senza consenso verificato resta bloccato.
+- **MUST:** il primo `online`/foreground deve interrogare e riconciliare il consenso server **prima** di letture/write cloud, checkpoint o journal. Una revoca remota più recente blocca le attività e preserva il journal locale senza upload.
+- **MUST:** nessun cache marker locale autorizza replica/cloud. Una nuova revisione dopo riaccettazione non può ri-etichettare pending del consenso precedente senza recupero separato ed esplicito.
 - **MUST:** documentazione completa e limiti nel file `docs/architecture/secure-local-archive-design.md`.
 
 ### Accesso browser storage
@@ -164,73 +169,43 @@ Versioni persistite correnti e indipendenti: Data Schema 1, Sync Protocol 3, Loc
 
 ## Sicurezza e configurazione Firebase
 
-### Boundary di configurazione
+**Tre boundary:** client Firebase (`VITE_FIREBASE_*`), App Check client (`VITE_RECAPTCHA_ENTERPRISE_SITE_KEY`), backend trusted (`FIREBASE_ADMIN_*` e `CRON_SECRET`). Mai esporre credenziali server con prefisso `VITE_`, né versionare segreti reali.
 
-Esistono tre contratti separati:
+- **MUST:** rispettare bootstrap App Check e token limited-use/anti-replay per endpoint sensibili. Un `permission-denied` resta rifiuto finché la causa non è diagnosticata, non un salvataggio riuscito.
+- **MUST:** Firestore Rules richiedono test Emulator, gate canonico e workflow Production dedicato. Deployment Hosting e Firestore hanno identità WIF separate e devono rispettare l'ordine sicuro client/Rules.
+- **MUST:** verificare dal provider stato live di Auth, IAM, env, domini, App Check, Rules e deployment.
 
-1. **Client Firebase:** quattro env `VITE_FIREBASE_*` obbligatorie lette staticamente in `src/lib/firebase.ts` (`API_KEY`, `AUTH_DOMAIN`, `PROJECT_ID`, `APP_ID`); non si configura alcun Measurement ID Analytics.
-2. **App Check client:** `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY` è l'unico nome runtime supportato; gli alias V3 legacy sono stati ritirati dopo il cutover Production verificato.
-3. **Server trusted:** `FIREBASE_ADMIN_PROJECT_ID`, `FIREBASE_ADMIN_CLIENT_EMAIL`, `FIREBASE_ADMIN_PRIVATE_KEY` e, per il cron, `CRON_SECRET`. Nessuna di queste deve avere prefisso `VITE_`.
-
-`.env.example` documenta esclusivamente nomi e placeholder sicuri; i valori reali server devono restare in Vercel/secret storage e non vanno committati.
-
-### App Check
-
-- Provider canonico: `ReCaptchaEnterpriseProvider`.
-- Il provider viene bootstrap-pato prima di Firestore; il token è acquisito separatamente e può essere ritentato dopo failure.
-- Il support check App Check è manuale (`window.crypto`, `window.fetch`); non dipende da Firebase Analytics.
-- **MUST:** le chiamate sensibili al backend custom di account deletion/recovery usano token App Check limited-use; Vercel li verifica consumandoli una sola volta e rifiuta il replay.
-- **MUST:** un `permission-denied` di sync resta `rejected` finché non è stata discriminata la causa; non etichettare genericamente Rules/Auth/App Check senza evidenza.
-
-### Firestore Rules
-
-- **MUST:** ogni modifica a `firestore.rules` deve passare i test emulator pertinenti e il gate canonico.
-- Il test Rules e il deploy Rules sono operazioni diverse. Il deploy Production è consentito soltanto dopo `Milestone Verification` verde sul push a `main`, sullo stesso exact SHA ancora corrente, tramite il workflow Firestore dedicato. Il deploy Hosting dello stesso release SHA segue il completamento verde della riconciliazione Firestore, così un cutover coordinato client/Rules non pubblica prima il client.
-- **MUST:** il workflow Firestore usa una identità WIF distinta dal deployer Hosting e con privilegi limitati a Rules, indici e requisiti Firebase CLI; non estendere il service account Hosting con ruoli Firestore.
-- **MUST:** il deploy Firestore non usa `--force`: indici live non gestiti non vengono cancellati implicitamente. Dopo il deploy, leggere nuovamente il provider e verificare che le Rules live corrispondano alla sorgente approvata e che tutti gli indici compositi desiderati siano `READY`.
-- **MUST:** `service-account.json` resta ignorato e nessuna credenziale privata viene committata.
-
-→ Dettagli: `.agents/rules/firebase-config.md`.
+→ Contratti: `.agents/rules/firebase-config.md` e `.agents/rules/external-services.md`.
 
 ## Servizi esterni e configurazione fuori repository
 
-TheLogBook dipende da configurazioni live che non sono completamente rappresentabili nel Git repository (Vercel env, Firebase/Google Cloud, domini OAuth/Auth, App Check/reCAPTCHA, Sentry, GitHub ruleset, Snyk e Search Console).
+Repository e provider esterni sono fonti distinte. GitHub ruleset, Firebase/Google Cloud, Vercel, Sentry, Snyk e Search Console possono differire dalla configurazione nel codice.
 
-- **MUST:** verificare il sistema esterno competente prima di assumere stato live, quote, domini, enforcement o secret.
-- **MUST:** il repository pubblico non contiene valori segreti, email personali, identificativi di credenziali, dati di fatturazione o path locali del maintainer.
-- **MUST:** quando cambia materialmente una configurazione esterna, aggiornare il registro decisionale stabile.
-- **MUST:** origin/domini di hosting ritirati vanno rimossi dalle allowlist esterne quando non servono più.
+- **MUST:** verificare direttamente provider, quote, domini, enforcement e runtime pertinenti prima di affermare lo stato live; non pubblicare credenziali o dati personali.
+- **MUST:** aggiornare il registro operativo solo per cambi materiali verificati, distinguendo stato osservato, decisione e fatto storico.
 
-→ Contratto: `.agents/rules/external-services.md`. Registro decisionale: `docs/operations/external-services-register.md`.
+→ `.agents/rules/external-services.md` e `docs/operations/external-services-register.md`.
 
 ## Account lifecycle e cancellazione account
 
-La cancellazione account è un workflow CRITICAL server-mediated. Il client non elimina direttamente il root `/users/{uid}`.
+**CRITICAL:** cancellazione account server-mediated; il client non elimina direttamente `/users/{uid}`.
 
-- Vercel Functions autenticano la richiesta e il backend trusted usa Firebase Admin.
-- Il job pulisce dati privati/telemetria e cancella Firebase Auth per ultimo.
-- `account_deletions/{uid}` è server-only e agisce da barriera cross-device.
-- Dopo completamento viene conservato un tombstone tecnico server-only limitato a 30 giorni; il cron autenticato giornaliero elimina i record scaduti.
-- La copia locale non viene eliminata finché il client non ha prova del completamento cloud secondo il protocollo di recovery.
-- **MUST:** non reintrodurre cancellazioni client-side che bypassino questo workflow.
+- **MUST:** Functions Vercel autenticano la richiesta, Firebase Admin gestisce il job, elimina i dati privati e cancella Firebase Auth **per ultima**. `account_deletions/{uid}` è un marker server-only cross-device.
+- **MUST:** la copia locale resta fino alla prova di completamento server. Timeout, risposta assente, Auth mancante o tombstone scaduto non sono prova sufficiente.
+- **MUST:** il tombstone tecnico server-only viene conservato fino a 30 giorni; il cron autenticato esegue il cleanup senza indebolire i percorsi di recovery.
+- **MUST:** consenso revocato, email non verificata, guest→account, logout e cancellazione hanno failure path distinti e non devono essere confusi.
 
-→ Dettagli: `.agents/rules/account-lifecycle.md`.
+→ Dettagli: `.agents/rules/account-lifecycle.md`, `.agents/rules/storage-and-sync.md`.
 
 ## Telemetria tecnica e privacy
 
-Distinguere due sistemi:
+**MUST:** Sentry resta limitato a errori/anomalie tecniche sanitizzati, minimizzati e autorizzati: non inviare intenzionalmente UID, dati salute, token o eventi comportamentali; non attivare Replay, tracing, logging, metriche o Analytics.
 
-1. **Telemetria tecnica TheLogBook:** gli errori e le anomalie tecniche sanitizzati vengono inviati a Sentry Error Monitoring soltanto in Production e per sessioni account autenticate. Il Firebase UID serve esclusivamente come gate locale e **non viene deliberatamente trasmesso a Sentry**; il payload include solo session ID tecnico, release/build SHA, contesto limitato, tipo/messaggio errore sanitizzato, contatori/timestamp e stack troncato/sanitizzato. Non vengono usati Sentry Replay, tracing, logging o metriche e non vengono inviati eventi comportamentali workout/PWA. Le collection Firestore `telemetry_*` restano legacy per client precedenti, cleanup e account deletion.
-2. **Analytics di utilizzo:** Google Analytics 4/Firebase Analytics, Vercel Analytics e Speed Insights sono ritirati. Non reintrodurre SDK di tracciamento, Measurement ID, identificatori o eventi di utilizzo.
+- **MUST:** code diagnostiche persistenti soltanto con AEAD owner-scoped e vault disponibile; in caso contrario usare il fallback in memoria previsto, senza creare nuove copie plaintext. Mantenere compatibilità e retention legacy finché necessarie.
+- **MUST:** source map e token di upload restano nel processo build Production, non negli asset pubblici.
+- **MUST:** non promettere anonimato quando esistono identificativi tecnici. Le modifiche materiali alla Privacy Policy seguono `LEGAL_VERSIONS.privacy`, indipendente dalla versione PWA.
 
-- **MUST:** non aggiungere eventi comportamentali workout/PWA alla telemetria tecnica per ricreare di fatto analytics di utilizzo.
-- **MUST:** il client corrente non crea nuove scritture nelle collection Firestore `telemetry_errors`, `telemetry_events` o `telemetry_anomalies`; Rules e retention di 30 giorni restano attive per client precedenti e dati legacy finché il relativo cleanup non viene ritirato deliberatamente.
-- **MUST:** errori/stack sottoposti alla telemetria tecnica passano dai sanitizzatori che rimuovono email, IP, token, API key, path utente e chiavi sensibili riconosciute prima del boundary Sentry.
-- **MUST:** la coda tecnica offline owner-scoped non crea nuovi JSON diagnostici in chiaro: persistenza soltanto AEAD con la chiave locale owner già sbloccata; se il vault non è pronto la telemetria resta best-effort in memoria. Le code plaintext delle build precedenti vengono cifrate e verificate prima della rimozione quando il vault è disponibile. Se il vault non è sbloccato, i report validi restano soltanto nella RAM della scheda e la vecchia copia plaintext viene rimossa: la chiusura della scheda può perderli. Nessun report passa a un altro owner. Le voci più vecchie di sette giorni non vengono restituite né inviate (50 elementi al massimo); il pruning del ciphertext avviene al successivo accesso alla coda, non necessariamente alla scadenza mentre la PWA è chiusa. Questa scadenza telemetrica è distinta dall'eliminazione dei dati utente.
-- **MUST:** source map Sentry sono generate solo nella build frontend Firebase Hosting Production (`FIREBASE_HOSTING_DEPLOY=production`), caricate con `SENTRY_AUTH_TOKEN` e rimosse dagli asset pubblici dopo l'upload; il token non entra mai nel bundle client.
-- **MUST:** documentazione privacy, UI e codice devono usare terminologia coerente: non promettere anonimato se esiste un identificativo tecnico/pseudonimo.
-- **MUST:** nessun documento pubblico/normativo deve incorporare email, indirizzi o altre informazioni private del maintainer. Usare soltanto canali di contatto pubblicamente predisposti dall'app quando esistono.
-- **MUST:** una modifica materiale alla Privacy Policy richiede bump di `LEGAL_VERSIONS.privacy` e regressioni pertinenti, così gli utenti devono riaccettare la versione aggiornata.
+→ `.agents/rules/firebase-config.md`, `.agents/rules/storage-and-sync.md`, `docs/telemetry-sentry-guide.md`.
 
 ## PWA, Service Worker e icone
 
@@ -242,23 +217,14 @@ Distinguere due sistemi:
 
 ## Design system e UX
 
-Tema adattivo system/light/dark con superfici e controlli ispirati a iOS. `src/styles/global.css` importa i moduli CSS e `src/styles/tokens.css` definisce i token semantici; CSS nativo, sentence case italiano. La scelta del tema è locale al dispositivo, non è un dato di `UserData`.
+**MUST:** temi system/light/dark, bootstrap senza flash e UX leggibile su mobile. Valori CSS e scala tipografica hanno fonte in `src/styles/tokens.css` e `.agents/rules/design-system.md`, non in numeri duplicati qui.
 
-- **MUST:** usare `GlobalDialog`/`useDialogStore` per dialoghi applicativi; niente `window.alert`/`window.confirm`.
-- **MUST:** niente `<dialog>` per form/editor complessi mobile; preferire superfici inline/full-screen/accordion.
-- **MUST:** input a `font-size: 16px !important` per prevenire zoom iOS dove applicabile.
-- **MUST:** la tipografia utente usa la scala semantica canonica in `src/styles/tokens.css`: 15 px corpo, 14 px secondario, 13 px metadati, 12 px micro-label, 16 px titoli di riga/controlli, 18 px sezioni e 22 px titoli pagina; timer e valori numerici in evidenza usano esclusivamente i token display dedicati. Evitare nuove dimensioni arbitrarie o `fontSize` numerici inline fuori dall'eccezione iOS a 16 px.
-- **MUST:** touch target principali almeno 44×44 px.
-- **SHOULD:** `min-width: 0` nei figli flex soggetti a overflow; `ContextMenu.tsx` per menu contestuali.
-- **MUST:** validare la sintassi CSS e la presenza di tutte le custom properties durante refactor dei token.
-- **VERIFY:** comportamento iOS Safari/PWA e viewport stretti per modifiche UX pertinenti.
+- **MUST:** dialoghi tramite `GlobalDialog`/`useDialogStore`, non `window.alert`/`window.confirm`. Preferire superfici inline/full-screen per editor mobili complessi.
+- **MUST:** input anti-zoom iOS, target touch e safe area accessibili; verificare light/dark, viewport, overlay e comportamento su dispositivi quando pertinente.
+- **MUST:** non creare nuove referenze a ogni render nei selettori Zustand. Nelle schede mantenute vive sotto `Suspense`, non usare l'attributo HTML `hidden` come meccanismo di tab visibility: preservare il pattern `style={{ display: ... }}` salvo migrazione esplicitamente testata.
+- **MUST:** recovery e render React non mutano lo store globale. `useRef(initialValue)` non è lazy initialization: preservare owner/session fencing e commit React per bozze device-critical.
 
-### React
-
-- **MUST:** sulle superfici mantenute vive sotto `Suspense`, non usare l'attributo HTML `hidden` come meccanismo di tab visibility; il pattern corrente usa `style={{ display: ... }}` e va preservato salvo una migrazione React esplicitamente testata.
-- **MUST:** niente fallback inline di array/oggetti nei selettori Zustand che generano una nuova referenza a ogni render; usare costanti stabili.
-- **SHOULD:** memoizzazione custom solo dove misurata o già motivata dai componenti ad alta frequenza.
-- **MUST:** recovery e componenti React non devono mutare lo store globale durante il render. `useRef(initialValue)` non è una lazy initialization: l'espressione viene valutata a ogni render. Nei draft device-critical mantenere l'inizializzazione owner/session-scoped stabile e applicare eventuali blocchi di persistenza soltanto dopo il commit React, conservando il comportamento fail-closed.
+→ Specifiche: `.agents/rules/design-system.md`.
 
 ## Processo Git e branch
 
@@ -270,58 +236,53 @@ Per modifiche non banali:
 - **MUST:** eseguire review finale del diff ed evitare refactor/formattazioni non pertinenti.
 - **MUST:** dopo autorizzazione generale il merge può avvenire autonomamente quando gate e review sono verdi e non restano blocker.
 
+### Versionamento della PWA
+
+- **MUST (decisione prodotto):** a ogni commit che entra in `main` tramite normale squash merge incrementare di uno la componente minor della versione applicativa in `package.json` e azzerare la patch (da `MAJOR.MINOR.PATCH` a `MAJOR.(MINOR+1).0`). Calcolare il numero dal vero HEAD remoto di `main`, non dalla versione iniziale del branch; in caso di merge concorrente riallineare e rivalidare.
+- **MUST:** includere il bump e la sincronizzazione dei due campi root in `package-lock.json` nel candidato PR **prima** della CI exact-SHA e review. Non introdurre bump post-verifica, commit CI automatici o push diretti a `main` e non incrementare per commit intermedi del branch.
+- **MUST:** non duplicare la versione pubblica in `AGENTS.md`. Il bump non modifica automaticamente Data Schema, Sync Protocol, Local Envelope, Backup Schema, manifest catalogo o versioni dei documenti legali.
+- **VERIFY:** i manifest package sono input del selettore Vercel backend; anche un bump senza modifiche di codice può provocare un deploy. Verificarne l'esito senza indebolire il rilevamento dei cambi alle dipendenze server.
+
 ## Test e CI
 
-### Gate canonico
+Il gate canonico locale è `npm run verify:m8`. Su GitHub l'equivalente richiede `Milestone Verification` sullo SHA esatto: tutti gli shard, E2E, CodeQL e `Canonical Verification` verdi.
 
-Il gate repository completo è:
+- **MUST:** i subset `lint`, `test`, `build`, `test:e2e` sono diagnostici, non sostituti del gate finale.
+- **MUST:** ogni nuovo commit invalida le verifiche relative allo SHA precedente.
+- **MUST:** non indebolire test/no-skips, sicurezza, baseline warning, Emulator o protezioni GitHub per ottenere CI verde.
+- **MUST:** i test normativi attraversano il boundary reale e hanno oracle indipendenti; un mock che replica la logica testata non è una prova sufficiente.
+- **MUST:** distinguere test locale, CI PR, merge, CI post-merge, deploy e stato runtime; dichiarare esplicitamente ogni verifica mancante.
 
-```bash
-npm run verify:m8
-```
-
-`verify:m8` include transitivamente M7 → M6 → M5 e le suite/gate precedenti: lint, typecheck/hardening, unit/integration/isolated/fuzz/recovery/GC/stress, Firebase Rules emulator, Playwright E2E, no-skips, build e controlli M7/M8.
-
-- `npm run lint`, `npm run test`, `npm run build` e `npm run test:e2e` sono diagnostici/sotto-gate; non sostituiscono M8 per il candidato finale.
-- `.github/workflows/verification.yml` distribuisce i leaf command di M8 su shard exact-SHA paralleli e mantiene **Canonical Verification** come check aggregato stabile; `scripts/check-ci-contract.mjs` deve provare che la matrice CI è leaf-equivalente a `npm run verify:m8`.
-- Java/Firebase Emulator e Chromium Playwright vengono predisposti solo negli shard che li richiedono; i limiti single-worker delle suite sensibili restano invariati.
-- **MUST:** non dichiarare verde un gate non realmente eseguito.
-- **MUST:** warning inattesi, `act(...)`, unhandled rejection e framework warning nel candidato vanno corretti o spiegati, non soppressi cosmeticamente.
-- **MUST:** `test:quality-guardrails` impedisce che la PR aggiunga o sostituisca warning rispetto allo SHA base, indebolisca lint/TypeScript/leaf canonici o introduca nuove soppressioni. La baseline può solo diminuire; rigenerarla per accettare warning nuovi non è consentito.
-- **MUST:** test normativi devono attraversare il boundary di produzione che dichiarano di verificare; mock e oracle non possono reimplementare il comportamento sotto test.
-
-→ Contratto completo: `.agents/rules/ci-verification.md` e `.agents/rules/verification-hardening.md`.
+→ `.agents/rules/ci-verification.md`, `.agents/rules/verification-hardening.md`.
 
 ## Vercel e deployment
 
-`vercel.json` è la configurazione repository canonica. Nel contratto corrente:
+`vercel.json` definisce il backend trusted; il frontend Production è Firebase Hosting.
 
-- **MUST:** `main` è il solo branch abilitato ai deployment Vercel tramite `git.deploymentEnabled`; i branch di sviluppo sono disabilitati.
-- **MUST:** `ignoreCommand` deve saltare i deployment Git che non modificano il boundary backend Vercel; cambi a `api/`, `server/`, moduli condivisi importati dal backend (oggi `src/lib/legalVersions.ts`), configurazione Vercel, dipendenze/runtime o configurazione TypeScript server devono invece continuare a generare un deployment Production.
-- **MUST:** in assenza di uno SHA precedente affidabile o se il confronto Git fallisce, il selettore deve fallire aperto verso il deployment, mai saltare un possibile aggiornamento backend.
-- **MUST:** non indebolire questa barriera per ottenere una Preview; la CI GitHub è il gate del branch.
-- Il deployment di produzione Vercel, quando necessario, deve derivare da `main`.
-- Dopo il merge verificare sempre commit effettivo e Canonical Verification su `main`; verificare un nuovo deployment Vercel sullo stesso SHA solo quando il diff richiede il backend, altrimenti verificare che Vercel abbia correttamente ignorato il commit frontend-only.
-- **VERIFY:** se Vercel Deployment Checks dipende dal nome `Canonical Verification`, non rinominare il job senza prima verificare/aggiornare la configurazione esterna.
+- **MUST:** `main` è l'unico branch con deploy Vercel; niente Preview dei branch di sviluppo come sostituto del gate.
+- **MUST:** `ignoreCommand` salta soltanto modifiche dimostrabilmente non pertinenti al backend. Se SHA precedente o diff non sono attendibili, **deploy fail-open**, mai skip arbitrario.
+- **MUST:** dopo il merge verificare SHA e CI su `main`, Hosting e Vercel separatamente; Vercel deve deployare se il diff è backend-relevant, altrimenti va verificato lo skip.
+
+→ `.agents/rules/external-services.md` e `.agents/rules/firebase-config.md`.
 
 ## Catalogo globale
 
-`global_catalog` è pubblico in lettura e non scrivibile dal client. I seed bundled correnti sono intenzionalmente vuoti.
+`global_catalog` è pubblico in lettura e non scrivibile dal client; i seed bundled sono intenzionalmente vuoti.
 
-- Il seed script rifiuta input vuoti/invalidi prima dell'inizializzazione Admin e supporta dry-run sicuro.
-- **MUST:** nessuna pubblicazione parte dai seed bundled vuoti.
-- Una write reale richiede file esterni validati/non vuoti, progetto esplicito e conferma esplicita uguale al progetto; non riutilizzare versioni esistenti.
-- **MAY:** dry-run/validazione sono incoraggiati e non vanno bloccati dalla policy di sicurezza.
+- **MUST:** una pubblicazione reale richiede file esterni validati/non vuoti, progetto esplicito e conferma; il dry-run resta non distruttivo.
+- **MUST:** la versione del catalogo è distinta dalla versione pubblica della PWA. Un bump PWA non deve causare il seeding del catalogo.
 
-→ Dettagli: `.agents/rules/catalog-operations.md`.
+→ `.agents/rules/catalog-operations.md`.
 
 ## Repository hygiene ed encoding
 
 - **MUST:** documenti task-specific (`implementation_plan*.md`, report audit/remediation generati, directory legacy di report) non restano nel candidato finale salvo che siano deliberatamente documentazione stabile nel path canonico.
-- Istruzioni normative: `AGENTS.md` + `.agents/rules/`; guide stabili: `docs/`; audit storici deliberati: `docs/audits/`.
+- Istruzioni normative: `AGENTS.md` + `.agents/rules/`; guide stabili e registri operativi: `docs/`. Audit e report di una singola revisione restano nella cronologia Git/PR; conservarne copie in `docs/audits/` solo quando servono ancora come evidenze storiche datate, chiaramente separate dallo stato corrente.
 - **MUST:** Markdown e sorgenti UTF-8 senza BOM; non introdurre mojibake.
 
 ## Riferimenti normativi
+
+I sottofile non sono caricati automaticamente in ogni ambiente; i loro dettagli, eccezioni e failure path devono essere consultati e confrontati con il codice corrente prima di apportare modifiche.
 
 | Documento | Contenuto |
 |---|---|

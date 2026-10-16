@@ -103,11 +103,12 @@ const TrainingHistory = ({ onEditWorkout }: TrainingHistoryProps) => {
     const library = useMemo(() => userData?.library || [], [userData?.library]);
     const today = Logic.getLocalDateString();
     const initialHistoryDate = useMemo(() => {
-        const dates = history
-            .map(workoutDateKey)
-            .filter((date): date is string => Boolean(date))
-            .sort((a, b) => b.localeCompare(a));
-        return dates[0] || today;
+        let latestDate: string | null = null;
+        for (const workout of history) {
+            const date = workoutDateKey(workout);
+            if (date && (!latestDate || date > latestDate)) latestDate = date;
+        }
+        return latestDate || today;
     }, [history, today]);
 
     const [viewMonth, setViewMonth] = useState(() => initialHistoryDate.slice(0, 7));

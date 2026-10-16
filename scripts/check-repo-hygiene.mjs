@@ -1,5 +1,7 @@
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import { checkMarkdownLinks } from './markdown-links.mjs';
+import './markdown-links-regressions.mjs';
 import { basename, extname } from 'node:path';
 import { TextDecoder } from 'node:util';
 
@@ -17,6 +19,15 @@ const tracked = execFileSync('git', ['ls-files', '-z'])
   .toString('utf8')
   .split('\0')
   .filter(Boolean);
+
+const markdownFiles = tracked.filter(path => path.endsWith('.md'));
+const linkFailures = checkMarkdownLinks(markdownFiles, {
+  read: path => readFileSync(path, 'utf8'),
+  exists: path => existsSync(path),
+});
+if (linkFailures.length) {
+  failures.push('broken internal documentation links:' + String.fromCharCode(10) + linkFailures.map(x => '  ' + x).join(String.fromCharCode(10)));
+}
 
 const taskSpecificAnalysisArtifacts = tracked.filter(path => (
   /^implementation_plan(?:_.*)?\.md$/.test(path)
@@ -90,4 +101,4 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-console.log(`M6 repository hygiene OK: clean worktree; ${checked} tracked text files are UTF-8 without BOM; no task-specific analysis artifacts.`);
+console.log(`M6 repository hygiene OK: clean worktree; ${checked} tracked text files are UTF-8 without BOM; ${markdownFiles.length} Markdown files checked for local links; no task-specific analysis artifacts.`);

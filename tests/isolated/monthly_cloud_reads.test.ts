@@ -87,6 +87,24 @@ describe('monthly Firestore read boundaries', () => {
         expect(documents.get('nutrition_months/2026-05')).toHaveProperty('_sync', syncMeta);
     });
 
+    it('rejects lossy scalar fallbacks in monthly window hydration but accepts exact numeric conversions', async () => {
+        const data = draft();
+        const documents = cloudDocuments();
+        firestore.getDoc.mockResolvedValue(snapshot({
+            '2026-05-03': { date: '2026-05-03', weight: 'corrupted' },
+        }));
+        await expect(loadNutritionMonths(owner, ['2026-05'], data, documents))
+            .rejects.toThrow('Dati cloud non validi in Firestore nutrition_months/2026-05');
+        expect(data.nutrition).toEqual({});
+        expect(documents.size).toBe(0);
+
+        firestore.getDoc.mockResolvedValue(snapshot({
+            '2026-05-03': { date: '2026-05-03', weight: '74.5' },
+        }));
+        await loadNutritionMonths(owner, ['2026-05'], data, documents);
+        expect(data.nutrition['2026-05-03']).toMatchObject({ weight: 74.5 });
+    });
+
     it('blocks a nutrition day with quarantined nested meal identities before any hydration', async () => {
         const data = draft();
         const documents = cloudDocuments();

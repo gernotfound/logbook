@@ -11,6 +11,16 @@ afterEach(() => {
 });
 
 describe('legal documents modal accessibility', () => {
+  it('explains that manual exports are optional, plaintext, and do not replace cloud synchronization', () => {
+    const { unmount } = render(<PrivacyPolicy onClose={vi.fn()} />);
+    expect(screen.getByText(/non necessari periodicamente per il normale utilizzo/i)).toBeDefined();
+    expect(screen.getByText(/generano file non cifrati/i)).toBeDefined();
+    expect(screen.getByText(/Solo i dati già sincronizzati possono essere recuperati dal cloud/i)).toBeDefined();
+    unmount();
+    render(<TermsAndConditions onClose={vi.fn()} />);
+    expect(screen.getByText(/Le esportazioni JSON e CSV sono facoltative e producono file non cifrati/i)).toBeDefined();
+  });
+
   it('traps focus in privacy policy and closes with Escape', () => {
     const onClose = vi.fn();
     render(<><button type="button">Outside</button><PrivacyPolicy onClose={onClose} /></>);

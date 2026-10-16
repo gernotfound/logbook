@@ -11,7 +11,7 @@ vi.mock('../../src/lib/healthConsent', async () => ({
     ...(await vi.importActual<typeof import('../../src/lib/healthConsent')>('../../src/lib/healthConsent')),
     getVerifiedHealthConsentRevision: () => 1,
 }));
-import { claimReplicaCheckpoint } from '../../src/lib/sync/replicaProtocol';
+import { claimReplicaCheckpoint, retireExpiredReplicas } from '../../src/lib/sync/replicaProtocol';
 import { seedTrustedConsent, asModularFirestore } from './replicaHarness';
 
 let env: RulesTestEnvironment;
@@ -204,4 +204,70 @@ it('rejects Protocol 1/2 writers both before and after the account creates its r
     }
 
     expect((await getDoc(rootRef)).data()?.profile.height).toBe('170');
+});
+
+
+it('rejects malformed checkpoint coordinates before they can influence causal GC', async () => {
+    const db = asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore());
+    const controlRef = doc(db, 'users/a/sync_control/state');
+    const now = Date.now();
+    const entry = {
+        replicaId: 'checkpoint-replica', generation: 1, status: 'active',
+        lastSeq: 0, checkpointAtMs: now,
+        leaseUntilMs: now + 360 * 24 * 60 * 60 * 1000,
+        checkpointClock: {},
+    };
+    const registration = (checkpointClock: Record<string, unknown>) => ({
+        protocolVersion: 3,
+        consentRevision: 1,
+        replicas: { s00: { ...entry, checkpointClock } },
+        mutation: { slot: 's00', action: 'register' },
+    });
+
+    for (const clock of [
+        { injectedActor: 1 },
+        { s00: -1 },
+        { s00: '1' },
+        { s00: 1.5 },
+        { s00: 9007199254740992 },
+    ]) {
+        await assertFails(setDoc(controlRef, registration(clock)));
+    }
+    expect((await getDoc(controlRef)).exists()).toBe(false);
+    await assertSucceeds(setDoc(controlRef, registration({ s00: 0, s15: 3 })));
+    const current = (await getDoc(controlRef)).data()!;
+    for (const clock of [{ injectedActor: 1 }, { s01: -1 }, { s01: '4' }]) {
+        await assertFails(setDoc(controlRef, {
+            ...current,
+            replicas: { s00: { ...current.replicas.s00, checkpointClock: clock } },
+            mutation: { slot: 's00', action: 'checkpoint' },
+        }));
+    }
+    expect((await getDoc(controlRef)).data()?.replicas.s00.checkpointClock).toEqual({ s00: 0, s15: 3 });
+});
+
+it('retires an expired replica without dropping the verified consent generation', async () => {
+    const db = asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore());
+    const controlRef = doc(db, 'users/a/sync_control/state');
+    const now = Date.now();
+    await env.withSecurityRulesDisabled(async context => {
+        await setDoc(doc(asModularFirestore(context.firestore()), 'users/a/sync_control/state'), {
+            protocolVersion: 3, consentRevision: 1,
+            replicas: {
+                s00: {
+                    replicaId: 'expired', generation: 1, status: 'active', lastSeq: 7,
+                    checkpointAtMs: now - 370 * 24 * 60 * 60 * 1000,
+                    leaseUntilMs: now - 2 * 24 * 60 * 60 * 1000,
+                    checkpointClock: { s00: 7 },
+                },
+            },
+            mutation: { slot: 's00', action: 'checkpoint' },
+        });
+    });
+    await retireExpiredReplicas(db, 'a');
+    const retired = (await getDoc(controlRef)).data()!;
+    expect(retired.consentRevision).toBe(1);
+    expect(retired.replicas.s00).toMatchObject({ status: 'retired', lastSeq: 7, checkpointClock: { s00: 7 } });
+    await retireExpiredReplicas(db, 'a');
+    expect((await getDoc(controlRef)).data()).toEqual(retired);
 });

@@ -1,3 +1,4 @@
+import { BACKEND_API_ORIGIN as API } from './backendApi';
 import type { User } from 'firebase/auth';
 import type { UserData } from '../types';
 import { LEGAL_VERSIONS } from './legalVersions';
@@ -6,8 +7,7 @@ import { getLimitedUseAppCheckToken } from './appCheck';
 import { readBrowserValueStrict, removeBrowserValue, writeBrowserValue } from './sync/browserStorage';
 
 export type HealthConsentStatus = 'unregistered' | 'checking' | 'active' | 'withdrawn' | 'pending' | 'reaccepting' | 'recovery-required' | 'stale-request' | 'error';
-type ServerStatus = { status: 'unregistered' | 'active' | 'withdrawn'; revision: number; acceptedAt?: string; privacyVersion?: string; termsVersion?: string };
-const API = (import.meta.env.VITE_ACCOUNT_DELETION_API_ORIGIN || 'https://logbook-gnf.vercel.app').replace(/\/$/, '');
+type ServerStatus = { status: 'unregistered' | 'active' | 'withdrawn'; revision: number; acceptedAt?: string; privacyVersion?: string; termsVersion?: string; erasedBeforeRevision?: number };
 const entries = new Map<string, HealthConsentStatus>();
 const listeners = new Set<() => void>();
 const verifiedReacceptance = new Map<string, string>();
@@ -277,7 +277,11 @@ async function serverRequest(user: User, method: 'GET' | 'POST', body?: unknown)
   if ((state.status !== 'active' && state.status !== 'withdrawn' && state.status !== 'unregistered')
     || typeof state.revision !== 'number' || !Number.isSafeInteger(state.revision) || state.revision < 0
     || (state.status === 'unregistered' && state.revision !== 0)
-    || (state.status !== 'unregistered' && state.revision < 1)) {
+    || (state.status !== 'unregistered' && state.revision < 1)
+    || (state.erasedBeforeRevision !== undefined
+      && (!Number.isSafeInteger(state.erasedBeforeRevision)
+        || state.erasedBeforeRevision < 1
+        || state.erasedBeforeRevision >= state.revision))) {
     throw new Error('Stato del consenso server non valido.');
   }
   return state as ServerStatus;
@@ -309,10 +313,13 @@ export async function readHealthConsentServerStatus(user: User): Promise<ServerS
 }
 
 /** Read the live generation for a separate, user-confirmed pending-data recovery. */
-export async function readActiveHealthConsentRevision(user: User): Promise<number> {
+export async function readActiveHealthConsentRevision(user: User): Promise<{ revision: number; erasedBeforeRevision?: number }> {
   const state = await serverRequest(user, 'GET');
   if (state.status !== 'active' || state.revision < 2) throw new Error('Un nuovo consenso attivo non è stato verificato.');
-  return state.revision;
+  return {
+    revision: state.revision,
+    ...(state.erasedBeforeRevision !== undefined ? { erasedBeforeRevision: state.erasedBeforeRevision } : {}),
+  };
 }
 
 /**
