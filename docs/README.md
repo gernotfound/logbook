@@ -23,6 +23,7 @@ Leggere **solo ciò che riguarda il task**; per cambi trasversali consultare tut
 | Documento | Stato | Per quale attività |
 |---|---|---|
 | [Registro servizi esterni](operations/external-services-register.md) | Registro operativo; riscontri live necessari | Firebase, Vercel, Sentry, GitHub e servizi ritirati |
+| [Ambiente Firebase Test isolato](operations/firebase-test-environment.md) | PREPARAZIONE IN CORSO, NON pronto per E2E | Configurazione Test riferita dal product owner, guardrail e verifiche ancora mancanti |
 | [Cutover Firebase Hosting](operations/firebase-hosting-cutover.md) | STORICO completato il 2 ottobre 2026 | Decisioni e rollback storici, non procedura di deploy corrente |
 
 ## Diagnostica
