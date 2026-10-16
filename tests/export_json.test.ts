@@ -79,6 +79,24 @@ describe('JSON Export/Import Logic', () => {
         expect(parsed.userData.profile.dob).toBe('2000-01-01');
     });
 
+    it('prepares a full JSON backup as a blob URL without launching a file picker or download', () => {
+        const blobUrl = 'blob:https://example.test/backup';
+        const create = vi.spyOn(URL, 'createObjectURL').mockReturnValue(blobUrl);
+        const downloadSpy = vi.spyOn(Exporter, 'downloadFile');
+        const data: any = { profile: { dob: '2000-01-01' }, history: [] };
+        const url = Exporter.prepareBackupJsonUrl(data, { uid: 'user123' },
+            { scope: 'cloud-and-device', months: ['2026-09'] }, { envelope: { revision: 2 } });
+
+        expect(url).toBe(blobUrl);
+        expect(create).toHaveBeenCalledTimes(1);
+        const blob = create.mock.calls[0][0] as Blob;
+        expect(blob.type).toBe('application/json');
+        expect(blob.size).toBeGreaterThan(0);
+        expect(downloadSpy).not.toHaveBeenCalled();
+        create.mockRestore();
+        downloadSpy.mockRestore();
+    });
+
     it('importFromJson blocks importing a current backup from a different user', async () => {
         const payload = createBackup({ history: [{ id: 'h2' }] } as any, 'user:alien456');
         const file = new File([JSON.stringify(payload)], "test.json", { type: "application/json" });
