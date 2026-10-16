@@ -153,6 +153,19 @@ class UnsyncedLogoutError extends Error {
     }
 }
 
+/**
+ * Data-only erasure: caller MUST have an authenticated, server-confirmed
+ * `health_data_erasures/{uid}.status=complete` response for this exact owner.
+ * Unlike ordinary logout, old pending changes are deliberately discarded:
+ * the user requested erasure and the cloud revision has advanced to fence them.
+ * This boundary does NOT delete Firebase Auth.
+ */
+export async function purgeCompletedHealthDataLocal(owner: string): Promise<void> {
+    if (!owner.startsWith('user:')) throw new Error('Cancellazione dati: proprietario account richiesto.');
+    // If interrupted, preserve the existing purge fence and resume its cleanup.
+    return purgeOwnerLocalData(owner, isLocalPurgeIncomplete(owner));
+}
+
 /** Sign-out and purge share one owner lock, with a persistent writer fence. */
 export async function logoutAndPurgeAccount(
     owner: string,
