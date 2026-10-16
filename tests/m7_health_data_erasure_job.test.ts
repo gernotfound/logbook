@@ -68,7 +68,7 @@ vi.mock('../server/accountDeletion/firebaseAdmin', () => {
           staged.push(() => fixture.records.set(ref.path, { ...data }));
         },
         update: (ref: { path: string }, patch: Entry) => {
-          if (!fixture.records.has(ref.path) && !staged.some(() => false)) throw new Error('Missing document');
+          if (!fixture.records.has(ref.path)) throw new Error('Missing document');
           staged.push(() => fixture.records.set(ref.path, { ...fixture.records.get(ref.path), ...patch }));
         },
         delete: (ref: { path: string }) => staged.push(() => { fixture.records.delete(ref.path); }),
@@ -84,6 +84,8 @@ vi.mock('../server/accountDeletion/firebaseAdmin', () => {
 import {
   createHealthDataErasureJob, processHealthDataErasure, readHealthDataErasureStatus,
 } from '../server/healthConsent/erasure';
+import { recordHealthConsentReacceptance, recordHealthConsentWithdrawal } from '../server/healthConsent/withdrawal';
+import { LEGAL_VERSIONS } from '../src/lib/legalVersions';
 
 const consentPath = (uid: string) => 'health_consent_withdrawals/' + uid;
 const markerPath = (uid: string) => 'health_data_erasures/' + uid;
@@ -117,6 +119,25 @@ describe('trusted data-only erasure worker', () => {
     await createHealthDataErasureJob('a');
     expect(await readHealthDataErasureStatus('a')).toMatchObject({ complete: true });
     expect(fixture.records.get(consentPath('a'))?.revision).toBe(4);
+  });
+
+  it('fences stale reacceptance and supports a later independently withdrawn data generation', async () => {
+    await createHealthDataErasureJob('a');
+    expect(await processHealthDataErasure('a', Date.now() + 30000)).toBe('complete');
+    const acceptance = {
+      acceptedTerms: true as const, acceptedHealthData: true as const,
+      privacyVersion: LEGAL_VERSIONS.privacy, termsVersion: LEGAL_VERSIONS.terms,
+    };
+    await expect(recordHealthConsentReacceptance('a', acceptance, 3)).rejects.toThrow();
+    const active = await recordHealthConsentReacceptance('a', acceptance, 4);
+    expect(active.revision).toBe(5);
+    await recordHealthConsentWithdrawal('a', 5);
+    fixture.records.set('users/a', { profile: { height: 165 } });
+    await createHealthDataErasureJob('a');
+    expect(fixture.records.get(markerPath('a'))).toMatchObject({ status: 'requested', consentRevision: 6 });
+    expect(await processHealthDataErasure('a', Date.now() + 30000)).toBe('complete');
+    expect(fixture.records.get(consentPath('a'))).toMatchObject({ status: 'withdrawn', revision: 7 });
+    expect(fixture.records.has('users/a')).toBe(false);
   });
 
   it('denies new requests while consent is active or full account deletion is pending', async () => {
