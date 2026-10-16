@@ -114,7 +114,7 @@ describe('trusted data-only erasure worker', () => {
   it('deletes only the requested owner business data, keeps Auth/consent and advances the epoch', async () => {
     await createHealthDataErasureJob('a');
     expect(await processHealthDataErasure('a', Date.now() + 30000)).toBe('complete');
-    expect(await readHealthDataErasureStatus('a')).toMatchObject({ status: 'complete', complete: true });
+    expect(await readHealthDataErasureStatus('a')).toMatchObject({ status: 'complete', complete: true, localPurgeAuthorized: true });
     expect(fixture.records.has('users/a')).toBe(false);
     expect([...fixture.records.keys()].some(key => key.startsWith('users/a/'))).toBe(false);
     expect(fixture.records.has('users/b')).toBe(true);
@@ -158,6 +158,21 @@ describe('trusted data-only erasure worker', () => {
     expect(await purgeExpiredCompletedHealthErasures(Date.now() + 30000)).toBe(1);
     expect(fixture.records.has(markerPath('a'))).toBe(false);
     expect(fixture.records.has(consentPath('a'))).toBe(true);
+  });
+
+  it('never authorizes local purge using a receipt from a prior reaccepted generation', async () => {
+    await createHealthDataErasureJob('a');
+    expect(await processHealthDataErasure('a', Date.now() + 30000)).toBe('complete');
+    const acceptance = {
+      acceptedTerms: true as const, acceptedHealthData: true as const,
+      privacyVersion: LEGAL_VERSIONS.privacy, termsVersion: LEGAL_VERSIONS.terms,
+    };
+    await recordHealthConsentReacceptance('a', acceptance, 4);
+    expect(await readHealthDataErasureStatus('a'))
+      .toMatchObject({ complete: true, localPurgeAuthorized: false });
+    await recordHealthConsentWithdrawal('a', 5);
+    expect(await readHealthDataErasureStatus('a'))
+      .toMatchObject({ complete: true, localPurgeAuthorized: false });
   });
 
   it('denies new requests while consent is active or full account deletion is pending', async () => {
