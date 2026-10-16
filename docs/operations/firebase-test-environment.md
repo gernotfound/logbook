@@ -34,9 +34,9 @@ L'allestimento **non** autorizza merge su `main`, modifica delle credenziali Pro
 
 - Team selezionato: `gnfcreator`.
 - Repository da importare: `gernotfound/logbook` (la stessa di Production, **nessuna seconda repo**).
-- Nome scelto per il progetto: `thelogbook-test-backend`.
-- Root Directory: `./`; preset applicativo selezionato: **Other**.
-- **Aggiornamento 2026-10-16:** il product owner **riferisce di avere creato un progetto Vercel vuoto** all'indirizzo `https://vercel.com/gnfcreator/project-8xnkl`. La verifica diretta con il connettore Vercel (`get_project` sia per ID/slug di team, sia `list_projects` sul team `gnfcreator`) restituisce tuttavia **404 Project not found** e nessun nuovo progetto nell'elenco. Il connettore legge regolarmente il progetto Production `logbook`, quindi l'identità del nuovo progetto, il suo reale stato e l'eventuale diversa autorizzazione restano **NON VERIFICATI**. Non creare un duplicato, non impostare credenziali e non distribuire codice; richiedere il **Project ID (`prj_...`)** dalla schermata Vercel Settings → General e ricontrollarlo. In precedenza il tentativo di creare il progetto con il connettore, senza Git né deploy, era stato rifiutato con **403 Forbidden**, senza creazione attestata.
+- Nome del progetto: `thelogbook-test-backend`, ora **applicato e letto dal provider**. Project ID: `prj_o232EaPmYkrn04zev3Sw9iL2ympj`.
+- Root Directory prevista: `./` (project root, da verificare nelle Settings); preset applicativo **Other** verificato, Node.js **24.x** verificato.
+- **Progetto creato e verificato via connettore 2026-10-16:** Project ID `prj_o232EaPmYkrn04zev3Sw9iL2ympj`, team `gnfcreator`, creato inizialmente come `project-8xnkl` da interfaccia product owner. I tentativi iniziali di lettura con filtro esplicito `teamId` davano 404 e la creazione via connettore era stata rifiutata 403; la lettura con **Project ID senza team scope esplicito** ha successivamente restituito il progetto corretto, con `accountId` corrispondente a `gnfcreator`. L'assistente ha aggiornato via Vercel API il nome in **`thelogbook-test-backend`**, `framework=null` (Other), Node.js 24.x, `previewDeploymentsDisabled=true`, build command `node scripts/prepare-vercel-backend-static.mjs` e output directory `vercel-backend-static`; l'API ha accettato l'aggiornamento. Il read-back successivo ha verificato nome, framework, Node.js 24.x, **nessun deployment** (`latestDeployment=null`, elenco 0). Alcune opzioni come il flag Preview e gli override build/output non sono esposte nel payload sintetico della lettura e restano da ricontrollare nella schermata Vercel Settings prima di collegare Git.
 
 ### Guardrail necessari prima del primo deploy
 
@@ -59,7 +59,8 @@ L'allestimento **non** autorizza merge su `main`, modifica delle credenziali Pro
 ## Prossime verifiche
 
 - [ ] Verifica stato/protezioni GitHub del branch dedicato.
-- [ ] Finalizzare e verificare configurazione backend Vercel Test senza deploy da `main`.
+- [x] Creazione progetto Vercel Test senza deploy, nome e framework verificati in provider; **nessun deployment** presente.
+- [ ] Verificare in Vercel Settings la persistenza di `previewDeploymentsDisabled`, Build/Output Settings e Root Directory; successivamente collegare/restringere Git o predisporre deploy manuale exact-SHA, senza distribuire `main`.
 - [ ] Verifica API key browser, restrizioni/referrer e registrazione App Check nel progetto Firebase Test.
 - [ ] Provisioning IAM/Test e credenziali solo nel provider, mai nel repository.
 - [ ] Installazione Rules e indici su Firestore Test dopo gate/emulator.
