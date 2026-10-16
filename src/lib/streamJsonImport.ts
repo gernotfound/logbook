@@ -72,10 +72,13 @@ export async function parseLargeBackupJson(
                 raw = '';
                 if (stringIsKey) {
                     const frame = stack[stack.length - 1];
-                    if (frame?.kind !== 'object') invalid();
-                    if (frame.state !== 'first' && frame.state !== 'next') invalid();
-                    frame.key = value;
-                    frame.state = 'colon';
+                    if (frame && frame.kind === 'object') {
+                        if (frame.state !== 'first' && frame.state !== 'next') invalid();
+                        frame.key = value;
+                        frame.state = 'colon';
+                    } else {
+                        invalid();
+                    }
                 } else {
                     assign(value);
                 }
