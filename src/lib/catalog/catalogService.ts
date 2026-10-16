@@ -212,8 +212,11 @@ export async function syncGlobalCatalog(
 async function performCatalogSync(dbInstance: Firestore, options?: { force?: boolean; timeoutMs?: number }): Promise<{ catalog: CachedGlobalCatalog; updated: boolean; persisted?: boolean }> {
     const cached = await getCachedCatalog();
     const timeoutMs = options?.timeoutMs ?? DEFAULT_SYNC_TIMEOUT_MS;
+    // Manifest and data documents share one network budget. Two independent
+    // timeouts could otherwise delay authenticated hydration for twice as long.
+    const syncDeadline = Date.now() + timeoutMs;
 
-    if (!navigator.onLine) {
+    if (!navigator.onLine || timeoutMs <= 0) {
         return { catalog: cached, updated: false };
     }
 
@@ -242,9 +245,12 @@ async function performCatalogSync(dbInstance: Firestore, options?: { force?: boo
         const exercisesDocRef = doc(dbInstance, CATALOG_FIRESTORE_COLLECTION, remoteManifest.docRefs.exercises);
         const foodsDocRef = doc(dbInstance, CATALOG_FIRESTORE_COLLECTION, remoteManifest.docRefs.foods);
 
+        const remainingMs = syncDeadline - Date.now();
+        if (remainingMs <= 0) return { catalog: cached, updated: false };
+
         const [exercisesSnap, foodsSnap] = await withTimeout(
             Promise.all([getDoc(exercisesDocRef), getDoc(foodsDocRef)]),
-            timeoutMs,
+            remainingMs,
             "Timeout scaricamento documenti catalogo globale"
         );
 
