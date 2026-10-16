@@ -8,6 +8,10 @@ import { auth } from '../firebase';
 import { currentHealthConsentStatus, getGuestHealthConsentStatus } from '../healthConsent';
 import { readBrowserValueStrict } from './browserStorage';
 import { persistOwnerBoundWorkoutSnapshot } from './deviceCriticalState';
+import { readDeviceValueStrict } from './deviceStorage';
+import { readWorkoutDeviceIntent } from './workoutDeviceIntent';
+import { equivalentWorkoutSnapshot } from './workoutSnapshotEquality';
+import type { WorkoutSession } from '../../types';
 import { UserDataSchema } from '../schema';
 import type { UserData } from '../../types';
 import { markTabSnapshotClean, readTabSnapshotState } from './tabSnapshotCausality';
@@ -100,6 +104,23 @@ export async function prepareForReload(options: ReloadOptions = {}) {
     }
     if (state.userData && envelope) markTabSnapshotClean(session, state.userData);
     if (useAppStore.getState().localPersistenceBlocked) throw new Error('Persistenza locale bloccata: aggiornamento sospeso.');
-    persistOwnerBoundWorkoutSnapshot(session, state.dataOwner, state.localWorkout);
+    if (isConsentSuspended(session.owner)) {
+        // A withdrawn consent does not authorize writing device-critical data.
+        // Authenticate the existing copies, but NEVER replace them with the
+        // possibly stale suspended-screen RAM snapshot (especially null).
+        const stored = readDeviceValueStrict('workout', session.owner);
+        const intent = session.owner.startsWith('user:')
+            ? readWorkoutDeviceIntent(session.owner)
+            : null;
+        const durableWorkout: WorkoutSession | null = intent?.workout
+            ?? (stored === null ? null : JSON.parse(stored) as WorkoutSession);
+        if (state.localWorkout && !equivalentWorkoutSnapshot(state.localWorkout, durableWorkout)
+            && options.discardUnverifiedInMemoryData !== true) {
+            throw new UnverifiedTabSnapshotError();
+        }
+    } else {
+        persistOwnerBoundWorkoutSnapshot(session, state.dataOwner, state.localWorkout);
+    }
+    if (!isCurrentSession(session)) throw new Error('Sessione cambiata. Ripeti l’operazione.');
     return session;
 }
