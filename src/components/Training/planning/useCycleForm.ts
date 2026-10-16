@@ -111,6 +111,7 @@ export function useCycleForm({ initialCycle, routines, onSave, showAlert }: UseC
             setEndDate(newEnd);
             setEndDateTextInput(Logic.formatItalianDate(newEnd));
         } else if (startDate) {
+            // Preserve the existing blur recovery contract for incomplete text input.
             setDateTextInput(Logic.formatItalianDate(startDate));
         }
     };
@@ -195,11 +196,9 @@ export function useCycleForm({ initialCycle, routines, onSave, showAlert }: UseC
     };
 
     const handleAddRoutineById = (routineId: string) => {
-        if (!routineId) return;
-        setCycleRoutines(prev => [
-            ...prev,
-            { routineId, frequencyPerWeek: 1 }
-        ]);
+        if (!routineId || cycleRoutines.some(item => item.routineId === routineId)) return;
+        setCycleRoutines(prev => prev.some(item => item.routineId === routineId)
+            ? prev : [...prev, { routineId, frequencyPerWeek: 1 }]);
         const newCount = cycleRoutines.length + 1;
         if (!initialCycle?.sessionsPerWeek && parseInt(sessionsPerWeek, 10) === cycleRoutines.length) {
             setSessionsPerWeek(String(newCount));
@@ -273,8 +272,15 @@ export function useCycleForm({ initialCycle, routines, onSave, showAlert }: UseC
             await showAlert('Il ciclo deve durare da 1 a 52 settimane e prevedere da 1 a 14 sedute intere a settimana.');
             return;
         }
-        const validStartDate = Logic.parseDateInput(dateTextInput) || startDate || undefined;
-        const validEndDate = Logic.parseDateInput(endDateTextInput) || endDate || (validStartDate ? computeEndDate(validStartDate, weeks) : undefined);
+        // Never fall back to an old date when an edited text field is invalid.
+        // Persisting an inverted interval would make the timeline silently
+        // ignore the user's chosen endDate on subsequent reads.
+        const validStartDate = Logic.parseDateInput(dateTextInput);
+        const validEndDate = Logic.parseDateInput(endDateTextInput);
+        if (!validStartDate || !validEndDate || validEndDate < validStartDate) {
+            await showAlert('Inserisci date di inizio e fine valide, con la fine non precedente all’inizio.');
+            return;
+        }
         const hasStrategyDetails = Boolean(strategyIntent || primaryMuscles.length || secondaryMuscles.length);
         const editableStrategy: TrainingCycleStrategy | undefined = hasStrategyDetails
             ? {
@@ -330,8 +336,8 @@ export function useCycleForm({ initialCycle, routines, onSave, showAlert }: UseC
             startDate: startDate || undefined,
             endDate: endDate || undefined,
             routines: cycleRoutines
-        }, routines);
-    }, [name, tempWeeks, tempFreq, startDate, endDate, cycleRoutines, routines]);
+        }, routines, showSchedulePreview);
+    }, [name, tempWeeks, tempFreq, startDate, endDate, cycleRoutines, routines, showSchedulePreview]);
 
     return {
         refs: { startDatePickerRef, endDatePickerRef },

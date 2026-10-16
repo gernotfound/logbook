@@ -577,4 +577,90 @@ describe('account deletion recovery device registration retries', () => {
     }
   });
 
+  it('refuses a fifth account without evicting any existing recovery proof', async () => {
+    const { registerDeletionRecoveryDevice, DeletionRecoveryCredentialCapacityError } = await loadSubject();
+    const existing = Array.from({ length: 4 }, (_, index) => ({
+      uid: 'past-owner-' + index, token: 'A'.repeat(43),
+    }));
+    const serialized = JSON.stringify(existing);
+    localStorage.setItem('logbook_deletion_recovery_devices_v1', serialized);
+    const current = user('new-owner');
+    firebase.auth.currentUser = current;
+    const network = vi.fn();
+    vi.stubGlobal('fetch', network);
+
+    await expect(registerDeletionRecoveryDevice(current)).rejects.toBeInstanceOf(DeletionRecoveryCredentialCapacityError);
+    expect(localStorage.getItem('logbook_deletion_recovery_devices_v1')).toBe(serialized);
+    expect(network).not.toHaveBeenCalled();
+  });
+
+  it('preserves every unrelated legacy recovery proof when removing one from an over-capacity registry', async () => {
+    const { removeDeletionRecoveryCredential } = await loadSubject();
+    const existing = Array.from({ length: 5 }, (_, index) => ({
+      uid: 'past-owner-' + index, token: 'B'.repeat(43),
+    }));
+    localStorage.setItem('logbook_deletion_recovery_devices_v1', JSON.stringify(existing));
+    removeDeletionRecoveryCredential('past-owner-4');
+
+    expect(JSON.parse(localStorage.getItem('logbook_deletion_recovery_devices_v1')!))
+      .toEqual(existing.slice(0, 4));
+  });
+
+  it('retains all four account proofs across login switches and repeated registration', async () => {
+    const { registerDeletionRecoveryDevice } = await loadSubject();
+    const request = vi.fn(async () => new Response(JSON.stringify({ registered: true }), { status: 200 }));
+    vi.stubGlobal('fetch', request);
+    const original = new Map<string, string>();
+    for (const id of ['a', 'b', 'c', 'd']) {
+      const current = user(id);
+      firebase.auth.currentUser = current;
+      try {
+        await registerDeletionRecoveryDevice(current);
+      } catch (error) {
+        // Registration may be blocked by App Check in this unit harness.
+        // The local proof must remain available for a later retry.
+        expect(error).toMatchObject({ operation: 'device-registration', phase: 'app-check', kind: 'provider' });
+      }
+      const credentials = JSON.parse(localStorage.getItem('logbook_deletion_recovery_devices_v1')!);
+      const proof = credentials.find((entry: { uid: string }) => entry.uid === id);
+      expect(proof).toBeDefined();
+      original.set(id, proof.token);
+    }
+    // Reentering a known identity must reuse its proof even at capacity.
+    const again = user('b');
+    firebase.auth.currentUser = again;
+    const results = await Promise.allSettled([registerDeletionRecoveryDevice(again), registerDeletionRecoveryDevice(again)]);
+    for (const result of results) if (result.status === 'rejected') {
+      expect(result.reason).toMatchObject({ operation: 'device-registration', phase: 'app-check', kind: 'provider' });
+    }
+    const credentials = JSON.parse(localStorage.getItem('logbook_deletion_recovery_devices_v1')!);
+    expect(credentials).toHaveLength(4);
+    expect(new Set(credentials.map((entry: { uid: string }) => entry.uid)).size).toBe(4);
+    for (const entry of credentials) expect(entry.token).toBe(original.get(entry.uid));
+    expect(request.mock.calls.length).toBeLessThanOrEqual(6);
+  });
+
+  it('uses an exclusive browser lock to avoid concurrent proof overwrites when supported', async () => {
+    const { registerDeletionRecoveryDevice } = await loadSubject();
+    const descriptor = Object.getOwnPropertyDescriptor(navigator, 'locks');
+    const requestLock = vi.fn(async (_name: string, _options: unknown, task: () => unknown) => task());
+    Object.defineProperty(navigator, 'locks', { configurable: true, value: { request: requestLock } });
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ registered: true }), { status: 200 })));
+    const current = user('lock-owner');
+    firebase.auth.currentUser = current;
+    try {
+      const results = await Promise.allSettled([registerDeletionRecoveryDevice(current), registerDeletionRecoveryDevice(current)]);
+      for (const result of results) if (result.status === 'rejected') {
+        expect(result.reason).toMatchObject({ operation: 'device-registration', phase: 'app-check', kind: 'provider' });
+      }
+      expect(requestLock).toHaveBeenCalledTimes(2);
+      expect(requestLock.mock.calls[0][1]).toEqual({ mode: 'exclusive' });
+      const credentials = JSON.parse(localStorage.getItem('logbook_deletion_recovery_devices_v1')!);
+      expect(credentials).toHaveLength(1);
+    } finally {
+      if (descriptor) Object.defineProperty(navigator, 'locks', descriptor);
+      else Reflect.deleteProperty(navigator, 'locks');
+    }
+  });
+
 });

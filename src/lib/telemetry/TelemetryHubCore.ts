@@ -50,7 +50,6 @@ export class TelemetryHub {
   private isErrorMicrotaskPending = false;
   private isFlushing = false;
   private inFlightFlushPromise: Promise<void> | null = null;
-  private originalOnError?: typeof window.onerror;
 
   private constructor() {}
 
@@ -76,20 +75,6 @@ export class TelemetryHub {
       window.addEventListener('unhandledrejection', this.handleUnhandledRejection, false);
       window.addEventListener('online', this.handleOnlineEvent, false);
 
-      this.originalOnError = window.onerror;
-      window.onerror = (event, source, lineno, colno, error) => {
-        try {
-          const err = error || new Error(typeof event === 'string' ? event : 'Script error.');
-          this.trackError(err, { source: 'window_error' });
-        } catch {
-          // Ignore
-        }
-        if (typeof this.originalOnError === 'function') {
-          return this.originalOnError(event, source, lineno, colno, error);
-        }
-        return false;
-      };
-
       if (!this.isOffline()) {
         this.flushQueue().catch(() => {});
       }
@@ -101,10 +86,6 @@ export class TelemetryHub {
       window.removeEventListener('error', this.handleWindowError, false);
       window.removeEventListener('unhandledrejection', this.handleUnhandledRejection, false);
       window.removeEventListener('online', this.handleOnlineEvent, false);
-      if (this.originalOnError !== undefined) {
-        window.onerror = this.originalOnError;
-        this.originalOnError = undefined;
-      }
     }
 
     this.rateLimits.reset();

@@ -72,34 +72,22 @@ describe('Empirical Challenger: Training Cycles End Date & Two-Way Binding Adver
             expect(computeWeeksFromDatesDirect(start, end520)).toBe(520);
         });
 
-        it('calculateCycleTimeline handles 0 (defaults to 4) and negative durationWeeks (clamps to 1)', () => {
-            const cycleZero: TrainingCycle = {
-                id: 'c_zero',
-                name: 'Ciclo Zero',
-                durationWeeks: 0,
-                startDate: '2026-09-01',
-                routines: []
-            };
-
-            const timelineZero = calculateCycleTimeline(cycleZero, '2026-09-01');
-            // 0 is falsy, so fallback to default 4 weeks
-            expect(timelineZero.totalWeeks).toBe(4);
-            expect(timelineZero.endDate).toBe('2026-09-28');
-            expect(timelineZero.formattedRange).toBe('dal 01/09/2026 al 28/09/2026');
-
-            const cycleNeg: TrainingCycle = {
-                id: 'c_neg',
-                name: 'Ciclo Negativo',
-                durationWeeks: -10,
-                startDate: '2026-09-01',
-                routines: []
-            };
-
-            const timelineNeg = calculateCycleTimeline(cycleNeg, '2026-09-01');
-            // Negative number is clamped via Math.max(1, -10) -> 1 week
-            expect(timelineNeg.totalWeeks).toBe(1);
-            expect(timelineNeg.endDate).toBe('2026-09-07');
-            expect(timelineNeg.formattedRange).toBe('dal 01/09/2026 al 07/09/2026');
+        it('refuses unsafe historical cycle durations without silently replacing the persisted value', () => {
+            for (const durationWeeks of [0, -10]) {
+                const cycle: TrainingCycle = {
+                    id: 'c_invalid',
+                    name: 'Ciclo storico',
+                    durationWeeks,
+                    startDate: '2026-09-01',
+                    routines: []
+                };
+                const timeline = calculateCycleTimeline(cycle, '2026-09-01');
+                expect(timeline.totalWeeks).toBe(0);
+                expect(timeline.endDate).toBeUndefined();
+                expect(timeline.formattedRange).toBe('Parametri del ciclo non validi');
+                expect(timeline.statusLabel).toBe('Parametri del ciclo da correggere');
+                expect(cycle.durationWeeks).toBe(durationWeeks);
+            }
         });
 
         it('calculateCycleSchedule supports 100 weeks generating exactly 100 weekly items without memory blowup', () => {

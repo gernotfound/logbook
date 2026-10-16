@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { previewRoutineSets } from '../src/lib/routineSessionLimits';
 import type { UserData, WorkoutRoutine, WorkoutSession } from '../src/types';
 import {
     applyWorkoutCompletionDraft,
@@ -20,6 +21,54 @@ function createRuntime(): WorkoutPreparationRuntime {
 }
 
 describe('workout session preparation', () => {
+    it('bounds rendering work for an imported routine without changing its stored count', () => {
+        const imported = { setsCount: 1_000_000_000 };
+        expect(previewRoutineSets(imported.setsCount)).toBe(20);
+        expect(previewRoutineSets(-5)).toBe(1);
+        expect(imported.setsCount).toBe(1_000_000_000);
+    });
+
+    it('fails before creating a session from excessive imported set or segment counts without altering the routine', () => {
+        const badSegment = { id: 'unsafe', name: 'Storica', exercises: [{
+            exId: 'bench', setsCount: 1,
+            setPlans: [{ technique: 'cluster' as const, segmentCount: 1_000_000_000 }],
+        }] };
+        const oversizedSets = { ...badSegment, exercises: [{ exId: 'bench', setsCount: 1_000_000_000 }] };
+        const snapshot = JSON.stringify(badSegment);
+        expect(() => buildRoutineWorkout({}, badSegment, undefined, createRuntime()))
+            .toThrow('La scheda contiene troppe serie o segmenti');
+        expect(() => buildRoutineWorkout({}, oversizedSets, undefined, createRuntime()))
+            .toThrow('La scheda contiene troppe serie o segmenti');
+        expect(JSON.stringify(badSegment)).toBe(snapshot);
+
+        const safe = { ...badSegment, exercises: [{
+            exId: 'bench', setsCount: 20,
+            setPlans: [{ technique: 'cluster' as const, segmentCount: 20 }],
+        }] };
+        const workout = buildRoutineWorkout({}, safe, undefined, createRuntime());
+        expect(workout.exercises[0].sets).toHaveLength(20);
+        expect(workout.exercises[0].sets[0].segments).toHaveLength(19);
+    });
+
+    it('rejects oversized imported setPlans before cloning them or preparing a session', () => {
+        const oversized: WorkoutRoutine = {
+            id: 'oversized-plans', name: 'Scheda importata',
+            exercises: [{ exId: 'bench', setsCount: 1,
+                setPlans: Array.from({ length: 21 }, () => ({ technique: 'straight' as const })) }],
+        };
+        const snapshot = JSON.stringify(oversized);
+        expect(() => buildRoutineWorkout({}, oversized, undefined, createRuntime()))
+            .toThrow('La scheda contiene troppe serie o segmenti');
+        expect(JSON.stringify(oversized)).toBe(snapshot);
+
+        const supported = {
+            ...oversized, exercises: [{ exId: 'bench', setsCount: 20, setPlans: oversized.exercises[0].setPlans?.slice(0, 20) }],
+        };
+        const result = buildRoutineWorkout({}, supported, undefined, createRuntime());
+        expect(result.exercises[0].sets).toHaveLength(20);
+        expect(result.exercises[0]).toHaveProperty('setPlans', supported.exercises[0].setPlans);
+    });
+
     it('builds a routine workout with the same cycle and set semantics as the hook', () => {
         const routine = {
             id: 'routine-a',

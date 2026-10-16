@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { X, Plus, Search, Activity, Timer } from 'lucide-react';
 import { ExerciseLibraryItem } from '../../types';
-import { Logic, getDetailedMuscleCategory } from '../../lib/logic';
+import { getDetailedMuscleCategory } from '../../lib/logic';
+import { createExerciseLibrarySearcher } from '../../lib/calc/workout';
 
 export interface ExerciseSearchDropdownProps {
     library: ExerciseLibraryItem[];
@@ -30,15 +31,16 @@ export const ExerciseSearchDropdown: React.FC<ExerciseSearchDropdownProps> = ({
     const inputRef = useRef<HTMLInputElement>(null);
     const dropdownRef = useRef<HTMLDivElement>(null);
 
-    // Compute search results
-    const filteredExercises = useMemo(() => {
+    const exclusionKey = excludeIds?.join('\u0000') ?? '';
+    const searcher = useMemo(() => {
         let list = Array.isArray(library) ? library : [];
-        if (excludeIds && excludeIds.length > 0) {
-            const excludeSet = new Set(excludeIds);
+        if (exclusionKey) {
+            const excludeSet = new Set(exclusionKey.split('\u0000'));
             list = list.filter(item => item && !excludeSet.has(item.id));
         }
-        return Logic.searchExerciseLibrary(list, searchTerm);
-    }, [library, excludeIds, searchTerm]);
+        return createExerciseLibrarySearcher(list);
+    }, [library, exclusionKey]);
+    const filteredExercises = useMemo(() => searcher(searchTerm), [searcher, searchTerm]);
 
     // Handle outside clicks/touches
     useEffect(() => {

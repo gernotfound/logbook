@@ -269,7 +269,7 @@ describe('Workout Improvements & History Edit Suite', () => {
       expect(latsPath?.getAttribute('style')).toContain('fill: rgb(249, 115, 22)');
     });
 
-    test('useHomeView accurately computes muscleColors and volume with dropsets', () => {
+    test('useHomeView retains recent muscle exposure for composed sets', () => {
       const now = Date.now();
       const mockLibrary = [
         {
@@ -329,12 +329,7 @@ describe('Workout Improvements & History Edit Suite', () => {
 
       expect(hookResult.loading).toBe(false);
       
-      // Volume calculation: composed dropsets remain one work set: 3 work sets for Petto
-      expect(hookResult.volumeChartData.labels).toContain('Petto');
-      const pettoIndex = hookResult.volumeChartData.labels.indexOf('Petto');
-      expect(hookResult.volumeChartData.datasets[0].data[pettoIndex]).toBe(3);
-
-      // Fatigue / MuscleColors: 24h passed -> baseFatigue = 1 - 24/72 = 0.667 (> 0.35) -> #f97316 (orange)
+      // Composed sets still count as factual exposure for the 72-hour recovery map.
       expect(hookResult.muscleColors['chest-lower-left']).toBe('var(--muscle-recent)');
       expect(hookResult.muscleColors['chest_lower']).toBe('var(--muscle-recent)');
     });

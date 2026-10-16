@@ -25,10 +25,13 @@ export const CycleRoutinesList = memo(function CycleRoutinesList({
     const [isSearchOpen, setIsSearchOpen] = useState(false);
     const resultsId = useId();
     const exerciseNames = useMemo(() => new Map(library.map(exercise => [exercise.id, exercise.name])), [library]);
+    const routineMap = useMemo(() => new Map(routines.map(routine => [routine.id, routine])), [routines]);
 
     const matches = useMemo(() => {
         const normalized = query.trim().toLocaleLowerCase('it');
+        const selectedIds = new Set(cycleRoutines.map(item => item.routineId));
         return routines.filter(routine => {
+            if (selectedIds.has(routine.id)) return false;
             if (!normalized) return true;
             const names = (routine.exercises ?? [])
                 .map(item => exerciseNames.get(item.exId) ?? '')
@@ -38,7 +41,7 @@ export const CycleRoutinesList = memo(function CycleRoutinesList({
                 .toLocaleLowerCase('it')
                 .includes(normalized);
         });
-    }, [exerciseNames, query, routines]);
+    }, [cycleRoutines, exerciseNames, query, routines]);
 
     const addRoutine = (routineId: string) => {
         onAdd(routineId);
@@ -74,7 +77,7 @@ export const CycleRoutinesList = memo(function CycleRoutinesList({
                         }}
                         onChange={event => {
                             const value = event.target.value;
-                            const exactRoutine = routines.find(routine => routine.id === value);
+                            const exactRoutine = routineMap.get(value);
                             if (exactRoutine) {
                                 addRoutine(exactRoutine.id);
                                 return;
@@ -117,8 +120,8 @@ export const CycleRoutinesList = memo(function CycleRoutinesList({
             ) : (
                 <div className="planning-sequence-list">
                     {cycleRoutines.map((item, index) => {
-                        const routine = routines.find(candidate => candidate.id === item.routineId);
-                        const name = routine?.name ?? 'Scheda';
+                        const routine = routineMap.get(item.routineId);
+                        const name = routine?.name ?? 'Scheda non disponibile';
                         return (
                             <div key={`${item.routineId}-${index}`} className="planning-sequence-row">
                                 <span className="planning-sequence-index" aria-hidden="true">{String.fromCharCode(65 + (index % 26))}</span>

@@ -30,6 +30,7 @@ ChartJS.register(
 );
 
 export interface VolumeCaloriesCorrelationChartProps {
+  isActive?: boolean;
   history?: WorkoutSession[];
   nutrition?: Record<string, NutritionDay>;
   library?: Exercise[];
@@ -49,6 +50,7 @@ const PERIOD_OPTIONS = [
 ];
 
 export default function VolumeCaloriesCorrelationChart({
+  isActive = true,
   history = EMPTY_HISTORY,
   nutrition = EMPTY_NUTRITION,
   library = EMPTY_LIBRARY,
@@ -58,7 +60,7 @@ export default function VolumeCaloriesCorrelationChart({
   const { colors, reducedMotion } = useChartAppearance();
   const [selectedWeeks, setSelectedWeeks] = useState<number>(defaultWeeks);
   const [isCalculating, setIsCalculating] = useState(true);
-  const { calculateCorrelationStats } = useAnalyticsWorker();
+  const { calculateCorrelationStats } = useAnalyticsWorker(isActive);
 
   const [calcResult, setCalcResult] = useState<{points: any[], stats: any}>({
     points: [],
@@ -72,6 +74,7 @@ export default function VolumeCaloriesCorrelationChart({
   }
 
   useEffect(() => {
+    if (!isActive) return;
     let isMounted = true;
 
     calculateCorrelationStats(history, nutrition, library, userWeight, selectedWeeks)
@@ -88,7 +91,7 @@ export default function VolumeCaloriesCorrelationChart({
       });
 
     return () => { isMounted = false; };
-  }, [history, nutrition, library, userWeight, selectedWeeks, calculateCorrelationStats]);
+  }, [isActive, history, nutrition, library, userWeight, selectedWeeks, calculateCorrelationStats]);
 
   const { points, stats } = calcResult;
 

@@ -285,74 +285,97 @@ interface SearchableFood {
     unit?: string;
 }
 
-export function searchFoods<T extends SearchableFood>(foodsList: T[], query: string, categoryFilter?: string): T[] {
-    if (!Array.isArray(foodsList) || foodsList.length === 0) return [];
+export function createFoodSearcher<T extends SearchableFood>(foodsList: T[], categoryFilter?: string): (query: string) => T[] {
+    if (!Array.isArray(foodsList) || foodsList.length === 0) return () => [];
     let results = foodsList;
     if (categoryFilter && categoryFilter !== 'all') {
         results = results.filter(item => item && item.category === categoryFilter);
     }
-    if (!query || typeof query !== 'string' || !query.trim()) {
-        return results;
-    }
-    const q = normalizeFoodStr(query);
-    if (!q) return results;
+    type PreparedFood = { item: T; name: string; category: string; servingUnit: string; brand: string } | null;
+    let prepared: PreparedFood[] | undefined;
+    const normalizedNames = new Map<T, string>();
+    let fuse: Fuse<T> | undefined;
+    const nameOf = (item: T) => normalizedNames.get(item) ?? normalizeFoodStr(item.name);
+    return (query: string): T[] => {
+        if (!query || typeof query !== 'string' || !query.trim()) {
+            return results;
+        }
+        const q = normalizeFoodStr(query);
+        if (!q) return results;
 
-    // Direct substring matches
-    const directMatched = results.filter(item => {
-        if (!item) return false;
-        const name = normalizeFoodStr(item.name);
-        const category = normalizeFoodStr(item.category);
-        const servingUnit = normalizeFoodStr(item.servingUnit || item.unit);
-        const brand = normalizeFoodStr(item.brand);
-        return name.includes(q) || category.includes(q) || servingUnit.includes(q) || brand.includes(q);
-    });
+        if (!prepared) {
+            prepared = results.map(item => item ? {
+                item,
+                name: normalizeFoodStr(item.name),
+                category: normalizeFoodStr(item.category),
+                servingUnit: normalizeFoodStr(item.servingUnit || item.unit),
+                brand: normalizeFoodStr(item.brand)
+            } : null);
+            for (const entry of prepared) {
+                if (entry) normalizedNames.set(entry.item, entry.name);
+            }
+        }
 
-    if (q.length < 2) {
-        return directMatched.sort((a, b) => {
-            const aName = normalizeFoodStr(a.name);
-            const bName = normalizeFoodStr(b.name);
+        // Direct substring matches
+        const directMatched: T[] = [];
+        for (const entry of prepared) {
+            if (entry && (entry.name.includes(q) || entry.category.includes(q)
+                || entry.servingUnit.includes(q) || entry.brand.includes(q))) {
+                directMatched.push(entry.item);
+            }
+        }
+
+        if (q.length < 2) {
+            return directMatched.sort((a, b) => {
+                const aName = nameOf(a);
+                const bName = nameOf(b);
+                const aStarts = aName.startsWith(q);
+                const bStarts = bName.startsWith(q);
+                if (aStarts && !bStarts) return -1;
+                if (!aStarts && bStarts) return 1;
+                return aName.localeCompare(bName, 'it');
+            });
+        }
+
+        // Build Fuse only if the query actually needs fuzzy matching.
+        const currentFuse = fuse ?? (fuse = new Fuse(results, FUSE_FOOD_OPTIONS));
+
+        const tokens = query.trim().split(/\s+/).filter(t => t.length >= 2);
+        let fuzzyMatched: T[] = [];
+        if (tokens.length > 1) {
+            // Find items that match all tokens
+            const tokenMatches = tokens.map(tok => new Set(currentFuse.search(tok).map(r => r.item)));
+            const allMatch = results.filter(item => tokenMatches.every(set => set.has(item)));
+            const singleMatches = currentFuse.search(query.trim()).map(res => res.item);
+            fuzzyMatched = [...allMatch, ...singleMatches];
+        } else {
+            fuzzyMatched = currentFuse.search(query.trim()).map(res => res.item);
+        }
+
+        const seen = new Set<string | number>();
+        const merged: T[] = [];
+        for (const f of [...directMatched, ...fuzzyMatched]) {
+            const key = f.id ?? f.name;
+            if (!seen.has(key)) {
+                seen.add(key);
+                merged.push(f);
+            }
+        }
+
+        return merged.sort((a, b) => {
+            const aName = nameOf(a);
+            const bName = nameOf(b);
             const aStarts = aName.startsWith(q);
             const bStarts = bName.startsWith(q);
             if (aStarts && !bStarts) return -1;
             if (!aStarts && bStarts) return 1;
             return aName.localeCompare(bName, 'it');
         });
-    }
+    };
+}
 
-    // Fuzzy matches with Fuse.js
-    const fuse = new Fuse(results, FUSE_FOOD_OPTIONS);
-
-    const tokens = query.trim().split(/\s+/).filter(t => t.length >= 2);
-    let fuzzyMatched: T[] = [];
-    if (tokens.length > 1) {
-        // Find items that match all tokens
-        const tokenMatches = tokens.map(tok => new Set(fuse.search(tok).map(r => r.item)));
-        const allMatch = results.filter(item => tokenMatches.every(set => set.has(item)));
-        const singleMatches = fuse.search(query.trim()).map(res => res.item);
-        fuzzyMatched = [...allMatch, ...singleMatches];
-    } else {
-        fuzzyMatched = fuse.search(query.trim()).map(res => res.item);
-    }
-
-    const seen = new Set<string | number>();
-    const merged: T[] = [];
-    for (const f of [...directMatched, ...fuzzyMatched]) {
-        const key = f.id ?? f.name;
-        if (!seen.has(key)) {
-            seen.add(key);
-            merged.push(f);
-        }
-    }
-
-    return merged.sort((a, b) => {
-        const aName = normalizeFoodStr(a.name);
-        const bName = normalizeFoodStr(b.name);
-        const aStarts = aName.startsWith(q);
-        const bStarts = bName.startsWith(q);
-        if (aStarts && !bStarts) return -1;
-        if (!aStarts && bStarts) return 1;
-        return aName.localeCompare(bName, 'it');
-    });
+export function searchFoods<T extends SearchableFood>(foodsList: T[], query: string, categoryFilter?: string): T[] {
+    return createFoodSearcher(foodsList, categoryFilter)(query);
 }
 
 export function validateCustomFood(foodData: any) {

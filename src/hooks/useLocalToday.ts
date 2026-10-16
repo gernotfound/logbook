@@ -1,21 +1,44 @@
-import { useEffect, useState } from 'react';
+import { useSyncExternalStore } from 'react';
 import { Logic } from '../lib/logic';
 
+let currentToday = Logic.getLocalDateString();
+const listeners = new Set<() => void>();
+let midnightTimer: ReturnType<typeof setTimeout> | undefined;
+
+function refreshToday() {
+    const nextToday = Logic.getLocalDateString();
+    if (nextToday !== currentToday) {
+        currentToday = nextToday;
+        listeners.forEach(listener => listener());
+    }
+    if (midnightTimer !== undefined) clearTimeout(midnightTimer);
+    if (listeners.size === 0) {
+        midnightTimer = undefined;
+        return;
+    }
+    const now = new Date();
+    const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+    midnightTimer = setTimeout(refreshToday, Math.max(50, midnight.getTime() - now.getTime() + 50));
+}
+
+function subscribe(listener: () => void) {
+    listeners.add(listener);
+    if (listeners.size === 1) {
+        document.addEventListener('visibilitychange', refreshToday);
+        window.addEventListener('focus', refreshToday);
+    }
+    refreshToday();
+    return () => {
+        listeners.delete(listener);
+        if (listeners.size === 0) {
+            document.removeEventListener('visibilitychange', refreshToday);
+            window.removeEventListener('focus', refreshToday);
+            if (midnightTimer !== undefined) clearTimeout(midnightTimer);
+            midnightTimer = undefined;
+        }
+    };
+}
+
 export function useLocalToday(): string {
-    const [today, setToday] = useState(() => Logic.getLocalDateString());
-    useEffect(() => {
-        let timer: ReturnType<typeof setTimeout>;
-        const refresh = () => {
-            clearTimeout(timer);
-            setToday(Logic.getLocalDateString());
-            const now = new Date();
-            const next = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
-            timer = setTimeout(refresh, Math.max(50, next.getTime() - now.getTime() + 50));
-        };
-        refresh();
-        document.addEventListener('visibilitychange', refresh);
-        window.addEventListener('focus', refresh);
-        return () => { clearTimeout(timer); document.removeEventListener('visibilitychange', refresh); window.removeEventListener('focus', refresh); };
-    }, []);
-    return today;
+    return useSyncExternalStore(subscribe, () => currentToday, () => currentToday);
 }

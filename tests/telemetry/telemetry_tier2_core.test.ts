@@ -278,22 +278,18 @@ describe('Unified Telemetry Hub E2E Suite — Tier 2 Core', () => {
     });
 
     describe('F5 Boundaries: Global Window Handlers Edge Conditions', () => {
-      it('F5-B1: window.onerror invoked with all undefined arguments', () => {
+      it('F5-B1: global ErrorEvent without an Error object is non-blocking', () => {
         telemetryHub.init();
         expect(() => {
-          if (window.onerror) {
-            (window.onerror as any)(undefined, undefined, undefined, undefined, undefined);
-          }
+          window.dispatchEvent(new ErrorEvent('error'));
         }).not.toThrow();
       });
 
-      it('F5-B2: window.onerror invoked with cross-origin "Script error."', async () => {
+      it('F5-B2: global cross-origin "Script error." is still reported', async () => {
         vi.useFakeTimers();
         telemetryHub.init();
 
-        if (window.onerror) {
-          (window.onerror as any)('Script error.', '', 0, 0, undefined);
-        }
+        window.dispatchEvent(new ErrorEvent('error', { message: 'Script error.' }));
 
         await vi.advanceTimersByTimeAsync(100);
         expect(mockSetDoc).toHaveBeenCalled();
