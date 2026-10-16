@@ -89,7 +89,7 @@ it('2. V3 API: replay is idempotent', async () => {
     expect(saved._sync.fields['profile/name'].seq).toBe(1);
 });
 
-it('2b. V3 API: contention smoke test converges to the semantic operation', async () => {
+it('2b. V3 API: replay converges after an interfering out-of-band write', async () => {
     const db = asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore());
     const replica = await registerReplica(db, 'a');
     const writer0 = { slot: replica.slot, replicaId: replica.replicaId, generation: replica.generation, seq: 0 };
@@ -114,6 +114,9 @@ it('2b. V3 API: contention smoke test converges to the semantic operation', asyn
         });
     });
     await promise;
+    // The administrative write can race before or after the transaction commit.
+    // A deliberate replay must converge regardless of which write was last.
+    await applyDocumentChanges(db, 'a', ops, () => true, replica);
 
     const saved = (await getDoc(doc(db, 'users/a'))).data()!;
     expect(saved.profile.name).toBe('TestRetry');
