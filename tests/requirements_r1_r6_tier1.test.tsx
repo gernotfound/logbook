@@ -521,7 +521,7 @@ describe('TheLogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => 
             });
 
             it('T1.4.6: supports time trackingType rendering time input placeholder', () => {
-                const set = { id: 's1', kg: '', time: '60s' };
+                const set = { id: 's1', kg: '', reps: '', time: '60s' };
                 render(
                     <SessionSetRow 
                         set={set}
@@ -571,7 +571,7 @@ describe('TheLogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => 
                     id: 's1',
                     kg: '100',
                     reps: '8',
-                    technique: 'cluster',
+                    technique: 'cluster' as const,
                     segments: [{
                         id: 'seg1',
                         kg: '73',
