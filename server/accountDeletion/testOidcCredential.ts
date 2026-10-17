@@ -35,7 +35,13 @@ type AccessToken = Awaited<ReturnType<Credential['getAccessToken']>>;
 async function exchangeForImpersonatedToken(): Promise<AccessToken> {
   // Vercel issues a separate short-lived token with this GCP-only audience.
   // The GCP provider also verifies issuer + the exact Test project subject.
-  const oidcToken = await getVercelOidcToken({ audience: TOKEN_AUDIENCE });
+  let oidcToken: string;
+  try {
+    oidcToken = await getVercelOidcToken({ audience: TOKEN_AUDIENCE });
+  } catch {
+    // SDK failures may contain token or provider details: expose only this fixed category.
+    throw new Error('Test Vercel OIDC token acquisition failed.');
+  }
   if (!oidcToken) throw new Error('Vercel OIDC token unavailable.');
 
   const stsResponse = await fetch(STS_URL, {
@@ -50,7 +56,7 @@ async function exchangeForImpersonatedToken(): Promise<AccessToken> {
       scope: GOOGLE_SCOPE,
     }),
     signal: AbortSignal.timeout(15_000),
-  });
+  }).catch(() => { throw new Error('Test WIF transport failed.'); });
   if (!stsResponse.ok) throw new Error('Test WIF token exchange rejected.');
   const sts: unknown = await stsResponse.json();
   if (!sts || typeof sts !== 'object' || !('access_token' in sts)
@@ -66,7 +72,7 @@ async function exchangeForImpersonatedToken(): Promise<AccessToken> {
     },
     body: JSON.stringify({ scope: [GOOGLE_SCOPE], lifetime: '3600s' }),
     signal: AbortSignal.timeout(15_000),
-  });
+  }).catch(() => { throw new Error('Test IAM transport failed.'); });
   if (!impersonationResponse.ok) throw new Error('Test service-account impersonation rejected.');
   const impersonation: unknown = await impersonationResponse.json();
   if (!impersonation || typeof impersonation !== 'object'
@@ -100,9 +106,15 @@ export function classifyTestFirestoreReadFailure(error: unknown): string {
   const message = error instanceof Error ? error.message : '';
   switch (message) {
     case 'Vercel OIDC token unavailable.': return 'vercel-oidc-missing';
+    case 'Test Vercel OIDC token acquisition failed.': return 'vercel-oidc-acquisition-failed';
+    case 'Test WIF transport failed.': return 'google-sts-transport-failed';
     case 'Test WIF token exchange rejected.': return 'google-sts-rejected';
+    case 'Test IAM transport failed.': return 'iam-transport-failed';
     case 'Test service-account impersonation rejected.': return 'iam-impersonation-rejected';
     case 'Isolated Vercel Test OIDC environment is not configured safely.': return 'unsafe-test-runtime-env';
+    case 'Test WIF token exchange returned no access token.': return 'google-sts-invalid-response';
+    case 'Test service-account impersonation returned an invalid response.': return 'iam-invalid-response';
+    case 'Test service-account access token has an invalid expiry.': return 'iam-invalid-expiry';
     default: return 'unclassified';
   }
 }

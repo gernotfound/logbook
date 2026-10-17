@@ -45,6 +45,12 @@ describe('isolated Vercel Test Firebase Admin identity federation', () => {
     expect(classifyTestFirestoreReadFailure(Object.assign(new Error('private remote details'), { code: 7 }))).toBe('grpc-7');
     expect(classifyTestFirestoreReadFailure(Object.assign(new Error('private remote details'), { code: 'permission-denied' }))).toBe('permission-denied');
     expect(classifyTestFirestoreReadFailure(new Error('Test WIF token exchange rejected.'))).toBe('google-sts-rejected');
+    expect(classifyTestFirestoreReadFailure(new Error('Test Vercel OIDC token acquisition failed.'))).toBe('vercel-oidc-acquisition-failed');
+    expect(classifyTestFirestoreReadFailure(new Error('Test WIF transport failed.'))).toBe('google-sts-transport-failed');
+    expect(classifyTestFirestoreReadFailure(new Error('Test IAM transport failed.'))).toBe('iam-transport-failed');
+    expect(classifyTestFirestoreReadFailure(new Error('Test WIF token exchange returned no access token.'))).toBe('google-sts-invalid-response');
+    expect(classifyTestFirestoreReadFailure(new Error('Test service-account impersonation returned an invalid response.'))).toBe('iam-invalid-response');
+    expect(classifyTestFirestoreReadFailure(new Error('Test service-account access token has an invalid expiry.'))).toBe('iam-invalid-expiry');
     expect(classifyTestFirestoreReadFailure(new Error('Test service-account impersonation rejected.'))).toBe('iam-impersonation-rejected');
     expect(classifyTestFirestoreReadFailure(new Error('do-not-log-sensitive-information'))).toBe('unclassified');
     expect(classifyTestFirestoreReadFailure(null)).toBe('unclassified');
@@ -135,6 +141,18 @@ describe('isolated Vercel Test Firebase Admin identity federation', () => {
       }));
     await expect(credential.getAccessToken()).resolves.toMatchObject({ access_token: 'impersonated-token' });
     expect(mockFetch).toHaveBeenCalledTimes(3);
+  });
+
+  it('sanitizes failures at Vercel token acquisition, STS and IAM transport boundaries', async () => {
+    oidc.getVercelOidcToken.mockRejectedValueOnce(new Error('sensitive oidc provider response'));
+    await expect(createTestOidcCredential().getAccessToken()).rejects.toThrow('Test Vercel OIDC token acquisition failed.');
+    const failingSts = vi.fn().mockRejectedValueOnce(new Error('sensitive STS transport detail'));
+    vi.stubGlobal('fetch', failingSts);
+    await expect(createTestOidcCredential().getAccessToken()).rejects.toThrow('Test WIF transport failed.');
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce(json({ access_token: 'temporary-token' }))
+      .mockRejectedValueOnce(new Error('sensitive IAM transport detail')));
+    await expect(createTestOidcCredential().getAccessToken()).rejects.toThrow('Test IAM transport failed.');
   });
 
   it('rejects malformed IAM responses, expired grants and missing Vercel tokens', async () => {
