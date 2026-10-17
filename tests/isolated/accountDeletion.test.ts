@@ -99,6 +99,65 @@ beforeEach(async () => {
 
 afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
+it('drains owner-scoped keys discovered during a previous localStorage purge pass', async () => {
+    const owner = 'user:a';
+    const first = 'logbook:v2:user:a:sealed:workout';
+    const late = 'logbook:v2:user:a:sealed:late-workout';
+    const unrelated = 'logbook:v2:user:b:sealed:workout';
+    const control = 'logbook:v2:user:a:secure-vault-control';
+    disk.set(first, 'tlb-sealed:v1:original');
+    disk.set(control, 'owner-a-wrapping-key');
+    disk.set(unrelated, 'owner-b-ciphertext');
+    const remove = localStorage.removeItem.bind(localStorage);
+    let introduced = false;
+    const intercepted = vi.spyOn(localStorage, 'removeItem').mockImplementation((key: string) => {
+        remove(key);
+        if (key === first && !introduced) {
+            introduced = true;
+            disk.set(late, 'tlb-sealed:v1:delayed-write');
+        }
+    });
+
+    try {
+        await purgeCompletedAccountLocalData(owner);
+    } finally {
+        intercepted.mockRestore();
+    }
+
+    expect(introduced).toBe(true);
+    expect(disk.has(first)).toBe(false);
+    expect(disk.has(late)).toBe(false);
+    expect(disk.has(control)).toBe(false);
+    expect(disk.get(unrelated)).toBe('owner-b-ciphertext');
+    expect(isLocalPurgePending(owner)).toBe(true);
+});
+
+it('keeps the encryption control and purge fence when new storage keys keep reappearing', async () => {
+    const owner = 'user:a';
+    const rotating = 'logbook:v2:user:a:sealed:reappearing';
+    const control = 'logbook:v2:user:a:secure-vault-control';
+    disk.set(rotating, 'tlb-sealed:v1:recoverable');
+    disk.set(control, 'wrapped-key-must-survive');
+    const remove = localStorage.removeItem.bind(localStorage);
+    const intercepted = vi.spyOn(localStorage, 'removeItem').mockImplementation((key: string) => {
+        remove(key);
+        if (key === rotating) disk.set(rotating, 'tlb-sealed:v1:recoverable');
+    });
+
+    try {
+        await expect(purgeCompletedAccountLocalData(owner)).rejects.toThrow('Pulizia locale incompleta');
+        expect(disk.get(control)).toBe('wrapped-key-must-survive');
+        expect(disk.has(rotating)).toBe(true);
+        expect(isLocalPurgePending(owner)).toBe(true);
+    } finally {
+        intercepted.mockRestore();
+    }
+
+    await purgeCompletedAccountLocalData(owner);
+    expect(disk.has(rotating)).toBe(false);
+    expect(disk.has(control)).toBe(false);
+});
+
 it('retains the wrapped data-encryption key when a sealed local snapshot cannot be purged', async () => {
     const control = 'logbook:v2:user:a:secure-vault-control';
     const sealedWorkout = 'logbook:v2:user:a:sealed:workout';
