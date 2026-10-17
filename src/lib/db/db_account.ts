@@ -144,6 +144,13 @@ export async function purgeCompletedHealthDataLocal(owner: string): Promise<void
         preflight: async () => {
             if (!isCurrentSession(session)) throw new Error('Sessione cambiata prima della pulizia locale.');
             if (isAccountDeletionPending(owner)) throw new Error('Cancellazione account concorrente in corso.');
+            // The first trusted proof can go stale while another tab owns the
+            // vault lock. Revalidate the consent epoch under the lock before
+            // installing the destructive, durable fence. A resumed purge is
+            // already fenced; it keeps its initial proof above.
+            await assertCurrentHealthDataErasureCompleted(owner.slice('user:'.length));
+            if (!isCurrentSession(session)) throw new Error('Sessione cambiata prima della pulizia locale.');
+            if (isAccountDeletionPending(owner)) throw new Error('Cancellazione account concorrente in corso.');
         },
         afterFence: async () => {},
     });

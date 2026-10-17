@@ -22,7 +22,7 @@ vi.mock('../../src/lib/firebase', () => ({
 vi.mock('../../src/lib/appCheck', () => ({ getLimitedUseAppCheckToken: boundary.appCheck }));
 vi.mock('../../src/lib/sync/replicateJournal', () => ({ waitForJournalIdle: boundary.idle }));
 
-import { deleteAccount, purgeAllLocalUserData, purgeCompletedAccountLocalData, resumeAccountDeletion } from '../../src/lib/db/db_account';
+import { deleteAccount, purgeAllLocalUserData, purgeCompletedAccountLocalData, purgeCompletedHealthDataLocal, resumeAccountDeletion } from '../../src/lib/db/db_account';
 import { invalidateSession } from '../../src/lib/sync/session';
 import { createLocalKeyVault, deviceVaultKeyId } from '../../src/lib/sync/secureArchiveKeys';
 import { isVaultUnlocked } from '../../src/lib/sync/secureArchiveSession';
@@ -98,6 +98,61 @@ beforeEach(async () => {
 });
 
 afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+
+const completeHealthProof = () => response(200, {
+    status: 'complete', complete: true, localPurgeAuthorized: true,
+});
+
+it('revalidates health-erasure completion only after acquiring the owner lock', async () => {
+    let unlock!: () => void;
+    const locked = new Promise<void>(resolve => { unlock = resolve; });
+    let lockEntered = false;
+    vi.stubGlobal('navigator', { locks: { request: async (_name: string, _options: unknown, action: () => Promise<unknown>) => {
+        await locked;
+        lockEntered = true;
+        return action();
+    } } });
+    boundary.auth.currentUser.getIdToken = vi.fn(async () => 'firebase-id-token');
+    boundary.fetch.mockResolvedValueOnce(completeHealthProof())
+        .mockResolvedValueOnce(response(200, {
+            status: 'complete', complete: true, localPurgeAuthorized: false,
+        }));
+
+    const work = purgeCompletedHealthDataLocal('user:a');
+    await vi.waitFor(() => expect(boundary.fetch).toHaveBeenCalledTimes(1));
+    expect(lockEntered).toBe(false);
+    expect(await get('logbook:v2:user:a')).toEqual({ original: 'recoverable' });
+    unlock();
+
+    await expect(work).rejects.toThrow('non è verificata');
+    expect(boundary.fetch).toHaveBeenCalledTimes(2);
+    expect(await get('logbook:v2:user:a')).toEqual({ original: 'recoverable' });
+    expect(isLocalPurgePending('user:a')).toBe(false);
+});
+
+it('preserves the original archive if the trusted recheck under lock is unavailable', async () => {
+    boundary.auth.currentUser.getIdToken = vi.fn(async () => 'firebase-id-token');
+    boundary.fetch.mockResolvedValueOnce(completeHealthProof())
+        .mockResolvedValueOnce(response(503, { error: 'Temporaneamente non disponibile' }));
+
+    await expect(purgeCompletedHealthDataLocal('user:a'))
+        .rejects.toThrow('Non è stato possibile verificare la ricevuta');
+    expect(boundary.fetch).toHaveBeenCalledTimes(2);
+    expect(await get('logbook:v2:user:a')).toEqual({ original: 'recoverable' });
+    expect(isLocalPurgePending('user:a')).toBe(false);
+});
+
+it('finishes data-only erasure after two current trusted proofs, preserving another owner', async () => {
+    boundary.auth.currentUser.getIdToken = vi.fn(async () => 'firebase-id-token');
+    boundary.fetch.mockResolvedValue(completeHealthProof());
+
+    await purgeCompletedHealthDataLocal('user:a');
+
+    expect(boundary.fetch).toHaveBeenCalledTimes(2);
+    expect(await get('logbook:v2:user:a')).toBeUndefined();
+    expect(await get('logbook:v2:user:b')).toEqual({ original: 'other owner' });
+    expect(isLocalPurgePending('user:a')).toBe(true);
+});
 
 it('drains owner-scoped keys discovered during a previous localStorage purge pass', async () => {
     const owner = 'user:a';
