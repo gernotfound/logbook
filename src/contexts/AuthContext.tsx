@@ -26,6 +26,7 @@ import {
 import { safeHardReload } from '../lib/sync/safeReload';
 import { prepareForReload } from '../lib/sync/reloadBarrier';
 import { prepareAuthenticatedLogout } from './auth/prepareAuthenticatedLogout';
+import { useUnverifiedLocalContinuation } from './auth/useUnverifiedLocalContinuation';
 import { bootstrapAuthenticatedSession } from './auth/bootstrapAuthenticatedSession';
 import { watchDeletionRecoveryDeviceRegistration } from '../lib/deletionDeviceRecovery';
 import { RecoveryDiagnosticTracker } from '../lib/deletionRecoveryDiagnostics';
@@ -347,28 +348,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         isGuestRef, setIsGuest, setGuestMigrationStatus, setUserData, setSaveError,
     });
 
-    const continueUnverifiedLocally = useCallback(async () => {
-        const user = auth.currentUser;
-        if (!user || user.emailVerified !== false) {
-            throw new Error('Nessuna verifica email in attesa.');
-        }
-        // Reconcile any in-memory edits and device-critical drafts before switching
-        // owner; a failed durability check must leave the account session intact.
-        const current = useAppStore.getState();
-        if (current.userData !== null || current.localWorkout !== null) {
-            await prepareForReload();
-        }
-        // Sign out without the authenticated purge path: local owner envelopes and
-        // any guest migration intent must survive until an explicit verified login.
-        await signOut(auth);
-        lockVault(userOwner(user.uid));
-        if (!isGuestActiveStrict()) {
-            // Never seed a fresh guest from another authenticated user's in-memory data.
-            // resetStore does not delete the authenticated IndexedDB envelope.
-            useAppStore.getState().resetStore({ force: true });
-            await loginAsGuest();
-        }
-    }, [isGuestActiveStrict, loginAsGuest]);
+    const continueUnverifiedLocally = useUnverifiedLocalContinuation({
+        isGuestActiveStrict, loginAsGuest,
+    });
 
     const retryGuestMigration = useGuestMigrationRetry({
         isGuestActiveStrict, setSaveError, setSyncing,
