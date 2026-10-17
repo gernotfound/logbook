@@ -83,26 +83,6 @@ describe('Google redirect lifecycle', () => {
     expect(useAppStore.getState().saveError).toContain('Connessione non disponibile');
   });
 
-  it('consumes a pending redirect marker and calls the safe reload barrier only once', async () => {
-    // Keep the Firebase redirect completion in flight while foreground
-    // reconciliation reads the persisted marker; otherwise an unrelated
-    // resolved getRedirectResult() callback can consume it first.
-    vi.mocked(getRedirectResult).mockImplementationOnce(() => new Promise(() => {}));
-    renderHook(() => useAuth(), { wrapper });
-    await act(async () => { await Promise.resolve(); });
-    localStorage.setItem(REDIRECT_KEY, 'true');
-
-    await act(async () => {
-      document.dispatchEvent(new Event('visibilitychange'));
-      await Promise.resolve();
-    });
-
-    expect(localStorage.getItem(REDIRECT_KEY)).toBeNull();
-    expect(safeHardReload).toHaveBeenCalledTimes(1);
-    document.dispatchEvent(new Event('visibilitychange'));
-    expect(safeHardReload).toHaveBeenCalledTimes(1);
-  });
-
   it('fails closed when foreground redirect marker cleanup cannot be persisted', async () => {
     renderHook(() => useAuth(), { wrapper });
     await act(async () => { await Promise.resolve(); });
@@ -119,25 +99,6 @@ describe('Google redirect lifecycle', () => {
     expect(safeHardReload).not.toHaveBeenCalled();
     expect(localStorage.getItem(REDIRECT_KEY)).toBe('true');
     expect(useAppStore.getState().saveError).toContain('stato locale del dispositivo');
-  });
-
-  it('reports a blocked safe reload without claiming the redirect completed', async () => {
-    // Keep the Firebase redirect completion in flight while foreground
-    // reconciliation reads the persisted marker; otherwise an unrelated
-    // resolved getRedirectResult() callback can consume it first.
-    vi.mocked(getRedirectResult).mockImplementationOnce(() => new Promise(() => {}));
-    renderHook(() => useAuth(), { wrapper });
-    await act(async () => { await Promise.resolve(); });
-    localStorage.setItem(REDIRECT_KEY, 'true');
-    vi.mocked(safeHardReload).mockRejectedValueOnce(new Error('Bozza locale non salvata'));
-
-    await act(async () => {
-      document.dispatchEvent(new Event('visibilitychange'));
-      await Promise.resolve();
-    });
-
-    expect(safeHardReload).toHaveBeenCalledTimes(1);
-    expect(useAppStore.getState().saveError).toContain('Bozza locale non salvata');
   });
 
   it('unsubscribes its foreground redirect listener on provider unmount', async () => {

@@ -3,6 +3,27 @@ import { auth, getRedirectResult } from '../../lib/firebase';
 import { readBrowserValue, tryRemoveBrowserValue } from '../../lib/sync/browserStorage';
 import { safeHardReload } from '../../lib/sync/safeReload';
 
+type RedirectRecoveryEnvironment = {
+    visibility: () => DocumentVisibilityState;
+    listen: (callback: () => void) => () => void;
+    read: (key: string) => string | null;
+    remove: (key: string) => boolean;
+    reload: () => Promise<void>;
+    getRedirect: () => Promise<unknown>;
+};
+
+const browserEnvironment: RedirectRecoveryEnvironment = {
+    visibility: () => document.visibilityState,
+    listen: callback => {
+        document.addEventListener('visibilitychange', callback);
+        return () => document.removeEventListener('visibilitychange', callback);
+    },
+    read: readBrowserValue,
+    remove: tryRemoveBrowserValue,
+    reload: safeHardReload,
+    getRedirect: () => getRedirectResult(auth),
+};
+
 type RedirectRecoveryDependencies = {
     awaitingRedirectKey: string;
     redirectLaunchFailedRef: RefObject<boolean>;
@@ -14,30 +35,30 @@ type RedirectRecoveryDependencies = {
 // the persistence barrier rejects the navigation.
 export function attachAuthRedirectRecovery({
     awaitingRedirectKey, redirectLaunchFailedRef, setSaveError,
-}: RedirectRecoveryDependencies): () => void {
+}: RedirectRecoveryDependencies, environment: RedirectRecoveryEnvironment = browserEnvironment): () => void {
     const handleAuthVisibilityChange = async () => {
         if (redirectLaunchFailedRef.current) return;
-        if (document.visibilityState !== 'visible' || readBrowserValue(awaitingRedirectKey) !== 'true') return;
-        if (!tryRemoveBrowserValue(awaitingRedirectKey)) {
+        if (environment.visibility() !== 'visible' || environment.read(awaitingRedirectKey) !== 'true') return;
+        if (!environment.remove(awaitingRedirectKey)) {
             setSaveError('Accesso completato, ma non riesco ad aggiornare lo stato locale del dispositivo. Riprova.');
             return;
         }
         try {
-            await safeHardReload();
+            await environment.reload();
         } catch (error) {
             console.warn('Reload post-auth bloccato dalla barriera di persistenza:', error);
             setSaveError(error instanceof Error ? error.message : 'Ricaricamento non sicuro. Riprova.');
         }
     };
-    document.addEventListener('visibilitychange', handleAuthVisibilityChange);
+    const detachVisibility = environment.listen(handleAuthVisibilityChange);
 
-    getRedirectResult(auth).then(() => {
-        tryRemoveBrowserValue(awaitingRedirectKey);
+    environment.getRedirect().then(() => {
+        environment.remove(awaitingRedirectKey);
     }).catch(() => {
-        tryRemoveBrowserValue(awaitingRedirectKey);
+        environment.remove(awaitingRedirectKey);
         console.error('Ripresa redirect Google non riuscita.');
         setSaveError("Accesso Google non completato. Riprova.");
     });
 
-    return () => document.removeEventListener('visibilitychange', handleAuthVisibilityChange);
+    return detachVisibility;
 }
