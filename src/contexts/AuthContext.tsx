@@ -12,7 +12,7 @@ import { useGoogleAuthActions } from './auth/useGoogleAuthActions';
 import { useGuestMigrationRetry } from './auth/useGuestMigrationRetry';
 import { GUEST_KEY, useGuestLogin } from './auth/useGuestLogin';
 import { createAuthConsentLifecycleHandlers } from './auth/consentLifecycle';
-import { loadAuthenticatedData } from './auth/loadAuthenticatedData';
+import { loadAndDrainAuthenticatedData } from './auth/loadAndDrainAuthenticatedData';
 import { captureSession, GUEST_REVOCATION_KEY, GUEST_SESSION_KEY, invalidateSession, isActiveGuestSession, isCurrentSession, revokeGuestSession, userOwner } from '../lib/sync/session';
 import { withGuestLifecycleLock } from '../lib/sync/guestLifecycleLock';
 import {
@@ -142,46 +142,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
     }, [blockUnreadableLifecycleStorage]);
 
-    const loadData = useCallback(async (user: User) => {
-        await loadAuthenticatedData({
-            user,
-            isGuestActive: () => isGuestActiveStrict(),
-            setUserData,
-            setSyncing,
-            setSaveError,
-        });
-
-        if (typeof navigator !== 'undefined' && !navigator.onLine) return;
-        if (auth.currentUser?.uid !== user.uid || isGuestActiveStrict()) return;
-
-        const { readLocal } = await import('../lib/sync/localRepository');
-        const drainCheckpointedJournal = async () => {
-            const envelope = await readLocal(user.uid);
-            if (!envelope?.replica || !envelope.pending.length) return;
-            await useAppStore.getState().flushPendingSyncs();
-        };
-
-        // A Protocol 3 checkpoint can be the prerequisite that makes an offline or
-        // migrated journal deliverable. Drain it after the checkpoint instead of
-        // relying on listener ordering between the global replay and auth refresh.
-        try {
-            await drainCheckpointedJournal();
-        } catch (error) {
-            if ((error as { code?: unknown })?.code !== 'replica-fenced') throw error;
-
-            // transactionWriter has already marked the durable identity as checkpoint-required.
-            // Re-enter the authenticated loader once: it performs a full cloud scan, obtains
-            // a current generation, rebases the journal, then the retry can be delivered.
-            await loadAuthenticatedData({
-                user,
-                isGuestActive: () => isGuestActiveStrict(),
-                setUserData,
-                setSyncing,
-                setSaveError,
-            });
-            await drainCheckpointedJournal();
-        }
-    }, [isGuestActiveStrict, setSyncing, setUserData, setSaveError]);
+    const loadData = useCallback((user: User) => loadAndDrainAuthenticatedData({
+        user,
+        isGuestActive: () => isGuestActiveStrict(),
+        setUserData, setSyncing, setSaveError,
+    }), [isGuestActiveStrict, setSyncing, setUserData, setSaveError]);
 
     useEffect(() => {
         if (!currentUser || emailVerificationRequired) return;
