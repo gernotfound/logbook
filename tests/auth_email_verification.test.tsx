@@ -137,8 +137,11 @@ describe('email verification lifecycle', () => {
     it('rejects a weak password before creating an account or touching the local archive', async () => {
         const archived = { privateDraft: 'do-not-touch' };
         idbStore['logbook:v2:user:unverified-user'] = archived;
+        // A verified account would hydrate the intentionally opaque test archive.
+        // Use the real unverified gate to exercise email actions without opening it.
+        startWith(account(false));
         const { result } = renderHook(() => useAuth(), { wrapper });
-        await waitFor(() => expect(result.current.loading).toBe(false));
+        await waitFor(() => expect(result.current.emailVerificationRequired).toBe(true));
 
         await act(async () => {
             await expect(result.current.registerWithEmail('unverified@example.com', 'weak')).rejects.toThrow();
@@ -177,8 +180,11 @@ describe('email verification lifecycle', () => {
         vi.mocked(signInWithEmailAndPassword).mockRejectedValueOnce(
             Object.assign(new Error('bad password'), { code: 'auth/wrong-password' }),
         );
+        // A verified account would hydrate the intentionally opaque test archive.
+        // Use the real unverified gate to exercise email actions without opening it.
+        startWith(account(false));
         const { result } = renderHook(() => useAuth(), { wrapper });
-        await waitFor(() => expect(result.current.loading).toBe(false));
+        await waitFor(() => expect(result.current.emailVerificationRequired).toBe(true));
 
         await act(async () => {
             await expect(result.current.loginWithEmail('unverified@example.com', 'wrong')).rejects.toThrow();
