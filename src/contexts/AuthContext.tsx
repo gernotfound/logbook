@@ -3,26 +3,18 @@ import { User } from 'firebase/auth';
 import { auth, getRedirectResult, onAuthStateChanged, signOut } from '../lib/firebase';
 import { DB } from '../lib/db';
 import { isAccountDeletionPending } from '../lib/sync/accountGate';
-import { refreshHealthConsent } from '../lib/healthConsent';
 import { useAppStore } from '../store/useAppStore';
 import { UserData } from '../types';
-import { AuthContext, type GuestMigrationPolicy } from './AuthContextDef';
+import { AuthContext } from './AuthContextDef';
 import { useDialogStore } from '../store/useDialogStore';
-import { draftRegistry } from '../lib/utils/draftRegistry';
 import { useEmailAuthActions } from './auth/useEmailAuthActions';
 import { useGoogleAuthActions } from './auth/useGoogleAuthActions';
 import { useGuestMigrationRetry } from './auth/useGuestMigrationRetry';
 import { GUEST_KEY, useGuestLogin } from './auth/useGuestLogin';
-import { resumePersistedGuestMigration } from './auth/resumePersistedGuestMigration';
-import { guardAuthenticatedBootstrap } from './auth/guardAuthenticatedBootstrap';
 import { createAuthConsentLifecycleHandlers } from './auth/consentLifecycle';
 import { loadAuthenticatedData } from './auth/loadAuthenticatedData';
-import { migrateGuestAccount } from './auth/migrateGuestAccount';
-import { isLegalConsentRequiredError } from '../lib/sync/replicateJournal';
 import { captureSession, GUEST_REVOCATION_KEY, GUEST_SESSION_KEY, invalidateSession, isActiveGuestSession, isCurrentSession, revokeGuestSession, userOwner } from '../lib/sync/session';
-import { classifySyncFailure } from '../lib/sync/syncFailure';
 import { withGuestLifecycleLock } from '../lib/sync/guestLifecycleLock';
-import { SyncTimeoutError } from '../lib/db/db_core';
 import {
     BrowserStorageError,
     readBrowserValue,
@@ -33,12 +25,14 @@ import {
 } from '../lib/sync/browserStorage';
 import { safeHardReload } from '../lib/sync/safeReload';
 import { prepareForReload } from '../lib/sync/reloadBarrier';
+import { prepareAuthenticatedLogout } from './auth/prepareAuthenticatedLogout';
+import { useUnverifiedLocalContinuation } from './auth/useUnverifiedLocalContinuation';
+import { bootstrapAuthenticatedSession } from './auth/bootstrapAuthenticatedSession';
 import { watchDeletionRecoveryDeviceRegistration } from '../lib/deletionDeviceRecovery';
 import { RecoveryDiagnosticTracker } from '../lib/deletionRecoveryDiagnostics';
 import { reportError } from '../lib/errorHandler';
 import { clearAuthenticatedOwnerHint } from '../lib/sync/authOwnerHint';
-import { bindGuestMigrationIntentToUser, clearGuestMigrationIntent } from '../lib/auth/guestMigrationIntent';
-import { cancelLocalVaultReadiness, ensureLocalVaultReady } from '../lib/sync/secureArchiveUnlockFlow';
+import { cancelLocalVaultReadiness } from '../lib/sync/secureArchiveUnlockFlow';
 import { lockVault } from '../lib/sync/secureArchiveSession';
 
 const GUEST_MIGRATION_SYNC_RECOVERY_KEY = 'logbook_guest_migration_sync_recovery';
@@ -278,126 +272,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 && authRunRef.current === authRun
                 && (expectedUid ? auth.currentUser?.uid === expectedUid : auth.currentUser === null);
 
-            if (user && guardAuthenticatedBootstrap(user, {
-                awaitingRedirectKey: AWAITING_REDIRECT_KEY,
-                isGuestActiveStrict, setCurrentUser, setEmailVerificationRequired,
-                setGuestMigrationStatus, setLoading,
-            })) return;
-            // A deletion receipt is independently recoverable even while the
-            // ciphertext is locked. Do not require the secret of an account
-            // already deleted on the server just to finalize its local purge.
-            if (user && isAccountDeletionPending(userOwner(user.uid))) {
-                useAppStore.getState().cancelPendingSyncs();
-                useAppStore.setState({ userData: null, dataOwner: null, localWorkout: null });
-                setCurrentUser(user);
-                setLoading(false);
-                return;
-            }
-            // Consent refresh itself performs a durable IndexedDB consent-epoch
-            // update. Unlock BEFORE it, not merely before later hydration/sync.
             if (user) {
-                await ensureLocalVaultReady(userOwner(user.uid));
-                if (!isCurrentRun()) return;
-            }
-            // Expose identity only after the local archive can be safely read.
-            if (user) setEmailVerificationRequired(false);
-            setCurrentUser(user);
-            if (user) {
-                // Hydration/migration and all cloud business writes must wait for
-                // this check; an offline/failed check remains fail-closed.
-                const consentStatus = await refreshHealthConsent(user);
-                if (!isCurrentRun()) return;
-                if (consentStatus !== 'active') {
-                    // No regular hydration/migration/replica registration after a
-                    // withdrawal, even when a local cached envelope exists.
-                    useAppStore.getState().cancelPendingSyncs();
-                    setLoading(false);
-                    return;
-                }
-            }
-
-            if (user) {
-                const wasGuest = isGuestActiveStrict();
-                setEmailVerificationRequired(false);
-                const recoveryUid = readGuestMigrationRecoveryStrict();
-
-                if (recoveryUid === user.uid) {
-                    setLoading(false);
-                    const handled = await resumePersistedGuestMigration(user, isCurrentRun, {
-                        guestKey: GUEST_KEY,
-                        isGuestActiveStrict, isGuestRef, migrationDataRef, setIsGuest,
-                        setGuestMigrationStatus, setUserData, setSyncing, setSaveError,
-                        clearGuestMigrationSyncRecovery,
-                    });
-                    if (!isCurrentRun()) return;
-                    if (handled) return;
-                }
-
-                if (wasGuest) {
-                    setGuestMigrationStatus('pending');
-                    setLoading(false);
-                    draftRegistry.flushAll();
-
-                    const guestData = migrationDataRef.current || useAppStore.getState().userData;
-                    let policy: GuestMigrationPolicy;
-                    let intentId: string;
-                    try {
-                        const intent = bindGuestMigrationIntentToUser(user);
-                        policy = intent.policy;
-                        intentId = intent.id;
-                    } catch (error) {
-                        if (!isCurrentRun()) return;
-                        console.error('Intento migrazione guest non determinabile:', error);
-                        setGuestMigrationStatus('failed');
-                        setSaveError('Non è possibile determinare il tentativo di trasferimento. Avvia di nuovo l’accesso e scegli come gestire i dati locali.');
-                        return;
-                    }
-
-                    try {
-                        const migrationResult = await migrateGuestAccount({
-                            user,
-                            guestData,
-                            policy,
-                            setUserData,
-                            setSyncing,
-                            isCurrent: isCurrentRun,
-                            onLocalReady: () => {
-                                // Persist recovery before changing owner. If any critical
-                                // storage transition fails, migration remains recoverable.
-                                markGuestMigrationSyncRecovery(user.uid);
-                                removeBrowserValue(GUEST_KEY);
-                                clearGuestMigrationIntent(intentId);
-                                isGuestRef.current = false;
-                                setIsGuest(false);
-                                migrationDataRef.current = null;
-                            },
-                        });
-
-                        if (!isCurrentRun()) return;
-
-                        if (migrationResult.status === 'rejected' || migrationResult.status === 'failed') {
-                            setGuestMigrationStatus('failed');
-                            setSaveError('I dati sono salvati su questo dispositivo, ma la sincronizzazione dell’account non è stata completata. Riprova.');
-                        } else {
-                            clearGuestMigrationSyncRecovery(user.uid);
-                            setGuestMigrationStatus('idle');
-                            if (migrationResult.status === 'local-pending') {
-                                setSaveError(isLegalConsentRequiredError(migrationResult.error)
-                                    ? 'Account preparato sul dispositivo. Accetta Termini e consenso salute per sincronizzare i progressi.'
-                                    : '📶 Offline: account preparato sul dispositivo. La sincronizzazione riprenderà quando torni online.');
-                            }
-                        }
-                    } catch (error) {
-                        if (!isCurrentRun()) return;
-                        console.error('Preparazione account da modalità locale non completata:', error);
-                        setGuestMigrationStatus('failed');
-                        setSaveError('Preparazione account non completata. I dati locali sono conservati e possono essere recuperati. Riprova.');
-                    }
-                } else {
-                    setGuestMigrationStatus('idle');
-                    await loadData(user);
-                    if (isCurrentRun()) setLoading(false);
-                }
+                await bootstrapAuthenticatedSession(user, isCurrentRun, {
+                    awaitingRedirectKey: AWAITING_REDIRECT_KEY,
+                    guestKey: GUEST_KEY, isGuestActiveStrict,
+                    readGuestMigrationRecoveryStrict, isGuestRef, migrationDataRef,
+                    setIsGuest, setCurrentUser, setEmailVerificationRequired,
+                    setGuestMigrationStatus, setLoading, setUserData, setSyncing,
+                    setSaveError, markGuestMigrationSyncRecovery,
+                    clearGuestMigrationSyncRecovery, loadData,
+                });
             } else {
                 setCurrentUser(null);
                 setEmailVerificationRequired(false);
@@ -464,28 +348,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         isGuestRef, setIsGuest, setGuestMigrationStatus, setUserData, setSaveError,
     });
 
-    const continueUnverifiedLocally = useCallback(async () => {
-        const user = auth.currentUser;
-        if (!user || user.emailVerified !== false) {
-            throw new Error('Nessuna verifica email in attesa.');
-        }
-        // Reconcile any in-memory edits and device-critical drafts before switching
-        // owner; a failed durability check must leave the account session intact.
-        const current = useAppStore.getState();
-        if (current.userData !== null || current.localWorkout !== null) {
-            await prepareForReload();
-        }
-        // Sign out without the authenticated purge path: local owner envelopes and
-        // any guest migration intent must survive until an explicit verified login.
-        await signOut(auth);
-        lockVault(userOwner(user.uid));
-        if (!isGuestActiveStrict()) {
-            // Never seed a fresh guest from another authenticated user's in-memory data.
-            // resetStore does not delete the authenticated IndexedDB envelope.
-            useAppStore.getState().resetStore({ force: true });
-            await loginAsGuest();
-        }
-    }, [isGuestActiveStrict, loginAsGuest]);
+    const continueUnverifiedLocally = useUnverifiedLocalContinuation({
+        isGuestActiveStrict, loginAsGuest,
+    });
 
     const retryGuestMigration = useGuestMigrationRetry({
         isGuestActiveStrict, setSaveError, setSyncing,
@@ -493,7 +358,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     });
 
     const logoutInFlightRef = useRef(false);
-    const LOGOUT_SYNC_CHECK_TIMEOUT_MS = 5000;
 
     const logout = useCallback(async (options?: { mode?: 'normal' | 'force', skipConfirm?: boolean }) => {
         if (logoutInFlightRef.current) return;
@@ -582,94 +446,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 return;
             }
 
-            let discardUnsynced = mode === 'force';
-            if (mode === 'normal') {
-                setSyncing(true);
-                // The Firestore SDK tracks only its own in-flight writes, not
-                // TheLogBook's IndexedDB journal. Inspect the durable source.
-                let durablePending = false;
-                try {
-                    const { readLocal } = await import('../lib/sync/localRepository');
-                    const envelope = await readLocal(userOwner(initialUid!));
-                    durablePending = (envelope?.pending.length ?? 0) > 0;
-                } catch {
-                    setSyncing(false);
-                    await useDialogStore.getState().showAlert('Non posso verificare i dati locali prima del logout. Archivio preservato: riprova dopo aver riaperto TheLogBook.');
-                    return;
-                }
-                const state = useAppStore.getState();
-                let isSafe = state.syncHealth === 'synced' && !state.localWorkout && !state.userData?.pendingConflicts && !durablePending;
-                let pendingWriteStatus: 'local-pending' | 'rejected' | 'failed' | null = null;
-
-                if (!isSafe) {
-                    try {
-                        const { waitForPendingWrites } = await import('firebase/firestore');
-                        const { getDb } = await import('../lib/firebase');
-
-                        const timeoutPromise = new Promise((_, reject) => setTimeout(
-                            () => reject(new SyncTimeoutError('Controllo sincronizzazione logout scaduto')),
-                            LOGOUT_SYNC_CHECK_TIMEOUT_MS
-                        ));
-                        await Promise.race([waitForPendingWrites(getDb()), timeoutPromise]);
-                    } catch (error) {
-                        const failure = classifySyncFailure(error);
-                        pendingWriteStatus = failure.status;
-                        if (failure.status !== 'local-pending') {
-                            console.warn('Controllo scritture pendenti durante logout fallito:', error);
-                        }
-                    }
-
-                    if (auth.currentUser?.uid !== initialUid) {
-                        setSyncing(false);
-                        return;
-                    }
-
-                    const finalState = useAppStore.getState();
-                    isSafe = finalState.syncHealth === 'synced' && !finalState.localWorkout && !finalState.userData?.pendingConflicts && !durablePending && pendingWriteStatus === null;
-                }
-                setSyncing(false);
-
-                if (!isSafe) {
-                    const finalState = useAppStore.getState();
-                    let reason: 'conflict' | 'offline' | 'rejected' | 'failed' = 'offline';
-
-                    if (finalState.userData?.pendingConflicts) {
-                        reason = 'conflict';
-                    } else if (finalState.syncHealth === 'rejected' || pendingWriteStatus === 'rejected') {
-                        reason = 'rejected';
-                    } else if (finalState.syncHealth === 'failed' || pendingWriteStatus === 'failed') {
-                        reason = 'failed';
-                    }
-
-                    const action = await useDialogStore.getState().showUnsyncedDataLogout(reason);
-
-                    if (auth.currentUser?.uid !== initialUid) {
-                        return;
-                    }
-
-                    if (action === 'export') {
-                        const { Exporter } = await import('../lib/export');
-                        const currentState = useAppStore.getState().userData;
-                        if (currentState) {
-                            Exporter.exportEmergencyJSON(currentState);
-                        }
-                        return;
-                    }
-
-                    if (action === 'cancel' || action === 'wait') {
-                        return;
-                    } else if (action === 'safe-exit') {
-                        const finalCheck = useAppStore.getState();
-                        if (finalCheck.syncHealth !== 'synced' || finalCheck.localWorkout || finalCheck.userData?.pendingConflicts) {
-                            return;
-                        }
-                    } else if (action === 'force-exit') {
-                        discardUnsynced = true;
-                    } else {
-                        return;
-                    }
-                }
-            }
+            const discardUnsynced = mode === 'force' ? true : await prepareAuthenticatedLogout(initialUid, setSyncing);
+            if (discardUnsynced === null) return;
 
             // A draft can fail while a confirmation dialog or cloud check is open.
             if (useAppStore.getState().localPersistenceBlocked) {

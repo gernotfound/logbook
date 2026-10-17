@@ -57,6 +57,23 @@ describe('PWA & iPhone Startup Resilience Tests', () => {
     expect(screen.getByTestId('user-state').textContent).toBe('test@example.com');
   });
 
+  test('does not load user data before the pending trusted consent check completes', async () => {
+    let resolveConsent!: (status: 'active') => void;
+    vi.mocked(refreshHealthConsent).mockImplementationOnce(
+      () => new Promise(resolve => { resolveConsent = resolve; }),
+    );
+    render(<AuthProvider><TestAuthConsumer /></AuthProvider>);
+    await waitFor(() => expect(vi.mocked(refreshHealthConsent)).toHaveBeenCalledTimes(1));
+
+    expect(screen.getByTestId('loading-state').textContent).toBe('LOADING');
+    expect(screen.getByTestId('data-state').textContent).toBe('NO_DATA');
+    expect(DB.loadCloudPayload).not.toHaveBeenCalled();
+    expect(DB.loadUserData).not.toHaveBeenCalled();
+
+    await act(async () => { resolveConsent('active'); });
+    await waitFor(() => expect(screen.getByTestId('loading-state').textContent).toBe('READY'));
+  });
+
   test('does not hydrate or register fitness replicas when the trusted consent state is withdrawn', async () => {
     vi.mocked(refreshHealthConsent).mockResolvedValueOnce('withdrawn');
     useAppStore.setState({ userData: null, dataOwner: null });

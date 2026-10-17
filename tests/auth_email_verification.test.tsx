@@ -9,6 +9,7 @@ import { useAppStore } from '../src/store/useAppStore';
 import { idbStore } from './setup';
 import { draftRegistry } from '../src/lib/utils/draftRegistry';
 import { UserDataSchema } from '../src/lib/schema';
+import { useUnverifiedLocalContinuation } from '../src/contexts/auth/useUnverifiedLocalContinuation';
 
 const wrapper = ({ children }: { children: React.ReactNode }) => <AuthProvider>{children}</AuthProvider>;
 
@@ -83,6 +84,23 @@ describe('email verification lifecycle', () => {
         });
         expect(user.getIdToken).toHaveBeenCalledWith(true);
 
+    });
+
+    it.each([
+        ['already verified', account(true)],
+        ['signed out', null],
+    ])('rejects local continuation without a pending verification: %s', async (_caseName, current) => {
+        (auth as any).currentUser = current;
+        const loginAsGuest = vi.fn(async () => {});
+        const { result } = renderHook(() => useUnverifiedLocalContinuation({
+            isGuestActiveStrict: () => false,
+            loginAsGuest,
+        }));
+
+        await expect(result.current()).rejects.toThrow('Nessuna verifica email in attesa.');
+        expect(signOut).not.toHaveBeenCalled();
+        expect(loginAsGuest).not.toHaveBeenCalled();
+        expect(DB.purgeAllLocalUserData).not.toHaveBeenCalled();
     });
 
     it('starts a separate local session without purging the authenticated archive', async () => {

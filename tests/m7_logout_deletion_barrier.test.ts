@@ -28,7 +28,8 @@ describe('M7 logout isolation with stale deletion receipts', () => {
   it('uses force reset only after explicit guest/authenticated logout cleanup', () => {
     const authContext = readFileSync(resolve(process.cwd(), 'src/contexts/AuthContext.tsx'), 'utf8');
     const guestLogin = readFileSync(resolve(process.cwd(), 'src/contexts/auth/useGuestLogin.ts'), 'utf8');
-    const forcedResets = [authContext, guestLogin].flatMap(source =>
+    const unverifiedLocal = readFileSync(resolve(process.cwd(), 'src/contexts/auth/useUnverifiedLocalContinuation.ts'), 'utf8');
+    const forcedResets = [authContext, guestLogin, unverifiedLocal].flatMap(source =>
       source.match(/resetStore\(\{ force: true \}\)/g) ?? []);
 
     // Ownerless guest bootstrap adds an explicit, reviewed force-reset path.
@@ -42,7 +43,9 @@ describe('M7 logout isolation with stale deletion receipts', () => {
     expect(guestLogin).toMatch(/if \(\(previous\.userData !== null \|\| previous\.localWorkout !== null\) && previous\.dataOwner !== 'guest'\)[\s\S]{0,90}previous\.resetStore\(\{ force: true \}\)/);
     expect(authContext).toMatch(/if \(isGuestRef\.current && !isActiveGuestSession\(\)\)[\s\S]{0,300}resetStore\(\{ force: true \}\)/);
     expect(authContext).toMatch(/await DB\.purgeAllLocalUserData\('guest'\);[\s\S]{0,650}setIsGuest\(false\);[\s\S]{0,250}resetStore\(\{ force: true \}\)/);
-    expect(authContext).toMatch(/const continueUnverifiedLocally[\s\S]*?await signOut\(auth\);[\s\S]{0,350}resetStore\(\{ force: true \}\)/);
+    expect(authContext).toContain('const continueUnverifiedLocally = useUnverifiedLocalContinuation({');
+    expect(unverifiedLocal).toMatch(/const continueUnverifiedLocally[\s\S]*?await prepareForReload\(\);[\s\S]*?await signOut\(auth\);[\s\S]{0,350}resetStore\(\{ force: true \}\)/);
+    expect(unverifiedLocal).not.toContain('DB.purgeAllLocalUserData');
     expect(authContext).toContain('await DB.secureLogOut({ discardUnsynced,');
     expect(authContext).toMatch(/await DB\.secureLogOut\(\{ discardUnsynced,[\s\S]{0,180}verifyCurrentDrafts:[\s\S]{0,150}\}\);[\s\S]{0,200}resetStore\(\{ force: true \}\)/);
     expect(authContext).toMatch(/setIsGuest\(false\);[\s\S]{0,200}resetStore\(\{ force: true \}\)/);
