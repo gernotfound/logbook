@@ -154,6 +154,38 @@ it('finishes data-only erasure after two current trusted proofs, preserving anot
     expect(isLocalPurgePending('user:a')).toBe(true);
 });
 
+it('retains old account ciphertext and shared drafts if another account activates while waiting for the purge lock', async () => {
+    let release!: () => void;
+    let entered!: () => void;
+    const waiting = new Promise<void>(resolve => { release = resolve; });
+    const requested = new Promise<void>(resolve => { entered = resolve; });
+    vi.stubGlobal('navigator', { locks: { request: async (_key: string, _opts: unknown, action: () => Promise<unknown>) => {
+        entered();
+        await waiting;
+        return action();
+    } } });
+    const sharedKey = 'logbook_local_workout';
+    disk.set(sharedKey, 'new-owner-workout');
+    const work = purgeCompletedAccountLocalData('user:a');
+    await requested;
+    boundary.auth.currentUser = { uid: 'b' };
+    release();
+    await expect(work).rejects.toThrow('La pulizia locale resta sospesa');
+    expect(await get('logbook:v2:user:a')).toEqual({ original: 'recoverable' });
+    expect(await get('logbook:v2:user:b')).toEqual({ original: 'other owner' });
+    expect(disk.get(sharedKey)).toBe('new-owner-workout');
+    expect(isLocalPurgePending('user:a')).toBe(false);
+});
+
+it('keeps an interrupted deletion fenced when a guest starts before retry', async () => {
+    disk.set('logbook_is_guest', 'true');
+    disk.set('logbook_local_workout', 'guest-workout');
+    await expect(purgeCompletedAccountLocalData('user:a')).rejects.toThrow('La pulizia locale resta sospesa');
+    expect(await get('logbook:v2:user:a')).toEqual({ original: 'recoverable' });
+    expect(disk.get('logbook_local_workout')).toBe('guest-workout');
+    expect(isLocalPurgePending('user:a')).toBe(false);
+});
+
 it('drains owner-scoped keys discovered during a previous localStorage purge pass', async () => {
     const owner = 'user:a';
     const first = 'logbook:v2:user:a:sealed:workout';

@@ -65,6 +65,8 @@ Flusso normativo:
 
 **MUST:** Firebase Auth è sempre l'ultima risorsa cloud eliminata. Un errore di query, batch, verifica, backend o stato non autorizza il purge locale né una dichiarazione di successo.
 
+**MUST:** la finalizzazione locale di una cancellazione account completa deve ricontrollare, sotto il lock dell'owner, che non sia diventato attivo un altro account o una sessione ospite. Anche il retry di un purge già fenced deve rispettare il controllo prima di eliminare chiavi locali condivise; il server-complete resta prova distinta da questa barriera locale.
+
 **MUST:** Un job `failed` deve comunicare che la cancellazione cloud può essere parziale. I batch già riusciti non sono reversibili. Errori transient/retryable possono essere ripresi idempotentemente; residui inattesi o violazioni fail-closed non devono entrare in un retry distruttivo automatico senza nuova valutazione.
 
 **MUST:** Il marker locale sospende replica, logout distruttivi e reset locali ordinari finché la receipt non è riconciliata. Il boundary di purge deve applicare la protezione anche quando viene chiamato direttamente; solo la finalizzazione con prova server `complete` può usare il percorso di purge dedicato. Offline o con endpoint non raggiungibile, la copia locale resta conservata e il marker continua a bloccare i writer.
