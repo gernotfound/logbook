@@ -462,7 +462,7 @@ describe('TheLogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => 
                 expect(isometryBtn).toBeDefined();
 
                 fireEvent.click(dropsetBtn);
-                expect(mockAdd).toHaveBeenCalledWith('dropset', 's1');
+                expect(mockAdd).toHaveBeenCalledWith(0, 'dropset', 's1');
             });
 
             it('T1.4.4: renders Dropset rows beneath the parent set with kg and reps inputs', () => {
@@ -521,7 +521,7 @@ describe('TheLogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => 
             });
 
             it('T1.4.6: supports time trackingType rendering time input placeholder', () => {
-                const set = { id: 's1', kg: '', time: '60s' };
+                const set = { id: 's1', kg: '', reps: '', time: '60s' };
                 render(
                     <SessionSetRow 
                         set={set}
@@ -563,7 +563,7 @@ describe('TheLogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => 
                 const kgInput = screen.getByDisplayValue('70');
                 fireEvent.change(kgInput, { target: { value: '75' } });
                 fireEvent.blur(kgInput);
-                expect(mockUpdate).toHaveBeenCalledWith('s1', 'kg', '75');
+                expect(mockUpdate).toHaveBeenCalledWith(0, 's1', 'kg', '75');
             });
 
             it('T1.4.8: keeps core segment fields but removes the segment technical-details section', () => {
@@ -571,7 +571,7 @@ describe('TheLogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => 
                     id: 's1',
                     kg: '100',
                     reps: '8',
-                    technique: 'cluster',
+                    technique: 'cluster' as const,
                     segments: [{
                         id: 'seg1',
                         kg: '73',

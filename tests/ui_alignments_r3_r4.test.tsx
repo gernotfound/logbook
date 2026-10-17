@@ -243,13 +243,13 @@ describe('UI Alignments - R3 & R4', () => {
         it('renders input flex container with alignItems: center and ellipsis options button with inline-flex alignment styles', () => {
             const mockSet = {
                 id: 'set_1',
-                kg: 50,
-                reps: 10,
+                kg: '50',
+                reps: '10',
                 dropsets: [
-                    { id: 'ds_1', kg: 40, reps: 8 }
+                    { id: 'ds_1', kg: '40', reps: '8' }
                 ],
                 isometrics: [
-                    { id: 'iso_1', kg: 30, time: 20 }
+                    { id: 'iso_1', kg: '30', time: '20' }
                 ]
             };
 
