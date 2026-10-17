@@ -84,6 +84,10 @@ describe('Google redirect lifecycle', () => {
   });
 
   it('consumes a pending redirect marker and calls the safe reload barrier only once', async () => {
+    // Keep the Firebase redirect completion in flight while foreground
+    // reconciliation reads the persisted marker; otherwise an unrelated
+    // resolved getRedirectResult() callback can consume it first.
+    vi.mocked(getRedirectResult).mockImplementationOnce(() => new Promise(() => {}));
     renderHook(() => useAuth(), { wrapper });
     await act(async () => { await Promise.resolve(); });
     localStorage.setItem(REDIRECT_KEY, 'true');
@@ -118,6 +122,10 @@ describe('Google redirect lifecycle', () => {
   });
 
   it('reports a blocked safe reload without claiming the redirect completed', async () => {
+    // Keep the Firebase redirect completion in flight while foreground
+    // reconciliation reads the persisted marker; otherwise an unrelated
+    // resolved getRedirectResult() callback can consume it first.
+    vi.mocked(getRedirectResult).mockImplementationOnce(() => new Promise(() => {}));
     renderHook(() => useAuth(), { wrapper });
     await act(async () => { await Promise.resolve(); });
     localStorage.setItem(REDIRECT_KEY, 'true');
