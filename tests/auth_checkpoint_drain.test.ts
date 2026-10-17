@@ -1,27 +1,23 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { User } from 'firebase/auth';
+import { loadAndDrainAuthenticatedData } from '../src/contexts/auth/loadAndDrainAuthenticatedData';
 
-const mocks = vi.hoisted(() => ({
+const mocks = {
     load: vi.fn(),
     readLocal: vi.fn(),
     flush: vi.fn(),
-    auth: { currentUser: { uid: 'account-a' } as { uid: string } | null },
-}));
+    currentUid: vi.fn(),
+    isOnline: vi.fn(),
+};
 
-vi.mock('../src/contexts/auth/loadAuthenticatedData', () => ({
-    loadAuthenticatedData: mocks.load,
-}));
-vi.mock('../src/lib/sync/localRepository', () => ({
+const environment = {
+    load: mocks.load,
     readLocal: mocks.readLocal,
-}));
-vi.mock('../src/lib/firebase', () => ({
-    auth: mocks.auth,
-}));
-vi.mock('../src/store/useAppStore', () => ({
-    useAppStore: { getState: () => ({ flushPendingSyncs: mocks.flush }) },
-}));
+    flush: mocks.flush,
+    currentUid: mocks.currentUid,
+    isOnline: mocks.isOnline,
+};
 
-import { loadAndDrainAuthenticatedData } from '../src/contexts/auth/loadAndDrainAuthenticatedData';
 
 const options = () => ({
     user: { uid: 'account-a' } as User,
@@ -36,7 +32,8 @@ const checkpointed = { replica: { actorId: 'replica-a' }, pending: [{ id: 'pendi
 describe('authenticated checkpoint journal drain', () => {
     beforeEach(() => {
         vi.resetAllMocks();
-        mocks.auth.currentUser = { uid: 'account-a' };
+        mocks.currentUid.mockReturnValue('account-a');
+        mocks.isOnline.mockReturnValue(true);
         mocks.load.mockResolvedValue(undefined);
         mocks.flush.mockResolvedValue(undefined);
         mocks.readLocal.mockResolvedValue(undefined);
@@ -44,7 +41,7 @@ describe('authenticated checkpoint journal drain', () => {
 
     it('keeps a missing or empty journal untouched after loading', async () => {
         const args = options();
-        await loadAndDrainAuthenticatedData(args);
+        await loadAndDrainAuthenticatedData(args, environment);
         expect(mocks.load).toHaveBeenCalledOnce();
         expect(mocks.load).toHaveBeenCalledWith(expect.objectContaining({
             user: args.user, setUserData: args.setUserData,
@@ -54,16 +51,16 @@ describe('authenticated checkpoint journal drain', () => {
         expect(mocks.flush).not.toHaveBeenCalled();
 
         mocks.readLocal.mockResolvedValueOnce({ replica: {}, pending: [] });
-        await loadAndDrainAuthenticatedData(options());
+        await loadAndDrainAuthenticatedData(options(), environment);
         expect(mocks.flush).not.toHaveBeenCalled();
     });
 
     it('delivers a durable pending journal only when a replica checkpoint exists', async () => {
         mocks.readLocal.mockResolvedValueOnce({ replica: null, pending: [{}] })
             .mockResolvedValueOnce(checkpointed);
-        await loadAndDrainAuthenticatedData(options());
+        await loadAndDrainAuthenticatedData(options(), environment);
         expect(mocks.flush).not.toHaveBeenCalled();
-        await loadAndDrainAuthenticatedData(options());
+        await loadAndDrainAuthenticatedData(options(), environment);
         expect(mocks.flush).toHaveBeenCalledOnce();
         expect(mocks.load.mock.invocationCallOrder[0])
             .toBeLessThan(mocks.readLocal.mock.invocationCallOrder[0]);
@@ -73,7 +70,7 @@ describe('authenticated checkpoint journal drain', () => {
         const fenced = Object.assign(new Error('replica checkpoint needed'), { code: 'replica-fenced' });
         mocks.readLocal.mockResolvedValue(checkpointed);
         mocks.flush.mockRejectedValueOnce(fenced).mockResolvedValueOnce(undefined);
-        await loadAndDrainAuthenticatedData(options());
+        await loadAndDrainAuthenticatedData(options(), environment);
 
         expect(mocks.load).toHaveBeenCalledTimes(2);
         expect(mocks.readLocal).toHaveBeenCalledTimes(2);
@@ -87,28 +84,24 @@ describe('authenticated checkpoint journal drain', () => {
     it('propagates non-replica-fenced delivery errors without a destructive retry', async () => {
         mocks.readLocal.mockResolvedValue(checkpointed);
         mocks.flush.mockRejectedValueOnce(new Error('network unavailable'));
-        await expect(loadAndDrainAuthenticatedData(options())).rejects.toThrow('network unavailable');
+        await expect(loadAndDrainAuthenticatedData(options(), environment)).rejects.toThrow('network unavailable');
         expect(mocks.load).toHaveBeenCalledOnce();
         expect(mocks.flush).toHaveBeenCalledOnce();
     });
 
     it('never drains a journal after account identity changes during hydration', async () => {
         mocks.load.mockImplementationOnce(async () => {
-            mocks.auth.currentUser = { uid: 'account-b' };
+            mocks.currentUid.mockReturnValue('account-b');
         });
-        await loadAndDrainAuthenticatedData(options());
+        await loadAndDrainAuthenticatedData(options(), environment);
         expect(mocks.readLocal).not.toHaveBeenCalled();
         expect(mocks.flush).not.toHaveBeenCalled();
     });
 
     it('does not drain an offline journal', async () => {
-        const offline = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
-        try {
-            await loadAndDrainAuthenticatedData(options());
-            expect(mocks.readLocal).not.toHaveBeenCalled();
-            expect(mocks.flush).not.toHaveBeenCalled();
-        } finally {
-            offline.mockRestore();
-        }
+        mocks.isOnline.mockReturnValue(false);
+        await loadAndDrainAuthenticatedData(options(), environment);
+        expect(mocks.readLocal).not.toHaveBeenCalled();
+        expect(mocks.flush).not.toHaveBeenCalled();
     });
 });
