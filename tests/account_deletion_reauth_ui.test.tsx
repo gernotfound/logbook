@@ -158,6 +158,33 @@ describe('account deletion recent authentication', () => {
     expect(result.current.deletingAccount).toBe(false);
   });
 
+  it('prevents account deletion during data erasure while allowing it after cancellation', async () => {
+    // Block the first data-erasure confirmation to test the synchronous guard.
+    const { auth } = await import('../src/lib/firebase');
+    const { currentHealthConsentStatus } = await import('../src/lib/healthConsent');
+    vi.spyOn(auth, 'currentUser', 'get').mockReturnValue(authState.user as never);
+    vi.spyOn(await import('../src/lib/healthConsent'), 'currentHealthConsentStatus')
+      .mockReturnValue('withdrawn' as ReturnType<typeof currentHealthConsentStatus>);
+    let releasePrompt!: (value: boolean) => void;
+    dialog.showConfirm.mockImplementationOnce(() => new Promise(resolve => { releasePrompt = resolve; }));
+    const accountDelete = vi.spyOn(DB, 'deleteAccount').mockResolvedValue({ status: 'complete' });
+    const { result } = renderHook(() => useSettings());
+    let healthWork!: Promise<void>;
+    act(() => { healthWork = result.current.handleDeleteHealthData(); });
+    await act(async () => { await Promise.resolve(); });
+    expect(dialog.showConfirm).toHaveBeenCalledTimes(1);
+
+    await act(async () => result.current.handleDeleteAccount());
+    expect(accountDelete).not.toHaveBeenCalled();
+    expect(dialog.showConfirm).toHaveBeenCalledTimes(1);
+
+    await act(async () => { releasePrompt(false); await healthWork; });
+    dialog.showConfirm.mockResolvedValue(false);
+    await act(async () => result.current.handleDeleteAccount());
+    expect(dialog.showConfirm).toHaveBeenCalledTimes(2);
+    expect(accountDelete).not.toHaveBeenCalled();
+  });
+
   it('cancels safely when the password prompt is dismissed', async () => {
     dialog.showPasswordPrompt.mockResolvedValue(null);
     reauth.run.mockResolvedValue('password-required');
