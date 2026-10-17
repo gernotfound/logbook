@@ -33,6 +33,9 @@ export function assertTestOidcEnvironment(env: NodeJS.ProcessEnv): void {
 type AccessToken = Awaited<ReturnType<Credential['getAccessToken']>>;
 
 async function exchangeForImpersonatedToken(): Promise<AccessToken> {
+  // Test-only, constant stages: never log JWTs, raw remote responses or error messages.
+  let stage: 'vercel-oidc' | 'google-sts' | 'iam-impersonation' = 'vercel-oidc';
+  try {
   // Vercel issues a separate short-lived token with this GCP-only audience.
   // The GCP provider also verifies issuer + the exact Test project subject.
   let oidcToken: string;
@@ -44,6 +47,7 @@ async function exchangeForImpersonatedToken(): Promise<AccessToken> {
   }
   if (!oidcToken) throw new Error('Vercel OIDC token unavailable.');
 
+  stage = 'google-sts';
   const stsResponse = await fetch(STS_URL, {
     method: 'POST',
     headers: { 'content-type': 'application/x-www-form-urlencoded' },
@@ -64,6 +68,7 @@ async function exchangeForImpersonatedToken(): Promise<AccessToken> {
     throw new Error('Test WIF token exchange returned no access token.');
   }
 
+  stage = 'iam-impersonation';
   const impersonationResponse = await fetch(IMPERSONATION_URL, {
     method: 'POST',
     headers: {
@@ -86,7 +91,14 @@ async function exchangeForImpersonatedToken(): Promise<AccessToken> {
   if (!Number.isFinite(expiresIn) || expiresIn <= 60 || expiresIn > 3600) {
     throw new Error('Test service-account access token has an invalid expiry.');
   }
+  console.info('[firebase-test:oidc] credential exchange complete');
   return { access_token: impersonation.accessToken, expires_in: expiresIn };
+  } catch (error) {
+    console.error('[firebase-test:oidc] credential exchange failed', {
+      stage, category: classifyTestFirestoreReadFailure(error),
+    });
+    throw error;
+  }
 }
 
 // Classify Test-only provider failures without ever logging raw error messages,

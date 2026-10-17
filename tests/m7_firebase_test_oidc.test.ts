@@ -129,6 +129,19 @@ describe('isolated Vercel Test Firebase Admin identity federation', () => {
     expect(oidc.getVercelOidcToken).toHaveBeenCalledTimes(1);
   });
 
+  it('records the bounded failed OIDC stage without logging provider response data', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      oidc.getVercelOidcToken.mockRejectedValueOnce(new Error('secret-oidc-response'));
+      await expect(createTestOidcCredential().getAccessToken())
+        .rejects.toThrow('Test Vercel OIDC token acquisition failed.');
+      expect(spy).toHaveBeenCalledWith('[firebase-test:oidc] credential exchange failed', {
+        stage: 'vercel-oidc', category: 'vercel-oidc-acquisition-failed',
+      });
+      expect(JSON.stringify(spy.mock.calls)).not.toContain('secret-oidc-response');
+    } finally { spy.mockRestore(); }
+  });
+
   it('fails closed for rejected STS exchange and retries instead of caching the error', async () => {
     const mockFetch = vi.fn().mockResolvedValueOnce(json({ error: 'invalid_grant', secret: 'do-not-log' }, 403));
     vi.stubGlobal('fetch', mockFetch);
