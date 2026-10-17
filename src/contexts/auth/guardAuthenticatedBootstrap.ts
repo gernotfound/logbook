@@ -37,31 +37,29 @@ export function guardAuthenticatedBootstrap(
         setLoading(false);
         return true;
     }
-    {
-        beginHealthConsentVerification(user.uid);
-        tryRemoveBrowserValue(awaitingRedirectKey);
-        const expectedOwner = userOwner(user.uid);
-        const current = useAppStore.getState();
-        const guestActiveBeforeAuth = isGuestActiveStrict();
-        if (!guestActiveBeforeAuth && (current.userData !== null || current.localWorkout !== null) && current.dataOwner !== expectedOwner) {
-            useAppStore.setState({ userData: null, dataOwner: null, localWorkout: null });
-        }
-        try {
-            rememberAuthenticatedOwner(user.uid);
-        } catch (error) {
-            console.error('Owner autenticato locale non persistibile:', error);
-            useAppStore.setState({
-                userData: null,
-                dataOwner: null,
-                localWorkout: null,
-                localPersistenceBlocked: true,
-                syncHealth: 'failed',
-                saveError: 'Archivio del dispositivo non disponibile. Riprova prima di continuare.',
-            });
-            setCurrentUser(user);
-            setLoading(false);
-            return true;
-        }
+    beginHealthConsentVerification(user.uid);
+    tryRemoveBrowserValue(awaitingRedirectKey);
+    const expectedOwner = userOwner(user.uid);
+    const current = useAppStore.getState();
+    const guestActiveBeforeAuth = isGuestActiveStrict();
+    if (!guestActiveBeforeAuth && (current.userData !== null || current.localWorkout !== null) && current.dataOwner !== expectedOwner) {
+        useAppStore.setState({ userData: null, dataOwner: null, localWorkout: null });
+    }
+    try {
+        rememberAuthenticatedOwner(user.uid);
+    } catch (error) {
+        console.error('Owner autenticato locale non persistibile:', error);
+        useAppStore.setState({
+            userData: null,
+            dataOwner: null,
+            localWorkout: null,
+            localPersistenceBlocked: true,
+            syncHealth: 'failed',
+            saveError: 'Archivio del dispositivo non disponibile. Riprova prima di continuare.',
+        });
+        setCurrentUser(user);
+        setLoading(false);
+        return true;
     }
     return false;
 }
