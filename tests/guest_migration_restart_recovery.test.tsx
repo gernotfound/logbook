@@ -100,6 +100,7 @@ describe('guest migration restart recovery', () => {
         expect((await localRepository.readLocal('guest'))?.data.routines?.map(routine => routine.id))
             .toContain('guest-routine');
         expect(purge).not.toHaveBeenCalled();
+        expect(DB.loadCloudPayload).not.toHaveBeenCalled();
     });
 
     it('retains the recovery marker and blocks account data if the authenticated envelope is missing', async () => {
