@@ -4,6 +4,12 @@
 > **Ambito:** Firebase Test e backend Vercel Test, separati dal runtime Production.
 > **Ultimo aggiornamento:** 2026-10-17. Le configurazioni storiche elencate come "riferite" provengono da schermate del product owner; le verifiche dirette recenti sono distinte qui sotto.
 
+## Correzione della root cause Firestore su backend Test — 2026-10-17
+
+- **Difetto riprodotto nel codice delle dipendenze:** Firebase Admin Firestore (`firebase-admin/lib/firestore/firestore-internal.js`) rifiuta una generica implementazione di `Credential` con `invalid-credential`: sono accettate solo `ServiceAccountCredential` o credenziali ADC. Il Test usava `initializeApp({ credential: createTestOidcCredential() })`, quindi la prima chiamata `getFirestore(app)` falliva **prima** di raggiungere Firestore. Questo spiega i `503` del consenso, i `500` del percorso dispositivo e il precedente `unclassified`, senza dimostrare ancora che STS/IAM siano configurati correttamente.
+- **Correzione esclusivamente Test:** `server/accountDeletion/firebaseAdmin.ts` conserva `getFirestore(app)` per Production; in `vercel-oidc` crea un singleton `Firestore` (`@google-cloud/firestore`) con `OAuth2Client` (`google-auth-library`) alimentato dagli access token temporanei della stessa federazione Vercel OIDC → Google STS → IAM. L'opzione pubblica GoogleAuth `authClient` è inoltrata da Firestore 9.x verso GAX benché non tipizzata da Firestore.Settings; versioni dei pacchetti dichiarate e test reale del passaggio al client GAX, compresa la sanificazione JSON e la scadenza delle credenziali. Non vengono generate chiavi private né disattivati i controlli Auth, App Check o il fail-closed.
+- **Verifica residua:** unit test e gate exact-SHA non attestano ancora i permessi runtime della federazione WIF, né il completamento del consenso autenticato. Servono CI sul candidato finale, deploy Vercel Test e smoke HTTP autenticato da sessione sintetica; non modificare il progetto Production.
+
 ## Nuovo collaudo del consenso Test — 2026-10-17
 
 - Il product owner ha effettuato l'accesso con un account Test in un browser ordinario; l'interfaccia mostra **Verifica del consenso non riuscita**. Console: `GET /api/health-consent` HTTP `503`, `GET/POST /api/account-deletion-device` HTTP `500`. L'avviso `beforeinstallprompt` riguarda il banner installazione e non spiega il fallimento del consenso. Non inserire identificativi utente, indirizzi email o token nei registri pubblici.

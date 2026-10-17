@@ -2,6 +2,8 @@ import { cert, getApps, initializeApp, type App } from 'firebase-admin/app';
 import { getAppCheck } from 'firebase-admin/app-check';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
+import type { Firestore } from '@google-cloud/firestore';
+import { createTestFirestore } from './testFirestore.js';
 import { assertTestOidcEnvironment, createTestOidcCredential, TEST_FIREBASE_PROJECT_ID } from './testOidcCredential.js';
 
 function requiredEnv(name: string): string {
@@ -43,8 +45,17 @@ export function adminAuth() {
   return getAuth(getAdminApp());
 }
 
+let isolatedTestDb: Firestore | undefined;
+
 export function adminDb() {
-  return getFirestore(getAdminApp());
+  const app = getAdminApp();
+  if (process.env.FIREBASE_ADMIN_AUTH_MODE === 'vercel-oidc') {
+    // Admin Firestore rejects custom Admin credentials. Reuse the isolated
+    // Test Firestore client with a Google-GAX OAuth client backed by WIF.
+    isolatedTestDb ??= createTestFirestore();
+    return isolatedTestDb;
+  }
+  return getFirestore(app);
 }
 
 export function adminAppCheck() {
