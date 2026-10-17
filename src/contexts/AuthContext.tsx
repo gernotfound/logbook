@@ -523,7 +523,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 return;
             }
 
-            const discardUnsynced = await prepareAuthenticatedLogout(mode, initialUid, setSyncing);
+            const discardUnsynced = mode === 'force' ? true : await prepareAuthenticatedLogout(initialUid, setSyncing);
             if (discardUnsynced === null) return;
 
             // A draft can fail while a confirmation dialog or cloud check is open.

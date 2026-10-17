@@ -21,7 +21,7 @@ describe('authenticated logout preflight', () => {
         vi.spyOn(localRepository, 'readLocal').mockRejectedValueOnce(new Error('IndexedDB read failure'));
         const setSyncing = vi.fn();
 
-        const result = await prepareAuthenticatedLogout('normal', ownerUid, setSyncing);
+        const result = await prepareAuthenticatedLogout(ownerUid, setSyncing);
 
         expect(result).toBeNull();
         expect(setSyncing).toHaveBeenNthCalledWith(1, true);
@@ -36,7 +36,7 @@ describe('authenticated logout preflight', () => {
         vi.spyOn(localRepository, 'readLocal').mockResolvedValueOnce({ pending: [] } as any);
         const setSyncing = vi.fn();
 
-        const result = await prepareAuthenticatedLogout('normal', ownerUid, setSyncing);
+        const result = await prepareAuthenticatedLogout(ownerUid, setSyncing);
 
         expect(result).toBe(false);
         expect(setSyncing).toHaveBeenLastCalledWith(false);
@@ -52,7 +52,7 @@ describe('authenticated logout preflight', () => {
         );
         const setSyncing = vi.fn();
 
-        const pending = prepareAuthenticatedLogout('normal', ownerUid, setSyncing);
+        const pending = prepareAuthenticatedLogout(ownerUid, setSyncing);
         await vi.waitFor(() => expect(waitForPendingWrites).toHaveBeenCalledTimes(1));
         (auth as any).currentUser = { uid: 'other-account' };
         releaseWrite();
@@ -70,17 +70,21 @@ describe('authenticated logout preflight', () => {
         vi.mocked(useDialogStore.getState().showUnsyncedDataLogout).mockResolvedValueOnce('force-exit');
         const setSyncing = vi.fn();
 
-        const result = await prepareAuthenticatedLogout('normal', ownerUid, setSyncing);
+        const result = await prepareAuthenticatedLogout(ownerUid, setSyncing);
 
         expect(result).toBe(true);
         expect(useDialogStore.getState().showUnsyncedDataLogout).toHaveBeenCalledWith('rejected');
     });
 
-    it('skips sync preflight only for an explicit force logout', async () => {
-        const readLocal = vi.spyOn(localRepository, 'readLocal');
+    it('does not authorize logout when the unsynced dialog chooses to wait', async () => {
+        vi.spyOn(localRepository, 'readLocal').mockResolvedValueOnce({ pending: [{}] } as any);
+        vi.mocked(waitForPendingWrites).mockRejectedValueOnce(
+            Object.assign(new Error('offline'), { code: 'unavailable' }),
+        );
+        vi.mocked(useDialogStore.getState().showUnsyncedDataLogout).mockResolvedValueOnce('wait');
         const setSyncing = vi.fn();
-        expect(await prepareAuthenticatedLogout('force', ownerUid, setSyncing)).toBe(true);
-        expect(readLocal).not.toHaveBeenCalled();
-        expect(setSyncing).not.toHaveBeenCalled();
+
+        expect(await prepareAuthenticatedLogout(ownerUid, setSyncing)).toBeNull();
+        expect(useDialogStore.getState().showUnsyncedDataLogout).toHaveBeenCalledWith('offline');
     });
 });
