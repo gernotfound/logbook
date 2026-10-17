@@ -18,9 +18,7 @@ import { guardAuthenticatedBootstrap } from './auth/guardAuthenticatedBootstrap'
 import { createAuthConsentLifecycleHandlers } from './auth/consentLifecycle';
 import { loadAuthenticatedData } from './auth/loadAuthenticatedData';
 import { captureSession, GUEST_REVOCATION_KEY, GUEST_SESSION_KEY, invalidateSession, isActiveGuestSession, isCurrentSession, revokeGuestSession, userOwner } from '../lib/sync/session';
-import { classifySyncFailure } from '../lib/sync/syncFailure';
 import { withGuestLifecycleLock } from '../lib/sync/guestLifecycleLock';
-import { SyncTimeoutError } from '../lib/db/db_core';
 import {
     BrowserStorageError,
     readBrowserValue,
@@ -31,6 +29,7 @@ import {
 } from '../lib/sync/browserStorage';
 import { safeHardReload } from '../lib/sync/safeReload';
 import { prepareForReload } from '../lib/sync/reloadBarrier';
+import { prepareAuthenticatedLogout } from './auth/prepareAuthenticatedLogout';
 import { watchDeletionRecoveryDeviceRegistration } from '../lib/deletionDeviceRecovery';
 import { RecoveryDiagnosticTracker } from '../lib/deletionRecoveryDiagnostics';
 import { reportError } from '../lib/errorHandler';
@@ -436,7 +435,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     });
 
     const logoutInFlightRef = useRef(false);
-    const LOGOUT_SYNC_CHECK_TIMEOUT_MS = 5000;
 
     const logout = useCallback(async (options?: { mode?: 'normal' | 'force', skipConfirm?: boolean }) => {
         if (logoutInFlightRef.current) return;
@@ -525,94 +523,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 return;
             }
 
-            let discardUnsynced = mode === 'force';
-            if (mode === 'normal') {
-                setSyncing(true);
-                // The Firestore SDK tracks only its own in-flight writes, not
-                // TheLogBook's IndexedDB journal. Inspect the durable source.
-                let durablePending = false;
-                try {
-                    const { readLocal } = await import('../lib/sync/localRepository');
-                    const envelope = await readLocal(userOwner(initialUid!));
-                    durablePending = (envelope?.pending.length ?? 0) > 0;
-                } catch {
-                    setSyncing(false);
-                    await useDialogStore.getState().showAlert('Non posso verificare i dati locali prima del logout. Archivio preservato: riprova dopo aver riaperto TheLogBook.');
-                    return;
-                }
-                const state = useAppStore.getState();
-                let isSafe = state.syncHealth === 'synced' && !state.localWorkout && !state.userData?.pendingConflicts && !durablePending;
-                let pendingWriteStatus: 'local-pending' | 'rejected' | 'failed' | null = null;
-
-                if (!isSafe) {
-                    try {
-                        const { waitForPendingWrites } = await import('firebase/firestore');
-                        const { getDb } = await import('../lib/firebase');
-
-                        const timeoutPromise = new Promise((_, reject) => setTimeout(
-                            () => reject(new SyncTimeoutError('Controllo sincronizzazione logout scaduto')),
-                            LOGOUT_SYNC_CHECK_TIMEOUT_MS
-                        ));
-                        await Promise.race([waitForPendingWrites(getDb()), timeoutPromise]);
-                    } catch (error) {
-                        const failure = classifySyncFailure(error);
-                        pendingWriteStatus = failure.status;
-                        if (failure.status !== 'local-pending') {
-                            console.warn('Controllo scritture pendenti durante logout fallito:', error);
-                        }
-                    }
-
-                    if (auth.currentUser?.uid !== initialUid) {
-                        setSyncing(false);
-                        return;
-                    }
-
-                    const finalState = useAppStore.getState();
-                    isSafe = finalState.syncHealth === 'synced' && !finalState.localWorkout && !finalState.userData?.pendingConflicts && !durablePending && pendingWriteStatus === null;
-                }
-                setSyncing(false);
-
-                if (!isSafe) {
-                    const finalState = useAppStore.getState();
-                    let reason: 'conflict' | 'offline' | 'rejected' | 'failed' = 'offline';
-
-                    if (finalState.userData?.pendingConflicts) {
-                        reason = 'conflict';
-                    } else if (finalState.syncHealth === 'rejected' || pendingWriteStatus === 'rejected') {
-                        reason = 'rejected';
-                    } else if (finalState.syncHealth === 'failed' || pendingWriteStatus === 'failed') {
-                        reason = 'failed';
-                    }
-
-                    const action = await useDialogStore.getState().showUnsyncedDataLogout(reason);
-
-                    if (auth.currentUser?.uid !== initialUid) {
-                        return;
-                    }
-
-                    if (action === 'export') {
-                        const { Exporter } = await import('../lib/export');
-                        const currentState = useAppStore.getState().userData;
-                        if (currentState) {
-                            Exporter.exportEmergencyJSON(currentState);
-                        }
-                        return;
-                    }
-
-                    if (action === 'cancel' || action === 'wait') {
-                        return;
-                    } else if (action === 'safe-exit') {
-                        const finalCheck = useAppStore.getState();
-                        if (finalCheck.syncHealth !== 'synced' || finalCheck.localWorkout || finalCheck.userData?.pendingConflicts) {
-                            return;
-                        }
-                    } else if (action === 'force-exit') {
-                        discardUnsynced = true;
-                    } else {
-                        return;
-                    }
-                }
-            }
+            const discardUnsynced = mode === 'force' ? true : await prepareAuthenticatedLogout(initialUid, setSyncing);
+            if (discardUnsynced === null) return;
 
             // A draft can fail while a confirmation dialog or cloud check is open.
             if (useAppStore.getState().localPersistenceBlocked) {
