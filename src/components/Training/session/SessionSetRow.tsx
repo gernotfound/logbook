@@ -4,25 +4,27 @@ import { BufferedInput } from '../../UI/BufferedInput';
 import { continuationTechniqueLabel, getContinuationTechnique } from '../../../lib/advancedSets';
 import { useDialogStore } from '../../../store/useDialogStore';
 import { sessionSetHasMeaningfulData } from '../../../lib/workoutSetData';
+import type { SessionExerciseSet } from '../../../types';
 
 interface SessionSetRowProps {
-    set: any;
+    set: SessionExerciseSet;
     sIndex: number;
     exIndex: number;
     trackingType?: string;
     isOpenMenu: boolean;
-    onToggleMenu: () => void;
-    onRemoveSet: (sIndex: number) => void;
-    onUpdateSet: (setId: string, field: string, value: any) => void;
-    onAddSpecialSet: (type: string, setId: string) => void;
-    onUpdateSpecialSet: (setId: string, type: 'dropsets' | 'isometrics' | 'segments', idx: number, field: string, value: any) => void;
-    onRemoveSpecialSet: (setId: string, type: 'dropsets' | 'isometrics' | 'segments', idx: number) => void;
-    onUpdateSetTarget: (setId: string, reps: number | undefined) => void;
+    onToggleMenu: (setId: string) => void;
+    onRemoveSet: (exIndex: number, sIndex: number) => void;
+    onUpdateSet: (exIndex: number, setId: string, field: string, value: unknown) => void;
+    onAddSpecialSet: (exIndex: number, type: string, setId: string) => void;
+    onUpdateSpecialSet: (exIndex: number, setId: string, type: 'dropsets' | 'isometrics' | 'segments', idx: number, field: string, value: unknown) => void;
+    onRemoveSpecialSet: (exIndex: number, setId: string, type: 'dropsets' | 'isometrics' | 'segments', idx: number) => void;
+    onUpdateSetTarget: (exIndex: number, setId: string, reps: number | undefined) => void;
 }
 
 const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
     set: s,
     sIndex,
+    exIndex,
     trackingType,
     isOpenMenu,
     onToggleMenu,
@@ -46,8 +48,8 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
             );
             if (!confirmed) return;
         }
-        onRemoveSet(sIndex);
-        if (isOpenMenu) onToggleMenu();
+        onRemoveSet(exIndex, sIndex);
+        if (isOpenMenu) onToggleMenu(s.id);
     };
 
     React.useEffect(() => {
@@ -60,15 +62,15 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
     };
 
     const selectRir = (rir: number | undefined) => {
-        onUpdateSet(s.id, 'rir', rir);
+        onUpdateSet(exIndex, s.id, 'rir', rir);
         setIsRirOpen(false);
-        onToggleMenu();
+        onToggleMenu(s.id);
         queueMicrotask(() => menuTriggerRef.current?.focus());
     };
 
     const toggleSetMenu = () => {
         setIsRirOpen(false);
-        onToggleMenu();
+        onToggleMenu(s.id);
     };
 
     const advancedSegments = Array.isArray(s.segments) ? s.segments : [];
@@ -99,7 +101,7 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
                                 step="0.25"
                                 placeholder="Kg (opz)"
                                 value={s.kg ?? ''}
-                                onChange={val => onUpdateSet(s.id, 'kg', val)}
+                                onChange={val => onUpdateSet(exIndex, s.id, 'kg', val)}
                                 onFocus={e => e.target.select()}
                                 style={{ margin: 0, flex: 1, minWidth: 0 }}
                             />
@@ -108,7 +110,7 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
                                 type="text"
                                 placeholder="Tempo (es. 60s)"
                                 value={s.time ?? ''}
-                                onChange={val => onUpdateSet(s.id, 'time', val)}
+                                onChange={val => onUpdateSet(exIndex, s.id, 'time', val)}
                                 onFocus={e => e.target.select()}
                                 style={{ margin: 0, flex: 2, minWidth: 0 }}
                             />
@@ -121,7 +123,7 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
                                 step="0.25"
                                 placeholder="Kg"
                                 value={s.kg ?? ''}
-                                onChange={val => onUpdateSet(s.id, 'kg', val)}
+                                onChange={val => onUpdateSet(exIndex, s.id, 'kg', val)}
                                 onFocus={e => e.target.select()}
                                 style={{ margin: 0, flex: 1, minWidth: 0 }}
                             />
@@ -130,7 +132,7 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
                                 type="number"
                                 placeholder="Reps"
                                 value={s.reps ?? ''}
-                                onChange={val => onUpdateSet(s.id, 'reps', val)}
+                                onChange={val => onUpdateSet(exIndex, s.id, 'reps', val)}
                                 onFocus={e => e.target.select()}
                                 style={{ margin: 0, flex: 1, minWidth: 0 }}
                             />
@@ -273,9 +275,9 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
                                     ['rep_match', 'Rep-match'],
                                     ['diminishing', 'Diminishing set'],
                                 ].map(([value, label]) => (
-                                    <button key={value} className="btn btn-small" style={{ display: 'block', width: '100%', marginBottom: '6px' }} onClick={() => onAddSpecialSet(value, s.id)}>+ {label}</button>
+                                    <button key={value} className="btn btn-small" style={{ display: 'block', width: '100%', marginBottom: '6px' }} onClick={() => onAddSpecialSet(exIndex, value, s.id)}>+ {label}</button>
                                 ))}
-                                <button className="btn btn-small" style={{ display: 'block', width: '100%', marginBottom: '6px' }} onClick={() => onAddSpecialSet('isometry', s.id)}>+ Isometria</button>
+                                <button className="btn btn-small" style={{ display: 'block', width: '100%', marginBottom: '6px' }} onClick={() => onAddSpecialSet(exIndex, 'isometry', s.id)}>+ Isometria</button>
                                 <button
                                     type="button"
                                     className="btn btn-small session-set-remove-action"
@@ -298,7 +300,7 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
                             <span style={{ fontSize: 'var(--font-size-micro)', color: 'var(--text-muted)' }}>Target reps</span>
                             <BufferedInput id={`target-${s.id}`} type="number" placeholder="—" value={s.target?.reps ?? ''} onChange={val => {
                                 const parsed = Number(val);
-                                onUpdateSetTarget(s.id, val === '' || !Number.isFinite(parsed) ? undefined : Math.max(0, Math.trunc(parsed)));
+                                onUpdateSetTarget(exIndex, s.id, val === '' || !Number.isFinite(parsed) ? undefined : Math.max(0, Math.trunc(parsed)));
                             }} style={{ margin: 0, width: '82px' }} />
                         </div>
                     )}
@@ -307,11 +309,11 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
                             {continuationTechniqueLabel(s.technique)}
                         </div>
                     )}
-                    {advancedSegments.map((segment: any, segmentIndex: number) => {
+                    {advancedSegments.map((segment, segmentIndex: number) => {
                         const technique = getContinuationTechnique(s, segment);
                         const baseLabel = technique ? continuationTechniqueLabel(technique) : 'Tecnica';
                         const occurrence = technique
-                            ? advancedSegments.slice(0, segmentIndex + 1).filter((candidate: any) => getContinuationTechnique(s, candidate) === technique).length
+                            ? advancedSegments.slice(0, segmentIndex + 1).filter((candidate) => getContinuationTechnique(s, candidate) === technique).length
                             : 1;
                         const label = technique ? `${baseLabel} ${occurrence}` : baseLabel;
                         const isIsometry = technique === 'isometry';
@@ -323,15 +325,15 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
                                 <div style={{ fontSize: 'var(--font-size-micro)', color: 'var(--primary-color)', fontWeight: 700, marginBottom: '4px' }}>↳ {label}</div>
                                 <div className={`session-advanced-segment-grid ${gridVariant}`}>
                                     {!isDropset && !isIsometry && (
-                                        <BufferedInput id={`seg-rest-${s.id}-${segmentIndex}`} type="number" placeholder="Rec s" value={segment.restBeforeSeconds ?? ''} onChange={val => onUpdateSpecialSet(s.id, 'segments', segmentIndex, 'restBeforeSeconds', val === '' ? undefined : Math.max(0, Math.trunc(Number(val) || 0)))} style={{ margin: 0, minWidth: 0 }} />
+                                        <BufferedInput id={`seg-rest-${s.id}-${segmentIndex}`} type="number" placeholder="Rec s" value={segment.restBeforeSeconds ?? ''} onChange={val => onUpdateSpecialSet(exIndex, s.id, 'segments', segmentIndex, 'restBeforeSeconds', val === '' ? undefined : Math.max(0, Math.trunc(Number(val) || 0)))} style={{ margin: 0, minWidth: 0 }} />
                                     )}
-                                    <BufferedInput id={`seg-kg-${s.id}-${segmentIndex}`} type="number" step="0.25" placeholder="Kg" value={segment.kg ?? ''} onChange={val => onUpdateSpecialSet(s.id, 'segments', segmentIndex, 'kg', val)} style={{ margin: 0, minWidth: 0 }} />
+                                    <BufferedInput id={`seg-kg-${s.id}-${segmentIndex}`} type="number" step="0.25" placeholder="Kg" value={segment.kg ?? ''} onChange={val => onUpdateSpecialSet(exIndex, s.id, 'segments', segmentIndex, 'kg', val)} style={{ margin: 0, minWidth: 0 }} />
                                     {isIsometry ? (
-                                        <BufferedInput id={`seg-time-${s.id}-${segmentIndex}`} type="number" placeholder="Sec" value={segment.time ?? ''} onChange={val => onUpdateSpecialSet(s.id, 'segments', segmentIndex, 'time', val)} style={{ margin: 0, minWidth: 0 }} />
+                                        <BufferedInput id={`seg-time-${s.id}-${segmentIndex}`} type="number" placeholder="Sec" value={segment.time ?? ''} onChange={val => onUpdateSpecialSet(exIndex, s.id, 'segments', segmentIndex, 'time', val)} style={{ margin: 0, minWidth: 0 }} />
                                     ) : (
-                                        <BufferedInput id={`seg-reps-${s.id}-${segmentIndex}`} type="number" placeholder="Reps" value={segment.reps ?? ''} onChange={val => onUpdateSpecialSet(s.id, 'segments', segmentIndex, 'reps', val)} style={{ margin: 0, minWidth: 0 }} />
+                                        <BufferedInput id={`seg-reps-${s.id}-${segmentIndex}`} type="number" placeholder="Reps" value={segment.reps ?? ''} onChange={val => onUpdateSpecialSet(exIndex, s.id, 'segments', segmentIndex, 'reps', val)} style={{ margin: 0, minWidth: 0 }} />
                                     )}
-                                    <button className="btn-icon" aria-label={`Rimuovi ${label}`} style={{ minWidth: '44px', minHeight: '44px', color: 'var(--danger-color)' }} onClick={() => onRemoveSpecialSet(s.id, 'segments', segmentIndex)}>✕</button>
+                                    <button className="btn-icon" aria-label={`Rimuovi ${label}`} style={{ minWidth: '44px', minHeight: '44px', color: 'var(--danger-color)' }} onClick={() => onRemoveSpecialSet(exIndex, s.id, 'segments', segmentIndex)}>✕</button>
                                 </div>
                                 {(technique === 'rep_match' || technique === 'diminishing') && Boolean(segment.technique) && (
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '5px' }}>
@@ -363,29 +365,29 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
                 </div>
             )}
 
-            {(s.dropsets || []).map((ds: any, dsIdx: number) => {
+            {(s.dropsets || []).map((ds, dsIdx: number) => {
                 const label = (s.dropsets && s.dropsets.length > 1) ? `↳ Dropset ${dsIdx + 1}` : '↳ Dropset';
                 return (
                     <div key={ds.id || dsIdx} style={{ marginLeft: '20px', borderLeft: '2px solid var(--warning-color)', paddingLeft: '10px', display: 'flex', alignItems: 'center', marginBottom: '5px', gap: '10px' }}>
                         <div style={{ fontSize: 'var(--font-size-micro)', color: 'var(--warning-color)', minWidth: '78px', fontWeight: 600 }}>{label}</div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flex: 1, minWidth: 0 }}>
-                            <BufferedInput id={`ds-kg-${s.id}-${dsIdx}`} type="number" step="0.25" placeholder="Kg" value={ds.kg ?? ''} onChange={val => onUpdateSpecialSet(s.id, 'dropsets', dsIdx, 'kg', val)} onFocus={e => e.target.select()} style={{ margin: 0, flex: 1, minWidth: 0 }} />
-                            <BufferedInput id={`ds-reps-${s.id}-${dsIdx}`} type="number" placeholder="Reps" value={ds.reps ?? ''} onChange={val => onUpdateSpecialSet(s.id, 'dropsets', dsIdx, 'reps', val)} onFocus={e => e.target.select()} style={{ margin: 0, flex: 1, minWidth: 0 }} />
-                            <button className="btn-icon" aria-label={`Rimuovi dropset ${dsIdx + 1}`} style={{ color: 'var(--danger-color)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: 0 }} onClick={() => onRemoveSpecialSet(s.id, 'dropsets', dsIdx)}>✕</button>
+                            <BufferedInput id={`ds-kg-${s.id}-${dsIdx}`} type="number" step="0.25" placeholder="Kg" value={ds.kg ?? ''} onChange={val => onUpdateSpecialSet(exIndex, s.id, 'dropsets', dsIdx, 'kg', val)} onFocus={e => e.target.select()} style={{ margin: 0, flex: 1, minWidth: 0 }} />
+                            <BufferedInput id={`ds-reps-${s.id}-${dsIdx}`} type="number" placeholder="Reps" value={ds.reps ?? ''} onChange={val => onUpdateSpecialSet(exIndex, s.id, 'dropsets', dsIdx, 'reps', val)} onFocus={e => e.target.select()} style={{ margin: 0, flex: 1, minWidth: 0 }} />
+                            <button className="btn-icon" aria-label={`Rimuovi dropset ${dsIdx + 1}`} style={{ color: 'var(--danger-color)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: 0 }} onClick={() => onRemoveSpecialSet(exIndex, s.id, 'dropsets', dsIdx)}>✕</button>
                         </div>
                     </div>
                 );
             })}
 
-            {(s.isometrics || []).map((iso: any, isoIdx: number) => {
+            {(s.isometrics || []).map((iso, isoIdx: number) => {
                 const label = (s.isometrics && s.isometrics.length > 1) ? `↳ Isometria ${isoIdx + 1}` : '↳ Isometria';
                 return (
                     <div key={iso.id || isoIdx} style={{ marginLeft: '20px', borderLeft: '2px solid var(--accent-color)', paddingLeft: '10px', display: 'flex', alignItems: 'center', marginBottom: '5px', gap: '10px' }}>
                         <div style={{ fontSize: 'var(--font-size-micro)', color: 'var(--accent-color)', minWidth: '78px', fontWeight: 600 }}>{label}</div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flex: 1, minWidth: 0 }}>
-                            <BufferedInput id={`iso-kg-${s.id}-${isoIdx}`} type="number" step="0.25" placeholder="Kg" value={iso.kg ?? ''} onChange={val => onUpdateSpecialSet(s.id, 'isometrics', isoIdx, 'kg', val)} onFocus={e => e.target.select()} style={{ margin: 0, flex: 1, minWidth: 0 }} />
-                            <BufferedInput id={`iso-time-${s.id}-${isoIdx}`} type="number" placeholder="Sec" value={iso.time ?? ''} onChange={val => onUpdateSpecialSet(s.id, 'isometrics', isoIdx, 'time', val)} onFocus={e => e.target.select()} style={{ margin: 0, flex: 1, minWidth: 0 }} />
-                            <button className="btn-icon" aria-label={`Rimuovi isometria ${isoIdx + 1}`} style={{ color: 'var(--danger-color)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: 0 }} onClick={() => onRemoveSpecialSet(s.id, 'isometrics', isoIdx)}>✕</button>
+                            <BufferedInput id={`iso-kg-${s.id}-${isoIdx}`} type="number" step="0.25" placeholder="Kg" value={iso.kg ?? ''} onChange={val => onUpdateSpecialSet(exIndex, s.id, 'isometrics', isoIdx, 'kg', val)} onFocus={e => e.target.select()} style={{ margin: 0, flex: 1, minWidth: 0 }} />
+                            <BufferedInput id={`iso-time-${s.id}-${isoIdx}`} type="number" placeholder="Sec" value={iso.time ?? ''} onChange={val => onUpdateSpecialSet(exIndex, s.id, 'isometrics', isoIdx, 'time', val)} onFocus={e => e.target.select()} style={{ margin: 0, flex: 1, minWidth: 0 }} />
+                            <button className="btn-icon" aria-label={`Rimuovi isometria ${isoIdx + 1}`} style={{ color: 'var(--danger-color)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: 0 }} onClick={() => onRemoveSpecialSet(exIndex, s.id, 'isometrics', isoIdx)}>✕</button>
                         </div>
                     </div>
                 );
@@ -394,16 +396,8 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
     );
 };
 
-// React.memo con comparatore personalizzato:
-// Rende la digitazione delle serie fluidissima. Solo la serie modificata si ri-renderizza.
-export const SessionSetRow = React.memo(SessionSetRowInner, (prev, next) => {
-    return (
-        prev.set === next.set &&
-        prev.sIndex === next.sIndex &&
-        prev.exIndex === next.exIndex &&
-        prev.trackingType === next.trackingType &&
-        prev.isOpenMenu === next.isOpenMenu
-    );
-});
+// The parent passes stable action references so memo can compare callbacks, too.
+// A replaced handler must never remain stale on an otherwise unchanged set.
+export const SessionSetRow = React.memo(SessionSetRowInner);
 
 export default SessionSetRow;
