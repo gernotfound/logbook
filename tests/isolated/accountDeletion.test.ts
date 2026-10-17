@@ -238,6 +238,18 @@ it('persists a recovery receipt before POST and purges only after server complet
     expect(boundary.reset).toHaveBeenCalledTimes(1);
 });
 
+it('keeps a server-accepted receipt if the subsequent status check is unavailable', async () => {
+    boundary.fetch.mockResolvedValueOnce(response(202, { uid: 'a', status: 'requested' }));
+    boundary.fetch.mockResolvedValueOnce(response(503, { error: 'Stato cancellazione non disponibile.' }));
+
+    await expect(deleteAccount(context)).rejects.toThrow('Stato cancellazione non disponibile.');
+
+    expect(readAccountDeletionMarker('user:a')?.serverAcceptedAt).toBeTypeOf('number');
+    expect(isAccountDeletionPending('user:a')).toBe(true);
+    expect(await get('logbook:v2:user:a')).toBeDefined();
+    expect(boundary.auth.signOut).not.toHaveBeenCalled();
+});
+
 it('checks recent authentication before App Check or any server request', async () => {
     boundary.token.mockResolvedValue({ authTime: '2020-01-01T00:00:00Z', token: 'stale-token' });
 

@@ -320,6 +320,7 @@ async function performDeletion(context: AccountDeletionContext): Promise<Account
 
     try {
         await requestServerDeletion(marker, token.token, appToken);
+        markAccountDeletion(marker.owner, { receiptToken: marker.receiptToken, serverAcceptedAt: Date.now() });
     } catch (error) {
         if (error instanceof AccountDeletionRequestTimeoutError) {
             return pendingDeletionOutcome('La richiesta di cancellazione è stata inviata, ma il server non ha risposto entro il limite interattivo. La copia locale e la ricevuta sono state conservate; LogBook verificherà lo stato automaticamente e puoi riprendere l’operazione dalle impostazioni.');

@@ -1,10 +1,10 @@
 import { BACKEND_API_ORIGIN as ACCOUNT_DELETION_API_ORIGIN } from '../backendApi';
 import { ensureAppCheck } from '../firebase';
 import { assertDeletionDeadlineActive, withDeletionDeadline } from '../deletionDeadline';
-import { markAccountDeletion, type AccountDeletionMarker } from '../sync/accountGate';
+import { type AccountDeletionMarker } from '../sync/accountGate';
 
-// Trusted HTTP transport only. Receipt persistence, owner gating and physical
-// cleanup remain in db_account.ts and ownerLocalPurge.ts.
+// App Check and HTTP request/response boundary. Durable acknowledgement,
+// owner validation and local cleanup remain with the account orchestrator.
 export type ServerDeletionStatus = {
     uid: string;
     status: 'requested' | 'deleting' | 'verifying' | 'complete' | 'failed';
@@ -75,7 +75,6 @@ export async function requestServerDeletion(marker: AccountDeletionMarker, idTok
         error.definitiveRejection = response.status === 400 || response.status === 401 || response.status === 403;
         throw error;
     }
-    markAccountDeletion(marker.owner, { receiptToken: marker.receiptToken, serverAcceptedAt: Date.now() });
 }
 
 export async function fetchAccountDeletionStatus(marker: AccountDeletionMarker, timeoutMs = ACCOUNT_DELETION_HTTP_TIMEOUT_MS): Promise<ServerDeletionStatus> {
