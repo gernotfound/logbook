@@ -106,7 +106,19 @@ export async function purgeAllLocalUserData(owner = storageOwner()) {
 /** Only a verified server-complete account deletion may use this boundary. */
 export async function purgeCompletedAccountLocalData(owner: string) {
     if (!owner.startsWith('user:')) throw new Error('La finalizzazione richiede un owner account.');
-    return purgeOwnerLocalData(owner);
+    const uid = owner.slice('user:'.length);
+    const assertOwnerStillInactive = () => {
+        // A new account or guest session can become active while this owner
+        // waits for its vault lock. Never remove shared drafts for that session.
+        if (anotherLocalIdentityIsActive(uid)) {
+            throw new Error('Un altro account o una sessione ospite è diventata attiva. La pulizia locale resta sospesa.');
+        }
+    };
+    return purgeOwnerLocalData(owner, false, {
+        preflight: async () => { assertOwnerStillInactive(); },
+        // Runs even when resuming an already-fenced, interrupted purge.
+        afterFence: async () => { assertOwnerStillInactive(); },
+    });
 }
 
 /** A clean-looking UI cannot prove that its durable offline journal is empty. */
