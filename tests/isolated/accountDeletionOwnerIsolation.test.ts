@@ -71,6 +71,21 @@ it('classifies a missing receipt status as device-recovery eligible without purg
     expect(isAccountDeletionPending('user:a')).toBe(true);
 });
 
+it('retains the receipt and local archive when the trusted status endpoint is unavailable', async () => {
+    boundary.auth.currentUser = null;
+    boundary.fetch.mockResolvedValueOnce(new Response(JSON.stringify({ error: 'Servizio temporaneamente indisponibile.' }), {
+        status: 503,
+        headers: { 'content-type': 'application/json' },
+    }));
+
+    await expect(resumeAccountDeletion(context)).rejects.toThrow('Servizio temporaneamente indisponibile.');
+
+    expect(boundary.purge).not.toHaveBeenCalled();
+    expect(boundary.auth.signOut).not.toHaveBeenCalled();
+    expect(boundary.resetCache).not.toHaveBeenCalled();
+    expect(isAccountDeletionPending('user:a')).toBe(true);
+});
+
 it('does not sign out or purge account B when account A completes in background', async () => {
     boundary.auth.currentUser = { uid: 'b' };
 
