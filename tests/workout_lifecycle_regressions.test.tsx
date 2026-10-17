@@ -237,6 +237,57 @@ describe('Workout lifecycle durable recovery regressions', () => {
     });
 
 
+    it('never completes a workout replaced while the finish confirmation is open', async () => {
+        const original = workout('finish-confirm-original', true);
+        const replacement = workout('finish-confirm-replacement', true);
+        const initial = userData({ activeWorkout: original });
+        await initializeLocal(owner, initial);
+        useAppStore.setState({ userData: initial, dataOwner: owner, localWorkout: original });
+        const previousDispatch = useAppStore.getState().dispatchDomainOperation;
+        const mockedDispatch = vi.fn(previousDispatch);
+        useAppStore.setState({ dispatchDomainOperation: mockedDispatch });
+        vi.mocked(useDialogStore.getState().showConfirm).mockImplementationOnce(async () => {
+            useAppStore.setState({ localWorkout: replacement });
+            return true;
+        });
+        try {
+            const hook = renderHook(() => useWorkoutSession());
+            await act(async () => { expect(await hook.result.current.endWorkout()).toBeNull(); });
+            expect(mockedDispatch).not.toHaveBeenCalled();
+            expect(useAppStore.getState().localWorkout?.id).toBe(replacement.id);
+            expect((await readLocal(owner))?.data.history?.some(w => w.id === original.id)).toBe(false);
+            expect((await readLocal(owner))?.data.activeWorkout?.id).toBe(original.id);
+        } finally {
+            useAppStore.setState({ dispatchDomainOperation: previousDispatch });
+        }
+    });
+
+    it('retains a live workout, timer and final draft when completion commit is rejected', async () => {
+        const pending = workout('finish-rejected', true);
+        const initial = userData({ activeWorkout: pending });
+        await initializeLocal(owner, initial);
+        const snapshot = { version: 1, state: 'running', startTime: 1000, accumulated: 125 };
+        localStorage.setItem(deviceKey('timer', owner), JSON.stringify(snapshot));
+        const draftName = 'draft:post-session:' + pending.id;
+        writeDeviceValue(draftName, JSON.stringify({ draft: { workoutId: pending.id } }), owner);
+        useAppStore.setState({ userData: initial, dataOwner: owner, localWorkout: pending });
+        const previousDispatch = useAppStore.getState().dispatchDomainOperation;
+        useAppStore.setState({ dispatchDomainOperation: vi.fn(async () => ({
+            ok: false as const, status: 'failed' as const, error: new Error('IndexedDB unavailable'),
+        })) });
+        try {
+            const hook = renderHook(() => useWorkoutSession());
+            await act(async () => { expect(await hook.result.current.endWorkout(false)).toBeNull(); });
+            expect(useAppStore.getState().localWorkout?.id).toBe(pending.id);
+            expect((await readLocal(owner))?.data.activeWorkout?.id).toBe(pending.id);
+            expect((await readLocal(owner))?.data.history?.some(w => w.id === pending.id)).toBe(false);
+            expect(readWorkoutTimerSnapshot(owner)).toEqual(snapshot);
+            expect(readDeviceValueStrict(draftName, owner)).not.toBeNull();
+        } finally {
+            useAppStore.setState({ dispatchDomainOperation: previousDispatch });
+        }
+    });
+
     it('recovers a durable deletion when the post-commit device cleanup fails', async () => {
         const deleted = workout('deleted-on-device', true);
         const initial = userData({ activeWorkout: deleted });
