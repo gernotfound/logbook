@@ -1,6 +1,6 @@
 # Ambiente di test isolato — TheLogBook
 
-> **Stato:** backend Vercel Test e Firestore Rules/indici Test distribuiti; frontend Hosting, collaudo Rules live e prove E2E autenticate ancora da completare. Le note storiche successive descrivono le tappe precedenti, non lo stato corrente.
+> **Stato:** frontend Firebase Hosting Test, backend Vercel Test e Firestore Rules/indici Test distribuiti; autenticazione, App Check, WIF/OIDC, Rules live e flussi E2E autenticati ancora da verificare. Le note storiche successive descrivono le tappe precedenti, non lo stato corrente.
 > **Ambito:** Firebase Test e backend Vercel Test, separati dal runtime Production.
 > **Ultimo aggiornamento:** 2026-10-17. Le configurazioni storiche elencate come "riferite" provengono da schermate del product owner; le verifiche dirette recenti sono distinte qui sotto.
 
@@ -32,6 +32,11 @@ Questo file e `docs/operations/external-services-register.md` sono il registro t
 - **Firebase Hosting Test live:** deploy CLI `firebase deploy --only hosting --project thelogbook-test --config .firebase.test.local.json --non-interactive` da `ef737f9d`, completato con rilascio sul sito `https://thelogbook-test.web.app`. Smoke HTTP diretto: `/`, `/sw.js` e `/manifest.webmanifest` restituiscono HTTP **200**, con content-type corrispondenti.
 - **Vercel Test:** modificata la protezione SSO del **solo progetto backend Test** da `all_except_custom_domains` a `preview` (confermato dal read-back del provider). Questo permette alla PWA di raggiungere gli endpoint del deployment Production *del progetto isolato Test*, mentre le risorse Production reali sono distinte. Smoke HTTP non autenticato: `/backend-only.txt` **200**, `/api/account-deletion` **403**. La sicurezza ora poggia su Origin/CORS, Firebase Auth e App Check nel codice server, non sul login Vercel del browser. Non sono state ridotte le protezioni delle richieste applicative.
 - **Non ancora verificato:** dominio Firebase Auth autorizzato, token validi App Check, enforcement live, scambio OIDC/STS con Google Cloud, accesso Firestore con account fittizi, flussi login, offline e sincronizzazione tramite browser. Non dichiarare Test operativo end-to-end fino al superamento di queste prove.
+
+### Verifica candidata successiva — 2026-10-17
+
+- La run [39018100554](https://github.com/gernotfound/logbook/actions/runs/39018100554) sul precedente commit `0cfd7ec40e57ce107d66f6856fe954e86c0f7469` è **fallita** nel solo shard unit/integration 2/2, mentre Playwright, CodeQL, build, Rules e gli altri shard sono riusciti. Il test coinvolto è `tests/tab_validation.test.tsx`, relativa all'avvio tramite shortcut Impostazioni e alla persistenza della scheda Home.
+- Analisi e correzione del test sul branch Test: la pagina lazy e la scrittura asincrona delle preferenze venivano asserite prima della stabilizzazione. Le attese sono state rese esplicite con `waitFor`, mantenendo le asserzioni sullo stato e sul valore finale; ripristinato inoltre l'URL di partenza in `beforeEach` per impedire contaminazioni fra scenari. Le 17 regressioni del file sono riuscite in due esecuzioni locali consecutive dopo la correzione. Il nuovo SHA richiede comunque l'intero gate canonico GitHub prima di essere considerato validato.
 
 ## Stato osservato e runbook isolato — 2026-10-17
 
