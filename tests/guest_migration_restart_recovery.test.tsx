@@ -86,6 +86,38 @@ describe('guest migration restart recovery', () => {
         expect(document.getElementById('app-container')).toBeTruthy();
     });
 
+    it('retains the recovery marker and blocks account data if the authenticated envelope is missing', async () => {
+        localStorage.setItem(SYNC_RECOVERY_KEY, user.uid);
+        expect(await localRepository.readLocal(user.uid)).toBeUndefined();
+        const purge = vi.spyOn(DB, 'purgeAllLocalUserData');
+
+        render(<AuthProvider><App /></AuthProvider>);
+
+        await waitFor(() => expect(screen.getByText('Accesso non completato')).toBeTruthy());
+        expect(localStorage.getItem(SYNC_RECOVERY_KEY)).toBe(user.uid);
+        expect(useAppStore.getState().saveError).toContain('copia locale autenticata non disponibile');
+        expect(screen.queryByTestId('bottom-nav')).toBeNull();
+        expect(purge).not.toHaveBeenCalled();
+    });
+
+    it('retains the recovery marker when the authenticated envelope cannot be read', async () => {
+        localStorage.setItem(SYNC_RECOVERY_KEY, user.uid);
+        const readLocal = localRepository.readLocal;
+        vi.spyOn(localRepository, 'readLocal').mockImplementation(async owner => {
+            if (owner === user.uid) throw new Error('Simulated encrypted envelope read failure');
+            return readLocal(owner);
+        });
+        const purge = vi.spyOn(DB, 'purgeAllLocalUserData');
+
+        render(<AuthProvider><App /></AuthProvider>);
+
+        await waitFor(() => expect(screen.getByText('Accesso non completato')).toBeTruthy());
+        expect(localStorage.getItem(SYNC_RECOVERY_KEY)).toBe(user.uid);
+        expect(useAppStore.getState().saveError).toContain('I dati locali sono stati lasciati intatti');
+        expect(screen.queryByTestId('bottom-nav')).toBeNull();
+        expect(purge).not.toHaveBeenCalled();
+    });
+
     it('keeps a rejected post-commit migration durable across restarts without sessionStorage, then clears it on local-pending retry', async () => {
         const { cloud, guest } = fixtures();
         const merged = parse({ ...cloud, profile: { ...cloud.profile, ...guest.profile }, routines: [...(cloud.routines || []), ...(guest.routines || [])] });
