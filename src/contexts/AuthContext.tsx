@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo, ReactNode } from 'react';
 import { User } from 'firebase/auth';
-import { auth, getRedirectResult, onAuthStateChanged, signOut } from '../lib/firebase';
+import { auth, onAuthStateChanged, signOut } from '../lib/firebase';
 import { DB } from '../lib/db';
 import { isAccountDeletionPending } from '../lib/sync/accountGate';
 import { useAppStore } from '../store/useAppStore';
@@ -12,18 +12,16 @@ import { useGoogleAuthActions } from './auth/useGoogleAuthActions';
 import { useGuestMigrationRetry } from './auth/useGuestMigrationRetry';
 import { GUEST_KEY, useGuestLogin } from './auth/useGuestLogin';
 import { createAuthConsentLifecycleHandlers } from './auth/consentLifecycle';
-import { loadAuthenticatedData } from './auth/loadAuthenticatedData';
+import { loadAndDrainAuthenticatedData } from './auth/loadAndDrainAuthenticatedData';
 import { captureSession, GUEST_REVOCATION_KEY, GUEST_SESSION_KEY, invalidateSession, isActiveGuestSession, isCurrentSession, revokeGuestSession, userOwner } from '../lib/sync/session';
 import { withGuestLifecycleLock } from '../lib/sync/guestLifecycleLock';
 import {
     BrowserStorageError,
-    readBrowserValue,
     readBrowserValueStrict,
     removeBrowserValue,
-    tryRemoveBrowserValue,
     writeBrowserValue,
 } from '../lib/sync/browserStorage';
-import { safeHardReload } from '../lib/sync/safeReload';
+import { attachAuthRedirectRecovery } from './auth/attachAuthRedirectRecovery';
 import { prepareForReload } from '../lib/sync/reloadBarrier';
 import { prepareAuthenticatedLogout } from './auth/prepareAuthenticatedLogout';
 import { useUnverifiedLocalContinuation } from './auth/useUnverifiedLocalContinuation';
@@ -142,46 +140,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
     }, [blockUnreadableLifecycleStorage]);
 
-    const loadData = useCallback(async (user: User) => {
-        await loadAuthenticatedData({
-            user,
-            isGuestActive: () => isGuestActiveStrict(),
-            setUserData,
-            setSyncing,
-            setSaveError,
-        });
-
-        if (typeof navigator !== 'undefined' && !navigator.onLine) return;
-        if (auth.currentUser?.uid !== user.uid || isGuestActiveStrict()) return;
-
-        const { readLocal } = await import('../lib/sync/localRepository');
-        const drainCheckpointedJournal = async () => {
-            const envelope = await readLocal(user.uid);
-            if (!envelope?.replica || !envelope.pending.length) return;
-            await useAppStore.getState().flushPendingSyncs();
-        };
-
-        // A Protocol 3 checkpoint can be the prerequisite that makes an offline or
-        // migrated journal deliverable. Drain it after the checkpoint instead of
-        // relying on listener ordering between the global replay and auth refresh.
-        try {
-            await drainCheckpointedJournal();
-        } catch (error) {
-            if ((error as { code?: unknown })?.code !== 'replica-fenced') throw error;
-
-            // transactionWriter has already marked the durable identity as checkpoint-required.
-            // Re-enter the authenticated loader once: it performs a full cloud scan, obtains
-            // a current generation, rebases the journal, then the retry can be delivered.
-            await loadAuthenticatedData({
-                user,
-                isGuestActive: () => isGuestActiveStrict(),
-                setUserData,
-                setSyncing,
-                setSaveError,
-            });
-            await drainCheckpointedJournal();
-        }
-    }, [isGuestActiveStrict, setSyncing, setUserData, setSaveError]);
+    const loadData = useCallback((user: User) => loadAndDrainAuthenticatedData({
+        user,
+        isGuestActive: () => isGuestActiveStrict(),
+        setUserData, setSyncing, setSaveError,
+    }), [isGuestActiveStrict, setSyncing, setUserData, setSaveError]);
 
     useEffect(() => {
         if (!currentUser || emailVerificationRequired) return;
@@ -222,28 +185,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     useEffect(() => {
         let isMounted = true;
-        const handleAuthVisibilityChange = async () => {
-            if (redirectLaunchFailedRef.current) return;
-            if (document.visibilityState !== 'visible' || readBrowserValue(AWAITING_REDIRECT_KEY) !== 'true') return;
-            if (!tryRemoveBrowserValue(AWAITING_REDIRECT_KEY)) {
-                setSaveError('Accesso completato, ma non riesco ad aggiornare lo stato locale del dispositivo. Riprova.');
-                return;
-            }
-            try {
-                await safeHardReload();
-            } catch (error) {
-                console.warn('Reload post-auth bloccato dalla barriera di persistenza:', error);
-                setSaveError(error instanceof Error ? error.message : 'Ricaricamento non sicuro. Riprova.');
-            }
-        };
-        document.addEventListener('visibilitychange', handleAuthVisibilityChange);
-
-        getRedirectResult(auth).then(() => {
-            tryRemoveBrowserValue(AWAITING_REDIRECT_KEY);
-        }).catch(() => {
-            tryRemoveBrowserValue(AWAITING_REDIRECT_KEY);
-            console.error('Ripresa redirect Google non riuscita.');
-            setSaveError("Accesso Google non completato. Riprova.");
+        const detachRedirectRecovery = attachAuthRedirectRecovery({
+            awaitingRedirectKey: AWAITING_REDIRECT_KEY,
+            redirectLaunchFailedRef, setSaveError,
         });
 
         const unsubscribe = onAuthStateChanged(auth, async (user: any) => {
@@ -327,7 +271,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             cancelLocalVaultReadiness('guest');
             invalidateSession();
             unsubscribe();
-            document.removeEventListener('visibilitychange', handleAuthVisibilityChange);
+            detachRedirectRecovery();
             document.removeEventListener('visibilitychange', handleVisibilityChange);
             window.removeEventListener('online', handleVisibilityChange);
             window.removeEventListener('focus', handleVisibilityChange);

@@ -83,6 +83,37 @@ describe('Google redirect lifecycle', () => {
     expect(useAppStore.getState().saveError).toContain('Connessione non disponibile');
   });
 
+  it('fails closed when foreground redirect marker cleanup cannot be persisted', async () => {
+    renderHook(() => useAuth(), { wrapper });
+    await act(async () => { await Promise.resolve(); });
+    localStorage.setItem(REDIRECT_KEY, 'true');
+    localStorageMock.removeItem.mockImplementationOnce(() => {
+      throw new Error('storage cleanup denied');
+    });
+
+    await act(async () => {
+      document.dispatchEvent(new Event('visibilitychange'));
+      await Promise.resolve();
+    });
+
+    expect(safeHardReload).not.toHaveBeenCalled();
+    expect(localStorage.getItem(REDIRECT_KEY)).toBe('true');
+    expect(useAppStore.getState().saveError).toContain('stato locale del dispositivo');
+  });
+
+  it('unsubscribes its foreground redirect listener on provider unmount', async () => {
+    const { unmount } = renderHook(() => useAuth(), { wrapper });
+    await act(async () => { await Promise.resolve(); });
+    unmount();
+    localStorage.setItem(REDIRECT_KEY, 'true');
+
+    await act(async () => {
+      document.dispatchEvent(new Event('visibilitychange'));
+      await Promise.resolve();
+    });
+    expect(safeHardReload).not.toHaveBeenCalled();
+  });
+
   it('surfaces redirect resume failures instead of treating them as non-critical', async () => {
     vi.mocked(getRedirectResult).mockRejectedValueOnce(Object.assign(new Error('redirect expired'), { code: 'auth/invalid-credential' }));
 
