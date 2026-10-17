@@ -47,7 +47,7 @@ describe('keyless Test Firestore Admin compatibility', () => {
   it('routes the Test Admin Firestore singleton through Google-GAX OIDC credentials', async () => {
     const db = adminDb() as InspectableFirestore;
     expect(adminDb()).toBe(db);
-    expect(db.projectId).toBe(TEST_FIREBASE_PROJECT_ID);
+    expect((db as unknown as { projectId: string }).projectId).toBe(TEST_FIREBASE_PROJECT_ID);
     expect(typeof db.runTransaction).toBe('function');
     // Demonstrates the prior defect: Firebase Admin Firestore refuses the
     // custom Admin Credential, while the isolated Google-GAX bridge accepts it.
