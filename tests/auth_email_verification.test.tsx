@@ -3,7 +3,7 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthProvider } from '../src/contexts/AuthContext';
 import { useAuth } from '../src/hooks/useAuth';
-import { auth, createUserWithEmailAndPassword, onAuthStateChanged, reload, sendEmailVerification, signOut } from '../src/lib/firebase';
+import { auth, createUserWithEmailAndPassword, onAuthStateChanged, reload, sendEmailVerification, signInWithEmailAndPassword, signOut } from '../src/lib/firebase';
 import { DB } from '../src/lib/db';
 import { useAppStore } from '../src/store/useAppStore';
 import { idbStore } from './setup';
@@ -131,6 +131,67 @@ describe('email verification lifecycle', () => {
         vi.mocked(signOut).mockRejectedValueOnce(new Error('offline'));
         await expect(result.current.continueUnverifiedLocally()).rejects.toThrow('offline');
         expect(result.current.isGuest).toBe(false);
+        expect(DB.purgeAllLocalUserData).not.toHaveBeenCalled();
+    });
+
+    it('rejects a weak password before creating an account or touching the local archive', async () => {
+        const archived = { privateDraft: 'do-not-touch' };
+        idbStore['logbook:v2:user:unverified-user'] = archived;
+        // A verified account would hydrate the intentionally opaque test archive.
+        // Use the real unverified gate to exercise email actions without opening it.
+        startWith(account(false));
+        const { result } = renderHook(() => useAuth(), { wrapper });
+        await waitFor(() => expect(result.current.emailVerificationRequired).toBe(true));
+
+        await act(async () => {
+            await expect(result.current.registerWithEmail('unverified@example.com', 'weak')).rejects.toThrow();
+        });
+
+        expect(createUserWithEmailAndPassword).not.toHaveBeenCalled();
+        expect(sendEmailVerification).not.toHaveBeenCalled();
+        expect(idbStore['logbook:v2:user:unverified-user']).toBe(archived);
+        expect(DB.purgeAllLocalUserData).not.toHaveBeenCalled();
+    });
+
+    it('does not continue email verification when refreshing the ID token fails', async () => {
+        const user = account(false);
+        startWith(user);
+        const archived = { privateDraft: 'do-not-touch' };
+        idbStore['logbook:v2:user:unverified-user'] = archived;
+        const { result } = renderHook(() => useAuth(), { wrapper });
+        await waitFor(() => expect(result.current.emailVerificationRequired).toBe(true));
+
+        vi.mocked(reload).mockImplementationOnce(async () => { user.emailVerified = true; });
+        user.getIdToken.mockRejectedValueOnce(new Error('token refresh unavailable'));
+
+        await act(async () => {
+            await expect(result.current.refreshEmailVerification()).rejects.toThrow('token refresh unavailable');
+        });
+
+        expect(user.getIdToken).toHaveBeenCalledWith(true);
+        expect(result.current.emailVerificationRequired).toBe(true);
+        expect(idbStore['logbook:v2:user:unverified-user']).toBe(archived);
+        expect(DB.purgeAllLocalUserData).not.toHaveBeenCalled();
+    });
+
+    it('surfaces an email login error without deleting account data', async () => {
+        const archived = { privateDraft: 'do-not-touch' };
+        idbStore['logbook:v2:user:unverified-user'] = archived;
+        vi.mocked(signInWithEmailAndPassword).mockRejectedValueOnce(
+            Object.assign(new Error('bad password'), { code: 'auth/wrong-password' }),
+        );
+        // A verified account would hydrate the intentionally opaque test archive.
+        // Use the real unverified gate to exercise email actions without opening it.
+        startWith(account(false));
+        const { result } = renderHook(() => useAuth(), { wrapper });
+        await waitFor(() => expect(result.current.emailVerificationRequired).toBe(true));
+
+        await act(async () => {
+            await expect(result.current.loginWithEmail('unverified@example.com', 'wrong')).rejects.toThrow();
+        });
+
+        expect(signInWithEmailAndPassword).toHaveBeenCalledTimes(1);
+        expect(idbStore['logbook:v2:user:unverified-user']).toBe(archived);
         expect(DB.purgeAllLocalUserData).not.toHaveBeenCalled();
     });
 
