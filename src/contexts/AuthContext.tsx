@@ -6,23 +6,20 @@ import { isAccountDeletionPending } from '../lib/sync/accountGate';
 import { refreshHealthConsent } from '../lib/healthConsent';
 import { useAppStore } from '../store/useAppStore';
 import { UserData } from '../types';
-import { UserDataSchema } from '../lib/schema';
 import { AuthContext, type GuestMigrationPolicy } from './AuthContextDef';
 import { useDialogStore } from '../store/useDialogStore';
-import { getCachedCatalog, getInMemoryCatalog, isCatalogInMemory } from '../lib/catalog/catalogService';
-import { resolveEffectiveExercises, resolveEffectiveFoods } from '../lib/catalog/deltaResolver';
 import { draftRegistry } from '../lib/utils/draftRegistry';
-import { getResolvedDefaultUserData } from './auth/defaultUserData';
 import { useEmailAuthActions } from './auth/useEmailAuthActions';
 import { useGoogleAuthActions } from './auth/useGoogleAuthActions';
 import { useGuestMigrationRetry } from './auth/useGuestMigrationRetry';
+import { GUEST_KEY, useGuestLogin } from './auth/useGuestLogin';
 import { resumePersistedGuestMigration } from './auth/resumePersistedGuestMigration';
 import { guardAuthenticatedBootstrap } from './auth/guardAuthenticatedBootstrap';
 import { createAuthConsentLifecycleHandlers } from './auth/consentLifecycle';
 import { loadAuthenticatedData } from './auth/loadAuthenticatedData';
 import { migrateGuestAccount } from './auth/migrateGuestAccount';
 import { isLegalConsentRequiredError } from '../lib/sync/replicateJournal';
-import { activateGuestSession, captureSession, GUEST_REVOCATION_KEY, GUEST_SESSION_KEY, invalidateSession, isActiveGuestSession, isCurrentSession, revokeGuestSession, userOwner } from '../lib/sync/session';
+import { captureSession, GUEST_REVOCATION_KEY, GUEST_SESSION_KEY, invalidateSession, isActiveGuestSession, isCurrentSession, revokeGuestSession, userOwner } from '../lib/sync/session';
 import { classifySyncFailure } from '../lib/sync/syncFailure';
 import { withGuestLifecycleLock } from '../lib/sync/guestLifecycleLock';
 import { SyncTimeoutError } from '../lib/db/db_core';
@@ -44,7 +41,6 @@ import { bindGuestMigrationIntentToUser, clearGuestMigrationIntent } from '../li
 import { cancelLocalVaultReadiness, ensureLocalVaultReady } from '../lib/sync/secureArchiveUnlockFlow';
 import { lockVault } from '../lib/sync/secureArchiveSession';
 
-const GUEST_KEY = 'logbook_is_guest';
 const GUEST_MIGRATION_SYNC_RECOVERY_KEY = 'logbook_guest_migration_sync_recovery';
 const AWAITING_REDIRECT_KEY = 'logbook_awaiting_redirect';
 
@@ -464,66 +460,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         isGuestActiveStrict, setSaveError, setEmailVerificationRequired, migrationDataRef,
     });
 
-    // Accesso guest: solo localStorage, zero Firebase
-    const loginAsGuest = useCallback(async () => {
-        try {
-            // Serialize the entire cleanup-to-activation transition across tabs.
-            // An older logout must never delete a new guest generation.
-            await withGuestLifecycleLock(async () => {
-                clearAuthenticatedOwnerHint();
-                if (readBrowserValueStrict(GUEST_REVOCATION_KEY) !== null) {
-                    await DB.purgeAllLocalUserData('guest');
-                    // This realm might still hold the revoked guest's snapshot.
-                    // Do not seed the new generation with data from that session.
-                    useAppStore.getState().resetStore({ force: true });
-                }
-                const bytes = crypto.getRandomValues(new Uint8Array(16));
-                const id = Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
-                writeBrowserValue(GUEST_SESSION_KEY, id);
-                writeBrowserValue(GUEST_KEY, 'true');
-                removeBrowserValue(GUEST_REVOCATION_KEY);
-                activateGuestSession(id);
-                useDialogStore.getState().cancelAll();
-            });
-        } catch {
-            setSaveError('Impossibile avviare la modalità locale: pulizia o coordinamento delle sessioni non disponibile. I dati esistenti restano protetti.');
-            return;
-        }
-        // The newly activated guest session must be protected before any
-        // new local UserData/workout snapshot can be published.
-        await ensureLocalVaultReady('guest');
-        isGuestRef.current = true;
-        setIsGuest(true);
-        setGuestMigrationStatus('idle');
-        const previous = useAppStore.getState();
-        // An ownerless/foreign snapshot must not seed a new guest generation.
-        if ((previous.userData !== null || previous.localWorkout !== null) && previous.dataOwner !== 'guest') {
-            previous.resetStore({ force: true });
-        }
-        const currentData = useAppStore.getState().userData;
-        if (!currentData) {
-            const catalog = isCatalogInMemory() ? getInMemoryCatalog() : (await getCachedCatalog());
-            const initialGuestData = getResolvedDefaultUserData(catalog);
-            setUserData(UserDataSchema.parse(initialGuestData) as unknown as UserData);
-        } else {
-            const hasCatalogExercises = Array.isArray(currentData.library) && currentData.library.some(e => e.isDefault === true);
-            const hasCatalogFoods = Array.isArray(currentData.customFoods) && currentData.customFoods.some(f => f.isCustom === false);
-            if (!hasCatalogExercises || !hasCatalogFoods) {
-                const catalog = isCatalogInMemory() ? getInMemoryCatalog() : (await getCachedCatalog());
-                const resolvedLibrary = !hasCatalogExercises
-                    ? resolveEffectiveExercises(catalog.exercises, currentData.library || [], currentData.catalogOverrides)
-                    : currentData.library;
-                const resolvedFoods = !hasCatalogFoods
-                    ? resolveEffectiveFoods(catalog.foods, currentData.customFoods || [], currentData.catalogOverrides)
-                    : currentData.customFoods;
-                setUserData({
-                    ...currentData,
-                    library: resolvedLibrary,
-                    customFoods: resolvedFoods
-                });
-            }
-        }
-    }, [setSaveError, setUserData]);
+    const loginAsGuest = useGuestLogin({
+        isGuestRef, setIsGuest, setGuestMigrationStatus, setUserData, setSaveError,
+    });
 
     const continueUnverifiedLocally = useCallback(async () => {
         const user = auth.currentUser;
