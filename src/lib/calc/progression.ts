@@ -12,6 +12,7 @@ import type {
     WorkoutSession,
 } from '../../types';
 import { getSetSegments, getSetTechnique } from '../advancedSets';
+import { compareSessionChronology, isSessionEarlier, orderedEarlierSessions } from './progressionHistory';
 
 export type ProgressionExerciseRef = Pick<Exercise, 'id' | 'name' | 'trackingType' | 'isBodyweight' | 'equipmentWeight' | 'muscles' | 'secondaryMuscles'>;
 
@@ -607,30 +608,6 @@ function priorityFor(
     return 'other';
 }
 
-function sessionTimestamp(session: WorkoutSession, preferEnd = false): number | undefined {
-    const candidates = preferEnd
-        ? [session.globalEndTime, session.endTime, session.globalStartTime]
-        : [session.globalStartTime, session.globalEndTime, session.endTime];
-    return candidates.find(value => typeof value === 'number' && Number.isFinite(value));
-}
-
-function isSessionEarlier(candidate: WorkoutSession, current: WorkoutSession): boolean {
-    if (candidate.id && current.id && candidate.id === current.id) return false;
-    if (candidate.date && current.date) {
-        if (candidate.date < current.date) return true;
-        if (candidate.date > current.date) return false;
-    }
-    const candidateEnd = sessionTimestamp(candidate, true);
-    const currentStart = sessionTimestamp(current, false);
-    return candidateEnd !== undefined && currentStart !== undefined && candidateEnd < currentStart;
-}
-
-function compareSessionChronology(a: WorkoutSession, b: WorkoutSession): number {
-    const dateCompare = (a.date ?? '').localeCompare(b.date ?? '');
-    if (dateCompare !== 0) return dateCompare;
-    return (sessionTimestamp(a, false) ?? 0) - (sessionTimestamp(b, false) ?? 0);
-}
-
 function observedSessionWorkSets(
     session: WorkoutSession,
     libraryMap: Map<string, ProgressionExerciseRef>,
@@ -693,17 +670,15 @@ export function computeProgressionEngine(
     context: ProgressionBodyweightContext = {},
 ): ProgressionEngineResult {
     const analyses: ExerciseProgressionAnalysis[] = [];
+    const orderedHistory = orderedEarlierSessions(history, currentWorkout);
     for (const currentExercise of currentWorkout.exercises ?? []) {
         if (!currentExercise?.exId) continue;
         const exercise = libraryMap.get(currentExercise.exId);
         const current = normalizeExerciseExposure(currentWorkout, currentExercise, exercise, context);
-        const historical = history
-            .filter(session => isSessionEarlier(session, currentWorkout))
-            .sort(compareSessionChronology)
-            .flatMap(session => {
-                const found = (session.exercises ?? []).find(item => item.exId === currentExercise.exId);
-                return found ? [normalizeExerciseExposure(session, found, exercise, context)] : [];
-            });
+        const historical = orderedHistory.flatMap(session => {
+            const found = (session.exercises ?? []).find(item => item.exId === currentExercise.exId);
+            return found ? [normalizeExerciseExposure(session, found, exercise, context)] : [];
+        });
 
         const latestExposure = historical.at(-1);
         const comparable = historical.filter(previous => compareExposureCompatibility(current, previous).level !== 'none');
