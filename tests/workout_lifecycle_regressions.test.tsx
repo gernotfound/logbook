@@ -418,6 +418,45 @@ describe('Workout lifecycle durable recovery regressions', () => {
         }
     });
 
+    it('serializes overlapping history saves across separately mounted workout hooks', async () => {
+        const historical = workout('shared-history-save', true);
+        const editor: WorkoutSession & { id: string } = {
+            ...historical, isEditingHistory: true, originalHistoryId: historical.id,
+        };
+        const dispatch = useAppStore.getState().dispatchDomainOperation;
+        useAppStore.setState({ userData: userData({ history: [historical] }), localWorkout: editor });
+        let finish!: (result: { ok: true; status: 'synced' }) => void;
+        const mockedDispatch = vi.fn(() => new Promise<{ ok: true; status: 'synced' }>(resolve => { finish = resolve; }));
+        useAppStore.setState({ dispatchDomainOperation: mockedDispatch });
+        try {
+            const first = renderHook(() => useWorkoutSession());
+            const second = renderHook(() => useWorkoutSession());
+            let pending!: Promise<boolean>;
+            act(() => { pending = first.result.current.saveHistoryEdit(); });
+            expect(mockedDispatch).toHaveBeenCalledTimes(1);
+            await act(async () => {
+                expect(await second.result.current.saveHistoryEdit()).toBe(false);
+                expect(await second.result.current.cancelHistoryEdit()).toBe(false);
+            });
+            expect(mockedDispatch).toHaveBeenCalledTimes(1);
+            act(() => {
+                useAppStore.setState({ localWorkout: { ...editor, routineName: 'Modifica concorrente' } });
+            });
+            await act(async () => { finish({ ok: true, status: 'synced' }); expect(await pending).toBe(false); });
+            expect(useAppStore.getState().localWorkout?.routineName).toBe('Modifica concorrente');
+            expect(useAppStore.getState().localWorkout?.isEditingHistory).toBe(true);
+
+            // A completed attempt releases the owner-wide lock, not just the component state.
+            let retry!: Promise<boolean>;
+            act(() => { retry = second.result.current.saveHistoryEdit(); });
+            expect(mockedDispatch).toHaveBeenCalledTimes(2);
+            act(() => { useAppStore.setState({ localWorkout: { ...editor, routineName: 'Ancora modificato' } }); });
+            await act(async () => { finish({ ok: true, status: 'synced' }); expect(await retry).toBe(false); });
+        } finally {
+            useAppStore.setState({ dispatchDomainOperation: dispatch });
+        }
+    });
+
     it('deleting a history item closes the editor and restores its suspended live workout', async () => {
         const historical = workout('history-to-delete', true);
         const suspended = workout('still-live', true);
