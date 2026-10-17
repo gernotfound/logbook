@@ -4,6 +4,13 @@
 > **Ambito:** Firebase Test e backend Vercel Test, separati dal runtime Production.
 > **Ultimo aggiornamento:** 2026-10-17. Le configurazioni storiche elencate come "riferite" provengono da schermate del product owner; le verifiche dirette recenti sono distinte qui sotto.
 
+## Nuovo collaudo del consenso Test — 2026-10-17
+
+- Il product owner ha effettuato l'accesso con un account Test in un browser ordinario; l'interfaccia mostra **Verifica del consenso non riuscita**. Console: `GET /api/health-consent` HTTP `503`, `GET/POST /api/account-deletion-device` HTTP `500`. L'avviso `beforeinstallprompt` riguarda il banner installazione e non spiega il fallimento del consenso. Non inserire identificativi utente, indirizzi email o token nei registri pubblici.
+- Log runtime del deployment Test `dpl_DwBcpkRSCoke6Ffhn3RDXy6V1DBE`: letture Firestore del consenso rifiutate, ma classificazione diagnostica precedente `unclassified`. Causa di OIDC/STS/IAM/Firestore non determinata: nessun permesso IAM, regola Firestore o token deve essere cambiato alla cieca. Il fail-closed del consenso è corretto.
+- La classificazione dei fallimenti di scambio token OIDC Vercel, trasporto STS e IAM è ora resa esplicita **solo nel Test** senza logging di token, body, errori remoti o dati account. Test mirati 8/8, typecheck server e lint completati in locale. Integrato il commit remoto `main` `f877546aad79ed9bde506544b1f38dbbaa1b5107` nel ramo Test. [Gate canonico 39040348778](https://github.com/gernotfound/logbook/actions/runs/39040348778) **SUCCESS** sullo SHA `75c0191d29638fc773b1959218c4e2a7c01cf6f5`.
+- Backend Vercel **Test-only** pubblicato da questo SHA: `dpl_7Z27Q58Gqu1tw7SEkbb66CFhumiR` READY. Smoke HTTP: `/backend-only.txt` 200, `/sw.js` 404, `/api/health-consent` senza autenticazione 401, `/api/account-deletion-device` senza App Check 403. **Nessun deploy di Production reale né merge di PR #431**. Una richiesta autenticata successiva al nuovo deploy resta necessaria per osservare la categoria diagnostica e risolvere la root cause; attualmente non è osservata.
+
 ## Stato runtime Test verificato — 2026-10-17
 
 - **Firebase Hosting Test:** il file locale `dist/index.html`, il Service Worker e il manifest risultavano identici byte per byte ai tre file già pubblicati. Da branch Test validato sullo SHA `0f4597eb2199c6d746997dac2b30af6ecffef32d`, la CLI ha eseguito **soltanto** `firebase deploy --only hosting --project thelogbook-test --config .firebase.test.local.json --non-interactive`: deploy riuscito, 64 asset esistenti con la CSP derivata Test. Questa è una **pubblicazione CSP/configurazione**, **non** un nuovo build Vite dal codice aggiornato.
