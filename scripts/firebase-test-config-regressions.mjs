@@ -5,12 +5,32 @@ import { testFirebaseConfig, TEST_FIREBASE_PROJECT, TEST_HOSTING_SITE } from './
 
 const source = JSON.parse(readFileSync('firebase.json', 'utf8'));
 
-void test('Test deployment keeps all canonical rules and hosting behavior but replaces the site', () => {
+void test('Test deployment preserves Firestore and routes while isolating Hosting site and CSP', () => {
   const result = testFirebaseConfig(source, TEST_FIREBASE_PROJECT);
   assert.equal(result.hosting.site, TEST_HOSTING_SITE);
   assert.equal(source.hosting.site, 'thelogbook');
   assert.deepEqual(result.firestore, source.firestore);
-  assert.deepEqual(result.hosting.headers, source.hosting.headers);
+  const sourceHeaders = source.hosting.headers;
+  const testHeaders = result.hosting.headers;
+  assert.equal(testHeaders.length, sourceHeaders.length);
+  for (let i = 0; i < sourceHeaders.length; i++) {
+    assert.equal(testHeaders[i].source, sourceHeaders[i].source);
+    assert.equal(testHeaders[i].headers.length, sourceHeaders[i].headers.length);
+    for (let j = 0; j < sourceHeaders[i].headers.length; j++) {
+      const original = sourceHeaders[i].headers[j];
+      const derived = testHeaders[i].headers[j];
+      assert.equal(derived.key, original.key);
+      if (original.key !== 'Content-Security-Policy') {
+        assert.deepEqual(derived, original);
+      } else {
+        assert.match(derived.value, /https:\/\/thelogbook-test-backend-gnfcreator\.vercel\.app/);
+        assert.match(derived.value, /https:\/\/thelogbook-test\.firebaseapp\.com/);
+        assert.doesNotMatch(derived.value, /logbook-gnf\.vercel\.app|logbook-db-98cc4\.firebaseapp\.com|\.sentry\.io/);
+        assert.match(derived.value, /default-src 'self'/);
+        assert.match(original.value, /https:\/\/logbook-gnf\.vercel\.app/);
+      }
+    }
+  }
   assert.deepEqual(result.hosting.rewrites, source.hosting.rewrites);
   assert.equal(result.hosting.public, 'dist');
 });
@@ -31,6 +51,25 @@ void test('Test deployment refuses unexpected changes to canonical routing or si
   assert.throws(() => testFirebaseConfig({
     ...source, functions: { source: 'functions' },
   }, TEST_FIREBASE_PROJECT));
+});
+
+void test('Test CSP fails closed if Production backend/Auth mapping drifts or is duplicated', () => {
+  const csp = source.hosting.headers.find(route => route.source === '/**')
+    .headers.find(header => header.key === 'Content-Security-Policy').value;
+  for (const changedCsp of [
+    csp.replace('https://logbook-gnf.vercel.app', 'https://unexpected.example'),
+    csp.replace('https://logbook-db-98cc4.firebaseapp.com', 'https://unexpected.example'),
+    csp.replace(/connect-src[^;]+;/, ''),
+  ]) {
+    const altered = structuredClone(source);
+    altered.hosting.headers.find(route => route.source === '/**')
+      .headers.find(header => header.key === 'Content-Security-Policy').value = changedCsp;
+    assert.throws(() => testFirebaseConfig(altered, TEST_FIREBASE_PROJECT));
+  }
+  const duplicate = structuredClone(source);
+  const globalHeaders = duplicate.hosting.headers.find(route => route.source === '/**').headers;
+  globalHeaders.push({ key: 'Content-Security-Policy', value: csp });
+  assert.throws(() => testFirebaseConfig(duplicate, TEST_FIREBASE_PROJECT));
 });
 
 import { checkFirebaseTestFrontendEnv } from './check-firebase-test-frontend-env.mjs';
