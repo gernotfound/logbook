@@ -5,6 +5,7 @@ vi.mock('@vercel/oidc', () => oidc);
 
 import {
   assertTestOidcEnvironment,
+  classifyTestFirestoreReadFailure,
   createTestOidcCredential,
   TEST_FIREBASE_PROJECT_ID,
   TEST_SERVICE_ACCOUNT_EMAIL,
@@ -40,6 +41,15 @@ function successFetch(): ReturnType<typeof vi.fn> {
 }
 
 describe('isolated Vercel Test Firebase Admin identity federation', () => {
+  it('classifies read failures without serializing sensitive error messages', () => {
+    expect(classifyTestFirestoreReadFailure(Object.assign(new Error('private remote details'), { code: 7 }))).toBe('grpc-7');
+    expect(classifyTestFirestoreReadFailure(Object.assign(new Error('private remote details'), { code: 'permission-denied' }))).toBe('permission-denied');
+    expect(classifyTestFirestoreReadFailure(new Error('Test WIF token exchange rejected.'))).toBe('google-sts-rejected');
+    expect(classifyTestFirestoreReadFailure(new Error('Test service-account impersonation rejected.'))).toBe('iam-impersonation-rejected');
+    expect(classifyTestFirestoreReadFailure(new Error('do-not-log-sensitive-information'))).toBe('unclassified');
+    expect(classifyTestFirestoreReadFailure(null)).toBe('unclassified');
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     oidc.getVercelOidcToken.mockResolvedValue('signed-vercel-oidc-test-token');

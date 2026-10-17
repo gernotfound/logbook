@@ -4,6 +4,14 @@
 > **Ambito:** Firebase Test e backend Vercel Test, separati dal runtime Production.
 > **Ultimo aggiornamento:** 2026-10-17. Le configurazioni storiche elencate come "riferite" provengono da schermate del product owner; le verifiche dirette recenti sono distinte qui sotto.
 
+## Stato runtime Test verificato — 2026-10-17
+
+- **Firebase Hosting Test:** il file locale `dist/index.html`, il Service Worker e il manifest risultavano identici byte per byte ai tre file già pubblicati. Da branch Test validato sullo SHA `0f4597eb2199c6d746997dac2b30af6ecffef32d`, la CLI ha eseguito **soltanto** `firebase deploy --only hosting --project thelogbook-test --config .firebase.test.local.json --non-interactive`: deploy riuscito, 64 asset esistenti con la CSP derivata Test. Questa è una **pubblicazione CSP/configurazione**, **non** un nuovo build Vite dal codice aggiornato.
+- **CSP live verificata:** sulla risposta HTTP 200 dell'origine Test sono presenti `connect-src` per il backend Test e `frame-src` per Firebase Auth Test; assenti gli origin Production del backend, Firebase Auth e Sentry. Rimangono `default-src 'self'` e `frame-ancestors 'none'`.
+- **App Check e chiamate Vercel Test:** browser isolato ottiene un token App Check *limited-use*; il backend risponde `400` per input intenzionalmente non valido **dopo** il controllo App Check. Un GET di sola lettura con UID sintetico inesistente e ricevuta sintatticamente valida risponde `500`. Il runtime log Vercel Test conferma `[account-deletion] backend failure {kind: 'Error'}`, senza dettagli di causa. Nessun POST né modifica a dati o account.
+- **Diagnostica candidata solo Test:** classificazione della causa dell'errore di lettura Firestore nel profilo `vercel-oidc`; non registra messaggi grezzi, payload, ID, email, token, secret o valori di chiavi. La verifica OIDC e il controllo TypeScript server sono superati localmente. Non dichiarare completata la federazione Firestore: manca un GET con esito atteso `404` su ID sintetico inesistente e verifica provider.
+- **Sicurezza:** nessun merge su `main`, deploy Production, enforcement App Check, creazione/cancellazione di account, né cambiamento a Firestore Rules live in questa fase.
+
 ## Registro operativo e regole di minimizzazione
 
 Questo file e `docs/operations/external-services-register.md` sono il registro tecnico condivisibile nel repository **pubblico**. Ogni intervento su Test deve riportare data, ambito, baseline `main` e SHA del candidato, PR, verifiche osservate sullo SHA esatto, provider/progetto coinvolto, operazioni riuscite o fallite, stato del runtime e attività residue. Distinguere sempre test automatici, operazioni del provider e verifiche browser dal vivo. Le sezioni storiche sottostanti restano traccia delle fasi precedenti, non descrivono necessariamente lo stato attuale.

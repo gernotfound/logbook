@@ -83,6 +83,30 @@ async function exchangeForImpersonatedToken(): Promise<AccessToken> {
   return { access_token: impersonation.accessToken, expires_in: expiresIn };
 }
 
+// Classify Test-only provider failures without ever logging raw error messages,
+// service credentials, tokens, account identifiers or remote response bodies.
+export function classifyTestFirestoreReadFailure(error: unknown): string {
+  if (!error || typeof error !== 'object') return 'unclassified';
+  const code = 'code' in error ? error.code : undefined;
+  if (typeof code === 'number' && Number.isInteger(code) && code >= 0 && code <= 16) {
+    return `grpc-${code}`;
+  }
+  if (typeof code === 'string' && [
+    'permission-denied', 'unauthenticated', 'unavailable', 'deadline-exceeded',
+    'not-found', 'resource-exhausted', 'failed-precondition',
+  ].includes(code)) {
+    return code;
+  }
+  const message = error instanceof Error ? error.message : '';
+  switch (message) {
+    case 'Vercel OIDC token unavailable.': return 'vercel-oidc-missing';
+    case 'Test WIF token exchange rejected.': return 'google-sts-rejected';
+    case 'Test service-account impersonation rejected.': return 'iam-impersonation-rejected';
+    case 'Isolated Vercel Test OIDC environment is not configured safely.': return 'unsafe-test-runtime-env';
+    default: return 'unclassified';
+  }
+}
+
 export function createTestOidcCredential(): Credential {
   // Firebase Admin shares a singleton app within one Vercel function instance.
   // Cache temporary Google access tokens, but never cache the Vercel source JWT.
