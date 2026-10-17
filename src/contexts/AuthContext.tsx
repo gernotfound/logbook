@@ -6,19 +6,17 @@ import { isAccountDeletionPending } from '../lib/sync/accountGate';
 import { refreshHealthConsent } from '../lib/healthConsent';
 import { useAppStore } from '../store/useAppStore';
 import { UserData } from '../types';
-import { AuthContext, type GuestMigrationPolicy } from './AuthContextDef';
+import { AuthContext } from './AuthContextDef';
 import { useDialogStore } from '../store/useDialogStore';
-import { draftRegistry } from '../lib/utils/draftRegistry';
 import { useEmailAuthActions } from './auth/useEmailAuthActions';
 import { useGoogleAuthActions } from './auth/useGoogleAuthActions';
 import { useGuestMigrationRetry } from './auth/useGuestMigrationRetry';
 import { GUEST_KEY, useGuestLogin } from './auth/useGuestLogin';
 import { resumePersistedGuestMigration } from './auth/resumePersistedGuestMigration';
+import { startInitialGuestMigration } from './auth/startInitialGuestMigration';
 import { guardAuthenticatedBootstrap } from './auth/guardAuthenticatedBootstrap';
 import { createAuthConsentLifecycleHandlers } from './auth/consentLifecycle';
 import { loadAuthenticatedData } from './auth/loadAuthenticatedData';
-import { migrateGuestAccount } from './auth/migrateGuestAccount';
-import { isLegalConsentRequiredError } from '../lib/sync/replicateJournal';
 import { captureSession, GUEST_REVOCATION_KEY, GUEST_SESSION_KEY, invalidateSession, isActiveGuestSession, isCurrentSession, revokeGuestSession, userOwner } from '../lib/sync/session';
 import { classifySyncFailure } from '../lib/sync/syncFailure';
 import { withGuestLifecycleLock } from '../lib/sync/guestLifecycleLock';
@@ -37,7 +35,6 @@ import { watchDeletionRecoveryDeviceRegistration } from '../lib/deletionDeviceRe
 import { RecoveryDiagnosticTracker } from '../lib/deletionRecoveryDiagnostics';
 import { reportError } from '../lib/errorHandler';
 import { clearAuthenticatedOwnerHint } from '../lib/sync/authOwnerHint';
-import { bindGuestMigrationIntentToUser, clearGuestMigrationIntent } from '../lib/auth/guestMigrationIntent';
 import { cancelLocalVaultReadiness, ensureLocalVaultReady } from '../lib/sync/secureArchiveUnlockFlow';
 import { lockVault } from '../lib/sync/secureArchiveSession';
 
@@ -334,65 +331,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 }
 
                 if (wasGuest) {
-                    setGuestMigrationStatus('pending');
-                    setLoading(false);
-                    draftRegistry.flushAll();
-
-                    const guestData = migrationDataRef.current || useAppStore.getState().userData;
-                    let policy: GuestMigrationPolicy;
-                    let intentId: string;
-                    try {
-                        const intent = bindGuestMigrationIntentToUser(user);
-                        policy = intent.policy;
-                        intentId = intent.id;
-                    } catch (error) {
-                        if (!isCurrentRun()) return;
-                        console.error('Intento migrazione guest non determinabile:', error);
-                        setGuestMigrationStatus('failed');
-                        setSaveError('Non è possibile determinare il tentativo di trasferimento. Avvia di nuovo l’accesso e scegli come gestire i dati locali.');
-                        return;
-                    }
-
-                    try {
-                        const migrationResult = await migrateGuestAccount({
-                            user,
-                            guestData,
-                            policy,
-                            setUserData,
-                            setSyncing,
-                            isCurrent: isCurrentRun,
-                            onLocalReady: () => {
-                                // Persist recovery before changing owner. If any critical
-                                // storage transition fails, migration remains recoverable.
-                                markGuestMigrationSyncRecovery(user.uid);
-                                removeBrowserValue(GUEST_KEY);
-                                clearGuestMigrationIntent(intentId);
-                                isGuestRef.current = false;
-                                setIsGuest(false);
-                                migrationDataRef.current = null;
-                            },
-                        });
-
-                        if (!isCurrentRun()) return;
-
-                        if (migrationResult.status === 'rejected' || migrationResult.status === 'failed') {
-                            setGuestMigrationStatus('failed');
-                            setSaveError('I dati sono salvati su questo dispositivo, ma la sincronizzazione dell’account non è stata completata. Riprova.');
-                        } else {
-                            clearGuestMigrationSyncRecovery(user.uid);
-                            setGuestMigrationStatus('idle');
-                            if (migrationResult.status === 'local-pending') {
-                                setSaveError(isLegalConsentRequiredError(migrationResult.error)
-                                    ? 'Account preparato sul dispositivo. Accetta Termini e consenso salute per sincronizzare i progressi.'
-                                    : '📶 Offline: account preparato sul dispositivo. La sincronizzazione riprenderà quando torni online.');
-                            }
-                        }
-                    } catch (error) {
-                        if (!isCurrentRun()) return;
-                        console.error('Preparazione account da modalità locale non completata:', error);
-                        setGuestMigrationStatus('failed');
-                        setSaveError('Preparazione account non completata. I dati locali sono conservati e possono essere recuperati. Riprova.');
-                    }
+                    await startInitialGuestMigration(user, isCurrentRun, {
+                        guestKey: GUEST_KEY, isGuestRef, migrationDataRef, setIsGuest,
+                        setGuestMigrationStatus, setLoading, setUserData, setSyncing, setSaveError,
+                        markGuestMigrationSyncRecovery, clearGuestMigrationSyncRecovery,
+                    });
                 } else {
                     setGuestMigrationStatus('idle');
                     await loadData(user);
