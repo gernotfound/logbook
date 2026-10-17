@@ -1,4 +1,4 @@
-import { BACKEND_API_ORIGIN as API } from './backendApi';
+import { sendHealthDataErasure } from './healthDataErasureTransport';
 import type { User } from 'firebase/auth';
 import { auth, ensureAppCheck } from './firebase';
 import { getLimitedUseAppCheckToken } from './appCheck';
@@ -8,30 +8,26 @@ export type HealthDataErasureOutcome =
   | { status: 'complete'; complete: true }
   | { status: 'requested' | 'deleting' | 'verifying' | 'failed'; complete: false; retryable?: boolean; error?: string };
 
+// Acquiring fresh credentials is separate from the owner/session guard:
+// callers must revalidate the captured session before dispatching HTTP.
+async function erasureRequestHeaders(user: User): Promise<{ authorization: string; 'x-firebase-appcheck': string }> {
+  await ensureAppCheck();
+  const token = await getLimitedUseAppCheckToken();
+  if (!token) throw new Error('Verifica App Check non disponibile.');
+  const idToken = await user.getIdToken(true);
+  return { authorization: 'Bearer ' + idToken, 'x-firebase-appcheck': token };
+}
+
 export async function requestHealthDataErasure(user: User): Promise<HealthDataErasureOutcome> {
   const session = captureSession();
   if (session.owner !== 'user:' + user.uid || auth.currentUser?.uid !== user.uid) {
     throw new Error('Sessione diversa da quella che ha richiesto la cancellazione.');
   }
-  await ensureAppCheck();
-  const token = await getLimitedUseAppCheckToken();
-  if (!token) throw new Error('Verifica App Check non disponibile.');
-  // Force a fresh ID token so the server can enforce recent auth_time.
-  const idToken = await user.getIdToken(true);
+  const headers = await erasureRequestHeaders(user);
   if (!isCurrentSession(session) || auth.currentUser?.uid !== user.uid) {
     throw new Error('Sessione cambiata. Verifica se la cancellazione è già stata avviata.');
   }
-  const response = await fetch(API + '/api/health-data-erasure', {
-    method: 'POST', cache: 'no-store', signal: AbortSignal.timeout(12000),
-    headers: { authorization: 'Bearer ' + idToken, 'x-firebase-appcheck': token },
-  });
-  const result: unknown = await response.json();
-  if (!response.ok && response.status !== 202) {
-    const message = result && typeof result === 'object' && typeof (result as { error?: unknown }).error === 'string'
-      ? (result as { error: string }).error
-      : 'Cancellazione non confermata dal servizio.';
-    throw new Error(message);
-  }
+  const result = await sendHealthDataErasure('POST', headers);
   if (!result || typeof result !== 'object') throw new Error('Stato cancellazione non verificabile.');
   const record = result as Partial<HealthDataErasureOutcome>;
   if (record.status === 'complete' && record.complete === true) return { status: 'complete', complete: true };
@@ -54,19 +50,11 @@ export async function assertCurrentHealthDataErasureCompleted(uid: string): Prom
   if (!user || user.uid !== uid || session.owner !== 'user:' + uid || !isCurrentSession(session)) {
     throw new Error('Proprietario della cancellazione dati non verificabile.');
   }
-  await ensureAppCheck();
-  const token = await getLimitedUseAppCheckToken();
-  if (!token) throw new Error('Verifica App Check non disponibile.');
-  const idToken = await user.getIdToken(true);
+  const headers = await erasureRequestHeaders(user);
   if (!isCurrentSession(session) || auth.currentUser?.uid !== uid) {
     throw new Error('Sessione cambiata prima della pulizia locale.');
   }
-  const response = await fetch(API + '/api/health-data-erasure', {
-    method: 'GET', cache: 'no-store', signal: AbortSignal.timeout(12000),
-    headers: { authorization: 'Bearer ' + idToken, 'x-firebase-appcheck': token },
-  });
-  if (!response.ok) throw new Error('Non è stato possibile verificare la ricevuta della cancellazione cloud.');
-  const value: unknown = await response.json();
+  const value = await sendHealthDataErasure('GET', headers);
   if (!value || typeof value !== 'object'
     || (value as { status?: unknown }).status !== 'complete'
     || (value as { complete?: unknown }).complete !== true
