@@ -1,8 +1,16 @@
 # Ambiente di test isolato — TheLogBook
 
-> **Stato:** frontend Firebase Hosting Test, backend Vercel Test e Firestore Rules/indici Test distribuiti; autenticazione, App Check, WIF/OIDC, Rules live e flussi E2E autenticati ancora da verificare. Le note storiche successive descrivono le tappe precedenti, non lo stato corrente.
+> **Stato:** frontend Firebase Hosting Test, backend Vercel Test e Firestore Rules/indici Test distribuiti. Il product owner ha confermato login e accettazione del consenso nell'app Test il 2026-10-17; questo non sostituisce le prove indipendenti di App Check, WIF/OIDC, autorizzazioni Firestore e sincronizzazione offline/online. Le note storiche successive non descrivono necessariamente lo stato corrente.
 > **Ambito:** Firebase Test e backend Vercel Test, separati dal runtime Production.
 > **Ultimo aggiornamento:** 2026-10-17. Le configurazioni storiche elencate come "riferite" provengono da schermate del product owner; le verifiche dirette recenti sono distinte qui sotto.
+
+## Diagnosi TelemetryHub e candidato di correzione — 2026-10-17
+
+- **Baseline:** `main` remoto `aad2cdfc3b327bbd2d64e43c62c44e1b60e7e57a`; PR draft #431 sul branch Test, senza merge verso `main` o deploy Production. Il cambiamento Auth recente di `main` e stato integrato nel solo worktree Test senza conflitti; le verifiche del nuovo candidato sono separate dalla precedente CI verde su `15eda237`.
+- **Meccanismo dimostrato nel codice:** il profilo Test proibisce `VITE_SENTRY_DSN`; `initSentry()` non abilita quindi il trasporto diagnostico. La vecchia logica poteva reinserire errori in coda e consumare il budget di retry a ogni flush, fino all'avviso `Evicting poison pill item`, anche in assenza di un trasporto configurato. Il messaggio indica lo scarto di una voce diagnostica, non lo scarto del journal business.
+- **Modifica candidata:** distinguere reporting intenzionalmente disattivato da un guasto temporaneo del trasporto: conservare i report ancora validi senza incrementare retry o forzare lo scarto durante l'assenza di DSN. Il limite temporale esistente della coda diagnostica (sette giorni), i controlli owner e i normali retry quando Sentry e attivo restano invariati.
+- **Evidenza e limite runtime:** HTTPS pubblico `https://thelogbook-test.web.app/` risponde 200 con CSP isolata; il frontend pubblicato usa ancora asset di una build precedente. Backend Test `/backend-only.txt` 200, `/sw.js` 404 e `/api/health-consent` senza credenziali 403 (fail-closed). La voce specifica gia scartata e l'errore tecnico originale non sono recuperabili dal solo stack trace riportato; non attribuirli a Firestore Rules o App Check senza ulteriori riscontri. La lettura dei log Vercel Test tramite connettore ha restituito 403, non una prova di assenza di errori.
+- **Validazione:** test sintetico `tests/telemetry_reporting_disabled.test.ts` per conservazione della coda senza tentativi di trasporto; la CI canonica sullo SHA finale e il nuovo Hosting Test devono ancora essere attestati separatamente. Nessun account o dato reale e stato toccato.
 
 ## Correzione della root cause Firestore su backend Test — 2026-10-17
 

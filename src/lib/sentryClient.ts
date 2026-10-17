@@ -16,6 +16,7 @@ type SentryTelemetryKind = 'error' | 'event' | 'storage-anomaly';
 type SentryTelemetryPayload = TelemetryErrorPayload | TelemetryEventPayload | StorageAnomalyPayload;
 
 let sentryInitialized = false;
+let reportingDisabledByConfiguration = false;
 
 function safeBuildSha(): string {
   return typeof __BUILD_SHA__ === 'string' && __BUILD_SHA__.length > 0 ? __BUILD_SHA__ : 'dev';
@@ -29,7 +30,10 @@ export function initSentry(): boolean {
   if (sentryInitialized) return true;
 
   const dsn = import.meta.env.VITE_SENTRY_DSN;
-  if (!dsn || !import.meta.env.PROD) return false;
+  if (!dsn || !import.meta.env.PROD) {
+    reportingDisabledByConfiguration = true;
+    return false;
+  }
 
   Sentry.init({
     dsn,
@@ -59,11 +63,18 @@ export function initSentry(): boolean {
   });
 
   sentryInitialized = true;
+  reportingDisabledByConfiguration = false;
   return true;
 }
 
 export function isSentryInitialized(): boolean {
   return sentryInitialized;
+}
+
+// Configuration-disabled reporting is distinct from a transient Sentry failure.
+// Pending diagnostics must not be retried or discarded simply because no DSN was deployed.
+export function isSentryReportingDisabled(): boolean {
+  return reportingDisabledByConfiguration;
 }
 
 function captureError(payload: TelemetryErrorPayload): boolean {
