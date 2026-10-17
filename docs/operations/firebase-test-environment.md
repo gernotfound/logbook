@@ -60,6 +60,10 @@ Questo file e `docs/operations/external-services-register.md` sono il registro t
 - **Regressioni:** `scripts/firebase-test-config-regressions.mjs` valida le origini Test, rifiuta drift della CSP sorgente e duplicazioni, conserva ogni header diverso dalla CSP e mantiene fail-closed sui project ID non Test. Sei test Node superati localmente; file `.firebase.test.local.json` rigenerato e ispezionato con tutti gli origin Test corretti. Sono evidenze sul **candidato locale**, non sull'Hosting pubblicato.
 - **Deploy e prova backend ancora mancanti:** la CSP live continuerà a risultare precedente finché una build exact-SHA e il deploy Hosting Test non potranno essere eseguiti senza violare i controlli di sicurezza dello strumento. Soltanto dopo quel passaggio sarà possibile collaudare realmente la verifica dei token limited-use nel backend Vercel e la federazione OIDC.
 
+### Allineamento ulteriore con main — 2026-10-17
+
+Il ramo `main` è avanzato nuovamente fino a `3cefa3ad22ac45f261548c83cd10cda280d3c41b` (refactor dell'editor storico allenamento). Integrato nel branch Test con merge senza conflitti e aggiornamento versione a `1.25.0`. Le sei regressioni del generatore CSP Test restano verdi dopo l'integrazione. Qualunque commit candidato finale richiede nuovamente la CI canonica sul suo SHA; il sito Hosting Test mantiene la release precedente finché il nuovo deploy non sarà consentito.
+
 ## Stato osservato e runbook isolato — 2026-10-17
 
 - GitHub `main` osservato allo SHA `df27d56bff4ea2f4081f642f343500cb2dbbb09d` (compresi i nuovi guardrail E2E della PR #418 e l'ottimizzazione del catalogo della PR #416); branch Test `testing/00-firebase-test-critical` tenuto distinto e PR #431 **draft, senza merge**. La sincronizzazione del branch con main e le nuove regressioni richiedono gate CI sul nuovo SHA prima dei prossimi deploy.
