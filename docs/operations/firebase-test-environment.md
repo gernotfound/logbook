@@ -70,6 +70,8 @@ Il ramo `main` è avanzato nuovamente fino a `3cefa3ad22ac45f261548c83cd10cda280
 - Correzione confinata al branch Test: confronto **esatto** dei token/origini CSP, verifica strutturale degli URL HTTPS con `URL`, rimozione attestata del solo collector Sentry canonico, rifiuto di origini e percorsi inattesi. Test con domini ingannevoli, origin Sentry cambiato e modifiche della CSP. Il file `firebase.json` Production non è stato modificato.
 - Esito diagnostico locale: 7/7 regressioni del generatore Test verdi e sintassi Node valida. L'eventuale nuova analisi CodeQL, il trattamento dei commenti di review e il gate canonico devono riferirsi al **nuovo commit esatto**, non alle CI verdi precedenti. Hosting Test conserva la release precedente finché un deploy Test isolato non sarà possibile.
 
+- **Sincronizzazione aggiuntiva GitHub:** dopo la correzione CodeQL, `main` è avanzato al commit `f4eafdf6ce391d12ed18dde8452478fb35342ef6` (estrazione del flusso di avvio allenamento). La modifica è stata integrata sul branch Test senza conflitti; l'integrazione invalida i gate dello SHA precedente e richiede nuova CI sull'HEAD candidato. La PR #431 resta draft e non va fusa in `main`.
+
 ## Stato osservato e runbook isolato — 2026-10-17
 
 - GitHub `main` osservato allo SHA `df27d56bff4ea2f4081f642f343500cb2dbbb09d` (compresi i nuovi guardrail E2E della PR #418 e l'ottimizzazione del catalogo della PR #416); branch Test `testing/00-firebase-test-critical` tenuto distinto e PR #431 **draft, senza merge**. La sincronizzazione del branch con main e le nuove regressioni richiedono gate CI sul nuovo SHA prima dei prossimi deploy.
