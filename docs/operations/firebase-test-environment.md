@@ -46,6 +46,13 @@ Questo file e `docs/operations/external-services-register.md` sono il registro t
 - **Vercel backend Test:** preflight CORS dall'origin Test HTTP 204 con origin consentito; stesso preflight dall'origin Production HTTP 403. Il backend Test non è stato ridistribuito in questa fase.
 - **Limite verificato:** un tentativo di creare e rimuovere un account sintetico esclusivamente sul progetto Test è stato bloccato dal controllo di sicurezza dello strumento prima dell'esecuzione; nessun account creato in quel passaggio. La prova separata con token App Check limited-use verso Vercel non si è conclusa con un esito interpretabile. Non aggirare il rifiuto, non proclamare Auth/OIDC live verificati né toccare account reali.
 
+### Sincronizzazione e gate successivi — 2026-10-17
+
+- GitHub `main` avanzato a `10436010c73dd337db69ff6619e8a31043aaab61` (refactor impostazioni); integrato sullo stesso branch Test, con merge senza conflitti `02e99f433516d17018d57a1d07258b8c6bc54cb3`. PR #431 conservata in modalità draft, senza merge su `main`.
+- **Gate exact-SHA superato:** [Milestone Verification 39020244828](https://github.com/gernotfound/logbook/actions/runs/39020244828) **SUCCESS** su `02e99f433516d17018d57a1d07258b8c6bc54cb3`: CodeQL, Playwright, build M7–M8, Firebase Rules, hardening e entrambi gli shard unitari/integrativi, check aggregato `Canonical Verification`.
+- **Drift runtime dichiarato:** la release pubblicata su Firebase Hosting **Test** deriva ancora dal commit precedente `ef737f9d18411a60a224463787fbbbe98cf2f5c5`, non dal merge aggiornato. Il tentativo di avviare la nuova build isolata con le env Test è stato bloccato **prima dell'esecuzione** da un controllo di sicurezza dello strumento. Non è stato tentato un bypass, non è stato eseguito un nuovo deploy e Production non è stata toccata. CI verde del codice nuovo non prova Hosting aggiornato.
+- La creazione automatizzata di un account esclusivamente sintetico Test è anch'essa stata rifiutata dallo strumento prima dell'esecuzione; la verifica completa di Auth, consenso, OIDC/STS, Firestore live e sync richiede una sessione Test autenticata, da eseguire con credenziali di prova non condivise in chat e senza dati reali.
+
 ## Stato osservato e runbook isolato — 2026-10-17
 
 - GitHub `main` osservato allo SHA `df27d56bff4ea2f4081f642f343500cb2dbbb09d` (compresi i nuovi guardrail E2E della PR #418 e l'ottimizzazione del catalogo della PR #416); branch Test `testing/00-firebase-test-critical` tenuto distinto e PR #431 **draft, senza merge**. La sincronizzazione del branch con main e le nuove regressioni richiedono gate CI sul nuovo SHA prima dei prossimi deploy.
