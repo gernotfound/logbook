@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo, ReactNode } from 'react';
 import { User } from 'firebase/auth';
-import { auth, getDb, waitForPendingWrites, getRedirectResult, onAuthStateChanged, signOut } from '../lib/firebase';
+import { auth, getRedirectResult, onAuthStateChanged, signOut } from '../lib/firebase';
 import { DB } from '../lib/db';
 import { isAccountDeletionPending } from '../lib/sync/accountGate';
 import { beginHealthConsentVerification, refreshHealthConsent } from '../lib/healthConsent';
