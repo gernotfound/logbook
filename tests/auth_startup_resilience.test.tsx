@@ -6,7 +6,7 @@ import { useAuth } from '../src/hooks/useAuth';
 import { useAppStore } from '../src/store/useAppStore';
 import { DB } from '../src/lib/db';
 import { auth, onAuthStateChanged } from '../src/lib/firebase';
-import { refreshHealthConsent } from '../src/lib/healthConsent';
+import { refreshHealthConsent, suspendHealthConsentCloudAccess } from '../src/lib/healthConsent';
 import * as localRepository from '../src/lib/sync/localRepository';
 import { createAndMigrateVault } from '../src/lib/sync/secureArchiveMigration';
 import { lockAllVaults } from '../src/lib/sync/secureArchiveSession';
@@ -86,6 +86,50 @@ describe('PWA & iPhone Startup Resilience Tests', () => {
 
     await act(async () => { window.dispatchEvent(new Event('online')); });
     await waitFor(() => expect(vi.mocked(refreshHealthConsent).mock.calls.length).toBe(previousChecks + 1));
+    expect(vi.mocked(DB.loadCloudPayload).mock.calls.length).toBe(previousCloudReads);
+  });
+
+  test('revokes the online cloud gate immediately on offline and avoids checks while disconnected', async () => {
+    render(<AuthProvider><TestAuthConsumer /></AuthProvider>);
+    await waitFor(() => expect(screen.getByTestId('loading-state').textContent).toBe('READY'));
+    const checksBefore = vi.mocked(refreshHealthConsent).mock.calls.length;
+    const offline = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    try {
+      await act(async () => {
+        window.dispatchEvent(new Event('offline'));
+        window.dispatchEvent(new Event('online'));
+      });
+      expect(suspendHealthConsentCloudAccess).toHaveBeenCalledWith('test-user-id');
+      expect(vi.mocked(refreshHealthConsent)).toHaveBeenCalledTimes(checksBefore);
+    } finally {
+      offline.mockRestore();
+    }
+  });
+
+  test('does not hydrate an old identity after an in-flight consent recheck resolves', async () => {
+    render(<AuthProvider><TestAuthConsumer /></AuthProvider>);
+    await waitFor(() => expect(screen.getByTestId('loading-state').textContent).toBe('READY'));
+    const checksBefore = vi.mocked(refreshHealthConsent).mock.calls.length;
+    const previousCloudReads = vi.mocked(DB.loadCloudPayload).mock.calls.length;
+    let finishCheck!: (status: 'active') => void;
+    vi.mocked(refreshHealthConsent).mockImplementationOnce(
+      () => new Promise(resolve => { finishCheck = resolve; }),
+    );
+    await act(async () => { window.dispatchEvent(new Event('online')); });
+    await waitFor(() => expect(vi.mocked(refreshHealthConsent).mock.calls.length).toBe(checksBefore + 1));
+    (auth as any).currentUser = { uid: 'another-account', emailVerified: true };
+    await act(async () => { finishCheck('active'); await Promise.resolve(); });
+    expect(vi.mocked(DB.loadCloudPayload).mock.calls.length).toBe(previousCloudReads);
+  });
+
+  test('does not hydrate after an unverifiable consent recheck on reconnect', async () => {
+    render(<AuthProvider><TestAuthConsumer /></AuthProvider>);
+    await waitFor(() => expect(screen.getByTestId('loading-state').textContent).toBe('READY'));
+    const checksBefore = vi.mocked(refreshHealthConsent).mock.calls.length;
+    const previousCloudReads = vi.mocked(DB.loadCloudPayload).mock.calls.length;
+    vi.mocked(refreshHealthConsent).mockResolvedValueOnce('error');
+    await act(async () => { window.dispatchEvent(new Event('online')); });
+    await waitFor(() => expect(vi.mocked(refreshHealthConsent).mock.calls.length).toBe(checksBefore + 1));
     expect(vi.mocked(DB.loadCloudPayload).mock.calls.length).toBe(previousCloudReads);
   });
 

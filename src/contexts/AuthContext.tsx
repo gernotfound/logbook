@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef, useCallback, useMemo, ReactNode } from 'react';
 import { User } from 'firebase/auth';
-import { auth, getDb, waitForPendingWrites, provider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged, signOut } from '../lib/firebase';
+import { auth, getRedirectResult, onAuthStateChanged, signOut } from '../lib/firebase';
 import { DB } from '../lib/db';
 import { isAccountDeletionPending } from '../lib/sync/accountGate';
-import { beginHealthConsentVerification, refreshHealthConsent, isHealthConsentWritable, suspendHealthConsentCloudAccess } from '../lib/healthConsent';
+import { beginHealthConsentVerification, refreshHealthConsent } from '../lib/healthConsent';
 import { useAppStore } from '../store/useAppStore';
 import { UserData } from '../types';
 import { UserDataSchema } from '../lib/schema';
@@ -14,6 +14,9 @@ import { resolveEffectiveExercises, resolveEffectiveFoods } from '../lib/catalog
 import { draftRegistry } from '../lib/utils/draftRegistry';
 import { getResolvedDefaultUserData } from './auth/defaultUserData';
 import { useEmailAuthActions } from './auth/useEmailAuthActions';
+import { useGoogleAuthActions } from './auth/useGoogleAuthActions';
+import { useGuestMigrationRetry } from './auth/useGuestMigrationRetry';
+import { createAuthConsentLifecycleHandlers } from './auth/consentLifecycle';
 import { loadAuthenticatedData } from './auth/loadAuthenticatedData';
 import { migrateGuestAccount } from './auth/migrateGuestAccount';
 import { isLegalConsentRequiredError, replicateJournal } from '../lib/sync/replicateJournal';
@@ -31,14 +34,13 @@ import {
 } from '../lib/sync/browserStorage';
 import { safeHardReload } from '../lib/sync/safeReload';
 import { prepareForReload } from '../lib/sync/reloadBarrier';
-import { classifyGooglePopupFailure } from './auth/googlePopup';
 import { watchDeletionRecoveryDeviceRegistration } from '../lib/deletionDeviceRecovery';
 import { RecoveryDiagnosticTracker } from '../lib/deletionRecoveryDiagnostics';
 import { reportError } from '../lib/errorHandler';
 import { clearAuthenticatedOwnerHint, rememberAuthenticatedOwner } from '../lib/sync/authOwnerHint';
-import { beginGuestMigrationIntent, bindGuestMigrationIntentToUser, clearGuestMigrationIntent } from '../lib/auth/guestMigrationIntent';
+import { bindGuestMigrationIntentToUser, clearGuestMigrationIntent } from '../lib/auth/guestMigrationIntent';
 import { cancelLocalVaultReadiness, ensureLocalVaultReady } from '../lib/sync/secureArchiveUnlockFlow';
-import { isVaultUnlocked, lockVault } from '../lib/sync/secureArchiveSession';
+import { lockVault } from '../lib/sync/secureArchiveSession';
 
 const GUEST_KEY = 'logbook_is_guest';
 const GUEST_MIGRATION_SYNC_RECOVERY_KEY = 'logbook_guest_migration_sync_recovery';
@@ -147,24 +149,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             return blockUnreadableLifecycleStorage(error);
         }
     }, [blockUnreadableLifecycleStorage]);
-
-    const startGoogleRedirect = useCallback(async () => {
-        redirectLaunchFailedRef.current = false;
-        try {
-            writeBrowserValue(AWAITING_REDIRECT_KEY, 'true');
-            await signInWithRedirect(auth, provider);
-        } catch (error) {
-            redirectLaunchFailedRef.current = true;
-            if (!tryRemoveBrowserValue(AWAITING_REDIRECT_KEY)) {
-                try {
-                    writeBrowserValue(AWAITING_REDIRECT_KEY, 'failed');
-                } catch {
-                    console.error('Impossibile rendere non attivo lo stato locale dopo un redirect Google non avviato.');
-                }
-            }
-            throw error;
-        }
-    }, []);
 
     const loadData = useCallback(async (user: User) => {
         await loadAuthenticatedData({
@@ -554,58 +538,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             }
         });
 
-        let isReloading = false;
-        const handleConsentReactivated = (event: Event) => {
-            const uid = (event as CustomEvent<{uid:string}>).detail?.uid;
-            const current = auth.currentUser;
-            if (!current || current.uid !== uid || !isHealthConsentWritable(userOwner(uid))) return;
-            setLoading(true);
-            loadData(current).catch(error => {
-                console.error('Hydration dopo nuovo consenso non riuscita:', error);
-                setSaveError('Nuovo consenso registrato, ma i dati non sono ancora disponibili. Riprova dopo aver verificato la connessione.');
-            }).finally(() => setLoading(false));
-        };
-        window.addEventListener('logbook:health-consent-reactivated', handleConsentReactivated);
-
-        const handleVisibilityChange = async (event?: Event) => {
-            if (isGuestActiveStrict() || isReloading) return;
-            // The "online" event must check consent even if this tab is hidden.
-            if (event?.type !== 'online' && document.visibilityState !== 'visible') return;
-            const user = auth.currentUser;
-            if (!user || user.emailVerified === false || !navigator.onLine
-                || !isVaultUnlocked(userOwner(user.uid))
-                || isAccountDeletionPending(userOwner(user.uid))) return;
-
-            isReloading = true;
-            const uid = user.uid;
-            try {
-                // A cached offline approval only authorizes local actions. On
-                // reconnect/foreground check the server BEFORE cloud hydration
-                // or delivering a journal that accumulated while disconnected.
-                const status = await refreshHealthConsent(user);
-                if (!isMounted || auth.currentUser?.uid !== uid || isGuestActiveStrict()) return;
-                if (status !== 'active') {
-                    useAppStore.getState().cancelPendingSyncs();
-                    return;
-                }
-                if (useAppStore.getState().syncing) return;
-                await Promise.race([
-                    waitForPendingWrites(getDb()),
-                    new Promise(resolve => setTimeout(resolve, 1500))
-                ]);
-                if (!isMounted || auth.currentUser?.uid !== uid
-                    || !isHealthConsentWritable(userOwner(uid))) return;
-                await loadData(user);
-            } catch (error) {
-                console.warn('Verifica consenso/aggiornamento dopo riconnessione non riusciti:', error);
-            } finally {
-                isReloading = false;
-            }
-        };
-        const handleOffline = () => {
-            const uid = auth.currentUser?.uid;
-            if (uid) suspendHealthConsentCloudAccess(uid);
-        };
+        const { handleConsentReactivated, handleVisibilityChange, handleOffline } = createAuthConsentLifecycleHandlers({
+            isMounted: () => isMounted,
+            isGuestActiveStrict, loadData, setLoading, setSaveError,
+        });
         document.addEventListener('visibilitychange', handleVisibilityChange);
         window.addEventListener('online', handleVisibilityChange);
         window.addEventListener('focus', handleVisibilityChange);
@@ -630,36 +566,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         };
     }, [isGuestActiveStrict, loadData, readGuestMigrationRecoveryStrict, setSyncing, setUserData, setSaveError]);
 
-    // Login con Google (dalla schermata di login, nessun guest precedente)
-    const login = useCallback(async (guestPolicy?: GuestMigrationPolicy) => {
-        setSaveError(null);
-        if (isGuestActiveStrict()) {
-            if (!guestPolicy) throw new Error('Scelta di trasferimento guest richiesta.');
-            beginGuestMigrationIntent(guestPolicy, 'google');
-        }
-        try {
-            await signInWithPopup(auth, provider);
-        } catch (error: any) {
-            const failure = classifyGooglePopupFailure(error);
-            if (failure === 'redirect') {
-                try {
-                    await startGoogleRedirect();
-                } catch {
-                    console.error('Accesso Google tramite redirect non riuscito.');
-                    setSaveError("Accesso fallito. Riprova.");
-                }
-            } else if (failure === 'cancelled') {
-                try { clearGuestMigrationIntent(); } catch { /* best effort: no successful auth occurred */ }
-            } else if (failure === 'network') {
-                try { clearGuestMigrationIntent(); } catch { /* best effort: no successful auth occurred */ }
-                setSaveError("Connessione non disponibile. Riprova quando sei online.");
-            } else if (failure === 'error') {
-                try { clearGuestMigrationIntent(); } catch { /* best effort */ }
-                console.error('Accesso Google non riuscito.');
-                setSaveError('Accesso Google non riuscito. Riprova.');
-            }
-        }
-    }, [isGuestActiveStrict, setSaveError, startGoogleRedirect]);
+    const { login, linkGoogleAccount } = useGoogleAuthActions({
+        isGuestActiveStrict, setSaveError, migrationDataRef, redirectLaunchFailedRef,
+    });
 
     const { loginWithEmail, registerWithEmail, resendEmailVerification, refreshEmailVerification } = useEmailAuthActions({
         isGuestActiveStrict, setSaveError, setEmailVerificationRequired, migrationDataRef,
@@ -749,107 +658,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
     }, [isGuestActiveStrict, loginAsGuest]);
 
-    // Collega account Google: migra i dati locali su Firestore
-    const linkGoogleAccount = useCallback(async (guestPolicy?: GuestMigrationPolicy) => {
-        setSaveError(null);
-        migrationDataRef.current = useAppStore.getState().userData;
-        if (isGuestActiveStrict()) {
-            if (!guestPolicy) throw new Error('Scelta di trasferimento guest richiesta.');
-            beginGuestMigrationIntent(guestPolicy, 'google');
-        }
-        try {
-            await signInWithPopup(auth, provider);
-        } catch (error: any) {
-            const failure = classifyGooglePopupFailure(error);
-            if (failure === 'redirect') {
-                try {
-                    await startGoogleRedirect();
-                } catch {
-                    console.error('Collegamento Google tramite redirect non riuscito.');
-                    setSaveError("Accesso fallito. Riprova.");
-                }
-                return;
-            }
-            if (failure === 'cancelled') {
-                try { clearGuestMigrationIntent(); } catch { /* best effort */ }
-                return;
-            }
-            if (failure === 'network') {
-                try { clearGuestMigrationIntent(); } catch { /* best effort */ }
-                setSaveError("Connessione non disponibile. Riprova quando sei online.");
-                return;
-            }
-            if (failure === 'error') {
-                try { clearGuestMigrationIntent(); } catch { /* best effort */ }
-                console.error('Collegamento account Google non riuscito.');
-                setSaveError("Collegamento fallito. Riprova.");
-            }
-        }
-    }, [isGuestActiveStrict, setSaveError, startGoogleRedirect]);
-
-    const retryGuestMigration = useCallback(async (policy?: GuestMigrationPolicy) => {
-        setSaveError(null);
-
-        if (isGuestActiveStrict()) {
-            try {
-                const uid = auth.currentUser?.uid;
-                if (!uid || !policy) throw new Error('Scegli esplicitamente se trasferire o non trasferire i dati locali.');
-                beginGuestMigrationIntent(policy, 'recovery', { uid });
-                await safeHardReload();
-            } catch (error) {
-                setGuestMigrationStatus('failed');
-                setSaveError(
-                    error instanceof Error && error.message.includes('Scelta di trasferimento')
-                        ? 'Scegli esplicitamente se trasferire o non trasferire i dati locali.'
-                        : error instanceof Error ? error.message : 'Ricaricamento non sicuro. Riprova.'
-                );
-            }
-            return;
-        }
-
-        const initialUid = auth.currentUser?.uid;
-        if (!initialUid) {
-            setGuestMigrationStatus('failed');
-            setSaveError('Sincronizzazione account non completata. Accedi nuovamente e riprova.');
-            return;
-        }
-
-        const session = captureSession();
-        const expectedOwner = userOwner(initialUid);
-        const isCurrentRetry = () => session.owner === expectedOwner
-            && isCurrentSession(session)
-            && auth.currentUser?.uid === initialUid
-            && !isGuestActiveStrict();
-
-        if (!isCurrentRetry()) return;
-
-        setGuestMigrationStatus('pending');
-        setSyncing(true);
-        try {
-            const result = await replicateJournal(expectedOwner);
-            if (!isCurrentRetry()) return;
-
-            if (result.status === 'synced' || result.status === 'local-pending') {
-                clearGuestMigrationSyncRecovery(initialUid);
-                setGuestMigrationStatus('idle');
-                if (result.status === 'local-pending') {
-                    setSaveError(isLegalConsentRequiredError(result.error)
-                            ? 'I dati sono salvati sul dispositivo. Accetta Termini e consenso salute per sincronizzarli con l’account.'
-                            : '📶 Offline: i dati sono salvati sul dispositivo e verranno sincronizzati quando torni online.');
-                }
-            } else {
-                setGuestMigrationStatus('failed');
-                setSaveError('Sincronizzazione account non completata. I dati locali restano conservati. Riprova.');
-            }
-        } catch (error) {
-            if (!isCurrentRetry()) return;
-            console.error('Retry sincronizzazione account non riuscito:', error);
-            setGuestMigrationStatus('failed');
-            setSaveError('Sincronizzazione account non completata. I dati locali restano conservati. Riprova.');
-        } finally {
-            if (isCurrentRetry()) setSyncing(false);
-        }
-    }, [isGuestActiveStrict, setSaveError, setSyncing]);
+    const retryGuestMigration = useGuestMigrationRetry({
+        isGuestActiveStrict, setSaveError, setSyncing,
+        setGuestMigrationStatus, clearGuestMigrationSyncRecovery,
+    });
 
     const logoutInFlightRef = useRef(false);
     const LOGOUT_SYNC_CHECK_TIMEOUT_MS = 5000;

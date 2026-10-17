@@ -53,6 +53,36 @@ describe('Google redirect lifecycle', () => {
     expect(safeHardReload).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ['login', (auth: ReturnType<typeof useAuth>) => auth.login()],
+    ['linkGoogleAccount', (auth: ReturnType<typeof useAuth>) => auth.linkGoogleAccount()],
+  ])('never redirects when the %s popup is cancelled', async (_name, run) => {
+    vi.mocked(signInWithPopup).mockRejectedValueOnce(
+      Object.assign(new Error('cancelled'), { code: 'auth/popup-closed-by-user' }),
+    );
+    const { result } = renderHook(() => useAuth(), { wrapper });
+    await act(async () => { await Promise.resolve(); });
+    await act(async () => { await run(result.current); });
+    expect(signInWithRedirect).not.toHaveBeenCalled();
+    expect(localStorage.getItem(REDIRECT_KEY)).toBeNull();
+    expect(useAppStore.getState().saveError).toBeNull();
+  });
+
+  it.each([
+    ['login', (auth: ReturnType<typeof useAuth>) => auth.login()],
+    ['linkGoogleAccount', (auth: ReturnType<typeof useAuth>) => auth.linkGoogleAccount()],
+  ])('retains no redirect marker after network failure in %s', async (_name, run) => {
+    vi.mocked(signInWithPopup).mockRejectedValueOnce(
+      Object.assign(new Error('network'), { code: 'auth/network-request-failed' }),
+    );
+    const { result } = renderHook(() => useAuth(), { wrapper });
+    await act(async () => { await Promise.resolve(); });
+    await act(async () => { await run(result.current); });
+    expect(signInWithRedirect).not.toHaveBeenCalled();
+    expect(localStorage.getItem(REDIRECT_KEY)).toBeNull();
+    expect(useAppStore.getState().saveError).toContain('Connessione non disponibile');
+  });
+
   it('surfaces redirect resume failures instead of treating them as non-critical', async () => {
     vi.mocked(getRedirectResult).mockRejectedValueOnce(Object.assign(new Error('redirect expired'), { code: 'auth/invalid-credential' }));
 

@@ -117,6 +117,44 @@ describe('Milestone M2: Guest Bootstrap & Cold Start Lifecycle', () => {
         expect(localStorage.getItem('logbook_is_guest')).toBe('true');
     });
 
+    it('does not start guest migration or discard guest data when no account identity exists', async () => {
+        const { result } = renderHook(() => useAuth(), {
+            wrapper: ({ children }) => <AuthProvider>{children}</AuthProvider>,
+        });
+        await act(async () => { await result.current.loginAsGuest(); });
+        await confirmRealGuestVault();
+        await waitFor(() => expect(useAppStore.getState().userData).not.toBeNull());
+        const previous = useAppStore.getState().userData;
+        const guestSession = captureSession();
+        const purge = vi.spyOn(DB, 'purgeAllLocalUserData');
+
+        await act(async () => { await result.current.retryGuestMigration('merge'); });
+
+        expect(result.current.guestMigrationStatus).toBe('failed');
+        expect(useAppStore.getState().saveError).toContain('Scegli esplicitamente');
+        expect(localStorage.getItem('guest_migration_intent_v1')).toBeNull();
+        expect(useAppStore.getState().userData).toEqual(previous);
+        expect(isCurrentSession(guestSession)).toBe(true);
+        expect(purge).not.toHaveBeenCalled();
+    });
+
+    it('does not replicate or purge when migration is retried anonymously', async () => {
+        const { result } = renderHook(() => useAuth(), {
+            wrapper: ({ children }) => <AuthProvider>{children}</AuthProvider>,
+        });
+        await waitFor(() => expect(result.current.loading).toBe(false));
+        const purge = vi.spyOn(DB, 'purgeAllLocalUserData');
+        const accountPurge = vi.spyOn(DB, 'secureLogOut');
+
+        await act(async () => { await result.current.retryGuestMigration('merge'); });
+
+        expect(result.current.guestMigrationStatus).toBe('failed');
+        expect(useAppStore.getState().saveError).toContain('Accedi nuovamente');
+        expect(useAppStore.getState().syncing).toBe(false);
+        expect(purge).not.toHaveBeenCalled();
+        expect(accountPurge).not.toHaveBeenCalled();
+    });
+
     it('invalidates a second guest view after cross-tab revocation', async () => {
         render(<AuthProvider><GuestTestComponent /></AuthProvider>);
         act(() => { screen.getByTestId('btn-guest').click(); });
