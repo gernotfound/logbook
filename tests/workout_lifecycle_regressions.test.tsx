@@ -643,6 +643,29 @@ describe('Workout lifecycle durable recovery regressions', () => {
         } finally { useAppStore.setState({ setSyncedLocalWorkout: originalSetter }); }
     });
 
+    it('never starts or resets the timer when the prepared IndexedDB workout has a different identity', async () => {
+        const visible = workout('prepared-visible');
+        const durable = workout('prepared-different');
+        const initial = userData({ activeWorkout: durable });
+        await initializeLocal(owner, initial);
+        useAppStore.setState({ userData: initial, dataOwner: owner, localWorkout: visible });
+        const snapshot = { version: 1, state: 'running', startTime: 1000, accumulated: 250 };
+        localStorage.setItem(deviceKey('timer', owner), JSON.stringify(snapshot));
+        const originalSetter = useAppStore.getState().setSyncedLocalWorkout;
+        const forbiddenSetter = vi.fn(originalSetter);
+        useAppStore.setState({ setSyncedLocalWorkout: forbiddenSetter });
+        try {
+            const { result } = renderHook(() => useWorkoutSession());
+            await act(async () => { expect(await result.current.confirmWorkoutStart()).toBe(false); });
+            expect(forbiddenSetter).not.toHaveBeenCalled();
+            expect(readWorkoutTimerSnapshot(owner)).toEqual(snapshot);
+            expect((await readLocal(owner))?.data.activeWorkout?.id).toBe(durable.id);
+            expect(useAppStore.getState().localWorkout?.globalStartTime).toBeUndefined();
+        } finally {
+            useAppStore.setState({ setSyncedLocalWorkout: originalSetter });
+        }
+    });
+
     it('cleans up the deleted workout final rating draft after confirming local deletion', async () => {
         const target = workout('delete-final-rating', true);
         const initial = userData({ activeWorkout: target });
