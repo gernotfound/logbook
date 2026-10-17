@@ -4,6 +4,22 @@ import { auth } from '../../lib/firebase';
 import { useAppStore } from '../../store/useAppStore';
 import { loadAuthenticatedData } from './loadAuthenticatedData';
 
+type DrainEnvironment = {
+    load: typeof loadAuthenticatedData;
+    readLocal: typeof import('../../lib/sync/localRepository')['readLocal'];
+    flush: () => Promise<unknown>;
+    currentUid: () => string | null;
+    isOnline: () => boolean;
+};
+
+const productionEnvironment: DrainEnvironment = {
+    load: loadAuthenticatedData,
+    readLocal: async owner => (await import('../../lib/sync/localRepository')).readLocal(owner),
+    flush: () => useAppStore.getState().flushPendingSyncs(),
+    currentUid: () => auth.currentUser?.uid ?? null,
+    isOnline: () => typeof navigator === 'undefined' || navigator.onLine,
+};
+
 type AuthenticatedDataSyncOptions = {
     user: User;
     isGuestActive: () => boolean;
@@ -17,8 +33,8 @@ type AuthenticatedDataSyncOptions = {
 // journal unless the underlying replica transport confirms delivery.
 export async function loadAndDrainAuthenticatedData({
     user, isGuestActive, setUserData, setSyncing, setSaveError,
-}: AuthenticatedDataSyncOptions): Promise<void> {
-    await loadAuthenticatedData({
+}: AuthenticatedDataSyncOptions, environment: DrainEnvironment = productionEnvironment): Promise<void> {
+    await environment.load({
         user,
         isGuestActive,
         setUserData,
@@ -26,14 +42,12 @@ export async function loadAndDrainAuthenticatedData({
         setSaveError,
     });
 
-    if (typeof navigator !== 'undefined' && !navigator.onLine) return;
-    if (auth.currentUser?.uid !== user.uid || isGuestActive()) return;
-
-    const { readLocal } = await import('../../lib/sync/localRepository');
+    if (!environment.isOnline()) return;
+    if (environment.currentUid() !== user.uid || isGuestActive()) return;
     const drainCheckpointedJournal = async () => {
-        const envelope = await readLocal(user.uid);
+        const envelope = await environment.readLocal(user.uid);
         if (!envelope?.replica || !envelope.pending.length) return;
-        await useAppStore.getState().flushPendingSyncs();
+        await environment.flush();
     };
 
     // A Protocol 3 checkpoint can be the prerequisite that makes an offline or
@@ -47,7 +61,7 @@ export async function loadAndDrainAuthenticatedData({
         // transactionWriter has already marked the durable identity as checkpoint-required.
         // Re-enter the authenticated loader once: it performs a full cloud scan, obtains
         // a current generation, rebases the journal, then the retry can be delivered.
-        await loadAuthenticatedData({
+        await environment.load({
             user,
             isGuestActive,
             setUserData,
