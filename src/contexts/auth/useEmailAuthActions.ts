@@ -72,7 +72,7 @@ export function useEmailAuthActions({
                 setSaveError('Account creato, ma non è stato possibile inviare la verifica email. Usa “Invia di nuovo” e riprova.');
             }
         }
-    }, [handleAuthError, isGuestActiveStrict, setSaveError]);
+    }, [handleAuthError, isGuestActiveStrict, migrationDataRef, setSaveError]);
 
     const resendEmailVerification = useCallback(async () => {
         const user = auth.currentUser;
@@ -94,7 +94,7 @@ export function useEmailAuthActions({
         // Refresh its claims before resuming any owner-scoped cloud operation.
         await user.getIdToken(true);
         await safeHardReload();
-    }, [setSaveError]);
+    }, [setEmailVerificationRequired, setSaveError]);
 
     return { loginWithEmail, registerWithEmail, resendEmailVerification, refreshEmailVerification };
 }
