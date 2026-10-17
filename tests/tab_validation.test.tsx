@@ -208,7 +208,9 @@ describe('R4: Tab Zod Schema & LocalStorage Fallback Resilience (ARCH-05)', () =
 
             expect(await screen.findByRole('heading', { name: 'Impostazioni' })).toBeDefined();
             expect(screen.getByRole('button', { name: /^home$/i }).classList.contains('active')).toBe(true);
-            expect(window.localStorage.getItem(accountTabKey)).toBe(JSON.stringify('home'));
+            // The owner-scoped preference is persisted by a React effect, not
+            // synchronously with the visible shortcut navigation.
+            await waitFor(() => expect(window.localStorage.getItem(accountTabKey)).toBe(JSON.stringify('home')));
             expect(window.location.search).toBe('');
         });
 
