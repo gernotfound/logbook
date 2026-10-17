@@ -20,6 +20,14 @@ self.addEventListener('activate', (event) => {
 `.trim();
 
 export async function GET(): Promise<Response> {
+  // The retirement worker belongs only to the legacy Production Vercel origin.
+  // The isolated Test backend must never serve an installable worker at /sw.js.
+  if (process.env.FIREBASE_ADMIN_AUTH_MODE === 'vercel-oidc') {
+    return new Response('Not Found', {
+      status: 404,
+      headers: { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' },
+    });
+  }
   return new Response(LEGACY_SERVICE_WORKER, {
     status: 200,
     headers: {

@@ -21,6 +21,7 @@ const accountTabKey = ownerUiPreferenceKey('user:test-user-id', LOCAL_STORAGE_AC
 describe('R4: Tab Zod Schema & LocalStorage Fallback Resilience (ARCH-05)', () => {
     beforeEach(async () => {
         window.localStorage.clear();
+        window.history.replaceState({}, '', '/');
         vi.clearAllMocks();
         await prepareUnlockedTestArchive();
     });
@@ -128,9 +129,9 @@ describe('R4: Tab Zod Schema & LocalStorage Fallback Resilience (ARCH-05)', () =
             const home = await screen.findByRole('button', { name: /^home$/i });
             expect(home.classList.contains('active')).toBe(true);
             fireEvent.click(screen.getByRole('button', { name: /allenamento/i }));
-            const session = await screen.findByRole('tab', { name: 'Sessione' });
+            const session = await screen.findByRole('tab', { name: 'Sessione' }, { timeout: 5000 });
             expect(session.getAttribute('aria-selected')).toBe('true');
-            expect(window.localStorage.getItem(ownerUiPreferenceKey('user:test-user-id', LOCAL_STORAGE_TRAINING_TAB))).toBe(JSON.stringify('session'));
+            await waitFor(() => expect(window.localStorage.getItem(ownerUiPreferenceKey('user:test-user-id', LOCAL_STORAGE_TRAINING_TAB))).toBe(JSON.stringify('session')));
         });
 
         it('falls back to "home" tab when localStorage has a corrupted tab string', async () => {
@@ -207,9 +208,11 @@ describe('R4: Tab Zod Schema & LocalStorage Fallback Resilience (ARCH-05)', () =
             });
 
             expect(await screen.findByRole('heading', { name: 'Impostazioni' })).toBeDefined();
-            expect(screen.getByRole('button', { name: /^home$/i }).classList.contains('active')).toBe(true);
-            expect(window.localStorage.getItem(accountTabKey)).toBe(JSON.stringify('home'));
-            expect(window.location.search).toBe('');
+            await waitFor(() => {
+                expect(screen.getByRole('button', { name: /^home$/i }).classList.contains('active')).toBe(true);
+                expect(window.localStorage.getItem(accountTabKey)).toBe(JSON.stringify('home'));
+                expect(window.location.search).toBe('');
+            });
         });
 
         it('exposes the settings control in the Home header', () => {

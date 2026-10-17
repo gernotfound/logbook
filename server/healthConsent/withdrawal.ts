@@ -1,5 +1,6 @@
 import { Timestamp } from 'firebase-admin/firestore';
 import { adminDb } from '../accountDeletion/firebaseAdmin.js';
+import { classifyTestFirestoreReadFailure } from '../accountDeletion/testOidcCredential.js';
 import { LEGAL_VERSIONS } from '../../src/lib/legalVersions.js';
 
 const CONSENT_COLLECTION = 'health_consent_withdrawals';
@@ -29,7 +30,17 @@ function consentRef(uid: string) {
 
 export async function readHealthConsentState(uid: string, requireRegistration = false): Promise<HealthConsentState> {
   validUid(uid);
-  const snap = await consentRef(uid).get();
+  let snap;
+  try {
+    snap = await consentRef(uid).get();
+  } catch (error) {
+    if (process.env.FIREBASE_ADMIN_AUTH_MODE === 'vercel-oidc') {
+      console.error('[health-consent:test] Firestore read rejected', {
+        category: classifyTestFirestoreReadFailure(error),
+      });
+    }
+    throw error;
+  }
   // Older deployed clients still read the legacy revision-0 state during
   // phase one. Versioned clients explicitly request the authoritative state;
   // Rules enforcement is activated only after this backend is Production-ready.

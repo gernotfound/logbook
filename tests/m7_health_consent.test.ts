@@ -1,7 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 type Stored = Record<string, unknown>;
-const storage = vi.hoisted(() => ({ documents: new Map<string, Stored>() }));
+const storage = vi.hoisted(() => ({ documents: new Map<string, Stored>(), failConsentRead: false }));
 const auth = vi.hoisted(() => ({
   verifyHealthConsentRequester: vi.fn(async () => ({ uid: 'account-1', emailVerified: true })),
   requireVerifiedHealthConsentWrite: vi.fn((identity: { emailVerified: boolean }) => {
@@ -21,6 +21,9 @@ vi.mock('../server/accountDeletion/firebaseAdmin', () => ({
       doc: (uid: string) => ({
         key: name + '/' + uid,
         async get() {
+          if (storage.failConsentRead && name === 'health_consent_withdrawals') {
+            throw Object.assign(new Error('sensitive error details must not be logged'), { code: 7 });
+          }
           const item = storage.documents.get(name + '/' + uid);
           return { exists: !!item, data: () => item };
         },
@@ -65,7 +68,18 @@ const acceptance = {
 };
 
 describe('trusted health consent boundary', () => {
-  beforeEach(() => { storage.documents.clear(); vi.clearAllMocks(); });
+  beforeEach(() => { storage.documents.clear(); storage.failConsentRead = false; vi.clearAllMocks(); });
+  afterEach(() => { storage.failConsentRead = false; vi.unstubAllEnvs(); vi.restoreAllMocks(); });
+
+  it('fails closed and logs only the error category for Test OIDC Firestore reads', async () => {
+    vi.stubEnv('FIREBASE_ADMIN_AUTH_MODE', 'vercel-oidc');
+    storage.failConsentRead = true;
+    const logger = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const response = await GET(req('GET'));
+    expect(response.status).toBe(503);
+    expect(logger).toHaveBeenCalledWith('[health-consent:test] Firestore read rejected', { category: 'grpc-7' });
+    expect(JSON.stringify(logger.mock.calls)).not.toContain('sensitive error details');
+  });
 
   it('does not expose records as personal business documents before withdrawal', async () => {
     expect(await readHealthConsentState('account-1')).toEqual({ status: 'active', revision: 0 });

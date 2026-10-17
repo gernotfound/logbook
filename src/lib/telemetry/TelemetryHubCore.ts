@@ -25,6 +25,7 @@ import {
   type TrackErrorOptions,
 } from './contracts';
 import { createTelemetryId } from './id';
+import { isSentryReportingDisabled } from '../sentryClient';
 import {
   isTelemetryOffline,
   TelemetryRateLimitState,
@@ -407,7 +408,9 @@ export class TelemetryHub {
     // Never queue a previous owner's response after an asynchronous auth change.
     if (!accepted && payload.userId && payload.userId === currentUid && ownerEpoch === this.ownerEpoch) {
       this.queue.enqueueItem('error', payload);
-      if (!this.isOffline()) this.scheduleExponentialBackoff();
+      if (!this.isOffline() && !isSentryReportingDisabled()) {
+        this.scheduleExponentialBackoff();
+      }
     }
   }
 
@@ -568,6 +571,12 @@ export class TelemetryHub {
 
         if (consecutiveFailures >= 2) {
           break;
+        }
+
+        // A deployment without reporting credentials cannot deliver error reports.
+        // Keep them pending without consuming retry attempts or deleting ciphertext.
+        if (item.itemType === 'error' && isSentryReportingDisabled()) {
+          continue;
         }
 
         if (

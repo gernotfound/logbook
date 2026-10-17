@@ -1,6 +1,7 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { FieldPath, FieldValue, Timestamp, type QueryDocumentSnapshot, type Transaction } from 'firebase-admin/firestore';
 import { adminAuth, adminDb } from './firebaseAdmin.js';
+import { classifyTestFirestoreReadFailure } from './testOidcCredential.js';
 import { completedDeletionPurgeAfter } from './retention.js';
 import {
   PRIVATE_ACCOUNT_COLLECTIONS,
@@ -153,7 +154,17 @@ export async function createOrRefreshDeletionJob(uidValue: string, receiptValue:
 export async function readAuthorizedDeletionJob(uidValue: string, receiptValue: string): Promise<AccountDeletionJob | null> {
   const uid = validateUid(uidValue);
   const receipt = validateReceipt(receiptValue);
-  const snapshot = await jobRef(uid).get();
+  let snapshot;
+  try {
+    snapshot = await jobRef(uid).get();
+  } catch (error) {
+    if (process.env.FIREBASE_ADMIN_AUTH_MODE === 'vercel-oidc') {
+      console.error('[account-deletion:test] Firestore read rejected', {
+        category: classifyTestFirestoreReadFailure(error),
+      });
+    }
+    throw error;
+  }
   if (!snapshot.exists) return null;
   const job = snapshot.data() as AccountDeletionJob;
   return receiptMatchesJob(receipt, job) ? job : null;

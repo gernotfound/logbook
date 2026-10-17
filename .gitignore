@@ -11,6 +11,7 @@ node_modules
 dist
 dist-ssr
 vercel-backend-static
+.firebase.test.local.json
 *.local
 *.tsbuildinfo
 

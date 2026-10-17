@@ -1,0 +1,290 @@
+# Ambiente di test isolato — TheLogBook
+
+> **Stato:** frontend Firebase Hosting Test, backend Vercel Test e Firestore Rules/indici Test distribuiti. Il product owner ha confermato login e accettazione del consenso nell'app Test il 2026-10-17; questo non sostituisce le prove indipendenti di App Check, WIF/OIDC, autorizzazioni Firestore e sincronizzazione offline/online. Le note storiche successive non descrivono necessariamente lo stato corrente.
+> **Ambito:** Firebase Test e backend Vercel Test, separati dal runtime Production.
+> **Ultimo aggiornamento:** 2026-10-17. Le configurazioni storiche elencate come "riferite" provengono da schermate del product owner; le verifiche dirette recenti sono distinte qui sotto.
+
+## Collaudo live Test dopo la pubblicazione frontend — 2026-10-17
+
+- **Baseline confermata:** `main` remoto `aad2cdfc3b327bbd2d64e43c62c44e1b60e7e57a`, PR draft #431 e branch Test `799db02e752ea07e490e9ec6256ae4cbc8279993`. Nessun merge su `main` né deploy o modifica ai servizi Production.
+- **CI e frontend Test:** [Milestone Verification 39051141749](https://github.com/gernotfound/logbook/actions/runs/39051141749) **SUCCESS**, nove job inclusi CodeQL, Playwright, Firestore Rules e gate canonico exact-SHA. Build `build:test` isolata dal medesimo SHA riuscita; 65 file pubblicati esclusivamente su `https://thelogbook-test.web.app` via Firebase CLI. HTML e bundle `telemetryHub-BLVEh1Tg.js` pubblicati corrispondono byte per byte alla build; `sw.js` e manifest rispondono 200. La build locale e stata generata su Node 26, diverso dal Node 24 prescritto; i gate CI su runner canonici sono prove indipendenti.
+- **Ripresa browser:** una nuova scheda Chrome Test nello stesso profilo ha visualizzato la Home e le sezioni principali senza nuova richiesta di login e senza il blocco del consenso. Il contesto di sola lettura non espone i risultati delle richieste autenticate né distingue definitivamente lo stato del token cloud; non chiamare questa prova un E2E autenticato completo.
+- **Firebase Test live, letture amministrative limitate:** database Firestore `(default)` e app Web Test presenti. Il record di consenso osservato risulta `active` con revisione positiva; esistono il root cloud con Data Schema 1/Sync Protocol 3 e `sync_control/state` con Protocol 3 e uno slot di replica. Nessun identificativo account o payload business riportato. Il ruleset Firestore **attivo** e identico al file `firestore.rules` del branch Test, confrontato tramite digest del contenuto restituito dall'API provider.
+- **App Check live:** Firebase Console registra l'app Web Test con provider Fraud Defense. Le API App Check restituiscono `UNENFORCED` per `firestore.googleapis.com` e `identitytoolkit.googleapis.com`: registrazione e imposizione dei token sono condizioni distinte. Nessun enforcement e stato modificato. Il backend trusted continua a richiedere App Check ai boundary pertinenti.
+- **OIDC/IAM Test live:** provider WIF `vercel-test-backend` `ACTIVE`, issuer atteso, mapping `google.subject=assertion.sub` e condizione sul soggetto Vercel Test esatto corrispondenti alla configurazione nel codice. Service account Test dedicato abilitato, un solo principal WIF nel binding `roles/iam.workloadIdentityUser`. I ruoli IAM di progetto osservati per il runtime Test sono `roles/datastore.user`, `roles/firebaseappcheck.tokenVerifier` e `roles/firebaseauth.admin`. Questi controlli di configurazione non sono una prova autonoma dello scambio token STS eseguito da Vercel.
+- **Smoke backend Test senza credenziali:** preflight `/api/health-consent` dall'origine Test 204, origin Production e arbitrario 403; GET consenso senza Firebase Auth 401; GET `/api/account-deletion-device` senza App Check 403; `/backend-only.txt` 200; `/sw.js` sul backend 404. Nessuna richiesta POST o mutazione dati.
+- **Limiti e prossima priorita:** restano da osservare richieste HTTP autenticate App Check/OIDC dal browser sulla release corrente, riconciliazione del consenso dopo reload, isolamento cross-user runtime, offline → modifica business sintetica → riavvio → ritorno online → verifica ack cloud/journal, gestione di errori e recovery. Il connettore browser in questa modalita consente solo lettura del contesto visibile, non controllo della scheda o cattura delle richieste; l'API log runtime Vercel ha risposto 403. Non attribuire assenza di errori a questa limitazione. Non sono stati creati account né cancellati dati, storage o cache.
+
+## Diagnosi TelemetryHub e correzione pubblicata — 2026-10-17
+
+- **Baseline:** `main` remoto `aad2cdfc3b327bbd2d64e43c62c44e1b60e7e57a`; PR draft #431 sul branch Test, senza merge verso `main` o deploy Production. Il cambiamento Auth recente di `main` e stato integrato nel solo worktree Test senza conflitti; le verifiche del nuovo candidato sono separate dalla precedente CI verde su `15eda237`.
+- **Meccanismo dimostrato nel codice:** il profilo Test proibisce `VITE_SENTRY_DSN`; `initSentry()` non abilita quindi il trasporto diagnostico. La vecchia logica poteva reinserire errori in coda e consumare il budget di retry a ogni flush, fino all'avviso `Evicting poison pill item`, anche in assenza di un trasporto configurato. Il messaggio indica lo scarto di una voce diagnostica, non lo scarto del journal business.
+- **Modifica candidata:** distinguere reporting intenzionalmente disattivato da un guasto temporaneo del trasporto: conservare i report ancora validi senza incrementare retry o forzare lo scarto durante l'assenza di DSN. Il limite temporale esistente della coda diagnostica (sette giorni), i controlli owner e i normali retry quando Sentry e attivo restano invariati.
+- **Evidenza e limite runtime precedente alla release del commit `799db02`:** HTTPS pubblico `https://thelogbook-test.web.app/` rispondeva 200 con CSP isolata; il frontend allora pubblicato usava ancora asset di una build precedente. Backend Test `/backend-only.txt` 200, `/sw.js` 404 e `/api/health-consent` senza credenziali 403 (fail-closed). La voce specifica gia scartata e l'errore tecnico originale non sono recuperabili dal solo stack trace riportato; non attribuirli a Firestore Rules o App Check senza ulteriori riscontri. La lettura dei log Vercel Test tramite connettore ha restituito 403, non una prova di assenza di errori.
+- **Validazione completata:** test sintetico `tests/telemetry_reporting_disabled.test.ts` per conservazione della coda senza tentativi di trasporto; [CI 39051141749](https://github.com/gernotfound/logbook/actions/runs/39051141749) verde su `799db02`, Hosting Test pubblicato e identita HTML/bundle live verificata. Lo specifico evento gia scartato non e recuperabile dal solo avviso di console. Nessun account o dato reale e stato toccato.
+
+## Correzione della root cause Firestore su backend Test — 2026-10-17
+
+- **Difetto riprodotto nel codice delle dipendenze:** Firebase Admin Firestore (`firebase-admin/lib/firestore/firestore-internal.js`) rifiuta una generica implementazione di `Credential` con `invalid-credential`: sono accettate solo `ServiceAccountCredential` o credenziali ADC. Il Test usava `initializeApp({ credential: createTestOidcCredential() })`, quindi la prima chiamata `getFirestore(app)` falliva **prima** di raggiungere Firestore. Questo spiega i `503` del consenso, i `500` del percorso dispositivo e il precedente `unclassified`, senza dimostrare ancora che STS/IAM siano configurati correttamente.
+- **Correzione esclusivamente Test:** `server/accountDeletion/firebaseAdmin.ts` conserva `getFirestore(app)` per Production; in `vercel-oidc` crea un singleton `Firestore` (`@google-cloud/firestore`) con `OAuth2Client` (`google-auth-library`) alimentato dagli access token temporanei della stessa federazione Vercel OIDC → Google STS → IAM. L'opzione pubblica GoogleAuth `authClient` è inoltrata da Firestore 9.x verso GAX benché non tipizzata da Firestore.Settings; versioni dei pacchetti dichiarate e test reale del passaggio al client GAX, compresa la sanificazione JSON e la scadenza delle credenziali. Non vengono generate chiavi private né disattivati i controlli Auth, App Check o il fail-closed.
+- **Verifica residua:** unit test e gate exact-SHA non attestano ancora i permessi runtime della federazione WIF, né il completamento del consenso autenticato. Servono CI sul candidato finale, deploy Vercel Test e smoke HTTP autenticato da sessione sintetica; non modificare il progetto Production.
+
+## Nuovo collaudo del consenso Test — 2026-10-17
+
+- Il product owner ha effettuato l'accesso con un account Test in un browser ordinario; l'interfaccia mostra **Verifica del consenso non riuscita**. Console: `GET /api/health-consent` HTTP `503`, `GET/POST /api/account-deletion-device` HTTP `500`. L'avviso `beforeinstallprompt` riguarda il banner installazione e non spiega il fallimento del consenso. Non inserire identificativi utente, indirizzi email o token nei registri pubblici.
+- Log runtime del deployment Test `dpl_DwBcpkRSCoke6Ffhn3RDXy6V1DBE`: letture Firestore del consenso rifiutate, ma classificazione diagnostica precedente `unclassified`. Causa di OIDC/STS/IAM/Firestore non determinata: nessun permesso IAM, regola Firestore o token deve essere cambiato alla cieca. Il fail-closed del consenso è corretto.
+- La classificazione dei fallimenti di scambio token OIDC Vercel, trasporto STS e IAM è ora resa esplicita **solo nel Test** senza logging di token, body, errori remoti o dati account. Test mirati 8/8, typecheck server e lint completati in locale. Integrato il commit remoto `main` `f877546aad79ed9bde506544b1f38dbbaa1b5107` nel ramo Test. [Gate canonico 39040348778](https://github.com/gernotfound/logbook/actions/runs/39040348778) **SUCCESS** sullo SHA `75c0191d29638fc773b1959218c4e2a7c01cf6f5`.
+- Backend Vercel **Test-only** pubblicato da questo SHA: `dpl_7Z27Q58Gqu1tw7SEkbb66CFhumiR` READY. Smoke HTTP: `/backend-only.txt` 200, `/sw.js` 404, `/api/health-consent` senza autenticazione 401, `/api/account-deletion-device` senza App Check 403. **Nessun deploy di Production reale né merge di PR #431**. Una richiesta autenticata successiva al nuovo deploy resta necessaria per osservare la categoria diagnostica e risolvere la root cause; attualmente non è osservata.
+
+## Stato runtime Test verificato — 2026-10-17
+
+- **Firebase Hosting Test:** il file locale `dist/index.html`, il Service Worker e il manifest risultavano identici byte per byte ai tre file già pubblicati. Da branch Test validato sullo SHA `0f4597eb2199c6d746997dac2b30af6ecffef32d`, la CLI ha eseguito **soltanto** `firebase deploy --only hosting --project thelogbook-test --config .firebase.test.local.json --non-interactive`: deploy riuscito, 64 asset esistenti con la CSP derivata Test. Questa è una **pubblicazione CSP/configurazione**, **non** un nuovo build Vite dal codice aggiornato.
+- **CSP live verificata:** sulla risposta HTTP 200 dell'origine Test sono presenti `connect-src` per il backend Test e `frame-src` per Firebase Auth Test; assenti gli origin Production del backend, Firebase Auth e Sentry. Rimangono `default-src 'self'` e `frame-ancestors 'none'`.
+- **App Check e chiamate Vercel Test:** browser isolato ottiene un token App Check *limited-use*; il backend risponde `400` per input intenzionalmente non valido **dopo** il controllo App Check. Un GET di sola lettura con UID sintetico inesistente e ricevuta sintatticamente valida risponde `500`. Il runtime log Vercel Test conferma `[account-deletion] backend failure {kind: 'Error'}`, senza dettagli di causa. Nessun POST né modifica a dati o account.
+- **Diagnostica candidata solo Test:** classificazione della causa dell'errore di lettura Firestore nel profilo `vercel-oidc`; non registra messaggi grezzi, payload, ID, email, token, secret o valori di chiavi. La verifica OIDC e il controllo TypeScript server sono superati localmente. Non dichiarare completata la federazione Firestore: manca un GET con esito atteso `404` su ID sintetico inesistente e verifica provider.
+- **Vercel Test aggiornato:** deployment manuale isolato `dpl_2Q5zT5D6gYiWX6C9HRZjyPDxwGyh` **READY**, derivato dall'esatto SHA `b2fb05581bf2a80695e5bf01e35b6df30b112ab8`, con [CI 39024836732](https://github.com/gernotfound/logbook/actions/runs/39024836732) verde. La diagnostica Test classifica gli errori di lettura senza stampare messaggi grezzi. Una verifica immediatamente successiva non ha raggiunto Vercel perché Firebase App Check ha restituito `appCheck/initial-throttle` al browser di automazione: la federazione Firestore non è quindi ancora confermata o esclusa sul nuovo backend.
+- **Service Worker sul backend Test — corretto e verificato live:** `/sw.js` e `/api/legacy-service-worker` rispondevano HTTP 200 con lo script di ritiro Production su Vercel Test, nonostante la configurazione Test non definisse la rewrite. Il profilo `vercel-oidc` restituisce ora 404 non cacheabile, senza rimuovere il worker di ritiro nel profilo Production. Regressioni: 3/3 test legacy SW e typecheck server locali; [CI canonica 39025713703](https://github.com/gernotfound/logbook/actions/runs/39025713703) SUCCESS sul commit `b70f587ac84ba444708a2a5279e51a9c651efbdd`. Deployment backend Test `dpl_J4RiiG6h5Ft2H9xH7fCr8ZrzAQut` READY; smoke canonico Test: `/sw.js` **404**, `/api/legacy-service-worker` **404**, `/backend-only.txt` **200**, `/api/account-deletion` senza App Check **403**. Nessun deploy backend Production.
+- **App Check limited-use dopo il deployment:** le ultime verifiche nel browser automatizzato si sono interrotte **prima** della richiesta Vercel con `FirebaseError` `appCheck/initial-throttle`; il provider non ha rilasciato un nuovo token e non sono state eseguite ulteriori richieste ripetitive. Questa evidenza **non prova** che il precedente errore Firestore `500` sia risolto o persista sul deployment attuale. La categoria diagnostica Vercel Test attende una nuova richiesta autorizzata da un browser non soggetto al throttling; se applicabile, usare soltanto account e dati sintetici con credenziali tenute fuori dalla chat.
+- **Sicurezza:** nessun merge su `main`, deploy Production, enforcement App Check, creazione/cancellazione di account, né cambiamento a Firestore Rules live in questa fase.
+
+## Registro operativo e regole di minimizzazione
+
+Questo file e `docs/operations/external-services-register.md` sono il registro tecnico condivisibile nel repository **pubblico**. Ogni intervento su Test deve riportare data, ambito, baseline `main` e SHA del candidato, PR, verifiche osservate sullo SHA esatto, provider/progetto coinvolto, operazioni riuscite o fallite, stato del runtime e attività residue. Distinguere sempre test automatici, operazioni del provider e verifiche browser dal vivo. Le sezioni storiche sottostanti restano traccia delle fasi precedenti, non descrivono necessariamente lo stato attuale.
+
+**Divieto di inserire valori sensibili o personali:** nessun valore di chiavi API o site key (anche se pubbliche), private key, token, credenziale, secret, `.env` reale, identificativo di sessione, recapito/email personale, nome di persona, percorso locale contenente uno username, screenshot non anonimizzato o contenuto di dati di allenamento. Riportare invece soltanto il **nome** delle variabili, gli identificativi tecnici non segreti necessari al collaudo, SHA, link a CI/PR e l'esito dei controlli. Dati di collaudo esclusivamente sintetici. I valori runtime devono rimanere nei provider autorizzati o in file locali ignorati, mai in commit, PR, log pubblici o documentazione.
+
+### Cronologia verificata
+
+| Data | Operazione | Evidenza / risultato | Limite |
+|---|---|---|---|
+| 2026-10-16 | Preparazione dell'ambiente Firebase/Vercel isolato e integrazione WIF keyless nel branch Test | Identità e ruoli IAM riferiti tramite schermate; protezioni e regressioni di codice nel branch | Le schermate IAM non provano uno scambio OIDC reale |
+| 2026-10-16 | Primo deploy manuale del backend-only sul progetto Vercel Test | Deployment `dpl_B3chKa6BctS5NLJxKaXnhWPjsrZ6` dal commit `06b433387ba1f486f2b528a11da02550e4d19d41` READY; smoke: file statico 200, preflight Test 204, origin Production 403, App Check mancante 403, cron senza secret 503 | Vercel Authentication impedisce l'accesso browser ordinario; OIDC/STS e token App Check validi non collaudati |
+| 2026-10-17 | Sincronizzazione branch Test e guardrail di build/deploy | PR #431 rimasta draft; CI canonica [38980606575](https://github.com/gernotfound/logbook/actions/runs/38980606575) riuscita sul commit `4f9f0f4dbba1f75654a482fb7c371c3b8ecce6d8` | Verifica automatica, non prova runtime |
+| 2026-10-17 | Pubblicazione Firestore Rules e indici nel progetto **solo Test** | CLI `firebase deploy --only firestore --project thelogbook-test --config .firebase.test.local.json --non-interactive` terminata con esito 0 dal commit validato `4f9f0f4d`; Rules compilate e rilasciate, indici distribuiti nel database `(default)` | Autorizzazioni live con account fittizi e read-back ancora da verificare |
+| 2026-10-17 | Incorporati i miglioramenti E2E di `main` | Commit Test `4a521e738bb23b0591467e4c6a72c9eae40c9f34`, [CI 38981211594](https://github.com/gernotfound/logbook/actions/runs/38981211594) riuscita; PR #431 ancora draft | Nessun merge su `main` o deploy Hosting da quel commit |
+| 2026-10-17 | Ricevuta nel dialogo la site key pubblica reCAPTCHA Enterprise per Test | Disponibilità comunicata; **valore deliberatamente omesso dal repository** | Associazione al provider e acquisizione token App Check reali non ancora verificate |
+| 2026-10-17 | Integrato l'ulteriore cambiamento di `main` sul budget di sync catalogo e sui pannelli Training inattivi | Baseline GitHub `df27d56bff4ea2f4081f642f343500cb2dbbb09d`; merge nel branch Test predisposto senza conflitti | Nuovo SHA e gate CI da verificare dopo il commit |
+
+**Prossime prove:** verificare nel provider la site key e i domini Test senza riportare valori, testare App Check senza enforcement, risolvere l'accessibilità browser del backend Test senza incorporare bypass token pubblici, collaudare WIF/OIDC e Firestore autorizzato su account sintetici, poi build e Hosting Test, smoke browser/offline e casi di recovery. Nessuna azione su Production o merge PR #431 senza autorizzazione specifica.
+
+## Progresso verificato successivo — 2026-10-17
+
+- **Sincronizzazione GitHub:** `main` remoto `01223093c7f1885acab54fb516d1084897bc2e3b`, integrato senza conflitti nel branch Test `ef737f9d18411a60a224463787fbbbe98cf2f5c5`. La PR #431 resta draft e non viene integrata in `main`.
+- **CI canonica:** [run 39017399742](https://github.com/gernotfound/logbook/actions/runs/39017399742) **SUCCESS**, incluso CodeQL, Playwright, Firebase Rules e shard di verifica sul commit esatto `ef737f9d18411a60a224463787fbbbe98cf2f5c5`.
+- **Build frontend Test:** `npm run build:test` riuscita dopo il controllo delle env Test; le configurazioni SDK sono state ricavate dal progetto Firebase Test e il controllo dei bundle JS non ha trovato gli origin/ID Production oggetto della scansione. Generati 64 file statici e Service Worker. La site key è stata impiegata soltanto come environment variable di processo, senza copiarne il valore in documentazione o sorgenti.
+- **Firebase Hosting Test live:** deploy CLI `firebase deploy --only hosting --project thelogbook-test --config .firebase.test.local.json --non-interactive` da `ef737f9d`, completato con rilascio sul sito `https://thelogbook-test.web.app`. Smoke HTTP diretto: `/`, `/sw.js` e `/manifest.webmanifest` restituiscono HTTP **200**, con content-type corrispondenti.
+- **Vercel Test:** modificata la protezione SSO del **solo progetto backend Test** da `all_except_custom_domains` a `preview` (confermato dal read-back del provider). Questo permette alla PWA di raggiungere gli endpoint del deployment Production *del progetto isolato Test*, mentre le risorse Production reali sono distinte. Smoke HTTP non autenticato: `/backend-only.txt` **200**, `/api/account-deletion` **403**. La sicurezza ora poggia su Origin/CORS, Firebase Auth e App Check nel codice server, non sul login Vercel del browser. Non sono state ridotte le protezioni delle richieste applicative.
+- **Non ancora verificato:** dominio Firebase Auth autorizzato, token validi App Check, enforcement live, scambio OIDC/STS con Google Cloud, accesso Firestore con account fittizi, flussi login, offline e sincronizzazione tramite browser. Non dichiarare Test operativo end-to-end fino al superamento di queste prove.
+
+### Verifica candidata successiva — 2026-10-17
+
+- La run [39018100554](https://github.com/gernotfound/logbook/actions/runs/39018100554) sul precedente commit `0cfd7ec40e57ce107d66f6856fe954e86c0f7469` è **fallita** nel solo shard unit/integration 2/2, mentre Playwright, CodeQL, build, Rules e gli altri shard sono riusciti. Il test coinvolto è `tests/tab_validation.test.tsx`, relativa all'avvio tramite shortcut Impostazioni e alla persistenza della scheda Home.
+- Analisi e correzione del test sul branch Test: la pagina lazy e la scrittura asincrona delle preferenze venivano asserite prima della stabilizzazione. Le attese sono state rese esplicite con `waitFor`, mantenendo le asserzioni sullo stato e sul valore finale; ripristinato inoltre l'URL di partenza in `beforeEach` per impedire contaminazioni fra scenari. Le 17 regressioni del file sono riuscite in due esecuzioni locali consecutive dopo la correzione. Il nuovo SHA richiede comunque l'intero gate canonico GitHub prima di essere considerato validato.
+
+### Risultati della CI e degli smoke runtime — 2026-10-17
+
+- **CI esatta del candidato correttivo:** [Milestone Verification 39019399217](https://github.com/gernotfound/logbook/actions/runs/39019399217) riuscita sul commit `ad14d5d81ff3c3be3d741bd8750dc36e68259639`, con tutti gli shard, CodeQL, Playwright, Rules e `Canonical Verification` verdi. Questa verifica non attesta modifiche documentali effettuate successivamente.
+- **PWA Hosting Test in Chrome nuovo profilo:** root HTTP 200, titolo app atteso e assenza di overflow orizzontale alla viewport 390x844. Chiamata osservata all'endpoint `exchangeRecaptchaEnterpriseToken` di Firebase App Check **nel progetto Test** con HTTP 200 (risposta di rete; non ancora prova di accettazione lato Vercel).
+- **Offline Test:** dopo il caricamento online, registrazione Service Worker osservata nella fase `activating`; la navigazione della PWA in modalità offline ha restituito HTTP 200 e contenuto app, in un profilo Chrome isolato. Non è una prova della persistenza/sync di allenamenti reali.
+- **Vercel backend Test:** preflight CORS dall'origin Test HTTP 204 con origin consentito; stesso preflight dall'origin Production HTTP 403. Il backend Test non è stato ridistribuito in questa fase.
+- **Limite verificato:** un tentativo di creare e rimuovere un account sintetico esclusivamente sul progetto Test è stato bloccato dal controllo di sicurezza dello strumento prima dell'esecuzione; nessun account creato in quel passaggio. La prova separata con token App Check limited-use verso Vercel non si è conclusa con un esito interpretabile. Non aggirare il rifiuto, non proclamare Auth/OIDC live verificati né toccare account reali.
+
+### Sincronizzazione e gate successivi — 2026-10-17
+
+- GitHub `main` avanzato a `10436010c73dd337db69ff6619e8a31043aaab61` (refactor impostazioni); integrato sullo stesso branch Test, con merge senza conflitti `02e99f433516d17018d57a1d07258b8c6bc54cb3`. PR #431 conservata in modalità draft, senza merge su `main`.
+- **Gate exact-SHA superato:** [Milestone Verification 39020244828](https://github.com/gernotfound/logbook/actions/runs/39020244828) **SUCCESS** su `02e99f433516d17018d57a1d07258b8c6bc54cb3`: CodeQL, Playwright, build M7–M8, Firebase Rules, hardening e entrambi gli shard unitari/integrativi, check aggregato `Canonical Verification`.
+- **Drift runtime dichiarato:** la release pubblicata su Firebase Hosting **Test** deriva ancora dal commit precedente `ef737f9d18411a60a224463787fbbbe98cf2f5c5`, non dal merge aggiornato. Il tentativo di avviare la nuova build isolata con le env Test è stato bloccato **prima dell'esecuzione** da un controllo di sicurezza dello strumento. Non è stato tentato un bypass, non è stato eseguito un nuovo deploy e Production non è stata toccata. CI verde del codice nuovo non prova Hosting aggiornato.
+- La creazione automatizzata di un account esclusivamente sintetico Test è anch'essa stata rifiutata dallo strumento prima dell'esecuzione; la verifica completa di Auth, consenso, OIDC/STS, Firestore live e sync richiede una sessione Test autenticata, da eseguire con credenziali di prova non condivise in chat e senza dati reali.
+
+### Root cause CSP Test e correzione candidata — 2026-10-17
+
+- **Difetto verificato nel runtime Test:** il valore CSP `connect-src` ricevuto da `thelogbook-test.web.app` consente ancora il precedente backend Production, ma non il backend Vercel Test. La CSP consentiva inoltre il collector Sentry Production e il frame Firebase Auth del progetto Production. Nel browser Chrome un token App Check limited-use è stato richiesto, ma il successivo `fetch` verso il backend Test falliva prima di ottenere una risposta HTTP, coerentemente con il divieto CSP; il 204 CORS dal backend Test, da solo, non risolve questo controllo del browser.
+- **Root cause nel codice:** `scripts/prepare-firebase-test-config.mjs` sostituiva soltanto il sito Hosting, copiando intatta la CSP Production da `firebase.json`. La correzione candidata deriva esclusivamente una CSP Test: backend `connect-src` Test, frame Firebase Auth Test, nessun Sentry Production. Nessuna modifica alla CSP canonica Production, nessun indebolimento delle altre direttive o dei permessi Firestore.
+- **Regressioni:** `scripts/firebase-test-config-regressions.mjs` valida le origini Test, rifiuta drift della CSP sorgente e duplicazioni, conserva ogni header diverso dalla CSP e mantiene fail-closed sui project ID non Test. Sei test Node superati localmente; file `.firebase.test.local.json` rigenerato e ispezionato con tutti gli origin Test corretti. Sono evidenze sul **candidato locale**, non sull'Hosting pubblicato.
+- **Deploy e prova backend ancora mancanti:** la CSP live continuerà a risultare precedente finché una build exact-SHA e il deploy Hosting Test non potranno essere eseguiti senza violare i controlli di sicurezza dello strumento. Soltanto dopo quel passaggio sarà possibile collaudare realmente la verifica dei token limited-use nel backend Vercel e la federazione OIDC.
+
+### Allineamento ulteriore con main — 2026-10-17
+
+Il ramo `main` è avanzato nuovamente fino a `3cefa3ad22ac45f261548c83cd10cda280d3c41b` (refactor dell'editor storico allenamento). Integrato nel branch Test con merge senza conflitti e aggiornamento versione a `1.25.0`. Le sei regressioni del generatore CSP Test restano verdi dopo l'integrazione. Qualunque commit candidato finale richiede nuovamente la CI canonica sul suo SHA; il sito Hosting Test mantiene la release precedente finché il nuovo deploy non sarà consentito.
+
+### Revisione CodeQL della PR #431 — 2026-10-17
+
+- Notifica GitHub Advanced Security: sei commenti automatici di CodeQL sui guardrail CSP Test (`scripts/prepare-firebase-test-config.mjs`, `scripts/firebase-test-config-regressions.mjs`): cinque controlli URL basati su sottostringhe e una regexp per origini senza ancoraggio. Nessuna evidenza di incidente Production; i commenti sono una segnalazione di qualità/sicurezza del candidato e non sostituiscono la verifica dello SHA successivo.
+- Correzione confinata al branch Test: confronto **esatto** dei token/origini CSP, verifica strutturale degli URL HTTPS con `URL`, rimozione attestata del solo collector Sentry canonico, rifiuto di origini e percorsi inattesi. Test con domini ingannevoli, origin Sentry cambiato e modifiche della CSP. Il file `firebase.json` Production non è stato modificato.
+- Esito diagnostico locale: 7/7 regressioni del generatore Test verdi e sintassi Node valida. L'eventuale nuova analisi CodeQL, il trattamento dei commenti di review e il gate canonico devono riferirsi al **nuovo commit esatto**, non alle CI verdi precedenti. Hosting Test conserva la release precedente finché un deploy Test isolato non sarà possibile.
+
+- **Sincronizzazione aggiuntiva GitHub:** dopo la correzione CodeQL, `main` è avanzato al commit `f4eafdf6ce391d12ed18dde8452478fb35342ef6` (estrazione del flusso di avvio allenamento). La modifica è stata integrata sul branch Test senza conflitti; l'integrazione invalida i gate dello SHA precedente e richiede nuova CI sull'HEAD candidato. La PR #431 resta draft e non va fusa in `main`.
+
+## Stato osservato e runbook isolato — 2026-10-17
+
+- GitHub `main` osservato allo SHA `df27d56bff4ea2f4081f642f343500cb2dbbb09d` (compresi i nuovi guardrail E2E della PR #418 e l'ottimizzazione del catalogo della PR #416); branch Test `testing/00-firebase-test-critical` tenuto distinto e PR #431 **draft, senza merge**. La sincronizzazione del branch con main e le nuove regressioni richiedono gate CI sul nuovo SHA prima dei prossimi deploy.
+- Vercel Test: progetto **`prj_o232EaPmYkrn04zev3Sw9iL2ympj`**, deployment CLI manuale `dpl_B3chKa6BctS5NLJxKaXnhWPjsrZ6` dal commit Test `06b433387ba1f486f2b528a11da02550e4d19d41` allo stato **READY**. Smoke live: statico HTTP 200, preflight CORS dall'origin Test HTTP 204, origin Production rifiutato HTTP 403, endpoint account-deletion senza App Check HTTP 403, cron senza secret HTTP 503. Lo scambio reale Vercel OIDC → Google STS → IAM non è ancora stato dimostrato.
+- Vercel Authentication **attiva** sul progetto Test: le richieste autorizzate con `vercel curl` non dimostrano accessibilità dal browser PWA Test. Non pubblicare bypass token in un bundle frontend. La decisione tecnica di esposizione deve mantenere intatti Auth, App Check, CORS e limitazione degli endpoint.
+- Firebase CLI con sessione autorizzata ha individuato il progetto `thelogbook-test`, il sito Hosting `thelogbook-test` e la web app `1:1016481853013:web:1dbfcc122026dc757baedc`. Questo non certifica ancora Rules, OAuth, App Check o dati live.
+- **Guardrail Hosting/Firestore:** `node scripts/prepare-firebase-test-config.mjs thelogbook-test` genera il file ignorato `.firebase.test.local.json`, derivando il profilo canonico da `firebase.json` ma sostituendo `hosting.site` con `thelogbook-test` e **soltanto nella CSP Test** l'origin del backend, il frame Firebase Auth e l'endpoint Sentry Production, mantenendo intatti Rules, indici e configurazione Production. Rifiuta qualsiasi project ID diverso, incluso quello Production. Usare sempre `--project thelogbook-test --config .firebase.test.local.json` e `--only` esplicito, dopo CI verde sul commit esatto. Non modificare `.firebaserc` né `firebase.json` Production.
+- **Guardrail frontend:** `npm run build:test` controlla la presenza delle quattro env Firebase Web Test, della **site key pubblica** reCAPTCHA Enterprise Test e dell'endpoint backend Test; vieta valori di progetto, Auth, backend o Sentry Production. Prelevare l'API key pubblica dal solo progetto Test con `firebase apps:sdkconfig WEB <app-id-test> --project thelogbook-test`, senza committarla. Usare `VITE_FIREBASE_AUTH_DOMAIN=thelogbook-test.web.app` solo dopo la verifica del dominio autorizzato. La site key Test è stata fornita nella conversazione e non viene riprodotta in questo repository; resta da verificare direttamente l'associazione nel provider e l'acquisizione dei token.
+- **Firestore Test distribuito — 2026-10-17:** CI [38980606575](https://github.com/gernotfound/logbook/actions/runs/38980606575) **SUCCESS** su `4f9f0f4dbba1f75654a482fb7c371c3b8ecce6d8`, inclusi Canonical Verification, emulator Rules, Playwright, CodeQL e unit/integration. Dallo stesso SHA pulito è stato eseguito `firebase deploy --only firestore --project thelogbook-test --config .firebase.test.local.json --non-interactive`: CLI **exit 0**, compilazione/rilascio Rules riusciti e indici deployati nel database `(default)`. **Non è una prova di test autorizzativo live** e non comporta alcun deploy Hosting. `main`, PR #431 e risorse Production sono rimasti invariati.
+- **Prossimi gate di provider:** verificare il provider App Check, la site key pubblica reCAPTCHA Enterprise Test e l'enforcement, la raggiungibilità del backend dal browser, la federazione OIDC effettiva e le Rules live con dati fittizi; poi deploy Hosting Test e test end-to-end autenticati. Nessuna attivazione indiscriminata di enforcement né scrittura su Production.
+
+
+## Obiettivo e limiti
+
+Eseguire prove con account e dati esclusivamente fittizi per autenticazione, sincronizzazione, funzionamento offline, revoca del consenso e cancellazione dei dati salute mantenendo l'account (PR #429). La repository e il codice sorgente rimangono `gernotfound/logbook`; l'ambiente di test deve avere risorse, privilegi, credenziali e deployment isolati. Niente operazioni distruttive su utenti o dati Production.
+
+L'allestimento **non** autorizza merge su `main`, modifica delle credenziali Production, modifiche al ruleset, deploy Production o creazione di dati nel progetto Firebase reale. Prima di qualunque test distruttivo, verificare l'identità dell'account e i project ID di tutte le connessioni del frontend e backend.
+
+## Configurazione Firebase Test — comunicata dal product owner
+
+| Elemento | Configurazione riferita | Evidenza / limite |
+|---|---|---|
+| Progetto | `TheLogBook Test`, ID `thelogbook-test` | Dati in Firebase Console forniti dal product owner |
+| Numero progetto | `1016481853013` | Dato fornito dal product owner |
+| Ambiente GCP | Non specificato | Nessun effetto sull'isolamento da Production |
+| Cloud Firestore | database `(default)`, regione Torino (`europe-west12`) | Confermato dal product owner; API del provider non ancora verificate |
+| Firestore Security Rules iniziali | `rules_version = '2'; service cloud.firestore { match /databases/{database}/documents { match /{document=**} { allow read, write: if false; } } }` | Copiate dal product owner; **client read/write negati** finché non si applicano Rules applicative testate |
+| Authentication | Metodo Email/Password abilitato | Riferito dal product owner; account fittizi non ancora creati |
+| Domini Auth autorizzati | `localhost`, `thelogbook-test.firebaseapp.com`, `thelogbook-test.web.app` | Tabella dalla console fornita dal product owner; nessun dominio Production riportato |
+| Web app | `TheLogBook Test Web`; una sola registrazione finale | Un duplicato omonimo è stato eliminato dal product owner |
+| Firebase Hosting | `thelogbook-test.web.app`, `thelogbook-test.firebaseapp.com` | Domini predefiniti attivati, nessuna distribuzione della PWA Test attestata |
+| Google Cloud reCAPTCHA Enterprise | API abilitata; chiave **Web** `TheLogBook Test - App Check Web` | Screenshot Google Cloud: domini Test configurati, verifica dominio attiva |
+| Firebase App Check | Web app registrata con Fraud Defense / reCAPTCHA Enterprise; site key (ID, non secret key) | Screenshot registrazione e successiva conferma correzione chiave dal product owner |
+| App Check enforcement | **Non applicato** per Cloud Firestore e Firebase Authentication | Screenshot scheda API di Firebase App Check; mantenere disattivo fino a collaudo token |
+| Token TTL App Check | 1 ora mostrata nell'interfaccia prima della registrazione | Controllare valore effettivo nella console se rilevante |
+
+**Chiavi:** non copiare qui né in GitHub API key, site key, secret key reCAPTCHA, chiavi service account, token, password, email degli utenti o fatturazione. Una prima registrazione App Check ha utilizzato per errore la secret key legacy; il product owner ha successivamente riferito di aver sostituito il valore con la site key (ID) corretta. Il token App Check non è stato ancora collaudato su un sito Test pubblicato.
+
+## Vercel Test — in preparazione
+
+- Team selezionato: `gnfcreator`.
+- Repository da importare: `gernotfound/logbook` (la stessa di Production, **nessuna seconda repo**).
+- Nome del progetto: `thelogbook-test-backend`, ora **applicato e letto dal provider**. Project ID: `prj_o232EaPmYkrn04zev3Sw9iL2ympj`.
+- Root Directory prevista: `./` (project root, da verificare nelle Settings); preset applicativo **Other** verificato, Node.js **24.x** verificato.
+- **Progetto creato e verificato via connettore 2026-10-16:** Project ID `prj_o232EaPmYkrn04zev3Sw9iL2ympj`, team `gnfcreator`, creato inizialmente come `project-8xnkl` da interfaccia product owner. I tentativi iniziali di lettura con filtro esplicito `teamId` davano 404 e la creazione via connettore era stata rifiutata 403; la lettura con **Project ID senza team scope esplicito** ha successivamente restituito il progetto corretto, con `accountId` corrispondente a `gnfcreator`. L'assistente ha aggiornato via Vercel API il nome in **`thelogbook-test-backend`**, `framework=null` (Other), Node.js 24.x, `previewDeploymentsDisabled=true`, build command `node scripts/prepare-vercel-backend-static.mjs` e output directory `vercel-backend-static`; l'API ha accettato l'aggiornamento. Il read-back successivo ha verificato nome, framework, Node.js 24.x, **nessun deployment** (`latestDeployment=null`, elenco 0). La lettura di `get_git_deployment_context` per il team ha elencato i sette progetti Git già collegati, ma **non** il nuovo progetto Test: alla data della verifica non risulta un collegamento Git al progetto Test. La lettura senza `teamId` ha funzionato; il filtro `teamId` restituiva 404 nonostante il medesimo `accountId`. Alcune opzioni come il flag Preview e gli override build/output non sono esposte nel payload sintetico della lettura e restano da ricontrollare nella schermata Vercel Settings prima di collegare Git.
+
+### Vercel OIDC — evidenza schermata 2026-10-16
+
+Il product owner ha mostrato la pagina *Secure Backend Access with OIDC Federation* del progetto Vercel Test. La selezione **Team (Recommended)** appare già attiva; il pulsante **Save** appare disabilitato (nessun cambio pendente evidente). Claim mostrati nell'interfaccia:
+
+| Claim | Valore mostrato |
+|---|---|
+| `iss` | `https://oidc.vercel.com/gnfcreator` |
+| `aud` | `https://vercel.com/gnfcreator` |
+| `sub`, `scope` | `owner:gnfcreator:project:thelogbook-test-backend:environment:production` |
+
+Questa schermata **non equivale ancora a una federazione GCP funzionante**. La parola `production` denota l'environment **del solo progetto Vercel Test**, non il progetto Firebase reale; l'autorizzazione GCP deve vincolare esattamente l'identità di team, progetto Vercel e ambiente per evitare privilegi incrociati. I timestamp `iat`, `nbf`, `exp` mostrati non vengono persistiti nella documentazione perché temporanei. Prossimo passaggio: preparare in `thelogbook-test` un pool/provid­er Workload Identity Federation OIDC Google Cloud con issuer e audience osservati, mappatura `google.subject=assertion.sub`, condizione che limiti al `sub` osservato e permesso `roles/iam.workloadIdentityUser` sul solo service account runtime dedicato. Non creare provider con condizioni generiche né generare chiavi JSON. Prima del deploy servono codice Firebase Admin compatibile OIDC sul branch Test, gate e prova runtime su dati fittizi.
+
+### Provider OIDC Google Cloud — restrizioni verificate tramite screenshot (2026-10-16)
+
+Nel progetto Google Cloud **`thelogbook-test`** il product owner ha creato, tramite console, il pool `logbook-test-vercel` e il provider OIDC `vercel-test-backend` (nome visualizzato `TheLogBook Test Vercel OIDC`). I due screenshot della schermata di modifica del provider **confermano**:
+
+| Controllo | Configurazione osservata |
+|---|---|
+| Provider | ID `vercel-test-backend`, abilitato |
+| Issuer | `https://oidc.vercel.com/gnfcreator` |
+| File JWK | Nessun file personalizzato |
+| Segmenti di pubblico | **Pubblico predefinito** (non audience personalizzati aperti) |
+| Mapping attributi | `google.subject` = `assertion.sub` |
+| Condizione CEL | `assertion.sub == 'owner:gnfcreator:project:thelogbook-test-backend:environment:production'` |
+
+L'audience predefinita del provider corrisponde al nome canonico GCP `https://iam.googleapis.com/projects/1016481853013/locations/global/workloadIdentityPools/logbook-test-vercel/providers/vercel-test-backend` (o alla forma `//iam.googleapis.com/...` equivalente supportata). Il runtime Vercel Test dovrà richiedere mediante `getVercelOidcToken({ audience: GCP_AUDIENCE })` **un token OIDC con audience di questo provider**, non usare il token predefinito del team Vercel `https://vercel.com/gnfcreator`.
+
+**Associazione service account — verificata tramite console:** la scheda `Service account connessi` del pool mostra `logbook-test-vercel-runtime` e l'unico filtro `google.subject="owner:gnfcreator:project:thelogbook-test-backend:environment:production"`. Questo prova la configurazione visualizzata dell'impersonazione e del filtro per soggetto esatto, **non** una prova dell'effettivo scambio token STS/impersonation. Le metriche WIF riportavano ancora assenza di scambi osservati. Nessun file JSON di chiave privata è stato creato; il pannello per scaricare la configurazione di credenziali esterne ADC era facoltativo e non è necessario condividere quel file in chat.
+
+**Vincoli successivi prima del primo deploy:** implementare sul branch Test il percorso `Firebase Admin ↔ Google STS` con OIDC e impersonation senza chiave, preservando il comportamento Production; predisporre env pubbliche e server-side solo Test e restrizioni anti-cross-environment, isolare cron e redirect della baseline; eseguire gate canonico/CI sul candidato; collaudare token con il subject/audience attesi e rifiuto dei soggetti diversi, prima di test con account fittizi. Fonti tecniche: [Vercel GCP OIDC](https://vercel.com/docs/oidc/gcp), [Google WIF](https://cloud.google.com/iam/docs/workload-identity-federation).
+
+**Delta remoto `main`:** rispetto al punto di origine del branch, sono intervenuti anche i commit `48bafc1d...` e `7ff77418...`, relativi principalmente a codice/test allenamenti e nutrizione e manifest npm. Sono stati osservati con compare GitHub, non integrati automaticamente nel branch Test. Prima di implementare il backend riesaminare differenze effettive, manifest/lockfile e contratto di deploy; nessuna modifica a `main` è autorizzata senza avvisare il product owner.
+
+### Guardrail necessari prima del primo deploy
+
+1. Il `vercel.json` della baseline imposta `git.deploymentEnabled.main=true` e `**=false`. **Non collegare GitHub prima della verifica dell'identità e delle impostazioni del progetto Vercel Test vuoto.** Scegliere per il backend Test una strategia di deploy manuale e pinned-SHA dal branch `testing/00-firebase-test-critical`, oppure una connessione Git deliberatamente isolata che non distribuisca `main` né ogni push del branch. Verificare nello specifico la compatibilità con il `vercel.json` corrente, il redirect alla PWA reale, il cron giornaliero e il gate canonico: non assumere che il solo cambio di Production Branch sia un isolamento sufficiente.
+2. La baseline include `/api/account-deletion-cron` programmato giornalmente e un redirect dalla root all'URL Production: esaminare/neutralizzare entrambi per il Test, **senza** modificare il runtime Production.
+3. Provisionare l'identità Firebase Admin **del progetto Test** in Vercel Test, con IAM minimo e App Check replay verification se necessario. Mai riutilizzare le variabili `FIREBASE_ADMIN_*` di Production.
+
+### Google Cloud IAM — inventario riferito tramite screenshot (2026-10-16)
+
+- Nella pagina **Service accounts** del progetto `thelogbook-test`, lo screenshot mostra **una sola identità Firebase Admin SDK predefinita**, abilitata, **senza chiavi** nella colonna apposita. È un inventario della schermata utente, non una lettura IAM via API e non dimostra l'assenza di identità nascoste o ruoli ereditati.
+- **Identità dedicata creata, confermata tramite screenshot del product owner (2026-10-16):** `logbook-test-vercel-runtime@thelogbook-test.iam.gserviceaccount.com`, visualizzata come **TheLogBook Test Vercel Runtime**, stato **Abilitato**, colonna **ID chiave: Nessuna chiave**. Nella schermata dell'inventario compaiono sia questa identità sia il preesistente account Firebase Admin SDK; nessuna chiave risulta in elenco. Lo screenshot **non dimostra i ruoli IAM effettivi**: la creazione è stata eseguita lasciando vuote le autorizzazioni facoltative, ma servirà verifica separata in IAM.
+- **IAM aggiornato, evidenza screenshot del product owner 2026-10-16:** nella scheda `IAM → Consenti`, per `logbook-test-vercel-runtime@thelogbook-test.iam.gserviceaccount.com` risultano **assegnati tre ruoli** nel progetto `thelogbook-test`: `Cloud Datastore User` (`roles/datastore.user`), `Firebase App Check Token Verifier` (`roles/firebaseappcheck.tokenVerifier`) e `Firebase Authentication Admin` (`roles/firebaseauth.admin`). La riga dell'identità non mostra Proprietario/Editor o altri ruoli; la schermata non certifica eventuali privilegi ereditati da altre gerarchie o autorizzazioni effettive di endpoint. Verificare il comportamento backend con account fittizio prima di dichiarare funzionante l'accesso.
+- **Decisione di sicurezza:** non riutilizzare l'account Firebase Admin SDK predefinito, non concedere Proprietario/Editor, non creare chiavi in questa fase. I ruoli IAM verranno verificati dopo il salvataggio e prima di qualsiasi deploy.
+- L'implementazione attuale di `server/accountDeletion/firebaseAdmin.ts` usa `FIREBASE_ADMIN_PROJECT_ID`, `FIREBASE_ADMIN_CLIENT_EMAIL` e `FIREBASE_ADMIN_PRIVATE_KEY` tramite `cert()`. **Non generare alcuna chiave privata per ora**: prima valutare provisioning sicuro/possibile identità federata e configurazione Test isolata. Non inserire credenziali nel repository o in chat.
+
+### Accessi per automazioni ChatGPT e GitHub — decisione progettuale (non ancora applicata)
+
+Il product owner desidera che le automazioni e ChatGPT possano amministrare in modo più autonomo **soltanto il progetto Test**. Questo **non equivale** ad allargare i ruoli del service account runtime Vercel: i permessi di un service account non diventano automaticamente accessibili a ChatGPT.
+
+- **Identità runtime** `logbook-test-vercel-runtime`: accesso dati Firestore, Auth e verifica token App Check richiesti dalle Functions Vercel, limitato al progetto `thelogbook-test`. I tre ruoli IAM proposti sono `roles/datastore.user`, `roles/firebaseauth.admin`, `roles/firebaseappcheck.tokenVerifier` (da verificare in IAM prima del deploy).
+- **Identità distinta per operazioni automatizzate**, proposta `logbook-test-automation`: provisioning e deployment Test di Firestore Rules/indici, Firebase Hosting e, solo se necessario, account di prova. Ruoli separati per attività e con condizioni sugli ambienti; preferire workload identity federation / identità temporanee e gate su SHA esatto. Concedere permessi amministrativi soltanto per la specifica operazione autorizzata. Non aggiungere Proprietario, Editor, IAM Security Admin, Service Account Key Admin o permessi Production.
+- **Accesso interattivo di ChatGPT**: richiede un connettore/app effettivamente disponibile e autenticato con le opportune capacità; non deriva dai ruoli assegnati agli account di servizio. Alla data attuale in questa conversazione non sono stati eseguiti comandi IAM sul provider attraverso ChatGPT; ruoli e accesso diretto non sono ancora verificati.
+- **Azioni critiche** come cancellare il progetto, cancellare utenti o dati reali, rimuovere regole protettive o abilitare costi richiedono un confine d'autorizzazione distinto, anche se l'ambiente è Test. Usare esclusivamente dati fittizi per i collaudi E2E.
+- **Evidenze**: screenshot del product owner documentano identità, assenza di chiavi e **tre ruoli effettivamente elencati nella schermata IAM**, ma non equivalgono a verifica API né a collaudo runtime. Le fonti normative per i ruoli sono la documentazione IAM Google Cloud e i contratti runtime presenti nel repository; ogni accesso effettivo deve essere provato con richieste Test autorizzate.
+
+
+
+
+4. Definire `PUBLIC_APP_ORIGIN` e origini CORS Test; evitare accessi cross-environment. Tenere separate le env client `VITE_FIREBASE_*`, `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY` e `VITE_ACCOUNT_DELETION_API_ORIGIN`. Verificare CSP, OAuth e domini di origine.
+5. Effettuare controlli fail-closed della destinazione prima dei deploy Firestore/Hosting; distribuire Rules e indici Test dal commit verificato, poi frontend Test e backend Test. Nessun workflow Test deve cambiare il workflow o le risorse Production.
+6. Collegare il test E2E a UID/account fittizi; simulare offline/revoca/cancellazione e confermare la persistenza dell'account, senza coinvolgere dati utente reali.
+7. Tenere separati gate canonico, CI, deploy, smoke HTTP e prove E2E autenticate: non dichiararli completati in assenza di evidenza osservata.
+
+## Gestione GitHub
+
+- Branch dedicato: `testing/00-firebase-test-critical`, creato dal remoto `main` allo SHA `58c41265a40af7e13f11244e54d957b85111aea4`.
+- Branch a lunga durata per la **preparazione** dell'ambiente Test, non un branch da fondere automaticamente. `main` può progredire indipendentemente.
+- Prima delle modifiche successive, ricontrollare il vero `main` remoto, i delta e le regole di `AGENTS.md` e `.agents/rules/`.
+- Proposta di protezione: impedire cancellazione accidentale e force-push, mantenendo normale avanzamento via commit; verificare eventuali vincoli GitHub già presenti e i permessi amministrativi prima di applicarli.
+- **Nessuna PR o merge autorizzati** per questa fase di sola infrastruttura Test. Ogni eventuale integrazione in `main` va concordata esplicitamente col product owner.
+
+## Implementazione keyless sul branch Test — candidata, da validare
+
+Lavoro aggiunto su `testing/00-firebase-test-critical`, **non distribuito né integrato in `main`**:
+
+- `server/accountDeletion/testOidcCredential.ts`: il backend recupera con `@vercel/oidc` un OIDC JWT con audience specifica del provider GCP; scambia il token con STS (`sts.googleapis.com`), impersona **solo** l'account `logbook-test-vercel-runtime@thelogbook-test.iam.gserviceaccount.com` tramite IAM Credentials e restituisce a Firebase Admin un access token temporaneo. Non salva né richiede chiavi private.
+- `server/accountDeletion/firebaseAdmin.ts`: se `FIREBASE_ADMIN_AUTH_MODE=vercel-oidc`, verifica rigorosamente il project ID Firebase Test, email account Test, `VERCEL_PROJECT_ID` Test, ambiente Vercel `production`, flag Vercel e origin frontend `https://thelogbook-test.web.app`; rifiuta la presenza di una chiave Admin privata. **Per i progetti non Test** lascia attivo il percorso `cert()` preesistente e rifiuta auth mode sconosciuti; anche un deployment configurato per il progetto `thelogbook-test` senza OIDC fallisce chiuso.
+- `vercel.test.json`: profilo backend-only usabile tramite **`--local-config vercel.test.json`**, con tutti i deploy Git automatici disabilitati, nessun redirect a frontend Production, nessuna schedulazione automatica cron, nessun service worker legacy. Non sostituisce `vercel.json` Production, che resta immutato. Il cron esiste come endpoint da invocare **solo manualmente e con `CRON_SECRET` Test** durante i test controllati.
+- `scripts/check-vercel-test-safety.mjs` e `tests/m7_firebase_test_oidc.test.ts`: guardrail su isolamento e regressioni del token exchange, expiry, caching, failure paths.
+- `package.json`/`package-lock.json` dichiarano e fissano `@vercel/oidc` e relativi pacchetti. **CI GitHub osservata sullo SHA esatto `84c0dee34a9149dc430e280da6ad03f5cc1f7671`, run [38912861341](https://github.com/gernotfound/logbook/actions/runs/38912861341): SUCCESS**, inclusi installazione npm, sei shard (statico, rules, build/M7–M8, due unit/integration, hardening/stress), Playwright E2E, CodeQL e Canonical Verification. Questo NON collauda il runtime OIDC esterno e NON prova alcun deploy.
+
+### Env Vercel Test verificate direttamente nel provider — 2026-10-16
+
+Nel progetto Vercel Test **`prj_o232EaPmYkrn04zev3Sw9iL2ympj`** sono state create via connettore Vercel quattro variabili **encrypted**, con target esclusivamente `production` dell'ambiente Vercel Test. Il read-back `filter_project_envs` ha confermato l'esistenza delle quattro chiavi e il target (non sono stati stampati né committati valori criptati):
+
+| Chiave | Valore previsto | Ambito |
+|---|---|---|
+| `FIREBASE_ADMIN_AUTH_MODE` | `vercel-oidc` | Server-only Test |
+| `FIREBASE_ADMIN_PROJECT_ID` | `thelogbook-test` | Server-only Test |
+| `FIREBASE_ADMIN_CLIENT_EMAIL` | `logbook-test-vercel-runtime@thelogbook-test.iam.gserviceaccount.com` | Server-only Test |
+| `PUBLIC_APP_ORIGIN` | `https://thelogbook-test.web.app` | Origine CORS Test |
+
+`FIREBASE_ADMIN_PRIVATE_KEY` **non è presente** e non deve essere aggiunta. L'elenco del progetto prima della creazione era vuoto, quello dopo contiene solo queste quattro chiavi. Mancano ancora, per testare il cron manualmente, un `CRON_SECRET` dedicato e tutte le condizioni di deploy/runtime. Non sono presenti deployment al momento del read-back.
+
+### Google Cloud Test: API federazione abilitate — conferma console del product owner (2026-10-16)
+
+Il product owner ha aperto nel progetto `thelogbook-test` le pagine API di Google Cloud e riportato il pulsante **«Gestisci»** per entrambe:
+
+- **IAM Service Account Credentials API** — `iamcredentials.googleapis.com`: riferita come **abilitata** dalla console.
+- **Security Token Service API** — `sts.googleapis.com`: riferita come **abilitata** dalla console.
+
+Non è stata eseguita una lettura dello stato enablement via Cloud API da questa conversazione. Il pulsante «Gestisci» è un riscontro sufficiente per procedere a preparare un collaudo, ma **non prova** l'effettivo scambio di credenziali, l'assenza di blocchi org/IAM o l'accesso Firestore/App Check nel runtime.
+
+**Checkpoint storico superato:** il progetto Vercel Test era inizialmente privo di deployment e senza collegamento Git. Il primo deploy manuale, realizzato usando `vercel.test.json` e un commit identificato del branch Test, è documentato nella cronologia in apertura. Il progetto Test rimane scollegato da Git per impedire deployment automatici da `main`; il profilo Vercel Production non deve essere usato. **Blocco ancora reale:** l'accesso dal browser è protetto da Vercel Authentication e lo scambio OIDC con Google Cloud non è stato verificato mediante una richiesta autenticata.
+
+### Prerequisiti storici e controlli permanenti per i deployment Test
+
+1. **GitHub:** verificare il gate canonico sullo SHA esatto del branch dopo le modifiche e correggere eventuali errori senza ridurre i controlli. La CI di default gira su PR verso `main`, push su `main` o `workflow_dispatch`: un semplice commit sul branch Test non significa CI verde.
+2. **Vercel Test:** usare esclusivamente il progetto `prj_o232EaPmYkrn04zev3Sw9iL2ympj`. Il progetto è senza collegamento Git; eseguire soltanto un deploy manuale, da un checkout exact-SHA del branch Test e con `--local-config vercel.test.json`. Verificare gli override nella dashboard e disabilitare Preview automatici; **non usare mai il `vercel.json` Production** per il progetto Test.
+3. **Variabili server-only Vercel Test:** `FIREBASE_ADMIN_AUTH_MODE=vercel-oidc`, `FIREBASE_ADMIN_PROJECT_ID=thelogbook-test`, `FIREBASE_ADMIN_CLIENT_EMAIL=logbook-test-vercel-runtime@thelogbook-test.iam.gserviceaccount.com`, `PUBLIC_APP_ORIGIN=https://thelogbook-test.web.app`; `CRON_SECRET` lungo e generato nel provider, se si provano endpoint di recupero. `FIREBASE_ADMIN_PRIVATE_KEY` **non impostata**. Le env Vercel di sistema `VERCEL`, `VERCEL_ENV` e `VERCEL_PROJECT_ID` devono corrispondere al profilo Test; non sovrascriverle.
+4. **Google Cloud Test:** verificare che **IAM Service Account Credentials API** (`iamcredentials.googleapis.com`) e **Security Token Service API** (`sts.googleapis.com`) siano attive in `thelogbook-test`, e la conferma IAM della sola identità `principal://.../subject/owner:gnfcreator:project:thelogbook-test-backend:environment:production`. Non aggiungere privilegi su Production.
+5. **Test runtime:** effettuare una richiesta di stato autenticata da un **account fittizio**, osservare la federazione WIF, verificare che i vecchi token/altro progetto Vercel siano rifiutati, quindi testare consensi, salvataggio e cancellazione dati solo nel database Test. La CI, i token validi e i deploy sono evidenze distinte.
+
+## Prossime verifiche
+
+- [ ] Verifica stato/protezioni GitHub del branch dedicato.
+- [x] Creazione progetto Vercel Test e primo deployment backend-only manuale; READY, con smoke HTTP fail-closed documentati nella cronologia.
+- [ ] Verificare in Vercel Settings la persistenza di `previewDeploymentsDisabled`, Build/Output Settings e Root Directory; successivamente collegare/restringere Git o predisporre deploy manuale exact-SHA, senza distribuire `main`.
+- [ ] Verifica API key browser, restrizioni/referrer e registrazione App Check nel progetto Firebase Test.
+- [x] Tre ruoli IAM runtime richiesti riportati nella schermata Google Cloud del progetto Test, senza ruoli generali visibili.
+- [x] Implementazione e regressioni della federazione OIDC/keyless isolate nel branch Test. **Da verificare ancora:** scambio token e autorizzazioni effettive nel runtime Vercel Test.
+- [x] Deploy Rules e indici su Firestore Test dopo gate/emulator; **da verificare ancora** il read-back live e gli accessi con account fittizi.
+- [ ] Deploy PWA su Hosting Test con configurazione frontend e CSP separate.
+- [ ] Test token App Check senza enforcement, poi valutarne attivazione.
+- [ ] Test E2E autenticato su dati fittizi e documentazione dei risultati reali.
