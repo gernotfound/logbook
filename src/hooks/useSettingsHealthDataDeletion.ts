@@ -1,4 +1,4 @@
-import { useState, type RefObject } from 'react';
+import { useState } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
 import { DB } from '../lib/db';
@@ -11,15 +11,14 @@ import { isSensitiveReauthCancellation, reauthenticateForSensitiveAction } from 
 
 export type SettingsDeletionInFlight = 'account' | 'health-data' | null;
 
-export function useSettingsHealthDataDeletion(deletionBusy: RefObject<SettingsDeletionInFlight>) {
+export function useSettingsHealthDataDeletion(beginDeletion: () => boolean, endDeletion: () => void) {
     const showAlert = useDialogStore(state => state.showAlert);
     const showConfirm = useDialogStore(state => state.showConfirm);
     const showPasswordPrompt = useDialogStore(state => state.showPasswordPrompt);
     const [erasingHealthData, setErasingHealthData] = useState(false);
 
     const handleDeleteHealthData = async () => {
-        if (deletionBusy.current !== null) return;
-        deletionBusy.current = 'health-data';
+        if (!beginDeletion()) return;
         let serverComplete = false;
         try {
             const user = auth.currentUser;
@@ -97,7 +96,7 @@ export function useSettingsHealthDataDeletion(deletionBusy: RefObject<SettingsDe
                 'Cancellazione da verificare',
             );
         } finally {
-            deletionBusy.current = null;
+            endDeletion();
             setErasingHealthData(false);
         }
     };

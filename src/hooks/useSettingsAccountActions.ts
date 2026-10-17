@@ -117,7 +117,15 @@ export function useSettingsAccountActions({ currentUser, isGuest, logout }: Acco
     const [deletionPhase, setDeletionPhase] = useState<'idle' | 'verifying' | 'deleting'>('idle');
     // Both destructive flows must acquire this guard before their first await.
     const deletionBusy = useRef<SettingsDeletionInFlight>(null);
-    const { erasingHealthData, handleDeleteHealthData } = useSettingsHealthDataDeletion(deletionBusy);
+    const beginHealthDeletion = () => {
+        if (deletionBusy.current !== null) return false;
+        deletionBusy.current = 'health-data';
+        return true;
+    };
+    const endHealthDeletion = () => {
+        if (deletionBusy.current === 'health-data') deletionBusy.current = null;
+    };
+    const { erasingHealthData, handleDeleteHealthData } = useSettingsHealthDataDeletion(beginHealthDeletion, endHealthDeletion);
     let pendingAccountDeletion = false;
     try { pendingAccountDeletion = isAccountDeletionPending(captureSession().owner); }
     catch { /* The writer separately refuses an unreadable deletion marker. */ }
