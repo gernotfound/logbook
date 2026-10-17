@@ -1,0 +1,114 @@
+@media (min-width: 32rem) {
+    #view-data .activity-stat-grid {
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+    }
+
+    #view-data .activity-steps-form {
+        grid-template-columns: minmax(10rem, 1fr) auto auto;
+        align-items: end;
+    }
+
+    #view-data .activity-steps-form label,
+    #view-data .activity-steps-form input {
+        grid-column: 1;
+    }
+
+    #view-data .activity-primary-fields {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    #view-data .activity-detail-fields {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 25rem) {
+    #view-data .activity-heading-row.activity-cardio-header {
+        display: grid;
+    }
+
+    #view-data .activity-heading-row.activity-cardio-header .activity-action {
+        width: 100%;
+    }
+
+    #view-data .activity-cardio-item {
+        align-items: flex-start;
+    }
+
+    #view-data .activity-cardio-actions {
+        flex-direction: column;
+    }
+}
+
+@media (max-width: 22.5rem) {
+    #view-data .section-divider,
+    #view-data .section-divider-last,
+    #view-data .data-panel,
+    #view-data .activity-cardio-editor {
+        padding: .75rem;
+    }
+
+    #view-data .data-method-switch,
+    #view-data .data-action-row,
+    #view-data .activity-editor-actions {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    #view-data .data-calculation-profile {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    #view-data .data-calculation-profile .btn {
+        width: 100%;
+    }
+
+    #view-data .history-header {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    #view-data .history-period-button {
+        width: 100%;
+    }
+
+    #view-data .history-year-picker,
+    #view-data .history-calendar-panel {
+        padding: .75rem;
+    }
+
+    #view-data .history-month-nav {
+        gap: .25rem;
+    }
+
+    #view-data .history-month-name,
+    #view-data .history-month-summary strong {
+        font-size: var(--font-size-secondary);
+    }
+
+    #view-data .history-selected-day-heading {
+        align-items: flex-start;
+    }
+
+    #view-data .history-record-open {
+        gap: .5rem;
+        padding-left: .625rem;
+    }
+}
+
+@media (max-width: 20rem) {
+    #view-data .data-form-grid,
+    #view-data .data-detail-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    #view-data .data-field-full {
+        grid-column: auto;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #view-data .data-method-dot::after,
+    #view-data .data-disclosure-chevron {
+        transition: none;
+    }
+}

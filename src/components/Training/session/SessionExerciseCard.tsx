@@ -354,13 +354,13 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                             exIndex={exIndex}
                             trackingType={libDef?.trackingType}
                             isOpenMenu={openSpecialMenuId === s.id}
-                            onToggleMenu={() => onToggleSpecialMenu(s.id)}
-                            onRemoveSet={() => onRemoveSet(exIndex, sIndex)}
-                            onUpdateSet={(setId, field, val) => onUpdateSet(exIndex, setId, field, val)}
-                            onAddSpecialSet={(type, setId) => onAddSpecialSet(exIndex, type, setId)}
-                            onUpdateSpecialSet={(setId, type, dsIdx, field, val) => onUpdateSpecialSet(exIndex, setId, type, dsIdx, field, val)}
-                            onRemoveSpecialSet={(setId, type, dsIdx) => onRemoveSpecialSet(exIndex, setId, type, dsIdx)}
-                            onUpdateSetTarget={(setId, reps) => onUpdateSetTarget(exIndex, setId, reps)}
+                            onToggleMenu={onToggleSpecialMenu}
+                            onRemoveSet={onRemoveSet}
+                            onUpdateSet={onUpdateSet}
+                            onAddSpecialSet={onAddSpecialSet}
+                            onUpdateSpecialSet={onUpdateSpecialSet}
+                            onRemoveSpecialSet={onRemoveSpecialSet}
+                            onUpdateSetTarget={onUpdateSetTarget}
                         />
                     ))}
 
@@ -415,21 +415,8 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
     );
 };
 
-// React.memo con comparatore personalizzato:
-// Si ri-renderizza SOLO quando cambiano i dati reali (exItem, libDef, stato pannelli).
-// Le callback inline di TrainingSession vengono ignorate — questo evita che ogni
-// battitura in un esercizio ri-renderizzi TUTTI gli altri esercizi della sessione.
-export const SessionExerciseCard = React.memo(SessionExerciseCardInner, (prev, next) => {
-    return (
-        prev.exItem === next.exItem &&
-        prev.libDef === next.libDef &&
-        prev.pastWorkouts === next.pastWorkouts &&
-        prev.isHistoryOpen === next.isHistoryOpen &&
-        prev.isSetupOpen === next.isSetupOpen &&
-        prev.openSpecialMenuId === next.openSpecialMenuId &&
-        prev.exIndex === next.exIndex &&
-        prev.totalExercises === next.totalExercises
-    );
-});
+// Action props originate from stable useCallback handlers in ActiveWorkoutSession.
+// Shallow comparison also invalidates memo when the parent replaces a callback.
+export const SessionExerciseCard = React.memo(SessionExerciseCardInner);
 
 export default SessionExerciseCard;

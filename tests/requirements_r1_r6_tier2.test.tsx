@@ -364,7 +364,7 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
 
                 const removeBtn = screen.getByRole('button', { name: 'Rimuovi dropset 1' });
                 fireEvent.click(removeBtn);
-                expect(mockRemove).toHaveBeenCalledWith('s1', 'dropsets', 0);
+                expect(mockRemove).toHaveBeenCalledWith(0, 's1', 'dropsets', 0);
             });
 
             it('T2.4.6: SessionSetRow handles empty string kg and reps without throwing', () => {

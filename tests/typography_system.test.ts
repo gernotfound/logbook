@@ -63,6 +63,8 @@ describe('scala tipografica canonica', () => {
       'src/components/Nutrition/TrackingViews.css',
       'src/components/Training/ActiveWorkoutSession.tsx',
       'src/components/Training/training.css',
+      'src/components/Training/training-overview.css',
+      'src/components/Training/training-session.css',
     ]);
     const files = walk(path.join(ROOT, 'src')).filter(file => /\.(?:css|tsx?)$/.test(file));
     const violations = files

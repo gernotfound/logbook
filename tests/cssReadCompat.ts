@@ -6,7 +6,11 @@ const compatFs = fs as typeof fs & { __logbookCssReadCompatInstalled?: boolean }
 
 if (!compatFs.__logbookCssReadCompatInstalled) {
   const originalReadFileSync = fs.readFileSync.bind(fs);
-  const globalCssPath = path.resolve(process.cwd(), 'src/styles/global.css');
+  const cssEntrypoints = new Set([
+    path.resolve(process.cwd(), 'src/styles/global.css'),
+    path.resolve(process.cwd(), 'src/components/Training/training.css'),
+    path.resolve(process.cwd(), 'src/components/Data/data.css'),
+  ]);
 
   function expandLocalCssImports(filePath: string, visited = new Set<string>()): string {
     const resolvedPath = path.resolve(filePath);
@@ -24,17 +28,16 @@ if (!compatFs.__logbookCssReadCompatInstalled) {
     );
   }
 
-  // Repository-level UI tests inspect the effective global stylesheet directly.
-  // Keep those oracles valid after modularization by expanding only local imports
-  // when the canonical global.css entrypoint is read as UTF-8 text.
+  // UI tests inspect the global, Training and Data stylesheet entrypoints as text.
+  // Expand local imports so existing assertions exercise the effective CSS.
   fs.readFileSync = ((filePath: any, options?: any) => {
     const encoding = typeof options === 'string' ? options : options?.encoding;
     if (
       typeof filePath === 'string' &&
-      path.resolve(filePath) === globalCssPath &&
+      cssEntrypoints.has(path.resolve(filePath)) &&
       (encoding === 'utf8' || encoding === 'utf-8')
     ) {
-      return expandLocalCssImports(globalCssPath);
+      return expandLocalCssImports(filePath);
     }
 
     return originalReadFileSync(filePath, options);

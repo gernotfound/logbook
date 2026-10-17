@@ -123,12 +123,12 @@ describe('RIR reale per singola serie', () => {
         expect(screen.queryByRole('menu', { name: 'Seleziona RIR serie 1' })).toBeNull();
         fireEvent.click(trigger);
         fireEvent.click(screen.getByRole('menuitemradio', { name: '0' }));
-        expect(onUpdateSet).toHaveBeenLastCalledWith('s1', 'rir', 0);
+        expect(onUpdateSet).toHaveBeenLastCalledWith(0, 's1', 'rir', 0);
 
         rerender(<SessionSetRow {...props} set={{ ...props.set, rir: 10 }} />);
         fireEvent.click(screen.getByRole('button', { name: 'Imposta RIR serie 1: 10' }));
         fireEvent.click(screen.getByRole('menuitem', { name: 'Non registrato' }));
-        expect(onUpdateSet).toHaveBeenLastCalledWith('s1', 'rir', undefined);
+        expect(onUpdateSet).toHaveBeenLastCalledWith(0, 's1', 'rir', undefined);
     });
 
     it('non propone RIR sulle serie tracciate a tempo', () => {
