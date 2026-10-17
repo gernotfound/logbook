@@ -23,11 +23,28 @@ void test('Test deployment preserves Firestore and routes while isolating Hostin
       if (original.key !== 'Content-Security-Policy') {
         assert.deepEqual(derived, original);
       } else {
-        assert.match(derived.value, /https:\/\/thelogbook-test-backend-gnfcreator\.vercel\.app/);
-        assert.match(derived.value, /https:\/\/thelogbook-test\.firebaseapp\.com/);
-        assert.doesNotMatch(derived.value, /logbook-gnf\.vercel\.app|logbook-db-98cc4\.firebaseapp\.com|\.sentry\.io/);
-        assert.match(derived.value, /default-src 'self'/);
-        assert.match(original.value, /https:\/\/logbook-gnf\.vercel\.app/);
+        const directiveSources = (csp, name) => {
+          const part = csp.split(';').map(value => value.trim())
+            .find(value => value.startsWith(name + ' '));
+          assert.ok(part, `Missing ${name} CSP directive`);
+          return part.split(/\s+/).slice(1);
+        };
+        const connect = directiveSources(derived.value, 'connect-src');
+        const frames = directiveSources(derived.value, 'frame-src');
+        const productionConnect = directiveSources(original.value, 'connect-src');
+        assert.equal(connect.filter(token => token === 'https://thelogbook-test-backend-gnfcreator.vercel.app').length, 1);
+        assert.equal(frames.filter(token => token === 'https://thelogbook-test.firebaseapp.com').length, 1);
+        assert.equal(productionConnect.filter(token => token === 'https://logbook-gnf.vercel.app').length, 1);
+        for (const tokens of [connect, frames]) {
+          for (const token of tokens) {
+            if (!token.startsWith('https://')) continue;
+            const origin = new URL(token);
+            assert.notEqual(origin.origin, 'https://logbook-gnf.vercel.app');
+            assert.notEqual(origin.origin, 'https://logbook-db-98cc4.firebaseapp.com');
+            assert.equal(origin.hostname === 'sentry.io' || origin.hostname.endsWith('.sentry.io'), false);
+          }
+        }
+        assert.equal(derived.value.split(';').some(part => part.trim() === "default-src 'self'"), true);
       }
     }
   }
@@ -70,6 +87,25 @@ void test('Test CSP fails closed if Production backend/Auth mapping drifts or is
   const globalHeaders = duplicate.hosting.headers.find(route => route.source === '/**').headers;
   globalHeaders.push({ key: 'Content-Security-Policy', value: csp });
   assert.throws(() => testFirebaseConfig(duplicate, TEST_FIREBASE_PROJECT));
+});
+
+void test('Test CSP rejects deceptive origin fragments, paths and changed Sentry collectors', () => {
+  const csp = source.hosting.headers.find(route => route.source === '/**')
+    .headers.find(header => header.key === 'Content-Security-Policy').value;
+  const unexpected = [
+    csp.replace('https://logbook-gnf.vercel.app', 'https://logbook-gnf.vercel.app.attacker.example'),
+    csp.replace('https://logbook-db-98cc4.firebaseapp.com', 'https://logbook-db-98cc4.firebaseapp.com.attacker.example'),
+    csp.replace('https://logbook-gnf.vercel.app', 'https://logbook-gnf.vercel.app/path'),
+    csp.replace('https://o4512174476230656.ingest.de.sentry.io', 'https://another.ingest.de.sentry.io'),
+    csp.replace('https://o4512174476230656.ingest.de.sentry.io', 'https://o4512174476230656.ingest.de.sentry.io.attacker.example'),
+  ];
+  for (const changedCsp of unexpected) {
+    assert.notEqual(changedCsp, csp, 'Regression must actually change the CSP');
+    const altered = structuredClone(source);
+    altered.hosting.headers.find(route => route.source === '/**')
+      .headers.find(header => header.key === 'Content-Security-Policy').value = changedCsp;
+    assert.throws(() => testFirebaseConfig(altered, TEST_FIREBASE_PROJECT));
+  }
 });
 
 import { checkFirebaseTestFrontendEnv } from './check-firebase-test-frontend-env.mjs';

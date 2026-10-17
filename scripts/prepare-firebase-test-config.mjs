@@ -20,19 +20,36 @@ function testContentSecurityPolicy(value) {
       connectCount++;
       assert.equal(tokens.filter(token => token === PRODUCTION_BACKEND_ORIGIN).length, 1,
         'Canonical CSP must contain exactly one Production backend origin');
-      assert.ok(!tokens.includes(TEST_BACKEND_ORIGIN),
+      assert.equal(tokens.some(token => token === TEST_BACKEND_ORIGIN), false,
         'Test backend origin must not appear in canonical Production CSP');
+      let removedSentry = 0;
       const testTokens = tokens
-        .filter(token => !/^https:\/\/[a-z0-9-]+\.ingest\.[a-z0-9-]+\.sentry\.io$/.test(token))
+        .filter(token => {
+          if (!token.startsWith('https://')) return true;
+          const url = new URL(token);
+          assert.equal(url.origin, token, 'CSP connect-src must use exact HTTPS origins');
+          if (url.hostname !== 'sentry.io' && !url.hostname.endsWith('.sentry.io')) return true;
+          assert.equal(token, 'https://o4512174476230656.ingest.de.sentry.io',
+            'Unexpected Sentry collector in Production CSP');
+          removedSentry++;
+          return false;
+        })
         .map(token => token === PRODUCTION_BACKEND_ORIGIN ? TEST_BACKEND_ORIGIN : token);
+      assert.equal(removedSentry, 1, 'Expected exactly one Production Sentry collector');
       return [name, ...testTokens].join(' ');
     }
     if (name === 'frame-src') {
       frameCount++;
       assert.equal(tokens.filter(token => token === PRODUCTION_AUTH_FRAME).length, 1,
         'Canonical CSP must contain exactly one Production Firebase Auth frame origin');
-      assert.ok(!tokens.includes(TEST_AUTH_FRAME),
+      assert.equal(tokens.some(token => token === TEST_AUTH_FRAME), false,
         'Test Auth frame origin must not appear in canonical Production CSP');
+      for (const token of tokens) {
+        if (token.startsWith('https://')) {
+          assert.equal(new URL(token).origin, token,
+            'CSP frame-src must use exact HTTPS origins');
+        }
+      }
       return [name, ...tokens.map(token =>
         token === PRODUCTION_AUTH_FRAME ? TEST_AUTH_FRAME : token)].join(' ');
     }
@@ -40,11 +57,26 @@ function testContentSecurityPolicy(value) {
   });
   assert.equal(connectCount, 1, 'Expected one connect-src directive');
   assert.equal(frameCount, 1, 'Expected one frame-src directive');
-  const result = directives.join('; ') + ';';
-  assert.ok(!result.includes(PRODUCTION_BACKEND_ORIGIN));
-  assert.ok(!result.includes(PRODUCTION_AUTH_FRAME));
-  assert.ok(!result.includes('.sentry.io'), 'Test CSP must not contact Production Sentry');
-  return result;
+  const testSources = new Map(directives.map(directive => {
+    const [name, ...tokens] = directive.split(/\s+/);
+    return [name, tokens];
+  }));
+  assert.equal(testSources.size, directives.length, 'Duplicate CSP directives');
+  const testConnect = testSources.get('connect-src');
+  const testFrames = testSources.get('frame-src');
+  assert.equal(testConnect.filter(token => token === TEST_BACKEND_ORIGIN).length, 1);
+  assert.equal(testFrames.filter(token => token === TEST_AUTH_FRAME).length, 1);
+  for (const tokens of [testConnect, testFrames]) {
+    for (const token of tokens) {
+      if (!token.startsWith('https://')) continue;
+      const origin = new URL(token);
+      assert.notEqual(origin.origin, PRODUCTION_BACKEND_ORIGIN);
+      assert.notEqual(origin.origin, PRODUCTION_AUTH_FRAME);
+      assert.equal(origin.hostname === 'sentry.io' || origin.hostname.endsWith('.sentry.io'), false,
+        'Test CSP must not contact Production Sentry');
+    }
+  }
+  return directives.join('; ') + ';';
 }
 
 

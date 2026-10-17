@@ -64,6 +64,12 @@ Questo file e `docs/operations/external-services-register.md` sono il registro t
 
 Il ramo `main` è avanzato nuovamente fino a `3cefa3ad22ac45f261548c83cd10cda280d3c41b` (refactor dell'editor storico allenamento). Integrato nel branch Test con merge senza conflitti e aggiornamento versione a `1.25.0`. Le sei regressioni del generatore CSP Test restano verdi dopo l'integrazione. Qualunque commit candidato finale richiede nuovamente la CI canonica sul suo SHA; il sito Hosting Test mantiene la release precedente finché il nuovo deploy non sarà consentito.
 
+### Revisione CodeQL della PR #431 — 2026-10-17
+
+- Notifica GitHub Advanced Security: sei commenti automatici di CodeQL sui guardrail CSP Test (`scripts/prepare-firebase-test-config.mjs`, `scripts/firebase-test-config-regressions.mjs`): cinque controlli URL basati su sottostringhe e una regexp per origini senza ancoraggio. Nessuna evidenza di incidente Production; i commenti sono una segnalazione di qualità/sicurezza del candidato e non sostituiscono la verifica dello SHA successivo.
+- Correzione confinata al branch Test: confronto **esatto** dei token/origini CSP, verifica strutturale degli URL HTTPS con `URL`, rimozione attestata del solo collector Sentry canonico, rifiuto di origini e percorsi inattesi. Test con domini ingannevoli, origin Sentry cambiato e modifiche della CSP. Il file `firebase.json` Production non è stato modificato.
+- Esito diagnostico locale: 7/7 regressioni del generatore Test verdi e sintassi Node valida. L'eventuale nuova analisi CodeQL, il trattamento dei commenti di review e il gate canonico devono riferirsi al **nuovo commit esatto**, non alle CI verdi precedenti. Hosting Test conserva la release precedente finché un deploy Test isolato non sarà possibile.
+
 ## Stato osservato e runbook isolato — 2026-10-17
 
 - GitHub `main` osservato allo SHA `df27d56bff4ea2f4081f642f343500cb2dbbb09d` (compresi i nuovi guardrail E2E della PR #418 e l'ottimizzazione del catalogo della PR #416); branch Test `testing/00-firebase-test-critical` tenuto distinto e PR #431 **draft, senza merge**. La sincronizzazione del branch con main e le nuove regressioni richiedono gate CI sul nuovo SHA prima dei prossimi deploy.
