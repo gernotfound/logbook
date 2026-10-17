@@ -12,7 +12,7 @@ import { draftRegistry } from '../lib/utils/draftRegistry';
 import { useEmailAuthActions } from './auth/useEmailAuthActions';
 import { useGoogleAuthActions } from './auth/useGoogleAuthActions';
 import { useGuestMigrationRetry } from './auth/useGuestMigrationRetry';
-import { useGuestLogin } from './auth/useGuestLogin';
+import { GUEST_KEY, useGuestLogin } from './auth/useGuestLogin';
 import { resumePersistedGuestMigration } from './auth/resumePersistedGuestMigration';
 import { guardAuthenticatedBootstrap } from './auth/guardAuthenticatedBootstrap';
 import { createAuthConsentLifecycleHandlers } from './auth/consentLifecycle';
@@ -41,7 +41,6 @@ import { bindGuestMigrationIntentToUser, clearGuestMigrationIntent } from '../li
 import { cancelLocalVaultReadiness, ensureLocalVaultReady } from '../lib/sync/secureArchiveUnlockFlow';
 import { lockVault } from '../lib/sync/secureArchiveSession';
 
-const GUEST_KEY = 'logbook_is_guest';
 const GUEST_MIGRATION_SYNC_RECOVERY_KEY = 'logbook_guest_migration_sync_recovery';
 const AWAITING_REDIRECT_KEY = 'logbook_awaiting_redirect';
 

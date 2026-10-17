@@ -13,6 +13,8 @@ import { readBrowserValueStrict, removeBrowserValue, writeBrowserValue } from '.
 import { clearAuthenticatedOwnerHint } from '../../lib/sync/authOwnerHint';
 import { ensureLocalVaultReady } from '../../lib/sync/secureArchiveUnlockFlow';
 
+export const GUEST_KEY = 'logbook_is_guest';
+
 type GuestMigrationStatus = 'idle' | 'pending' | 'failed';
 type GuestLoginDependencies = {
     isGuestRef: RefObject<boolean>;
@@ -85,7 +87,7 @@ export function useGuestLogin({
                 });
             }
         }
-    }, [setSaveError, setUserData]);
+    }, [isGuestRef, setIsGuest, setGuestMigrationStatus, setSaveError, setUserData]);
 
     return loginAsGuest;
 }
