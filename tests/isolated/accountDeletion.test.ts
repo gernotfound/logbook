@@ -144,7 +144,7 @@ it('preserves the original archive if the trusted recheck under lock is unavaila
 
 it('finishes data-only erasure after two current trusted proofs, preserving another owner', async () => {
     boundary.auth.currentUser.getIdToken = vi.fn(async () => 'firebase-id-token');
-    boundary.fetch.mockResolvedValue(completeHealthProof());
+    boundary.fetch.mockImplementation(async () => completeHealthProof());
 
     await purgeCompletedHealthDataLocal('user:a');
 
