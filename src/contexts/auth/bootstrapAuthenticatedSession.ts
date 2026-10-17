@@ -47,7 +47,7 @@ export async function bootstrapAuthenticatedSession(
     }: BootstrapDependencies,
 ): Promise<void> {
     if (user && guardAuthenticatedBootstrap(user, {
-        awaitingRedirectKey: awaitingRedirectKey,
+        awaitingRedirectKey,
         isGuestActiveStrict, setCurrentUser, setEmailVerificationRequired,
         setGuestMigrationStatus, setLoading,
     })) return;
@@ -92,7 +92,7 @@ export async function bootstrapAuthenticatedSession(
         if (recoveryUid === user.uid) {
             setLoading(false);
             const handled = await resumePersistedGuestMigration(user, isCurrentRun, {
-                guestKey: guestKey,
+                guestKey,
                 isGuestActiveStrict, isGuestRef, migrationDataRef, setIsGuest,
                 setGuestMigrationStatus, setUserData, setSyncing, setSaveError,
                 clearGuestMigrationSyncRecovery,
@@ -103,7 +103,7 @@ export async function bootstrapAuthenticatedSession(
 
         if (wasGuest) {
             await startInitialGuestMigration(user, isCurrentRun, {
-                guestKey: guestKey, isGuestRef, migrationDataRef, setIsGuest,
+                guestKey, isGuestRef, migrationDataRef, setIsGuest,
                 setGuestMigrationStatus, setLoading, setUserData, setSyncing, setSaveError,
                 markGuestMigrationSyncRecovery, clearGuestMigrationSyncRecovery,
             });
