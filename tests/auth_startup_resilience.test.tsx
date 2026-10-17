@@ -94,6 +94,22 @@ describe('PWA & iPhone Startup Resilience Tests', () => {
     await waitFor(() => expect(vi.mocked(refreshHealthConsent).mock.calls.length).toBe(previousChecks + 1));
   });
 
+  test('rehydrates the authenticated owner on reconnect without requiring a reload', async () => {
+    render(<AuthProvider><TestAuthConsumer /></AuthProvider>);
+    await waitFor(() => expect(screen.getByTestId('loading-state').textContent).toBe('READY'));
+
+    const consentChecksBefore = vi.mocked(refreshHealthConsent).mock.calls.length;
+    const cloudReadsBefore = vi.mocked(DB.loadCloudPayload).mock.calls.length;
+    vi.mocked(refreshHealthConsent).mockResolvedValueOnce('active');
+
+    await act(async () => { window.dispatchEvent(new Event('online')); });
+
+    await waitFor(() => expect(vi.mocked(refreshHealthConsent).mock.calls.length).toBe(consentChecksBefore + 1));
+    await waitFor(() => expect(vi.mocked(DB.loadCloudPayload).mock.calls.length).toBeGreaterThan(cloudReadsBefore));
+    expect(useAppStore.getState().dataOwner).toBe('user:test-user-id');
+    expect(useAppStore.getState().localPersistenceBlocked).toBe(false);
+  });
+
   test('rechecks the trusted consent before loading cloud data after reconnect', async () => {
     render(<AuthProvider><TestAuthConsumer /></AuthProvider>);
     await waitFor(() => expect(screen.getByTestId('loading-state').textContent).toBe('READY'));
