@@ -244,6 +244,31 @@ describe('Milestone M2: Guest Bootstrap & Cold Start Lifecycle', () => {
         expect(useAppStore.getState().userData).not.toBeNull();
     });
 
+    it('preserves a revoked guest archive when cleanup fails before a new session can activate', async () => {
+        const { result } = renderHook(() => useAuth(), {
+            wrapper: ({ children }) => <AuthProvider>{children}</AuthProvider>,
+        });
+        await act(async () => { await result.current.loginAsGuest(); });
+        await confirmRealGuestVault();
+        const oldSession = captureSession();
+        const oldId = localStorage.getItem(GUEST_SESSION_KEY);
+        const oldData = useAppStore.getState().userData;
+        expect(oldId).toBeTruthy();
+        expect(oldData).not.toBeNull();
+
+        localStorage.setItem(GUEST_REVOCATION_KEY, 'revoked-in-another-tab');
+        const purge = vi.spyOn(DB, 'purgeAllLocalUserData')
+            .mockRejectedValueOnce(new Error('simulated IndexedDB failure'));
+        await act(async () => { await result.current.loginAsGuest(); });
+
+        expect(purge).toHaveBeenCalledTimes(1);
+        expect(localStorage.getItem(GUEST_REVOCATION_KEY)).toBe('revoked-in-another-tab');
+        expect(localStorage.getItem(GUEST_SESSION_KEY)).toBe(oldId);
+        expect(isCurrentSession(oldSession)).toBe(false);
+        expect(useAppStore.getState().userData).toEqual(oldData);
+        expect(useAppStore.getState().saveError).toContain('pulizia o coordinamento delle sessioni');
+    });
+
     it('M2.2: catalog delta resolvers preserve custom entries and apply overrides', () => {
         const catalog = {
             exercises: [
