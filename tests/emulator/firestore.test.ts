@@ -232,7 +232,7 @@ it('rejects Protocol 1/2 writes even before the account creates its Protocol 3 c
 
 it.each(['anonymous', 'b'])('denies %s all operations on another user and their private collections', async identity => {
     const db = identity === 'anonymous' ? asModularFirestore(env.unauthenticatedContext().firestore()) : asModularFirestore(env.authenticatedContext(identity, { email_verified: true }).firestore());
-    for (const path of ['users/a', 'users/a/history_months/2026-09', 'users/a/nutrition_months/2026-09', 'users/a/telemetry_events/e', 'users/a/telemetry_errors/e', 'users/a/telemetry_anomalies/e']) {
+    for (const path of ['users/a', 'users/a/history_months/2026-09', 'users/a/nutrition_months/2026-09', 'users/a/sync_control/state', 'users/a/telemetry_events/e', 'users/a/telemetry_errors/e', 'users/a/telemetry_anomalies/e']) {
         const ref = doc(db, path);
         await assertFails(getDoc(ref));
         await assertFails(setDoc(ref, {}));
