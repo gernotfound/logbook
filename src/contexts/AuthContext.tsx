@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo, ReactNode } from 'react';
 import { User } from 'firebase/auth';
-import { auth, getRedirectResult, onAuthStateChanged, signOut } from '../lib/firebase';
+import { auth, onAuthStateChanged, signOut } from '../lib/firebase';
 import { DB } from '../lib/db';
 import { isAccountDeletionPending } from '../lib/sync/accountGate';
 import { useAppStore } from '../store/useAppStore';
@@ -17,13 +17,11 @@ import { captureSession, GUEST_REVOCATION_KEY, GUEST_SESSION_KEY, invalidateSess
 import { withGuestLifecycleLock } from '../lib/sync/guestLifecycleLock';
 import {
     BrowserStorageError,
-    readBrowserValue,
     readBrowserValueStrict,
     removeBrowserValue,
-    tryRemoveBrowserValue,
     writeBrowserValue,
 } from '../lib/sync/browserStorage';
-import { safeHardReload } from '../lib/sync/safeReload';
+import { attachAuthRedirectRecovery } from './auth/attachAuthRedirectRecovery';
 import { prepareForReload } from '../lib/sync/reloadBarrier';
 import { prepareAuthenticatedLogout } from './auth/prepareAuthenticatedLogout';
 import { useUnverifiedLocalContinuation } from './auth/useUnverifiedLocalContinuation';
@@ -187,28 +185,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     useEffect(() => {
         let isMounted = true;
-        const handleAuthVisibilityChange = async () => {
-            if (redirectLaunchFailedRef.current) return;
-            if (document.visibilityState !== 'visible' || readBrowserValue(AWAITING_REDIRECT_KEY) !== 'true') return;
-            if (!tryRemoveBrowserValue(AWAITING_REDIRECT_KEY)) {
-                setSaveError('Accesso completato, ma non riesco ad aggiornare lo stato locale del dispositivo. Riprova.');
-                return;
-            }
-            try {
-                await safeHardReload();
-            } catch (error) {
-                console.warn('Reload post-auth bloccato dalla barriera di persistenza:', error);
-                setSaveError(error instanceof Error ? error.message : 'Ricaricamento non sicuro. Riprova.');
-            }
-        };
-        document.addEventListener('visibilitychange', handleAuthVisibilityChange);
-
-        getRedirectResult(auth).then(() => {
-            tryRemoveBrowserValue(AWAITING_REDIRECT_KEY);
-        }).catch(() => {
-            tryRemoveBrowserValue(AWAITING_REDIRECT_KEY);
-            console.error('Ripresa redirect Google non riuscita.');
-            setSaveError("Accesso Google non completato. Riprova.");
+        const detachRedirectRecovery = attachAuthRedirectRecovery({
+            awaitingRedirectKey: AWAITING_REDIRECT_KEY,
+            redirectLaunchFailedRef, setSaveError,
         });
 
         const unsubscribe = onAuthStateChanged(auth, async (user: any) => {
@@ -292,7 +271,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             cancelLocalVaultReadiness('guest');
             invalidateSession();
             unsubscribe();
-            document.removeEventListener('visibilitychange', handleAuthVisibilityChange);
+            detachRedirectRecovery();
             document.removeEventListener('visibilitychange', handleVisibilityChange);
             window.removeEventListener('online', handleVisibilityChange);
             window.removeEventListener('focus', handleVisibilityChange);
