@@ -86,6 +86,22 @@ describe('guest migration restart recovery', () => {
         expect(document.getElementById('app-container')).toBeTruthy();
     });
 
+    it('does not consume guest data without an explicit migration intent', async () => {
+        const { guest } = fixtures();
+        localStorage.setItem(GUEST_KEY, 'true');
+        useAppStore.getState().setUserData(guest);
+        const purge = vi.spyOn(DB, 'purgeAllLocalUserData');
+
+        render(<AuthProvider><App /></AuthProvider>);
+
+        await waitFor(() => expect(useAppStore.getState().saveError).toContain('scegli come gestire i dati locali'));
+        expect(localStorage.getItem(GUEST_KEY)).toBe('true');
+        expect(localStorage.getItem(SYNC_RECOVERY_KEY)).toBeNull();
+        expect((await localRepository.readLocal('guest'))?.data.routines?.map(routine => routine.id))
+            .toContain('guest-routine');
+        expect(purge).not.toHaveBeenCalled();
+    });
+
     it('retains the recovery marker and blocks account data if the authenticated envelope is missing', async () => {
         localStorage.setItem(SYNC_RECOVERY_KEY, user.uid);
         expect(await localRepository.readLocal(user.uid)).toBeUndefined();
