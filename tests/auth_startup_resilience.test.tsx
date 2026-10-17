@@ -133,6 +133,49 @@ describe('PWA & iPhone Startup Resilience Tests', () => {
     expect(vi.mocked(DB.loadCloudPayload).mock.calls.length).toBe(previousCloudReads);
   });
 
+  test('does not associate an unverified email identity with local data from another account', async () => {
+    const foreignData = {
+      profile: { height: '181' }, library: [], routines: [], history: [],
+      nutrition: {}, customFoods: [], activeWorkout: null, nutritionPlanning: {},
+    } as UserData;
+    useAppStore.setState({ userData: foreignData, dataOwner: 'user:account-a' });
+    (auth as any).currentUser = {
+      uid: 'unverified-email', email: 'unverified@example.com', emailVerified: false,
+      providerData: [{ providerId: 'password' }],
+    };
+    const archiveBefore = idbStore['logbook:v2:user:test-user-id'];
+    render(<AuthProvider><TestAuthConsumer /></AuthProvider>);
+    await waitFor(() => expect(screen.getByTestId('loading-state').textContent).toBe('READY'));
+    expect(screen.getByTestId('user-state').textContent).toBe('unverified@example.com');
+    expect(screen.getByTestId('data-state').textContent).toBe('NO_DATA');
+    expect(useAppStore.getState().dataOwner).toBeNull();
+    expect(vi.mocked(refreshHealthConsent)).not.toHaveBeenCalled();
+    expect(DB.loadCloudPayload).not.toHaveBeenCalled();
+    expect(DB.loadUserData).not.toHaveBeenCalled();
+    expect(localStorage.getItem('logbook_authenticated_owner')).toBeNull();
+    expect(idbStore['logbook:v2:user:test-user-id']).toEqual(archiveBefore);
+  });
+
+  test('blocks local ownership and cloud reads when the authenticated owner hint cannot be persisted', async () => {
+    const originalSet = localStorageMock.setItem.getMockImplementation();
+    localStorageMock.setItem.mockImplementation((key: string, value: string) => {
+      if (key === 'logbook_authenticated_owner') throw new DOMException('Storage blocked', 'SecurityError');
+      return originalSet?.(key, value);
+    });
+    try {
+      render(<AuthProvider><TestAuthConsumer /></AuthProvider>);
+      await waitFor(() => expect(screen.getByTestId('loading-state').textContent).toBe('READY'));
+      expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
+      expect(useAppStore.getState().saveError).toContain('Archivio del dispositivo non disponibile');
+      expect(screen.getByTestId('data-state').textContent).toBe('NO_DATA');
+      expect(vi.mocked(refreshHealthConsent)).not.toHaveBeenCalled();
+      expect(DB.loadCloudPayload).not.toHaveBeenCalled();
+      expect(DB.loadUserData).not.toHaveBeenCalled();
+    } finally {
+      if (originalSet) localStorageMock.setItem.mockImplementation(originalSet);
+    }
+  });
+
   test('fences the previous owner while a different authenticated owner is still hydrating', async () => {
     const previousData = {
       profile: { name: 'Account A' },

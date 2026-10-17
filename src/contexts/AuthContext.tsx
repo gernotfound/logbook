@@ -3,7 +3,7 @@ import { User } from 'firebase/auth';
 import { auth, getRedirectResult, onAuthStateChanged, signOut } from '../lib/firebase';
 import { DB } from '../lib/db';
 import { isAccountDeletionPending } from '../lib/sync/accountGate';
-import { beginHealthConsentVerification, refreshHealthConsent } from '../lib/healthConsent';
+import { refreshHealthConsent } from '../lib/healthConsent';
 import { useAppStore } from '../store/useAppStore';
 import { UserData } from '../types';
 import { UserDataSchema } from '../lib/schema';
@@ -17,6 +17,7 @@ import { useEmailAuthActions } from './auth/useEmailAuthActions';
 import { useGoogleAuthActions } from './auth/useGoogleAuthActions';
 import { useGuestMigrationRetry } from './auth/useGuestMigrationRetry';
 import { resumePersistedGuestMigration } from './auth/resumePersistedGuestMigration';
+import { guardAuthenticatedBootstrap } from './auth/guardAuthenticatedBootstrap';
 import { createAuthConsentLifecycleHandlers } from './auth/consentLifecycle';
 import { loadAuthenticatedData } from './auth/loadAuthenticatedData';
 import { migrateGuestAccount } from './auth/migrateGuestAccount';
@@ -38,7 +39,7 @@ import { prepareForReload } from '../lib/sync/reloadBarrier';
 import { watchDeletionRecoveryDeviceRegistration } from '../lib/deletionDeviceRecovery';
 import { RecoveryDiagnosticTracker } from '../lib/deletionRecoveryDiagnostics';
 import { reportError } from '../lib/errorHandler';
-import { clearAuthenticatedOwnerHint, rememberAuthenticatedOwner } from '../lib/sync/authOwnerHint';
+import { clearAuthenticatedOwnerHint } from '../lib/sync/authOwnerHint';
 import { bindGuestMigrationIntentToUser, clearGuestMigrationIntent } from '../lib/auth/guestMigrationIntent';
 import { cancelLocalVaultReadiness, ensureLocalVaultReady } from '../lib/sync/secureArchiveUnlockFlow';
 import { lockVault } from '../lib/sync/secureArchiveSession';
@@ -281,47 +282,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 && authRunRef.current === authRun
                 && (expectedUid ? auth.currentUser?.uid === expectedUid : auth.currentUser === null);
 
-            if (user && user.emailVerified === false) {
-                // Account creation signs users in before they verify their inbox.
-                // Do not claim an owner, hydrate cloud data or transfer guest data
-                // until verification is complete; preserve the guest migration intent.
-                const current = useAppStore.getState();
-                if (!isGuestActiveStrict() && (current.userData !== null || current.localWorkout !== null) && current.dataOwner !== userOwner(user.uid)) {
-                    // Discard only the stale in-memory owner; retain both IndexedDB archives.
-                    useAppStore.setState({ userData: null, dataOwner: null, localWorkout: null });
-                }
-                setGuestMigrationStatus('idle');
-                setCurrentUser(user);
-                setEmailVerificationRequired(true);
-                setLoading(false);
-                return;
-            }
-            if (user) {
-                beginHealthConsentVerification(user.uid);
-                tryRemoveBrowserValue(AWAITING_REDIRECT_KEY);
-                const expectedOwner = userOwner(user.uid);
-                const current = useAppStore.getState();
-                const guestActiveBeforeAuth = isGuestActiveStrict();
-                if (!guestActiveBeforeAuth && (current.userData !== null || current.localWorkout !== null) && current.dataOwner !== expectedOwner) {
-                    useAppStore.setState({ userData: null, dataOwner: null, localWorkout: null });
-                }
-                try {
-                    rememberAuthenticatedOwner(user.uid);
-                } catch (error) {
-                    console.error('Owner autenticato locale non persistibile:', error);
-                    useAppStore.setState({
-                        userData: null,
-                        dataOwner: null,
-                        localWorkout: null,
-                        localPersistenceBlocked: true,
-                        syncHealth: 'failed',
-                        saveError: 'Archivio del dispositivo non disponibile. Riprova prima di continuare.',
-                    });
-                    setCurrentUser(user);
-                    setLoading(false);
-                    return;
-                }
-            }
+            if (user && guardAuthenticatedBootstrap(user, {
+                awaitingRedirectKey: AWAITING_REDIRECT_KEY,
+                isGuestActiveStrict, setCurrentUser, setEmailVerificationRequired,
+                setGuestMigrationStatus, setLoading,
+            })) return;
             // A deletion receipt is independently recoverable even while the
             // ciphertext is locked. Do not require the secret of an account
             // already deleted on the server just to finalize its local purge.
