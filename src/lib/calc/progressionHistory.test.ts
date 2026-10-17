@@ -51,7 +51,7 @@ describe('historical session order for the progression report', () => {
             session('w-' + i, '2026-09-' + String(1 + (i % 29)).padStart(2, '0'), 1000 + i)
         ));
         const originalOrder = history
-            .filter(item => item.id !== current.id && item.date < current.date)
+            .filter(item => item.id !== current.id && (item.date ?? '') < (current.date ?? ''))
             .sort((a, b) => (a.date ?? '').localeCompare(b.date ?? '')
                 || ((a.globalStartTime ?? 0) - (b.globalStartTime ?? 0)));
         expect(orderedEarlierSessions(history, current).map(item => item.id))
