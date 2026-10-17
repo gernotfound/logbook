@@ -39,7 +39,7 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
     const menuTriggerRef = React.useRef<HTMLButtonElement>(null);
     const rirTriggerRef = React.useRef<HTMLButtonElement>(null);
     const firstRirOptionRef = React.useRef<HTMLButtonElement>(null);
-    const hasRir = Number.isInteger(s.rir) && s.rir >= 0 && s.rir <= 10;
+    const hasRir = typeof s.rir === 'number' && Number.isInteger(s.rir) && s.rir >= 0 && s.rir <= 10;
 
     const handleRemoveSetSafely = async () => {
         if (sessionSetHasMeaningfulData(s)) {
@@ -346,6 +346,7 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
                                             onChange={val => {
                                                 const parsed = Number(val);
                                                 onUpdateSpecialSet(
+                                                    exIndex,
                                                     s.id,
                                                     'segments',
                                                     segmentIndex,
