@@ -106,7 +106,7 @@ describe('PWA & iPhone Startup Resilience Tests', () => {
 
     await waitFor(() => expect(vi.mocked(refreshHealthConsent).mock.calls.length).toBe(consentChecksBefore + 1));
     await waitFor(() => expect(vi.mocked(DB.loadCloudPayload).mock.calls.length).toBeGreaterThan(cloudReadsBefore));
-    expect(useAppStore.getState().dataOwner).toBe('user:test-user-id');
+    expect(screen.getByTestId('user-state').textContent).toBe('test@example.com');
     expect(useAppStore.getState().localPersistenceBlocked).toBe(false);
   });
 
