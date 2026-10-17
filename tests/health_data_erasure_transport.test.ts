@@ -59,6 +59,27 @@ describe('trusted health data erasure client proof', () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  it('preserves the server error without accepting a failed POST as a successful erasure', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => response({ error: 'Backend indisponibile.' }, 503)));
+    await expect(requestHealthDataErasure(state.currentUser as never)).rejects.toThrow('Backend indisponibile.');
+    expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/api/health-data-erasure'),
+      expect.objectContaining({ method: 'POST', cache: 'no-store' }));
+  });
+
+  it('rejects an unavailable proof GET before parsing an untrusted error body', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('not-json', { status: 503 })));
+    await expect(assertCurrentHealthDataErasureCompleted('owner')).rejects.toThrow('Non è stato possibile verificare');
+  });
+
+  it('never sends a request if the owner session expires during token retrieval', async () => {
+    state.currentUser.getIdToken.mockImplementationOnce(async () => {
+      state.current = false;
+      return 'valid-token';
+    });
+    await expect(requestHealthDataErasure(state.currentUser as never)).rejects.toThrow('Sessione cambiata');
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it('does not treat a 202 pending server response as complete', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => response({
       status: 'deleting', complete: false, localPurgeAuthorized: false,
