@@ -3,7 +3,7 @@ import path from 'node:path';
 
 const roots = ['src/hooks', 'src/components'];
 const allowedSnapshotSelectors = new Map([
-  ['src/hooks/useSettings.ts', 1], // Bulk JSON import only; profile edits use DomainOperation.
+  ['src/hooks/useSettingsTransfers.ts', 1], // Bulk JSON import only; profile edits use DomainOperation.
 ]);
 
 const files = [];
