@@ -1,8 +1,20 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { runInNewContext } from 'node:vm';
 import { GET } from '../api/legacy-service-worker';
 
 describe('legacy Vercel service-worker retirement endpoint', () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it('does not serve a Service Worker from the isolated Test backend', async () => {
+    vi.stubEnv('FIREBASE_ADMIN_AUTH_MODE', 'vercel-oidc');
+    const response = await GET();
+    expect(response.status).toBe(404);
+    expect(response.headers.get('content-type')).not.toContain('application/javascript');
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(response.headers.has('service-worker-allowed')).toBe(false);
+    expect(await response.text()).toBe('Not Found');
+  });
+
   it('retires the old worker without forcing navigation or touching user-data storage', async () => {
     const response = await GET();
 
