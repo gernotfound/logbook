@@ -10,6 +10,7 @@ import { refreshHealthConsent, suspendHealthConsentCloudAccess } from '../src/li
 import * as localRepository from '../src/lib/sync/localRepository';
 import { createAndMigrateVault } from '../src/lib/sync/secureArchiveMigration';
 import { lockAllVaults } from '../src/lib/sync/secureArchiveSession';
+import { UserDataSchema } from '../src/lib/schema';
 import type { UserData } from '../src/types';
 
 import { idbStore, localStorageMock } from './setup';
@@ -108,6 +109,39 @@ describe('PWA & iPhone Startup Resilience Tests', () => {
     await waitFor(() => expect(vi.mocked(DB.loadCloudPayload).mock.calls.length).toBeGreaterThan(cloudReadsBefore));
     expect(screen.getByTestId('user-state').textContent).toBe('test@example.com');
     expect(useAppStore.getState().localPersistenceBlocked).toBe(false);
+  });
+
+  test('delivers a durable offline journal on the online event without a second user edit or reload', async () => {
+    const owner = 'user:test-user-id';
+    const initial = UserDataSchema.parse({ profile: { height: '170' } }) as unknown as UserData;
+    const changed = UserDataSchema.parse({ ...initial, profile: { ...initial.profile, height: '171' } }) as unknown as UserData;
+    await localRepository.initializeLocal(owner, initial);
+
+    const network = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    await localRepository.commitLocal(owner, changed, initial);
+    expect((await localRepository.readLocal(owner))?.pending.length).toBeGreaterThan(0);
+
+    vi.mocked(DB.saveUserData).mockImplementationOnce(async () => {
+      const envelope = await localRepository.readLocal(owner);
+      if (!envelope?.pending.length) throw new Error('Missing durable offline journal');
+      const lastSequence = Math.max(...envelope.pending.map(item => item.seq));
+      await localRepository.acknowledgeThrough(owner, lastSequence, changed);
+      return { ok: true, status: 'synced' };
+    });
+    useAppStore.setState({ userData: changed, dataOwner: owner, syncHealth: 'local-pending', syncing: false });
+
+    network.mockReturnValue(true);
+    window.dispatchEvent(new Event('online'));
+
+    await waitFor(() => expect(vi.mocked(DB.saveUserData)).toHaveBeenCalledOnce());
+    try {
+      await waitFor(async () => expect((await localRepository.readLocal(owner))?.pending).toHaveLength(0));
+      expect((await localRepository.readLocal(owner))?.data.profile?.height).toBe('171');
+      expect(useAppStore.getState().syncHealth).toBe('synced');
+      expect(useAppStore.getState().localPersistenceBlocked).toBe(false);
+    } finally {
+      network.mockRestore();
+    }
   });
 
   test('rechecks the trusted consent before loading cloud data after reconnect', async () => {
