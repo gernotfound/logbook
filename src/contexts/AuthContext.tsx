@@ -3,7 +3,6 @@ import { User } from 'firebase/auth';
 import { auth, getRedirectResult, onAuthStateChanged, signOut } from '../lib/firebase';
 import { DB } from '../lib/db';
 import { isAccountDeletionPending } from '../lib/sync/accountGate';
-import { refreshHealthConsent } from '../lib/healthConsent';
 import { useAppStore } from '../store/useAppStore';
 import { UserData } from '../types';
 import { AuthContext } from './AuthContextDef';
@@ -12,9 +11,6 @@ import { useEmailAuthActions } from './auth/useEmailAuthActions';
 import { useGoogleAuthActions } from './auth/useGoogleAuthActions';
 import { useGuestMigrationRetry } from './auth/useGuestMigrationRetry';
 import { GUEST_KEY, useGuestLogin } from './auth/useGuestLogin';
-import { resumePersistedGuestMigration } from './auth/resumePersistedGuestMigration';
-import { startInitialGuestMigration } from './auth/startInitialGuestMigration';
-import { guardAuthenticatedBootstrap } from './auth/guardAuthenticatedBootstrap';
 import { createAuthConsentLifecycleHandlers } from './auth/consentLifecycle';
 import { loadAuthenticatedData } from './auth/loadAuthenticatedData';
 import { captureSession, GUEST_REVOCATION_KEY, GUEST_SESSION_KEY, invalidateSession, isActiveGuestSession, isCurrentSession, revokeGuestSession, userOwner } from '../lib/sync/session';
@@ -30,11 +26,12 @@ import {
 import { safeHardReload } from '../lib/sync/safeReload';
 import { prepareForReload } from '../lib/sync/reloadBarrier';
 import { prepareAuthenticatedLogout } from './auth/prepareAuthenticatedLogout';
+import { bootstrapAuthenticatedSession } from './auth/bootstrapAuthenticatedSession';
 import { watchDeletionRecoveryDeviceRegistration } from '../lib/deletionDeviceRecovery';
 import { RecoveryDiagnosticTracker } from '../lib/deletionRecoveryDiagnostics';
 import { reportError } from '../lib/errorHandler';
 import { clearAuthenticatedOwnerHint } from '../lib/sync/authOwnerHint';
-import { cancelLocalVaultReadiness, ensureLocalVaultReady } from '../lib/sync/secureArchiveUnlockFlow';
+import { cancelLocalVaultReadiness } from '../lib/sync/secureArchiveUnlockFlow';
 import { lockVault } from '../lib/sync/secureArchiveSession';
 
 const GUEST_MIGRATION_SYNC_RECOVERY_KEY = 'logbook_guest_migration_sync_recovery';
@@ -274,72 +271,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 && authRunRef.current === authRun
                 && (expectedUid ? auth.currentUser?.uid === expectedUid : auth.currentUser === null);
 
-            if (user && guardAuthenticatedBootstrap(user, {
-                awaitingRedirectKey: AWAITING_REDIRECT_KEY,
-                isGuestActiveStrict, setCurrentUser, setEmailVerificationRequired,
-                setGuestMigrationStatus, setLoading,
-            })) return;
-            // A deletion receipt is independently recoverable even while the
-            // ciphertext is locked. Do not require the secret of an account
-            // already deleted on the server just to finalize its local purge.
-            if (user && isAccountDeletionPending(userOwner(user.uid))) {
-                useAppStore.getState().cancelPendingSyncs();
-                useAppStore.setState({ userData: null, dataOwner: null, localWorkout: null });
-                setCurrentUser(user);
-                setLoading(false);
-                return;
-            }
-            // Consent refresh itself performs a durable IndexedDB consent-epoch
-            // update. Unlock BEFORE it, not merely before later hydration/sync.
             if (user) {
-                await ensureLocalVaultReady(userOwner(user.uid));
-                if (!isCurrentRun()) return;
-            }
-            // Expose identity only after the local archive can be safely read.
-            if (user) setEmailVerificationRequired(false);
-            setCurrentUser(user);
-            if (user) {
-                // Hydration/migration and all cloud business writes must wait for
-                // this check; an offline/failed check remains fail-closed.
-                const consentStatus = await refreshHealthConsent(user);
-                if (!isCurrentRun()) return;
-                if (consentStatus !== 'active') {
-                    // No regular hydration/migration/replica registration after a
-                    // withdrawal, even when a local cached envelope exists.
-                    useAppStore.getState().cancelPendingSyncs();
-                    setLoading(false);
-                    return;
-                }
-            }
-
-            if (user) {
-                const wasGuest = isGuestActiveStrict();
-                setEmailVerificationRequired(false);
-                const recoveryUid = readGuestMigrationRecoveryStrict();
-
-                if (recoveryUid === user.uid) {
-                    setLoading(false);
-                    const handled = await resumePersistedGuestMigration(user, isCurrentRun, {
-                        guestKey: GUEST_KEY,
-                        isGuestActiveStrict, isGuestRef, migrationDataRef, setIsGuest,
-                        setGuestMigrationStatus, setUserData, setSyncing, setSaveError,
-                        clearGuestMigrationSyncRecovery,
-                    });
-                    if (!isCurrentRun()) return;
-                    if (handled) return;
-                }
-
-                if (wasGuest) {
-                    await startInitialGuestMigration(user, isCurrentRun, {
-                        guestKey: GUEST_KEY, isGuestRef, migrationDataRef, setIsGuest,
-                        setGuestMigrationStatus, setLoading, setUserData, setSyncing, setSaveError,
-                        markGuestMigrationSyncRecovery, clearGuestMigrationSyncRecovery,
-                    });
-                } else {
-                    setGuestMigrationStatus('idle');
-                    await loadData(user);
-                    if (isCurrentRun()) setLoading(false);
-                }
+                await bootstrapAuthenticatedSession(user, isCurrentRun, {
+                    awaitingRedirectKey: AWAITING_REDIRECT_KEY,
+                    guestKey: GUEST_KEY, isGuestActiveStrict,
+                    readGuestMigrationRecoveryStrict, isGuestRef, migrationDataRef,
+                    setIsGuest, setCurrentUser, setEmailVerificationRequired,
+                    setGuestMigrationStatus, setLoading, setUserData, setSyncing,
+                    setSaveError, markGuestMigrationSyncRecovery,
+                    clearGuestMigrationSyncRecovery, loadData,
+                });
             } else {
                 setCurrentUser(null);
                 setEmailVerificationRequired(false);
