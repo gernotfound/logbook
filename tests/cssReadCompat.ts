@@ -9,6 +9,7 @@ if (!compatFs.__logbookCssReadCompatInstalled) {
   const cssEntrypoints = new Set([
     path.resolve(process.cwd(), 'src/styles/global.css'),
     path.resolve(process.cwd(), 'src/components/Training/training.css'),
+    path.resolve(process.cwd(), 'src/components/Data/data.css'),
   ]);
 
   function expandLocalCssImports(filePath: string, visited = new Set<string>()): string {
@@ -27,8 +28,8 @@ if (!compatFs.__logbookCssReadCompatInstalled) {
     );
   }
 
-  // UI tests inspect both the global and Training CSS entrypoints as text.
-  // Expand local imports so existing assertions still exercise the effective CSS.
+  // UI tests inspect the global, Training and Data stylesheet entrypoints as text.
+  // Expand local imports so existing assertions exercise the effective CSS.
   fs.readFileSync = ((filePath: any, options?: any) => {
     const encoding = typeof options === 'string' ? options : options?.encoding;
     if (
