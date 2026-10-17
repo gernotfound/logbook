@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo, ReactNode } from 'react';
 import { User } from 'firebase/auth';
-import { auth, getDb, waitForPendingWrites, provider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged, signOut } from '../lib/firebase';
+import { auth, getDb, waitForPendingWrites, getRedirectResult, onAuthStateChanged, signOut } from '../lib/firebase';
 import { DB } from '../lib/db';
 import { isAccountDeletionPending } from '../lib/sync/accountGate';
 import { beginHealthConsentVerification, refreshHealthConsent, isHealthConsentWritable, suspendHealthConsentCloudAccess } from '../lib/healthConsent';
@@ -14,6 +14,7 @@ import { resolveEffectiveExercises, resolveEffectiveFoods } from '../lib/catalog
 import { draftRegistry } from '../lib/utils/draftRegistry';
 import { getResolvedDefaultUserData } from './auth/defaultUserData';
 import { useEmailAuthActions } from './auth/useEmailAuthActions';
+import { useGoogleAuthActions } from './auth/useGoogleAuthActions';
 import { loadAuthenticatedData } from './auth/loadAuthenticatedData';
 import { migrateGuestAccount } from './auth/migrateGuestAccount';
 import { isLegalConsentRequiredError, replicateJournal } from '../lib/sync/replicateJournal';
@@ -31,7 +32,6 @@ import {
 } from '../lib/sync/browserStorage';
 import { safeHardReload } from '../lib/sync/safeReload';
 import { prepareForReload } from '../lib/sync/reloadBarrier';
-import { classifyGooglePopupFailure } from './auth/googlePopup';
 import { watchDeletionRecoveryDeviceRegistration } from '../lib/deletionDeviceRecovery';
 import { RecoveryDiagnosticTracker } from '../lib/deletionRecoveryDiagnostics';
 import { reportError } from '../lib/errorHandler';
@@ -147,24 +147,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             return blockUnreadableLifecycleStorage(error);
         }
     }, [blockUnreadableLifecycleStorage]);
-
-    const startGoogleRedirect = useCallback(async () => {
-        redirectLaunchFailedRef.current = false;
-        try {
-            writeBrowserValue(AWAITING_REDIRECT_KEY, 'true');
-            await signInWithRedirect(auth, provider);
-        } catch (error) {
-            redirectLaunchFailedRef.current = true;
-            if (!tryRemoveBrowserValue(AWAITING_REDIRECT_KEY)) {
-                try {
-                    writeBrowserValue(AWAITING_REDIRECT_KEY, 'failed');
-                } catch {
-                    console.error('Impossibile rendere non attivo lo stato locale dopo un redirect Google non avviato.');
-                }
-            }
-            throw error;
-        }
-    }, []);
 
     const loadData = useCallback(async (user: User) => {
         await loadAuthenticatedData({
@@ -630,36 +612,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         };
     }, [isGuestActiveStrict, loadData, readGuestMigrationRecoveryStrict, setSyncing, setUserData, setSaveError]);
 
-    // Login con Google (dalla schermata di login, nessun guest precedente)
-    const login = useCallback(async (guestPolicy?: GuestMigrationPolicy) => {
-        setSaveError(null);
-        if (isGuestActiveStrict()) {
-            if (!guestPolicy) throw new Error('Scelta di trasferimento guest richiesta.');
-            beginGuestMigrationIntent(guestPolicy, 'google');
-        }
-        try {
-            await signInWithPopup(auth, provider);
-        } catch (error: any) {
-            const failure = classifyGooglePopupFailure(error);
-            if (failure === 'redirect') {
-                try {
-                    await startGoogleRedirect();
-                } catch {
-                    console.error('Accesso Google tramite redirect non riuscito.');
-                    setSaveError("Accesso fallito. Riprova.");
-                }
-            } else if (failure === 'cancelled') {
-                try { clearGuestMigrationIntent(); } catch { /* best effort: no successful auth occurred */ }
-            } else if (failure === 'network') {
-                try { clearGuestMigrationIntent(); } catch { /* best effort: no successful auth occurred */ }
-                setSaveError("Connessione non disponibile. Riprova quando sei online.");
-            } else if (failure === 'error') {
-                try { clearGuestMigrationIntent(); } catch { /* best effort */ }
-                console.error('Accesso Google non riuscito.');
-                setSaveError('Accesso Google non riuscito. Riprova.');
-            }
-        }
-    }, [isGuestActiveStrict, setSaveError, startGoogleRedirect]);
+    const { login, linkGoogleAccount } = useGoogleAuthActions({
+        isGuestActiveStrict, setSaveError, migrationDataRef, redirectLaunchFailedRef,
+    });
 
     const { loginWithEmail, registerWithEmail, resendEmailVerification, refreshEmailVerification } = useEmailAuthActions({
         isGuestActiveStrict, setSaveError, setEmailVerificationRequired, migrationDataRef,
@@ -748,44 +703,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             await loginAsGuest();
         }
     }, [isGuestActiveStrict, loginAsGuest]);
-
-    // Collega account Google: migra i dati locali su Firestore
-    const linkGoogleAccount = useCallback(async (guestPolicy?: GuestMigrationPolicy) => {
-        setSaveError(null);
-        migrationDataRef.current = useAppStore.getState().userData;
-        if (isGuestActiveStrict()) {
-            if (!guestPolicy) throw new Error('Scelta di trasferimento guest richiesta.');
-            beginGuestMigrationIntent(guestPolicy, 'google');
-        }
-        try {
-            await signInWithPopup(auth, provider);
-        } catch (error: any) {
-            const failure = classifyGooglePopupFailure(error);
-            if (failure === 'redirect') {
-                try {
-                    await startGoogleRedirect();
-                } catch {
-                    console.error('Collegamento Google tramite redirect non riuscito.');
-                    setSaveError("Accesso fallito. Riprova.");
-                }
-                return;
-            }
-            if (failure === 'cancelled') {
-                try { clearGuestMigrationIntent(); } catch { /* best effort */ }
-                return;
-            }
-            if (failure === 'network') {
-                try { clearGuestMigrationIntent(); } catch { /* best effort */ }
-                setSaveError("Connessione non disponibile. Riprova quando sei online.");
-                return;
-            }
-            if (failure === 'error') {
-                try { clearGuestMigrationIntent(); } catch { /* best effort */ }
-                console.error('Collegamento account Google non riuscito.');
-                setSaveError("Collegamento fallito. Riprova.");
-            }
-        }
-    }, [isGuestActiveStrict, setSaveError, startGoogleRedirect]);
 
     const retryGuestMigration = useCallback(async (policy?: GuestMigrationPolicy) => {
         setSaveError(null);
