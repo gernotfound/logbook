@@ -132,6 +132,32 @@ describe('account deletion recent authentication', () => {
     expect(result.current.deletionPhase).toBe('idle');
   });
 
+  it('keeps data-only erasure disabled while an account deletion is in progress', async () => {
+    reauth.run.mockResolvedValue('reauthenticated');
+    let completeDeletion: ((value: { status: 'complete' }) => void) | undefined;
+    vi.spyOn(DB, 'deleteAccount').mockImplementation(() => new Promise(resolve => {
+      completeDeletion = resolve;
+    }));
+    const { result } = renderHook(() => useSettings());
+    let pending!: Promise<void>;
+    act(() => { pending = result.current.handleDeleteAccount(); });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(result.current.deletingAccount).toBe(true);
+    const confirmations = dialog.showConfirm.mock.calls.length;
+    await act(async () => result.current.handleDeleteHealthData());
+    expect(dialog.showConfirm).toHaveBeenCalledTimes(confirmations);
+    expect(result.current.erasingHealthData).toBe(false);
+    await act(async () => {
+      completeDeletion?.({ status: 'complete' });
+      await pending;
+    });
+    expect(result.current.deletingAccount).toBe(false);
+  });
+
   it('cancels safely when the password prompt is dismissed', async () => {
     dialog.showPasswordPrompt.mockResolvedValue(null);
     reauth.run.mockResolvedValue('password-required');
