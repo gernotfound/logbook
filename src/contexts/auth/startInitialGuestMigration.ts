@@ -36,7 +36,7 @@ export async function startInitialGuestMigration(
     setGuestMigrationStatus('pending');
     setLoading(false);
     draftRegistry.flushAll();
-     const guestData = migrationDataRef.current || useAppStore.getState().userData;
+    const guestData = migrationDataRef.current || useAppStore.getState().userData;
     let policy: GuestMigrationPolicy;
     let intentId: string;
     try {
@@ -50,7 +50,7 @@ export async function startInitialGuestMigration(
         setSaveError('Non è possibile determinare il tentativo di trasferimento. Avvia di nuovo l’accesso e scegli come gestire i dati locali.');
         return;
     }
-     try {
+    try {
         const migrationResult = await migrateGuestAccount({
             user,
             guestData,
@@ -69,8 +69,8 @@ export async function startInitialGuestMigration(
                 migrationDataRef.current = null;
             },
         });
-         if (!isCurrentRun()) return;
-         if (migrationResult.status === 'rejected' || migrationResult.status === 'failed') {
+        if (!isCurrentRun()) return;
+        if (migrationResult.status === 'rejected' || migrationResult.status === 'failed') {
             setGuestMigrationStatus('failed');
             setSaveError('I dati sono salvati su questo dispositivo, ma la sincronizzazione dell’account non è stata completata. Riprova.');
         } else {
