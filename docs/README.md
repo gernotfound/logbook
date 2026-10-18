@@ -68,4 +68,4 @@ Il [pacchetto compliance](compliance/README.md) contiene le decisioni aperte e l
 
 ## Attività pianificate
 
-Le attività future si gestiscono in [GitHub Issues](https://github.com/gernotfound/logbook/issues), non in file `ToDo.md` della root. L'[ambiente Firebase Test isolato](https://github.com/gernotfound/logbook/issues/426) è una proposta operativa da verificare; la presenza dell'issue non prova che l'ambiente esista.
+Le attività future si gestiscono in [GitHub Issues](https://github.com/gernotfound/logbook/issues), non in file `ToDo.md` della root. L'ambiente Firebase/Vercel Test separato è stato **dismesso il 18 ottobre 2026**: la [issue #426](https://github.com/gernotfound/logbook/issues/426) è chiusa come non pianificata. Restano attivi i test locali/CI; non programmare collaudi cloud distruttivi su Production.

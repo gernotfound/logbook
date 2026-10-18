@@ -12,4 +12,4 @@ Supporta backup, importazione ed esportazione dei dati.
 
 **Documentazione:** [Indice completo](docs/README.md) · [Regole AI](AGENTS.md) · [Contratti specialistici](.agents/rules/)
 
-**Lavori da pianificare e seguire:** [GitHub Issues](https://github.com/gernotfound/logbook/issues) (es. [ambiente Firebase Test isolato](https://github.com/gernotfound/logbook/issues/426)).
+**Lavori da pianificare e seguire:** [GitHub Issues](https://github.com/gernotfound/logbook/issues). I collaudi automatici si svolgono con fixture locali, emulatori e CI; non è configurato un ambiente Firebase/Vercel Test separato.
