@@ -40,7 +40,7 @@ function parsePersistedActiveWorkout(value: unknown) {
     return parsed;
 }
 
-export class ConcurrentCloudReadError extends Error {
+class ConcurrentCloudReadError extends Error {
     readonly code = 'concurrent-cloud-read';
     constructor() {
         super('Il cloud è cambiato durante la lettura: snapshot non utilizzabile per il checkpoint. Riprova la sincronizzazione.');
