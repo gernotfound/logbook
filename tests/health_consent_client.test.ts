@@ -805,3 +805,64 @@ describe('consent responses across authenticated owner changes', () => {
     expect(localStorage.getItem('logbook:v2:user:' + uid + ':health-consent-generation')).toBeNull();
   });
 });
+
+describe('no trusted consent POST after an authenticated owner switch', () => {
+  it('never reaccepts for account A when its GET finishes after login to B', async () => {
+    const uid = 'reaccept-switch-' + crypto.randomUUID();
+    const actor = user(uid);
+    (auth as { currentUser: unknown }).currentUser = actor;
+    localStorage.setItem(key(uid), 'withdrawn');
+    let resolveRead!: (response: Response) => void;
+    const request = vi.fn(() => new Promise<Response>(resolve => { resolveRead = resolve; }));
+    vi.stubGlobal('fetch', request);
+    const reaccepting = reacceptHealthConsent(actor, accepted);
+    await vi.waitFor(() => expect(request).toHaveBeenCalledOnce());
+    (auth as { currentUser: unknown }).currentUser = user('other-account');
+    resolveRead(Response.json({ status: 'withdrawn', revision: 1 }));
+    await expect(reaccepting).rejects.toThrow('Sessione cambiata');
+    expect(localStorage.getItem(key(uid))).toBe('withdrawn');
+    expect(request).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not send an old withdrawal after Firebase token acquisition races with login B', async () => {
+    const uid = 'withdraw-token-switch-' + crypto.randomUUID();
+    let releaseToken!: (token: string) => void;
+    const actor = user(uid);
+    const normalGetIdToken = actor.getIdToken;
+    actor.getIdToken = vi.fn()
+      .mockImplementationOnce(() => normalGetIdToken())
+      .mockImplementationOnce(() => new Promise<string>(resolve => { releaseToken = resolve; }));
+    (auth as { currentUser: unknown }).currentUser = actor;
+    const request = vi.fn(async () => Response.json({ status: 'active', revision: 1 }));
+    vi.stubGlobal('fetch', request);
+    beginHealthConsentVerification(uid);
+    expect(await refreshHealthConsent(actor)).toBe('active');
+    const withdrawal = withdrawHealthConsent(actor);
+    await vi.waitFor(() => expect(actor.getIdToken).toHaveBeenCalledTimes(2));
+    (auth as { currentUser: unknown }).currentUser = user('other-account');
+    releaseToken('old-valid-token');
+    await expect(withdrawal).rejects.toThrow('Sessione cambiata');
+    expect(localStorage.getItem(key(uid))).toBe('pending:1');
+    expect(request).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not reconfirm a stale withdrawal after its server GET races with login B', async () => {
+    const uid = 'reconfirm-switch-' + crypto.randomUUID();
+    const actor = user(uid);
+    (auth as { currentUser: unknown }).currentUser = actor;
+    localStorage.setItem(key(uid), 'pending:1');
+    let resolveRead!: (response: Response) => void;
+    const request = vi.fn()
+      .mockResolvedValueOnce(Response.json({ status: 'active', revision: 2, acceptedAt: '2026-10-12T00:00:00.000Z' }))
+      .mockImplementationOnce(() => new Promise<Response>(resolve => { resolveRead = resolve; }));
+    vi.stubGlobal('fetch', request);
+    expect(await refreshHealthConsent(actor)).toBe('stale-request');
+    const reconfirming = reconfirmStaleHealthWithdrawal(actor);
+    await vi.waitFor(() => expect(request).toHaveBeenCalledTimes(2));
+    (auth as { currentUser: unknown }).currentUser = user('other-account');
+    resolveRead(Response.json({ status: 'active', revision: 2 }));
+    await expect(reconfirming).rejects.toThrow('Sessione cambiata');
+    expect(localStorage.getItem(key(uid))).toBe('pending:1');
+    expect(request).toHaveBeenCalledTimes(2);
+  });
+});
