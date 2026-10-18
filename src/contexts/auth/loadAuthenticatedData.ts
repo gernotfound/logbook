@@ -63,7 +63,7 @@ export async function loadAuthenticatedData({
                 saveError: 'Protezione cloud non registrabile. I dati locali devono essere preservati.' });
             return false;
         }
-        if (isCurrent()) useAppStore.setState({ syncHealth: 'failed' });
+        if (isCurrent()) useAppStore.setState({ syncHealth: 'failed', cloudIntegrityBlocked: true });
         return isCurrent();
     };
 
@@ -81,6 +81,7 @@ export async function loadAuthenticatedData({
                 userData: localEnvelope.data,
                 dataOwner: expectedOwner,
                 localWorkout,
+                cloudIntegrityBlocked: Boolean(localEnvelope.cloudIntegrityFence),
             });
             markTabSnapshotClean(session, localEnvelope.data);
         } else {
@@ -88,7 +89,7 @@ export async function loadAuthenticatedData({
             // Ownerless memory is untrusted, not an account-creation default.
             // Without a matching durable envelope it must not survive into B.
             if ((current.userData !== null || current.localWorkout !== null) && current.dataOwner !== expectedOwner) {
-                useAppStore.setState({ userData: null, dataOwner: null, localWorkout: null });
+                useAppStore.setState({ userData: null, dataOwner: null, localWorkout: null, cloudIntegrityBlocked: false });
             }
         }
     } catch (error) {
@@ -160,6 +161,7 @@ export async function loadAuthenticatedData({
                 useAppStore.setState({
                     userData: hydratedEnv.data, dataOwner: expectedOwner,
                     localWorkout: hydratedWorkout,
+                    cloudIntegrityBlocked: false,
                     syncHealth: hydratedEnv.pending.length ? 'local-pending' : 'synced',
                     saveError: hydratedEnv.pending.length ? 'Salvato localmente. Sincronizzazione in attesa.' : null,
                 });
@@ -201,7 +203,8 @@ export async function loadAuthenticatedData({
             if (!isCurrent()) return 'blocked';
             if (stillAbsent) {
                 const localWorkout = getInitialLocalWorkout(expectedOwner, stillAbsent.data.activeWorkout ?? null, stillAbsent.data.history, stillAbsent.lastClosedWorkoutId, stillAbsent.closedWorkoutIds);
-                useAppStore.setState({ userData: stillAbsent.data, dataOwner: expectedOwner, localWorkout });
+                useAppStore.setState({ userData: stillAbsent.data, dataOwner: expectedOwner, localWorkout,
+                    cloudIntegrityBlocked: Boolean(stillAbsent.cloudIntegrityFence) });
                 markTabSnapshotClean(session, stillAbsent.data);
                 return 'blocked';
             }
