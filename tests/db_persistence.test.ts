@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { getDoc, getDocs, writeBatch } from 'firebase/firestore';
+import { getDoc, getDocFromServer, getDocs, writeBatch } from 'firebase/firestore';
 
 vi.unmock('../src/lib/db');
 
@@ -89,7 +89,7 @@ describe('DB Persistence for Training Cycles and Planning', () => {
             activeCycleId: 'cycle_loaded'
         };
 
-        vi.mocked(getDoc).mockResolvedValueOnce({
+        vi.mocked(getDocFromServer).mockResolvedValueOnce({
             exists: () => true,
             data: () => mockFirestoreDoc
         } as any);
@@ -112,7 +112,7 @@ describe('DB Persistence for Training Cycles and Planning', () => {
     });
 
     it('DB.loadUserData defaults trainingCycles to [] and activeCycleId to null if absent', async () => {
-        vi.mocked(getDoc).mockResolvedValueOnce({
+        vi.mocked(getDocFromServer).mockResolvedValueOnce({
             exists: () => true,
             data: () => ({
                 profile: { name: 'Mario' },
