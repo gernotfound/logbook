@@ -103,6 +103,7 @@ async function drain(session: ReturnType<typeof captureSession>, deliveryState: 
         let envelope = await readLocal(session.owner);
         if (!current()) throw new Error('Sessione cambiata');
         if (!envelope) throw new Error('Archivio locale non disponibile');
+        if (envelope.cloudIntegrityFence) throw new ReplicaFencedError('Divergenza cloud rilevata durante il replay: journal preservato.');
         if (!envelope.pending?.length) return;
         if ((envelope.consentRevision ?? 0) !== getVerifiedHealthConsentRevision(session.owner.slice(5))) {
             throw new ReplicaFencedError('Journal locale precedente al nuovo consenso: esporta il backup prima di procedere.');
@@ -120,6 +121,7 @@ async function drain(session: ReturnType<typeof captureSession>, deliveryState: 
         envelope = await ensureBoundedPendingSequences(session.owner, replica.slot);
         if (!current()) throw new Error('Sessione cambiata');
         if (!envelope) throw new Error('Archivio locale non disponibile');
+        if (envelope.cloudIntegrityFence) throw new ReplicaFencedError('Divergenza cloud rilevata durante il replay: journal preservato.');
         if (!envelope.pending?.length) return;
         if (!envelope.replica || envelope.actorId !== envelope.replica.slot) {
             throw new ReplicaFencedError('Replica cambiata durante la preparazione del journal.');
