@@ -120,9 +120,15 @@ export async function migrateGuestAccount({ user, guestData, policy, setUserData
         // guest intentionally skips the transfer. Hydration is not cloud ACK.
         const finishWithoutGuestMerge = async (hydrated: LocalEnvelope): Promise<SyncResult> => {
             markLocalReady();
-            const replayResult = await replicateJournal(userOwner(user.uid));
-            assertCurrent();
             const { readLocal } = await import('../../lib/sync/localRepository');
+            const beforeReplay = await readLocal(user.uid);
+            assertCurrent();
+            if (!beforeReplay) throw new Error('Archivio autenticato non disponibile dopo hydration.');
+            // A consent check cannot turn an empty journal into fake pending.
+            const replayResult: SyncResult = beforeReplay.pending.length
+                ? await replicateJournal(userOwner(user.uid))
+                : { ok: true, status: 'synced' };
+            assertCurrent();
             const durable = await readLocal(user.uid);
             assertCurrent();
             if (!durable) throw new Error('Archivio autenticato non disponibile dopo la replica.');
@@ -146,7 +152,7 @@ export async function migrateGuestAccount({ user, guestData, policy, setUserData
             assertCurrent();
             hydratedEnv = await prepareReplica(hydratedEnv);
             assertCurrent();
-            return finishWithoutGuestMerge(hydratedEnv);
+            return await finishWithoutGuestMerge(hydratedEnv);
         }
 
         if (cloudHasData && !guestHasData) {
@@ -156,7 +162,7 @@ export async function migrateGuestAccount({ user, guestData, policy, setUserData
             assertCurrent();
             hydratedEnv = await prepareReplica(hydratedEnv);
             assertCurrent();
-            return finishWithoutGuestMerge(hydratedEnv);
+            return await finishWithoutGuestMerge(hydratedEnv);
         }
 
         if (guestHasData) {
@@ -199,7 +205,7 @@ export async function migrateGuestAccount({ user, guestData, policy, setUserData
         assertCurrent();
         hydratedEnv = await prepareReplica(hydratedEnv);
         assertCurrent();
-        return finishWithoutGuestMerge(hydratedEnv);
+        return await finishWithoutGuestMerge(hydratedEnv);
     } catch (error) {
         if (error instanceof StaleGuestMigrationError || !isCurrent()) throw new StaleGuestMigrationError();
         const code = (error as { code?: unknown })?.code;
