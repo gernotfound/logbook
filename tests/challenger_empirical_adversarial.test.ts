@@ -311,7 +311,7 @@ describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & D
     });
 
     describe('2. 3-Month Windowing & Multi-Month Firestore Isolation', () => {
-        it('2.1: DB.loadUserData loads 3 target months with 7 server reads and 1 catalog getDoc', async () => {
+        it('2.1: DB.loadUserData reads 3 months with 9 authoritative server reads including control epochs', async () => {
             const mockUserDoc = {
                 _schemaVersion: 1,
                 _sync: {
@@ -377,7 +377,8 @@ describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & D
 
             // Catalog manifest still uses getDoc; user root/months require a real server-read boundary.
             expect(getDoc).toHaveBeenCalledTimes(1);
-            expect(getDocFromServer).toHaveBeenCalledTimes(7);
+            // Six month reads, one root read and two control-epoch witnesses.
+            expect(getDocFromServer).toHaveBeenCalledTimes(9);
         });
 
         it('2.2: Verifies older months on Firestore are never deleted or affected when saving current data', async () => {
