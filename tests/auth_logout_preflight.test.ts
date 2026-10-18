@@ -32,6 +32,13 @@ describe('authenticated logout preflight', () => {
         expect(useDialogStore.getState().showUnsyncedDataLogout).not.toHaveBeenCalled();
     });
 
+    it('blocks logout despite an empty journal if a cloud integrity fence is durable', async () => {
+        vi.spyOn(localRepository, 'readLocal').mockResolvedValueOnce({ pending: [], cloudIntegrityFence: 'unsafe-cloud' } as any);
+        expect(await prepareAuthenticatedLogout(ownerUid, vi.fn())).toBeNull();
+        expect(useDialogStore.getState().showAlert).toHaveBeenCalledWith(expect.stringContaining('snapshot cloud'));
+        expect(useDialogStore.getState().showUnsyncedDataLogout).not.toHaveBeenCalled();
+    });
+
     it('permits normal logout only when memory and durable journal are clean', async () => {
         vi.spyOn(localRepository, 'readLocal').mockResolvedValueOnce({ pending: [] } as any);
         const setSyncing = vi.fn();

@@ -8,7 +8,7 @@ import { captureSession, isCurrentSession, userOwner } from '../../lib/sync/sess
 import { useAppStore } from '../../store/useAppStore';
 import { getCachedCatalog, getInMemoryCatalog, isCatalogInMemory } from '../../lib/catalog/catalogService';
 import { getResolvedDefaultUserData } from './defaultUserData';
-import { adoptReplicaCheckpoint, readLocal, hydrateLocal } from '../../lib/sync/localRepository';
+import { adoptReplicaCheckpoint, readLocal, hydrateLocal, markCloudIntegrityBlocked, completeCloudIntegrityRecovery } from '../../lib/sync/localRepository';
 import {
     checkpointFromCloudDocuments,
     claimReplicaCheckpoint,
@@ -54,6 +54,23 @@ export async function loadAuthenticatedData({
 
     if (!useAppStore.getState().userData) setSyncing(true);
 
+    const preserveUnsafeCloud = async (): Promise<boolean> => {
+        try {
+            await markCloudIntegrityBlocked(expectedOwner);
+        } catch (error) {
+            console.error('Impossibile registrare la barriera cloud sul dispositivo:', error);
+            if (isCurrent()) useAppStore.setState({ localPersistenceBlocked: true, syncHealth: 'failed',
+                saveError: 'Protezione cloud non registrabile. I dati locali devono essere preservati.' });
+            return false;
+        }
+        if (isCurrent()) useAppStore.setState({
+            syncHealth: 'failed',
+            cloudIntegrityBlocked: true,
+            saveError: 'Snapshot cloud non verificato: copia locale preservata. Sincronizzazione sospesa fino al recupero.',
+        });
+        return isCurrent();
+    };
+
     try {
         // Once Firebase identifies the authenticated owner, fence any pre-auth snapshot
         // and install exactly that owner's durable envelope before doing network work.
@@ -68,6 +85,11 @@ export async function loadAuthenticatedData({
                 userData: localEnvelope.data,
                 dataOwner: expectedOwner,
                 localWorkout,
+                cloudIntegrityBlocked: Boolean(localEnvelope.cloudIntegrityFence),
+                ...(localEnvelope.cloudIntegrityFence ? {
+                    syncHealth: 'failed' as const,
+                    saveError: 'Snapshot cloud non verificato: copia locale preservata. Sincronizzazione sospesa fino al recupero.',
+                } : {}),
             });
             markTabSnapshotClean(session, localEnvelope.data);
         } else {
@@ -75,7 +97,7 @@ export async function loadAuthenticatedData({
             // Ownerless memory is untrusted, not an account-creation default.
             // Without a matching durable envelope it must not survive into B.
             if ((current.userData !== null || current.localWorkout !== null) && current.dataOwner !== expectedOwner) {
-                useAppStore.setState({ userData: null, dataOwner: null, localWorkout: null });
+                useAppStore.setState({ userData: null, dataOwner: null, localWorkout: null, cloudIntegrityBlocked: false });
             }
         }
     } catch (error) {
@@ -98,7 +120,7 @@ export async function loadAuthenticatedData({
         const durableBeforeCloud = await readLocal(expectedOwner);
         if (!cloudAllowed()) return 'blocked';
         if (!cloudAllowed()) return 'blocked';
-        const checkpointDue = needsReplicaCheckpoint(durableBeforeCloud?.replica);
+        const checkpointDue = needsReplicaCheckpoint(durableBeforeCloud?.replica) || Boolean(durableBeforeCloud?.cloudIntegrityFence);
         const payload = await DB.loadCloudPayload({ allMonths: checkpointDue });
         if (!cloudAllowed()) return 'blocked';
 
@@ -131,6 +153,11 @@ export async function loadAuthenticatedData({
                     if (!cloudAllowed()) return 'blocked';
                 }
 
+                hydratedEnv = await completeCloudIntegrityRecovery(
+                    expectedOwner, durableBeforeCloud?.cloudIntegrityFence ?? null, checkpointDue, cloudAllowed,
+                );
+                if (!cloudAllowed()) return 'blocked';
+
                 // hydrateLocal has already committed this authoritative snapshot
                 // atomically. Rendering it via the user-edit writer setUserData
                 // would create a second semantic journal from the old UI state.
@@ -142,10 +169,13 @@ export async function loadAuthenticatedData({
                 useAppStore.setState({
                     userData: hydratedEnv.data, dataOwner: expectedOwner,
                     localWorkout: hydratedWorkout,
+                    cloudIntegrityBlocked: false,
+                    syncHealth: hydratedEnv.pending.length ? 'local-pending' : 'synced',
+                    saveError: hydratedEnv.pending.length ? 'Salvato localmente. Sincronizzazione in attesa.' : null,
                 });
                 markTabSnapshotClean(session, hydratedEnv.data);
             } catch (mergeError) {
-                if (!cloudAllowed()) return 'blocked';
+                if (!cloudAllowed() || !(await preserveUnsafeCloud())) return 'blocked';
                 const code = (mergeError as { code?: unknown })?.code;
                 if (code === 'invalid-cloud-sync-metadata') {
                     setSaveError('Sincronizzazione cloud sospesa: i metadati di sincronizzazione remoti non sono validi. I dati locali validi sono stati preservati e TheLogBook non sovrascriverà il cloud finché il problema non viene risolto.');
@@ -163,6 +193,11 @@ export async function loadAuthenticatedData({
         }
     } catch (error: any) {
         if (!isCurrent()) return 'blocked';
+        const integrityError = ['CloudDataIntegrityError', 'LegacyVersionError', 'FutureVersionError', 'ZodError', 'InvalidCloudSyncMetadataError'].includes(error?.name);
+        if (integrityError) {
+            if (!(await preserveUnsafeCloud())) return 'blocked';
+            setSaveError('Dati cloud non verificabili: sincronizzazione sospesa, archivio locale preservato.');
+        }
         console.warn('Errore caricamento dati in AuthContext (uso dati locali/offline):', error);
         if (error?.code === 'unavailable' || !navigator.onLine) {
             setSaveError('📶 Offline: visualizzando dati locali. I dati verranno sincronizzati al ripristino della connessione.');
@@ -176,7 +211,8 @@ export async function loadAuthenticatedData({
             if (!isCurrent()) return 'blocked';
             if (stillAbsent) {
                 const localWorkout = getInitialLocalWorkout(expectedOwner, stillAbsent.data.activeWorkout ?? null, stillAbsent.data.history, stillAbsent.lastClosedWorkoutId, stillAbsent.closedWorkoutIds);
-                useAppStore.setState({ userData: stillAbsent.data, dataOwner: expectedOwner, localWorkout });
+                useAppStore.setState({ userData: stillAbsent.data, dataOwner: expectedOwner, localWorkout,
+                    cloudIntegrityBlocked: Boolean(stillAbsent.cloudIntegrityFence) });
                 markTabSnapshotClean(session, stillAbsent.data);
                 return 'blocked';
             }

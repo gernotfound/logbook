@@ -5,7 +5,7 @@ import { readLocal } from '../sync/localRepository';
 import { readDeviceValueStrict } from '../sync/deviceStorage';
 import { getCachedCatalog } from '../catalog/catalogService';
 import { applyRemoteDocuments, projectDocuments, type DocumentData } from '../sync/documentProjection';
-import { applySemanticOperations, parseSyncMeta, type SyncMeta } from '../sync/semanticProjection';
+import { applySemanticOperations, coversVectorClock, parseSyncMeta, type SyncMeta } from '../sync/semanticProjection';
 import { normalizeCloudDocument } from '../schemaEvolution';
 import { UserDataSchema } from '../schema';
 import { withTimeout } from './db_core';
@@ -120,6 +120,17 @@ export async function collectBackupSnapshot(fallback: UserData, includeCloud: bo
         throw new Error('I dati locali sono cambiati durante il backup. Riprova quando le modifiche sono stabili.');
     }
     const local = envelope?.data ?? fallback;
+    if (cloud && envelope) {
+        if (envelope.cloudIntegrityFence) {
+            throw new Error('Backup cloud sospeso: divergenza con la copia locale ancora da verificare. Esporta la copia del dispositivo.');
+        }
+        for (const [path, durableMeta] of Object.entries(envelope.syncMetaByDocument)) {
+            const observed = syncMetaByDocument[path];
+            if (!observed || !coversVectorClock(observed.clock, durableMeta.clock)) {
+                throw new Error('Backup cloud incompleto rispetto ai dati confermati sul dispositivo. Esporta la copia locale.');
+            }
+        }
+    }
     let mergedValue = local;
     if (cloud) {
         if (envelope?.pending?.length) {

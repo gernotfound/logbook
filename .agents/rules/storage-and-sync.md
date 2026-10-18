@@ -221,6 +221,8 @@ Vedi anche `.agents/rules/crash-consistency.md`.
 
 ## Hydration cloud
 
+**MUST:** una discrepanza causale durante hydration o checkpoint installa una barriera durevole owner-scoped. Blocca il journal e il purge di logout, anche forzato, finché una lettura completa dal server e un checkpoint replica verificato non terminano; fallimenti concorrenti invalidano lo sblocco.
+
 Esistono due coperture distinte e non intercambiabili:
 
 - `window`: normale startup/foreground, root + finestra mensile caricata. I mesi locali non letti dal cloud devono essere preservati.

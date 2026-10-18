@@ -248,6 +248,18 @@ it('exports only allowlisted recovery device data and excludes account-deletion 
     expect(backup.recovery.device).not.toHaveProperty('storage_marker');
 });
 
+it('refuses a full backup when a locally acknowledged month is absent on server', async () => {
+    const data = parse({ nutrition: { '2025-01-01': { date: '2025-01-01', weight: 70 } } });
+    await initializeLocal('user:a', data);
+    await acknowledgeThrough('user:a', 0, data, [], {
+        'nutrition_months/2025-01': { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {} },
+    });
+    await expect(collectBackupSnapshot(data, true)).rejects.toThrow(/Backup cloud incompleto/);
+    const device = await collectBackupSnapshot(data, false);
+    expect(device.coverage.scope).toBe('device');
+    expect(device.data.nutrition?.['2025-01-01']?.weight).toBe(70);
+});
+
 it('never labels a failed cloud scan complete; explicit device export still works', async () => {
     const data = parse({ profile: { height: '171' } });
     await initializeLocal('user:a', data);

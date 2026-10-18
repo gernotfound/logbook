@@ -46,6 +46,8 @@ interface LocalEnvelopeV5 {
     syncMetaByDocument: Record<string, SyncMeta>;
     replica: ReplicaIdentity | null;
     revision: number;
+    // Persistent owner-scoped barrier for unverified cloud snapshots.
+    cloudIntegrityFence?: string;
     // An older journal must never be replayed under a newly accepted consent.
     consentRevision?: number;
     // Original local state is retained after an explicit, non-silent replay.
@@ -166,6 +168,10 @@ function validate(value: any, owner: string): LocalEnvelope | undefined {
     }
     if (typeof record.revision !== 'number' || !Number.isSafeInteger(record.revision) || record.revision < 0) {
         throw new Error('Revisione locale non valida');
+    }
+
+    if (record.cloudIntegrityFence !== undefined && (typeof record.cloudIntegrityFence !== 'string' || !record.cloudIntegrityFence.trim())) {
+        throw new Error('Barriera integrità cloud locale non valida');
     }
 
     if (record.lastClosedWorkoutId !== undefined && (
@@ -608,6 +614,42 @@ export async function commitDomainOperations(owner: string, batch: DomainOperati
         return { ...(current ?? { completeMonths: [], replica: null }), ...currentEnvelopeVersions(), ...closure, ...intentPatch, owner, actorId, actorSeq: sequenced.actorSeq, clock: sequenced.clock, data: desired, baseline: current?.baseline ?? fallback, completeMonths: current?.completeMonths ?? [], pending: owner === 'guest' ? [] : [...(current?.pending ?? []), ...operations], syncMetaByDocument: current?.syncMetaByDocument ?? {}, replica: current?.replica ?? null, revision: (current?.revision ?? 0) + 1 };
     });
     return { operations, data: savedData };
+}
+
+export async function markCloudIntegrityBlocked(owner: string): Promise<void> {
+    owner = normalizeStorageOwner(owner);
+    await updateArchiveRecord<any>(owner, raw => {
+        const current = validate(raw, owner);
+        if (!current) throw new Error('Archivio locale non disponibile per la protezione cloud');
+        return {
+            ...current,
+            cloudIntegrityFence: generateId('cloud-fence'),
+            replica: current.replica ? { ...current.replica, checkpointAtMs: 1, leaseUntilMs: 1 } : null,
+            revision: current.revision + 1,
+        };
+    });
+}
+
+export async function completeCloudIntegrityRecovery(
+    owner: string, expectedFence: string | null, fullCheckpointCompleted: boolean, guard?: LocalWriteGuard,
+): Promise<LocalEnvelope> {
+    owner = normalizeStorageOwner(owner);
+    let saved: LocalEnvelope | undefined;
+    await updateArchiveRecord<any>(owner, raw => {
+        if (guard && !guard()) return raw;
+        const current = validate(raw, owner);
+        if (!current) throw new Error('Archivio locale non disponibile durante il recupero cloud');
+        if ((current.cloudIntegrityFence ?? null) !== expectedFence) {
+            throw new ReplicaFencedError('La verifica cloud è stata invalidata da una nuova divergenza; copia locale preservata.');
+        }
+        if (expectedFence && (!fullCheckpointCompleted || !current.replica || current.replica.leaseUntilMs <= Date.now())) {
+            throw new ReplicaFencedError('La divergenza cloud richiede un checkpoint completo prima dello sblocco.');
+        }
+        saved = expectedFence ? { ...current, cloudIntegrityFence: undefined, revision: current.revision + 1 } : current;
+        return saved;
+    });
+    if (!saved) throw new Error('Recupero cloud invalidato dal cambio di sessione');
+    return saved;
 }
 
 export async function markReplicaCheckpointRequired(

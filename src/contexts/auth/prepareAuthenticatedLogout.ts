@@ -21,6 +21,11 @@ export async function prepareAuthenticatedLogout(
     try {
         const { readLocal } = await import('../../lib/sync/localRepository');
         const envelope = await readLocal(userOwner(initialUid!));
+        if (envelope?.cloudIntegrityFence) {
+            setSyncing(false);
+            await useDialogStore.getState().showAlert('Logout sospeso: lo snapshot cloud non è ancora verificato. La copia locale è preservata; riconnetti e completa il recupero prima di uscire.');
+            return null;
+        }
         durablePending = (envelope?.pending.length ?? 0) > 0;
     } catch {
         setSyncing(false);
