@@ -53,6 +53,19 @@ export async function recoverOldLocalEditsAfterConsent(user: User): Promise<void
   const cloudData = applyRemoteDocuments(
     UserDataSchema.parse({}) as unknown as UserData, normalized, catalog,
   );
+  // The cloud scan is not atomic with the trusted consent record. A different
+  // device can erase data or change the consent epoch while pages are read.
+  // Do not turn an earlier journal into fresh edits using that stale proof.
+  const latestConsent = await readActiveHealthConsentRevision(user);
+  assertCurrent();
+  if (latestConsent.erasedBeforeRevision !== undefined
+    && (original.consentRevision ?? 0) <= latestConsent.erasedBeforeRevision) {
+    throw new Error('Queste modifiche appartengono a dati eliminati su richiesta. Non possono essere ripristinate tramite il recupero del consenso.');
+  }
+  if (latestConsent.revision !== serverConsent.revision
+    || latestConsent.erasedBeforeRevision !== serverConsent.erasedBeforeRevision) {
+    throw new Error('Il consenso sul server è cambiato durante il recupero. Riprova dopo una nuova verifica.');
+  }
   await rebaseConsentRecoveryWithExplicitChoice(
     session.owner, serverConsent.revision,
     original.revision, cloudData, snapshot.data, cloudDocuments, () => { assertCurrent(); return true; },
@@ -60,6 +73,12 @@ export async function recoverOldLocalEditsAfterConsent(user: User): Promise<void
   // A server refresh authoritatively confirms the revision and unlocks only
   // after local data and the original journal are durably committed.
   const status = await refreshHealthConsent(user);
+  // refreshHealthConsent may legitimately update the consent marker captured
+  // above. Keep the identity/epoch fence without comparing that old marker.
+  const currentSession = captureSession();
+  if (currentSession.owner !== session.owner || currentSession.epoch !== session.epoch) {
+    throw new Error('La sessione è cambiata durante il recupero.');
+  }
   if (status !== 'active') throw new Error('Recupero salvato, ma consenso non ancora verificato. Riprova.');
   finishHealthConsentReacceptance(uid);
 }
