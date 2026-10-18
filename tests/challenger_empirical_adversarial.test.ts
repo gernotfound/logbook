@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { doc, getDoc, writeBatch } from 'firebase/firestore';
+import { doc, getDoc, getDocFromServer, writeBatch } from 'firebase/firestore';
 
 vi.unmock('../src/lib/db');
 import { ConsentedTestDB as DB } from './testUtils';
@@ -76,6 +76,9 @@ describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & D
             }
             return { exists: () => false, data: () => ({}) } as any;
         });
+        // Both APIs model the same simulated remote store, but retain separate
+        // spies so cache-based reads cannot satisfy the authoritative-read oracle.
+        vi.mocked(getDocFromServer).mockImplementation(async ref => vi.mocked(getDoc)(ref));
     });
 
     describe('1. Persistence and Save Amnesia Adversarial Tests', () => {
@@ -308,7 +311,7 @@ describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & D
     });
 
     describe('2. 3-Month Windowing & Multi-Month Firestore Isolation', () => {
-        it('2.1: DB.loadUserData strictly loads exactly 3 target months (current, M-1, M-2) via 8 getDoc calls', async () => {
+        it('2.1: DB.loadUserData loads 3 target months with 7 server reads and 1 catalog getDoc', async () => {
             const mockUserDoc = {
                 _schemaVersion: 1,
                 _sync: {
@@ -348,7 +351,7 @@ describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & D
             const mockHistoryM1 = currentMonth({ h_m1: { id: 'h_m1', date: `${m1}-15`, globalStartTime: 50, exercises: [] } });
             const mockNutritionM2 = currentMonth({ [`${m2}-05`]: { date: `${m2}-05`, kcal: 2200, carbs: 200, pro: 150, fat: 60, meals: [] } });
 
-            vi.mocked(getDoc).mockImplementation(async (docRef: any) => {
+            vi.mocked(getDocFromServer).mockImplementation(async (docRef: any) => {
                 const pathStr = docRef?.path || '';
                 if (pathStr.includes('history_months')) {
                     if (pathStr.includes(m0)) return { exists: () => true, data: () => mockHistoryM0 } as any;
@@ -372,8 +375,9 @@ describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & D
             expect(loaded?.history?.[1]?.id).toBe('h_m1');
             expect(loaded?.nutrition?.[`${m2}-05`]).toBeDefined();
 
-            // Total getDoc calls must be exactly 1 (manifest) + 1 (user) + 3 (history) + 3 (nutrition) = 8
-            expect(getDoc).toHaveBeenCalledTimes(8);
+            // Catalog manifest still uses getDoc; user root/months require a real server-read boundary.
+            expect(getDoc).toHaveBeenCalledTimes(1);
+            expect(getDocFromServer).toHaveBeenCalledTimes(7);
         });
 
         it('2.2: Verifies older months on Firestore are never deleted or affected when saving current data', async () => {

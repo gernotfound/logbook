@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { getDoc, writeBatch } from 'firebase/firestore';
+import { getDoc, getDocFromServer, writeBatch } from 'firebase/firestore';
 import fs from 'fs';
 import path from 'path';
 
@@ -53,6 +53,7 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
             }
             return { exists: () => false, data: () => ({}) } as any;
         });
+        vi.mocked(getDocFromServer).mockImplementation(async ref => vi.mocked(getDoc)(ref));
 
         let pendingWrites: Array<() => void> = [];
 
@@ -599,7 +600,7 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
             };
 
             // First call returns userDoc, remaining 6 calls return empty month snapshots
-            vi.mocked(getDoc)
+            vi.mocked(getDocFromServer)
                 .mockResolvedValueOnce({
                     exists: () => true,
                     data: () => mockUserDoc
@@ -613,8 +614,9 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
 
             expect(loaded).not.toBeNull();
             expect(loaded?.profile?.height).toBe('180');
-            // getDoc should be called: 1 for manifest + 1 for userDoc + 3 for history_months + 3 for nutrition_months = 8 calls total
-            expect(getDoc).toHaveBeenCalledTimes(8);
+            // Cached SDK reads are only for the catalog; authoritative user data uses server reads.
+            expect(getDoc).toHaveBeenCalledTimes(1);
+            expect(getDocFromServer).toHaveBeenCalledTimes(7);
         });
 
         it('server deletion preserves <=400 batches and verifies residues before deleting Auth', () => {
