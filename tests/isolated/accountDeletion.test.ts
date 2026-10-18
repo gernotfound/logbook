@@ -499,6 +499,21 @@ it('reports storage deletion failures during a verified account-deletion cleanup
     expect(disk.has('logbook:v2:user:a:timer_state')).toBe(false);
 });
 
+it('never purges an acknowledged local copy under a cloud-integrity fence, even on force logout', async () => {
+    const localRepository = await import('../../src/lib/sync/localRepository');
+    vi.spyOn(localRepository, 'readLocal').mockResolvedValue({
+        pending: [], cloudIntegrityFence: 'remote-missing-shard',
+    } as any);
+    const { logoutAndPurgeAccount } = await import('../../src/lib/db/db_account');
+    const signOut = vi.fn();
+
+    await expect(logoutAndPurgeAccount('user:a', signOut, true)).rejects.toThrow('snapshot cloud non verificato');
+    expect(signOut).not.toHaveBeenCalled();
+    expect(await get('logbook:v2:user:a')).toEqual({ original: 'recoverable' });
+    await expect(purgeAllLocalUserData('user:a')).rejects.toThrow('snapshot cloud non verificato');
+    expect(await get('logbook:v2:user:a')).toEqual({ original: 'recoverable' });
+});
+
 it('blocks direct ordinary purge while preserving the pending receipt and real IndexedDB envelope', async () => {
     const receipt = 'A'.repeat(43);
     markAccountDeletion('user:a', { receiptToken: receipt, serverAcceptedAt: Date.now() });
