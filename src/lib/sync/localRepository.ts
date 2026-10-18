@@ -710,13 +710,40 @@ export async function adoptReplicaCheckpoint(
     return saved;
 }
 
-export async function acknowledgeThrough(owner: string, expectedSeq: number, remote: UserData, months: string[] = [], syncMeta?: Record<string, SyncMeta>): Promise<void> {
+/**
+ * A remote delivery is not proof that a later local envelope still contains
+ * the same operations. Verify the exact delivered prefix and replica generation
+ * inside the IndexedDB update before retiring any local journal entries.
+ */
+export async function acknowledgeThrough(
+    owner: string,
+    expectedSeq: number,
+    remote: UserData,
+    months: string[] = [],
+    syncMeta?: Record<string, SyncMeta>,
+    delivery?: { operations: SemanticOperation[]; replica: ReplicaIdentity },
+): Promise<void> {
     owner = normalizeStorageOwner(owner);
     const parsed = parse(remote);
     const catalog = await getCachedCatalog();
     await updateArchiveRecord<any>(owner, raw => {
         const current = validate(raw, owner);
         if (!current) throw new Error('Archivio locale non trovato');
+        if (delivery) {
+            const replica = current.replica;
+            const sameReplica = replica !== null
+                && replica.slot === delivery.replica.slot
+                && replica.replicaId === delivery.replica.replicaId
+                && replica.generation === delivery.replica.generation
+                && current.actorId === delivery.replica.slot;
+            const deliveredPrefix = current.pending.filter(op => op.seq <= expectedSeq);
+            if (!sameReplica
+                || delivery.operations.length === 0
+                || delivery.operations[delivery.operations.length - 1]?.seq !== expectedSeq
+                || !equal(deliveredPrefix, delivery.operations)) {
+                throw new Error('Acknowledgement invalidato: replica o batch locale cambiati; journal preservato.');
+            }
+        }
         const pending = current.pending.filter(op => op.seq > expectedSeq);
         const incomingMeta = syncMeta ?? {};
         const incomingIsStale = Object.keys(incomingMeta).length > 0 && Object.entries(incomingMeta).some(([path, meta]) => {

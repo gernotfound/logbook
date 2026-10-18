@@ -357,6 +357,71 @@ describe('durable owner-scoped journal', () => {
         expect(hydrated.completeMonths).toEqual(['2026-09']);
     });
 
+    it('refuses to acknowledge a same-sequence batch whose durable payload changed', async () => {
+        const base = data(170);
+        await initializeLocal('a', base);
+        const now = Date.now();
+        const identity = { slot: 's00', replicaId: 'ack-payload', generation: 1,
+            checkpointAtMs: now, leaseUntilMs: now + 31_104_000_000 };
+        await adoptReplicaCheckpoint('a', { identity, baseSeq: 0 },
+            { clock: {}, syncMetaByDocument: {} });
+        await commitLocal('a', data(171), base);
+        const before = (await readLocal('a'))!;
+        expect(before.pending.length).toBeGreaterThan(0);
+        const key = 'logbook:v2:user:a';
+        const raw = await get(key) as Record<string, any>;
+        const corrupted = { ...raw, pending: raw.pending.map((op: any) => ({ ...op, value: 'unexpected-payload' })) };
+        await set(key, corrupted);
+
+        await expect(acknowledgeThrough('a', before.pending.at(-1)!.seq, data(171), [], undefined,
+            { operations: before.pending, replica: identity })).rejects.toThrow('Acknowledgement invalidato');
+        expect(await get(key)).toEqual(corrupted);
+        expect((await readLocal('a'))?.pending).toEqual(corrupted.pending);
+    });
+
+    it('refuses to retire a new replica journal using the old replica acknowledgement', async () => {
+        const base = data(170);
+        await initializeLocal('a', base);
+        const now = Date.now();
+        const first = { slot: 's00', replicaId: 'ack-old-replica', generation: 1,
+            checkpointAtMs: now, leaseUntilMs: now + 31_104_000_000 };
+        await adoptReplicaCheckpoint('a', { identity: first, baseSeq: 0 },
+            { clock: {}, syncMetaByDocument: {} });
+        await commitLocal('a', data(171), base);
+        const delivered = (await readLocal('a'))!;
+        const second = { ...first, slot: 's01', replicaId: 'ack-new-replica' };
+        await adoptReplicaCheckpoint('a', { identity: second, baseSeq: 0 },
+            { clock: {}, syncMetaByDocument: {} });
+        const before = (await readLocal('a'))!;
+        expect(before.actorId).toBe('s01');
+        expect(before.pending.every(op => op.actorId === 's01')).toBe(true);
+
+        await expect(acknowledgeThrough('a', delivered.pending.at(-1)!.seq, data(171), [], undefined,
+            { operations: delivered.pending, replica: first })).rejects.toThrow('Acknowledgement invalidato');
+        expect(await readLocal('a')).toEqual(before);
+    });
+
+    it('acknowledges only the delivered prefix while preserving a newer local edit', async () => {
+        const base = data(170);
+        await initializeLocal('a', base);
+        const now = Date.now();
+        const identity = { slot: 's00', replicaId: 'ack-newer-edit', generation: 1,
+            checkpointAtMs: now, leaseUntilMs: now + 31_104_000_000 };
+        await adoptReplicaCheckpoint('a', { identity, baseSeq: 0 },
+            { clock: {}, syncMetaByDocument: {} });
+        await commitLocal('a', data(171), base);
+        const delivered = (await readLocal('a'))!;
+        await commitLocal('a', data(172), data(171));
+
+        await acknowledgeThrough('a', delivered.pending.at(-1)!.seq, data(171), [], undefined,
+            { operations: delivered.pending, replica: identity });
+        const after = (await readLocal('a'))!;
+        expect(after.baseline.profile?.height).toBe('171');
+        expect(after.data.profile?.height).toBe('172');
+        expect(after.pending.length).toBeGreaterThan(0);
+        expect(after.pending.every(op => op.seq > delivered.pending.at(-1)!.seq)).toBe(true);
+    });
+
     it('does not let a delayed older acknowledgement roll back a newer durable acknowledgement', async () => {
         const base = data(170);
         await initializeLocal('a', base);
