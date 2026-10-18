@@ -826,11 +826,13 @@ export async function acknowledgeThrough(
         if (syncMeta) for (const meta of Object.values(syncMeta)) for (const [actor, seq] of Object.entries(meta.clock)) newClock[actor] = Math.max(newClock[actor] || 0, seq);
         const newSyncMeta = { ...current.syncMetaByDocument, ...(syncMeta || {}) };
         const remoteDocs = projectDocuments(parsed, catalog);
-        const { documents: mergedDocs, syncMetas: mergedMetas } = applySemanticOperations(remoteDocs, pending, newSyncMeta);
+        const { documents: mergedDocs } = applySemanticOperations(remoteDocs, pending, newSyncMeta);
         const reconciled = applyRemoteDocuments(current.data, mergedDocs, catalog);
         reconciled.pendingConflicts = current.data.pendingConflicts;
         const data = parse(reconciled);
-        return { ...current, clock: newClock, baseline: parsed, data, pending, completeMonths: [...new Set([...current.completeMonths, ...months])], syncMetaByDocument: mergedMetas };
+        // Persist only server-confirmed metadata; replayed pending operations are
+        // speculative and must never become evidence that a cloud document exists.
+        return { ...current, clock: newClock, baseline: parsed, data, pending, completeMonths: [...new Set([...current.completeMonths, ...months])], syncMetaByDocument: newSyncMeta };
     });
 }
 
@@ -867,6 +869,25 @@ export async function hydrateLocal(owner: string, cloudData: UserData, months: s
             }
             saved = { ...currentEnvelopeVersions(), ...ownerConsentRevision(owner), owner, actorId: generateId('actor'), actorSeq: 0, clock, data: cloud, baseline: cloud, completeMonths: months, pending: [], syncMetaByDocument, replica: null, revision: 0 };
         } else {
+            // Older clients persisted merge projections as cloud acknowledgements.
+            // A writerless, empty placeholder for a month with no local or
+            // baseline business records and no pending operation has no server
+            // provenance. Removing that *derived metadata* cannot discard user data.
+            // Never apply this recovery to a real writer, a causal stamp, a local
+            // business month or a pending edit.
+            const localPaths = projectDocuments(current.data, catalog);
+            const baselinePaths = projectDocuments(current.baseline, catalog);
+            const pendingPaths = new Set(current.pending.map(op => op.docPath));
+            const confirmedMeta = Object.fromEntries(
+                Object.entries(current.syncMetaByDocument).filter(([path, meta]) =>
+                    meta.writer !== undefined
+                    || Object.keys(meta.clock).length > 0
+                    || Object.keys(meta.fields).length > 0
+                    || localPaths.has(path)
+                    || baselinePaths.has(path)
+                    || pendingPaths.has(path)
+                ),
+            );
             const syncMeta: Record<string, SyncMeta> = {};
             const authoritativePaths = new Set(['', ...months.map(m => `history_months/${m}`), ...months.map(m => `nutrition_months/${m}`)]);
             // A full scan may race with a newer acknowledgement in another tab.
@@ -875,7 +896,7 @@ export async function hydrateLocal(owner: string, cloudData: UserData, months: s
             // response cannot prove that its acknowledged data was removed.
             // Reject before installing the cloud snapshot or claiming a checkpoint.
             const missingPaths = cloudDocuments
-                ? Object.keys(current.syncMetaByDocument).filter(path =>
+                ? Object.keys(confirmedMeta).filter(path =>
                     (coverageMode === 'all' || authoritativePaths.has(path))
                     && !cloudDocuments.get(path)?._sync
                 )
@@ -889,12 +910,12 @@ export async function hydrateLocal(owner: string, cloudData: UserData, months: s
                 // evidence also installs the owner-scoped destructive-purge fence.
                 return fenceCloudIntegrity(current);
             }
-            if (coverageMode === 'window') for (const [path, meta] of Object.entries(current.syncMetaByDocument ?? {})) if (!authoritativePaths.has(path)) syncMeta[path] = meta;
+            if (coverageMode === 'window') for (const [path, meta] of Object.entries(confirmedMeta)) if (!authoritativePaths.has(path)) syncMeta[path] = meta;
             const updatedClock = { ...current.clock };
             const stalePaths: string[] = [];
             if (cloudDocuments) for (const [path, doc] of cloudDocuments.entries()) if (doc._sync) {
                 const meta = parseCloudSyncMeta(path, doc._sync);
-                const durable = current.syncMetaByDocument[path];
+                const durable = confirmedMeta[path];
                 if ((coverageMode === 'all' || authoritativePaths.has(path)) && durable
                     && !coversVectorClock(meta.clock, durable.clock)) {
                     stalePaths.push(path);
@@ -927,11 +948,14 @@ export async function hydrateLocal(owner: string, cloudData: UserData, months: s
             const applicationBase = coverageMode === 'all' ? ({ ...current.data, history: [], nutrition: {} } as UserData) : current.data;
             const baselineData = applyRemoteDocuments(applicationBase, localDocs, catalog);
             const parsedBaseline = parse(baselineData);
-            const { documents: mergedDocs, syncMetas: mergedMetas } = applySemanticOperations(localDocs, current.pending, syncMeta);
+            const { documents: mergedDocs } = applySemanticOperations(localDocs, current.pending, syncMeta);
             const data = applyRemoteDocuments(applicationBase, mergedDocs, catalog);
             data.pendingConflicts = current.data.pendingConflicts;
             const parsedData = parse(data);
-            saved = { ...current, ...currentEnvelopeVersions(), clock: updatedClock, data: parsedData, baseline: parsedBaseline, completeMonths: coverageMode === 'all' ? [...new Set(months)] : [...new Set([...current.completeMonths, ...months])], syncMetaByDocument: mergedMetas };
+            saved = { ...current, ...currentEnvelopeVersions(), clock: updatedClock, data: parsedData, baseline: parsedBaseline, completeMonths: coverageMode === 'all' ? [...new Set(months)] : [...new Set([...current.completeMonths, ...months])], // Derived merge stamps belong to the pending journal, not to the
+                // acknowledged cloud frontier. Only server reads can prove
+                // that a document was ever stored remotely.
+                syncMetaByDocument: syncMeta };
         }
         return saved;
     });
