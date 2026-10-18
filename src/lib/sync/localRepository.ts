@@ -388,7 +388,7 @@ export async function commitLocal(owner: string, data: UserData, initialBase: Us
     let operations: SemanticOperation[] = [];
     const catalog = await getCachedCatalog();
     await updateArchiveRecord<any>(owner, raw => {
-        if (guard && !guard()) return raw;
+        if (guard && !guard()) throw new Error('Commit locale invalidato dal cambio sessione');
         const current = validate(raw, owner);
         if (expectedRevision !== undefined && (
             current?.revision !== expectedRevision

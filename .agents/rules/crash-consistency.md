@@ -19,6 +19,8 @@ La pipeline local-first deve rimanere recuperabile quando il processo viene inte
 
 **MUST:** se la transazione locale riesce, il nuovo business state e le relative `SemanticOperation` diventano durevoli insieme prima del debounce cloud.
 
+**MUST:** una sessione invalidata dal guard verificato all'interno della transazione IndexedDB fa rigettare `commitLocal()`, anche se nessun record è stato modificato: un commit annullato non può essere restituito come successo (neppure con un journal vuoto).
+
 ### Remote delivery
 
 Firestore applica il batch semantico tramite transazione.
