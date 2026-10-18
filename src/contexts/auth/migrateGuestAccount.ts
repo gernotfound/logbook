@@ -116,6 +116,34 @@ export async function migrateGuestAccount({ user, guestData, policy, setUserData
             return UserDataSchema.parse(getResolvedDefaultUserData(catalog)) as unknown as UserData;
         };
 
+        // An account may already hold its own pending journal even when the
+        // guest intentionally skips the transfer. Hydration is not cloud ACK.
+        const finishWithoutGuestMerge = async (): Promise<SyncResult> => {
+            markLocalReady();
+            const { readLocal } = await import('../../lib/sync/localRepository');
+            const beforeReplay = await readLocal(user.uid);
+            assertCurrent();
+            if (!beforeReplay) throw new Error('Archivio autenticato non disponibile dopo hydration.');
+            // A consent check cannot turn an empty journal into fake pending.
+            const replayResult: SyncResult = beforeReplay.pending.length
+                ? await replicateJournal(userOwner(user.uid))
+                : { ok: true, status: 'synced' };
+            assertCurrent();
+            const durable = await readLocal(user.uid);
+            assertCurrent();
+            if (!durable) throw new Error('Archivio autenticato non disponibile dopo la replica.');
+            applyLocalData(durable.data);
+            let result = replayResult;
+            if (durable.cloudIntegrityFence) {
+                result = { ok: false, status: 'failed', error: new Error('Recupero cloud richiesto: dati locali preservati.') };
+            } else if (replayResult.status === 'synced' && durable.pending.length > 0) {
+                // A concurrent tab may have appended an edit during replay.
+                result = { ok: false, status: 'local-pending', error: new Error('Journal locale ancora in attesa di sincronizzazione.') };
+            }
+            useAppStore.setState({ syncHealth: result.status });
+            return result;
+        };
+
         if (policy === 'skip') {
             const { hydrateLocal } = await import('../../lib/sync/localRepository');
             assertCurrent();
@@ -124,9 +152,7 @@ export async function migrateGuestAccount({ user, guestData, policy, setUserData
             assertCurrent();
             hydratedEnv = await prepareReplica(hydratedEnv);
             assertCurrent();
-            markLocalReady();
-            applyLocalData(hydratedEnv.data);
-            return { ok: true, status: 'synced' };
+            return await finishWithoutGuestMerge();
         }
 
         if (cloudHasData && !guestHasData) {
@@ -136,9 +162,7 @@ export async function migrateGuestAccount({ user, guestData, policy, setUserData
             assertCurrent();
             hydratedEnv = await prepareReplica(hydratedEnv);
             assertCurrent();
-            markLocalReady();
-            applyLocalData(hydratedEnv.data);
-            return { ok: true, status: 'synced' };
+            return await finishWithoutGuestMerge();
         }
 
         if (guestHasData) {
@@ -181,9 +205,7 @@ export async function migrateGuestAccount({ user, guestData, policy, setUserData
         assertCurrent();
         hydratedEnv = await prepareReplica(hydratedEnv);
         assertCurrent();
-        markLocalReady();
-        applyLocalData(hydratedEnv.data);
-        return { ok: true, status: 'synced' };
+        return await finishWithoutGuestMerge();
     } catch (error) {
         if (error instanceof StaleGuestMigrationError || !isCurrent()) throw new StaleGuestMigrationError();
         const code = (error as { code?: unknown })?.code;
