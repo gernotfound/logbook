@@ -1,5 +1,5 @@
 import { getDb } from '../firebase';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDocFromServer } from 'firebase/firestore';
 import { normalizeCloudDocument } from '../schemaEvolution';
 import { withTimeout } from './db_core';
 import { requireCompleteHistoryMonthDocument } from '../sync/monthlyIntegrity';
@@ -13,7 +13,7 @@ export async function loadHistoryMonths(
     cloudDocuments?: Map<string, Record<string, unknown>>,
 ): Promise<void> {
     const historyDocs = await withTimeout(
-        Promise.all(targetMonths.map(m => getDoc(doc(getDb(), "users", user.uid, "history_months", m)))),
+        Promise.all(targetMonths.map(m => getDocFromServer(doc(getDb(), "users", user.uid, "history_months", m)))),
         6000,
         "Timeout recupero storico"
     );

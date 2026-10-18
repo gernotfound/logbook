@@ -3,7 +3,7 @@ import {
     collection,
     doc,
     documentId,
-    getDoc,
+    getDocFromServer,
     getDocsFromServer,
     limit,
     orderBy,
@@ -82,7 +82,7 @@ async function loadCloudPayload(options?: { allMonths?: boolean }): Promise<{
                     return null;
                 }),
             withTimeout(
-                getDoc(doc(db, 'users', user.uid)),
+                getDocFromServer(doc(db, 'users', user.uid)),
                 6000,
                 'Timeout recupero profilo utente',
             ),
