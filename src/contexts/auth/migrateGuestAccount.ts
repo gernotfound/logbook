@@ -86,7 +86,7 @@ export async function migrateGuestAccount({ user, guestData, policy, setUserData
         const guestHasData = hasUserData(guestData);
         const prepareReplica = async (hydrated: LocalEnvelope): Promise<LocalEnvelope> => {
             assertCurrent();
-            const { adoptReplicaCheckpoint } = await import('../../lib/sync/localRepository');
+            const { adoptReplicaCheckpoint, completeCloudIntegrityRecovery } = await import('../../lib/sync/localRepository');
             await retireExpiredReplicas(getDb(), user.uid);
             assertCurrent();
             const checkpoint = checkpointFromCloudDocuments(cloudPayload?.cloudDocuments ?? new Map());
@@ -99,7 +99,9 @@ export async function migrateGuestAccount({ user, guestData, policy, setUserData
                 hydrated.replica ? undefined : hydrated.actorId,
             );
             assertCurrent();
-            return adoptReplicaCheckpoint(user.uid, claim, checkpoint, isCurrent);
+            const adopted = await adoptReplicaCheckpoint(user.uid, claim, checkpoint, isCurrent);
+            assertCurrent();
+            return completeCloudIntegrityRecovery(user.uid, hydrated.cloudIntegrityFence ?? null, true, isCurrent);
         };
 
         const resolveAuthenticatedBase = async (): Promise<UserData> => {
@@ -180,6 +182,24 @@ export async function migrateGuestAccount({ user, guestData, policy, setUserData
         return { ok: true, status: 'synced' };
     } catch (error) {
         if (error instanceof StaleGuestMigrationError || !isCurrent()) throw new StaleGuestMigrationError();
+        const code = (error as { code?: unknown })?.code;
+        const integrityFailure = code === 'replica-fenced' || code === 'invalid-cloud-sync-metadata'
+            || ['CloudDataIntegrityError', 'LegacyVersionError', 'FutureVersionError', 'ZodError'].includes(
+                error instanceof Error ? error.name : '',
+            );
+        if (integrityFailure) {
+            const { markCloudIntegrityBlocked, readLocal } = await import('../../lib/sync/localRepository');
+            try {
+                if (await readLocal(user.uid)) {
+                    await markCloudIntegrityBlocked(user.uid);
+                    useAppStore.setState({ syncHealth: 'failed' });
+                }
+            } catch (fenceError) {
+                console.error('Barriera cloud dopo migrazione non registrabile:', fenceError);
+                useAppStore.setState({ localPersistenceBlocked: true, syncHealth: 'failed',
+                    saveError: 'Archivio locale non verificabile dopo la migrazione; dati preservati.' });
+            }
+        }
         console.warn('Errore sincronizzazione iniziale post-link:', error);
         await restoreAfterFailure();
         if (!localReady) throw error;
