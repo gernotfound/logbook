@@ -201,6 +201,7 @@ export async function replicateJournal(expectedOwner?: string): Promise<SyncResu
         const envelope = await readLocal(session.owner);
         if (expectedOwner && session.owner !== expectedOwner) throw new Error('Sessione cambiata');
         if (!envelope) throw new Error('Copia locale non disponibile');
+        if (envelope.cloudIntegrityFence) throw new ReplicaFencedError('Snapshot cloud incompleto: verifica completa richiesta prima di sincronizzare.');
         if (session.owner === 'guest' || !envelope.pending?.length) return { ok: true, status: 'synced' };
         if (needsLegalUpdate(envelope.data.legalConsent)) {
             return { ok: false, status: 'local-pending', error: new LegalConsentRequiredError() };
