@@ -34,7 +34,7 @@ type AuthenticatedDataSyncOptions = {
 export async function loadAndDrainAuthenticatedData({
     user, isGuestActive, setUserData, setSyncing, setSaveError,
 }: AuthenticatedDataSyncOptions, environment: DrainEnvironment = productionEnvironment): Promise<void> {
-    await environment.load({
+    const outcome = await environment.load({
         user,
         isGuestActive,
         setUserData,
@@ -42,7 +42,7 @@ export async function loadAndDrainAuthenticatedData({
         setSaveError,
     });
 
-    if (!environment.isOnline()) return;
+    if (outcome === 'blocked' || !environment.isOnline()) return;
     if (environment.currentUid() !== user.uid || isGuestActive()) return;
     const drainCheckpointedJournal = async () => {
         const envelope = await environment.readLocal(user.uid);
@@ -61,13 +61,14 @@ export async function loadAndDrainAuthenticatedData({
         // transactionWriter has already marked the durable identity as checkpoint-required.
         // Re-enter the authenticated loader once: it performs a full cloud scan, obtains
         // a current generation, rebases the journal, then the retry can be delivered.
-        await environment.load({
+        const retryOutcome = await environment.load({
             user,
             isGuestActive,
             setUserData,
             setSyncing,
             setSaveError,
         });
+        if (retryOutcome === 'blocked') return;
         await drainCheckpointedJournal();
     }
 }

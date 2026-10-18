@@ -81,6 +81,31 @@ describe('authenticated checkpoint journal drain', () => {
             .toBeLessThan(mocks.flush.mock.invocationCallOrder[1]);
     });
 
+
+    it('does not replay a durable journal if hydration was fenced or could not read cloud', async () => {
+        mocks.load.mockResolvedValueOnce('blocked');
+        mocks.readLocal.mockResolvedValue(checkpointed);
+
+        await loadAndDrainAuthenticatedData(options(), environment);
+
+        expect(mocks.load).toHaveBeenCalledOnce();
+        expect(mocks.readLocal).not.toHaveBeenCalled();
+        expect(mocks.flush).not.toHaveBeenCalled();
+    });
+
+    it('does not retry an already-fenced journal if the recovery hydration is also blocked', async () => {
+        const fenced = Object.assign(new Error('cloud base changed'), { code: 'replica-fenced' });
+        mocks.readLocal.mockResolvedValue(checkpointed);
+        mocks.flush.mockRejectedValueOnce(fenced);
+        mocks.load.mockResolvedValueOnce('ready').mockResolvedValueOnce('blocked');
+
+        await loadAndDrainAuthenticatedData(options(), environment);
+
+        expect(mocks.load).toHaveBeenCalledTimes(2);
+        expect(mocks.flush).toHaveBeenCalledTimes(1);
+        expect(mocks.readLocal).toHaveBeenCalledTimes(1);
+    });
+
     it('propagates non-replica-fenced delivery errors without a destructive retry', async () => {
         mocks.readLocal.mockResolvedValue(checkpointed);
         mocks.flush.mockRejectedValueOnce(new Error('network unavailable'));
