@@ -5,7 +5,7 @@ import { equivalentWorkoutSnapshot } from './workoutSnapshotEquality';
 import type { UserData } from '../../types';
 import { generateId } from '../utils/date';
 import { getNutritionConflictFingerprint } from '../utils/object';
-import { checkpointFromCloudDocuments, parseReplicaIdentity, type CloudCheckpoint, type ReplicaCheckpoint, type ReplicaIdentity } from './replicaProtocol';
+import { checkpointFromCloudDocuments, parseReplicaIdentity, ReplicaFencedError, type CloudCheckpoint, type ReplicaCheckpoint, type ReplicaIdentity } from './replicaProtocol';
 import equal from 'fast-deep-equal';
 import { type SemanticOperation, type VectorClock, type SyncMeta, diffDocuments, applySemanticOperations, coversVectorClock, mergeVectors, parseSemanticOperation, parseSyncMeta, parseVectorClock } from './semanticProjection';
 import { projectDocuments, applyRemoteDocuments, type DocumentData } from './documentProjection';
@@ -802,6 +802,17 @@ export async function hydrateLocal(owner: string, cloudData: UserData, months: s
         } else {
             const syncMeta: Record<string, SyncMeta> = {};
             const authoritativePaths = new Set(['', ...months.map(m => `history_months/${m}`), ...months.map(m => `nutrition_months/${m}`)]);
+            // A full scan may race with a newer acknowledgement in another tab.
+            // Protocol 3 does not physically delete sync documents. If a document
+            // with known durable causal metadata is absent (or lacks _sync), the
+            // response cannot prove that its acknowledged data was removed.
+            // Reject before installing the cloud snapshot or claiming a checkpoint.
+            if (cloudDocuments && Object.keys(current.syncMetaByDocument).some(path =>
+                (coverageMode === 'all' || authoritativePaths.has(path))
+                && !cloudDocuments.get(path)?._sync
+            )) {
+                throw new ReplicaFencedError('Snapshot cloud incompleto rispetto alla copia locale: sincronizzazione sospesa senza cancellare dati.');
+            }
             if (coverageMode === 'window') for (const [path, meta] of Object.entries(current.syncMetaByDocument ?? {})) if (!authoritativePaths.has(path)) syncMeta[path] = meta;
             const updatedClock = { ...current.clock };
             let staleCloudSnapshot = false;

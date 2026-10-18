@@ -6,6 +6,7 @@ import { DB } from '../src/lib/db';
 import { AuthProvider } from '../src/contexts/AuthContext';
 import { UserDataSchema } from '../src/lib/schema';
 import { mergeUserData } from '../src/lib/merge';
+import { rootDocument } from '../src/lib/sync/documentProjection';
 import { readLocal } from '../src/lib/sync/localRepository';
 import { useAppStore } from '../src/store/useAppStore';
 import type { UserData } from '../src/types';
@@ -59,7 +60,18 @@ describe('guest -> account V3 migration', () => {
 
         vi.mocked(DB.loadCloudPayload)
             .mockResolvedValueOnce({ data: cloud, completeMonths: [], cloudDocuments: new Map() })
-            .mockResolvedValueOnce({ data: merged, completeMonths: [], cloudDocuments: new Map() });
+            .mockImplementationOnce(async () => {
+                // A real post-flush cloud response includes the root document's
+                // causal metadata, not merely the merged business snapshot.
+                const durable = await readLocal('user:a');
+                const sync = durable?.syncMetaByDocument[''];
+                if (!sync) throw new Error('Post-flush fixture missing durable root _sync');
+                return {
+                    data: merged,
+                    completeMonths: [],
+                    cloudDocuments: new Map([['', { ...rootDocument(merged), _sync: sync }]]),
+                };
+            });
 
         render(<AuthProvider><div>app</div></AuthProvider>);
 
