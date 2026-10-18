@@ -74,7 +74,7 @@ async function assertNoOutdatedConsentJournal(owner: string): Promise<void> {
     const generation = readBrowserValueStrict(`logbook:v2:${owner}:health-consent-generation`);
     const withdrawal = readBrowserValueStrict(`logbook:v2:${owner}:health-consent-withdrawal`);
     if (generation === null && withdrawal !== 'withdrawn') return;
-    if (generation !== null && (!/^[1-9]\\d*$/.test(generation) || !Number.isSafeInteger(Number(generation)))) {
+    if (generation !== null && (!/^[1-9]\d*$/.test(generation) || !Number.isSafeInteger(Number(generation)))) {
         throw new HealthConsentTransitionPendingError();
     }
     const { readLocal } = await import('../sync/localRepository');

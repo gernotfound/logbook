@@ -125,7 +125,7 @@ Journal e ciphertext precedenti restano recuperabili e non si riproducono automa
 
 ## Logout e pulizia locale
 
-Il logout autenticato ordinario deve verificare il journal IndexedDB durabile, non solo lo stato di sincronizzazione in memoria. Il preflight finale avviene sotto Web Lock di owner: prima si consolidano le bozze correnti, poi si verifica che il journal non abbia pending, si persiste il purge fence e soltanto allora si invalida Firebase Auth.
+Il logout autenticato ordinario deve verificare il journal IndexedDB durabile, non solo lo stato di sincronizzazione in memoria. Una generazione di consenso positiva, canonica e rappresentabile come intero sicuro non è di per sé una transizione pendente; revisioni malformate, richieste di consenso non riconciliate e journal appartenenti a una generazione precedente devono invece bloccare il purge, anche dopo una scelta di uscita forzata. Il preflight finale avviene sotto Web Lock di owner: prima si consolidano le bozze correnti, poi si verifica che il journal non abbia pending, si persiste il purge fence e soltanto allora si invalida Firebase Auth.
 I writer di altre schede devono rifiutare la fence. Un sign-out fallito prima della prima cancellazione revoca soltanto la nuova fence; una cancellazione incompleta la conserva per il recovery. Il percorso esplicitamente distruttivo del dialogo può scartare pending dopo scelta consapevole, ma deve preservare gli altri gate di consenso e cancellazione account.
 
 

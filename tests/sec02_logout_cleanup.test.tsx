@@ -278,6 +278,85 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
         purgeSpy.mockRestore();
     });
 
+    it('accepts a verified positive consent generation when the journal is clean', async () => {
+        const { auth } = await import('../src/lib/firebase');
+        const owner = storageOwner();
+        const read = vi.spyOn(localRepository, 'readLocal').mockResolvedValue({
+            pending: [], consentRevision: 12,
+        } as any);
+        localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '12');
+
+        try {
+            await DB.secureLogOut();
+            expect(auth.signOut).toHaveBeenCalledTimes(1);
+            expect(idb.del).toHaveBeenCalledWith('logbook:v2:' + owner);
+        } finally {
+            read.mockRestore();
+        }
+    });
+
+    it('rejects malformed and unsafe consent revisions without sign-out or purge', async () => {
+        const { auth } = await import('../src/lib/firebase');
+        const owner = storageOwner();
+        const key = `logbook:v2:${owner}:health-consent-generation`;
+        for (const revision of ['0', '01', '1junk', '9007199254740992']) {
+            localStorage.setItem(key, revision);
+            await expect(DB.secureLogOut({ discardUnsynced: true }))
+                .rejects.toThrow('non è ancora riconciliata');
+            expect(auth.signOut).not.toHaveBeenCalled();
+            expect(idb.del).not.toHaveBeenCalled();
+            expect(localStorage.getItem(key)).toBe(revision);
+            expect(isLocalPurgePending(owner)).toBe(false);
+        }
+    });
+
+    it('preserves a previous-epoch pending journal even if forced logout is requested', async () => {
+        const { auth } = await import('../src/lib/firebase');
+        const owner = storageOwner();
+        const key = `logbook:v2:${owner}:health-consent-generation`;
+        localStorage.setItem(key, '2');
+        const read = vi.spyOn(localRepository, 'readLocal').mockResolvedValue({
+            pending: [{ seq: 1 }], consentRevision: 1,
+        } as any);
+
+        try {
+            await expect(DB.secureLogOut({ discardUnsynced: true }))
+                .rejects.toThrow('non è ancora riconciliata');
+            expect(auth.signOut).not.toHaveBeenCalled();
+            expect(idb.del).not.toHaveBeenCalled();
+            expect(localStorage.getItem(key)).toBe('2');
+            expect(isLocalPurgePending(owner)).toBe(false);
+        } finally {
+            read.mockRestore();
+        }
+    });
+
+    it('keeps a clean account intact if another tab withdraws consent during the journal read', async () => {
+        const { auth } = await import('../src/lib/firebase');
+        const owner = storageOwner();
+        const marker = `logbook:v2:${owner}:health-consent-withdrawal`;
+        localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '2');
+        let resolveRead!: (value: Awaited<ReturnType<typeof localRepository.readLocal>>) => void;
+        const read = vi.spyOn(localRepository, 'readLocal').mockImplementationOnce(
+            () => new Promise<Awaited<ReturnType<typeof localRepository.readLocal>>>(
+                resolve => { resolveRead = resolve; },
+            ),
+        );
+        try {
+            const logout = DB.secureLogOut();
+            await vi.waitFor(() => expect(read).toHaveBeenCalledTimes(1));
+            localStorage.setItem(marker, 'pending:2');
+            resolveRead(undefined);
+            await expect(logout).rejects.toThrow('non è ancora riconciliata');
+            expect(auth.signOut).not.toHaveBeenCalled();
+            expect(idb.del).not.toHaveBeenCalled();
+            expect(localStorage.getItem(marker)).toBe('pending:2');
+            expect(isLocalPurgePending(owner)).toBe(false);
+        } finally {
+            read.mockRestore();
+        }
+    });
+
     it('allows an ordinary logout after server-confirmed withdrawal', async () => {
         const { auth } = await import('../src/lib/firebase');
         const owner = storageOwner();
