@@ -340,6 +340,72 @@ describe('durable owner-scoped journal', () => {
         expect(hydrated.completeMonths).toEqual(['2026-09']);
     });
 
+    it('fences a full checkpoint missing a previously acknowledged monthly shard', async () => {
+        const local = UserDataSchema.parse({ nutrition: {
+            '2025-01-01': { date: '2025-01-01', weight: 70 },
+            '2026-09-01': { date: '2026-09-01', weight: 80 },
+        } }) as unknown as UserData;
+        await initializeLocal('a', local, ['2025-01', '2026-09']);
+        const knownMeta = { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: { s01: 1 }, fields: {} };
+        await acknowledgeThrough('a', 0, local, [], { 'nutrition_months/2025-01': knownMeta });
+        const before = await readLocal('a');
+
+        // A paginated full scan started before another tab's acknowledgement:
+        // its month list omits the old, already-acknowledged document.
+        const cloud = UserDataSchema.parse({ nutrition: {
+            '2026-09-01': { date: '2026-09-01', weight: 81 },
+        } }) as unknown as UserData;
+        const docs = new Map<string, any>([['nutrition_months/2026-09', {
+            _sync: { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {} },
+        }]]);
+        await expect(hydrateLocal('a', cloud, ['2026-09'], docs, 'all'))
+            .rejects.toMatchObject({ code: 'replica-fenced' });
+        expect(await readLocal('a')).toEqual(before);
+        expect((await readLocal('a'))?.data.nutrition?.['2025-01-01']?.weight).toBe(70);
+    });
+
+    it('fences a covered window whose previously acknowledged root loses sync evidence', async () => {
+        const local = data(171);
+        await initializeLocal('a', local);
+        const knownMeta = { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: { s01: 1 }, fields: {} };
+        await acknowledgeThrough('a', 0, local, [], { '': knownMeta });
+        const before = await readLocal('a');
+        const cloud = data(160);
+
+        // A missing root and a root without _sync are both insufficient proof
+        // to remove data whose metadata is already durable in another tab.
+        for (const docs of [
+            new Map<string, any>(),
+            new Map<string, any>([['', { profile: cloud.profile }]]),
+        ]) {
+            await expect(hydrateLocal('a', cloud, [], docs, 'window'))
+                .rejects.toMatchObject({ code: 'replica-fenced' });
+            expect(await readLocal('a')).toEqual(before);
+        }
+    });
+
+    it('still accepts a normal window omitting older, non-authoritative synced shards', async () => {
+        const local = UserDataSchema.parse({ nutrition: {
+            '2025-01-01': { date: '2025-01-01', weight: 70 },
+            '2026-09-01': { date: '2026-09-01', weight: 80 },
+        } }) as unknown as UserData;
+        await initializeLocal('a', local, ['2025-01', '2026-09']);
+        const knownMeta = { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: { s01: 1 }, fields: {} };
+        await acknowledgeThrough('a', 0, local, [], { 'nutrition_months/2025-01': knownMeta });
+        const cloud = UserDataSchema.parse({ nutrition: {
+            '2026-09-01': { date: '2026-09-01', weight: 81 },
+        } }) as unknown as UserData;
+        const docs = new Map<string, any>([['', {
+            _sync: { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {} },
+        }], ['nutrition_months/2026-09', {
+            _sync: { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {} },
+        }]]);
+        const hydrated = await hydrateLocal('a', cloud, ['2026-09'], docs, 'window');
+        expect(hydrated.data.nutrition?.['2025-01-01']?.weight).toBe(70);
+        expect(hydrated.data.nutrition?.['2026-09-01']?.weight).toBe(81);
+        expect(hydrated.syncMetaByDocument['nutrition_months/2025-01']).toEqual(knownMeta);
+    });
+
     it('treats exhaustive hydration as authoritative for every monthly shard', async () => {
         const base = UserDataSchema.parse({ nutrition: {
             '2025-01-01': { date: '2025-01-01', weight: 70 },
