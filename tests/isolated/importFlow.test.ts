@@ -29,7 +29,7 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 it('commits only after confirmation and reports local-pending without claiming cloud confirmation', async () => {
-    const save = vi.fn(async update => { expect(ui.confirm).toHaveBeenCalled(); ui.state.userData = update(ui.state.userData); ui.state.syncHealth = 'local-pending'; });
+    const save = vi.fn(async update => { expect(ui.confirm).toHaveBeenCalled(); ui.state.userData = update(ui.state.userData); ui.state.syncHealth = 'local-pending'; return { ok: false, status: 'local-pending', error: new Error('offline') } as const; });
     await Exporter.importFromJson(file, { uid: 'a' }, save, 'restore');
     expect(ui.state.userData.profile.height).toBe('180');
     expect(ui.alert).toHaveBeenCalledWith(expect.stringContaining('cloud in attesa'));
@@ -50,6 +50,25 @@ it('propagates storage rejection and never announces success', async () => {
     const save = vi.fn().mockRejectedValue(new Error('quota exceeded'));
     await expect(Exporter.importFromJson(file, { uid: 'a' }, save)).rejects.toThrow('quota');
     expect(ui.alert).toHaveBeenCalledExactlyOnceWith('quota exceeded');
+});
+it.each(['rejected', 'failed'] as const)('does not report or continue recovery on a resolved %s result', async status => {
+    const save = vi.fn(async () => ({ ok: false, status, error: new Error('Salvataggio bloccato') } as const));
+    await expect(Exporter.importFromJson(file, { uid: 'a' }, save, 'restore')).rejects.toThrow('Importazione non confermata');
+    expect(save).toHaveBeenCalledOnce();
+    expect(ui.alert).toHaveBeenCalledExactlyOnceWith(expect.stringContaining('Importazione non confermata'));
+    expect(ui.alert).not.toHaveBeenCalledWith(expect.stringContaining('Importazione completata'));
+    expect(ui.state.userData.profile.height).toBe('170');
+});
+it('uses the durable local-pending result even if a later store status changes', async () => {
+    const save = vi.fn(async update => {
+        ui.state.userData = update(ui.state.userData);
+        // This global UI field may be changed by a separate concurrent sync.
+        ui.state.syncHealth = 'synced';
+        return { ok: false, status: 'local-pending', error: new Error('offline') } as const;
+    });
+    await Exporter.importFromJson(file, { uid: 'a' }, save, 'restore');
+    expect(ui.alert).toHaveBeenCalledWith(expect.stringContaining('cloud in attesa'));
+    expect(ui.alert).not.toHaveBeenCalledWith(expect.stringContaining('Importazione completata'));
 });
 it('handles FileReader errors and cancellation before save', async () => {
     vi.stubGlobal('FileReader', class { onerror = () => {}; readAsText() { queueMicrotask(() => this.onerror()); } });
