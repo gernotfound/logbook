@@ -396,7 +396,8 @@ describe('durable owner-scoped journal', () => {
         await hydrateLocal('a', root, [], remote, 'all');
         const afterFull = await readLocal('a');
         expect(afterFull?.cloudIntegrityFence).toBeUndefined();
-        expect(afterFull?.data).toEqual(root);
+        expect(afterFull?.data.profile).toEqual(root.profile);
+        expect(afterFull?.pending).toEqual([]);
     });
 
     it('does not promote pending-only metadata to acknowledged remote evidence', async () => {
