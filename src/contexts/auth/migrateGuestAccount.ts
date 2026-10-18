@@ -101,7 +101,11 @@ export async function migrateGuestAccount({ user, guestData, policy, setUserData
             assertCurrent();
             await adoptReplicaCheckpoint(user.uid, claim, checkpoint, isCurrent);
             assertCurrent();
-            return completeCloudIntegrityRecovery(user.uid, hydrated.cloudIntegrityFence ?? null, true, isCurrent);
+            const recovered = await completeCloudIntegrityRecovery(user.uid, hydrated.cloudIntegrityFence ?? null, true, isCurrent);
+            if (hydrated.cloudIntegrityFence && isCurrent()) {
+                useAppStore.setState({ cloudIntegrityBlocked: false, syncHealth: recovered.pending.length ? 'local-pending' : 'synced', saveError: null });
+            }
+            return recovered;
         };
 
         const resolveAuthenticatedBase = async (): Promise<UserData> => {
@@ -192,7 +196,7 @@ export async function migrateGuestAccount({ user, guestData, policy, setUserData
             try {
                 if (await readLocal(user.uid)) {
                     await markCloudIntegrityBlocked(user.uid);
-                    useAppStore.setState({ syncHealth: 'failed' });
+                    useAppStore.setState({ syncHealth: 'failed', cloudIntegrityBlocked: true });
                 }
             } catch (fenceError) {
                 console.error('Barriera cloud dopo migrazione non registrabile:', fenceError);
