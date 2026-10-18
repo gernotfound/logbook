@@ -42,11 +42,14 @@ export async function loadAndDrainAuthenticatedData({
         setSaveError,
     });
 
-    if (outcome === 'blocked' || !environment.isOnline()) return;
-    if (environment.currentUid() !== user.uid || isGuestActive()) return;
+    const isCurrentOwner = () => environment.currentUid() === user.uid
+        && !isGuestActive() && environment.isOnline();
+    if (outcome === 'blocked' || !isCurrentOwner()) return;
     const drainCheckpointedJournal = async () => {
         const envelope = await environment.readLocal(user.uid);
-        if (!envelope?.replica || !envelope.pending.length) return;
+        // The global flush uses the current store owner; a delayed IndexedDB
+        // read must not flush a later authenticated session.
+        if (!isCurrentOwner() || !envelope?.replica || !envelope.pending.length) return;
         await environment.flush();
     };
 
@@ -58,6 +61,7 @@ export async function loadAndDrainAuthenticatedData({
     } catch (error) {
         if ((error as { code?: unknown })?.code !== 'replica-fenced') throw error;
 
+        if (!isCurrentOwner()) return;
         // transactionWriter has already marked the durable identity as checkpoint-required.
         // Re-enter the authenticated loader once: it performs a full cloud scan, obtains
         // a current generation, rebases the journal, then the retry can be delivered.
@@ -68,7 +72,7 @@ export async function loadAndDrainAuthenticatedData({
             setSyncing,
             setSaveError,
         });
-        if (retryOutcome === 'blocked') return;
+        if (retryOutcome === 'blocked' || !isCurrentOwner()) return;
         await drainCheckpointedJournal();
     }
 }
