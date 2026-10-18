@@ -283,10 +283,15 @@ describe('M3: Storage & Persistence Delta Isolation Suite', () => {
                 supplements: []
             };
 
-            vi.mocked(getDocFromServer).mockResolvedValueOnce({
+            vi.mocked(getDocFromServer).mockImplementation(async (ref: any) => {
+                if (ref?.path?.endsWith('/sync_control/state')) {
+                    return { exists: () => false, data: () => undefined } as any;
+                }
+                return {
                 exists: () => true,
                 data: () => mockFirestoreDoc
-            } as any);
+            } as any;
+            });
 
             const loaded = await DB.loadUserData();
 
@@ -304,10 +309,15 @@ describe('M3: Storage & Persistence Delta Isolation Suite', () => {
         });
 
         it('returns standard catalog defaults when user document does not exist', async () => {
-            vi.mocked(getDocFromServer).mockResolvedValueOnce({
+            vi.mocked(getDocFromServer).mockImplementation(async (ref: any) => {
+                if (ref?.path?.endsWith('/sync_control/state')) {
+                    return { exists: () => false, data: () => undefined } as any;
+                }
+                return {
                 exists: () => false,
                 data: () => undefined
-            } as any);
+            } as any;
+            });
 
             const loaded = await DB.loadUserData();
 
