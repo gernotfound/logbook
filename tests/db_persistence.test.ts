@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { getDoc, getDocFromServer, getDocs, writeBatch } from 'firebase/firestore';
+import { getDocFromServer, getDocs, writeBatch } from 'firebase/firestore';
 
 vi.unmock('../src/lib/db');
 

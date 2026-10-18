@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { getDoc, getDocFromServer, writeBatch } from 'firebase/firestore';
+import { getDocFromServer, writeBatch } from 'firebase/firestore';
 
 vi.unmock('../src/lib/db');
 import { ConsentedTestDB as DB } from './testUtils';
