@@ -88,6 +88,15 @@ class InvalidCloudSyncMetadataError extends Error {
  */
 export class IncompleteCloudSnapshotError extends ReplicaFencedError {
     readonly evidence = 'cloud-snapshot-integrity';
+
+    constructor(
+        message: string,
+        readonly causeKind: 'missing-document' | 'stale-document',
+        readonly documentPaths: readonly string[],
+    ) {
+        super(message);
+        this.name = 'IncompleteCloudSnapshotError';
+    }
 }
 
 export class WorkoutIntentConflictError extends Error {
@@ -865,24 +874,30 @@ export async function hydrateLocal(owner: string, cloudData: UserData, months: s
             // with known durable causal metadata is absent (or lacks _sync), the
             // response cannot prove that its acknowledged data was removed.
             // Reject before installing the cloud snapshot or claiming a checkpoint.
-            if (cloudDocuments && Object.keys(current.syncMetaByDocument).some(path =>
-                (coverageMode === 'all' || authoritativePaths.has(path))
-                && !cloudDocuments.get(path)?._sync
-            )) {
-                integrityFailure = new IncompleteCloudSnapshotError('Snapshot cloud incompleto rispetto alla copia locale: sincronizzazione sospesa senza cancellare dati.');
+            const missingPaths = cloudDocuments
+                ? Object.keys(current.syncMetaByDocument).filter(path =>
+                    (coverageMode === 'all' || authoritativePaths.has(path))
+                    && !cloudDocuments.get(path)?._sync
+                )
+                : [];
+            if (missingPaths.length) {
+                integrityFailure = new IncompleteCloudSnapshotError(
+                    'Snapshot cloud incompleto rispetto alla copia locale: sincronizzazione sospesa senza cancellare dati.',
+                    'missing-document', missingPaths,
+                );
                 // The same IndexedDB commit that detects missing acknowledged
                 // evidence also installs the owner-scoped destructive-purge fence.
                 return fenceCloudIntegrity(current);
             }
             if (coverageMode === 'window') for (const [path, meta] of Object.entries(current.syncMetaByDocument ?? {})) if (!authoritativePaths.has(path)) syncMeta[path] = meta;
             const updatedClock = { ...current.clock };
-            let staleCloudSnapshot = false;
+            const stalePaths: string[] = [];
             if (cloudDocuments) for (const [path, doc] of cloudDocuments.entries()) if (doc._sync) {
                 const meta = parseCloudSyncMeta(path, doc._sync);
                 const durable = current.syncMetaByDocument[path];
                 if ((coverageMode === 'all' || authoritativePaths.has(path)) && durable
                     && !coversVectorClock(meta.clock, durable.clock)) {
-                    staleCloudSnapshot = true;
+                    stalePaths.push(path);
                 }
                 syncMeta[path] = meta;
                 for (const [actor, seq] of Object.entries(meta.clock)) updatedClock[actor] = Math.max(updatedClock[actor] || 0, seq);
@@ -890,8 +905,11 @@ export async function hydrateLocal(owner: string, cloudData: UserData, months: s
             // A delayed or causally incomparable snapshot cannot certify a replica
             // checkpoint, even if the local envelope is preserved. Fail closed so the
             // caller does not publish a frontier derived from stale cloud evidence.
-            if (staleCloudSnapshot) {
-                integrityFailure = new IncompleteCloudSnapshotError('Snapshot cloud non aggiornato rispetto alla copia locale: checkpoint sospeso senza sovrascrivere dati.');
+            if (stalePaths.length) {
+                integrityFailure = new IncompleteCloudSnapshotError(
+                    'Snapshot cloud non aggiornato rispetto alla copia locale: checkpoint sospeso senza sovrascrivere dati.',
+                    'stale-document', stalePaths,
+                );
                 return fenceCloudIntegrity(current);
             }
             const localDocs = projectDocuments(current.data, catalog);
