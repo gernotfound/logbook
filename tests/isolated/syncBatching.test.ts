@@ -103,4 +103,76 @@ describe('bounded causal sync batching', () => {
         expect(batch.every(item => item.seq === 3)).toBe(true);
         expect(distinctDocumentCount(batch)).toBe(MAX_SYNC_DOCUMENTS_PER_TRANSACTION);
     });
+    it('matches the reference causal selection for interleaved and repeated sequences', () => {
+        // Exact pre-refactor oracle: scan the entire pending array per sequence.
+        const reference = (pending: SemanticOperation[], maxDocuments: number) => {
+            const sequences = [...new Set(pending.map(item => item.seq))].sort((a, b) => a - b);
+            const selected: SemanticOperation[] = [];
+            const paths = new Set<string>();
+            for (const sequence of sequences) {
+                const group = pending.filter(item => item.seq === sequence);
+                const groupPaths = new Set(group.map(item => item.docPath));
+                const count = new Set([...paths, ...groupPaths]).size;
+                if (selected.length && count > maxDocuments) break;
+                if (!selected.length && count > maxDocuments) {
+                    throw new Error(`Gruppo causale troppo grande: ${count} documenti, massimo ${maxDocuments}.`);
+                }
+                selected.push(...group);
+                for (const path of groupPaths) paths.add(path);
+            }
+            return selected;
+        };
+
+        // Thousands of operations with non-contiguous sequence IDs and duplicate
+        // document paths; unique values expose accidental intra-sequence reordering.
+        const pairs: Array<[number, string]> = [
+            [9, 'history/0'], [3, 'history/0'], [7, 'history/1'], [3, 'history/1'],
+            [11, 'history/2'], [7, 'history/2'], [9, 'history/3'], [11, 'history/4'],
+        ];
+        const pending = Array.from({ length: 2048 }, (_, i) => {
+            const [seq, path] = pairs[i % pairs.length];
+            return { ...operation(path, seq), value: `edit-${i}` };
+        });
+        const originalValues = pending.map(item => item.value);
+        for (const maxDocuments of [2, 3, 4, 5, 8]) {
+            const expected = reference(pending, maxDocuments);
+            const actual = boundedPendingTransactionBatch(pending, maxDocuments);
+            expect(actual).toEqual(expected);
+            expect(actual.map(item => item.value)).toEqual(expected.map(item => item.value));
+            expect(distinctDocumentCount(actual)).toBeLessThanOrEqual(maxDocuments);
+        }
+        expect(() => boundedPendingTransactionBatch(pending, 1)).toThrow(
+            'Gruppo causale troppo grande: 2 documenti, massimo 1.',
+        );
+        expect(pending.map(item => item.value)).toEqual(originalValues);
+    });
+
+    it('preserves sequence atomicity across deterministic mixed-order journal samples', () => {
+        // Deterministic PRNG makes varied paths/order reproducible in CI.
+        let seed = 42;
+        const next = () => ((seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 0x100000000);
+        for (let sample = 0; sample < 30; sample++) {
+            const pending = Array.from({ length: 100 }, (_, index) => {
+                const seq = 1 + Math.floor(next() * 12);
+                const doc = 'nutrition/' + Math.floor(next() * 9);
+                return { ...operation(doc, seq), value: 'sample-' + sample + '-' + index };
+            });
+            const reference = [...new Set(pending.map(op => op.seq))].sort((a, b) => a - b);
+            const expected: SemanticOperation[] = [];
+            const documents = new Set<string>();
+            for (const seq of reference) {
+                const group = pending.filter(op => op.seq === seq);
+                const nextDocuments = new Set([...documents, ...group.map(op => op.docPath)]);
+                if (expected.length && nextDocuments.size > 8) break;
+                if (!expected.length && nextDocuments.size > 8) {
+                    expect(() => boundedPendingTransactionBatch(pending)).toThrow('Gruppo causale troppo grande');
+                    break;
+                }
+                expected.push(...group);
+                for (const op of group) documents.add(op.docPath);
+            }
+            if (expected.length) expect(boundedPendingTransactionBatch(pending)).toEqual(expected);
+        }
+    });
+
 });
