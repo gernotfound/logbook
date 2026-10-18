@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackEvent: vi.fn(), trackError: vi.fn() } }));
 import { UserDataSchema } from '../../src/lib/schema';
 import type { UserData } from '../../src/types';
-import { adoptReplicaCheckpoint, markReplicaCheckpointRequired, hydrateLocal, commitLocal, commitDomainOperations, initializeLocal, readLocal, acknowledgeThrough, StaleLocalRevisionError } from '../../src/lib/sync/localRepository';
+import { adoptReplicaCheckpoint, markReplicaCheckpointRequired, markCloudIntegrityBlocked, completeCloudIntegrityRecovery, hydrateLocal, commitLocal, commitDomainOperations, initializeLocal, readLocal, acknowledgeThrough, StaleLocalRevisionError } from '../../src/lib/sync/localRepository';
 import {
     CURRENT_DATA_SCHEMA,
     CURRENT_LOCAL_ENVELOPE,
@@ -262,6 +262,29 @@ describe('durable owner-scoped journal', () => {
 
         await expect(readLocal('a')).rejects.toThrow(LegacyVersionError);
         expect(await get('logbook:v2:user:a')).toEqual(legacy);
+    });
+
+    it('persists cloud-integrity fencing until a verified full checkpoint, retaining pending edits', async () => {
+        const base = data(170);
+        await initializeLocal('a', base);
+        await commitLocal('a', data(171), base);
+        await markCloudIntegrityBlocked('a');
+        const fenced = (await readLocal('a'))!;
+        expect(fenced.cloudIntegrityFence).toEqual(expect.any(String));
+        expect(fenced.pending.length).toBeGreaterThan(0);
+        await expect(completeCloudIntegrityRecovery('a', fenced.cloudIntegrityFence!, false))
+            .rejects.toMatchObject({ code: 'replica-fenced' });
+        const identity = { slot: 's00', replicaId: 'recovery', generation: 1,
+            checkpointAtMs: Date.now(), leaseUntilMs: Date.now() + 360 * 24 * 60 * 60 * 1000 };
+        await adoptReplicaCheckpoint('a', { identity, baseSeq: 0 }, { clock: {}, syncMetaByDocument: {} });
+        await markCloudIntegrityBlocked('a');
+        await expect(completeCloudIntegrityRecovery('a', fenced.cloudIntegrityFence!, true))
+            .rejects.toMatchObject({ code: 'replica-fenced' });
+        const latest = (await readLocal('a'))!;
+        await adoptReplicaCheckpoint('a', { identity, baseSeq: 0 }, { clock: {}, syncMetaByDocument: {} });
+        const recovered = await completeCloudIntegrityRecovery('a', latest.cloudIntegrityFence!, true);
+        expect(recovered.cloudIntegrityFence).toBeUndefined();
+        expect(recovered.pending.length).toBeGreaterThan(0);
     });
 
     it('marks only the matching fenced replica as checkpoint-required without dropping its journal', async () => {
