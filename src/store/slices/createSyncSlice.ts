@@ -26,6 +26,8 @@ export interface SyncSlice {
     syncPresentation: SyncPresentation;
     syncGeneration: number;
     localPersistenceBlocked: boolean;
+    // UI-only projection of the durable IndexedDB cloud-integrity fence.
+    cloudIntegrityBlocked: boolean;
     compatibilityStatus: CompatibilityStatus;
     compatibilityError: string | null;
     setSyncing: (value: boolean) => void;
@@ -261,6 +263,7 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
         syncPresentation: 'normal',
         syncGeneration: 0,
         localPersistenceBlocked: false,
+        cloudIntegrityBlocked: false,
         compatibilityStatus: 'ok',
         compatibilityError: null,
         setSyncing: value => set({ syncing: value }),
@@ -425,6 +428,7 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
                 syncHealth: 'synced',
                 syncPresentation: 'normal',
                 localPersistenceBlocked: false,
+                cloudIntegrityBlocked: false,
                 compatibilityStatus: 'ok',
                 compatibilityError: null,
             });
