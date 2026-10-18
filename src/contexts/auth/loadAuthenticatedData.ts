@@ -8,7 +8,7 @@ import { captureSession, isCurrentSession, userOwner } from '../../lib/sync/sess
 import { useAppStore } from '../../store/useAppStore';
 import { getCachedCatalog, getInMemoryCatalog, isCatalogInMemory } from '../../lib/catalog/catalogService';
 import { getResolvedDefaultUserData } from './defaultUserData';
-import { adoptReplicaCheckpoint, readLocal, hydrateLocal, markCloudIntegrityBlocked, completeCloudIntegrityRecovery } from '../../lib/sync/localRepository';
+import { adoptReplicaCheckpoint, readLocal, hydrateLocal, markCloudIntegrityBlocked, completeCloudIntegrityRecovery, IncompleteCloudSnapshotError, markReplicaCheckpointRequired } from '../../lib/sync/localRepository';
 import {
     checkpointFromCloudDocuments,
     claimReplicaCheckpoint,
@@ -175,19 +175,28 @@ export async function loadAuthenticatedData({
                 });
                 markTabSnapshotClean(session, hydratedEnv.data);
             } catch (mergeError) {
-                if (!cloudAllowed() || !(await preserveUnsafeCloud())) return 'blocked';
+                if (!cloudAllowed()) return 'blocked';
                 const code = (mergeError as { code?: unknown })?.code;
-                if (code === 'invalid-cloud-sync-metadata') {
-                    setSaveError('Sincronizzazione cloud sospesa: i metadati di sincronizzazione remoti non sono validi. I dati locali validi sono stati preservati e TheLogBook non sovrascriverà il cloud finché il problema non viene risolto.');
-                    console.error('Metadati di sincronizzazione cloud non validi; stato locale preservato:', mergeError);
-                } else if (code === 'replica-capacity' || code === 'replica-fenced') {
-                    setSaveError(mergeError instanceof Error ? mergeError.message : 'Sincronizzazione sospesa: questa copia deve completare un nuovo checkpoint cloud.');
-                    console.warn('Checkpoint replica non completato; stato locale preservato:', mergeError);
+                if (mergeError instanceof IncompleteCloudSnapshotError) {
+                    // hydrateLocal already fenced the exact unsafe envelope in
+                    // its atomic IndexedDB write, before surfacing the error.
+                    useAppStore.setState({ syncHealth: 'failed', cloudIntegrityBlocked: true });
+                    setSaveError(mergeError.message);
+                    console.warn('Evidenza cloud incompleta; archivio locale protetto:', mergeError);
+                } else if (code === 'invalid-cloud-sync-metadata') {
+                    if (!(await preserveUnsafeCloud())) return 'blocked';
+                    setSaveError('Metadati cloud non validi. Archivio locale preservato; sincronizzazione sospesa.');
+                    console.error('Metadati di sincronizzazione cloud non validi:', mergeError);
                 } else {
-                    console.error('Hydration cloud non valida; stato locale preservato:', mergeError);
+                    // Transport failures and replica capacity are NOT evidence
+                    // that acknowledged business documents went missing.
+                    // Requiring a new checkpoint stops old journal replay while
+                    // leaving backup/logout policy tied to actual integrity.
+                    await markReplicaCheckpointRequired(expectedOwner);
+                    if (!cloudAllowed()) return 'blocked';
+                    setSaveError(mergeError instanceof Error ? mergeError.message : 'Checkpoint cloud non completato. Riprova.');
+                    console.warn('Checkpoint cloud non disponibile:', mergeError);
                 }
-                // A failed hydrate/checkpoint is not authorization to flush the
-                // previous journal from a replica whose cloud base is unverified.
                 return 'blocked';
             }
         }
@@ -197,6 +206,10 @@ export async function loadAuthenticatedData({
         if (integrityError) {
             if (!(await preserveUnsafeCloud())) return 'blocked';
             setSaveError('Dati cloud non verificabili: sincronizzazione sospesa, archivio locale preservato.');
+        } else if (error?.code === 'concurrent-cloud-read') {
+            // A racing scan is not a verified missing document. Retry at the
+            // next foreground sync without installing a destructive-exit fence.
+            setSaveError(error.message);
         }
         console.warn('Errore caricamento dati in AuthContext (uso dati locali/offline):', error);
         if (error?.code === 'unavailable' || !navigator.onLine) {
