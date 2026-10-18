@@ -90,7 +90,8 @@ describe('DB Persistence for Training Cycles and Planning', () => {
         };
 
         vi.mocked(getDocFromServer).mockImplementation(async (ref: any) => {
-                if (ref?.path?.endsWith('/sync_control/state')) {
+                if (typeof ref?.path !== 'string' || ref.path.endsWith('/sync_control/state')
+                    || ref.path.includes('/history_months/') || ref.path.includes('/nutrition_months/')) {
                     return { exists: () => false, data: () => undefined } as any;
                 }
                 return {
@@ -118,7 +119,8 @@ describe('DB Persistence for Training Cycles and Planning', () => {
 
     it('DB.loadUserData defaults trainingCycles to [] and activeCycleId to null if absent', async () => {
         vi.mocked(getDocFromServer).mockImplementation(async (ref: any) => {
-                if (ref?.path?.endsWith('/sync_control/state')) {
+                if (typeof ref?.path !== 'string' || ref.path.endsWith('/sync_control/state')
+                    || ref.path.includes('/history_months/') || ref.path.includes('/nutrition_months/')) {
                     return { exists: () => false, data: () => undefined } as any;
                 }
                 return {
