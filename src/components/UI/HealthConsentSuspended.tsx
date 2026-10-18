@@ -135,7 +135,7 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
       // The server accepted the new consent, but older local edits still need
       // the person's separate, explicit recovery choice. This is not a failed
       // consent: keep the suspension and let the recovery screen explain it.
-      if (refreshed === 'recovery-required') return;
+      if (refreshed === 'recovery-required' || refreshed === 'erasure-required') return;
       if (refreshed !== 'active') throw new Error('Nuovo consenso non ancora verificato su questo dispositivo.');
       finishHealthConsentReacceptance(user.uid);
     } catch {
