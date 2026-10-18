@@ -319,7 +319,9 @@ it('retries a mixed full read, publishing only the stable server epoch', async (
     harness.root.mockImplementation(async (path: string) => {
         if (path.endsWith('sync_control/state')) {
             controlReads += 1;
-            return { exists: () => true, data: () => ({ epoch: controlReads === 1 ? 1 : 2 }) };
+            // Document snapshots hold immutable data from their read instant.
+            const epoch = controlReads === 1 ? 1 : 2;
+            return { exists: () => true, data: () => ({ epoch }) };
         }
         return { exists: () => false };
     });
