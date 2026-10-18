@@ -6,7 +6,7 @@ import { auth, ensureAppCheck } from './firebase';
 import { getLimitedUseAppCheckToken } from './appCheck';
 import { readBrowserValueStrict, removeBrowserValue, writeBrowserValue } from './sync/browserStorage';
 
-export type HealthConsentStatus = 'unregistered' | 'checking' | 'active' | 'withdrawn' | 'pending' | 'reaccepting' | 'recovery-required' | 'stale-request' | 'error';
+export type HealthConsentStatus = 'unregistered' | 'checking' | 'active' | 'withdrawn' | 'pending' | 'reaccepting' | 'recovery-required' | 'erasure-required' | 'stale-request' | 'error';
 type ServerStatus = { status: 'unregistered' | 'active' | 'withdrawn'; revision: number; acceptedAt?: string; privacyVersion?: string; termsVersion?: string; erasedBeforeRevision?: number };
 const entries = new Map<string, HealthConsentStatus>();
 const listeners = new Set<() => void>();
@@ -106,6 +106,7 @@ export function currentHealthConsentStatus(uid: string | undefined): HealthConse
   if (!uid) return 'active';
   try {
     if (entries.get(uid) === 'recovery-required') return 'recovery-required';
+    if (entries.get(uid) === 'erasure-required') return 'erasure-required';
     if (entries.get(uid) === 'stale-request') return 'stale-request';
     const saved = readMarker(uid);
     if (parsePendingRevision(saved) !== null) return 'pending';
@@ -538,8 +539,17 @@ export async function refreshHealthConsent(user: User): Promise<HealthConsentSta
       observedGeneration = String(state.revision);
       const { advanceLocalConsentRevisionIfClean } = await import('./sync/localRepository');
       if (!isSameDecision()) return currentHealthConsentStatus(uid);
-      const ready = await advanceLocalConsentRevisionIfClean('user:' + uid, state.revision, isSameDecision);
+      const ready = await advanceLocalConsentRevisionIfClean(
+        'user:' + uid, state.revision, isSameDecision, state.erasedBeforeRevision,
+      );
       if (!isSameDecision()) return currentHealthConsentStatus(uid);
+      if (ready === 'erased') {
+        verifiedRevisions.delete(uid);
+        onlineVerifiedRevisions.delete(uid);
+        serverConfirmedLegal.delete(uid);
+        setStatus(uid, 'erasure-required');
+        return 'erasure-required';
+      }
       if (!ready) {
         setStatus(uid, 'recovery-required');
         return 'recovery-required';
@@ -634,7 +644,8 @@ export async function retainNewerHealthConsent(user: User): Promise<HealthConsen
   const { advanceLocalConsentRevisionIfClean } = await import('./sync/localRepository');
   const ready = await advanceLocalConsentRevisionIfClean('user:' + uid, live.revision,
     () => sameAuth() && readMarker(uid) === saved
-      && readBrowserValueStrict(generationMarker(uid)) === String(live.revision));
+      && readBrowserValueStrict(generationMarker(uid)) === String(live.revision),
+    live.erasedBeforeRevision);
   if (!sameAuth()) throw new Error('Sessione cambiata durante il recupero.');
   if (readMarker(uid) !== saved || currentHealthConsentStatus(uid) !== 'stale-request') {
     throw new Error('La revoca locale è cambiata durante il recupero.');
@@ -642,6 +653,13 @@ export async function retainNewerHealthConsent(user: User): Promise<HealthConsen
   // The superseded request is cleared only after the live generation has
   // durably fenced old tabs. An old journal remains in IndexedDB in either case.
   removeBrowserValue(marker(uid));
+  if (ready === 'erased') {
+    verifiedRevisions.delete(uid);
+    onlineVerifiedRevisions.delete(uid);
+    serverConfirmedLegal.delete(uid);
+    setStatus(uid, 'erasure-required');
+    return 'erasure-required';
+  }
   if (!ready) {
     setStatus(uid, 'recovery-required');
     return 'recovery-required';
