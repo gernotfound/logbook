@@ -597,6 +597,20 @@ describe('LogBook Background Sync & Error Toast 4-Tier Test Suite', () => {
         expect(screen.getByText(message)).toBeDefined();
       });
 
+      test('T2.13d_R3: Cloud-integrity failure remains visible and cannot be dismissed', async () => {
+        const { container } = await renderSettledApp();
+        const message = 'Snapshot cloud incompleto: copia locale preservata.';
+
+        act(() => {
+          useAppStore.setState({ syncHealth: 'failed', saveError: message });
+        });
+        expect(screen.getByText(message)).toBeDefined();
+        expect(container.querySelector('.sync-error-close')).toBeNull();
+
+        act(() => { vi.advanceTimersByTime(10_000); });
+        expect(useAppStore.getState().saveError).toBe(message);
+      });
+
       test('T2.13c_R3: Update-required reload surfaces a device snapshot failure instead of swallowing it', async () => {
         await renderSettledApp();
         reloadMocks.requiredUpdateHardReload.mockRejectedValueOnce(new Error('quota update snapshot'));
