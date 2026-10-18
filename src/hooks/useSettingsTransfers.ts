@@ -82,6 +82,10 @@ export function useSettingsTransfers({ currentUser, isGuest }: TransferAuth) {
         setExportingData(true);
         try {
             const envelope = stateData ? undefined : await readLocal(session.owner);
+            // An empty fallback is useful for a cloud-only rights export, but
+            // is not evidence that a local archive exists. Never offer it as a
+            // device backup if the cloud scan fails.
+            const hasDeviceBackupSource = stateData !== null || envelope !== undefined;
             const userData = stateData ?? envelope?.data ?? (UserDataSchema.parse({}) as NonNullable<typeof stateData>);
             try { await useAppStore.getState().flushPendingSyncs(); }
             catch { /* A rejected cloud write must not prevent exporting its durable local copy. */ }
@@ -91,6 +95,9 @@ export function useSettingsTransfers({ currentUser, isGuest }: TransferAuth) {
                 snapshot = await collectBackupSnapshot(userData, !isGuest);
             } catch (error) {
                 if (!isCurrentSession(session)) throw error;
+                if (!hasDeviceBackupSource) {
+                    throw new Error('Backup locale non disponibile: nessun archivio leggibile su questo dispositivo. Il backup cloud non è riuscito; riprova senza sostituire eventuali copie precedenti.');
+                }
                 if (!(await showConfirm('Il backup completo del cloud non è disponibile. Vuoi esportare solo i dati presenti su questo dispositivo? La copia sarà indicata come parziale.'))) return;
                 if (!isCurrentSession(session)) throw new Error('Sessione cambiata.');
                 snapshot = await collectBackupSnapshot(userData, false);
