@@ -38,6 +38,15 @@ describe('consent generation is a durable local and cross-tab write fence', () =
     expect(preserved?.consentRevision).toBeUndefined();
   });
 
+  it('aborts consent epoch adoption inside IndexedDB if the session guard fails', async () => {
+    const base = initialData();
+    await initializeLocal(owner, base);
+    const before = await readLocal(owner);
+    await expect(advanceLocalConsentRevisionIfClean(owner, 2, () => false))
+      .rejects.toThrow('Sessione cambiata');
+    expect(await readLocal(owner)).toEqual(before);
+  });
+
   it('can adopt the new epoch atomically when no old pending operations exist', async () => {
     const base = initialData();
     await initializeLocal(owner, base);

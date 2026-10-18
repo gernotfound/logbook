@@ -331,11 +331,12 @@ export async function rebaseConsentRecoveryWithExplicitChoice(
     });
 }
 
-export async function advanceLocalConsentRevisionIfClean(owner: string, revision: number): Promise<boolean> {
+export async function advanceLocalConsentRevisionIfClean(owner: string, revision: number, guard?: LocalWriteGuard): Promise<boolean> {
     owner = normalizeStorageOwner(owner);
     if (!owner.startsWith('user:') || !Number.isSafeInteger(revision) || revision < 1) throw new Error('Generazione consenso non valida');
     let ready = false;
     await updateArchiveRecord<any>(owner, raw => {
+        if (guard && !guard()) throw new Error('Sessione cambiata durante la riconciliazione del consenso.');
         const current = validate(raw, owner);
         if (!current) { ready = true; return raw; }
         const previous = current.consentRevision ?? 0;

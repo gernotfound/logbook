@@ -161,5 +161,7 @@ Gli aggiornamenti PWA sono differibili. Prima del reload: flush delle bozze, att
 
 ## Riferimenti per consenso e accountability
 
+**MUST (owner e consenso asincroni):** risposte trusted e scelte esplicite del consenso non possono pubblicare revisioni o modificare IndexedDB dopo un cambio UID; ricontrollare identità/decisione dopo le attese e nel commit locale. Il drenaggio del journal deve verificare l'UID anche dopo la lettura IndexedDB prima del flush globale.
+
 - [Decisione e gate sul consenso salute](../../docs/compliance/health-consent-release-gate.md) e [protocollo tecnico della revoca](../../docs/compliance/health-consent-technical-protocol.md): distinguere comportamenti documentati, verifiche manuali pendenti e questioni legali aperte.
 - [Pacchetto compliance pre-pilot](../../docs/compliance/README.md): procedure e template non automaticamente approvati, né sostituti di Rules, codice e contratti di questo file.
