@@ -15,7 +15,7 @@ import {
     claimReplicaCheckpoint,
     retireExpiredReplicas,
 } from '../../lib/sync/replicaProtocol';
-import type { LocalEnvelope } from '../../lib/sync/localRepository';
+import { IncompleteCloudSnapshotError, type LocalEnvelope } from '../../lib/sync/localRepository';
 
 type GuestMigrationPolicy = 'merge' | 'skip';
 
@@ -187,11 +187,15 @@ export async function migrateGuestAccount({ user, guestData, policy, setUserData
     } catch (error) {
         if (error instanceof StaleGuestMigrationError || !isCurrent()) throw new StaleGuestMigrationError();
         const code = (error as { code?: unknown })?.code;
-        const integrityFailure = code === 'replica-fenced' || code === 'invalid-cloud-sync-metadata'
+        if (error instanceof IncompleteCloudSnapshotError) {
+            // The hydration transaction has already persisted the precise fence.
+            useAppStore.setState({
+                syncHealth: 'failed', cloudIntegrityBlocked: true, saveError: error.message,
+            });
+        } else if (code === 'invalid-cloud-sync-metadata'
             || ['CloudDataIntegrityError', 'LegacyVersionError', 'FutureVersionError', 'ZodError'].includes(
                 error instanceof Error ? error.name : '',
-            );
-        if (integrityFailure) {
+            )) {
             const { markCloudIntegrityBlocked, readLocal } = await import('../../lib/sync/localRepository');
             try {
                 if (await readLocal(user.uid)) {
