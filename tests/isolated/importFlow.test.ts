@@ -36,7 +36,7 @@ it('commits only after confirmation and reports local-pending without claiming c
 });
 it('does not overwrite an edit made while the preview was open', async () => {
     ui.confirm.mockImplementation(async () => { ui.state.userData.profile.height = '175'; return true; });
-    const save = vi.fn(async update => { ui.state.userData = update(ui.state.userData); });
+    const save = vi.fn(async update => { ui.state.userData = update(ui.state.userData); return { ok: true, status: 'synced' } as const; });
     await expect(Exporter.importFromJson(file, { uid: 'a' }, save, 'restore')).rejects.toThrow('dati sono cambiati');
     expect(ui.state.userData.profile.height).toBe('175');
 });
