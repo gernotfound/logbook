@@ -81,6 +81,15 @@ class InvalidCloudSyncMetadataError extends Error {
     }
 }
 
+/**
+ * Cloud business evidence is missing or causally older than an already
+ * acknowledged local document. Unlike a transport/replica failure this is
+ * evidence that destructive cleanup must be fenced durably.
+ */
+export class IncompleteCloudSnapshotError extends ReplicaFencedError {
+    readonly evidence = 'cloud-snapshot-integrity';
+}
+
 export class WorkoutIntentConflictError extends Error {
     readonly code = 'workout-intent-conflict';
 
@@ -616,17 +625,23 @@ export async function commitDomainOperations(owner: string, batch: DomainOperati
     return { operations, data: savedData };
 }
 
+function fenceCloudIntegrity(current: LocalEnvelope): LocalEnvelope {
+    // Preserve the original fence across retries, so a read-only retry cannot
+    // invalidate an in-flight recovery by rotating its witness.
+    return {
+        ...current,
+        cloudIntegrityFence: current.cloudIntegrityFence ?? generateId('cloud-fence'),
+        replica: current.replica ? { ...current.replica, checkpointAtMs: 1, leaseUntilMs: 1 } : null,
+        revision: current.revision + 1,
+    };
+}
+
 export async function markCloudIntegrityBlocked(owner: string): Promise<void> {
     owner = normalizeStorageOwner(owner);
     await updateArchiveRecord<any>(owner, raw => {
         const current = validate(raw, owner);
         if (!current) throw new Error('Archivio locale non disponibile per la protezione cloud');
-        return {
-            ...current,
-            cloudIntegrityFence: generateId('cloud-fence'),
-            replica: current.replica ? { ...current.replica, checkpointAtMs: 1, leaseUntilMs: 1 } : null,
-            revision: current.revision + 1,
-        };
+        return fenceCloudIntegrity(current);
     });
 }
 
@@ -828,6 +843,7 @@ export async function hydrateLocal(owner: string, cloudData: UserData, months: s
     owner = normalizeStorageOwner(owner);
     const cloud = structuredClone(parse(cloudData));
     let saved: LocalEnvelope | undefined;
+    let integrityFailure: IncompleteCloudSnapshotError | undefined;
     const catalog = await getCachedCatalog();
     await updateArchiveRecord<any>(owner, raw => {
         if (guard && !guard()) return raw;
@@ -853,7 +869,10 @@ export async function hydrateLocal(owner: string, cloudData: UserData, months: s
                 (coverageMode === 'all' || authoritativePaths.has(path))
                 && !cloudDocuments.get(path)?._sync
             )) {
-                throw new ReplicaFencedError('Snapshot cloud incompleto rispetto alla copia locale: sincronizzazione sospesa senza cancellare dati.');
+                integrityFailure = new IncompleteCloudSnapshotError('Snapshot cloud incompleto rispetto alla copia locale: sincronizzazione sospesa senza cancellare dati.');
+                // The same IndexedDB commit that detects missing acknowledged
+                // evidence also installs the owner-scoped destructive-purge fence.
+                return fenceCloudIntegrity(current);
             }
             if (coverageMode === 'window') for (const [path, meta] of Object.entries(current.syncMetaByDocument ?? {})) if (!authoritativePaths.has(path)) syncMeta[path] = meta;
             const updatedClock = { ...current.clock };
@@ -872,7 +891,8 @@ export async function hydrateLocal(owner: string, cloudData: UserData, months: s
             // checkpoint, even if the local envelope is preserved. Fail closed so the
             // caller does not publish a frontier derived from stale cloud evidence.
             if (staleCloudSnapshot) {
-                throw new ReplicaFencedError('Snapshot cloud non aggiornato rispetto alla copia locale: checkpoint sospeso senza sovrascrivere dati.');
+                integrityFailure = new IncompleteCloudSnapshotError('Snapshot cloud non aggiornato rispetto alla copia locale: checkpoint sospeso senza sovrascrivere dati.');
+                return fenceCloudIntegrity(current);
             }
             const localDocs = projectDocuments(current.data, catalog);
             const cloudDocsForHydration = projectDocuments(cloud, catalog);
@@ -897,6 +917,7 @@ export async function hydrateLocal(owner: string, cloudData: UserData, months: s
         }
         return saved;
     });
+    if (integrityFailure) throw integrityFailure;
     if (!saved) throw new Error('Hydration locale invalidata o non riuscita');
     return saved;
 }
