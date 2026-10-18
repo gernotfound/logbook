@@ -380,6 +380,89 @@ describe('durable owner-scoped journal', () => {
         expect(hydrated.completeMonths).toEqual(['2026-09']);
     });
 
+    it('never certifies empty window months as cloud documents', async () => {
+        const root = data(171);
+        const remote = new Map<string, any>([['', {
+            profile: root.profile,
+            _sync: { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {} },
+        }]]);
+        await initializeLocal('a', root);
+        await hydrateLocal('a', root, ['2026-10', '2026-09', '2026-08'], remote, 'window');
+        const afterWindow = await readLocal('a');
+        expect(Object.keys(afterWindow!.syncMetaByDocument)).toEqual(['']);
+
+        // Reopening on a full checkpoint is not evidence that an empty month
+        // mysteriously disappeared from Firestore.
+        await hydrateLocal('a', root, [], remote, 'all');
+        const afterFull = await readLocal('a');
+        expect(afterFull?.cloudIntegrityFence).toBeUndefined();
+        expect(afterFull?.data.profile).toEqual(root.profile);
+        expect(afterFull?.pending).toEqual([]);
+    });
+
+    it('does not promote pending-only metadata to acknowledged remote evidence', async () => {
+        const base = data(170);
+        const desired = UserDataSchema.parse({
+            ...base,
+            nutrition: { '2026-10-01': { date: '2026-10-01', weight: 80 } },
+        }) as unknown as UserData;
+        await initializeLocal('a', base);
+        await commitLocal('a', desired, base);
+        const pendingBefore = (await readLocal('a'))!.pending;
+        expect(pendingBefore.some(op => op.docPath === 'nutrition_months/2026-10')).toBe(true);
+        await acknowledgeThrough('a', 0, base, [], {
+            '': { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {} },
+        });
+        const after = (await readLocal('a'))!;
+        expect(after.pending).toEqual(pendingBefore);
+        expect(after.data.nutrition?.['2026-10-01']?.weight).toBe(80);
+        expect(after.syncMetaByDocument['nutrition_months/2026-10']).toBeUndefined();
+    });
+
+    it('repairs only writerless inert legacy month metadata after a full server scan', async () => {
+        const root = data(170);
+        await initializeLocal('a', root);
+        const key = 'logbook:v2:user:a';
+        const raw = await get(key) as Record<string, any>;
+        await set(key, {
+            ...raw,
+            cloudIntegrityFence: 'previous-client-warning',
+            syncMetaByDocument: { 'nutrition_months/2026-08': {
+                protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {},
+            } },
+        });
+        const remote = new Map<string, any>([['', {
+            _sync: { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {} },
+        }]]);
+        const before = (await readLocal('a'))!;
+        const hydrated = await hydrateLocal('a', root, [], remote, 'all');
+        expect(hydrated.syncMetaByDocument['nutrition_months/2026-08']).toBeUndefined();
+        expect(hydrated.cloudIntegrityFence).toBe('previous-client-warning');
+        expect(hydrated.data).toEqual(before.data);
+        expect(hydrated.pending).toEqual(before.pending);
+    });
+
+    it('keeps the integrity fence when local business data exists on a missing month', async () => {
+        const business = UserDataSchema.parse({
+            nutrition: { '2026-08-01': { date: '2026-08-01', weight: 75 } },
+        }) as unknown as UserData;
+        await initializeLocal('a', business);
+        const key = 'logbook:v2:user:a';
+        const raw = await get(key) as Record<string, any>;
+        await set(key, { ...raw, syncMetaByDocument: {
+            'nutrition_months/2026-08': { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {} },
+        } });
+        const remote = new Map<string, any>([['', {
+            _sync: { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {} },
+        }]]);
+        await expect(hydrateLocal('a', data(170), [], remote, 'all'))
+            .rejects.toMatchObject({ code: 'replica-fenced', causeKind: 'missing-document',
+                documentPaths: ['nutrition_months/2026-08'] });
+        const stillLocal = (await readLocal('a'))!;
+        expect(stillLocal.data.nutrition?.['2026-08-01']?.weight).toBe(75);
+        expect(stillLocal.cloudIntegrityFence).toEqual(expect.any(String));
+    });
+
     it('fences a full checkpoint missing a previously acknowledged monthly shard', async () => {
         const local = UserDataSchema.parse({ nutrition: {
             '2025-01-01': { date: '2025-01-01', weight: 70 },
