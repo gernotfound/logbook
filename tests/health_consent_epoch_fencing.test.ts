@@ -47,6 +47,27 @@ describe('consent generation is a durable local and cross-tab write fence', () =
     expect(await readLocal(owner)).toEqual(before);
   });
 
+  it('does not restamp an ACKed local archive belonging to an erased consent epoch', async () => {
+    const older = 'user:erased-' + crypto.randomUUID();
+    await initializeLocal(older, initialData());
+    const original = await readLocal(older);
+    expect(original?.pending).toEqual([]);
+
+    expect(await advanceLocalConsentRevisionIfClean(older, 4, undefined, 2)).toBe('erased');
+    expect(await readLocal(older)).toEqual(original);
+
+    // Later archives outside the erasure floor may safely adopt a new epoch.
+    expect(await advanceLocalConsentRevisionIfClean(older, 2)).toBe(true);
+    expect(await advanceLocalConsentRevisionIfClean(older, 4, undefined, 1)).toBe(true);
+    expect((await readLocal(older))?.consentRevision).toBe(4);
+  });
+
+  it('does not create a replacement envelope for a fresh device after erasure', async () => {
+    const fresh = 'user:erased-fresh-' + crypto.randomUUID();
+    expect(await advanceLocalConsentRevisionIfClean(fresh, 4, undefined, 2)).toBe(true);
+    expect(await readLocal(fresh)).toBeUndefined();
+  });
+
   it('can adopt the new epoch atomically when no old pending operations exist', async () => {
     const base = initialData();
     await initializeLocal(owner, base);

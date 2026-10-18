@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { auth } from '../src/lib/firebase';
+import { UserDataSchema } from '../src/lib/schema';
+import { initializeLocal, readLocal } from '../src/lib/sync/localRepository';
 // Unlike the rest of the UI fixture, this suite exercises the real policy module.
 vi.unmock('../src/lib/healthConsent');
 
@@ -69,6 +71,54 @@ describe('first trusted consent registration', () => {
     expect(await refreshHealthConsent(actor)).toBe('error');
     expect(isHealthConsentCloudWritable('user:' + uid)).toBe(false);
     await expect(registerInitialHealthConsent(actor, accepted)).rejects.toThrow();
+  });
+});
+
+describe('erased acknowledged local consent generation', () => {
+  it('fences an ACKed erased archive after remote reacceptance and on repeated checks', async () => {
+    const uid = 'erased-' + crypto.randomUUID();
+    const owner = 'user:' + uid;
+    const actor = user(uid);
+    (auth as { currentUser: unknown }).currentUser = actor;
+    await initializeLocal(owner, UserDataSchema.parse({ profile: { height: '180' } }) as any);
+    const original = await readLocal(owner);
+    expect(original?.pending).toEqual([]);
+
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json({
+      status: 'active', revision: 4, erasedBeforeRevision: 2,
+      acceptedAt: '2026-10-12T05:00:00.000Z',
+      privacyVersion: accepted.privacyVersion, termsVersion: accepted.termsVersion,
+    })));
+    beginHealthConsentVerification(uid);
+    expect(await refreshHealthConsent(actor)).toBe('erasure-required');
+    expect(currentHealthConsentStatus(uid)).toBe('erasure-required');
+    expect(isHealthConsentWritable(owner)).toBe(false);
+    expect(isHealthConsentCloudWritable(owner)).toBe(false);
+    expect(await readLocal(owner)).toEqual(original);
+    expect(localStorage.getItem('logbook:v2:' + owner + ':health-consent-generation')).toBe('4');
+
+    beginHealthConsentVerification(uid);
+    expect(await refreshHealthConsent(actor)).toBe('erasure-required');
+    expect(await readLocal(owner)).toEqual(original);
+  });
+
+  it('does not let an explicit KEEP silently reauthorize a clean erased local copy', async () => {
+    const uid = 'erased-keep-' + crypto.randomUUID();
+    const owner = 'user:' + uid;
+    const actor = user(uid);
+    (auth as { currentUser: unknown }).currentUser = actor;
+    await initializeLocal(owner, UserDataSchema.parse({ profile: { height: '180' } }) as any);
+    const original = await readLocal(owner);
+    localStorage.setItem(key(uid), 'withdrawn');
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json({
+      status: 'active', revision: 4, erasedBeforeRevision: 2,
+      acceptedAt: '2026-10-12T05:00:00.000Z',
+    })));
+    beginHealthConsentVerification(uid);
+    expect(await refreshHealthConsent(actor)).toBe('stale-request');
+    expect(await retainNewerHealthConsent(actor)).toBe('erasure-required');
+    expect(isHealthConsentWritable(owner)).toBe(false);
+    expect(await readLocal(owner)).toEqual(original);
   });
 });
 

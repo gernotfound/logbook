@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto';
 import { clear, get, set } from 'idb-keyval';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-const app = vi.hoisted(() => ({ state: { userData: null as any, localWorkout: null as any, dataOwner: 'user:a' as string | null }, flush: vi.fn(), auth: { currentUser: { uid: 'a' } } }));
+const app = vi.hoisted(() => ({ state: { userData: null as any, localWorkout: null as any, dataOwner: 'user:a' as string | null }, flush: vi.fn(), auth: { currentUser: { uid: 'a' } }, suspendedConsent: null as null | 'erasure-required' }));
 vi.mock('../../src/store/useAppStore', () => ({ useAppStore: {
     getState: () => ({ ...app.state, flushPendingSyncs: app.flush }),
     setState: (patch: any) => { app.state = { ...app.state, ...(typeof patch === 'function' ? patch(app.state) : patch) }; },
@@ -16,6 +16,7 @@ vi.mock('../../src/lib/healthConsent', async () => {
         : actual.isHealthConsentWritable(owner);
     return {
         ...actual,
+        currentHealthConsentStatus: (uid: string) => app.suspendedConsent ?? actual.currentHealthConsentStatus(uid),
         isHealthConsentWritable: writable,
         isHealthConsentCloudWritable: writable,
         requireHealthConsentWritable: (owner: string) => {
@@ -37,7 +38,7 @@ import type { UserData } from '../../src/types';
 const parse = (height: number) => UserDataSchema.parse({ profile: { height } }) as unknown as UserData;
 let disk: Map<string, string>;
 beforeEach(async () => {
-    await clear(); invalidateSession(); vi.resetAllMocks(); app.auth.currentUser = { uid: 'a' };
+    await clear(); invalidateSession(); vi.resetAllMocks(); app.auth.currentUser = { uid: 'a' }; app.suspendedConsent = null;
     disk = new Map();
     vi.stubGlobal('localStorage', { getItem: (key: string) => disk.get(key) ?? null, setItem: (key: string, value: string) => disk.set(key, value), removeItem: (key: string) => disk.delete(key) });
     app.state = { userData: parse(170), localWorkout: { id: 'active', exercises: [] }, dataOwner: 'user:a' };
@@ -307,6 +308,20 @@ it('does not erase a stored workout while reloading a consent-suspended screen',
     disk.set('logbook:v2:user:a:workout', saved);
     disk.set('logbook:v2:user:a:health-consent-withdrawal', 'withdrawn');
     app.state.localWorkout = null; // Suspended UI has no active RAM workout.
+    app.flush.mockRejectedValue(new Error('offline'));
+
+    const reload = vi.fn();
+    await safeHardReload(reload);
+
+    expect(reload).toHaveBeenCalledTimes(1);
+    expect(disk.get('logbook:v2:user:a:workout')).toBe(saved);
+});
+
+it('does not replace an old stored workout when reloading a server-erased local archive', async () => {
+    const saved = JSON.stringify({ id: 'old-acknowledged-workout', exercises: [] });
+    disk.set('logbook:v2:user:a:workout', saved);
+    app.state.localWorkout = null;
+    app.suspendedConsent = 'erasure-required';
     app.flush.mockRejectedValue(new Error('offline'));
 
     const reload = vi.fn();

@@ -331,10 +331,16 @@ export async function rebaseConsentRecoveryWithExplicitChoice(
     });
 }
 
-export async function advanceLocalConsentRevisionIfClean(owner: string, revision: number, guard?: LocalWriteGuard): Promise<boolean> {
+export async function advanceLocalConsentRevisionIfClean(
+    owner: string, revision: number, guard?: LocalWriteGuard, erasedBeforeRevision?: number,
+): Promise<boolean | 'erased'> {
     owner = normalizeStorageOwner(owner);
-    if (!owner.startsWith('user:') || !Number.isSafeInteger(revision) || revision < 1) throw new Error('Generazione consenso non valida');
-    let ready = false;
+    if (!owner.startsWith('user:') || !Number.isSafeInteger(revision) || revision < 1
+        || (erasedBeforeRevision !== undefined && (!Number.isSafeInteger(erasedBeforeRevision)
+            || erasedBeforeRevision < 1 || erasedBeforeRevision >= revision))) {
+        throw new Error('Generazione consenso non valida');
+    }
+    let ready: boolean | 'erased' = false;
     await updateArchiveRecord<any>(owner, raw => {
         if (guard && !guard()) throw new Error('Sessione cambiata durante la riconciliazione del consenso.');
         const current = validate(raw, owner);
@@ -342,6 +348,12 @@ export async function advanceLocalConsentRevisionIfClean(owner: string, revision
         const previous = current.consentRevision ?? 0;
         if (previous > revision) throw new Error('Generazione locale più recente del server');
         if (previous === revision) { ready = true; return raw; }
+        // An ACKed journal is not proof that its business data survived a
+        // server-confirmed erasure. Keep the original envelope unchanged.
+        if (erasedBeforeRevision !== undefined && previous <= erasedBeforeRevision) {
+            ready = 'erased';
+            return raw;
+        }
         if (current.pending.length > 0) { ready = false; return raw; }
         ready = true;
         return { ...current, consentRevision: revision, replica: null, revision: current.revision + 1 };
