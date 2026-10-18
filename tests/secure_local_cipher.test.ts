@@ -14,7 +14,9 @@ describe('secure archive ciphertext primitive', () => {
         const original = key();
         const sealed = sealLocalJson(original, owner, archive, sensitive);
         expect(sealed.startsWith(SEALED_LOCAL_PREFIX)).toBe(true);
-        expect(sealed).not.toContain('143');
+        // Base64url ciphertext can coincidentally contain short numeric sequences.
+        // Assert no serialized plaintext fragment rather than a random collision.
+        expect(sealed).not.toContain('"averageHeartRate":"143"');
         expect(sealed).not.toContain('allenamento');
         expect(openLocalJson(original, owner, archive, sealed)).toEqual(sensitive);
     });
