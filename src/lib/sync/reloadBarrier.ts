@@ -59,7 +59,7 @@ function isConsentSuspended(owner: string): boolean {
     // the person deliberately withdrew consent.
     return status === 'withdrawn' || status === 'pending'
         || status === 'reaccepting' || status === 'recovery-required'
-        || status === 'stale-request';
+        || status === 'erasure-required' || status === 'stale-request';
 }
 
 export async function prepareForReload(options: ReloadOptions = {}) {
