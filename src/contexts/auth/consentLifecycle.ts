@@ -4,7 +4,7 @@ import { isAccountDeletionPending } from '../../lib/sync/accountGate';
 import { refreshHealthConsent, isHealthConsentWritable, suspendHealthConsentCloudAccess } from '../../lib/healthConsent';
 import { useAppStore } from '../../store/useAppStore';
 import { isVaultUnlocked } from '../../lib/sync/secureArchiveSession';
-import { userOwner } from '../../lib/sync/session';
+import { captureSession, isCurrentSession, userOwner } from '../../lib/sync/session';
 
 type ConsentLifecycleDependencies = {
     isMounted: () => boolean;
@@ -20,15 +20,25 @@ export function createAuthConsentLifecycleHandlers({
     isMounted, isGuestActiveStrict, loadData, setLoading, setSaveError,
 }: ConsentLifecycleDependencies) {
         let isReloading = false;
+        let reactivationRequest = 0;
         const handleConsentReactivated = (event: Event) => {
             const uid = (event as CustomEvent<{uid:string}>).detail?.uid;
             const current = auth.currentUser;
-            if (!current || current.uid !== uid || !isHealthConsentWritable(userOwner(uid))) return;
+            if (!isMounted() || !current || current.uid !== uid || isGuestActiveStrict()
+                || !isHealthConsentWritable(userOwner(uid))) return;
+            const session = captureSession();
+            if (session.owner !== userOwner(uid)) return;
+            const request = ++reactivationRequest;
+            const stillCurrent = () => isMounted() && auth.currentUser?.uid === uid
+                && isCurrentSession(session) && request === reactivationRequest;
             setLoading(true);
             loadData(current).catch(error => {
+                if (!stillCurrent()) return;
                 console.error('Hydration dopo nuovo consenso non riuscita:', error);
                 setSaveError('Nuovo consenso registrato, ma i dati non sono ancora disponibili. Riprova dopo aver verificato la connessione.');
-            }).finally(() => setLoading(false));
+            }).finally(() => {
+                if (stillCurrent()) setLoading(false);
+            });
         };
         window.addEventListener('logbook:health-consent-reactivated', handleConsentReactivated);
 
