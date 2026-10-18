@@ -440,6 +440,8 @@ vi.mock('firebase/firestore', () => {
     };
   };
   const getDoc = vi.fn(async (ref: any) => snapshot(firestoreMockStore[refPath(ref)]));
+  // Distinct server-read mock: production hydration must never fall back to getDoc/cache.
+  const getDocFromServer = vi.fn(async (ref: any) => snapshot(firestoreMockStore[refPath(ref)]));
   const createBatch = () => {
     const staged: Array<{ kind: 'set' | 'delete'; ref: any; data?: any }> = [];
     return {
@@ -460,7 +462,7 @@ vi.mock('firebase/firestore', () => {
     getFirestore: vi.fn(() => ({})), initializeFirestore: vi.fn(() => ({})),
     memoryLocalCache: vi.fn(() => ({})),
     waitForPendingWrites: vi.fn().mockResolvedValue(undefined),
-    doc: vi.fn((_db: unknown, ...parts: string[]) => ({ path: parts.join('/') })), getDoc,
+    doc: vi.fn((_db: unknown, ...parts: string[]) => ({ path: parts.join('/') })), getDoc, getDocFromServer,
     setDoc: vi.fn(async (ref: any, data: any) => { firestoreMockStore[refPath(ref)] = structuredClone(data); }),
     deleteDoc: vi.fn(async (ref: any) => { delete firestoreMockStore[refPath(ref)]; }),
     collection: vi.fn((_db: unknown, ...parts: string[]) => ({ path: parts.join('/') })),

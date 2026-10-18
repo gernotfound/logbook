@@ -5,6 +5,7 @@ import { beforeEach, expect, it, vi } from 'vitest';
 const harness = vi.hoisted(() => ({
     auth: { currentUser: { uid: 'a' } as { uid: string } | null, signOut: vi.fn() },
     root: vi.fn(),
+    cacheRoot: vi.fn(),
     page: vi.fn(),
     historyWindow: vi.fn(),
     nutritionWindow: vi.fn(),
@@ -29,7 +30,8 @@ vi.mock('../../src/lib/telemetryHub', () => ({
 vi.mock('firebase/firestore', () => ({
     doc: (_db: unknown, ...path: string[]) => path.join('/'),
     collection: (_db: unknown, ...path: string[]) => path.join('/'),
-    getDoc: harness.root,
+    getDoc: harness.cacheRoot,
+    getDocFromServer: harness.root,
     getDocsFromServer: harness.page,
     documentId: () => 'id',
     orderBy: () => ({}),
@@ -49,7 +51,42 @@ beforeEach(async () => {
     harness.catalogSync.mockResolvedValue({ catalog: { exercises: [], foods: [] }, updated: false });
     harness.auth.currentUser = { uid: 'a' };
     harness.root.mockResolvedValue({ exists: () => false });
+    harness.cacheRoot.mockResolvedValue({ exists: () => false });
     harness.page.mockResolvedValue({ size: 0, docs: [] });
+});
+
+
+it('requires a server-confirmed root even when the memory cache reports a miss', async () => {
+    harness.cacheRoot.mockResolvedValue({ exists: () => false });
+    harness.root.mockResolvedValue({
+        exists: () => true,
+        data: () => ({
+            profile: { height: '180' },
+            _schemaVersion: 1,
+            _sync: { protocolVersion: 3, clock: {}, fields: {},
+                writer: { slot: 's00', replicaId: 'remote-root', generation: 1, seq: 0 } },
+        }),
+    });
+
+    const payload = await DB.loadCloudPayload();
+    expect(payload?.data.profile?.height).toBe('180');
+    expect(payload?.cloudDocuments.get('')?._sync).toBeDefined();
+    expect(harness.root).toHaveBeenCalledOnce();
+    expect(harness.cacheRoot).not.toHaveBeenCalled();
+});
+
+it('rejects an unavailable authoritative root instead of treating a cached miss as deletion', async () => {
+    harness.cacheRoot.mockResolvedValue({ exists: () => false });
+    harness.root.mockRejectedValueOnce(new Error('Firestore server unavailable'));
+    const warning = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+        await expect(DB.loadCloudPayload()).rejects.toThrow('Firestore server unavailable');
+        expect(harness.historyWindow).not.toHaveBeenCalled();
+        expect(harness.nutritionWindow).not.toHaveBeenCalled();
+        expect(harness.cacheRoot).not.toHaveBeenCalled();
+    } finally {
+        warning.mockRestore();
+    }
 });
 
 it('continues window hydration when the root document is absent', async () => {

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { getDoc, writeBatch } from 'firebase/firestore';
+import { getDocFromServer, writeBatch } from 'firebase/firestore';
 
 vi.unmock('../src/lib/db');
 import { ConsentedTestDB as DB } from './testUtils';
@@ -283,7 +283,7 @@ describe('M3: Storage & Persistence Delta Isolation Suite', () => {
                 supplements: []
             };
 
-            vi.mocked(getDoc).mockResolvedValueOnce({
+            vi.mocked(getDocFromServer).mockResolvedValueOnce({
                 exists: () => true,
                 data: () => mockFirestoreDoc
             } as any);
@@ -304,7 +304,7 @@ describe('M3: Storage & Persistence Delta Isolation Suite', () => {
         });
 
         it('returns standard catalog defaults when user document does not exist', async () => {
-            vi.mocked(getDoc).mockResolvedValueOnce({
+            vi.mocked(getDocFromServer).mockResolvedValueOnce({
                 exists: () => false,
                 data: () => undefined
             } as any);
