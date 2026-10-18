@@ -399,7 +399,8 @@ describe('durable owner-scoped journal', () => {
             _sync: { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {} },
         }]]);
         await expect(hydrateLocal('a', cloud, ['2026-09'], docs, 'all'))
-            .rejects.toMatchObject({ code: 'replica-fenced' });
+            .rejects.toMatchObject({ code: 'replica-fenced', causeKind: 'missing-document',
+                documentPaths: ['nutrition_months/2025-01'] });
         const fenced = await readLocal('a');
             expect(fenced?.data).toEqual(before?.data);
             expect(fenced?.baseline).toEqual(before?.baseline);
@@ -614,7 +615,8 @@ describe('durable owner-scoped journal', () => {
                 _sync: { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: remoteClock, fields: {} },
             }]]);
             await expect(hydrateLocal('a', cloud, ['2025-01'], docs, 'all'))
-                .rejects.toMatchObject({ code: 'replica-fenced' });
+                .rejects.toMatchObject({ code: 'replica-fenced', causeKind: 'stale-document',
+                    documentPaths: ['nutrition_months/2025-01'] });
             const fenced = await readLocal('a');
             expect(fenced?.data).toEqual(before?.data);
             expect(fenced?.baseline).toEqual(before?.baseline);
