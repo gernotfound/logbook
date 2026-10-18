@@ -225,9 +225,14 @@ describe('remote commit to local acknowledgement reconciliation', () => {
         expect(new Set(pendingIdentities).size).toBe(pendingIdentities.length);
 
         const reconciledMeta = firstAckEnvelope!.syncMetaByDocument[''];
-        expect(reconciledMeta.clock).toMatchObject({ [remoteActor]: 1, [localActor]: 2 });
+        // Only seq 1 reached Firestore. Seq 2 must remain exclusively in the
+        // pending journal until the second transaction actually delivers it.
+        expect(reconciledMeta).toEqual(firstOutcomeSyncMeta!['']);
+        expect(reconciledMeta.clock).toMatchObject({ [remoteActor]: 1, [localActor]: 1 });
         expect(reconciledMeta.fields['profile/name']).toMatchObject({ actorId: remoteActor, seq: 1 });
-        expect(reconciledMeta.fields['profile/height']).toMatchObject({ actorId: localActor, seq: 2 });
+        expect(reconciledMeta.fields['profile/height']).toMatchObject({ actorId: localActor, seq: 1 });
+        expect(firstAckEnvelope!.pending.some(op => op.seq === 2
+            && op.clock[localActor] === 2)).toBe(true);
 
         const finalEnvelope = await readLocal(owner);
         const finalCloud = (await getDoc(userRef)).data()!;
