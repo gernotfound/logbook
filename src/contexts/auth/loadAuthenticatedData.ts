@@ -192,7 +192,9 @@ export async function loadAuthenticatedData({
                     // that acknowledged business documents went missing.
                     // Requiring a new checkpoint stops old journal replay while
                     // leaving backup/logout policy tied to actual integrity.
-                    await markReplicaCheckpointRequired(expectedOwner);
+                    if (durableBeforeCloud?.replica) {
+                        await markReplicaCheckpointRequired(expectedOwner, durableBeforeCloud.replica);
+                    }
                     if (!cloudAllowed()) return 'blocked';
                     setSaveError(mergeError instanceof Error ? mergeError.message : 'Checkpoint cloud non completato. Riprova.');
                     console.warn('Checkpoint cloud non disponibile:', mergeError);
