@@ -3,11 +3,8 @@ import type { UserData } from '../../types';
 import { auth, getDb } from '../../lib/firebase';
 import { isHealthConsentCloudWritable } from '../../lib/healthConsent';
 import { DB } from '../../lib/db';
-import { UserDataSchema } from '../../lib/schema';
 import { captureSession, isCurrentSession, userOwner } from '../../lib/sync/session';
 import { useAppStore } from '../../store/useAppStore';
-import { getCachedCatalog, getInMemoryCatalog, isCatalogInMemory } from '../../lib/catalog/catalogService';
-import { getResolvedDefaultUserData } from './defaultUserData';
 import { adoptReplicaCheckpoint, readLocal, hydrateLocal, markCloudIntegrityBlocked, completeCloudIntegrityRecovery, IncompleteCloudSnapshotError, markReplicaCheckpointRequired } from '../../lib/sync/localRepository';
 import {
     checkpointFromCloudDocuments,
@@ -32,7 +29,6 @@ const loadGenerationByOwner = new Map<string, number>();
 export async function loadAuthenticatedData({
     user,
     isGuestActive,
-    setUserData,
     setSyncing,
     setSaveError,
 }: LoadAuthenticatedDataOptions): Promise<'ready' | 'blocked'> {
@@ -223,8 +219,9 @@ export async function loadAuthenticatedData({
             setSaveError('📶 Offline: visualizzando dati locali. I dati verranno sincronizzati al ripristino della connessione.');
         }
 
-        // Only a positively absent local envelope may initialize a fresh default dataset.
-        // A read failure returned earlier and can never reach this branch.
+        // An owner envelope is authoritative local evidence even when the cloud
+        // is unavailable. Absence of an envelope, however, does NOT prove that
+        // the remote account is empty; never seed a replacement snapshot here.
         const latestData = useAppStore.getState().userData;
         if (!latestData) {
             const stillAbsent = await readLocal(expectedOwner);
@@ -236,11 +233,11 @@ export async function loadAuthenticatedData({
                 markTabSnapshotClean(session, stillAbsent.data);
                 return 'blocked';
             }
-            const catalog = isCatalogInMemory() ? getInMemoryCatalog() : (await getCachedCatalog());
-            if (!isCurrent()) return 'blocked';
-            const fallbackData = getResolvedDefaultUserData(catalog);
-            if (!isCurrent()) return 'blocked';
-            setUserData(UserDataSchema.parse(fallbackData) as unknown as UserData);
+            // A transient cloud error on a new device is not a server-confirmed
+            // empty account. An optimistic default would become a new semantic
+            // journal and could later overwrite genuine remote business data.
+            useAppStore.setState({ syncHealth: 'failed' });
+            setSaveError('Impossibile verificare i dati cloud e nessun archivio locale disponibile. I dati dell’account non sono stati modificati: riconnettiti e riprova.');
         }
         // A failed cloud read cannot certify the causal base for a journal drain.
         return 'blocked';
