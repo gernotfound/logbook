@@ -240,12 +240,17 @@ export function requireHealthConsentWritable(owner: string): void {
 }
 
 async function serverRequest(user: User, method: 'GET' | 'POST', body?: unknown): Promise<ServerStatus> {
+  // Credential acquisition may outlive the Firebase account that initiated it.
+  // An old token must not submit a consent transition after a new login.
+  const startingUid = auth.currentUser?.uid ?? null;
+  if (startingUid !== null && startingUid !== user.uid) throw new Error('Sessione cambiata.');
   await ensureAppCheck();
   const token = await getLimitedUseAppCheckToken();
   if (!token) throw new Error('App Check non disponibile.');
   // Token acquisition is a separate auth gate: a Firebase token failure
   // must not be confused with a transient transport outage.
   const idToken = await user.getIdToken();
+  if ((auth.currentUser?.uid ?? null) !== startingUid) throw new Error('Sessione cambiata.');
   let response: Response;
   try {
     response = await fetch(API + '/api/health-consent', {
@@ -653,9 +658,12 @@ export async function reconfirmStaleHealthWithdrawal(user: User): Promise<void> 
   if (currentHealthConsentStatus(uid) !== 'stale-request') throw new Error('Nessuna revoca precedente da riconfermare.');
   const originalMarker = readMarker(uid);
   const originalGeneration = readBrowserValueStrict(generationMarker(uid));
+  const startingUid = auth.currentUser?.uid ?? null;
+  if (startingUid !== null && startingUid !== uid) throw new Error('Sessione cambiata.');
   const live = await serverRequest(user, 'GET');
   // Never turn a newer decision made by another tab into an unsolicited
   // revocation merely because an older confirmation request arrived late.
+  if ((auth.currentUser?.uid ?? null) !== startingUid) throw new Error('Sessione cambiata.');
   if (readMarker(uid) !== originalMarker
     || readBrowserValueStrict(generationMarker(uid)) !== originalGeneration
     || currentHealthConsentStatus(uid) !== 'stale-request') {
@@ -683,9 +691,12 @@ export async function reacceptHealthConsent(user: User, acceptance: {
   const previousAttempt = parseReacceptRevision(saved);
   if (saved !== 'withdrawn' && previousAttempt === null) throw new Error('Revoca non confermata.');
   let expectedRevision = previousAttempt;
+  const startingUid = auth.currentUser?.uid ?? null;
+  if (startingUid !== null && startingUid !== uid) throw new Error('Sessione cambiata.');
   if (expectedRevision === null) {
     const live = await serverRequest(user, 'GET');
     if (live.status !== 'withdrawn') throw new Error('La revoca non risulta attiva sul server.');
+    if ((auth.currentUser?.uid ?? null) !== startingUid) throw new Error('Sessione cambiata.');
     if (readMarker(uid) !== saved) throw new Error('La scelta locale è cambiata durante la verifica.');
     expectedRevision = live.revision;
   }
