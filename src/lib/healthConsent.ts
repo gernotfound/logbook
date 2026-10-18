@@ -357,6 +357,8 @@ export function reacceptHealthConsentLocally(user: User, acceptance: {
 
 export async function refreshHealthConsent(user: User): Promise<HealthConsentStatus> {
   const uid = user.uid;
+  const startingAuthUid = auth.currentUser?.uid ?? null;
+  if (startingAuthUid !== null && startingAuthUid !== uid) return currentHealthConsentStatus(uid);
   const saved = readMarker(uid);
   const offlineReaccept = parseOfflineReaccept(saved);
   const offlineReacceptValid = offlineReaccept !== null
@@ -373,6 +375,7 @@ export async function refreshHealthConsent(user: User): Promise<HealthConsentSta
   let observedGeneration = readBrowserValueStrict(generationMarker(uid));
   const serial = invalidateConsentChecks(uid);
   const isSameDecision = () => verificationSerials.get(uid) === serial
+    && (auth.currentUser?.uid ?? null) === startingAuthUid
     && readMarker(uid) === saved
     && readBrowserValueStrict(generationMarker(uid)) === observedGeneration;
   const recoverCachedOfflineConsent = (): boolean => {
@@ -529,7 +532,8 @@ export async function refreshHealthConsent(user: User): Promise<HealthConsentSta
       writeBrowserValue(generationMarker(uid), String(state.revision));
       observedGeneration = String(state.revision);
       const { advanceLocalConsentRevisionIfClean } = await import('./sync/localRepository');
-      const ready = await advanceLocalConsentRevisionIfClean('user:' + uid, state.revision);
+      if (!isSameDecision()) return currentHealthConsentStatus(uid);
+      const ready = await advanceLocalConsentRevisionIfClean('user:' + uid, state.revision, isSameDecision);
       if (!isSameDecision()) return currentHealthConsentStatus(uid);
       if (!ready) {
         setStatus(uid, 'recovery-required');
@@ -604,13 +608,16 @@ export async function withdrawHealthConsent(user: User, freezeWriters?: () => vo
  */
 export async function retainNewerHealthConsent(user: User): Promise<HealthConsentStatus> {
   const uid = user.uid;
+  const startingAuthUid = auth.currentUser?.uid ?? null;
+  if (startingAuthUid !== null && startingAuthUid !== uid) throw new Error('Sessione cambiata.');
   if (currentHealthConsentStatus(uid) !== 'stale-request') throw new Error('Nessuna scelta recente da confermare.');
   const saved = readMarker(uid);
+  const sameAuth = () => (auth.currentUser?.uid ?? null) === startingAuthUid;
   const originalRevision = parsePendingRevision(saved) ?? parseOfflineReaccept(saved)?.revision ?? null;
   if (originalRevision === null && saved !== 'withdrawn') throw new Error('Richiesta precedente non riconosciuta.');
   const live = await serverRequest(user, 'GET');
-  if (readMarker(uid) !== saved || currentHealthConsentStatus(uid) !== 'stale-request') {
-    throw new Error('La revoca locale è cambiata durante la verifica.');
+  if (!sameAuth() || readMarker(uid) !== saved || currentHealthConsentStatus(uid) !== 'stale-request') {
+    throw new Error('Sessione o revoca locale cambiata durante la verifica.');
   }
   // The durable withdrawn marker has no request revision, but a live active
   // revision >= 2 proves a subsequent explicit reacceptance occurred.
@@ -619,9 +626,11 @@ export async function retainNewerHealthConsent(user: User): Promise<HealthConsen
   }
   writeBrowserValue(generationMarker(uid), String(live.revision));
   const { advanceLocalConsentRevisionIfClean } = await import('./sync/localRepository');
-  const ready = await advanceLocalConsentRevisionIfClean('user:' + uid, live.revision);
-  if (readMarker(uid) !== saved || currentHealthConsentStatus(uid) !== 'stale-request') {
-    throw new Error('La revoca locale è cambiata durante il recupero.');
+  const ready = await advanceLocalConsentRevisionIfClean('user:' + uid, live.revision,
+    () => sameAuth() && readMarker(uid) === saved
+      && readBrowserValueStrict(generationMarker(uid)) === String(live.revision));
+  if (!sameAuth() || readMarker(uid) !== saved || currentHealthConsentStatus(uid) !== 'stale-request') {
+    throw new Error('Sessione o revoca locale cambiata durante il recupero.');
   }
   // The superseded request is cleared only after the live generation has
   // durably fenced old tabs. An old journal remains in IndexedDB in either case.
