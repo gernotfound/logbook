@@ -24,6 +24,7 @@ Il repository è pubblico. Questo registro non contiene token, private key, emai
 | Firebase Storage | NON USATO DAL RUNTIME | modulo Storage e relativa env client ritirati dal contratto | codice |
 | Firebase Cloud Messaging | NON USATO DAL RUNTIME | modulo Messaging e relativa env client ritirati dal contratto | codice |
 | Firebase Hosting | ACTIVE | frontend/PWA Production su `thelogbook.web.app`, deploy exact-SHA da GitHub Actions | Firebase Hosting + workflow Production |
+| Firebase/Vercel Test separati | DISMESSI (2026-10-18) | Progetti `thelogbook-test` e `thelogbook-test-backend` eliminati; nessun cloud di test separato attivo | Firebase CLI, inventario Vercel, PR #431 |
 | Firebase Admin | ACTIVE | account deletion e manutenzione server trusted | Vercel env + Vercel Functions |
 | Firebase App Check + reCAPTCHA Enterprise / Google Cloud Fraud Defense | ACTIVE | attestazione anti-abuse prima dell'accesso cloud | Firebase App Check + Google Cloud |
 | Vercel Functions / Cron | ACTIVE | backend trusted account-deletion/recovery, cron e redirect del vecchio root verso Firebase | Vercel + `vercel.json` |
@@ -33,6 +34,12 @@ Il repository è pubblico. Questo registro non contiene token, private key, emai
 | GitHub Actions / CodeQL / ruleset | ACTIVE | repository pubblico, PR, CI e SAST canonico | GitHub |
 | Snyk | OPTIONAL | controllo security supplementare | integrazione Snyk esterna |
 | Google Search Console | EXTERNAL-ONLY | verifica proprietà, sitemap e indicizzazione | Search Console + asset SEO repo |
+
+## Dismissione ambiente Test separato — 2026-10-18
+
+Su richiesta del product owner il progetto Firebase/GCP `thelogbook-test` e il progetto Vercel `thelogbook-test-backend` sono stati eliminati. Le verifiche successive hanno rilevato **assenza** del primo nell'inventario Firebase CLI e **zero corrispondenze** del secondo nell'elenco progetti Vercel; Firebase Hosting Test era stato disabilitato (HTTP 404). La [PR #431](https://github.com/gernotfound/logbook/pull/431) è chiusa senza merge e il branch remoto/locale dedicato è stato rimosso. Il codice/configurazione Test di quella PR non è stato portato su `main`.
+
+Sono preservati Firebase Production `logbook-db-98cc4`, Vercel Production `logbook`, i relativi origin e i workflow GitHub Actions. Non si deve ricreare automaticamente un cloud Test né usare Production per stress test, simulazioni distruttive o modifiche a dati reali. Restano disponibili fixture sintetiche, Firebase Emulator, Vitest, Playwright locale e gate canonico; per prove live non distruttive seguire [Collaudi E2E](e2e-reliability.md). La rimozione dei progetti non prova da sola la pulizia di eventuali allowlist/configurazioni esterne di terze parti: verificarle prima di affermarla.
 
 ## Firebase Hosting
 

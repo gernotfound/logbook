@@ -1,6 +1,6 @@
 # TheLogBook — validazione cloud trusted e funzionamento offline (CRITICAL)
 
-> **STATO: PROPOSTA ARCHITETTURALE, NON IMPLEMENTATA.** Baseline verificata direttamente su GitHub: gernotfound/logbook, main SHA 7617a226201d81824785580ef87164f2a7705ffb (14 ottobre 2026). La presenza di questa specifica non certifica un nuovo endpoint, una migrazione, quote del provider, nuovi test runtime o nuove Security Rules. Rispettare AGENTS.md, le regole storage-and-sync, domain-operations, crash-consistency, firebase-config e ci-verification.
+> **STATO: PROPOSTA ARCHITETTURALE, NON IMPLEMENTATA E NON IN ESECUZIONE.** Baseline verificata direttamente su GitHub: gernotfound/logbook, main SHA 7617a226201d81824785580ef87164f2a7705ffb (14 ottobre 2026). Dal 18 ottobre 2026 l'ambiente separato Firebase/Vercel Test è stato dismesso su decisione del product owner; le fasi di sperimentazione cloud live qui descritte sono **sospese** e non autorizzano a ricrearlo o a sperimentare su Production. La presenza di questa specifica non certifica nuovi endpoint, migrazioni, costi, test runtime o Security Rules. Rispettare AGENTS.md e i contratti specialistici.
 
 ## 1. Problema e perimetro
 
@@ -62,9 +62,9 @@ Non trattare il solo valore di sync_control.lastSeq come prova del payload: cert
 
 **Fase A — core/test condiviso, senza cambiare il runtime Production.** Estrarre il pure merge/validation contract in moduli usabili nel server e nel client; fixture identiche a transactionWriter e test di equivalenza/fuzz. Conservare invariati salvataggio IndexedDB, Firestore Rules e flusso cloud esistente. Non creare un nuovo writer Production.
 
-**Fase B — gateway soltanto su Firebase Test isolato.** Implementare autentificazione, App Check, consent/revision, barriera deletion, rate limit, strict validation, idempotenza, transactional commits e recovery. Firebase Test risultava da creare nella baseline della proposta; verificarne lo stato live e seguire l'[issue #426](https://github.com/gernotfound/logbook/issues/426) prima di procedere. Validare permessi Firebase Admin e limiti reali/costi Vercel. Non attivare piani con fatturazione senza decisione esplicita del product owner.
+**Fase B — SOSPESA: validazione cloud isolata.** Un gateway trusted richiederebbe un ambiente non-Production indipendente per provare Auth, App Check, consent/revision, barriera deletion, rate limit, validazione strict, idempotenza, transazioni e recovery. Il precedente Firebase/Vercel Test è stato eliminato e la [issue #426](https://github.com/gernotfound/logbook/issues/426) chiusa. **Non ricreare infrastrutture né riutilizzare Production** senza una nuova decisione esplicita del product owner, comprendente eventuali costi.
 
-**Fase C — collaudi avversariali e compatibilità.** Emulator Rules, API Firebase Test reale, Playwright login, worker/reload, dati sintetici, due dispositivi, tre o più replay, failover e richiamo del consenso. Verificare tempi, quota, cold start, regione/privacy. Nessun dual-write verso Production come test.
+**Fase C — SOSPESA per prove cloud reali.** Continuare a poter eseguire test locali/emulatori/Playwright sintetici sul codice corrente. I collaudi autenticati live del gateway (due identità/dispositivi, replay, failover, App Check, consenso, quote e recovery) restano requisiti **non verificati** finché non venga autorizzato un isolamento adeguato. Non usarli come esperimenti su dati o account Production; nessun dual-write verso Production come test.
 
 **Fase D — rilascio coordinato.** Prima client capace di usare il gateway e opzioni di aggiornamento/recupero per client vecchi. Solo dopo, cutover delle Rules che blocca le write dirette; attivare il gateway come **unica autorità**. Gate canonico exact-SHA, review e squash merge, CI main, Vercel Production verificato, Firestore readback live e Hosting smoke. Il rollback dev'essere un protocollo verificato, non un temporaneo indebolimento delle Rules.
 
@@ -90,6 +90,6 @@ Non trattare il solo valore di sync_control.lastSeq come prova del payload: cert
 
 **Scelta tecnica consigliata:** un solo writer cloud trusted **dopo** il journal locale, mantenendo il boundary offline attuale. L'implementazione autorizzabile per prima è la **Fase A**, non un cutover prematuro.
 
-**Non ancora dimostrati:** disponibilità di Firebase Test separato, IAM ed enforcement esatti del gateway, capacità/costo Vercel per questa workload, tenuta operativa del gateway, recupero di vecchi client e approvazione degli eventuali costi esterni. Nessun nuovo endpoint, config provider o traffico Production modificato da questo documento.
+**Non ancora dimostrati:** l'ambiente Test separato è stato dismesso, perciò non sono disponibili prove cloud isolate del gateway, IAM/enforcement, capacità/costi Vercel per questa workload, tenuta operativa, recupero di vecchi client e approvazione di costi esterni. Nessun nuovo endpoint, configurazione provider o traffico Production viene introdotto da questo documento.
 
 Una volta verificate le fasi A–C, la decisione di procedere al cutover deve basarsi su evidenze di sicurezza **e** disponibilità. Una semplice CI verde non è una prova del runtime.
