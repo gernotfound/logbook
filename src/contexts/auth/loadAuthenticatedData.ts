@@ -182,7 +182,12 @@ export async function loadAuthenticatedData({
                     // its atomic IndexedDB write, before surfacing the error.
                     useAppStore.setState({ syncHealth: 'failed', cloudIntegrityBlocked: true });
                     setSaveError(mergeError.message);
-                    console.warn('Evidenza cloud incompleta; archivio locale protetto:', mergeError);
+                    // Log only document categories/month IDs, never business data.
+                    console.warn('Evidenza cloud incompleta; archivio locale protetto:', {
+                        cause: mergeError.causeKind,
+                        documentPaths: mergeError.documentPaths,
+                        count: mergeError.documentPaths.length,
+                    });
                 } else if (code === 'invalid-cloud-sync-metadata') {
                     if (!(await preserveUnsafeCloud())) return 'blocked';
                     setSaveError('Sincronizzazione cloud sospesa: i metadati di sincronizzazione remoti non sono validi. I dati locali validi sono stati preservati e TheLogBook non sovrascriverà il cloud finché il problema non viene risolto.');
