@@ -65,6 +65,8 @@ Flusso normativo:
 
 **MUST:** Firebase Auth è sempre l'ultima risorsa cloud eliminata. Un errore di query, batch, verifica, backend o stato non autorizza il purge locale né una dichiarazione di successo.
 
+**MUST:** la finalizzazione locale di una cancellazione account completa deve ricontrollare, sotto il lock dell'owner, che non sia diventato attivo un altro account o una sessione ospite. Anche il retry di un purge già fenced deve rispettare il controllo prima di eliminare chiavi locali condivise; il server-complete resta prova distinta da questa barriera locale.
+
 **MUST:** Un job `failed` deve comunicare che la cancellazione cloud può essere parziale. I batch già riusciti non sono reversibili. Errori transient/retryable possono essere ripresi idempotentemente; residui inattesi o violazioni fail-closed non devono entrare in un retry distruttivo automatico senza nuova valutazione.
 
 **MUST:** Il marker locale sospende replica, logout distruttivi e reset locali ordinari finché la receipt non è riconciliata. Il boundary di purge deve applicare la protezione anche quando viene chiamato direttamente; solo la finalizzazione con prova server `complete` può usare il percorso di purge dedicato. Offline o con endpoint non raggiungibile, la copia locale resta conservata e il marker continua a bloccare i writer.
@@ -89,7 +91,7 @@ Non introdurre Nitro, Workflow, `waitUntil` come sostituto di durability, o una 
 
 **MUST:** al completamento il backend avanza **atomicamente** la revisione di consenso ancora `withdrawn` e registra `erasedBeforeRevision`. Una vecchia replica non può scrivere con la generazione cancellata. I retry dello stesso job sono idempotenti anche dopo l'avanzamento della revisione. La retention del job completo è 30 giorni; solo il cron con prova persistente dell'epoch può rimuoverlo.
 
-**MUST:** il client può cancellare IndexedDB, device-critical e chiavi soltanto dopo stato `complete` letto dal proprio endpoint trusted; il purge locale resta fenced fino alla prova di rimozione delle copie cifrate. Dopo la pulizia, effettua sign-out **senza eliminare Firebase Auth**. Se la connessione, la verifica del server o la pulizia locale fallisce, nessun messaggio deve dichiarare cancellazione completa.
+**MUST:** il client può cancellare IndexedDB, device-critical e chiavi soltanto dopo stato `complete` letto dal proprio endpoint trusted; per una nuova pulizia dei soli dati salute la prova della revisione corrente deve essere ripetuta **dentro il lock esclusivo dell'owner**, immediatamente prima del fence. Un purge già interrotto e fenced resta riprendibile senza richiedere una seconda prova sotto lock. Il purge locale resta fenced fino alla prova di rimozione delle copie cifrate. Dopo la pulizia, effettua sign-out **senza eliminare Firebase Auth**. Se la connessione, la verifica del server o la pulizia locale fallisce, nessun messaggio deve dichiarare cancellazione completa.
 
 **LIMITAZIONE:** dispositivi offline possono conservare copie vecchie impossibili da eliminare da remoto. Il protocollo impedisce la replica delle generazioni vecchie nel cloud; un successivo recupero esplicito di archivi precedenti richiede attenzione per non reintrodurre dati eliminati. Non dichiarare cancellazione universale di copie offline, fornitori esterni o backup non verificati.
 

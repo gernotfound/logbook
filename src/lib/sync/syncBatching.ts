@@ -131,12 +131,20 @@ export function boundedPendingTransactionBatch(
     assertDocumentLimit(maxDocuments);
     if (pending.length === 0) return [];
 
-    const sequences = [...new Set(pending.map(operation => operation.seq))].sort((left, right) => left - right);
+    // Group once while preserving insertion order within each causal sequence.
+    // Only the sequence identifiers are sorted; no operation is reordered.
+    const bySequence = new Map<number, SemanticOperation[]>();
+    for (const operation of pending) {
+        const group = bySequence.get(operation.seq);
+        if (group) group.push(operation);
+        else bySequence.set(operation.seq, [operation]);
+    }
+    const sequences = [...bySequence.keys()].sort((left, right) => left - right);
     const selected: SemanticOperation[] = [];
     const selectedDocuments = new Set<string>();
 
     for (const sequence of sequences) {
-        const group = pending.filter(operation => operation.seq === sequence);
+        const group = bySequence.get(sequence)!;
         const groupDocuments = new Set(group.map(operation => operation.docPath));
         const nextDocumentCount = new Set([...selectedDocuments, ...groupDocuments]).size;
 

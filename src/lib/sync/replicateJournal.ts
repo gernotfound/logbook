@@ -151,7 +151,7 @@ async function drain(session: ReturnType<typeof captureSession>, deliveryState: 
         const changedMonths = changedPaths.flatMap(path => path ? [path.split('/')[1]] : []);
 
         try {
-            await acknowledgeThrough(session.owner, seq, remote, changedMonths, outcome.syncMeta);
+            await acknowledgeThrough(session.owner, seq, remote, changedMonths, outcome.syncMeta, { operations: delivered, replica: envelope.replica });
         } catch (error) {
             // A remote transaction is already confirmed here. An acknowledgement failure is retryable
             // only when a fresh, validated IndexedDB read proves that the exact delivered batch remains.
