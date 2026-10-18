@@ -626,11 +626,11 @@ export async function commitDomainOperations(owner: string, batch: DomainOperati
 }
 
 function fenceCloudIntegrity(current: LocalEnvelope): LocalEnvelope {
-    // Preserve the original fence across retries, so a read-only retry cannot
-    // invalidate an in-flight recovery by rotating its witness.
+    // A newly detected divergence must invalidate a recovery based on any
+    // earlier observation, even when another tab is attempting a checkpoint.
     return {
         ...current,
-        cloudIntegrityFence: current.cloudIntegrityFence ?? generateId('cloud-fence'),
+        cloudIntegrityFence: generateId('cloud-fence'),
         replica: current.replica ? { ...current.replica, checkpointAtMs: 1, leaseUntilMs: 1 } : null,
         revision: current.revision + 1,
     };
