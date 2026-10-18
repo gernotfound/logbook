@@ -12,7 +12,7 @@ import {
     type QueryConstraint,
     type QueryDocumentSnapshot,
 } from 'firebase/firestore';
-import equal from 'fast-deep-equal';
+import { sameCloudControlState } from './sync/cloudReadConsistency';
 import type { UserData } from '../types';
 import { DomainParsers, UserDataSchema } from './schema';
 import { rootDocument } from './sync/documentProjection';
@@ -204,8 +204,7 @@ async function loadCloudPayload(options?: { allMonths?: boolean }, consistencyAt
             getDocFromServer(controlRef), 10000, 'Conferma consistenza cloud non disponibile',
         );
         if (auth.currentUser?.uid !== user.uid) throw new Error('Sessione cambiata durante la lettura cloud');
-        if (beforeControl.exists() !== afterControl.exists()
-            || (beforeControl.exists() && !equal(beforeControl.data(), afterControl.data()))) {
+        if (!sameCloudControlState(beforeControl, afterControl)) {
             if (consistencyAttempt === 0) return loadCloudPayload(options, 1);
             throw new ConcurrentCloudReadError();
         }
