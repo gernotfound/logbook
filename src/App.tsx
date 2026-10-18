@@ -238,12 +238,12 @@ function OwnerBoundApp({ startupTab }: { startupTab: string | null }) {
   // Transient save errors auto-dismiss. A local persistence failure is a durable
   // write barrier and must remain visible until the app lifecycle resets it.
   useEffect(() => {
-    if (!saveError || localPersistenceBlocked) return;
+    if (!saveError || localPersistenceBlocked || syncHealth === 'failed') return;
     const timer = setTimeout(() => {
       setSaveError(null);
     }, 5000);
     return () => clearTimeout(timer);
-  }, [saveError, localPersistenceBlocked, setSaveError]);
+  }, [saveError, localPersistenceBlocked, syncHealth, setSaveError]);
 
   // Clear saveError on online event if it was due to missing connection during save
   useEffect(() => {
