@@ -99,7 +99,7 @@ export async function migrateGuestAccount({ user, guestData, policy, setUserData
                 hydrated.replica ? undefined : hydrated.actorId,
             );
             assertCurrent();
-            const adopted = await adoptReplicaCheckpoint(user.uid, claim, checkpoint, isCurrent);
+            await adoptReplicaCheckpoint(user.uid, claim, checkpoint, isCurrent);
             assertCurrent();
             return completeCloudIntegrityRecovery(user.uid, hydrated.cloudIntegrityFence ?? null, true, isCurrent);
         };
