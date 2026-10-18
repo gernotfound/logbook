@@ -197,7 +197,7 @@ export async function loadAuthenticatedData({
                     }
                     if (!cloudAllowed()) return 'blocked';
                     setSaveError(mergeError instanceof Error ? mergeError.message : 'Checkpoint cloud non completato. Riprova.');
-                    console.warn('Checkpoint cloud non disponibile:', mergeError);
+                    console.error('Hydration cloud non valida; stato locale preservato:', mergeError);
                 }
                 return 'blocked';
             }
