@@ -63,7 +63,11 @@ export async function loadAuthenticatedData({
                 saveError: 'Protezione cloud non registrabile. I dati locali devono essere preservati.' });
             return false;
         }
-        if (isCurrent()) useAppStore.setState({ syncHealth: 'failed', cloudIntegrityBlocked: true });
+        if (isCurrent()) useAppStore.setState({
+            syncHealth: 'failed',
+            cloudIntegrityBlocked: true,
+            saveError: 'Snapshot cloud non verificato: copia locale preservata. Sincronizzazione sospesa fino al recupero.',
+        });
         return isCurrent();
     };
 
@@ -82,6 +86,10 @@ export async function loadAuthenticatedData({
                 dataOwner: expectedOwner,
                 localWorkout,
                 cloudIntegrityBlocked: Boolean(localEnvelope.cloudIntegrityFence),
+                ...(localEnvelope.cloudIntegrityFence ? {
+                    syncHealth: 'failed' as const,
+                    saveError: 'Snapshot cloud non verificato: copia locale preservata. Sincronizzazione sospesa fino al recupero.',
+                } : {}),
             });
             markTabSnapshotClean(session, localEnvelope.data);
         } else {
