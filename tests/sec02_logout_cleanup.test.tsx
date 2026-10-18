@@ -336,15 +336,17 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
         const owner = storageOwner();
         const marker = `logbook:v2:${owner}:health-consent-withdrawal`;
         localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '2');
-        let resolveRead!: (value: unknown) => void;
+        let resolveRead!: (value: Awaited<ReturnType<typeof localRepository.readLocal>>) => void;
         const read = vi.spyOn(localRepository, 'readLocal').mockImplementationOnce(
-            () => new Promise(resolve => { resolveRead = resolve; }) as ReturnType<typeof localRepository.readLocal>,
+            () => new Promise<Awaited<ReturnType<typeof localRepository.readLocal>>>(
+                resolve => { resolveRead = resolve; },
+            ),
         );
         try {
             const logout = DB.secureLogOut();
             await vi.waitFor(() => expect(read).toHaveBeenCalledTimes(1));
             localStorage.setItem(marker, 'pending:2');
-            resolveRead({ pending: [], consentRevision: 2 });
+            resolveRead(undefined);
             await expect(logout).rejects.toThrow('non è ancora riconciliata');
             expect(auth.signOut).not.toHaveBeenCalled();
             expect(idb.del).not.toHaveBeenCalled();
