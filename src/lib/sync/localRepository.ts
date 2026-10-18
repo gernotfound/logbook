@@ -878,7 +878,7 @@ export async function hydrateLocal(owner: string, cloudData: UserData, months: s
             const localPaths = projectDocuments(current.data, catalog);
             const baselinePaths = projectDocuments(current.baseline, catalog);
             const pendingPaths = new Set(current.pending.map(op => op.docPath));
-            const confirmedMeta = Object.fromEntries(
+            const retainedMeta: Record<string, SyncMeta> = Object.fromEntries(
                 Object.entries(current.syncMetaByDocument).filter(([path, meta]) =>
                     meta.writer !== undefined
                     || Object.keys(meta.clock).length > 0
@@ -896,7 +896,7 @@ export async function hydrateLocal(owner: string, cloudData: UserData, months: s
             // response cannot prove that its acknowledged data was removed.
             // Reject before installing the cloud snapshot or claiming a checkpoint.
             const missingPaths = cloudDocuments
-                ? Object.keys(confirmedMeta).filter(path =>
+                ? Object.keys(retainedMeta).filter(path =>
                     (coverageMode === 'all' || authoritativePaths.has(path))
                     && !cloudDocuments.get(path)?._sync
                 )
@@ -910,12 +910,12 @@ export async function hydrateLocal(owner: string, cloudData: UserData, months: s
                 // evidence also installs the owner-scoped destructive-purge fence.
                 return fenceCloudIntegrity(current);
             }
-            if (coverageMode === 'window') for (const [path, meta] of Object.entries(confirmedMeta)) if (!authoritativePaths.has(path)) syncMeta[path] = meta;
+            if (coverageMode === 'window') for (const [path, meta] of Object.entries(retainedMeta)) if (!authoritativePaths.has(path)) syncMeta[path] = meta;
             const updatedClock = { ...current.clock };
             const stalePaths: string[] = [];
             if (cloudDocuments) for (const [path, doc] of cloudDocuments.entries()) if (doc._sync) {
                 const meta = parseCloudSyncMeta(path, doc._sync);
-                const durable = confirmedMeta[path];
+                const durable = retainedMeta[path];
                 if ((coverageMode === 'all' || authoritativePaths.has(path)) && durable
                     && !coversVectorClock(meta.clock, durable.clock)) {
                     stalePaths.push(path);
