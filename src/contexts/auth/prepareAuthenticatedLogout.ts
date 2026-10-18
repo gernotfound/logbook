@@ -13,23 +13,30 @@ export async function prepareAuthenticatedLogout(
     initialUid: string | undefined,
     setSyncing: ReturnType<typeof useAppStore.getState>['setSyncing'],
 ): Promise<boolean | null> {
+    // The preflight belongs to the account which initiated logout.
+    if (!initialUid || auth.currentUser?.uid !== initialUid) return null;
     let discardUnsynced = false;
     setSyncing(true);
-    // The Firestore SDK tracks only its own in-flight writes, not
-    // TheLogBook's IndexedDB journal. Inspect the durable source.
-    let durablePending = false;
-    try {
-        const { readLocal } = await import('../../lib/sync/localRepository');
-        const envelope = await readLocal(userOwner(initialUid!));
-        if (envelope?.cloudIntegrityFence) {
-            setSyncing(false);
-            await useDialogStore.getState().showAlert('Logout sospeso: lo snapshot cloud non è ancora verificato. La copia locale è preservata; riconnetti e completa il recupero prima di uscire.');
+    // Firestore's write queue is separate from the durable IndexedDB journal.
+    // Refresh the latter after any async boundary that can change this decision.
+    const readDurablePending = async (): Promise<boolean | null> => {
+        try {
+            const { readLocal } = await import('../../lib/sync/localRepository');
+            const envelope = await readLocal(userOwner(initialUid));
+            if (auth.currentUser?.uid !== initialUid) return null;
+            if (envelope?.cloudIntegrityFence) {
+                await useDialogStore.getState().showAlert('Logout sospeso: lo snapshot cloud non è ancora verificato. La copia locale è preservata; riconnetti e completa il recupero prima di uscire.');
+                return null;
+            }
+            return (envelope?.pending.length ?? 0) > 0;
+        } catch {
+            await useDialogStore.getState().showAlert('Non posso verificare i dati locali prima del logout. Archivio preservato: riprova dopo aver riaperto TheLogBook.');
             return null;
         }
-        durablePending = (envelope?.pending.length ?? 0) > 0;
-    } catch {
+    };
+    let durablePending = await readDurablePending();
+    if (durablePending === null) {
         setSyncing(false);
-        await useDialogStore.getState().showAlert('Non posso verificare i dati locali prima del logout. Archivio preservato: riprova dopo aver riaperto TheLogBook.');
         return null;
     }
     const state = useAppStore.getState();
@@ -59,6 +66,12 @@ export async function prepareAuthenticatedLogout(
             return null;
         }
 
+        const refreshedPending = await readDurablePending();
+        if (refreshedPending === null) {
+            setSyncing(false);
+            return null;
+        }
+        durablePending = refreshedPending;
         const finalState = useAppStore.getState();
         isSafe = finalState.syncHealth === 'synced' && !finalState.localWorkout && !finalState.userData?.pendingConflicts && !durablePending && pendingWriteStatus === null;
     }
@@ -94,6 +107,9 @@ export async function prepareAuthenticatedLogout(
         if (action === 'cancel' || action === 'wait') {
             return null;
         } else if (action === 'safe-exit') {
+            // A new edit can reach IndexedDB while the dialog is visible.
+            const latestPending = await readDurablePending();
+            if (latestPending !== false || pendingWriteStatus !== null) return null;
             const finalCheck = useAppStore.getState();
             if (finalCheck.syncHealth !== 'synced' || finalCheck.localWorkout || finalCheck.userData?.pendingConflicts) {
                 return null;
