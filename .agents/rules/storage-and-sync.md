@@ -228,7 +228,7 @@ Esistono due coperture distinte e non intercambiabili:
 
 **MUST:** una scansione `all` non deve essere trattata come una semplice finestra parziale.
 
-**MUST (CRITICAL):** se `cloudDocuments` è disponibile e la copia locale possiede già metadati causali durevoli per un documento compreso nello scope autorevole della hydration, lo snapshot remoto deve includere il documento con `_sync`. Per `all` lo scope include tutti i documenti già osservati; per `window` solo root e mesi richiesti. Se manca questa prova, non considerare la sua assenza una cancellazione: sospendere la hydration con `replica-fenced`, preservare integralmente l'envelope IndexedDB e non avanzare al checkpoint della replica. I documenti di sync Protocol 3 non vengono eliminati fisicamente; un mese mai osservato localmente può invece risultare legittimamente assente nel cloud.
+**MUST (CRITICAL):** se `cloudDocuments` è disponibile e la copia locale possiede già metadati causali durevoli per un documento compreso nello scope autorevole della hydration, lo snapshot remoto deve includere il documento con `_sync`. Il clock remoto deve inoltre coprire causalmente quello durevole locale: una versione più vecchia o incomparabile non è una prova valida. Per `all` lo scope include tutti i documenti già osservati; per `window` solo root e mesi richiesti. Se la prova manca o è obsoleta, sospendere la hydration con `replica-fenced`, preservare integralmente l'envelope IndexedDB e non avanzare al checkpoint della replica. I documenti di sync Protocol 3 non vengono eliminati fisicamente; un mese mai osservato localmente può invece risultare legittimamente assente nel cloud.
 
 ## Esiti della sincronizzazione
 

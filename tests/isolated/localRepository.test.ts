@@ -538,10 +538,49 @@ describe('durable owner-scoped journal', () => {
                 fields: {},
             } }],
         ]);
-        const hydrated = await hydrateLocal('a', stale, [], staleDocuments, 'window');
-
-        expect(hydrated.data.profile?.height).toBe('172');
+        const before = await readLocal('a');
+        await expect(hydrateLocal('a', stale, [], staleDocuments, 'window'))
+            .rejects.toMatchObject({ code: 'replica-fenced' });
+        expect(await readLocal('a')).toEqual(before);
         expect((await readLocal('a'))?.data.profile?.height).toBe('172');
+    });
+
+    it('rejects a full checkpoint with present but causally older or incomparable monthly metadata', async () => {
+        const local = UserDataSchema.parse({ nutrition: {
+            '2025-01-01': { date: '2025-01-01', weight: 70 },
+        } }) as unknown as UserData;
+        await initializeLocal('a', local, ['2025-01']);
+        const durableMeta = { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: { s01: 3 }, fields: {} };
+        await acknowledgeThrough('a', 0, local, [], { 'nutrition_months/2025-01': durableMeta });
+        const before = await readLocal('a');
+        const cloud = UserDataSchema.parse({ nutrition: {
+            '2025-01-01': { date: '2025-01-01', weight: 60 },
+        } }) as unknown as UserData;
+
+        for (const remoteClock of [{ s01: 2 }, { s02: 4 }]) {
+            const docs = new Map<string, any>([['nutrition_months/2025-01', {
+                _sync: { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: remoteClock, fields: {} },
+            }]]);
+            await expect(hydrateLocal('a', cloud, ['2025-01'], docs, 'all'))
+                .rejects.toMatchObject({ code: 'replica-fenced' });
+            expect(await readLocal('a')).toEqual(before);
+        }
+    });
+
+    it('accepts a covered cloud frontier for a previously acknowledged document', async () => {
+        const local = data(170);
+        await initializeLocal('a', local);
+        await acknowledgeThrough('a', 0, local, [], { '': {
+            protocolVersion: CURRENT_SYNC_PROTOCOL, clock: { s01: 3 }, fields: {},
+        } });
+        const fresh = data(175);
+        const documents = new Map<string, any>([['', {
+            _sync: { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: { s01: 3, s02: 4 }, fields: {} },
+        }]]);
+        const result = await hydrateLocal('a', fresh, [], documents, 'window');
+
+        expect(result.data.profile?.height).toBe('175');
+        expect(result.syncMetaByDocument[''].clock).toEqual({ s01: 3, s02: 4 });
     });
 
     it('emits parent tombstones when a workout or nutrition day is deleted', async () => {
