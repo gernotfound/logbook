@@ -20,6 +20,9 @@ vi.mock('../src/lib/sync/session', () => ({
     captureSession: () => ({ owner: fixture.owner, epoch: 1 }),
     isCurrentSession: () => true,
 }));
+// In this screen a revoked/suspended consent permits a rights backup even
+// when regular authenticated hydration has not populated the Zustand view.
+vi.mock('../src/lib/healthConsent', () => ({ currentHealthConsentStatus: () => 'withdrawn' }));
 vi.mock('../src/lib/sync/localRepository', () => ({ readLocal: fixture.readLocal }));
 vi.mock('../src/lib/db/backupSnapshot', () => ({ collectBackupSnapshot: fixture.collectSnapshot }));
 vi.mock('../src/store/useAppStore', () => {
