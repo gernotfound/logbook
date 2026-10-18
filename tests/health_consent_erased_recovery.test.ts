@@ -12,6 +12,7 @@ const journal = vi.hoisted(() => ({
   rebaseConsentRecoveryWithExplicitChoice: vi.fn(),
 }));
 const snapshot = vi.hoisted(() => ({ collectBackupSnapshot: vi.fn() }));
+const identity = vi.hoisted(() => ({ owner: 'user:a', epoch: 1 }));
 
 vi.mock('../src/lib/healthConsent', () => consent);
 vi.mock('../src/lib/sync/localRepository', () => journal);
@@ -20,14 +21,17 @@ vi.mock('../src/lib/catalog/catalogService', () => ({
   getCachedCatalog: vi.fn(async () => ({ exercises: [], foods: [] })),
 }));
 vi.mock('../src/lib/sync/session', () => ({
-  captureSession: () => ({ owner: 'user:a', epoch: 1 }),
-  isCurrentSession: () => true,
+  captureSession: () => ({ ...identity }),
+  isCurrentSession: (captured: { owner: string; epoch: number }) =>
+    captured.owner === identity.owner && captured.epoch === identity.epoch,
 }));
 import { recoverOldLocalEditsAfterConsent } from '../src/lib/healthConsentRecovery';
 
 describe('consent recovery after deliberate data erasure', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    identity.owner = 'user:a';
+    identity.epoch = 1;
     consent.currentHealthConsentStatus.mockReturnValue('recovery-required');
     journal.readLocal.mockResolvedValue({
       consentRevision: 3, revision: 17,
@@ -95,6 +99,25 @@ describe('consent recovery after deliberate data erasure', () => {
       'user:a', 5, 17, expect.anything(), expect.anything(), expect.any(Map), expect.any(Function),
     );
     expect(consent.finishHealthConsentReacceptance).toHaveBeenCalledOnce();
+  });
+
+  it('does not publish reactivation for account A if ownership changes during the final refresh', async () => {
+    consent.readActiveHealthConsentRevision.mockResolvedValue({ revision: 5 });
+    snapshot.collectBackupSnapshot.mockResolvedValue({
+      coverage: { scope: 'cloud-and-device' },
+      recovery: { cloudDocuments: {} },
+      data: {},
+    });
+    consent.refreshHealthConsent.mockImplementationOnce(async () => {
+      identity.owner = 'user:b';
+      identity.epoch = 2;
+      return 'active';
+    });
+
+    await expect(recoverOldLocalEditsAfterConsent({ uid: 'a' } as User))
+      .rejects.toThrow('sessione è cambiata');
+    expect(journal.rebaseConsentRecoveryWithExplicitChoice).toHaveBeenCalledOnce();
+    expect(consent.finishHealthConsentReacceptance).not.toHaveBeenCalled();
   });
 
   it('preserves the old journal when a second trusted consent check fails', async () => {
