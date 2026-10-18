@@ -819,20 +819,18 @@ export async function hydrateLocal(owner: string, cloudData: UserData, months: s
             if (cloudDocuments) for (const [path, doc] of cloudDocuments.entries()) if (doc._sync) {
                 const meta = parseCloudSyncMeta(path, doc._sync);
                 const durable = current.syncMetaByDocument[path];
-                if (authoritativePaths.has(path) && durable
-                    && coversVectorClock(durable.clock, meta.clock)
+                if ((coverageMode === 'all' || authoritativePaths.has(path)) && durable
                     && !coversVectorClock(meta.clock, durable.clock)) {
                     staleCloudSnapshot = true;
                 }
                 syncMeta[path] = meta;
                 for (const [actor, seq] of Object.entries(meta.clock)) updatedClock[actor] = Math.max(updatedClock[actor] || 0, seq);
             }
-            // A foreground request started in another tab can complete after a newer
-            // acknowledgement has already become durable. Its older snapshot is not
-            // authoritative anymore; keep the durable envelope rather than rolling it back.
+            // A delayed or causally incomparable snapshot cannot certify a replica
+            // checkpoint, even if the local envelope is preserved. Fail closed so the
+            // caller does not publish a frontier derived from stale cloud evidence.
             if (staleCloudSnapshot) {
-                saved = current;
-                return current;
+                throw new ReplicaFencedError('Snapshot cloud non aggiornato rispetto alla copia locale: checkpoint sospeso senza sovrascrivere dati.');
             }
             const localDocs = projectDocuments(current.data, catalog);
             const cloudDocsForHydration = projectDocuments(cloud, catalog);
