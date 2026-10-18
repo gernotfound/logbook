@@ -429,6 +429,22 @@ describe('durable owner-scoped journal', () => {
         expect(nutritionDeletes).toEqual([expect.objectContaining({ path: ['2026-09-10'], isDelete: true })]);
     });
 
+    it('keeps business state and journal atomic when a monthly deletion write is rejected', async () => {
+        const base = UserDataSchema.parse({
+            history: [{ id: 'w1', date: '2026-09-10', routineName: 'A', duration: '20m', exercises: [] }],
+            nutrition: { '2026-09-10': { date: '2026-09-10', weight: 80 } },
+        }) as unknown as UserData;
+        const desired = UserDataSchema.parse({ history: [], nutrition: {} }) as unknown as UserData;
+        await initializeLocal('a', base);
+        const before = await readLocal('a');
+        vi.spyOn(IDBObjectStore.prototype, 'put').mockImplementationOnce(() => {
+            throw new DOMException('Injected monthly deletion failure', 'QuotaExceededError');
+        });
+
+        await expect(commitLocal('a', desired, base)).rejects.toThrow('Injected monthly deletion failure');
+        expect(await readLocal('a')).toEqual(before);
+    });
+
     it('does not advance actorSeq for a semantic no-op', async () => {
         const initial = data(170);
         await initializeLocal('a', initial);
