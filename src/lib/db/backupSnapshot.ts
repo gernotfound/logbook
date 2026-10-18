@@ -12,6 +12,7 @@ import { withTimeout } from './db_core';
 import type { UserData } from '../../types';
 import type { BackupCoverage } from '../backup';
 import equal from 'fast-deep-equal';
+import { sameCloudControlState } from '../sync/cloudReadConsistency';
 import { currentHealthConsentStatus, hasUnreconciledOfflineReaccept, readHealthConsentServerStatus } from '../healthConsent';
 import { fetchWithdrawnCloudBackup } from './withdrawnBackupTransport';
 import { requireCompleteHistoryMonthDocument, requireCompleteNutritionMonthDocument } from '../sync/monthlyIntegrity';
@@ -96,8 +97,7 @@ export async function collectBackupSnapshot(fallback: UserData, includeCloud: bo
             }
             const afterControl = await withTimeout(getDocFromServer(controlRef), 10000, 'Controllo versione cloud non disponibile.');
             assertCurrent();
-            if (beforeControl.exists() !== afterControl.exists()
-                || (beforeControl.exists() && !equal(beforeControl.data(), afterControl.data()))) {
+            if (!sameCloudControlState(beforeControl, afterControl)) {
                 if (consistencyAttempt === 0) return collectBackupSnapshot(fallback, includeCloud, 1);
                 throw new Error('Il cloud è cambiato durante il backup: non è possibile garantire una copia completa coerente. Riprova quando gli altri dispositivi sono inattivi.');
             }

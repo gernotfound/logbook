@@ -395,12 +395,19 @@ describe('durable owner-scoped journal', () => {
         const cloud = UserDataSchema.parse({ nutrition: {
             '2026-09-01': { date: '2026-09-01', weight: 81 },
         } }) as unknown as UserData;
-        const docs = new Map<string, any>([['nutrition_months/2026-09', {
+        const docs = new Map<string, any>([['', {
+            _sync: { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {} },
+        }], ['nutrition_months/2026-09', {
             _sync: { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {} },
         }]]);
         await expect(hydrateLocal('a', cloud, ['2026-09'], docs, 'all'))
-            .rejects.toMatchObject({ code: 'replica-fenced' });
-        expect(await readLocal('a')).toEqual(before);
+            .rejects.toMatchObject({ code: 'replica-fenced', causeKind: 'missing-document',
+                documentPaths: ['nutrition_months/2025-01'] });
+        const fenced = await readLocal('a');
+            expect(fenced?.data).toEqual(before?.data);
+            expect(fenced?.baseline).toEqual(before?.baseline);
+            expect(fenced?.pending).toEqual(before?.pending);
+            expect(fenced?.cloudIntegrityFence).toEqual(expect.any(String));
         expect((await readLocal('a'))?.data.nutrition?.['2025-01-01']?.weight).toBe(70);
     });
 
@@ -420,7 +427,11 @@ describe('durable owner-scoped journal', () => {
         ]) {
             await expect(hydrateLocal('a', cloud, [], docs, 'window'))
                 .rejects.toMatchObject({ code: 'replica-fenced' });
-            expect(await readLocal('a')).toEqual(before);
+            const fenced = await readLocal('a');
+            expect(fenced?.data).toEqual(before?.data);
+            expect(fenced?.baseline).toEqual(before?.baseline);
+            expect(fenced?.pending).toEqual(before?.pending);
+            expect(fenced?.cloudIntegrityFence).toEqual(expect.any(String));
         }
     });
 
@@ -581,7 +592,11 @@ describe('durable owner-scoped journal', () => {
         const before = await readLocal('a');
         await expect(hydrateLocal('a', stale, [], staleDocuments, 'window'))
             .rejects.toMatchObject({ code: 'replica-fenced' });
-        expect(await readLocal('a')).toEqual(before);
+        const fenced = await readLocal('a');
+            expect(fenced?.data).toEqual(before?.data);
+            expect(fenced?.baseline).toEqual(before?.baseline);
+            expect(fenced?.pending).toEqual(before?.pending);
+            expect(fenced?.cloudIntegrityFence).toEqual(expect.any(String));
         expect((await readLocal('a'))?.data.profile?.height).toBe('172');
     });
 
@@ -598,12 +613,19 @@ describe('durable owner-scoped journal', () => {
         } }) as unknown as UserData;
 
         for (const remoteClock of [{ s01: 2 }, { s02: 4 }]) {
-            const docs = new Map<string, any>([['nutrition_months/2025-01', {
+            const docs = new Map<string, any>([['', {
+                _sync: { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {} },
+            }], ['nutrition_months/2025-01', {
                 _sync: { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: remoteClock, fields: {} },
             }]]);
             await expect(hydrateLocal('a', cloud, ['2025-01'], docs, 'all'))
-                .rejects.toMatchObject({ code: 'replica-fenced' });
-            expect(await readLocal('a')).toEqual(before);
+                .rejects.toMatchObject({ code: 'replica-fenced', causeKind: 'stale-document',
+                    documentPaths: ['nutrition_months/2025-01'] });
+            const fenced = await readLocal('a');
+            expect(fenced?.data).toEqual(before?.data);
+            expect(fenced?.baseline).toEqual(before?.baseline);
+            expect(fenced?.pending).toEqual(before?.pending);
+            expect(fenced?.cloudIntegrityFence).toEqual(expect.any(String));
         }
     });
 

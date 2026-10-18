@@ -12,6 +12,7 @@ import {
     type QueryConstraint,
     type QueryDocumentSnapshot,
 } from 'firebase/firestore';
+import { sameCloudControlState } from './sync/cloudReadConsistency';
 import type { UserData } from '../types';
 import { DomainParsers, UserDataSchema } from './schema';
 import { rootDocument } from './sync/documentProjection';
@@ -39,7 +40,15 @@ function parsePersistedActiveWorkout(value: unknown) {
     return parsed;
 }
 
-async function loadCloudPayload(options?: { allMonths?: boolean }): Promise<{
+class ConcurrentCloudReadError extends Error {
+    readonly code = 'concurrent-cloud-read';
+    constructor() {
+        super('Il cloud è cambiato durante la lettura: snapshot non utilizzabile per il checkpoint. Riprova la sincronizzazione.');
+        this.name = 'ConcurrentCloudReadError';
+    }
+}
+
+async function loadCloudPayload(options?: { allMonths?: boolean }, consistencyAttempt = 0): Promise<{
     data: UserData;
     cloudDocuments: Map<string, Record<string, unknown>>;
     completeMonths: string[];
@@ -69,6 +78,14 @@ async function loadCloudPayload(options?: { allMonths?: boolean }): Promise<{
     try {
         await ensureAppCheck();
         const db = getDb();
+        // Every supported business transaction advances sync_control atomically.
+        // Bracket root + all paginated months with server-side control reads to
+        // reject a mixed cloud epoch, rather than treating partial data as missing.
+        const controlRef = doc(db, 'users', user.uid, 'sync_control', 'state');
+        const beforeControl = await withTimeout(
+            getDocFromServer(controlRef), 10000, 'Controllo consistenza cloud non disponibile',
+        );
+        if (auth.currentUser?.uid !== user.uid) throw new Error('Sessione cambiata durante la lettura cloud');
         // Read the root and refresh the global catalog concurrently. Hydration must
         // resolve the user library from the catalog actually downloaded for this
         // request, not from a stale snapshot captured before a detached sync.
@@ -182,6 +199,15 @@ async function loadCloudPayload(options?: { allMonths?: boolean }): Promise<{
         if (state.activeWorkout) state.activeWorkout = parsePersistedActiveWorkout(state.activeWorkout);
         if (state.nutritionPlanning) state.nutritionPlanning = DomainParsers.parseNutritionPlanning(state.nutritionPlanning);
         if (state.legalConsent) state.legalConsent = DomainParsers.parseLegalConsent(state.legalConsent);
+
+        const afterControl = await withTimeout(
+            getDocFromServer(controlRef), 10000, 'Conferma consistenza cloud non disponibile',
+        );
+        if (auth.currentUser?.uid !== user.uid) throw new Error('Sessione cambiata durante la lettura cloud');
+        if (!sameCloudControlState(beforeControl, afterControl)) {
+            if (consistencyAttempt === 0) return loadCloudPayload(options, 1);
+            throw new ConcurrentCloudReadError();
+        }
 
         return { data: state as UserData, cloudDocuments, completeMonths };
     } catch (error) {

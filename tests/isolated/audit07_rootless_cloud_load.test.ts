@@ -71,7 +71,7 @@ it('requires a server-confirmed root even when the memory cache reports a miss',
     const payload = await DB.loadCloudPayload();
     expect(payload?.data.profile?.height).toBe('180');
     expect(payload?.cloudDocuments.get('')?._sync).toBeDefined();
-    expect(harness.root).toHaveBeenCalledOnce();
+    expect(harness.root).toHaveBeenCalledTimes(3);
     expect(harness.cacheRoot).not.toHaveBeenCalled();
 });
 
@@ -298,7 +298,7 @@ it('publishes the freshly downloaded catalog instead of the stale initial cache'
     harness.catalogSync.mockImplementation(() => new Promise(resolve => { releaseCatalog = resolve; }));
     const loading = DB.loadCloudPayload();
     await vi.waitFor(() => {
-        expect(harness.root).toHaveBeenCalledOnce();
+        expect(harness.root).toHaveBeenCalledTimes(2);
         expect(harness.catalogSync).toHaveBeenCalledOnce();
     });
     releaseCatalog?.({
@@ -311,6 +311,48 @@ it('publishes the freshly downloaded catalog instead of the stale initial cache'
     const payload = await loading;
     expect(payload?.data.library?.some(item => item.id === 'new-exercise' && item.isDefault)).toBe(true);
     expect(payload?.data.customFoods?.some(item => item.id === 'new-food' && item.isCustom === false)).toBe(true);
+});
+
+it('retries a mixed full read, publishing only the stable server epoch', async () => {
+    let controlReads = 0;
+    let pages = 0;
+    harness.root.mockImplementation(async (path: string) => {
+        if (path.endsWith('sync_control/state')) {
+            controlReads += 1;
+            // Document snapshots hold immutable data from their read instant.
+            const epoch = controlReads === 1 ? 1 : 2;
+            return { exists: () => true, data: () => ({ epoch }) };
+        }
+        return { exists: () => false };
+    });
+    harness.page.mockImplementation(async ({ path }: { path: string }) => {
+        if (path.endsWith('nutrition_months')) return { size: 0, docs: [] };
+        pages += 1;
+        return { size: 1, docs: [{
+            id: '2024-01', data: () => ({
+                ['w' + pages]: { id: 'w' + pages, date: '2024-01-01', exercises: [] },
+                _schemaVersion: 1,
+                _sync: { protocolVersion: 3, clock: {}, fields: {}, writer: {
+                    slot: 's00', replicaId: 'test-reader', generation: 1, seq: 0,
+                } },
+            }),
+        }] };
+    });
+    const snapshot = await DB.loadCloudPayload({ allMonths: true });
+    expect(controlReads).toBe(4);
+    expect(pages).toBe(2);
+    expect(snapshot?.data.history?.map(item => item.id)).toEqual(['w2']);
+});
+
+it('fails closed when the cloud changes throughout both full-read attempts', async () => {
+    let epoch = 0;
+    harness.root.mockImplementation(async (path: string) => path.endsWith('sync_control/state')
+        ? { exists: () => true, data: () => ({ epoch: ++epoch }) }
+        : { exists: () => false });
+    await expect(DB.loadCloudPayload({ allMonths: true })).rejects.toMatchObject({
+        code: 'concurrent-cloud-read',
+    });
+    expect(harness.page).toHaveBeenCalledTimes(4);
 });
 
 it('retains the offline cached catalog when the remote catalog update rejects', async () => {

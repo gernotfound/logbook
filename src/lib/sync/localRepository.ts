@@ -81,6 +81,24 @@ class InvalidCloudSyncMetadataError extends Error {
     }
 }
 
+/**
+ * Cloud business evidence is missing or causally older than an already
+ * acknowledged local document. Unlike a transport/replica failure this is
+ * evidence that destructive cleanup must be fenced durably.
+ */
+export class IncompleteCloudSnapshotError extends ReplicaFencedError {
+    readonly evidence = 'cloud-snapshot-integrity';
+
+    constructor(
+        message: string,
+        readonly causeKind: 'missing-document' | 'stale-document',
+        readonly documentPaths: readonly string[],
+    ) {
+        super(message);
+        this.name = 'IncompleteCloudSnapshotError';
+    }
+}
+
 export class WorkoutIntentConflictError extends Error {
     readonly code = 'workout-intent-conflict';
 
@@ -616,17 +634,23 @@ export async function commitDomainOperations(owner: string, batch: DomainOperati
     return { operations, data: savedData };
 }
 
+function fenceCloudIntegrity(current: LocalEnvelope): LocalEnvelope {
+    // A newly detected divergence must invalidate a recovery based on any
+    // earlier observation, even when another tab is attempting a checkpoint.
+    return {
+        ...current,
+        cloudIntegrityFence: generateId('cloud-fence'),
+        replica: current.replica ? { ...current.replica, checkpointAtMs: 1, leaseUntilMs: 1 } : null,
+        revision: current.revision + 1,
+    };
+}
+
 export async function markCloudIntegrityBlocked(owner: string): Promise<void> {
     owner = normalizeStorageOwner(owner);
     await updateArchiveRecord<any>(owner, raw => {
         const current = validate(raw, owner);
         if (!current) throw new Error('Archivio locale non disponibile per la protezione cloud');
-        return {
-            ...current,
-            cloudIntegrityFence: generateId('cloud-fence'),
-            replica: current.replica ? { ...current.replica, checkpointAtMs: 1, leaseUntilMs: 1 } : null,
-            revision: current.revision + 1,
-        };
+        return fenceCloudIntegrity(current);
     });
 }
 
@@ -828,6 +852,7 @@ export async function hydrateLocal(owner: string, cloudData: UserData, months: s
     owner = normalizeStorageOwner(owner);
     const cloud = structuredClone(parse(cloudData));
     let saved: LocalEnvelope | undefined;
+    let integrityFailure: IncompleteCloudSnapshotError | undefined;
     const catalog = await getCachedCatalog();
     await updateArchiveRecord<any>(owner, raw => {
         if (guard && !guard()) return raw;
@@ -849,21 +874,30 @@ export async function hydrateLocal(owner: string, cloudData: UserData, months: s
             // with known durable causal metadata is absent (or lacks _sync), the
             // response cannot prove that its acknowledged data was removed.
             // Reject before installing the cloud snapshot or claiming a checkpoint.
-            if (cloudDocuments && Object.keys(current.syncMetaByDocument).some(path =>
-                (coverageMode === 'all' || authoritativePaths.has(path))
-                && !cloudDocuments.get(path)?._sync
-            )) {
-                throw new ReplicaFencedError('Snapshot cloud incompleto rispetto alla copia locale: sincronizzazione sospesa senza cancellare dati.');
+            const missingPaths = cloudDocuments
+                ? Object.keys(current.syncMetaByDocument).filter(path =>
+                    (coverageMode === 'all' || authoritativePaths.has(path))
+                    && !cloudDocuments.get(path)?._sync
+                )
+                : [];
+            if (missingPaths.length) {
+                integrityFailure = new IncompleteCloudSnapshotError(
+                    'Snapshot cloud incompleto rispetto alla copia locale: sincronizzazione sospesa senza cancellare dati.',
+                    'missing-document', missingPaths,
+                );
+                // The same IndexedDB commit that detects missing acknowledged
+                // evidence also installs the owner-scoped destructive-purge fence.
+                return fenceCloudIntegrity(current);
             }
             if (coverageMode === 'window') for (const [path, meta] of Object.entries(current.syncMetaByDocument ?? {})) if (!authoritativePaths.has(path)) syncMeta[path] = meta;
             const updatedClock = { ...current.clock };
-            let staleCloudSnapshot = false;
+            const stalePaths: string[] = [];
             if (cloudDocuments) for (const [path, doc] of cloudDocuments.entries()) if (doc._sync) {
                 const meta = parseCloudSyncMeta(path, doc._sync);
                 const durable = current.syncMetaByDocument[path];
                 if ((coverageMode === 'all' || authoritativePaths.has(path)) && durable
                     && !coversVectorClock(meta.clock, durable.clock)) {
-                    staleCloudSnapshot = true;
+                    stalePaths.push(path);
                 }
                 syncMeta[path] = meta;
                 for (const [actor, seq] of Object.entries(meta.clock)) updatedClock[actor] = Math.max(updatedClock[actor] || 0, seq);
@@ -871,8 +905,12 @@ export async function hydrateLocal(owner: string, cloudData: UserData, months: s
             // A delayed or causally incomparable snapshot cannot certify a replica
             // checkpoint, even if the local envelope is preserved. Fail closed so the
             // caller does not publish a frontier derived from stale cloud evidence.
-            if (staleCloudSnapshot) {
-                throw new ReplicaFencedError('Snapshot cloud non aggiornato rispetto alla copia locale: checkpoint sospeso senza sovrascrivere dati.');
+            if (stalePaths.length) {
+                integrityFailure = new IncompleteCloudSnapshotError(
+                    'Snapshot cloud non aggiornato rispetto alla copia locale: checkpoint sospeso senza sovrascrivere dati.',
+                    'stale-document', stalePaths,
+                );
+                return fenceCloudIntegrity(current);
             }
             const localDocs = projectDocuments(current.data, catalog);
             const cloudDocsForHydration = projectDocuments(cloud, catalog);
@@ -897,6 +935,7 @@ export async function hydrateLocal(owner: string, cloudData: UserData, months: s
         }
         return saved;
     });
+    if (integrityFailure) throw integrityFailure;
     if (!saved) throw new Error('Hydration locale invalidata o non riuscita');
     return saved;
 }
