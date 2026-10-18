@@ -5,6 +5,7 @@ import { isLegalConsentRequiredError, replicateJournal } from '../../lib/sync/re
 import { captureSession, isCurrentSession, userOwner } from '../../lib/sync/session';
 import { markTabSnapshotClean } from '../../lib/sync/tabSnapshotCausality';
 import { getInitialLocalWorkout } from '../../store/slices/createWorkoutSlice';
+import { recoverWorkoutDeviceIntent } from '../../lib/sync/workoutDeviceIntent';
 import { removeBrowserValue } from '../../lib/sync/browserStorage';
 import { clearGuestMigrationIntent } from '../../lib/auth/guestMigrationIntent';
 import type { UserData } from '../../types';
@@ -86,17 +87,25 @@ export async function resumePersistedGuestMigration(
             try {
                 const session = captureSession();
                 if (session.owner !== userOwner(user.uid) || !isCurrentSession(session)) return true;
-                const recovered = authenticatedEnvelope.data;
+                // The same owner-scoped recovery precedes ordinary authenticated
+                // hydration. Never expose an unapplied device write-ahead intent.
+                await recoverWorkoutDeviceIntent(session.owner, () => isCurrentRun() && isCurrentSession(session));
+                if (!isCurrentRun() || !isCurrentSession(session)) return true;
+                const { readLocal } = await import('../../lib/sync/localRepository');
+                const updatedEnvelope = await readLocal(user.uid);
+                if (!updatedEnvelope) throw new Error('Archivio account scomparso durante il recupero workout.');
+                if (!isCurrentRun() || !isCurrentSession(session)) return true;
+                const recovered = updatedEnvelope.data;
                 const workout = getInitialLocalWorkout(
                     session.owner, recovered.activeWorkout ?? null, recovered.history,
-                    authenticatedEnvelope.lastClosedWorkoutId, authenticatedEnvelope.closedWorkoutIds,
+                    updatedEnvelope.lastClosedWorkoutId, updatedEnvelope.closedWorkoutIds,
                 );
                 if (!isCurrentRun() || !isCurrentSession(session)) return true;
                 useAppStore.setState({
                     userData: recovered, dataOwner: session.owner, localWorkout: workout,
-                    cloudIntegrityBlocked: Boolean(authenticatedEnvelope.cloudIntegrityFence),
-                    syncHealth: authenticatedEnvelope.cloudIntegrityFence ? 'failed'
-                        : authenticatedEnvelope.pending.length ? 'local-pending' : 'synced',
+                    cloudIntegrityBlocked: Boolean(updatedEnvelope.cloudIntegrityFence),
+                    syncHealth: updatedEnvelope.cloudIntegrityFence ? 'failed'
+                        : updatedEnvelope.pending.length ? 'local-pending' : 'synced',
                 });
                 markTabSnapshotClean(session, recovered);
             } catch (error) {
