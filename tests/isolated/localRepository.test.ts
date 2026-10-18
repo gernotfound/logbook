@@ -205,11 +205,28 @@ describe('durable owner-scoped journal', () => {
         expect(await readLocal('guest')).toBeUndefined();
     });
 
-    it('does not recreate deleted data from a stale snapshot commit', async () => {
+    it('rejects a stale snapshot commit after deletion without recreating the envelope', async () => {
         await initializeLocal('user:a', data(170));
         await clear();
-        await commitLocal('user:a', data(180), data(170), () => false);
+        await expect(commitLocal('user:a', data(180), data(170), () => false))
+            .rejects.toThrow('Commit locale invalidato dal cambio sessione');
         expect(await readLocal('user:a')).toBeUndefined();
+    });
+
+    it('rejects a stale snapshot commit atomically without changing an existing pending journal', async () => {
+        const original = data(170);
+        await initializeLocal('user:a', original);
+        await commitLocal('user:a', data(171), original);
+        const before = await readLocal('user:a');
+        let guardCalls = 0;
+
+        await expect(commitLocal('user:a', data(172), data(171), () => {
+            guardCalls++;
+            return false;
+        })).rejects.toThrow('Commit locale invalidato dal cambio sessione');
+
+        expect(guardCalls).toBe(1);
+        expect(await readLocal('user:a')).toEqual(before);
     });
 
     it('rejects pre-M1 and future local envelopes without rewriting their bytes', async () => {
