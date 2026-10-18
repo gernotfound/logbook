@@ -16,6 +16,9 @@ const snapshot = vi.hoisted(() => ({ collectBackupSnapshot: vi.fn() }));
 vi.mock('../src/lib/healthConsent', () => consent);
 vi.mock('../src/lib/sync/localRepository', () => journal);
 vi.mock('../src/lib/db/backupSnapshot', () => snapshot);
+vi.mock('../src/lib/catalog/catalogService', () => ({
+  getCachedCatalog: vi.fn(async () => ({ exercises: [], foods: [] })),
+}));
 vi.mock('../src/lib/sync/session', () => ({
   captureSession: () => ({ owner: 'user:a', epoch: 1 }),
   isCurrentSession: () => true,
@@ -41,6 +44,71 @@ describe('consent recovery after deliberate data erasure', () => {
     expect(journal.rebaseConsentRecoveryWithExplicitChoice).not.toHaveBeenCalled();
     expect(snapshot.collectBackupSnapshot).not.toHaveBeenCalled();
     expect(consent.finishHealthConsentReacceptance).not.toHaveBeenCalled();
+  });
+
+  it('rejects a new erasure floor recorded during the full cloud scan before rebasing', async () => {
+    consent.readActiveHealthConsentRevision
+      .mockResolvedValueOnce({ revision: 5 })
+      .mockResolvedValueOnce({ revision: 7, erasedBeforeRevision: 5 });
+    snapshot.collectBackupSnapshot.mockResolvedValue({
+      coverage: { scope: 'cloud-and-device' },
+      recovery: { cloudDocuments: {} },
+      data: {},
+    });
+
+    await expect(recoverOldLocalEditsAfterConsent({ uid: 'a' } as User))
+      .rejects.toThrow('eliminati su richiesta');
+    expect(consent.readActiveHealthConsentRevision).toHaveBeenCalledTimes(2);
+    expect(journal.rebaseConsentRecoveryWithExplicitChoice).not.toHaveBeenCalled();
+    expect(consent.finishHealthConsentReacceptance).not.toHaveBeenCalled();
+  });
+
+  it('rejects a newer remote consent epoch even without a new erasure floor', async () => {
+    consent.readActiveHealthConsentRevision
+      .mockResolvedValueOnce({ revision: 5 })
+      .mockResolvedValueOnce({ revision: 7 });
+    snapshot.collectBackupSnapshot.mockResolvedValue({
+      coverage: { scope: 'cloud-and-device' },
+      recovery: { cloudDocuments: {} },
+      data: {},
+    });
+
+    await expect(recoverOldLocalEditsAfterConsent({ uid: 'a' } as User))
+      .rejects.toThrow('consenso sul server è cambiato');
+    expect(journal.rebaseConsentRecoveryWithExplicitChoice).not.toHaveBeenCalled();
+    expect(consent.finishHealthConsentReacceptance).not.toHaveBeenCalled();
+  });
+
+  it('rebases only when the complete scan and the second trusted consent check agree', async () => {
+    consent.readActiveHealthConsentRevision.mockResolvedValue({ revision: 5 });
+    snapshot.collectBackupSnapshot.mockResolvedValue({
+      coverage: { scope: 'cloud-and-device' },
+      recovery: { cloudDocuments: {} },
+      data: {},
+    });
+    consent.refreshHealthConsent.mockResolvedValue('active');
+
+    await recoverOldLocalEditsAfterConsent({ uid: 'a' } as User);
+    expect(consent.readActiveHealthConsentRevision).toHaveBeenCalledTimes(2);
+    expect(journal.rebaseConsentRecoveryWithExplicitChoice).toHaveBeenCalledOnce();
+    expect(journal.rebaseConsentRecoveryWithExplicitChoice).toHaveBeenCalledWith(
+      'user:a', 5, 17, expect.anything(), expect.anything(), expect.any(Map), expect.any(Function),
+    );
+    expect(consent.finishHealthConsentReacceptance).toHaveBeenCalledOnce();
+  });
+
+  it('preserves the old journal when a second trusted consent check fails', async () => {
+    consent.readActiveHealthConsentRevision
+      .mockResolvedValueOnce({ revision: 5 })
+      .mockRejectedValueOnce(new Error('verifica server indisponibile'));
+    snapshot.collectBackupSnapshot.mockResolvedValue({
+      coverage: { scope: 'cloud-and-device' },
+      recovery: { cloudDocuments: {} },
+      data: {},
+    });
+    await expect(recoverOldLocalEditsAfterConsent({ uid: 'a' } as User))
+      .rejects.toThrow('verifica server indisponibile');
+    expect(journal.rebaseConsentRecoveryWithExplicitChoice).not.toHaveBeenCalled();
   });
 
   it('fails closed on unversioned legacy pending journals after confirmed erasure', async () => {
