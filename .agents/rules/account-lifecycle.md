@@ -23,7 +23,7 @@ Un recupero separato e confermato dell'allenamento device-local può eseguire un
 Solo dopo quel commit è ammesso ripristinare un timer mancante, convertendo lo stato running in paused all'istante dell'export. Non promettere continuità temporale tra dispositivi e non sovrascrivere alcun record esistente.
 - **Ripristina:** sostituisce i campi presenti nel formato supportato rispetto allo stato locale disponibile; non autorizza a trattare dati cloud mai caricati come assenti.
 - L'anteprima/commit deve invalidarsi se cambia sessione o baseline rilevante durante l'operazione.
-- La conferma segue la persistenza locale; offline non va presentata come conferma cloud.
+- La conferma segue la persistenza locale; offline non va presentata come conferma cloud. **MUST:** l'importazione controlla l'esito tipizzato `SyncResult` di `saveUserData`: il solo completamento della Promise non è prova di commit; `failed`/`rejected` arrestano il flusso prima di recuperi device e conferme, mentre `local-pending` può essere dichiarato solo come dato salvato localmente e non cloud-acknowledged. Il messaggio deve usare l'esito della specifica importazione, non uno stato di sync globale che può essere cambiato da altre operazioni.
 - I consensi importati non sostituiscono l'accettazione corrente.
 - Nel merge ospite → account, il consenso legale ospite non è trasferibile: `legalConsent` resta quello già associato all'account, se presente; per un account nuovo serve una nuova accettazione esplicita.
 - Non inventare conversioni V1/V2 per aggirare la baseline clean-cut.

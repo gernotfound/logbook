@@ -7,7 +7,7 @@ import { restorePortableWorkout, restorePortableTimerAsPaused } from './backupWo
 import { captureSession, isCurrentSession } from './sync/session';
 import { readLocal } from './sync/localRepository';
 import equal from 'fast-deep-equal';
-import type { Exercise, ExportShareOptions, NutritionDay, SessionExercise, SessionExerciseSet, TrainingCycle, UserData, WorkoutRoutine, WorkoutSession } from '../types';
+import type { Exercise, ExportShareOptions, NutritionDay, SessionExercise, SessionExerciseSet, TrainingCycle, UserData, WorkoutRoutine, WorkoutSession, SyncResult } from '../types';
 import { requireCanonicalWorkoutDate } from './sync/monthlyIntegrity';
 import { parseLargeBackupJson } from './streamJsonImport';
 
@@ -413,7 +413,7 @@ export const Exporter = {
         saveUserData: (
             update: (previous: UserData | null) => UserData,
             options?: { expectedRevision?: number },
-        ) => Promise<unknown>,
+        ) => Promise<SyncResult>,
         mode: ImportMode = 'merge'
     ) {
         const session = captureSession();
@@ -462,12 +462,18 @@ export const Exporter = {
             if (!latestEnvelope || latestEnvelope.revision !== expectedRevision) {
                 throw new Error('I dati sono cambiati durante l’anteprima. Ripeti l’importazione.');
             }
-            await saveUserData(previous => {
+            const saveResult = await saveUserData(previous => {
                 assertCurrent();
                 if (!equal(previous, snapshot)) throw new Error('I dati sono cambiati durante l’anteprima. Ripeti l’importazione.');
                 return prepared.data;
             }, { expectedRevision });
             assertCurrent();
+            // A resolved Promise does not prove that a local commit succeeded:
+            // update-required and other fail-closed boundaries return SyncResult
+            // without throwing. Do not proceed to optional device recovery then.
+            if (!saveResult.ok && saveResult.status !== 'local-pending') {
+                throw new Error('Importazione non confermata: il salvataggio è stato bloccato. Conserva il backup originale e riprova dopo aver risolto il problema.', { cause: saveResult.error });
+            }
             let draftReport = '';
             if (decoded.deviceDrafts.length && await useDialogStore.getState().showConfirm(
                 'Il backup contiene ' + decoded.deviceDrafts.length + ' bozze recuperabili. Ripristinare soltanto quelle assenti dal dispositivo? Le bozze esistenti non saranno sovrascritte.')) {
@@ -508,8 +514,7 @@ export const Exporter = {
                 }
             }
             assertCurrent();
-            const status = useAppStore.getState().syncHealth;
-            void useDialogStore.getState().showAlert((status === 'local-pending'
+            void useDialogStore.getState().showAlert((saveResult.status === 'local-pending'
                 ? 'Importazione salvata sul dispositivo. Sincronizzazione cloud in attesa.'
                 : 'Importazione completata.') + draftReport);
         } catch (error) {
