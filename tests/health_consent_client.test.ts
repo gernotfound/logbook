@@ -765,3 +765,43 @@ describe('account offline withdrawal and explicit local-only reacceptance', () =
     } finally { onLine.mockRestore(); }
   });
 });
+
+describe('consent responses across authenticated owner changes', () => {
+  it('does not publish an old trusted response for account A after login to B', async () => {
+    const uid = 'late-owner-' + crypto.randomUUID();
+    const actor = user(uid);
+    (auth as { currentUser: unknown }).currentUser = actor;
+    let resolveGet!: (response: Response) => void;
+    const fetchMock = vi.fn(() => new Promise<Response>(resolve => { resolveGet = resolve; }));
+    vi.stubGlobal('fetch', fetchMock);
+    beginHealthConsentVerification(uid);
+    const pending = refreshHealthConsent(actor);
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
+    (auth as { currentUser: unknown }).currentUser = user('other-account');
+    resolveGet(Response.json({ status: 'active', revision: 2, acceptedAt: '2026-10-12T00:00:00.000Z' }));
+    expect(await pending).not.toBe('active');
+    expect(localStorage.getItem('logbook:v2:user:' + uid + ':health-consent-generation')).toBeNull();
+    expect(localStorage.getItem('logbook:v2:user:' + uid + ':health-consent-last-active')).toBeNull();
+    expect(isHealthConsentCloudWritable('user:' + uid)).toBe(false);
+  });
+
+  it('preserves a stale KEEP choice after the account changes during GET', async () => {
+    const uid = 'keep-owner-' + crypto.randomUUID();
+    const actor = user(uid);
+    (auth as { currentUser: unknown }).currentUser = actor;
+    localStorage.setItem(key(uid), 'pending:1');
+    let resolveKeep!: (response: Response) => void;
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(Response.json({ status: 'active', revision: 2, acceptedAt: '2026-10-12T00:00:00.000Z' }))
+      .mockImplementationOnce(() => new Promise<Response>(resolve => { resolveKeep = resolve; }));
+    vi.stubGlobal('fetch', fetchMock);
+    expect(await refreshHealthConsent(actor)).toBe('stale-request');
+    const keep = retainNewerHealthConsent(actor);
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    (auth as { currentUser: unknown }).currentUser = user('other-account');
+    resolveKeep(Response.json({ status: 'active', revision: 2, acceptedAt: '2026-10-12T00:00:00.000Z' }));
+    await expect(keep).rejects.toThrow('Sessione');
+    expect(localStorage.getItem(key(uid))).toBe('pending:1');
+    expect(localStorage.getItem('logbook:v2:user:' + uid + ':health-consent-generation')).toBeNull();
+  });
+});
