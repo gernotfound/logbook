@@ -400,7 +400,11 @@ describe('durable owner-scoped journal', () => {
         }]]);
         await expect(hydrateLocal('a', cloud, ['2026-09'], docs, 'all'))
             .rejects.toMatchObject({ code: 'replica-fenced' });
-        expect(await readLocal('a')).toEqual(before);
+        const fenced = await readLocal('a');
+            expect(fenced?.data).toEqual(before?.data);
+            expect(fenced?.baseline).toEqual(before?.baseline);
+            expect(fenced?.pending).toEqual(before?.pending);
+            expect(fenced?.cloudIntegrityFence).toEqual(expect.any(String));
         expect((await readLocal('a'))?.data.nutrition?.['2025-01-01']?.weight).toBe(70);
     });
 
@@ -420,7 +424,11 @@ describe('durable owner-scoped journal', () => {
         ]) {
             await expect(hydrateLocal('a', cloud, [], docs, 'window'))
                 .rejects.toMatchObject({ code: 'replica-fenced' });
-            expect(await readLocal('a')).toEqual(before);
+            const fenced = await readLocal('a');
+            expect(fenced?.data).toEqual(before?.data);
+            expect(fenced?.baseline).toEqual(before?.baseline);
+            expect(fenced?.pending).toEqual(before?.pending);
+            expect(fenced?.cloudIntegrityFence).toEqual(expect.any(String));
         }
     });
 
@@ -581,7 +589,11 @@ describe('durable owner-scoped journal', () => {
         const before = await readLocal('a');
         await expect(hydrateLocal('a', stale, [], staleDocuments, 'window'))
             .rejects.toMatchObject({ code: 'replica-fenced' });
-        expect(await readLocal('a')).toEqual(before);
+        const fenced = await readLocal('a');
+            expect(fenced?.data).toEqual(before?.data);
+            expect(fenced?.baseline).toEqual(before?.baseline);
+            expect(fenced?.pending).toEqual(before?.pending);
+            expect(fenced?.cloudIntegrityFence).toEqual(expect.any(String));
         expect((await readLocal('a'))?.data.profile?.height).toBe('172');
     });
 
@@ -603,7 +615,11 @@ describe('durable owner-scoped journal', () => {
             }]]);
             await expect(hydrateLocal('a', cloud, ['2025-01'], docs, 'all'))
                 .rejects.toMatchObject({ code: 'replica-fenced' });
-            expect(await readLocal('a')).toEqual(before);
+            const fenced = await readLocal('a');
+            expect(fenced?.data).toEqual(before?.data);
+            expect(fenced?.baseline).toEqual(before?.baseline);
+            expect(fenced?.pending).toEqual(before?.pending);
+            expect(fenced?.cloudIntegrityFence).toEqual(expect.any(String));
         }
     });
 
