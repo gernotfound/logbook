@@ -89,10 +89,15 @@ describe('DB Persistence for Training Cycles and Planning', () => {
             activeCycleId: 'cycle_loaded'
         };
 
-        vi.mocked(getDocFromServer).mockResolvedValueOnce({
+        vi.mocked(getDocFromServer).mockImplementation(async (ref: any) => {
+                if (ref?.path?.endsWith('/sync_control/state')) {
+                    return { exists: () => false, data: () => undefined } as any;
+                }
+                return {
             exists: () => true,
             data: () => mockFirestoreDoc
-        } as any);
+        } as any;
+            });
 
         vi.mocked(getDocs).mockResolvedValue({
             forEach: () => {}
@@ -112,14 +117,19 @@ describe('DB Persistence for Training Cycles and Planning', () => {
     });
 
     it('DB.loadUserData defaults trainingCycles to [] and activeCycleId to null if absent', async () => {
-        vi.mocked(getDocFromServer).mockResolvedValueOnce({
+        vi.mocked(getDocFromServer).mockImplementation(async (ref: any) => {
+                if (ref?.path?.endsWith('/sync_control/state')) {
+                    return { exists: () => false, data: () => undefined } as any;
+                }
+                return {
             exists: () => true,
             data: () => ({
                 profile: { name: 'Mario' },
                 _schemaVersion: 1,
                 _sync: { protocolVersion: 3, clock: {}, fields: {}, writer: { slot: 's00', replicaId: 'test-replica', generation: 1, seq: 0 } },
             })
-        } as any);
+        } as any;
+            });
 
         vi.mocked(getDocs).mockResolvedValue({
             forEach: () => {}
