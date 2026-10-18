@@ -118,7 +118,7 @@ export async function migrateGuestAccount({ user, guestData, policy, setUserData
 
         // An account may already hold its own pending journal even when the
         // guest intentionally skips the transfer. Hydration is not cloud ACK.
-        const finishWithoutGuestMerge = async (hydrated: LocalEnvelope): Promise<SyncResult> => {
+        const finishWithoutGuestMerge = async (): Promise<SyncResult> => {
             markLocalReady();
             const { readLocal } = await import('../../lib/sync/localRepository');
             const beforeReplay = await readLocal(user.uid);
@@ -152,7 +152,7 @@ export async function migrateGuestAccount({ user, guestData, policy, setUserData
             assertCurrent();
             hydratedEnv = await prepareReplica(hydratedEnv);
             assertCurrent();
-            return await finishWithoutGuestMerge(hydratedEnv);
+            return await finishWithoutGuestMerge();
         }
 
         if (cloudHasData && !guestHasData) {
@@ -162,7 +162,7 @@ export async function migrateGuestAccount({ user, guestData, policy, setUserData
             assertCurrent();
             hydratedEnv = await prepareReplica(hydratedEnv);
             assertCurrent();
-            return await finishWithoutGuestMerge(hydratedEnv);
+            return await finishWithoutGuestMerge();
         }
 
         if (guestHasData) {
@@ -205,7 +205,7 @@ export async function migrateGuestAccount({ user, guestData, policy, setUserData
         assertCurrent();
         hydratedEnv = await prepareReplica(hydratedEnv);
         assertCurrent();
-        return await finishWithoutGuestMerge(hydratedEnv);
+        return await finishWithoutGuestMerge();
     } catch (error) {
         if (error instanceof StaleGuestMigrationError || !isCurrent()) throw new StaleGuestMigrationError();
         const code = (error as { code?: unknown })?.code;
