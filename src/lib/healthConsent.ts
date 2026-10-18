@@ -616,8 +616,9 @@ export async function retainNewerHealthConsent(user: User): Promise<HealthConsen
   const originalRevision = parsePendingRevision(saved) ?? parseOfflineReaccept(saved)?.revision ?? null;
   if (originalRevision === null && saved !== 'withdrawn') throw new Error('Richiesta precedente non riconosciuta.');
   const live = await serverRequest(user, 'GET');
-  if (!sameAuth() || readMarker(uid) !== saved || currentHealthConsentStatus(uid) !== 'stale-request') {
-    throw new Error('Sessione o revoca locale cambiata durante la verifica.');
+  if (!sameAuth()) throw new Error('Sessione cambiata durante la verifica.');
+  if (readMarker(uid) !== saved || currentHealthConsentStatus(uid) !== 'stale-request') {
+    throw new Error('La revoca locale è cambiata durante la verifica.');
   }
   // The durable withdrawn marker has no request revision, but a live active
   // revision >= 2 proves a subsequent explicit reacceptance occurred.
@@ -629,8 +630,9 @@ export async function retainNewerHealthConsent(user: User): Promise<HealthConsen
   const ready = await advanceLocalConsentRevisionIfClean('user:' + uid, live.revision,
     () => sameAuth() && readMarker(uid) === saved
       && readBrowserValueStrict(generationMarker(uid)) === String(live.revision));
-  if (!sameAuth() || readMarker(uid) !== saved || currentHealthConsentStatus(uid) !== 'stale-request') {
-    throw new Error('Sessione o revoca locale cambiata durante il recupero.');
+  if (!sameAuth()) throw new Error('Sessione cambiata durante il recupero.');
+  if (readMarker(uid) !== saved || currentHealthConsentStatus(uid) !== 'stale-request') {
+    throw new Error('La revoca locale è cambiata durante il recupero.');
   }
   // The superseded request is cleared only after the live generation has
   // durably fenced old tabs. An old journal remains in IndexedDB in either case.
