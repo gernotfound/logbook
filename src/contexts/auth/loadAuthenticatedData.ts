@@ -185,8 +185,8 @@ export async function loadAuthenticatedData({
                     console.warn('Evidenza cloud incompleta; archivio locale protetto:', mergeError);
                 } else if (code === 'invalid-cloud-sync-metadata') {
                     if (!(await preserveUnsafeCloud())) return 'blocked';
-                    setSaveError('Metadati cloud non validi. Archivio locale preservato; sincronizzazione sospesa.');
-                    console.error('Metadati di sincronizzazione cloud non validi:', mergeError);
+                    setSaveError('Sincronizzazione cloud sospesa: i metadati di sincronizzazione remoti non sono validi. I dati locali validi sono stati preservati e TheLogBook non sovrascriverà il cloud finché il problema non viene risolto.');
+                    console.error('Metadati di sincronizzazione cloud non validi; stato locale preservato:', mergeError);
                 } else {
                     // Transport failures and replica capacity are NOT evidence
                     // that acknowledged business documents went missing.
