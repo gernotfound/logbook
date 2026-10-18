@@ -147,6 +147,8 @@ Se il key store non è disponibile ma esiste ciphertext, non generare una nuova 
 
 La modalità guest ha archivio e workout separati dagli utenti. La migrazione conserva la copia guest e registra il risultato locale prima della replica. Le callback vecchie sono invalidate tramite owner ed epoch.
 
+**MUST:** anche con policy `skip` (nessun trasferimento dell'archivio guest), oppure senza dati guest da fondere, un journal già pendente dell'account autenticato deve essere rigiocato o dichiarato `local-pending`/fallito secondo l'esito durevole; la hydration da sola non prova un ACK cloud. La copia guest resta separata e invariata.
+
 **MUST (CRITICAL):** durante il recovery di una migrazione guest→account già durevole, pubblicare l'envelope autenticato nello stato UI soltanto dopo il controllo dell'owner/sessione e senza attraversare `setUserData()` o altri writer di modifica business. Un vecchio snapshot guest in memoria non è la baseline del nuovo account. I journal e le copie device-critical di entrambi gli owner devono rimanere protetti; il ripristino dell'allenamento autenticato usa il recovery owner-scoped canonico.
 
 Gli aggiornamenti PWA sono differibili. Prima del reload: flush delle bozze, attesa dei salvataggi, confronto fra store e copia IndexedDB e snapshot sincrono del workout. Errori locali bloccano il reload. Un errore di caricamento chunk apre lo stesso prompt; non scatena più un reload automatico che può ripetersi.

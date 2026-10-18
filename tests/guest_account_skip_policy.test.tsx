@@ -5,7 +5,7 @@ import { auth, onAuthStateChanged } from '../src/lib/firebase';
 import { DB } from '../src/lib/db';
 import { AuthProvider } from '../src/contexts/AuthContext';
 import { UserDataSchema } from '../src/lib/schema';
-import { initializeLocal, readLocal } from '../src/lib/sync/localRepository';
+import { initializeLocal, commitLocal, readLocal } from '../src/lib/sync/localRepository';
 import { useAppStore } from '../src/store/useAppStore';
 import type { UserData } from '../src/types';
 import { beginGuestMigrationIntent } from '../src/lib/auth/guestMigrationIntent';
@@ -27,6 +27,53 @@ describe('guest -> account skip policy', () => {
             return () => {};
         });
         await createAndMigrateVault('user:skip-user');
+    });
+
+
+    it.each(['skip', 'merge'] as const)('does not acknowledge pre-existing account pending work on %s', async policy => {
+        const cloud = parse({
+            profile: { gender: 'M' },
+            routines: [{ id: 'cloud-routine', name: 'Cloud', exercises: [] }],
+        });
+        const accountEdit = parse({ ...cloud, profile: { ...cloud.profile, height: '183' } });
+        const guest = policy === 'skip'
+            ? parse({ profile: { height: '151' }, routines: [{ id: 'guest-routine', name: 'Guest', exercises: [] }] })
+            : parse({});
+
+        // The policy selects only the guest archive. Existing account edits
+        // cannot be declared delivered by an unrelated hydration.
+        await initializeLocal(user.uid, cloud);
+        await commitLocal(user.uid, accountEdit, cloud);
+        expect((await readLocal(user.uid))?.pending.length).toBeGreaterThan(0);
+        await initializeLocal('guest', guest);
+        localStorage.setItem('logbook_is_guest', 'true');
+        beginGuestMigrationIntent(policy, 'recovery', { uid: user.uid });
+        useAppStore.getState().setUserData(guest);
+        const offline = vi.spyOn(window.navigator, 'onLine', 'get').mockReturnValue(false);
+        try {
+            vi.mocked(DB.loadCloudPayload).mockResolvedValueOnce({
+                data: cloud, completeMonths: [], cloudDocuments: new Map(),
+            });
+
+            render(<AuthProvider><div>app</div></AuthProvider>);
+
+            await waitFor(() => {
+                expect(localStorage.getItem('logbook_is_guest')).toBeNull();
+                expect(useAppStore.getState().saveError).toMatch(/dispositivo|Offline/);
+                expect(useAppStore.getState().syncHealth).toBe('local-pending');
+            });
+
+            const envelope = await readLocal(user.uid);
+            expect(envelope?.pending.length).toBeGreaterThan(0);
+            expect(envelope?.data.profile?.height).toBe('183');
+            expect(envelope?.data.routines?.map(item => item.id)).toContain('cloud-routine');
+            expect(envelope?.data.routines?.map(item => item.id)).not.toContain('guest-routine');
+            expect((await readLocal('guest'))?.data).toEqual(guest);
+            expect(useAppStore.getState().dataOwner).toBe('user:' + user.uid);
+            expect(DB.loadCloudPayload).toHaveBeenCalledTimes(1);
+        } finally {
+            offline.mockRestore();
+        }
     });
 
     it('fails closed when the authoritative migration intent is absent', async () => {
