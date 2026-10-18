@@ -11,6 +11,7 @@ import type { UserData } from '../src/types';
 import { beginGuestMigrationIntent } from '../src/lib/auth/guestMigrationIntent';
 import { createAndMigrateVault } from '../src/lib/sync/secureArchiveMigration';
 import { lockAllVaults } from '../src/lib/sync/secureArchiveSession';
+import { migrateGuestAccount } from '../src/contexts/auth/migrateGuestAccount';
 
 const parse = (value: unknown) => UserDataSchema.parse(value) as unknown as UserData;
 const user = { uid: 'skip-user', email: 'skip@example.com', displayName: 'Skip User' } as any;
@@ -30,31 +31,29 @@ describe('guest -> account skip policy', () => {
     });
 
 
-    it.each(['skip', 'merge'] as const)('does not acknowledge pre-existing account pending work on %s', async policy => {
+    it('preserves account pending while the user explicitly skips guest transfer', async () => {
         const cloud = parse({
             profile: { gender: 'M' },
             routines: [{ id: 'cloud-routine', name: 'Cloud', exercises: [] }],
         });
         const accountEdit = parse({ ...cloud, profile: { ...cloud.profile, height: '183' } });
-        const guest = policy === 'skip'
-            ? parse({ profile: { height: '151' }, routines: [{ id: 'guest-routine', name: 'Guest', exercises: [] }] })
-            : parse({});
+        const guest = parse({
+            profile: { height: '151' },
+            routines: [{ id: 'guest-routine', name: 'Guest', exercises: [] }],
+        });
 
-        // The policy selects only the guest archive. Existing account edits
-        // cannot be declared delivered by an unrelated hydration.
         await initializeLocal(user.uid, cloud);
         await commitLocal(user.uid, accountEdit, cloud);
         expect((await readLocal(user.uid))?.pending.length).toBeGreaterThan(0);
         await initializeLocal('guest', guest);
         localStorage.setItem('logbook_is_guest', 'true');
-        beginGuestMigrationIntent(policy, 'recovery', { uid: user.uid });
+        beginGuestMigrationIntent('skip', 'recovery', { uid: user.uid });
         useAppStore.getState().setUserData(guest);
         const offline = vi.spyOn(window.navigator, 'onLine', 'get').mockReturnValue(false);
         try {
             vi.mocked(DB.loadCloudPayload).mockResolvedValueOnce({
                 data: cloud, completeMonths: [], cloudDocuments: new Map(),
             });
-
             render(<AuthProvider><div>app</div></AuthProvider>);
 
             await waitFor(() => {
@@ -62,13 +61,47 @@ describe('guest -> account skip policy', () => {
                 expect(useAppStore.getState().saveError).toMatch(/dispositivo|Offline/);
                 expect(useAppStore.getState().syncHealth).toBe('local-pending');
             });
+            const account = await readLocal(user.uid);
+            expect(account?.pending.length).toBeGreaterThan(0);
+            expect(account?.data.profile?.height).toBe('183');
+            expect(account?.data.routines?.map(item => item.id)).toEqual(['cloud-routine']);
+            const stillGuest = await readLocal('guest');
+            expect(stillGuest?.data.profile?.height).toBe('151');
+            expect(stillGuest?.data.routines?.map(item => item.id)).toEqual(['guest-routine']);
+            expect(useAppStore.getState().dataOwner).toBe('user:' + user.uid);
+            expect(DB.loadCloudPayload).toHaveBeenCalledTimes(1);
+        } finally {
+            offline.mockRestore();
+        }
+    });
 
-            const envelope = await readLocal(user.uid);
-            expect(envelope?.pending.length).toBeGreaterThan(0);
-            expect(envelope?.data.profile?.height).toBe('183');
-            expect(envelope?.data.routines?.map(item => item.id)).toContain('cloud-routine');
-            expect(envelope?.data.routines?.map(item => item.id)).not.toContain('guest-routine');
-            expect((await readLocal('guest'))?.data).toEqual(guest);
+    it('retains account pending when merge has no actual guest data to transfer', async () => {
+        const cloud = parse({
+            profile: { gender: 'M' },
+            routines: [{ id: 'cloud-routine', name: 'Cloud', exercises: [] }],
+        });
+        const accountEdit = parse({ ...cloud, profile: { ...cloud.profile, height: '183' } });
+        await initializeLocal(user.uid, cloud);
+        await commitLocal(user.uid, accountEdit, cloud);
+        vi.mocked(DB.loadCloudPayload).mockResolvedValueOnce({
+            data: cloud, completeMonths: [], cloudDocuments: new Map(),
+        });
+        const offline = vi.spyOn(window.navigator, 'onLine', 'get').mockReturnValue(false);
+        const onLocalReady = vi.fn();
+        try {
+            // A null guest dataset exercises the cloudHasData && !guestHasData
+            // branch without a UI bootstrap that can seed default guest fields.
+            const result = await migrateGuestAccount({
+                user, guestData: null, policy: 'merge',
+                setUserData: vi.fn(), setSyncing: vi.fn(), onLocalReady,
+                isCurrent: () => true,
+            });
+            expect(onLocalReady).toHaveBeenCalledOnce();
+            expect(result.status).toBe('local-pending');
+            const account = await readLocal(user.uid);
+            expect(account?.pending.length).toBeGreaterThan(0);
+            expect(account?.data.profile?.height).toBe('183');
+            expect(account?.data.routines?.map(item => item.id)).toEqual(['cloud-routine']);
             expect(useAppStore.getState().dataOwner).toBe('user:' + user.uid);
             expect(DB.loadCloudPayload).toHaveBeenCalledTimes(1);
         } finally {
