@@ -602,7 +602,7 @@ describe('LogBook Background Sync & Error Toast 4-Tier Test Suite', () => {
         const message = 'Snapshot cloud incompleto: copia locale preservata.';
 
         act(() => {
-          useAppStore.setState({ syncHealth: 'failed', saveError: message });
+          useAppStore.setState({ cloudIntegrityBlocked: true, syncHealth: 'failed', saveError: message });
         });
         expect(screen.getByText(message)).toBeDefined();
         expect(container.querySelector('.sync-error-close')).toBeNull();
