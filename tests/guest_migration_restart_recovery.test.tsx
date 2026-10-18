@@ -103,6 +103,31 @@ describe('guest migration restart recovery', () => {
         expect(DB.loadCloudPayload).not.toHaveBeenCalled();
     });
 
+
+    it('restores an already-durable authenticated archive without rewriting a stale guest view', async () => {
+        const { cloud, guest } = fixtures();
+        await localRepository.initializeLocal(user.uid, cloud, []);
+        const guestBefore = await localRepository.readLocal('guest');
+        const accountBefore = await localRepository.readLocal(user.uid);
+        // After a crash the guest snapshot can remain in memory, while the
+        // recovery marker already makes storageOwner() resolve to the account.
+        localStorage.setItem(GUEST_KEY, 'true');
+        useAppStore.setState({ userData: guest, dataOwner: 'guest', localWorkout: null });
+        localStorage.setItem(SYNC_RECOVERY_KEY, user.uid);
+
+        render(<AuthProvider><App /></AuthProvider>);
+
+        await waitFor(() => expect(localStorage.getItem(SYNC_RECOVERY_KEY)).toBeNull());
+        expect(localStorage.getItem(GUEST_KEY)).toBeNull();
+        expect(useAppStore.getState().dataOwner).toBe('user:' + user.uid);
+        expect(useAppStore.getState().localPersistenceBlocked).toBe(false);
+        expect(useAppStore.getState().userData?.routines?.map(item => item.id)).toEqual(['cloud-routine']);
+        expect((await localRepository.readLocal(user.uid))?.pending).toEqual(accountBefore?.pending);
+        expect((await localRepository.readLocal(user.uid))?.data).toEqual(accountBefore?.data);
+        expect((await localRepository.readLocal('guest'))?.data).toEqual(guestBefore?.data);
+        expect(screen.getByTestId('bottom-nav')).toBeTruthy();
+    });
+
     it('retains the recovery marker and blocks account data if the authenticated envelope is missing', async () => {
         localStorage.setItem(SYNC_RECOVERY_KEY, user.uid);
         expect(await localRepository.readLocal(user.uid)).toBeUndefined();
