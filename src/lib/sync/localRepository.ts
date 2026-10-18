@@ -1,4 +1,5 @@
 import { getArchiveRecord, updateArchiveRecord } from './secureArchiveRepository';
+import { enforceMonthlyEntityTombstones } from './monthlyEntityTombstones';
 import { UserDataSchema } from '../schema';
 import { equivalentWorkoutSnapshot } from './workoutSnapshotEquality';
 import type { UserData } from '../../types';
@@ -232,25 +233,6 @@ function validate(value: any, owner: string): LocalEnvelope | undefined {
         replica,
         revision: record.revision,
     };
-}
-
-function enforceMonthlyEntityTombstones(
-    baseDocs: Map<string, DocumentData>, desiredDocs: Map<string, DocumentData>, input: SemanticOperation[],
-    actorId: string, seq: number, clock: VectorClock
-): SemanticOperation[] {
-    let operations = [...input];
-    const paths = new Set([...baseDocs.keys(), ...desiredDocs.keys()]);
-    for (const docPath of paths) {
-        if (!docPath.startsWith('history_months/') && !docPath.startsWith('nutrition_months/')) continue;
-        const baseDoc = baseDocs.get(docPath) ?? {};
-        const desiredDoc = desiredDocs.get(docPath) ?? {};
-        for (const entityId of Object.keys(baseDoc)) {
-            if (Object.hasOwn(desiredDoc, entityId)) continue;
-            operations = operations.filter(op => !(op.docPath === docPath && op.path[0] === entityId));
-            operations.push({ docPath, path: [entityId], isDelete: true, actorId, seq, clock });
-        }
-    }
-    return operations;
 }
 
 function assertWorkoutNotClosed(id: string, envelope: LocalEnvelope | undefined): void {
