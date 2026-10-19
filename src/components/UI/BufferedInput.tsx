@@ -5,6 +5,11 @@ import { assertBufferedDraftUnchanged, readBufferedDraftSnapshot, writeBufferedD
 import { requiredUpdateRecoveryRegistry } from '../../lib/sync/requiredUpdateRecovery';
 import { useAppStore } from '../../store/useAppStore';
 import { BufferedWorkoutScope } from './bufferedWorkoutScope';
+import {
+    clearBufferedWriterIntent, createBufferedWriterIntentName,
+    readBufferedWriterEvidence, writeBufferedWriterIntent,
+} from '../../lib/sync/bufferedDraftWriterIntent';
+import type { BufferedWriterEvidence } from '../../lib/sync/bufferedDraftWriterIntent';
 
  interface BufferedInputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange'> {
     value: string | number | undefined;
@@ -49,6 +54,7 @@ type InitialBufferedRecovery = {
     key: string | null;
     recovered: string | null;
     observedRaw: string | null;
+    sourceIntent: BufferedWriterEvidence | null;
     error: unknown | null;
 };
 
@@ -61,9 +67,16 @@ function createInitialRecovery(
     try {
         const session = captureSession();
         const snapshot = readRecoveryStrict(key, session.owner);
-        return { session, key, recovered: snapshot.value, observedRaw: snapshot.raw, error: null };
+        const intents = key ? readBufferedWriterEvidence(session.owner, key) : [];
+        if (intents.length > 1 || (intents.length === 1 && intents[0].value !== snapshot.value)) {
+            throw new Error('Bozze concorrenti non riconciliabili: originali conservati per esportazione.');
+        }
+        return {
+            session, key, recovered: snapshot.value, observedRaw: snapshot.raw,
+            sourceIntent: intents[0] ?? null, error: null,
+        };
     } catch (error) {
-        return { session: null, key, recovered: null, observedRaw: null, error };
+        return { session: null, key, recovered: null, observedRaw: null, sourceIntent: null, error };
     }
 }
 
@@ -80,6 +93,9 @@ export const BufferedInput = React.forwardRef<HTMLInputElement, BufferedInputPro
         const latestLocalValue = useRef(initialValue);
         const recoveryValue = useRef<string | null>(initialRecovery.recovered);
         const observedRaw = useRef<string | null>(initialRecovery.observedRaw);
+        const writerIntentName = useRef<string | null>(null);
+        const writerIntentRaw = useRef<string | null>(null);
+        const sourceIntent = useRef(initialRecovery.sourceIntent);
 
         useEffect(() => {
             if (initialRecovery.error) blockBufferedPersistence(initialRecovery.error);
@@ -109,6 +125,13 @@ export const BufferedInput = React.forwardRef<HTMLInputElement, BufferedInputPro
             if (useAppStore.getState().localPersistenceBlocked) {
                 throw new Error('Persistenza delle bozze del workout bloccata.');
             }
+            // Every editor has its own device key: preserve input synchronously
+            // before the shared canonical key can lose a truly simultaneous race.
+            writerIntentName.current ??= createBufferedWriterIntentName();
+            writerIntentRaw.current = writeBufferedWriterIntent(
+                writerIntentName.current, session.owner, key, raw,
+                writerIntentRaw.current, session.consentGeneration,
+            );
             observedRaw.current = writeBufferedDraft(
                 key, session.owner, raw, session.consentGeneration, observedRaw.current,
             );
@@ -135,6 +158,23 @@ export const BufferedInput = React.forwardRef<HTMLInputElement, BufferedInputPro
                             recoveryKey.current, session.owner, null,
                             session.consentGeneration, observedRaw.current,
                         );
+                        // Only after the parent confirms this value do we remove
+                        // this editor's independent recovery witness. Any
+                        // failure preserves the remaining witness for export.
+                        if (writerIntentName.current && writerIntentRaw.current) {
+                            clearBufferedWriterIntent(
+                                writerIntentName.current, session.owner,
+                                writerIntentRaw.current, session.consentGeneration,
+                            );
+                            writerIntentRaw.current = null;
+                        }
+                        if (sourceIntent.current) {
+                            clearBufferedWriterIntent(
+                                sourceIntent.current.name, session.owner,
+                                sourceIntent.current.raw, session.consentGeneration,
+                            );
+                            sourceIntent.current = null;
+                        }
                         recoveryValue.current = null;
                     } catch (error) {
                         blockBufferedPersistence(error);
@@ -288,6 +328,9 @@ export const BufferedTextarea = React.forwardRef<HTMLTextAreaElement, BufferedTe
         const latestLocalValue = useRef(initialValue);
         const recoveryValue = useRef<string | null>(initialRecovery.recovered);
         const observedRaw = useRef<string | null>(initialRecovery.observedRaw);
+        const writerIntentName = useRef<string | null>(null);
+        const writerIntentRaw = useRef<string | null>(null);
+        const sourceIntent = useRef(initialRecovery.sourceIntent);
 
         useEffect(() => {
             if (initialRecovery.error) blockBufferedPersistence(initialRecovery.error);
@@ -313,6 +356,13 @@ export const BufferedTextarea = React.forwardRef<HTMLTextAreaElement, BufferedTe
             if (useAppStore.getState().localPersistenceBlocked) {
                 throw new Error('Persistenza delle bozze del workout bloccata.');
             }
+            // Every editor has its own device key: preserve input synchronously
+            // before the shared canonical key can lose a truly simultaneous race.
+            writerIntentName.current ??= createBufferedWriterIntentName();
+            writerIntentRaw.current = writeBufferedWriterIntent(
+                writerIntentName.current, session.owner, key, raw,
+                writerIntentRaw.current, session.consentGeneration,
+            );
             observedRaw.current = writeBufferedDraft(
                 key, session.owner, raw, session.consentGeneration, observedRaw.current,
             );
@@ -332,6 +382,23 @@ export const BufferedTextarea = React.forwardRef<HTMLTextAreaElement, BufferedTe
                             recoveryKey.current, session.owner, null,
                             session.consentGeneration, observedRaw.current,
                         );
+                        // Only after the parent confirms this value do we remove
+                        // this editor's independent recovery witness. Any
+                        // failure preserves the remaining witness for export.
+                        if (writerIntentName.current && writerIntentRaw.current) {
+                            clearBufferedWriterIntent(
+                                writerIntentName.current, session.owner,
+                                writerIntentRaw.current, session.consentGeneration,
+                            );
+                            writerIntentRaw.current = null;
+                        }
+                        if (sourceIntent.current) {
+                            clearBufferedWriterIntent(
+                                sourceIntent.current.name, session.owner,
+                                sourceIntent.current.raw, session.consentGeneration,
+                            );
+                            sourceIntent.current = null;
+                        }
                         recoveryValue.current = null;
                     } catch (error) {
                         blockBufferedPersistence(error);

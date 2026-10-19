@@ -5,6 +5,11 @@ import { BufferedInput, BufferedTextarea } from '../src/components/UI/BufferedIn
 import { BufferedWorkoutScope } from '../src/components/UI/bufferedWorkoutScope';
 import type { WorkoutSession } from '../src/types';
 import { deviceKey } from '../src/lib/sync/deviceStorage';
+import { readBufferedDraftSnapshot, writeBufferedDraft } from '../src/lib/sync/bufferedDraftEpoch';
+import {
+    clearBufferedWriterIntent, createBufferedWriterIntentName,
+    readBufferedWriterEvidence, writeBufferedWriterIntent,
+} from '../src/lib/sync/bufferedDraftWriterIntent';
 import { captureSession, invalidateSession } from '../src/lib/sync/session';
 import { requiredUpdateRecoveryRegistry } from '../src/lib/sync/requiredUpdateRecovery';
 import { useAppStore } from '../src/store/useAppStore';
@@ -500,5 +505,115 @@ describe.each(['input', 'textarea'] as const)('concurrent same-workout %s drafts
         expect(localStorage.getItem(key)).toBeNull();
         expect(useAppStore.getState().localPersistenceBlocked).toBe(false);
         view.unmount();
+    });
+});
+
+describe.each(['input', 'textarea'] as const)('independent same-workout %s writer evidence', kind => {
+    const workoutId = 'same-workout';
+    const draftName = `draft:buffered:${kind}:${workoutId}:stable-draft`;
+    const mount = (update: (value: string) => void, value = '') => render(
+        <BufferedWorkoutScope.Provider value={workoutId}>
+            {field(kind, update, value)}
+        </BufferedWorkoutScope.Provider>
+    );
+    const edited = (view: ReturnType<typeof render>) =>
+        view.container.querySelector(kind === 'input' ? 'input' : 'textarea') as HTMLInputElement | HTMLTextAreaElement;
+
+    beforeEach(() => {
+        localStorageMock.getItem.mockImplementation(initialGetItem);
+        localStorageMock.setItem.mockImplementation(initialSetItem);
+        localStorage.clear();
+        useAppStore.setState({
+            localWorkout: { id: workoutId } as WorkoutSession,
+            localPersistenceBlocked: false, syncHealth: 'synced',
+            syncPresentation: 'normal', saveError: null,
+        });
+        const owner = captureSession().owner;
+        localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '3');
+    });
+    afterEach(() => {
+        useAppStore.setState({ localWorkout: null });
+        localStorageMock.getItem.mockImplementation(initialGetItem);
+        localStorageMock.setItem.mockImplementation(initialSetItem);
+        vi.restoreAllMocks();
+    });
+
+    it('retains both contenders even if a simultaneous shared overwrite loses one copy', () => {
+        const owner = captureSession().owner;
+        const a = createBufferedWriterIntentName();
+        const b = createBufferedWriterIntentName();
+        expect(a).not.toBe(b);
+        writeBufferedWriterIntent(a, owner, draftName, 'Writer A private value', null, '3');
+        writeBufferedWriterIntent(b, owner, draftName, 'Writer B private value', null, '3');
+
+        // Deliberately force the shared-key lost-update outcome that localStorage
+        // cannot prevent without CAS. Independent keys remain the evidence.
+        writeBufferedDraft(draftName, owner, 'Writer A private value', '3');
+        writeBufferedDraft(draftName, owner, 'Writer B private value', '3');
+        expect(readBufferedDraftSnapshot(draftName, owner).value).toBe('Writer B private value');
+        expect(readBufferedWriterEvidence(owner, draftName).map(x => x.value).sort()).toEqual([
+            'Writer A private value', 'Writer B private value',
+        ]);
+
+        const report = vi.spyOn(console, 'error').mockImplementation(() => {});
+        const restore = mount(vi.fn(), 'new parent value');
+        expect(edited(restore).value).toBe('new parent value');
+        expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
+        expect(report).toHaveBeenCalled();
+        expect(readBufferedWriterEvidence(owner, draftName)).toHaveLength(2);
+        restore.unmount();
+    });
+
+    it('keeps a successfully written independent draft when canonical storage fails', () => {
+        const owner = captureSession().owner;
+        const canonicalKey = deviceKey(draftName, owner);
+        const report = vi.spyOn(console, 'error').mockImplementation(() => {});
+        localStorageMock.setItem.mockImplementation((key: string, value: string) => {
+            if (key === canonicalKey) throw new DOMException('quota exceeded', 'QuotaExceededError');
+            return initialSetItem(key, value);
+        });
+        const view = mount(vi.fn());
+        fireEvent.change(edited(view), { target: { value: 'Retained private edit' } });
+        expect(localStorage.getItem(canonicalKey)).toBeNull();
+        expect(readBufferedWriterEvidence(owner, draftName).map(x => x.value))
+            .toEqual(['Retained private edit']);
+        expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
+        view.unmount();
+        expect(report).toHaveBeenCalled();
+    });
+
+    it('restores one matching witness after a simulated reload and clears it only on parent acknowledgement', () => {
+        const owner = captureSession().owner;
+        const value = 'Unsaved verified draft';
+        const first = mount(vi.fn());
+        fireEvent.change(edited(first), { target: { value } });
+        expect(readBufferedWriterEvidence(owner, draftName)).toHaveLength(1);
+        first.unmount();
+
+        const update = vi.fn();
+        const second = mount(update);
+        expect(edited(second).value).toBe(value);
+        expect(useAppStore.getState().localPersistenceBlocked).toBe(false);
+        fireEvent.blur(edited(second));
+        expect(update).toHaveBeenCalledExactlyOnceWith(value);
+        second.rerender(
+            <BufferedWorkoutScope.Provider value={workoutId}>
+                {field(kind, update, value)}
+            </BufferedWorkoutScope.Provider>,
+        );
+        expect(readBufferedDraftSnapshot(draftName, owner).raw).toBeNull();
+        expect(readBufferedWriterEvidence(owner, draftName)).toHaveLength(0);
+        second.unmount();
+    });
+
+    it('never clears a changed writer slot with a stale acknowledgement', () => {
+        const owner = captureSession().owner;
+        const name = createBufferedWriterIntentName();
+        const raw = writeBufferedWriterIntent(name, owner, draftName, 'version 1', null, '3');
+        const newer = writeBufferedWriterIntent(name, owner, draftName, 'version 2', raw, '3');
+        expect(() => clearBufferedWriterIntent(name, owner, raw, '3')).toThrow();
+        expect(readBufferedWriterEvidence(owner, draftName)).toMatchObject([
+            { name, raw: newer, value: 'version 2' },
+        ]);
     });
 });
