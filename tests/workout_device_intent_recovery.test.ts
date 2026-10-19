@@ -45,7 +45,7 @@ describe('authenticated device-intent replay into semantic journal', () => {
             .toThrow('generazione di consenso non verificabile');
         expect(() => persistOwnerBoundWorkoutSnapshot(captureSessionForOwner(account), account, workout('75')))
             .toThrow('generazione di consenso non verificabile');
-        expect(() => saveWorkoutDeviceIntent(account, workout('65'), workout('75'), baseline.activeWorkout))
+        expect(() => saveWorkoutDeviceIntent(account, workout('65'), workout('75'), baseline.activeWorkout ?? null))
             .toThrow('generazione di consenso non verificabile');
 
         expect(readDeviceValueStrict('workout', account)).toBe(original);
@@ -85,7 +85,7 @@ describe('authenticated device-intent replay into semantic journal', () => {
         });
         const hydrated = getInitialLocalWorkout(account, initial.activeWorkout, initial.history, undefined, undefined, 3);
         expect(hydrated?.exercises[0].sets[0].kg).toBe('55');
-        const intent = saveWorkoutDeviceIntent(account, hydrated, workout('60'), initial.activeWorkout);
+        const intent = saveWorkoutDeviceIntent(account, hydrated, workout('60'), initial.activeWorkout ?? null);
         expect(intent.consentRevision).toBe(3);
         await recoverWorkoutDeviceIntent(account, () => true);
         expect((await readLocal(account))?.data.activeWorkout?.exercises[0].sets[0].kg).toBe('60');
