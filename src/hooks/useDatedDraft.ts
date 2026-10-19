@@ -45,17 +45,20 @@ export function useDatedDraft<T extends Record<string, string>>(kind: string, da
     const session = owner ? captureSessionForOwner(owner) : null;
     const name = 'draft:' + kind + ':' + date;
     const key = owner ? deviceKey(name, owner) : null;
+    // The consent generation is part of the read scope: a mounted form must
+    // re-check provenance when another tab advances the owner's epoch.
+    const readScope = key ? JSON.stringify([key, session?.consentGeneration, session?.consentMarker]) : null;
     const { stored, provenanceError } = useMemo(() => {
         try {
             return {
-                stored: key && owner ? readDraft(name, owner) : null,
+                stored: readScope && owner ? readDraft(name, owner) : null,
                 provenanceError: null as UnverifiedDatedDraftEpochError | null,
             };
         } catch (error) {
             if (!(error instanceof UnverifiedDatedDraftEpochError)) throw error;
             return { stored: null, provenanceError: error };
         }
-    }, [key, name, owner, session?.consentGeneration, session?.consentMarker]);
+    }, [readScope, name, owner]);
     const blockProvenance = (error: UnverifiedDatedDraftEpochError) => {
         useAppStore.setState({
             localPersistenceBlocked: true,
