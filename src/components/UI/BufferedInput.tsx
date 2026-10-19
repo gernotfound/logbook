@@ -124,7 +124,18 @@ export const BufferedInput = React.forwardRef<HTMLInputElement, BufferedInputPro
             if (isDirty.current) {
                 const session = editSession.current;
                 if (!session) throw new Error('Sessione della bozza non disponibile.');
-                if (!isCurrentSession(session)) { isDirty.current = false; return; }
+                if (!isCurrentSession(session)) {
+                    isDirty.current = false;
+                    // Switching identities must not update a new owner's UI. A
+                    // consent transition for the same owner, however, is a
+                    // blocked recovery requiring an explicit warning.
+                    const current = captureSession();
+                    if (current.owner === session.owner
+                        && current.consentGeneration !== session.consentGeneration) {
+                        throw new Error('Consenso modificato: bozza workout precedente conservata.');
+                    }
+                    return;
+                }
                 if (useAppStore.getState().localPersistenceBlocked) {
                     throw new Error('Persistenza delle bozze del workout bloccata.');
                 }
@@ -284,7 +295,18 @@ export const BufferedTextarea = React.forwardRef<HTMLTextAreaElement, BufferedTe
             if (isDirty.current) {
                 const session = editSession.current;
                 if (!session) throw new Error('Sessione della bozza non disponibile.');
-                if (!isCurrentSession(session)) { isDirty.current = false; return; }
+                if (!isCurrentSession(session)) {
+                    isDirty.current = false;
+                    // Switching identities must not update a new owner's UI. A
+                    // consent transition for the same owner, however, is a
+                    // blocked recovery requiring an explicit warning.
+                    const current = captureSession();
+                    if (current.owner === session.owner
+                        && current.consentGeneration !== session.consentGeneration) {
+                        throw new Error('Consenso modificato: bozza workout precedente conservata.');
+                    }
+                    return;
+                }
                 if (useAppStore.getState().localPersistenceBlocked) {
                     throw new Error('Persistenza delle bozze del workout bloccata.');
                 }
