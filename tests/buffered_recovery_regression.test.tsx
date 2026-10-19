@@ -72,7 +72,6 @@ describe.each(['input', 'textarea'] as const)('owner-scoped buffered %s recovery
         const marker = `logbook:v2:${owner}:health-consent-generation`;
         localStorage.setItem(marker, '3');
         const onChange = vi.fn();
-        const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
         const view = render(field(kind, onChange));
         fireEvent.change(editor(), { target: { value: 'private current edit' } });
         const raw = localStorage.getItem(key);
@@ -87,8 +86,7 @@ describe.each(['input', 'textarea'] as const)('owner-scoped buffered %s recovery
         fireEvent.blur(editor());
         expect(onChange).not.toHaveBeenCalled();
         expect(localStorage.getItem(key)).toBe(raw);
-        expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
-        expect(consoleError).toHaveBeenCalled();
+        expect(useAppStore.getState().saveError).toMatch(/bozza/i);
         view.unmount();
     });
 
