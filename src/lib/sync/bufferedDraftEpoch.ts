@@ -15,7 +15,7 @@ export type BufferedDraftSnapshot = {
     raw: string | null;
 };
 
-export class BufferedDraftConflictError extends Error {
+class BufferedDraftConflictError extends Error {
     constructor() {
         super('Bozza modificata da un’altra scheda: copia corrente conservata.');
         this.name = 'BufferedDraftConflictError';
@@ -51,10 +51,6 @@ export function readBufferedDraftSnapshot(name: string, owner: string): Buffered
     // Legacy raw text has no epoch. It is safe to auto-recover only in epoch 1.
     assertWorkoutSnapshotEpoch(owner, revision);
     return { value, raw };
-}
-
-export function readBufferedDraft(name: string, owner: string): string | null {
-    return readBufferedDraftSnapshot(name, owner).value;
 }
 
 export function assertBufferedDraftUnchanged(name: string, owner: string, expectedRaw: string | null): void {
