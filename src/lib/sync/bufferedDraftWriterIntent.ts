@@ -12,6 +12,13 @@ type BufferedWriterIntent = {
 };
 
 export type BufferedWriterEvidence = { name: string; raw: string; value: string };
+export type BufferedRecoveryEntry = {
+    name: string;
+    draftName: string;
+    value: string;
+    consentRevision: number | null;
+    provenance: 'current' | 'previous' | 'unknown' | 'guest';
+};
 
 /** Each editor gets a distinct synchronous device key; no shared CAS is needed to protect its own latest input. */
 export function createBufferedWriterIntentName(): string {
@@ -43,7 +50,7 @@ function parseWriterEvidence(
  * Enumerate both encrypted and pre-vault owner namespaces, never another owner.
  * Ambiguous/orphaned writers must be exported explicitly, not auto-selected.
  */
-export function readBufferedWriterEvidence(owner: string, draftName: string): BufferedWriterEvidence[] {
+function ownerWriterNames(owner: string): Set<string> {
     const ownerPrefix = deviceKey('', owner);
     const names = new Set<string>();
     for (let i = 0; i < localStorage.length; i++) {
@@ -53,6 +60,48 @@ export function readBufferedWriterEvidence(owner: string, draftName: string): Bu
         const name = suffix.startsWith('sealed:') ? suffix.slice('sealed:'.length) : suffix;
         if (name.startsWith(INTENT_PREFIX)) names.add(name);
     }
+    return names;
+}
+
+/** Explicit diagnostics only; never promote, clear, re-label or commit a witness. */
+export function inspectBufferedRecoveryEvidence(owner: string): BufferedRecoveryEntry[] {
+    const names = ownerWriterNames(owner);
+    if (names.size > 1024) throw new Error('Troppe copie per l’anteprima: conserva il Backup JSON.');
+    const revision = readDeviceConsentRevision(owner);
+    const scanned: (BufferedRecoveryEntry & { raw: string })[] = [];
+    let total = 0;
+    for (const name of names) {
+        const raw = readDeviceValueStrict(name, owner);
+        if (raw === null) throw new Error('Copia scomparsa durante la verifica.');
+        const parsed = parseWriterEvidence(name, owner, raw, false);
+        const draftName = (JSON.parse(raw) as BufferedWriterIntent).draftName;
+        total += parsed.value.length;
+        if (parsed.value.length > 100_000 || total > 1_000_000) {
+            throw new Error('Copie troppo grandi per l’anteprima: conserva il Backup JSON.');
+        }
+        const provenance: BufferedRecoveryEntry['provenance'] = owner === 'guest' ? 'guest'
+            : parsed.revision === undefined || revision === undefined ? 'unknown'
+                : parsed.revision === revision ? 'current' : 'previous';
+        scanned.push({ name, draftName, value: parsed.value,
+            consentRevision: parsed.revision ?? null, provenance, raw });
+    }
+    // Detect changes to all bytes and membership while reading across tabs.
+    const after = ownerWriterNames(owner);
+    if (after.size !== names.size || [...names].some(name => !after.has(name))
+        || readDeviceConsentRevision(owner) !== revision) {
+        throw new Error('Copie o consenso cambiati durante la verifica. Riprova.');
+    }
+    for (const record of scanned) {
+        if (readDeviceValueStrict(record.name, owner) !== record.raw) {
+            throw new Error('Copia modificata durante la verifica. Riprova.');
+        }
+    }
+    return scanned.map(({ raw: _raw, ...entry }) => entry)
+        .sort((a, b) => a.draftName.localeCompare(b.draftName) || a.name.localeCompare(b.name));
+}
+
+export function readBufferedWriterEvidence(owner: string, draftName: string): BufferedWriterEvidence[] {
+    const names = ownerWriterNames(owner);
     const matches: BufferedWriterEvidence[] = [];
     for (const name of names) {
         const raw = readDeviceValueStrict(name, owner);

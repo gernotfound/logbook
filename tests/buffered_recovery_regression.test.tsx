@@ -8,7 +8,7 @@ import { deviceKey } from '../src/lib/sync/deviceStorage';
 import { readBufferedDraftSnapshot, writeBufferedDraft } from '../src/lib/sync/bufferedDraftEpoch';
 import {
     clearBufferedWriterIntent, createBufferedWriterIntentName,
-    readBufferedWriterEvidence, writeBufferedWriterIntent,
+    inspectBufferedRecoveryEvidence, readBufferedWriterEvidence, writeBufferedWriterIntent,
 } from '../src/lib/sync/bufferedDraftWriterIntent';
 import { captureSession, invalidateSession } from '../src/lib/sync/session';
 import { requiredUpdateRecoveryRegistry } from '../src/lib/sync/requiredUpdateRecovery';
@@ -654,6 +654,52 @@ describe.each(['input', 'textarea'] as const)('independent same-workout %s write
             owner, draftName: 7, value: 'unknown provenance', consentRevision: 2,
         }));
         expect(() => readBufferedWriterEvidence(owner, draftName)).toThrow();
+    });
+
+    it('lists multiple independent copies without replaying, clearing or replacing any bytes', () => {
+        const owner = captureSession().owner;
+        const nameA = createBufferedWriterIntentName();
+        const nameB = createBufferedWriterIntentName();
+        const a = writeBufferedWriterIntent(nameA, owner, draftName, 'Private value A', null, '3');
+        const b = writeBufferedWriterIntent(nameB, owner, draftName, 'Private value B', null, '3');
+        const result = inspectBufferedRecoveryEvidence(owner);
+        expect(result.map(x => x.value).sort()).toEqual(['Private value A', 'Private value B']);
+        expect(result.every(x => x.draftName === draftName)).toBe(true);
+        expect(localStorage.getItem(deviceKey(nameA, owner))).toBe(a);
+        expect(localStorage.getItem(deviceKey(nameB, owner))).toBe(b);
+        expect(readBufferedWriterEvidence(owner, draftName)).toHaveLength(2);
+    });
+
+    it('keeps historical revisions visible but never re-labels them as current', () => {
+        const owner = captureSession().owner;
+        const marker = `logbook:v2:${owner}:health-consent-generation`;
+        const previous = createBufferedWriterIntentName();
+        localStorage.setItem(marker, '2');
+        const before = writeBufferedWriterIntent(previous, owner, draftName, 'Historical note', null, '2');
+        localStorage.setItem(marker, '3');
+        const current = createBufferedWriterIntentName();
+        writeBufferedWriterIntent(current, owner, draftName, 'Current note', null, '3');
+        const result = inspectBufferedRecoveryEvidence(owner);
+        expect(result).toHaveLength(2);
+        if (owner.startsWith('user:')) {
+            expect(result.map(x => x.provenance).sort()).toEqual(['current', 'previous']);
+        } else {
+            expect(result.map(x => x.provenance)).toEqual(['guest', 'guest']);
+        }
+        expect(result.find(x => x.name === previous)?.value).toBe('Historical note');
+        expect(localStorage.getItem(deviceKey(previous, owner))).toBe(before);
+    });
+
+    it('fails closed on corrupted evidence and keeps every original intact', () => {
+        const owner = captureSession().owner;
+        const valid = createBufferedWriterIntentName();
+        const broken = createBufferedWriterIntentName();
+        const raw = writeBufferedWriterIntent(valid, owner, draftName, 'Kept intact', null, '3');
+        const brokenKey = deviceKey(broken, owner);
+        localStorage.setItem(brokenKey, 'not-json');
+        expect(() => inspectBufferedRecoveryEvidence(owner)).toThrow();
+        expect(localStorage.getItem(deviceKey(valid, owner))).toBe(raw);
+        expect(localStorage.getItem(brokenKey)).toBe('not-json');
     });
 
     it('never clears a changed writer slot with a stale acknowledgement', () => {
