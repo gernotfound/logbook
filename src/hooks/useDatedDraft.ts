@@ -116,9 +116,9 @@ export function useDatedDraft<T extends Record<string, string>>(kind: string, da
     };
 
     const clear = (expected?: T) => {
-        verifyCurrentDraft();
         if (!session || !key || !isCurrentSession(session) || current.current.key !== key
             || (expected && JSON.stringify(expected) !== JSON.stringify(current.current.values))) return false;
+        verifyCurrentDraft();
         try { writeFencedDatedDraft(name, session.owner, null); }
         catch (error) {
             useAppStore.getState().setSaveError('Dati salvati; impossibile rimuovere la bozza locale.');
