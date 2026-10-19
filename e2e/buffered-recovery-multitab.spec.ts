@@ -82,7 +82,7 @@ test('two real guest tabs preserve independent encrypted edits and expose both f
   // later inspection must not depend on their in-memory component state.
   await page.close();
   await second.close();
-  await viewer.reload();
+  await viewer.goto('/?tab=settings');
   await expect(viewer.getByRole('heading', { name: 'Impostazioni', exact: true })).toBeVisible();
   await viewer.locator('.settings-menu').getByRole('button', { name: /Dati e backup/ }).click();
   await viewer.getByRole('button', { name: 'Esamina copie sul dispositivo' }).click();
