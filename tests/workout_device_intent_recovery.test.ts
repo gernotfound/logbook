@@ -6,7 +6,7 @@ import { captureSession } from '../src/lib/sync/session';
 import { deviceKey, readDeviceValueStrict, writeDeviceValue } from '../src/lib/sync/deviceStorage';
 import { BrowserStorageError } from '../src/lib/sync/browserStorage';
 import { localStorageMock } from './setup';
-import { commitDomainOperations, initializeLocal, readLocal } from '../src/lib/sync/localRepository';
+import { advanceLocalConsentRevisionIfClean, commitDomainOperations, initializeLocal, readLocal } from '../src/lib/sync/localRepository';
 import {
     readWorkoutDeviceIntent, recoverWorkoutDeviceIntent, saveWorkoutDeviceIntent,
 } from '../src/lib/sync/workoutDeviceIntent';
@@ -23,6 +23,84 @@ const owner = 'user:test-user-id';
 
 describe('authenticated device-intent replay into semantic journal', () => {
     beforeEach(() => { vi.clearAllMocks(); });
+
+    it('never turns a pre-revocation device-only edit into a new-consent cloud journal', async () => {
+        const account = 'user:old-device-epoch-' + crypto.randomUUID();
+        const key = `logbook:v2:${account}:health-consent-generation`;
+        localStorage.setItem(key, '1');
+        const original = data(workout('50'));
+        await initializeLocal(account, original);
+        const intent = saveWorkoutDeviceIntent(account, original.activeWorkout, workout('55'), original.activeWorkout);
+        expect(intent.consentRevision).toBe(1);
+        const rawWitness = readDeviceValueStrict('workout-intent:' + intent.intentId, account);
+
+        // The consent epoch advances while the synchronous workout intent has
+        // not yet reached its atomic IndexedDB/journal transaction.
+        localStorage.setItem(key, '3');
+        expect(await advanceLocalConsentRevisionIfClean(account, 3)).toBe(true);
+        const before = await readLocal(account);
+        expect(before?.pending).toEqual([]);
+
+        await expect(recoverWorkoutDeviceIntent(account, () => true))
+            .rejects.toThrow('generazione di consenso');
+        expect(await readLocal(account)).toEqual(before);
+        expect(readDeviceValueStrict('workout-intent:' + intent.intentId, account)).toBe(rawWitness);
+        expect(() => saveWorkoutDeviceIntent(account, workout('55'), workout('60'), original.activeWorkout))
+            .toThrow('consenso precedente');
+    });
+
+    it('fails closed on an unversioned legacy device intent after consent changes', async () => {
+        const account = 'user:legacy-device-epoch-' + crypto.randomUUID();
+        const key = `logbook:v2:${account}:health-consent-generation`;
+        const original = data(workout('50'));
+        await initializeLocal(account, original);
+        const old = saveWorkoutDeviceIntent(account, original.activeWorkout, workout('55'), original.activeWorkout);
+        expect(old.consentRevision).toBeUndefined();
+        localStorage.setItem(key, '3');
+        expect(await advanceLocalConsentRevisionIfClean(account, 3)).toBe(true);
+        const before = await readLocal(account);
+
+        await expect(recoverWorkoutDeviceIntent(account, () => true))
+            .rejects.toThrow('generazione di consenso');
+        expect(await readLocal(account)).toEqual(before);
+        expect(readWorkoutDeviceIntent(account)?.intentId).toBe(old.intentId);
+    });
+
+    it('allows a fresh synchronous workout intent created under the current reaccepted epoch', async () => {
+        const account = 'user:fresh-device-epoch-' + crypto.randomUUID();
+        localStorage.setItem(`logbook:v2:${account}:health-consent-generation`, '3');
+        const initial = data(workout('50'));
+        await initializeLocal(account, initial);
+        const newer = saveWorkoutDeviceIntent(account, initial.activeWorkout, workout('55'), initial.activeWorkout);
+        expect(newer.consentRevision).toBe(3);
+
+        await recoverWorkoutDeviceIntent(account, () => true);
+        const current = await readLocal(account);
+        expect(current?.consentRevision).toBe(3);
+        expect(current?.data.activeWorkout?.exercises[0].sets[0].kg).toBe('55');
+        expect(current?.pending.length).toBeGreaterThan(0);
+    });
+
+    it('rechecks the original workout epoch inside the atomic IndexedDB commit', async () => {
+        const account = 'user:atomic-device-epoch-' + crypto.randomUUID();
+        const key = `logbook:v2:${account}:health-consent-generation`;
+        localStorage.setItem(key, '1');
+        const original = data(workout('50'));
+        await initializeLocal(account, original);
+        const intent = saveWorkoutDeviceIntent(account, original.activeWorkout, workout('55'), original.activeWorkout);
+        localStorage.setItem(key, '3');
+        expect(await advanceLocalConsentRevisionIfClean(account, 3)).toBe(true);
+        const before = await readLocal(account);
+
+        await expect(commitDomainOperations(account,
+            { type: 'active-workout.set', workout: intent.workout }, original, () => true,
+            { generation: intent.generation, sequence: intent.sequence,
+              consentRevision: intent.consentRevision, intentId: intent.intentId,
+              parentIntentId: intent.parentIntentId, ancestorIds: intent.ancestorIds,
+              baseline: intent.baseline },
+        )).rejects.toThrow('consenso precedente');
+        expect(await readLocal(account)).toEqual(before);
+    });
 
     it('preserves a losing tab draft in immutable copies when two tabs overwrite their shared snapshot', async () => {
         const parallelOwner = 'user:slot-overwrite-test';
