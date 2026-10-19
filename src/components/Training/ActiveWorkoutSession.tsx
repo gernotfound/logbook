@@ -6,7 +6,7 @@ import { Logic } from '../../lib/logic';
 import SessionHeader from './SessionHeader';
 import SessionExerciseAccordion from './session/SessionExerciseAccordion';
 import SessionRatings from './session/SessionRatings';
-import { BufferedWorkoutScope } from '../UI/BufferedInput';
+import { BufferedWorkoutScope } from '../UI/bufferedWorkoutScope';
 import { ExerciseSearchDropdown } from './ExerciseSearchDropdown';
 import { resumeWorkoutClock, sampleWorkoutClock } from '../../lib/workoutClockGuard';
 import { useAppStore } from '../../store/useAppStore';
