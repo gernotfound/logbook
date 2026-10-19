@@ -26,7 +26,6 @@ export function useTrainingRoutines() {
     const routines = useAppStore(state => state.userData?.routines || EMPTY_ROUTINES);
     const library = useAppStore(state => state.userData?.library || EMPTY_LIBRARY);
     const dispatchDomainOperation = useAppStore(state => state.dispatchDomainOperation);
-    const setSaveError = useAppStore(state => state.setSaveError);
     const showAlert = useDialogStore(state => state.showAlert);
     const showConfirm = useDialogStore(state => state.showConfirm);
     const [draftSession] = useState(() => captureSession());
