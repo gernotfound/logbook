@@ -4,15 +4,9 @@ import { captureSession, isCurrentSession } from '../../lib/sync/session';
 import { readBufferedDraft, writeBufferedDraft } from '../../lib/sync/bufferedDraftEpoch';
 import { requiredUpdateRecoveryRegistry } from '../../lib/sync/requiredUpdateRecovery';
 import { useAppStore } from '../../store/useAppStore';
+import { BufferedWorkoutScope } from './bufferedWorkoutScope';
 
-/**
- * The workout identity is supplied by the editor, not inferred from a global
- * store: historical edits and an active session may have different IDs.
- * A keyed provider remounts buffered fields when that identity changes.
- */
-export const BufferedWorkoutScope = React.createContext<string | null>(null);
-
-interface BufferedInputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange'> {
+ interface BufferedInputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange'> {
     value: string | number | undefined;
     onChange: (value: string) => void;
 }
@@ -144,7 +138,7 @@ export const BufferedInput = React.forwardRef<HTMLInputElement, BufferedInputPro
                 setLocalValue(value ?? '');
                 latestLocalValue.current = value ?? '';
             }
-        }, [value]);
+        }, [value, workoutId]);
 
         const flush = useCallback(() => {
             if (isDirty.current) {
@@ -333,7 +327,7 @@ export const BufferedTextarea = React.forwardRef<HTMLTextAreaElement, BufferedTe
                 setLocalValue(value ?? '');
                 latestLocalValue.current = value ?? '';
             }
-        }, [value]);
+        }, [value, workoutId]);
 
         const flush = useCallback(() => {
             if (isDirty.current) {
