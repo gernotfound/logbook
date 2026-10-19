@@ -176,16 +176,25 @@ export const BufferedInput = React.forwardRef<HTMLInputElement, BufferedInputPro
 
         const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
             isFocused.current = false;
-            try { flush(); }
-            catch (error) { blockBufferedPersistence(error); }
-            if (onBlur) onBlur(e);
+            try {
+                flush();
+                if (!editSession.current || !isCurrentSession(editSession.current)) return;
+                if (onBlur) onBlur(e);
+            } catch (error) {
+                blockBufferedPersistence(error);
+            }
         };
 
         const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
             if (e.key === 'Enter') {
-                try { flush(); }
-                catch (error) { blockBufferedPersistence(error); }
-                e.currentTarget.blur();
+                try {
+                    flush();
+                    if (!editSession.current || !isCurrentSession(editSession.current)) return;
+                    e.currentTarget.blur();
+                } catch (error) {
+                    blockBufferedPersistence(error);
+                    return;
+                }
             }
             if (onKeyDown) onKeyDown(e);
         };
@@ -322,9 +331,13 @@ export const BufferedTextarea = React.forwardRef<HTMLTextAreaElement, BufferedTe
 
         const handleBlur = (e: React.FocusEvent<HTMLTextAreaElement>) => {
             isFocused.current = false;
-            try { flush(); }
-            catch (error) { blockBufferedPersistence(error); }
-            if (onBlur) onBlur(e);
+            try {
+                flush();
+                if (!editSession.current || !isCurrentSession(editSession.current)) return;
+                if (onBlur) onBlur(e);
+            } catch (error) {
+                blockBufferedPersistence(error);
+            }
         };
 
         return (
