@@ -395,3 +395,110 @@ describe.each(['input', 'textarea'] as const)('workout-scoped buffered %s recove
         view.unmount();
     });
 });
+
+describe.each(['input', 'textarea'] as const)('concurrent same-workout %s drafts', kind => {
+    const workoutId = 'same-workout';
+    const draftName = `draft:buffered:${kind}:${workoutId}:stable-draft`;
+    const mount = (update: (value: string) => void, value = '') => render(
+        <BufferedWorkoutScope.Provider value={workoutId}>
+            {field(kind, update, value)}
+        </BufferedWorkoutScope.Provider>
+    );
+    const edited = (view: ReturnType<typeof render>) =>
+        view.container.querySelector(kind === 'input' ? 'input' : 'textarea') as HTMLInputElement | HTMLTextAreaElement;
+
+    beforeEach(() => {
+        localStorageMock.getItem.mockImplementation(initialGetItem);
+        localStorageMock.setItem.mockImplementation(initialSetItem);
+        localStorage.clear();
+        useAppStore.setState({
+            localWorkout: { id: workoutId } as WorkoutSession,
+            localPersistenceBlocked: false, syncHealth: 'synced',
+            syncPresentation: 'normal', saveError: null,
+        });
+        const owner = captureSession().owner;
+        localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '3');
+    });
+    afterEach(() => {
+        useAppStore.setState({ localWorkout: null });
+        localStorageMock.getItem.mockImplementation(initialGetItem);
+        localStorageMock.setItem.mockImplementation(initialSetItem);
+        vi.restoreAllMocks();
+    });
+
+    it('rejects a second stale editor before overwriting a newer draft in the same consent revision', () => {
+        const owner = captureSession().owner;
+        const key = deviceKey(draftName, owner);
+        const firstCallback = vi.fn();
+        const secondCallback = vi.fn();
+        const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+        const first = mount(firstCallback);
+        const second = mount(secondCallback);
+        fireEvent.change(edited(first), { target: { value: 'First author private value' } });
+        const original = localStorage.getItem(key);
+        expect(JSON.parse(original!)).toMatchObject({
+            __logbookBufferedDraft: 1, owner, name: draftName,
+            consentRevision: 3, value: 'First author private value',
+        });
+        fireEvent.change(edited(second), { target: { value: 'Stale author conflicting value' } });
+        expect(localStorage.getItem(key)).toBe(original);
+        expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
+        fireEvent.blur(edited(second));
+        expect(secondCallback).not.toHaveBeenCalled();
+        expect(firstCallback).not.toHaveBeenCalled();
+        expect(consoleError).toHaveBeenCalled();
+        first.unmount();
+        second.unmount();
+    });
+
+    it('preserves the newer copy when an old parent acknowledges a previously flushed value', () => {
+        const owner = captureSession().owner;
+        const key = deviceKey(draftName, owner);
+        const olderCallback = vi.fn();
+        const newerCallback = vi.fn();
+        const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+        const oldView = mount(olderCallback);
+        fireEvent.change(edited(oldView), { target: { value: 'Old value' } });
+        fireEvent.blur(edited(oldView));
+        expect(olderCallback).toHaveBeenCalledExactlyOnceWith('Old value');
+
+        // A second tab loads exactly the first tab's durable draft, edits it,
+        // then the first tab receives a delayed acknowledgement for OLD data.
+        const newView = mount(newerCallback);
+        fireEvent.change(edited(newView), { target: { value: 'Newer value' } });
+        const newerRaw = localStorage.getItem(key);
+        expect(JSON.parse(newerRaw!)).toMatchObject({ value: 'Newer value' });
+        oldView.rerender(
+            <BufferedWorkoutScope.Provider value={workoutId}>
+                {field(kind, olderCallback, 'Old value')}
+            </BufferedWorkoutScope.Provider>,
+        );
+        expect(localStorage.getItem(key)).toBe(newerRaw);
+        expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
+        expect(consoleError).toHaveBeenCalled();
+        expect(newerCallback).not.toHaveBeenCalled();
+        oldView.unmount();
+        newView.unmount();
+    });
+
+    it('allows one editor to revise its own saved draft repeatedly and clear only on acknowledgement', () => {
+        const owner = captureSession().owner;
+        const key = deviceKey(draftName, owner);
+        const update = vi.fn();
+        const view = mount(update);
+        fireEvent.change(edited(view), { target: { value: 'A' } });
+        fireEvent.change(edited(view), { target: { value: 'B' } });
+        const raw = localStorage.getItem(key);
+        expect(JSON.parse(raw!)).toMatchObject({ value: 'B' });
+        fireEvent.blur(edited(view));
+        expect(update).toHaveBeenCalledExactlyOnceWith('B');
+        view.rerender(
+            <BufferedWorkoutScope.Provider value={workoutId}>
+                {field(kind, update, 'B')}
+            </BufferedWorkoutScope.Provider>,
+        );
+        expect(localStorage.getItem(key)).toBeNull();
+        expect(useAppStore.getState().localPersistenceBlocked).toBe(false);
+        view.unmount();
+    });
+});
