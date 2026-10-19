@@ -3,9 +3,8 @@ import type { useAuth } from './useAuth';
 import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
 import { captureSession, isCurrentSession } from '../lib/sync/session';
-import { collectBackupSnapshot } from '../lib/db/backupSnapshot';
+import { collectBackupSnapshot, hasDeviceRecoveryBackupSource } from '../lib/db/backupSnapshot';
 import { readLocal } from '../lib/sync/localRepository';
-import { readDeviceValueStrict } from '../lib/sync/deviceStorage';
 import { UserDataSchema } from '../lib/schema';
 import { currentHealthConsentStatus } from '../lib/healthConsent';
 import type { ImportMode } from '../lib/backup';
@@ -91,16 +90,15 @@ export function useSettingsTransfers({ currentUser, isGuest }: TransferAuth) {
             // An empty fallback is useful for a cloud-only rights export, but
             // is not evidence that a local archive exists. Never offer it as a
             // device backup if the cloud scan fails.
-            const deviceWorkout = protectedDeviceBackup
-                ? readDeviceValueStrict('workout', session.owner) : null;
-            const hasDeviceBackupSource = stateData !== null || envelope !== undefined || deviceWorkout !== null;
+            const hasDeviceBackupSource = stateData !== null || envelope !== undefined
+                || (protectedDeviceBackup && hasDeviceRecoveryBackupSource(session.owner));
             const userData = stateData ?? envelope?.data ?? (UserDataSchema.parse({}) as NonNullable<typeof stateData>);
             if (protectedDeviceBackup) {
                 if (!hasDeviceBackupSource) {
-                    throw new Error('Backup locale non disponibile: nessun archivio o allenamento leggibile su questo dispositivo.');
+                    throw new Error('Backup locale non disponibile: nessun archivio o dato di recupero leggibile su questo dispositivo.');
                 }
                 if (!(await showConfirm(
-                    'Il caricamento dei dati è bloccato per proteggere una copia locale di provenienza non verificata. Vuoi esportare SOLO il backup di questo dispositivo, contrassegnato come parziale? I dati non saranno riattivati, importati o sincronizzati. Conserva il file in un luogo protetto.',
+                    'Il caricamento dei dati è bloccato per proteggere una copia locale di provenienza non verificata. Vuoi esportare SOLO il backup di questo dispositivo, contrassegnato come parziale? Il file può contenere copie storiche e registrazioni di recupero che non vengono reintegrate automaticamente. Non saranno riattivate o sincronizzate. Conserva il file in un luogo protetto.',
                 ))) return;
             } else {
                 try { await useAppStore.getState().flushPendingSyncs(); }
@@ -110,6 +108,10 @@ export function useSettingsTransfers({ currentUser, isGuest }: TransferAuth) {
             let snapshot;
             try {
                 snapshot = await collectBackupSnapshot(userData, !isGuest && !protectedDeviceBackup);
+                if (protectedDeviceBackup && !stateData && !envelope
+                    && !Object.keys(snapshot.recovery.device).length) {
+                    throw new Error('Dati di recupero locali cambiati durante il backup: nessuna copia vuota esportata.');
+                }
             } catch (error) {
                 if (!isCurrentSession(session) || protectedDeviceBackup) throw error;
                 if (!hasDeviceBackupSource) {
