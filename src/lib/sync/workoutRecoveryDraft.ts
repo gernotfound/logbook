@@ -41,15 +41,26 @@ export function readWorkoutRecoveryDraft(name: string, owner: string): unknown |
 }
 
 /** An unproven previous draft is never overwritten or cleared automatically. */
-export function writeWorkoutRecoveryDraft(name: string, owner: string, data: unknown | null): void {
+export function writeWorkoutRecoveryDraft(
+    name: string, owner: string, data: unknown | null,
+    expectedConsentGeneration?: string | null,
+): void {
     readWorkoutRecoveryDraft(name, owner);
+    const revision = readDeviceConsentRevision(owner);
+    // A mounted editor must write the generation it originally captured, never
+    // relabel old in-memory answers with a concurrently published new generation.
+    if (expectedConsentGeneration !== undefined && owner.startsWith('user:')
+        && expectedConsentGeneration !== (revision === undefined ? null : String(revision))) {
+        throw new Error('Generazione consenso cambiata: vecchia bozza preservata.');
+    }
     if (data === null) {
         writeDeviceValue(name, null, owner);
         return;
     }
-    const revision = readDeviceConsentRevision(owner);
-    const value: unknown = owner.startsWith('user:') && revision !== undefined
-        ? { __logbookWorkoutRecoveryDraft: 1, owner, name, consentRevision: revision, data } satisfies RecoveryDraftWitness
+    const origin = expectedConsentGeneration === undefined ? revision
+        : expectedConsentGeneration === null ? undefined : Number(expectedConsentGeneration);
+    const value: unknown = owner.startsWith('user:') && origin !== undefined
+        ? { __logbookWorkoutRecoveryDraft: 1, owner, name, consentRevision: origin, data } satisfies RecoveryDraftWitness
         : data;
     writeDeviceValue(name, JSON.stringify(value), owner);
 }
