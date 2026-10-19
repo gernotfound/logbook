@@ -1,6 +1,7 @@
 import { readDeviceValueStrict, writeDeviceValue } from './sync/deviceStorage';
 import { draftRegistry } from './utils/draftRegistry';
 
+const MAX_DEVICE_RECOVERY_DRAFTS = 1024;
 const draftKey = (name: string) => name === 'draft_exercise' || name === 'draft_routine'
     || /^draft:[a-z-]+:[a-zA-Z0-9_.:-]{1,128}$/.test(name);
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -20,7 +21,7 @@ interface BackupDeviceDraft {
 export function selectBackupDeviceDrafts(recovery: unknown): BackupDeviceDraft[] {
     if (!isRecord(recovery) || !isRecord(recovery.device)) return [];
     const entries = Object.entries(recovery.device).filter(([name]) => draftKey(name));
-    if (entries.length > 64) throw new Error('Backup: troppe bozze di recupero.');
+    if (entries.length > MAX_DEVICE_RECOVERY_DRAFTS) throw new Error('Backup: troppe bozze di recupero.');
     let total = 0;
     return entries.map(([name, value]) => {
         if (typeof value !== 'string' || value.length > 100_000) {

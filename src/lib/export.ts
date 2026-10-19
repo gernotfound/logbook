@@ -453,7 +453,11 @@ export const Exporter = {
                     ? '\nIl backup è parziale: storico e nutrizione non presenti nel file saranno conservati.'
                     : '') +
                 (decoded.ownerUnknown ? '\nIl backup non identifica un proprietario. Conferma solo se questi dati sono tuoi.' : '') +
-                (decoded.hasDeviceRecovery ? '\nIl file contiene dati di recupero: potrai recuperare le bozze mancanti e, se possibile, l’allenamento interrotto con il timer in pausa. Il journal causale originale NON viene trapiantato; conserva il backup.' : '') +
+                (decoded.hasDeviceRecovery ? '\nIl file contiene dati di recupero. Le bozze valide possono essere ripristinate separatamente e, se possibile, anche l’allenamento interrotto con timer in pausa. Il journal causale originale NON viene trapiantato; conserva il backup.' : '') +
+                (decoded.deviceDraftRecoveryWarning
+                    ? '\nATTENZIONE: ' + decoded.deviceDraftRecoveryWarning +
+                      ' Le bozze del file NON saranno ripristinate in questa importazione. Il backup originale rimane indispensabile per un recupero successivo; i dati principali possono essere importati separatamente.'
+                    : '') +
                 '\nI consensi importati non verranno applicati.\nProcedere?';
             if (!(await useDialogStore.getState().showConfirm(summary, 'Anteprima importazione'))) return;
             assertCurrent();
@@ -474,7 +478,8 @@ export const Exporter = {
             if (!saveResult.ok && saveResult.status !== 'local-pending') {
                 throw new Error('Importazione non confermata: il salvataggio è stato bloccato. Conserva il backup originale e riprova dopo aver risolto il problema.', { cause: saveResult.error });
             }
-            let draftReport = '';
+            let draftReport = decoded.deviceDraftRecoveryWarning
+                ? ' Bozze non ripristinate: conserva il backup originale per il recupero.' : '';
             if (decoded.deviceDrafts.length && await useDialogStore.getState().showConfirm(
                 'Il backup contiene ' + decoded.deviceDrafts.length + ' bozze recuperabili. Ripristinare soltanto quelle assenti dal dispositivo? Le bozze esistenti non saranno sovrascritte.')) {
                 try {
