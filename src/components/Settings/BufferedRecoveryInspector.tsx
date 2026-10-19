@@ -41,9 +41,15 @@ export function BufferedRecoveryInspector() {
     })();
 
     useEffect(() => {
-        setInspection(null);
-        setError(null);
-    }, [dataOwner, allowed]);
+        // State changes from auth/consent are handled as events rather than
+        // synchronously mirroring props into state during a React effect.
+        const hide = () => { setInspection(null); setError(null); };
+        const unsubscribeOwner = useAppStore.subscribe((next, previous) => {
+            if (next.dataOwner !== previous.dataOwner) hide();
+        });
+        const unsubscribeConsent = subscribeHealthConsent(hide);
+        return () => { unsubscribeOwner(); unsubscribeConsent(); };
+    }, []);
     useEffect(() => {
         const hide = () => { setInspection(null); setError(null); };
         document.addEventListener('visibilitychange', hide);
