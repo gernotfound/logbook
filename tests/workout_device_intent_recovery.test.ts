@@ -30,7 +30,7 @@ describe('authenticated device-intent replay into semantic journal', () => {
         localStorage.setItem(key, '1');
         const original = data(workout('50'));
         await initializeLocal(account, original);
-        const intent = saveWorkoutDeviceIntent(account, original.activeWorkout, workout('55'), original.activeWorkout);
+        const intent = saveWorkoutDeviceIntent(account, (original.activeWorkout ?? null), workout('55'), (original.activeWorkout ?? null));
         expect(intent.consentRevision).toBe(1);
         const rawWitness = readDeviceValueStrict('workout-intent:' + intent.intentId, account);
 
@@ -45,7 +45,7 @@ describe('authenticated device-intent replay into semantic journal', () => {
             .rejects.toThrow('generazione di consenso');
         expect(await readLocal(account)).toEqual(before);
         expect(readDeviceValueStrict('workout-intent:' + intent.intentId, account)).toBe(rawWitness);
-        expect(() => saveWorkoutDeviceIntent(account, workout('55'), workout('60'), original.activeWorkout))
+        expect(() => saveWorkoutDeviceIntent(account, workout('55'), workout('60'), (original.activeWorkout ?? null)))
             .toThrow('consenso precedente');
     });
 
@@ -54,7 +54,7 @@ describe('authenticated device-intent replay into semantic journal', () => {
         const key = `logbook:v2:${account}:health-consent-generation`;
         const original = data(workout('50'));
         await initializeLocal(account, original);
-        const old = saveWorkoutDeviceIntent(account, original.activeWorkout, workout('55'), original.activeWorkout);
+        const old = saveWorkoutDeviceIntent(account, (original.activeWorkout ?? null), workout('55'), (original.activeWorkout ?? null));
         expect(old.consentRevision).toBeUndefined();
         localStorage.setItem(key, '3');
         expect(await advanceLocalConsentRevisionIfClean(account, 3)).toBe(true);
@@ -71,7 +71,7 @@ describe('authenticated device-intent replay into semantic journal', () => {
         localStorage.setItem(`logbook:v2:${account}:health-consent-generation`, '3');
         const initial = data(workout('50'));
         await initializeLocal(account, initial);
-        const newer = saveWorkoutDeviceIntent(account, initial.activeWorkout, workout('55'), initial.activeWorkout);
+        const newer = saveWorkoutDeviceIntent(account, (initial.activeWorkout ?? null), workout('55'), (initial.activeWorkout ?? null));
         expect(newer.consentRevision).toBe(3);
 
         await recoverWorkoutDeviceIntent(account, () => true);
@@ -87,7 +87,7 @@ describe('authenticated device-intent replay into semantic journal', () => {
         localStorage.setItem(key, '1');
         const original = data(workout('50'));
         await initializeLocal(account, original);
-        const intent = saveWorkoutDeviceIntent(account, original.activeWorkout, workout('55'), original.activeWorkout);
+        const intent = saveWorkoutDeviceIntent(account, (original.activeWorkout ?? null), workout('55'), (original.activeWorkout ?? null));
         localStorage.setItem(key, '3');
         expect(await advanceLocalConsentRevisionIfClean(account, 3)).toBe(true);
         const before = await readLocal(account);
