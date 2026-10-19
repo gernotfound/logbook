@@ -20,8 +20,11 @@ vi.mock('../../src/lib/healthConsent', () => ({
     subscribeHealthConsent: () => () => {},
 }));
 vi.mock('../../src/store/useAppStore', () => ({
-    useAppStore: (selector: (state: { dataOwner: string | null }) => unknown) =>
-        selector({ dataOwner: fixture.dataOwner }),
+    useAppStore: Object.assign(
+        (selector: (state: { dataOwner: string | null }) => unknown) =>
+            selector({ dataOwner: fixture.dataOwner }),
+        { subscribe: () => () => {} },
+    ),
 }));
 vi.mock('../../src/lib/sync/bufferedDraftWriterIntent', () => ({
     inspectBufferedRecoveryEvidence: fixture.inspect,
