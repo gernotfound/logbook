@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
 import { Logic } from '../lib/logic';
-import { storageOwner } from '../lib/sync/session';
+import { captureSession, isCurrentSession } from '../lib/sync/session';
 import { getInMemoryCatalog } from '../lib/catalog/catalogService';
 import {
     filterMuscles,
@@ -18,6 +18,16 @@ import {
 
 const EMPTY_ARRAY: any[] = [];
 
+function blockExerciseDraft(error: unknown): void {
+    console.error('Persistenza bozza esercizio non disponibile:', error);
+    useAppStore.setState({
+        localPersistenceBlocked: true,
+        syncHealth: 'failed',
+        syncPresentation: 'normal',
+        saveError: 'Bozza esercizio non verificabile o non salvata: originale conservato. Riapri TheLogBook per verificare il recupero.',
+    });
+}
+
 export function useTrainingExercises() {
     const library = useAppStore(state => state.userData?.library || EMPTY_ARRAY);
     const routines = useAppStore(state => state.userData?.routines || EMPTY_ARRAY);
@@ -30,8 +40,24 @@ export function useTrainingExercises() {
             throw result.error instanceof Error ? result.error : new Error('Operazione esercizio non completata');
         }
     };
-    const [draftOwner] = useState(() => storageOwner());
-    const [initialDraft] = useState(() => readExerciseDraft(draftOwner));
+    const [draftSession] = useState(() => captureSession());
+    const draftOwner = draftSession.owner;
+    const [initialRecovery] = useState(() => {
+        try { return { draft: readExerciseDraft(draftOwner), error: null as unknown }; }
+        catch (error) { return { draft: null, error }; }
+    });
+    const initialDraft = initialRecovery.draft;
+    const localPersistenceBlocked = useAppStore(state => state.localPersistenceBlocked);
+    const assertCurrentDraft = () => {
+        if (initialRecovery.error || localPersistenceBlocked || !isCurrentSession(draftSession)) {
+            throw new Error('Sessione, consenso o bozza esercizio non più verificabili.');
+        }
+        // A different tab may have replaced the stored draft since the form mounted.
+        readExerciseDraft(draftOwner);
+    };
+    useEffect(() => {
+        if (initialRecovery.error) blockExerciseDraft(initialRecovery.error);
+    }, [initialRecovery.error]);
     const [editingExId, setEditingExId] = useState<string | null>(null);
     const [exName, setExName] = useState(() => initialDraft?.name || '');
     const [exNotes, setExNotes] = useState(() => initialDraft?.notes || '');
@@ -45,7 +71,9 @@ export function useTrainingExercises() {
 
     // Save draft on change
     useEffect(() => {
-        if (!editingExId) {
+        if (editingExId || initialRecovery.error || localPersistenceBlocked) return;
+        try {
+            assertCurrentDraft();
             persistExerciseDraft({
                 name: exName,
                 notes: exNotes,
@@ -53,10 +81,13 @@ export function useTrainingExercises() {
                 selectedMuscles,
                 secondaryMuscles,
                 isBodyweight,
-                equipmentWeight
+                equipmentWeight,
             }, draftOwner);
+        } catch (error) {
+            blockExerciseDraft(error);
         }
-    }, [exName, exNotes, trackingType, selectedMuscles, secondaryMuscles, isBodyweight, equipmentWeight, editingExId, draftOwner]);
+    }, [exName, exNotes, trackingType, selectedMuscles, secondaryMuscles, isBodyweight,
+        equipmentWeight, editingExId, draftOwner, draftSession, initialRecovery.error, localPersistenceBlocked]);
 
     const filteredMuscles = useMemo(() => filterMuscles(muscleSearch), [muscleSearch]);
 
@@ -167,7 +198,12 @@ export function useTrainingExercises() {
         setTrackingType('weight_reps');
         setIsBodyweight(false);
         setEquipmentWeight('');
-        clearExerciseDraft(draftOwner);
+        try {
+            assertCurrentDraft();
+            clearExerciseDraft(draftOwner);
+        } catch (error) {
+            blockExerciseDraft(error);
+        }
     };
 
     const isDuplicateName = useMemo(() => {
@@ -240,6 +276,7 @@ export function useTrainingExercises() {
         }
 
         try {
+            assertCurrentDraft();
             const savedExercise = editingExId
                 ? updatedLibrary.find(ex => ex.id === editingExId)
                 : updatedLibrary.find(ex => !library.some(current => current.id === ex.id));
@@ -247,7 +284,8 @@ export function useTrainingExercises() {
             await persistExercise({ type: 'exercise.upsert', exercise: savedExercise });
             handleCancelEdit(); // Reset form
             return true;
-        } catch {
+        } catch (error) {
+            blockExerciseDraft(error);
             void showAlert("Errore durante il salvataggio dell'esercizio.");
             return false;
         }
