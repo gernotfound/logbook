@@ -5,6 +5,7 @@ import { ActiveWorkoutSession } from './ActiveWorkoutSession';
 import PreSessionCheckIn from './PreSessionCheckIn';
 import WorkoutReportModal from './WorkoutReportModal';
 import SessionRatings from './session/SessionRatings';
+import { BufferedWorkoutScope } from '../UI/bufferedWorkoutScope';
 import type { WorkoutSession } from '../../types';
 import { Logic } from '../../lib/logic';
 import { draftRegistry } from '../../lib/utils/draftRegistry';
@@ -294,7 +295,8 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
                     </div>
                 </div>
                 {postSessionDraft && (
-                    <SessionRatings
+                    <BufferedWorkoutScope.Provider key={String(activeWorkout.id)} value={String(activeWorkout.id)}>
+                        <SessionRatings
                         water={postSessionDraft.water}
                         setWater={water => updatePostSessionDraft({ water })}
                         mood={postSessionDraft.mood}
@@ -307,7 +309,8 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
                         pains={postSessionDraft.pains}
                         onTogglePain={togglePostSessionPain}
                         onSetPains={pains => updatePostSessionDraft({ pains })}
-                    />
+                        />
+                    </BufferedWorkoutScope.Provider>
                 )}
                 <div className="pre-session-actions">
                     <button type="button" className="btn btn-success" onClick={() => void finish()}>Salva e termina</button>
