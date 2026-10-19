@@ -76,7 +76,8 @@ export function useSettingsTransfers({ currentUser, isGuest }: TransferAuth) {
         const stateData = state.userData;
         // A quarantined workout must remain exportable by its owner even when
         // the authenticated UI deliberately refuses to hydrate it.
-        const protectedDeviceBackup = session.owner !== 'guest' && state.localPersistenceBlocked === true;
+        const protectedDeviceBackup = session.owner !== 'guest' && state.localPersistenceBlocked === true
+            && currentHealthConsentStatus(session.owner.slice(5)) === 'active';
         if (!stateData && !protectedDeviceBackup
             && (session.owner === 'guest' || currentHealthConsentStatus(session.owner.slice(5)) === 'active')) {
             await showAlert('I dati non sono ancora disponibili. Attendi il caricamento prima di esportare.');
