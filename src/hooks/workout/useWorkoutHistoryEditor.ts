@@ -3,11 +3,11 @@ import { Logic } from '../../lib/logic';
 import { readLocal } from '../../lib/sync/localRepository';
 import { readDeviceValueStrict, writeDeviceValue } from '../../lib/sync/deviceStorage';
 import { captureSession, isCurrentSession } from '../../lib/sync/session';
-import { readWorkoutDeviceIntent, recoverWorkoutDeviceIntent } from '../../lib/sync/workoutDeviceIntent';
+import { readDeviceConsentRevision, readWorkoutDeviceIntent, recoverWorkoutDeviceIntent } from '../../lib/sync/workoutDeviceIntent';
 import type { WorkoutSession } from '../../types';
 import { useAppStore } from '../../store/useAppStore';
 import { useDialogStore } from '../../store/useDialogStore';
-import { claimHistorySave, HISTORY_EDITOR_CONTEXT, isHistorySavePending, releaseHistorySave, restoreSessionAfterHistoryEdit } from './historyEditorContext';
+import { assertHistoryEditorContextEpoch, claimHistorySave, HISTORY_EDITOR_CONTEXT, isHistorySavePending, releaseHistorySave, restoreSessionAfterHistoryEdit } from './historyEditorContext';
 import { prepareHistoricalWorkoutForEditing, prepareHistoricalWorkoutForSave } from './workoutSessionPreparation';
 
 type EditorDependencies = {
@@ -64,9 +64,14 @@ export function useWorkoutHistoryEditor({
             // Preserve the device's authoritative session (including unsynced sets)
             // before replacing the visible snapshot with a history editor.
             const previousContext = readDeviceValueStrict(HISTORY_EDITOR_CONTEXT, session.owner);
+            // An abandoned editor context can outlive a consent withdrawal.
+            // Never replace an unproven suspended session with a current-epoch one.
+            assertHistoryEditorContextEpoch(previousContext, session.owner);
+            const sourceRevision = readDeviceConsentRevision(session.owner);
             const nextContext = JSON.stringify({
                 version: 1,
                 editorId: editingWorkout.id,
+                ...(sourceRevision !== undefined ? { consentRevision: sourceRevision } : {}),
                 suspended,
             });
             writeDeviceValue(HISTORY_EDITOR_CONTEXT, nextContext, session.owner);
