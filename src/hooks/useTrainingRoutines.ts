@@ -4,15 +4,23 @@ import { useState, useEffect } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
 import { Logic } from '../lib/logic';
-import { readDeviceValue, writeDeviceValue } from '../lib/sync/deviceStorage';
-import { LocalCiphertextError } from '../lib/sync/secureArchiveCipher';
-import { readVaultControl } from '../lib/sync/secureArchiveSession';
-import { storageOwner } from '../lib/sync/session';
+import { readWorkoutRecoveryDraft, writeWorkoutRecoveryDraft } from '../lib/sync/workoutRecoveryDraft';
+import { captureSession, isCurrentSession } from '../lib/sync/session';
 import { PlannedSetTechnique, ProgressionContract, RoutineExercise, SetTechnique, WorkoutRoutine } from '../types';
 
 const EMPTY_ROUTINES: WorkoutRoutine[] = [];
 const EMPTY_LIBRARY: any[] = [];
 const ROUTINE_DRAFT_KEY = 'draft_routine';
+
+function blockRoutineDraft(error: unknown): void {
+    console.error('Persistenza bozza scheda non disponibile:', error);
+    useAppStore.setState({
+        localPersistenceBlocked: true,
+        syncHealth: 'failed',
+        syncPresentation: 'normal',
+        saveError: 'Bozza scheda non verificabile o non salvata: originale conservato. Riapri TheLogBook per verificare il recupero.',
+    });
+}
 
 export function useTrainingRoutines() {
     const routines = useAppStore(state => state.userData?.routines || EMPTY_ROUTINES);
@@ -21,45 +29,51 @@ export function useTrainingRoutines() {
     const setSaveError = useAppStore(state => state.setSaveError);
     const showAlert = useDialogStore(state => state.showAlert);
     const showConfirm = useDialogStore(state => state.showConfirm);
-    const [draftOwner] = useState(() => storageOwner());
-    const [initialDraft] = useState(() => {
-        const raw = readDeviceValue(ROUTINE_DRAFT_KEY, draftOwner);
-        if (!raw) return null;
+    const [draftSession] = useState(() => captureSession());
+    const draftOwner = draftSession.owner;
+    const [initialRecovery] = useState(() => {
         try {
-            const parsed: unknown = JSON.parse(raw);
-            return parsed && typeof parsed === 'object' ? parsed as { name?: string; exercises?: RoutineExercise[] } : null;
-        } catch {
-            if (readVaultControl(draftOwner)) throw new LocalCiphertextError();
-            return null;
+            const draft = readWorkoutRecoveryDraft(ROUTINE_DRAFT_KEY, draftOwner);
+            return { draft: draft as { name?: string; exercises?: RoutineExercise[] } | null, error: null as unknown };
+        } catch (error) {
+            return { draft: null, error };
         }
     });
+    const initialDraft = initialRecovery.draft;
+    const localPersistenceBlocked = useAppStore(state => state.localPersistenceBlocked);
+    const assertCurrentDraft = () => {
+        if (initialRecovery.error || localPersistenceBlocked || !isCurrentSession(draftSession)) {
+            throw new Error('Sessione, consenso o bozza scheda non più verificabili.');
+        }
+        readWorkoutRecoveryDraft(ROUTINE_DRAFT_KEY, draftOwner);
+    };
+    useEffect(() => {
+        if (initialRecovery.error) blockRoutineDraft(initialRecovery.error);
+    }, [initialRecovery.error]);
     const [routineName, setRoutineName] = useState(() => initialDraft?.name || '');
     const [editingRoutineId, setEditingRoutineId] = useState<string | null>(null);
     const [routineExercises, setRoutineExercises] = useState<RoutineExercise[]>(() => Array.isArray(initialDraft?.exercises) ? initialDraft.exercises : []);
     const [expandedRoutineId, setExpandedRoutineId] = useState<string | null>(null);
 
     useEffect(() => {
-        if (editingRoutineId) return;
-        if (routineName.trim() !== '' || routineExercises.length > 0) {
-            try {
-                writeDeviceValue(ROUTINE_DRAFT_KEY, JSON.stringify({ name: routineName, exercises: routineExercises }), draftOwner);
-            } catch {
-                setSaveError('Bozza scheda conservata solo in memoria: archivio del dispositivo non disponibile.');
-            }
-        } else {
-            try {
-                writeDeviceValue(ROUTINE_DRAFT_KEY, null, draftOwner);
-            } catch {
-                setSaveError('Impossibile rimuovere la bozza della scheda dal dispositivo.');
-            }
+        if (editingRoutineId || initialRecovery.error || localPersistenceBlocked) return;
+        try {
+            assertCurrentDraft();
+            writeWorkoutRecoveryDraft(ROUTINE_DRAFT_KEY, draftOwner,
+                routineName.trim() !== '' || routineExercises.length > 0
+                    ? { name: routineName, exercises: routineExercises } : null);
+        } catch (error) {
+            blockRoutineDraft(error);
         }
-    }, [routineName, routineExercises, editingRoutineId, setSaveError, draftOwner]);
+    }, [routineName, routineExercises, editingRoutineId, draftOwner, draftSession,
+        initialRecovery.error, localPersistenceBlocked]);
 
     const clearRoutineDraft = () => {
         try {
-            writeDeviceValue(ROUTINE_DRAFT_KEY, null, draftOwner);
-        } catch {
-            setSaveError('Impossibile rimuovere la bozza della scheda dal dispositivo.');
+            assertCurrentDraft();
+            writeWorkoutRecoveryDraft(ROUTINE_DRAFT_KEY, draftOwner, null);
+        } catch (error) {
+            blockRoutineDraft(error);
         }
     };
 
@@ -117,6 +131,7 @@ export function useTrainingRoutines() {
         }
 
         try {
+            assertCurrentDraft();
             const sanitizedExercises: RoutineExercise[] = routineExercises.map(ex => {
                 const num = typeof ex.setsCount === 'number' ? ex.setsCount : parseInt(String(ex.setsCount), 10);
                 return {
@@ -152,7 +167,8 @@ export function useTrainingRoutines() {
             setEditingRoutineId(null);
             clearRoutineDraft();
             return true;
-        } catch {
+        } catch (error) {
+            blockRoutineDraft(error);
             await showAlert("Errore durante il salvataggio della scheda.");
             return false;
         }
