@@ -1,7 +1,8 @@
 import React, { useLayoutEffect } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
-import { BufferedInput, BufferedTextarea, BufferedWorkoutScope } from '../src/components/UI/BufferedInput';
+import { BufferedInput, BufferedTextarea } from '../src/components/UI/BufferedInput';
+import { BufferedWorkoutScope } from '../src/components/UI/bufferedWorkoutScope';
 import type { WorkoutSession } from '../src/types';
 import { deviceKey } from '../src/lib/sync/deviceStorage';
 import { captureSession, invalidateSession } from '../src/lib/sync/session';
