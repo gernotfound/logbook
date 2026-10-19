@@ -1,7 +1,35 @@
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { chromium, type BrowserContext } from '@playwright/test';
+import { assertLoopbackE2eUrl } from '../scripts/e2e-environment.mjs';
 import { expect, test } from './fixtures';
 
-test('abrupt renderer crash preserves an unacknowledged encrypted note and recovers it offline', async ({ page, context }) => {
-  await page.goto('/');
+const origin = assertLoopbackE2eUrl(process.env.LOGBOOK_TEST_URL || 'http://127.0.0.1:4173');
+
+/** A standalone, disposable on-disk browser profile: the test can restart Chromium after a crash. */
+async function openIsolatedProfile(directory: string): Promise<BrowserContext> {
+  const context = await chromium.launchPersistentContext(directory, { headless: true, baseURL: origin });
+  await context.route('**/*', route => {
+    try {
+      if (new URL(route.request().url()).origin === origin) return route.continue();
+    } catch {
+      // Invalid or non-loopback request is never allowed out of this E2E browser.
+    }
+    return route.abort('blockedbyclient');
+  });
+  return context;
+}
+
+test('abrupt browser crash preserves an unacknowledged encrypted note and recovers it offline', async () => {
+  test.setTimeout(75_000);
+  const profile = await mkdtemp(join(tmpdir(), 'logbook-buffered-crash-'));
+  let original: BrowserContext | undefined;
+  let recovered: BrowserContext | undefined;
+  try {
+    original = await openIsolatedProfile(profile);
+    const page = original.pages()[0] ?? await original.newPage();
+    await page.goto('/');
   await page.getByRole('button', { name: 'Continua senza account' }).click();
   await expect(page.getByText('Aggiornamento Termini e Privacy')).toBeVisible();
   for (const checkbox of await page.locator('input[type="checkbox"]').all()) {
@@ -48,12 +76,13 @@ test('abrupt renderer crash preserves an unacknowledged encrypted note and recov
   // Precache must already control this page; the next document has no network.
   await page.evaluate(async () => { await navigator.serviceWorker.ready; });
   await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
-  await context.setOffline(true);
+  await original.setOffline(true);
 
-  // CDP Page.crash terminates Chromium's renderer without the unload,
-  // pagehide, blur or React cleanup that a normal page.close() triggers.
+  // Page.crash can terminate the entire browser process in Playwright's CI
+  // container. Reopen a *new* Chromium process against the same disposable
+  // on-disk profile; unlike context.newPage(), this works after browser death.
   const crashed = page.waitForEvent('crash', { timeout: 15_000 });
-  const cdp = await context.newCDPSession(page);
+  const cdp = await original.newCDPSession(page);
   try {
     await cdp.send('Page.crash');
   } catch {
@@ -61,9 +90,11 @@ test('abrupt renderer crash preserves an unacknowledged encrypted note and recov
     // the independent oracle that this was not a graceful navigation.
   }
   await crashed;
-  await page.close().catch(() => {});
+  await original.close().catch(() => {});
 
-  const resumed = await context.newPage();
+  recovered = await openIsolatedProfile(profile);
+  await recovered.setOffline(true);
+  const resumed = recovered.pages()[0] ?? await recovered.newPage();
   await resumed.goto('/?tab=training');
   await expect(resumed.getByRole('button', { name: 'Termina allenamento' })).toBeVisible();
   await resumed.locator('.session-exercise-summary').click();
@@ -75,4 +106,9 @@ test('abrupt renderer crash preserves an unacknowledged encrypted note and recov
       key.startsWith(p + 'draft:buffered-intent:') || key.startsWith(p + 'draft:buffered:textarea:'))
   ), prefix);
   expect(after).toEqual(before);
+  } finally {
+    await recovered?.close().catch(() => {});
+    await original?.close().catch(() => {});
+    await rm(profile, { recursive: true, force: true });
+  }
 });
