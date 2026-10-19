@@ -12,7 +12,8 @@ vi.mock('firebase/firestore', () => ({
     getDocFromServer: (path: string) => path.endsWith('/sync_control/state') ? sdk.control(path) : sdk.root(path),
     getDocsFromServer: sdk.page,
 }));
-import { collectBackupSnapshot } from '../../src/lib/db/backupSnapshot';
+import { collectBackupSnapshot, hasDeviceRecoveryBackupSource } from '../../src/lib/db/backupSnapshot';
+import { createBackup, decodeImport } from '../../src/lib/backup';
 import { acknowledgeThrough, initializeLocal, commitLocal, readLocal } from '../../src/lib/sync/localRepository';
 import { UserDataSchema } from '../../src/lib/schema';
 import { CURRENT_DATA_SCHEMA, CURRENT_SYNC_PROTOCOL, FutureVersionError } from '../../src/lib/schemaEvolution';
@@ -227,6 +228,10 @@ it('exports only allowlisted recovery device data and excludes account-deletion 
     const values = new Map<string, string>([
         ['logbook:v2:user:a:workout', '{"id":"w1"}'],
         ['logbook:v2:user:a:draft:measurement:2026-10-04', '{"weight":"80"}'],
+        ['logbook:v2:user:a:history-editor-context', '{"version":1,"editorId":"e1"}'],
+        ['logbook:v2:user:a:workout-intent:' + 'a'.repeat(32), '{"__logbookWorkoutIntent":1}'],
+        ['logbook:v2:user:a:workout-intent:not-valid', '{"bad":true}'],
+        ['logbook:v2:user:b:workout', '{"id":"foreign"}'],
         ['logbook:v2:user:a:account-deletion', '{"receiptToken":"super-secret-receipt"}'],
         ['logbook:v2:user:a:telemetry_queue', '[{"event":"x"}]'],
         ['logbook:v2:user:a:storage_marker', '{"timestamp":1}'],
@@ -241,11 +246,42 @@ it('exports only allowlisted recovery device data and excludes account-deletion 
     expect(backup.recovery.device).toEqual({
         workout: '{"id":"w1"}',
         'draft:measurement:2026-10-04': '{"weight":"80"}',
+        'history-editor-context': '{"version":1,"editorId":"e1"}',
+        ['workout-intent:' + 'a'.repeat(32)]: '{"__logbookWorkoutIntent":1}',
     });
     expect(JSON.stringify(backup.recovery)).not.toContain('super-secret-receipt');
     expect(backup.recovery.device).not.toHaveProperty('account-deletion');
     expect(backup.recovery.device).not.toHaveProperty('telemetry_queue');
     expect(backup.recovery.device).not.toHaveProperty('storage_marker');
+});
+
+it('retains a crash-only private workout witness in an explicit partial backup without replaying it on import', async () => {
+    const source = '{"__logbookWorkoutIntent":1,"sequence":1}';
+    const key = 'workout-intent:' + 'f'.repeat(32);
+    const values = new Map<string, string>([
+        ['logbook:v2:user:a:' + key, source],
+        ['logbook:v2:user:b:workout', '{"id":"foreign"}'],
+        ['logbook:v2:user:a:account-deletion', '{"secret":"do-not-export"}'],
+    ]);
+    vi.stubGlobal('localStorage', {
+        get length() { return values.size; },
+        key: (index: number) => [...values.keys()][index] ?? null,
+        getItem: (name: string) => values.get(name) ?? null,
+    });
+    expect(hasDeviceRecoveryBackupSource('user:a')).toBe(true);
+
+    const backup = await collectBackupSnapshot(parse({}), false);
+    expect(backup.coverage.scope).toBe('device');
+    expect(backup.recovery.envelope).toBeUndefined();
+    expect(backup.recovery.device).toEqual({ [key]: source });
+    expect(values.get('logbook:v2:user:a:' + key)).toBe(source);
+    const exported = createBackup(backup.data, 'user:a', backup.coverage, backup.recovery);
+    const decoded = decodeImport(exported, 'user:a');
+    expect((exported.recovery as { device: Record<string, string> }).device[key]).toBe(source);
+    expect(decoded.deviceWorkoutRaw).toBeNull();
+    expect(decoded.deviceDrafts).toEqual([]);
+    expect(JSON.stringify(exported)).not.toContain('do-not-export');
+    expect(JSON.stringify(exported)).not.toContain('foreign');
 });
 
 it('refuses a full backup when a locally acknowledged month is absent on server', async () => {
