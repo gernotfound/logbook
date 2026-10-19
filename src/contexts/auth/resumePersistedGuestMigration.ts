@@ -98,7 +98,7 @@ export async function resumePersistedGuestMigration(
                 const recovered = updatedEnvelope.data;
                 const workout = getInitialLocalWorkout(
                     session.owner, recovered.activeWorkout ?? null, recovered.history,
-                    updatedEnvelope.lastClosedWorkoutId, updatedEnvelope.closedWorkoutIds,
+                    updatedEnvelope.lastClosedWorkoutId, updatedEnvelope.closedWorkoutIds, updatedEnvelope.consentRevision,
                 );
                 if (!isCurrentRun() || !isCurrentSession(session)) return true;
                 useAppStore.setState({
