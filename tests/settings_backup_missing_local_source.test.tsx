@@ -11,6 +11,7 @@ const fixture = vi.hoisted(() => ({
     flush: vi.fn(async () => {}),
     deviceWorkout: vi.fn(),
     current: true,
+    consent: 'withdrawn' as 'active' | 'withdrawn',
     state: {
         userData: null as UserData | null,
         localPersistenceBlocked: false,
@@ -25,7 +26,7 @@ vi.mock('../src/lib/sync/session', () => ({
 }));
 // In this screen a revoked/suspended consent permits a rights backup even
 // when regular authenticated hydration has not populated the Zustand view.
-vi.mock('../src/lib/healthConsent', () => ({ currentHealthConsentStatus: () => 'withdrawn' }));
+vi.mock('../src/lib/healthConsent', () => ({ currentHealthConsentStatus: () => fixture.consent }));
 vi.mock('../src/lib/sync/localRepository', () => ({ readLocal: fixture.readLocal }));
 vi.mock('../src/lib/sync/deviceStorage', () => ({ readDeviceValueStrict: fixture.deviceWorkout }));
 vi.mock('../src/lib/db/backupSnapshot', () => ({ collectBackupSnapshot: fixture.collectSnapshot }));
@@ -56,6 +57,7 @@ beforeEach(() => {
     fixture.state.dataOwner = null;
     fixture.state.localPersistenceBlocked = false;
     fixture.current = true;
+    fixture.consent = 'withdrawn';
     fixture.deviceWorkout.mockReturnValue(null);
     useDialogStore.getState().showConfirm = vi.fn(async () => true);
     fixture.readLocal.mockResolvedValue(undefined);
@@ -63,6 +65,7 @@ beforeEach(() => {
 });
 
 describe('quarantined workout device backup', () => {
+    beforeEach(() => { fixture.consent = 'active'; });
     const historicalCopy = '{"id":"old-workout","date":"2026-10-14","exercises":[]}';
 
     it('exports a device-only recovery copy while active consent blocks UI hydration', async () => {
