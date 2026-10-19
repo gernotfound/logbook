@@ -21,7 +21,7 @@ type PlainWorkoutSnapshot = {
     workout: WorkoutSession;
 };
 
-const readDeviceConsentRevision = (owner: string): number | undefined => {
+export const readDeviceConsentRevision = (owner: string): number | undefined => {
     if (!owner.startsWith('user:')) return undefined;
     const saved = readBrowserValueStrict(`logbook:v2:${owner}:health-consent-generation`);
     if (saved === null) return undefined;
