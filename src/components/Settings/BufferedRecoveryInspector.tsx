@@ -106,7 +106,7 @@ export function BufferedRecoveryInspector() {
                             <p className="settings-help">{shown.entries.length} copie conservate in {groups.size} campi. I nomi tecnici non provano l'appartenenza all'allenamento corrente.</p>
                             {[...groups].map(([draftName, entries]) => (
                                 <details key={draftName} className="settings-recovery-group">
-                                    <summary>{draftName} — {entries.length} {entries.length === 1 ? 'copia' : 'copie'}</summary>
+                                    <summary className="disclosure-summary">{draftName} — {entries.length} {entries.length === 1 ? 'copia' : 'copie'}</summary>
                                     {entries.map((entry, index) => (
                                         <div key={entry.name} className="settings-recovery-entry">
                                             <p className="settings-help settings-help-last">Copia {index + 1}: {provenanceLabel[entry.provenance]}</p>
