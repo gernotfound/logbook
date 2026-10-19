@@ -61,6 +61,21 @@ describe('exercise draft owner isolation', () => {
     expect(localStorage.getItem(key)).toBe(raw);
   });
 
+  it('refuses to re-stamp mounted draft values as a newly accepted consent epoch', () => {
+    const owner = 'user:a';
+    const marker = `logbook:v2:${owner}:health-consent-generation`;
+    const key = deviceKey('draft_exercise', owner);
+    // The form was mounted in revision 3 and had not yet written a draft.
+    localStorage.setItem(marker, '5');
+    expect(() => persistExerciseDraft(draft, owner, '3')).toThrow('Generazione consenso cambiata');
+    expect(localStorage.getItem(key)).toBeNull();
+    // A new current-revision form can still produce a valid copy.
+    persistExerciseDraft(draft, owner, '5');
+    expect(JSON.parse(localStorage.getItem(key)!)).toMatchObject({
+      consentRevision: 5, owner, name: 'draft_exercise',
+    });
+  });
+
   it('blocks invalid provenance metadata without clearing the original', () => {
     const owner = 'user:a';
     const name = 'draft_exercise';
