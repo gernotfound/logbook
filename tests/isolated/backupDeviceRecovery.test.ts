@@ -43,8 +43,11 @@ describe('backup device draft recovery', () => {
         ]));
         const drafts = selectBackupDeviceDrafts({ device });
         expect(drafts).toHaveLength(65);
+        const firstName = drafts[0].name;
+        storage.drafts.set(firstName, '{"newer":"existing copy"}');
         const result = restoreMissingBackupDeviceDrafts(drafts, 'user:a', () => {});
-        expect(result).toEqual({ restored: 65, preserved: 0 });
+        expect(result).toEqual({ restored: 64, preserved: 1 });
+        expect(storage.drafts.get(firstName)).toBe('{"newer":"existing copy"}');
         expect(storage.drafts.size).toBe(65);
         expect(storage.flush).toHaveBeenCalledWith({ strict: true });
     });

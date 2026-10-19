@@ -34,6 +34,24 @@ it('commits only after confirmation and reports local-pending without claiming c
     expect(ui.state.userData.profile.height).toBe('180');
     expect(ui.alert).toHaveBeenCalledWith(expect.stringContaining('cloud in attesa'));
 });
+it('warns before business import when optional draft recovery is malformed, without restoring it', async () => {
+    const original = createBackup(UserDataSchema.parse({ profile: { height: '180' } }) as any,
+        'user:a', { scope: 'device', months: [] }, { device: { draft_routine: '{' } });
+    const corruptedRecoveryFile = { content: JSON.stringify(original) } as unknown as File;
+    const save = vi.fn(async update => {
+        ui.state.userData = update(ui.state.userData);
+        return { ok: true, status: 'synced' } as const;
+    });
+    await Exporter.importFromJson(corruptedRecoveryFile, { uid: 'a' }, save, 'restore');
+    expect(ui.confirm).toHaveBeenCalledOnce();
+    expect(ui.confirm).toHaveBeenCalledWith(
+        expect.stringContaining('Le bozze del file NON saranno ripristinate'), 'Anteprima importazione',
+    );
+    expect(save).toHaveBeenCalledOnce();
+    expect(ui.state.userData.profile.height).toBe('180');
+    expect(ui.alert).toHaveBeenCalledWith(expect.stringContaining('Bozze non ripristinate'));
+});
+
 it('does not overwrite an edit made while the preview was open', async () => {
     ui.confirm.mockImplementation(async () => { ui.state.userData.profile.height = '175'; return true; });
     const save = vi.fn(async update => { ui.state.userData = update(ui.state.userData); return { ok: true, status: 'synced' } as const; });
