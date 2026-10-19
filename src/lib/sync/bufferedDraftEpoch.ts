@@ -9,14 +9,27 @@ type BufferedDraftRecord = {
     value: string;
 };
 
+export type BufferedDraftSnapshot = {
+    value: string | null;
+    /** Exact plaintext representation, not the underlying AEAD ciphertext. */
+    raw: string | null;
+};
+
+export class BufferedDraftConflictError extends Error {
+    constructor() {
+        super('Bozza modificata da un’altra scheda: copia corrente conservata.');
+        this.name = 'BufferedDraftConflictError';
+    }
+}
+
 /**
- * Owner-scoped ciphertext authenticates storage ownership, not the consent
- * generation that originally produced a health-related unfinished input.
- * Read the witness and text in one synchronous protected record.
+ * A single strict read returns both the user-facing value and the exact
+ * document image the editor observed. Checking only owner and consent revision
+ * does not detect a different editor writing the same workout and field.
  */
-export function readBufferedDraft(name: string, owner: string): string | null {
+export function readBufferedDraftSnapshot(name: string, owner: string): BufferedDraftSnapshot {
     const raw = readDeviceValueStrict(name, owner);
-    if (raw === null) return null;
+    if (raw === null) return { value: null, raw: null };
     let revision: number | undefined;
     let value = raw;
     if (raw.startsWith('{')) {
@@ -32,20 +45,42 @@ export function readBufferedDraft(name: string, owner: string): string | null {
                 throw new Error('Provenienza della bozza bufferizzata non valida: copia conservata.');
             }
             revision = record.consentRevision;
-            value = record.value!;
+            value = record.value;
         }
     }
     // Legacy raw text has no epoch. It is safe to auto-recover only in epoch 1.
     assertWorkoutSnapshotEpoch(owner, revision);
-    return value;
+    return { value, raw };
 }
 
-/** An old or unverified record cannot be overwritten or silently cleaned up. */
+export function readBufferedDraft(name: string, owner: string): string | null {
+    return readBufferedDraftSnapshot(name, owner).value;
+}
+
+export function assertBufferedDraftUnchanged(name: string, owner: string, expectedRaw: string | null): void {
+    if (readBufferedDraftSnapshot(name, owner).raw !== expectedRaw) {
+        throw new BufferedDraftConflictError();
+    }
+}
+
+/**
+ * Conditional replacement/clear. The caller must carry forward the exact raw
+ * image returned by the last successful write. A stale editor must not use a
+ * fresh read to authorize overwriting a newer image it never observed.
+ *
+ * localStorage has no compare-and-swap primitive: this protects observable
+ * interleavings, but simultaneous read-then-write across JS realms still
+ * requires a distinct cross-tab serialization protocol.
+ */
 export function writeBufferedDraft(
     name: string, owner: string, value: string | null,
     expectedConsentGeneration?: string | null,
-): void {
-    readBufferedDraft(name, owner);
+    expectedRaw?: string | null,
+): string | null {
+    const current = readBufferedDraftSnapshot(name, owner);
+    if (expectedRaw !== undefined && current.raw !== expectedRaw) {
+        throw new BufferedDraftConflictError();
+    }
     const revision = readDeviceConsentRevision(owner);
     if (expectedConsentGeneration !== undefined && owner.startsWith('user:')
         && expectedConsentGeneration !== (revision === undefined ? null : String(revision))) {
@@ -53,7 +88,7 @@ export function writeBufferedDraft(
     }
     if (value === null) {
         writeDeviceValue(name, null, owner);
-        return;
+        return null;
     }
     const sourceRevision = expectedConsentGeneration === undefined ? revision
         : expectedConsentGeneration === null ? undefined : Number(expectedConsentGeneration);
@@ -63,4 +98,5 @@ export function writeBufferedDraft(
         } satisfies BufferedDraftRecord)
         : value;
     writeDeviceValue(name, next, owner);
+    return next;
 }
