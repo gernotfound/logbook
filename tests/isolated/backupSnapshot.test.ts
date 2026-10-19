@@ -46,6 +46,15 @@ it('preserves business import when optional device recovery exceeds its bounded 
     expect((original.recovery as { device: Record<string, string> }).device).toEqual(device);
 });
 
+it('does not silently drop an explicit malformed device recovery section', () => {
+    const original = createBackup(parse({ profile: { height: '175' } }), 'user:a',
+        { scope: 'device', months: [] }, { device: [] });
+    const decoded = decodeImport(original, 'user:a');
+    expect(decoded.data).toMatchObject({ profile: { height: '175' } });
+    expect(decoded.deviceDrafts).toEqual([]);
+    expect(decoded.deviceDraftRecoveryWarning).toContain('sezione bozze');
+});
+
 it('makes a malformed optional device draft visible without blocking valid business data', () => {
     const original = createBackup(parse({ profile: { height: '175' } }), 'user:a',
         { scope: 'device', months: [] }, { device: { draft_routine: '{' } });

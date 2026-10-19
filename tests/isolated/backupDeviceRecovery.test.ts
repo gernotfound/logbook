@@ -54,6 +54,8 @@ describe('backup device draft recovery', () => {
 
     it('rejects malformed or oversized draft bytes before any write', () => {
         expect(() => selectBackupDeviceDrafts({ device: { draft_routine: '{' } })).toThrow('non JSON');
+        expect(() => selectBackupDeviceDrafts({ device: [] })).toThrow('sezione bozze');
+        expect(() => selectBackupDeviceDrafts({ device: null })).toThrow('sezione bozze');
         expect(() => selectBackupDeviceDrafts({ device: { draft_exercise: '[]' } })).toThrow('struttura non valida');
         expect(() => selectBackupDeviceDrafts({ device: { draft_routine: 'x'.repeat(100_001) } })).toThrow('non valida');
         expect(storage.write).not.toHaveBeenCalled();

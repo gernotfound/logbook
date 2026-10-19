@@ -19,7 +19,10 @@ interface BackupDeviceDraft {
  * no-overwrite restore after the business import.
  */
 export function selectBackupDeviceDrafts(recovery: unknown): BackupDeviceDraft[] {
-    if (!isRecord(recovery) || !isRecord(recovery.device)) return [];
+    if (recovery === null || recovery === undefined) return [];
+    if (!isRecord(recovery)) throw new Error('Backup: sezione recupero non valida.');
+    if (!Object.hasOwn(recovery, 'device')) return [];
+    if (!isRecord(recovery.device)) throw new Error('Backup: sezione bozze di recupero non valida.');
     const entries = Object.entries(recovery.device).filter(([name]) => draftKey(name));
     if (entries.length > MAX_DEVICE_RECOVERY_DRAFTS) throw new Error('Backup: troppe bozze di recupero.');
     let total = 0;
