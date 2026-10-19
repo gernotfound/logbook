@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
 import { Logic } from '../lib/logic';
@@ -48,13 +48,13 @@ export function useTrainingExercises() {
     });
     const initialDraft = initialRecovery.draft;
     const localPersistenceBlocked = useAppStore(state => state.localPersistenceBlocked);
-    const assertCurrentDraft = () => {
+    const assertCurrentDraft = useCallback(() => {
         if (initialRecovery.error || localPersistenceBlocked || !isCurrentSession(draftSession)) {
             throw new Error('Sessione, consenso o bozza esercizio non più verificabili.');
         }
         // A different tab may have replaced the stored draft since the form mounted.
         readExerciseDraft(draftOwner);
-    };
+    }, [draftOwner, draftSession, initialRecovery.error, localPersistenceBlocked]);
     useEffect(() => {
         if (initialRecovery.error) blockExerciseDraft(initialRecovery.error);
     }, [initialRecovery.error]);
@@ -87,7 +87,8 @@ export function useTrainingExercises() {
             blockExerciseDraft(error);
         }
     }, [exName, exNotes, trackingType, selectedMuscles, secondaryMuscles, isBodyweight,
-        equipmentWeight, editingExId, draftOwner, draftSession, initialRecovery.error, localPersistenceBlocked]);
+        equipmentWeight, editingExId, draftOwner, draftSession, initialRecovery.error,
+        localPersistenceBlocked, assertCurrentDraft]);
 
     const filteredMuscles = useMemo(() => filterMuscles(muscleSearch), [muscleSearch]);
 
