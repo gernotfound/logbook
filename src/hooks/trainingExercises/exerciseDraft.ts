@@ -22,7 +22,7 @@ export function readExerciseDraft(owner = storageOwner()): Record<string, any> |
     return readWorkoutRecoveryDraft(EXERCISE_DRAFT_KEY, owner) as Record<string, any> | null;
 }
 
-export function persistExerciseDraft(draft: ExerciseDraft, owner = storageOwner()): void {
+export function persistExerciseDraft(draft: ExerciseDraft, owner = storageOwner(), expectedConsentGeneration?: string | null): void {
     const hasContent = Boolean(
         draft.name.trim() ||
         draft.notes.trim() ||
@@ -34,9 +34,9 @@ export function persistExerciseDraft(draft: ExerciseDraft, owner = storageOwner(
 
     // Propagate persistence failures: swallowing them would permit a user to
     // commit memory-only or obsolete draft values as new business data.
-    writeWorkoutRecoveryDraft(EXERCISE_DRAFT_KEY, owner, hasContent ? draft : null);
+    writeWorkoutRecoveryDraft(EXERCISE_DRAFT_KEY, owner, hasContent ? draft : null, expectedConsentGeneration);
 }
 
-export function clearExerciseDraft(owner = storageOwner()): void {
-    writeWorkoutRecoveryDraft(EXERCISE_DRAFT_KEY, owner, null);
+export function clearExerciseDraft(owner = storageOwner(), expectedConsentGeneration?: string | null): void {
+    writeWorkoutRecoveryDraft(EXERCISE_DRAFT_KEY, owner, null, expectedConsentGeneration);
 }
