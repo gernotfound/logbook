@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { captureSessionForOwner, isCurrentSession, type SessionSnapshot } from '../lib/sync/session';
-import { deviceKey, readDeviceValueStrict, writeDeviceValue } from '../lib/sync/deviceStorage';
+import { deviceKey } from '../lib/sync/deviceStorage';
+import { readFencedDatedDraft, writeFencedDatedDraft, UnverifiedDatedDraftEpochError } from '../lib/sync/datedDraftEpoch';
 import { draftRegistry } from '../lib/utils/draftRegistry';
 import { requiredUpdateRecoveryRegistry } from '../lib/sync/requiredUpdateRecovery';
 import { useAppStore } from '../store/useAppStore';
@@ -11,21 +12,9 @@ import { LocalVaultLockedError, readVaultControl } from '../lib/sync/secureArchi
 
 function readDraft(name: string, owner: string): Record<string, string> | null {
     try {
-        const raw = readDeviceValueStrict(name, owner);
-        if (!raw) return null;
-        const parsed: unknown = JSON.parse(raw);
-        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-            if (readVaultControl(owner)) throw new LocalCiphertextError();
-            return null;
-        }
-        const entries = Object.entries(parsed);
-        if (entries.some(([, value]) => typeof value !== 'string')) {
-            if (readVaultControl(owner)) throw new LocalCiphertextError();
-            return null;
-        }
-        return Object.fromEntries(entries) as Record<string, string>;
+        return readFencedDatedDraft(name, owner);
     } catch (error) {
-        if (error instanceof BrowserStorageError || error instanceof LocalVaultLockedError
+        if (error instanceof UnverifiedDatedDraftEpochError || error instanceof BrowserStorageError || error instanceof LocalVaultLockedError
             || error instanceof LocalPurgePendingError || error instanceof LocalCiphertextError) throw error;
         if (readVaultControl(owner)) throw error;
         console.warn('Bozza non leggibile, originale conservato:', error);
@@ -56,7 +45,31 @@ export function useDatedDraft<T extends Record<string, string>>(kind: string, da
     const session = owner ? captureSessionForOwner(owner) : null;
     const name = 'draft:' + kind + ':' + date;
     const key = owner ? deviceKey(name, owner) : null;
-    const stored = useMemo(() => key && owner ? readDraft(name, owner) : null, [key, name, owner]);
+    // The consent generation is part of the read scope: a mounted form must
+    // re-check provenance when another tab advances the owner's epoch.
+    const readScope = key ? JSON.stringify([key, session?.consentGeneration, session?.consentMarker]) : null;
+    const { stored, provenanceError } = useMemo(() => {
+        try {
+            return {
+                stored: readScope && owner ? readDraft(name, owner) : null,
+                provenanceError: null as UnverifiedDatedDraftEpochError | null,
+            };
+        } catch (error) {
+            if (!(error instanceof UnverifiedDatedDraftEpochError)) throw error;
+            return { stored: null, provenanceError: error };
+        }
+    }, [readScope, name, owner]);
+    const blockProvenance = (error: UnverifiedDatedDraftEpochError) => {
+        useAppStore.setState({
+            localPersistenceBlocked: true,
+            syncHealth: 'failed',
+            syncPresentation: 'normal',
+            saveError: error.message,
+        });
+    };
+    useEffect(() => {
+        if (provenanceError) blockProvenance(provenanceError);
+    }, [provenanceError]);
     const loaded = mergeDraft(source, stored);
     const [edited, setEdited] = useState<{ key: string; values: T | null } | null>(null);
     const values = key && edited?.key === key ? edited.values ?? source : loaded ?? source;
@@ -72,16 +85,34 @@ export function useDatedDraft<T extends Record<string, string>>(kind: string, da
         };
     });
 
+    const verifyCurrentDraft = () => {
+        if (provenanceError) {
+            blockProvenance(provenanceError);
+            throw provenanceError;
+        }
+        if (!session || !key || !isCurrentSession(session) || current.current.key !== key) {
+            throw new Error('Sessione cambiata prima della verifica della bozza.');
+        }
+        try {
+            readFencedDatedDraft(name, session.owner);
+        } catch (error) {
+            if (error instanceof UnverifiedDatedDraftEpochError) blockProvenance(error);
+            throw error;
+        }
+    };
+
     const persist = (draftName: string, draftOwner: string, value: T) => {
-        try { writeDeviceValue(draftName, JSON.stringify(value), draftOwner); }
+        try { writeFencedDatedDraft(draftName, draftOwner, value); }
         catch (error) {
-            useAppStore.getState().setSaveError('Bozza conservata solo in memoria: archivio del dispositivo non disponibile.');
+            if (error instanceof UnverifiedDatedDraftEpochError) blockProvenance(error);
+            else useAppStore.getState().setSaveError('Bozza conservata solo in memoria: archivio del dispositivo non disponibile.');
             throw error;
         }
     };
 
     const setField = <K extends keyof T>(field: K, value: T[K]) => {
-        if (!session || !key || !isCurrentSession(session) || current.current.key !== key) return;
+        if (!session || !key) return;
+        try { verifyCurrentDraft(); } catch { return; }
         const next = { ...current.current.values, [field]: value };
         current.current = { key, name, values: next, dirty: true, session };
         setEdited({ key, values: next });
@@ -91,7 +122,8 @@ export function useDatedDraft<T extends Record<string, string>>(kind: string, da
     const clear = (expected?: T) => {
         if (!session || !key || !isCurrentSession(session) || current.current.key !== key
             || (expected && JSON.stringify(expected) !== JSON.stringify(current.current.values))) return false;
-        try { writeDeviceValue(name, null, session.owner); }
+        verifyCurrentDraft();
+        try { writeFencedDatedDraft(name, session.owner, null); }
         catch (error) {
             useAppStore.getState().setSaveError('Dati salvati; impossibile rimuovere la bozza locale.');
             throw error;
@@ -118,5 +150,5 @@ export function useDatedDraft<T extends Record<string, string>>(kind: string, da
         };
     }, []);
 
-    return { values, setField, clear };
+    return { values, setField, clear, verifyCurrentDraft };
 }

@@ -70,6 +70,7 @@ export function useSleepMeasurements() {
             const targetDate = editingDate || selectedDate;
 
             if (!isCurrentSession(session)) throw new Error('Sessione cambiata');
+            draft.verifyCurrentDraft();
             await dispatchDurableOperation(dispatchDomainOperation, {
                 type: 'nutrition-day.patch',
                 date: targetDate,
