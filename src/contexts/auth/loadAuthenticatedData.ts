@@ -76,7 +76,7 @@ export async function loadAuthenticatedData({
         if (!isCurrent()) return 'blocked';
 
         if (localEnvelope) {
-            const localWorkout = getInitialLocalWorkout(expectedOwner, localEnvelope.data.activeWorkout ?? null, localEnvelope.data.history, localEnvelope.lastClosedWorkoutId, localEnvelope.closedWorkoutIds);
+            const localWorkout = getInitialLocalWorkout(expectedOwner, localEnvelope.data.activeWorkout ?? null, localEnvelope.data.history, localEnvelope.lastClosedWorkoutId, localEnvelope.closedWorkoutIds, localEnvelope.consentRevision);
             useAppStore.setState({
                 userData: localEnvelope.data,
                 dataOwner: expectedOwner,
@@ -159,7 +159,7 @@ export async function loadAuthenticatedData({
                 // would create a second semantic journal from the old UI state.
                 const hydratedWorkout = getInitialLocalWorkout(
                     expectedOwner, hydratedEnv.data.activeWorkout ?? null, hydratedEnv.data.history,
-                    hydratedEnv.lastClosedWorkoutId, hydratedEnv.closedWorkoutIds,
+                    hydratedEnv.lastClosedWorkoutId, hydratedEnv.closedWorkoutIds, hydratedEnv.consentRevision,
                 );
                 if (!cloudAllowed()) return 'blocked';
                 useAppStore.setState({
@@ -227,7 +227,7 @@ export async function loadAuthenticatedData({
             const stillAbsent = await readLocal(expectedOwner);
             if (!isCurrent()) return 'blocked';
             if (stillAbsent) {
-                const localWorkout = getInitialLocalWorkout(expectedOwner, stillAbsent.data.activeWorkout ?? null, stillAbsent.data.history, stillAbsent.lastClosedWorkoutId, stillAbsent.closedWorkoutIds);
+                const localWorkout = getInitialLocalWorkout(expectedOwner, stillAbsent.data.activeWorkout ?? null, stillAbsent.data.history, stillAbsent.lastClosedWorkoutId, stillAbsent.closedWorkoutIds, stillAbsent.consentRevision);
                 useAppStore.setState({ userData: stillAbsent.data, dataOwner: expectedOwner, localWorkout,
                     cloudIntegrityBlocked: Boolean(stillAbsent.cloudIntegrityFence) });
                 markTabSnapshotClean(session, stillAbsent.data);
