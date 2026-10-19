@@ -5,7 +5,7 @@ import { ActiveWorkoutSession } from './ActiveWorkoutSession';
 import PreSessionCheckIn from './PreSessionCheckIn';
 import WorkoutReportModal from './WorkoutReportModal';
 import SessionRatings from './session/SessionRatings';
-import { BufferedWorkoutScope } from '../UI/BufferedInput';
+import { BufferedWorkoutScope } from '../UI/bufferedWorkoutScope';
 import type { WorkoutSession } from '../../types';
 import { Logic } from '../../lib/logic';
 import { draftRegistry } from '../../lib/utils/draftRegistry';
