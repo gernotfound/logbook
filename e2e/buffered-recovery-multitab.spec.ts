@@ -85,15 +85,24 @@ test('two real guest tabs preserve independent encrypted edits and expose both f
     Object.entries(localStorage).filter(([key]) => key.startsWith(p))
   ), prefix)).toEqual(saved);
 
-  // Terminate both editing realms without logout or a normal React unmount:
-  // later inspection must not depend on their in-memory component state.
-  await page.close();
-  await second.close();
+  // Destroy and reconstruct the inspector document/JS realm while both
+  // editors remain unacknowledged. A normal editor pagehide can legitimately
+  // flush and acknowledge its own witness, so it is not a stable two-witness
+  // oracle. The fresh reader must re-open the real encrypted device archive.
   await viewer.goto('/?tab=settings');
   await expect(viewer.getByRole('heading', { name: 'Impostazioni', exact: true })).toBeVisible();
   await viewer.locator('.settings-menu').getByRole('button', { name: /Dati e backup/ }).click();
   await viewer.getByRole('button', { name: 'Esamina copie sul dispositivo' }).click();
   await expect(viewer.getByText('2 copie conservate in 1 campo.')).toBeVisible();
+  await viewer.locator('.settings-recovery-group summary').first().click();
+  const afterReloadValues = viewer.locator('.settings-recovery-entry textarea[readonly]');
+  await expect(afterReloadValues).toHaveCount(2);
+  expect((await afterReloadValues.evaluateAll(elements =>
+    elements.map(element => (element as HTMLTextAreaElement).value)
+  )).sort()).toEqual([a, b].sort());
+  expect(await viewer.evaluate((p) => Object.fromEntries(
+    Object.entries(localStorage).filter(([key]) => key.startsWith(p))
+  ), prefix)).toEqual(saved);
 });
 
 for (const theme of ['light', 'dark'] as const) {
