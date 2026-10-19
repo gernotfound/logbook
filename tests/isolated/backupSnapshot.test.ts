@@ -32,6 +32,38 @@ beforeEach(async () => {
 });
 afterEach(() => vi.unstubAllGlobals());
 
+
+it('preserves business import when optional device recovery exceeds its bounded limit', () => {
+    const device = Object.fromEntries(Array.from({ length: 1025 }, (_, index) => [
+        'draft:buffered-intent:' + index.toString(16).padStart(32, '0'), '{}',
+    ]));
+    const original = createBackup(parse({ profile: { height: '175' } }), 'user:a',
+        { scope: 'device', months: [] }, { device });
+    const decoded = decodeImport(original, 'user:a');
+    expect(decoded.data).toMatchObject({ profile: { height: '175' } });
+    expect(decoded.deviceDrafts).toEqual([]);
+    expect(decoded.deviceDraftRecoveryWarning).toContain('troppe bozze');
+    expect((original.recovery as { device: Record<string, string> }).device).toEqual(device);
+});
+
+it('does not silently drop an explicit malformed device recovery section', () => {
+    const original = createBackup(parse({ profile: { height: '175' } }), 'user:a',
+        { scope: 'device', months: [] }, { device: [] });
+    const decoded = decodeImport(original, 'user:a');
+    expect(decoded.data).toMatchObject({ profile: { height: '175' } });
+    expect(decoded.deviceDrafts).toEqual([]);
+    expect(decoded.deviceDraftRecoveryWarning).toContain('sezione bozze');
+});
+
+it('makes a malformed optional device draft visible without blocking valid business data', () => {
+    const original = createBackup(parse({ profile: { height: '175' } }), 'user:a',
+        { scope: 'device', months: [] }, { device: { draft_routine: '{' } });
+    const decoded = decodeImport(original, 'user:a');
+    expect(decoded.data).toMatchObject({ profile: { height: '175' } });
+    expect(decoded.deviceDrafts).toEqual([]);
+    expect(decoded.deviceDraftRecoveryWarning).toContain('non JSON');
+});
+
 it('collects every page of historical documents beyond the 3-month view and retains a concurrent local edit', async () => {
     const base = parse({ profile: { height: '170', gender: 'M' } });
     await initializeLocal('user:a', base);

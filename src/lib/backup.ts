@@ -210,9 +210,22 @@ export function decodeImport(payload: unknown, owner: string) {
 
     const device = !share && isRecord(normalized.recovery) && isRecord(normalized.recovery.device)
         ? normalized.recovery.device : null;
+    // Device-only recovery is optional: an oversized or damaged draft section
+    // must not invalidate otherwise valid business data. Report the omission
+    // explicitly before confirmation and keep the original file untouched.
+    let deviceDrafts: ReturnType<typeof selectBackupDeviceDrafts> = [];
+    let deviceDraftRecoveryWarning: string | null = null;
+    if (!share) {
+        try {
+            deviceDrafts = selectBackupDeviceDrafts(normalized.recovery);
+        } catch (error) {
+            deviceDraftRecoveryWarning = error instanceof Error ? error.message
+                : 'Bozze di recupero non verificabili.';
+        }
+    }
     return { data: selected, share, ownerUnknown: !share && !sourceOwner, coverage,
         hasDeviceRecovery: !share && normalized.recovery !== undefined,
-        deviceDrafts: share ? [] : selectBackupDeviceDrafts(normalized.recovery),
+        deviceDrafts, deviceDraftRecoveryWarning,
         deviceWorkoutRaw: typeof device?.workout === 'string' ? device.workout : null,
         deviceTimerRaw: typeof device?.timer === 'string' ? device.timer : null,
         exportedAt: typeof normalized.exportedAt === 'string' ? normalized.exportedAt : '' };
