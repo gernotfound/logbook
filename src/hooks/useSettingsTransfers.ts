@@ -5,6 +5,7 @@ import { useDialogStore } from '../store/useDialogStore';
 import { captureSession, isCurrentSession } from '../lib/sync/session';
 import { collectBackupSnapshot } from '../lib/db/backupSnapshot';
 import { readLocal } from '../lib/sync/localRepository';
+import { readDeviceValueStrict } from '../lib/sync/deviceStorage';
 import { UserDataSchema } from '../lib/schema';
 import { currentHealthConsentStatus } from '../lib/healthConsent';
 import type { ImportMode } from '../lib/backup';
@@ -73,7 +74,11 @@ export function useSettingsTransfers({ currentUser, isGuest }: TransferAuth) {
             return;
         }
         const stateData = state.userData;
-        if (!stateData && (session.owner === 'guest' || currentHealthConsentStatus(session.owner.slice(5)) === 'active')) {
+        // A quarantined workout must remain exportable by its owner even when
+        // the authenticated UI deliberately refuses to hydrate it.
+        const protectedDeviceBackup = session.owner !== 'guest' && state.localPersistenceBlocked === true;
+        if (!stateData && !protectedDeviceBackup
+            && (session.owner === 'guest' || currentHealthConsentStatus(session.owner.slice(5)) === 'active')) {
             await showAlert('I dati non sono ancora disponibili. Attendi il caricamento prima di esportare.');
             return;
         }
@@ -85,16 +90,27 @@ export function useSettingsTransfers({ currentUser, isGuest }: TransferAuth) {
             // An empty fallback is useful for a cloud-only rights export, but
             // is not evidence that a local archive exists. Never offer it as a
             // device backup if the cloud scan fails.
-            const hasDeviceBackupSource = stateData !== null || envelope !== undefined;
+            const deviceWorkout = protectedDeviceBackup
+                ? readDeviceValueStrict('workout', session.owner) : null;
+            const hasDeviceBackupSource = stateData !== null || envelope !== undefined || deviceWorkout !== null;
             const userData = stateData ?? envelope?.data ?? (UserDataSchema.parse({}) as NonNullable<typeof stateData>);
-            try { await useAppStore.getState().flushPendingSyncs(); }
-            catch { /* A rejected cloud write must not prevent exporting its durable local copy. */ }
+            if (protectedDeviceBackup) {
+                if (!hasDeviceBackupSource) {
+                    throw new Error('Backup locale non disponibile: nessun archivio o allenamento leggibile su questo dispositivo.');
+                }
+                if (!(await showConfirm(
+                    'Il caricamento dei dati è bloccato per proteggere una copia locale di provenienza non verificata. Vuoi esportare SOLO il backup di questo dispositivo, contrassegnato come parziale? I dati non saranno riattivati, importati o sincronizzati. Conserva il file in un luogo protetto.',
+                ))) return;
+            } else {
+                try { await useAppStore.getState().flushPendingSyncs(); }
+                catch { /* A rejected cloud write must not prevent exporting its durable local copy. */ }
+            }
             if (!isCurrentSession(session)) throw new Error('Sessione cambiata.');
             let snapshot;
             try {
-                snapshot = await collectBackupSnapshot(userData, !isGuest);
+                snapshot = await collectBackupSnapshot(userData, !isGuest && !protectedDeviceBackup);
             } catch (error) {
-                if (!isCurrentSession(session)) throw error;
+                if (!isCurrentSession(session) || protectedDeviceBackup) throw error;
                 if (!hasDeviceBackupSource) {
                     throw new Error('Backup locale non disponibile: nessun archivio leggibile su questo dispositivo. Il backup cloud non è riuscito; riprova senza sostituire eventuali copie precedenti.');
                 }
