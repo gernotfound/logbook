@@ -103,7 +103,7 @@ export function BufferedRecoveryInspector() {
                     {groups.size === 0
                         ? <p role="status" className="settings-help settings-help-last">Nessuna testimonianza indipendente disponibile. Le altre bozze non vengono esaminate qui.</p>
                         : <>
-                            <p className="settings-help">{shown.entries.length} copie conservate in {groups.size} campi. I nomi tecnici non provano l'appartenenza all'allenamento corrente.</p>
+                            <p className="settings-help">{shown.entries.length} {shown.entries.length === 1 ? 'copia conservata' : 'copie conservate'} in {groups.size} {groups.size === 1 ? 'campo' : 'campi'}. I nomi tecnici non provano l'appartenenza all'allenamento corrente.</p>
                             {[...groups].map(([draftName, entries]) => (
                                 <details key={draftName} className="settings-recovery-group">
                                     <summary className="disclosure-summary">{draftName} — {entries.length} {entries.length === 1 ? 'copia' : 'copie'}</summary>
