@@ -8,7 +8,7 @@ import { getNutritionConflictFingerprint } from '../../lib/utils/object';
 
 import { updateStorageMarker, clearStorageMarker } from '../../lib/storageTelemetry';
 import { commitLocal, initializeLocal, clearNutritionConflict, readLocal, StaleLocalRevisionError } from '../../lib/sync/localRepository';
-import { writeDeviceValue } from '../../lib/sync/deviceStorage';
+import { persistPlainWorkoutSnapshot } from '../../lib/sync/workoutDeviceIntent';
 import { readVaultControl } from '../../lib/sync/secureArchiveSession';
 import { captureSession, isCurrentSession } from '../../lib/sync/session';
 import { markTabSnapshotClean, markTabSnapshotDirty } from '../../lib/sync/tabSnapshotCausality';
@@ -121,8 +121,7 @@ export const createDataSlice: StateCreator<AppState, [], [], DataSlice> = (set, 
         const aligned = alignActiveWorkout(rawNextData.activeWorkout, state.localWorkout);
         if (aligned.local !== state.localWorkout) {
             try {
-                if (aligned.local) writeDeviceValue('workout', JSON.stringify(aligned.local), session.owner);
-                else writeDeviceValue('workout', null, session.owner);
+                persistPlainWorkoutSnapshot(aligned.local, session.owner);
             } catch (error) {
                 console.error('Allineamento device-critical del workout fallito:', error);
                 set({
