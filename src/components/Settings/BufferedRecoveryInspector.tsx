@@ -90,7 +90,7 @@ export function BufferedRecoveryInspector() {
             <p className="settings-help">Puoi leggere le copie conservate quando più schede modificano lo stesso campo. Questa funzione non sceglie, modifica, elimina o sincronizza nulla.</p>
             <p className="settings-help settings-warning">Il testo può contenere dati sulla salute. Conserva il Backup JSON originale in un luogo protetto prima di tentare altri recuperi.</p>
             <div className="settings-actions">
-                <button type="button" className="btn" onClick={inspect} disabled={!allowed || !dataOwner}>
+                <button type="button" className="btn" onClick={inspect} disabled={!allowed}>
                     <FileSearch size={18} aria-hidden="true" /> Esamina copie sul dispositivo
                 </button>
                 {shown && (
