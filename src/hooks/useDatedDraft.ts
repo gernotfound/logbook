@@ -108,6 +108,7 @@ export function useDatedDraft<T extends Record<string, string>>(kind: string, da
     };
 
     const setField = <K extends keyof T>(field: K, value: T[K]) => {
+        if (!session || !key) return;
         try { verifyCurrentDraft(); } catch { return; }
         const next = { ...current.current.values, [field]: value };
         current.current = { key, name, values: next, dirty: true, session };
