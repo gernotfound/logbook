@@ -513,7 +513,7 @@ function hasCommittedWorkoutAncestor(
 export interface DomainCommitResult { operations: SemanticOperation[]; data: UserData; }
 
 export async function commitDomainOperations(owner: string, batch: DomainOperationBatch, initialBase: UserData, guard?: LocalWriteGuard,
-    workoutIntent?: { generation: string; sequence: number; intentId?: string; parentIntentId?: string; ancestorIds?: string[]; baseline: import('../../types').WorkoutSession | null },
+    workoutIntent?: { generation: string; sequence: number; consentRevision?: number; intentId?: string; parentIntentId?: string; ancestorIds?: string[]; baseline: import('../../types').WorkoutSession | null },
 ): Promise<DomainCommitResult> {
     owner = normalizeStorageOwner(owner);
     const domainOperations = normalizeDomainOperationBatch(batch);
@@ -525,6 +525,17 @@ export async function commitDomainOperations(owner: string, batch: DomainOperati
         if (guard && !guard()) throw new Error('Commit locale invalidato dal cambio sessione');
         const current = validate(raw, owner);
         if (workoutIntent) {
+            // Revalidate the source epoch IN the same IndexedDB commit which
+            // would make this unacknowledged device snapshot a new cloud journal.
+            // A revocation/reacceptance in another tab cannot restamp it.
+            const localRevision = current?.consentRevision ?? 0;
+            if (workoutIntent.consentRevision !== undefined
+                ? (!Number.isSafeInteger(workoutIntent.consentRevision)
+                    || workoutIntent.consentRevision < 1
+                    || workoutIntent.consentRevision !== localRevision)
+                : localRevision > 1) {
+                throw new WorkoutIntentConflictError('Workout di un consenso precedente: journal invariato e copia dispositivo preservata.');
+            }
             if (domainOperations.length !== 1 || domainOperations[0].type !== 'active-workout.set'
                 || !domainOperations[0].workout || !owner.startsWith('user:')
                 || !/^[a-f0-9]{32}$/.test(workoutIntent.generation)
