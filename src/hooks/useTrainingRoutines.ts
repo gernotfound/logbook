@@ -61,7 +61,7 @@ export function useTrainingRoutines() {
             assertCurrentDraft();
             writeWorkoutRecoveryDraft(ROUTINE_DRAFT_KEY, draftOwner,
                 routineName.trim() !== '' || routineExercises.length > 0
-                    ? { name: routineName, exercises: routineExercises } : null);
+                    ? { name: routineName, exercises: routineExercises } : null, draftSession.consentGeneration);
         } catch (error) {
             blockRoutineDraft(error);
         }
@@ -71,7 +71,7 @@ export function useTrainingRoutines() {
     const clearRoutineDraft = () => {
         try {
             assertCurrentDraft();
-            writeWorkoutRecoveryDraft(ROUTINE_DRAFT_KEY, draftOwner, null);
+            writeWorkoutRecoveryDraft(ROUTINE_DRAFT_KEY, draftOwner, null, draftSession.consentGeneration);
         } catch (error) {
             blockRoutineDraft(error);
         }
