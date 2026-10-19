@@ -79,6 +79,22 @@ it('hides plaintext on visibility change and fails closed on storage read error'
     expect(screen.queryByDisplayValue('Newer sensitive note')).toBeNull();
 });
 
+it('can inspect a quarantined owner before normal data hydration', () => {
+    fixture.dataOwner = null;
+    render(<BufferedRecoveryInspector />);
+    fireEvent.click(screen.getByRole('button', { name: /Esamina copie sul dispositivo/ }));
+    expect(fixture.inspect).toHaveBeenCalledExactlyOnceWith('user:a');
+    expect(screen.getByDisplayValue('Older sensitive note')).toBeTruthy();
+});
+
+it('refuses to inspect copies from a different data owner', () => {
+    fixture.dataOwner = 'user:elsewhere';
+    render(<BufferedRecoveryInspector />);
+    fireEvent.click(screen.getByRole('button', { name: /Esamina copie sul dispositivo/ }));
+    expect(fixture.inspect).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert').textContent).toContain('Sessione o consenso');
+});
+
 it('hides every prior-owner copy after the owner changes', () => {
     const view = render(<BufferedRecoveryInspector />);
     fireEvent.click(screen.getByRole('button', { name: /Esamina copie sul dispositivo/ }));
