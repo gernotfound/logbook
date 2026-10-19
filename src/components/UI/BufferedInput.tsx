@@ -172,7 +172,11 @@ export const BufferedInput = React.forwardRef<HTMLInputElement, BufferedInputPro
             try {
                 persistRecovery();
             } catch (error) {
-                if (!isCurrentSession(editSession.current!)) {
+                if (!recoveryKey.current || !editSession.current || !isCurrentSession(editSession.current)) {
+                    // Inputs without a stable key have always flushed to their
+                    // parent on blur/unmount, but cannot guarantee PWA reload.
+                    // Preserve that UI contract; the required-update capture
+                    // still rejects an unsaved device draft with no key.
                     useAppStore.getState().setSaveError('Bozza non ancora protetta nello storage del dispositivo.');
                 } else {
                     blockBufferedPersistence(error);
@@ -338,7 +342,11 @@ export const BufferedTextarea = React.forwardRef<HTMLTextAreaElement, BufferedTe
             try {
                 persistRecovery();
             } catch (error) {
-                if (!isCurrentSession(editSession.current!)) {
+                if (!recoveryKey.current || !editSession.current || !isCurrentSession(editSession.current)) {
+                    // Inputs without a stable key have always flushed to their
+                    // parent on blur/unmount, but cannot guarantee PWA reload.
+                    // Preserve that UI contract; the required-update capture
+                    // still rejects an unsaved device draft with no key.
                     useAppStore.getState().setSaveError('Bozza non ancora protetta nello storage del dispositivo.');
                 } else {
                     blockBufferedPersistence(error);
