@@ -606,6 +606,56 @@ describe.each(['input', 'textarea'] as const)('independent same-workout %s write
         second.unmount();
     });
 
+    it('does not block an unrelated field because an older-consent witness still exists', () => {
+        const owner = captureSession().owner;
+        const marker = `logbook:v2:${owner}:health-consent-generation`;
+        const oldField = `draft:buffered:${kind}:${workoutId}:historical-field`;
+        const historicalName = createBufferedWriterIntentName();
+        localStorage.setItem(marker, '2');
+        const historicalRaw = writeBufferedWriterIntent(
+            historicalName, owner, oldField, 'private historical value', null, '2',
+        );
+        localStorage.setItem(marker, '3');
+
+        expect(readBufferedWriterEvidence(owner, draftName)).toEqual([]);
+        const update = vi.fn();
+        const view = mount(update);
+        expect(useAppStore.getState().localPersistenceBlocked).toBe(false);
+        fireEvent.change(edited(view), { target: { value: 'Current field' } });
+        fireEvent.blur(edited(view));
+        expect(update).toHaveBeenCalledWith('Current field');
+        expect(useAppStore.getState().localPersistenceBlocked).toBe(false);
+        expect(localStorage.getItem(deviceKey(historicalName, owner))).toBe(historicalRaw);
+        view.unmount();
+    });
+
+    it('counts the 64-witness guard per field, not across unrelated fields', () => {
+        const owner = captureSession().owner;
+        for (let index = 0; index < 65; index++) {
+            writeBufferedWriterIntent(
+                createBufferedWriterIntentName(), owner,
+                `draft:buffered:${kind}:${workoutId}:other-${index}`,
+                `Historical note ${index}`, null, '3',
+            );
+        }
+        expect(readBufferedWriterEvidence(owner, draftName)).toEqual([]);
+        const view = mount(vi.fn());
+        expect(useAppStore.getState().localPersistenceBlocked).toBe(false);
+        fireEvent.change(edited(view), { target: { value: 'New private value' } });
+        expect(useAppStore.getState().localPersistenceBlocked).toBe(false);
+        view.unmount();
+    });
+
+    it('does not hide malformed unrelated witnesses whose source field cannot be verified', () => {
+        const owner = captureSession().owner;
+        const name = createBufferedWriterIntentName();
+        localStorage.setItem(deviceKey(name, owner), JSON.stringify({
+            __logbookBufferedWriterIntent: 1,
+            owner, draftName: 7, value: 'unknown provenance', consentRevision: 2,
+        }));
+        expect(() => readBufferedWriterEvidence(owner, draftName)).toThrow();
+    });
+
     it('never clears a changed writer slot with a stale acknowledgement', () => {
         const owner = captureSession().owner;
         const name = createBufferedWriterIntentName();
