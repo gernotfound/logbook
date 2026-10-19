@@ -31,12 +31,12 @@ export function BufferedRecoveryInspector() {
     const allowed = useSyncExternalStore(subscribeHealthConsent, consentAllowed, () => false);
     const [inspection, setInspection] = useState<Inspection | null>(null);
     const [error, setError] = useState<string | null>(null);
-    const visible = (() => {
+    const shown = (() => {
         try {
-            return inspection !== null && allowed && isCurrentSession(inspection.session)
-                && dataOwner === inspection.session.owner;
+            return inspection && allowed && isCurrentSession(inspection.session)
+                && (!dataOwner || dataOwner === inspection.session.owner) ? inspection : null;
         } catch {
-            return false;
+            return null;
         }
     })();
 
@@ -59,7 +59,7 @@ export function BufferedRecoveryInspector() {
         setError(null);
         try {
             const session = captureSession();
-            if (!consentAllowed() || dataOwner !== session.owner) {
+            if (!consentAllowed() || (dataOwner && dataOwner !== session.owner)) {
                 throw new Error('Sessione o consenso non verificati: anteprima non disponibile.');
             }
             const entries = inspectBufferedRecoveryEvidence(session.owner);
@@ -72,7 +72,7 @@ export function BufferedRecoveryInspector() {
         }
     };
     const groups = new Map<string, BufferedRecoveryEntry[]>();
-    if (visible) for (const entry of inspection.entries) {
+    if (shown) for (const entry of shown.entries) {
         const list = groups.get(entry.draftName) ?? [];
         list.push(entry);
         groups.set(entry.draftName, list);
@@ -87,17 +87,17 @@ export function BufferedRecoveryInspector() {
                 <button type="button" className="btn" onClick={inspect} disabled={!allowed || !dataOwner}>
                     <FileSearch size={18} aria-hidden="true" /> Esamina copie sul dispositivo
                 </button>
-                {visible && (
+                {shown && (
                     <button type="button" className="btn" onClick={() => setInspection(null)}>Nascondi copie</button>
                 )}
             </div>
             {error && <p role="alert" className="settings-help settings-warning settings-recovery-message">{error} Nessun dato è stato modificato.</p>}
-            {visible && (
+            {shown && (
                 <div className="settings-recovery-list" role="region" aria-label="Copie di recupero">
                     {groups.size === 0
                         ? <p role="status" className="settings-help settings-help-last">Nessuna testimonianza indipendente disponibile. Le altre bozze non vengono esaminate qui.</p>
                         : <>
-                            <p className="settings-help">{inspection.entries.length} copie conservate in {groups.size} campi. I nomi tecnici non provano l'appartenenza all'allenamento corrente.</p>
+                            <p className="settings-help">{shown.entries.length} copie conservate in {groups.size} campi. I nomi tecnici non provano l'appartenenza all'allenamento corrente.</p>
                             {[...groups].map(([draftName, entries]) => (
                                 <details key={draftName} className="settings-recovery-group">
                                     <summary>{draftName} — {entries.length} {entries.length === 1 ? 'copia' : 'copie'}</summary>
