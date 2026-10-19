@@ -45,12 +45,100 @@ describe.each(['input', 'textarea'] as const)('owner-scoped buffered %s recovery
         vi.restoreAllMocks();
     });
 
+
+    it('quarantines an unversioned old buffered draft after erasure without overwriting it', () => {
+        const key = recoveryKey(kind);
+        const owner = captureSession().owner;
+        const raw = 'Previously deleted health detail';
+        localStorage.setItem(key, raw);
+        localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '3');
+        const onChange = vi.fn();
+        const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+        const view = render(field(kind, onChange, 'current value'));
+        expect(editor().value).toBe('current value');
+        expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
+        expect(onChange).not.toHaveBeenCalled();
+        fireEvent.change(editor(), { target: { value: 'new edit' } });
+        fireEvent.blur(editor());
+        expect(onChange).not.toHaveBeenCalled();
+        expect(localStorage.getItem(key)).toBe(raw);
+        expect(consoleError).toHaveBeenCalled();
+        view.unmount();
+    });
+
+    it('writes a stamped epoch-bound record and never flushes a mounted stale editor', () => {
+        const key = recoveryKey(kind);
+        const owner = captureSession().owner;
+        const marker = `logbook:v2:${owner}:health-consent-generation`;
+        localStorage.setItem(marker, '3');
+        const onChange = vi.fn();
+        const view = render(field(kind, onChange));
+        fireEvent.change(editor(), { target: { value: 'private current edit' } });
+        const raw = localStorage.getItem(key);
+        expect(JSON.parse(raw!)).toMatchObject({
+            __logbookBufferedDraft: 1, owner,
+            name: `draft:buffered:${kind}:stable-draft`,
+            consentRevision: 3, value: 'private current edit',
+        });
+
+        localStorage.setItem(marker, '5');
+        expect(() => requiredUpdateRecoveryRegistry.captureAll()).toThrow(AggregateError);
+        fireEvent.blur(editor());
+        expect(onChange).not.toHaveBeenCalled();
+        expect(localStorage.getItem(key)).toBe(raw);
+        expect(useAppStore.getState().saveError).toMatch(/bozza/i);
+        view.unmount();
+    });
+
+    it('refuses automatic cleanup of a buffered record from a previous revision', () => {
+        const key = recoveryKey(kind);
+        const owner = captureSession().owner;
+        const marker = `logbook:v2:${owner}:health-consent-generation`;
+        localStorage.setItem(marker, '3');
+        const onChange = vi.fn();
+        const view = render(field(kind, onChange));
+        fireEvent.change(editor(), { target: { value: '30' } });
+        const raw = localStorage.getItem(key);
+        fireEvent.blur(editor());
+        expect(onChange).toHaveBeenCalledTimes(1);
+        localStorage.setItem(marker, '5');
+        const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+        view.rerender(field(kind, onChange, kind === 'input' ? '30' : '30'));
+        expect(localStorage.getItem(key)).toBe(raw);
+        expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
+        expect(consoleError).toHaveBeenCalled();
+        view.unmount();
+    });
+
+    it('preserves a stamped buffered draft with tampered owner metadata', () => {
+        const key = recoveryKey(kind);
+        const owner = captureSession().owner;
+        const marker = `logbook:v2:${owner}:health-consent-generation`;
+        localStorage.setItem(marker, '3');
+        const raw = JSON.stringify({
+            __logbookBufferedDraft: 1, owner: 'user:unrelated',
+            name: `draft:buffered:${kind}:stable-draft`,
+            consentRevision: 3, value: 'wrong owner secret',
+        });
+        localStorage.setItem(key, raw);
+        const onChange = vi.fn();
+        const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+        const view = render(field(kind, onChange));
+        expect(editor().value).toBe('');
+        expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
+        expect(localStorage.getItem(key)).toBe(raw);
+        expect(onChange).not.toHaveBeenCalled();
+        expect(consoleError).toHaveBeenCalled();
+        view.unmount();
+    });
+
     it('reads the recovery key at mount, not on unrelated rerenders', () => {
         const onChange = vi.fn();
         const key = recoveryKey(kind);
+        const previousReads = localStorageMock.getItem.mock.calls.filter(([readKey]) => readKey === key).length;
         const view = render(field(kind, onChange));
         const initialReads = localStorageMock.getItem.mock.calls.filter(([readKey]) => readKey === key).length;
-        expect(initialReads).toBe(1);
+        expect(initialReads - previousReads).toBe(1);
 
         // A transient failure *after* mount must not turn an unrelated React
         // rerender into another strict device-storage read or a global block.

@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
 import { draftRegistry } from '../../lib/utils/draftRegistry';
 import { captureSession, isCurrentSession } from '../../lib/sync/session';
-import { readDeviceValueStrict, writeDeviceValue } from '../../lib/sync/deviceStorage';
-import { BrowserStorageError } from '../../lib/sync/browserStorage';
+import { readBufferedDraft, writeBufferedDraft } from '../../lib/sync/bufferedDraftEpoch';
 import { requiredUpdateRecoveryRegistry } from '../../lib/sync/requiredUpdateRecovery';
 import { useAppStore } from '../../store/useAppStore';
 
@@ -21,7 +20,7 @@ function normalizeInputValue(value: string, type?: string, inputMode?: string) {
 
 function readRecoveryStrict(key: string | null, owner: string): string | null {
     if (!key) return null;
-    return readDeviceValueStrict(key, owner);
+    return readBufferedDraft(key, owner);
 }
 
 function blockBufferedPersistence(error: unknown): void {
@@ -87,7 +86,10 @@ export const BufferedInput = React.forwardRef<HTMLInputElement, BufferedInputPro
             if (!key) throw new Error('Bozza volatile senza identificativo stabile.');
             if (!session || !isCurrentSession(session)) throw new Error('Sessione cambiata prima del recupero della bozza.');
             const raw = String(latestLocalValue.current);
-            writeDeviceValue(key, raw, session.owner);
+            if (useAppStore.getState().localPersistenceBlocked) {
+                throw new Error('Persistenza delle bozze del workout bloccata.');
+            }
+            writeBufferedDraft(key, session.owner, raw, session.consentGeneration);
             recoveryValue.current = raw;
         }, []);
 
@@ -104,10 +106,11 @@ export const BufferedInput = React.forwardRef<HTMLInputElement, BufferedInputPro
                     try {
                         const session = editSession.current;
                         if (!session) throw new Error('Sessione iniziale della bozza non disponibile.');
-                        writeDeviceValue(recoveryKey.current, null, session.owner);
+                        if (!isCurrentSession(session)) throw new Error('Sessione cambiata prima della pulizia della bozza.');
+                        writeBufferedDraft(recoveryKey.current, session.owner, null, session.consentGeneration);
                         recoveryValue.current = null;
-                    } catch {
-                        useAppStore.getState().setSaveError('Dato salvato; impossibile rimuovere la copia di recupero locale.');
+                    } catch (error) {
+                        blockBufferedPersistence(error);
                     }
                 }
             }
@@ -121,7 +124,26 @@ export const BufferedInput = React.forwardRef<HTMLInputElement, BufferedInputPro
             if (isDirty.current) {
                 const session = editSession.current;
                 if (!session) throw new Error('Sessione della bozza non disponibile.');
-                if (!isCurrentSession(session)) { isDirty.current = false; return; }
+                if (!isCurrentSession(session)) {
+                    isDirty.current = false;
+                    // Switching identities must not update a new owner's UI. A
+                    // consent transition for the same owner, however, is a
+                    // blocked recovery requiring an explicit warning.
+                    const current = captureSession();
+                    if (current.owner === session.owner
+                        && current.consentGeneration !== session.consentGeneration) {
+                        throw new Error('Consenso modificato: bozza workout precedente conservata.');
+                    }
+                    return;
+                }
+                if (useAppStore.getState().localPersistenceBlocked) {
+                    throw new Error('Persistenza delle bozze del workout bloccata.');
+                }
+                if (recoveryKey.current) {
+                    // Before promoting an in-memory edit, verify the source copy
+                    // has not been invalidated or replaced by another tab.
+                    readBufferedDraft(recoveryKey.current, session.owner);
+                }
                 const finalVal = normalizeInputValue(
                     String(latestLocalValue.current),
                     typeRef.current,
@@ -139,7 +161,7 @@ export const BufferedInput = React.forwardRef<HTMLInputElement, BufferedInputPro
                 unregisterRecovery();
                 draftRegistry.unregister(flush);
                 try { flush(); }
-                catch { useAppStore.getState().setSaveError('Impossibile salvare una bozza prima di chiudere il campo.'); }
+                catch (error) { blockBufferedPersistence(error); }
             };
         }, [flush, persistRecovery]);
 
@@ -150,8 +172,15 @@ export const BufferedInput = React.forwardRef<HTMLInputElement, BufferedInputPro
             try {
                 persistRecovery();
             } catch (error) {
-                useAppStore.getState().setSaveError('Bozza non ancora protetta nello storage del dispositivo.');
-                if (error instanceof BrowserStorageError) blockBufferedPersistence(error);
+                if (!recoveryKey.current || !editSession.current || !isCurrentSession(editSession.current)) {
+                    // Inputs without a stable key have always flushed to their
+                    // parent on blur/unmount, but cannot guarantee PWA reload.
+                    // Preserve that UI contract; the required-update capture
+                    // still rejects an unsaved device draft with no key.
+                    useAppStore.getState().setSaveError('Bozza non ancora protetta nello storage del dispositivo.');
+                } else {
+                    blockBufferedPersistence(error);
+                }
             }
         };
 
@@ -162,14 +191,25 @@ export const BufferedInput = React.forwardRef<HTMLInputElement, BufferedInputPro
 
         const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
             isFocused.current = false;
-            flush();
-            if (onBlur) onBlur(e);
+            try {
+                flush();
+                if (!editSession.current || !isCurrentSession(editSession.current)) return;
+                if (onBlur) onBlur(e);
+            } catch (error) {
+                blockBufferedPersistence(error);
+            }
         };
 
         const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
             if (e.key === 'Enter') {
-                flush();
-                e.currentTarget.blur();
+                try {
+                    flush();
+                    if (!editSession.current || !isCurrentSession(editSession.current)) return;
+                    e.currentTarget.blur();
+                } catch (error) {
+                    blockBufferedPersistence(error);
+                    return;
+                }
             }
             if (onKeyDown) onKeyDown(e);
         };
@@ -228,7 +268,10 @@ export const BufferedTextarea = React.forwardRef<HTMLTextAreaElement, BufferedTe
             if (!key) throw new Error('Bozza volatile senza identificativo stabile.');
             if (!session || !isCurrentSession(session)) throw new Error('Sessione cambiata prima del recupero della bozza.');
             const raw = String(latestLocalValue.current);
-            writeDeviceValue(key, raw, session.owner);
+            if (useAppStore.getState().localPersistenceBlocked) {
+                throw new Error('Persistenza delle bozze del workout bloccata.');
+            }
+            writeBufferedDraft(key, session.owner, raw, session.consentGeneration);
             recoveryValue.current = raw;
         }, []);
 
@@ -238,10 +281,11 @@ export const BufferedTextarea = React.forwardRef<HTMLTextAreaElement, BufferedTe
                     try {
                         const session = editSession.current;
                         if (!session) throw new Error('Sessione iniziale della bozza non disponibile.');
-                        writeDeviceValue(recoveryKey.current, null, session.owner);
+                        if (!isCurrentSession(session)) throw new Error('Sessione cambiata prima della pulizia della bozza.');
+                        writeBufferedDraft(recoveryKey.current, session.owner, null, session.consentGeneration);
                         recoveryValue.current = null;
-                    } catch {
-                        useAppStore.getState().setSaveError('Dato salvato; impossibile rimuovere la copia di recupero locale.');
+                    } catch (error) {
+                        blockBufferedPersistence(error);
                     }
                 }
             }
@@ -255,7 +299,26 @@ export const BufferedTextarea = React.forwardRef<HTMLTextAreaElement, BufferedTe
             if (isDirty.current) {
                 const session = editSession.current;
                 if (!session) throw new Error('Sessione della bozza non disponibile.');
-                if (!isCurrentSession(session)) { isDirty.current = false; return; }
+                if (!isCurrentSession(session)) {
+                    isDirty.current = false;
+                    // Switching identities must not update a new owner's UI. A
+                    // consent transition for the same owner, however, is a
+                    // blocked recovery requiring an explicit warning.
+                    const current = captureSession();
+                    if (current.owner === session.owner
+                        && current.consentGeneration !== session.consentGeneration) {
+                        throw new Error('Consenso modificato: bozza workout precedente conservata.');
+                    }
+                    return;
+                }
+                if (useAppStore.getState().localPersistenceBlocked) {
+                    throw new Error('Persistenza delle bozze del workout bloccata.');
+                }
+                if (recoveryKey.current) {
+                    // Before promoting an in-memory edit, verify the source copy
+                    // has not been invalidated or replaced by another tab.
+                    readBufferedDraft(recoveryKey.current, session.owner);
+                }
                 onChangeRef.current(String(latestLocalValue.current));
                 isDirty.current = false;
             }
@@ -268,7 +331,7 @@ export const BufferedTextarea = React.forwardRef<HTMLTextAreaElement, BufferedTe
                 unregisterRecovery();
                 draftRegistry.unregister(flush);
                 try { flush(); }
-                catch { useAppStore.getState().setSaveError('Impossibile salvare una bozza prima di chiudere il campo.'); }
+                catch (error) { blockBufferedPersistence(error); }
             };
         }, [flush, persistRecovery]);
 
@@ -279,8 +342,15 @@ export const BufferedTextarea = React.forwardRef<HTMLTextAreaElement, BufferedTe
             try {
                 persistRecovery();
             } catch (error) {
-                useAppStore.getState().setSaveError('Bozza non ancora protetta nello storage del dispositivo.');
-                if (error instanceof BrowserStorageError) blockBufferedPersistence(error);
+                if (!recoveryKey.current || !editSession.current || !isCurrentSession(editSession.current)) {
+                    // Inputs without a stable key have always flushed to their
+                    // parent on blur/unmount, but cannot guarantee PWA reload.
+                    // Preserve that UI contract; the required-update capture
+                    // still rejects an unsaved device draft with no key.
+                    useAppStore.getState().setSaveError('Bozza non ancora protetta nello storage del dispositivo.');
+                } else {
+                    blockBufferedPersistence(error);
+                }
             }
         };
 
@@ -291,8 +361,13 @@ export const BufferedTextarea = React.forwardRef<HTMLTextAreaElement, BufferedTe
 
         const handleBlur = (e: React.FocusEvent<HTMLTextAreaElement>) => {
             isFocused.current = false;
-            flush();
-            if (onBlur) onBlur(e);
+            try {
+                flush();
+                if (!editSession.current || !isCurrentSession(editSession.current)) return;
+                if (onBlur) onBlur(e);
+            } catch (error) {
+                blockBufferedPersistence(error);
+            }
         };
 
         return (
