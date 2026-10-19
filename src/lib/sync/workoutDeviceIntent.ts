@@ -165,7 +165,7 @@ export function saveWorkoutDeviceIntent(
     // consent rebase. Its absence is supported only for legacy/test archives.
     const epochValue = readBrowserValueStrict(`logbook:v2:${owner}:health-consent-generation`);
     const epoch = epochValue === null ? undefined : Number(epochValue);
-    if (epochValue !== null && (!/^[1-9]\\d*$/.test(epochValue) || !Number.isSafeInteger(epoch))) {
+    if (epochValue !== null && (!/^[1-9]\d*$/.test(epochValue) || !Number.isSafeInteger(epoch))) {
         throw new Error('Generazione consenso workout non verificabile: dati preservati.');
     }
     const existing = readWorkoutDeviceIntent(owner);
