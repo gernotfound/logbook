@@ -9,8 +9,11 @@ const fixture = vi.hoisted(() => ({
     collectSnapshot: vi.fn(),
     exportBackup: vi.fn(),
     flush: vi.fn(async () => {}),
+    deviceWorkout: vi.fn(),
+    current: true,
     state: {
         userData: null as UserData | null,
+        localPersistenceBlocked: false,
         dataOwner: null as string | null,
         saveUserData: vi.fn(),
     },
@@ -18,12 +21,13 @@ const fixture = vi.hoisted(() => ({
 
 vi.mock('../src/lib/sync/session', () => ({
     captureSession: () => ({ owner: fixture.owner, epoch: 1 }),
-    isCurrentSession: () => true,
+    isCurrentSession: () => fixture.current,
 }));
 // In this screen a revoked/suspended consent permits a rights backup even
 // when regular authenticated hydration has not populated the Zustand view.
 vi.mock('../src/lib/healthConsent', () => ({ currentHealthConsentStatus: () => 'withdrawn' }));
 vi.mock('../src/lib/sync/localRepository', () => ({ readLocal: fixture.readLocal }));
+vi.mock('../src/lib/sync/deviceStorage', () => ({ readDeviceValueStrict: fixture.deviceWorkout }));
 vi.mock('../src/lib/db/backupSnapshot', () => ({ collectBackupSnapshot: fixture.collectSnapshot }));
 vi.mock('../src/store/useAppStore', () => {
     const useAppStore = Object.assign(
@@ -50,8 +54,86 @@ beforeEach(() => {
     vi.clearAllMocks();
     fixture.state.userData = null;
     fixture.state.dataOwner = null;
+    fixture.state.localPersistenceBlocked = false;
+    fixture.current = true;
+    fixture.deviceWorkout.mockReturnValue(null);
+    useDialogStore.getState().showConfirm = vi.fn(async () => true);
     fixture.readLocal.mockResolvedValue(undefined);
     fixture.exportBackup.mockResolvedValue(true);
+});
+
+describe('quarantined workout device backup', () => {
+    const historicalCopy = '{"id":"old-workout","date":"2026-10-14","exercises":[]}';
+
+    it('exports a device-only recovery copy while active consent blocks UI hydration', async () => {
+        fixture.state.localPersistenceBlocked = true;
+        fixture.deviceWorkout.mockReturnValue(historicalCopy);
+        const recovered = { workout: historicalCopy };
+        fixture.collectSnapshot.mockResolvedValueOnce({
+            owner: fixture.owner, data: empty(), coverage: { scope: 'device', months: [] },
+            recovery: { device: recovered },
+        });
+        const { result } = renderHook(() => useSettingsTransfers({ currentUser: owner, isGuest: false }));
+        await act(async () => { await result.current.handleExportBackup(); });
+
+        expect(useDialogStore.getState().showConfirm)
+            .toHaveBeenCalledWith(expect.stringContaining('SOLO il backup di questo dispositivo'));
+        expect(fixture.collectSnapshot).toHaveBeenCalledExactlyOnceWith(expect.anything(), false);
+        expect(fixture.flush).not.toHaveBeenCalled();
+        expect(fixture.exportBackup).toHaveBeenCalledWith(
+            expect.anything(), { uid: 'backup-uid' },
+            expect.objectContaining({ scope: 'device' }),
+            expect.objectContaining({ device: recovered }),
+        );
+        expect(fixture.deviceWorkout).toHaveBeenCalledWith('workout', fixture.owner);
+    });
+
+    it('refuses an empty backup when no durable archive or device workout exists', async () => {
+        fixture.state.localPersistenceBlocked = true;
+        const { result } = renderHook(() => useSettingsTransfers({ currentUser: owner, isGuest: false }));
+        await act(async () => { await result.current.handleExportBackup(); });
+        expect(useDialogStore.getState().showAlert)
+            .toHaveBeenCalledWith(expect.stringContaining('nessun archivio o allenamento leggibile'));
+        expect(useDialogStore.getState().showConfirm).not.toHaveBeenCalled();
+        expect(fixture.collectSnapshot).not.toHaveBeenCalled();
+        expect(fixture.exportBackup).not.toHaveBeenCalled();
+    });
+
+    it('preserves the existing local envelope and refuses export when the owner declines', async () => {
+        fixture.state.localPersistenceBlocked = true;
+        const data = empty();
+        fixture.readLocal.mockResolvedValue({ owner: fixture.owner, data, pending: [] });
+        vi.mocked(useDialogStore.getState().showConfirm).mockResolvedValueOnce(false);
+        const { result } = renderHook(() => useSettingsTransfers({ currentUser: owner, isGuest: false }));
+        await act(async () => { await result.current.handleExportBackup(); });
+        expect(fixture.collectSnapshot).not.toHaveBeenCalled();
+        expect(fixture.exportBackup).not.toHaveBeenCalled();
+        expect(fixture.flush).not.toHaveBeenCalled();
+    });
+
+    it('does not export a quarantined snapshot after the authenticated session changes', async () => {
+        fixture.state.localPersistenceBlocked = true;
+        fixture.deviceWorkout.mockReturnValue(historicalCopy);
+        vi.mocked(useDialogStore.getState().showConfirm).mockImplementationOnce(async () => {
+            fixture.current = false;
+            return true;
+        });
+        const { result } = renderHook(() => useSettingsTransfers({ currentUser: owner, isGuest: false }));
+        await act(async () => { await result.current.handleExportBackup(); });
+        expect(fixture.collectSnapshot).not.toHaveBeenCalled();
+        expect(fixture.exportBackup).not.toHaveBeenCalled();
+    });
+
+    it('does not silently skip an unreadable encrypted workout', async () => {
+        fixture.state.localPersistenceBlocked = true;
+        fixture.deviceWorkout.mockImplementationOnce(() => { throw new Error('Ciphertext non leggibile'); });
+        const { result } = renderHook(() => useSettingsTransfers({ currentUser: owner, isGuest: false }));
+        await act(async () => { await result.current.handleExportBackup(); });
+        expect(fixture.collectSnapshot).not.toHaveBeenCalled();
+        expect(fixture.exportBackup).not.toHaveBeenCalled();
+        expect(useDialogStore.getState().showAlert)
+            .toHaveBeenCalledWith('Ciphertext non leggibile');
+    });
 });
 
 describe('backup rights export with no local archive', () => {
