@@ -66,14 +66,17 @@ test('two real guest tabs preserve independent encrypted edits and expose both f
   await openRecoveryInspector(viewer);
   await expect(viewer.getByText('2 copie conservate in 1 campo.')).toBeVisible();
   await viewer.locator('.settings-recovery-group summary').first().click();
-  await expect(viewer.getByDisplayValue(a)).toBeVisible();
-  await expect(viewer.getByDisplayValue(b)).toBeVisible();
+  const displayedValues = viewer.locator('.settings-recovery-entry textarea[readonly]');
+  await expect(displayedValues).toHaveCount(2);
+  expect((await displayedValues.evaluateAll(elements =>
+    elements.map(element => (element as HTMLTextAreaElement).value)
+  )).sort()).toEqual([a, b].sort());
   expect(await viewer.evaluate((p) => Object.fromEntries(
     Object.entries(localStorage).filter(([key]) => key.startsWith(p))
   ), prefix)).toEqual(saved);
 
   await viewer.getByRole('button', { name: 'Nascondi copie' }).click();
-  await expect(viewer.getByDisplayValue(a)).toHaveCount(0);
+  await expect(displayedValues).toHaveCount(0);
   expect(await viewer.evaluate((p) => Object.fromEntries(
     Object.entries(localStorage).filter(([key]) => key.startsWith(p))
   ), prefix)).toEqual(saved);
