@@ -17,8 +17,30 @@ import { currentHealthConsentStatus, hasUnreconciledOfflineReaccept, readHealthC
 import { fetchWithdrawnCloudBackup } from './withdrawnBackupTransport';
 import { requireCompleteHistoryMonthDocument, requireCompleteNutritionMonthDocument } from '../sync/monthlyIntegrity';
 
-const RECOVERY_DEVICE_KEYS = new Set(['workout', 'timer', 'draft_exercise', 'draft_routine']);
-const isRecoveryDeviceKey = (name: string) => RECOVERY_DEVICE_KEYS.has(name) || name.startsWith('draft:');
+const RECOVERY_DEVICE_KEYS = new Set([
+    'workout', 'timer', 'draft_exercise', 'draft_routine', 'history-editor-context',
+]);
+const isRecoveryDeviceKey = (name: string) =>
+    RECOVERY_DEVICE_KEYS.has(name) || name.startsWith('draft:')
+    || /^workout-intent:[a-f0-9]{32}$/.test(name);
+
+// Private write-ahead witnesses and suspended editor context are included as
+// raw recovery evidence only. Import never replays them as a causal journal.
+function deviceRecoveryName(key: string | null, owner: string): string | null {
+    const prefix = 'logbook:v2:' + owner + ':';
+    if (!key?.startsWith(prefix)) return null;
+    const raw = key.slice(prefix.length);
+    const name = raw.startsWith('sealed:') ? raw.slice('sealed:'.length) : raw;
+    return isRecoveryDeviceKey(name) ? name : null;
+}
+
+export function hasDeviceRecoveryBackupSource(owner: string): boolean {
+    for (let index = 0; index < localStorage.length; index++) {
+        const name = deviceRecoveryName(localStorage.key(index), owner);
+        if (name !== null && readDeviceValueStrict(name, owner) !== null) return true;
+    }
+    return false;
+}
 
 export async function collectBackupSnapshot(fallback: UserData, includeCloud: boolean, consistencyAttempt = 0) {
     const session = captureSession();
@@ -148,19 +170,14 @@ export async function collectBackupSnapshot(fallback: UserData, includeCloud: bo
 
     if (!includeCloud) coverage.months = envelope?.completeMonths ?? [];
     const device: Record<string, string> = {};
-    const prefix = 'logbook:v2:' + session.owner + ':';
     for (let index = 0; index < localStorage.length; index++) {
-        const key = localStorage.key(index);
-        if (key?.startsWith(prefix)) {
-            const rawName = key.slice(prefix.length);
-            const name = rawName.startsWith('sealed:') ? rawName.slice('sealed:'.length) : rawName;
-            if (!isRecoveryDeviceKey(name)) continue;
-            // Recovery payloads contain plaintext only in the EXPLICIT backup.
-            // The archive itself remains sealed. A resurfaced old-tab legacy key
-            // must fail the read rather than disappear from the backup silently.
-            const value = readDeviceValueStrict(name, session.owner);
-            if (value !== null) device[name] = value;
-        }
+        const name = deviceRecoveryName(localStorage.key(index), session.owner);
+        if (name === null) continue;
+        // Recovery payloads contain plaintext only in the EXPLICIT backup.
+        // The archive itself remains sealed. A resurfaced old-tab legacy key
+        // must fail the read rather than disappear from the backup silently.
+        const value = readDeviceValueStrict(name, session.owner);
+        if (value !== null) device[name] = value;
     }
     assertCurrent();
     return { owner: session.owner, data: UserDataSchema.parse(mergedValue) as unknown as UserData, coverage,
