@@ -3,7 +3,7 @@ import { Logic } from '../../lib/logic';
 import { auth } from '../../lib/firebase';
 import { draftRegistry } from '../../lib/utils/draftRegistry';
 import { resetGlobalWorkoutTimer } from '../../lib/utils/timer';
-import { writeDeviceValue } from '../../lib/sync/deviceStorage';
+import { writeWorkoutRecoveryDraft } from '../../lib/sync/workoutRecoveryDraft';
 import { captureSession, isCurrentSession } from '../../lib/sync/session';
 import { isWorkoutClockAnomalyError, resetWorkoutClockGuard } from '../../lib/workoutClockGuard';
 import { applyWorkoutCompletionDraft, prepareCompletedWorkout, type WorkoutCompletionDraft } from './workoutSessionPreparation';
@@ -128,7 +128,7 @@ export function useWorkoutFinalization({
             // This draft belongs exclusively to the deleted session, not a new
             // workout. Failed best-effort cleanup must not undo a durable deletion.
             try {
-                writeDeviceValue('draft:post-session:' + deletedWorkoutId, null, expectedSession.owner);
+                writeWorkoutRecoveryDraft('draft:post-session:' + deletedWorkoutId, expectedSession.owner, null);
             } catch (error) {
                 console.warn('Impossibile pulire la bozza finale di una sessione eliminata:', error);
                 useAppStore.getState().setSaveError('Sessione eliminata, ma una copia locale della valutazione finale non è stata rimossa.');
