@@ -1,4 +1,5 @@
 import { DomainParsers } from '../schema';
+import { readBrowserValueStrict } from './browserStorage';
 import { equivalentWorkoutSnapshot } from './workoutSnapshotEquality';
 import type { WorkoutSession } from '../../types';
 import { requireHealthConsentWritable } from '../healthConsent';
@@ -17,6 +18,9 @@ export type WorkoutDeviceIntent = {
     owner: string;
     generation: string;
     sequence: number;
+    // A device-only edit must not be promoted after the server accepted a
+    // different consent epoch. Legacy intents did not include this witness.
+    consentRevision?: number;
     // Old device intents omit this; new writes identify individual edits even
     // if two browser tabs allocate the same sequence concurrently.
     intentId?: string;
@@ -51,6 +55,8 @@ function parseIntent(value: unknown, owner: string): WorkoutDeviceIntent | null 
         || typeof raw.generation !== 'string' || !tokenPattern.test(raw.generation)
         || typeof raw.sequence !== 'number' || !Number.isSafeInteger(raw.sequence)
         || raw.sequence < 1 || raw.sequence > MAX_SEQUENCE
+        || (raw.consentRevision !== undefined && (!Number.isSafeInteger(raw.consentRevision)
+            || raw.consentRevision < 1))
         || (raw.intentId !== undefined && (typeof raw.intentId !== 'string' || !tokenPattern.test(raw.intentId)))
         || (raw.parentIntentId !== undefined && (typeof raw.parentIntentId !== 'string' || !tokenPattern.test(raw.parentIntentId)))
         || (raw.ancestorIds !== undefined && (!Array.isArray(raw.ancestorIds) || raw.ancestorIds.length > 64
@@ -63,6 +69,7 @@ function parseIntent(value: unknown, owner: string): WorkoutDeviceIntent | null 
     const workout = validatedWorkout(raw.workout);
     const baseline = raw.baseline === null ? null : validatedWorkout(raw.baseline, false);
     return { __logbookWorkoutIntent: 1, owner, generation: raw.generation, sequence: raw.sequence,
+        ...(raw.consentRevision !== undefined ? { consentRevision: raw.consentRevision } : {}),
         ...(raw.intentId ? { intentId: raw.intentId } : {}),
         ...(raw.parentIntentId ? { parentIntentId: raw.parentIntentId } : {}),
         ...(raw.ancestorIds ? { ancestorIds: raw.ancestorIds } : {}), baseline, workout };
@@ -154,7 +161,18 @@ export function saveWorkoutDeviceIntent(
     workout: WorkoutSession,
     observedBase: WorkoutSession | null,
 ): WorkoutDeviceIntent {
+    // This durable, cross-tab epoch marker is published before any local
+    // consent rebase. Its absence is supported only for legacy/test archives.
+    const epochValue = readBrowserValueStrict(`logbook:v2:${owner}:health-consent-generation`);
+    const epoch = epochValue === null ? undefined : Number(epochValue);
+    if (epochValue !== null && (!/^[1-9]\d*$/.test(epochValue) || !Number.isSafeInteger(epoch))) {
+        throw new Error('Generazione consenso workout non verificabile: dati preservati.');
+    }
     const existing = readWorkoutDeviceIntent(owner);
+    if (existing && epoch !== undefined
+        && (existing.consentRevision ?? (epoch > 1 ? 0 : epoch)) !== epoch) {
+        throw new Error('Workout appartenente a un consenso precedente: copia dispositivo preservata.');
+    }
     if (!existing) {
         const raw = readDeviceValueStrict('workout', owner);
         if (raw !== null) {
@@ -174,6 +192,7 @@ export function saveWorkoutDeviceIntent(
     const intent: WorkoutDeviceIntent = {
         __logbookWorkoutIntent: 1, owner, generation,
         sequence: (existing?.sequence ?? 0) + 1,
+        ...(epoch !== undefined ? { consentRevision: epoch } : {}),
         intentId: token(),
         ...(existing?.intentId ? {
             parentIntentId: existing.intentId,
@@ -269,8 +288,17 @@ export async function recoverWorkoutDeviceIntent(owner: string, guard: LocalWrit
         if (equivalentWorkoutSnapshot(envelope.data.activeWorkout, intent.workout)) return;
         throw new Error('Recupero workout sospeso: lo stato locale è cambiato in un’altra scheda. La copia originale è preservata.');
     }
+    // An uncommitted synchronous edit was not part of the IndexedDB journal
+    // when consent advanced. Legacy untagged edits cannot prove provenance
+    // after revision 1; preserve them rather than silently replay them.
+    const activeRevision = envelope.consentRevision ?? 0;
+    if (intent.consentRevision !== undefined
+        ? intent.consentRevision !== activeRevision
+        : activeRevision > 1) {
+        throw new Error('Workout di una generazione di consenso non verificabile: copia di recupero preservata.');
+    }
     await commitDomainOperations(owner, { type: 'active-workout.set', workout: intent.workout }, envelope.data, guard,
-        { generation: intent.generation, sequence: intent.sequence, intentId: intent.intentId,
+        { generation: intent.generation, sequence: intent.sequence, consentRevision: intent.consentRevision, intentId: intent.intentId,
             parentIntentId: intent.parentIntentId, ancestorIds: intent.ancestorIds, baseline: intent.baseline });
     if (!guard()) throw new Error('Sessione cambiata durante il recupero del workout.');
     // Repair the shared snapshot if this tab crashed after writing its private
