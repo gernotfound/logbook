@@ -82,7 +82,7 @@ export function useTrainingExercises() {
                 secondaryMuscles,
                 isBodyweight,
                 equipmentWeight,
-            }, draftOwner);
+            }, draftOwner, draftSession.consentGeneration);
         } catch (error) {
             blockExerciseDraft(error);
         }
@@ -200,7 +200,7 @@ export function useTrainingExercises() {
         setEquipmentWeight('');
         try {
             assertCurrentDraft();
-            clearExerciseDraft(draftOwner);
+            clearExerciseDraft(draftOwner, draftSession.consentGeneration);
         } catch (error) {
             blockExerciseDraft(error);
         }
