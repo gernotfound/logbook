@@ -98,14 +98,14 @@ it('prevents a mounted old form from publishing stale health data after a cross-
     const original = JSON.stringify({ weight: '75' });
     localStorage.setItem(key, original);
     useAppStore.setState({ userData: data(), dataOwner: owner, localPersistenceBlocked: false });
-    const dispatch = vi.spyOn(useAppStore.getState(), 'dispatchDomainOperation');
+    const beforeData = useAppStore.getState().userData;
     const hook = renderHook(() => useNutritionMeasurements('2026-09-11'));
     expect(hook.result.current.weight).toBe('75');
 
     // No rerender yet: a stale UI event handler still holds the old field values.
     localStorage.setItem(marker, '3');
     await act(async () => { await hook.result.current.calculateAndSave(); });
-    expect(dispatch).not.toHaveBeenCalled();
+    expect(useAppStore.getState().userData).toEqual(beforeData);
     expect(localStorage.getItem(key)).toBe(original);
 
     hook.rerender();
