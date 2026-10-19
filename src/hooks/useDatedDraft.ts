@@ -14,7 +14,7 @@ function readDraft(name: string, owner: string): Record<string, string> | null {
     try {
         return readFencedDatedDraft(name, owner);
     } catch (error) {
-        if (error instanceof BrowserStorageError || error instanceof LocalVaultLockedError
+        if (error instanceof UnverifiedDatedDraftEpochError || error instanceof BrowserStorageError || error instanceof LocalVaultLockedError
             || error instanceof LocalPurgePendingError || error instanceof LocalCiphertextError) throw error;
         if (readVaultControl(owner)) throw error;
         console.warn('Bozza non leggibile, originale conservato:', error);
