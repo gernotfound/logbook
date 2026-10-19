@@ -34,6 +34,8 @@ test('two real guest tabs preserve independent encrypted edits and expose both f
   await expect(page.getByRole('button', { name: 'Termina allenamento' })).toBeVisible();
   await page.getByPlaceholder('Cerca esercizio per nome...').fill(exercise);
   await page.getByRole('option', { name: new RegExp(exercise) }).click();
+  await page.locator('.session-exercise-summary').click();
+  await expect(page.locator('.session-exercise-summary')).toHaveAttribute('aria-expanded', 'true');
   await page.getByRole('button', { name: 'Aggiungi nota per la prossima volta' }).click();
   const first = page.getByPlaceholder('Note per la prossima volta (dolori, feedback)...');
   await expect(first).toBeVisible();
@@ -42,6 +44,8 @@ test('two real guest tabs preserve independent encrypted edits and expose both f
   const second = await context.newPage();
   await second.goto('/?tab=training');
   await expect(second.getByRole('button', { name: 'Termina allenamento' })).toBeVisible();
+  await second.locator('.session-exercise-summary').click();
+  await expect(second.locator('.session-exercise-summary')).toHaveAttribute('aria-expanded', 'true');
   await second.getByRole('button', { name: 'Aggiungi nota per la prossima volta' }).click();
   const secondEditor = second.getByPlaceholder('Note per la prossima volta (dolori, feedback)...');
   await expect(secondEditor).toBeVisible();
