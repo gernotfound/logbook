@@ -278,6 +278,13 @@ export function useTrainingExercises() {
 
         try {
             assertCurrentDraft();
+        } catch (error) {
+            blockExerciseDraft(error);
+            void showAlert("Errore durante il salvataggio dell\x27esercizio.");
+            return false;
+        }
+
+        try {
             const savedExercise = editingExId
                 ? updatedLibrary.find(ex => ex.id === editingExId)
                 : updatedLibrary.find(ex => !library.some(current => current.id === ex.id));
@@ -285,8 +292,7 @@ export function useTrainingExercises() {
             await persistExercise({ type: 'exercise.upsert', exercise: savedExercise });
             handleCancelEdit(); // Reset form
             return true;
-        } catch (error) {
-            blockExerciseDraft(error);
+        } catch {
             void showAlert("Errore durante il salvataggio dell'esercizio.");
             return false;
         }
