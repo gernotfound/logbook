@@ -1,6 +1,6 @@
 import { MAX_ROUTINE_SEGMENTS, MAX_ROUTINE_SETS, previewRoutineSets } from '../lib/routineSessionLimits';
 import { dispatchDurableOperation } from '../lib/sync/dispatchDurableOperation';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
 import { Logic } from '../lib/logic';
@@ -41,12 +41,12 @@ export function useTrainingRoutines() {
     });
     const initialDraft = initialRecovery.draft;
     const localPersistenceBlocked = useAppStore(state => state.localPersistenceBlocked);
-    const assertCurrentDraft = () => {
+    const assertCurrentDraft = useCallback(() => {
         if (initialRecovery.error || localPersistenceBlocked || !isCurrentSession(draftSession)) {
             throw new Error('Sessione, consenso o bozza scheda non più verificabili.');
         }
         readWorkoutRecoveryDraft(ROUTINE_DRAFT_KEY, draftOwner);
-    };
+    }, [draftOwner, draftSession, initialRecovery.error, localPersistenceBlocked]);
     useEffect(() => {
         if (initialRecovery.error) blockRoutineDraft(initialRecovery.error);
     }, [initialRecovery.error]);
@@ -66,7 +66,7 @@ export function useTrainingRoutines() {
             blockRoutineDraft(error);
         }
     }, [routineName, routineExercises, editingRoutineId, draftOwner, draftSession,
-        initialRecovery.error, localPersistenceBlocked]);
+        initialRecovery.error, localPersistenceBlocked, assertCurrentDraft]);
 
     const clearRoutineDraft = () => {
         try {
