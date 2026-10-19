@@ -44,8 +44,10 @@ describe('authenticated device-intent replay into semantic journal', () => {
             .toThrow('generazione di consenso non verificabile');
         expect(() => persistPlainWorkoutSnapshot(null, account))
             .toThrow('generazione di consenso non verificabile');
+        // A captured token for a different active owner is rejected at the
+        // earlier session boundary; it cannot overwrite the fenced snapshot.
         expect(() => persistOwnerBoundWorkoutSnapshot(captureSessionForOwner(account), account, workout('75')))
-            .toThrow('generazione di consenso non verificabile');
+            .toThrow('Sessione cambiata');
         expect(() => saveWorkoutDeviceIntent(account, workout('65'), workout('75'), baseline.activeWorkout ?? null))
             .toThrow('generazione di consenso non verificabile');
 
