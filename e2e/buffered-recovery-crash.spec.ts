@@ -83,14 +83,12 @@ test('abrupt browser crash preserves an unacknowledged encrypted note and recove
   // on-disk profile; unlike context.newPage(), this works after browser death.
   const crashed = page.waitForEvent('crash', { timeout: 15_000 });
   const cdp = await original.newCDPSession(page);
-  try {
-    await cdp.send('Page.crash');
-  } catch {
-    // Closing the renderer can disconnect the command; the crash event is
-    // the independent oracle that this was not a graceful navigation.
-  }
+  // The command often never settles because the process answering it is
+  // gone. Observe the independent Playwright crash event instead; handle a
+  // possible rejection without awaiting the dead CDP target.
+  void cdp.send('Page.crash').catch(() => {});
   await crashed;
-  await original.close().catch(() => {});
+  if (original.browser()?.isConnected()) await original.close();
 
   recovered = await openIsolatedProfile(profile);
   await recovered.setOffline(true);
