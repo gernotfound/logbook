@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
 import { draftRegistry } from '../../lib/utils/draftRegistry';
 import { captureSession, isCurrentSession } from '../../lib/sync/session';
-import { readBufferedDraft, writeBufferedDraft } from '../../lib/sync/bufferedDraftEpoch';
+import { assertBufferedDraftUnchanged, readBufferedDraftSnapshot, writeBufferedDraft } from '../../lib/sync/bufferedDraftEpoch';
 import { requiredUpdateRecoveryRegistry } from '../../lib/sync/requiredUpdateRecovery';
 import { useAppStore } from '../../store/useAppStore';
 import { BufferedWorkoutScope } from './bufferedWorkoutScope';
@@ -30,9 +30,8 @@ function normalizeInputValue(value: string, type?: string, inputMode?: string) {
     return type === 'number' || inputMode === 'decimal' ? value.replace(',', '.') : value;
 }
 
-function readRecoveryStrict(key: string | null, owner: string): string | null {
-    if (!key) return null;
-    return readBufferedDraft(key, owner);
+function readRecoveryStrict(key: string | null, owner: string) {
+    return key ? readBufferedDraftSnapshot(key, owner) : { value: null, raw: null };
 }
 
 function blockBufferedPersistence(error: unknown): void {
@@ -49,6 +48,7 @@ type InitialBufferedRecovery = {
     session: ReturnType<typeof captureSession> | null;
     key: string | null;
     recovered: string | null;
+    observedRaw: string | null;
     error: unknown | null;
 };
 
@@ -60,9 +60,10 @@ function createInitialRecovery(
     const key = recoveryName(kind, id, workoutId);
     try {
         const session = captureSession();
-        return { session, key, recovered: readRecoveryStrict(key, session.owner), error: null };
+        const snapshot = readRecoveryStrict(key, session.owner);
+        return { session, key, recovered: snapshot.value, observedRaw: snapshot.raw, error: null };
     } catch (error) {
-        return { session: null, key, recovered: null, error };
+        return { session: null, key, recovered: null, observedRaw: null, error };
     }
 }
 
@@ -78,6 +79,7 @@ export const BufferedInput = React.forwardRef<HTMLInputElement, BufferedInputPro
         const isFocused = useRef(false);
         const latestLocalValue = useRef(initialValue);
         const recoveryValue = useRef<string | null>(initialRecovery.recovered);
+        const observedRaw = useRef<string | null>(initialRecovery.observedRaw);
 
         useEffect(() => {
             if (initialRecovery.error) blockBufferedPersistence(initialRecovery.error);
@@ -107,7 +109,9 @@ export const BufferedInput = React.forwardRef<HTMLInputElement, BufferedInputPro
             if (useAppStore.getState().localPersistenceBlocked) {
                 throw new Error('Persistenza delle bozze del workout bloccata.');
             }
-            writeBufferedDraft(key, session.owner, raw, session.consentGeneration);
+            observedRaw.current = writeBufferedDraft(
+                key, session.owner, raw, session.consentGeneration, observedRaw.current,
+            );
             recoveryValue.current = raw;
         }, [workoutId]);
 
@@ -127,7 +131,10 @@ export const BufferedInput = React.forwardRef<HTMLInputElement, BufferedInputPro
                         if (!isCurrentSession(session) || !isCurrentWorkoutScope(workoutId)) {
                             throw new Error('Sessione workout cambiata prima della pulizia della bozza.');
                         }
-                        writeBufferedDraft(recoveryKey.current, session.owner, null, session.consentGeneration);
+                        observedRaw.current = writeBufferedDraft(
+                            recoveryKey.current, session.owner, null,
+                            session.consentGeneration, observedRaw.current,
+                        );
                         recoveryValue.current = null;
                     } catch (error) {
                         blockBufferedPersistence(error);
@@ -168,7 +175,9 @@ export const BufferedInput = React.forwardRef<HTMLInputElement, BufferedInputPro
                 if (recoveryKey.current) {
                     // Before promoting an in-memory edit, verify the source copy
                     // has not been invalidated or replaced by another tab.
-                    readBufferedDraft(recoveryKey.current, session.owner);
+                    assertBufferedDraftUnchanged(
+                        recoveryKey.current, session.owner, observedRaw.current,
+                    );
                 }
                 const finalVal = normalizeInputValue(
                     String(latestLocalValue.current),
@@ -278,6 +287,7 @@ export const BufferedTextarea = React.forwardRef<HTMLTextAreaElement, BufferedTe
         const isFocused = useRef(false);
         const latestLocalValue = useRef(initialValue);
         const recoveryValue = useRef<string | null>(initialRecovery.recovered);
+        const observedRaw = useRef<string | null>(initialRecovery.observedRaw);
 
         useEffect(() => {
             if (initialRecovery.error) blockBufferedPersistence(initialRecovery.error);
@@ -303,7 +313,9 @@ export const BufferedTextarea = React.forwardRef<HTMLTextAreaElement, BufferedTe
             if (useAppStore.getState().localPersistenceBlocked) {
                 throw new Error('Persistenza delle bozze del workout bloccata.');
             }
-            writeBufferedDraft(key, session.owner, raw, session.consentGeneration);
+            observedRaw.current = writeBufferedDraft(
+                key, session.owner, raw, session.consentGeneration, observedRaw.current,
+            );
             recoveryValue.current = raw;
         }, [workoutId]);
 
@@ -316,7 +328,10 @@ export const BufferedTextarea = React.forwardRef<HTMLTextAreaElement, BufferedTe
                         if (!isCurrentSession(session) || !isCurrentWorkoutScope(workoutId)) {
                             throw new Error('Sessione workout cambiata prima della pulizia della bozza.');
                         }
-                        writeBufferedDraft(recoveryKey.current, session.owner, null, session.consentGeneration);
+                        observedRaw.current = writeBufferedDraft(
+                            recoveryKey.current, session.owner, null,
+                            session.consentGeneration, observedRaw.current,
+                        );
                         recoveryValue.current = null;
                     } catch (error) {
                         blockBufferedPersistence(error);
@@ -357,7 +372,9 @@ export const BufferedTextarea = React.forwardRef<HTMLTextAreaElement, BufferedTe
                 if (recoveryKey.current) {
                     // Before promoting an in-memory edit, verify the source copy
                     // has not been invalidated or replaced by another tab.
-                    readBufferedDraft(recoveryKey.current, session.owner);
+                    assertBufferedDraftUnchanged(
+                        recoveryKey.current, session.owner, observedRaw.current,
+                    );
                 }
                 onChangeRef.current(String(latestLocalValue.current));
                 isDirty.current = false;
