@@ -51,7 +51,7 @@ it('shows evidence only after explicit request and can hide it again', () => {
     expect(screen.queryByDisplayValue('Older sensitive note')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: /Esamina copie sul dispositivo/ }));
     expect(fixture.inspect).toHaveBeenCalledExactlyOnceWith('user:a');
-    expect(screen.getByText(/2 copie conservate in 1 campi/)).toBeTruthy();
+    expect(screen.getByText(/2 copie conservate in 1 campo/)).toBeTruthy();
     fireEvent.click(screen.getByText(/workout-1:notes — 2 copie/));
     expect(screen.getByDisplayValue('Older sensitive note')).toBeTruthy();
     expect(screen.getByDisplayValue('Newer sensitive note')).toBeTruthy();
