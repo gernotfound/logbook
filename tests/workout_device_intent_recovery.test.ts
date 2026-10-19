@@ -2,16 +2,17 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { update as idbUpdate } from 'idb-keyval';
 import { DomainParsers, UserDataSchema } from '../src/lib/schema';
 import { equivalentWorkoutSnapshot } from '../src/lib/sync/workoutSnapshotEquality';
-import { captureSession } from '../src/lib/sync/session';
+import { captureSession, captureSessionForOwner } from '../src/lib/sync/session';
 import { deviceKey, readDeviceValueStrict, writeDeviceValue } from '../src/lib/sync/deviceStorage';
 import { BrowserStorageError } from '../src/lib/sync/browserStorage';
 import { localStorageMock } from './setup';
 import { advanceLocalConsentRevisionIfClean, commitDomainOperations, initializeLocal, readLocal } from '../src/lib/sync/localRepository';
 import {
-    readWorkoutDeviceIntent, recoverWorkoutDeviceIntent, saveWorkoutDeviceIntent,
+    persistPlainWorkoutSnapshot, readWorkoutDeviceIntent, recoverWorkoutDeviceIntent, saveWorkoutDeviceIntent, unwrapWorkoutDeviceSnapshot,
 } from '../src/lib/sync/workoutDeviceIntent';
 import { getInitialLocalWorkout } from '../src/store/slices/createWorkoutSlice';
 import { persistOwnerBoundWorkoutSnapshot } from '../src/lib/sync/deviceCriticalState';
+import { assertHistoryEditorContextEpoch, HISTORY_EDITOR_CONTEXT } from '../src/hooks/workout/historyEditorContext';
 import type { UserData, WorkoutSession } from '../src/types';
 
 const workout = (kg: string): WorkoutSession => ({
@@ -23,6 +24,116 @@ const owner = 'user:test-user-id';
 
 describe('authenticated device-intent replay into semantic journal', () => {
     beforeEach(() => { vi.clearAllMocks(); });
+
+    it('fences a legacy plain workout after consent advances without altering its durable source', async () => {
+        const account = 'user:legacy-plain-' + crypto.randomUUID();
+        const epochKey = `logbook:v2:${account}:health-consent-generation`;
+        localStorage.setItem(epochKey, '1');
+        const baseline = data(workout('50'));
+        await initializeLocal(account, baseline);
+        const original = JSON.stringify(workout('65'));
+        writeDeviceValue('workout', original, account);
+        localStorage.setItem(epochKey, '3');
+        expect(await advanceLocalConsentRevisionIfClean(account, 3)).toBe(true);
+        const before = await readLocal(account);
+
+        await expect(recoverWorkoutDeviceIntent(account, () => true)).resolves.toBeUndefined();
+        expect(() => getInitialLocalWorkout(account, baseline.activeWorkout, baseline.history, undefined, undefined, 3))
+            .toThrow('generazione di consenso non verificabile');
+        expect(() => persistPlainWorkoutSnapshot(workout('75'), account))
+            .toThrow('generazione di consenso non verificabile');
+        expect(() => persistPlainWorkoutSnapshot(null, account))
+            .toThrow('generazione di consenso non verificabile');
+        // A captured token for a different active owner is rejected at the
+        // earlier session boundary; it cannot overwrite the fenced snapshot.
+        expect(() => persistOwnerBoundWorkoutSnapshot(captureSessionForOwner(account), account, workout('75')))
+            .toThrow('Sessione cambiata');
+        expect(() => saveWorkoutDeviceIntent(account, workout('65'), workout('75'), baseline.activeWorkout ?? null))
+            .toThrow('generazione di consenso non verificabile');
+
+        expect(readDeviceValueStrict('workout', account)).toBe(original);
+        expect(await readLocal(account)).toEqual(before);
+        expect((await readLocal(account))?.pending).toEqual([]);
+    });
+
+    it('preserves source-epoch metadata on a plain workout and refuses an old stamped copy', async () => {
+        const account = 'user:stamped-plain-' + crypto.randomUUID();
+        const epochKey = `logbook:v2:${account}:health-consent-generation`;
+        localStorage.setItem(epochKey, '1');
+        const initial = data(workout('50'));
+        await initializeLocal(account, initial);
+        persistPlainWorkoutSnapshot(workout('55'), account);
+        const stamped = readDeviceValueStrict('workout', account);
+        expect(unwrapWorkoutDeviceSnapshot(JSON.parse(stamped!), account).consentRevision).toBe(1);
+        localStorage.setItem(epochKey, '3');
+        expect(await advanceLocalConsentRevisionIfClean(account, 3)).toBe(true);
+        const before = await readLocal(account);
+
+        expect(() => getInitialLocalWorkout(account, initial.activeWorkout, initial.history, undefined, undefined, 3))
+            .toThrow('generazione di consenso precedente');
+        expect(() => persistPlainWorkoutSnapshot(null, account)).toThrow('generazione di consenso precedente');
+        expect(readDeviceValueStrict('workout', account)).toBe(stamped);
+        expect(await readLocal(account)).toEqual(before);
+    });
+
+    it('supports fresh plain workout drafts in the current epoch without losing the consent witness', async () => {
+        const account = 'user:fresh-plain-' + crypto.randomUUID();
+        localStorage.setItem(`logbook:v2:${account}:health-consent-generation`, '3');
+        const initial = data(workout('50'));
+        await initializeLocal(account, initial);
+        persistPlainWorkoutSnapshot(workout('55'), account);
+        const raw = readDeviceValueStrict('workout', account);
+        expect(unwrapWorkoutDeviceSnapshot(JSON.parse(raw!), account)).toMatchObject({
+            isIntent: false, consentRevision: 3, workout: workout('55'),
+        });
+        const hydrated = getInitialLocalWorkout(account, initial.activeWorkout, initial.history, undefined, undefined, 3);
+        expect(hydrated?.exercises[0].sets[0].kg).toBe('55');
+        const intent = saveWorkoutDeviceIntent(account, hydrated, workout('60'), initial.activeWorkout ?? null);
+        expect(intent.consentRevision).toBe(3);
+        await recoverWorkoutDeviceIntent(account, () => true);
+        expect((await readLocal(account))?.data.activeWorkout?.exercises[0].sets[0].kg).toBe('60');
+    });
+
+    it('rejects tampered plain workout metadata without overwriting or claiming a new consent', async () => {
+        const account = 'user:invalid-plain-' + crypto.randomUUID();
+        localStorage.setItem(`logbook:v2:${account}:health-consent-generation`, '3');
+        const original = JSON.stringify({
+            __logbookWorkoutSnapshot: 1, owner: 'user:someone-else',
+            consentRevision: 3, workout: workout('80'),
+        });
+        writeDeviceValue('workout', original, account);
+        expect(() => getInitialLocalWorkout(account, null, [], undefined, undefined, 3))
+            .toThrow('Metadati dello snapshot workout non validi');
+        expect(() => persistPlainWorkoutSnapshot(workout('90'), account))
+            .toThrow('Metadati dello snapshot workout non validi');
+        expect(readDeviceValueStrict('workout', account)).toBe(original);
+    });
+
+    it('preserves a suspended historical-editor workout of unknown source epoch', async () => {
+        const account = 'user:history-epoch-' + crypto.randomUUID();
+        const epochKey = `logbook:v2:${account}:health-consent-generation`;
+        localStorage.setItem(epochKey, '1');
+        const initial = data(workout('50'));
+        await initializeLocal(account, initial);
+        const source = JSON.stringify({
+            version: 1, editorId: 'historical-edit', suspended: workout('75'),
+        });
+        writeDeviceValue(HISTORY_EDITOR_CONTEXT, source, account);
+        localStorage.setItem(epochKey, '3');
+        expect(await advanceLocalConsentRevisionIfClean(account, 3)).toBe(true);
+        const before = await readLocal(account);
+
+        expect(() => assertHistoryEditorContextEpoch(source, account, before?.consentRevision))
+            .toThrow('generazione di consenso non verificabile');
+        expect(readDeviceValueStrict(HISTORY_EDITOR_CONTEXT, account)).toBe(source);
+        expect(await readLocal(account)).toEqual(before);
+        const stamped = JSON.stringify({
+            version: 1, editorId: 'fresh-edit', suspended: workout('80'), consentRevision: 3,
+        });
+        expect(() => assertHistoryEditorContextEpoch(stamped, account, 3)).not.toThrow();
+        expect(() => assertHistoryEditorContextEpoch(stamped, account, 1))
+            .toThrow('Generazione consenso locale incoerente');
+    });
 
     it('never turns a pre-revocation device-only edit into a new-consent cloud journal', async () => {
         const account = 'user:old-device-epoch-' + crypto.randomUUID();

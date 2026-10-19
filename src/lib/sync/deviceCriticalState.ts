@@ -1,7 +1,6 @@
 import type { WorkoutSession } from '../../types';
-import { writeDeviceValue } from './deviceStorage';
+import { persistPlainWorkoutSnapshot, readWorkoutDeviceIntent } from './workoutDeviceIntent';
 import { captureSession, isCurrentSession } from './session';
-import { readWorkoutDeviceIntent } from './workoutDeviceIntent';
 import { equivalentWorkoutSnapshot } from './workoutSnapshotEquality';
 
 type SessionSnapshot = ReturnType<typeof captureSession>;
@@ -31,11 +30,7 @@ export function persistOwnerBoundWorkoutSnapshot(
             return;
         }
     }
-    writeDeviceValue(
-        'workout',
-        localWorkout ? JSON.stringify(localWorkout) : null,
-        session.owner,
-    );
+    persistPlainWorkoutSnapshot(localWorkout, session.owner);
 
     if (!isCurrentSession(session)) throw new Error('Sessione cambiata durante il salvataggio del workout.');
 }

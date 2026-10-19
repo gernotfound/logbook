@@ -1,5 +1,6 @@
 import { DomainParsers } from '../schema';
 import { readBrowserValueStrict } from './browserStorage';
+import { storageOwner } from './session';
 import { equivalentWorkoutSnapshot } from './workoutSnapshotEquality';
 import type { WorkoutSession } from '../../types';
 import { requireHealthConsentWritable } from '../healthConsent';
@@ -12,6 +13,43 @@ const MAX_SEQUENCE = Number.MAX_SAFE_INTEGER - 1;
 const tokenPattern = /^[a-f0-9]{32}$/;
 const SLOT_PREFIX = 'workout-intent:';
 const slotName = (id: string) => SLOT_PREFIX + id;
+
+type PlainWorkoutSnapshot = {
+    __logbookWorkoutSnapshot: 1;
+    owner: string;
+    consentRevision: number;
+    workout: WorkoutSession;
+};
+
+export const readDeviceConsentRevision = (owner: string): number | undefined => {
+    if (!owner.startsWith('user:')) return undefined;
+    const saved = readBrowserValueStrict(`logbook:v2:${owner}:health-consent-generation`);
+    if (saved === null) return undefined;
+    const revision = Number(saved);
+    if (!/^[1-9]\d*$/.test(saved) || !Number.isSafeInteger(revision)) {
+        throw new Error('Generazione consenso workout non verificabile: copia preservata.');
+    }
+    return revision;
+};
+
+/** An old plain snapshot is not evidence of its source epoch after reacceptance. */
+export function assertWorkoutSnapshotEpoch(
+    owner: string, sourceRevision?: number, envelopeRevision?: number,
+): void {
+    if (!owner.startsWith('user:')) return;
+    const current = readDeviceConsentRevision(owner);
+    if (envelopeRevision !== undefined && current !== undefined && envelopeRevision !== current) {
+        throw new Error('Generazione consenso locale incoerente: workout preservato.');
+    }
+    if (sourceRevision === undefined) {
+        if ((current ?? envelopeRevision ?? 0) > 1) {
+            throw new Error('Workout di una generazione di consenso non verificabile: copia preservata.');
+        }
+    } else if (sourceRevision !== current || (envelopeRevision !== undefined && sourceRevision !== envelopeRevision)) {
+        throw new Error('Workout appartenente a una generazione di consenso precedente: copia preservata.');
+    }
+}
+
 
 export type WorkoutDeviceIntent = {
     __logbookWorkoutIntent: 1;
@@ -150,9 +188,42 @@ export function readWorkoutDeviceIntent(owner: string): WorkoutDeviceIntent | nu
     return parseIntent(value, owner);
 }
 
-export function unwrapWorkoutDeviceSnapshot(value: unknown, owner: string): { workout: unknown; isIntent: boolean } {
+export function unwrapWorkoutDeviceSnapshot(value: unknown, owner: string): {
+    workout: unknown; isIntent: boolean; consentRevision?: number;
+} {
     const intent = parseIntent(value, owner);
-    return intent ? { workout: intent.workout, isIntent: true } : { workout: value, isIntent: false };
+    if (intent) return { workout: intent.workout, isIntent: true, consentRevision: intent.consentRevision };
+    if (value && typeof value === 'object' && !Array.isArray(value)
+        && Object.hasOwn(value, '__logbookWorkoutSnapshot')) {
+        const record = value as Partial<PlainWorkoutSnapshot>;
+        if (record.__logbookWorkoutSnapshot !== 1 || record.owner !== owner
+            || !Number.isSafeInteger(record.consentRevision) || (record.consentRevision ?? 0) < 1) {
+            throw new Error('Metadati dello snapshot workout non validi: copia preservata.');
+        }
+        return { workout: record.workout, isIntent: false, consentRevision: record.consentRevision };
+    }
+    return { workout: value, isIntent: false };
+}
+
+/** A single device record carries both workout and origin epoch; no two-key torn witness. */
+export function persistPlainWorkoutSnapshot(workout: WorkoutSession | null, owner = storageOwner()): void {
+    const current = readDeviceConsentRevision(owner);
+    if (owner.startsWith('user:')) {
+        const old = readDeviceValueStrict('workout', owner);
+        if (old !== null) {
+            let value: unknown;
+            try { value = JSON.parse(old); }
+            catch { throw new Error('Snapshot workout esistente corrotto: copia preservata.'); }
+            const source = unwrapWorkoutDeviceSnapshot(value, owner);
+            assertWorkoutSnapshotEpoch(owner, source.consentRevision);
+        }
+    }
+    const value = workout === null ? null : current === undefined
+        ? JSON.stringify(workout)
+        : JSON.stringify({
+            __logbookWorkoutSnapshot: 1, owner, consentRevision: current, workout,
+        } satisfies PlainWorkoutSnapshot);
+    writeDeviceValue('workout', value, owner);
 }
 
 export function saveWorkoutDeviceIntent(
@@ -163,11 +234,7 @@ export function saveWorkoutDeviceIntent(
 ): WorkoutDeviceIntent {
     // This durable, cross-tab epoch marker is published before any local
     // consent rebase. Its absence is supported only for legacy/test archives.
-    const epochValue = readBrowserValueStrict(`logbook:v2:${owner}:health-consent-generation`);
-    const epoch = epochValue === null ? undefined : Number(epochValue);
-    if (epochValue !== null && (!/^[1-9]\d*$/.test(epochValue) || !Number.isSafeInteger(epoch))) {
-        throw new Error('Generazione consenso workout non verificabile: dati preservati.');
-    }
+    const epoch = readDeviceConsentRevision(owner);
     const existing = readWorkoutDeviceIntent(owner);
     if (existing && epoch !== undefined
         && (existing.consentRevision ?? (epoch > 1 ? 0 : epoch)) !== epoch) {
@@ -176,8 +243,10 @@ export function saveWorkoutDeviceIntent(
     if (!existing) {
         const raw = readDeviceValueStrict('workout', owner);
         if (raw !== null) {
-            const legacy = validatedWorkout(JSON.parse(raw) as unknown, false);
-            if (!equivalentWorkoutSnapshot(legacy, previous)) {
+            const source = unwrapWorkoutDeviceSnapshot(JSON.parse(raw) as unknown, owner);
+            assertWorkoutSnapshotEpoch(owner, source.consentRevision);
+            const previousSnapshot = validatedWorkout(source.workout, false);
+            if (!equivalentWorkoutSnapshot(previousSnapshot, previous)) {
                 throw new Error('Snapshot workout cambiato da un’altra scheda: dati preservati.');
             }
         }

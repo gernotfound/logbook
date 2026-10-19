@@ -9,7 +9,7 @@ import { currentHealthConsentStatus, getGuestHealthConsentStatus } from '../heal
 import { readBrowserValueStrict } from './browserStorage';
 import { persistOwnerBoundWorkoutSnapshot } from './deviceCriticalState';
 import { readDeviceValueStrict } from './deviceStorage';
-import { readWorkoutDeviceIntent } from './workoutDeviceIntent';
+import { readWorkoutDeviceIntent, unwrapWorkoutDeviceSnapshot } from './workoutDeviceIntent';
 import { equivalentWorkoutSnapshot } from './workoutSnapshotEquality';
 import type { WorkoutSession } from '../../types';
 import { UserDataSchema } from '../schema';
@@ -116,8 +116,11 @@ export async function prepareForReload(options: ReloadOptions = {}) {
         const intent = session.owner.startsWith('user:')
             ? readWorkoutDeviceIntent(session.owner)
             : null;
+        // This read is diagnostic during suspension, not an authorization to
+        // replay the saved snapshot into the newly accepted consent epoch.
         const durableWorkout: WorkoutSession | null = intent?.workout
-            ?? (stored === null ? null : JSON.parse(stored) as WorkoutSession);
+            ?? (stored === null ? null
+                : unwrapWorkoutDeviceSnapshot(JSON.parse(stored) as unknown, session.owner).workout as WorkoutSession);
         if (state.localWorkout && !equivalentWorkoutSnapshot(state.localWorkout, durableWorkout)
             && options.discardUnverifiedInMemoryData !== true) {
             throw new UnverifiedTabSnapshotError();
