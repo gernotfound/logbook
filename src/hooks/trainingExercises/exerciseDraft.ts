@@ -1,7 +1,5 @@
 import type { MuscleDef } from '../../lib/constants/muscles';
-import { readDeviceValue, writeDeviceValue } from '../../lib/sync/deviceStorage';
-import { LocalCiphertextError } from '../../lib/sync/secureArchiveCipher';
-import { readVaultControl } from '../../lib/sync/secureArchiveSession';
+import { readWorkoutRecoveryDraft, writeWorkoutRecoveryDraft } from '../../lib/sync/workoutRecoveryDraft';
 import { storageOwner } from '../../lib/sync/session';
 
 const EXERCISE_DRAFT_KEY = 'draft_exercise';
@@ -18,19 +16,13 @@ export interface ExerciseDraft {
     equipmentWeight: string;
 }
 
-export function readExerciseDraft(owner?: string): Record<string, any> | null {
-    const raw = readDeviceValue(EXERCISE_DRAFT_KEY, owner);
-    if (!raw) return null;
-
-    try {
-        return JSON.parse(raw);
-    } catch {
-        if (readVaultControl(owner ?? storageOwner())) throw new LocalCiphertextError();
-        return null;
-    }
+export function readExerciseDraft(owner = storageOwner()): Record<string, any> | null {
+    // The recovery payload cannot be promoted to a new consent generation merely
+    // because its owner-scoped ciphertext is still readable.
+    return readWorkoutRecoveryDraft(EXERCISE_DRAFT_KEY, owner) as Record<string, any> | null;
 }
 
-export function persistExerciseDraft(draft: ExerciseDraft, owner?: string): void {
+export function persistExerciseDraft(draft: ExerciseDraft, owner = storageOwner()): void {
     const hasContent = Boolean(
         draft.name.trim() ||
         draft.notes.trim() ||
@@ -40,25 +32,11 @@ export function persistExerciseDraft(draft: ExerciseDraft, owner?: string): void
         draft.equipmentWeight
     );
 
-    if (hasContent) {
-        try {
-            writeDeviceValue(EXERCISE_DRAFT_KEY, JSON.stringify(draft), owner);
-        } catch (error) {
-            console.warn('Quota exceeded or error saving draft', error);
-        }
-    } else {
-        try {
-            writeDeviceValue(EXERCISE_DRAFT_KEY, null, owner);
-        } catch {
-            // Draft cleanup is best-effort.
-        }
-    }
+    // Propagate persistence failures: swallowing them would permit a user to
+    // commit memory-only or obsolete draft values as new business data.
+    writeWorkoutRecoveryDraft(EXERCISE_DRAFT_KEY, owner, hasContent ? draft : null);
 }
 
-export function clearExerciseDraft(owner?: string): void {
-    try {
-        writeDeviceValue(EXERCISE_DRAFT_KEY, null, owner);
-    } catch {
-        // Draft cleanup is best-effort.
-    }
+export function clearExerciseDraft(owner = storageOwner()): void {
+    writeWorkoutRecoveryDraft(EXERCISE_DRAFT_KEY, owner, null);
 }
