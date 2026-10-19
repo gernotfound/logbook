@@ -12,6 +12,7 @@ import {
 } from '../src/lib/sync/workoutDeviceIntent';
 import { getInitialLocalWorkout } from '../src/store/slices/createWorkoutSlice';
 import { persistOwnerBoundWorkoutSnapshot } from '../src/lib/sync/deviceCriticalState';
+import { assertHistoryEditorContextEpoch, HISTORY_EDITOR_CONTEXT } from '../src/hooks/workout/historyEditorContext';
 import type { UserData, WorkoutSession } from '../src/types';
 
 const workout = (kg: string): WorkoutSession => ({
@@ -104,6 +105,32 @@ describe('authenticated device-intent replay into semantic journal', () => {
         expect(() => persistPlainWorkoutSnapshot(workout('90'), account))
             .toThrow('Metadati dello snapshot workout non validi');
         expect(readDeviceValueStrict('workout', account)).toBe(original);
+    });
+
+    it('preserves a suspended historical-editor workout of unknown source epoch', async () => {
+        const account = 'user:history-epoch-' + crypto.randomUUID();
+        const epochKey = `logbook:v2:${account}:health-consent-generation`;
+        localStorage.setItem(epochKey, '1');
+        const initial = data(workout('50'));
+        await initializeLocal(account, initial);
+        const source = JSON.stringify({
+            version: 1, editorId: 'historical-edit', suspended: workout('75'),
+        });
+        writeDeviceValue(HISTORY_EDITOR_CONTEXT, source, account);
+        localStorage.setItem(epochKey, '3');
+        expect(await advanceLocalConsentRevisionIfClean(account, 3)).toBe(true);
+        const before = await readLocal(account);
+
+        expect(() => assertHistoryEditorContextEpoch(source, account, before?.consentRevision))
+            .toThrow('generazione di consenso non verificabile');
+        expect(readDeviceValueStrict(HISTORY_EDITOR_CONTEXT, account)).toBe(source);
+        expect(await readLocal(account)).toEqual(before);
+        const stamped = JSON.stringify({
+            version: 1, editorId: 'fresh-edit', suspended: workout('80'), consentRevision: 3,
+        });
+        expect(() => assertHistoryEditorContextEpoch(stamped, account, 3)).not.toThrow();
+        expect(() => assertHistoryEditorContextEpoch(stamped, account, 1))
+            .toThrow('Generazione consenso locale incoerente');
     });
 
     it('never turns a pre-revocation device-only edit into a new-consent cloud journal', async () => {
