@@ -12,6 +12,7 @@ import { useWorkoutSetMutations } from '../src/hooks/workout/useWorkoutSetMutati
 import { captureSession } from '../src/lib/sync/session';
 import { getInitialLocalWorkout } from '../src/store/slices/createWorkoutSlice';
 import { readWorkoutTimerSnapshot } from '../src/lib/utils/timer';
+import { readWorkoutRecoveryDraft, writeWorkoutRecoveryDraft } from '../src/lib/sync/workoutRecoveryDraft';
 import PreSessionCheckIn from '../src/components/Training/PreSessionCheckIn';
 import TrainingSession from '../src/components/Training/TrainingSession';
 import WorkoutTimer from '../src/components/Training/WorkoutTimer';
@@ -63,6 +64,87 @@ describe('Workout lifecycle durable recovery regressions', () => {
             expect(localStorage.getItem(key)).toBe('{bad-json');
         }
         expect(screen.getByRole('button', { name: 'Avvia recupero' }).hasAttribute('disabled')).toBe(true);
+    });
+
+    it('quarantines legacy readiness of an erased consent epoch without beginning a new workout', async () => {
+        const marker = `logbook:v2:${owner}:health-consent-generation`;
+        const key = deviceKey('draft:pre-session:old-checkin', owner);
+        const original = '{"energy":4,"stress":2}';
+        localStorage.setItem(key, original);
+        localStorage.setItem(marker, '3');
+        const onStart = vi.fn(async () => true);
+        render(<PreSessionCheckIn workoutId="old-checkin" onStart={onStart} onCancel={vi.fn(async () => true)} />);
+        await waitFor(() => expect(useAppStore.getState().localPersistenceBlocked).toBe(true));
+        expect(screen.getByRole('button', { name: 'Energia: 4 su 5' }).getAttribute('aria-pressed')).toBe('false');
+        fireEvent.click(screen.getByRole('button', { name: 'Salta check-in e inizia' }));
+        await waitFor(() => expect(onStart).not.toHaveBeenCalled());
+        expect(readDeviceValueStrict('draft:pre-session:old-checkin', owner)).toBe(original);
+    });
+
+    it('stamps current readiness and refuses a stale mounted form after another tab advances consent', async () => {
+        const marker = `logbook:v2:${owner}:health-consent-generation`;
+        const name = 'draft:pre-session:live-checkin';
+        localStorage.setItem(marker, '3');
+        const onStart = vi.fn(async () => true);
+        render(<PreSessionCheckIn workoutId="live-checkin" onStart={onStart} onCancel={vi.fn(async () => true)} />);
+        fireEvent.click(screen.getByRole('button', { name: 'Energia: 4 su 5' }));
+        const raw = readDeviceValueStrict(name, owner);
+        expect(JSON.parse(raw!)).toMatchObject({
+            __logbookWorkoutRecoveryDraft: 1, owner, name, consentRevision: 3, data: { energy: 4 },
+        });
+        localStorage.setItem(marker, '5');
+        fireEvent.click(screen.getByRole('button', { name: 'Salta check-in e inizia' }));
+        await waitFor(() => expect(useAppStore.getState().localPersistenceBlocked).toBe(true));
+        expect(onStart).not.toHaveBeenCalled();
+        expect(readDeviceValueStrict(name, owner)).toBe(raw);
+    });
+
+    it('does not resurrect a legacy final workout rating after consent revocation and reacceptance', async () => {
+        const current = workout('old-final-rating', true);
+        const name = 'draft:post-session:' + current.id;
+        const original = JSON.stringify({ pendingEndTime: 1500, draft: {
+            workoutId: current.id, mood: '5', pump: '', fatigue: '', water: '', pains: [],
+        } });
+        writeDeviceValue(name, original, owner);
+        localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '3');
+        useAppStore.setState({ userData: userData({ activeWorkout: current }), localWorkout: current });
+        render(<TrainingSession />);
+        await waitFor(() => expect(useAppStore.getState().localPersistenceBlocked).toBe(true));
+        expect(readDeviceValueStrict(name, owner)).toBe(original);
+        expect(() => writeWorkoutRecoveryDraft(name, owner, null)).toThrow('generazione di consenso');
+        expect(readDeviceValueStrict(name, owner)).toBe(original);
+    });
+
+    it('preserves the source consent epoch of the current final rating against stale mounted edits', async () => {
+        const current = workout('fresh-final-rating', true);
+        const name = 'draft:post-session:' + current.id;
+        const marker = `logbook:v2:${owner}:health-consent-generation`;
+        localStorage.setItem(marker, '3');
+        useAppStore.setState({ userData: userData({ activeWorkout: current }), localWorkout: current });
+        render(<TrainingSession />);
+        fireEvent.click(screen.getByRole('button', { name: 'Termina allenamento' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Umore: 5 su 5' }));
+        const raw = readDeviceValueStrict(name, owner);
+        expect(JSON.parse(raw!)).toMatchObject({
+            __logbookWorkoutRecoveryDraft: 1, owner, name, consentRevision: 3,
+            data: { draft: { mood: '5', workoutId: current.id } },
+        });
+        localStorage.setItem(marker, '5');
+        fireEvent.click(screen.getByRole('button', { name: 'Umore: 4 su 5' }));
+        expect(readDeviceValueStrict(name, owner)).toBe(raw);
+    });
+
+    it('keeps corrupted owner metadata in an old workout draft rather than overwriting it', () => {
+        const name = 'draft:pre-session:tampered';
+        const raw = JSON.stringify({
+            __logbookWorkoutRecoveryDraft: 1, owner: 'user:other',
+            name, consentRevision: 3, data: { energy: 2 },
+        });
+        localStorage.setItem(deviceKey(name, owner), raw);
+        localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '3');
+        expect(() => readWorkoutRecoveryDraft(name, owner)).toThrow('Metadati');
+        expect(() => writeWorkoutRecoveryDraft(name, owner, { energy: 5 })).toThrow('Metadati');
+        expect(readDeviceValueStrict(name, owner)).toBe(raw);
     });
 
     it('keeps readiness UI and durable draft unchanged when a write fails', () => {
