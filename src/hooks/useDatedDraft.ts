@@ -55,15 +55,17 @@ export function useDatedDraft<T extends Record<string, string>>(kind: string, da
             if (!(error instanceof UnverifiedDatedDraftEpochError)) throw error;
             return { stored: null, provenanceError: error };
         }
-    }, [key, name, owner]);
-    useEffect(() => {
-        if (!provenanceError) return;
+    }, [key, name, owner, session?.consentGeneration, session?.consentMarker]);
+    const blockProvenance = (error: UnverifiedDatedDraftEpochError) => {
         useAppStore.setState({
             localPersistenceBlocked: true,
             syncHealth: 'failed',
             syncPresentation: 'normal',
-            saveError: provenanceError.message,
+            saveError: error.message,
         });
+    };
+    useEffect(() => {
+        if (provenanceError) blockProvenance(provenanceError);
     }, [provenanceError]);
     const loaded = mergeDraft(source, stored);
     const [edited, setEdited] = useState<{ key: string; values: T | null } | null>(null);
@@ -80,16 +82,33 @@ export function useDatedDraft<T extends Record<string, string>>(kind: string, da
         };
     });
 
+    const verifyCurrentDraft = () => {
+        if (provenanceError) {
+            blockProvenance(provenanceError);
+            throw provenanceError;
+        }
+        if (!session || !key || !isCurrentSession(session) || current.current.key !== key) {
+            throw new Error('Sessione cambiata prima della verifica della bozza.');
+        }
+        try {
+            readFencedDatedDraft(name, session.owner);
+        } catch (error) {
+            if (error instanceof UnverifiedDatedDraftEpochError) blockProvenance(error);
+            throw error;
+        }
+    };
+
     const persist = (draftName: string, draftOwner: string, value: T) => {
         try { writeFencedDatedDraft(draftName, draftOwner, value); }
         catch (error) {
-            useAppStore.getState().setSaveError('Bozza conservata solo in memoria: archivio del dispositivo non disponibile.');
+            if (error instanceof UnverifiedDatedDraftEpochError) blockProvenance(error);
+            else useAppStore.getState().setSaveError('Bozza conservata solo in memoria: archivio del dispositivo non disponibile.');
             throw error;
         }
     };
 
     const setField = <K extends keyof T>(field: K, value: T[K]) => {
-        if (provenanceError || !session || !key || !isCurrentSession(session) || current.current.key !== key) return;
+        try { verifyCurrentDraft(); } catch { return; }
         const next = { ...current.current.values, [field]: value };
         current.current = { key, name, values: next, dirty: true, session };
         setEdited({ key, values: next });
@@ -97,7 +116,7 @@ export function useDatedDraft<T extends Record<string, string>>(kind: string, da
     };
 
     const clear = (expected?: T) => {
-        if (provenanceError) throw provenanceError;
+        verifyCurrentDraft();
         if (!session || !key || !isCurrentSession(session) || current.current.key !== key
             || (expected && JSON.stringify(expected) !== JSON.stringify(current.current.values))) return false;
         try { writeFencedDatedDraft(name, session.owner, null); }
@@ -127,5 +146,5 @@ export function useDatedDraft<T extends Record<string, string>>(kind: string, da
         };
     }, []);
 
-    return { values, setField, clear };
+    return { values, setField, clear, verifyCurrentDraft };
 }
