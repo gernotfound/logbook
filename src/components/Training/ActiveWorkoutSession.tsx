@@ -6,6 +6,7 @@ import { Logic } from '../../lib/logic';
 import SessionHeader from './SessionHeader';
 import SessionExerciseAccordion from './session/SessionExerciseAccordion';
 import SessionRatings from './session/SessionRatings';
+import { BufferedWorkoutScope } from '../UI/BufferedInput';
 import { ExerciseSearchDropdown } from './ExerciseSearchDropdown';
 import { resumeWorkoutClock, sampleWorkoutClock } from '../../lib/workoutClockGuard';
 import { useAppStore } from '../../store/useAppStore';
@@ -232,7 +233,8 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory, onRequestEnd }: Acti
     };
 
     return (
-        <div className="training-sub-view active workout-session">
+        <BufferedWorkoutScope.Provider key={String(activeWorkout.id)} value={String(activeWorkout.id)}>
+            <div className="training-sub-view active workout-session">
             <SessionHeader
                 isEditingHistory={activeWorkout.isEditingHistory}
                 routineName={activeWorkout.routineName}
@@ -358,6 +360,7 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory, onRequestEnd }: Acti
                     </button>
                 </div>
             )}
-        </div>
+            </div>
+        </BufferedWorkoutScope.Provider>
     );
 };
