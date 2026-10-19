@@ -87,6 +87,34 @@ it('quarantines an old measurement draft after reacceptance instead of restaging
     expect(localStorage.getItem(key)).toBe(original);
 });
 
+it('prevents a mounted old form from publishing stale health data after a cross-tab epoch change', async () => {
+    localStorage.removeItem('logbook_is_guest');
+    invalidateSession();
+    const owner = 'user:' + mockFirebaseAuth.currentUser!.uid;
+    const name = 'draft:measurement:2026-09-11';
+    const key = deviceKey(name, owner);
+    const marker = `logbook:v2:${owner}:health-consent-generation`;
+    localStorage.setItem(marker, '1');
+    const original = JSON.stringify({ weight: '75' });
+    localStorage.setItem(key, original);
+    useAppStore.setState({ userData: data(), dataOwner: owner, localPersistenceBlocked: false });
+    const dispatch = vi.spyOn(useAppStore.getState(), 'dispatchDomainOperation');
+    const hook = renderHook(() => useNutritionMeasurements('2026-09-11'));
+    expect(hook.result.current.weight).toBe('75');
+
+    // No rerender yet: a stale UI event handler still holds the old field values.
+    localStorage.setItem(marker, '3');
+    await act(async () => { await hook.result.current.calculateAndSave(); });
+    expect(dispatch).not.toHaveBeenCalled();
+    expect(localStorage.getItem(key)).toBe(original);
+
+    hook.rerender();
+    expect(hook.result.current.weight).toBe('');
+    expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
+    act(() => hook.result.current.setWeight('80'));
+    expect(localStorage.getItem(key)).toBe(original);
+});
+
 it('stamps a new measurement draft and fences it after the generation changes', () => {
     localStorage.removeItem('logbook_is_guest');
     invalidateSession();
