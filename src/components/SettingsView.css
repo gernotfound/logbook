@@ -74,3 +74,12 @@
 .settings-account-deletion-progress__copy { display:grid; max-width:24rem; gap:.5rem; }
 .settings-account-deletion-progress__copy h1 { margin:0; color:var(--text-main); font-size:var(--font-size-page); }
 .settings-account-deletion-progress__copy p { margin:0; color:var(--text-muted); font-size:var(--font-size-body); line-height:1.5; }
+
+/* Recovery review remains inside Settings' scrolling surface on narrow devices. */
+.settings-recovery-message { margin-top:.75rem; overflow-wrap:anywhere; }
+.settings-recovery-list { display:grid; gap:.75rem; min-width:0; margin-top:1rem; }
+.settings-recovery-group { min-width:0; padding:.75rem; border:1px solid var(--glass-border); border-radius:var(--radius-control); background:var(--surface-light); }
+.settings-recovery-group summary { color:var(--text-main); cursor:pointer; overflow-wrap:anywhere; }
+.settings-recovery-group summary:focus-visible { outline:2px solid var(--primary-color); outline-offset:3px; }
+.settings-recovery-entry { min-width:0; margin-top:.75rem; }
+.settings-recovery-entry textarea { display:block; box-sizing:border-box; width:100%; min-width:0; max-width:100%; margin-top:.4rem; padding:.75rem; border:1px solid var(--glass-border); border-radius:var(--radius-control); background:var(--surface-color); color:var(--text-main); resize:vertical; overflow-wrap:anywhere; }
