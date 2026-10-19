@@ -9,7 +9,7 @@ const fixture = vi.hoisted(() => ({
     collectSnapshot: vi.fn(),
     exportBackup: vi.fn(),
     flush: vi.fn(async () => {}),
-    deviceWorkout: vi.fn(),
+    hasRecoverySource: vi.fn(),
     current: true,
     consent: 'withdrawn' as 'active' | 'withdrawn',
     state: {
@@ -28,8 +28,7 @@ vi.mock('../src/lib/sync/session', () => ({
 // when regular authenticated hydration has not populated the Zustand view.
 vi.mock('../src/lib/healthConsent', () => ({ currentHealthConsentStatus: () => fixture.consent }));
 vi.mock('../src/lib/sync/localRepository', () => ({ readLocal: fixture.readLocal }));
-vi.mock('../src/lib/sync/deviceStorage', () => ({ readDeviceValueStrict: fixture.deviceWorkout }));
-vi.mock('../src/lib/db/backupSnapshot', () => ({ collectBackupSnapshot: fixture.collectSnapshot }));
+vi.mock('../src/lib/db/backupSnapshot', () => ({ collectBackupSnapshot: fixture.collectSnapshot, hasDeviceRecoveryBackupSource: fixture.hasRecoverySource }));
 vi.mock('../src/store/useAppStore', () => {
     const useAppStore = Object.assign(
         (selector: (state: unknown) => unknown) => selector(fixture.state),
@@ -58,7 +57,7 @@ beforeEach(() => {
     fixture.state.localPersistenceBlocked = false;
     fixture.current = true;
     fixture.consent = 'withdrawn';
-    fixture.deviceWorkout.mockReturnValue(null);
+    fixture.hasRecoverySource.mockReturnValue(false);
     useDialogStore.getState().showConfirm = vi.fn(async () => true);
     fixture.readLocal.mockResolvedValue(undefined);
     fixture.exportBackup.mockResolvedValue(true);
@@ -70,7 +69,7 @@ describe('quarantined workout device backup', () => {
 
     it('exports a device-only recovery copy while active consent blocks UI hydration', async () => {
         fixture.state.localPersistenceBlocked = true;
-        fixture.deviceWorkout.mockReturnValue(historicalCopy);
+        fixture.hasRecoverySource.mockReturnValue(true);
         const recovered = { workout: historicalCopy };
         fixture.collectSnapshot.mockResolvedValueOnce({
             owner: fixture.owner, data: empty(), coverage: { scope: 'device', months: [] },
@@ -88,7 +87,7 @@ describe('quarantined workout device backup', () => {
             expect.objectContaining({ scope: 'device' }),
             expect.objectContaining({ device: recovered }),
         );
-        expect(fixture.deviceWorkout).toHaveBeenCalledWith('workout', fixture.owner);
+        expect(fixture.hasRecoverySource).toHaveBeenCalledWith(fixture.owner);
     });
 
     it('refuses an empty backup when no durable archive or device workout exists', async () => {
@@ -96,7 +95,7 @@ describe('quarantined workout device backup', () => {
         const { result } = renderHook(() => useSettingsTransfers({ currentUser: owner, isGuest: false }));
         await act(async () => { await result.current.handleExportBackup(); });
         expect(useDialogStore.getState().showAlert)
-            .toHaveBeenCalledWith(expect.stringContaining('nessun archivio o allenamento leggibile'));
+            .toHaveBeenCalledWith(expect.stringContaining('nessun archivio o dato di recupero leggibile'));
         expect(useDialogStore.getState().showConfirm).not.toHaveBeenCalled();
         expect(fixture.collectSnapshot).not.toHaveBeenCalled();
         expect(fixture.exportBackup).not.toHaveBeenCalled();
@@ -116,7 +115,7 @@ describe('quarantined workout device backup', () => {
 
     it('does not export a quarantined snapshot after the authenticated session changes', async () => {
         fixture.state.localPersistenceBlocked = true;
-        fixture.deviceWorkout.mockReturnValue(historicalCopy);
+        fixture.hasRecoverySource.mockReturnValue(true);
         vi.mocked(useDialogStore.getState().showConfirm).mockImplementationOnce(async () => {
             fixture.current = false;
             return true;
@@ -127,9 +126,40 @@ describe('quarantined workout device backup', () => {
         expect(fixture.exportBackup).not.toHaveBeenCalled();
     });
 
+    it('backs up a private intent slot even if the shared workout snapshot is missing', async () => {
+        fixture.state.localPersistenceBlocked = true;
+        fixture.hasRecoverySource.mockReturnValue(true);
+        const privateWitness = { ['workout-intent:' + 'a'.repeat(32)]: '{"__logbookWorkoutIntent":1}' };
+        fixture.collectSnapshot.mockResolvedValueOnce({
+            owner: fixture.owner, data: empty(), coverage: { scope: 'device', months: [] },
+            recovery: { device: privateWitness },
+        });
+        const { result } = renderHook(() => useSettingsTransfers({ currentUser: owner, isGuest: false }));
+        await act(async () => { await result.current.handleExportBackup(); });
+        expect(fixture.exportBackup).toHaveBeenCalledWith(
+            expect.anything(), { uid: 'backup-uid' },
+            expect.objectContaining({ scope: 'device' }),
+            expect.objectContaining({ device: privateWitness }),
+        );
+    });
+
+    it('refuses a backup that lost its only device witness during capture', async () => {
+        fixture.state.localPersistenceBlocked = true;
+        fixture.hasRecoverySource.mockReturnValue(true);
+        fixture.collectSnapshot.mockResolvedValueOnce({
+            owner: fixture.owner, data: empty(), coverage: { scope: 'device', months: [] },
+            recovery: { device: {} },
+        });
+        const { result } = renderHook(() => useSettingsTransfers({ currentUser: owner, isGuest: false }));
+        await act(async () => { await result.current.handleExportBackup(); });
+        expect(fixture.exportBackup).not.toHaveBeenCalled();
+        expect(useDialogStore.getState().showAlert)
+            .toHaveBeenCalledWith(expect.stringContaining('nessuna copia vuota esportata'));
+    });
+
     it('does not silently skip an unreadable encrypted workout', async () => {
         fixture.state.localPersistenceBlocked = true;
-        fixture.deviceWorkout.mockImplementationOnce(() => { throw new Error('Ciphertext non leggibile'); });
+        fixture.hasRecoverySource.mockImplementationOnce(() => { throw new Error('Ciphertext non leggibile'); });
         const { result } = renderHook(() => useSettingsTransfers({ currentUser: owner, isGuest: false }));
         await act(async () => { await result.current.handleExportBackup(); });
         expect(fixture.collectSnapshot).not.toHaveBeenCalled();
