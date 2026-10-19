@@ -135,9 +135,10 @@ describe.each(['input', 'textarea'] as const)('owner-scoped buffered %s recovery
     it('reads the recovery key at mount, not on unrelated rerenders', () => {
         const onChange = vi.fn();
         const key = recoveryKey(kind);
+        const previousReads = localStorageMock.getItem.mock.calls.filter(([readKey]) => readKey === key).length;
         const view = render(field(kind, onChange));
         const initialReads = localStorageMock.getItem.mock.calls.filter(([readKey]) => readKey === key).length;
-        expect(initialReads).toBe(1);
+        expect(initialReads - previousReads).toBe(1);
 
         // A transient failure *after* mount must not turn an unrelated React
         // rerender into another strict device-storage read or a global block.
