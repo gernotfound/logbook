@@ -132,6 +132,12 @@ export function useTrainingRoutines() {
 
         try {
             assertCurrentDraft();
+        } catch {
+            await showAlert("Errore durante il salvataggio della scheda.");
+            return false;
+        }
+
+        try {
             const sanitizedExercises: RoutineExercise[] = routineExercises.map(ex => {
                 const num = typeof ex.setsCount === 'number' ? ex.setsCount : parseInt(String(ex.setsCount), 10);
                 return {
