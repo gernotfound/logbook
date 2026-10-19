@@ -19,7 +19,9 @@ export function createBufferedWriterIntentName(): string {
     return INTENT_PREFIX + Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
 }
 
-function parseWriterEvidence(name: string, owner: string, raw: string): BufferedWriterEvidence & { revision?: number } {
+function parseWriterEvidence(
+    name: string, owner: string, raw: string, validateEpoch = true,
+): BufferedWriterEvidence & { revision?: number } {
     let value: unknown;
     try { value = JSON.parse(raw); } catch { throw new Error('Intenzione bozza non valida: originale conservato.'); }
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -33,7 +35,7 @@ function parseWriterEvidence(name: string, owner: string, raw: string): Buffered
             && (!Number.isSafeInteger(record.consentRevision) || record.consentRevision < 1))) {
         throw new Error('Metadati intenzione bozza non validi: originale conservato.');
     }
-    assertWorkoutSnapshotEpoch(owner, record.consentRevision);
+    if (validateEpoch) assertWorkoutSnapshotEpoch(owner, record.consentRevision);
     return { name, raw, value: record.value, revision: record.consentRevision };
 }
 
@@ -50,15 +52,21 @@ export function readBufferedWriterEvidence(owner: string, draftName: string): Bu
         const suffix = key.slice(ownerPrefix.length);
         const name = suffix.startsWith('sealed:') ? suffix.slice('sealed:'.length) : suffix;
         if (name.startsWith(INTENT_PREFIX)) names.add(name);
-        if (names.size > 64) throw new Error('Troppe bozze concorrenti: esportazione di recupero necessaria.');
     }
     const matches: BufferedWriterEvidence[] = [];
     for (const name of names) {
         const raw = readDeviceValueStrict(name, owner);
         if (raw === null) throw new Error('Intenzione bozza scomparsa durante la lettura.');
-        const evidence = parseWriterEvidence(name, owner, raw);
+        // Check provenance only for this field. A valid older-epoch witness
+        // for an unrelated field must remain exportable without blocking edits here.
+        // Malformed/unknown-owner records still fail closed before filtering.
+        const evidence = parseWriterEvidence(name, owner, raw, false);
         const record = JSON.parse(raw) as BufferedWriterIntent;
-        if (record.draftName === draftName) matches.push(evidence);
+        if (record.draftName === draftName) {
+            assertWorkoutSnapshotEpoch(owner, evidence.revision);
+            matches.push(evidence);
+            if (matches.length > 64) throw new Error('Troppe bozze concorrenti: esportazione di recupero necessaria.');
+        }
     }
     return matches;
 }
