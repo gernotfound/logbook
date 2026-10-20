@@ -52,6 +52,23 @@ describe('backup device draft recovery', () => {
         expect(storage.flush).toHaveBeenCalledWith({ strict: true });
     });
 
+    it('retains dated independent witnesses in explicit backup recovery without promoting business data', () => {
+        const dated = JSON.stringify({ __logbookDatedWriterIntent: 1, owner: 'user:a',
+            draftName: 'draft:measurement:2026-10-20', consentRevision: 3,
+            values: { weight: '75', waist: '85' } });
+        const drafts = selectBackupDeviceDrafts({ device: {
+            'draft:dated-intent:00000000000000000000000000000001': dated,
+            'draft:dated-intent:00000000000000000000000000000002': dated,
+        } });
+        expect(drafts).toHaveLength(2);
+        storage.drafts.set(drafts[0].name, 'existing owner evidence');
+        const result = restoreMissingBackupDeviceDrafts(drafts, 'user:a', () => {});
+        expect(result).toEqual({ restored: 1, preserved: 1 });
+        expect(storage.write).toHaveBeenCalledExactlyOnceWith(drafts[1].name, dated, 'user:a');
+        expect(storage.drafts.get(drafts[0].name)).toBe('existing owner evidence');
+        expect(storage.drafts.has('draft:measurement:2026-10-20')).toBe(false);
+    });
+
     it('rejects malformed or oversized draft bytes before any write', () => {
         expect(() => selectBackupDeviceDrafts({ device: { draft_routine: '{' } })).toThrow('non JSON');
         expect(() => selectBackupDeviceDrafts({ device: [] })).toThrow('sezione bozze');
