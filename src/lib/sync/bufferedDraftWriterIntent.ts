@@ -133,6 +133,14 @@ function checkConsent(owner: string, expectedConsentGeneration?: string | null):
  * Synchronously preserve this editor's latest value BEFORE attempting any shared-key update.
  * Writers in different tabs use different keys even if they read the same shared image.
  */
+/** Only a genuinely absent previously written slot may be resealed under a new random key. */
+export class BufferedWriterConsumedError extends Error {
+    constructor() {
+        super('Intenzione bozza già confermata da un altro editor; serve nuova testimonianza.');
+        this.name = 'BufferedWriterConsumedError';
+    }
+}
+
 export function writeBufferedWriterIntent(
     name: string, owner: string, draftName: string, value: string,
     expectedRaw: string | null, expectedConsentGeneration?: string | null,
@@ -141,6 +149,7 @@ export function writeBufferedWriterIntent(
         throw new Error('Identità intenzione bozza non valida.');
     }
     const current = readDeviceValueStrict(name, owner);
+    if (current === null && expectedRaw !== null) throw new BufferedWriterConsumedError();
     if (current !== expectedRaw) throw new Error('Intenzione bozza modificata esternamente: copia conservata.');
     if (current !== null) {
         const evidence = parseWriterEvidence(name, owner, current);
