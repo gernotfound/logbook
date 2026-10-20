@@ -47,25 +47,47 @@ function parseDraft(raw: string, owner: string): Record<string, string> {
     return data as Record<string, string>;
 }
 
-/** Copies from revoked generations are evidence, not current editing state. */
-export function readFencedDatedDraft(name: string, owner: string): Record<string, string> | null {
-    const raw = readDeviceValueStrict(name, owner);
-    return raw === null ? null : parseDraft(raw, owner);
+export class DatedDraftConflictError extends Error {
+    readonly code = 'dated-draft-concurrent-edit';
+    constructor() {
+        super('Bozza modificata da un’altra scheda: originale conservato. Riapri TheLogBook per ricaricare la copia più recente.');
+        this.name = 'DatedDraftConflictError';
+    }
 }
 
-/** Validate the old record before either overwriting or deleting it. */
+export type DatedDraftImage = { values: Record<string, string> | null; raw: string | null };
+
+/** Read value and exact plaintext record image from a single strict device read. */
+export function readFencedDatedDraftImage(name: string, owner: string): DatedDraftImage {
+    const raw = readDeviceValueStrict(name, owner);
+    return { values: raw === null ? null : parseDraft(raw, owner), raw };
+}
+
+/** Copies from revoked generations are evidence, not current editing state. */
+export function readFencedDatedDraft(name: string, owner: string): Record<string, string> | null {
+    return readFencedDatedDraftImage(name, owner).values;
+}
+
+/**
+ * Optional expectedRaw fences stale editors across observable cross-tab interleavings.
+ * localStorage has no atomic compare-and-swap; simultaneous realm writes still need
+ * independent witnesses or a serialization protocol for full race protection.
+ */
 export function writeFencedDatedDraft(
-    name: string, owner: string, values: Record<string, string> | null,
-): void {
-    readFencedDatedDraft(name, owner);
+    name: string, owner: string, values: Record<string, string> | null, expectedRaw?: string | null,
+): string | null {
+    const current = readFencedDatedDraftImage(name, owner);
+    if (expectedRaw !== undefined && current.raw !== expectedRaw) throw new DatedDraftConflictError();
     const revision = readDeviceConsentRevision(owner);
     if (values === null) {
         writeDeviceValue(name, null, owner);
-        return;
+        return null;
     }
     const payload: DatedDraftSnapshot | Record<string, string> =
         owner.startsWith('user:') && revision !== undefined
             ? { __logbookDatedDraft: SNAPSHOT_VERSION, owner, consentRevision: revision, values }
             : values;
-    writeDeviceValue(name, JSON.stringify(payload), owner);
+    const raw = JSON.stringify(payload);
+    writeDeviceValue(name, raw, owner);
+    return raw;
 }
