@@ -425,6 +425,26 @@ describe('authenticated device-intent replay into semantic journal', () => {
             .toBe(JSON.stringify(first));
     });
 
+    it('repairs an actually missing shared key for a legacy ID-less intent', async () => {
+        const account = 'user:legacy-unbacked-missing-' + crypto.randomUUID();
+        const initial = data(workout('50'));
+        await initializeLocal(account, initial);
+        const modern = saveWorkoutDeviceIntent(account, initial.activeWorkout ?? null,
+            workout('55'), initial.activeWorkout ?? null);
+        // Pre-private-slot PWA versions stored only an ID-less shared intent.
+        writeDeviceValue('workout-intent:' + modern.intentId, null, account);
+        const legacy = { ...modern, intentId: undefined };
+        writeDeviceValue('workout', JSON.stringify(legacy), account);
+        let guardCalls = 0;
+        await recoverWorkoutDeviceIntent(account, () => {
+            if (++guardCalls === 4) writeDeviceValue('workout', null, account);
+            return true;
+        });
+        expect(guardCalls).toBe(4);
+        expect((await readLocal(account))?.data.activeWorkout?.exercises[0].sets[0].kg).toBe('55');
+        expect(readDeviceValueStrict('workout', account)).toBe(JSON.stringify(legacy));
+    });
+
     it('repairs an unchanged older shared snapshot only when its private ancestor is authentic', async () => {
         const account = 'user:backed-ancestor-' + crypto.randomUUID();
         const initial = data(workout('50'));
