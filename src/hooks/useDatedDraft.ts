@@ -132,7 +132,7 @@ export function useDatedDraft<T extends Record<string, string>>(kind: string, da
         if (!session || !key) return;
         try { verifyCurrentDraft(); } catch { return; }
         const next = { ...current.current.values, [field]: value };
-        current.current = { key, name, values: next, dirty: true, session };
+        current.current = { key, name, values: next, dirty: true, session, observedRaw: current.current.observedRaw };
         setEdited({ key, values: next });
         try {
             current.current.observedRaw = persist(name, session.owner, next, current.current.observedRaw);
