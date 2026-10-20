@@ -111,17 +111,36 @@ export function useDatedDraft<T extends Record<string, string>>(kind: string, da
         };
     });
 
+    const assertIndependentEvidence = (draft: CurrentDraft<T>) => {
+        if (!draft.name || !draft.session) throw new Error('Sessione bozza datata non verificata.');
+        const evidence = readDatedWriterEvidence(draft.session.owner, draft.name);
+        for (const entry of evidence) {
+            const own = entry.name === draft.writerName && entry.raw === draft.writerRaw;
+            const source = entry.name === draft.sourceIntent?.name
+                && entry.raw === draft.sourceIntent.raw;
+            if (!own && !source) throw new DatedDraftConflictError();
+        }
+        if (draft.writerRaw && !evidence.some(e => e.name === draft.writerName && e.raw === draft.writerRaw)) {
+            throw new DatedDraftConflictError();
+        }
+        if (draft.sourceIntent && !evidence.some(e => e.name === draft.sourceIntent?.name
+            && e.raw === draft.sourceIntent.raw)) throw new DatedDraftConflictError();
+    };
+
     const verifyCurrentDraft = () => {
         if (provenanceError) {
             blockProvenance(provenanceError);
             throw provenanceError;
         }
-        if (!session || !key || !isCurrentSession(session) || current.current.key !== key) {
+        const draft = current.current;
+        if (!session || !key || !isCurrentSession(session) || draft.key !== key
+            || draft.scope !== readScope) {
             throw new Error('Sessione cambiata prima della verifica della bozza.');
         }
         try {
-            const image = readFencedDatedDraftImage(name, session.owner);
-            if (image.raw !== current.current.observedRaw) throw new DatedDraftConflictError();
+            const currentImage = readFencedDatedDraftImage(name, session.owner);
+            if (currentImage.raw !== draft.observedRaw) throw new DatedDraftConflictError();
+            assertIndependentEvidence(draft);
         } catch (error) {
             if (error instanceof UnverifiedDatedDraftEpochError || error instanceof DatedDraftConflictError) {
                 blockProvenance(error);
@@ -130,28 +149,44 @@ export function useDatedDraft<T extends Record<string, string>>(kind: string, da
         }
     };
 
-    const persist = (draftName: string, draftOwner: string, value: T, expectedRaw: string | null): string => {
+    const persist = (draft: CurrentDraft<T>): void => {
         try {
-            return writeFencedDatedDraft(draftName, draftOwner, value, expectedRaw);
+            if (!draft.key || !draft.name || !draft.session || !isCurrentSession(draft.session)) {
+                throw new Error('Sessione cambiata prima del salvataggio della bozza.');
+            }
+            if (provenanceError) throw provenanceError;
+            // Persist this editor's latest full input BEFORE touching the
+            // shared key. Even a lost canonical race keeps a distinct witness.
+            draft.writerName ??= createDatedWriterIntentName();
+            draft.writerRaw = writeDatedWriterIntent(
+                draft.writerName, draft.session.owner, draft.name, draft.values,
+                draft.writerRaw, draft.session.consentGeneration,
+            );
+            if (useAppStore.getState().localPersistenceBlocked) throw new DatedDraftConflictError();
+            const before = readFencedDatedDraftImage(draft.name, draft.session.owner);
+            if (before.raw !== draft.observedRaw) throw new DatedDraftConflictError();
+            assertIndependentEvidence(draft);
+            draft.observedRaw = writeFencedDatedDraft(
+                draft.name, draft.session.owner, draft.values, draft.observedRaw,
+            );
         } catch (error) {
             if (error instanceof UnverifiedDatedDraftEpochError || error instanceof DatedDraftConflictError) {
                 blockProvenance(error);
             } else {
-                useAppStore.getState().setSaveError('Bozza conservata solo in memoria: archivio del dispositivo non disponibile.');
+                useAppStore.getState().setSaveError('Bozza conservata solo in memoria o nella copia di recupero: archivio del dispositivo non disponibile.');
             }
             throw error;
         }
     };
 
     const setField = <K extends keyof T>(field: K, value: T[K]) => {
-        if (!session || !key) return;
-        try { verifyCurrentDraft(); } catch { return; }
+        if (!session || !key || !readScope || !isCurrentSession(session)
+            || current.current.scope !== readScope) return;
         const next = { ...current.current.values, [field]: value };
-        current.current = { key, name, values: next, dirty: true, session, observedRaw: current.current.observedRaw };
-        setEdited({ key, values: next });
-        try {
-            current.current.observedRaw = persist(name, session.owner, next, current.current.observedRaw);
-        } catch { /* Visible error; strict reload flush retries. */ }
+        current.current = { ...current.current, values: next, dirty: true };
+        setEdited({ scope: readScope, values: next });
+        try { persist(current.current); }
+        catch { /* The independent witness or visible blocking error preserves recovery. */ }
     };
 
     const clear = (expected?: T) => {
