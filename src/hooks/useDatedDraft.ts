@@ -13,6 +13,10 @@ import { BrowserStorageError } from '../lib/sync/browserStorage';
 import { LocalCiphertextError } from '../lib/sync/secureArchiveCipher';
 import { LocalPurgePendingError } from '../lib/sync/localPurgeFence';
 import { LocalVaultLockedError, readVaultControl } from '../lib/sync/secureArchiveSession';
+import {
+    clearDatedWriterIntent, createDatedWriterIntentName,
+    readDatedWriterEvidence, writeDatedWriterIntent, type DatedWriterEvidence,
+} from '../lib/sync/datedDraftWriterIntent';
 
 function readDraft(name: string, owner: string): DatedDraftImage {
     try {
@@ -43,6 +47,10 @@ type CurrentDraft<T extends Record<string, string>> = {
     dirty: boolean;
     session: SessionSnapshot | null;
     observedRaw: string | null;
+    scope: string | null;
+    writerName: string | null;
+    writerRaw: string | null;
+    sourceIntent: DatedWriterEvidence | null;
 };
 
 export function useDatedDraft<T extends Record<string, string>>(kind: string, date: string, source: T) {
@@ -53,15 +61,20 @@ export function useDatedDraft<T extends Record<string, string>>(kind: string, da
     // The consent generation is part of the read scope: a mounted form must
     // re-check provenance when another tab advances the owner's epoch.
     const readScope = key ? JSON.stringify([key, session?.consentGeneration, session?.consentMarker]) : null;
-    const { image, provenanceError } = useMemo(() => {
+    const { image, sourceIntent, provenanceError } = useMemo(() => {
         try {
-            return {
-                image: readScope && owner ? readDraft(name, owner) : { values: null, raw: null },
-                provenanceError: null as UnverifiedDatedDraftEpochError | null,
-            };
+            const image = readScope && owner ? readDraft(name, owner) : { values: null, raw: null };
+            const evidence = readScope && owner ? readDatedWriterEvidence(owner, name) : [];
+            if (evidence.length > 1 || (evidence.length === 1
+                && JSON.stringify(evidence[0].values) !== JSON.stringify(image.values))) {
+                // Conflicting witnesses are evidence, never a new canonical value.
+                throw new DatedDraftConflictError();
+            }
+            return { image, sourceIntent: evidence[0] ?? null,
+                provenanceError: null as UnverifiedDatedDraftEpochError | DatedDraftConflictError | null };
         } catch (error) {
-            if (!(error instanceof UnverifiedDatedDraftEpochError)) throw error;
-            return { image: { values: null, raw: null }, provenanceError: error };
+            if (!(error instanceof UnverifiedDatedDraftEpochError || error instanceof DatedDraftConflictError)) throw error;
+            return { image: { values: null, raw: null }, sourceIntent: null, provenanceError: error };
         }
     }, [readScope, name, owner]);
     const blockProvenance = (error: UnverifiedDatedDraftEpochError | DatedDraftConflictError) => {
@@ -76,21 +89,25 @@ export function useDatedDraft<T extends Record<string, string>>(kind: string, da
         if (provenanceError) blockProvenance(provenanceError);
     }, [provenanceError]);
     const loaded = mergeDraft(source, image.values);
-    const [edited, setEdited] = useState<{ key: string; values: T | null } | null>(null);
-    const values = key && edited?.key === key ? edited.values ?? source : loaded ?? source;
-    const current = useRef<CurrentDraft<T>>({ key, name: key ? name : null, values, dirty: !!loaded, session, observedRaw: image.raw });
+    const [edited, setEdited] = useState<{ scope: string; values: T | null } | null>(null);
+    const values = readScope && edited?.scope === readScope ? edited.values ?? source : loaded ?? source;
+    const current = useRef<CurrentDraft<T>>({
+        key, name: key ? name : null, scope: readScope, values, dirty: !!loaded, session,
+        observedRaw: image.raw, writerName: null, writerRaw: null, sourceIntent,
+    });
 
     useLayoutEffect(() => {
         // A rerender must not reset the editor's write baseline to its mount image.
         // Navigating to another date creates a separate observed-image scope.
-        const observedRaw = current.current.key === key ? current.current.observedRaw : image.raw;
+        const sameScope = current.current.scope === readScope;
         current.current = {
-            key,
-            name: key ? name : null,
-            values,
-            dirty: Boolean(key) && (edited?.key === key ? edited.values !== null : !!loaded),
+            key, name: key ? name : null, scope: readScope, values,
+            dirty: Boolean(key) && (edited?.scope === readScope ? edited.values !== null : !!loaded),
             session,
-            observedRaw,
+            observedRaw: sameScope ? current.current.observedRaw : image.raw,
+            writerName: sameScope ? current.current.writerName : null,
+            writerRaw: sameScope ? current.current.writerRaw : null,
+            sourceIntent: sameScope ? current.current.sourceIntent : sourceIntent,
         };
     });
 
