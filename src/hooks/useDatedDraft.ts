@@ -197,7 +197,7 @@ export function useDatedDraft<T extends Record<string, string>>(kind: string, da
 
     const setField = <K extends keyof T>(field: K, value: T[K]) => {
         if (!session || !key || !readScope || !isCurrentSession(session)
-            || current.current.scope !== readScope) return;
+            || current.current.scope !== readScope || currentProvenanceError.current) return;
         const next = { ...current.current.values, [field]: value };
         current.current = { ...current.current, values: next, dirty: true };
         setEdited({ scope: readScope, values: next });
