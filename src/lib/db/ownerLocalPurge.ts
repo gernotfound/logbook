@@ -11,6 +11,35 @@ import { vaultControlMirrorId } from '../sync/secureArchiveControlRecovery';
 // Account/consent authorization and server-complete evidence stay with db_account.
 const LOCAL_PURGE_MAX_PASSES = 6;
 
+/**
+ * A suspended tab can change localStorage while this tab enumerates numeric
+ * indexes. A skipped ciphertext key must never be mistaken for proof that
+ * it is safe to destroy the owner's wrapping key.
+ */
+function stableStorageKeyInventory(): Set<string> {
+    const enumerate = (): Set<string> => {
+        const count = localStorage.length;
+        const keys = new Set<string>();
+        for (let index = 0; index < count; index++) {
+            const key = localStorage.key(index);
+            if (key === null || keys.has(key)) {
+                throw new Error('Inventario localStorage modificato durante la pulizia.');
+            }
+            keys.add(key);
+        }
+        if (localStorage.length !== count) {
+            throw new Error('Inventario localStorage modificato durante la pulizia.');
+        }
+        return keys;
+    };
+    const first = enumerate();
+    const second = enumerate();
+    if (first.size !== second.size || [...first].some(key => !second.has(key))) {
+        throw new Error('Inventario localStorage modificato durante la pulizia.');
+    }
+    return second;
+}
+
 function collectLocalPurgeKeys(owner: string): Set<string> {
     const keys = new Set([
         'logbook_local_workout', 'logbook_timer_state', 'logbook_timer_start', 'logbook_timer_accumulated',
@@ -25,10 +54,8 @@ function collectLocalPurgeKeys(owner: string): Set<string> {
     if (owner === 'guest') { keys.add('logbook_is_guest'); keys.add('logbook_guest_session_id_v1'); }
 
     const prefix = 'logbook:v2:' + owner + ':';
-    const length = localStorage.length;
-    for (let index = 0; index < length; index++) {
-        const storageKey = localStorage.key(index);
-        if (storageKey?.startsWith(prefix) && !storageKey.endsWith(':account-deletion')
+    for (const storageKey of stableStorageKeyInventory()) {
+        if (storageKey.startsWith(prefix) && !storageKey.endsWith(':account-deletion')
             && !storageKey.endsWith(':secure-vault-control')) {
             keys.add(storageKey);
         }
