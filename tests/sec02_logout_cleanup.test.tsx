@@ -185,7 +185,7 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
         consoleWarnSpy.mockRestore();
     });
 
-    it('purgeAllLocalUserData verifies the postcondition after concurrent key compaction', async () => {
+    it('purgeAllLocalUserData preserves the remaining draft when the key list shifts and safely resumes', async () => {
         const owner = 'user:test-user-id';
         const first = `logbook:v2:${owner}:draft:a`;
         const second = `logbook:v2:${owner}:draft:b`;
@@ -203,10 +203,17 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
             return storageKey;
         });
 
-        await DB.purgeAllLocalUserData(owner);
-
+        // The old index scan could skip the second draft. A concurrent
+        // compaction invalidates the inventory, not the recoverable data.
+        await expect(DB.purgeAllLocalUserData(owner)).rejects.toThrow('Pulizia locale incompleta');
+        expect(compacted).toBe(true);
         expect(localStorage.getItem(first)).toBeNull();
+        expect(localStorage.getItem(second)).toBe('b');
+        expect(isLocalPurgePending(owner)).toBe(true);
+
+        await DB.purgeAllLocalUserData(owner);
         expect(localStorage.getItem(second)).toBeNull();
+        expect(isLocalPurgePending(owner)).toBe(true);
     });
 
     it('purgeAllLocalUserData removes owner keys added concurrently during cleanup', async () => {
