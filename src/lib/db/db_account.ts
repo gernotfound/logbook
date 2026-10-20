@@ -199,10 +199,10 @@ export async function purgeCompletedHealthDataLocal(owner: string): Promise<void
             if (!isCurrentSession(session)) throw new Error('Sessione cambiata prima della pulizia locale.');
             assertPurgeIdentitySafe(owner, true);
         },
-        assertStillSafe: () => {
-            if (!isCurrentSession(session)) throw new Error('Sessione cambiata durante la pulizia locale.');
-            assertPurgeIdentitySafe(owner, true);
-        },
+        // Session comparison reads consent markers that this purge itself
+        // removes. After its initial trusted proofs, enforce owner identity
+        // instead; the durable purge fence prevents a new local consent write.
+        assertStillSafe: () => assertPurgeIdentitySafe(owner, true),
     });
 }
 
