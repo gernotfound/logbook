@@ -80,11 +80,14 @@ function ownerNames(owner: string): Set<string> {
 export function readDatedWriterEvidence(owner: string, draftName: string): DatedWriterEvidence[] {
     if (!DATED_KEY.test(draftName)) throw new Error('Identità bozza datata non valida.');
     const names = ownerNames(owner);
+    const revision = readDeviceConsentRevision(owner);
     const matches: DatedWriterEvidence[] = [];
+    const scanned: DatedWriterEvidence[] = [];
     for (const name of names) {
         const raw = readDeviceValueStrict(name, owner);
         if (raw === null) throw new Error('Copia datata scomparsa durante la lettura.');
         const candidate = parse(name, owner, raw);
+        scanned.push(candidate);
         if (candidate.draftName !== draftName) continue;
         assertWorkoutSnapshotEpoch(owner, candidate.consentRevision);
         matches.push(candidate);
@@ -92,14 +95,22 @@ export function readDatedWriterEvidence(owner: string, draftName: string): Dated
             throw new Error('Troppe copie concorrenti: recupero esplicito necessario.');
         }
     }
+    // Authenticate the entire owner-scoped inventory, not just today's
+    // matching field: another tab can change an existing witness while its key
+    // membership remains stable. The consent epoch must also remain unchanged.
     const after = ownerNames(owner);
-    if (after.size !== names.size || [...names].some(name => !after.has(name))) {
-        throw new Error('Elenco copie datate modificato durante la lettura.');
+    if (after.size !== names.size || [...names].some(name => !after.has(name))
+        || readDeviceConsentRevision(owner) !== revision) {
+        throw new Error('Copie datate o consenso cambiati durante la lettura.');
     }
-    for (const match of matches) {
-        if (readDeviceValueStrict(match.name, owner) !== match.raw) {
+    for (const witness of scanned) {
+        if (readDeviceValueStrict(witness.name, owner) !== witness.raw) {
             throw new Error('Copia datata modificata durante la verifica.');
         }
+    }
+    // Consent may also change during the final authenticated value reads.
+    if (readDeviceConsentRevision(owner) !== revision) {
+        throw new Error('Copie datate o consenso cambiati durante la lettura.');
     }
     return matches;
 }
