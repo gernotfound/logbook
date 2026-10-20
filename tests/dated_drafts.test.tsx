@@ -88,6 +88,7 @@ it('quarantines an old measurement draft after reacceptance instead of restaging
     expect(useAppStore.getState().saveError).toContain('generazione di consenso');
     act(() => hook.result.current.setWeight('90'));
     expect(hook.result.current.weight).toBe('');
+    expect(readDatedWriterEvidence(owner, 'draft:measurement:2026-09-11')).toHaveLength(0);
     expect(localStorage.getItem(key)).toBe(original);
     expect(() => writeFencedDatedDraft('draft:measurement:2026-09-11', owner, null))
         .toThrow(UnverifiedDatedDraftEpochError);
