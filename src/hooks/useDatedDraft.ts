@@ -13,6 +13,7 @@ import { BrowserStorageError } from '../lib/sync/browserStorage';
 import { LocalCiphertextError } from '../lib/sync/secureArchiveCipher';
 import { LocalPurgePendingError } from '../lib/sync/localPurgeFence';
 import { LocalVaultLockedError, readVaultControl } from '../lib/sync/secureArchiveSession';
+import { requireHealthConsentWritable } from '../lib/healthConsent';
 import {
     clearDatedWriterIntent, createDatedWriterIntentName,
     readDatedWriterEvidence, writeDatedWriterIntent, type DatedWriterEvidence,
@@ -97,8 +98,13 @@ export function useDatedDraft<T extends Record<string, string>>(kind: string, da
         key, name: key ? name : null, scope: readScope, values, dirty: !!loaded, session,
         observedRaw: image.raw, writerName: null, writerRaw: null, sourceIntent,
     });
+    // The reload registry callback is intentionally registered once. Keep
+    // provenance current across consent-generation changes without capturing
+    // the first render's stale error value.
+    const currentProvenanceError = useRef<Error | null>(provenanceError);
 
     useLayoutEffect(() => {
+        currentProvenanceError.current = provenanceError;
         // A rerender must not reset the editor's write baseline to its mount image.
         // Navigating to another date creates a separate observed-image scope.
         const sameScope = current.current.scope === readScope;
@@ -159,7 +165,7 @@ export function useDatedDraft<T extends Record<string, string>>(kind: string, da
             if (!draft.key || !draft.name || !draft.session || !isCurrentSession(draft.session)) {
                 throw new Error('Sessione cambiata prima del salvataggio della bozza.');
             }
-            if (provenanceError) throw provenanceError;
+            if (currentProvenanceError.current) throw currentProvenanceError.current;
             // Persist this editor's latest full input BEFORE touching the
             // shared key. Even a lost canonical race keeps a distinct witness.
             draft.writerName ??= createDatedWriterIntentName();
@@ -201,6 +207,7 @@ export function useDatedDraft<T extends Record<string, string>>(kind: string, da
             || (expected && JSON.stringify(expected) !== JSON.stringify(draft.values))) return false;
         verifyCurrentDraft();
         try {
+            requireHealthConsentWritable(session.owner);
             const clearedRaw = writeFencedDatedDraft(name, session.owner, null, draft.observedRaw);
             // Business commit was already durably confirmed. Remove only the
             // exact witness belonging to this editor and the witness loaded at
