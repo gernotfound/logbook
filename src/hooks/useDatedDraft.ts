@@ -71,13 +71,15 @@ export function useDatedDraft<T extends Record<string, string>>(kind: string, da
                 throw new DatedDraftConflictError();
             }
             return { image, sourceIntent: evidence[0] ?? null,
-                provenanceError: null as UnverifiedDatedDraftEpochError | DatedDraftConflictError | null };
+                provenanceError: null as Error | null };
         } catch (error) {
-            if (!(error instanceof UnverifiedDatedDraftEpochError || error instanceof DatedDraftConflictError)) throw error;
-            return { image: { values: null, raw: null }, sourceIntent: null, provenanceError: error };
+            // Corruption and unavailable storage are also blocking errors:
+            // never interpret unreadable witness evidence as an empty draft.
+            return { image: { values: null, raw: null }, sourceIntent: null,
+                provenanceError: error instanceof Error ? error : new Error('Copie datate non verificabili.') };
         }
     }, [readScope, name, owner]);
-    const blockProvenance = (error: UnverifiedDatedDraftEpochError | DatedDraftConflictError) => {
+    const blockProvenance = (error: Error) => {
         useAppStore.setState({
             localPersistenceBlocked: true,
             syncHealth: 'failed',
@@ -113,6 +115,9 @@ export function useDatedDraft<T extends Record<string, string>>(kind: string, da
 
     const assertIndependentEvidence = (draft: CurrentDraft<T>) => {
         if (!draft.name || !draft.session) throw new Error('Sessione bozza datata non verificata.');
+        if (draft.writerName !== null && draft.writerRaw === null) {
+            throw new DatedDraftConflictError();
+        }
         const evidence = readDatedWriterEvidence(draft.session.owner, draft.name);
         for (const entry of evidence) {
             const own = entry.name === draft.writerName && entry.raw === draft.writerRaw;
