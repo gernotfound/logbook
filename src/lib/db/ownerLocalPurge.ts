@@ -44,7 +44,12 @@ function remainingLocalPurgeKeys(owner: string): Set<string> {
     return remaining;
 }
 
-type PurgeGate = { preflight: () => Promise<void>; afterFence: () => Promise<void> };
+type PurgeGate = {
+    preflight: () => Promise<void>;
+    afterFence: () => Promise<void>;
+    /** Recheck after every asynchronous deletion before touching shared data. */
+    assertStillSafe?: () => void;
+};
 
 export async function purgeOwnerLocalData(owner: string, resumeOnly = false, gate?: PurgeGate) {
     if (typeof navigator === 'undefined' || !navigator.locks?.request) {
@@ -73,12 +78,30 @@ export async function purgeOwnerLocalData(owner: string, resumeOnly = false, gat
                 throw error;
             }
         }
+        gate?.assertStillSafe?.();
         lockVault(owner);
         const failures: unknown[] = [];
-        const storageKeys = ['logbook:v2:' + owner, 'logbook_cached_user_data',
+        // Only the owner-scoped envelope can be deleted before the next awaited
+        // identity check. Never launch unscoped IndexedDB deletes in parallel
+        // with it: another account may activate while the browser is awaiting IDB.
+        const ownerKey = 'logbook:v2:' + owner;
+        const legacyKeys = ['logbook_cached_user_data',
             'pending_sync_token', 'pending_sync_payload', 'sync_failed'];
-        const results = await Promise.allSettled(storageKeys.map(key => del(key)));
-    for (const result of results) if (result.status === 'rejected') failures.push(result.reason);
+        const storageKeys = [ownerKey, ...legacyKeys];
+        try {
+            await del(ownerKey);
+            if ((await get<unknown>(ownerKey)) !== undefined) {
+                failures.push(new Error('Verifica cancellazione IndexedDB fallita: ' + ownerKey));
+            }
+        } catch (error) { failures.push(error); }
+        if (failures.length) {
+            throw new AggregateError(failures, 'Pulizia locale incompleta (IndexedDB). Chiave cifrata e copie residue conservate per il recupero.');
+        }
+        for (const key of legacyKeys) {
+            gate?.assertStillSafe?.();
+            try { await del(key); } catch (error) { failures.push(error); }
+        }
+        gate?.assertStillSafe?.();
 
     // Wrapped DEK metadata must survive an IndexedDB purge failure. Deleting
     // it first would leave the remaining ciphertext permanently undecryptable.
@@ -98,9 +121,11 @@ export async function purgeOwnerLocalData(owner: string, resumeOnly = false, gat
     let remaining = new Set<string>();
     try {
         for (let pass = 0; pass < LOCAL_PURGE_MAX_PASSES; pass++) {
+            gate?.assertStillSafe?.();
             const keys = collectLocalPurgeKeys(owner);
             for (const storageKey of keys) {
                 try {
+                    gate?.assertStillSafe?.();
                     localStorage.removeItem(storageKey);
                 } catch (error) {
                     failures.push(error);
@@ -129,10 +154,13 @@ export async function purgeOwnerLocalData(owner: string, resumeOnly = false, gat
     const keyId = deviceVaultKeyId(owner);
     const mirrorId = vaultControlMirrorId(owner);
     try {
+        gate?.assertStillSafe?.();
         await del(mirrorId);
         if ((await get(mirrorId)) !== undefined) throw new Error('La copia di recupero del controllo locale non è stata eliminata.');
+        gate?.assertStillSafe?.();
         await del(keyId);
         if ((await get(keyId)) !== undefined) throw new Error('La chiave locale del dispositivo non è stata eliminata.');
+        gate?.assertStillSafe?.();
         localStorage.removeItem(controlKey);
         if (localStorage.getItem(controlKey) !== null) throw new Error('I metadati crittografici locali non sono stati eliminati.');
     } catch (error) {
