@@ -34,6 +34,49 @@ function deviceRecoveryName(key: string | null, owner: string): string | null {
     return isRecoveryDeviceKey(name) ? name : null;
 }
 
+/**
+ * The backup is a user-visible claim that every device recovery witness was
+ * included. Scanning localStorage by a live numeric index can skip keys when
+ * another tab adds/removes one, even though each individual read succeeds.
+ *
+ * Capture names first; validate exact physical membership and decoded values
+ * after the copy. This detects observable races without claiming a
+ * transactional snapshot across browser realms.
+ */
+function readStableDeviceRecovery(owner: string): Record<string, string> {
+    const physicalKeys = (): Set<string> => {
+        const keys = new Set<string>();
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (deviceRecoveryName(key, owner) !== null) keys.add(key!);
+        }
+        return keys;
+    };
+    const before = physicalKeys();
+    const device: Record<string, string> = {};
+    for (const physicalKey of before) {
+        const name = deviceRecoveryName(physicalKey, owner)!;
+        // Strict read validates owner, vault state, ciphertext and purge
+        // fences; a vanished key cannot silently become an omitted witness.
+        const value = readDeviceValueStrict(name, owner);
+        if (value === null || Object.hasOwn(device, name)) {
+            throw new Error('Le copie di recupero sono cambiate durante il backup. Riprova senza chiudere altre schede.');
+        }
+        device[name] = value;
+    }
+    const after = physicalKeys();
+    if (after.size !== before.size || [...before].some(key => !after.has(key))) {
+        throw new Error('Le copie di recupero sono cambiate durante il backup. Riprova senza chiudere altre schede.');
+    }
+    for (const physicalKey of before) {
+        const name = deviceRecoveryName(physicalKey, owner)!;
+        if (readDeviceValueStrict(name, owner) !== device[name]) {
+            throw new Error('I valori di recupero sono cambiati durante il backup. Riprova senza chiudere altre schede.');
+        }
+    }
+    return device;
+}
+
 export function hasDeviceRecoveryBackupSource(owner: string): boolean {
     for (let index = 0; index < localStorage.length; index++) {
         const name = deviceRecoveryName(localStorage.key(index), owner);
@@ -169,16 +212,10 @@ export async function collectBackupSnapshot(fallback: UserData, includeCloud: bo
     }
 
     if (!includeCloud) coverage.months = envelope?.completeMonths ?? [];
-    const device: Record<string, string> = {};
-    for (let index = 0; index < localStorage.length; index++) {
-        const name = deviceRecoveryName(localStorage.key(index), session.owner);
-        if (name === null) continue;
-        // Recovery payloads contain plaintext only in the EXPLICIT backup.
-        // The archive itself remains sealed. A resurfaced old-tab legacy key
-        // must fail the read rather than disappear from the backup silently.
-        const value = readDeviceValueStrict(name, session.owner);
-        if (value !== null) device[name] = value;
-    }
+    // Recovery payloads contain plaintext only in the EXPLICIT backup.
+    // A resurfaced old-tab key or cross-tab edit must fail closed rather
+    // than disappear silently from an otherwise successful export.
+    const device = readStableDeviceRecovery(session.owner);
     assertCurrent();
     return { owner: session.owner, data: UserDataSchema.parse(mergedValue) as unknown as UserData, coverage,
         recovery: { envelope, device, cloudDocuments: Object.fromEntries(documents) } };
