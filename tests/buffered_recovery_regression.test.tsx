@@ -564,6 +564,38 @@ describe.each(['input', 'textarea'] as const)('independent same-workout %s write
         restore.unmount();
     });
 
+    it('never treats a private competing writer as absent when another tab compacts indexes', () => {
+        const owner = captureSession().owner;
+        const unrelated = 'cross-tab:temporary-' + crypto.randomUUID();
+        localStorage.setItem(unrelated, 'present');
+        const a = createBufferedWriterIntentName();
+        const b = createBufferedWriterIntentName();
+        writeBufferedWriterIntent(a, owner, draftName, 'Writer A', null, '3');
+        writeBufferedWriterIntent(b, owner, draftName, 'Writer B', null, '3');
+
+        const originalKey = localStorageMock.key.getMockImplementation();
+        if (!originalKey) throw new Error('Missing localStorage mock implementation');
+        let compacted = false;
+        localStorageMock.key.mockImplementation((index: number) => {
+            const found = originalKey(index);
+            if (!compacted && found === unrelated) {
+                compacted = true;
+                localStorage.removeItem(unrelated);
+            }
+            return found;
+        });
+        try {
+            expect(() => readBufferedWriterEvidence(owner, draftName))
+                .toThrow('Inventario copie bufferizzate');
+        } finally {
+            localStorageMock.key.mockImplementation(originalKey);
+        }
+
+        expect(compacted).toBe(true);
+        expect(readBufferedWriterEvidence(owner, draftName).map(x => x.value).sort())
+            .toEqual(['Writer A', 'Writer B']);
+    });
+
     it('keeps a successfully written independent draft when canonical storage fails', () => {
         const owner = captureSession().owner;
         const canonicalKey = deviceKey(draftName, owner);
