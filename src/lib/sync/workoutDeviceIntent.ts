@@ -380,7 +380,27 @@ export async function recoverWorkoutDeviceIntent(owner: string, guard: LocalWrit
         : activeRevision > 1) {
         throw new Error('Workout di una generazione di consenso non verificabile: copia di recupero preservata.');
     }
-    await commitDomainOperations(owner, { type: 'active-workout.set', workout: intent.workout }, envelope.data, guard,
+    // readLocal(), catalog loading and other tabs can interleave after the
+    // previous inventory. Revalidate the exact candidate and all siblings in
+    // the synchronous IndexedDB update callback, immediately before journal
+    // publication. A newly arrived independent edit must remain uncommitted
+    // rather than silently selecting the stale winner.
+    const witnessImage = unresolved.map(slot => [slot.name, JSON.stringify(slot.intent)]);
+    const sharedImage = JSON.stringify(shared);
+    const guardAndVerifyWitnesses: LocalWriteGuard = () => {
+        if (!guard()) return false;
+        const current = readRecoverySlots(owner);
+        if (JSON.stringify(readWorkoutDeviceIntent(owner)) !== sharedImage
+            || current.length !== witnessImage.length
+            || current.some((slot, index) => slot.name !== witnessImage[index][0]
+                || JSON.stringify(slot.intent) !== witnessImage[index][1])) {
+            throw new WorkoutIntentConflictError(
+                'Copie workout cambiate prima del commit locale: nessun replay eseguito, dati preservati.',
+            );
+        }
+        return true;
+    };
+    await commitDomainOperations(owner, { type: 'active-workout.set', workout: intent.workout }, envelope.data, guardAndVerifyWitnesses,
         { generation: intent.generation, sequence: intent.sequence, consentRevision: intent.consentRevision, intentId: intent.intentId,
             parentIntentId: intent.parentIntentId, ancestorIds: intent.ancestorIds, baseline: intent.baseline });
     if (!guard()) throw new Error('Sessione cambiata durante il recupero del workout.');
