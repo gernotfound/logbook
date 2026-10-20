@@ -27,7 +27,7 @@ import { createDataSlice } from '../../src/store/slices/createDataSlice';
 import { createWorkoutSlice } from '../../src/store/slices/createWorkoutSlice';
 import { createSyncSlice } from '../../src/store/slices/createSyncSlice';
 import type { AppState } from '../../src/store/useAppStore';
-import { readLocal, initializeLocal, acknowledgeThrough, commitDomainOperations } from '../../src/lib/sync/localRepository';
+import { readLocal, initializeLocal, acknowledgeThrough, commitDomainOperations, advanceLocalConsentRevisionIfClean } from '../../src/lib/sync/localRepository';
 import { UserDataSchema } from '../../src/lib/schema';
 import type { UserData } from '../../src/types';
 import { getNutritionConflictFingerprint } from '../../src/lib/utils/object';
@@ -109,6 +109,41 @@ describe('store with real IndexedDB commits', () => {
         await expect(store.getState().dispatchDomainOperation({
             type: 'profile.patch', patch: { height: '190' },
         })).rejects.toThrow('Archivio locale non leggibile');
+    });
+
+    it('commits a newly edited workout after consent reacceptance with its proven source revision', async () => {
+        const physical = new Map<string, string>();
+        vi.stubGlobal('localStorage', {
+            getItem: (key: string) => physical.get(key) ?? null,
+            setItem: (key: string, value: string) => { physical.set(key, String(value)); },
+            removeItem: (key: string) => { physical.delete(key); },
+            clear: () => physical.clear(),
+            key: (index: number) => [...physical.keys()][index] ?? null,
+            get length() { return physical.size; },
+        });
+        physical.set('logbook:v2:user:A:health-consent-generation', '3');
+
+        const previous = { id: 'epoch-3-workout', date: '2026-10-14', routineName: 'Before', exercises: [] };
+        const baseline = UserDataSchema.parse({ activeWorkout: previous }) as unknown as UserData;
+        await clear();
+        await initializeLocal('user:A', baseline);
+        expect(await advanceLocalConsentRevisionIfClean('user:A', 3)).toBe(true);
+        store.setState({
+            userData: baseline, dataOwner: 'user:A', localWorkout: previous,
+            localPersistenceBlocked: false, syncHealth: 'synced', syncing: false, saveError: null,
+        });
+
+        const updated = { ...previous, routineName: 'Edited in consent revision 3' };
+        const saving = store.getState().setSyncedLocalWorkout(updated);
+        await store.getState().flushPendingSyncs();
+        await expect(saving).resolves.toMatchObject({ ok: true });
+
+        const durable = await readLocal('user:A');
+        expect(durable?.consentRevision).toBe(3);
+        expect(durable?.data.activeWorkout?.routineName).toBe(updated.routineName);
+        expect(durable?.lastWorkoutDeviceIntent?.intentId).toMatch(/^[a-f0-9]{32}$/);
+        expect(store.getState().localPersistenceBlocked).toBe(false);
+        expect(store.getState().localWorkout?.routineName).toBe(updated.routineName);
     });
 
     it('never calls the cloud or confirms success after a local quota failure', async () => {

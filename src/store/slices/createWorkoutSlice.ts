@@ -202,7 +202,8 @@ export const createWorkoutSlice: StateCreator<AppState, [], [], WorkoutSlice> = 
         set({ localWorkout: persistedWorkout });
         const sessionOwner = captureSession().owner;
         const outcome = await get().dispatchDomainOperation({ type: 'active-workout.set', workout: persistedWorkout },
-            intent ? { workoutIntent: { generation: intent.generation, sequence: intent.sequence, intentId: intent.intentId,
+            intent ? { workoutIntent: { generation: intent.generation, sequence: intent.sequence,
+                consentRevision: intent.consentRevision, intentId: intent.intentId,
                 parentIntentId: intent.parentIntentId, ancestorIds: intent.ancestorIds, baseline: intent.baseline } } : undefined);
         if (intent && (outcome.ok || outcome.status === 'local-pending')) {
             // Cleanup cannot turn an already committed edit into a failed save.
