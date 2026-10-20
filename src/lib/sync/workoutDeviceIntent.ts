@@ -406,10 +406,42 @@ export async function recoverWorkoutDeviceIntent(owner: string, guard: LocalWrit
     if (!guard()) throw new Error('Sessione cambiata durante il recupero del workout.');
     // Repair the shared snapshot if this tab crashed after writing its private
     // slot but before publishing the common device key.
-    const latestShared = readWorkoutDeviceIntent(owner);
+    const latestRaw = readDeviceValueStrict('workout', owner);
+    const latestShared = latestRaw === null ? null : readWorkoutDeviceIntent(owner);
+    // A plain workout is NOT an absent device snapshot. Another tab may have
+    // saved a device-only draft after the journal commit; it has no immutable
+    // per-edit witness and must never be overwritten by the repair.
+    if (latestRaw !== null && !latestShared) {
+        throw new WorkoutIntentConflictError('Snapshot workout concorrente senza intento: originale preservato.');
+    }
+    if (latestShared && latestShared.intentId === intent.intentId
+        && JSON.stringify(latestShared) !== JSON.stringify(intent)) {
+        throw new WorkoutIntentConflictError('Snapshot workout concorrente con identità riutilizzata: originale preservato.');
+    }
     if (!latestShared || latestShared.intentId !== intent.intentId) {
-        if (latestShared && (latestShared.generation !== intent.generation || latestShared.sequence >= intent.sequence)) {
-            throw new WorkoutIntentConflictError('Snapshot concorrente durante il recupero. Copia privata preservata.');
+        if (latestShared) {
+            // Only supersede an older, independently backed ancestor. A legacy
+            // intent without a private copy may itself be the only surviving
+            // device edit, even if its sequence is lower than the journalled edit.
+            if (!latestShared.intentId || latestShared.generation !== intent.generation
+                || latestShared.sequence >= intent.sequence
+                || !intent.ancestorIds?.includes(latestShared.intentId)) {
+                throw new WorkoutIntentConflictError('Snapshot concorrente durante il recupero. Copia privata preservata.');
+            }
+            const ancestorRaw = readDeviceValueStrict(slotName(latestShared.intentId), owner);
+            let ancestor: WorkoutDeviceIntent | null = null;
+            if (ancestorRaw !== null) {
+                try { ancestor = parseIntent(JSON.parse(ancestorRaw) as unknown, owner); }
+                catch { /* An unreadable ancestor cannot justify replacing the shared copy. */ }
+            }
+            if (!ancestor || JSON.stringify(ancestor) !== JSON.stringify(latestShared)) {
+                throw new WorkoutIntentConflictError('Snapshot workout senza copia indipendente verificabile: originale preservato.');
+            }
+        }
+        // Detect an observable change after the proof above. localStorage is
+        // not transactional across tabs; never claim this is a cross-tab CAS.
+        if (readDeviceValueStrict('workout', owner) !== latestRaw) {
+            throw new WorkoutIntentConflictError('Snapshot workout cambiato durante la riparazione: originale preservato.');
         }
         writeDeviceValue('workout', JSON.stringify(intent), owner);
     }

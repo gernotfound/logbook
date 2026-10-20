@@ -374,6 +374,90 @@ describe('authenticated device-intent replay into semantic journal', () => {
             .toBe(JSON.stringify({ ...original, workout: workout('60') }));
     });
 
+    it('preserves a concurrent plain workout written after the journal commit', async () => {
+        const account = 'user:post-commit-plain-' + crypto.randomUUID();
+        const initial = data(workout('50'));
+        await initializeLocal(account, initial);
+        const candidate = saveWorkoutDeviceIntent(account, initial.activeWorkout ?? null,
+            workout('55'), initial.activeWorkout ?? null);
+        let guardCalls = 0;
+        let draftRaw: string | null = null;
+        const guard = () => {
+            if (++guardCalls === 4) {
+                // A different tab publishes its only plain device copy after
+                // the IndexedDB commit, but before the replay repair.
+                persistPlainWorkoutSnapshot(workout('60'), account);
+                draftRaw = readDeviceValueStrict('workout', account);
+            }
+            return true;
+        };
+        await expect(recoverWorkoutDeviceIntent(account, guard))
+            .rejects.toThrow('Snapshot workout concorrente senza intento');
+        const committed = await readLocal(account);
+        expect(committed?.data.activeWorkout?.exercises[0].sets[0].kg).toBe('55');
+        expect(committed?.pending.length).toBeGreaterThan(0);
+        expect(guardCalls).toBe(4);
+        expect(readDeviceValueStrict('workout', account)).toBe(draftRaw);
+        expect(readDeviceValueStrict('workout-intent:' + candidate.intentId, account))
+            .toBe(JSON.stringify(candidate));
+        await recoverWorkoutDeviceIntent(account, () => true);
+        expect(readDeviceValueStrict('workout', account)).toBe(draftRaw);
+    });
+
+    it('never overwrites an unbacked legacy intent after a newer journal commit', async () => {
+        const account = 'user:post-commit-legacy-' + crypto.randomUUID();
+        const initial = data(workout('50'));
+        await initializeLocal(account, initial);
+        const first = saveWorkoutDeviceIntent(account, initial.activeWorkout ?? null,
+            workout('55'), initial.activeWorkout ?? null);
+        saveWorkoutDeviceIntent(account, first.workout, workout('60'), first.baseline);
+        const legacy = { ...first, intentId: undefined, workout: workout('65') };
+        const rawLegacy = JSON.stringify(legacy);
+        let calls = 0;
+        await expect(recoverWorkoutDeviceIntent(account, () => {
+            if (++calls === 4) writeDeviceValue('workout', rawLegacy, account);
+            return true;
+        })).rejects.toThrow('Snapshot concorrente durante il recupero');
+        expect(calls).toBe(4);
+        expect((await readLocal(account))?.data.activeWorkout?.exercises[0].sets[0].kg).toBe('60');
+        expect(readDeviceValueStrict('workout', account)).toBe(rawLegacy);
+        expect(readDeviceValueStrict('workout-intent:' + first.intentId, account))
+            .toBe(JSON.stringify(first));
+    });
+
+    it('repairs an actually missing shared key for a legacy ID-less intent', async () => {
+        const account = 'user:legacy-unbacked-missing-' + crypto.randomUUID();
+        const initial = data(workout('50'));
+        await initializeLocal(account, initial);
+        const modern = saveWorkoutDeviceIntent(account, initial.activeWorkout ?? null,
+            workout('55'), initial.activeWorkout ?? null);
+        // Pre-private-slot PWA versions stored only an ID-less shared intent.
+        writeDeviceValue('workout-intent:' + modern.intentId, null, account);
+        const legacy = { ...modern, intentId: undefined };
+        writeDeviceValue('workout', JSON.stringify(legacy), account);
+        let guardCalls = 0;
+        await recoverWorkoutDeviceIntent(account, () => {
+            if (++guardCalls === 4) writeDeviceValue('workout', null, account);
+            return true;
+        });
+        expect(guardCalls).toBe(4);
+        expect((await readLocal(account))?.data.activeWorkout?.exercises[0].sets[0].kg).toBe('55');
+        expect(readDeviceValueStrict('workout', account)).toBe(JSON.stringify(legacy));
+    });
+
+    it('repairs an unchanged older shared snapshot only when its private ancestor is authentic', async () => {
+        const account = 'user:backed-ancestor-' + crypto.randomUUID();
+        const initial = data(workout('50'));
+        await initializeLocal(account, initial);
+        const first = saveWorkoutDeviceIntent(account, initial.activeWorkout ?? null,
+            workout('55'), initial.activeWorkout ?? null);
+        const next = saveWorkoutDeviceIntent(account, first.workout, workout('60'), first.baseline);
+        writeDeviceValue('workout', JSON.stringify(first), account);
+        await recoverWorkoutDeviceIntent(account, () => true);
+        expect((await readLocal(account))?.data.activeWorkout?.exercises[0].sets[0].kg).toBe('60');
+        expect(readWorkoutDeviceIntent(account)?.intentId).toBe(next.intentId);
+    });
+
     it('recovers a private draft when the shared snapshot write was interrupted', async () => {
         const testOwner = 'user:slot-before-shared';
         const initial = data(workout('50'));
