@@ -237,6 +237,11 @@ export function useDatedDraft<T extends Record<string, string>>(kind: string, da
         return true;
     };
 
+    const persistRef = useRef(persist);
+    useLayoutEffect(() => {
+        persistRef.current = persist;
+    });
+
     useEffect(() => {
         const flush = () => {
             const draft = current.current;
@@ -244,7 +249,7 @@ export function useDatedDraft<T extends Record<string, string>>(kind: string, da
             if (!draft.key || !draft.name || !draft.session || !isCurrentSession(draft.session)) {
                 throw new Error('Sessione cambiata prima del salvataggio della bozza.');
             }
-            persist(draft);
+            persistRef.current(draft);
         };
         draftRegistry.register(flush);
         const unregisterRecovery = requiredUpdateRecoveryRegistry.register(flush);
