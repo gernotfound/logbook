@@ -130,7 +130,6 @@ export async function purgeAllLocalUserData(owner = storageOwner()) {
 /** Only a verified server-complete account deletion may use this boundary. */
 export async function purgeCompletedAccountLocalData(owner: string) {
     if (!owner.startsWith('user:')) throw new Error('La finalizzazione richiede un owner account.');
-    const uid = owner.slice('user:'.length);
     const assertOwnerStillInactive = () => {
         // A new account or guest session can become active while this owner
         // waits for its vault lock. Never remove shared drafts for that session.
