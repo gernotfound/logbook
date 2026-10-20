@@ -606,6 +606,41 @@ describe.each(['input', 'textarea'] as const)('independent same-workout %s write
         second.unmount();
     });
 
+    it('reseals the live source editor when another acknowledged editor consumed its former witness', () => {
+        const owner = captureSession().owner;
+        const source = mount(vi.fn());
+        fireEvent.change(edited(source), { target: { value: '75' } });
+        const [initial] = readBufferedWriterEvidence(owner, draftName);
+        expect(initial.value).toBe('75');
+
+        const confirm = vi.fn();
+        const second = mount(confirm);
+        expect(edited(second).value).toBe('75');
+        fireEvent.change(edited(second), { target: { value: '76' } });
+        fireEvent.blur(edited(second));
+        expect(confirm).toHaveBeenCalledWith('76');
+        second.rerender(
+            <BufferedWorkoutScope.Provider value={workoutId}>
+                {field(kind, confirm, '76')}
+            </BufferedWorkoutScope.Provider>,
+        );
+        expect(readBufferedDraftSnapshot(draftName, owner).raw).toBeNull();
+        expect(readBufferedWriterEvidence(owner, draftName)).toHaveLength(0);
+
+        // The old field is still mounted. Its next keystroke cannot reuse
+        // the consumed slot, and cannot overwrite the acknowledged canonical.
+        const report = vi.spyOn(console, 'error').mockImplementation(() => {});
+        fireEvent.change(edited(source), { target: { value: '77' } });
+        const [next] = readBufferedWriterEvidence(owner, draftName);
+        expect(next.name).not.toBe(initial.name);
+        expect(next.value).toBe('77');
+        expect(readBufferedDraftSnapshot(draftName, owner).raw).toBeNull();
+        expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
+        expect(report).toHaveBeenCalled();
+        second.unmount();
+        source.unmount();
+    });
+
     it('does not block an unrelated field because an older-consent witness still exists', () => {
         const owner = captureSession().owner;
         const marker = `logbook:v2:${owner}:health-consent-generation`;
