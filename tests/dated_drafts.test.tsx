@@ -304,6 +304,71 @@ it('retains two full writer values even if the shared canonical record is forcib
     expect(inspected.map(x => JSON.parse(x.value).sleepHours).sort()).toEqual(['07:00', '08:00']);
 });
 
+it('refuses a dated evidence read when an unrelated writer changes after authentication', () => {
+    const owner = storageOwner();
+    const field = 'draft:measurement:2026-09-11';
+    const unrelated = 'draft:sleep:2026-09-11';
+    const otherWriter = createDatedWriterIntentName();
+    const chosenWriter = createDatedWriterIntentName();
+    const original = writeDatedWriterIntent(otherWriter, owner, unrelated, { sleepHours: '07:00' }, null);
+    writeDatedWriterIntent(chosenWriter, owner, field, { weight: '75' }, null);
+
+    const read = vi.mocked(localStorage.getItem);
+    const originalRead = read.getMockImplementation();
+    if (!originalRead) throw new Error('Missing localStorage mock implementation');
+    let updated = false;
+    read.mockImplementation((key: string) => {
+        const value = originalRead(key);
+        if (!updated && key === deviceKey(chosenWriter, owner)) {
+            updated = true;
+            writeDatedWriterIntent(otherWriter, owner, unrelated, { sleepHours: '08:00' }, original);
+        }
+        return value;
+    });
+    try {
+        expect(() => readDatedWriterEvidence(owner, field)).toThrow('Copia datata modificata durante la verifica.');
+    } finally {
+        read.mockImplementation(originalRead);
+    }
+    expect(updated).toBe(true);
+    expect(readDatedWriterEvidence(owner, field).map(x => x.values.weight)).toEqual(['75']);
+    expect(readDatedWriterEvidence(owner, unrelated).map(x => x.values.sleepHours)).toEqual(['08:00']);
+});
+
+it('rejects consent revision changes during the final dated writer inventory', () => {
+    localStorage.removeItem('logbook_is_guest');
+    invalidateSession();
+    const owner = 'user:' + mockFirebaseAuth.currentUser!.uid;
+    const field = 'draft:measurement:2026-09-11';
+    const revisionKey = deviceKey('health-consent-generation', owner);
+    localStorage.setItem(revisionKey, '3');
+    const writer = createDatedWriterIntentName();
+    const raw = writeDatedWriterIntent(writer, owner, field, { weight: '75' }, null, '3');
+    const writerKey = deviceKey(writer, owner);
+
+    const keyMock = vi.mocked(localStorage.key);
+    const originalKey = keyMock.getMockImplementation();
+    if (!originalKey) throw new Error('Missing localStorage key mock implementation');
+    let appearances = 0;
+    keyMock.mockImplementation((index: number) => {
+        const key = originalKey(index);
+        if (key === writerKey && ++appearances === 3) {
+            // Two index passes establish the first stable inventory. A second
+            // browser tab reaccepts consent while the final scan is underway.
+            localStorage.setItem(revisionKey, '5');
+        }
+        return key;
+    });
+    try {
+        expect(() => readDatedWriterEvidence(owner, field)).toThrow('Copie datate o consenso cambiati');
+    } finally {
+        keyMock.mockImplementation(originalKey);
+    }
+    expect(appearances).toBeGreaterThanOrEqual(3);
+    expect(localStorage.getItem(writerKey)).toBe(raw);
+    expect(inspectDatedRecoveryEvidence(owner)[0].provenance).toBe('previous');
+});
+
 it('preserves dated writer witnesses when another tab compacts the key inventory', () => {
     const owner = storageOwner();
     const draftName = 'draft:measurement:2026-09-11';
