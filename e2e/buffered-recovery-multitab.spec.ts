@@ -148,7 +148,7 @@ test('a canonical quota failure retains the independent encrypted witness, inclu
   // independent witness. This hook lives solely in this disposable page realm.
   await page.evaluate((prefix) => {
     const originalSet = Storage.prototype.setItem;
-    Storage.prototype.setItem = function (key: string, value: string) {
+    Storage.prototype.setItem = function (this: Storage, key: string, value: string) {
       if (key.startsWith(prefix)) throw new DOMException('synthetic quota exhausted', 'QuotaExceededError');
       return originalSet.call(this, key, value);
     };
