@@ -280,6 +280,25 @@ it('advances the observed image after consecutive edits and clears only its own 
     expect(useAppStore.getState().localPersistenceBlocked).toBe(false);
 });
 
+it('allows the same mounted form to edit again after a confirmed save and retained tombstone', async () => {
+    const owner = storageOwner();
+    const name = 'draft:measurement:2026-09-11';
+    const dispatch = vi.fn().mockResolvedValue({ ok: true, status: 'synced' } as SyncResult);
+    useAppStore.setState({ dispatchDomainOperation: dispatch });
+    const hook = renderHook(() => useNutritionMeasurements('2026-09-11'));
+    act(() => hook.result.current.setWeight('75'));
+    await act(async () => { await hook.result.current.calculateAndSave(); });
+    const deleted = readFencedDatedDraftImage(name, owner);
+    expect(deleted.values).toBeNull();
+    expect(deleted.raw).not.toBeNull();
+
+    act(() => hook.result.current.setWeight('76'));
+    expect(readFencedDatedDraft(name, owner)?.weight).toBe('76');
+    expect(readFencedDatedDraftImage(name, owner).raw).not.toBe(deleted.raw);
+    expect(useAppStore.getState().localPersistenceBlocked).toBe(false);
+    hook.unmount();
+});
+
 it('reads a new localStorage key before any write can copy the previous value over it', () => {
     localStorage.setItem('view-a', JSON.stringify('history')); localStorage.setItem('view-b', JSON.stringify('home'));
     const hook = renderHook(({ key }) => useLocalStorage(key, 'default'), { initialProps: { key: 'view-a' } });
