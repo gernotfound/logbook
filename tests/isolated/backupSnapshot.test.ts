@@ -287,6 +287,73 @@ it('exports only allowlisted recovery device data and excludes account-deletion 
     expect(backup.recovery.device).not.toHaveProperty('storage_marker');
 });
 
+it('aborts instead of exporting a stale value if another tab changes a witness during backup', async () => {
+    const name = 'draft:dated-intent:' + 'a'.repeat(32);
+    const key = 'logbook:v2:user:a:' + name;
+    const values = new Map([[key, '{"weight":"75"}']]);
+    let changed = false;
+    vi.stubGlobal('localStorage', {
+        get length() { return values.size; },
+        key: (index: number) => [...values.keys()][index] ?? null,
+        getItem: (readKey: string) => {
+            const value = values.get(readKey) ?? null;
+            if (readKey === key && !changed) {
+                changed = true;
+                values.set(key, '{"weight":"76"}');
+            }
+            return value;
+        },
+    });
+    await expect(collectBackupSnapshot(parse({}), false))
+        .rejects.toThrow('I valori di recupero sono cambiati');
+    expect(changed).toBe(true);
+    expect(values.get(key)).toBe('{"weight":"76"}');
+});
+
+it('aborts instead of omitting a newly added independent witness mid-export', async () => {
+    const first = 'logbook:v2:user:a:draft:buffered-intent:' + 'a'.repeat(32);
+    const second = 'logbook:v2:user:a:draft:buffered-intent:' + 'b'.repeat(32);
+    const values = new Map([[first, '{"value":"editor A"}']]);
+    let added = false;
+    vi.stubGlobal('localStorage', {
+        get length() { return values.size; },
+        key: (index: number) => [...values.keys()][index] ?? null,
+        getItem: (readKey: string) => {
+            const value = values.get(readKey) ?? null;
+            if (readKey === first && !added) {
+                added = true;
+                values.set(second, '{"value":"editor B"}');
+            }
+            return value;
+        },
+    });
+    await expect(collectBackupSnapshot(parse({}), false))
+        .rejects.toThrow('Le copie di recupero sono cambiate');
+    expect(added).toBe(true);
+    expect(values.size).toBe(2);
+});
+
+it('aborts if a witness disappears during collection instead of reporting a complete device backup', async () => {
+    const key = 'logbook:v2:user:a:workout-intent:' + 'e'.repeat(32);
+    const values = new Map([[key, '{"sequence":1}']]);
+    let removed = false;
+    vi.stubGlobal('localStorage', {
+        get length() { return values.size; },
+        key: (index: number) => [...values.keys()][index] ?? null,
+        getItem: (readKey: string) => {
+            const value = values.get(readKey) ?? null;
+            if (readKey === key && !removed) {
+                removed = true;
+                values.delete(key);
+            }
+            return value;
+        },
+    });
+    await expect(collectBackupSnapshot(parse({}), false))
+        .rejects.toThrow('Le copie di recupero sono cambiate');
+    expect(removed).toBe(true);
+});
+
 it('retains a crash-only private workout witness in an explicit partial backup without replaying it on import', async () => {
     const source = '{"__logbookWorkoutIntent":1,"sequence":1}';
     const key = 'workout-intent:' + 'f'.repeat(32);
