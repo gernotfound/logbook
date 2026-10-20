@@ -1,5 +1,5 @@
 import { requireHealthConsentWritable } from '../healthConsent';
-import { readBrowserValue, readBrowserValueStrict, removeBrowserValue, writeBrowserValue } from './browserStorage';
+import { readBrowserValueStrict, removeBrowserValue, writeBrowserValue } from './browserStorage';
 import { LocalCiphertextError, openLocalText, sealLocalText, SEALED_LOCAL_PREFIX } from './secureArchiveCipher';
 import { LocalVaultLockedError, readVaultControl, requireUnlockedLocalKey } from './secureArchiveSession';
 import { isActiveGuestSession, storageOwner } from './session';
@@ -89,7 +89,10 @@ export function writeDeviceValue(name: string, value: string | null, owner?: str
     if (readBrowserValueStrict(protectedDeviceKey(name, resolvedOwner)) !== null) throw new LocalCiphertextError();
     // Pre-provisioning legacy path, to be retired after every device has passed
     // the secure vault setup. A ciphertext without control metadata is invalid.
-    if (readBrowserValue(storageKey)?.startsWith(SEALED_LOCAL_PREFIX)) throw new LocalCiphertextError();
+    // This is a data-integrity gate, not an optional hint. A transient failed
+    // read must not be interpreted as "absent" and then authorize overwriting
+    // or deleting the only legacy copy (possibly sealed without its control).
+    if (readBrowserValueStrict(storageKey)?.startsWith(SEALED_LOCAL_PREFIX)) throw new LocalCiphertextError();
     if (value === null) removeBrowserValue(storageKey);
     else writeBrowserValue(storageKey, value);
 }
