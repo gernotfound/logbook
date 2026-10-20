@@ -2,8 +2,11 @@ import { readDeviceValueStrict, writeDeviceValue } from './sync/deviceStorage';
 import { draftRegistry } from './utils/draftRegistry';
 
 const MAX_DEVICE_RECOVERY_DRAFTS = 1024;
+// Witnesses remain in the raw backup for evidence but must never be transplanted
+// into a different device/owner/consent epoch as ordinary editable drafts.
 const draftKey = (name: string) => name === 'draft_exercise' || name === 'draft_routine'
-    || /^draft:[a-z-]+:[a-zA-Z0-9_.:-]{1,128}$/.test(name);
+    || (!name.startsWith('draft:buffered-intent:') && !name.startsWith('draft:dated-intent:')
+        && /^draft:[a-z-]+:[a-zA-Z0-9_.:-]{1,128}$/.test(name));
 const isRecord = (value: unknown): value is Record<string, unknown> =>
     value !== null && typeof value === 'object' && !Array.isArray(value);
 
