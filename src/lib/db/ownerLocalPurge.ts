@@ -78,6 +78,7 @@ export async function purgeOwnerLocalData(owner: string, resumeOnly = false, gat
                 throw error;
             }
         }
+        gate?.assertStillSafe?.();
         lockVault(owner);
         const failures: unknown[] = [];
         // Only the owner-scoped envelope can be deleted before the next awaited
