@@ -318,6 +318,62 @@ describe('authenticated device-intent replay into semantic journal', () => {
         expect(await readLocal(scopedOwner)).toEqual(before);
     });
 
+    it('refuses a new sibling inserted after the last scan but inside the IndexedDB commit guard', async () => {
+        const scopedOwner = 'user:commit-time-sibling-' + crypto.randomUUID();
+        const initial = data(workout('50'));
+        await initializeLocal(scopedOwner, initial);
+        const original = saveWorkoutDeviceIntent(scopedOwner, initial.activeWorkout ?? null,
+            workout('55'), initial.activeWorkout ?? null);
+        const competing = { ...original, intentId: 'd'.repeat(32), workout: workout('60') };
+        const before = await readLocal(scopedOwner);
+        const originalRaw = readDeviceValueStrict('workout-intent:' + original.intentId, scopedOwner);
+        let guardCalls = 0;
+        const guard = () => {
+            // Two calls validate session/owner before the async catalog read.
+            // The third is invoked in the IndexedDB update transaction.
+            if (++guardCalls === 3) {
+                writeDeviceValue('workout-intent:' + competing.intentId,
+                    JSON.stringify(competing), scopedOwner);
+            }
+            return true;
+        };
+
+        await expect(recoverWorkoutDeviceIntent(scopedOwner, guard))
+            .rejects.toThrow('Copie workout cambiate prima del commit locale');
+        expect(guardCalls).toBeGreaterThanOrEqual(3);
+        expect(await readLocal(scopedOwner)).toEqual(before);
+        expect(readDeviceValueStrict('workout-intent:' + original.intentId, scopedOwner))
+            .toBe(originalRaw);
+        expect(readDeviceValueStrict('workout-intent:' + competing.intentId, scopedOwner))
+            .toBe(JSON.stringify(competing));
+        await expect(recoverWorkoutDeviceIntent(scopedOwner, () => true))
+            .rejects.toThrow('Più schede');
+        expect(await readLocal(scopedOwner)).toEqual(before);
+    });
+
+    it('refuses a shared workout changed during the IndexedDB commit preflight', async () => {
+        const scopedOwner = 'user:commit-time-shared-' + crypto.randomUUID();
+        const initial = data(workout('50'));
+        await initializeLocal(scopedOwner, initial);
+        const original = saveWorkoutDeviceIntent(scopedOwner, initial.activeWorkout ?? null,
+            workout('55'), initial.activeWorkout ?? null);
+        const witness = readDeviceValueStrict('workout-intent:' + original.intentId, scopedOwner);
+        const before = await readLocal(scopedOwner);
+        let guardCalls = 0;
+        const guard = () => {
+            if (++guardCalls === 3) {
+                writeDeviceValue('workout', JSON.stringify({ ...original, workout: workout('60') }), scopedOwner);
+            }
+            return true;
+        };
+        await expect(recoverWorkoutDeviceIntent(scopedOwner, guard))
+            .rejects.toThrow('Copie workout cambiate prima del commit locale');
+        expect(await readLocal(scopedOwner)).toEqual(before);
+        expect(readDeviceValueStrict('workout-intent:' + original.intentId, scopedOwner)).toBe(witness);
+        expect(readDeviceValueStrict('workout', scopedOwner))
+            .toBe(JSON.stringify({ ...original, workout: workout('60') }));
+    });
+
     it('recovers a private draft when the shared snapshot write was interrupted', async () => {
         const testOwner = 'user:slot-before-shared';
         const initial = data(workout('50'));
