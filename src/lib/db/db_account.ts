@@ -15,7 +15,8 @@ import { auth, getDb, waitForPendingWrites, signOut } from '../firebase';
 import { withTimeout } from './db_core';
 import { assertDeletionDeadlineActive, withDeletionDeadline } from '../deletionDeadline';
 import { readBrowserValueStrict } from '../sync/browserStorage';
-import { storageOwner, captureSession, isCurrentSession, isActiveGuestSession } from '../sync/session';
+import { storageOwner, captureSession, isCurrentSession, isActiveGuestSession, GUEST_REVOCATION_KEY } from '../sync/session';
+import { readAuthenticatedOwnerHint } from '../sync/authOwnerHint';
 import {
     clearAccountDeletion,
     findPendingAccountDeletion,
@@ -46,6 +47,21 @@ class HealthConsentTransitionPendingError extends Error {
     constructor() {
         super('La revoca o la nuova accettazione dei dati salute non è ancora riconciliata. Per non perdere la richiesta, completa la verifica prima di uscire.');
         this.name = 'HealthConsentTransitionPendingError';
+    }
+}
+
+/** A suspended owner must never purge unscoped device records belonging to the next identity. */
+function assertPurgeIdentitySafe(owner: string, resuming: boolean): void {
+    const guestActive = readBrowserValueStrict('logbook_is_guest') === 'true';
+    const activeUid = auth.currentUser?.uid;
+    const ownerHint = readAuthenticatedOwnerHint();
+    const competingIdentity = owner === 'guest'
+        ? Boolean(activeUid || ownerHint || (resuming && guestActive
+            && readBrowserValueStrict(GUEST_REVOCATION_KEY) === null))
+        : guestActive || Boolean((activeUid && owner !== 'user:' + activeUid)
+            || (ownerHint && ownerHint !== owner));
+    if (competingIdentity) {
+        throw new Error('Un altro account o una sessione ospite è diventata attiva. La pulizia locale resta sospesa.');
     }
 }
 
@@ -88,9 +104,15 @@ async function assertNoOutdatedConsentJournal(owner: string): Promise<void> {
 export async function purgeAllLocalUserData(owner = storageOwner()) {
     // Recovery of a previously started purge must never require an archive
     // that may already be partially deleted.
-    if (isLocalPurgePending(owner)) return purgeOwnerLocalData(owner, true);
+    if (isLocalPurgePending(owner)) {
+        return purgeOwnerLocalData(owner, true, {
+            preflight: async () => {},
+            afterFence: async () => { assertPurgeIdentitySafe(owner, true); },
+        });
+    }
     return purgeOwnerLocalData(owner, false, {
         preflight: async () => {
+            assertPurgeIdentitySafe(owner, false);
             assertOrdinaryPurgeAllowed(owner);
             await assertNoOutdatedConsentJournal(owner);
             if (owner.startsWith('user:')) {
@@ -101,7 +123,7 @@ export async function purgeAllLocalUserData(owner = storageOwner()) {
             }
             assertOrdinaryPurgeAllowed(owner);
         },
-        afterFence: async () => {},
+        afterFence: async () => { assertPurgeIdentitySafe(owner, false); },
     });
 }
 
@@ -112,9 +134,7 @@ export async function purgeCompletedAccountLocalData(owner: string) {
     const assertOwnerStillInactive = () => {
         // A new account or guest session can become active while this owner
         // waits for its vault lock. Never remove shared drafts for that session.
-        if (anotherLocalIdentityIsActive(uid)) {
-            throw new Error('Un altro account o una sessione ospite è diventata attiva. La pulizia locale resta sospesa.');
-        }
+        assertPurgeIdentitySafe(owner, false);
     };
     return purgeOwnerLocalData(owner, false, {
         preflight: async () => { assertOwnerStillInactive(); },
@@ -173,7 +193,10 @@ export async function purgeCompletedHealthDataLocal(owner: string): Promise<void
             if (!isCurrentSession(session)) throw new Error('Sessione cambiata prima della pulizia locale.');
             if (isAccountDeletionPending(owner)) throw new Error('Cancellazione account concorrente in corso.');
         },
-        afterFence: async () => {},
+        afterFence: async () => {
+            if (!isCurrentSession(session)) throw new Error('Sessione cambiata prima della pulizia locale.');
+            assertPurgeIdentitySafe(owner, true);
+        },
     });
 }
 
@@ -199,13 +222,19 @@ export async function logoutAndPurgeAccount(
             }
             assertOrdinaryPurgeAllowed(owner);
         },
-        afterFence: signOutAccount,
+        afterFence: async () => {
+            await signOutAccount();
+            assertPurgeIdentitySafe(owner, false);
+        },
     });
 }
 
 export async function resumeInterruptedLocalPurge(owner: string): Promise<void> {
     if (!isLocalPurgeIncomplete(owner)) return;
-    await purgeOwnerLocalData(owner, true);
+    await purgeOwnerLocalData(owner, true, {
+        preflight: async () => {},
+        afterFence: async () => { assertPurgeIdentitySafe(owner, true); },
+    });
 }
 
 const ACCOUNT_DELETION_INITIAL_OBSERVE_MS = 7500;
