@@ -40,3 +40,9 @@ void test('rejects malformed lockfiles', () => {
 void test('rejects a root prepare or postinstall script', () => {
   assert.match(checkInstallScripts(expectedLockfile(), { scripts: { prepare: 'node arbitrary.js' } }).join('; '), /root npm ci lifecycle hook/);
 });
+
+void test('rejects a returned Sentry CLI install hook after plugin dependency removal', () => {
+  const lockfile = expectedLockfile();
+  lockfile.packages['node_modules/@sentry/cli'] = { version: '2.58.6', hasInstallScript: true };
+  assert.match(checkInstallScripts(lockfile).join('\n'), /Unreviewed lifecycle script: node_modules\/@sentry\/cli/);
+});
