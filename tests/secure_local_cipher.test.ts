@@ -9,6 +9,19 @@ const owner = 'user:local-crypt-test';
 const archive = 'logbook:v2:user:local-crypt-test';
 
 describe('secure archive ciphertext primitive', () => {
+
+    it('opens a fixed interoperable XChaCha20-Poly1305 sealed-v1 record', () => {
+        // Independent HChaCha20 + IETF ChaCha20-Poly1305 reference fixture:
+        // key bytes 0..31, nonce bytes 0..23, UTF-8 plaintext and owner/key/version AAD.
+        // A stable fixture catches regressions hidden by same-version round trips.
+        const dataKey = Uint8Array.from({ length: 32 }, (_, index) => index);
+        const sealed = 'tlb-sealed:v1:AAECAwQFBgcICQoLDA0ODxAREhMUFRYX.8qdoHvOrrctdJ1S3uybNjGsjWsSboj0b4IiVKxA-zZ2e6lgaeByW1sTeTw';
+        expect(openLocalText(dataKey, owner, archive, sealed)).toBe('legacy encrypted draft 💪');
+        expect(() => openLocalText(dataKey, 'user:other', archive, sealed)).toThrow(LocalCiphertextError);
+        expect(() => openLocalText(dataKey, owner, archive + ':other', sealed)).toThrow(LocalCiphertextError);
+        expect(() => openLocalText(new Uint8Array(32), owner, archive, sealed)).toThrow(LocalCiphertextError);
+    });
+
     it('round-trips typed UTF-8 JSON without storing plaintext', () => {
         const sensitive = { weight: '75', averageHeartRate: '143', notes: 'allenamento 💪', pending: [{ seq: 1 }] };
         const original = key();
