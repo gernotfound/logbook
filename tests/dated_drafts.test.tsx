@@ -7,6 +7,10 @@ import { useDialogStore } from '../src/store/useDialogStore';
 import { activateGuestSession, GUEST_SESSION_KEY, GUEST_REVOCATION_KEY, invalidateSession, storageOwner } from '../src/lib/sync/session';
 import { deviceKey } from '../src/lib/sync/deviceStorage';
 import { DatedDraftConflictError, readFencedDatedDraft, readFencedDatedDraftImage, writeFencedDatedDraft, UnverifiedDatedDraftEpochError } from '../src/lib/sync/datedDraftEpoch';
+import {
+    createDatedWriterIntentName, inspectDatedRecoveryEvidence, readDatedWriterEvidence,
+    writeDatedWriterIntent,
+} from '../src/lib/sync/datedDraftWriterIntent';
 import { mockFirebaseAuth } from './setup';
 import { draftRegistry } from '../src/lib/utils/draftRegistry';
 import { UserDataSchema } from '../src/lib/schema';
@@ -250,7 +254,7 @@ it('blocks a stale mounted measurement form before edit or business dispatch, pr
     const currentRaw = readFencedDatedDraftImage(name, owner).raw;
 
     act(() => stale.result.current.setWaist('85'));
-    expect(stale.result.current.waist).toBe('');
+    expect(stale.result.current.waist).toBe('85'); // keep fresh text in its own witness
     expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
     expect(useAppStore.getState().saveError).toMatch(/altra scheda/i);
     await act(async () => { await stale.result.current.calculateAndSave(); });
@@ -259,6 +263,104 @@ it('blocks a stale mounted measurement form before edit or business dispatch, pr
     expect(readFencedDatedDraft(name, owner)?.weight).toBe('76');
     earlier.unmount();
     stale.unmount();
+});
+
+it('preserves both editors independently when a stale form cannot update the shared dated draft', () => {
+    const owner = storageOwner();
+    const name = 'draft:measurement:2026-09-11';
+    const first = renderHook(() => useNutritionMeasurements('2026-09-11'));
+    const second = renderHook(() => useNutritionMeasurements('2026-09-11'));
+    act(() => first.result.current.setWeight('75'));
+    act(() => second.result.current.setWeight('76'));
+    expect(readFencedDatedDraft(name, owner)?.weight).toBe('75');
+    expect(readDatedWriterEvidence(owner, name).map(x => x.values.weight).sort()).toEqual(['75', '76']);
+    expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
+
+    // An independent new editor cannot silently choose or republish either contender.
+    first.unmount(); second.unmount();
+    const reopened = renderHook(() => useNutritionMeasurements('2026-09-11'));
+    expect(reopened.result.current.weight).toBe('');
+    expect(readDatedWriterEvidence(owner, name)).toHaveLength(2);
+    reopened.unmount();
+});
+
+it('retains two full writer values even if the shared canonical record is forcibly lost in a simultaneous race', () => {
+    const owner = storageOwner();
+    const name = 'draft:sleep:2026-09-11';
+    const a = createDatedWriterIntentName();
+    const b = createDatedWriterIntentName();
+    writeDatedWriterIntent(a, owner, name, { sleepHours: '07:00' }, null);
+    writeDatedWriterIntent(b, owner, name, { sleepHours: '08:00' }, null);
+    // Deliberately emulate two writers which both passed their preflight
+    // before either canonical write (localStorage has no atomic CAS).
+    writeFencedDatedDraft(name, owner, { sleepHours: '07:00' });
+    writeFencedDatedDraft(name, owner, { sleepHours: '08:00' });
+    expect(readFencedDatedDraft(name, owner)?.sleepHours).toBe('08:00');
+    expect(readDatedWriterEvidence(owner, name).map(x => x.values.sleepHours).sort())
+        .toEqual(['07:00', '08:00']);
+    const inspected = inspectDatedRecoveryEvidence(owner);
+    expect(inspected).toHaveLength(2);
+    expect(inspected.map(x => JSON.parse(x.value).sleepHours).sort()).toEqual(['07:00', '08:00']);
+});
+
+it('keeps an independent witness readable if a canonical write exhausts storage quota', () => {
+    const owner = storageOwner();
+    const name = 'draft:measurement:2026-09-11';
+    const canonical = deviceKey(name, owner);
+    const hook = renderHook(() => useNutritionMeasurements('2026-09-11'));
+    vi.mocked(localStorage.setItem).mockImplementation((key, value) => {
+        if (key === canonical) throw new DOMException('Quota exceeded', 'QuotaExceededError');
+        storeItem(key, value);
+    });
+    act(() => hook.result.current.setWeight('75'));
+    expect(readFencedDatedDraft(name, owner)).toBeNull();
+    expect(readDatedWriterEvidence(owner, name).map(x => x.values.weight)).toEqual(['75']);
+    expect(() => draftRegistry.flushAll({ strict: true })).toThrow('bozze');
+    hook.unmount();
+});
+
+it('removes only committed editor evidence after durable business save', async () => {
+    const owner = storageOwner();
+    const name = 'draft:measurement:2026-09-11';
+    const dispatch = vi.fn().mockResolvedValue({ ok: true, status: 'synced' } as SyncResult);
+    useAppStore.setState({ dispatchDomainOperation: dispatch });
+    const hook = renderHook(() => useNutritionMeasurements('2026-09-11'));
+    act(() => hook.result.current.setWeight('75'));
+    expect(readDatedWriterEvidence(owner, name)).toHaveLength(1);
+    await act(async () => { await hook.result.current.calculateAndSave(); });
+    expect(dispatch).toHaveBeenCalledTimes(1);
+    expect(readDatedWriterEvidence(owner, name)).toHaveLength(0);
+    expect(readFencedDatedDraftImage(name, owner).values).toBeNull();
+    hook.unmount();
+});
+
+it('quarantines consent-revoked writer evidence while retaining its bytes for explicit export', () => {
+    localStorage.removeItem('logbook_is_guest');
+    invalidateSession();
+    const owner = 'user:' + mockFirebaseAuth.currentUser!.uid;
+    const name = 'draft:measurement:2026-09-11';
+    const marker = `logbook:v2:${owner}:health-consent-generation`;
+    localStorage.setItem(marker, '3');
+    const witness = createDatedWriterIntentName();
+    const raw = writeDatedWriterIntent(witness, owner, name, { weight: '75' }, null, '3');
+    localStorage.setItem(marker, '5');
+    expect(() => readDatedWriterEvidence(owner, name)).toThrow();
+    const preview = inspectDatedRecoveryEvidence(owner);
+    expect(preview).toHaveLength(1);
+    expect(preview[0].provenance).toBe('previous');
+    expect(preview[0].value).toContain('75');
+    expect(localStorage.getItem(deviceKey(witness, owner))).toBe(raw);
+});
+
+it('blocks malformed dated writer witness rather than treating recovery storage as empty', () => {
+    const owner = storageOwner();
+    const name = 'draft:measurement:2026-09-11';
+    const witness = createDatedWriterIntentName();
+    const original = '{"__logbookDatedWriterIntent":1,"owner":"guest","draftName":"foreign","values":{"weight":"75"}}';
+    const key = deviceKey(witness, owner);
+    localStorage.setItem(key, original);
+    expect(() => readDatedWriterEvidence(owner, name)).toThrow();
+    expect(localStorage.getItem(key)).toBe(original);
 });
 
 it('advances the observed image after consecutive edits and clears only its own committed draft', async () => {
