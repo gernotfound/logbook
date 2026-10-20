@@ -131,7 +131,12 @@ export function useDatedDraft<T extends Record<string, string>>(kind: string, da
                 && entry.raw === draft.sourceIntent.raw;
             if (!own && !source) throw new DatedDraftConflictError();
         }
-        if (draft.writerRaw && !evidence.some(e => e.name === draft.writerName && e.raw === draft.writerRaw)) {
+        if (draft.writerRaw && !evidence.some(e => e.name === draft.writerName
+            && e.raw === draft.writerRaw
+            && JSON.stringify(e.values) === JSON.stringify(draft.values))) {
+            // A quota/error may leave a previously successful witness intact
+            // while a newer edit exists only in RAM. Never commit that draft
+            // as though the current keystrokes were independently protected.
             throw new DatedDraftConflictError();
         }
         if (draft.sourceIntent && !evidence.some(e => e.name === draft.sourceIntent?.name
