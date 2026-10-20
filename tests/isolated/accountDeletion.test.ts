@@ -22,11 +22,11 @@ vi.mock('../../src/lib/firebase', () => ({
 vi.mock('../../src/lib/appCheck', () => ({ getLimitedUseAppCheckToken: boundary.appCheck }));
 vi.mock('../../src/lib/sync/replicateJournal', () => ({ waitForJournalIdle: boundary.idle }));
 
-import { deleteAccount, purgeAllLocalUserData, purgeCompletedAccountLocalData, purgeCompletedHealthDataLocal, resumeAccountDeletion } from '../../src/lib/db/db_account';
+import { deleteAccount, purgeAllLocalUserData, purgeCompletedAccountLocalData, purgeCompletedHealthDataLocal, resumeAccountDeletion, resumeInterruptedLocalPurge } from '../../src/lib/db/db_account';
 import { invalidateSession } from '../../src/lib/sync/session';
 import { createLocalKeyVault, deviceVaultKeyId } from '../../src/lib/sync/secureArchiveKeys';
 import { isVaultUnlocked } from '../../src/lib/sync/secureArchiveSession';
-import { assertNoLocalPurge, isLocalPurgePending } from '../../src/lib/sync/localPurgeFence';
+import { assertNoLocalPurge, beginLocalPurge, isLocalPurgePending } from '../../src/lib/sync/localPurgeFence';
 import { sealLocalText } from '../../src/lib/sync/secureArchiveCipher';
 import {
     isAccountDeletionPending,
@@ -184,6 +184,56 @@ it('keeps an interrupted deletion fenced when a guest starts before retry', asyn
     expect(await get('logbook:v2:user:a')).toEqual({ original: 'recoverable' });
     expect(disk.get('logbook_local_workout')).toBe('guest-workout');
     expect(isLocalPurgePending('user:a')).toBe(false);
+});
+
+it('does not resume a fenced account purge after a different account has logged in', async () => {
+    beginLocalPurge('user:a');
+    disk.set('logbook_local_workout', 'new-owner-workout');
+    boundary.auth.currentUser = { uid: 'b' };
+
+    await expect(resumeInterruptedLocalPurge('user:a')).rejects.toThrow('La pulizia locale resta sospesa');
+    await expect(purgeAllLocalUserData('user:a')).rejects.toThrow('La pulizia locale resta sospesa');
+
+    expect(await get('logbook:v2:user:a')).toEqual({ original: 'recoverable' });
+    expect(await get('logbook:v2:user:b')).toEqual({ original: 'other owner' });
+    expect(disk.get('logbook_local_workout')).toBe('new-owner-workout');
+    expect(isLocalPurgePending('user:a')).toBe(true);
+});
+
+it('preserves an interrupted account purge if an owner hint switches before Auth resolves', async () => {
+    beginLocalPurge('user:a');
+    disk.set('logbook_authenticated_owner', 'user:b');
+    disk.set('logbook_local_workout', 'from-other-account');
+    boundary.auth.currentUser = null;
+
+    await expect(resumeInterruptedLocalPurge('user:a')).rejects.toThrow('La pulizia locale resta sospesa');
+
+    expect(await get('logbook:v2:user:a')).toEqual({ original: 'recoverable' });
+    expect(disk.get('logbook_local_workout')).toBe('from-other-account');
+    expect(isLocalPurgePending('user:a')).toBe(true);
+});
+
+it('refuses to resume an old guest purge over a newly active guest generation', async () => {
+    beginLocalPurge('guest');
+    boundary.auth.currentUser = null;
+    disk.set('logbook_is_guest', 'true');
+    disk.set('logbook_guest_session_id_v1', 'new-guest-generation');
+    disk.set('draft_measurement', 'new-guest-draft');
+
+    await expect(resumeInterruptedLocalPurge('guest')).rejects.toThrow('La pulizia locale resta sospesa');
+
+    expect(disk.get('draft_measurement')).toBe('new-guest-draft');
+    expect(isLocalPurgePending('guest')).toBe(true);
+});
+
+it('completes a fenced owner purge when the same owner is still active', async () => {
+    beginLocalPurge('user:a');
+
+    await resumeInterruptedLocalPurge('user:a');
+
+    expect(await get('logbook:v2:user:a')).toBeUndefined();
+    expect(await get('logbook:v2:user:b')).toEqual({ original: 'other owner' });
+    expect(isLocalPurgePending('user:a')).toBe(true);
 });
 
 it('drains owner-scoped keys discovered during a previous localStorage purge pass', async () => {
