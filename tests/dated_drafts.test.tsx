@@ -319,6 +319,31 @@ it('keeps an independent witness readable if a canonical write exhausts storage 
     hook.unmount();
 });
 
+it('rejects business save when a later witness update fails but a previous witness still exists', async () => {
+    const owner = storageOwner();
+    const name = 'draft:measurement:2026-09-11';
+    const dispatch = vi.fn().mockResolvedValue({ ok: true, status: 'synced' } as SyncResult);
+    useAppStore.setState({ dispatchDomainOperation: dispatch });
+    const hook = renderHook(() => useNutritionMeasurements('2026-09-11'));
+    act(() => hook.result.current.setWeight('75'));
+    const original = readDatedWriterEvidence(owner, name);
+    expect(original.map(x => x.values.weight)).toEqual(['75']);
+
+    const witnessPrefix = deviceKey('draft:dated-intent:', owner);
+    vi.mocked(localStorage.setItem).mockImplementation((key, value) => {
+        if (key.startsWith(witnessPrefix)) throw new DOMException('witness quota', 'QuotaExceededError');
+        storeItem(key, value);
+    });
+    act(() => hook.result.current.setWeight('76'));
+    expect(hook.result.current.weight).toBe('76');
+    expect(readDatedWriterEvidence(owner, name)).toEqual(original);
+    await act(async () => { await hook.result.current.calculateAndSave(); });
+    expect(dispatch).not.toHaveBeenCalled();
+    expect(readFencedDatedDraft(name, owner)?.weight).toBe('75');
+    expect(() => draftRegistry.flushAll({ strict: true })).toThrow('bozze');
+    hook.unmount();
+});
+
 it('removes only committed editor evidence after durable business save', async () => {
     const owner = storageOwner();
     const name = 'draft:measurement:2026-09-11';
