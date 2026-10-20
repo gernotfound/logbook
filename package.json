@@ -1,7 +1,7 @@
 {
   "name": "logbook",
   "private": true,
-  "version": "1.96.0",
+  "version": "1.101.0",
   "type": "module",
   "packageManager": "npm@11.21.0",
   "engines": {
@@ -63,8 +63,8 @@
     "verify:m8": "npm run verify:m7 && npm run test:m8 && npm run test:domain-boundary:m8"
   },
   "dependencies": {
-    "@noble/ciphers": "2.2.0",
-    "@sentry/react": "^11.6.0",
+    "@noble/ciphers": "2.4.0",
+    "@sentry/react": "^11.8.0",
     "chart.js": "^4.5.1",
     "date-fns": "^4.4.0",
     "fast-deep-equal": "^3.1.3",
@@ -73,9 +73,9 @@
     "fuse.js": "^7.5.0",
     "idb-keyval": "^6.3.0",
     "lucide-react": "^1.59.0",
-    "react": "^19.3.0",
+    "react": "^19.3.1",
     "react-chartjs-2": "^5.3.1",
-    "react-dom": "^19.3.0",
+    "react-dom": "^19.3.1",
     "vite-plugin-pwa": "^2.0.0",
     "zod": "^4.6.5",
     "zustand": "^5.0.15"
@@ -96,7 +96,7 @@
     "@axe-core/playwright": "^4.13.0",
     "@firebase/rules-unit-testing": "6.0.0",
     "@playwright/test": "^1.64.0",
-    "@sentry/vite-plugin": "^5.4.1",
+    "@sentry/vite-plugin": "^11.8.0",
     "@testing-library/dom": "^10.4.2",
     "@testing-library/react": "^16.3.3",
     "@types/react": "^19.3.0",
@@ -120,7 +120,6 @@
   },
   "allowScripts": {
     "@firebase/util": true,
-    "@sentry/cli": true,
     "protobufjs": true,
     "re2": true
   }

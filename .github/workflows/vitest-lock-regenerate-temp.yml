@@ -1,0 +1,34 @@
+# TEMPORARY migration helper. Delete before final candidate validation and merge.
+name: Temporary Vitest 5 lock regeneration
+on:
+  push:
+    branches:
+      - dependabot/npm_and_yarn/vitest/ui-5.0.4
+    paths:
+      - package.json
+      - .github/workflows/vitest-lock-regenerate-temp.yml
+permissions:
+  contents: write
+jobs:
+  generate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.ref_name }}
+          persist-credentials: true
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '24'
+      - name: Regenerate lockfile without install lifecycle scripts
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - name: Verify reviewed install-time packages
+        run: node scripts/check-install-scripts.mjs
+      - name: Commit generated lockfile only
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add package-lock.json
+          git diff --cached --quiet && { echo 'Expected a regenerated lockfile'; exit 1; }
+          git commit -m 'chore(test): synchronize Vitest 5 lockfile with current dependencies'
+          git push origin "HEAD:${GITHUB_REF_NAME}"
