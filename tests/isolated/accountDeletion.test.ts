@@ -154,6 +154,20 @@ it('finishes data-only erasure after two current trusted proofs, preserving anot
     expect(isLocalPurgePending('user:a')).toBe(true);
 });
 
+it('does not self-abort data erasure after removing its own consent markers', async () => {
+    boundary.auth.currentUser.getIdToken = vi.fn(async () => 'firebase-id-token');
+    boundary.fetch.mockImplementation(async () => completeHealthProof());
+    disk.set('logbook:v2:user:a:health-consent-generation', '1');
+    disk.set('logbook:v2:user:a:health-consent-withdrawal', 'withdrawn');
+
+    await purgeCompletedHealthDataLocal('user:a');
+
+    expect(await get('logbook:v2:user:a')).toBeUndefined();
+    expect(disk.has('logbook:v2:user:a:health-consent-generation')).toBe(false);
+    expect(disk.has('logbook:v2:user:a:health-consent-withdrawal')).toBe(false);
+    expect(isLocalPurgePending('user:a')).toBe(true);
+});
+
 it('retains old account ciphertext and shared drafts if another account activates while waiting for the purge lock', async () => {
     let release!: () => void;
     let entered!: () => void;
