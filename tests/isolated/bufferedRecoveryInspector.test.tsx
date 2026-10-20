@@ -7,6 +7,7 @@ const fixture = vi.hoisted(() => ({
     consent: 'active',
     dataOwner: 'user:a' as string | null,
     inspect: vi.fn(),
+    inspectDated: vi.fn(),
 }));
 vi.mock('../../src/lib/sync/session', () => ({
     captureSession: () => ({ owner: fixture.owner, epoch: 1 }),
@@ -29,6 +30,9 @@ vi.mock('../../src/store/useAppStore', () => ({
 vi.mock('../../src/lib/sync/bufferedDraftWriterIntent', () => ({
     inspectBufferedRecoveryEvidence: fixture.inspect,
 }));
+vi.mock('../../src/lib/sync/datedDraftWriterIntent', () => ({
+    inspectDatedRecoveryEvidence: fixture.inspectDated,
+}));
 import { BufferedRecoveryInspector } from '../../src/components/Settings/BufferedRecoveryInspector';
 
 beforeEach(() => {
@@ -36,6 +40,7 @@ beforeEach(() => {
     fixture.current = true;
     fixture.consent = 'active';
     fixture.dataOwner = 'user:a';
+    fixture.inspectDated.mockReset().mockReturnValue([]);
     fixture.inspect.mockReset().mockReturnValue([
         { name: 'draft:buffered-intent:a', draftName: 'draft:buffered:textarea:workout-1:notes',
             value: 'Older sensitive note', consentRevision: 2, provenance: 'previous' },
@@ -104,4 +109,20 @@ it('hides every prior-owner copy after the owner changes', () => {
     view.rerender(<BufferedRecoveryInspector />);
     expect(screen.queryByDisplayValue('Older sensitive note')).toBeNull();
     expect(screen.queryByRole('region', { name: 'Copie di recupero' })).toBeNull();
+});
+
+it('inspects both buffered and dated copies only on explicit consent-checked action', () => {
+    fixture.inspectDated.mockReturnValue([
+        { name: 'draft:dated-intent:abc', draftName: 'draft:measurement:2026-10-20',
+            value: '{"weight":"75"}', consentRevision: 3, provenance: 'current' },
+    ]);
+    render(<BufferedRecoveryInspector />);
+    expect(fixture.inspectDated).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: /Esamina copie sul dispositivo/ }));
+    expect(fixture.inspectDated).toHaveBeenCalledExactlyOnceWith('user:a');
+    expect(screen.getByText(/3 copie conservate in 2 campi/)).toBeTruthy();
+    fireEvent.click(screen.getByText(/draft:measurement:2026-10-20 — 1 copia/));
+    expect(screen.getByDisplayValue('{"weight":"75"}')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Nascondi copie' }));
+    expect(screen.queryByDisplayValue('{"weight":"75"}')).toBeNull();
 });
