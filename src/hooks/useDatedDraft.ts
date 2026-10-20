@@ -190,21 +190,38 @@ export function useDatedDraft<T extends Record<string, string>>(kind: string, da
     };
 
     const clear = (expected?: T) => {
-        if (!session || !key || !isCurrentSession(session) || current.current.key !== key
-            || (expected && JSON.stringify(expected) !== JSON.stringify(current.current.values))) return false;
+        const draft = current.current;
+        if (!session || !key || !isCurrentSession(session) || draft.key !== key
+            || draft.scope !== readScope
+            || (expected && JSON.stringify(expected) !== JSON.stringify(draft.values))) return false;
         verifyCurrentDraft();
-        let clearedRaw: string;
-        try { clearedRaw = writeFencedDatedDraft(name, session.owner, null, current.current.observedRaw); }
-        catch (error) {
+        try {
+            const clearedRaw = writeFencedDatedDraft(name, session.owner, null, draft.observedRaw);
+            // Business commit was already durably confirmed. Remove only the
+            // exact witness belonging to this editor and the witness loaded at
+            // mount. Unrelated contenders must remain untouched.
+            draft.observedRaw = clearedRaw;
+            if (draft.writerName && draft.writerRaw) {
+                clearDatedWriterIntent(draft.writerName, session.owner,
+                    draft.writerRaw, session.consentGeneration);
+                draft.writerName = null;
+                draft.writerRaw = null;
+            }
+            if (draft.sourceIntent) {
+                clearDatedWriterIntent(draft.sourceIntent.name, session.owner,
+                    draft.sourceIntent.raw, session.consentGeneration);
+                draft.sourceIntent = null;
+            }
+        } catch (error) {
             if (error instanceof UnverifiedDatedDraftEpochError || error instanceof DatedDraftConflictError) {
                 blockProvenance(error);
             } else {
-                useAppStore.getState().setSaveError('Dati salvati; impossibile rimuovere la bozza locale.');
+                useAppStore.getState().setSaveError('Dati salvati; impossibile pulire la copia locale di recupero.');
             }
             throw error;
         }
-        current.current = { key, name, values: source, dirty: false, session, observedRaw: clearedRaw };
-        setEdited({ key, values: null });
+        current.current = { ...draft, values: source, dirty: false };
+        setEdited({ scope: readScope!, values: null });
         return true;
     };
 
@@ -215,7 +232,7 @@ export function useDatedDraft<T extends Record<string, string>>(kind: string, da
             if (!draft.key || !draft.name || !draft.session || !isCurrentSession(draft.session)) {
                 throw new Error('Sessione cambiata prima del salvataggio della bozza.');
             }
-            draft.observedRaw = persist(draft.name, draft.session.owner, draft.values, draft.observedRaw);
+            persist(draft);
         };
         draftRegistry.register(flush);
         const unregisterRecovery = requiredUpdateRecoveryRegistry.register(flush);
