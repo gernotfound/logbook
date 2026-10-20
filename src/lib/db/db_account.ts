@@ -108,6 +108,7 @@ export async function purgeAllLocalUserData(owner = storageOwner()) {
         return purgeOwnerLocalData(owner, true, {
             preflight: async () => {},
             afterFence: async () => { assertPurgeIdentitySafe(owner, true); },
+            assertStillSafe: () => assertPurgeIdentitySafe(owner, true),
         });
     }
     return purgeOwnerLocalData(owner, false, {
@@ -124,6 +125,7 @@ export async function purgeAllLocalUserData(owner = storageOwner()) {
             assertOrdinaryPurgeAllowed(owner);
         },
         afterFence: async () => { assertPurgeIdentitySafe(owner, false); },
+        assertStillSafe: () => assertPurgeIdentitySafe(owner, false),
     });
 }
 
@@ -139,6 +141,7 @@ export async function purgeCompletedAccountLocalData(owner: string) {
         preflight: async () => { assertOwnerStillInactive(); },
         // Runs even when resuming an already-fenced, interrupted purge.
         afterFence: async () => { assertOwnerStillInactive(); },
+        assertStillSafe: assertOwnerStillInactive,
     });
 }
 
@@ -196,6 +199,10 @@ export async function purgeCompletedHealthDataLocal(owner: string): Promise<void
             if (!isCurrentSession(session)) throw new Error('Sessione cambiata prima della pulizia locale.');
             assertPurgeIdentitySafe(owner, true);
         },
+        assertStillSafe: () => {
+            if (!isCurrentSession(session)) throw new Error('Sessione cambiata durante la pulizia locale.');
+            assertPurgeIdentitySafe(owner, true);
+        },
     });
 }
 
@@ -225,6 +232,7 @@ export async function logoutAndPurgeAccount(
             await signOutAccount();
             assertPurgeIdentitySafe(owner, false);
         },
+        assertStillSafe: () => assertPurgeIdentitySafe(owner, false),
     });
 }
 
@@ -233,6 +241,7 @@ export async function resumeInterruptedLocalPurge(owner: string): Promise<void> 
     await purgeOwnerLocalData(owner, true, {
         preflight: async () => {},
         afterFence: async () => { assertPurgeIdentitySafe(owner, true); },
+        assertStillSafe: () => assertPurgeIdentitySafe(owner, true),
     });
 }
 
