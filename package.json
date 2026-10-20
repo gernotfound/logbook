@@ -120,7 +120,6 @@
   },
   "allowScripts": {
     "@firebase/util": true,
-    "@sentry/cli": true,
     "protobufjs": true,
     "re2": true
   }

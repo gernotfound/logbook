@@ -6,7 +6,6 @@ import { fileURLToPath } from 'node:url';
 // lockfile upgrade before changing this explicit versioned approval list.
 export const approvedInstallScripts = Object.freeze({
   'node_modules/@firebase/util': '1.15.3',
-  'node_modules/@sentry/cli': '2.58.6',
   'node_modules/fsevents': '2.3.3',
   'node_modules/protobufjs': '7.6.5',
 });
