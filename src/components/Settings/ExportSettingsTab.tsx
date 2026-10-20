@@ -2,6 +2,7 @@ import type { ChangeEvent } from 'react';
 import { Archive, FileSpreadsheet, Share2, Upload } from 'lucide-react';
 import { ExportSelector, type ExportSelection, type ExportSelectorItem } from '../ExportSelector';
 import type { ImportMode } from '../../lib/backup';
+import { BufferedRecoveryInspector } from './BufferedRecoveryInspector';
 
 const EMPTY_EXPORT_ITEMS: ExportSelectorItem[] = [];
 type ExportShareOptions = { exportLibrary?: boolean | string[]; exportRoutines?: boolean | string[]; exportTrainingCycles?: boolean | string[]; };
@@ -51,6 +52,7 @@ export function ExportSettingsTab(props: ExportSettingsTabProps) {
                     <label className={'btn btn-primary settings-file-button ' + (importingData ? 'is-disabled' : '')}><Upload size={18} aria-hidden="true" /> {importingData ? 'Importazione...' : 'Ripristina'}<input type="file" accept=".json" hidden onChange={event => onImportFile(event, 'restore')} disabled={importingData} /></label>
                 </div>
             </div>
+            <BufferedRecoveryInspector />
             <div className="settings-detail-card">
                 <h2><FileSpreadsheet size={20} aria-hidden="true" /> Esportazione CSV</h2>
                 <p className="settings-help">Crea file tabellari dai dati attualmente caricati su questo dispositivo. Il CSV è pensato per analisi in un foglio di calcolo e non sostituisce il Backup JSON completo del cloud.</p>

@@ -599,16 +599,16 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
                 activeCycleId: null
             };
 
-            // First call returns userDoc, remaining 6 calls return empty month snapshots
-            vi.mocked(getDocFromServer)
-                .mockResolvedValueOnce({
-                    exists: () => true,
-                    data: () => mockUserDoc
-                } as any)
-                .mockResolvedValue({
-                    exists: () => false,
-                    data: () => undefined
-                } as any);
+            // Control and month reads are separate from the cloud root.
+            // Avoid a call-order fixture: the control witness is fetched first.
+            vi.mocked(getDocFromServer).mockImplementation(async (ref: any) => {
+                const path = String(ref?.path ?? '');
+                if (path.includes('/sync_control/') || path.includes('/history_months/')
+                    || path.includes('/nutrition_months/')) {
+                    return { exists: () => false, data: () => undefined } as any;
+                }
+                return { exists: () => true, data: () => mockUserDoc } as any;
+            });
 
             const loaded = await DB.loadUserData();
 
@@ -616,7 +616,8 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
             expect(loaded?.profile?.height).toBe('180');
             // Cached SDK reads are only for the catalog; authoritative user data uses server reads.
             expect(getDoc).toHaveBeenCalledTimes(1);
-            expect(getDocFromServer).toHaveBeenCalledTimes(7);
+            // One root, six months and two server control-epoch reads.
+            expect(getDocFromServer).toHaveBeenCalledTimes(9);
         });
 
         it('server deletion preserves <=400 batches and verifies residues before deleting Auth', () => {

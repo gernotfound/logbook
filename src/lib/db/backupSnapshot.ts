@@ -5,19 +5,83 @@ import { readLocal } from '../sync/localRepository';
 import { readDeviceValueStrict } from '../sync/deviceStorage';
 import { getCachedCatalog } from '../catalog/catalogService';
 import { applyRemoteDocuments, projectDocuments, type DocumentData } from '../sync/documentProjection';
-import { applySemanticOperations, parseSyncMeta, type SyncMeta } from '../sync/semanticProjection';
+import { applySemanticOperations, coversVectorClock, parseSyncMeta, type SyncMeta } from '../sync/semanticProjection';
 import { normalizeCloudDocument } from '../schemaEvolution';
 import { UserDataSchema } from '../schema';
 import { withTimeout } from './db_core';
 import type { UserData } from '../../types';
 import type { BackupCoverage } from '../backup';
 import equal from 'fast-deep-equal';
+import { sameCloudControlState } from '../sync/cloudReadConsistency';
 import { currentHealthConsentStatus, hasUnreconciledOfflineReaccept, readHealthConsentServerStatus } from '../healthConsent';
 import { fetchWithdrawnCloudBackup } from './withdrawnBackupTransport';
 import { requireCompleteHistoryMonthDocument, requireCompleteNutritionMonthDocument } from '../sync/monthlyIntegrity';
 
-const RECOVERY_DEVICE_KEYS = new Set(['workout', 'timer', 'draft_exercise', 'draft_routine']);
-const isRecoveryDeviceKey = (name: string) => RECOVERY_DEVICE_KEYS.has(name) || name.startsWith('draft:');
+const RECOVERY_DEVICE_KEYS = new Set([
+    'workout', 'timer', 'draft_exercise', 'draft_routine', 'history-editor-context',
+]);
+const isRecoveryDeviceKey = (name: string) =>
+    RECOVERY_DEVICE_KEYS.has(name) || name.startsWith('draft:')
+    || /^workout-intent:[a-f0-9]{32}$/.test(name);
+
+// Private write-ahead witnesses and suspended editor context are included as
+// raw recovery evidence only. Import never replays them as a causal journal.
+function deviceRecoveryName(key: string | null, owner: string): string | null {
+    const prefix = 'logbook:v2:' + owner + ':';
+    if (!key?.startsWith(prefix)) return null;
+    const raw = key.slice(prefix.length);
+    const name = raw.startsWith('sealed:') ? raw.slice('sealed:'.length) : raw;
+    return isRecoveryDeviceKey(name) ? name : null;
+}
+
+/**
+ * The backup is a user-visible claim that every device recovery witness was
+ * included. Scanning localStorage by a live numeric index can skip keys when
+ * another tab adds/removes one, even though each individual read succeeds.
+ *
+ * Capture names first; validate exact physical membership and decoded values
+ * after the copy. This detects observable races without claiming a
+ * transactional snapshot across browser realms.
+ */
+function readStableDeviceRecovery(owner: string): Record<string, string> {
+    const physicalKeys = (): Set<string> => {
+        const keys = new Set<string>();
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (deviceRecoveryName(key, owner) !== null) keys.add(key!);
+        }
+        return keys;
+    };
+    const before = physicalKeys();
+    const device: Record<string, string> = {};
+    for (const physicalKey of before) {
+        const name = deviceRecoveryName(physicalKey, owner)!;
+        // Strict read validates owner, vault state, ciphertext and purge
+        // fences; a vanished key cannot silently become an omitted witness.
+        const value = readDeviceValueStrict(name, owner);
+        if (value === null || Object.hasOwn(device, name)) {
+            throw new Error('Le copie di recupero sono cambiate durante il backup. Riprova senza chiudere altre schede.');
+        }
+        device[name] = value;
+    }
+    const after = physicalKeys();
+    if (after.size !== before.size || [...before].some(key => !after.has(key))) {
+        throw new Error('Le copie di recupero sono cambiate durante il backup. Riprova senza chiudere altre schede.');
+    }
+    for (const physicalKey of before) {
+        const name = deviceRecoveryName(physicalKey, owner)!;
+        if (readDeviceValueStrict(name, owner) !== device[name]) {
+            throw new Error('I valori di recupero sono cambiati durante il backup. Riprova senza chiudere altre schede.');
+        }
+    }
+    return device;
+}
+
+export function hasDeviceRecoveryBackupSource(owner: string): boolean {
+    // The existence preflight must be as race-aware as the export itself.
+    // A shifting localStorage index must not hide the only recovery witness.
+    return Object.keys(readStableDeviceRecovery(owner)).length > 0;
+}
 
 export async function collectBackupSnapshot(fallback: UserData, includeCloud: boolean, consistencyAttempt = 0) {
     const session = captureSession();
@@ -96,8 +160,7 @@ export async function collectBackupSnapshot(fallback: UserData, includeCloud: bo
             }
             const afterControl = await withTimeout(getDocFromServer(controlRef), 10000, 'Controllo versione cloud non disponibile.');
             assertCurrent();
-            if (beforeControl.exists() !== afterControl.exists()
-                || (beforeControl.exists() && !equal(beforeControl.data(), afterControl.data()))) {
+            if (!sameCloudControlState(beforeControl, afterControl)) {
                 if (consistencyAttempt === 0) return collectBackupSnapshot(fallback, includeCloud, 1);
                 throw new Error('Il cloud è cambiato durante il backup: non è possibile garantire una copia completa coerente. Riprova quando gli altri dispositivi sono inattivi.');
             }
@@ -120,6 +183,17 @@ export async function collectBackupSnapshot(fallback: UserData, includeCloud: bo
         throw new Error('I dati locali sono cambiati durante il backup. Riprova quando le modifiche sono stabili.');
     }
     const local = envelope?.data ?? fallback;
+    if (cloud && envelope) {
+        if (envelope.cloudIntegrityFence) {
+            throw new Error('Backup cloud sospeso: divergenza con la copia locale ancora da verificare. Esporta la copia del dispositivo.');
+        }
+        for (const [path, durableMeta] of Object.entries(envelope.syncMetaByDocument)) {
+            const observed = syncMetaByDocument[path];
+            if (!observed || !coversVectorClock(observed.clock, durableMeta.clock)) {
+                throw new Error('Backup cloud incompleto rispetto ai dati confermati sul dispositivo. Esporta la copia locale.');
+            }
+        }
+    }
     let mergedValue = local;
     if (cloud) {
         if (envelope?.pending?.length) {
@@ -136,21 +210,10 @@ export async function collectBackupSnapshot(fallback: UserData, includeCloud: bo
     }
 
     if (!includeCloud) coverage.months = envelope?.completeMonths ?? [];
-    const device: Record<string, string> = {};
-    const prefix = 'logbook:v2:' + session.owner + ':';
-    for (let index = 0; index < localStorage.length; index++) {
-        const key = localStorage.key(index);
-        if (key?.startsWith(prefix)) {
-            const rawName = key.slice(prefix.length);
-            const name = rawName.startsWith('sealed:') ? rawName.slice('sealed:'.length) : rawName;
-            if (!isRecoveryDeviceKey(name)) continue;
-            // Recovery payloads contain plaintext only in the EXPLICIT backup.
-            // The archive itself remains sealed. A resurfaced old-tab legacy key
-            // must fail the read rather than disappear from the backup silently.
-            const value = readDeviceValueStrict(name, session.owner);
-            if (value !== null) device[name] = value;
-        }
-    }
+    // Recovery payloads contain plaintext only in the EXPLICIT backup.
+    // A resurfaced old-tab key or cross-tab edit must fail closed rather
+    // than disappear silently from an otherwise successful export.
+    const device = readStableDeviceRecovery(session.owner);
     assertCurrent();
     return { owner: session.owner, data: UserDataSchema.parse(mergedValue) as unknown as UserData, coverage,
         recovery: { envelope, device, cloudDocuments: Object.fromEntries(documents) } };

@@ -4,8 +4,26 @@ import { DomainParsers } from '../../lib/schema';
 import { captureSession, isCurrentSession } from '../../lib/sync/session';
 import { readDeviceValueStrict, writeDeviceValue } from '../../lib/sync/deviceStorage';
 import { readLocal } from '../../lib/sync/localRepository';
+import { assertWorkoutSnapshotEpoch } from '../../lib/sync/workoutDeviceIntent';
 
 export const HISTORY_EDITOR_CONTEXT = 'history-editor-context';
+
+export function assertHistoryEditorContextEpoch(raw: string | null, owner: string, envelopeRevision?: number): void {
+    if (raw === null) return;
+    let parsed: unknown;
+    try { parsed = JSON.parse(raw); }
+    catch { throw new Error('Contesto editor storico non leggibile: copia preservata.'); }
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        throw new Error('Contesto editor storico non valido: copia preservata.');
+    }
+    const saved = parsed as { version?: unknown; editorId?: unknown; consentRevision?: unknown };
+    if (saved.version !== 1 || typeof saved.editorId !== 'string' || !saved.editorId
+        || (saved.consentRevision !== undefined && (!Number.isSafeInteger(saved.consentRevision)
+            || (saved.consentRevision as number) < 1))) {
+        throw new Error('Metadati editor storico non validi: copia preservata.');
+    }
+    assertWorkoutSnapshotEpoch(owner, saved.consentRevision as number | undefined, envelopeRevision);
+}
 
 // One lock per owner, shared by all mounted history controls.
 const pendingHistorySaves = new Set<string>();
@@ -45,6 +63,9 @@ export async function restoreSessionAfterHistoryEdit(editorId: string): Promise<
     if (!isCurrentSession(session) || useAppStore.getState().localWorkout !== editor) {
         throw new Error('Sessione o editor modificati durante il ripristino.');
     }
+    // Keep the historical context and its suspended workout in the source epoch.
+    // A new consent cannot relabel the context by calling setLocalWorkout().
+    assertHistoryEditorContextEpoch(raw, session.owner, durable?.consentRevision);
     const wasClosed = (id: string) => durable && (
         durable.lastClosedWorkoutId === id
         || durable.closedWorkoutIds?.includes(id)

@@ -3,12 +3,9 @@ import type { UserData } from '../../types';
 import { auth, getDb } from '../../lib/firebase';
 import { isHealthConsentCloudWritable } from '../../lib/healthConsent';
 import { DB } from '../../lib/db';
-import { UserDataSchema } from '../../lib/schema';
 import { captureSession, isCurrentSession, userOwner } from '../../lib/sync/session';
 import { useAppStore } from '../../store/useAppStore';
-import { getCachedCatalog, getInMemoryCatalog, isCatalogInMemory } from '../../lib/catalog/catalogService';
-import { getResolvedDefaultUserData } from './defaultUserData';
-import { adoptReplicaCheckpoint, readLocal, hydrateLocal } from '../../lib/sync/localRepository';
+import { adoptReplicaCheckpoint, readLocal, hydrateLocal, markCloudIntegrityBlocked, completeCloudIntegrityRecovery, IncompleteCloudSnapshotError, markReplicaCheckpointRequired } from '../../lib/sync/localRepository';
 import {
     checkpointFromCloudDocuments,
     claimReplicaCheckpoint,
@@ -32,7 +29,6 @@ const loadGenerationByOwner = new Map<string, number>();
 export async function loadAuthenticatedData({
     user,
     isGuestActive,
-    setUserData,
     setSyncing,
     setSaveError,
 }: LoadAuthenticatedDataOptions): Promise<'ready' | 'blocked'> {
@@ -54,6 +50,23 @@ export async function loadAuthenticatedData({
 
     if (!useAppStore.getState().userData) setSyncing(true);
 
+    const preserveUnsafeCloud = async (): Promise<boolean> => {
+        try {
+            await markCloudIntegrityBlocked(expectedOwner);
+        } catch (error) {
+            console.error('Impossibile registrare la barriera cloud sul dispositivo:', error);
+            if (isCurrent()) useAppStore.setState({ localPersistenceBlocked: true, syncHealth: 'failed',
+                saveError: 'Protezione cloud non registrabile. I dati locali devono essere preservati.' });
+            return false;
+        }
+        if (isCurrent()) useAppStore.setState({
+            syncHealth: 'failed',
+            cloudIntegrityBlocked: true,
+            saveError: 'Snapshot cloud non verificato: copia locale preservata. Sincronizzazione sospesa fino al recupero.',
+        });
+        return isCurrent();
+    };
+
     try {
         // Once Firebase identifies the authenticated owner, fence any pre-auth snapshot
         // and install exactly that owner's durable envelope before doing network work.
@@ -63,11 +76,16 @@ export async function loadAuthenticatedData({
         if (!isCurrent()) return 'blocked';
 
         if (localEnvelope) {
-            const localWorkout = getInitialLocalWorkout(expectedOwner, localEnvelope.data.activeWorkout ?? null, localEnvelope.data.history, localEnvelope.lastClosedWorkoutId, localEnvelope.closedWorkoutIds);
+            const localWorkout = getInitialLocalWorkout(expectedOwner, localEnvelope.data.activeWorkout ?? null, localEnvelope.data.history, localEnvelope.lastClosedWorkoutId, localEnvelope.closedWorkoutIds, localEnvelope.consentRevision);
             useAppStore.setState({
                 userData: localEnvelope.data,
                 dataOwner: expectedOwner,
                 localWorkout,
+                cloudIntegrityBlocked: Boolean(localEnvelope.cloudIntegrityFence),
+                ...(localEnvelope.cloudIntegrityFence ? {
+                    syncHealth: 'failed' as const,
+                    saveError: 'Snapshot cloud non verificato: copia locale preservata. Sincronizzazione sospesa fino al recupero.',
+                } : {}),
             });
             markTabSnapshotClean(session, localEnvelope.data);
         } else {
@@ -75,7 +93,7 @@ export async function loadAuthenticatedData({
             // Ownerless memory is untrusted, not an account-creation default.
             // Without a matching durable envelope it must not survive into B.
             if ((current.userData !== null || current.localWorkout !== null) && current.dataOwner !== expectedOwner) {
-                useAppStore.setState({ userData: null, dataOwner: null, localWorkout: null });
+                useAppStore.setState({ userData: null, dataOwner: null, localWorkout: null, cloudIntegrityBlocked: false });
             }
         }
     } catch (error) {
@@ -98,7 +116,7 @@ export async function loadAuthenticatedData({
         const durableBeforeCloud = await readLocal(expectedOwner);
         if (!cloudAllowed()) return 'blocked';
         if (!cloudAllowed()) return 'blocked';
-        const checkpointDue = needsReplicaCheckpoint(durableBeforeCloud?.replica);
+        const checkpointDue = needsReplicaCheckpoint(durableBeforeCloud?.replica) || Boolean(durableBeforeCloud?.cloudIntegrityFence);
         const payload = await DB.loadCloudPayload({ allMonths: checkpointDue });
         if (!cloudAllowed()) return 'blocked';
 
@@ -131,60 +149,95 @@ export async function loadAuthenticatedData({
                     if (!cloudAllowed()) return 'blocked';
                 }
 
+                hydratedEnv = await completeCloudIntegrityRecovery(
+                    expectedOwner, durableBeforeCloud?.cloudIntegrityFence ?? null, checkpointDue, cloudAllowed,
+                );
+                if (!cloudAllowed()) return 'blocked';
+
                 // hydrateLocal has already committed this authoritative snapshot
                 // atomically. Rendering it via the user-edit writer setUserData
                 // would create a second semantic journal from the old UI state.
                 const hydratedWorkout = getInitialLocalWorkout(
                     expectedOwner, hydratedEnv.data.activeWorkout ?? null, hydratedEnv.data.history,
-                    hydratedEnv.lastClosedWorkoutId, hydratedEnv.closedWorkoutIds,
+                    hydratedEnv.lastClosedWorkoutId, hydratedEnv.closedWorkoutIds, hydratedEnv.consentRevision,
                 );
                 if (!cloudAllowed()) return 'blocked';
                 useAppStore.setState({
                     userData: hydratedEnv.data, dataOwner: expectedOwner,
                     localWorkout: hydratedWorkout,
+                    cloudIntegrityBlocked: false,
+                    syncHealth: hydratedEnv.pending.length ? 'local-pending' : 'synced',
+                    saveError: hydratedEnv.pending.length ? 'Salvato localmente. Sincronizzazione in attesa.' : null,
                 });
                 markTabSnapshotClean(session, hydratedEnv.data);
             } catch (mergeError) {
                 if (!cloudAllowed()) return 'blocked';
                 const code = (mergeError as { code?: unknown })?.code;
-                if (code === 'invalid-cloud-sync-metadata') {
+                if (mergeError instanceof IncompleteCloudSnapshotError) {
+                    // hydrateLocal already fenced the exact unsafe envelope in
+                    // its atomic IndexedDB write, before surfacing the error.
+                    useAppStore.setState({ syncHealth: 'failed', cloudIntegrityBlocked: true });
+                    setSaveError(mergeError.message);
+                    // Log only document categories/month IDs, never business data.
+                    console.warn('Evidenza cloud incompleta; archivio locale protetto:', {
+                        cause: mergeError.causeKind,
+                        documentPaths: mergeError.documentPaths,
+                        count: mergeError.documentPaths.length,
+                    });
+                } else if (code === 'invalid-cloud-sync-metadata') {
+                    if (!(await preserveUnsafeCloud())) return 'blocked';
                     setSaveError('Sincronizzazione cloud sospesa: i metadati di sincronizzazione remoti non sono validi. I dati locali validi sono stati preservati e TheLogBook non sovrascriverà il cloud finché il problema non viene risolto.');
                     console.error('Metadati di sincronizzazione cloud non validi; stato locale preservato:', mergeError);
-                } else if (code === 'replica-capacity' || code === 'replica-fenced') {
-                    setSaveError(mergeError instanceof Error ? mergeError.message : 'Sincronizzazione sospesa: questa copia deve completare un nuovo checkpoint cloud.');
-                    console.warn('Checkpoint replica non completato; stato locale preservato:', mergeError);
                 } else {
+                    // Transport failures and replica capacity are NOT evidence
+                    // that acknowledged business documents went missing.
+                    // Requiring a new checkpoint stops old journal replay while
+                    // leaving backup/logout policy tied to actual integrity.
+                    if (durableBeforeCloud?.replica) {
+                        await markReplicaCheckpointRequired(expectedOwner, durableBeforeCloud.replica);
+                    }
+                    if (!cloudAllowed()) return 'blocked';
+                    setSaveError(mergeError instanceof Error ? mergeError.message : 'Checkpoint cloud non completato. Riprova.');
                     console.error('Hydration cloud non valida; stato locale preservato:', mergeError);
                 }
-                // A failed hydrate/checkpoint is not authorization to flush the
-                // previous journal from a replica whose cloud base is unverified.
                 return 'blocked';
             }
         }
     } catch (error: any) {
         if (!isCurrent()) return 'blocked';
+        const integrityError = ['CloudDataIntegrityError', 'LegacyVersionError', 'FutureVersionError', 'ZodError', 'InvalidCloudSyncMetadataError'].includes(error?.name);
+        if (integrityError) {
+            if (!(await preserveUnsafeCloud())) return 'blocked';
+            setSaveError('Dati cloud non verificabili: sincronizzazione sospesa, archivio locale preservato.');
+        } else if (error?.code === 'concurrent-cloud-read') {
+            // A racing scan is not a verified missing document. Retry at the
+            // next foreground sync without installing a destructive-exit fence.
+            setSaveError(error.message);
+        }
         console.warn('Errore caricamento dati in AuthContext (uso dati locali/offline):', error);
         if (error?.code === 'unavailable' || !navigator.onLine) {
             setSaveError('📶 Offline: visualizzando dati locali. I dati verranno sincronizzati al ripristino della connessione.');
         }
 
-        // Only a positively absent local envelope may initialize a fresh default dataset.
-        // A read failure returned earlier and can never reach this branch.
+        // An owner envelope is authoritative local evidence even when the cloud
+        // is unavailable. Absence of an envelope, however, does NOT prove that
+        // the remote account is empty; never seed a replacement snapshot here.
         const latestData = useAppStore.getState().userData;
         if (!latestData) {
             const stillAbsent = await readLocal(expectedOwner);
             if (!isCurrent()) return 'blocked';
             if (stillAbsent) {
-                const localWorkout = getInitialLocalWorkout(expectedOwner, stillAbsent.data.activeWorkout ?? null, stillAbsent.data.history, stillAbsent.lastClosedWorkoutId, stillAbsent.closedWorkoutIds);
-                useAppStore.setState({ userData: stillAbsent.data, dataOwner: expectedOwner, localWorkout });
+                const localWorkout = getInitialLocalWorkout(expectedOwner, stillAbsent.data.activeWorkout ?? null, stillAbsent.data.history, stillAbsent.lastClosedWorkoutId, stillAbsent.closedWorkoutIds, stillAbsent.consentRevision);
+                useAppStore.setState({ userData: stillAbsent.data, dataOwner: expectedOwner, localWorkout,
+                    cloudIntegrityBlocked: Boolean(stillAbsent.cloudIntegrityFence) });
                 markTabSnapshotClean(session, stillAbsent.data);
                 return 'blocked';
             }
-            const catalog = isCatalogInMemory() ? getInMemoryCatalog() : (await getCachedCatalog());
-            if (!isCurrent()) return 'blocked';
-            const fallbackData = getResolvedDefaultUserData(catalog);
-            if (!isCurrent()) return 'blocked';
-            setUserData(UserDataSchema.parse(fallbackData) as unknown as UserData);
+            // A transient cloud error on a new device is not a server-confirmed
+            // empty account. An optimistic default would become a new semantic
+            // journal and could later overwrite genuine remote business data.
+            useAppStore.setState({ syncHealth: 'failed' });
+            setSaveError('Impossibile verificare i dati cloud e nessun archivio locale disponibile. I dati dell’account non sono stati modificati: riconnettiti e riprova.');
         }
         // A failed cloud read cannot certify the causal base for a journal drain.
         return 'blocked';

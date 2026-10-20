@@ -74,7 +74,7 @@ async function assertNoOutdatedConsentJournal(owner: string): Promise<void> {
     const generation = readBrowserValueStrict(`logbook:v2:${owner}:health-consent-generation`);
     const withdrawal = readBrowserValueStrict(`logbook:v2:${owner}:health-consent-withdrawal`);
     if (generation === null && withdrawal !== 'withdrawn') return;
-    if (generation !== null && (!/^[1-9]\\d*$/.test(generation) || !Number.isSafeInteger(Number(generation)))) {
+    if (generation !== null && (!/^[1-9]\d*$/.test(generation) || !Number.isSafeInteger(Number(generation)))) {
         throw new HealthConsentTransitionPendingError();
     }
     const { readLocal } = await import('../sync/localRepository');
@@ -95,7 +95,9 @@ export async function purgeAllLocalUserData(owner = storageOwner()) {
             await assertNoOutdatedConsentJournal(owner);
             if (owner.startsWith('user:')) {
                 const { readLocal } = await import('../sync/localRepository');
-                if ((await readLocal(owner))?.pending.length) throw new UnsyncedLogoutError();
+                const envelope = await readLocal(owner);
+                if (envelope?.cloudIntegrityFence) throw new CloudIntegrityBlockedError();
+                if (envelope?.pending.length) throw new UnsyncedLogoutError();
             }
             assertOrdinaryPurgeAllowed(owner);
         },
@@ -122,6 +124,13 @@ export async function purgeCompletedAccountLocalData(owner: string) {
 }
 
 /** A clean-looking UI cannot prove that its durable offline journal is empty. */
+class CloudIntegrityBlockedError extends Error {
+    constructor() {
+        super('Logout sospeso: snapshot cloud non verificato. La copia locale è preservata finché non viene completato un checkpoint sicuro.');
+        this.name = 'CloudIntegrityBlockedError';
+    }
+}
+
 class UnsyncedLogoutError extends Error {
     constructor() {
         super('Logout sospeso: alcune modifiche sono ancora salvate solo sul dispositivo. Attendi la sincronizzazione o scegli esplicitamente di perderle.');
@@ -181,10 +190,12 @@ export async function logoutAndPurgeAccount(
             assertOrdinaryPurgeAllowed(owner);
             if (!discardUnsynced) await verifyCurrentDrafts?.();
             await assertNoOutdatedConsentJournal(owner);
+            // Force-exit does not authorize discarding acknowledged data absent from cloud.
+            const { readLocal } = await import('../sync/localRepository');
+            const envelope = await readLocal(owner);
+            if (envelope?.cloudIntegrityFence) throw new CloudIntegrityBlockedError();
             if (!discardUnsynced) {
-                const { readLocal } = await import('../sync/localRepository');
-                const local = await readLocal(owner);
-                if (local?.pending.length) throw new UnsyncedLogoutError();
+                if (envelope?.pending.length) throw new UnsyncedLogoutError();
             }
             assertOrdinaryPurgeAllowed(owner);
         },

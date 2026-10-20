@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { auth } from '../src/lib/firebase';
+import { UserDataSchema } from '../src/lib/schema';
+import { initializeLocal, readLocal } from '../src/lib/sync/localRepository';
 // Unlike the rest of the UI fixture, this suite exercises the real policy module.
 vi.unmock('../src/lib/healthConsent');
 
@@ -69,6 +71,54 @@ describe('first trusted consent registration', () => {
     expect(await refreshHealthConsent(actor)).toBe('error');
     expect(isHealthConsentCloudWritable('user:' + uid)).toBe(false);
     await expect(registerInitialHealthConsent(actor, accepted)).rejects.toThrow();
+  });
+});
+
+describe('erased acknowledged local consent generation', () => {
+  it('fences an ACKed erased archive after remote reacceptance and on repeated checks', async () => {
+    const uid = 'erased-' + crypto.randomUUID();
+    const owner = 'user:' + uid;
+    const actor = user(uid);
+    (auth as { currentUser: unknown }).currentUser = actor;
+    await initializeLocal(owner, UserDataSchema.parse({ profile: { height: '180' } }) as any);
+    const original = await readLocal(owner);
+    expect(original?.pending).toEqual([]);
+
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json({
+      status: 'active', revision: 4, erasedBeforeRevision: 2,
+      acceptedAt: '2026-10-12T05:00:00.000Z',
+      privacyVersion: accepted.privacyVersion, termsVersion: accepted.termsVersion,
+    })));
+    beginHealthConsentVerification(uid);
+    expect(await refreshHealthConsent(actor)).toBe('erasure-required');
+    expect(currentHealthConsentStatus(uid)).toBe('erasure-required');
+    expect(isHealthConsentWritable(owner)).toBe(false);
+    expect(isHealthConsentCloudWritable(owner)).toBe(false);
+    expect(await readLocal(owner)).toEqual(original);
+    expect(localStorage.getItem('logbook:v2:' + owner + ':health-consent-generation')).toBe('4');
+
+    beginHealthConsentVerification(uid);
+    expect(await refreshHealthConsent(actor)).toBe('erasure-required');
+    expect(await readLocal(owner)).toEqual(original);
+  });
+
+  it('does not let an explicit KEEP silently reauthorize a clean erased local copy', async () => {
+    const uid = 'erased-keep-' + crypto.randomUUID();
+    const owner = 'user:' + uid;
+    const actor = user(uid);
+    (auth as { currentUser: unknown }).currentUser = actor;
+    await initializeLocal(owner, UserDataSchema.parse({ profile: { height: '180' } }) as any);
+    const original = await readLocal(owner);
+    localStorage.setItem(key(uid), 'withdrawn');
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json({
+      status: 'active', revision: 4, erasedBeforeRevision: 2,
+      acceptedAt: '2026-10-12T05:00:00.000Z',
+    })));
+    beginHealthConsentVerification(uid);
+    expect(await refreshHealthConsent(actor)).toBe('stale-request');
+    expect(await retainNewerHealthConsent(actor)).toBe('erasure-required');
+    expect(isHealthConsentWritable(owner)).toBe(false);
+    expect(await readLocal(owner)).toEqual(original);
   });
 });
 
@@ -763,5 +813,106 @@ describe('account offline withdrawal and explicit local-only reacceptance', () =
       expect(isHealthConsentWritable('user:' + uid)).toBe(false);
       expect(isHealthConsentCloudWritable('user:' + uid)).toBe(false);
     } finally { onLine.mockRestore(); }
+  });
+});
+
+describe('consent responses across authenticated owner changes', () => {
+  it('does not publish an old trusted response for account A after login to B', async () => {
+    const uid = 'late-owner-' + crypto.randomUUID();
+    const actor = user(uid);
+    (auth as { currentUser: unknown }).currentUser = actor;
+    let resolveGet!: (response: Response) => void;
+    const fetchMock = vi.fn(() => new Promise<Response>(resolve => { resolveGet = resolve; }));
+    vi.stubGlobal('fetch', fetchMock);
+    beginHealthConsentVerification(uid);
+    const pending = refreshHealthConsent(actor);
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
+    (auth as { currentUser: unknown }).currentUser = user('other-account');
+    resolveGet(Response.json({ status: 'active', revision: 2, acceptedAt: '2026-10-12T00:00:00.000Z' }));
+    expect(await pending).not.toBe('active');
+    expect(localStorage.getItem('logbook:v2:user:' + uid + ':health-consent-generation')).toBeNull();
+    expect(localStorage.getItem('logbook:v2:user:' + uid + ':health-consent-last-active')).toBeNull();
+    expect(isHealthConsentCloudWritable('user:' + uid)).toBe(false);
+  });
+
+  it('preserves a stale KEEP choice after the account changes during GET', async () => {
+    const uid = 'keep-owner-' + crypto.randomUUID();
+    const actor = user(uid);
+    (auth as { currentUser: unknown }).currentUser = actor;
+    localStorage.setItem(key(uid), 'pending:1');
+    let resolveKeep!: (response: Response) => void;
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(Response.json({ status: 'active', revision: 2, acceptedAt: '2026-10-12T00:00:00.000Z' }))
+      .mockImplementationOnce(() => new Promise<Response>(resolve => { resolveKeep = resolve; }));
+    vi.stubGlobal('fetch', fetchMock);
+    expect(await refreshHealthConsent(actor)).toBe('stale-request');
+    const keep = retainNewerHealthConsent(actor);
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    (auth as { currentUser: unknown }).currentUser = user('other-account');
+    resolveKeep(Response.json({ status: 'active', revision: 2, acceptedAt: '2026-10-12T00:00:00.000Z' }));
+    await expect(keep).rejects.toThrow('Sessione');
+    expect(localStorage.getItem(key(uid))).toBe('pending:1');
+    expect(localStorage.getItem('logbook:v2:user:' + uid + ':health-consent-generation')).toBeNull();
+  });
+});
+
+describe('no trusted consent POST after an authenticated owner switch', () => {
+  it('never reaccepts for account A when its GET finishes after login to B', async () => {
+    const uid = 'reaccept-switch-' + crypto.randomUUID();
+    const actor = user(uid);
+    (auth as { currentUser: unknown }).currentUser = actor;
+    localStorage.setItem(key(uid), 'withdrawn');
+    let resolveRead!: (response: Response) => void;
+    const request = vi.fn(() => new Promise<Response>(resolve => { resolveRead = resolve; }));
+    vi.stubGlobal('fetch', request);
+    const reaccepting = reacceptHealthConsent(actor, accepted);
+    await vi.waitFor(() => expect(request).toHaveBeenCalledOnce());
+    (auth as { currentUser: unknown }).currentUser = user('other-account');
+    resolveRead(Response.json({ status: 'withdrawn', revision: 1 }));
+    await expect(reaccepting).rejects.toThrow('Sessione cambiata');
+    expect(localStorage.getItem(key(uid))).toBe('withdrawn');
+    expect(request).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not send an old withdrawal after Firebase token acquisition races with login B', async () => {
+    const uid = 'withdraw-token-switch-' + crypto.randomUUID();
+    let releaseToken!: (token: string) => void;
+    const actor = user(uid);
+    const normalGetIdToken = actor.getIdToken;
+    actor.getIdToken = vi.fn()
+      .mockImplementationOnce(() => normalGetIdToken())
+      .mockImplementationOnce(() => new Promise<string>(resolve => { releaseToken = resolve; }));
+    (auth as { currentUser: unknown }).currentUser = actor;
+    const request = vi.fn(async () => Response.json({ status: 'active', revision: 1 }));
+    vi.stubGlobal('fetch', request);
+    beginHealthConsentVerification(uid);
+    expect(await refreshHealthConsent(actor)).toBe('active');
+    const withdrawal = withdrawHealthConsent(actor);
+    await vi.waitFor(() => expect(actor.getIdToken).toHaveBeenCalledTimes(2));
+    (auth as { currentUser: unknown }).currentUser = user('other-account');
+    releaseToken('old-valid-token');
+    await expect(withdrawal).rejects.toThrow('Sessione cambiata');
+    expect(localStorage.getItem(key(uid))).toBe('pending:1');
+    expect(request).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not reconfirm a stale withdrawal after its server GET races with login B', async () => {
+    const uid = 'reconfirm-switch-' + crypto.randomUUID();
+    const actor = user(uid);
+    (auth as { currentUser: unknown }).currentUser = actor;
+    localStorage.setItem(key(uid), 'pending:1');
+    let resolveRead!: (response: Response) => void;
+    const request = vi.fn()
+      .mockResolvedValueOnce(Response.json({ status: 'active', revision: 2, acceptedAt: '2026-10-12T00:00:00.000Z' }))
+      .mockImplementationOnce(() => new Promise<Response>(resolve => { resolveRead = resolve; }));
+    vi.stubGlobal('fetch', request);
+    expect(await refreshHealthConsent(actor)).toBe('stale-request');
+    const reconfirming = reconfirmStaleHealthWithdrawal(actor);
+    await vi.waitFor(() => expect(request).toHaveBeenCalledTimes(2));
+    (auth as { currentUser: unknown }).currentUser = user('other-account');
+    resolveRead(Response.json({ status: 'active', revision: 2 }));
+    await expect(reconfirming).rejects.toThrow('Sessione cambiata');
+    expect(localStorage.getItem(key(uid))).toBe('pending:1');
+    expect(request).toHaveBeenCalledTimes(2);
   });
 });

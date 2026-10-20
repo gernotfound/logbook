@@ -5,11 +5,12 @@ import { ActiveWorkoutSession } from './ActiveWorkoutSession';
 import PreSessionCheckIn from './PreSessionCheckIn';
 import WorkoutReportModal from './WorkoutReportModal';
 import SessionRatings from './session/SessionRatings';
+import { BufferedWorkoutScope } from '../UI/bufferedWorkoutScope';
 import type { WorkoutSession } from '../../types';
 import { Logic } from '../../lib/logic';
 import { draftRegistry } from '../../lib/utils/draftRegistry';
 import { captureSession, isCurrentSession } from '../../lib/sync/session';
-import { readDeviceValueStrict, writeDeviceValue } from '../../lib/sync/deviceStorage';
+import { readWorkoutRecoveryDraft, writeWorkoutRecoveryDraft } from '../../lib/sync/workoutRecoveryDraft';
 import { requiredUpdateRecoveryRegistry } from '../../lib/sync/requiredUpdateRecovery';
 import type { WorkoutCompletionDraft } from '../../hooks/workout/workoutSessionPreparation';
 import { useAppStore } from '../../store/useAppStore';
@@ -34,9 +35,9 @@ function createPostSessionDraft(workout: WorkoutSession): PostSessionDraft {
     };
 }
 
-function parsePostSessionRecovery(raw: string | null, workoutId: string): { pendingEndTime: number | null; draft: PostSessionDraft } | null {
+function parsePostSessionRecovery(raw: unknown | null, workoutId: string): { pendingEndTime: number | null; draft: PostSessionDraft } | null {
     if (raw === null) return null;
-    const parsed = JSON.parse(raw) as { pendingEndTime?: unknown; draft?: Partial<PostSessionDraft> };
+    const parsed = raw as { pendingEndTime?: unknown; draft?: Partial<PostSessionDraft> };
     const draft = parsed?.draft;
     if (!draft || draft.workoutId !== workoutId) throw new Error('Bozza finale appartiene a un workout diverso.');
     if (!Array.isArray(draft.pains) || draft.pains.some(value => typeof value !== 'string')) throw new Error('Bozza finale corrotta.');
@@ -105,10 +106,10 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
         const session = postSessionSessionRef.current;
         if (!isCurrentSession(session)) throw new Error('Sessione cambiata prima del salvataggio della valutazione finale.');
         try {
-            writeDeviceValue(
+            writeWorkoutRecoveryDraft(
                 postSessionRecoveryName,
-                JSON.stringify({ pendingEndTime: endTime, draft }),
                 session.owner,
+                { pendingEndTime: endTime, draft },
             );
         } catch (error) {
             blockPostSessionPersistence(error);
@@ -119,7 +120,7 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
     const clearPostSessionRecovery = useCallback(() => {
         if (!postSessionRecoveryName) return;
         try {
-            writeDeviceValue(postSessionRecoveryName, null, postSessionSessionRef.current.owner);
+            writeWorkoutRecoveryDraft(postSessionRecoveryName, postSessionSessionRef.current.owner, null);
         } catch (error) {
             console.warn('Workout salvato, ma la copia di recupero finale non è stata rimossa:', error);
             useAppStore.getState().setSaveError('Workout salvato; impossibile rimuovere una copia di recupero locale obsoleta.');
@@ -138,7 +139,7 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
         let recovered: ReturnType<typeof parsePostSessionRecovery>;
         try {
             recovered = parsePostSessionRecovery(
-                readDeviceValueStrict(postSessionRecoveryName, session.owner),
+                readWorkoutRecoveryDraft(postSessionRecoveryName, session.owner),
                 workoutId,
             );
         } catch (error) {
@@ -294,7 +295,8 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
                     </div>
                 </div>
                 {postSessionDraft && (
-                    <SessionRatings
+                    <BufferedWorkoutScope.Provider key={String(activeWorkout.id)} value={String(activeWorkout.id)}>
+                        <SessionRatings
                         water={postSessionDraft.water}
                         setWater={water => updatePostSessionDraft({ water })}
                         mood={postSessionDraft.mood}
@@ -307,7 +309,8 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
                         pains={postSessionDraft.pains}
                         onTogglePain={togglePostSessionPain}
                         onSetPains={pains => updatePostSessionDraft({ pains })}
-                    />
+                        />
+                    </BufferedWorkoutScope.Provider>
                 )}
                 <div className="pre-session-actions">
                     <button type="button" className="btn btn-success" onClick={() => void finish()}>Salva e termina</button>

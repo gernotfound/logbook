@@ -94,7 +94,7 @@ export async function bootstrapAuthenticatedSession(
             const handled = await resumePersistedGuestMigration(user, isCurrentRun, {
                 guestKey,
                 isGuestActiveStrict, isGuestRef, migrationDataRef, setIsGuest,
-                setGuestMigrationStatus, setUserData, setSyncing, setSaveError,
+                setGuestMigrationStatus, setSyncing, setSaveError,
                 clearGuestMigrationSyncRecovery,
             });
             if (!isCurrentRun()) return;

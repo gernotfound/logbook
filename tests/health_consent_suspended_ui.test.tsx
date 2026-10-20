@@ -114,9 +114,32 @@ describe('suspended health-consent screen', () => {
     expect(reacceptButton().disabled).toBe(true);
   });
 
+  it('shows erased local archives separately from recoverable offline journals, without a replay button', () => {
+    render(<HealthConsentSuspended status="erasure-required" user={account} />);
+    expect(screen.getByText(/cancellazione dei dati eseguita sul cloud include la generazione/i)).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Prepara backup JSON' })).toBeDefined();
+    expect(screen.getByRole('button', { name: "Esci dall'account" })).toBeDefined();
+    expect(screen.queryByRole('button', { name: 'Recupera modifiche e riattiva' })).toBeNull();
+    expect(screen.queryByRole('checkbox')).toBeNull();
+  });
+
+  it('does not report a failed consent when the server accepted it but an old erased copy stays blocked', async () => {
+    vi.mocked(reacceptHealthConsent).mockResolvedValue('2026-10-12T10:00:00.000Z');
+    vi.mocked(refreshHealthConsent).mockResolvedValue('erasure-required');
+    render(<HealthConsentSuspended status="withdrawn" user={account} />);
+    const [terms, health] = checkboxInputs();
+    fireEvent.click(terms);
+    fireEvent.click(health);
+    fireEvent.click(reacceptButton());
+    await waitFor(() => expect(refreshHealthConsent).toHaveBeenCalledOnce());
+    await waitFor(() => expect(reacceptButton().textContent).toContain('Presta un nuovo consenso'));
+    expect(finishHealthConsentReacceptance).not.toHaveBeenCalled();
+    expect(screen.queryByText(/Non è stato possibile completare il nuovo consenso/)).toBeNull();
+  });
+
   it('does not offer premature reacceptance for unverified, failed, stale or recovery states', () => {
     const { rerender } = render(<HealthConsentSuspended status="checking" user={account} />);
-    for (const status of ['checking', 'error', 'stale-request', 'recovery-required'] as const) {
+    for (const status of ['checking', 'error', 'stale-request', 'recovery-required', 'erasure-required'] as const) {
       rerender(<HealthConsentSuspended status={status} user={account} />);
       expect(screen.queryByRole('checkbox')).toBeNull();
       expect(screen.queryByRole('button', { name: 'Presta un nuovo consenso' })).toBeNull();

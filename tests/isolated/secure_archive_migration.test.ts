@@ -18,7 +18,8 @@ import { isLocalPurgePending } from '../../src/lib/sync/localPurgeFence';
 import { vaultControlMirrorId } from '../../src/lib/sync/secureArchiveControlRecovery';
 import { deviceVaultKeyId } from '../../src/lib/sync/secureArchiveKeys';
 import { LocalVaultLockedError, lockAllVaults, lockVault, readVaultControl, unlockVaultForOwner, vaultControlKey } from '../../src/lib/sync/secureArchiveSession';
-import { LocalCiphertextError, SEALED_LOCAL_PREFIX } from '../../src/lib/sync/secureArchiveCipher';
+import { LocalCiphertextError, SEALED_LOCAL_PREFIX, openLocalText } from '../../src/lib/sync/secureArchiveCipher';
+import { unlockLocalKeyVault } from '../../src/lib/sync/secureArchiveKeys';
 import { BrowserStorageError } from '../../src/lib/sync/browserStorage';
 import { activateGuestSession, GUEST_SESSION_KEY, GUEST_REVOCATION_KEY } from '../../src/lib/sync/session';
 import { collectBackupSnapshot } from '../../src/lib/db/backupSnapshot';
@@ -170,6 +171,88 @@ describe('durable secure archive migration', () => {
         await expect(createAndMigrateVault(owner)).rejects.toBeInstanceOf(LocalVaultLockedError);
         expect(await get('logbook:v2:' + owner)).toEqual(ciphertext);
         expect(localStorage.getItem(vaultControlKey(owner))).toBeNull();
+    });
+
+    it('never replaces the KEK when concurrent key compaction hides an orphaned ciphertext', async () => {
+        await createAndMigrateVault(owner);
+        const priorControl = readVaultControl(owner)!;
+        const ciphertextKey = protectedDeviceKey('draft_exercise', owner);
+        const originalDraft = '{"name":"recoverable"}';
+        writeDeviceValue('draft_exercise', originalDraft, owner);
+        const ciphertext = localStorage.getItem(ciphertextKey)!;
+        expect(await get('logbook:v2:' + owner)).toBeUndefined();
+
+        await del(vaultControlMirrorId(owner));
+        localStorage.removeItem(vaultControlKey(owner));
+        lockVault(owner);
+
+        // A different tab removes the first key while numeric enumeration
+        // is running. The old one-pass scan could miss the ciphertext and
+        // mint a replacement KEK, destroying the only way to decrypt it.
+        localStorage.removeItem(ciphertextKey);
+        const decoy = 'logbook:other-tab-index';
+        localStorage.setItem(decoy, 'other-tab');
+        localStorage.setItem(ciphertextKey, ciphertext);
+        expect(localStorage.key(0)).toBe(decoy);
+        const nativeKey = localStorage.key.bind(localStorage);
+        let shifted = false;
+        const spy = vi.spyOn(localStorage, 'key').mockImplementation(index => {
+            const seen = nativeKey(index);
+            if (index === 0 && !shifted) {
+                shifted = true;
+                localStorage.removeItem(decoy);
+            }
+            return seen;
+        });
+
+        await expect(createAndMigrateVault(owner)).rejects.toThrow('Inventario localStorage modificato');
+        spy.mockRestore();
+        expect(shifted).toBe(true);
+        expect(readVaultControl(owner)).toBeNull();
+        expect(await get(vaultControlMirrorId(owner))).toBeUndefined();
+        expect(localStorage.getItem(ciphertextKey)).toBe(ciphertext);
+
+        // Verify the persisted original KEK can still authenticate and
+        // decrypt the witness; equality of CryptoKey objects is not enough.
+        const dataKey = await unlockLocalKeyVault(priorControl.wrappedKey, owner);
+        try {
+            expect(openLocalText(dataKey, owner, ciphertextKey, ciphertext)).toBe(originalDraft);
+        } finally { dataKey.fill(0); }
+
+        // Stable inventory cannot invent missing controls or discard orphaned bytes.
+        await expect(createAndMigrateVault(owner)).rejects.toBeInstanceOf(LocalVaultLockedError);
+        expect(localStorage.getItem(ciphertextKey)).toBe(ciphertext);
+    });
+
+    it('does not activate migration while a second tab compacts legacy key indexes', async () => {
+        await initializeLocal(owner, base());
+        const legacyKey = deviceKey('draft:measurement:' + day, owner);
+        const raw = '{"weight":"78"}';
+        const decoy = 'logbook:other-tab';
+        localStorage.setItem(decoy, 'other-tab');
+        localStorage.setItem(legacyKey, raw);
+        const nativeKey = localStorage.key.bind(localStorage);
+        let shifted = false;
+        const spy = vi.spyOn(localStorage, 'key').mockImplementation(index => {
+            const seen = nativeKey(index);
+            if (index === 0 && !shifted && readVaultControl(owner)?.phase === 'migrating') {
+                shifted = true;
+                localStorage.removeItem(decoy);
+            }
+            return seen;
+        });
+
+        await expect(createAndMigrateVault(owner)).rejects.toThrow('Inventario localStorage modificato');
+        spy.mockRestore();
+        expect(shifted).toBe(true);
+        expect(readVaultControl(owner)?.phase).toBe('migrating');
+        expect(localStorage.getItem(legacyKey)).toBe(raw);
+        expect(localStorage.getItem(protectedDeviceKey('draft:measurement:' + day, owner))).toBeNull();
+
+        await resumeVaultMigration(owner);
+        expect(readVaultControl(owner)?.phase).toBe('active');
+        expect(localStorage.getItem(legacyKey)).toBeNull();
+        expect(readDeviceValueStrict('draft:measurement:' + day, owner)).toBe(raw);
     });
 
     it('rejects different control epochs instead of selecting a conflicting key', async () => {

@@ -32,6 +32,13 @@ describe('authenticated logout preflight', () => {
         expect(useDialogStore.getState().showUnsyncedDataLogout).not.toHaveBeenCalled();
     });
 
+    it('blocks logout despite an empty journal if a cloud integrity fence is durable', async () => {
+        vi.spyOn(localRepository, 'readLocal').mockResolvedValueOnce({ pending: [], cloudIntegrityFence: 'unsafe-cloud' } as any);
+        expect(await prepareAuthenticatedLogout(ownerUid, vi.fn())).toBeNull();
+        expect(useDialogStore.getState().showAlert).toHaveBeenCalledWith(expect.stringContaining('snapshot cloud'));
+        expect(useDialogStore.getState().showUnsyncedDataLogout).not.toHaveBeenCalled();
+    });
+
     it('permits normal logout only when memory and durable journal are clean', async () => {
         vi.spyOn(localRepository, 'readLocal').mockResolvedValueOnce({ pending: [] } as any);
         const setSyncing = vi.fn();
@@ -63,7 +70,7 @@ describe('authenticated logout preflight', () => {
     });
 
     it('requires explicit force-exit choice when the journal has pending work', async () => {
-        vi.spyOn(localRepository, 'readLocal').mockResolvedValueOnce({ pending: [{}] } as any);
+        vi.spyOn(localRepository, 'readLocal').mockResolvedValue({ pending: [{}] } as any);
         vi.mocked(waitForPendingWrites).mockRejectedValueOnce(
             Object.assign(new Error('permission denied'), { code: 'permission-denied' }),
         );
@@ -77,7 +84,7 @@ describe('authenticated logout preflight', () => {
     });
 
     it('does not authorize logout when the unsynced dialog chooses to wait', async () => {
-        vi.spyOn(localRepository, 'readLocal').mockResolvedValueOnce({ pending: [{}] } as any);
+        vi.spyOn(localRepository, 'readLocal').mockResolvedValue({ pending: [{}] } as any);
         vi.mocked(waitForPendingWrites).mockRejectedValueOnce(
             Object.assign(new Error('offline'), { code: 'unavailable' }),
         );
@@ -85,6 +92,53 @@ describe('authenticated logout preflight', () => {
         const setSyncing = vi.fn();
 
         expect(await prepareAuthenticatedLogout(ownerUid, setSyncing)).toBeNull();
+        expect(useDialogStore.getState().showUnsyncedDataLogout).toHaveBeenCalledWith('offline');
+    });
+
+    it('recognizes a journal drained while pending server writes settle', async () => {
+        const read = vi.spyOn(localRepository, 'readLocal')
+            .mockResolvedValueOnce({ pending: [{}] } as any)
+            .mockResolvedValueOnce({ pending: [] } as any);
+        vi.mocked(waitForPendingWrites).mockImplementationOnce(async () => {
+            useAppStore.setState({ syncHealth: 'synced' });
+        });
+
+        expect(await prepareAuthenticatedLogout(ownerUid, vi.fn())).toBe(false);
+        expect(read).toHaveBeenCalledTimes(2);
+        expect(useDialogStore.getState().showUnsyncedDataLogout).not.toHaveBeenCalled();
+    });
+
+    it('aborts if the cloud-integrity fence appears while pending writes settle', async () => {
+        vi.spyOn(localRepository, 'readLocal')
+            .mockResolvedValueOnce({ pending: [{}] } as any)
+            .mockResolvedValueOnce({ pending: [], cloudIntegrityFence: 'cloud-evidence-failed' } as any);
+        expect(await prepareAuthenticatedLogout(ownerUid, vi.fn())).toBeNull();
+        expect(useDialogStore.getState().showAlert).toHaveBeenCalledWith(expect.stringContaining('snapshot cloud'));
+        expect(useDialogStore.getState().showUnsyncedDataLogout).not.toHaveBeenCalled();
+    });
+
+    it('fails closed when the durable re-read after cloud waiting becomes unreadable', async () => {
+        vi.spyOn(localRepository, 'readLocal')
+            .mockResolvedValueOnce({ pending: [{}] } as any)
+            .mockRejectedValueOnce(new Error('IndexedDB became unavailable'));
+        expect(await prepareAuthenticatedLogout(ownerUid, vi.fn())).toBeNull();
+        expect(useDialogStore.getState().showAlert).toHaveBeenCalledWith(expect.stringContaining('Archivio preservato'));
+        expect(useDialogStore.getState().showUnsyncedDataLogout).not.toHaveBeenCalled();
+    });
+
+    it('never authorizes safe-exit when a new journal item arrives during the dialog', async () => {
+        useAppStore.setState({ syncHealth: 'local-pending' });
+        const read = vi.spyOn(localRepository, 'readLocal')
+            .mockResolvedValueOnce({ pending: [] } as any)
+            .mockResolvedValueOnce({ pending: [] } as any)
+            .mockResolvedValueOnce({ pending: [{}] } as any);
+        vi.mocked(useDialogStore.getState().showUnsyncedDataLogout).mockImplementationOnce(async () => {
+            useAppStore.setState({ syncHealth: 'synced' });
+            return 'safe-exit';
+        });
+
+        expect(await prepareAuthenticatedLogout(ownerUid, vi.fn())).toBeNull();
+        expect(read).toHaveBeenCalledTimes(3);
         expect(useDialogStore.getState().showUnsyncedDataLogout).toHaveBeenCalledWith('offline');
     });
 });

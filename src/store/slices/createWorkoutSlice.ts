@@ -3,11 +3,11 @@ import { DomainParsers } from '../../lib/schema';
 import { Logic } from '../../lib/logic';
 import { normalizeBusinessId } from '../../lib/businessIdentity';
 import type { WorkoutSession, SyncResult } from '../../types';
-import { readDeviceValueStrict, writeDeviceValue } from '../../lib/sync/deviceStorage';
+import { readDeviceValueStrict } from '../../lib/sync/deviceStorage';
 import type { AppState } from '../useAppStore';
 import { captureSession } from '../../lib/sync/session';
 import { assertWorkoutSessionIdentities } from '../../lib/sync/domainOperations/validation';
-import { readWorkoutDeviceIntent, releaseCommittedWorkoutSlot, saveWorkoutDeviceIntent, unwrapWorkoutDeviceSnapshot } from '../../lib/sync/workoutDeviceIntent';
+import { assertWorkoutSnapshotEpoch, persistPlainWorkoutSnapshot, readWorkoutDeviceIntent, releaseCommittedWorkoutSlot, saveWorkoutDeviceIntent, unwrapWorkoutDeviceSnapshot } from '../../lib/sync/workoutDeviceIntent';
 
 export interface WorkoutSlice {
     localWorkout: WorkoutSession | null;
@@ -39,8 +39,7 @@ function blockWorkoutPersistence(set: (partial: Partial<AppState>) => void, erro
 }
 
 function persistLocalWorkout(workout: WorkoutSession | null, owner?: string): void {
-    if (workout) writeDeviceValue('workout', JSON.stringify(workout), owner);
-    else writeDeviceValue('workout', null, owner);
+    persistPlainWorkoutSnapshot(workout, owner);
 }
 
 function uniqueRecoveredId(raw: unknown, prefix: string, seen: Set<string>): string {
@@ -90,7 +89,7 @@ function normalizeDeviceWorkout(raw: WorkoutSession): WorkoutSession | null {
     return { ...raw, id: workoutId, exercises };
 }
 
-export const getInitialLocalWorkout = (owner?: string, fallback?: WorkoutSession | null, history?: ReadonlyArray<WorkoutSession>, lastClosedWorkoutId?: string, closedWorkoutIds?: ReadonlyArray<string>): WorkoutSession | null => {
+export const getInitialLocalWorkout = (owner?: string, fallback?: WorkoutSession | null, history?: ReadonlyArray<WorkoutSession>, lastClosedWorkoutId?: string, closedWorkoutIds?: ReadonlyArray<string>, expectedConsentRevision?: number): WorkoutSession | null => {
     const wasClosed = (id: string) => lastClosedWorkoutId === id
         || closedWorkoutIds?.includes(id) === true
         || history?.some(item => item.id === id) === true;
@@ -118,7 +117,9 @@ export const getInitialLocalWorkout = (owner?: string, fallback?: WorkoutSession
     if (!parsed || typeof parsed !== 'object') throw new DeviceWorkoutCorruptError();
     // A pending synchronous intent must not be destroyed by bootstrap
     // normalization before its IndexedDB/journal reconciliation.
-    const { workout: savedWorkout, isIntent } = unwrapWorkoutDeviceSnapshot(parsed, owner ?? captureSession().owner);
+    const resolvedOwner = owner ?? captureSession().owner;
+    const { workout: savedWorkout, isIntent, consentRevision } = unwrapWorkoutDeviceSnapshot(parsed, resolvedOwner);
+    assertWorkoutSnapshotEpoch(resolvedOwner, consentRevision, expectedConsentRevision);
     const normalized = normalizeDeviceWorkout(savedWorkout as WorkoutSession);
     if (!normalized) throw new DeviceWorkoutCorruptError('Snapshot workout locale privo di identità valida.');
     const validated = DomainParsers.parseActiveWorkout(normalized) as WorkoutSession | null;

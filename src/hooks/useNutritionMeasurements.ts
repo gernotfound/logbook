@@ -186,6 +186,7 @@ export function useNutritionMeasurements(selectedDate?: string) {
             const targetDate = targetDateStr;
             try {
                 if (!isCurrentSession(session)) throw new Error('Sessione cambiata');
+                draft.verifyCurrentDraft();
                 await dispatchDurableOperation(dispatchDomainOperation, {
                     type: 'nutrition-day.patch',
                     date: targetDate,

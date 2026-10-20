@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import { Logic } from '../../lib/logic';
 import { captureSession, isCurrentSession } from '../../lib/sync/session';
-import { readDeviceValueStrict, writeDeviceValue } from '../../lib/sync/deviceStorage';
+import { readWorkoutRecoveryDraft, writeWorkoutRecoveryDraft } from '../../lib/sync/workoutRecoveryDraft';
 import { requiredUpdateRecoveryRegistry } from '../../lib/sync/requiredUpdateRecovery';
 import { draftRegistry } from '../../lib/utils/draftRegistry';
 import type { WorkoutReadiness } from '../../types';
@@ -34,9 +34,8 @@ function formatSleep(value: string | number | undefined): string | null {
     return `${hours} h ${minutes} min`;
 }
 
-function parseReadinessDraft(raw: string | null): ReadinessDraft {
-    if (raw === null) return {};
-    const parsed = JSON.parse(raw);
+function parseReadinessDraft(parsed: unknown | null): ReadinessDraft {
+    if (parsed === null) return {};
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
         throw new Error('Bozza check-in locale non valida.');
     }
@@ -76,7 +75,7 @@ function createInitialReadinessRecovery(workoutId: string): InitialReadinessReco
         return {
             session,
             recoveryName,
-            recovered: parseReadinessDraft(readDeviceValueStrict(recoveryName, session.owner)),
+            recovered: parseReadinessDraft(readWorkoutRecoveryDraft(recoveryName, session.owner)),
             error: null,
         };
     } catch (error) {
@@ -106,13 +105,13 @@ export default function PreSessionCheckIn({ workoutId, routineName, date, onStar
         if (!dirtyRef.current) return;
         const activeSession = session.current;
         if (!activeSession || !isCurrentSession(activeSession)) throw new Error('Sessione cambiata prima del salvataggio del check-in.');
-        writeDeviceValue(recoveryName.current, JSON.stringify(valuesRef.current), activeSession.owner);
+        writeWorkoutRecoveryDraft(recoveryName.current, activeSession.owner, valuesRef.current);
     }, []);
 
     const clearDraft = useCallback(() => {
         const activeSession = session.current;
         if (!activeSession || !isCurrentSession(activeSession)) throw new Error('Sessione cambiata prima della pulizia del check-in.');
-        writeDeviceValue(recoveryName.current, null, activeSession.owner);
+        writeWorkoutRecoveryDraft(recoveryName.current, activeSession.owner, null);
         dirtyRef.current = false;
     }, []);
 
@@ -131,7 +130,7 @@ export default function PreSessionCheckIn({ workoutId, routineName, date, onStar
         try {
             const activeSession = session.current;
             if (!activeSession || !isCurrentSession(activeSession)) throw new Error('Sessione cambiata prima del salvataggio del check-in.');
-            writeDeviceValue(recoveryName.current, JSON.stringify(next), activeSession.owner);
+            writeWorkoutRecoveryDraft(recoveryName.current, activeSession.owner, next);
         } catch (error) {
             blockReadinessPersistence(error);
             return;
@@ -145,6 +144,10 @@ export default function PreSessionCheckIn({ workoutId, routineName, date, onStar
         if (starting) return;
         setStarting(true);
         try {
+            const activeSession = session.current;
+            if (!activeSession || !isCurrentSession(activeSession)) throw new Error('Sessione cambiata prima di avviare il workout.');
+            // Mounted UI values may predate a consent change in another tab.
+            readWorkoutRecoveryDraft(recoveryName.current, activeSession.owner);
             const started = await onStart(includeReadiness ? valuesRef.current : undefined);
             if (started) {
                 try {
@@ -166,6 +169,9 @@ export default function PreSessionCheckIn({ workoutId, routineName, date, onStar
     const cancel = async () => {
         if (starting) return;
         try {
+            const activeSession = session.current;
+            if (!activeSession || !isCurrentSession(activeSession)) throw new Error('Sessione cambiata prima di eliminare il workout.');
+            readWorkoutRecoveryDraft(recoveryName.current, activeSession.owner);
             if (await onCancel()) clearDraft();
         } catch (error) {
             blockReadinessPersistence(error);

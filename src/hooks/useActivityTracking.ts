@@ -96,6 +96,7 @@ export function useActivityTracking() {
         const submitted = { ...stepsDraft.values };
         try {
             if (!isCurrentSession(session)) throw new Error('Sessione cambiata');
+            stepsDraft.verifyCurrentDraft();
             await dispatchDurableOperation(dispatchDomainOperation, { type: 'activity-steps.set', date: selectedDate, steps, source: 'manual', capturedAt: Date.now() });
             if (!isCurrentSession(session)) return false;
             return stepsDraft.clear(submitted);
@@ -179,6 +180,7 @@ export function useActivityTracking() {
         const submitted = { ...form };
         try {
             if (!isCurrentSession(session)) throw new Error('Sessione cambiata');
+            cardioDraft.verifyCurrentDraft();
             await dispatchDurableOperation(dispatchDomainOperation, { type: 'cardio-session.upsert', date: selectedDate, session: cardioSession });
             if (!isCurrentSession(session)) return false;
             const cleared = cardioDraft.clear(submitted);

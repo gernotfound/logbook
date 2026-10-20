@@ -219,6 +219,52 @@ it('drains owner-scoped keys discovered during a previous localStorage purge pas
     expect(isLocalPurgePending(owner)).toBe(true);
 });
 
+it('never destroys the device wrapping key if a changing localStorage index hides ciphertext', async () => {
+    const owner = 'user:a';
+    const decoy = 'logbook:unrelated-index';
+    const control = 'logbook:v2:user:a:secure-vault-control';
+    const ciphertext = 'logbook:v2:user:a:sealed:workout';
+    const { vault, dataKey } = await createLocalKeyVault(owner);
+    disk.set(decoy, 'not-owner-data');
+    disk.set(ciphertext, sealLocalText(dataKey, owner, ciphertext, '{"weight":"80"}'));
+    disk.set(control, JSON.stringify({
+        format: 'thelogbook-local-vault-control', version: 2,
+        owner, phase: 'active', epoch: 'a'.repeat(32), wrappedKey: vault,
+    }));
+    let concurrentShift = true;
+    vi.stubGlobal('localStorage', {
+        get length() {
+            // Simulate another realm inserting a non-owner key before each
+            // enumeration. Removing it at index 0 shifts the ciphertext to
+            // the already-visited position without deleting the ciphertext.
+            if (concurrentShift && !disk.has(decoy)) disk = new Map([[decoy, 'not-owner-data'], ...disk]);
+            return disk.size;
+        },
+        key: (index: number) => {
+            const observed = [...disk.keys()][index] ?? null;
+            if (concurrentShift && index === 0 && observed === decoy) disk.delete(decoy);
+            return observed;
+        },
+        getItem: (key: string) => disk.get(key) ?? null,
+        setItem: (key: string, value: string) => disk.set(key, value),
+        removeItem: (key: string) => disk.delete(key),
+    });
+
+    await expect(purgeCompletedAccountLocalData(owner)).rejects.toThrow('Pulizia locale incompleta');
+    expect(disk.get(ciphertext)).toContain('tlb-sealed:');
+    expect(disk.has(control)).toBe(true);
+    expect(await get(deviceVaultKeyId(owner))).toBeDefined();
+    expect(isLocalPurgePending(owner)).toBe(true);
+
+    // When the competing tab stops mutating keys, the same fenced purge can
+    // finish; a failed inventory must not require destroying the ciphertext.
+    concurrentShift = false;
+    await purgeCompletedAccountLocalData(owner);
+    expect(disk.has(ciphertext)).toBe(false);
+    expect(disk.has(control)).toBe(false);
+    expect(await get(deviceVaultKeyId(owner))).toBeUndefined();
+});
+
 it('keeps the encryption control and purge fence when new storage keys keep reappearing', async () => {
     const owner = 'user:a';
     const rotating = 'logbook:v2:user:a:sealed:reappearing';
@@ -497,6 +543,21 @@ it('reports storage deletion failures during a verified account-deletion cleanup
 
     expect(disk.has('logbook:v2:user:a:workout')).toBe(true);
     expect(disk.has('logbook:v2:user:a:timer_state')).toBe(false);
+});
+
+it('never purges an acknowledged local copy under a cloud-integrity fence, even on force logout', async () => {
+    const localRepository = await import('../../src/lib/sync/localRepository');
+    vi.spyOn(localRepository, 'readLocal').mockResolvedValue({
+        pending: [], cloudIntegrityFence: 'remote-missing-shard',
+    } as any);
+    const { logoutAndPurgeAccount } = await import('../../src/lib/db/db_account');
+    const signOut = vi.fn();
+
+    await expect(logoutAndPurgeAccount('user:a', signOut, true)).rejects.toThrow('snapshot cloud non verificato');
+    expect(signOut).not.toHaveBeenCalled();
+    expect(await get('logbook:v2:user:a')).toEqual({ original: 'recoverable' });
+    await expect(purgeAllLocalUserData('user:a')).rejects.toThrow('snapshot cloud non verificato');
+    expect(await get('logbook:v2:user:a')).toEqual({ original: 'recoverable' });
 });
 
 it('blocks direct ordinary purge while preserving the pending receipt and real IndexedDB envelope', async () => {

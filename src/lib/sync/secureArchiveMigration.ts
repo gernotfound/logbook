@@ -14,6 +14,7 @@ import { withGuestLifecycleLock } from './guestLifecycleLock';
 import { isAccountDeletionPending } from './accountGate';
 import { OWNER_UI_PREFERENCES } from '../uiPreferenceKeys';
 import { assertNoLocalPurge, isLocalPurgeIncomplete, isLocalPurgePending, releaseLocalPurgeFence, LocalPurgePendingError } from './localPurgeFence';
+import { stableStorageKeyInventory } from './stableStorageKeyInventory';
 
 const SAFE_PLAINTEXT_NAMES = new Set([
     'health-consent-withdrawal', 'health-consent-generation', 'health-consent-last-active',
@@ -32,12 +33,8 @@ function isSensitiveDeviceName(name: string): boolean {
 
 function ownerStorageNames(owner: string): string[] {
     const prefix = 'logbook:v2:' + owner + ':';
-    const names: string[] = [];
-    for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key?.startsWith(prefix)) names.push(key.slice(prefix.length));
-    }
-    return names;
+    return [...stableStorageKeyInventory('Inventario localStorage modificato durante la migrazione.')]
+        .filter(key => key.startsWith(prefix)).map(key => key.slice(prefix.length));
 }
 
 function assertKnownDeviceNames(owner: string): string[] {

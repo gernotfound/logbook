@@ -135,7 +135,7 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
       // The server accepted the new consent, but older local edits still need
       // the person's separate, explicit recovery choice. This is not a failed
       // consent: keep the suspension and let the recovery screen explain it.
-      if (refreshed === 'recovery-required') return;
+      if (refreshed === 'recovery-required' || refreshed === 'erasure-required') return;
       if (refreshed !== 'active') throw new Error('Nuovo consenso non ancora verificato su questo dispositivo.');
       finishHealthConsentReacceptance(user.uid);
     } catch {
@@ -187,7 +187,9 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
       <h1>{initialAcceptance ? 'Primo consenso richiesto' : status === 'checking' ? 'Verifica del consenso in corso' : status === 'error' ? 'Verifica del consenso non riuscita' : 'Accesso a TheLogBook sospeso'}</h1>
       <p>{statusUnverified
         ? 'L’accesso ai dati è temporaneamente sospeso perché non è stato possibile completare la verifica. Questo stato non significa che tu abbia revocato il consenso.'
-        : initialAcceptance ? 'Il tuo account non ha ancora un primo consenso registrato sul server. L’accesso fitness e la sincronizzazione restano sospesi fino all’accettazione esplicita.' : 'Allenamenti, nutrizione e diario sono sospesi. Per riattivarli serve un nuovo consenso esplicito dopo la conferma della revoca.'}</p>
+        : status === 'erasure-required'
+          ? 'Il nuovo consenso è attivo, ma questo dispositivo conserva un archivio di una generazione che è stata cancellata dal cloud. La vecchia copia non può essere riattivata o sincronizzata.'
+          : initialAcceptance ? 'Il tuo account non ha ancora un primo consenso registrato sul server. L’accesso fitness e la sincronizzazione restano sospesi fino all’accettazione esplicita.' : 'Allenamenti, nutrizione e diario sono sospesi. Per riattivarli serve un nuovo consenso esplicito dopo la conferma della revoca.'}</p>
       {user === null && <p>Modalità locale: i dati sono salvati solo su questo dispositivo. Non è necessario contattare il server per la revoca.</p>}
       {status === 'checking' && <p role="status">Verifica dello stato sul server in corso…</p>}
       {status === 'error' && <p role="alert">Non è stato possibile verificare lo stato del consenso. L’accesso fitness resta sospeso.</p>}
@@ -220,6 +222,10 @@ export function HealthConsentSuspended({ status, user }: { status: HealthConsent
             setError(e instanceof Error ? e.message : 'Impossibile verificare il consenso più recente.');
           } finally { setBusy(false); }
         })(); }}>Mantieni il nuovo consenso</button>
+      </section>}
+      {status === 'erasure-required' && <section aria-label="Copia locale di dati cancellati">
+        <p role="alert">La cancellazione dei dati eseguita sul cloud include la generazione della copia conservata qui. Per rispettare quella cancellazione, TheLogBook non la trasforma automaticamente in dati nuovi.</p>
+        <p>Puoi preparare un backup della copia locale. Se non ci sono modifiche ancora pendenti, puoi scegliere «Esci dall’account» e poi accedere di nuovo per partire dal cloud aggiornato. L’uscita cancella la copia locale di questo account; se ci sono modifiche non sincronizzate, la protezione del logout può sospenderla.</p>
       </section>}
       {status === 'recovery-required' && <section aria-label="Recupero delle modifiche precedenti">
         <p role="alert">Il nuovo consenso è stato registrato, ma su questo dispositivo ci sono modifiche non sincronizzate prima della revoca. Non le eliminiamo e non le inviamo automaticamente.</p>

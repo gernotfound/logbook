@@ -26,6 +26,7 @@ import type { UserData } from '../src/types';
 import { beginGuestMigrationIntent } from '../src/lib/auth/guestMigrationIntent';
 import { createAndMigrateVault } from '../src/lib/sync/secureArchiveMigration';
 import { lockAllVaults } from '../src/lib/sync/secureArchiveSession';
+import { saveWorkoutDeviceIntent } from '../src/lib/sync/workoutDeviceIntent';
 
 const defaultRunTransaction = vi.mocked(runTransaction).getMockImplementation();
 
@@ -101,6 +102,63 @@ describe('guest migration restart recovery', () => {
             .toContain('guest-routine');
         expect(purge).not.toHaveBeenCalled();
         expect(DB.loadCloudPayload).not.toHaveBeenCalled();
+    });
+
+
+    it('restores an already-durable authenticated archive without rewriting a stale guest view', async () => {
+        const { cloud, guest } = fixtures();
+        await localRepository.initializeLocal(user.uid, cloud, []);
+        const guestBefore = await localRepository.readLocal('guest');
+        const accountBefore = await localRepository.readLocal(user.uid);
+        // After a crash the guest snapshot can remain in memory, while the
+        // recovery marker already makes storageOwner() resolve to the account.
+        localStorage.setItem(GUEST_KEY, 'true');
+        useAppStore.setState({ userData: guest, dataOwner: 'guest', localWorkout: null });
+        localStorage.setItem(SYNC_RECOVERY_KEY, user.uid);
+
+        render(<AuthProvider><App /></AuthProvider>);
+
+        await waitFor(() => expect(localStorage.getItem(SYNC_RECOVERY_KEY)).toBeNull());
+        expect(localStorage.getItem(GUEST_KEY)).toBeNull();
+        expect(useAppStore.getState().dataOwner).toBe('user:' + user.uid);
+        expect(useAppStore.getState().localPersistenceBlocked).toBe(false);
+        expect(useAppStore.getState().userData?.routines?.map(item => item.id)).toEqual(['cloud-routine']);
+        expect((await localRepository.readLocal(user.uid))?.pending).toEqual(accountBefore?.pending);
+        expect((await localRepository.readLocal(user.uid))?.data).toEqual(accountBefore?.data);
+        expect((await localRepository.readLocal('guest'))?.data).toEqual(guestBefore?.data);
+        expect(screen.getByTestId('bottom-nav')).toBeTruthy();
+    });
+
+    it('reconciles a newer authenticated workout device intent before publishing recovered account data', async () => {
+        const { cloud, guest } = fixtures();
+        const originalWorkout = {
+            id: 'recovery-workout', date: '2026-10-14', routineName: 'Recupero',
+            exercises: [{ id: 'exercise-1', exId: 'bench', sets: [{ id: 'set-1', kg: '50', reps: '8' }] }],
+        };
+        const initial = parse({ ...cloud, activeWorkout: originalWorkout });
+        await localRepository.initializeLocal(user.uid, initial, []);
+        const updatedWorkout = {
+            ...initial.activeWorkout!,
+            exercises: [{ ...initial.activeWorkout!.exercises[0], sets: [
+                { ...initial.activeWorkout!.exercises[0].sets[0], kg: '55' },
+            ] }],
+        };
+        saveWorkoutDeviceIntent('user:' + user.uid, initial.activeWorkout!, updatedWorkout, initial.activeWorkout!);
+        localStorage.setItem(GUEST_KEY, 'true');
+        useAppStore.setState({ userData: guest, dataOwner: 'guest', localWorkout: null });
+        localStorage.setItem(SYNC_RECOVERY_KEY, user.uid);
+
+        render(<AuthProvider><App /></AuthProvider>);
+
+        await waitFor(async () => {
+            const envelope = await localRepository.readLocal(user.uid);
+            expect(envelope?.data.activeWorkout?.exercises[0].sets[0].kg).toBe('55');
+            expect(envelope?.pending.length).toBeGreaterThan(0);
+            expect(useAppStore.getState().localWorkout?.exercises[0].sets[0].kg).toBe('55');
+        });
+        await waitFor(() => expect(localStorage.getItem(SYNC_RECOVERY_KEY)).toBeNull());
+        expect(useAppStore.getState().localPersistenceBlocked).toBe(false);
+        expect((await localRepository.readLocal('guest'))?.data.routines?.map(item => item.id)).toContain('guest-routine');
     });
 
     it('retains the recovery marker and blocks account data if the authenticated envelope is missing', async () => {

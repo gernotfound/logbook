@@ -2,7 +2,10 @@ import type { Dispatch, RefObject, SetStateAction } from 'react';
 import type { User } from 'firebase/auth';
 import { useAppStore } from '../../store/useAppStore';
 import { isLegalConsentRequiredError, replicateJournal } from '../../lib/sync/replicateJournal';
-import { userOwner } from '../../lib/sync/session';
+import { captureSession, isCurrentSession, userOwner } from '../../lib/sync/session';
+import { markTabSnapshotClean } from '../../lib/sync/tabSnapshotCausality';
+import { getInitialLocalWorkout } from '../../store/slices/createWorkoutSlice';
+import { recoverWorkoutDeviceIntent } from '../../lib/sync/workoutDeviceIntent';
 import { removeBrowserValue } from '../../lib/sync/browserStorage';
 import { clearGuestMigrationIntent } from '../../lib/auth/guestMigrationIntent';
 import type { UserData } from '../../types';
@@ -15,7 +18,6 @@ type RecoveryDependencies = {
     migrationDataRef: RefObject<UserData | null>;
     setIsGuest: Dispatch<SetStateAction<boolean>>;
     setGuestMigrationStatus: Dispatch<SetStateAction<GuestMigrationStatus>>;
-    setUserData: ReturnType<typeof useAppStore.getState>['setUserData'];
     setSyncing: ReturnType<typeof useAppStore.getState>['setSyncing'];
     setSaveError: ReturnType<typeof useAppStore.getState>['setSaveError'];
     clearGuestMigrationSyncRecovery: (uid: string) => void;
@@ -28,7 +30,7 @@ export async function resumePersistedGuestMigration(
 ): Promise<boolean> {
     const {
         guestKey, isGuestActiveStrict, isGuestRef, migrationDataRef,
-        setIsGuest, setGuestMigrationStatus, setUserData, setSyncing,
+        setIsGuest, setGuestMigrationStatus, setSyncing,
         setSaveError, clearGuestMigrationSyncRecovery,
     } = dependencies;
             if (!isCurrentRun()) return true;
@@ -61,10 +63,7 @@ export async function resumePersistedGuestMigration(
                 return true;
             }
 
-            setUserData(authenticatedEnvelope.data);
-
             if (guestStillActive) {
-                useAppStore.getState().setLocalWorkout(authenticatedEnvelope.data.activeWorkout || null);
                 try {
                     if (!isCurrentRun()) return true;
                     removeBrowserValue(guestKey);
@@ -82,6 +81,41 @@ export async function resumePersistedGuestMigration(
             }
 
             if (!isCurrentRun()) return true;
+            // Recovery publishes an existing durable owner envelope, not a new
+            // user edit. setUserData() would attempt a semantic snapshot commit
+            // from the old guest UI or trip the cross-owner persistence guard.
+            try {
+                const session = captureSession();
+                if (session.owner !== userOwner(user.uid) || !isCurrentSession(session)) return true;
+                // The same owner-scoped recovery precedes ordinary authenticated
+                // hydration. Never expose an unapplied device write-ahead intent.
+                await recoverWorkoutDeviceIntent(session.owner, () => isCurrentRun() && isCurrentSession(session));
+                if (!isCurrentRun() || !isCurrentSession(session)) return true;
+                const { readLocal } = await import('../../lib/sync/localRepository');
+                const updatedEnvelope = await readLocal(user.uid);
+                if (!updatedEnvelope) throw new Error('Archivio account scomparso durante il recupero workout.');
+                if (!isCurrentRun() || !isCurrentSession(session)) return true;
+                const recovered = updatedEnvelope.data;
+                const workout = getInitialLocalWorkout(
+                    session.owner, recovered.activeWorkout ?? null, recovered.history,
+                    updatedEnvelope.lastClosedWorkoutId, updatedEnvelope.closedWorkoutIds, updatedEnvelope.consentRevision,
+                );
+                if (!isCurrentRun() || !isCurrentSession(session)) return true;
+                useAppStore.setState({
+                    userData: recovered, dataOwner: session.owner, localWorkout: workout,
+                    cloudIntegrityBlocked: Boolean(updatedEnvelope.cloudIntegrityFence),
+                    syncHealth: updatedEnvelope.cloudIntegrityFence ? 'failed'
+                        : updatedEnvelope.pending.length ? 'local-pending' : 'synced',
+                });
+                markTabSnapshotClean(session, recovered);
+            } catch (error) {
+                if (!isCurrentRun()) return true;
+                console.error('Recovery account: pubblicazione dati locali non sicura:', error);
+                setGuestMigrationStatus('failed');
+                setSaveError('Recupero dell’archivio autenticato non completato. Dati preservati: riprova.');
+                return true;
+            }
+
             setSyncing(true);
             try {
                 const result = await replicateJournal(userOwner(user.uid));

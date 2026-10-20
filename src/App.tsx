@@ -160,6 +160,7 @@ function OwnerBoundApp({ startupTab }: { startupTab: string | null }) {
   const syncHealth = useAppStore(state => state.syncHealth);
   const syncPresentation = useAppStore(state => state.syncPresentation);
   const localPersistenceBlocked = useAppStore(state => state.localPersistenceBlocked);
+  const cloudIntegrityBlocked = useAppStore(state => state.cloudIntegrityBlocked);
   const setSaveError = useAppStore(state => state.setSaveError);
   const submitLegalConsent = useAppStore(state => state.submitLegalConsent);
   const compatibilityStatus = useAppStore(state => state.compatibilityStatus);
@@ -235,15 +236,15 @@ function OwnerBoundApp({ startupTab }: { startupTab: string | null }) {
     }
   }, [startupTab]);
 
-  // Transient save errors auto-dismiss. A local persistence failure is a durable
-  // write barrier and must remain visible until the app lifecycle resets it.
+  // Transient errors auto-dismiss; only a verified durable integrity fence or
+  // blocked local persistence keeps the warning until recovery.
   useEffect(() => {
-    if (!saveError || localPersistenceBlocked) return;
+    if (!saveError || localPersistenceBlocked || cloudIntegrityBlocked) return;
     const timer = setTimeout(() => {
       setSaveError(null);
     }, 5000);
     return () => clearTimeout(timer);
-  }, [saveError, localPersistenceBlocked, setSaveError]);
+  }, [saveError, localPersistenceBlocked, cloudIntegrityBlocked, setSaveError]);
 
   // Clear saveError on online event if it was due to missing connection during save
   useEffect(() => {
@@ -545,7 +546,7 @@ function OwnerBoundApp({ startupTab }: { startupTab: string | null }) {
         >
           <AlertTriangle className="sync-error-icon" size={20} aria-hidden="true" />
           <span className="sync-error-text">{saveError}</span>
-          {!localPersistenceBlocked && (
+          {!localPersistenceBlocked && !cloudIntegrityBlocked && (
             <button
               type="button"
               className="sync-error-close"

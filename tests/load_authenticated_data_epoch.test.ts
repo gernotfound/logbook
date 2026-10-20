@@ -116,6 +116,38 @@ describe('authenticated hydration session fencing', () => {
         await clear();
     });
 
+    it('does not create an empty account journal when a cloud read fails without a local envelope', async () => {
+        await clear();
+        const { loadAuthenticatedData, readLocal, invalidateSession } = await loadModules();
+        invalidateSession();
+        storeState.current = { userData: null, localWorkout: null, localPersistenceBlocked: false };
+        dbState.loadCloudPayload.mockRejectedValueOnce(Object.assign(new Error('Cloud unavailable'), { code: 'unavailable' }));
+        const setUserData = vi.fn();
+        const setSaveError = vi.fn();
+        const options = {
+            user: { uid: 'user-a' } as any,
+            isGuestActive: () => false,
+            setUserData,
+            setSyncing: vi.fn(),
+            setSaveError,
+        };
+
+        expect(await loadAuthenticatedData(options)).toBe('blocked');
+        expect(setUserData).not.toHaveBeenCalled();
+        expect((await readLocal('user:user-a'))).toBeUndefined();
+        expect(storeState.current.userData).toBeNull();
+        expect(setSaveError).toHaveBeenCalledWith(expect.stringContaining('nessun archivio locale'));
+
+        // The failure is retryable: a later verified server read still hydrates
+        // this same account normally, without any fabricated local baseline.
+        dbState.loadCloudPayload.mockResolvedValueOnce(payload('185'));
+        expect(await loadAuthenticatedData(options)).toBe('ready');
+        expect(storeState.current.userData?.profile?.height).toBe('185');
+        expect((await readLocal('user:user-a'))?.data.profile?.height).toBe('185');
+        expect(setUserData).not.toHaveBeenCalled();
+        await clear();
+    });
+
     it('does not publish or persist A when the session changes before cloud data arrives', async () => {
         const { loadAuthenticatedData, readLocal, invalidateSession } = await loadModules();
         invalidateSession();

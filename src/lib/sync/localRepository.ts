@@ -46,6 +46,8 @@ interface LocalEnvelopeV5 {
     syncMetaByDocument: Record<string, SyncMeta>;
     replica: ReplicaIdentity | null;
     revision: number;
+    // Persistent owner-scoped barrier for unverified cloud snapshots.
+    cloudIntegrityFence?: string;
     // An older journal must never be replayed under a newly accepted consent.
     consentRevision?: number;
     // Original local state is retained after an explicit, non-silent replay.
@@ -76,6 +78,24 @@ class InvalidCloudSyncMetadataError extends Error {
     constructor(readonly documentPath: string, readonly originalError: unknown) {
         super(`Metadati di sincronizzazione cloud non validi per ${documentPath || 'root'}.`);
         this.name = 'InvalidCloudSyncMetadataError';
+    }
+}
+
+/**
+ * Cloud business evidence is missing or causally older than an already
+ * acknowledged local document. Unlike a transport/replica failure this is
+ * evidence that destructive cleanup must be fenced durably.
+ */
+export class IncompleteCloudSnapshotError extends ReplicaFencedError {
+    readonly evidence = 'cloud-snapshot-integrity';
+
+    constructor(
+        message: string,
+        readonly causeKind: 'missing-document' | 'stale-document',
+        readonly documentPaths: readonly string[],
+    ) {
+        super(message);
+        this.name = 'IncompleteCloudSnapshotError';
     }
 }
 
@@ -166,6 +186,10 @@ function validate(value: any, owner: string): LocalEnvelope | undefined {
     }
     if (typeof record.revision !== 'number' || !Number.isSafeInteger(record.revision) || record.revision < 0) {
         throw new Error('Revisione locale non valida');
+    }
+
+    if (record.cloudIntegrityFence !== undefined && (typeof record.cloudIntegrityFence !== 'string' || !record.cloudIntegrityFence.trim())) {
+        throw new Error('Barriera integrità cloud locale non valida');
     }
 
     if (record.lastClosedWorkoutId !== undefined && (
@@ -307,16 +331,29 @@ export async function rebaseConsentRecoveryWithExplicitChoice(
     });
 }
 
-export async function advanceLocalConsentRevisionIfClean(owner: string, revision: number): Promise<boolean> {
+export async function advanceLocalConsentRevisionIfClean(
+    owner: string, revision: number, guard?: LocalWriteGuard, erasedBeforeRevision?: number,
+): Promise<boolean | 'erased'> {
     owner = normalizeStorageOwner(owner);
-    if (!owner.startsWith('user:') || !Number.isSafeInteger(revision) || revision < 1) throw new Error('Generazione consenso non valida');
-    let ready = false;
+    if (!owner.startsWith('user:') || !Number.isSafeInteger(revision) || revision < 1
+        || (erasedBeforeRevision !== undefined && (!Number.isSafeInteger(erasedBeforeRevision)
+            || erasedBeforeRevision < 1 || erasedBeforeRevision >= revision))) {
+        throw new Error('Generazione consenso non valida');
+    }
+    let ready: boolean | 'erased' = false;
     await updateArchiveRecord<any>(owner, raw => {
+        if (guard && !guard()) throw new Error('Sessione cambiata durante la riconciliazione del consenso.');
         const current = validate(raw, owner);
         if (!current) { ready = true; return raw; }
         const previous = current.consentRevision ?? 0;
         if (previous > revision) throw new Error('Generazione locale più recente del server');
         if (previous === revision) { ready = true; return raw; }
+        // An ACKed journal is not proof that its business data survived a
+        // server-confirmed erasure. Keep the original envelope unchanged.
+        if (erasedBeforeRevision !== undefined && previous <= erasedBeforeRevision) {
+            ready = 'erased';
+            return raw;
+        }
         if (current.pending.length > 0) { ready = false; return raw; }
         ready = true;
         return { ...current, consentRevision: revision, replica: null, revision: current.revision + 1 };
@@ -476,7 +513,7 @@ function hasCommittedWorkoutAncestor(
 export interface DomainCommitResult { operations: SemanticOperation[]; data: UserData; }
 
 export async function commitDomainOperations(owner: string, batch: DomainOperationBatch, initialBase: UserData, guard?: LocalWriteGuard,
-    workoutIntent?: { generation: string; sequence: number; intentId?: string; parentIntentId?: string; ancestorIds?: string[]; baseline: import('../../types').WorkoutSession | null },
+    workoutIntent?: { generation: string; sequence: number; consentRevision?: number; intentId?: string; parentIntentId?: string; ancestorIds?: string[]; baseline: import('../../types').WorkoutSession | null },
 ): Promise<DomainCommitResult> {
     owner = normalizeStorageOwner(owner);
     const domainOperations = normalizeDomainOperationBatch(batch);
@@ -488,6 +525,17 @@ export async function commitDomainOperations(owner: string, batch: DomainOperati
         if (guard && !guard()) throw new Error('Commit locale invalidato dal cambio sessione');
         const current = validate(raw, owner);
         if (workoutIntent) {
+            // Revalidate the source epoch IN the same IndexedDB commit which
+            // would make this unacknowledged device snapshot a new cloud journal.
+            // A revocation/reacceptance in another tab cannot restamp it.
+            const localRevision = current?.consentRevision ?? 0;
+            if (workoutIntent.consentRevision !== undefined
+                ? (!Number.isSafeInteger(workoutIntent.consentRevision)
+                    || workoutIntent.consentRevision < 1
+                    || workoutIntent.consentRevision !== localRevision)
+                : localRevision > 1) {
+                throw new WorkoutIntentConflictError('Workout di un consenso precedente: journal invariato e copia dispositivo preservata.');
+            }
             if (domainOperations.length !== 1 || domainOperations[0].type !== 'active-workout.set'
                 || !domainOperations[0].workout || !owner.startsWith('user:')
                 || !/^[a-f0-9]{32}$/.test(workoutIntent.generation)
@@ -608,6 +656,48 @@ export async function commitDomainOperations(owner: string, batch: DomainOperati
         return { ...(current ?? { completeMonths: [], replica: null }), ...currentEnvelopeVersions(), ...closure, ...intentPatch, owner, actorId, actorSeq: sequenced.actorSeq, clock: sequenced.clock, data: desired, baseline: current?.baseline ?? fallback, completeMonths: current?.completeMonths ?? [], pending: owner === 'guest' ? [] : [...(current?.pending ?? []), ...operations], syncMetaByDocument: current?.syncMetaByDocument ?? {}, replica: current?.replica ?? null, revision: (current?.revision ?? 0) + 1 };
     });
     return { operations, data: savedData };
+}
+
+function fenceCloudIntegrity(current: LocalEnvelope): LocalEnvelope {
+    // A newly detected divergence must invalidate a recovery based on any
+    // earlier observation, even when another tab is attempting a checkpoint.
+    return {
+        ...current,
+        cloudIntegrityFence: generateId('cloud-fence'),
+        replica: current.replica ? { ...current.replica, checkpointAtMs: 1, leaseUntilMs: 1 } : null,
+        revision: current.revision + 1,
+    };
+}
+
+export async function markCloudIntegrityBlocked(owner: string): Promise<void> {
+    owner = normalizeStorageOwner(owner);
+    await updateArchiveRecord<any>(owner, raw => {
+        const current = validate(raw, owner);
+        if (!current) throw new Error('Archivio locale non disponibile per la protezione cloud');
+        return fenceCloudIntegrity(current);
+    });
+}
+
+export async function completeCloudIntegrityRecovery(
+    owner: string, expectedFence: string | null, fullCheckpointCompleted: boolean, guard?: LocalWriteGuard,
+): Promise<LocalEnvelope> {
+    owner = normalizeStorageOwner(owner);
+    let saved: LocalEnvelope | undefined;
+    await updateArchiveRecord<any>(owner, raw => {
+        if (guard && !guard()) return raw;
+        const current = validate(raw, owner);
+        if (!current) throw new Error('Archivio locale non disponibile durante il recupero cloud');
+        if ((current.cloudIntegrityFence ?? null) !== expectedFence) {
+            throw new ReplicaFencedError('La verifica cloud è stata invalidata da una nuova divergenza; copia locale preservata.');
+        }
+        if (expectedFence && (!fullCheckpointCompleted || !current.replica || current.replica.leaseUntilMs <= Date.now())) {
+            throw new ReplicaFencedError('La divergenza cloud richiede un checkpoint completo prima dello sblocco.');
+        }
+        saved = expectedFence ? { ...current, cloudIntegrityFence: undefined, revision: current.revision + 1 } : current;
+        return saved;
+    });
+    if (!saved) throw new Error('Recupero cloud invalidato dal cambio di sessione');
+    return saved;
 }
 
 export async function markReplicaCheckpointRequired(
@@ -760,11 +850,13 @@ export async function acknowledgeThrough(
         if (syncMeta) for (const meta of Object.values(syncMeta)) for (const [actor, seq] of Object.entries(meta.clock)) newClock[actor] = Math.max(newClock[actor] || 0, seq);
         const newSyncMeta = { ...current.syncMetaByDocument, ...(syncMeta || {}) };
         const remoteDocs = projectDocuments(parsed, catalog);
-        const { documents: mergedDocs, syncMetas: mergedMetas } = applySemanticOperations(remoteDocs, pending, newSyncMeta);
+        const { documents: mergedDocs } = applySemanticOperations(remoteDocs, pending, newSyncMeta);
         const reconciled = applyRemoteDocuments(current.data, mergedDocs, catalog);
         reconciled.pendingConflicts = current.data.pendingConflicts;
         const data = parse(reconciled);
-        return { ...current, clock: newClock, baseline: parsed, data, pending, completeMonths: [...new Set([...current.completeMonths, ...months])], syncMetaByDocument: mergedMetas };
+        // Persist only server-confirmed metadata; replayed pending operations are
+        // speculative and must never become evidence that a cloud document exists.
+        return { ...current, clock: newClock, baseline: parsed, data, pending, completeMonths: [...new Set([...current.completeMonths, ...months])], syncMetaByDocument: newSyncMeta };
     });
 }
 
@@ -786,6 +878,7 @@ export async function hydrateLocal(owner: string, cloudData: UserData, months: s
     owner = normalizeStorageOwner(owner);
     const cloud = structuredClone(parse(cloudData));
     let saved: LocalEnvelope | undefined;
+    let integrityFailure: IncompleteCloudSnapshotError | undefined;
     const catalog = await getCachedCatalog();
     await updateArchiveRecord<any>(owner, raw => {
         if (guard && !guard()) return raw;
@@ -800,6 +893,25 @@ export async function hydrateLocal(owner: string, cloudData: UserData, months: s
             }
             saved = { ...currentEnvelopeVersions(), ...ownerConsentRevision(owner), owner, actorId: generateId('actor'), actorSeq: 0, clock, data: cloud, baseline: cloud, completeMonths: months, pending: [], syncMetaByDocument, replica: null, revision: 0 };
         } else {
+            // Older clients persisted merge projections as cloud acknowledgements.
+            // A writerless, empty placeholder for a month with no local or
+            // baseline business records and no pending operation has no server
+            // provenance. Removing that *derived metadata* cannot discard user data.
+            // Never apply this recovery to a real writer, a causal stamp, a local
+            // business month or a pending edit.
+            const localPaths = projectDocuments(current.data, catalog);
+            const baselinePaths = projectDocuments(current.baseline, catalog);
+            const pendingPaths = new Set(current.pending.map(op => op.docPath));
+            const retainedMeta: Record<string, SyncMeta> = Object.fromEntries(
+                Object.entries(current.syncMetaByDocument).filter(([path, meta]) =>
+                    meta.writer !== undefined
+                    || Object.keys(meta.clock).length > 0
+                    || Object.keys(meta.fields).length > 0
+                    || localPaths.has(path)
+                    || baselinePaths.has(path)
+                    || pendingPaths.has(path)
+                ),
+            );
             const syncMeta: Record<string, SyncMeta> = {};
             const authoritativePaths = new Set(['', ...months.map(m => `history_months/${m}`), ...months.map(m => `nutrition_months/${m}`)]);
             // A full scan may race with a newer acknowledgement in another tab.
@@ -807,21 +919,30 @@ export async function hydrateLocal(owner: string, cloudData: UserData, months: s
             // with known durable causal metadata is absent (or lacks _sync), the
             // response cannot prove that its acknowledged data was removed.
             // Reject before installing the cloud snapshot or claiming a checkpoint.
-            if (cloudDocuments && Object.keys(current.syncMetaByDocument).some(path =>
-                (coverageMode === 'all' || authoritativePaths.has(path))
-                && !cloudDocuments.get(path)?._sync
-            )) {
-                throw new ReplicaFencedError('Snapshot cloud incompleto rispetto alla copia locale: sincronizzazione sospesa senza cancellare dati.');
+            const missingPaths = cloudDocuments
+                ? Object.keys(retainedMeta).filter(path =>
+                    (coverageMode === 'all' || authoritativePaths.has(path))
+                    && !cloudDocuments.get(path)?._sync
+                )
+                : [];
+            if (missingPaths.length) {
+                integrityFailure = new IncompleteCloudSnapshotError(
+                    'Snapshot cloud incompleto rispetto alla copia locale: sincronizzazione sospesa senza cancellare dati.',
+                    'missing-document', missingPaths,
+                );
+                // The same IndexedDB commit that detects missing acknowledged
+                // evidence also installs the owner-scoped destructive-purge fence.
+                return fenceCloudIntegrity(current);
             }
-            if (coverageMode === 'window') for (const [path, meta] of Object.entries(current.syncMetaByDocument ?? {})) if (!authoritativePaths.has(path)) syncMeta[path] = meta;
+            if (coverageMode === 'window') for (const [path, meta] of Object.entries(retainedMeta)) if (!authoritativePaths.has(path)) syncMeta[path] = meta;
             const updatedClock = { ...current.clock };
-            let staleCloudSnapshot = false;
+            const stalePaths: string[] = [];
             if (cloudDocuments) for (const [path, doc] of cloudDocuments.entries()) if (doc._sync) {
                 const meta = parseCloudSyncMeta(path, doc._sync);
-                const durable = current.syncMetaByDocument[path];
+                const durable = retainedMeta[path];
                 if ((coverageMode === 'all' || authoritativePaths.has(path)) && durable
                     && !coversVectorClock(meta.clock, durable.clock)) {
-                    staleCloudSnapshot = true;
+                    stalePaths.push(path);
                 }
                 syncMeta[path] = meta;
                 for (const [actor, seq] of Object.entries(meta.clock)) updatedClock[actor] = Math.max(updatedClock[actor] || 0, seq);
@@ -829,8 +950,12 @@ export async function hydrateLocal(owner: string, cloudData: UserData, months: s
             // A delayed or causally incomparable snapshot cannot certify a replica
             // checkpoint, even if the local envelope is preserved. Fail closed so the
             // caller does not publish a frontier derived from stale cloud evidence.
-            if (staleCloudSnapshot) {
-                throw new ReplicaFencedError('Snapshot cloud non aggiornato rispetto alla copia locale: checkpoint sospeso senza sovrascrivere dati.');
+            if (stalePaths.length) {
+                integrityFailure = new IncompleteCloudSnapshotError(
+                    'Snapshot cloud non aggiornato rispetto alla copia locale: checkpoint sospeso senza sovrascrivere dati.',
+                    'stale-document', stalePaths,
+                );
+                return fenceCloudIntegrity(current);
             }
             const localDocs = projectDocuments(current.data, catalog);
             const cloudDocsForHydration = projectDocuments(cloud, catalog);
@@ -847,14 +972,18 @@ export async function hydrateLocal(owner: string, cloudData: UserData, months: s
             const applicationBase = coverageMode === 'all' ? ({ ...current.data, history: [], nutrition: {} } as UserData) : current.data;
             const baselineData = applyRemoteDocuments(applicationBase, localDocs, catalog);
             const parsedBaseline = parse(baselineData);
-            const { documents: mergedDocs, syncMetas: mergedMetas } = applySemanticOperations(localDocs, current.pending, syncMeta);
+            const { documents: mergedDocs } = applySemanticOperations(localDocs, current.pending, syncMeta);
             const data = applyRemoteDocuments(applicationBase, mergedDocs, catalog);
             data.pendingConflicts = current.data.pendingConflicts;
             const parsedData = parse(data);
-            saved = { ...current, ...currentEnvelopeVersions(), clock: updatedClock, data: parsedData, baseline: parsedBaseline, completeMonths: coverageMode === 'all' ? [...new Set(months)] : [...new Set([...current.completeMonths, ...months])], syncMetaByDocument: mergedMetas };
+            saved = { ...current, ...currentEnvelopeVersions(), clock: updatedClock, data: parsedData, baseline: parsedBaseline, completeMonths: coverageMode === 'all' ? [...new Set(months)] : [...new Set([...current.completeMonths, ...months])], // Derived merge stamps belong to the pending journal, not to the
+                // acknowledged cloud frontier. Only server reads can prove
+                // that a document was ever stored remotely.
+                syncMetaByDocument: syncMeta };
         }
         return saved;
     });
+    if (integrityFailure) throw integrityFailure;
     if (!saved) throw new Error('Hydration locale invalidata o non riuscita');
     return saved;
 }

@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackEvent: vi.fn(), trackError: vi.fn() } }));
 import { UserDataSchema } from '../../src/lib/schema';
 import type { UserData } from '../../src/types';
-import { adoptReplicaCheckpoint, markReplicaCheckpointRequired, hydrateLocal, commitLocal, commitDomainOperations, initializeLocal, readLocal, acknowledgeThrough, StaleLocalRevisionError } from '../../src/lib/sync/localRepository';
+import { adoptReplicaCheckpoint, markReplicaCheckpointRequired, markCloudIntegrityBlocked, completeCloudIntegrityRecovery, hydrateLocal, commitLocal, commitDomainOperations, initializeLocal, readLocal, acknowledgeThrough, StaleLocalRevisionError } from '../../src/lib/sync/localRepository';
 import {
     CURRENT_DATA_SCHEMA,
     CURRENT_LOCAL_ENVELOPE,
@@ -264,6 +264,29 @@ describe('durable owner-scoped journal', () => {
         expect(await get('logbook:v2:user:a')).toEqual(legacy);
     });
 
+    it('persists cloud-integrity fencing until a verified full checkpoint, retaining pending edits', async () => {
+        const base = data(170);
+        await initializeLocal('a', base);
+        await commitLocal('a', data(171), base);
+        await markCloudIntegrityBlocked('a');
+        const fenced = (await readLocal('a'))!;
+        expect(fenced.cloudIntegrityFence).toEqual(expect.any(String));
+        expect(fenced.pending.length).toBeGreaterThan(0);
+        await expect(completeCloudIntegrityRecovery('a', fenced.cloudIntegrityFence!, false))
+            .rejects.toMatchObject({ code: 'replica-fenced' });
+        const identity = { slot: 's00', replicaId: 'recovery', generation: 1,
+            checkpointAtMs: Date.now(), leaseUntilMs: Date.now() + 360 * 24 * 60 * 60 * 1000 };
+        await adoptReplicaCheckpoint('a', { identity, baseSeq: 0 }, { clock: {}, syncMetaByDocument: {} });
+        await markCloudIntegrityBlocked('a');
+        await expect(completeCloudIntegrityRecovery('a', fenced.cloudIntegrityFence!, true))
+            .rejects.toMatchObject({ code: 'replica-fenced' });
+        const latest = (await readLocal('a'))!;
+        await adoptReplicaCheckpoint('a', { identity, baseSeq: 0 }, { clock: {}, syncMetaByDocument: {} });
+        const recovered = await completeCloudIntegrityRecovery('a', latest.cloudIntegrityFence!, true);
+        expect(recovered.cloudIntegrityFence).toBeUndefined();
+        expect(recovered.pending.length).toBeGreaterThan(0);
+    });
+
     it('marks only the matching fenced replica as checkpoint-required without dropping its journal', async () => {
         await initializeLocal('a', data(170));
         const now = Date.now();
@@ -357,6 +380,89 @@ describe('durable owner-scoped journal', () => {
         expect(hydrated.completeMonths).toEqual(['2026-09']);
     });
 
+    it('never certifies empty window months as cloud documents', async () => {
+        const root = data(171);
+        const remote = new Map<string, any>([['', {
+            profile: root.profile,
+            _sync: { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {} },
+        }]]);
+        await initializeLocal('a', root);
+        await hydrateLocal('a', root, ['2026-10', '2026-09', '2026-08'], remote, 'window');
+        const afterWindow = await readLocal('a');
+        expect(Object.keys(afterWindow!.syncMetaByDocument)).toEqual(['']);
+
+        // Reopening on a full checkpoint is not evidence that an empty month
+        // mysteriously disappeared from Firestore.
+        await hydrateLocal('a', root, [], remote, 'all');
+        const afterFull = await readLocal('a');
+        expect(afterFull?.cloudIntegrityFence).toBeUndefined();
+        expect(afterFull?.data.profile).toEqual(root.profile);
+        expect(afterFull?.pending).toEqual([]);
+    });
+
+    it('does not promote pending-only metadata to acknowledged remote evidence', async () => {
+        const base = data(170);
+        const desired = UserDataSchema.parse({
+            ...base,
+            nutrition: { '2026-10-01': { date: '2026-10-01', weight: 80 } },
+        }) as unknown as UserData;
+        await initializeLocal('a', base);
+        await commitLocal('a', desired, base);
+        const pendingBefore = (await readLocal('a'))!.pending;
+        expect(pendingBefore.some(op => op.docPath === 'nutrition_months/2026-10')).toBe(true);
+        await acknowledgeThrough('a', 0, base, [], {
+            '': { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {} },
+        });
+        const after = (await readLocal('a'))!;
+        expect(after.pending).toEqual(pendingBefore);
+        expect(after.data.nutrition?.['2026-10-01']?.weight).toBe(80);
+        expect(after.syncMetaByDocument['nutrition_months/2026-10']).toBeUndefined();
+    });
+
+    it('repairs only writerless inert legacy month metadata after a full server scan', async () => {
+        const root = data(170);
+        await initializeLocal('a', root);
+        const key = 'logbook:v2:user:a';
+        const raw = await get(key) as Record<string, any>;
+        await set(key, {
+            ...raw,
+            cloudIntegrityFence: 'previous-client-warning',
+            syncMetaByDocument: { 'nutrition_months/2026-08': {
+                protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {},
+            } },
+        });
+        const remote = new Map<string, any>([['', {
+            _sync: { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {} },
+        }]]);
+        const before = (await readLocal('a'))!;
+        const hydrated = await hydrateLocal('a', root, [], remote, 'all');
+        expect(hydrated.syncMetaByDocument['nutrition_months/2026-08']).toBeUndefined();
+        expect(hydrated.cloudIntegrityFence).toBe('previous-client-warning');
+        expect(hydrated.data).toEqual(before.data);
+        expect(hydrated.pending).toEqual(before.pending);
+    });
+
+    it('keeps the integrity fence when local business data exists on a missing month', async () => {
+        const business = UserDataSchema.parse({
+            nutrition: { '2026-08-01': { date: '2026-08-01', weight: 75 } },
+        }) as unknown as UserData;
+        await initializeLocal('a', business);
+        const key = 'logbook:v2:user:a';
+        const raw = await get(key) as Record<string, any>;
+        await set(key, { ...raw, syncMetaByDocument: {
+            'nutrition_months/2026-08': { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {} },
+        } });
+        const remote = new Map<string, any>([['', {
+            _sync: { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {} },
+        }]]);
+        await expect(hydrateLocal('a', data(170), [], remote, 'all'))
+            .rejects.toMatchObject({ code: 'replica-fenced', causeKind: 'missing-document',
+                documentPaths: ['nutrition_months/2026-08'] });
+        const stillLocal = (await readLocal('a'))!;
+        expect(stillLocal.data.nutrition?.['2026-08-01']?.weight).toBe(75);
+        expect(stillLocal.cloudIntegrityFence).toEqual(expect.any(String));
+    });
+
     it('fences a full checkpoint missing a previously acknowledged monthly shard', async () => {
         const local = UserDataSchema.parse({ nutrition: {
             '2025-01-01': { date: '2025-01-01', weight: 70 },
@@ -372,12 +478,19 @@ describe('durable owner-scoped journal', () => {
         const cloud = UserDataSchema.parse({ nutrition: {
             '2026-09-01': { date: '2026-09-01', weight: 81 },
         } }) as unknown as UserData;
-        const docs = new Map<string, any>([['nutrition_months/2026-09', {
+        const docs = new Map<string, any>([['', {
+            _sync: { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {} },
+        }], ['nutrition_months/2026-09', {
             _sync: { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {} },
         }]]);
         await expect(hydrateLocal('a', cloud, ['2026-09'], docs, 'all'))
-            .rejects.toMatchObject({ code: 'replica-fenced' });
-        expect(await readLocal('a')).toEqual(before);
+            .rejects.toMatchObject({ code: 'replica-fenced', causeKind: 'missing-document',
+                documentPaths: ['nutrition_months/2025-01'] });
+        const fenced = await readLocal('a');
+            expect(fenced?.data).toEqual(before?.data);
+            expect(fenced?.baseline).toEqual(before?.baseline);
+            expect(fenced?.pending).toEqual(before?.pending);
+            expect(fenced?.cloudIntegrityFence).toEqual(expect.any(String));
         expect((await readLocal('a'))?.data.nutrition?.['2025-01-01']?.weight).toBe(70);
     });
 
@@ -397,7 +510,11 @@ describe('durable owner-scoped journal', () => {
         ]) {
             await expect(hydrateLocal('a', cloud, [], docs, 'window'))
                 .rejects.toMatchObject({ code: 'replica-fenced' });
-            expect(await readLocal('a')).toEqual(before);
+            const fenced = await readLocal('a');
+            expect(fenced?.data).toEqual(before?.data);
+            expect(fenced?.baseline).toEqual(before?.baseline);
+            expect(fenced?.pending).toEqual(before?.pending);
+            expect(fenced?.cloudIntegrityFence).toEqual(expect.any(String));
         }
     });
 
@@ -558,7 +675,11 @@ describe('durable owner-scoped journal', () => {
         const before = await readLocal('a');
         await expect(hydrateLocal('a', stale, [], staleDocuments, 'window'))
             .rejects.toMatchObject({ code: 'replica-fenced' });
-        expect(await readLocal('a')).toEqual(before);
+        const fenced = await readLocal('a');
+            expect(fenced?.data).toEqual(before?.data);
+            expect(fenced?.baseline).toEqual(before?.baseline);
+            expect(fenced?.pending).toEqual(before?.pending);
+            expect(fenced?.cloudIntegrityFence).toEqual(expect.any(String));
         expect((await readLocal('a'))?.data.profile?.height).toBe('172');
     });
 
@@ -575,12 +696,19 @@ describe('durable owner-scoped journal', () => {
         } }) as unknown as UserData;
 
         for (const remoteClock of [{ s01: 2 }, { s02: 4 }]) {
-            const docs = new Map<string, any>([['nutrition_months/2025-01', {
+            const docs = new Map<string, any>([['', {
+                _sync: { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {} },
+            }], ['nutrition_months/2025-01', {
                 _sync: { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: remoteClock, fields: {} },
             }]]);
             await expect(hydrateLocal('a', cloud, ['2025-01'], docs, 'all'))
-                .rejects.toMatchObject({ code: 'replica-fenced' });
-            expect(await readLocal('a')).toEqual(before);
+                .rejects.toMatchObject({ code: 'replica-fenced', causeKind: 'stale-document',
+                    documentPaths: ['nutrition_months/2025-01'] });
+            const fenced = await readLocal('a');
+            expect(fenced?.data).toEqual(before?.data);
+            expect(fenced?.baseline).toEqual(before?.baseline);
+            expect(fenced?.pending).toEqual(before?.pending);
+            expect(fenced?.cloudIntegrityFence).toEqual(expect.any(String));
         }
     });
 

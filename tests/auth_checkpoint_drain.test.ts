@@ -123,6 +123,17 @@ describe('authenticated checkpoint journal drain', () => {
         expect(mocks.flush).not.toHaveBeenCalled();
     });
 
+    it('does not flush the new account after a stale IndexedDB read', async () => {
+        let resolveRead!: (value: unknown) => void;
+        mocks.readLocal.mockImplementationOnce(() => new Promise(resolve => { resolveRead = resolve; }));
+        const draining = loadAndDrainAuthenticatedData(options(), environment);
+        await vi.waitFor(() => expect(mocks.readLocal).toHaveBeenCalledOnce());
+        mocks.currentUid.mockReturnValue('account-b');
+        resolveRead(checkpointed);
+        await draining;
+        expect(mocks.flush).not.toHaveBeenCalled();
+    });
+
     it('does not drain an offline journal', async () => {
         mocks.isOnline.mockReturnValue(false);
         await loadAndDrainAuthenticatedData(options(), environment);

@@ -37,7 +37,7 @@ describe('Adversarial Import/Export Logic', () => {
     let mockUserData: UserData;
 
     beforeEach(() => {
-        saveUserDataMock = vi.fn();
+        saveUserDataMock = vi.fn().mockResolvedValue({ ok: true, status: 'synced' });
         mockUserData = {
             profile: { dob: '1990-01-01' } as any,
             library: [{ id: 'ex1', name: 'Original', setsCount: 3, sets: [] }],

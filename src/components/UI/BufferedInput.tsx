@@ -1,27 +1,42 @@
 import React, { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
 import { draftRegistry } from '../../lib/utils/draftRegistry';
 import { captureSession, isCurrentSession } from '../../lib/sync/session';
-import { readDeviceValueStrict, writeDeviceValue } from '../../lib/sync/deviceStorage';
-import { BrowserStorageError } from '../../lib/sync/browserStorage';
+import { assertBufferedDraftUnchanged, readBufferedDraftSnapshot, writeBufferedDraft } from '../../lib/sync/bufferedDraftEpoch';
 import { requiredUpdateRecoveryRegistry } from '../../lib/sync/requiredUpdateRecovery';
 import { useAppStore } from '../../store/useAppStore';
+import { BufferedWorkoutScope } from './bufferedWorkoutScope';
+import {
+    BufferedWriterConsumedError, clearBufferedWriterIntent, createBufferedWriterIntentName,
+    readBufferedWriterEvidence, writeBufferedWriterIntent,
+} from '../../lib/sync/bufferedDraftWriterIntent';
+import type { BufferedWriterEvidence } from '../../lib/sync/bufferedDraftWriterIntent';
 
-interface BufferedInputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange'> {
+ interface BufferedInputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange'> {
     value: string | number | undefined;
     onChange: (value: string) => void;
 }
 
-function recoveryName(kind: 'input' | 'textarea', id: string | undefined) {
-    return id ? `draft:buffered:${kind}:${id}` : null;
+function recoveryName(kind: 'input' | 'textarea', id: string | undefined, workoutId: string | null) {
+    if (!id) return null;
+    // Unscoped records from previous builds are kept untouched as recovery
+    // evidence. They cannot establish which workout produced their content,
+    // even when their owner and consent revision are known.
+    return workoutId ? `draft:buffered:${kind}:${workoutId}:${id}`
+        : `draft:buffered:${kind}:${id}`;
+}
+
+function isCurrentWorkoutScope(workoutId: string | null): boolean {
+    // A keyed provider remounts on workout changes, but its old child's cleanup
+    // must not flush pending text into the next workout's parent callback.
+    return !workoutId || String(useAppStore.getState().localWorkout?.id ?? '') === workoutId;
 }
 
 function normalizeInputValue(value: string, type?: string, inputMode?: string) {
     return type === 'number' || inputMode === 'decimal' ? value.replace(',', '.') : value;
 }
 
-function readRecoveryStrict(key: string | null, owner: string): string | null {
-    if (!key) return null;
-    return readDeviceValueStrict(key, owner);
+function readRecoveryStrict(key: string | null, owner: string) {
+    return key ? readBufferedDraftSnapshot(key, owner) : { value: null, raw: null };
 }
 
 function blockBufferedPersistence(error: unknown): void {
@@ -38,24 +53,37 @@ type InitialBufferedRecovery = {
     session: ReturnType<typeof captureSession> | null;
     key: string | null;
     recovered: string | null;
+    observedRaw: string | null;
+    sourceIntent: BufferedWriterEvidence | null;
     error: unknown | null;
 };
 
-function createInitialRecovery(kind: 'input' | 'textarea', id: string | undefined): InitialBufferedRecovery {
+function createInitialRecovery(
+    kind: 'input' | 'textarea', id: string | undefined, workoutId: string | null,
+): InitialBufferedRecovery {
     // Preserve the owner captured on mount: a late edit must never rebind
     // another account's draft after the session changes.
-    const key = recoveryName(kind, id);
+    const key = recoveryName(kind, id, workoutId);
     try {
         const session = captureSession();
-        return { session, key, recovered: readRecoveryStrict(key, session.owner), error: null };
+        const snapshot = readRecoveryStrict(key, session.owner);
+        const intents = key ? readBufferedWriterEvidence(session.owner, key) : [];
+        if (intents.length > 1 || (intents.length === 1 && intents[0].value !== snapshot.value)) {
+            throw new Error('Bozze concorrenti non riconciliabili: originali conservati per esportazione.');
+        }
+        return {
+            session, key, recovered: snapshot.value, observedRaw: snapshot.raw,
+            sourceIntent: intents[0] ?? null, error: null,
+        };
     } catch (error) {
-        return { session: null, key, recovered: null, error };
+        return { session: null, key, recovered: null, observedRaw: null, sourceIntent: null, error };
     }
 }
 
 export const BufferedInput = React.forwardRef<HTMLInputElement, BufferedInputProps>(
     ({ id, value, onChange, onBlur, onFocus, onKeyDown, type, inputMode, ...props }, ref) => {
-        const [initialRecovery] = useState(() => createInitialRecovery('input', id));
+        const workoutId = React.useContext(BufferedWorkoutScope);
+        const [initialRecovery] = useState(() => createInitialRecovery('input', id, workoutId));
         const initialValue = initialRecovery.recovered ?? value ?? '';
         const [localValue, setLocalValue] = useState(initialValue);
         const recoveryKey = useRef(initialRecovery.key);
@@ -64,6 +92,10 @@ export const BufferedInput = React.forwardRef<HTMLInputElement, BufferedInputPro
         const isFocused = useRef(false);
         const latestLocalValue = useRef(initialValue);
         const recoveryValue = useRef<string | null>(initialRecovery.recovered);
+        const observedRaw = useRef<string | null>(initialRecovery.observedRaw);
+        const writerIntentName = useRef<string | null>(null);
+        const writerIntentRaw = useRef<string | null>(null);
+        const sourceIntent = useRef(initialRecovery.sourceIntent);
 
         useEffect(() => {
             if (initialRecovery.error) blockBufferedPersistence(initialRecovery.error);
@@ -86,10 +118,40 @@ export const BufferedInput = React.forwardRef<HTMLInputElement, BufferedInputPro
             const session = editSession.current;
             if (!key) throw new Error('Bozza volatile senza identificativo stabile.');
             if (!session || !isCurrentSession(session)) throw new Error('Sessione cambiata prima del recupero della bozza.');
+            if (!isCurrentWorkoutScope(workoutId)) {
+                throw new Error('Allenamento cambiato prima di salvare la bozza.');
+            }
             const raw = String(latestLocalValue.current);
-            writeDeviceValue(key, raw, session.owner);
+            if (useAppStore.getState().localPersistenceBlocked) {
+                throw new Error('Persistenza delle bozze del workout bloccata.');
+            }
+            // Every editor has its own device key: preserve input synchronously
+            // before the shared canonical key can lose a truly simultaneous race.
+            writerIntentName.current ??= createBufferedWriterIntentName();
+            try {
+                writerIntentRaw.current = writeBufferedWriterIntent(
+                    writerIntentName.current, session.owner, key, raw,
+                    writerIntentRaw.current, session.consentGeneration,
+                );
+            } catch (error) {
+                // Another editor can durably acknowledge and consume a source
+                // witness while its original editor remains mounted. Never
+                // reuse that consumed key or overwrite a different writer.
+                // Preserve this new input under a fresh independent key first;
+                // the subsequent canonical preflight still rejects stale state.
+                if (!(error instanceof BufferedWriterConsumedError)) throw error;
+                const fresh = createBufferedWriterIntentName();
+                const written = writeBufferedWriterIntent(
+                    fresh, session.owner, key, raw, null, session.consentGeneration,
+                );
+                writerIntentName.current = fresh;
+                writerIntentRaw.current = written;
+            }
+            observedRaw.current = writeBufferedDraft(
+                key, session.owner, raw, session.consentGeneration, observedRaw.current,
+            );
             recoveryValue.current = raw;
-        }, []);
+        }, [workoutId]);
 
         // Sync from external value if not focused or dirty. A recovered value remains
         // visible until its parent confirms the same value, then its recovery key is cleared.
@@ -104,10 +166,33 @@ export const BufferedInput = React.forwardRef<HTMLInputElement, BufferedInputPro
                     try {
                         const session = editSession.current;
                         if (!session) throw new Error('Sessione iniziale della bozza non disponibile.');
-                        writeDeviceValue(recoveryKey.current, null, session.owner);
+                        if (!isCurrentSession(session) || !isCurrentWorkoutScope(workoutId)) {
+                            throw new Error('Sessione workout cambiata prima della pulizia della bozza.');
+                        }
+                        observedRaw.current = writeBufferedDraft(
+                            recoveryKey.current, session.owner, null,
+                            session.consentGeneration, observedRaw.current,
+                        );
+                        // Only after the parent confirms this value do we remove
+                        // this editor's independent recovery witness. Any
+                        // failure preserves the remaining witness for export.
+                        if (writerIntentName.current && writerIntentRaw.current) {
+                            clearBufferedWriterIntent(
+                                writerIntentName.current, session.owner,
+                                writerIntentRaw.current, session.consentGeneration,
+                            );
+                            writerIntentRaw.current = null;
+                        }
+                        if (sourceIntent.current) {
+                            clearBufferedWriterIntent(
+                                sourceIntent.current.name, session.owner,
+                                sourceIntent.current.raw, session.consentGeneration,
+                            );
+                            sourceIntent.current = null;
+                        }
                         recoveryValue.current = null;
-                    } catch {
-                        useAppStore.getState().setSaveError('Dato salvato; impossibile rimuovere la copia di recupero locale.');
+                    } catch (error) {
+                        blockBufferedPersistence(error);
                     }
                 }
             }
@@ -115,13 +200,40 @@ export const BufferedInput = React.forwardRef<HTMLInputElement, BufferedInputPro
                 setLocalValue(value ?? '');
                 latestLocalValue.current = value ?? '';
             }
-        }, [value]);
+        }, [value, workoutId]);
 
         const flush = useCallback(() => {
             if (isDirty.current) {
+                if (!isCurrentWorkoutScope(workoutId)) {
+                    // The source copy is already owner+workout scoped and is
+                    // preserved for recovery. Never mutate a different workout.
+                    isDirty.current = false;
+                    return;
+                }
                 const session = editSession.current;
                 if (!session) throw new Error('Sessione della bozza non disponibile.');
-                if (!isCurrentSession(session)) { isDirty.current = false; return; }
+                if (!isCurrentSession(session)) {
+                    isDirty.current = false;
+                    // Switching identities must not update a new owner's UI. A
+                    // consent transition for the same owner, however, is a
+                    // blocked recovery requiring an explicit warning.
+                    const current = captureSession();
+                    if (current.owner === session.owner
+                        && current.consentGeneration !== session.consentGeneration) {
+                        throw new Error('Consenso modificato: bozza workout precedente conservata.');
+                    }
+                    return;
+                }
+                if (useAppStore.getState().localPersistenceBlocked) {
+                    throw new Error('Persistenza delle bozze del workout bloccata.');
+                }
+                if (recoveryKey.current) {
+                    // Before promoting an in-memory edit, verify the source copy
+                    // has not been invalidated or replaced by another tab.
+                    assertBufferedDraftUnchanged(
+                        recoveryKey.current, session.owner, observedRaw.current,
+                    );
+                }
                 const finalVal = normalizeInputValue(
                     String(latestLocalValue.current),
                     typeRef.current,
@@ -130,7 +242,7 @@ export const BufferedInput = React.forwardRef<HTMLInputElement, BufferedInputPro
                 onChangeRef.current(finalVal);
                 isDirty.current = false;
             }
-        }, []);
+        }, [workoutId]);
 
         useEffect(() => {
             draftRegistry.register(flush);
@@ -139,7 +251,7 @@ export const BufferedInput = React.forwardRef<HTMLInputElement, BufferedInputPro
                 unregisterRecovery();
                 draftRegistry.unregister(flush);
                 try { flush(); }
-                catch { useAppStore.getState().setSaveError('Impossibile salvare una bozza prima di chiudere il campo.'); }
+                catch (error) { blockBufferedPersistence(error); }
             };
         }, [flush, persistRecovery]);
 
@@ -150,8 +262,15 @@ export const BufferedInput = React.forwardRef<HTMLInputElement, BufferedInputPro
             try {
                 persistRecovery();
             } catch (error) {
-                useAppStore.getState().setSaveError('Bozza non ancora protetta nello storage del dispositivo.');
-                if (error instanceof BrowserStorageError) blockBufferedPersistence(error);
+                if (!recoveryKey.current || !editSession.current || !isCurrentSession(editSession.current)) {
+                    // Inputs without a stable key have always flushed to their
+                    // parent on blur/unmount, but cannot guarantee PWA reload.
+                    // Preserve that UI contract; the required-update capture
+                    // still rejects an unsaved device draft with no key.
+                    useAppStore.getState().setSaveError('Bozza non ancora protetta nello storage del dispositivo.');
+                } else {
+                    blockBufferedPersistence(error);
+                }
             }
         };
 
@@ -162,14 +281,27 @@ export const BufferedInput = React.forwardRef<HTMLInputElement, BufferedInputPro
 
         const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
             isFocused.current = false;
-            flush();
-            if (onBlur) onBlur(e);
+            try {
+                flush();
+                if (!editSession.current || !isCurrentSession(editSession.current)
+                    || !isCurrentWorkoutScope(workoutId)) return;
+                if (onBlur) onBlur(e);
+            } catch (error) {
+                blockBufferedPersistence(error);
+            }
         };
 
         const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
             if (e.key === 'Enter') {
-                flush();
-                e.currentTarget.blur();
+                try {
+                    flush();
+                    if (!editSession.current || !isCurrentSession(editSession.current)
+                    || !isCurrentWorkoutScope(workoutId)) return;
+                    e.currentTarget.blur();
+                } catch (error) {
+                    blockBufferedPersistence(error);
+                    return;
+                }
             }
             if (onKeyDown) onKeyDown(e);
         };
@@ -200,7 +332,8 @@ interface BufferedTextareaProps extends Omit<React.TextareaHTMLAttributes<HTMLTe
 
 export const BufferedTextarea = React.forwardRef<HTMLTextAreaElement, BufferedTextareaProps>(
     ({ id, value, onChange, onBlur, onFocus, ...props }, ref) => {
-        const [initialRecovery] = useState(() => createInitialRecovery('textarea', id));
+        const workoutId = React.useContext(BufferedWorkoutScope);
+        const [initialRecovery] = useState(() => createInitialRecovery('textarea', id, workoutId));
         const initialValue = initialRecovery.recovered ?? value ?? '';
         const [localValue, setLocalValue] = useState(initialValue);
         const recoveryKey = useRef(initialRecovery.key);
@@ -209,6 +342,10 @@ export const BufferedTextarea = React.forwardRef<HTMLTextAreaElement, BufferedTe
         const isFocused = useRef(false);
         const latestLocalValue = useRef(initialValue);
         const recoveryValue = useRef<string | null>(initialRecovery.recovered);
+        const observedRaw = useRef<string | null>(initialRecovery.observedRaw);
+        const writerIntentName = useRef<string | null>(null);
+        const writerIntentRaw = useRef<string | null>(null);
+        const sourceIntent = useRef(initialRecovery.sourceIntent);
 
         useEffect(() => {
             if (initialRecovery.error) blockBufferedPersistence(initialRecovery.error);
@@ -227,10 +364,40 @@ export const BufferedTextarea = React.forwardRef<HTMLTextAreaElement, BufferedTe
             const session = editSession.current;
             if (!key) throw new Error('Bozza volatile senza identificativo stabile.');
             if (!session || !isCurrentSession(session)) throw new Error('Sessione cambiata prima del recupero della bozza.');
+            if (!isCurrentWorkoutScope(workoutId)) {
+                throw new Error('Allenamento cambiato prima di salvare la bozza.');
+            }
             const raw = String(latestLocalValue.current);
-            writeDeviceValue(key, raw, session.owner);
+            if (useAppStore.getState().localPersistenceBlocked) {
+                throw new Error('Persistenza delle bozze del workout bloccata.');
+            }
+            // Every editor has its own device key: preserve input synchronously
+            // before the shared canonical key can lose a truly simultaneous race.
+            writerIntentName.current ??= createBufferedWriterIntentName();
+            try {
+                writerIntentRaw.current = writeBufferedWriterIntent(
+                    writerIntentName.current, session.owner, key, raw,
+                    writerIntentRaw.current, session.consentGeneration,
+                );
+            } catch (error) {
+                // Another editor can durably acknowledge and consume a source
+                // witness while its original editor remains mounted. Never
+                // reuse that consumed key or overwrite a different writer.
+                // Preserve this new input under a fresh independent key first;
+                // the subsequent canonical preflight still rejects stale state.
+                if (!(error instanceof BufferedWriterConsumedError)) throw error;
+                const fresh = createBufferedWriterIntentName();
+                const written = writeBufferedWriterIntent(
+                    fresh, session.owner, key, raw, null, session.consentGeneration,
+                );
+                writerIntentName.current = fresh;
+                writerIntentRaw.current = written;
+            }
+            observedRaw.current = writeBufferedDraft(
+                key, session.owner, raw, session.consentGeneration, observedRaw.current,
+            );
             recoveryValue.current = raw;
-        }, []);
+        }, [workoutId]);
 
         useEffect(() => {
             if (recoveryValue.current !== null && !isDirty.current && recoveryKey.current) {
@@ -238,10 +405,33 @@ export const BufferedTextarea = React.forwardRef<HTMLTextAreaElement, BufferedTe
                     try {
                         const session = editSession.current;
                         if (!session) throw new Error('Sessione iniziale della bozza non disponibile.');
-                        writeDeviceValue(recoveryKey.current, null, session.owner);
+                        if (!isCurrentSession(session) || !isCurrentWorkoutScope(workoutId)) {
+                            throw new Error('Sessione workout cambiata prima della pulizia della bozza.');
+                        }
+                        observedRaw.current = writeBufferedDraft(
+                            recoveryKey.current, session.owner, null,
+                            session.consentGeneration, observedRaw.current,
+                        );
+                        // Only after the parent confirms this value do we remove
+                        // this editor's independent recovery witness. Any
+                        // failure preserves the remaining witness for export.
+                        if (writerIntentName.current && writerIntentRaw.current) {
+                            clearBufferedWriterIntent(
+                                writerIntentName.current, session.owner,
+                                writerIntentRaw.current, session.consentGeneration,
+                            );
+                            writerIntentRaw.current = null;
+                        }
+                        if (sourceIntent.current) {
+                            clearBufferedWriterIntent(
+                                sourceIntent.current.name, session.owner,
+                                sourceIntent.current.raw, session.consentGeneration,
+                            );
+                            sourceIntent.current = null;
+                        }
                         recoveryValue.current = null;
-                    } catch {
-                        useAppStore.getState().setSaveError('Dato salvato; impossibile rimuovere la copia di recupero locale.');
+                    } catch (error) {
+                        blockBufferedPersistence(error);
                     }
                 }
             }
@@ -249,17 +439,44 @@ export const BufferedTextarea = React.forwardRef<HTMLTextAreaElement, BufferedTe
                 setLocalValue(value ?? '');
                 latestLocalValue.current = value ?? '';
             }
-        }, [value]);
+        }, [value, workoutId]);
 
         const flush = useCallback(() => {
             if (isDirty.current) {
+                if (!isCurrentWorkoutScope(workoutId)) {
+                    // The source copy is already owner+workout scoped and is
+                    // preserved for recovery. Never mutate a different workout.
+                    isDirty.current = false;
+                    return;
+                }
                 const session = editSession.current;
                 if (!session) throw new Error('Sessione della bozza non disponibile.');
-                if (!isCurrentSession(session)) { isDirty.current = false; return; }
+                if (!isCurrentSession(session)) {
+                    isDirty.current = false;
+                    // Switching identities must not update a new owner's UI. A
+                    // consent transition for the same owner, however, is a
+                    // blocked recovery requiring an explicit warning.
+                    const current = captureSession();
+                    if (current.owner === session.owner
+                        && current.consentGeneration !== session.consentGeneration) {
+                        throw new Error('Consenso modificato: bozza workout precedente conservata.');
+                    }
+                    return;
+                }
+                if (useAppStore.getState().localPersistenceBlocked) {
+                    throw new Error('Persistenza delle bozze del workout bloccata.');
+                }
+                if (recoveryKey.current) {
+                    // Before promoting an in-memory edit, verify the source copy
+                    // has not been invalidated or replaced by another tab.
+                    assertBufferedDraftUnchanged(
+                        recoveryKey.current, session.owner, observedRaw.current,
+                    );
+                }
                 onChangeRef.current(String(latestLocalValue.current));
                 isDirty.current = false;
             }
-        }, []);
+        }, [workoutId]);
 
         useEffect(() => {
             draftRegistry.register(flush);
@@ -268,7 +485,7 @@ export const BufferedTextarea = React.forwardRef<HTMLTextAreaElement, BufferedTe
                 unregisterRecovery();
                 draftRegistry.unregister(flush);
                 try { flush(); }
-                catch { useAppStore.getState().setSaveError('Impossibile salvare una bozza prima di chiudere il campo.'); }
+                catch (error) { blockBufferedPersistence(error); }
             };
         }, [flush, persistRecovery]);
 
@@ -279,8 +496,15 @@ export const BufferedTextarea = React.forwardRef<HTMLTextAreaElement, BufferedTe
             try {
                 persistRecovery();
             } catch (error) {
-                useAppStore.getState().setSaveError('Bozza non ancora protetta nello storage del dispositivo.');
-                if (error instanceof BrowserStorageError) blockBufferedPersistence(error);
+                if (!recoveryKey.current || !editSession.current || !isCurrentSession(editSession.current)) {
+                    // Inputs without a stable key have always flushed to their
+                    // parent on blur/unmount, but cannot guarantee PWA reload.
+                    // Preserve that UI contract; the required-update capture
+                    // still rejects an unsaved device draft with no key.
+                    useAppStore.getState().setSaveError('Bozza non ancora protetta nello storage del dispositivo.');
+                } else {
+                    blockBufferedPersistence(error);
+                }
             }
         };
 
@@ -291,8 +515,14 @@ export const BufferedTextarea = React.forwardRef<HTMLTextAreaElement, BufferedTe
 
         const handleBlur = (e: React.FocusEvent<HTMLTextAreaElement>) => {
             isFocused.current = false;
-            flush();
-            if (onBlur) onBlur(e);
+            try {
+                flush();
+                if (!editSession.current || !isCurrentSession(editSession.current)
+                    || !isCurrentWorkoutScope(workoutId)) return;
+                if (onBlur) onBlur(e);
+            } catch (error) {
+                blockBufferedPersistence(error);
+            }
         };
 
         return (

@@ -6,7 +6,7 @@ import { auth, ensureAppCheck } from './firebase';
 import { getLimitedUseAppCheckToken } from './appCheck';
 import { readBrowserValueStrict, removeBrowserValue, writeBrowserValue } from './sync/browserStorage';
 
-export type HealthConsentStatus = 'unregistered' | 'checking' | 'active' | 'withdrawn' | 'pending' | 'reaccepting' | 'recovery-required' | 'stale-request' | 'error';
+export type HealthConsentStatus = 'unregistered' | 'checking' | 'active' | 'withdrawn' | 'pending' | 'reaccepting' | 'recovery-required' | 'erasure-required' | 'stale-request' | 'error';
 type ServerStatus = { status: 'unregistered' | 'active' | 'withdrawn'; revision: number; acceptedAt?: string; privacyVersion?: string; termsVersion?: string; erasedBeforeRevision?: number };
 const entries = new Map<string, HealthConsentStatus>();
 const listeners = new Set<() => void>();
@@ -106,6 +106,7 @@ export function currentHealthConsentStatus(uid: string | undefined): HealthConse
   if (!uid) return 'active';
   try {
     if (entries.get(uid) === 'recovery-required') return 'recovery-required';
+    if (entries.get(uid) === 'erasure-required') return 'erasure-required';
     if (entries.get(uid) === 'stale-request') return 'stale-request';
     const saved = readMarker(uid);
     if (parsePendingRevision(saved) !== null) return 'pending';
@@ -240,12 +241,17 @@ export function requireHealthConsentWritable(owner: string): void {
 }
 
 async function serverRequest(user: User, method: 'GET' | 'POST', body?: unknown): Promise<ServerStatus> {
+  // Credential acquisition may outlive the Firebase account that initiated it.
+  // An old token must not submit a consent transition after a new login.
+  const startingUid = auth.currentUser?.uid ?? null;
+  if (startingUid !== null && startingUid !== user.uid) throw new Error('Sessione cambiata.');
   await ensureAppCheck();
   const token = await getLimitedUseAppCheckToken();
   if (!token) throw new Error('App Check non disponibile.');
   // Token acquisition is a separate auth gate: a Firebase token failure
   // must not be confused with a transient transport outage.
   const idToken = await user.getIdToken();
+  if ((auth.currentUser?.uid ?? null) !== startingUid) throw new Error('Sessione cambiata.');
   let response: Response;
   try {
     response = await fetch(API + '/api/health-consent', {
@@ -357,6 +363,8 @@ export function reacceptHealthConsentLocally(user: User, acceptance: {
 
 export async function refreshHealthConsent(user: User): Promise<HealthConsentStatus> {
   const uid = user.uid;
+  const startingAuthUid = auth.currentUser?.uid ?? null;
+  if (startingAuthUid !== null && startingAuthUid !== uid) return currentHealthConsentStatus(uid);
   const saved = readMarker(uid);
   const offlineReaccept = parseOfflineReaccept(saved);
   const offlineReacceptValid = offlineReaccept !== null
@@ -373,6 +381,7 @@ export async function refreshHealthConsent(user: User): Promise<HealthConsentSta
   let observedGeneration = readBrowserValueStrict(generationMarker(uid));
   const serial = invalidateConsentChecks(uid);
   const isSameDecision = () => verificationSerials.get(uid) === serial
+    && (auth.currentUser?.uid ?? null) === startingAuthUid
     && readMarker(uid) === saved
     && readBrowserValueStrict(generationMarker(uid)) === observedGeneration;
   const recoverCachedOfflineConsent = (): boolean => {
@@ -529,8 +538,18 @@ export async function refreshHealthConsent(user: User): Promise<HealthConsentSta
       writeBrowserValue(generationMarker(uid), String(state.revision));
       observedGeneration = String(state.revision);
       const { advanceLocalConsentRevisionIfClean } = await import('./sync/localRepository');
-      const ready = await advanceLocalConsentRevisionIfClean('user:' + uid, state.revision);
       if (!isSameDecision()) return currentHealthConsentStatus(uid);
+      const ready = await advanceLocalConsentRevisionIfClean(
+        'user:' + uid, state.revision, isSameDecision, state.erasedBeforeRevision,
+      );
+      if (!isSameDecision()) return currentHealthConsentStatus(uid);
+      if (ready === 'erased') {
+        verifiedRevisions.delete(uid);
+        onlineVerifiedRevisions.delete(uid);
+        serverConfirmedLegal.delete(uid);
+        setStatus(uid, 'erasure-required');
+        return 'erasure-required';
+      }
       if (!ready) {
         setStatus(uid, 'recovery-required');
         return 'recovery-required';
@@ -604,11 +623,15 @@ export async function withdrawHealthConsent(user: User, freezeWriters?: () => vo
  */
 export async function retainNewerHealthConsent(user: User): Promise<HealthConsentStatus> {
   const uid = user.uid;
+  const startingAuthUid = auth.currentUser?.uid ?? null;
+  if (startingAuthUid !== null && startingAuthUid !== uid) throw new Error('Sessione cambiata.');
   if (currentHealthConsentStatus(uid) !== 'stale-request') throw new Error('Nessuna scelta recente da confermare.');
   const saved = readMarker(uid);
+  const sameAuth = () => (auth.currentUser?.uid ?? null) === startingAuthUid;
   const originalRevision = parsePendingRevision(saved) ?? parseOfflineReaccept(saved)?.revision ?? null;
   if (originalRevision === null && saved !== 'withdrawn') throw new Error('Richiesta precedente non riconosciuta.');
   const live = await serverRequest(user, 'GET');
+  if (!sameAuth()) throw new Error('Sessione cambiata durante la verifica.');
   if (readMarker(uid) !== saved || currentHealthConsentStatus(uid) !== 'stale-request') {
     throw new Error('La revoca locale è cambiata durante la verifica.');
   }
@@ -619,13 +642,24 @@ export async function retainNewerHealthConsent(user: User): Promise<HealthConsen
   }
   writeBrowserValue(generationMarker(uid), String(live.revision));
   const { advanceLocalConsentRevisionIfClean } = await import('./sync/localRepository');
-  const ready = await advanceLocalConsentRevisionIfClean('user:' + uid, live.revision);
+  const ready = await advanceLocalConsentRevisionIfClean('user:' + uid, live.revision,
+    () => sameAuth() && readMarker(uid) === saved
+      && readBrowserValueStrict(generationMarker(uid)) === String(live.revision),
+    live.erasedBeforeRevision);
+  if (!sameAuth()) throw new Error('Sessione cambiata durante il recupero.');
   if (readMarker(uid) !== saved || currentHealthConsentStatus(uid) !== 'stale-request') {
     throw new Error('La revoca locale è cambiata durante il recupero.');
   }
   // The superseded request is cleared only after the live generation has
   // durably fenced old tabs. An old journal remains in IndexedDB in either case.
   removeBrowserValue(marker(uid));
+  if (ready === 'erased') {
+    verifiedRevisions.delete(uid);
+    onlineVerifiedRevisions.delete(uid);
+    serverConfirmedLegal.delete(uid);
+    setStatus(uid, 'erasure-required');
+    return 'erasure-required';
+  }
   if (!ready) {
     setStatus(uid, 'recovery-required');
     return 'recovery-required';
@@ -642,9 +676,12 @@ export async function reconfirmStaleHealthWithdrawal(user: User): Promise<void> 
   if (currentHealthConsentStatus(uid) !== 'stale-request') throw new Error('Nessuna revoca precedente da riconfermare.');
   const originalMarker = readMarker(uid);
   const originalGeneration = readBrowserValueStrict(generationMarker(uid));
+  const startingUid = auth.currentUser?.uid ?? null;
+  if (startingUid !== null && startingUid !== uid) throw new Error('Sessione cambiata.');
   const live = await serverRequest(user, 'GET');
   // Never turn a newer decision made by another tab into an unsolicited
   // revocation merely because an older confirmation request arrived late.
+  if ((auth.currentUser?.uid ?? null) !== startingUid) throw new Error('Sessione cambiata.');
   if (readMarker(uid) !== originalMarker
     || readBrowserValueStrict(generationMarker(uid)) !== originalGeneration
     || currentHealthConsentStatus(uid) !== 'stale-request') {
@@ -672,9 +709,12 @@ export async function reacceptHealthConsent(user: User, acceptance: {
   const previousAttempt = parseReacceptRevision(saved);
   if (saved !== 'withdrawn' && previousAttempt === null) throw new Error('Revoca non confermata.');
   let expectedRevision = previousAttempt;
+  const startingUid = auth.currentUser?.uid ?? null;
+  if (startingUid !== null && startingUid !== uid) throw new Error('Sessione cambiata.');
   if (expectedRevision === null) {
     const live = await serverRequest(user, 'GET');
     if (live.status !== 'withdrawn') throw new Error('La revoca non risulta attiva sul server.');
+    if ((auth.currentUser?.uid ?? null) !== startingUid) throw new Error('Sessione cambiata.');
     if (readMarker(uid) !== saved) throw new Error('La scelta locale è cambiata durante la verifica.');
     expectedRevision = live.revision;
   }

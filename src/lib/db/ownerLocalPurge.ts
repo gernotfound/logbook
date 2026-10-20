@@ -6,6 +6,7 @@ import {
 } from '../sync/localPurgeFence';
 import { deviceVaultKeyId } from '../sync/secureArchiveKeys';
 import { vaultControlMirrorId } from '../sync/secureArchiveControlRecovery';
+import { stableStorageKeyInventory } from '../sync/stableStorageKeyInventory';
 
 // This boundary owns the write fence and the physical device purge only.
 // Account/consent authorization and server-complete evidence stay with db_account.
@@ -25,10 +26,8 @@ function collectLocalPurgeKeys(owner: string): Set<string> {
     if (owner === 'guest') { keys.add('logbook_is_guest'); keys.add('logbook_guest_session_id_v1'); }
 
     const prefix = 'logbook:v2:' + owner + ':';
-    const length = localStorage.length;
-    for (let index = 0; index < length; index++) {
-        const storageKey = localStorage.key(index);
-        if (storageKey?.startsWith(prefix) && !storageKey.endsWith(':account-deletion')
+    for (const storageKey of stableStorageKeyInventory('Inventario localStorage modificato durante la pulizia.')) {
+        if (storageKey.startsWith(prefix) && !storageKey.endsWith(':account-deletion')
             && !storageKey.endsWith(':secure-vault-control')) {
             keys.add(storageKey);
         }
