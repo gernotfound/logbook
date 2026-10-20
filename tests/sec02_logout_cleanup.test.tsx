@@ -40,7 +40,7 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
         try {
             await expect(DB.purgeAllLocalUserData(storageOwner())).rejects.toThrow('modifiche');
             expect(idb.del).not.toHaveBeenCalled();
-            expect(isLocalPurgePending('user:user123')).toBe(false);
+            expect(isLocalPurgePending(storageOwner())).toBe(false);
         } finally { read.mockRestore(); }
     });
 
