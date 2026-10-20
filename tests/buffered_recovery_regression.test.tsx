@@ -596,6 +596,36 @@ describe.each(['input', 'textarea'] as const)('independent same-workout %s write
             .toEqual(['Writer A', 'Writer B']);
     });
 
+    it('detects a competing writer added while authenticating the first witness', () => {
+        const owner = captureSession().owner;
+        const first = createBufferedWriterIntentName();
+        const second = createBufferedWriterIntentName();
+        const original = writeBufferedWriterIntent(first, owner, draftName, 'Writer A', null, '3');
+        const originalGet = localStorageMock.getItem.getMockImplementation();
+        if (!originalGet) throw new Error('Missing browser storage mock implementation');
+        let inserted = false;
+        localStorageMock.getItem.mockImplementation((key: string) => {
+            const value = originalGet(key);
+            if (!inserted && key === deviceKey(first, owner)) {
+                inserted = true;
+                writeBufferedWriterIntent(second, owner, draftName, 'Writer B', null, '3');
+            }
+            return value;
+        });
+        try {
+            expect(() => readBufferedWriterEvidence(owner, draftName))
+                .toThrow('Copie bufferizzate o consenso cambiati');
+        } finally {
+            localStorageMock.getItem.mockImplementation(originalGet);
+        }
+
+        expect(inserted).toBe(true);
+        expect(localStorage.getItem(deviceKey(first, owner))).toBe(original);
+        expect(readBufferedWriterEvidence(owner, draftName).map(x => x.value).sort())
+            .toEqual(['Writer A', 'Writer B']);
+        // Neither witness is removed or promoted into the business state.
+    });
+
     it('keeps a successfully written independent draft when canonical storage fails', () => {
         const owner = captureSession().owner;
         const canonicalKey = deviceKey(draftName, owner);
