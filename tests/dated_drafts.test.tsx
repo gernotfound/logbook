@@ -16,6 +16,7 @@ import { requireHealthConsentWritable } from '../src/lib/healthConsent';
 const data = (nutrition = {}) => UserDataSchema.parse({ profile: { height: '180', gender: 'M' }, nutrition }) as any;
 const day = (date: string, fields = {}) => ({ date, kcal: 0, pro: 0, carbs: 0, fat: 0, meals: [], ...fields });
 const storeItem = vi.mocked(localStorage.setItem).getMockImplementation()!;
+const originalDispatchDomainOperation = useAppStore.getState().dispatchDomainOperation;
 beforeEach(() => {
     vi.mocked(localStorage.setItem).mockImplementation(storeItem);
     localStorage.clear();
@@ -28,7 +29,11 @@ beforeEach(() => {
     useAppStore.getState().resetStore();
     useAppStore.setState({ userData: data(), dataOwner: storageOwner() });
 });
-afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
+afterEach(() => {
+    useAppStore.setState({ dispatchDomainOperation: originalDispatchDomainOperation });
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+});
 
 it('uses the fenced store owner without rereading lifecycle ownership on rerender', () => {
     const getItem = vi.spyOn(localStorage, 'getItem');
