@@ -15,7 +15,7 @@ import { LocalPurgePendingError } from '../lib/sync/localPurgeFence';
 import { LocalVaultLockedError, readVaultControl } from '../lib/sync/secureArchiveSession';
 import { requireHealthConsentWritable } from '../lib/healthConsent';
 import {
-    clearDatedWriterIntent, createDatedWriterIntentName,
+    DatedWriterConsumedError, clearDatedWriterIntent, createDatedWriterIntentName,
     readDatedWriterEvidence, writeDatedWriterIntent, type DatedWriterEvidence,
 } from '../lib/sync/datedDraftWriterIntent';
 
@@ -174,10 +174,25 @@ export function useDatedDraft<T extends Record<string, string>>(kind: string, da
             // Persist this editor's latest full input BEFORE touching the
             // shared key. Even a lost canonical race keeps a distinct witness.
             draft.writerName ??= createDatedWriterIntentName();
-            draft.writerRaw = writeDatedWriterIntent(
-                draft.writerName, draft.session.owner, draft.name, draft.values,
-                draft.writerRaw, draft.session.consentGeneration,
-            );
+            try {
+                draft.writerRaw = writeDatedWriterIntent(
+                    draft.writerName, draft.session.owner, draft.name, draft.values,
+                    draft.writerRaw, draft.session.consentGeneration,
+                );
+            } catch (error) {
+                // A different editor can confirm the value we loaded and
+                // consume its witness while our form remains mounted. A new
+                // user edit must have its own fresh copy, never reuse the
+                // missing key or bypass the canonical conflict fence.
+                if (!(error instanceof DatedWriterConsumedError)) throw error;
+                const fresh = createDatedWriterIntentName();
+                const written = writeDatedWriterIntent(
+                    fresh, draft.session.owner, draft.name, draft.values,
+                    null, draft.session.consentGeneration,
+                );
+                draft.writerName = fresh;
+                draft.writerRaw = written;
+            }
             if (useAppStore.getState().localPersistenceBlocked) throw new DatedDraftConflictError();
             const before = readFencedDatedDraftImage(draft.name, draft.session.owner);
             if (before.raw !== draft.observedRaw) throw new DatedDraftConflictError();
