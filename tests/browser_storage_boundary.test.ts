@@ -71,6 +71,33 @@ describe('browser storage boundary', () => {
         expect(() => findPendingAccountDeletion()).toThrow(AccountDeletionMarkerCorruptError);
     });
 
+    it('blocks an absent-marker conclusion during cross-tab index compaction and retries safely', () => {
+        const unrelated = 'cross-tab:transient';
+        localStorage.setItem(unrelated, 'present');
+        markAccountDeletion(OWNER, { receiptToken: 'receipt-A' });
+
+        const originalKey = localStorageMock.key.getMockImplementation();
+        if (!originalKey) throw new Error('Missing localStorage mock implementation');
+        let compacted = false;
+        localStorageMock.key.mockImplementation((index: number) => {
+            const found = originalKey(index);
+            if (!compacted && found === unrelated) {
+                compacted = true;
+                localStorage.removeItem(unrelated);
+            }
+            return found;
+        });
+        try {
+            expect(() => findPendingAccountDeletion()).toThrow('Inventario marker cancellazione account');
+        } finally {
+            localStorageMock.key.mockImplementation(originalKey);
+        }
+
+        expect(compacted).toBe(true);
+        expect(readAccountDeletionMarker(OWNER)?.receiptToken).toBe('receipt-A');
+        expect(findPendingAccountDeletion()?.uid).toBe('test-user');
+    });
+
     it('rejects an account-deletion marker whose UID does not match its owner key', () => {
         localStorage.setItem('logbook:v2:' + OWNER + ':account-deletion', JSON.stringify({
             uid: 'other-user',
