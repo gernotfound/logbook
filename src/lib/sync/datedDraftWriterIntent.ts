@@ -113,6 +113,14 @@ function assertRevision(owner: string, expected?: string | null): number | undef
 }
 
 /** Independently and synchronously persist the editor's full latest value before its shared draft write. */
+/** Only a genuinely absent previously written slot may be resealed under a new random key. */
+export class DatedWriterConsumedError extends Error {
+    constructor() {
+        super('Copia datata già confermata da un altro editor; serve nuova testimonianza.');
+        this.name = 'DatedWriterConsumedError';
+    }
+}
+
 export function writeDatedWriterIntent(
     name: string, owner: string, draftName: string, values: Record<string, string>,
     expectedRaw: string | null, expectedConsentGeneration?: string | null,
@@ -120,6 +128,7 @@ export function writeDatedWriterIntent(
     if (!name.startsWith(PREFIX) || !ID.test(name.slice(PREFIX.length)) || !DATED_KEY.test(draftName)
         || !validValues(values)) throw new Error('Identità o contenuto della copia datata non validi.');
     const current = readDeviceValueStrict(name, owner);
+    if (current === null && expectedRaw !== null) throw new DatedWriterConsumedError();
     if (current !== expectedRaw) throw new Error('Copia datata modificata: originale conservato.');
     if (current !== null) {
         const previous = parse(name, owner, current);
