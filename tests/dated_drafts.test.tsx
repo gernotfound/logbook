@@ -132,7 +132,7 @@ it('stamps a new measurement draft and fences it after the generation changes', 
     act(() => hook.result.current.setWeight('77'));
     const raw = localStorage.getItem(key);
     expect(JSON.parse(raw!)).toMatchObject({
-        __logbookDatedDraft: 1, owner, consentRevision: 3, values: { weight: '77' },
+        __logbookDatedDraft: 2, owner, consentRevision: 3, values: { weight: '77' },
     });
     expect(readFencedDatedDraft('draft:measurement:2026-09-11', owner)?.weight).toBe('77');
     hook.unmount();
@@ -173,6 +173,67 @@ it('rejects stale replacement and cleanup of a dated draft in the same consent g
     expect(readFencedDatedDraftImage(name, owner)).toEqual({
         values: { sleepHours: '07:30', sleepDeep: '01:45' }, raw: second,
     });
+});
+
+it('prevents an absent → written → cleared ABA cycle from authorizing a stale form', () => {
+    const owner = storageOwner();
+    const name = 'draft:sleep:2026-09-11';
+    const staleRaw = readFencedDatedDraftImage(name, owner).raw;
+    expect(staleRaw).toBeNull();
+    const saved = writeFencedDatedDraft(name, owner, { sleepHours: '08:00' }, staleRaw);
+    const cleared = writeFencedDatedDraft(name, owner, null, saved);
+    const after = readFencedDatedDraftImage(name, owner);
+    expect(after.values).toBeNull();
+    expect(after.raw).toBe(cleared);
+    expect(cleared).not.toBe(staleRaw);
+    expect(() => writeFencedDatedDraft(name, owner, { sleepHours: '06:00' }, staleRaw))
+        .toThrow(DatedDraftConflictError);
+    expect(() => writeFencedDatedDraft(name, owner, null, staleRaw))
+        .toThrow(DatedDraftConflictError);
+    expect(readFencedDatedDraftImage(name, owner)).toEqual(after);
+});
+
+it('uses a new revision even when identical values are written again', () => {
+    const owner = storageOwner();
+    const name = 'draft:measurement:2026-09-11';
+    const first = writeFencedDatedDraft(name, owner, { weight: '75' }, null);
+    const second = writeFencedDatedDraft(name, owner, { weight: '75' }, first);
+    expect(second).not.toBe(first);
+    expect(() => writeFencedDatedDraft(name, owner, { weight: '76' }, first))
+        .toThrow(DatedDraftConflictError);
+    expect(readFencedDatedDraft(name, owner)).toEqual({ weight: '75' });
+});
+
+it('permits a new consent generation to replace a previous-generation deletion marker, not old data', () => {
+    localStorage.removeItem('logbook_is_guest');
+    invalidateSession();
+    const owner = 'user:' + mockFirebaseAuth.currentUser!.uid;
+    const marker = `logbook:v2:${owner}:health-consent-generation`;
+    const name = 'draft:measurement:2026-09-11';
+    localStorage.setItem(marker, '3');
+    const initial = writeFencedDatedDraft(name, owner, { weight: '76' }, null);
+    const tombstone = writeFencedDatedDraft(name, owner, null, initial);
+    localStorage.setItem(marker, '5');
+    expect(readFencedDatedDraftImage(name, owner)).toEqual({ values: null, raw: tombstone });
+    const next = writeFencedDatedDraft(name, owner, { weight: '77' }, tombstone);
+    expect(JSON.parse(next)).toMatchObject({
+        __logbookDatedDraft: 2, owner, consentRevision: 5, values: { weight: '77' },
+    });
+    expect(readFencedDatedDraft(name, owner)).toEqual({ weight: '77' });
+});
+
+it('refuses malformed deletion-marker revisions without rewriting the original bytes', () => {
+    const owner = storageOwner();
+    const name = 'draft:sleep:2026-09-11';
+    const key = deviceKey(name, owner);
+    const tampered = JSON.stringify({
+        __logbookDatedDraft: 2, owner, revisionId: 'not-random', values: null,
+    });
+    localStorage.setItem(key, tampered);
+    expect(() => readFencedDatedDraftImage(name, owner)).toThrow('Provenienza');
+    expect(() => writeFencedDatedDraft(name, owner, { sleepHours: '08:00' }))
+        .toThrow('Provenienza');
+    expect(localStorage.getItem(key)).toBe(tampered);
 });
 
 it('blocks a stale mounted measurement form before edit or business dispatch, preserving the newer device record', async () => {
@@ -343,7 +404,9 @@ it('clears the matching measurement draft after deletion without touching the re
 
     await act(async () => { await hook.result.current.handleDeleteMeasurement('2026-09-11'); });
 
-    expect(localStorage.getItem(deviceKey('draft:measurement:2026-09-11', storageOwner()))).toBeNull();
+    const deletedDraft = readFencedDatedDraftImage('draft:measurement:2026-09-11', storageOwner());
+    expect(deletedDraft.values).toBeNull();
+    expect(deletedDraft.raw).toContain('"values":null');
     const persisted = useAppStore.getState().userData?.nutrition?.['2026-09-11'];
     expect(persisted?.weight).toBeUndefined();
     expect(persisted?.waist).toBeUndefined();
