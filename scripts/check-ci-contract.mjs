@@ -139,7 +139,7 @@ requirePattern('runtime SHA comparison', workflow, /^          if \[ "\$\{actual
 const actualShaAssignments = workflow.match(/^\s*actual_sha=/gm) ?? [];
 if (actualShaAssignments.length !== 3) failures.push(`runtime SHA guard: expected matrix + E2E + CodeQL assignments, found ${actualShaAssignments.length}`);
 requirePattern('conditional Java setup', workflow, /^        if: matrix\.java == true\s*$/m);
-requirePattern('Java setup action pin', workflow, /^        uses: actions\/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6\s*$/m);
+requirePattern('Java setup action pin', workflow, /^        uses: actions\/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6\s*$/m);
 requirePattern('Temurin distribution', workflow, /^          distribution: temurin\s*$/m);
 requirePattern('Java 21 runtime', workflow, /^          java-version: ['"]?21['"]?\s*$/m);
 requirePattern('dedicated Playwright E2E job', workflow, /^  e2e:\s*$/m);
@@ -156,8 +156,8 @@ requirePattern('matrix command execution', workflow, /^          \$\{\{ matrix\.
 requirePattern('CodeQL job', workflow, /^  codeql:\s*$/m);
 requirePattern('CodeQL JavaScript-TypeScript language', workflow, /^          languages: javascript-typescript\s*$/m);
 requirePattern('CodeQL extended security queries', workflow, /^          queries: security-extended\s*$/m);
-requirePattern('CodeQL init action pin', workflow, /^        uses: github\/codeql-action\/init@24c54180a607b1449ed407dd24f251e4e9147c8d # v4\s*$/m);
-requirePattern('CodeQL analyze action pin', workflow, /^        uses: github\/codeql-action\/analyze@24c54180a607b1449ed407dd24f251e4e9147c8d # v4\s*$/m);
+requirePattern('CodeQL init action pin', workflow, /^        uses: github\/codeql-action\/init@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4\s*$/m);
+requirePattern('CodeQL analyze action pin', workflow, /^        uses: github\/codeql-action\/analyze@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4\s*$/m);
 
 const allowedIfLines = new Set([
   'if: matrix.java == true',
