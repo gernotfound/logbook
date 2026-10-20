@@ -147,7 +147,7 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
         let release!: () => void;
         const requested = new Promise<void>(resolve => { entered = resolve; });
         const pendingDelete = new Promise<void>(resolve => { release = resolve; });
-        vi.mocked(idb.del).mockImplementationOnce(async (key: string) => {
+        vi.mocked(idb.del).mockImplementationOnce(async key => {
             expect(key).toBe('logbook:v2:user:test-user-id');
             entered();
             await pendingDelete;
