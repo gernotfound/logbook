@@ -6,7 +6,7 @@ import { useAppStore } from '../src/store/useAppStore';
 import { storageOwner } from '../src/lib/sync/session';
 import { isLocalPurgePending } from '../src/lib/sync/localPurgeFence';
 import * as localRepository from '../src/lib/sync/localRepository';
-import { localStorageMock } from './setup';
+import { localStorageMock, mockFirebaseAuth } from './setup';
 import { markAccountDeletion, isAccountDeletionPending } from '../src/lib/sync/accountGate';
 
 vi.mock('idb-keyval', () => ({
@@ -38,7 +38,7 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
     it('also refuses a direct ordinary authenticated purge with a pending journal', async () => {
         const read = vi.spyOn(localRepository, 'readLocal').mockResolvedValue({ pending: [{ seq: 1 }] } as any);
         try {
-            await expect(DB.purgeAllLocalUserData('user:user123')).rejects.toThrow('modifiche');
+            await expect(DB.purgeAllLocalUserData(storageOwner())).rejects.toThrow('modifiche');
             expect(idb.del).not.toHaveBeenCalled();
             expect(isLocalPurgePending('user:user123')).toBe(false);
         } finally { read.mockRestore(); }
@@ -92,6 +92,18 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
         } finally { read.mockRestore(); }
     });
 
+    it('rejects ordinary cleanup of a different authenticated owner even with no pending journal', async () => {
+        const foreignOwner = 'user:different-user';
+        const foreignDraft = `logbook:v2:${foreignOwner}:draft:protected`;
+        localStorage.setItem(foreignDraft, 'foreign-ciphertext');
+
+        await expect(DB.purgeAllLocalUserData(foreignOwner)).rejects.toThrow('La pulizia locale resta sospesa');
+
+        expect(localStorage.getItem(foreignDraft)).toBe('foreign-ciphertext');
+        expect(idb.del).not.toHaveBeenCalled();
+        expect(isLocalPurgePending(foreignOwner)).toBe(false);
+    });
+
     it('purgeAllLocalUserData removes all sensitive keys from localStorage and preserves device-specific ones', async () => {
         const sensitiveKeys = [
             'logbook_local_workout',
@@ -113,6 +125,10 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
 
         sensitiveKeys.forEach(k => localStorage.setItem(k, 'sensitive_data'));
         deviceKeys.forEach(k => localStorage.setItem(k, 'device_pref'));
+        // An explicit guest reset belongs to a guest session, not the
+        // authenticated fixture used by the other logout tests.
+        mockFirebaseAuth.currentUser = null;
+        localStorage.setItem('logbook_is_guest', 'true');
 
         await DB.purgeAllLocalUserData('guest');
 
@@ -135,12 +151,12 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
     });
 
     it('purgeAllLocalUserData removes only the current owner guest migration recovery marker', async () => {
-        localStorage.setItem('logbook_guest_migration_sync_recovery', 'user123');
-        await DB.purgeAllLocalUserData('user:user123');
+        localStorage.setItem('logbook_guest_migration_sync_recovery', 'test-user-id');
+        await DB.purgeAllLocalUserData(storageOwner());
         expect(localStorage.getItem('logbook_guest_migration_sync_recovery')).toBeNull();
 
         localStorage.setItem('logbook_guest_migration_sync_recovery', 'another-user');
-        await DB.purgeAllLocalUserData('user:user123');
+        await DB.purgeAllLocalUserData(storageOwner());
         expect(localStorage.getItem('logbook_guest_migration_sync_recovery')).toBe('another-user');
     });
 
