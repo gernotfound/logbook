@@ -1,5 +1,6 @@
 import { DomainParsers } from '../schema';
 import { readBrowserValueStrict } from './browserStorage';
+import { stableStorageKeyInventory } from './stableStorageKeyInventory';
 import { storageOwner } from './session';
 import { equivalentWorkoutSnapshot } from './workoutSnapshotEquality';
 import type { WorkoutSession } from '../../types';
@@ -121,10 +122,10 @@ function parseIntent(value: unknown, owner: string): WorkoutDeviceIntent | null 
 function readRecoverySlots(owner: string): Array<{ name: string; intent: WorkoutDeviceIntent }> {
     const prefixes = [protectedDeviceKey(SLOT_PREFIX, owner), deviceKey(SLOT_PREFIX, owner)];
     const keys: Array<{ key: string; id: string }> = [];
-    for (let index = 0; index < localStorage.length; index++) {
-        const key = localStorage.key(index);
-        const prefix = prefixes.find(candidate => key?.startsWith(candidate));
-        if (key && prefix) keys.push({ key, id: key.slice(prefix.length) });
+    const inventory = stableStorageKeyInventory('Inventario copie workout modificato durante il recupero: dati preservati.');
+    for (const key of inventory) {
+        const prefix = prefixes.find(candidate => key.startsWith(candidate));
+        if (prefix) keys.push({ key, id: key.slice(prefix.length) });
     }
     return keys.sort((a, b) => a.key.localeCompare(b.key)).map(({ id }) => {
         if (!tokenPattern.test(id)) throw new Error('Copia workout di recupero incompatibile: dati preservati.');
