@@ -6,7 +6,7 @@ import { useAppStore } from '../src/store/useAppStore';
 import { useDialogStore } from '../src/store/useDialogStore';
 import { activateGuestSession, GUEST_SESSION_KEY, GUEST_REVOCATION_KEY, invalidateSession, storageOwner } from '../src/lib/sync/session';
 import { deviceKey } from '../src/lib/sync/deviceStorage';
-import { readFencedDatedDraft, writeFencedDatedDraft, UnverifiedDatedDraftEpochError } from '../src/lib/sync/datedDraftEpoch';
+import { DatedDraftConflictError, readFencedDatedDraft, readFencedDatedDraftImage, writeFencedDatedDraft, UnverifiedDatedDraftEpochError } from '../src/lib/sync/datedDraftEpoch';
 import { mockFirebaseAuth } from './setup';
 import { draftRegistry } from '../src/lib/utils/draftRegistry';
 import { UserDataSchema } from '../src/lib/schema';
@@ -16,6 +16,7 @@ import { requireHealthConsentWritable } from '../src/lib/healthConsent';
 const data = (nutrition = {}) => UserDataSchema.parse({ profile: { height: '180', gender: 'M' }, nutrition }) as any;
 const day = (date: string, fields = {}) => ({ date, kcal: 0, pro: 0, carbs: 0, fat: 0, meals: [], ...fields });
 const storeItem = vi.mocked(localStorage.setItem).getMockImplementation()!;
+const originalDispatchDomainOperation = useAppStore.getState().dispatchDomainOperation;
 beforeEach(() => {
     vi.mocked(localStorage.setItem).mockImplementation(storeItem);
     localStorage.clear();
@@ -28,7 +29,11 @@ beforeEach(() => {
     useAppStore.getState().resetStore();
     useAppStore.setState({ userData: data(), dataOwner: storageOwner() });
 });
-afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
+afterEach(() => {
+    useAppStore.setState({ dispatchDomainOperation: originalDispatchDomainOperation });
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+});
 
 it('uses the fenced store owner without rereading lifecycle ownership on rerender', () => {
     const getItem = vi.spyOn(localStorage, 'getItem');
@@ -151,6 +156,67 @@ it('rejects altered owner and revision in a stamped draft without replacing it',
     expect(() => writeFencedDatedDraft('draft:measurement:2026-09-11', owner, { weight: '81' }))
         .toThrow('Provenienza della bozza locale non valida');
     expect(localStorage.getItem(key)).toBe(original);
+});
+
+it('rejects stale replacement and cleanup of a dated draft in the same consent generation', () => {
+    const owner = storageOwner();
+    const name = 'draft:sleep:2026-09-11';
+    const first = writeFencedDatedDraft(name, owner, { sleepHours: '08:00', sleepDeep: '02:00' }, null);
+    expect(readFencedDatedDraftImage(name, owner).raw).toBe(first);
+    const second = writeFencedDatedDraft(name, owner, { sleepHours: '07:30', sleepDeep: '01:45' }, first);
+    expect(second).not.toBe(first);
+
+    expect(() => writeFencedDatedDraft(name, owner, { sleepHours: '06:00' }, first))
+        .toThrow(DatedDraftConflictError);
+    expect(() => writeFencedDatedDraft(name, owner, null, first))
+        .toThrow(DatedDraftConflictError);
+    expect(readFencedDatedDraftImage(name, owner)).toEqual({
+        values: { sleepHours: '07:30', sleepDeep: '01:45' }, raw: second,
+    });
+});
+
+it('blocks a stale mounted measurement form before edit or business dispatch, preserving the newer device record', async () => {
+    const owner = storageOwner();
+    const name = 'draft:measurement:2026-09-11';
+    writeFencedDatedDraft(name, owner, { weight: '75' });
+    const dispatch = vi.fn().mockResolvedValue({ ok: true, status: 'synced' } as SyncResult);
+    useAppStore.setState({ dispatchDomainOperation: dispatch });
+    const earlier = renderHook(() => useNutritionMeasurements('2026-09-11'));
+    const stale = renderHook(() => useNutritionMeasurements('2026-09-11'));
+    expect(stale.result.current.weight).toBe('75');
+
+    act(() => earlier.result.current.setWeight('76'));
+    const currentRaw = readFencedDatedDraftImage(name, owner).raw;
+
+    act(() => stale.result.current.setWaist('85'));
+    expect(stale.result.current.waist).toBe('');
+    expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
+    expect(useAppStore.getState().saveError).toMatch(/altra scheda/i);
+    await act(async () => { await stale.result.current.calculateAndSave(); });
+    expect(dispatch).not.toHaveBeenCalled();
+    expect(readFencedDatedDraftImage(name, owner).raw).toBe(currentRaw);
+    expect(readFencedDatedDraft(name, owner)?.weight).toBe('76');
+    earlier.unmount();
+    stale.unmount();
+});
+
+it('advances the observed image after consecutive edits and clears only its own committed draft', async () => {
+    const owner = storageOwner();
+    const name = 'draft:measurement:2026-09-11';
+    const dispatch = vi.fn().mockResolvedValue({ ok: true, status: 'synced' } as SyncResult);
+    useAppStore.setState({ dispatchDomainOperation: dispatch });
+    const hook = renderHook(() => useNutritionMeasurements('2026-09-11'));
+    act(() => hook.result.current.setWeight('75'));
+    const first = readFencedDatedDraftImage(name, owner).raw;
+    act(() => hook.result.current.setWeight('76'));
+    const second = readFencedDatedDraftImage(name, owner).raw;
+    expect(second).not.toBe(first);
+    expect(useAppStore.getState().localPersistenceBlocked).toBe(false);
+
+    await act(async () => { await hook.result.current.calculateAndSave(); });
+    expect(dispatch).toHaveBeenCalledTimes(1);
+    expect(readFencedDatedDraft(name, owner)).toBeNull();
+    expect(useAppStore.getState().localPersistenceBlocked).toBe(false);
 });
 
 it('reads a new localStorage key before any write can copy the previous value over it', () => {
