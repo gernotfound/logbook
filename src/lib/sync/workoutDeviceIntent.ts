@@ -414,7 +414,7 @@ export async function recoverWorkoutDeviceIntent(owner: string, guard: LocalWrit
     if (latestRaw !== null && !latestShared) {
         throw new WorkoutIntentConflictError('Snapshot workout concorrente senza intento: originale preservato.');
     }
-    if (latestShared?.intentId === intent.intentId
+    if (latestShared && latestShared.intentId === intent.intentId
         && JSON.stringify(latestShared) !== JSON.stringify(intent)) {
         throw new WorkoutIntentConflictError('Snapshot workout concorrente con identità riutilizzata: originale preservato.');
     }
