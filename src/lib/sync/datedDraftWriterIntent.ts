@@ -108,6 +108,10 @@ export function readDatedWriterEvidence(owner: string, draftName: string): Dated
             throw new Error('Copia datata modificata durante la verifica.');
         }
     }
+    // Consent may also change during the final authenticated value reads.
+    if (readDeviceConsentRevision(owner) !== revision) {
+        throw new Error('Copie datate o consenso cambiati durante la lettura.');
+    }
     return matches;
 }
 
