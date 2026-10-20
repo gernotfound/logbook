@@ -137,6 +137,38 @@ describe('browser storage boundary', () => {
         expect(() => writeDeviceValue('workout', null, OWNER)).toThrow(BrowserStorageError);
     });
 
+    it.each([
+        { kind: 'plaintext legacy draft', original: '{"weight":"75"}' },
+        { kind: 'orphaned sealed legacy draft', original: 'tlb-sealed:v1:unreadable-original' },
+    ])('preserves a $kind when the pre-vault target read temporarily fails', ({ original }) => {
+        const name = 'draft:measurement:2026-10-20';
+        const key = 'logbook:v2:' + OWNER + ':' + name;
+        for (const next of ['{"weight":"76"}', null]) {
+            localStorage.setItem(key, original);
+            const priorSetCalls = localStorageMock.setItem.mock.calls.length;
+            const priorRemoveCalls = localStorageMock.removeItem.mock.calls.length;
+            const originalGet = localStorageMock.getItem.getMockImplementation();
+            if (!originalGet) throw new Error('Missing localStorage mock implementation');
+            let failed = false;
+            localStorageMock.getItem.mockImplementation((readKey: string) => {
+                if (!failed && readKey === key) {
+                    failed = true;
+                    throw new DOMException('read unavailable', 'SecurityError');
+                }
+                return originalGet(readKey);
+            });
+            try {
+                expect(() => writeDeviceValue(name, next, OWNER)).toThrow(BrowserStorageError);
+                expect(failed).toBe(true);
+                expect(localStorageMock.setItem).toHaveBeenCalledTimes(priorSetCalls);
+                expect(localStorageMock.removeItem).toHaveBeenCalledTimes(priorRemoveCalls);
+            } finally {
+                localStorageMock.getItem.mockImplementation(originalGet);
+            }
+            expect(localStorage.getItem(key)).toBe(original);
+        }
+    });
+
     it('keeps deletion-recovery credential reads on the strict browser-storage boundary', () => {
         localStorageMock.getItem.mockImplementationOnce(storageFailure);
 

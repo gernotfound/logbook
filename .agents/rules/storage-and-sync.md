@@ -85,6 +85,8 @@ Il guest conserva la semplice persistenza locale preesistente.
 
 **MUST:** gate CRITICAL (ownership, lifecycle, logout, account deletion, reload/persistenza) non devono trasformare uno storage illeggibile in “chiave assente” se questa distinzione può cambiare una decisione distruttiva o di sicurezza.
 
+**MUST (CRITICAL, scritture device pre-vault):** senza controllo vault attivo, anche la verifica del record legacy di destinazione deve essere una **lettura rigorosa** prima di sovrascrittura o cancellazione. Se il browser nega o interrompe la lettura, non interpretare il dato come assente e non autorizzare modifiche alla chiave. Una copia legacy cifrata rimasta senza controllo va conservata e bloccata. Le letture best-effort restano riservate a preferenze e suggerimenti non distruttivi; il controllo di integrità della destinazione non è uno di questi.
+
 **MAY:** preferenze, hint e code telemetriche possono restare best-effort quando il loro contratto non influenza l'integrità dei dati business.
 
 **MUST:** per la coda diagnostica, best-effort **non** significa storage in chiaro: errori/stack, session ID e UID possono essere presenti nel payload tecnico.
