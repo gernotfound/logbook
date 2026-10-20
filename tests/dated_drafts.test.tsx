@@ -345,6 +345,38 @@ it('rejects business save when a later witness update fails but a previous witne
     hook.unmount();
 });
 
+it('preserves a mounted old editor\'s next edit when a second confirmed form consumed its witness', async () => {
+    const owner = storageOwner();
+    const name = 'draft:measurement:2026-09-11';
+    const dispatch = vi.fn().mockResolvedValue({ ok: true, status: 'synced' } as SyncResult);
+    useAppStore.setState({ dispatchDomainOperation: dispatch });
+    const original = renderHook(() => useNutritionMeasurements('2026-09-11'));
+    act(() => original.result.current.setWeight('75'));
+    const [originalWitness] = readDatedWriterEvidence(owner, name);
+    expect(originalWitness.values.weight).toBe('75');
+
+    const confirmer = renderHook(() => useNutritionMeasurements('2026-09-11'));
+    expect(confirmer.result.current.weight).toBe('75');
+    act(() => confirmer.result.current.setWeight('76'));
+    await act(async () => { await confirmer.result.current.calculateAndSave(); });
+    expect(dispatch).toHaveBeenCalledTimes(1);
+    expect(readFencedDatedDraft(name, owner)).toBeNull();
+    expect(readDatedWriterEvidence(owner, name)).toHaveLength(0);
+
+    // The first mounted form's slot has been consumed by a different
+    // acknowledged editor. Its NEW keystroke must be resealed under a new
+    // independent key before failing the stale canonical-image check.
+    act(() => original.result.current.setWeight('77'));
+    const [newWitness] = readDatedWriterEvidence(owner, name);
+    expect(newWitness.name).not.toBe(originalWitness.name);
+    expect(newWitness.values.weight).toBe('77');
+    expect(readFencedDatedDraft(name, owner)).toBeNull();
+    expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
+    expect(dispatch).toHaveBeenCalledTimes(1);
+    original.unmount();
+    confirmer.unmount();
+});
+
 it('removes only committed editor evidence after durable business save', async () => {
     const owner = storageOwner();
     const name = 'draft:measurement:2026-09-11';
