@@ -141,6 +141,53 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
         });
     });
 
+    it('stops before shared IndexedDB and localStorage cleanup when Auth changes during owner IDB deletion', async () => {
+        const previous = mockFirebaseAuth.currentUser!;
+        let entered!: () => void;
+        let release!: () => void;
+        const requested = new Promise<void>(resolve => { entered = resolve; });
+        const pendingDelete = new Promise<void>(resolve => { release = resolve; });
+        vi.mocked(idb.del).mockImplementationOnce(async (key: string) => {
+            expect(key).toBe('logbook:v2:user:test-user-id');
+            entered();
+            await pendingDelete;
+        });
+
+        const operation = DB.purgeAllLocalUserData();
+        await requested;
+        mockFirebaseAuth.currentUser = { ...previous, uid: 'second-user' };
+        localStorage.setItem('guest_migration_intent_v1', 'second-user-new-login');
+
+        release();
+        await expect(operation).rejects.toThrow('La pulizia locale resta sospesa');
+        expect(idb.del).toHaveBeenCalledTimes(1);
+        expect(localStorage.getItem('guest_migration_intent_v1')).toBe('second-user-new-login');
+        expect(isLocalPurgePending('user:test-user-id')).toBe(true);
+    });
+
+    it('stops before shared storage cleanup when a guest activates during old account IDB deletion', async () => {
+        let entered!: () => void;
+        let release!: () => void;
+        const requested = new Promise<void>(resolve => { entered = resolve; });
+        const pendingDelete = new Promise<void>(resolve => { release = resolve; });
+        vi.mocked(idb.del).mockImplementationOnce(async () => {
+            entered();
+            await pendingDelete;
+        });
+
+        const operation = DB.purgeAllLocalUserData();
+        await requested;
+        mockFirebaseAuth.currentUser = null;
+        localStorage.setItem('logbook_is_guest', 'true');
+        localStorage.setItem('draft_measurement', 'new-guest-measurement');
+
+        release();
+        await expect(operation).rejects.toThrow('La pulizia locale resta sospesa');
+        expect(idb.del).toHaveBeenCalledTimes(1);
+        expect(localStorage.getItem('draft_measurement')).toBe('new-guest-measurement');
+        expect(isLocalPurgePending('user:test-user-id')).toBe(true);
+    });
+
     it('purgeAllLocalUserData removes IndexedDB sensitive keys', async () => {
         await DB.purgeAllLocalUserData();
 
