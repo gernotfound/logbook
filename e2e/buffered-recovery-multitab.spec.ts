@@ -120,3 +120,73 @@ for (const theme of ['light', 'dark'] as const) {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1)).toBe(true);
   });
 }
+
+test('a canonical quota failure retains the independent encrypted witness, including through a corrupt-ciphertext read', async ({ page, context }) => {
+  await enterGuest(page);
+  await page.getByRole('button', { name: 'Allenamento', exact: true }).click();
+  await page.getByRole('tab', { name: 'Esercizi', exact: true }).click();
+  await page.getByRole('button', { name: 'Crea esercizio' }).click();
+  const exercise = 'Quota witness browser isolato';
+  await page.locator('#exercise-name').fill(exercise);
+  await page.locator('#exercise-creation-form').getByRole('button', { name: 'Salva', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Crea esercizio' })).toBeVisible();
+
+  await page.getByRole('tab', { name: 'Sessione', exact: true }).click();
+  await page.getByRole('button', { name: 'Allenamento libero' }).click();
+  await page.getByRole('button', { name: 'Salta check-in e inizia' }).click();
+  await expect(page.getByRole('button', { name: 'Termina allenamento' })).toBeVisible();
+  await page.getByPlaceholder('Cerca esercizio per nome...').fill(exercise);
+  await page.getByRole('option', { name: new RegExp(exercise) }).click();
+  await page.locator('.session-exercise-summary').click();
+  await page.getByRole('button', { name: 'Aggiungi nota per la prossima volta' }).click();
+  const note = page.getByPlaceholder('Note per la prossima volta (dolori, feedback)...');
+  await expect(note).toBeVisible();
+
+  const canonicalPrefix = 'logbook:v2:guest:sealed:draft:buffered:textarea:';
+  const witnessPrefix = 'logbook:v2:guest:sealed:draft:buffered-intent:';
+  // Fail only the shared canonical write; the real app must first seal its
+  // independent witness. This hook lives solely in this disposable page realm.
+  await page.evaluate((prefix) => {
+    const originalSet = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (key: string, value: string) {
+      if (key.startsWith(prefix)) throw new DOMException('synthetic quota exhausted', 'QuotaExceededError');
+      return originalSet.call(this, key, value);
+    };
+  }, canonicalPrefix);
+
+  const value = 'Nota non confermata: quota piena sul solo record condiviso';
+  await note.fill(value);
+  const saved = await page.evaluate(([witness, canonical]) => Object.fromEntries(
+    Object.entries(localStorage).filter(([key]) => key.startsWith(witness) || key.startsWith(canonical))
+  ), [witnessPrefix, canonicalPrefix]);
+  expect(Object.keys(saved).filter(key => key.startsWith(witnessPrefix))).toHaveLength(1);
+  expect(Object.keys(saved).filter(key => key.startsWith(canonicalPrefix))).toHaveLength(0);
+  expect(Object.values(saved).every(ciphertext => !ciphertext.includes(value))).toBe(true);
+
+  // A separate fresh document must still read the actual encrypted copy.
+  const viewer = await context.newPage();
+  await openRecoveryInspector(viewer);
+  await expect(viewer.getByText('1 copia conservata in 1 campo.')).toBeVisible();
+  await viewer.locator('.settings-recovery-group summary').first().click();
+  const recovered = viewer.locator('.settings-recovery-entry textarea[readonly]');
+  await expect(recovered).toHaveValue(value);
+  expect(await viewer.evaluate(prefix => Object.fromEntries(
+    Object.entries(localStorage).filter(([key]) => key.startsWith(prefix))
+  ), witnessPrefix)).toEqual(saved);
+
+  const [witnessKey, ciphertext] = Object.entries(saved)[0];
+  // A corrupt AEAD witness must fail closed, not become an empty draft or be deleted.
+  const corrupted = 'synthetically-corrupted-ciphertext';
+  await viewer.evaluate(([key, raw]) => localStorage.setItem(key, raw), [witnessKey, corrupted]);
+  await viewer.getByRole('button', { name: 'Esamina copie sul dispositivo' }).click();
+  await expect(viewer.getByRole('alert')).toContainText('Nessun dato è stato modificato.');
+  await expect(recovered).toHaveCount(0);
+  expect(await viewer.evaluate(key => localStorage.getItem(key), witnessKey)).toBe(corrupted);
+
+  // Restoring exactly the original bytes makes the original value readable again.
+  await viewer.evaluate(([key, raw]) => localStorage.setItem(key, raw), [witnessKey, ciphertext]);
+  await viewer.getByRole('button', { name: 'Esamina copie sul dispositivo' }).click();
+  await viewer.locator('.settings-recovery-group summary').first().click();
+  await expect(recovered).toHaveValue(value);
+  expect(await viewer.evaluate(key => localStorage.getItem(key), witnessKey)).toBe(ciphertext);
+});
