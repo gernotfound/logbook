@@ -115,9 +115,7 @@ export function useDatedDraft<T extends Record<string, string>>(kind: string, da
 
     const persist = (draftName: string, draftOwner: string, value: T, expectedRaw: string | null): string => {
         try {
-            const written = writeFencedDatedDraft(draftName, draftOwner, value, expectedRaw);
-            if (written === null) throw new Error('Bozza datata non scritta.');
-            return written;
+            return writeFencedDatedDraft(draftName, draftOwner, value, expectedRaw);
         } catch (error) {
             if (error instanceof UnverifiedDatedDraftEpochError || error instanceof DatedDraftConflictError) {
                 blockProvenance(error);
@@ -143,7 +141,8 @@ export function useDatedDraft<T extends Record<string, string>>(kind: string, da
         if (!session || !key || !isCurrentSession(session) || current.current.key !== key
             || (expected && JSON.stringify(expected) !== JSON.stringify(current.current.values))) return false;
         verifyCurrentDraft();
-        try { writeFencedDatedDraft(name, session.owner, null, current.current.observedRaw); }
+        let clearedRaw: string;
+        try { clearedRaw = writeFencedDatedDraft(name, session.owner, null, current.current.observedRaw); }
         catch (error) {
             if (error instanceof UnverifiedDatedDraftEpochError || error instanceof DatedDraftConflictError) {
                 blockProvenance(error);
@@ -152,7 +151,7 @@ export function useDatedDraft<T extends Record<string, string>>(kind: string, da
             }
             throw error;
         }
-        current.current = { key, name, values: source, dirty: false, session, observedRaw: null };
+        current.current = { key, name, values: source, dirty: false, session, observedRaw: clearedRaw };
         setEdited({ key, values: null });
         return true;
     };
