@@ -6,7 +6,7 @@ import { requiredUpdateRecoveryRegistry } from '../../lib/sync/requiredUpdateRec
 import { useAppStore } from '../../store/useAppStore';
 import { BufferedWorkoutScope } from './bufferedWorkoutScope';
 import {
-    clearBufferedWriterIntent, createBufferedWriterIntentName,
+    BufferedWriterConsumedError, clearBufferedWriterIntent, createBufferedWriterIntentName,
     readBufferedWriterEvidence, writeBufferedWriterIntent,
 } from '../../lib/sync/bufferedDraftWriterIntent';
 import type { BufferedWriterEvidence } from '../../lib/sync/bufferedDraftWriterIntent';
@@ -128,10 +128,25 @@ export const BufferedInput = React.forwardRef<HTMLInputElement, BufferedInputPro
             // Every editor has its own device key: preserve input synchronously
             // before the shared canonical key can lose a truly simultaneous race.
             writerIntentName.current ??= createBufferedWriterIntentName();
-            writerIntentRaw.current = writeBufferedWriterIntent(
-                writerIntentName.current, session.owner, key, raw,
-                writerIntentRaw.current, session.consentGeneration,
-            );
+            try {
+                writerIntentRaw.current = writeBufferedWriterIntent(
+                    writerIntentName.current, session.owner, key, raw,
+                    writerIntentRaw.current, session.consentGeneration,
+                );
+            } catch (error) {
+                // Another editor can durably acknowledge and consume a source
+                // witness while its original editor remains mounted. Never
+                // reuse that consumed key or overwrite a different writer.
+                // Preserve this new input under a fresh independent key first;
+                // the subsequent canonical preflight still rejects stale state.
+                if (!(error instanceof BufferedWriterConsumedError)) throw error;
+                const fresh = createBufferedWriterIntentName();
+                const written = writeBufferedWriterIntent(
+                    fresh, session.owner, key, raw, null, session.consentGeneration,
+                );
+                writerIntentName.current = fresh;
+                writerIntentRaw.current = written;
+            }
             observedRaw.current = writeBufferedDraft(
                 key, session.owner, raw, session.consentGeneration, observedRaw.current,
             );
@@ -359,10 +374,25 @@ export const BufferedTextarea = React.forwardRef<HTMLTextAreaElement, BufferedTe
             // Every editor has its own device key: preserve input synchronously
             // before the shared canonical key can lose a truly simultaneous race.
             writerIntentName.current ??= createBufferedWriterIntentName();
-            writerIntentRaw.current = writeBufferedWriterIntent(
-                writerIntentName.current, session.owner, key, raw,
-                writerIntentRaw.current, session.consentGeneration,
-            );
+            try {
+                writerIntentRaw.current = writeBufferedWriterIntent(
+                    writerIntentName.current, session.owner, key, raw,
+                    writerIntentRaw.current, session.consentGeneration,
+                );
+            } catch (error) {
+                // Another editor can durably acknowledge and consume a source
+                // witness while its original editor remains mounted. Never
+                // reuse that consumed key or overwrite a different writer.
+                // Preserve this new input under a fresh independent key first;
+                // the subsequent canonical preflight still rejects stale state.
+                if (!(error instanceof BufferedWriterConsumedError)) throw error;
+                const fresh = createBufferedWriterIntentName();
+                const written = writeBufferedWriterIntent(
+                    fresh, session.owner, key, raw, null, session.consentGeneration,
+                );
+                writerIntentName.current = fresh;
+                writerIntentRaw.current = written;
+            }
             observedRaw.current = writeBufferedDraft(
                 key, session.owner, raw, session.consentGeneration, observedRaw.current,
             );
