@@ -174,13 +174,14 @@ it('blocks a stale mounted measurement form before edit or business dispatch, pr
     const owner = storageOwner();
     const name = 'draft:measurement:2026-09-11';
     writeFencedDatedDraft(name, owner, { weight: '75' });
+    const dispatch = vi.fn().mockResolvedValue({ ok: true, status: 'synced' } as SyncResult);
+    useAppStore.setState({ dispatchDomainOperation: dispatch });
     const earlier = renderHook(() => useNutritionMeasurements('2026-09-11'));
     const stale = renderHook(() => useNutritionMeasurements('2026-09-11'));
     expect(stale.result.current.weight).toBe('75');
 
     act(() => earlier.result.current.setWeight('76'));
     const currentRaw = readFencedDatedDraftImage(name, owner).raw;
-    const dispatch = vi.spyOn(useAppStore.getState(), 'dispatchDomainOperation');
 
     act(() => stale.result.current.setWaist('85'));
     expect(stale.result.current.waist).toBe('');
@@ -197,6 +198,8 @@ it('blocks a stale mounted measurement form before edit or business dispatch, pr
 it('advances the observed image after consecutive edits and clears only its own committed draft', async () => {
     const owner = storageOwner();
     const name = 'draft:measurement:2026-09-11';
+    const dispatch = vi.fn().mockResolvedValue({ ok: true, status: 'synced' } as SyncResult);
+    useAppStore.setState({ dispatchDomainOperation: dispatch });
     const hook = renderHook(() => useNutritionMeasurements('2026-09-11'));
     act(() => hook.result.current.setWeight('75'));
     const first = readFencedDatedDraftImage(name, owner).raw;
@@ -205,9 +208,8 @@ it('advances the observed image after consecutive edits and clears only its own 
     expect(second).not.toBe(first);
     expect(useAppStore.getState().localPersistenceBlocked).toBe(false);
 
-    vi.spyOn(useAppStore.getState(), 'dispatchDomainOperation')
-        .mockResolvedValue({ ok: true, status: 'synced' } as SyncResult);
     await act(async () => { await hook.result.current.calculateAndSave(); });
+    expect(dispatch).toHaveBeenCalledTimes(1);
     expect(readFencedDatedDraft(name, owner)).toBeNull();
     expect(useAppStore.getState().localPersistenceBlocked).toBe(false);
 });
