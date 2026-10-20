@@ -354,6 +354,37 @@ it('aborts if a witness disappears during collection instead of reporting a comp
     expect(removed).toBe(true);
 });
 
+it('refuses a false no-source result when a concurrent tab shifts the localStorage key indexes', () => {
+    const unrelated = 'logbook:v2:user:a:telemetry_queue';
+    const witness = 'logbook:v2:user:a:workout-intent:' + 'f'.repeat(32);
+    const original = '{"__logbookWorkoutIntent":1,"sequence":1}';
+    const values = new Map([[unrelated, '[]'], [witness, original]]);
+    let shifted = false;
+    vi.stubGlobal('localStorage', {
+        get length() { return values.size; },
+        key: (index: number) => {
+            const key = [...values.keys()][index] ?? null;
+            if (index === 0 && !shifted) {
+                shifted = true;
+                values.delete(unrelated);
+            }
+            return key;
+        },
+        getItem: (key: string) => values.get(key) ?? null,
+    });
+
+    // A one-pass index scan would miss the witness and falsely deny export.
+    // The stable snapshot preflight must detect the changing membership.
+    expect(() => hasDeviceRecoveryBackupSource('user:a'))
+        .toThrow('Le copie di recupero sono cambiate durante il backup');
+    expect(shifted).toBe(true);
+    expect(values.get(witness)).toBe(original);
+    expect(hasDeviceRecoveryBackupSource('user:a')).toBe(true);
+
+    values.delete(witness);
+    expect(hasDeviceRecoveryBackupSource('user:a')).toBe(false);
+});
+
 it('retains a crash-only private workout witness in an explicit partial backup without replaying it on import', async () => {
     const source = '{"__logbookWorkoutIntent":1,"sequence":1}';
     const key = 'workout-intent:' + 'f'.repeat(32);

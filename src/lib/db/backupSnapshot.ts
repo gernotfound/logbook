@@ -78,11 +78,9 @@ function readStableDeviceRecovery(owner: string): Record<string, string> {
 }
 
 export function hasDeviceRecoveryBackupSource(owner: string): boolean {
-    for (let index = 0; index < localStorage.length; index++) {
-        const name = deviceRecoveryName(localStorage.key(index), owner);
-        if (name !== null && readDeviceValueStrict(name, owner) !== null) return true;
-    }
-    return false;
+    // The existence preflight must be as race-aware as the export itself.
+    // A shifting localStorage index must not hide the only recovery witness.
+    return Object.keys(readStableDeviceRecovery(owner)).length > 0;
 }
 
 export async function collectBackupSnapshot(fallback: UserData, includeCloud: boolean, consistencyAttempt = 0) {
