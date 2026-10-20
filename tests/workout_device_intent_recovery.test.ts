@@ -291,7 +291,9 @@ describe('authenticated device-intent replay into semantic journal', () => {
         localStorageMock.getItem.mockImplementation((key: string) => {
             const value = originalGet(key);
             if (key === deviceKey('workout-intent:' + first.intentId, scopedOwner)
-                && ++reads === 2) {
+                && ++reads === 3) {
+                // Two authenticated reads finish the first recovery scan;
+                // the third is the second scan just before journal replay.
                 // In another tab, a second editor keeps its independent slot.
                 // The shared key can still point at the first editor.
                 writeDeviceValue('workout-intent:' + competitor.intentId,
