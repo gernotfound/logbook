@@ -1,5 +1,6 @@
 import { deviceKey, readDeviceValueStrict, writeDeviceValue } from './deviceStorage';
 import { readDeviceConsentRevision, assertWorkoutSnapshotEpoch } from './workoutDeviceIntent';
+import { stableStorageKeyInventory } from './stableStorageKeyInventory';
 
 const INTENT_PREFIX = 'draft:buffered-intent:';
 
@@ -53,9 +54,9 @@ function parseWriterEvidence(
 function ownerWriterNames(owner: string): Set<string> {
     const ownerPrefix = deviceKey('', owner);
     const names = new Set<string>();
-    for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (!key?.startsWith(ownerPrefix)) continue;
+    const inventory = stableStorageKeyInventory('Inventario copie bufferizzate modificato durante la lettura.');
+    for (const key of inventory) {
+        if (!key.startsWith(ownerPrefix)) continue;
         const suffix = key.slice(ownerPrefix.length);
         const name = suffix.startsWith('sealed:') ? suffix.slice('sealed:'.length) : suffix;
         if (name.startsWith(INTENT_PREFIX)) names.add(name);

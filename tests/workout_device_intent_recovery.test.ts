@@ -234,6 +234,47 @@ describe('authenticated device-intent replay into semantic journal', () => {
         expect(readDeviceValueStrict('workout-intent:' + other.intentId, parallelOwner)).toBe(JSON.stringify(other));
     });
 
+    it('blocks replay when cross-tab compaction hides a competing independent workout witness', async () => {
+        const scopedOwner = 'user:slot-index-compaction-' + crypto.randomUUID();
+        const initial = data(workout('50'));
+        await initializeLocal(scopedOwner, initial);
+        const unrelated = 'cross-tab:temporary-' + crypto.randomUUID();
+        localStorage.setItem(unrelated, 'present');
+        const first = saveWorkoutDeviceIntent(scopedOwner, initial.activeWorkout ?? null,
+            workout('55'), initial.activeWorkout ?? null);
+        const competitor = { ...first, intentId: 'e'.repeat(32), workout: workout('60') };
+        writeDeviceValue('workout-intent:' + competitor.intentId, JSON.stringify(competitor), scopedOwner);
+        writeDeviceValue('workout', JSON.stringify(competitor), scopedOwner);
+
+        const originalFirst = readDeviceValueStrict('workout-intent:' + first.intentId, scopedOwner);
+        const originalSecond = readDeviceValueStrict('workout-intent:' + competitor.intentId, scopedOwner);
+        const before = await readLocal(scopedOwner);
+        const originalKey = localStorageMock.key.getMockImplementation();
+        if (!originalKey) throw new Error('Missing localStorage mock implementation');
+        let compacted = false;
+        localStorageMock.key.mockImplementation((index: number) => {
+            const found = originalKey(index);
+            if (!compacted && found === unrelated) {
+                compacted = true;
+                localStorage.removeItem(unrelated);
+            }
+            return found;
+        });
+        try {
+            await expect(recoverWorkoutDeviceIntent(scopedOwner, () => true))
+                .rejects.toThrow('Inventario copie workout');
+        } finally {
+            localStorageMock.key.mockImplementation(originalKey);
+        }
+        expect(compacted).toBe(true);
+        expect(await readLocal(scopedOwner)).toEqual(before);
+        expect(readDeviceValueStrict('workout-intent:' + first.intentId, scopedOwner)).toBe(originalFirst);
+        expect(readDeviceValueStrict('workout-intent:' + competitor.intentId, scopedOwner)).toBe(originalSecond);
+
+        await expect(recoverWorkoutDeviceIntent(scopedOwner, () => true)).rejects.toThrow('Più schede');
+        expect(await readLocal(scopedOwner)).toEqual(before);
+    });
+
     it('recovers a private draft when the shared snapshot write was interrupted', async () => {
         const testOwner = 'user:slot-before-shared';
         const initial = data(workout('50'));

@@ -385,6 +385,32 @@ it('refuses a false no-source result when a concurrent tab shifts the localStora
     expect(hasDeviceRecoveryBackupSource('user:a')).toBe(false);
 });
 
+it('rejects duplicate index observations rather than exporting only one of two physical witnesses', async () => {
+    const a = 'logbook:v2:user:a:workout-intent:' + 'a'.repeat(32);
+    const b = 'logbook:v2:user:a:workout-intent:' + 'b'.repeat(32);
+    const values = new Map([[a, '{"__logbookWorkoutIntent":1,"sequence":1}'],
+        [b, '{"__logbookWorkoutIntent":1,"sequence":2}']]);
+    let shifting = true;
+    vi.stubGlobal('localStorage', {
+        get length() { return values.size; },
+        // A key shifting between index observations may be returned twice,
+        // even though two distinct physical recovery records still exist.
+        key: (index: number) => shifting ? a : [...values.keys()][index] ?? null,
+        getItem: (key: string) => values.get(key) ?? null,
+    });
+
+    expect(() => hasDeviceRecoveryBackupSource('user:a'))
+        .toThrow('Le copie di recupero sono cambiate durante il backup');
+    expect(values.size).toBe(2);
+
+    shifting = false;
+    const backup = await collectBackupSnapshot(parse({}), false);
+    expect(Object.keys(backup.recovery.device)).toEqual([
+        'workout-intent:' + 'a'.repeat(32),
+        'workout-intent:' + 'b'.repeat(32),
+    ]);
+});
+
 it('retains a crash-only private workout witness in an explicit partial backup without replaying it on import', async () => {
     const source = '{"__logbookWorkoutIntent":1,"sequence":1}';
     const key = 'workout-intent:' + 'f'.repeat(32);

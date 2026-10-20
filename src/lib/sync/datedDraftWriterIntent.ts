@@ -1,5 +1,6 @@
 import { deviceKey, readDeviceValueStrict, writeDeviceValue } from './deviceStorage';
 import { assertWorkoutSnapshotEpoch, readDeviceConsentRevision } from './workoutDeviceIntent';
+import { stableStorageKeyInventory } from './stableStorageKeyInventory';
 
 const PREFIX = 'draft:dated-intent:';
 const ID = /^[a-f0-9]{32}$/;
@@ -62,9 +63,9 @@ function parse(name: string, owner: string, raw: string): DatedWriterEvidence & 
 function ownerNames(owner: string): Set<string> {
     const prefix = deviceKey('', owner);
     const names = new Set<string>();
-    for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (!key?.startsWith(prefix)) continue;
+    const inventory = stableStorageKeyInventory('Elenco copie datate modificato durante la lettura.');
+    for (const key of inventory) {
+        if (!key.startsWith(prefix)) continue;
         const suffix = key.slice(prefix.length);
         const name = suffix.startsWith('sealed:') ? suffix.slice(7) : suffix;
         if (name.startsWith(PREFIX)) names.add(name);

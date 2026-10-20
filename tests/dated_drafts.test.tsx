@@ -304,6 +304,40 @@ it('retains two full writer values even if the shared canonical record is forcib
     expect(inspected.map(x => JSON.parse(x.value).sleepHours).sort()).toEqual(['07:00', '08:00']);
 });
 
+it('preserves dated writer witnesses when another tab compacts the key inventory', () => {
+    const owner = storageOwner();
+    const draftName = 'draft:measurement:2026-09-11';
+    const unrelated = 'cross-tab:transient-' + crypto.randomUUID();
+    localStorage.setItem(unrelated, 'present');
+    const a = createDatedWriterIntentName();
+    const b = createDatedWriterIntentName();
+    writeDatedWriterIntent(a, owner, draftName, { weight: '75' }, null);
+    writeDatedWriterIntent(b, owner, draftName, { weight: '76' }, null);
+
+    const keyMock = vi.mocked(localStorage.key);
+    const originalKey = keyMock.getMockImplementation();
+    if (!originalKey) throw new Error('Missing localStorage mock implementation');
+    let compacted = false;
+    keyMock.mockImplementation((index: number) => {
+        const found = originalKey(index);
+        if (!compacted && found === unrelated) {
+            compacted = true;
+            localStorage.removeItem(unrelated);
+        }
+        return found;
+    });
+    try {
+        expect(() => readDatedWriterEvidence(owner, draftName))
+            .toThrow('Elenco copie datate modificato');
+    } finally {
+        keyMock.mockImplementation(originalKey);
+    }
+
+    expect(compacted).toBe(true);
+    expect(readDatedWriterEvidence(owner, draftName).map(x => x.values.weight).sort())
+        .toEqual(['75', '76']);
+});
+
 it('keeps an independent witness readable if a canonical write exhausts storage quota', () => {
     const owner = storageOwner();
     const name = 'draft:measurement:2026-09-11';

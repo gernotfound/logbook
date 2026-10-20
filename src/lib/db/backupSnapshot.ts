@@ -3,6 +3,7 @@ import { auth, getDb, ensureAppCheck } from '../firebase';
 import { captureSession, isCurrentSession } from '../sync/session';
 import { readLocal } from '../sync/localRepository';
 import { readDeviceValueStrict } from '../sync/deviceStorage';
+import { stableStorageKeyInventory } from '../sync/stableStorageKeyInventory';
 import { getCachedCatalog } from '../catalog/catalogService';
 import { applyRemoteDocuments, projectDocuments, type DocumentData } from '../sync/documentProjection';
 import { applySemanticOperations, coversVectorClock, parseSyncMeta, type SyncMeta } from '../sync/semanticProjection';
@@ -45,12 +46,8 @@ function deviceRecoveryName(key: string | null, owner: string): string | null {
  */
 function readStableDeviceRecovery(owner: string): Record<string, string> {
     const physicalKeys = (): Set<string> => {
-        const keys = new Set<string>();
-        for (let i = 0; i < localStorage.length; i++) {
-            const key = localStorage.key(i);
-            if (deviceRecoveryName(key, owner) !== null) keys.add(key!);
-        }
-        return keys;
+        const inventory = stableStorageKeyInventory('Le copie di recupero sono cambiate durante il backup. Riprova senza chiudere altre schede.');
+        return new Set([...inventory].filter(key => deviceRecoveryName(key, owner) !== null));
     };
     const before = physicalKeys();
     const device: Record<string, string> = {};

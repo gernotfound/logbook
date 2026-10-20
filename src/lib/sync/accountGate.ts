@@ -1,3 +1,4 @@
+import { stableStorageKeyInventory } from './stableStorageKeyInventory';
 import {
     readBrowserValueStrict,
     removeBrowserValue,
@@ -104,9 +105,9 @@ export function listPendingAccountDeletions(): {
     const markers: AccountDeletionMarker[] = [];
     const corrupt: AccountDeletionMarkerCorruptError[] = [];
     if (typeof localStorage === 'undefined') return { markers, corrupt };
-    for (let index = 0; index < localStorage.length; index++) {
-        const storageKey = localStorage.key(index);
-        if (!storageKey?.startsWith('logbook:v2:user:') || !storageKey.endsWith(suffix)) continue;
+    const inventory = stableStorageKeyInventory('Inventario marker cancellazione account modificato durante il recupero: copie preservate.');
+    for (const storageKey of inventory) {
+        if (!storageKey.startsWith('logbook:v2:user:') || !storageKey.endsWith(suffix)) continue;
         const owner = storageKey.slice('logbook:v2:'.length, -suffix.length);
         try {
             const marker = parse(owner, readBrowserValueStrict(storageKey));
