@@ -1,6 +1,7 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { FileSearch } from 'lucide-react';
 import { inspectBufferedRecoveryEvidence, type BufferedRecoveryEntry } from '../../lib/sync/bufferedDraftWriterIntent';
+import { inspectDatedRecoveryEvidence } from '../../lib/sync/datedDraftWriterIntent';
 import { captureSession, isActiveGuestSession, isCurrentSession, type SessionSnapshot } from '../../lib/sync/session';
 import { currentHealthConsentStatus, getGuestHealthConsentStatus, subscribeHealthConsent } from '../../lib/healthConsent';
 import { useAppStore } from '../../store/useAppStore';
@@ -68,7 +69,9 @@ export function BufferedRecoveryInspector() {
             if (!consentAllowed() || (dataOwner && dataOwner !== session.owner)) {
                 throw new Error('Sessione o consenso non verificati: anteprima non disponibile.');
             }
-            const entries = inspectBufferedRecoveryEvidence(session.owner);
+            const buffered = inspectBufferedRecoveryEvidence(session.owner);
+            const dated = inspectDatedRecoveryEvidence(session.owner);
+            const entries = [...buffered, ...dated];
             if (!isCurrentSession(session) || !consentAllowed()) {
                 throw new Error('Sessione o consenso cambiati durante la verifica.');
             }
@@ -87,7 +90,7 @@ export function BufferedRecoveryInspector() {
     return (
         <div className="settings-detail-card">
             <h2><FileSearch size={20} aria-hidden="true" /> Esamina bozze di recupero</h2>
-            <p className="settings-help">Puoi leggere le copie conservate quando più schede modificano lo stesso campo. Questa funzione non sceglie, modifica, elimina o sincronizza nulla.</p>
+            <p className="settings-help">Puoi leggere le copie conservate quando più schede modificano un allenamento o un modulo giornaliero. Questa funzione non sceglie, modifica, elimina o sincronizza nulla.</p>
             <p className="settings-help settings-warning">Il testo può contenere dati sulla salute. Conserva il Backup JSON originale in un luogo protetto prima di tentare altri recuperi.</p>
             <div className="settings-actions">
                 <button type="button" className="btn" onClick={inspect} disabled={!allowed}>
@@ -103,7 +106,7 @@ export function BufferedRecoveryInspector() {
                     {groups.size === 0
                         ? <p role="status" className="settings-help settings-help-last">Nessuna testimonianza indipendente disponibile. Le altre bozze non vengono esaminate qui.</p>
                         : <>
-                            <p className="settings-help">{shown.entries.length} {shown.entries.length === 1 ? 'copia conservata' : 'copie conservate'} in {groups.size} {groups.size === 1 ? 'campo' : 'campi'}. I nomi tecnici non provano l'appartenenza all'allenamento corrente.</p>
+                            <p className="settings-help">{shown.entries.length} {shown.entries.length === 1 ? 'copia conservata' : 'copie conservate'} in {groups.size} {groups.size === 1 ? 'campo' : 'campi'}. I nomi tecnici indicano il campo di origine, ma non provano che una copia sia quella da ripristinare.</p>
                             {[...groups].map(([draftName, entries]) => (
                                 <details key={draftName} className="settings-recovery-group">
                                     <summary className="disclosure-summary">{draftName} — {entries.length} {entries.length === 1 ? 'copia' : 'copie'}</summary>
