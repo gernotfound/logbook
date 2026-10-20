@@ -127,7 +127,7 @@ function readRecoverySlots(owner: string): Array<{ name: string; intent: Workout
         const prefix = prefixes.find(candidate => key.startsWith(candidate));
         if (prefix) keys.push({ key, id: key.slice(prefix.length) });
     }
-    return keys.sort((a, b) => a.key.localeCompare(b.key)).map(({ id }) => {
+    const scanned = keys.sort((a, b) => a.key.localeCompare(b.key)).map(({ id }) => {
         if (!tokenPattern.test(id)) throw new Error('Copia workout di recupero incompatibile: dati preservati.');
         const name = slotName(id);
         const raw = readDeviceValueStrict(name, owner);
@@ -137,8 +137,21 @@ function readRecoverySlots(owner: string): Array<{ name: string; intent: Workout
         catch { throw new Error('Copia workout corrotta: dati preservati.'); }
         const intent = parseIntent(parsed, owner);
         if (!intent || intent.intentId !== id) throw new Error('Identità della copia workout incoerente: dati preservati.');
-        return { name, intent };
+        return { name, intent, raw };
     });
+    // The first inventory can be internally stable while another tab adds a
+    // competing immutable witness during these authenticated value reads.
+    const after = stableStorageKeyInventory('Copie workout cambiate durante il recupero: dati preservati.');
+    const currentKeys = [...after].filter(key => prefixes.some(prefix => key.startsWith(prefix)));
+    if (currentKeys.length !== keys.length || keys.some(({ key }) => !after.has(key))) {
+        throw new Error('Copie workout cambiate durante il recupero: dati preservati.');
+    }
+    for (const slot of scanned) {
+        if (readDeviceValueStrict(slot.name, owner) !== slot.raw) {
+            throw new Error('Copia workout modificata durante la verifica: dati preservati.');
+        }
+    }
+    return scanned.map(({ name, intent }) => ({ name, intent }));
 }
 
 /** Never delete an independent edit: only a proved committed ancestry is pruned. */
