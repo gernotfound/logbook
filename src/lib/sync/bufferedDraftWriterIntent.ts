@@ -103,7 +103,9 @@ export function inspectBufferedRecoveryEvidence(owner: string): BufferedRecovery
 
 export function readBufferedWriterEvidence(owner: string, draftName: string): BufferedWriterEvidence[] {
     const names = ownerWriterNames(owner);
+    const revision = readDeviceConsentRevision(owner);
     const matches: BufferedWriterEvidence[] = [];
+    const scanned: BufferedWriterEvidence[] = [];
     for (const name of names) {
         const raw = readDeviceValueStrict(name, owner);
         if (raw === null) throw new Error('Intenzione bozza scomparsa durante la lettura.');
@@ -111,11 +113,25 @@ export function readBufferedWriterEvidence(owner: string, draftName: string): Bu
         // for an unrelated field must remain exportable without blocking edits here.
         // Malformed/unknown-owner records still fail closed before filtering.
         const evidence = parseWriterEvidence(name, owner, raw, false);
+        scanned.push(evidence);
         const record = JSON.parse(raw) as BufferedWriterIntent;
         if (record.draftName === draftName) {
             assertWorkoutSnapshotEpoch(owner, evidence.revision);
             matches.push(evidence);
             if (matches.length > 64) throw new Error('Troppe bozze concorrenti: esportazione di recupero necessaria.');
+        }
+    }
+    // Another tab may add a witness after the first stable inventory but
+    // before its values have been authenticated. Never infer uniqueness from
+    // that outdated list, including when the new witness is for this field.
+    const after = ownerWriterNames(owner);
+    if (after.size !== names.size || [...names].some(name => !after.has(name))
+        || readDeviceConsentRevision(owner) !== revision) {
+        throw new Error('Copie bufferizzate o consenso cambiati durante la lettura.');
+    }
+    for (const evidence of scanned) {
+        if (readDeviceValueStrict(evidence.name, owner) !== evidence.raw) {
+            throw new Error('Copia bufferizzata modificata durante la verifica.');
         }
     }
     return matches;
