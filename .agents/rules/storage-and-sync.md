@@ -36,6 +36,8 @@ La seconda copia del wrapped control NON è backup indipendente da IndexedDB/KEK
 
 **MUST:** finché conversione/cleanup non sono conclusi e verificati, le copie in chiaro, journal e metadata di recupero non si eliminano automaticamente. Fallimenti quota, tab legacy, AEAD, versioni future, Web Locks o browser storage bloccano la transizione senza cancellazione. Logout e account deletion rimuovono la chiave **dopo** la prova di pulizia dei ciphertext; server deletion richiede prova `complete`.
 
+**MUST (CRITICAL, inventario vault):** la scansione delle chiavi `localStorage` che autorizza un nuovo provisioning quando manca il controllo cifrato, o la conclusione della migrazione da record legacy, deve rilevare modifiche osservabili fra due inventari completi (anche chiavi non dell'owner) e indici mancanti/duplicati. In caso di instabilità bloccare la transizione, non generare una nuova KEK e mantenere i record originali per il retry/recupero. Il doppio inventario rileva corse osservabili ma non è uno snapshot atomico cross-tab; una chiave cifrata orfana senza controllo non autorizza il provisioning automatico.
+
 **VERIFY:** l'assenza di passphrase aggiuntiva limita la confidenzialità contro furto integrale del profilo browser o codice malevolo same-origin, che può raggiungere anche la wrapping key. Non è E2EE; dati solo offline possono andare persi se si perde il device/key. Non promettere recupero senza replica cloud.
 
 **MUST (CRITICAL):** le modifiche a un workout autenticato utilizzano un intento monotono nel record workout device-critical e una copia sincrona AEAD immutabile per ogni modifica (chiave casuale owner-scoped, non secondo journal).

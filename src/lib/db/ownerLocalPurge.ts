@@ -6,39 +6,11 @@ import {
 } from '../sync/localPurgeFence';
 import { deviceVaultKeyId } from '../sync/secureArchiveKeys';
 import { vaultControlMirrorId } from '../sync/secureArchiveControlRecovery';
+import { stableStorageKeyInventory } from '../sync/stableStorageKeyInventory';
 
 // This boundary owns the write fence and the physical device purge only.
 // Account/consent authorization and server-complete evidence stay with db_account.
 const LOCAL_PURGE_MAX_PASSES = 6;
-
-/**
- * A suspended tab can change localStorage while this tab enumerates numeric
- * indexes. A skipped ciphertext key must never be mistaken for proof that
- * it is safe to destroy the owner's wrapping key.
- */
-function stableStorageKeyInventory(): Set<string> {
-    const enumerate = (): Set<string> => {
-        const count = localStorage.length;
-        const keys = new Set<string>();
-        for (let index = 0; index < count; index++) {
-            const key = localStorage.key(index);
-            if (key === null || keys.has(key)) {
-                throw new Error('Inventario localStorage modificato durante la pulizia.');
-            }
-            keys.add(key);
-        }
-        if (localStorage.length !== count) {
-            throw new Error('Inventario localStorage modificato durante la pulizia.');
-        }
-        return keys;
-    };
-    const first = enumerate();
-    const second = enumerate();
-    if (first.size !== second.size || [...first].some(key => !second.has(key))) {
-        throw new Error('Inventario localStorage modificato durante la pulizia.');
-    }
-    return second;
-}
 
 function collectLocalPurgeKeys(owner: string): Set<string> {
     const keys = new Set([
@@ -54,7 +26,7 @@ function collectLocalPurgeKeys(owner: string): Set<string> {
     if (owner === 'guest') { keys.add('logbook_is_guest'); keys.add('logbook_guest_session_id_v1'); }
 
     const prefix = 'logbook:v2:' + owner + ':';
-    for (const storageKey of stableStorageKeyInventory()) {
+    for (const storageKey of stableStorageKeyInventory('Inventario localStorage modificato durante la pulizia.')) {
         if (storageKey.startsWith(prefix) && !storageKey.endsWith(':account-deletion')
             && !storageKey.endsWith(':secure-vault-control')) {
             keys.add(storageKey);
