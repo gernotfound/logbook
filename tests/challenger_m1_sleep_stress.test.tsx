@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { act, fireEvent, renderHook, screen } from '@testing-library/react';
+import { act, fireEvent, renderHook, screen, waitFor } from '@testing-library/react';
 import { renderWithProviders, emptyUserData } from './setup';
 import { useAppStore } from '../src/store/useAppStore';
 import { useDialogStore } from '../src/store/useDialogStore';
@@ -243,15 +243,17 @@ describe('Empirical Challenger: Sleep Format in HH:MM & State Integration Stress
             };
 
             const { container } = renderWithProviders(<SleepIntegratedView />, { userData: customUserData });
-            await act(async () => {
-                await Promise.resolve();
-                await new Promise((resolve) => setTimeout(resolve, 20));
-            });
 
             const deepInput = container.querySelector('#sleep-deep') as HTMLInputElement;
             const lightInput = container.querySelector('#sleep-light') as HTMLInputElement;
             const remInput = container.querySelector('#sleep-rem') as HTMLInputElement;
             const awakeInput = container.querySelector('#sleep-awake') as HTMLInputElement;
+            await waitFor(() => {
+                expect(deepInput.value).toBe('02:00');
+                expect(lightInput.value).toBe('04:00');
+                expect(remInput.value).toBe('01:30');
+                expect(awakeInput.value).toBe('00:30');
+            });
 
             // Clear all optional phase inputs
             act(() => {
@@ -264,18 +266,20 @@ describe('Empirical Challenger: Sleep Format in HH:MM & State Integration Stress
             const saveBtn = Array.from((container.querySelectorAll('button') as NodeListOf<HTMLButtonElement>)).find(b => b.textContent?.includes('Salva sonno'));
             expect(saveBtn).toBeDefined();
 
-            await act(async () => {
-                fireEvent.click(saveBtn!);
-                await new Promise((resolve) => setTimeout(resolve, 50));
-            });
-
-            const state = useAppStore.getState();
-            const day = state.userData?.nutrition?.[today];
-            expect(day?.sleepHours).toBe('08:00');
-            expect(day?.sleepDeep).toBeUndefined();
-            expect(day?.sleepLight).toBeUndefined();
-            expect(day?.sleepRem).toBeUndefined();
-            expect(day?.sleepAwake).toBeUndefined();
+            expect([deepInput.value, lightInput.value, remInput.value, awakeInput.value])
+                .toEqual(['', '', '', '']);
+            await act(async () => { fireEvent.click(saveBtn!); });
+            // Durable Domain Operations are asynchronous. Fixed 50 ms sleeps
+            // can observe a pre-commit store even when the save will succeed.
+            await waitFor(() => {
+                const persisted = useAppStore.getState().userData?.nutrition?.[today];
+                expect(persisted?.sleepHours).toBe('08:00');
+                expect(persisted?.sleepDeep).toBeUndefined();
+                expect(persisted?.sleepLight).toBeUndefined();
+                expect(persisted?.sleepRem).toBeUndefined();
+                expect(persisted?.sleepAwake).toBeUndefined();
+            }, { timeout: 5000 });
+            const day = useAppStore.getState().userData?.nutrition?.[today];
             // Verify existing nutrition fields were not destroyed
             expect(day?.kcal).toBe(2400);
             expect(day?.carbs).toBe(300);
@@ -299,13 +303,13 @@ describe('Empirical Challenger: Sleep Format in HH:MM & State Integration Stress
             };
 
             const { container } = renderWithProviders(<SleepIntegratedView />, { userData: customUserData });
-            await act(async () => {
-                await Promise.resolve();
-                await new Promise((resolve) => setTimeout(resolve, 20));
-            });
 
             const remInput = container.querySelector('#sleep-rem') as HTMLInputElement;
             const awakeInput = container.querySelector('#sleep-awake') as HTMLInputElement;
+            await waitFor(() => {
+                expect(remInput.value).toBe('01:00');
+                expect(awakeInput.value).toBe('00:30');
+            });
 
             act(() => {
                 fireEvent.change(remInput, { target: { value: '' } });
@@ -314,17 +318,16 @@ describe('Empirical Challenger: Sleep Format in HH:MM & State Integration Stress
 
             const saveBtn = Array.from((container.querySelectorAll('button') as NodeListOf<HTMLButtonElement>)).find(b => b.textContent?.includes('Salva sonno'));
 
-            await act(async () => {
-                fireEvent.click(saveBtn!);
-                await new Promise((resolve) => setTimeout(resolve, 50));
-            });
-
-            const day = useAppStore.getState().userData?.nutrition?.[today];
-            expect(day?.sleepHours).toBe('07:30');
-            expect(day?.sleepDeep).toBe('01:30');
-            expect(day?.sleepLight).toBe('04:30');
-            expect(day?.sleepRem).toBeUndefined();
-            expect(day?.sleepAwake).toBeUndefined();
+            expect([remInput.value, awakeInput.value]).toEqual(['', '']);
+            await act(async () => { fireEvent.click(saveBtn!); });
+            await waitFor(() => {
+                const persisted = useAppStore.getState().userData?.nutrition?.[today];
+                expect(persisted?.sleepHours).toBe('07:30');
+                expect(persisted?.sleepDeep).toBe('01:30');
+                expect(persisted?.sleepLight).toBe('04:30');
+                expect(persisted?.sleepRem).toBeUndefined();
+                expect(persisted?.sleepAwake).toBeUndefined();
+            }, { timeout: 5000 });
         });
     });
 
