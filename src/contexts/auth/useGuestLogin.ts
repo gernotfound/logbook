@@ -7,7 +7,7 @@ import type { UserData } from '../../types';
 import { getCachedCatalog, getInMemoryCatalog, isCatalogInMemory } from '../../lib/catalog/catalogService';
 import { resolveEffectiveExercises, resolveEffectiveFoods } from '../../lib/catalog/deltaResolver';
 import { getResolvedDefaultUserData } from './defaultUserData';
-import { activateGuestSession, captureSession, isActiveGuestSession, isCurrentSession, GUEST_REVOCATION_KEY, GUEST_SESSION_KEY } from '../../lib/sync/session';
+import { activateGuestSession, captureSession, isActiveGuestSession, isCurrentSession, type SessionSnapshot, GUEST_REVOCATION_KEY, GUEST_SESSION_KEY } from '../../lib/sync/session';
 import { withGuestLifecycleLock } from '../../lib/sync/guestLifecycleLock';
 import { readBrowserValueStrict, removeBrowserValue, writeBrowserValue } from '../../lib/sync/browserStorage';
 import { clearAuthenticatedOwnerHint } from '../../lib/sync/authOwnerHint';
@@ -15,6 +15,11 @@ import { ensureLocalVaultReady } from '../../lib/sync/secureArchiveUnlockFlow';
 import { isVaultUnlocked } from '../../lib/sync/secureArchiveSession';
 
 export const GUEST_KEY = 'logbook_is_guest';
+
+/** The same guard used at both asynchronous guest bootstrap boundaries. */
+export function isGuestVaultReadinessCurrent(session: SessionSnapshot): boolean {
+    return isCurrentSession(session) && isVaultUnlocked('guest');
+}
 
 type GuestMigrationStatus = 'idle' | 'pending' | 'failed';
 type GuestLoginDependencies = {
@@ -62,7 +67,7 @@ export function useGuestLogin({
         if (!activatedGuestId || !isActiveGuestSession()
             || readBrowserValueStrict(GUEST_SESSION_KEY) !== activatedGuestId) return;
         const guestSession = captureSession();
-        const canPublishGuest = () => isCurrentSession(guestSession) && isVaultUnlocked('guest');
+        const canPublishGuest = () => isGuestVaultReadinessCurrent(guestSession);
         await ensureLocalVaultReady('guest');
         // A canceled readiness Promise may resolve without an unlocked vault.
         if (!canPublishGuest()) return;
