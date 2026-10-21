@@ -344,6 +344,45 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
         expect(isLocalPurgePending(owner)).toBe(true);
     });
 
+    it('never treats an exact matching historical v1 fingerprint as proof of ownership', async () => {
+        const owner = 'user:test-user-id';
+        const legacyKey = 'draft_measurement';
+        const value = 'private-draft-from-another-generation';
+        const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
+        const hash = Array.from(new Uint8Array(bytes), byte => byte.toString(16).padStart(2, '0')).join('');
+        const hashes: (string | null)[] = Array(13).fill(null);
+        hashes[4] = hash; // Physical v1 fingerprint slot of draft_measurement.
+        const snapshotKey = 'logbook:local-purge-legacy-snapshot:v1:' + owner;
+        const snapshot = JSON.stringify({ version: 1, owner, hashes });
+        localStorage.setItem(snapshotKey, snapshot);
+        localStorage.setItem(legacyKey, value);
+        beginLocalPurge(owner);
+
+        await expect(DB.purgeAllLocalUserData(owner)).rejects.toThrow('senza proprietario verificabile');
+        expect(localStorage.getItem(legacyKey)).toBe(value);
+        expect(localStorage.getItem(snapshotKey)).toBe(snapshot);
+        expect(isLocalPurgeIncomplete(owner)).toBe(true);
+        expect(idb.del).not.toHaveBeenCalled();
+    });
+
+    it('rejects a new legacy business value introduced during the final awaited journal preflight', async () => {
+        const { auth } = await import('../src/lib/firebase');
+        const original = 'other-session-data-during-journal-read';
+        const read = vi.spyOn(localRepository, 'readLocal').mockImplementationOnce(async () => {
+            localStorage.setItem('draft_routine', original);
+            return undefined;
+        });
+        try {
+            await expect(DB.secureLogOut()).rejects.toThrow('senza proprietario verificabile');
+            expect(auth.signOut).not.toHaveBeenCalled();
+            expect(idb.del).not.toHaveBeenCalled();
+            expect(isLocalPurgePending(storageOwner())).toBe(false);
+            expect(localStorage.getItem('draft_routine')).toBe(original);
+        } finally {
+            read.mockRestore();
+        }
+    });
+
     it('does not claim a guest migration intent as data belonging to an authenticated owner', async () => {
         // Auth creates this ownerless intent before an account UID exists.
         // A different account's purge has no proof it owns the intent, even
