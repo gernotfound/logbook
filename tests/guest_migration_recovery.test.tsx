@@ -71,7 +71,7 @@ describe('guest migration crash recovery boundary', () => {
     it('keeps the guest marker, policy and guest mode when the authenticated local commit fails', async () => {
         const { cloud, guest } = fixtures();
         localStorage.setItem('logbook_is_guest', 'true');
-        beginGuestMigrationIntent('merge', 'recovery', { uid: user.uid });
+        await beginGuestMigrationIntent('merge', 'recovery', { uid: user.uid });
         useAppStore.getState().setUserData(guest);
 
         vi.mocked(DB.loadCloudPayload).mockResolvedValueOnce({
@@ -104,7 +104,7 @@ describe('guest migration crash recovery boundary', () => {
     it('retires the guest marker only after the authenticated envelope is durable and before replication', async () => {
         const { cloud, guest } = fixtures();
         localStorage.setItem('logbook_is_guest', 'true');
-        beginGuestMigrationIntent('merge', 'recovery', { uid: user.uid });
+        await beginGuestMigrationIntent('merge', 'recovery', { uid: user.uid });
         useAppStore.getState().setUserData(guest);
         onlineSpy = vi.spyOn(window.navigator, 'onLine', 'get').mockReturnValue(false);
 
@@ -142,7 +142,7 @@ describe('guest migration crash recovery boundary', () => {
     it('creates a durable authenticated base when a new account has no cloud payload yet', async () => {
         const { guest } = fixtures();
         localStorage.setItem('logbook_is_guest', 'true');
-        beginGuestMigrationIntent('merge', 'recovery', { uid: user.uid });
+        await beginGuestMigrationIntent('merge', 'recovery', { uid: user.uid });
         useAppStore.getState().setUserData(guest);
         onlineSpy = vi.spyOn(window.navigator, 'onLine', 'get').mockReturnValue(false);
 
