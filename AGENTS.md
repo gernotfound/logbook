@@ -209,7 +209,7 @@ Repository e provider esterni sono fonti distinte. GitHub ruleset, Firebase/Goog
 
 **MUST:** Sentry resta limitato a errori/anomalie tecniche sanitizzati, minimizzati e autorizzati: non inviare intenzionalmente UID, dati salute, token o eventi comportamentali; non attivare Replay, tracing, logging, metriche o Analytics.
 
-- **MUST:** code diagnostiche persistenti soltanto con AEAD owner-scoped e vault disponibile; in caso contrario usare il fallback in memoria previsto, senza creare nuove copie plaintext. Mantenere compatibilità e retention legacy finché necessarie.
+- **MUST:** code diagnostiche persistenti soltanto con AEAD owner-scoped e vault disponibile; in caso contrario usare il fallback in memoria previsto, senza creare nuove copie plaintext. Mantenere i limiti di capacità e la retention dei report correnti, senza importare o cancellare code globali pre-lancio.
 - **MUST:** source map e token di upload restano nel processo build Production, non negli asset pubblici.
 - **MUST:** non promettere anonimato quando esistono identificativi tecnici. Le modifiche materiali alla Privacy Policy seguono `LEGAL_VERSIONS.privacy`, indipendente dalla versione PWA.
 
