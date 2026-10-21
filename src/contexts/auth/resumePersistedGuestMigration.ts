@@ -15,7 +15,6 @@ import type { UserData } from '../../types';
 type GuestMigrationStatus = 'idle' | 'pending' | 'failed';
 type RecoveryDependencies = {
     guestKey: string;
-    isGuestActiveStrict: () => boolean;
     isGuestRef: RefObject<boolean>;
     migrationDataRef: RefObject<UserData | null>;
     setIsGuest: Dispatch<SetStateAction<boolean>>;
@@ -31,7 +30,7 @@ export async function resumePersistedGuestMigration(
     user: User, isCurrentRun: () => boolean, dependencies: RecoveryDependencies,
 ): Promise<boolean> {
     const {
-        guestKey, isGuestActiveStrict, isGuestRef, migrationDataRef,
+        guestKey, isGuestRef, migrationDataRef,
         setIsGuest, setGuestMigrationStatus, setSyncing,
         setSaveError, clearGuestMigrationSyncRecovery,
     } = dependencies;
