@@ -27,8 +27,8 @@ export function storeEncryptedTelemetry(owner: string, serialized: string): bool
   }
   const ciphertext = sealLocalText(secret, owner, key, serialized);
   writeBrowserValue(key, ciphertext);
-  // Do not remove any plaintext left by an older tab unless the new copy
-  // was durably written and successfully authenticated.
+  // Confirm the owner-scoped ciphertext is durable and authenticated before
+  // reporting a successful best-effort persistence attempt.
   const stored = readBrowserValueStrict(key);
   if (stored !== ciphertext || openLocalText(secret, owner, key, stored) !== serialized) {
     return false;
