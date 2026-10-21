@@ -41,8 +41,8 @@ export function attachAuthRedirectRecovery({
     // Capture the intent receipt before Auth's first state callback can clear
     // the shared redirect flag. A Firebase auth event alone is not evidence
     // that this tab's redirect completed with that identity.
-    const expectedIntentId = environment.read(awaitingRedirectKey) === 'true'
-        ? readGuestMigrationTabReceipt() : null;
+    const recoveringRedirect = environment.read(awaitingRedirectKey) === 'true';
+    const expectedIntentId = recoveringRedirect ? readGuestMigrationTabReceipt() : null;
     const handleAuthVisibilityChange = async () => {
         if (redirectLaunchFailedRef.current) return;
         if (environment.visibility() !== 'visible' || environment.read(awaitingRedirectKey) !== 'true') return;
@@ -78,12 +78,12 @@ export function attachAuthRedirectRecovery({
                 }
             }
         }
-        environment.remove(awaitingRedirectKey);
+        if (recoveringRedirect) environment.remove(awaitingRedirectKey);
     }).catch(() => {
         if (expectedIntentId) {
             rejectGuestMigrationAuthWaiters(expectedIntentId, 'Ripresa redirect Google non riuscita.');
         }
-        environment.remove(awaitingRedirectKey);
+        if (recoveringRedirect) environment.remove(awaitingRedirectKey);
         console.error('Ripresa redirect Google non riuscita.');
         setSaveError("Accesso Google non completato. Riprova.");
     });
