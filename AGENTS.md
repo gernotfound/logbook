@@ -13,6 +13,14 @@ Ogni regola in questo documento è classificata:
 
 Un `MUST` è un contratto da rispettare, non prova che codice o Production lo soddisfino già. Se codice, test e documentazione divergono, raccogliere evidenze prima di decidere quale fonte riallineare.
 
+## Nuova baseline di lancio — fresh start (decisione del product owner, 21/10/2026)
+
+**MUST (perimetro supportato):** il product owner dichiara che **non esistono dati, account, copie browser o backup di utenti, sviluppo o testing da recuperare**. A partire da questa decisione, il prodotto non supporta PWA e formati storage/backup pre-lancio: **non sviluppare conversioni, fallback, recovery, export o UX dedicati a dati legacy ipotetici**. Usare soltanto il formato e i namespace correnti indicati dal codice e dai manifest effettivi. Le versioni storiche già dismesse rimangono fuori contratto; i quattro contatori di schema/protocollo restano indipendenti dalla release applicativa.
+
+**MUST (nuovi dati e protezione continuativa):** il fresh start non autorizza la perdita di dati **creati da ora in avanti**, né elimina i requisiti di isolamento account/guest, cifratura e chiavi, journal/consenso, conflitti fra schede della versione corrente, Web Locks, logout, eliminazione account, export/import nel formato supportato, ripresa dopo crash e fail-closed su storage corrotto o di versione futura. Il purge corrente elimina esclusivamente i dati dell'owner verificato e i marker guest/Auth che gli appartengono; non adotta né elimina chiavi business globali/IDB pre-lancio senza owner. Non eseguire reset di Firebase/Firestore/Auth, eliminazioni di dati live o bypass di CI/Rules sulla sola base di questa dichiarazione. L'asserita assenza di dati è un'informazione fornita dal product owner, **non una verifica indipendente dei provider**.
+
+**SHOULD:** rimuovere codice e test destinati esclusivamente alla compatibilità pre-lancio quando non servono ai dati e alla ripresa della release supportata; aggiornare la documentazione collegata nella stessa PR. Nessun obbligo di offrire una procedura manuale di recupero/retirement pre-lancio senza evidenze di un caso reale.
+
 ## Fonte di verità e gestione del drift
 
 1. Il repository GitHub `gernotfound/logbook`, al commit realmente letto, è la fonte di verità tecnica.
@@ -50,7 +58,7 @@ Sono **CRITICAL** almeno: dati utente, IndexedDB/persistenza, sincronizzazione, 
 - **MUST:** risolvere la root cause, non applicare workaround locali che lasciano invarianti incoerenti.
 - **MUST:** mantenere il diff minimo rispetto all'obiettivo e aggiungere test di regressione quando appropriato.
 - **MUST:** analisi in sola lettura = nessuna modifica. Un incarico operativo non autorizza cancellazioni irreversibili di dati reali, bypass di protezioni o modifiche IAM/secret live estranee.
-- **MUST:** una motivazione storica pre-lancio non dimostra assenza attuale di account, dati, backup o vecchie PWA installate.
+- **MUST:** non confondere la decisione fresh start con una verifica live di provider/browser; i nuovi dati e i percorsi correnti rimangono protetti anche quando vecchie versioni non sono più supportate.
 
 ## Diagnosi e audit
 
