@@ -49,8 +49,9 @@ describe('serialized guest migration intent belongs to an exact Auth attempt', (
                 new Promise<never>((_resolve, reject) => { fail = reject; }));
             const { result } = google(true);
             const pending = result.current[action]('merge');
+            await waitFor(() => expect(localStorage.getItem(KEY)).not.toBeNull());
             const old = localStorage.getItem(KEY);
-            expect(old).not.toBeNull();
+            await waitFor(() => expect(fail).toBeTypeOf('function'));
 
             await expect(beginGuestMigrationIntent('skip', 'email', { email: 'later@example.test' }))
                 .rejects.toThrow('Un altro tentativo');
