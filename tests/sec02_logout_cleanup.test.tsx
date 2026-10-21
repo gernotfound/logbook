@@ -8,6 +8,7 @@ import { beginLocalPurge, isLocalPurgeIncomplete, isLocalPurgePending } from '..
 import * as localRepository from '../src/lib/sync/localRepository';
 import { localStorageMock, mockFirebaseAuth } from './setup';
 import { markAccountDeletion, isAccountDeletionPending } from '../src/lib/sync/accountGate';
+import { beginGuestMigrationIntent } from '../src/lib/auth/guestMigrationIntent';
 
 vi.mock('idb-keyval', () => ({
     get: vi.fn(),
@@ -241,7 +242,7 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
         expect(isLocalPurgePending('user:test-user-id')).toBe(true);
     });
 
-    it('preserves a replacement of an existing legacy key during asynchronous cleanup', async () => {
+    it('keeps a concurrently replaced guest Auth intent without blocking unrelated account cleanup', async () => {
         localStorage.setItem('guest_migration_intent_v1', 'old-session-intent');
         let started!: () => void;
         let finish!: () => void;
@@ -256,7 +257,7 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
         localStorage.setItem('guest_migration_intent_v1', 'new-session-intent');
         finish();
 
-        await expect(operation).rejects.toThrow('Pulizia locale incompleta');
+        await expect(operation).resolves.toBeUndefined();
         expect(localStorage.getItem('guest_migration_intent_v1')).toBe('new-session-intent');
         expect(isLocalPurgePending('user:test-user-id')).toBe(true);
     });
@@ -302,8 +303,8 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
         expect(isLocalPurgeIncomplete('user:test-user-id')).toBe(true);
     });
 
-    it('retains a replaced global guest migration intent across repeated purge attempts', async () => {
-        localStorage.setItem('guest_migration_intent_v1', 'old-intent');
+    it('retains a replaced legacy ownerless policy across repeated purge attempts', async () => {
+        localStorage.setItem('guest_migration_policy', 'old-intent');
         let started!: () => void;
         let finish!: () => void;
         const entered = new Promise<void>(resolve => { started = resolve; });
@@ -311,11 +312,11 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
         vi.mocked(idb.del).mockImplementationOnce(async () => { started(); await blocked; });
         const operation = DB.purgeAllLocalUserData();
         await entered;
-        localStorage.setItem('guest_migration_intent_v1', 'new-intent');
+        localStorage.setItem('guest_migration_policy', 'new-intent');
         finish();
         await expect(operation).rejects.toThrow('Pulizia locale incompleta');
         await expect(DB.purgeAllLocalUserData()).rejects.toThrow('senza provenienza');
-        expect(localStorage.getItem('guest_migration_intent_v1')).toBe('new-intent');
+        expect(localStorage.getItem('guest_migration_policy')).toBe('new-intent');
         expect(isLocalPurgeIncomplete('user:test-user-id')).toBe(true);
     });
 
@@ -340,6 +341,60 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
         expect(localStorage.getItem('draft_measurement')).toBeNull();
         expect(localStorage.getItem(fingerprintKey)).toBeNull();
         expect(isLocalPurgeIncomplete(owner)).toBe(false);
+        expect(isLocalPurgePending(owner)).toBe(true);
+    });
+
+    it('does not claim a guest migration intent as data belonging to an authenticated owner', async () => {
+        // Auth creates this ownerless intent before an account UID exists.
+        // A different account's purge has no proof it owns the intent, even
+        // when the intent predates the purge and the shared value is stable.
+        const intent = beginGuestMigrationIntent('merge', 'google');
+        const raw = localStorage.getItem('guest_migration_intent_v1');
+        expect(raw).toContain(intent.id);
+
+        await DB.purgeAllLocalUserData('user:test-user-id');
+
+        expect(localStorage.getItem('guest_migration_intent_v1')).toBe(raw);
+        expect(isLocalPurgePending('user:test-user-id')).toBe(true);
+    });
+
+    it('preserves guest migration ownership through an interrupted account purge and a retry', async () => {
+        const intent = beginGuestMigrationIntent('skip', 'email', { email: 'other@example.test' });
+        const raw = localStorage.getItem('guest_migration_intent_v1');
+        vi.mocked(idb.del).mockRejectedValueOnce(new Error('interrupted IndexedDB cleanup'));
+
+        await expect(DB.purgeAllLocalUserData('user:test-user-id')).rejects.toThrow('Pulizia locale incompleta');
+        const frozen = localStorage.getItem('logbook:local-purge-legacy-snapshot:v1:user:test-user-id');
+        expect(frozen).not.toBeNull();
+        // A newly created snapshot records null for guest/Auth ownership.
+        const record = JSON.parse(frozen!) as { hashes: Array<string | null> };
+        expect(record.hashes[11]).toBeNull();
+        expect(localStorage.getItem('guest_migration_intent_v1')).toBe(raw);
+
+        await DB.purgeAllLocalUserData('user:test-user-id');
+
+        expect(localStorage.getItem('guest_migration_intent_v1')).toBe(raw);
+        expect(raw).toContain(intent.id);
+        expect(localStorage.getItem('logbook:local-purge-legacy-snapshot:v1:user:test-user-id')).toBeNull();
+    });
+
+    it('resumes an older fingerprint snapshot without claiming guest/Auth ownership', async () => {
+        const owner = 'user:test-user-id';
+        const key = 'logbook:local-purge-legacy-snapshot:v1:' + owner;
+        const original = beginGuestMigrationIntent('merge', 'google');
+        const raw = localStorage.getItem('guest_migration_intent_v1');
+        // A frozen snapshot from 1.114.0 could have tracked the ownerless
+        // guest intent. It is not proof that the old account owned it.
+        const hashes: (string | null)[] = Array(13).fill(null);
+        hashes[11] = 'a'.repeat(64);
+        localStorage.setItem(key, JSON.stringify({ version: 1, owner, hashes }));
+        beginLocalPurge(owner);
+
+        await DB.purgeAllLocalUserData(owner);
+
+        expect(localStorage.getItem('guest_migration_intent_v1')).toBe(raw);
+        expect(raw).toContain(original.id);
+        expect(localStorage.getItem(key)).toBeNull();
         expect(isLocalPurgePending(owner)).toBe(true);
     });
 

@@ -23,6 +23,14 @@ const UNSCOPED_LEGACY_KEYS = [
     'guest_migration_intent_v1', 'guest_migration_policy',
 ] as const;
 const UNSCOPED_LEGACY_KEY_SET: ReadonlySet<string> = new Set(UNSCOPED_LEGACY_KEYS);
+
+// The active guest→account migration intent belongs to the guest/Auth flow,
+// not to any account being signed out or deleted. The guest reset still owns it.
+// Keep the historical fingerprint vector shape for resumed v1 purge evidence.
+const GUEST_AUTH_INTENT = 'guest_migration_intent_v1';
+const purgeOwnsLegacyKey = (owner: string, key: string): boolean =>
+    key !== GUEST_AUTH_INTENT || owner === 'guest';
+
  
 // A purge restart must not adopt unowned values created after its first attempt.
 // Persist only SHA-256 fingerprints (never plaintext recovery data) BEFORE
@@ -38,12 +46,15 @@ async function fingerprintLegacyValue(value: string | null): Promise<string | nu
 
 async function readFrozenLegacySnapshot(owner: string, resuming: boolean): Promise<Map<string, string | null>> {
     const key = purgeLegacySnapshotKey(owner);
-    const initial = new Map(UNSCOPED_LEGACY_KEYS.map(name => [name, readBrowserValueStrict(name)]));
+    const initial = new Map(UNSCOPED_LEGACY_KEYS.map(name => [
+        name, purgeOwnsLegacyKey(owner, name) ? readBrowserValueStrict(name) : null,
+    ]));
     const existing = readBrowserValueStrict(key);
     const hashes = await Promise.all([...initial.values()].map(fingerprintLegacyValue));
     // Web Crypto is async. Do not publish a baseline for values that were
     // modified while computing their fingerprints.
-    if (UNSCOPED_LEGACY_KEYS.some(name => readBrowserValueStrict(name) !== initial.get(name))) {
+    if (UNSCOPED_LEGACY_KEYS.some(name => purgeOwnsLegacyKey(owner, name)
+        && readBrowserValueStrict(name) !== initial.get(name))) {
         throw new Error('Chiavi legacy cambiate prima della registrazione della pulizia.');
     }
     if (resuming) {
@@ -94,7 +105,7 @@ async function readFrozenLegacySnapshot(owner: string, resuming: boolean): Promi
 
 
 function collectLocalPurgeKeys(owner: string): Set<string> {
-    const keys = new Set<string>(UNSCOPED_LEGACY_KEYS);
+    const keys = new Set<string>(UNSCOPED_LEGACY_KEYS.filter(key => purgeOwnsLegacyKey(owner, key)));
     // An in-flight Google login redirect belongs to the AUTH flow, not to
     // the account or guest archive being removed. It can begin while an
     // older account's IndexedDB cleanup is still pending.
