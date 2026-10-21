@@ -4,6 +4,7 @@ import {
   telemetryHub,
 } from '../../src/lib/telemetryHub';
 import { installTelemetryTestHarness, mockSetDoc } from './telemetryTestHarness';
+import { seedCurrentTelemetryQueue } from './seedCurrentQueue';
 
 describe('Unified Telemetry Hub E2E Suite — Tier 2 Product', () => {
   installTelemetryTestHarness();
@@ -181,13 +182,10 @@ describe('Unified Telemetry Hub E2E Suite — Tier 2 Product', () => {
         telemetryHub.init();
         telemetryHub.setUserId('user_partial_replay');
 
-        localStorage.setItem(
-          telemetryHub.getQueueStorageKey(),
-          JSON.stringify([
+        await seedCurrentTelemetryQueue('user_partial_replay', [
             { id: '1', timestamp: Date.now(), itemType: 'event', payload: { type: 'item1', context: getTelemetryContext(), userId: 'user_partial_replay', timestamp: Date.now() } },
             { id: '2', timestamp: Date.now(), itemType: 'event', payload: { type: 'item2', context: getTelemetryContext(), userId: 'user_partial_replay', timestamp: Date.now() } },
-          ])
-        );
+          ]);
 
         mockSetDoc
           .mockResolvedValueOnce(true)
