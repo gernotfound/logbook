@@ -21,10 +21,6 @@ const GUEST_AUTH_INTENT = 'guest_migration_intent_v1';
 function collectLocalPurgeKeys(owner: string): Set<string> {
     const keys = new Set<string>();
     // Redirects belong to Auth and are never deleted by owner archive purge.
-    const ownerUid = owner.startsWith('user:') ? owner.slice('user:'.length) : null;
-    if (ownerUid && localStorage.getItem('logbook_guest_migration_sync_recovery') === ownerUid) {
-        keys.add('logbook_guest_migration_sync_recovery');
-    }
     if (owner === 'guest') {
         keys.add('logbook_is_guest');
         keys.add('logbook_guest_session_id_v1');
@@ -112,11 +108,6 @@ export async function purgeOwnerLocalData(owner: string, resumeOnly = false, gat
             for (const storageKey of keys) {
                 gate?.assertStillSafe?.();
 
-                // This global migration handoff is owner-labeled by its VALUE,
-                // not by its name. Another account may replace it between
-                // inventory and removeItem: only erase a matching owner UID.
-                if (storageKey === 'logbook_guest_migration_sync_recovery'
-                    && localStorage.getItem(storageKey) !== owner.slice('user:'.length)) continue;
                 if (storageKey === GUEST_AUTH_INTENT
                     && readBrowserValueStrict(GUEST_AUTH_INTENT) !== initialGuestIntent) {
                     throw new Error('Intento Auth guest cambiato durante la pulizia.');

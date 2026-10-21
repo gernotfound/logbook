@@ -32,9 +32,9 @@ const defaultRunTransaction = vi.mocked(runTransaction).getMockImplementation();
 
 const GUEST_KEY = 'logbook_is_guest';
 const OVERLAY_SESSION_KEY = 'logbook_guest_login_overlay';
-const SYNC_RECOVERY_KEY = 'logbook_guest_migration_sync_recovery';
 const parse = (value: unknown) => UserDataSchema.parse(value) as unknown as UserData;
 const user = { uid: 'guest-restart-user', email: 'restart@example.com', displayName: 'Guest Restart' } as any;
+const SYNC_RECOVERY_KEY = `logbook:v2:user:${user.uid}:guest-migration-sync-recovery`;
 let onlineSpy: { mockRestore: () => void; mockReturnValue: (value: boolean) => unknown } | undefined;
 
 function fixtures() {
