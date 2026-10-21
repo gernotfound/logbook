@@ -2,13 +2,11 @@ import { useCallback, type RefObject } from 'react';
 import { auth, provider, signInWithPopup, signInWithRedirect } from '../../lib/firebase';
 import { useAppStore } from '../../store/useAppStore';
 import { captureSession, isCurrentSession } from '../../lib/sync/session';
-import { writeBrowserValue, tryRemoveBrowserValue } from '../../lib/sync/browserStorage';
+import { writeAuthRedirectMarker, tryRemoveAuthRedirectMarker } from '../../lib/auth/authRedirectMarker';
 import { beginGuestMigrationIntent, clearGuestMigrationIntent, confirmGuestMigrationCredential, rejectGuestMigrationAuthWaiters } from '../../lib/auth/guestMigrationIntent';
 import { classifyGooglePopupFailure } from './googlePopup';
 import type { GuestMigrationPolicy } from '../AuthContextDef';
 import type { UserData } from '../../types';
-
-const AWAITING_REDIRECT_KEY = 'logbook_awaiting_redirect';
 
 // An auth failure owns only the attempt it started. A stale popup callback
 // must not erase a guest migration intent replaced by a newer login/tab.
@@ -32,13 +30,13 @@ export function useGoogleAuthActions({
     const startGoogleRedirect = useCallback(async () => {
         redirectLaunchFailedRef.current = false;
         try {
-            writeBrowserValue(AWAITING_REDIRECT_KEY, 'true');
+            writeAuthRedirectMarker('true');
             await signInWithRedirect(auth, provider);
         } catch (error) {
             redirectLaunchFailedRef.current = true;
-            if (!tryRemoveBrowserValue(AWAITING_REDIRECT_KEY)) {
+            if (!tryRemoveAuthRedirectMarker()) {
                 try {
-                    writeBrowserValue(AWAITING_REDIRECT_KEY, 'failed');
+                    writeAuthRedirectMarker('failed');
                 } catch {
                     console.error('Impossibile rendere non attivo lo stato locale dopo un redirect Google non avviato.');
                 }

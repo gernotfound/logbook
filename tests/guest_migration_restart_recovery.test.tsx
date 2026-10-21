@@ -28,6 +28,9 @@ import { bootstrapAuthenticatedSession } from '../src/contexts/auth/bootstrapAut
 import { createAndMigrateVault } from '../src/lib/sync/secureArchiveMigration';
 import { lockAllVaults } from '../src/lib/sync/secureArchiveSession';
 import { saveWorkoutDeviceIntent } from '../src/lib/sync/workoutDeviceIntent';
+import { markGuestMigrationSyncRecovery } from '../src/lib/auth/guestMigrationSyncRecovery';
+import { GUEST_SESSION_KEY } from '../src/lib/sync/sessionKeys';
+import { resumePersistedGuestMigration } from '../src/contexts/auth/resumePersistedGuestMigration';
 
 const defaultRunTransaction = vi.mocked(runTransaction).getMockImplementation();
 
@@ -114,7 +117,6 @@ describe('guest migration restart recovery', () => {
         const markRecovery = vi.fn();
 
         await bootstrapAuthenticatedSession(user, () => true, {
-            awaitingRedirectKey: 'logbook_awaiting_redirect',
             guestKey: GUEST_KEY,
             isGuestActiveStrict,
             readGuestMigrationRecoveryStrict: () => false,
@@ -172,7 +174,7 @@ describe('guest migration restart recovery', () => {
         // recovery marker already makes storageOwner() resolve to the account.
         localStorage.setItem(GUEST_KEY, 'true');
         useAppStore.setState({ userData: guest, dataOwner: 'guest', localWorkout: null });
-        localStorage.setItem(SYNC_RECOVERY_KEY, user.uid);
+        markGuestMigrationSyncRecovery(user.uid);
 
         render(<AuthProvider><App /></AuthProvider>);
 
@@ -204,7 +206,7 @@ describe('guest migration restart recovery', () => {
         saveWorkoutDeviceIntent('user:' + user.uid, initial.activeWorkout!, updatedWorkout, initial.activeWorkout!);
         localStorage.setItem(GUEST_KEY, 'true');
         useAppStore.setState({ userData: guest, dataOwner: 'guest', localWorkout: null });
-        localStorage.setItem(SYNC_RECOVERY_KEY, user.uid);
+        markGuestMigrationSyncRecovery(user.uid);
 
         render(<AuthProvider><App /></AuthProvider>);
 
@@ -220,21 +222,49 @@ describe('guest migration restart recovery', () => {
     });
 
     it('retains the recovery marker and blocks account data if the authenticated envelope is missing', async () => {
-        localStorage.setItem(SYNC_RECOVERY_KEY, user.uid);
+        markGuestMigrationSyncRecovery(user.uid);
         expect(await localRepository.readLocal(user.uid)).toBeUndefined();
         const purge = vi.spyOn(DB, 'purgeAllLocalUserData');
 
         render(<AuthProvider><App /></AuthProvider>);
 
         await waitFor(() => expect(screen.getByText('Accesso non completato')).toBeTruthy());
-        expect(localStorage.getItem(SYNC_RECOVERY_KEY)).toBe(user.uid);
+        expect(JSON.parse(localStorage.getItem(SYNC_RECOVERY_KEY)!)).toMatchObject({ uid: user.uid });
         expect(useAppStore.getState().saveError).toContain('copia locale autenticata non disponibile');
         expect(screen.queryByTestId('bottom-nav')).toBeNull();
         expect(purge).not.toHaveBeenCalled();
     });
 
+    it('does not retire a newer guest generation while resuming an older account handoff', async () => {
+        const { cloud } = fixtures();
+        await localRepository.initializeLocal(user.uid, cloud, []);
+        localStorage.setItem(GUEST_SESSION_KEY, 'guest-original');
+        markGuestMigrationSyncRecovery(user.uid);
+        const witness = localStorage.getItem(SYNC_RECOVERY_KEY);
+        localStorage.setItem(GUEST_KEY, 'true');
+        localStorage.setItem(GUEST_SESSION_KEY, 'guest-new-generation');
+        const before = await localRepository.readLocal(user.uid);
+        const setGuestMigrationStatus = vi.fn();
+        const setSaveError = vi.fn();
+        const setIsGuest = vi.fn();
+        await resumePersistedGuestMigration(user, () => true, {
+            guestKey: GUEST_KEY,
+            isGuestRef: { current: true },
+            migrationDataRef: { current: null },
+            setIsGuest, setGuestMigrationStatus, setSyncing: vi.fn(),
+            setSaveError, clearGuestMigrationSyncRecovery: vi.fn(),
+        });
+        expect(setGuestMigrationStatus).toHaveBeenCalledWith('failed');
+        expect(setSaveError).toHaveBeenCalledWith(expect.stringContaining('nuova sessione locale'));
+        expect(setIsGuest).not.toHaveBeenCalled();
+        expect(localStorage.getItem(GUEST_KEY)).toBe('true');
+        expect(localStorage.getItem(GUEST_SESSION_KEY)).toBe('guest-new-generation');
+        expect(localStorage.getItem(SYNC_RECOVERY_KEY)).toBe(witness);
+        expect(await localRepository.readLocal(user.uid)).toEqual(before);
+    });
+
     it('retains the recovery marker when the authenticated envelope cannot be read', async () => {
-        localStorage.setItem(SYNC_RECOVERY_KEY, user.uid);
+        markGuestMigrationSyncRecovery(user.uid);
         const readLocal = localRepository.readLocal;
         vi.spyOn(localRepository, 'readLocal').mockImplementation(async owner => {
             if (owner === user.uid) throw new Error('Simulated encrypted envelope read failure');
@@ -245,7 +275,7 @@ describe('guest migration restart recovery', () => {
         render(<AuthProvider><App /></AuthProvider>);
 
         await waitFor(() => expect(screen.getByText('Accesso non completato')).toBeTruthy());
-        expect(localStorage.getItem(SYNC_RECOVERY_KEY)).toBe(user.uid);
+        expect(JSON.parse(localStorage.getItem(SYNC_RECOVERY_KEY)!)).toMatchObject({ uid: user.uid });
         expect(useAppStore.getState().saveError).toContain('I dati locali sono stati lasciati intatti');
         expect(screen.queryByTestId('bottom-nav')).toBeNull();
         expect(purge).not.toHaveBeenCalled();
@@ -258,14 +288,14 @@ describe('guest migration restart recovery', () => {
         await localRepository.commitLocal(user.uid, merged, cloud);
         useAppStore.getState().setUserData(merged);
         expect((await localRepository.readLocal(user.uid))?.pending.length).toBeGreaterThan(0);
-        localStorage.setItem(SYNC_RECOVERY_KEY, user.uid);
+        markGuestMigrationSyncRecovery(user.uid);
         expect(sessionStorage.getItem(OVERLAY_SESSION_KEY)).toBeNull();
         onlineSpy?.mockReturnValue(true);
         const permissionDenied = Object.assign(new Error('permission denied'), { code: 'permission-denied' });
         vi.mocked(runTransaction).mockRejectedValueOnce(permissionDenied);
         const firstRender = render(<AuthProvider><App /></AuthProvider>);
         await waitFor(() => expect(screen.getByText('Accesso non completato')).toBeTruthy());
-        expect(localStorage.getItem(SYNC_RECOVERY_KEY)).toBe(user.uid);
+        expect(JSON.parse(localStorage.getItem(SYNC_RECOVERY_KEY)!)).toMatchObject({ uid: user.uid });
         expect(sessionStorage.getItem(OVERLAY_SESSION_KEY)).toBeNull();
         expect(screen.queryByTestId('bottom-nav')).toBeNull();
         expect(document.getElementById('app-container')).toBeNull();
@@ -274,7 +304,7 @@ describe('guest migration restart recovery', () => {
         vi.mocked(runTransaction).mockRejectedValueOnce(permissionDenied);
         render(<AuthProvider><App /></AuthProvider>);
         await waitFor(() => expect(screen.getByText('Accesso non completato')).toBeTruthy());
-        expect(localStorage.getItem(SYNC_RECOVERY_KEY)).toBe(user.uid);
+        expect(JSON.parse(localStorage.getItem(SYNC_RECOVERY_KEY)!)).toMatchObject({ uid: user.uid });
         expect(sessionStorage.getItem(OVERLAY_SESSION_KEY)).toBeNull();
         expect(screen.queryByTestId('bottom-nav')).toBeNull();
         expect(document.getElementById('app-container')).toBeNull();

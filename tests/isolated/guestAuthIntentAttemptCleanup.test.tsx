@@ -8,6 +8,7 @@ import type { User, UserCredential } from 'firebase/auth';
 import { useGoogleAuthActions } from '../../src/contexts/auth/useGoogleAuthActions';
 import { useEmailAuthActions } from '../../src/contexts/auth/useEmailAuthActions';
 import { beginGuestMigrationIntent } from '../../src/lib/auth/guestMigrationIntent';
+import { markGuestMigrationSyncRecovery } from '../../src/lib/auth/guestMigrationSyncRecovery';
 import { resumePersistedGuestMigration } from '../../src/contexts/auth/resumePersistedGuestMigration';
 import * as localRepository from '../../src/lib/sync/localRepository';
 import { useAppStore } from '../../src/store/useAppStore';
@@ -296,12 +297,12 @@ describe('serialized guest migration intent belongs to an exact Auth attempt', (
         const spy = vi.spyOn(localRepository, 'readLocal').mockImplementationOnce(() =>
             new Promise<any>(resolve => { release = resolve; }));
         const old = await beginGuestMigrationIntent('merge', 'recovery', { uid: 'test-user-id' });
+        markGuestMigrationSyncRecovery('test-user-id');
         const run = resumePersistedGuestMigration(
             { uid: 'test-user-id' } as User,
             () => localStorage.getItem('logbook_is_guest') === 'true',
             {
                 guestKey: 'logbook_is_guest',
-                isGuestActiveStrict: () => true,
                 isGuestRef: { current: true },
                 migrationDataRef: { current: null },
                 setIsGuest: vi.fn(),
@@ -312,11 +313,16 @@ describe('serialized guest migration intent belongs to an exact Auth attempt', (
             },
         );
         await waitFor(() => expect(release).toBeTypeOf('function'));
-        await expect(beginGuestMigrationIntent('skip', 'email', { email: 'other@example.test' }))
-            .rejects.toThrow('Un altro tentativo');
+        // A new Auth attempt waits for recovery's entire guest transition.
+        // Once the guest has been retired, the queued attempt must not adopt it.
+        const newAttempt = beginGuestMigrationIntent('skip', 'email', {
+            email: 'other@example.test',
+            assertCurrent: () => localStorage.getItem('logbook_is_guest') === 'true',
+        });
         const originalBytes = localStorage.getItem(KEY);
         release({ data: {}, pending: [] });
         await run;
+        await expect(newAttempt).rejects.toThrow('non più attiva');
         expect(localStorage.getItem('logbook_is_guest')).toBeNull();
         expect(localStorage.getItem(KEY)).toBe(originalBytes);
         expect(JSON.parse(originalBytes!).id).toBe(old.id);

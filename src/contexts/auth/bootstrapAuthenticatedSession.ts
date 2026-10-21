@@ -12,7 +12,6 @@ import { startInitialGuestMigration } from './startInitialGuestMigration';
 
 type GuestMigrationStatus = 'idle' | 'pending' | 'failed';
 type BootstrapDependencies = {
-    awaitingRedirectKey: string;
     guestKey: string;
     isGuestActiveStrict: () => boolean;
     readGuestMigrationRecoveryStrict: (uid: string) => boolean;
@@ -26,8 +25,8 @@ type BootstrapDependencies = {
     setUserData: ReturnType<typeof useAppStore.getState>['setUserData'];
     setSyncing: ReturnType<typeof useAppStore.getState>['setSyncing'];
     setSaveError: ReturnType<typeof useAppStore.getState>['setSaveError'];
-    markGuestMigrationSyncRecovery: (uid: string) => void;
-    clearGuestMigrationSyncRecovery: (uid: string) => void;
+    markGuestMigrationSyncRecovery: (uid: string) => string;
+    clearGuestMigrationSyncRecovery: (uid: string, expectedId: string) => void;
     loadData: (user: User) => Promise<void>;
 };
 
@@ -38,7 +37,7 @@ export async function bootstrapAuthenticatedSession(
     user: User,
     isCurrentRun: () => boolean,
     {
-        awaitingRedirectKey, guestKey, isGuestActiveStrict,
+        guestKey, isGuestActiveStrict,
         readGuestMigrationRecoveryStrict, isGuestRef, migrationDataRef,
         setIsGuest, setCurrentUser, setEmailVerificationRequired,
         setGuestMigrationStatus, setLoading, setUserData, setSyncing,
@@ -47,7 +46,6 @@ export async function bootstrapAuthenticatedSession(
     }: BootstrapDependencies,
 ): Promise<void> {
     if (user && guardAuthenticatedBootstrap(user, {
-        awaitingRedirectKey,
         isGuestActiveStrict, setCurrentUser, setEmailVerificationRequired,
         setGuestMigrationStatus, setLoading,
     })) return;
@@ -93,7 +91,7 @@ export async function bootstrapAuthenticatedSession(
             setLoading(false);
             const handled = await resumePersistedGuestMigration(user, isCurrentRun, {
                 guestKey,
-                isGuestActiveStrict, isGuestRef, migrationDataRef, setIsGuest,
+                isGuestRef, migrationDataRef, setIsGuest,
                 setGuestMigrationStatus, setSyncing, setSaveError,
                 clearGuestMigrationSyncRecovery,
             });

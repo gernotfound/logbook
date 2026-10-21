@@ -1,4 +1,5 @@
 import { auth } from '../firebase';
+import { GUEST_SESSION_KEY } from './sessionKeys';
 import { readBrowserValueStrict, writeBrowserValue } from './browserStorage';
 import { userOwner } from './owner';
 import { readAuthenticatedOwnerHint } from './authOwnerHint';
@@ -6,7 +7,7 @@ import { readGuestMigrationSyncRecovery } from '../auth/guestMigrationSyncRecove
 
 export { userOwner } from './owner';
 
-export const GUEST_SESSION_KEY = 'logbook_guest_session_id_v1';
+export { GUEST_SESSION_KEY } from './sessionKeys';
 export const GUEST_REVOCATION_KEY = 'logbook_guest_revoked_v1';
 
 let epoch = 0;

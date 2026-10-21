@@ -68,12 +68,3 @@ export function removeBrowserValue(key: string): void {
     }
 }
 
-
-export function tryRemoveBrowserValue(key: string): boolean {
-    try {
-        removeBrowserValue(key);
-        return true;
-    } catch {
-        return false;
-    }
-}

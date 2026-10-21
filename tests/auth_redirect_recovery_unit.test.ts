@@ -5,6 +5,8 @@ describe('isolated foreground redirect recovery', () => {
     const detachAll: Array<() => void> = [];
     afterEach(() => {
         for (const detach of detachAll.splice(0)) detach();
+        sessionStorage.clear();
+        localStorage.clear();
     });
 
     function setup() {
@@ -91,6 +93,66 @@ describe('isolated foreground redirect recovery', () => {
         expect(JSON.parse(localStorage.getItem('guest_migration_intent_v1')!)).toMatchObject({
             id: intent.id, policy: 'skip',
         });
+    });
+
+    it('does not reload a guest redirect while its own credential proof is pending', async () => {
+        const { beginGuestMigrationIntent } = await import('../src/lib/auth/guestMigrationIntent');
+        localStorage.clear();
+        sessionStorage.clear();
+        await beginGuestMigrationIntent('merge', 'google');
+        let finish!: (result: unknown) => void;
+        const result = new Promise<unknown>(resolve => { finish = resolve; });
+        let marker: string | null = 'true';
+        let foreground = () => {};
+        const remove = vi.fn(() => { marker = null; return true; });
+        const reload = vi.fn(async () => {});
+        const detach = attachAuthRedirectRecovery({
+            awaitingRedirectKey: 'logbook_awaiting_redirect',
+            redirectLaunchFailedRef: { current: false },
+            setSaveError: vi.fn(),
+        }, {
+            visibility: () => 'visible',
+            listen: handler => { foreground = handler; return () => {}; },
+            read: () => marker,
+            remove,
+            reload,
+            getRedirect: () => result,
+        });
+        detachAll.push(detach);
+        foreground();
+        await Promise.resolve();
+        expect(remove).not.toHaveBeenCalled();
+        expect(reload).not.toHaveBeenCalled();
+        finish(null);
+        await vi.waitFor(() => expect(marker).toBeNull());
+        expect(reload).not.toHaveBeenCalled();
+    });
+
+    it('does not remove a later redirect marker when the startup SDK probe returns null', async () => {
+        let marker: string | null = null;
+        let complete!: (value: unknown) => void;
+        const pending = new Promise<unknown>(resolve => { complete = resolve; });
+        const remove = vi.fn(() => { marker = null; return true; });
+        const detach = attachAuthRedirectRecovery({
+            awaitingRedirectKey: 'logbook_awaiting_redirect',
+            redirectLaunchFailedRef: { current: false },
+            setSaveError: vi.fn(),
+        }, {
+            visibility: () => 'hidden',
+            listen: () => () => {},
+            read: () => marker,
+            remove,
+            reload: async () => {},
+            getRedirect: () => pending,
+        });
+        detachAll.push(detach);
+        // A new login starts after attachAuthRedirectRecovery captured an empty marker.
+        marker = 'true';
+        complete(null);
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(remove).not.toHaveBeenCalled();
+        expect(marker).toBe('true');
     });
 
     it('consumes the active marker once and calls the safe reload barrier only once', async () => {

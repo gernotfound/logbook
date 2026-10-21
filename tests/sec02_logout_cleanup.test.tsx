@@ -59,9 +59,9 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
 
     it('never erases active or failed Google redirect state as part of owner purge', async () => {
         for (const value of ['true', 'failed']) {
-            localStorage.setItem('logbook_awaiting_redirect', value);
+            sessionStorage.setItem('logbook_awaiting_redirect', value);
             await DB.purgeAllLocalUserData();
-            expect(localStorage.getItem('logbook_awaiting_redirect')).toBe(value);
+            expect(sessionStorage.getItem('logbook_awaiting_redirect')).toBe(value);
         }
     });
 
@@ -254,13 +254,13 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
     it('cannot delete another account recovery handoff created during owner purge', async () => {
         const keyA = 'logbook:v2:user:test-user-id:guest-migration-sync-recovery';
         const keyB = 'logbook:v2:user:second-user:guest-migration-sync-recovery';
-        localStorage.setItem(keyA, 'test-user-id');
+        localStorage.setItem(keyA, JSON.stringify({ version: 1, uid: 'test-user-id', guestSessionId: 'guest-a', id: 'proof-a' }));
         const originalRemove = localStorageMock.removeItem.getMockImplementation()!;
         let switched = false;
         localStorageMock.removeItem.mockImplementation((key: string) => {
             if (key === keyA && !switched) {
                 switched = true;
-                localStorage.setItem(keyB, 'second-user');
+                localStorage.setItem(keyB, JSON.stringify({ version: 1, uid: 'second-user', guestSessionId: 'guest-b', id: 'proof-b' }));
             }
             originalRemove(key);
         });
@@ -269,20 +269,20 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
 
         expect(switched).toBe(true);
         expect(localStorage.getItem(keyA)).toBeNull();
-        expect(localStorage.getItem(keyB)).toBe('second-user');
+        expect(JSON.parse(localStorage.getItem(keyB)!)).toMatchObject({ uid: 'second-user' });
         expect(isLocalPurgePending('user:test-user-id')).toBe(true);
     });
 
     it('purgeAllLocalUserData removes the owner recovery marker but preserves a different UID', async () => {
         const keyA = 'logbook:v2:user:test-user-id:guest-migration-sync-recovery';
         const keyB = 'logbook:v2:user:another-user:guest-migration-sync-recovery';
-        localStorage.setItem(keyA, 'test-user-id');
-        localStorage.setItem(keyB, 'another-user');
+        localStorage.setItem(keyA, JSON.stringify({ version: 1, uid: 'test-user-id', guestSessionId: 'guest-a', id: 'proof-a' }));
+        localStorage.setItem(keyB, JSON.stringify({ version: 1, uid: 'another-user', guestSessionId: 'guest-b', id: 'proof-b' }));
 
         await DB.purgeAllLocalUserData(storageOwner());
 
         expect(localStorage.getItem(keyA)).toBeNull();
-        expect(localStorage.getItem(keyB)).toBe('another-user');
+        expect(JSON.parse(localStorage.getItem(keyB)!)).toMatchObject({ uid: 'another-user' });
     });
 
     it('purgeAllLocalUserData preserves local recovery data if IndexedDB deletion fails', async () => {

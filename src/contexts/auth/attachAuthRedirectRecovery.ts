@@ -1,7 +1,7 @@
 import type { RefObject } from 'react';
 import type { UserCredential } from 'firebase/auth';
 import { auth, getRedirectResult } from '../../lib/firebase';
-import { readBrowserValue, tryRemoveBrowserValue } from '../../lib/sync/browserStorage';
+import { readAuthRedirectMarker, tryRemoveAuthRedirectMarker } from '../../lib/auth/authRedirectMarker';
 import { safeHardReload } from '../../lib/sync/safeReload';
 import { confirmGuestMigrationCredential, readGuestMigrationTabReceipt, rejectGuestMigrationAuthWaiters } from '../../lib/auth/guestMigrationIntent';
 
@@ -20,8 +20,8 @@ const browserEnvironment: RedirectRecoveryEnvironment = {
         document.addEventListener('visibilitychange', callback);
         return () => document.removeEventListener('visibilitychange', callback);
     },
-    read: readBrowserValue,
-    remove: tryRemoveBrowserValue,
+    read: readAuthRedirectMarker,
+    remove: tryRemoveAuthRedirectMarker,
     reload: safeHardReload,
     getRedirect: () => getRedirectResult(auth),
 };
@@ -41,10 +41,11 @@ export function attachAuthRedirectRecovery({
     // Capture the intent receipt before Auth's first state callback can clear
     // the shared redirect flag. A Firebase auth event alone is not evidence
     // that this tab's redirect completed with that identity.
-    const expectedIntentId = environment.read(awaitingRedirectKey) === 'true'
-        ? readGuestMigrationTabReceipt() : null;
+    const recoveringRedirect = environment.read(awaitingRedirectKey) === 'true';
+    const expectedIntentId = recoveringRedirect ? readGuestMigrationTabReceipt() : null;
+    let guestRedirectResultPending = Boolean(expectedIntentId);
     const handleAuthVisibilityChange = async () => {
-        if (redirectLaunchFailedRef.current) return;
+        if (redirectLaunchFailedRef.current || guestRedirectResultPending) return;
         if (environment.visibility() !== 'visible' || environment.read(awaitingRedirectKey) !== 'true') return;
         if (!environment.remove(awaitingRedirectKey)) {
             setSaveError('Accesso completato, ma non riesco ad aggiornare lo stato locale del dispositivo. Riprova.');
@@ -78,14 +79,16 @@ export function attachAuthRedirectRecovery({
                 }
             }
         }
-        environment.remove(awaitingRedirectKey);
+        if (recoveringRedirect) environment.remove(awaitingRedirectKey);
     }).catch(() => {
         if (expectedIntentId) {
             rejectGuestMigrationAuthWaiters(expectedIntentId, 'Ripresa redirect Google non riuscita.');
         }
-        environment.remove(awaitingRedirectKey);
+        if (recoveringRedirect) environment.remove(awaitingRedirectKey);
         console.error('Ripresa redirect Google non riuscita.');
         setSaveError("Accesso Google non completato. Riprova.");
+    }).finally(() => {
+        guestRedirectResultPending = false;
     });
 
     return detachVisibility;

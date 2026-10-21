@@ -2,13 +2,11 @@ import type { Dispatch, SetStateAction } from 'react';
 import type { User } from 'firebase/auth';
 import { beginHealthConsentVerification } from '../../lib/healthConsent';
 import { rememberAuthenticatedOwner } from '../../lib/sync/authOwnerHint';
-import { tryRemoveBrowserValue } from '../../lib/sync/browserStorage';
 import { userOwner } from '../../lib/sync/session';
 import { useAppStore } from '../../store/useAppStore';
 
 type GuestMigrationStatus = 'idle' | 'pending' | 'failed';
 type BootstrapGateDependencies = {
-    awaitingRedirectKey: string;
     isGuestActiveStrict: () => boolean;
     setCurrentUser: Dispatch<SetStateAction<User | null>>;
     setEmailVerificationRequired: Dispatch<SetStateAction<boolean>>;
@@ -19,7 +17,7 @@ type BootstrapGateDependencies = {
 // Synchronous fail-closed boundary preceding vault unlock and consent refresh.
 export function guardAuthenticatedBootstrap(
     user: User,
-    { awaitingRedirectKey, isGuestActiveStrict, setCurrentUser,
+    { isGuestActiveStrict, setCurrentUser,
       setEmailVerificationRequired, setGuestMigrationStatus, setLoading }: BootstrapGateDependencies,
 ): boolean {
     if (user.emailVerified === false) {
@@ -38,7 +36,6 @@ export function guardAuthenticatedBootstrap(
         return true;
     }
     beginHealthConsentVerification(user.uid);
-    tryRemoveBrowserValue(awaitingRedirectKey);
     const expectedOwner = userOwner(user.uid);
     const current = useAppStore.getState();
     const guestActiveBeforeAuth = isGuestActiveStrict();

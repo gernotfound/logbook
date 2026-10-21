@@ -21,6 +21,7 @@ import {
     removeBrowserValue,
 } from '../lib/sync/browserStorage';
 import { attachAuthRedirectRecovery } from './auth/attachAuthRedirectRecovery';
+import { AWAITING_REDIRECT_KEY } from '../lib/auth/authRedirectMarker';
 import { prepareForReload } from '../lib/sync/reloadBarrier';
 import { prepareAuthenticatedLogout } from './auth/prepareAuthenticatedLogout';
 import { useUnverifiedLocalContinuation } from './auth/useUnverifiedLocalContinuation';
@@ -32,8 +33,6 @@ import { clearAuthenticatedOwnerHint } from '../lib/sync/authOwnerHint';
 import { cancelLocalVaultReadiness } from '../lib/sync/secureArchiveUnlockFlow';
 import { lockVault } from '../lib/sync/secureArchiveSession';
 import { readGuestMigrationSyncRecovery, markGuestMigrationSyncRecovery, clearGuestMigrationSyncRecovery } from '../lib/auth/guestMigrationSyncRecovery';
-
-const AWAITING_REDIRECT_KEY = 'logbook_awaiting_redirect';
 
 function isStoredGuest(): boolean {
     return readBrowserValueStrict(GUEST_KEY) === 'true' && readBrowserValueStrict(GUEST_REVOCATION_KEY) === null && isActiveGuestSession();
@@ -203,7 +202,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
             if (user) {
                 await bootstrapAuthenticatedSession(user, isCurrentRun, {
-                    awaitingRedirectKey: AWAITING_REDIRECT_KEY,
                     guestKey: GUEST_KEY, isGuestActiveStrict,
                     readGuestMigrationRecoveryStrict, isGuestRef, migrationDataRef,
                     setIsGuest, setCurrentUser, setEmailVerificationRequired,
@@ -345,7 +343,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                         } catch (error) {
                             purgeError = error;
                         }
-                        if (initialUid) clearGuestMigrationSyncRecovery(initialUid);
                         isGuestRef.current = false;
                         setIsGuest(false);
                         setGuestMigrationStatus('idle');
@@ -394,7 +391,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 useAppStore.getState().resetStore({ force: true });
                 if (initialUid) {
                     clearAuthenticatedOwnerHint(userOwner(initialUid));
-                    clearGuestMigrationSyncRecovery(initialUid);
                 }
                 setGuestMigrationStatus('idle');
             } catch (error: any) {

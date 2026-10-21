@@ -4,6 +4,8 @@ import { useAppStore } from '../../store/useAppStore';
 import { isLegalConsentRequiredError, replicateJournal } from '../../lib/sync/replicateJournal';
 import { captureSession, isCurrentSession, userOwner } from '../../lib/sync/session';
 import { beginGuestMigrationIntent } from '../../lib/auth/guestMigrationIntent';
+import { readGuestMigrationSyncWitness } from '../../lib/auth/guestMigrationSyncRecovery';
+import { withGuestLifecycleLock } from '../../lib/sync/guestLifecycleLock';
 import { safeHardReload } from '../../lib/sync/safeReload';
 import type { GuestMigrationPolicy } from '../AuthContextDef';
 
@@ -13,7 +15,7 @@ type RetryDependencies = {
     setSaveError: ReturnType<typeof useAppStore.getState>['setSaveError'];
     setSyncing: ReturnType<typeof useAppStore.getState>['setSyncing'];
     setGuestMigrationStatus: Dispatch<SetStateAction<GuestMigrationStatus>>;
-    clearGuestMigrationSyncRecovery: (uid: string) => void;
+    clearGuestMigrationSyncRecovery: (uid: string, expectedId: string) => void;
 };
 
 // Owner fencing stays adjacent to journal replay; the provider owns session
@@ -82,11 +84,18 @@ export function useGuestMigrationRetry({
         setGuestMigrationStatus('pending');
         setSyncing(true);
         try {
+            const recoveryWitness = readGuestMigrationSyncWitness(initialUid);
             const result = await replicateJournal(expectedOwner);
             if (!isCurrentRetry()) return;
 
             if (result.status === 'synced' || result.status === 'local-pending') {
-                clearGuestMigrationSyncRecovery(initialUid);
+                if (recoveryWitness) {
+                    await withGuestLifecycleLock(async () => {
+                        if (!isCurrentRetry()) return;
+                        clearGuestMigrationSyncRecovery(initialUid, recoveryWitness.id);
+                    });
+                }
+                if (!isCurrentRetry()) return;
                 setGuestMigrationStatus('idle');
                 if (result.status === 'local-pending') {
                     setSaveError(isLegalConsentRequiredError(result.error)
