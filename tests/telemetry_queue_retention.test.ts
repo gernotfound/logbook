@@ -154,7 +154,7 @@ describe('Offline technical telemetry data minimization', () => {
 
     expect(storage.getQueuedEvents()).toEqual([]);
     expect(localStorage.getItem(storage.getQueueStorageKey())).toBe(raw);
-    storage.enqueueItem('event', queued('volatile', Date.now()).payload);
+    storage.enqueueItem('event', { ...queued('volatile', Date.now()).payload, id: 'volatile' });
     expect(storage.getQueuedEvents().map(item => item.id)).toEqual(['volatile']);
     expect(localStorage.getItem(storage.getQueueStorageKey())).toBe(raw);
     expect(localStorage.getItem(protectedDeviceKey('telemetry_queue', 'user:owner-a'))).toBeNull();
