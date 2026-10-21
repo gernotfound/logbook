@@ -4,7 +4,7 @@ import { TestDB as DB } from './testUtils';
 import * as idb from 'idb-keyval';
 import { useAppStore } from '../src/store/useAppStore';
 import { storageOwner } from '../src/lib/sync/session';
-import { beginLocalPurge, isLocalPurgeIncomplete, isLocalPurgePending } from '../src/lib/sync/localPurgeFence';
+import { isLocalPurgeIncomplete, isLocalPurgePending } from '../src/lib/sync/localPurgeFence';
 import * as localRepository from '../src/lib/sync/localRepository';
 import { localStorageMock, mockFirebaseAuth } from './setup';
 import { markAccountDeletion, isAccountDeletionPending } from '../src/lib/sync/accountGate';
