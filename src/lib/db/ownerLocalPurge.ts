@@ -13,6 +13,21 @@ import { readBrowserValueStrict, removeBrowserValue, writeBrowserValue } from '.
 // Account/consent authorization and server-complete evidence stay with db_account.
 const LOCAL_PURGE_MAX_PASSES = 6;
 
+// These old idb-keyval entries have no owner identity. The current application
+// no longer writes them, but an already running legacy tab may still do so.
+// An owner-scoped purge must not turn their physical location into ownership.
+const OWNERLESS_LEGACY_IDB_KEYS = [
+    'logbook_cached_user_data', 'pending_sync_token', 'pending_sync_payload', 'sync_failed',
+] as const;
+
+async function assertNoOwnerlessLegacyIndexedDbData(): Promise<void> {
+    for (const key of OWNERLESS_LEGACY_IDB_KEYS) {
+        if (await get<unknown>(key) !== undefined) {
+            throw new Error('Pulizia sospesa: dati IndexedDB legacy senza proprietario verificabile (' + key + ').');
+        }
+    }
+}
+
 // Only legacy compatibility keys without an owner namespace. New app writers
 // must not publish business data under these names. A suspended old tab may
 // still write them while a purge waits for IndexedDB, however.
@@ -181,12 +196,14 @@ export async function purgeOwnerLocalData(owner: string, resumeOnly = false, gat
         lockVault(owner);
         const failures: unknown[] = [];
         // Only the owner-scoped envelope can be deleted before the next awaited
-        // identity check. Never launch unscoped IndexedDB deletes in parallel
-        // with it: another account may activate while the browser is awaiting IDB.
+        // identity check. Only the explicitly owner-scoped IDB envelope may
+        // be removed; ownerless legacy keys are never part of this delete.
         const ownerKey = 'logbook:v2:' + owner;
-        const legacyKeys = ['logbook_cached_user_data',
-            'pending_sync_token', 'pending_sync_payload', 'sync_failed'];
-        const storageKeys = [ownerKey, ...legacyKeys];
+        // Ownerless values cannot be safely attributed even if present before
+        // the purge. Refuse automatic erasure instead of deleting another
+        // session's legacy writes; keep the durable fence for reconciliation.
+        await assertNoOwnerlessLegacyIndexedDbData();
+        gate?.assertStillSafe?.();
         try {
             await del(ownerKey);
             if ((await get<unknown>(ownerKey)) !== undefined) {
@@ -196,26 +213,11 @@ export async function purgeOwnerLocalData(owner: string, resumeOnly = false, gat
         if (failures.length) {
             throw new AggregateError(failures, 'Pulizia locale incompleta (IndexedDB). Chiave cifrata e copie residue conservate per il recupero.');
         }
-        for (const key of legacyKeys) {
-            gate?.assertStillSafe?.();
-            try { await del(key); } catch (error) { failures.push(error); }
-        }
+        // The owner lock does not serialize a legacy tab's global IDB writes.
+        // Check again after the awaited owner deletion; never delete globals.
         gate?.assertStillSafe?.();
-
-    // Wrapped DEK metadata must survive an IndexedDB purge failure. Deleting
-    // it first would leave the remaining ciphertext permanently undecryptable.
-    if (!failures.length) {
-        for (const key of storageKeys) {
-            try {
-                if (await get<unknown>(key) !== undefined) {
-                    failures.push(new Error('Verifica cancellazione IndexedDB fallita: ' + key));
-                }
-            } catch (error) { failures.push(error); }
-        }
-    }
-    if (failures.length) {
-        throw new AggregateError(failures, 'Pulizia locale incompleta (IndexedDB). Chiave cifrata e copie residue conservate per il recupero.');
-    }
+        await assertNoOwnerlessLegacyIndexedDbData();
+        gate?.assertStillSafe?.();
 
     let remaining = new Set<string>();
     try {
@@ -264,6 +266,10 @@ export async function purgeOwnerLocalData(owner: string, resumeOnly = false, gat
         throw new AggregateError(failures, 'Pulizia locale incompleta. Alcuni dati sono ancora presenti su questo dispositivo.');
     }
 
+    gate?.assertStillSafe?.();
+    await assertNoOwnerlessLegacyIndexedDbData();
+    gate?.assertStillSafe?.();
+
     // Both the non-extractable device key and the wrapping metadata are owner
     // scoped. NEVER remove the device key until the encrypted business envelope
     // and every localStorage snapshot were verifiably removed.
@@ -286,6 +292,11 @@ export async function purgeOwnerLocalData(owner: string, resumeOnly = false, gat
     // Drop the resident DEK only once all encrypted and device records have
     // been verified removed. An incomplete deletion remains recoverable.
     lockVault(owner);
+    // An unscoped legacy write during key erasure must not be reported as
+    // completed cleanup. This is detection, not cross-tab atomicity.
+    gate?.assertStillSafe?.();
+    await assertNoOwnerlessLegacyIndexedDbData();
+    gate?.assertStillSafe?.();
     // The original fingerprints are no longer needed once all deletes and
     // encryption-key cleanup have succeeded. If interrupted here, only absent
     // unscoped values may be resumed without the removed snapshot.
