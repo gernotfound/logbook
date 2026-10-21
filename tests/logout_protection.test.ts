@@ -138,9 +138,10 @@ describe('M5 logout protection through AuthProvider', () => {
         expect(dialogs.showAlert).toHaveBeenCalledWith('Modifiche locali non sincronizzate.');
     });
 
-    it('explains an unattributed legacy IDB blocker without suggesting an unrelated network retry', async () => {
-        const failure = Object.assign(new Error('Pulizia sospesa: dati IndexedDB legacy senza proprietario verificabile.'), {
-            name: 'OwnerlessLegacyIndexedDbError',
+    it.each(['OwnerlessLegacyIndexedDbError', 'OwnerlessLegacyLocalStorageError'])(
+        'explains an unattributed legacy blocker without suggesting a network retry (%s)', async name => {
+        const failure = Object.assign(new Error('Pulizia sospesa: dati senza proprietario verificabile.'), {
+            name,
         });
         vi.mocked(DB.secureLogOut).mockRejectedValueOnce(failure);
         const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
