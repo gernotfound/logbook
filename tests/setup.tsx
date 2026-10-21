@@ -503,25 +503,18 @@ vi.mock('../src/lib/db', () => ({
     secureLogOut: vi.fn().mockResolvedValue(undefined),
     deleteAccount: vi.fn().mockResolvedValue(undefined),
     purgeAllLocalUserData: vi.fn().mockImplementation(async (owner = 'user:test-user-id') => {
-      // Production refuses to assign ownerless legacy IDB payloads to this
-      // account; the shared test double must not silently erase them either.
-      if (['logbook_cached_user_data', 'pending_sync_token', 'pending_sync_payload', 'sync_failed']
-        .some(key => idbStore[key] !== undefined)) {
-        throw new Error('Pulizia sospesa: dati IndexedDB legacy senza proprietario verificabile.');
-      }
       delete idbStore[`logbook:v2:${owner}`];
       localStorage.removeItem(deviceKey('workout'));
-      localStorage.removeItem('logbook_local_workout');
-      localStorage.removeItem('logbook_timer_state');
-      localStorage.removeItem('logbook_timer_start');
-      localStorage.removeItem('logbook_timer_accumulated');
-      localStorage.removeItem('draft_measurement');
-      localStorage.removeItem('draft_exercise');
-      localStorage.removeItem('draft_routine');
-      localStorage.removeItem('logbook_awaiting_redirect');
-      localStorage.removeItem('logbook_telemetry_queue');
-      localStorage.removeItem('guest_migration_intent_v1');
-      localStorage.removeItem('guest_migration_policy');
+      const ownerPrefix = 'logbook:v2:' + owner + ':';
+      for (let i = localStorage.length - 1; i >= 0; i--) {
+        const key = localStorage.key(i);
+        if (key?.startsWith(ownerPrefix) && !key.endsWith(':account-deletion')
+          && !key.endsWith(':secure-vault-control')) localStorage.removeItem(key);
+      }
+      if (owner === 'guest') {
+        localStorage.removeItem('guest_migration_intent_v1');
+        localStorage.removeItem('logbook_guest_session_id_v1');
+      }
       const ownerUid = owner.startsWith('user:') ? owner.slice('user:'.length) : null;
       if (ownerUid && localStorage.getItem('logbook_guest_migration_sync_recovery') === ownerUid) {
         localStorage.removeItem('logbook_guest_migration_sync_recovery');
