@@ -81,10 +81,10 @@ export function useGuestMigrationRetry({
             return;
         }
 
-        const recoveryWitness = readGuestMigrationSyncWitness(initialUid);
         setGuestMigrationStatus('pending');
         setSyncing(true);
         try {
+            const recoveryWitness = readGuestMigrationSyncWitness(initialUid);
             const result = await replicateJournal(expectedOwner);
             if (!isCurrentRetry()) return;
 
