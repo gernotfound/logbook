@@ -144,7 +144,6 @@ export async function purgeOwnerLocalData(owner: string, resumeOnly = false, gat
     }
 
     gate?.assertStillSafe?.();
-    gate?.assertStillSafe?.();
 
     // Both the non-extractable device key and the wrapping metadata are owner
     // scoped. NEVER remove the device key until the encrypted business envelope
