@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { User } from 'firebase/auth';
+import type { User, UserCredential } from 'firebase/auth';
 import {
     beginGuestMigrationIntent,
     bindGuestMigrationIntentToUser,
@@ -12,6 +12,8 @@ const KEY = 'guest_migration_intent_v1';
 const user = { uid: 'same-account', email: 'same@example.test', providerData: [
     { providerId: 'google.com' },
 ] } as User;
+const credential = (providerId: 'google.com' | 'password', account: User = user) =>
+    ({ user: account, providerId } as UserCredential);
 
 describe('Auth result provenance for guest-to-account decisions', () => {
     beforeEach(() => {
@@ -34,7 +36,7 @@ describe('Auth result provenance for guest-to-account decisions', () => {
         expect(finished).toBe(false);
         expect(JSON.parse(localStorage.getItem(KEY)!)).not.toHaveProperty('credentialUid');
 
-        await confirmGuestMigrationCredential(intent.id, user);
+        await confirmGuestMigrationCredential(intent.id, credential('google.com'));
         await expect(binding).resolves.toMatchObject({ id: intent.id, boundUid: user.uid, policy: 'merge' });
         expect(finished).toBe(true);
     });
@@ -45,7 +47,7 @@ describe('Auth result provenance for guest-to-account decisions', () => {
         });
         const foreign = { ...user, uid: 'other-account' } as User;
         await expect(bindGuestMigrationIntentToUser(foreign)).rejects.toThrow('account diverso');
-        await expect(confirmGuestMigrationCredential(intent.id, foreign)).rejects.toThrow('account diverso');
+        await expect(confirmGuestMigrationCredential(intent.id, credential('password', foreign))).rejects.toThrow('account diverso');
         expect(JSON.parse(localStorage.getItem(KEY)!)).toMatchObject({ id: intent.id, policy: 'skip' });
     });
 
@@ -57,12 +59,12 @@ describe('Auth result provenance for guest-to-account decisions', () => {
         await rejection;
         expect(JSON.parse(localStorage.getItem(KEY)!)).toMatchObject({ id: intent.id, policy: 'merge' });
         await clearGuestMigrationIntent(intent.id);
-        await expect(confirmGuestMigrationCredential(intent.id, user)).rejects.toThrow('assente');
+        await expect(confirmGuestMigrationCredential(intent.id, credential('password'))).rejects.toThrow('assente');
     });
 
     it('cannot reuse a prior popup result after a JS realm restart with a copied receipt', async () => {
         const intent = await beginGuestMigrationIntent('merge', 'email', { email: user.email! });
-        await confirmGuestMigrationCredential(intent.id, user);
+        await confirmGuestMigrationCredential(intent.id, credential('password'));
         expect(JSON.parse(localStorage.getItem(KEY)!)).not.toHaveProperty('credentialUid');
         // New realm, but the localStorage reservation and sessionStorage receipt
         // still exist (the same circumstance as reload or a duplicated tab).
