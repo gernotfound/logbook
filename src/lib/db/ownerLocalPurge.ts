@@ -196,8 +196,8 @@ export async function purgeOwnerLocalData(owner: string, resumeOnly = false, gat
         lockVault(owner);
         const failures: unknown[] = [];
         // Only the owner-scoped envelope can be deleted before the next awaited
-        // identity check. Never launch unscoped IndexedDB deletes in parallel
-        // with it: another account may activate while the browser is awaiting IDB.
+        // identity check. Only the explicitly owner-scoped IDB envelope may
+        // be removed; ownerless legacy keys are never part of this delete.
         const ownerKey = 'logbook:v2:' + owner;
         // Ownerless values cannot be safely attributed even if present before
         // the purge. Refuse automatic erasure instead of deleting another
