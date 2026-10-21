@@ -201,6 +201,11 @@ export function inspectDatedRecoveryEvidence(owner: string): DatedRecoveryEntry[
             throw new Error('Copia datata cambiata durante la verifica.');
         }
     }
+    // The reported provenance must refer to the same consent epoch as
+    // the final authenticated witness reads, not an earlier inspection pass.
+    if (readDeviceConsentRevision(owner) !== revision) {
+        throw new Error('Copie o consenso cambiati durante la verifica.');
+    }
     return scanned.map(({ raw: _raw, ...entry }) => entry)
         .sort((a, b) => a.draftName.localeCompare(b.draftName) || a.name.localeCompare(b.name));
 }
