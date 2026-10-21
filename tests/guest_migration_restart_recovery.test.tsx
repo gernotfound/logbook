@@ -117,7 +117,6 @@ describe('guest migration restart recovery', () => {
         const markRecovery = vi.fn();
 
         await bootstrapAuthenticatedSession(user, () => true, {
-            awaitingRedirectKey: 'logbook_awaiting_redirect',
             guestKey: GUEST_KEY,
             isGuestActiveStrict,
             readGuestMigrationRecoveryStrict: () => false,
