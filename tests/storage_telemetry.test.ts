@@ -1,7 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
-  STORAGE_MARKER_KEY,
-  STORAGE_ANOMALY_REPORTED_KEY,
   STORAGE_MARKER_VERSION,
   getStorageMarker,
   getStorageMarkerKey,
@@ -20,6 +18,9 @@ import {
 } from '../src/lib/storageTelemetry';
 import * as sentryClient from '../src/lib/sentryClient';
 import * as firebaseLib from '../src/lib/firebase';
+
+const RETIRED_MARKER_KEY = 'logbook_storage_marker';
+const RETIRED_ANOMALY_KEY = 'logbook_storage_anomaly_reported';
 
 describe('Storage Recovery Telemetry Suite', () => {
   let previousAuthUser: typeof firebaseLib.auth.currentUser;
@@ -53,15 +54,16 @@ describe('Storage Recovery Telemetry Suite', () => {
       expect(getStorageMarker()).toBeNull();
     });
 
-    it('drops pre-owner global markers instead of attributing them to the current account', () => {
-      localStorage.setItem(STORAGE_MARKER_KEY, JSON.stringify({ version: 1, timestamp: 1234 }));
-      localStorage.setItem(STORAGE_ANOMALY_REPORTED_KEY, '1234');
+    it('ignores prelaunch global markers without adopting or deleting them', () => {
+      localStorage.setItem(RETIRED_MARKER_KEY, JSON.stringify({ version: 1, timestamp: 1234 }));
+      localStorage.setItem(RETIRED_ANOMALY_KEY, '1234');
 
       expect(getStorageMarker()).toBeNull();
-      expect(localStorage.getItem(STORAGE_MARKER_KEY)).toBeNull();
+      expect(localStorage.getItem(RETIRED_MARKER_KEY)).not.toBeNull();
 
       clearStorageMarker();
-      expect(localStorage.getItem(STORAGE_ANOMALY_REPORTED_KEY)).toBeNull();
+      expect(localStorage.getItem(RETIRED_MARKER_KEY)).not.toBeNull();
+      expect(localStorage.getItem(RETIRED_ANOMALY_KEY)).toBe('1234');
     });
 
     it('creates and retrieves a valid versioned storage marker', () => {
