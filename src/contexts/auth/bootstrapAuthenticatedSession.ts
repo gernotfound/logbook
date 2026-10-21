@@ -12,7 +12,6 @@ import { startInitialGuestMigration } from './startInitialGuestMigration';
 
 type GuestMigrationStatus = 'idle' | 'pending' | 'failed';
 type BootstrapDependencies = {
-    awaitingRedirectKey: string;
     guestKey: string;
     isGuestActiveStrict: () => boolean;
     readGuestMigrationRecoveryStrict: (uid: string) => boolean;
@@ -38,7 +37,7 @@ export async function bootstrapAuthenticatedSession(
     user: User,
     isCurrentRun: () => boolean,
     {
-        awaitingRedirectKey, guestKey, isGuestActiveStrict,
+        guestKey, isGuestActiveStrict,
         readGuestMigrationRecoveryStrict, isGuestRef, migrationDataRef,
         setIsGuest, setCurrentUser, setEmailVerificationRequired,
         setGuestMigrationStatus, setLoading, setUserData, setSyncing,
@@ -47,7 +46,6 @@ export async function bootstrapAuthenticatedSession(
     }: BootstrapDependencies,
 ): Promise<void> {
     if (user && guardAuthenticatedBootstrap(user, {
-        awaitingRedirectKey,
         isGuestActiveStrict, setCurrentUser, setEmailVerificationRequired,
         setGuestMigrationStatus, setLoading,
     })) return;
