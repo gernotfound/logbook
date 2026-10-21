@@ -102,11 +102,21 @@ export async function bootstrapAuthenticatedSession(
         }
 
         if (wasGuest) {
-            const guestAlreadyRetired = await startInitialGuestMigration(user, isCurrentRun, {
-                guestKey, isGuestRef, migrationDataRef, setIsGuest,
-                setGuestMigrationStatus, setLoading, setUserData, setSyncing, setSaveError,
-                markGuestMigrationSyncRecovery, clearGuestMigrationSyncRecovery,
-            });
+            let guestAlreadyRetired: boolean;
+            try {
+                guestAlreadyRetired = await startInitialGuestMigration(user, isCurrentRun, {
+                    guestKey, isGuestRef, migrationDataRef, setIsGuest,
+                    setGuestMigrationStatus, setLoading, setUserData, setSyncing, setSaveError,
+                    markGuestMigrationSyncRecovery, clearGuestMigrationSyncRecovery,
+                });
+            } catch (error) {
+                if (!isCurrentRun()) return;
+                console.error('Coordinamento migrazione guest non riuscito:', error);
+                setGuestMigrationStatus('failed');
+                setSaveError('Impossibile coordinare il trasferimento dei dati locali. Archivio conservato: riprova.');
+                setLoading(false);
+                return;
+            }
             if (guestAlreadyRetired && isCurrentRun()) {
                 // Another tab finished or revoked this guest generation while
                 // our bootstrap waited for the lifecycle lock. Its decision
