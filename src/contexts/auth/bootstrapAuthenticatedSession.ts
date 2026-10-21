@@ -102,11 +102,22 @@ export async function bootstrapAuthenticatedSession(
         }
 
         if (wasGuest) {
-            await startInitialGuestMigration(user, isCurrentRun, {
+            const guestAlreadyRetired = await startInitialGuestMigration(user, isCurrentRun, {
                 guestKey, isGuestRef, migrationDataRef, setIsGuest,
                 setGuestMigrationStatus, setLoading, setUserData, setSyncing, setSaveError,
                 markGuestMigrationSyncRecovery, clearGuestMigrationSyncRecovery,
             });
+            if (guestAlreadyRetired && isCurrentRun()) {
+                // Another tab finished or revoked this guest generation while
+                // our bootstrap waited for the lifecycle lock. Its decision
+                // does not authorize importing our stale in-memory guest view.
+                // Keep all device records intact and require a safe reload.
+                isGuestRef.current = false;
+                setIsGuest(false);
+                setGuestMigrationStatus('failed');
+                setSaveError('La sessione locale è cambiata in un’altra scheda. I dati sul dispositivo sono conservati: riprova per aggiornare la sessione in sicurezza.');
+                setLoading(false);
+            }
         } else {
             setGuestMigrationStatus('idle');
             await loadData(user);
