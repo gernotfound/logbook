@@ -445,7 +445,7 @@ describe('Training Session UI Improvements Suite (R1, R2, R3)', () => {
             const exItemTime = {
                 id: 'item_plank',
                 exId: 'ex_plank',
-                sets: [{ id: 's_plank', time: '60s' }],
+                sets: [{ id: 's_plank', kg: '', reps: '', time: '60s' }],
                 sessionNote: ''
             };
             const libDefTime = { id: 'ex_plank', name: 'Plank', trackingType: 'time' };
