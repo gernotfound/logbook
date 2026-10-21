@@ -1,7 +1,9 @@
 import type { RefObject } from 'react';
+import type { User } from 'firebase/auth';
 import { auth, getRedirectResult } from '../../lib/firebase';
 import { readBrowserValue, tryRemoveBrowserValue } from '../../lib/sync/browserStorage';
 import { safeHardReload } from '../../lib/sync/safeReload';
+import { confirmGuestMigrationCredential, readGuestMigrationTabReceipt, rejectGuestMigrationAuthWaiters } from '../../lib/auth/guestMigrationIntent';
 
 type RedirectRecoveryEnvironment = {
     visibility: () => DocumentVisibilityState;
@@ -36,6 +38,11 @@ type RedirectRecoveryDependencies = {
 export function attachAuthRedirectRecovery({
     awaitingRedirectKey, redirectLaunchFailedRef, setSaveError,
 }: RedirectRecoveryDependencies, environment: RedirectRecoveryEnvironment = browserEnvironment): () => void {
+    // Capture the intent receipt before Auth's first state callback can clear
+    // the shared redirect flag. A Firebase auth event alone is not evidence
+    // that this tab's redirect completed with that identity.
+    const expectedIntentId = environment.read(awaitingRedirectKey) === 'true'
+        ? readGuestMigrationTabReceipt() : null;
     const handleAuthVisibilityChange = async () => {
         if (redirectLaunchFailedRef.current) return;
         if (environment.visibility() !== 'visible' || environment.read(awaitingRedirectKey) !== 'true') return;
@@ -52,9 +59,23 @@ export function attachAuthRedirectRecovery({
     };
     const detachVisibility = environment.listen(handleAuthVisibilityChange);
 
-    environment.getRedirect().then(() => {
+    environment.getRedirect().then(async result => {
+        if (expectedIntentId) {
+            const credential = result && typeof result === 'object' && 'user' in result
+                ? result.user : null;
+            if (!credential || typeof credential !== 'object' || !('uid' in credential)
+                || typeof credential.uid !== 'string') {
+                rejectGuestMigrationAuthWaiters(expectedIntentId, 'Redirect Google non confermato.');
+                setSaveError('Accesso Google non confermato. Riprova.');
+            } else {
+                await confirmGuestMigrationCredential(expectedIntentId, credential as User);
+            }
+        }
         environment.remove(awaitingRedirectKey);
     }).catch(() => {
+        if (expectedIntentId) {
+            rejectGuestMigrationAuthWaiters(expectedIntentId, 'Ripresa redirect Google non riuscita.');
+        }
         environment.remove(awaitingRedirectKey);
         console.error('Ripresa redirect Google non riuscita.');
         setSaveError("Accesso Google non completato. Riprova.");
