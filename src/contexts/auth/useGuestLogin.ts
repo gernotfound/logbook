@@ -7,13 +7,22 @@ import type { UserData } from '../../types';
 import { getCachedCatalog, getInMemoryCatalog, isCatalogInMemory } from '../../lib/catalog/catalogService';
 import { resolveEffectiveExercises, resolveEffectiveFoods } from '../../lib/catalog/deltaResolver';
 import { getResolvedDefaultUserData } from './defaultUserData';
-import { activateGuestSession, GUEST_REVOCATION_KEY, GUEST_SESSION_KEY } from '../../lib/sync/session';
+import { activateGuestSession, captureSession, isActiveGuestSession, isCurrentSession, type SessionSnapshot, GUEST_REVOCATION_KEY, GUEST_SESSION_KEY } from '../../lib/sync/session';
 import { withGuestLifecycleLock } from '../../lib/sync/guestLifecycleLock';
 import { readBrowserValueStrict, removeBrowserValue, writeBrowserValue } from '../../lib/sync/browserStorage';
 import { clearAuthenticatedOwnerHint } from '../../lib/sync/authOwnerHint';
 import { ensureLocalVaultReady } from '../../lib/sync/secureArchiveUnlockFlow';
+import { isVaultUnlocked } from '../../lib/sync/secureArchiveSession';
 
 export const GUEST_KEY = 'logbook_is_guest';
+
+/** The same guard used at both asynchronous guest bootstrap boundaries. */
+export function isGuestVaultReadinessCurrent(
+    session: SessionSnapshot,
+    vaultReady: (owner: string) => boolean = isVaultUnlocked,
+): boolean {
+    return session.owner === 'guest' && isCurrentSession(session) && vaultReady('guest');
+}
 
 type GuestMigrationStatus = 'idle' | 'pending' | 'failed';
 type GuestLoginDependencies = {
@@ -30,6 +39,7 @@ export function useGuestLogin({
     isGuestRef, setIsGuest, setGuestMigrationStatus, setUserData, setSaveError,
 }: GuestLoginDependencies) {
     const loginAsGuest = useCallback(async () => {
+        let activatedGuestId: string | null = null;
         try {
             // Serialize the entire cleanup-to-activation transition across tabs.
             // An older logout must never delete a new guest generation.
@@ -47,28 +57,33 @@ export function useGuestLogin({
                 writeBrowserValue(GUEST_KEY, 'true');
                 removeBrowserValue(GUEST_REVOCATION_KEY);
                 activateGuestSession(id);
+                activatedGuestId = id;
                 useDialogStore.getState().cancelAll();
             });
         } catch {
             setSaveError('Impossibile avviare la modalità locale: pulizia o coordinamento delle sessioni non disponibile. I dati esistenti restano protetti.');
             return;
         }
-        // The newly activated guest session must be protected before any
-        // new local UserData/workout snapshot can be published.
+        // Guest activation and vault provisioning are separate awaits. A
+        // logout, account switch or other tab may revoke this generation
+        // before the vault is ready. Never promote a stale guest into Zustand.
+        if (!activatedGuestId || !isActiveGuestSession()
+            || readBrowserValueStrict(GUEST_SESSION_KEY) !== activatedGuestId) return;
+        const guestSession = captureSession();
+        const canPublishGuest = () => isGuestVaultReadinessCurrent(guestSession);
         await ensureLocalVaultReady('guest');
-        isGuestRef.current = true;
-        setIsGuest(true);
-        setGuestMigrationStatus('idle');
+        // A cancelled readiness Promise may resolve without an unlocked vault.
+        if (!canPublishGuest()) return;
         const previous = useAppStore.getState();
         // An ownerless/foreign snapshot must not seed a new guest generation.
         if ((previous.userData !== null || previous.localWorkout !== null) && previous.dataOwner !== 'guest') {
             previous.resetStore({ force: true });
         }
         const currentData = useAppStore.getState().userData;
+        let nextData: UserData | null = null;
         if (!currentData) {
             const catalog = isCatalogInMemory() ? getInMemoryCatalog() : (await getCachedCatalog());
-            const initialGuestData = getResolvedDefaultUserData(catalog);
-            setUserData(UserDataSchema.parse(initialGuestData) as unknown as UserData);
+            nextData = UserDataSchema.parse(getResolvedDefaultUserData(catalog)) as unknown as UserData;
         } else {
             const hasCatalogExercises = Array.isArray(currentData.library) && currentData.library.some(e => e.isDefault === true);
             const hasCatalogFoods = Array.isArray(currentData.customFoods) && currentData.customFoods.some(f => f.isCustom === false);
@@ -80,13 +95,20 @@ export function useGuestLogin({
                 const resolvedFoods = !hasCatalogFoods
                     ? resolveEffectiveFoods(catalog.foods, currentData.customFoods || [], currentData.catalogOverrides)
                     : currentData.customFoods;
-                setUserData({
+                nextData = {
                     ...currentData,
                     library: resolvedLibrary,
-                    customFoods: resolvedFoods
-                });
+                    customFoods: resolvedFoods,
+                };
             }
         }
+        // The catalog may have awaited while another account was activated.
+        // Publish the guest flag and its data only after the same final check.
+        if (!canPublishGuest()) return;
+        isGuestRef.current = true;
+        setIsGuest(true);
+        setGuestMigrationStatus('idle');
+        if (nextData) setUserData(nextData);
     }, [isGuestRef, setIsGuest, setGuestMigrationStatus, setSaveError, setUserData]);
 
     return loginAsGuest;
