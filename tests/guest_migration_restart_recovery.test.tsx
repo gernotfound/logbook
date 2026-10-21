@@ -250,7 +250,6 @@ describe('guest migration restart recovery', () => {
         const setIsGuest = vi.fn();
         await resumePersistedGuestMigration(user, () => true, {
             guestKey: GUEST_KEY,
-            isGuestActiveStrict: () => true,
             isGuestRef: { current: true },
             migrationDataRef: { current: null },
             setIsGuest, setGuestMigrationStatus, setSyncing: vi.fn(),
