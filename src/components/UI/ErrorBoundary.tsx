@@ -67,11 +67,6 @@ class ErrorBoundary extends Component<Props, State> {
         if (!isActiveGuestSession()) throw new Error('Sessione guest non più attiva.');
         await withGuestLifecycleLock(async () => {
           if (!isCurrentSession(session)) throw new Error('Sessione guest cambiata durante la conferma.');
-          // Preserve the guest session while an unattributed old record makes
-          // erasure unsafe: a revoked guest cannot simply reopen its vault.
-          const { preflightOwnerlessLegacyPurge } = await import('../../lib/db/ownerLocalPurge');
-          await preflightOwnerlessLegacyPurge();
-          if (!isCurrentSession(session)) throw new Error('Sessione guest cambiata durante la verifica.');
           // Error recovery is also a destructive guest reset: fence every
           // other tab before removing IndexedDB and never race a new login.
           revokeGuestSession();
