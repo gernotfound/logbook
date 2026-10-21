@@ -21,8 +21,8 @@ type InitialMigrationDependencies = {
     setUserData: ReturnType<typeof useAppStore.getState>['setUserData'];
     setSyncing: ReturnType<typeof useAppStore.getState>['setSyncing'];
     setSaveError: ReturnType<typeof useAppStore.getState>['setSaveError'];
-    markGuestMigrationSyncRecovery: (uid: string) => void;
-    clearGuestMigrationSyncRecovery: (uid: string) => void;
+    markGuestMigrationSyncRecovery: (uid: string) => string;
+    clearGuestMigrationSyncRecovery: (uid: string, expectedId: string) => void;
 };
 
 // The caller has verified identity, unlocked the account vault and refreshed
@@ -35,6 +35,7 @@ export async function startInitialGuestMigration(
     }: InitialMigrationDependencies,
 ): Promise<boolean> {
     let guestAlreadyRetired = false;
+    let recoveryWitnessId: string | null = null;
     await withGuestLifecycleLock(async () => {
     // The reservation is immutable while this tab is transferring ownership.
     // A second tab observing the Firebase sign-in may not race the same guest
@@ -72,7 +73,7 @@ export async function startInitialGuestMigration(
             onLocalReady: async () => {
                 // Persist recovery before changing owner. If any critical
                 // storage transition fails, migration remains recoverable.
-                markGuestMigrationSyncRecovery(user.uid);
+                recoveryWitnessId = markGuestMigrationSyncRecovery(user.uid);
                 removeBrowserValue(guestKey);
                 await clearGuestMigrationIntent(intentId);
                 isGuestRef.current = false;
@@ -85,7 +86,7 @@ export async function startInitialGuestMigration(
             setGuestMigrationStatus('failed');
             setSaveError('I dati sono salvati su questo dispositivo, ma la sincronizzazione dell’account non è stata completata. Riprova.');
         } else {
-            clearGuestMigrationSyncRecovery(user.uid);
+            if (recoveryWitnessId) clearGuestMigrationSyncRecovery(user.uid, recoveryWitnessId);
             setGuestMigrationStatus('idle');
             if (migrationResult.status === 'local-pending') {
                 setSaveError(isLegalConsentRequiredError(migrationResult.error)
