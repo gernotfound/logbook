@@ -72,22 +72,18 @@ export function useGuestLogin({
         const guestSession = captureSession();
         const canPublishGuest = () => isGuestVaultReadinessCurrent(guestSession);
         await ensureLocalVaultReady('guest');
-        // A canceled readiness Promise may resolve without an unlocked vault.
+        // A cancelled readiness Promise may resolve without an unlocked vault.
         if (!canPublishGuest()) return;
-        isGuestRef.current = true;
-        setIsGuest(true);
-        setGuestMigrationStatus('idle');
         const previous = useAppStore.getState();
         // An ownerless/foreign snapshot must not seed a new guest generation.
         if ((previous.userData !== null || previous.localWorkout !== null) && previous.dataOwner !== 'guest') {
             previous.resetStore({ force: true });
         }
         const currentData = useAppStore.getState().userData;
+        let nextData: UserData | null = null;
         if (!currentData) {
             const catalog = isCatalogInMemory() ? getInMemoryCatalog() : (await getCachedCatalog());
-            const initialGuestData = getResolvedDefaultUserData(catalog);
-            if (!canPublishGuest()) return;
-            setUserData(UserDataSchema.parse(initialGuestData) as unknown as UserData);
+            nextData = UserDataSchema.parse(getResolvedDefaultUserData(catalog)) as unknown as UserData;
         } else {
             const hasCatalogExercises = Array.isArray(currentData.library) && currentData.library.some(e => e.isDefault === true);
             const hasCatalogFoods = Array.isArray(currentData.customFoods) && currentData.customFoods.some(f => f.isCustom === false);
@@ -99,14 +95,20 @@ export function useGuestLogin({
                 const resolvedFoods = !hasCatalogFoods
                     ? resolveEffectiveFoods(catalog.foods, currentData.customFoods || [], currentData.catalogOverrides)
                     : currentData.customFoods;
-                if (!canPublishGuest()) return;
-                setUserData({
+                nextData = {
                     ...currentData,
                     library: resolvedLibrary,
-                    customFoods: resolvedFoods
-                });
+                    customFoods: resolvedFoods,
+                };
             }
         }
+        // The catalog may have awaited while another account was activated.
+        // Publish the guest flag and its data only after the same final check.
+        if (!canPublishGuest()) return;
+        isGuestRef.current = true;
+        setIsGuest(true);
+        setGuestMigrationStatus('idle');
+        if (nextData) setUserData(nextData);
     }, [isGuestRef, setIsGuest, setGuestMigrationStatus, setSaveError, setUserData]);
 
     return loginAsGuest;
