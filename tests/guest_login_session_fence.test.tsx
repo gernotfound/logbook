@@ -51,7 +51,18 @@ describe('guest login: session and vault readiness fencing', () => {
         const hook = setupGuestLogin();
         let operation!: Promise<void>;
         act(() => { operation = hook.result.current(); });
-        await waitFor(() => expect(ensureLocalVaultReady).toHaveBeenCalledWith('guest'));
+        await waitFor(() => {
+            if (vi.mocked(ensureLocalVaultReady).mock.calls.length === 0) {
+                throw new Error('Guest readiness not entered: ' + JSON.stringify({
+                    saveError: hook.setSaveError.mock.calls,
+                    guest: localStorage.getItem('logbook_is_guest'),
+                    guestSession: localStorage.getItem(GUEST_SESSION_KEY),
+                    guestRevocation: localStorage.getItem('logbook_guest_revoked_v1'),
+                    hasLocks: Boolean(navigator.locks?.request),
+                }));
+            }
+            expect(ensureLocalVaultReady).toHaveBeenCalledWith('guest');
+        });
         invalidateSession();
         await act(async () => { hold.resolve(); await operation; });
         expect(hook.setIsGuest).not.toHaveBeenCalled();
@@ -64,7 +75,7 @@ describe('guest login: session and vault readiness fencing', () => {
         vi.mocked(isVaultUnlocked).mockReturnValue(false);
         const hook = setupGuestLogin();
         await act(async () => { await hook.result.current(); });
-        expect(ensureLocalVaultReady).toHaveBeenCalledWith('guest');
+        expect(ensureLocalVaultReady, JSON.stringify({ saveError: hook.setSaveError.mock.calls, guest: localStorage.getItem('logbook_is_guest'), hasLocks: Boolean(navigator.locks?.request) })).toHaveBeenCalledWith('guest');
         expect(hook.setIsGuest).not.toHaveBeenCalled();
         expect(hook.setUserData).not.toHaveBeenCalled();
         hook.unmount();
@@ -76,7 +87,18 @@ describe('guest login: session and vault readiness fencing', () => {
         const hook = setupGuestLogin();
         let operation!: Promise<void>;
         act(() => { operation = hook.result.current(); });
-        await waitFor(() => expect(ensureLocalVaultReady).toHaveBeenCalledWith('guest'));
+        await waitFor(() => {
+            if (vi.mocked(ensureLocalVaultReady).mock.calls.length === 0) {
+                throw new Error('Guest readiness not entered: ' + JSON.stringify({
+                    saveError: hook.setSaveError.mock.calls,
+                    guest: localStorage.getItem('logbook_is_guest'),
+                    guestSession: localStorage.getItem(GUEST_SESSION_KEY),
+                    guestRevocation: localStorage.getItem('logbook_guest_revoked_v1'),
+                    hasLocks: Boolean(navigator.locks?.request),
+                }));
+            }
+            expect(ensureLocalVaultReady).toHaveBeenCalledWith('guest');
+        });
         localStorage.setItem(GUEST_SESSION_KEY, 'another-guest-generation');
         activateGuestSession('another-guest-generation');
         await act(async () => { hold.resolve(); await operation; });
