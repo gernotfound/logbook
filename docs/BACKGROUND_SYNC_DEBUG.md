@@ -24,6 +24,6 @@ Lo stesso replay viene richiesto anche quando:
 
 Safari/iOS può non supportare Background Sync. Questo non blocca il recupero: online, riapertura e ritorno in primo piano usano comunque lo stesso journal durevole.
 
-## Chiavi legacy
+## Chiavi pre-lancio ritirate
 
-`pending_sync_payload`, `pending_sync_token` e `sync_failed` appartengono al vecchio meccanismo di Background Sync. Il codice corrente non le usa per scrivere dati. Le chiavi IndexedDB legacy non hanno un owner verificabile: il logout e la pulizia account **non le cancellano automaticamente**. Se il residuo è già presente prima di iniziare una nuova pulizia, il preflight rifiuta il logout senza creare un fence incompleto. Se compare durante una pulizia già iniziata, quest'ultima resta incompleta e il fence continua a proteggere i dati. In entrambi i casi le chiavi legacy restano conservate anziché essere attribuite a un altro account. Serve riconciliazione esplicita; il controllo di assenza non rende atomici i writer di vecchie PWA ancora aperte.
+`pending_sync_payload`, `pending_sync_token` e `sync_failed` appartengono a un sistema pre-lancio non supportato. TheLogBook corrente non le legge, non le scrive, non le importa e non le elimina come parte del purge di un account. Il fresh start non richiede procedure di riconciliazione di dati storici inesistenti secondo il product owner. Background Sync usa il journal durable owner-scoped; crash, reload, offline e multi-tab della release supportata restano soggetti ai gate di persistenza e consenso.
