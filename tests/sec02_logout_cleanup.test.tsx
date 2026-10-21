@@ -220,6 +220,63 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
         expect(localStorage.getItem('logbook_awaiting_redirect')).toBeNull();
     });
 
+    it('preserves a new unscoped legacy draft written during the IndexedDB purge wait', async () => {
+        let started!: () => void;
+        let finish!: () => void;
+        const entered = new Promise<void>(resolve => { started = resolve; });
+        const blocked = new Promise<void>(resolve => { finish = resolve; });
+        vi.mocked(idb.del).mockImplementationOnce(async () => {
+            started();
+            await blocked;
+        });
+        const operation = DB.purgeAllLocalUserData();
+        await entered;
+        // No new Firebase UID is available yet; the identity fence alone
+        // cannot establish provenance of this global legacy value.
+        localStorage.setItem('draft_exercise', 'new-session-draft');
+        finish();
+
+        await expect(operation).rejects.toThrow('Pulizia locale incompleta');
+        expect(localStorage.getItem('draft_exercise')).toBe('new-session-draft');
+        expect(isLocalPurgePending('user:test-user-id')).toBe(true);
+    });
+
+    it('preserves a replacement of an existing legacy key during asynchronous cleanup', async () => {
+        localStorage.setItem('guest_migration_intent_v1', 'old-session-intent');
+        let started!: () => void;
+        let finish!: () => void;
+        const entered = new Promise<void>(resolve => { started = resolve; });
+        const blocked = new Promise<void>(resolve => { finish = resolve; });
+        vi.mocked(idb.del).mockImplementationOnce(async () => {
+            started();
+            await blocked;
+        });
+        const operation = DB.purgeAllLocalUserData();
+        await entered;
+        localStorage.setItem('guest_migration_intent_v1', 'new-session-intent');
+        finish();
+
+        await expect(operation).rejects.toThrow('Pulizia locale incompleta');
+        expect(localStorage.getItem('guest_migration_intent_v1')).toBe('new-session-intent');
+        expect(isLocalPurgePending('user:test-user-id')).toBe(true);
+    });
+
+    it('stops on a new legacy value introduced during a prior localStorage removal', async () => {
+        const priorRemoval = localStorageMock.removeItem.getMockImplementation()!;
+        let introduced = false;
+        localStorageMock.removeItem.mockImplementation((key: string) => {
+            priorRemoval(key);
+            if (!introduced && key === 'logbook_local_workout') {
+                introduced = true;
+                localStorage.setItem('draft_routine', 'new-tab-draft');
+            }
+        });
+        await expect(DB.purgeAllLocalUserData()).rejects.toThrow('Pulizia locale incompleta');
+        expect(introduced).toBe(true);
+        expect(localStorage.getItem('draft_routine')).toBe('new-tab-draft');
+        expect(isLocalPurgePending('user:test-user-id')).toBe(true);
+    });
+
     it('purgeAllLocalUserData removes IndexedDB sensitive keys', async () => {
         await DB.purgeAllLocalUserData();
 
@@ -227,6 +284,27 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
         expect(idb.del).toHaveBeenCalledWith('pending_sync_token');
         expect(idb.del).toHaveBeenCalledWith('pending_sync_payload');
         expect(idb.del).toHaveBeenCalledWith('sync_failed');
+    });
+
+    it('preserves a new account recovery UID swapped during the old owner purge inventory', async () => {
+        const recoveryKey = 'logbook_guest_migration_sync_recovery';
+        localStorage.setItem(recoveryKey, 'test-user-id');
+        const originalGet = localStorageMock.getItem.getMockImplementation()!;
+        let switched = false;
+        localStorageMock.getItem.mockImplementation((key: string) => {
+            const value = originalGet(key);
+            if (key === recoveryKey && value === 'test-user-id' && !switched) {
+                switched = true;
+                localStorage.setItem(recoveryKey, 'second-user');
+            }
+            return value;
+        });
+
+        await DB.purgeAllLocalUserData('user:test-user-id');
+
+        expect(switched).toBe(true);
+        expect(localStorage.getItem(recoveryKey)).toBe('second-user');
+        expect(isLocalPurgePending('user:test-user-id')).toBe(true);
     });
 
     it('purgeAllLocalUserData removes only the current owner guest migration recovery marker', async () => {

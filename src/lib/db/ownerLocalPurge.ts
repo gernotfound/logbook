@@ -12,13 +12,19 @@ import { stableStorageKeyInventory } from '../sync/stableStorageKeyInventory';
 // Account/consent authorization and server-complete evidence stay with db_account.
 const LOCAL_PURGE_MAX_PASSES = 6;
 
+// Only legacy compatibility keys without an owner namespace. New app writers
+// must not publish business data under these names. A suspended old tab may
+// still write them while a purge waits for IndexedDB, however.
+const UNSCOPED_LEGACY_KEYS = [
+    'logbook_local_workout', 'logbook_timer_state', 'logbook_timer_start', 'logbook_timer_accumulated',
+    'draft_measurement', 'draft_exercise', 'draft_routine', 'logbook_awaiting_redirect',
+    'logbook_telemetry_queue', 'logbook_storage_marker', 'logbook_storage_anomaly_reported',
+    'guest_migration_intent_v1', 'guest_migration_policy',
+] as const;
+const UNSCOPED_LEGACY_KEY_SET: ReadonlySet<string> = new Set(UNSCOPED_LEGACY_KEYS);
+
 function collectLocalPurgeKeys(owner: string): Set<string> {
-    const keys = new Set([
-        'logbook_local_workout', 'logbook_timer_state', 'logbook_timer_start', 'logbook_timer_accumulated',
-        'draft_measurement', 'draft_exercise', 'draft_routine', 'logbook_awaiting_redirect',
-        'logbook_telemetry_queue', 'logbook_storage_marker', 'logbook_storage_anomaly_reported',
-        'guest_migration_intent_v1', 'guest_migration_policy'
-    ]);
+    const keys = new Set<string>(UNSCOPED_LEGACY_KEYS);
     // An in-flight Google login redirect belongs to the AUTH flow, not to
     // the account or guest archive being removed. It can begin while an
     // older account's IndexedDB cleanup is still pending.
@@ -85,6 +91,13 @@ export async function purgeOwnerLocalData(owner: string, resumeOnly = false, gat
             }
         }
         gate?.assertStillSafe?.();
+        // Capture legacy globals before the first awaited IndexedDB operation.
+        // A new session can write a value before Firebase publishes its UID;
+        // the owner identity gate alone cannot attribute that shared key.
+        const legacyAtStart = new Map<string, string | null>(
+            UNSCOPED_LEGACY_KEYS.map(key => [key, localStorage.getItem(key)]),
+        );
+        const legacyRemoved = new Set<string>();
         lockVault(owner);
         const failures: unknown[] = [];
         // Only the owner-scoped envelope can be deleted before the next awaited
@@ -130,13 +143,27 @@ export async function purgeOwnerLocalData(owner: string, resumeOnly = false, gat
             gate?.assertStillSafe?.();
             const keys = collectLocalPurgeKeys(owner);
             for (const storageKey of keys) {
+                gate?.assertStillSafe?.();
+                // This active auth marker belongs to the new Google redirect,
+                // not the old owner. Its normal lifecycle clears it.
+                if (storageKey === 'logbook_awaiting_redirect'
+                    && localStorage.getItem(storageKey) === 'true') continue;
+                // This global migration handoff is owner-labeled by its VALUE,
+                // not by its name. Another account may replace it between
+                // inventory and removeItem: only erase a matching owner UID.
+                if (storageKey === 'logbook_guest_migration_sync_recovery'
+                    && localStorage.getItem(storageKey) !== owner.slice('user:'.length)) continue;
+                if (UNSCOPED_LEGACY_KEY_SET.has(storageKey)) {
+                    const expected = legacyRemoved.has(storageKey) ? null : legacyAtStart.get(storageKey);
+                    if (localStorage.getItem(storageKey) !== expected) {
+                        // Do not erase a different value published during a
+                        // purge. Retain the owner fence for a safe retry.
+                        throw new Error('Chiave legacy condivisa modificata durante la pulizia: ' + storageKey);
+                    }
+                }
                 try {
-                    gate?.assertStillSafe?.();
-                    // Recheck at removal time: a new Google redirect may have
-                    // activated after the first inventory pass.
-                    if (storageKey === 'logbook_awaiting_redirect'
-                        && localStorage.getItem(storageKey) === 'true') continue;
                     localStorage.removeItem(storageKey);
+                    if (UNSCOPED_LEGACY_KEY_SET.has(storageKey)) legacyRemoved.add(storageKey);
                 } catch (error) {
                     failures.push(error);
                 }
