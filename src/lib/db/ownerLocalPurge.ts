@@ -53,7 +53,8 @@ async function readFrozenLegacySnapshot(owner: string, resuming: boolean): Promi
     const hashes = await Promise.all([...initial.values()].map(fingerprintLegacyValue));
     // Web Crypto is async. Do not publish a baseline for values that were
     // modified while computing their fingerprints.
-    if (UNSCOPED_LEGACY_KEYS.some(name => readBrowserValueStrict(name) !== initial.get(name))) {
+    if (UNSCOPED_LEGACY_KEYS.some(name => purgeOwnsLegacyKey(owner, name)
+        && readBrowserValueStrict(name) !== initial.get(name))) {
         throw new Error('Chiavi legacy cambiate prima della registrazione della pulizia.');
     }
     if (resuming) {
