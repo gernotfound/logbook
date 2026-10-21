@@ -4,11 +4,10 @@ import type { UserData } from '../../types';
 import { useAppStore } from '../../store/useAppStore';
 import { draftRegistry } from '../../lib/utils/draftRegistry';
 import { bindGuestMigrationIntentToUser, clearGuestMigrationIntent } from '../../lib/auth/guestMigrationIntent';
-import { removeBrowserValue } from '../../lib/sync/browserStorage';
+import { readBrowserValueStrict, removeBrowserValue } from '../../lib/sync/browserStorage';
 import { isLegalConsentRequiredError } from '../../lib/sync/replicateJournal';
 import { migrateGuestAccount } from './migrateGuestAccount';
 import { withGuestLifecycleLock } from '../../lib/sync/guestLifecycleLock';
-import { readBrowserValueStrict } from '../../lib/sync/browserStorage';
 import type { GuestMigrationPolicy } from '../AuthContextDef';
 
 type GuestMigrationStatus = 'idle' | 'pending' | 'failed';
