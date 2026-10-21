@@ -43,8 +43,9 @@ export function attachAuthRedirectRecovery({
     // that this tab's redirect completed with that identity.
     const recoveringRedirect = environment.read(awaitingRedirectKey) === 'true';
     const expectedIntentId = recoveringRedirect ? readGuestMigrationTabReceipt() : null;
+    let guestRedirectResultPending = Boolean(expectedIntentId);
     const handleAuthVisibilityChange = async () => {
-        if (redirectLaunchFailedRef.current) return;
+        if (redirectLaunchFailedRef.current || guestRedirectResultPending) return;
         if (environment.visibility() !== 'visible' || environment.read(awaitingRedirectKey) !== 'true') return;
         if (!environment.remove(awaitingRedirectKey)) {
             setSaveError('Accesso completato, ma non riesco ad aggiornare lo stato locale del dispositivo. Riprova.');
@@ -86,6 +87,8 @@ export function attachAuthRedirectRecovery({
         if (recoveringRedirect) environment.remove(awaitingRedirectKey);
         console.error('Ripresa redirect Google non riuscita.');
         setSaveError("Accesso Google non completato. Riprova.");
+    }).finally(() => {
+        guestRedirectResultPending = false;
     });
 
     return detachVisibility;
