@@ -20,10 +20,17 @@ const OWNERLESS_LEGACY_IDB_KEYS = [
     'logbook_cached_user_data', 'pending_sync_token', 'pending_sync_payload', 'sync_failed',
 ] as const;
 
+class OwnerlessLegacyIndexedDbError extends Error {
+    constructor(key: string) {
+        super('Pulizia sospesa: dati IndexedDB legacy senza proprietario verificabile (' + key + ').');
+        this.name = 'OwnerlessLegacyIndexedDbError';
+    }
+}
+
 async function assertNoOwnerlessLegacyIndexedDbData(): Promise<void> {
     for (const key of OWNERLESS_LEGACY_IDB_KEYS) {
         if (await get<unknown>(key) !== undefined) {
-            throw new Error('Pulizia sospesa: dati IndexedDB legacy senza proprietario verificabile (' + key + ').');
+            throw new OwnerlessLegacyIndexedDbError(key);
         }
     }
 }
@@ -172,8 +179,16 @@ export async function purgeOwnerLocalData(owner: string, resumeOnly = false, gat
             return;
         }
         if (resumeOnly && !isLocalPurgeIncomplete(owner)) return;
-        if (gate && !isLocalPurgeIncomplete(owner)) await gate.preflight();
         const previouslyIncomplete = isLocalPurgeIncomplete(owner);
+        if (!previouslyIncomplete) {
+            // Known unattributed IDB bytes must prevent sign-out and the
+            // durable fence, not strand the user in an unfinished purge.
+            // Run this asynchronous probe BEFORE the final owner/journal
+            // preflight; no new await is introduced between that gate and
+            // installation of the synchronous writer fence.
+            await assertNoOwnerlessLegacyIndexedDbData();
+            if (gate) await gate.preflight();
+        }
         beginLocalPurge(owner);
         if (gate) {
             try {
