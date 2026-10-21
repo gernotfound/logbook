@@ -21,6 +21,7 @@ import {
     removeBrowserValue,
 } from '../lib/sync/browserStorage';
 import { attachAuthRedirectRecovery } from './auth/attachAuthRedirectRecovery';
+import { AWAITING_REDIRECT_KEY } from '../lib/auth/authRedirectMarker';
 import { prepareForReload } from '../lib/sync/reloadBarrier';
 import { prepareAuthenticatedLogout } from './auth/prepareAuthenticatedLogout';
 import { useUnverifiedLocalContinuation } from './auth/useUnverifiedLocalContinuation';
@@ -32,8 +33,6 @@ import { clearAuthenticatedOwnerHint } from '../lib/sync/authOwnerHint';
 import { cancelLocalVaultReadiness } from '../lib/sync/secureArchiveUnlockFlow';
 import { lockVault } from '../lib/sync/secureArchiveSession';
 import { readGuestMigrationSyncRecovery, markGuestMigrationSyncRecovery, clearGuestMigrationSyncRecovery } from '../lib/auth/guestMigrationSyncRecovery';
-
-const AWAITING_REDIRECT_KEY = 'logbook_awaiting_redirect';
 
 function isStoredGuest(): boolean {
     return readBrowserValueStrict(GUEST_KEY) === 'true' && readBrowserValueStrict(GUEST_REVOCATION_KEY) === null && isActiveGuestSession();
