@@ -3,7 +3,7 @@ import { auth, provider, signInWithPopup, signInWithRedirect } from '../../lib/f
 import { useAppStore } from '../../store/useAppStore';
 import { captureSession, isCurrentSession } from '../../lib/sync/session';
 import { writeBrowserValue, tryRemoveBrowserValue } from '../../lib/sync/browserStorage';
-import { beginGuestMigrationIntent, clearGuestMigrationIntent } from '../../lib/auth/guestMigrationIntent';
+import { beginGuestMigrationIntent, clearGuestMigrationIntent, confirmGuestMigrationCredential, rejectGuestMigrationAuthWaiters } from '../../lib/auth/guestMigrationIntent';
 import { classifyGooglePopupFailure } from './googlePopup';
 import type { GuestMigrationPolicy } from '../AuthContextDef';
 import type { UserData } from '../../types';
@@ -58,8 +58,9 @@ export function useGoogleAuthActions({
                 assertCurrent: () => isGuestActiveStrict() && isCurrentSession(guestSession),
             })).id;
         }
+        let credential: Awaited<ReturnType<typeof signInWithPopup>>;
         try {
-            await signInWithPopup(auth, provider);
+            credential = await signInWithPopup(auth, provider);
         } catch (error: any) {
             const failure = classifyGooglePopupFailure(error);
             if (failure === 'redirect') {
@@ -80,6 +81,16 @@ export function useGoogleAuthActions({
                 console.error('Accesso Google non riuscito.');
                 setSaveError('Accesso Google non riuscito. Riprova.');
             }
+            return;
+        }
+        if (intentId) {
+            try {
+                await confirmGuestMigrationCredential(intentId, credential);
+            } catch (error) {
+                rejectGuestMigrationAuthWaiters(intentId, 'Risultato di questo accesso Google non verificabile.');
+                console.error('Prova dell’accesso Google non confermata:', error);
+                setSaveError('Accesso effettuato, ma trasferimento guest non autorizzato. I dati locali sono conservati: riprova scegliendo come gestirli.');
+            }
         }
     }, [isGuestActiveStrict, setSaveError, startGoogleRedirect]);
 
@@ -95,8 +106,9 @@ export function useGoogleAuthActions({
                 assertCurrent: () => isGuestActiveStrict() && isCurrentSession(guestSession),
             })).id;
         }
+        let credential: Awaited<ReturnType<typeof signInWithPopup>>;
         try {
-            await signInWithPopup(auth, provider);
+            credential = await signInWithPopup(auth, provider);
         } catch (error: any) {
             const failure = classifyGooglePopupFailure(error);
             if (failure === 'redirect') {
@@ -122,6 +134,16 @@ export function useGoogleAuthActions({
                 await abandonOwnGuestIntent(intentId);
                 console.error('Collegamento account Google non riuscito.');
                 setSaveError("Collegamento fallito. Riprova.");
+            }
+            return;
+        }
+        if (intentId) {
+            try {
+                await confirmGuestMigrationCredential(intentId, credential);
+            } catch (error) {
+                rejectGuestMigrationAuthWaiters(intentId, 'Risultato di questo collegamento Google non verificabile.');
+                console.error('Prova del collegamento Google non confermata:', error);
+                setSaveError('Account collegato, ma trasferimento guest non autorizzato. I dati locali sono conservati: riprova scegliendo come gestirli.');
             }
         }
     }, [isGuestActiveStrict, migrationDataRef, setSaveError, startGoogleRedirect]);

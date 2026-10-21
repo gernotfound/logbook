@@ -1,4 +1,4 @@
-import type { User } from 'firebase/auth';
+import type { User, UserCredential } from 'firebase/auth';
 import { readBrowserValueStrict, removeBrowserValue, writeBrowserJson } from '../sync/browserStorage';
 import { withGuestLifecycleLock } from '../sync/guestLifecycleLock';
 import type { GuestMigrationPolicy } from '../../contexts/AuthContextDef';
@@ -10,6 +10,13 @@ const KEY = 'guest_migration_intent_v1';
 const TAB_RECEIPT_KEY = 'logbook:guest-auth-attempt';
 const INTENT_LOCK = 'thelogbook:guest-auth-intent';
 const MAX_AGE_MS = 24 * 60 * 60 * 1000;
+const AUTH_PROOF_WAIT_MS = 15_000;
+const authResultWaiters = new Map<string, Set<(error?: Error) => void>>();
+// Never persist an Auth result as a shared tab-readable authorization.
+// After a reload (other than an own verified redirect), recovery must require
+// an explicit new decision, rather than treating onAuthStateChanged as proof.
+const provenAuthResults = new Map<string, string>();
+const failedAuthResults = new Map<string, Error>();
 const realmClaim = createId();
 
 export type GuestMigrationMethod = 'email' | 'google' | 'recovery';
@@ -85,6 +92,99 @@ function withIntentLock<T>(operation: () => Promise<T>): Promise<T> {
     return navigator.locks.request(INTENT_LOCK, { mode: 'exclusive' }, operation);
 }
 
+function settleAuthResultWaiters(intentId: string, error?: Error): void {
+    const listeners = authResultWaiters.get(intentId);
+    if (!listeners) return;
+    for (const notify of Array.from(listeners)) notify(error);
+}
+
+function awaitOwnAuthResult(intentId: string): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+        let listeners = authResultWaiters.get(intentId);
+        if (!listeners) {
+            listeners = new Set();
+            authResultWaiters.set(intentId, listeners);
+        }
+        let settled = false;
+        const timer = setTimeout(() => settle(new Error('Autenticazione non confermata da questo tentativo. Riprova.')), AUTH_PROOF_WAIT_MS);
+        const settle = (error?: Error) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            listeners!.delete(settle);
+            if (listeners!.size === 0) authResultWaiters.delete(intentId);
+            if (error) reject(error);
+            else resolve();
+        };
+        listeners.add(settle);
+        // Close the read/subscription gap. The credential may have completed
+        // just before this waiter was registered.
+        try {
+            const latest = readGuestMigrationIntentStrict();
+            if (latest.id !== intentId) settle(new Error('Il tentativo Auth è stato sostituito.'));
+            else if (failedAuthResults.has(intentId)) settle(failedAuthResults.get(intentId));
+            else if (provenAuthResults.has(intentId)) settle();
+        } catch (error) {
+            settle(error instanceof Error ? error : new Error('Tentativo Auth non verificabile.'));
+        }
+    });
+}
+
+function assertUserMatchesIntent(intent: GuestMigrationIntent, user: User): void {
+    const uid = user.uid;
+    if (intent.expectedUid && intent.expectedUid !== uid) {
+        throw new Error('Il tentativo di trasferimento appartiene a un account diverso.');
+    }
+    const userEmail = normalizeEmail(user.email);
+    if (intent.method === 'email' && intent.expectedEmail && intent.expectedEmail !== userEmail) {
+        throw new Error('Il tentativo email non corrisponde all’account autenticato.');
+    }
+    if (intent.method === 'google' && !(user.providerData ?? []).some(provider => provider.providerId === 'google.com')) {
+        throw new Error('Il tentativo Google non corrisponde all’account autenticato.');
+    }
+}
+
+/** Only a successful Firebase UserCredential from this initiating Auth action can
+ * authorize a migration. onAuthStateChanged alone may report another tab's login. */
+export async function confirmGuestMigrationCredential(intentId: string, credential: UserCredential): Promise<void> {
+    await withIntentLock(async () => {
+        const user = credential.user;
+        const intent = readGuestMigrationIntentStrict();
+        if (readTabReceipt() !== intentId || intent.id !== intentId || intent.method === 'recovery') {
+            throw new Error('La credenziale non appartiene al tentativo Auth corrente.');
+        }
+        assertUserMatchesIntent(intent, user);
+        if ((intent.method === 'google' && credential.providerId !== 'google.com')
+            || (intent.method === 'email' && credential.providerId !== 'password')) {
+            throw new Error('Il provider del risultato Auth non corrisponde al tentativo.');
+        }
+        if (failedAuthResults.has(intentId)) {
+            throw failedAuthResults.get(intentId);
+        }
+        const provenUid = provenAuthResults.get(intentId);
+        if (provenUid && provenUid !== user.uid) {
+            throw new Error('La credenziale del tentativo Auth è cambiata.');
+        }
+        provenAuthResults.set(intentId, user.uid);
+        settleAuthResultWaiters(intentId);
+    });
+}
+
+/** Captured at redirect bootstrap before Auth can clear its navigation marker. */
+export function readGuestMigrationTabReceipt(): string | null {
+    return readTabReceipt();
+}
+
+export function rejectGuestMigrationAuthWaiters(intentId: string, reason: string): void {
+    // A redirect failure may arrive before Auth bootstrap subscribes.
+    // Keep the failure in this realm so a late subscriber cannot wait 15 s
+    // or infer a successful login from the broadcast.
+    if (provenAuthResults.has(intentId)) return;
+    const error = new Error(reason);
+    failedAuthResults.set(intentId, error);
+    settleAuthResultWaiters(intentId, error);
+}
+
 function readTabReceipt(): string | null {
     // sessionStorage errors are fatal at this owner-changing boundary.
     return sessionStorage.getItem(TAB_RECEIPT_KEY);
@@ -120,6 +220,7 @@ export function beginGuestMigrationIntent(
         if (email) intent.expectedEmail = email;
         if (options.uid) intent.expectedUid = options.uid;
         const oldReceipt = readTabReceipt();
+        const previousId = raw ? parse(raw).id : null;
         sessionStorage.setItem(TAB_RECEIPT_KEY, intent.id);
         try {
             writeBrowserJson(KEY, intent);
@@ -128,15 +229,33 @@ export function beginGuestMigrationIntent(
             else sessionStorage.setItem(TAB_RECEIPT_KEY, oldReceipt);
             throw error;
         }
+        if (previousId && previousId !== intent.id) {
+            provenAuthResults.delete(previousId);
+            failedAuthResults.delete(previousId);
+            settleAuthResultWaiters(previousId, new Error('Tentativo Auth sostituito da un recupero esplicito.'));
+        }
         return intent;
     }));
 }
 
-export function bindGuestMigrationIntentToUser(user: User): Promise<GuestMigrationIntent> {
+export async function bindGuestMigrationIntentToUser(user: User): Promise<GuestMigrationIntent> {
+    // Register a local waiter before binding: Firebase auth broadcasts do not
+    // establish that this tab's popup/email/redirect has returned a credential.
+    const prior = readGuestMigrationIntentStrict();
+    if (readTabReceipt() !== prior.id) {
+        throw new Error('Questo accesso non ha origine da questa scheda.');
+    }
+    assertUserMatchesIntent(prior, user);
+    if (prior.method !== 'recovery' && failedAuthResults.has(prior.id)) {
+        throw failedAuthResults.get(prior.id);
+    }
+    if (prior.method !== 'recovery' && provenAuthResults.get(prior.id) !== user.uid) {
+        await awaitOwnAuthResult(prior.id);
+    }
     return withIntentLock(async () => {
         const intent = readGuestMigrationIntentStrict();
-        if (readTabReceipt() !== intent.id) {
-            throw new Error('Questo accesso non ha origine da questa scheda.');
+        if (intent.id !== prior.id || readTabReceipt() !== intent.id) {
+            throw new Error('Il tentativo Auth corrente è cambiato.');
         }
         const uid = user.uid;
         if (intent.claimedBy && intent.claimedBy !== realmClaim) {
@@ -145,15 +264,9 @@ export function bindGuestMigrationIntentToUser(user: User): Promise<GuestMigrati
         if (intent.boundUid && intent.boundUid !== uid) {
             throw new Error('Il tentativo di trasferimento appartiene a una sessione diversa.');
         }
-        if (intent.expectedUid && intent.expectedUid !== uid) {
-            throw new Error('Il tentativo di trasferimento appartiene a un account diverso.');
-        }
-        const userEmail = normalizeEmail(user.email);
-        if (intent.method === 'email' && intent.expectedEmail && intent.expectedEmail !== userEmail) {
-            throw new Error('Il tentativo email non corrisponde all’account autenticato.');
-        }
-        if (intent.method === 'google' && !(user.providerData ?? []).some(provider => provider.providerId === 'google.com')) {
-            throw new Error('Il tentativo Google non corrisponde all’account autenticato.');
+        assertUserMatchesIntent(intent, user);
+        if (intent.method !== 'recovery' && provenAuthResults.get(intent.id) !== uid) {
+            throw new Error('L’identità non è stata confermata dal login avviato in questa scheda.');
         }
         const bound = { ...intent, boundUid: uid, claimedBy: realmClaim };
         writeBrowserJson(KEY, bound);
@@ -169,5 +282,8 @@ export function clearGuestMigrationIntent(expectedId: string): Promise<void> {
         }
         removeBrowserValue(KEY);
         sessionStorage.removeItem(TAB_RECEIPT_KEY);
+        provenAuthResults.delete(expectedId);
+        failedAuthResults.delete(expectedId);
+        settleAuthResultWaiters(expectedId, new Error('Tentativo Auth terminato.'));
     });
 }

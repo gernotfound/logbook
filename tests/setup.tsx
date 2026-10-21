@@ -326,7 +326,7 @@ const firebaseAuthFixture = vi.hoisted(() => {
     const user = createUser(options);
     auth.currentUser = user;
     for (const listener of listeners) listener(user);
-    return { user };
+    return { user, providerId: options.providerId ?? 'password', operationType: 'signIn' as const };
   };
 
   return { createUser, listeners, auth, signIn };
