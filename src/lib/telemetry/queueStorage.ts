@@ -98,7 +98,6 @@ export class TelemetryQueueStorage {
           // Encrypted owner-scoped storage is the only durable source.
           return recent;
         }
-
       }
     } catch {
       // A missing key, corrupted ciphertext, quota error or unavailable
