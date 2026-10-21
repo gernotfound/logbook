@@ -53,7 +53,7 @@ describe('guest login: session and vault readiness fencing', () => {
         vi.mocked(ensureLocalVaultReady).mockReturnValueOnce(hold.promise);
         const hook = setupGuestLogin();
         let operation!: Promise<void>;
-        act(() => { operation = hook.result.current.loginAsGuest(); });
+        act(() => { operation = hook.result.current(); });
         await waitFor(() => expect(ensureLocalVaultReady).toHaveBeenCalledWith('guest'));
         invalidateSession();
         await act(async () => { hold.resolve(); await operation; });
@@ -66,7 +66,7 @@ describe('guest login: session and vault readiness fencing', () => {
     it('does not accept cancelled readiness as a usable local vault', async () => {
         vi.mocked(isVaultUnlocked).mockReturnValue(false);
         const hook = setupGuestLogin();
-        await act(async () => { await hook.result.current.loginAsGuest(); });
+        await act(async () => { await hook.result.current(); });
         expect(ensureLocalVaultReady).toHaveBeenCalledWith('guest');
         expect(hook.setIsGuest).not.toHaveBeenCalled();
         expect(hook.setUserData).not.toHaveBeenCalled();
@@ -78,7 +78,7 @@ describe('guest login: session and vault readiness fencing', () => {
         vi.mocked(ensureLocalVaultReady).mockReturnValueOnce(hold.promise);
         const hook = setupGuestLogin();
         let operation!: Promise<void>;
-        act(() => { operation = hook.result.current.loginAsGuest(); });
+        act(() => { operation = hook.result.current(); });
         await waitFor(() => expect(ensureLocalVaultReady).toHaveBeenCalledWith('guest'));
         localStorage.setItem(GUEST_SESSION_KEY, 'another-guest-generation');
         activateGuestSession('another-guest-generation');
@@ -94,11 +94,13 @@ describe('guest login: session and vault readiness fencing', () => {
         vi.spyOn(catalogService, 'getCachedCatalog').mockReturnValue(hold.promise);
         const hook = setupGuestLogin();
         let operation!: Promise<void>;
-        act(() => { operation = hook.result.current.loginAsGuest(); });
+        act(() => { operation = hook.result.current(); });
         await waitFor(() => expect(catalogService.getCachedCatalog).toHaveBeenCalled());
         invalidateSession();
         await act(async () => {
-            hold.resolve({ exercises: [], foods: [] } as Awaited<ReturnType<typeof catalogService.getCachedCatalog>>);
+            // The stale callback must exit before consuming this catalog; its
+            // schema is irrelevant to the race being tested.
+            hold.resolve({ exercises: [], foods: [] } as unknown as Awaited<ReturnType<typeof catalogService.getCachedCatalog>>);
             await operation;
         });
         expect(hook.setUserData).not.toHaveBeenCalled();
