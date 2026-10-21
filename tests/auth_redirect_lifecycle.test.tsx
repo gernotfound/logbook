@@ -5,7 +5,7 @@ import { getRedirectResult, signInWithPopup, signInWithRedirect } from 'firebase
 import { AuthProvider } from '../src/contexts/AuthContext';
 import { useAuth } from '../src/hooks/useAuth';
 import { safeHardReload } from '../src/lib/sync/safeReload';
-import { localStorageMock } from './setup';
+import { sessionStorageMock } from './setup';
 import { useAppStore } from '../src/store/useAppStore';
 
 vi.mock('../src/lib/sync/safeReload', () => ({
@@ -23,6 +23,7 @@ let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
 describe('Google redirect lifecycle', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    sessionStorage.clear();
     vi.mocked(getRedirectResult).mockResolvedValue(null);
     vi.mocked(signInWithPopup).mockRejectedValue(popupBlocked);
     vi.mocked(signInWithRedirect).mockRejectedValue(redirectRejected);
@@ -45,8 +46,8 @@ describe('Google redirect lifecycle', () => {
       await run(result.current);
     });
 
-    expect(localStorageMock.setItem).toHaveBeenCalledWith(REDIRECT_KEY, 'true');
-    expect(localStorage.getItem(REDIRECT_KEY)).toBeNull();
+    expect(sessionStorageMock.setItem).toHaveBeenCalledWith(REDIRECT_KEY, 'true');
+    expect(sessionStorage.getItem(REDIRECT_KEY)).toBeNull();
 
     document.dispatchEvent(new Event('visibilitychange'));
     await act(async () => { await Promise.resolve(); });
@@ -64,7 +65,7 @@ describe('Google redirect lifecycle', () => {
     await act(async () => { await Promise.resolve(); });
     await act(async () => { await run(result.current); });
     expect(signInWithRedirect).not.toHaveBeenCalled();
-    expect(localStorage.getItem(REDIRECT_KEY)).toBeNull();
+    expect(sessionStorage.getItem(REDIRECT_KEY)).toBeNull();
     expect(useAppStore.getState().saveError).toBeNull();
   });
 
@@ -79,15 +80,27 @@ describe('Google redirect lifecycle', () => {
     await act(async () => { await Promise.resolve(); });
     await act(async () => { await run(result.current); });
     expect(signInWithRedirect).not.toHaveBeenCalled();
-    expect(localStorage.getItem(REDIRECT_KEY)).toBeNull();
+    expect(sessionStorage.getItem(REDIRECT_KEY)).toBeNull();
     expect(useAppStore.getState().saveError).toContain('Connessione non disponibile');
+  });
+
+  it('ignores a redirect marker written by another tab into shared localStorage', async () => {
+    localStorage.setItem(REDIRECT_KEY, 'true');
+    sessionStorage.removeItem(REDIRECT_KEY);
+    renderHook(() => useAuth(), { wrapper });
+    await act(async () => { await Promise.resolve(); });
+    document.dispatchEvent(new Event('visibilitychange'));
+    await act(async () => { await Promise.resolve(); });
+    expect(safeHardReload).not.toHaveBeenCalled();
+    expect(localStorage.getItem(REDIRECT_KEY)).toBe('true');
+    expect(sessionStorage.getItem(REDIRECT_KEY)).toBeNull();
   });
 
   it('fails closed when foreground redirect marker cleanup cannot be persisted', async () => {
     renderHook(() => useAuth(), { wrapper });
     await act(async () => { await Promise.resolve(); });
-    localStorage.setItem(REDIRECT_KEY, 'true');
-    localStorageMock.removeItem.mockImplementationOnce(() => {
+    sessionStorage.setItem(REDIRECT_KEY, 'true');
+    sessionStorageMock.removeItem.mockImplementationOnce(() => {
       throw new Error('storage cleanup denied');
     });
 
@@ -97,7 +110,7 @@ describe('Google redirect lifecycle', () => {
     });
 
     expect(safeHardReload).not.toHaveBeenCalled();
-    expect(localStorage.getItem(REDIRECT_KEY)).toBe('true');
+    expect(sessionStorage.getItem(REDIRECT_KEY)).toBe('true');
     expect(useAppStore.getState().saveError).toContain('stato locale del dispositivo');
   });
 
@@ -105,7 +118,7 @@ describe('Google redirect lifecycle', () => {
     const { unmount } = renderHook(() => useAuth(), { wrapper });
     await act(async () => { await Promise.resolve(); });
     unmount();
-    localStorage.setItem(REDIRECT_KEY, 'true');
+    sessionStorage.setItem(REDIRECT_KEY, 'true');
 
     await act(async () => {
       document.dispatchEvent(new Event('visibilitychange'));
@@ -121,14 +134,14 @@ describe('Google redirect lifecycle', () => {
     await act(async () => { await Promise.resolve(); await Promise.resolve(); });
 
     expect(useAppStore.getState().saveError).toContain('Accesso Google non completato');
-    expect(localStorage.getItem(REDIRECT_KEY)).toBeNull();
+    expect(sessionStorage.getItem(REDIRECT_KEY)).toBeNull();
   });
 
   it('blocca il reload spurio anche se la pulizia storage del marker fallisce', async () => {
     const { result } = renderHook(() => useAuth(), { wrapper });
     await act(async () => { await Promise.resolve(); });
 
-    localStorageMock.removeItem.mockImplementationOnce(() => {
+    sessionStorageMock.removeItem.mockImplementationOnce(() => {
       throw new Error('storage remove blocked');
     });
 
@@ -136,7 +149,7 @@ describe('Google redirect lifecycle', () => {
       await result.current.login();
     });
 
-    expect(localStorage.getItem(REDIRECT_KEY)).toBe('failed');
+    expect(sessionStorage.getItem(REDIRECT_KEY)).toBe('failed');
 
     document.dispatchEvent(new Event('visibilitychange'));
     await act(async () => { await Promise.resolve(); });
@@ -147,13 +160,13 @@ describe('Google redirect lifecycle', () => {
     const { result } = renderHook(() => useAuth(), { wrapper });
     await act(async () => { await Promise.resolve(); });
 
-    const originalSetItem = localStorageMock.setItem.getMockImplementation();
-    localStorageMock.setItem
+    const originalSetItem = sessionStorageMock.setItem.getMockImplementation();
+    sessionStorageMock.setItem
       .mockImplementationOnce((key, value) => originalSetItem?.(key, value))
       .mockImplementationOnce(() => {
         throw new Error('storage write blocked');
       });
-    localStorageMock.removeItem.mockImplementationOnce(() => {
+    sessionStorageMock.removeItem.mockImplementationOnce(() => {
       throw new Error('storage remove blocked');
     });
 
@@ -161,7 +174,7 @@ describe('Google redirect lifecycle', () => {
       await result.current.login();
     });
 
-    expect(localStorage.getItem(REDIRECT_KEY)).toBe('true');
+    expect(sessionStorage.getItem(REDIRECT_KEY)).toBe('true');
 
     document.dispatchEvent(new Event('visibilitychange'));
     await act(async () => { await Promise.resolve(); });
