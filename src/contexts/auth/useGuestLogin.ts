@@ -18,7 +18,7 @@ export const GUEST_KEY = 'logbook_is_guest';
 
 /** The same guard used at both asynchronous guest bootstrap boundaries. */
 export function isGuestVaultReadinessCurrent(session: SessionSnapshot): boolean {
-    return isCurrentSession(session) && isVaultUnlocked('guest');
+    return session.owner === 'guest' && isCurrentSession(session) && isVaultUnlocked('guest');
 }
 
 type GuestMigrationStatus = 'idle' | 'pending' | 'failed';
