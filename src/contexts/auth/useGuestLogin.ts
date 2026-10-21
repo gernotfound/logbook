@@ -17,8 +17,11 @@ import { isVaultUnlocked } from '../../lib/sync/secureArchiveSession';
 export const GUEST_KEY = 'logbook_is_guest';
 
 /** The same guard used at both asynchronous guest bootstrap boundaries. */
-export function isGuestVaultReadinessCurrent(session: SessionSnapshot): boolean {
-    return session.owner === 'guest' && isCurrentSession(session) && isVaultUnlocked('guest');
+export function isGuestVaultReadinessCurrent(
+    session: SessionSnapshot,
+    vaultReady: (owner: string) => boolean = isVaultUnlocked,
+): boolean {
+    return session.owner === 'guest' && isCurrentSession(session) && vaultReady('guest');
 }
 
 type GuestMigrationStatus = 'idle' | 'pending' | 'failed';
