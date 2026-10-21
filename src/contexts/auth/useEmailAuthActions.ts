@@ -52,7 +52,7 @@ export function useEmailAuthActions({
         }
         if (intentId) {
             try {
-                await confirmGuestMigrationCredential(intentId, credential.user);
+                await confirmGuestMigrationCredential(intentId, credential);
             } catch (error) {
                 rejectGuestMigrationAuthWaiters(intentId, 'Risultato di questo accesso email non verificabile.');
                 console.error('Prova dell’accesso email non confermata:', error);
@@ -92,7 +92,7 @@ export function useEmailAuthActions({
         let proofFailed = false;
         if (intentId) {
             try {
-                await confirmGuestMigrationCredential(intentId, credential.user);
+                await confirmGuestMigrationCredential(intentId, credential);
             } catch (error) {
                 proofFailed = true;
                 rejectGuestMigrationAuthWaiters(intentId, 'Risultato della registrazione email non verificabile.');
