@@ -99,21 +99,18 @@ function readTabReceipt(): string | null {
 export function beginGuestMigrationIntent(
     policy: GuestMigrationPolicy,
     method: GuestMigrationMethod,
-    options: { email?: string; uid?: string } = {},
+    options: { email?: string; uid?: string; assertCurrent?: () => boolean } = {},
 ): Promise<GuestMigrationIntent> {
     return withGuestLifecycleLock(() => withIntentLock(async () => {
+        if (options.assertCurrent && !options.assertCurrent()) {
+            throw new Error('Sessione di recupero guest non più attiva.');
+        }
         const raw = readBrowserValueStrict(KEY);
         if (raw !== null) {
             const active = parse(raw);
             const notExpired = Date.now() - active.startedAt <= MAX_AGE_MS;
             if (notExpired && !(method === 'recovery' && options.uid)) {
                 throw new Error('Un altro tentativo di trasferimento è ancora in corso. Completalo o riprova.');
-            }
-            if (notExpired && method === 'recovery' && options.uid
-                && active.boundUid && active.boundUid !== options.uid) {
-                // A different account may have committed its own data already:
-                // no automatic takeover or policy substitution is authorized.
-                throw new Error('Il trasferimento in corso appartiene a un altro account.');
             }
         }
         const intent: GuestMigrationIntent = {
