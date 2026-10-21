@@ -1,6 +1,7 @@
 import { useCallback, type RefObject } from 'react';
 import { auth, provider, signInWithPopup, signInWithRedirect } from '../../lib/firebase';
 import { useAppStore } from '../../store/useAppStore';
+import { captureSession, isCurrentSession } from '../../lib/sync/session';
 import { writeBrowserValue, tryRemoveBrowserValue } from '../../lib/sync/browserStorage';
 import { beginGuestMigrationIntent, clearGuestMigrationIntent } from '../../lib/auth/guestMigrationIntent';
 import { classifyGooglePopupFailure } from './googlePopup';
@@ -52,7 +53,10 @@ export function useGoogleAuthActions({
         let intentId: string | null = null;
         if (isGuestActiveStrict()) {
             if (!guestPolicy) throw new Error('Scelta di trasferimento guest richiesta.');
-            intentId = (await beginGuestMigrationIntent(guestPolicy, 'google')).id;
+            const guestSession = captureSession();
+            intentId = (await beginGuestMigrationIntent(guestPolicy, 'google', {
+                assertCurrent: () => isGuestActiveStrict() && isCurrentSession(guestSession),
+            })).id;
         }
         try {
             await signInWithPopup(auth, provider);
@@ -86,7 +90,10 @@ export function useGoogleAuthActions({
         let intentId: string | null = null;
         if (isGuestActiveStrict()) {
             if (!guestPolicy) throw new Error('Scelta di trasferimento guest richiesta.');
-            intentId = (await beginGuestMigrationIntent(guestPolicy, 'google')).id;
+            const guestSession = captureSession();
+            intentId = (await beginGuestMigrationIntent(guestPolicy, 'google', {
+                assertCurrent: () => isGuestActiveStrict() && isCurrentSession(guestSession),
+            })).id;
         }
         try {
             await signInWithPopup(auth, provider);
