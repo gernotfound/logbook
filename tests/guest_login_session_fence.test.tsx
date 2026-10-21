@@ -1,15 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { auth } from '../src/lib/firebase';
-import { isVaultUnlocked } from '../src/lib/sync/secureArchiveSession';
 import { isGuestVaultReadinessCurrent } from '../src/contexts/auth/useGuestLogin';
 import {
-    activateGuestSession, captureSession, isActiveGuestSession, isCurrentSession, GUEST_REVOCATION_KEY, GUEST_SESSION_KEY, invalidateSession,
+    activateGuestSession, captureSession, GUEST_REVOCATION_KEY, GUEST_SESSION_KEY, invalidateSession,
 } from '../src/lib/sync/session';
 
-vi.mock('../src/lib/sync/secureArchiveSession', async importOriginal => ({
-    ...(await importOriginal<typeof import('../src/lib/sync/secureArchiveSession')>()),
-    isVaultUnlocked: vi.fn(() => true),
-}));
+const ready = vi.fn((_owner: string) => true);
 
 function beginGuest(id: string) {
     localStorage.setItem('logbook_is_guest', 'true');
@@ -22,63 +18,57 @@ function beginGuest(id: string) {
 describe('guest vault readiness: exact owner and session fences', () => {
     beforeEach(() => {
         localStorage.clear();
-        // The shared UI fixture starts with an authenticated Firebase user.
-        // Guest readiness requires a real guest-only lifecycle.
         (auth as { currentUser: unknown }).currentUser = null;
         vi.clearAllMocks();
-        vi.mocked(isVaultUnlocked).mockReturnValue(true);
+        ready.mockReturnValue(true);
     });
 
-    it('permits publishing only with the active guest generation and an unlocked vault', () => {
+    it('allows the current guest generation when its vault is ready', () => {
         const session = beginGuest('guest-generation-a');
-        expect(isGuestVaultReadinessCurrent(session), JSON.stringify({
-            owner: session.owner, currentOwner: captureSession().owner,
-            sessionId: session.guestSessionId, currentId: localStorage.getItem(GUEST_SESSION_KEY),
-            guestFlag: localStorage.getItem('logbook_is_guest'),
-            guestActive: isActiveGuestSession(), current: isCurrentSession(session),
-            epoch: session.epoch, nowEpoch: captureSession().epoch,
-            consentMarker: session.consentMarker, nowConsent: captureSession().consentMarker,
-            currentAuth: auth.currentUser?.uid,
-            vaultUnlocked: isVaultUnlocked('guest'),
-        })).toBe(true);
-        expect(isVaultUnlocked).toHaveBeenCalledWith('guest');
+        expect(isGuestVaultReadinessCurrent(session, ready)).toBe(true);
+        expect(ready).toHaveBeenCalledExactlyOnceWith('guest');
     });
 
     it('refuses a canceled vault readiness completion after the session epoch changes', async () => {
         const session = beginGuest('guest-generation-b');
         let release!: () => void;
         const pending = new Promise<void>(resolve => { release = resolve; });
-        const checkAfterReady = pending.then(() => isGuestVaultReadinessCurrent(session));
+        const checkAfterReady = pending.then(() => isGuestVaultReadinessCurrent(session, ready));
         invalidateSession();
         release();
         await expect(checkAfterReady).resolves.toBe(false);
+        expect(ready).not.toHaveBeenCalled();
     });
 
     it('does not mistake a completed readiness Promise for a usable vault', async () => {
         const session = beginGuest('guest-generation-c');
-        vi.mocked(isVaultUnlocked).mockReturnValue(false);
-        const completion = Promise.resolve().then(() => isGuestVaultReadinessCurrent(session));
+        ready.mockReturnValue(false);
+        const completion = Promise.resolve().then(() => isGuestVaultReadinessCurrent(session, ready));
         await expect(completion).resolves.toBe(false);
+        expect(ready).toHaveBeenCalledExactlyOnceWith('guest');
     });
 
-    it('rejects adoption of a replacement guest generation after asynchronous work', async () => {
+    it('rejects a replacement guest generation after asynchronous work', async () => {
         const session = beginGuest('guest-generation-old');
         let release!: () => void;
         const pending = new Promise<void>(resolve => { release = resolve; });
-        const checkAfterReady = pending.then(() => isGuestVaultReadinessCurrent(session));
+        const checkAfterReady = pending.then(() => isGuestVaultReadinessCurrent(session, ready));
         beginGuest('guest-generation-new');
         release();
         await expect(checkAfterReady).resolves.toBe(false);
+        expect(ready).not.toHaveBeenCalled();
     });
 
-    it('does not publish guest state for an authenticated owner snapshot', () => {
-        const guest = beginGuest('guest-during-account-handoff');
-        expect(isGuestVaultReadinessCurrent({ ...guest, owner: 'user:other-account' })).toBe(false);
+    it('rejects an authenticated owner snapshot even if guest storage is active', () => {
+        const session = beginGuest('guest-generation-handoff');
+        expect(isGuestVaultReadinessCurrent({ ...session, owner: 'user:other-account' }, ready)).toBe(false);
+        expect(ready).not.toHaveBeenCalled();
     });
 
-    it('fails closed when the guest generation has been revoked', () => {
+    it('refuses a revoked guest generation without attempting to open the vault', () => {
         const session = beginGuest('guest-generation-revoked');
         localStorage.setItem(GUEST_REVOCATION_KEY, 'revoked');
-        expect(isGuestVaultReadinessCurrent(session)).toBe(false);
+        expect(isGuestVaultReadinessCurrent(session, ready)).toBe(false);
+        expect(ready).not.toHaveBeenCalled();
     });
 });
