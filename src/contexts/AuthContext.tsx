@@ -19,7 +19,6 @@ import {
     BrowserStorageError,
     readBrowserValueStrict,
     removeBrowserValue,
-    writeBrowserValue,
 } from '../lib/sync/browserStorage';
 import { attachAuthRedirectRecovery } from './auth/attachAuthRedirectRecovery';
 import { prepareForReload } from '../lib/sync/reloadBarrier';
