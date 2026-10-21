@@ -4,7 +4,7 @@ import { useAppStore } from '../../store/useAppStore';
 import { captureSession, isCurrentSession } from '../../lib/sync/session';
 import { validatePasswordAgainstPolicy } from '../../lib/auth/passwordPolicy';
 import { describeEmailAuthError } from '../../lib/auth/emailAuthError';
-import { beginGuestMigrationIntent, clearGuestMigrationIntent } from '../../lib/auth/guestMigrationIntent';
+import { beginGuestMigrationIntent, clearGuestMigrationIntent, confirmGuestMigrationCredential } from '../../lib/auth/guestMigrationIntent';
 import { safeHardReload } from '../../lib/sync/safeReload';
 import type { UserData } from '../../types';
 import type { GuestMigrationPolicy } from '../AuthContextDef';
@@ -44,7 +44,8 @@ export function useEmailAuthActions({
             })).id;
         }
         try {
-            await signInWithEmailAndPassword(auth, email, pass);
+            const credential = await signInWithEmailAndPassword(auth, email, pass);
+            if (intentId) await confirmGuestMigrationCredential(intentId, credential.user);
         } catch (error) {
             await abandonOwnGuestIntent(intentId);
             handleAuthError(error);
@@ -73,6 +74,7 @@ export function useEmailAuthActions({
         let credential: Awaited<ReturnType<typeof createUserWithEmailAndPassword>>;
         try {
             credential = await createUserWithEmailAndPassword(auth, email, pass);
+            if (intentId) await confirmGuestMigrationCredential(intentId, credential.user);
         } catch (error) {
             await abandonOwnGuestIntent(intentId);
             handleAuthError(error);
