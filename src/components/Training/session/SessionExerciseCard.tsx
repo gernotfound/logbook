@@ -11,7 +11,7 @@ interface SessionExerciseCardProps {
     exItem: SessionExercise;
     exIndex: number;
     totalExercises?: number;
-    libDef?: Pick<Exercise, 'name'> & Partial<Pick<Exercise, 'notes' | 'muscles'>> & { trackingType?: string };
+    libDef?: Omit<Partial<Exercise>, 'trackingType'> & { name: string; trackingType?: string };
     pastWorkouts: Array<{ date: string; sets: Partial<SessionExerciseSet>[]; note: string }>;
     isHistoryOpen: boolean;
     isSetupOpen: boolean;
