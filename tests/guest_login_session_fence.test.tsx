@@ -31,7 +31,7 @@ function setupGuestLogin() {
         isGuestRef, setIsGuest, setGuestMigrationStatus, setSaveError,
         setUserData: setUserData as unknown as ReturnType<typeof useAppStore.getState>['setUserData'],
     }));
-    return { result, unmount, isGuestRef, setIsGuest, setUserData };
+    return { result, unmount, isGuestRef, setIsGuest, setUserData, setSaveError };
 }
 
 describe('guest login: session and vault readiness fencing', () => {
