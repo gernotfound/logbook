@@ -33,6 +33,67 @@ describe('isolated foreground redirect recovery', () => {
         return { stored, remove, reload, setSaveError, foreground: () => listener() };
     }
 
+    it('accepts its own confirmed Google redirect even when the Auth callback arrives first', async () => {
+        const { beginGuestMigrationIntent, bindGuestMigrationIntentToUser } =
+            await import('../src/lib/auth/guestMigrationIntent');
+        localStorage.clear();
+        sessionStorage.clear();
+        const intent = await beginGuestMigrationIntent('merge', 'google');
+        const user = { uid: 'redirect-account', email: 'redirect@example.test',
+            providerData: [{ providerId: 'google.com' }] } as import('firebase/auth').User;
+        let deliver!: (value: unknown) => void;
+        const result = new Promise<unknown>(resolve => { deliver = resolve; });
+        let marker: string | null = 'true';
+        const setSaveError = vi.fn();
+        const detach = attachAuthRedirectRecovery({
+            awaitingRedirectKey: 'logbook_awaiting_redirect',
+            redirectLaunchFailedRef: { current: false },
+            setSaveError,
+        }, {
+            visibility: () => 'hidden',
+            listen: () => () => {},
+            read: () => marker,
+            remove: () => { marker = null; return true; },
+            reload: async () => {},
+            getRedirect: () => result,
+        });
+        detachAll.push(detach);
+        // Bootstrap observes the authenticated UID before getRedirectResult.
+        const binding = bindGuestMigrationIntentToUser(user);
+        deliver({ user });
+        await expect(binding).resolves.toMatchObject({ id: intent.id, boundUid: user.uid });
+        await vi.waitFor(() => expect(marker).toBeNull());
+        expect(setSaveError).not.toHaveBeenCalled();
+    });
+
+    it('keeps guest intact when a null redirect result precedes the Auth callback', async () => {
+        const { beginGuestMigrationIntent, bindGuestMigrationIntentToUser } =
+            await import('../src/lib/auth/guestMigrationIntent');
+        localStorage.clear();
+        sessionStorage.clear();
+        const intent = await beginGuestMigrationIntent('skip', 'google');
+        const setSaveError = vi.fn();
+        attachAuthRedirectRecovery({
+            awaitingRedirectKey: 'logbook_awaiting_redirect',
+            redirectLaunchFailedRef: { current: false },
+            setSaveError,
+        }, {
+            visibility: () => 'hidden',
+            listen: () => () => {},
+            read: () => 'true',
+            remove: () => true,
+            reload: async () => {},
+            getRedirect: async () => null,
+        });
+        await vi.waitFor(() => expect(setSaveError).toHaveBeenCalledWith(expect.stringContaining('non confermato')));
+        const user = { uid: 'redirect-account', providerData: [{ providerId: 'google.com' }] }
+            as import('firebase/auth').User;
+        await expect(bindGuestMigrationIntentToUser(user)).rejects.toThrow('Redirect Google non confermato');
+        expect(JSON.parse(localStorage.getItem('guest_migration_intent_v1')!)).toMatchObject({
+            id: intent.id, policy: 'skip',
+        });
+    });
+
     it('consumes the active marker once and calls the safe reload barrier only once', async () => {
         const { stored, remove, reload, foreground } = setup();
         foreground();
