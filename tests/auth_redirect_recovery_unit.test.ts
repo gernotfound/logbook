@@ -60,7 +60,7 @@ describe('isolated foreground redirect recovery', () => {
         detachAll.push(detach);
         // Bootstrap observes the authenticated UID before getRedirectResult.
         const binding = bindGuestMigrationIntentToUser(user);
-        deliver({ user });
+        deliver({ user, providerId: 'google.com' });
         await expect(binding).resolves.toMatchObject({ id: intent.id, boundUid: user.uid });
         await vi.waitFor(() => expect(marker).toBeNull());
         expect(setSaveError).not.toHaveBeenCalled();
