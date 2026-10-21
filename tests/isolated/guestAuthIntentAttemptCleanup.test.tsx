@@ -102,6 +102,51 @@ describe('serialized guest migration intent belongs to an exact Auth attempt', (
         expect(JSON.parse(localStorage.getItem(KEY)!).id).toBe(original.id);
     });
 
+    it('never reports journal-only recovery as success while a stale guest snapshot belongs to another owner', async () => {
+        const { auth } = await import('../../src/lib/firebase');
+        const { UserDataSchema } = await import('../../src/lib/schema');
+        const { useGuestMigrationRetry } = await import('../../src/contexts/auth/useGuestMigrationRetry');
+        const safeReload = await import('../../src/lib/sync/safeReload');
+        const journal = await import('../../src/lib/sync/replicateJournal');
+        const originalUser = auth.currentUser;
+        const snapshot = useAppStore.getState();
+        const user = { uid: 'authenticated-after-another-tab', emailVerified: true } as User;
+        const setStatus = vi.fn();
+        const setSaveError = vi.fn();
+        const reload = vi.spyOn(safeReload, 'safeHardReload').mockRejectedValueOnce(new Error('Bozza locale non verificata'));
+        const replicate = vi.spyOn(journal, 'replicateJournal');
+        try {
+            (auth as { currentUser: User | null }).currentUser = user;
+            useAppStore.setState({
+                dataOwner: 'guest',
+                userData: UserDataSchema.parse({ profile: { height: '172' } }) as any,
+            });
+            const hook = renderHook(() => useGuestMigrationRetry({
+                isGuestActiveStrict: () => false,
+                setSaveError,
+                setSyncing: vi.fn(),
+                setGuestMigrationStatus: setStatus,
+                clearGuestMigrationSyncRecovery: vi.fn(),
+            }));
+            await act(async () => { await hook.result.current(); });
+            expect(reload).toHaveBeenCalledTimes(1);
+            expect(replicate).not.toHaveBeenCalled();
+            expect(setStatus).toHaveBeenCalledWith('failed');
+            expect(setSaveError).toHaveBeenCalledWith('Bozza locale non verificata');
+            expect(useAppStore.getState().dataOwner).toBe('guest');
+            hook.unmount();
+        } finally {
+            (auth as { currentUser: User | null }).currentUser = originalUser;
+            useAppStore.setState({
+                dataOwner: snapshot.dataOwner,
+                userData: snapshot.userData,
+                localWorkout: snapshot.localWorkout,
+            });
+            reload.mockRestore();
+            replicate.mockRestore();
+        }
+    });
+
     it('does not clear an existing guest Auth intent when non-guest Google login fails', async () => {
         const other = await beginGuestMigrationIntent('merge', 'recovery', { uid: 'account-b' });
         const original = localStorage.getItem(KEY);
