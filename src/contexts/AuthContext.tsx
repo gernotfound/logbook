@@ -344,7 +344,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                         } catch (error) {
                             purgeError = error;
                         }
-                        if (initialUid) clearGuestMigrationSyncRecovery(initialUid);
                         isGuestRef.current = false;
                         setIsGuest(false);
                         setGuestMigrationStatus('idle');
@@ -393,7 +392,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 useAppStore.getState().resetStore({ force: true });
                 if (initialUid) {
                     clearAuthenticatedOwnerHint(userOwner(initialUid));
-                    clearGuestMigrationSyncRecovery(initialUid);
                 }
                 setGuestMigrationStatus('idle');
             } catch (error: any) {
