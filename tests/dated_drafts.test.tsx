@@ -401,6 +401,38 @@ it('rejects a consent change during the last authenticated dated witness read', 
     expect(inspectDatedRecoveryEvidence(owner)[0].provenance).toBe('previous');
 });
 
+it('rejects a consent change during the final dated recovery inspection read', () => {
+    localStorage.removeItem('logbook_is_guest');
+    invalidateSession();
+    const owner = 'user:' + mockFirebaseAuth.currentUser!.uid;
+    const field = 'draft:measurement:2026-09-11';
+    const revisionKey = deviceKey('health-consent-generation', owner);
+    localStorage.setItem(revisionKey, '3');
+    const witness = createDatedWriterIntentName();
+    const raw = writeDatedWriterIntent(witness, owner, field, { weight: '75' }, null, '3');
+    const name = deviceKey(witness, owner);
+
+    const getter = vi.mocked(localStorage.getItem);
+    const originalGet = getter.getMockImplementation();
+    if (!originalGet) throw new Error('Missing localStorage mock implementation');
+    let witnessReads = 0;
+    getter.mockImplementation((key: string) => {
+        const value = originalGet(key);
+        if (key === name && ++witnessReads === 2) {
+            localStorage.setItem(revisionKey, '5');
+        }
+        return value;
+    });
+    try {
+        expect(() => inspectDatedRecoveryEvidence(owner)).toThrow('Copie o consenso cambiati');
+    } finally {
+        getter.mockImplementation(originalGet);
+    }
+    expect(witnessReads).toBe(2);
+    expect(localStorage.getItem(name)).toBe(raw);
+    expect(inspectDatedRecoveryEvidence(owner)[0].provenance).toBe('previous');
+});
+
 it('preserves dated writer witnesses when another tab compacts the key inventory', () => {
     const owner = storageOwner();
     const draftName = 'draft:measurement:2026-09-11';

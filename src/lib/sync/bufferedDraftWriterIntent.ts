@@ -97,6 +97,10 @@ export function inspectBufferedRecoveryEvidence(owner: string): BufferedRecovery
             throw new Error('Copia modificata durante la verifica. Riprova.');
         }
     }
+    // The consent epoch may change in another tab during the final value reads.
+    if (readDeviceConsentRevision(owner) !== revision) {
+        throw new Error('Copie o consenso cambiati durante la verifica. Riprova.');
+    }
     return scanned.map(({ raw: _raw, ...entry }) => entry)
         .sort((a, b) => a.draftName.localeCompare(b.draftName) || a.name.localeCompare(b.name));
 }
@@ -133,6 +137,11 @@ export function readBufferedWriterEvidence(owner: string, draftName: string): Bu
         if (readDeviceValueStrict(evidence.name, owner) !== evidence.raw) {
             throw new Error('Copia bufferizzata modificata durante la verifica.');
         }
+    }
+    // Keep the same final epoch invariant as dated writer recovery: a new
+    // consent revision cannot adopt witnesses authenticated under the old one.
+    if (readDeviceConsentRevision(owner) !== revision) {
+        throw new Error('Copie bufferizzate o consenso cambiati durante la lettura.');
     }
     return matches;
 }
