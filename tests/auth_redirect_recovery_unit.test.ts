@@ -86,8 +86,7 @@ describe('isolated foreground redirect recovery', () => {
             getRedirect: async () => null,
         });
         await vi.waitFor(() => expect(setSaveError).toHaveBeenCalledWith(expect.stringContaining('non confermato')));
-        const user = { uid: 'redirect-account', providerData: [{ providerId: 'google.com' }] }
-            as import('firebase/auth').User;
+        const user = { uid: 'redirect-account', providerData: [{ providerId: 'google.com' }] } as import('firebase/auth').User;
         await expect(bindGuestMigrationIntentToUser(user)).rejects.toThrow('Redirect Google non confermato');
         expect(JSON.parse(localStorage.getItem('guest_migration_intent_v1')!)).toMatchObject({
             id: intent.id, policy: 'skip',
