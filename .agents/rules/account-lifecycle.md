@@ -152,6 +152,8 @@ Se il key store non è disponibile ma esiste ciphertext, non generare una nuova 
 
 La modalità guest ha archivio e workout separati dagli utenti. La migrazione conserva la copia guest e registra il risultato locale prima della replica. Le callback vecchie sono invalidate tramite owner ed epoch.
 
+**MUST (CRITICAL):** dopo l'attesa di `ensureLocalVaultReady('guest')`, l'accesso guest deve verificare che la generazione esattamente attivata sia ancora quella corrente e che il vault sia effettivamente sbloccato. La cancellazione della readiness può risolvere la Promise senza sbloccare il vault; ciò non autorizza `setIsGuest`, `setUserData` o altri dati in memoria. Riesaminare sessione/epoch anche dopo l'attesa del catalogo e prima di pubblicare `UserData` o copie di recupero. Un accesso guest obsoleto termina senza modificare il nuovo owner.
+
 **MUST:** anche con policy `skip` (nessun trasferimento dell'archivio guest), oppure senza dati guest da fondere, un journal già pendente dell'account autenticato deve essere rigiocato o dichiarato `local-pending`/fallito secondo l'esito durevole; la hydration da sola non prova un ACK cloud. La copia guest resta separata e invariata.
 
 **MUST (CRITICAL):** durante il recovery di una migrazione guest→account già durevole, pubblicare l'envelope autenticato nello stato UI soltanto dopo il controllo dell'owner/sessione e senza attraversare `setUserData()` o altri writer di modifica business. Un vecchio snapshot guest in memoria non è la baseline del nuovo account. I journal e le copie device-critical di entrambi gli owner devono rimanere protetti; il ripristino dell'allenamento autenticato usa il recovery owner-scoped canonico.
