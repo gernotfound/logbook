@@ -5,6 +5,8 @@ describe('isolated foreground redirect recovery', () => {
     const detachAll: Array<() => void> = [];
     afterEach(() => {
         for (const detach of detachAll.splice(0)) detach();
+        sessionStorage.clear();
+        localStorage.clear();
     });
 
     function setup() {
