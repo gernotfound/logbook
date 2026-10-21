@@ -50,13 +50,13 @@ const OWNERLESS_LEGACY_BUSINESS_KEYS = UNSCOPED_LEGACY_KEYS.slice(0, 7);
 const OWNERLESS_LEGACY_BUSINESS_KEY_SET: ReadonlySet<string> = new Set(OWNERLESS_LEGACY_BUSINESS_KEYS);
 const UNSCOPED_LEGACY_KEY_SET: ReadonlySet<string> = new Set(UNSCOPED_LEGACY_KEYS);
 
-export class OwnerlessLegacyLocalStorageError extends Error {
+class OwnerlessLegacyLocalStorageError extends Error {
     constructor(key: string) {
         super('Pulizia sospesa: dati locali legacy senza proprietario verificabile (' + key + ').');
         this.name = 'OwnerlessLegacyLocalStorageError';
     }
 }
-export function assertNoOwnerlessLegacyBusinessData(): void {
+function assertNoOwnerlessLegacyBusinessData(): void {
     for (const key of OWNERLESS_LEGACY_BUSINESS_KEYS) {
         if (readBrowserValueStrict(key) !== null) {
             throw new OwnerlessLegacyLocalStorageError(key);
