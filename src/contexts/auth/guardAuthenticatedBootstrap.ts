@@ -2,7 +2,7 @@ import type { Dispatch, SetStateAction } from 'react';
 import type { User } from 'firebase/auth';
 import { beginHealthConsentVerification } from '../../lib/healthConsent';
 import { rememberAuthenticatedOwner } from '../../lib/sync/authOwnerHint';
-import { tryRemoveBrowserValue } from '../../lib/sync/browserStorage';
+import { tryRemoveAuthRedirectMarker } from '../../lib/auth/authRedirectMarker';
 import { userOwner } from '../../lib/sync/session';
 import { useAppStore } from '../../store/useAppStore';
 
@@ -38,7 +38,7 @@ export function guardAuthenticatedBootstrap(
         return true;
     }
     beginHealthConsentVerification(user.uid);
-    tryRemoveBrowserValue(awaitingRedirectKey);
+    tryRemoveAuthRedirectMarker(awaitingRedirectKey);
     const expectedOwner = userOwner(user.uid);
     const current = useAppStore.getState();
     const guestActiveBeforeAuth = isGuestActiveStrict();
