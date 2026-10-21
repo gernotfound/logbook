@@ -29,7 +29,7 @@ export function useGuestMigrationRetry({
             try {
                 const uid = auth.currentUser?.uid;
                 if (!uid || !policy) throw new Error('Scegli esplicitamente se trasferire o non trasferire i dati locali.');
-                beginGuestMigrationIntent(policy, 'recovery', { uid });
+                await beginGuestMigrationIntent(policy, 'recovery', { uid });
                 await safeHardReload();
             } catch (error) {
                 setGuestMigrationStatus('failed');
