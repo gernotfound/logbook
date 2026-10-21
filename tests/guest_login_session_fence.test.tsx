@@ -26,7 +26,8 @@ describe('guest vault readiness: exact owner and session fences', () => {
     it('allows the current guest generation when its vault is ready', () => {
         const session = beginGuest('guest-generation-a');
         expect(isGuestVaultReadinessCurrent(session, ready)).toBe(true);
-        expect(ready).toHaveBeenCalledExactlyOnceWith('guest');
+        expect(ready).toHaveBeenCalledTimes(1);
+        expect(ready).toHaveBeenCalledWith('guest');
     });
 
     it('refuses a canceled vault readiness completion after the session epoch changes', async () => {
@@ -45,7 +46,8 @@ describe('guest vault readiness: exact owner and session fences', () => {
         ready.mockReturnValue(false);
         const completion = Promise.resolve().then(() => isGuestVaultReadinessCurrent(session, ready));
         await expect(completion).resolves.toBe(false);
-        expect(ready).toHaveBeenCalledExactlyOnceWith('guest');
+        expect(ready).toHaveBeenCalledTimes(1);
+        expect(ready).toHaveBeenCalledWith('guest');
     });
 
     it('rejects a replacement guest generation after asynchronous work', async () => {
