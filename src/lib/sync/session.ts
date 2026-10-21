@@ -2,6 +2,7 @@ import { auth } from '../firebase';
 import { readBrowserValueStrict, writeBrowserValue } from './browserStorage';
 import { userOwner } from './owner';
 import { readAuthenticatedOwnerHint } from './authOwnerHint';
+import { readGuestMigrationSyncRecovery } from '../auth/guestMigrationSyncRecovery';
 
 export { userOwner } from './owner';
 
@@ -41,13 +42,11 @@ export function isActiveGuestSession(): boolean {
 }
 export function storageOwner(): string {
     const guest = readBrowserValueStrict('logbook_is_guest') === 'true';
-    const recoveryUid = readBrowserValueStrict('logbook_guest_migration_sync_recovery');
-
     const uid = auth.currentUser?.uid;
     // Once the authenticated envelope is durable, the recovery marker is the
     // authoritative owner handoff. This prevents store hydration during crash
     // recovery from persisting authenticated data back into the guest archive.
-    if (uid && recoveryUid === uid) return userOwner(uid);
+    if (uid && readGuestMigrationSyncRecovery(uid)) return userOwner(uid);
     if (guest) return 'guest';
     if (uid) return userOwner(uid);
     // During authenticated cold boot Firebase Auth may still be refreshing over the

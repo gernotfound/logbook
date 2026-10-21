@@ -46,7 +46,7 @@ it('uses the fenced store owner without rereading lifecycle ownership on rerende
 
     hook.rerender();
 
-    const lifecycleKeys = new Set(['logbook_is_guest', 'logbook_guest_migration_sync_recovery', 'logbook_authenticated_owner']);
+    const lifecycleKeys = new Set(['logbook_is_guest', 'logbook_authenticated_owner']);
     expect(getItem.mock.calls.some(([key]) => lifecycleKeys.has(String(key)))).toBe(false);
 });
 

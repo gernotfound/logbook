@@ -19,7 +19,6 @@ import {
     BrowserStorageError,
     readBrowserValueStrict,
     removeBrowserValue,
-    writeBrowserValue,
 } from '../lib/sync/browserStorage';
 import { attachAuthRedirectRecovery } from './auth/attachAuthRedirectRecovery';
 import { prepareForReload } from '../lib/sync/reloadBarrier';
@@ -32,26 +31,12 @@ import { reportError } from '../lib/errorHandler';
 import { clearAuthenticatedOwnerHint } from '../lib/sync/authOwnerHint';
 import { cancelLocalVaultReadiness } from '../lib/sync/secureArchiveUnlockFlow';
 import { lockVault } from '../lib/sync/secureArchiveSession';
+import { readGuestMigrationSyncRecovery, markGuestMigrationSyncRecovery, clearGuestMigrationSyncRecovery } from '../lib/auth/guestMigrationSyncRecovery';
 
-const GUEST_MIGRATION_SYNC_RECOVERY_KEY = 'logbook_guest_migration_sync_recovery';
 const AWAITING_REDIRECT_KEY = 'logbook_awaiting_redirect';
 
 function isStoredGuest(): boolean {
     return readBrowserValueStrict(GUEST_KEY) === 'true' && readBrowserValueStrict(GUEST_REVOCATION_KEY) === null && isActiveGuestSession();
-}
-
-function readGuestMigrationSyncRecovery(): string | null {
-    return readBrowserValueStrict(GUEST_MIGRATION_SYNC_RECOVERY_KEY);
-}
-
-function markGuestMigrationSyncRecovery(uid: string): void {
-    writeBrowserValue(GUEST_MIGRATION_SYNC_RECOVERY_KEY, uid);
-}
-
-function clearGuestMigrationSyncRecovery(uid: string): void {
-    if (readBrowserValueStrict(GUEST_MIGRATION_SYNC_RECOVERY_KEY) === uid) {
-        removeBrowserValue(GUEST_MIGRATION_SYNC_RECOVERY_KEY);
-    }
 }
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
@@ -132,9 +117,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
     }, [blockUnreadableLifecycleStorage]);
 
-    const readGuestMigrationRecoveryStrict = useCallback((): string | null => {
+    const readGuestMigrationRecoveryStrict = useCallback((uid: string): boolean => {
         try {
-            return readGuestMigrationSyncRecovery();
+            return readGuestMigrationSyncRecovery(uid);
         } catch (error) {
             return blockUnreadableLifecycleStorage(error);
         }

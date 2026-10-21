@@ -513,10 +513,6 @@ vi.mock('../src/lib/db', () => ({
         localStorage.removeItem('guest_migration_intent_v1');
         localStorage.removeItem('logbook_guest_session_id_v1');
       }
-      const ownerUid = owner.startsWith('user:') ? owner.slice('user:'.length) : null;
-      if (ownerUid && localStorage.getItem('logbook_guest_migration_sync_recovery') === ownerUid) {
-        localStorage.removeItem('logbook_guest_migration_sync_recovery');
-      }
       if (owner === 'guest') localStorage.removeItem('logbook_is_guest');
     }),
   },

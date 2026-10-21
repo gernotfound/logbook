@@ -15,7 +15,7 @@ type BootstrapDependencies = {
     awaitingRedirectKey: string;
     guestKey: string;
     isGuestActiveStrict: () => boolean;
-    readGuestMigrationRecoveryStrict: () => string | null;
+    readGuestMigrationRecoveryStrict: (uid: string) => boolean;
     isGuestRef: RefObject<boolean>;
     migrationDataRef: RefObject<UserData | null>;
     setIsGuest: Dispatch<SetStateAction<boolean>>;
@@ -87,9 +87,9 @@ export async function bootstrapAuthenticatedSession(
     if (user) {
         const wasGuest = isGuestActiveStrict();
         setEmailVerificationRequired(false);
-        const recoveryUid = readGuestMigrationRecoveryStrict();
+        const hasRecovery = readGuestMigrationRecoveryStrict(user.uid);
 
-        if (recoveryUid === user.uid) {
+        if (hasRecovery) {
             setLoading(false);
             const handled = await resumePersistedGuestMigration(user, isCurrentRun, {
                 guestKey,
