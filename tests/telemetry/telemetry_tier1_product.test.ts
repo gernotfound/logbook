@@ -9,6 +9,7 @@ import {
   type TelemetryEventPayload,
 } from '../../src/lib/telemetryHub';
 import { installTelemetryTestHarness, mockSetDoc } from './telemetryTestHarness';
+import { seedCurrentTelemetryQueue } from './seedCurrentQueue';
 
 const RETIRED_GLOBAL_QUEUE_KEY = 'logbook_telemetry_queue';
 
@@ -266,9 +267,7 @@ describe('Unified Telemetry Hub E2E Suite — Tier 1 Product', () => {
         telemetryHub.init();
         telemetryHub.setUserId('user_clear_check');
 
-        localStorage.setItem(
-          telemetryHub.getQueueStorageKey(),
-          JSON.stringify([
+        await seedCurrentTelemetryQueue('user_clear_check', [
             {
               id: 'q_1',
               timestamp: Date.now(),
@@ -280,8 +279,7 @@ describe('Unified Telemetry Hub E2E Suite — Tier 1 Product', () => {
                 userId: 'user_clear_check',
               },
             },
-          ])
-        );
+          ]);
 
         await telemetryHub.flushQueue();
 
