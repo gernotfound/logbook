@@ -141,9 +141,13 @@ RAW STORAGE
 
 **MUST:** `update-required` è uno stato applicativo persistente per la sessione corrente, non un semplice toast. Quando viene rilevato da un boundary cloud/local, nuove mutazioni e nuovi replay/sync vengono bloccati, i job ancora in debounce vengono chiusi senza partire e l'UI espone una barriera read-only/recoverable fino a reload/aggiornamento.
 
+### Nuovo perimetro — fresh start dichiarato
+
+Il product owner dichiara nessun utente/account/browser/backup di sviluppo o testing da recuperare. Per la release di lancio non sono supportati i writer e i formati PWA pre-lancio, né sono richieste nuove migrazioni, fallback o una UI per dati ownerless ipotetici. **MUST:** tutti i writer nuovi usano namespace owner-scoped della baseline attuale; le chiavi pre-lancio ritirate non sono usate come sorgenti né oggetto di purge. **MUST:** restano intatti i contratti di formato corrente per offline-first, ciphertext, journaling atomico, consent epochs, backup Schema 3, guest→account, recovery dopo crash della release attuale, concorrenza fra schede correnti e blocco su versioni future/corruzione. Non aumentare automaticamente i numeri di schema/protocollo quando cambia la versione della PWA.
+
 ### Baseline clean-cut M1
 
-**Contesto storico, non presupposto attuale:** la baseline clean-cut M1 fu definita prima degli account reali. Non è prova che oggi manchino utenti, backup o dati legacy. Prima di rimuovere compatibilità, verificare formati realmente persistiti, client distribuiti e recovery. M1 stabilì:
+**Nota storica:** M1 descrive un precedente taglio compatibilità; il nuovo fresh start in `AGENTS.md` sostituisce l'esigenza di supportare i client pre-lancio. Non descrive i gate di sicurezza dei dati creati oggi. M1 stabilì:
 
 - la baseline M1 non introdusse una migrazione prodotto da local envelope V3 a V4;
 - nessuna importazione compatibile di backup V1/V2;
