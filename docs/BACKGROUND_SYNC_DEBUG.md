@@ -26,4 +26,4 @@ Safari/iOS può non supportare Background Sync. Questo non blocca il recupero: o
 
 ## Chiavi legacy
 
-`pending_sync_payload`, `pending_sync_token` e `sync_failed` appartengono al vecchio meccanismo di Background Sync. Il codice corrente non le usa per scrivere dati; vengono soltanto ripulite nei percorsi di recupero/logout per evitare residui di installazioni precedenti.
+`pending_sync_payload`, `pending_sync_token` e `sync_failed` appartengono al vecchio meccanismo di Background Sync. Il codice corrente non le usa per scrivere dati. Le chiavi IndexedDB legacy non hanno un owner verificabile: il logout e la pulizia account **non le cancellano automaticamente**. Se un residuo è presente, la pulizia locale rimane incompleta e protetta dal fence, senza adottare né distruggere dati potenzialmente appartenenti a un'altra sessione. Serve riconciliazione esplicita; il controllo di assenza non rende atomici i writer di vecchie PWA ancora aperte.

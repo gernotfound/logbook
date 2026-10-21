@@ -503,11 +503,13 @@ vi.mock('../src/lib/db', () => ({
     secureLogOut: vi.fn().mockResolvedValue(undefined),
     deleteAccount: vi.fn().mockResolvedValue(undefined),
     purgeAllLocalUserData: vi.fn().mockImplementation(async (owner = 'user:test-user-id') => {
+      // Production refuses to assign ownerless legacy IDB payloads to this
+      // account; the shared test double must not silently erase them either.
+      if (['logbook_cached_user_data', 'pending_sync_token', 'pending_sync_payload', 'sync_failed']
+        .some(key => idbStore[key] !== undefined)) {
+        throw new Error('Pulizia sospesa: dati IndexedDB legacy senza proprietario verificabile.');
+      }
       delete idbStore[`logbook:v2:${owner}`];
-      delete idbStore['logbook_cached_user_data'];
-      delete idbStore['pending_sync_token'];
-      delete idbStore['pending_sync_payload'];
-      delete idbStore['sync_failed'];
       localStorage.removeItem(deviceKey('workout'));
       localStorage.removeItem('logbook_local_workout');
       localStorage.removeItem('logbook_timer_state');

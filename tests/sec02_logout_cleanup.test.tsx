@@ -398,13 +398,67 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
         expect(isLocalPurgePending(owner)).toBe(true);
     });
 
-    it('purgeAllLocalUserData removes IndexedDB sensitive keys', async () => {
+    it('purges only owner-scoped IndexedDB data when no ambiguous legacy record exists', async () => {
         await DB.purgeAllLocalUserData();
+        expect(idb.del).toHaveBeenCalledWith('logbook:v2:user:test-user-id');
+        for (const key of ['logbook_cached_user_data', 'pending_sync_token', 'pending_sync_payload', 'sync_failed']) {
+            expect(idb.del).not.toHaveBeenCalledWith(key);
+            expect(idb.get).toHaveBeenCalledWith(key);
+        }
+    });
 
-        expect(idb.del).toHaveBeenCalledWith('logbook_cached_user_data');
-        expect(idb.del).toHaveBeenCalledWith('pending_sync_token');
-        expect(idb.del).toHaveBeenCalledWith('pending_sync_payload');
-        expect(idb.del).toHaveBeenCalledWith('sync_failed');
+    it.each(['logbook_cached_user_data', 'pending_sync_token', 'pending_sync_payload', 'sync_failed'])(
+        'refuses to purge unowned legacy IndexedDB data in %s before deleting anything', async key => {
+            const foreignRecord = { owner: 'new-session', data: 'preserve' };
+            vi.mocked(idb.get).mockImplementation(async name => name === key ? foreignRecord : undefined);
+            await expect(DB.purgeAllLocalUserData()).rejects.toThrow('senza proprietario verificabile');
+            expect(idb.del).not.toHaveBeenCalled();
+            expect(await idb.get(key)).toBe(foreignRecord);
+            expect(isLocalPurgeIncomplete('user:test-user-id')).toBe(true);
+        },
+    );
+
+    it('retains a global IDB value written by a legacy tab while owner deletion is in flight', async () => {
+        const records = new Map<string, unknown>();
+        const foreignRecord = { owner: 'next-account', payload: 'do-not-delete' };
+        let entered!: () => void;
+        let release!: () => void;
+        const pending = new Promise<void>(resolve => { entered = resolve; });
+        const resume = new Promise<void>(resolve => { release = resolve; });
+        vi.mocked(idb.get).mockImplementation(async key => records.get(String(key)));
+        vi.mocked(idb.del).mockImplementation(async key => {
+            if (key === 'logbook:v2:user:test-user-id') {
+                entered();
+                await resume;
+            }
+            records.delete(String(key));
+        });
+
+        const first = DB.purgeAllLocalUserData();
+        await pending;
+        records.set('pending_sync_payload', foreignRecord);
+        release();
+        await expect(first).rejects.toThrow('senza proprietario verificabile');
+        expect(records.get('pending_sync_payload')).toBe(foreignRecord);
+        expect(idb.del).toHaveBeenCalledTimes(1);
+        expect(isLocalPurgeIncomplete('user:test-user-id')).toBe(true);
+
+        // Reload/retry must not adopt the foreign payload and delete it.
+        await expect(DB.purgeAllLocalUserData()).rejects.toThrow('senza proprietario verificabile');
+        expect(records.get('pending_sync_payload')).toBe(foreignRecord);
+        expect(idb.del).toHaveBeenCalledTimes(1);
+    });
+
+    it('refuses legacy IDB data discovered during the finalization phase', async () => {
+        const foreignRecord = { owner: 'new-guest' };
+        let reads = 0;
+        vi.mocked(idb.get).mockImplementation(async key => {
+            if (key === 'sync_failed' && ++reads >= 3) return foreignRecord;
+            return undefined;
+        });
+        await expect(DB.purgeAllLocalUserData()).rejects.toThrow('senza proprietario verificabile');
+        expect(idb.del).not.toHaveBeenCalledWith('sync_failed');
+        expect(isLocalPurgeIncomplete('user:test-user-id')).toBe(true);
     });
 
     it('preserves a new account recovery UID swapped during the old owner purge inventory', async () => {
