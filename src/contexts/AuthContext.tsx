@@ -349,6 +349,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                         // Confirmation and lock acquisition are both asynchronous.
                         // A different tab may have replaced or revoked this generation.
                         if (!isCurrentSession(requestedSession)) return;
+                        const { preflightOwnerlessLegacyPurge } = await import('../lib/db/ownerLocalPurge');
+                        await preflightOwnerlessLegacyPurge();
+                        if (!isCurrentSession(requestedSession)) return;
                         revokeGuestSession();
                         useDialogStore.getState().cancelAll();
                         useAppStore.getState().cancelPendingSyncs();
@@ -366,10 +369,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                         setGuestMigrationStatus('idle');
                         useAppStore.getState().resetStore({ force: true });
                     });
-                } catch {
-                    await useDialogStore.getState().showAlert(
-                        'Impossibile coordinare la chiusura della modalità locale. Nessuna nuova cancellazione viene avviata senza la protezione tra schede.'
-                    );
+                } catch (error: unknown) {
+                    const legacyBlocker = error instanceof Error
+                        && (error.name === 'OwnerlessLegacyIndexedDbError'
+                            || error.name === 'OwnerlessLegacyLocalStorageError');
+                    await useDialogStore.getState().showAlert(legacyBlocker
+                        ? 'Logout sospeso: sono presenti vecchi dati senza proprietario verificabile. La sessione ospite e le copie sono state conservate. Non cancellare i dati del sito.'
+                        : 'Impossibile coordinare la chiusura della modalità locale. Nessuna nuova cancellazione viene avviata senza la protezione tra schede.');
                     return;
                 }
                 if (purgeError) {
@@ -417,7 +423,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 const localStorageFailure = error instanceof AggregateError
                     || error instanceof BrowserStorageError
                     || error?.name === 'BrowserStorageError';
-                await useDialogStore.getState().showAlert(error?.name === 'OwnerlessLegacyIndexedDbError'
+                await useDialogStore.getState().showAlert((error?.name === 'OwnerlessLegacyIndexedDbError' || error?.name === 'OwnerlessLegacyLocalStorageError')
                     ? 'Pulizia locale sospesa: sono presenti vecchi dati del dispositivo senza proprietario verificabile. Queste copie sono state preservate; non cancellare i dati del sito.'
                     : error instanceof Error && (error.name === 'HealthConsentTransitionPendingError' || error.name === 'UnsyncedLogoutError' || error.name === 'CloudIntegrityBlockedError')
                         ? error.message
