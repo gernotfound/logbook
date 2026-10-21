@@ -40,13 +40,10 @@ describe('guest login: session and vault readiness fencing', () => {
         useAppStore.getState().resetStore({ force: true });
         vi.clearAllMocks();
         invalidateSession();
-        vi.stubGlobal('navigator', {
-            locks: { request: async (_key: string, _options: unknown, callback: () => Promise<unknown>) => callback() },
-        });
         vi.mocked(isVaultUnlocked).mockReturnValue(true);
         vi.mocked(ensureLocalVaultReady).mockResolvedValue(undefined);
     });
-    afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+    afterEach(() => { vi.restoreAllMocks(); });
 
     it('does not publish guest mode when readiness finishes after an identity switch', async () => {
         const hold = deferred<void>();
