@@ -24,6 +24,7 @@ import * as localRepository from '../src/lib/sync/localRepository';
 import { useAppStore } from '../src/store/useAppStore';
 import type { UserData } from '../src/types';
 import { beginGuestMigrationIntent } from '../src/lib/auth/guestMigrationIntent';
+import { bootstrapAuthenticatedSession } from '../src/contexts/auth/bootstrapAuthenticatedSession';
 import { createAndMigrateVault } from '../src/lib/sync/secureArchiveMigration';
 import { lockAllVaults } from '../src/lib/sync/secureArchiveSession';
 import { saveWorkoutDeviceIntent } from '../src/lib/sync/workoutDeviceIntent';
@@ -85,6 +86,63 @@ describe('guest migration restart recovery', () => {
         await waitFor(() => expect(useAppStore.getState().saveError).toContain('Offline: account preparato sul dispositivo'));
         await waitFor(() => expect(screen.getByTestId('bottom-nav')).toBeTruthy());
         expect(document.getElementById('app-container')).toBeTruthy();
+    });
+
+    it('ends authenticated bootstrap in a recoverable failed state when another tab retires guest ownership while waiting', async () => {
+        const { guest } = fixtures();
+        localStorage.setItem(GUEST_KEY, 'true');
+        await beginGuestMigrationIntent('merge', 'recovery', { uid: user.uid });
+        useAppStore.getState().setUserData(guest);
+        const before = await localRepository.readLocal('guest');
+
+        // The auth gate observes the original guest. Between the last
+        // wasGuest observation and lock acquisition a different tab removes
+        // its flag. This must not silently leave loading=true or load a
+        // foreign in-memory snapshot into the authenticated owner.
+        let observations = 0;
+        const isGuestActiveStrict = () => {
+            observations++;
+            const active = localStorage.getItem(GUEST_KEY) === 'true';
+            if (observations === 2) localStorage.removeItem(GUEST_KEY);
+            return active;
+        };
+        const setIsGuest = vi.fn();
+        const setLoading = vi.fn();
+        const setGuestMigrationStatus = vi.fn();
+        const setSaveError = vi.fn();
+        const loadData = vi.fn(async () => {});
+        const markRecovery = vi.fn();
+
+        await bootstrapAuthenticatedSession(user, () => true, {
+            awaitingRedirectKey: 'logbook_awaiting_redirect',
+            guestKey: GUEST_KEY,
+            isGuestActiveStrict,
+            readGuestMigrationRecoveryStrict: () => false,
+            isGuestRef: { current: true },
+            migrationDataRef: { current: null },
+            setIsGuest,
+            setCurrentUser: vi.fn(),
+            setEmailVerificationRequired: vi.fn(),
+            setGuestMigrationStatus,
+            setLoading,
+            setUserData: vi.fn(),
+            setSyncing: vi.fn(),
+            setSaveError,
+            markGuestMigrationSyncRecovery: markRecovery,
+            clearGuestMigrationSyncRecovery: vi.fn(),
+            loadData,
+        });
+
+        expect(observations).toBeGreaterThanOrEqual(2);
+        expect(setGuestMigrationStatus).toHaveBeenCalledWith('failed');
+        expect(setIsGuest).toHaveBeenCalledWith(false);
+        expect(setLoading).toHaveBeenCalledWith(false);
+        expect(setSaveError).toHaveBeenCalledWith(expect.stringContaining('sessione locale è cambiata'));
+        expect(markRecovery).not.toHaveBeenCalled();
+        expect(loadData).not.toHaveBeenCalled();
+        expect(DB.loadCloudPayload).not.toHaveBeenCalled();
+        expect(await localRepository.readLocal('guest')).toEqual(before);
+        expect(localStorage.getItem('guest_migration_intent_v1')).not.toBeNull();
     });
 
     it('does not consume guest data without an explicit migration intent', async () => {
