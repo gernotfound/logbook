@@ -286,6 +286,27 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
         expect(idb.del).toHaveBeenCalledWith('sync_failed');
     });
 
+    it('preserves a new account recovery UID swapped during the old owner purge inventory', async () => {
+        const recoveryKey = 'logbook_guest_migration_sync_recovery';
+        localStorage.setItem(recoveryKey, 'test-user-id');
+        const originalGet = localStorageMock.getItem.getMockImplementation()!;
+        let switched = false;
+        localStorageMock.getItem.mockImplementation((key: string) => {
+            const value = originalGet(key);
+            if (key === recoveryKey && value === 'test-user-id' && !switched) {
+                switched = true;
+                localStorage.setItem(recoveryKey, 'second-user');
+            }
+            return value;
+        });
+
+        await DB.purgeAllLocalUserData('user:test-user-id');
+
+        expect(switched).toBe(true);
+        expect(localStorage.getItem(recoveryKey)).toBe('second-user');
+        expect(isLocalPurgePending('user:test-user-id')).toBe(true);
+    });
+
     it('purgeAllLocalUserData removes only the current owner guest migration recovery marker', async () => {
         localStorage.setItem('logbook_guest_migration_sync_recovery', 'test-user-id');
         await DB.purgeAllLocalUserData(storageOwner());
