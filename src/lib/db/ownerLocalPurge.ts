@@ -148,6 +148,11 @@ export async function purgeOwnerLocalData(owner: string, resumeOnly = false, gat
                 // not the old owner. Its normal lifecycle clears it.
                 if (storageKey === 'logbook_awaiting_redirect'
                     && localStorage.getItem(storageKey) === 'true') continue;
+                // This global migration handoff is owner-labeled by its VALUE,
+                // not by its name. Another account may replace it between
+                // inventory and removeItem: only erase a matching owner UID.
+                if (storageKey === 'logbook_guest_migration_sync_recovery'
+                    && localStorage.getItem(storageKey) !== owner.slice('user:'.length)) continue;
                 if (UNSCOPED_LEGACY_KEY_SET.has(storageKey)) {
                     const expected = legacyRemoved.has(storageKey) ? null : legacyAtStart.get(storageKey);
                     if (localStorage.getItem(storageKey) !== expected) {
