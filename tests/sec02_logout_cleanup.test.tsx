@@ -242,7 +242,7 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
         expect(isLocalPurgePending('user:test-user-id')).toBe(true);
     });
 
-    it('preserves a replacement of an existing legacy key during asynchronous cleanup', async () => {
+    it('keeps a concurrently replaced guest Auth intent without blocking unrelated account cleanup', async () => {
         localStorage.setItem('guest_migration_intent_v1', 'old-session-intent');
         let started!: () => void;
         let finish!: () => void;
@@ -257,7 +257,7 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
         localStorage.setItem('guest_migration_intent_v1', 'new-session-intent');
         finish();
 
-        await expect(operation).rejects.toThrow('Pulizia locale incompleta');
+        await expect(operation).resolves.toBeUndefined();
         expect(localStorage.getItem('guest_migration_intent_v1')).toBe('new-session-intent');
         expect(isLocalPurgePending('user:test-user-id')).toBe(true);
     });
@@ -303,8 +303,8 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
         expect(isLocalPurgeIncomplete('user:test-user-id')).toBe(true);
     });
 
-    it('retains a replaced global guest migration intent across repeated purge attempts', async () => {
-        localStorage.setItem('guest_migration_intent_v1', 'old-intent');
+    it('retains a replaced legacy ownerless policy across repeated purge attempts', async () => {
+        localStorage.setItem('guest_migration_policy', 'old-intent');
         let started!: () => void;
         let finish!: () => void;
         const entered = new Promise<void>(resolve => { started = resolve; });
@@ -312,11 +312,11 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
         vi.mocked(idb.del).mockImplementationOnce(async () => { started(); await blocked; });
         const operation = DB.purgeAllLocalUserData();
         await entered;
-        localStorage.setItem('guest_migration_intent_v1', 'new-intent');
+        localStorage.setItem('guest_migration_policy', 'new-intent');
         finish();
         await expect(operation).rejects.toThrow('Pulizia locale incompleta');
         await expect(DB.purgeAllLocalUserData()).rejects.toThrow('senza provenienza');
-        expect(localStorage.getItem('guest_migration_intent_v1')).toBe('new-intent');
+        expect(localStorage.getItem('guest_migration_policy')).toBe('new-intent');
         expect(isLocalPurgeIncomplete('user:test-user-id')).toBe(true);
     });
 
