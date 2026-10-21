@@ -67,12 +67,12 @@ export function useGoogleAuthActions({
                     setSaveError("Accesso fallito. Riprova.");
                 }
             } else if (failure === 'cancelled') {
-                abandonOwnGuestIntent(intentId)
+                abandonOwnGuestIntent(intentId);
             } else if (failure === 'network') {
-                abandonOwnGuestIntent(intentId)
+                abandonOwnGuestIntent(intentId);
                 setSaveError("Connessione non disponibile. Riprova quando sei online.");
             } else if (failure === 'error') {
-                abandonOwnGuestIntent(intentId)
+                abandonOwnGuestIntent(intentId);
                 console.error('Accesso Google non riuscito.');
                 setSaveError('Accesso Google non riuscito. Riprova.');
             }
@@ -103,16 +103,16 @@ export function useGoogleAuthActions({
                 return;
             }
             if (failure === 'cancelled') {
-                abandonOwnGuestIntent(intentId)
+                abandonOwnGuestIntent(intentId);
                 return;
             }
             if (failure === 'network') {
-                abandonOwnGuestIntent(intentId)
+                abandonOwnGuestIntent(intentId);
                 setSaveError("Connessione non disponibile. Riprova quando sei online.");
                 return;
             }
             if (failure === 'error') {
-                abandonOwnGuestIntent(intentId)
+                abandonOwnGuestIntent(intentId);
                 console.error('Collegamento account Google non riuscito.');
                 setSaveError("Collegamento fallito. Riprova.");
             }
