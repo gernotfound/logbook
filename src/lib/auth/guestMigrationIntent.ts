@@ -1,4 +1,4 @@
-import type { User } from 'firebase/auth';
+import type { User, UserCredential } from 'firebase/auth';
 import { readBrowserValueStrict, removeBrowserValue, writeBrowserJson } from '../sync/browserStorage';
 import { withGuestLifecycleLock } from '../sync/guestLifecycleLock';
 import type { GuestMigrationPolicy } from '../../contexts/AuthContextDef';
@@ -146,13 +146,18 @@ function assertUserMatchesIntent(intent: GuestMigrationIntent, user: User): void
 
 /** Only a successful Firebase UserCredential from this initiating Auth action can
  * authorize a migration. onAuthStateChanged alone may report another tab's login. */
-export async function confirmGuestMigrationCredential(intentId: string, user: User): Promise<void> {
+export async function confirmGuestMigrationCredential(intentId: string, credential: UserCredential): Promise<void> {
     await withIntentLock(async () => {
+        const user = credential.user;
         const intent = readGuestMigrationIntentStrict();
         if (readTabReceipt() !== intentId || intent.id !== intentId || intent.method === 'recovery') {
             throw new Error('La credenziale non appartiene al tentativo Auth corrente.');
         }
         assertUserMatchesIntent(intent, user);
+        if ((intent.method === 'google' && credential.providerId !== 'google.com')
+            || (intent.method === 'email' && credential.providerId !== 'password')) {
+            throw new Error('Il provider del risultato Auth non corrisponde al tentativo.');
+        }
         if (failedAuthResults.has(intentId)) {
             throw failedAuthResults.get(intentId);
         }
