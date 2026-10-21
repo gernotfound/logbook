@@ -144,7 +144,6 @@ const storageMocks = vi.hoisted(() => {
 export const localStorageMock = storageMocks.localStorageMock;
 export const sessionStorageMock = storageMocks.sessionStorageMock;
 
-import { deviceKey } from '../src/lib/sync/deviceStorage';
 import { storageOwner } from '../src/lib/sync/session';
 import React from 'react';
 import { render, act } from '@testing-library/react';
