@@ -33,12 +33,16 @@ export async function startInitialGuestMigration(
         setGuestMigrationStatus, setLoading, setUserData, setSyncing,
         setSaveError, markGuestMigrationSyncRecovery, clearGuestMigrationSyncRecovery,
     }: InitialMigrationDependencies,
-): Promise<void> {
-    return withGuestLifecycleLock(async () => {
+): Promise<boolean> {
+    let guestAlreadyRetired = false;
+    await withGuestLifecycleLock(async () => {
     // The reservation is immutable while this tab is transferring ownership.
     // A second tab observing the Firebase sign-in may not race the same guest
     // archive through a different choice or consume a completed handoff.
-    if (readBrowserValueStrict(guestKey) !== 'true') return;
+    if (readBrowserValueStrict(guestKey) !== 'true') {
+        guestAlreadyRetired = true;
+        return;
+    }
     if (!isCurrentRun()) return;
     setGuestMigrationStatus('pending');
     setLoading(false);
@@ -96,4 +100,5 @@ export async function startInitialGuestMigration(
         setSaveError('Preparazione account non completata. I dati locali sono conservati e possono essere recuperati. Riprova.');
     }
     });
+    return guestAlreadyRetired;
 }
