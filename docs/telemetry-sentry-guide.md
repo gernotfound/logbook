@@ -27,7 +27,7 @@ Le impostazioni Sentry di Data Scrubbing, Default Scrubbers, IP scrubbing e Spik
 
 La finestra di deduplica client è 15 minuti per fingerprint. Il primo errore della finestra viene inviato; ripetizioni successive vengono aggregate localmente ma non generano un secondo evento alla scadenza della finestra. Questo limita l'impatto di hot loop sulla quota Sentry.
 
-La coda diagnostica locale best-effort conserva al massimo 50 report; gli elementi più vecchi di sette giorni non vengono restituiti o inviati. I nuovi payload sono persistiti in `localStorage` soltanto come ciphertext AEAD owner-scoped quando il vault locale è sbloccato; prima restano nella RAM della scheda. Con vault bloccato, una vecchia coda plaintext viene ritirata dal disco dopo aver trattenuto in RAM i report validi, che possono andare persi alla chiusura della scheda. Il pruning del ciphertext avviene al successivo accesso alla coda, non automaticamente mentre la PWA è chiusa. Gli elementi guest privi di UID autenticato non vengono riassegnati dopo il login. Questa durata locale non determina la retention di Sentry né quella delle collection Firestore legacy.
+La coda diagnostica locale best-effort conserva al massimo 50 report; gli elementi più vecchi di sette giorni non vengono restituiti o inviati. I nuovi payload sono persistiti in `localStorage` soltanto come ciphertext AEAD owner-scoped quando il vault locale è sbloccato; prima restano nella RAM della scheda. Il fresh start non rilegge né importa code plaintext legacy, globali o owner-scoped. Se il vault è bloccato, soltanto i nuovi report restano in RAM e possono andare persi alla chiusura della scheda. Il pruning del ciphertext avviene al successivo accesso alla coda, non automaticamente mentre la PWA è chiusa. Gli elementi guest privi di UID autenticato non vengono riassegnati dopo il login. Questa durata locale non determina la retention di Sentry né quella delle collection Firestore legacy.
 
 ## Release e source map
 
@@ -47,11 +47,11 @@ La build frontend **Firebase Hosting Production** usa:
 
 Le collection `telemetry_errors`, `telemetry_events` e `telemetry_anomalies` non sono più la destinazione del client corrente. Restano temporaneamente:
 
-- Security Rules per client PWA precedenti;
+- Security Rules storiche per percorsi non più supportati dalla PWA corrente;
 - retention di 30 giorni e maintenance cron per documenti esistenti/legacy;
 - account deletion, che continua a rimuovere le collection private note.
 
-La loro rimozione completa è un task successivo e richiede evidenza che i client vecchi non possano più scrivere e che i dati residui siano stati smaltiti.
+La loro eventuale rimozione completa resta un intervento backend/Rules separato, soggetto a verifica del provider live e dell'effettivo contenuto: non è implicitamente autorizzato dal fresh start del client.
 
 ## Verifica
 
