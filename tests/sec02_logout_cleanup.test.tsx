@@ -32,6 +32,10 @@ vi.mock('../src/lib/firebase', async () => {
 describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        // Later regression cases replace the IDB implementation; prevent
+        // their mock storage from becoming the next test's initial state.
+        vi.mocked(idb.get).mockReset();
+        vi.mocked(idb.del).mockReset();
         Object.defineProperty(navigator, 'locks', { configurable: true, value: { request: async (_key: string, _options: unknown, action: () => Promise<unknown>) => action() } });
         localStorage.clear();
     });
