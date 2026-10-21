@@ -17,15 +17,16 @@ type EmailAuthDependencies = {
 
 // The email sign-in/verification actions share the provider's guest migration
 // intent and error boundary; they never authorize owner-scoped data hydration.
+/** A failed asynchronous login may only retire its own Auth handoff. */
+function abandonOwnGuestIntent(id: string | null): void {
+    if (id === null) return;
+    try { clearGuestMigrationIntent(id); }
+    catch { /* A newer Auth attempt owns the currently stored intent. */ }
+}
+
 export function useEmailAuthActions({
     isGuestActiveStrict, setSaveError, setEmailVerificationRequired, migrationDataRef,
 }: EmailAuthDependencies) {
-    const cleanupFailedOwnIntent = (id: string | null) => {
-        if (id === null) return;
-        try { clearGuestMigrationIntent(id); }
-        catch { /* Another auth attempt replaced or consumed this intent. */ }
-    };
-
     const handleAuthError = useCallback((error: unknown): never => {
         setSaveError(describeEmailAuthError(error));
         throw error;
@@ -41,7 +42,7 @@ export function useEmailAuthActions({
         try {
             await signInWithEmailAndPassword(auth, email, pass);
         } catch (error) {
-            cleanupFailedOwnIntent(intentId)
+            abandonOwnGuestIntent(intentId);
             handleAuthError(error);
         }
     }, [handleAuthError, isGuestActiveStrict, setSaveError]);
@@ -66,7 +67,7 @@ export function useEmailAuthActions({
         try {
             credential = await createUserWithEmailAndPassword(auth, email, pass);
         } catch (error) {
-            cleanupFailedOwnIntent(intentId)
+            abandonOwnGuestIntent(intentId);
             handleAuthError(error);
             return;
         }
