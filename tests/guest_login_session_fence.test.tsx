@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { auth } from '../src/lib/firebase';
 import { isVaultUnlocked } from '../src/lib/sync/secureArchiveSession';
 import { isGuestVaultReadinessCurrent } from '../src/contexts/auth/useGuestLogin';
 import {
@@ -21,13 +22,20 @@ function beginGuest(id: string) {
 describe('guest vault readiness: exact owner and session fences', () => {
     beforeEach(() => {
         localStorage.clear();
+        // The shared UI fixture starts with an authenticated Firebase user.
+        // Guest readiness requires a real guest-only lifecycle.
+        (auth as { currentUser: unknown }).currentUser = null;
         vi.clearAllMocks();
         vi.mocked(isVaultUnlocked).mockReturnValue(true);
     });
 
     it('permits publishing only with the active guest generation and an unlocked vault', () => {
         const session = beginGuest('guest-generation-a');
-        expect(isGuestVaultReadinessCurrent(session)).toBe(true);
+        expect(isGuestVaultReadinessCurrent(session), JSON.stringify({
+            owner: session.owner, currentOwner: captureSession().owner,
+            sessionId: session.guestSessionId,
+            vaultUnlocked: isVaultUnlocked('guest'),
+        })).toBe(true);
         expect(isVaultUnlocked).toHaveBeenCalledWith('guest');
     });
 
