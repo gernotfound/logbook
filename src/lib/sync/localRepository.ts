@@ -893,25 +893,10 @@ export async function hydrateLocal(owner: string, cloudData: UserData, months: s
             }
             saved = { ...currentEnvelopeVersions(), ...ownerConsentRevision(owner), owner, actorId: generateId('actor'), actorSeq: 0, clock, data: cloud, baseline: cloud, completeMonths: months, pending: [], syncMetaByDocument, replica: null, revision: 0 };
         } else {
-            // Older clients persisted merge projections as cloud acknowledgements.
-            // A writerless, empty placeholder for a month with no local or
-            // baseline business records and no pending operation has no server
-            // provenance. Removing that *derived metadata* cannot discard user data.
-            // Never apply this recovery to a real writer, a causal stamp, a local
-            // business month or a pending edit.
-            const localPaths = projectDocuments(current.data, catalog);
-            const baselinePaths = projectDocuments(current.baseline, catalog);
-            const pendingPaths = new Set(current.pending.map(op => op.docPath));
-            const retainedMeta: Record<string, SyncMeta> = Object.fromEntries(
-                Object.entries(current.syncMetaByDocument).filter(([path, meta]) =>
-                    meta.writer !== undefined
-                    || Object.keys(meta.clock).length > 0
-                    || Object.keys(meta.fields).length > 0
-                    || localPaths.has(path)
-                    || baselinePaths.has(path)
-                    || pendingPaths.has(path)
-                ),
-            );
+            // In the supported release, only server-confirmed documents may
+            // enter the durable acknowledgement map. Even an empty, writerless
+            // record is evidence we cannot silently discard on a later read.
+            const durableMeta = current.syncMetaByDocument;
             const syncMeta: Record<string, SyncMeta> = {};
             const authoritativePaths = new Set(['', ...months.map(m => `history_months/${m}`), ...months.map(m => `nutrition_months/${m}`)]);
             // A full scan may race with a newer acknowledgement in another tab.
@@ -920,7 +905,7 @@ export async function hydrateLocal(owner: string, cloudData: UserData, months: s
             // response cannot prove that its acknowledged data was removed.
             // Reject before installing the cloud snapshot or claiming a checkpoint.
             const missingPaths = cloudDocuments
-                ? Object.keys(retainedMeta).filter(path =>
+                ? Object.keys(durableMeta).filter(path =>
                     (coverageMode === 'all' || authoritativePaths.has(path))
                     && !cloudDocuments.get(path)?._sync
                 )
@@ -934,12 +919,12 @@ export async function hydrateLocal(owner: string, cloudData: UserData, months: s
                 // evidence also installs the owner-scoped destructive-purge fence.
                 return fenceCloudIntegrity(current);
             }
-            if (coverageMode === 'window') for (const [path, meta] of Object.entries(retainedMeta)) if (!authoritativePaths.has(path)) syncMeta[path] = meta;
+            if (coverageMode === 'window') for (const [path, meta] of Object.entries(durableMeta)) if (!authoritativePaths.has(path)) syncMeta[path] = meta;
             const updatedClock = { ...current.clock };
             const stalePaths: string[] = [];
             if (cloudDocuments) for (const [path, doc] of cloudDocuments.entries()) if (doc._sync) {
                 const meta = parseCloudSyncMeta(path, doc._sync);
-                const durable = retainedMeta[path];
+                const durable = durableMeta[path];
                 if ((coverageMode === 'all' || authoritativePaths.has(path)) && durable
                     && !coversVectorClock(meta.clock, durable.clock)) {
                     stalePaths.push(path);

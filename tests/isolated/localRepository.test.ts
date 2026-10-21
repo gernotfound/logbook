@@ -419,27 +419,31 @@ describe('durable owner-scoped journal', () => {
         expect(after.syncMetaByDocument['nutrition_months/2026-10']).toBeUndefined();
     });
 
-    it('repairs only writerless inert legacy month metadata after a full server scan', async () => {
+    it('fences a missing server-confirmed document even with empty writerless metadata', async () => {
         const root = data(170);
         await initializeLocal('a', root);
-        const key = 'logbook:v2:user:a';
-        const raw = await get(key) as Record<string, any>;
-        await set(key, {
-            ...raw,
-            cloudIntegrityFence: 'previous-client-warning',
-            syncMetaByDocument: { 'nutrition_months/2026-08': {
-                protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {},
-            } },
-        });
-        const remote = new Map<string, any>([['', {
-            _sync: { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {} },
-        }]]);
+        // This record is obtained from a real-format server snapshot, not
+        // synthesized locally or imported from a prelaunch envelope.
+        const confirmedMonth = { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {} };
+        const rootDoc = { _sync: { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {} } };
+        await hydrateLocal('a', root, ['2026-08'], new Map<string, any>([
+            ['', rootDoc],
+            ['nutrition_months/2026-08', { _sync: confirmedMonth }],
+        ]), 'window');
         const before = (await readLocal('a'))!;
-        const hydrated = await hydrateLocal('a', root, [], remote, 'all');
-        expect(hydrated.syncMetaByDocument['nutrition_months/2026-08']).toBeUndefined();
-        expect(hydrated.cloudIntegrityFence).toBe('previous-client-warning');
-        expect(hydrated.data).toEqual(before.data);
-        expect(hydrated.pending).toEqual(before.pending);
+        expect(before.syncMetaByDocument['nutrition_months/2026-08']).toEqual(confirmedMonth);
+        // The following full server scan is missing that earlier acknowledged
+        // document. Its empty causal fields do not waive the integrity guard.
+        const remote = new Map<string, any>([['', rootDoc]]);
+        await expect(hydrateLocal('a', root, [], remote, 'all'))
+            .rejects.toMatchObject({ code: 'replica-fenced', causeKind: 'missing-document',
+                documentPaths: ['nutrition_months/2026-08'] });
+        const after = (await readLocal('a'))!;
+        expect(after.cloudIntegrityFence).toEqual(expect.any(String));
+        expect(after.syncMetaByDocument['nutrition_months/2026-08']).toEqual(confirmedMonth);
+        expect(after.data).toEqual(before.data);
+        expect(after.baseline).toEqual(before.baseline);
+        expect(after.pending).toEqual(before.pending);
     });
 
     it('keeps the integrity fence when local business data exists on a missing month', async () => {
