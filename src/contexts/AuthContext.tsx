@@ -202,7 +202,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
             if (user) {
                 await bootstrapAuthenticatedSession(user, isCurrentRun, {
-                    awaitingRedirectKey: AWAITING_REDIRECT_KEY,
                     guestKey: GUEST_KEY, isGuestActiveStrict,
                     readGuestMigrationRecoveryStrict, isGuestRef, migrationDataRef,
                     setIsGuest, setCurrentUser, setEmailVerificationRequired,
