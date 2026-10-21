@@ -69,7 +69,7 @@ describe('guest migration restart recovery', () => {
     it('mounts only the blocking migration UI during automatic guest recovery without a session overlay marker', async () => {
         const { cloud, guest } = fixtures();
         localStorage.setItem(GUEST_KEY, 'true');
-        beginGuestMigrationIntent('merge', 'recovery', { uid: user.uid });
+        await beginGuestMigrationIntent('merge', 'recovery', { uid: user.uid });
         useAppStore.getState().setUserData(guest);
         let resolveCloud!: (value: any) => void;
         const cloudRequest = new Promise(resolve => { resolveCloud = resolve; });
@@ -237,7 +237,7 @@ describe('guest migration restart recovery', () => {
         const userA = { uid: 'account-a', email: 'a@example.com', displayName: 'A' } as any;
         const userB = { uid: 'account-b', email: 'b@example.com', displayName: 'B' } as any;
         localStorage.setItem(GUEST_KEY, 'true');
-        beginGuestMigrationIntent('merge', 'recovery', { uid: userA.uid });
+        await beginGuestMigrationIntent('merge', 'recovery', { uid: userA.uid });
         useAppStore.getState().setUserData(guest);
         let authCallback!: (nextUser: any) => Promise<void>;
         vi.mocked(onAuthStateChanged).mockImplementation((_auth, callback: any) => { authCallback = callback; return () => {}; });
@@ -286,7 +286,7 @@ describe('guest migration restart recovery', () => {
         expect(await localRepository.readLocal(userB.uid)).toBeUndefined();
 
         // A fresh explicit decision for B is required before B may own the guest data.
-        beginGuestMigrationIntent('merge', 'recovery', { uid: userB.uid });
+        await beginGuestMigrationIntent('merge', 'recovery', { uid: userB.uid });
         let retryB!: Promise<void>;
         act(() => { retryB = authCallback(userB); });
         await waitFor(() => expect(DB.loadCloudPayload).toHaveBeenCalledTimes(2));
