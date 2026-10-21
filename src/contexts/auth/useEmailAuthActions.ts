@@ -48,7 +48,7 @@ export function useEmailAuthActions({
             credential = await signInWithEmailAndPassword(auth, email, pass);
         } catch (error) {
             await abandonOwnGuestIntent(intentId);
-            handleAuthError(error);
+            return handleAuthError(error);
         }
         if (intentId) {
             try {
