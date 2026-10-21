@@ -1,7 +1,7 @@
 import type { RefObject } from 'react';
 import type { UserCredential } from 'firebase/auth';
 import { auth, getRedirectResult } from '../../lib/firebase';
-import { readBrowserValue, tryRemoveBrowserValue } from '../../lib/sync/browserStorage';
+import { readAuthRedirectMarker, tryRemoveAuthRedirectMarker } from '../../lib/auth/authRedirectMarker';
 import { safeHardReload } from '../../lib/sync/safeReload';
 import { confirmGuestMigrationCredential, readGuestMigrationTabReceipt, rejectGuestMigrationAuthWaiters } from '../../lib/auth/guestMigrationIntent';
 
@@ -20,8 +20,8 @@ const browserEnvironment: RedirectRecoveryEnvironment = {
         document.addEventListener('visibilitychange', callback);
         return () => document.removeEventListener('visibilitychange', callback);
     },
-    read: readBrowserValue,
-    remove: tryRemoveBrowserValue,
+    read: readAuthRedirectMarker,
+    remove: tryRemoveAuthRedirectMarker,
     reload: safeHardReload,
     getRedirect: () => getRedirectResult(auth),
 };
