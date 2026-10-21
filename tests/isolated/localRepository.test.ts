@@ -422,19 +422,19 @@ describe('durable owner-scoped journal', () => {
     it('fences a missing server-confirmed document even with empty writerless metadata', async () => {
         const root = data(170);
         await initializeLocal('a', root);
-        const key = 'logbook:v2:user:a';
-        const raw = await get(key) as Record<string, any>;
-        // An acknowledged empty month is still remote evidence in the current
-        // protocol. An absent document cannot silently invalidate that proof.
+        // This record is obtained from a real-format server snapshot, not
+        // synthesized locally or imported from a prelaunch envelope.
         const confirmedMonth = { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {} };
-        await set(key, {
-            ...raw,
-            syncMetaByDocument: { 'nutrition_months/2026-08': confirmedMonth },
-        });
-        const remote = new Map<string, any>([['', {
-            _sync: { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {} },
-        }]]);
+        const rootDoc = { _sync: { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {} } };
+        await hydrateLocal('a', root, ['2026-08'], new Map<string, any>([
+            ['', rootDoc],
+            ['nutrition_months/2026-08', { _sync: confirmedMonth }],
+        ]), 'window');
         const before = (await readLocal('a'))!;
+        expect(before.syncMetaByDocument['nutrition_months/2026-08']).toEqual(confirmedMonth);
+        // The following full server scan is missing that earlier acknowledged
+        // document. Its empty causal fields do not waive the integrity guard.
+        const remote = new Map<string, any>([['', rootDoc]]);
         await expect(hydrateLocal('a', root, [], remote, 'all'))
             .rejects.toMatchObject({ code: 'replica-fenced', causeKind: 'missing-document',
                 documentPaths: ['nutrition_months/2026-08'] });
