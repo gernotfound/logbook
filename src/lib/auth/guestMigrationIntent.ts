@@ -103,7 +103,7 @@ export function beginGuestMigrationIntent(
 ): Promise<GuestMigrationIntent> {
     return withGuestLifecycleLock(() => withIntentLock(async () => {
         if (options.assertCurrent && !options.assertCurrent()) {
-            throw new Error('Sessione di recupero guest non più attiva.');
+            throw new Error('La sessione locale originaria non è più attiva.');
         }
         const raw = readBrowserValueStrict(KEY);
         if (raw !== null) {
