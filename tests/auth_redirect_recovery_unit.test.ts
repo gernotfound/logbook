@@ -93,6 +93,33 @@ describe('isolated foreground redirect recovery', () => {
         });
     });
 
+    it('does not remove a later redirect marker when the startup SDK probe returns null', async () => {
+        let marker: string | null = null;
+        let complete!: (value: unknown) => void;
+        const pending = new Promise<unknown>(resolve => { complete = resolve; });
+        const remove = vi.fn(() => { marker = null; return true; });
+        const detach = attachAuthRedirectRecovery({
+            awaitingRedirectKey: 'logbook_awaiting_redirect',
+            redirectLaunchFailedRef: { current: false },
+            setSaveError: vi.fn(),
+        }, {
+            visibility: () => 'hidden',
+            listen: () => () => {},
+            read: () => marker,
+            remove,
+            reload: async () => {},
+            getRedirect: () => pending,
+        });
+        detachAll.push(detach);
+        // A new login starts after attachAuthRedirectRecovery captured an empty marker.
+        marker = 'true';
+        complete(null);
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(remove).not.toHaveBeenCalled();
+        expect(marker).toBe('true');
+    });
+
     it('consumes the active marker once and calls the safe reload barrier only once', async () => {
         const { stored, remove, reload, foreground } = setup();
         foreground();
