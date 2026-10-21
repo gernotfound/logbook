@@ -3,7 +3,7 @@ import { auth } from '../src/lib/firebase';
 import { isVaultUnlocked } from '../src/lib/sync/secureArchiveSession';
 import { isGuestVaultReadinessCurrent } from '../src/contexts/auth/useGuestLogin';
 import {
-    activateGuestSession, captureSession, GUEST_REVOCATION_KEY, GUEST_SESSION_KEY, invalidateSession,
+    activateGuestSession, captureSession, isActiveGuestSession, isCurrentSession, GUEST_REVOCATION_KEY, GUEST_SESSION_KEY, invalidateSession,
 } from '../src/lib/sync/session';
 
 vi.mock('../src/lib/sync/secureArchiveSession', async importOriginal => ({
@@ -33,7 +33,12 @@ describe('guest vault readiness: exact owner and session fences', () => {
         const session = beginGuest('guest-generation-a');
         expect(isGuestVaultReadinessCurrent(session), JSON.stringify({
             owner: session.owner, currentOwner: captureSession().owner,
-            sessionId: session.guestSessionId,
+            sessionId: session.guestSessionId, currentId: localStorage.getItem(GUEST_SESSION_KEY),
+            guestFlag: localStorage.getItem('logbook_is_guest'),
+            guestActive: isActiveGuestSession(), current: isCurrentSession(session),
+            epoch: session.epoch, nowEpoch: captureSession().epoch,
+            consentMarker: session.consentMarker, nowConsent: captureSession().consentMarker,
+            currentAuth: auth.currentUser?.uid,
             vaultUnlocked: isVaultUnlocked('guest'),
         })).toBe(true);
         expect(isVaultUnlocked).toHaveBeenCalledWith('guest');
