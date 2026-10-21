@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  TELEMETRY_QUEUE_CAPACITY,
   TELEMETRY_QUEUE_MAX_AGE_MS,
   type QueuedTelemetryItem,
 } from '../src/lib/telemetry/contracts';
