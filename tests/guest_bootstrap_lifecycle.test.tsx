@@ -76,6 +76,28 @@ describe('Milestone M2: Guest Bootstrap & Cold Start Lifecycle', () => {
         expect(parseInt(screen.getByTestId('food-count').textContent || '0')).toBe(0);
     });
 
+    it('does not revoke a guest session when an ownerless old business draft is present', async () => {
+        const { result } = renderHook(() => useAuth(), {
+            wrapper: ({ children }) => <AuthProvider>{children}</AuthProvider>,
+        });
+        await act(async () => { await result.current.loginAsGuest(); });
+        await confirmRealGuestVault();
+        await waitFor(() => expect(result.current.isGuest).toBe(true));
+        const original = captureSession();
+        const data = useAppStore.getState().userData;
+        const purge = vi.spyOn(DB, 'purgeAllLocalUserData');
+        localStorage.setItem('draft_measurement', 'old-private-data');
+
+        await act(async () => { await result.current.logout({ mode: 'normal' }); });
+
+        expect(purge).not.toHaveBeenCalled();
+        expect(result.current.isGuest).toBe(true);
+        expect(isCurrentSession(original)).toBe(true);
+        expect(useAppStore.getState().userData).toEqual(data);
+        expect(localStorage.getItem('draft_measurement')).toBe('old-private-data');
+        expect(localStorage.getItem(GUEST_REVOCATION_KEY)).toBeNull();
+    });
+
     it('signs out Firebase without deleting the guest archive while first consent is pending', async () => {
         let listener!: (user: unknown) => Promise<void>;
         vi.mocked(onAuthStateChanged).mockImplementation((_auth, callback: any) => {
