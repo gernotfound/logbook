@@ -1,5 +1,5 @@
 import type { RefObject } from 'react';
-import type { User } from 'firebase/auth';
+import type { UserCredential } from 'firebase/auth';
 import { auth, getRedirectResult } from '../../lib/firebase';
 import { readBrowserValue, tryRemoveBrowserValue } from '../../lib/sync/browserStorage';
 import { safeHardReload } from '../../lib/sync/safeReload';
@@ -68,7 +68,14 @@ export function attachAuthRedirectRecovery({
                 rejectGuestMigrationAuthWaiters(expectedIntentId, 'Redirect Google non confermato.');
                 setSaveError('Accesso Google non confermato. Riprova.');
             } else {
-                await confirmGuestMigrationCredential(expectedIntentId, credential as User);
+                // The redirect SDK must provide the full originating credential,
+                // including the provider of this *specific* Auth operation.
+                if (!result || typeof result !== 'object' || !('providerId' in result)) {
+                    rejectGuestMigrationAuthWaiters(expectedIntentId, 'Provider del redirect non verificabile.');
+                    setSaveError('Accesso Google non confermato. Riprova.');
+                } else {
+                    await confirmGuestMigrationCredential(expectedIntentId, result as UserCredential);
+                }
             }
         }
         environment.remove(awaitingRedirectKey);
