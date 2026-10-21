@@ -3,7 +3,7 @@ import { auth, provider, signInWithPopup, signInWithRedirect } from '../../lib/f
 import { useAppStore } from '../../store/useAppStore';
 import { captureSession, isCurrentSession } from '../../lib/sync/session';
 import { writeBrowserValue, tryRemoveBrowserValue } from '../../lib/sync/browserStorage';
-import { beginGuestMigrationIntent, clearGuestMigrationIntent } from '../../lib/auth/guestMigrationIntent';
+import { beginGuestMigrationIntent, clearGuestMigrationIntent, confirmGuestMigrationCredential } from '../../lib/auth/guestMigrationIntent';
 import { classifyGooglePopupFailure } from './googlePopup';
 import type { GuestMigrationPolicy } from '../AuthContextDef';
 import type { UserData } from '../../types';
@@ -59,7 +59,8 @@ export function useGoogleAuthActions({
             })).id;
         }
         try {
-            await signInWithPopup(auth, provider);
+            const credential = await signInWithPopup(auth, provider);
+            if (intentId) await confirmGuestMigrationCredential(intentId, credential.user);
         } catch (error: any) {
             const failure = classifyGooglePopupFailure(error);
             if (failure === 'redirect') {
@@ -96,7 +97,8 @@ export function useGoogleAuthActions({
             })).id;
         }
         try {
-            await signInWithPopup(auth, provider);
+            const credential = await signInWithPopup(auth, provider);
+            if (intentId) await confirmGuestMigrationCredential(intentId, credential.user);
         } catch (error: any) {
             const failure = classifyGooglePopupFailure(error);
             if (failure === 'redirect') {
