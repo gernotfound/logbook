@@ -17,11 +17,36 @@ const credential = (providerId: 'google.com' | 'password', account: User = user)
     ({ user: account, providerId } as UserCredential);
 
 describe('Auth result provenance for guest-to-account decisions', () => {
+    const originalLocks = Object.getOwnPropertyDescriptor(navigator, 'locks');
     beforeEach(() => {
         localStorage.clear();
         sessionStorage.clear();
+        // jsdom has no Web Locks API. Preserve the production contract:
+        // operations with the same named lock are serialized, never bypassed.
+        const tails = new Map<string, Promise<void>>();
+        Object.defineProperty(navigator, 'locks', {
+            configurable: true,
+            value: {
+                request: async <T>(name: string, _options: LockOptions, operation: () => Promise<T>): Promise<T> => {
+                    const preceding = tails.get(name) ?? Promise.resolve();
+                    let release!: () => void;
+                    const held = new Promise<void>(resolve => { release = resolve; });
+                    tails.set(name, preceding.then(() => held));
+                    await preceding;
+                    try {
+                        return await operation();
+                    } finally {
+                        release();
+                    }
+                },
+            },
+        });
     });
-    afterEach(() => vi.useRealTimers());
+    afterEach(() => {
+        vi.useRealTimers();
+        if (originalLocks) Object.defineProperty(navigator, 'locks', originalLocks);
+        else Reflect.deleteProperty(navigator, 'locks');
+    });
 
     it('does not bind an Auth broadcast of the same UID/provider before the initiating result', async () => {
         const intent = await beginGuestMigrationIntent('merge', 'google');
