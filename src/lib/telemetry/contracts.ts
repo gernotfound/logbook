@@ -87,7 +87,6 @@ export interface RateLimitEntry {
 export const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
 export const DEDUP_WINDOW_MS = RATE_LIMIT_WINDOW_MS;
 export const TELEMETRY_DISPATCH_TIMEOUT_MS = 5000;
-export const TELEMETRY_QUEUE_KEY = 'logbook_telemetry_queue';
 export const TELEMETRY_QUEUE_CAPACITY = 50;
 // Best-effort technical reports must not remain indefinitely on an offline device.
 export const TELEMETRY_QUEUE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;

@@ -48,11 +48,7 @@ export interface CreateAnomalyPayloadOptions {
   win?: Window;
 }
 
-// Pre-v2 global keys are retained only for one-way cleanup. New diagnostic
-// state is owner-scoped so account switches cannot inherit another owner's
-// storage marker or anomaly deduplication flag.
-export const STORAGE_MARKER_KEY = 'logbook_storage_marker';
-export const STORAGE_ANOMALY_REPORTED_KEY = 'logbook_storage_anomaly_reported';
+// Diagnostic state is owner-scoped. Pre-launch global markers are ignored.
 export const STORAGE_MARKER_VERSION = 1;
 
 export function getStorageMarkerKey(owner?: string): string {
@@ -72,10 +68,7 @@ export function getStorageMarker(customStorage?: Storage, owner?: string): Stora
     if (!storage) return null;
     const key = getStorageMarkerKey(owner);
     const raw = storage.getItem(key);
-    if (!raw) {
-      storage.removeItem(STORAGE_MARKER_KEY);
-      return null;
-    }
+    if (!raw) return null;
     const parsed = JSON.parse(raw);
     if (
       parsed &&
@@ -111,7 +104,6 @@ export function updateStorageMarker(timestamp: number = Date.now(), customStorag
       schemaVersion: 1,
     };
     storage.setItem(getStorageMarkerKey(owner), JSON.stringify(marker));
-    storage.removeItem(STORAGE_MARKER_KEY);
     return marker;
   } catch (e) {
     console.warn("Impossibile aggiornare lo storage marker:", e);
@@ -128,8 +120,6 @@ export function clearStorageMarker(customStorage?: Storage, owner?: string): voi
     if (!storage) return;
     storage.removeItem(getStorageMarkerKey(owner));
     storage.removeItem(getStorageAnomalyReportedKey(owner));
-    storage.removeItem(STORAGE_MARKER_KEY);
-    storage.removeItem(STORAGE_ANOMALY_REPORTED_KEY);
   } catch {
     // Ignore removal errors
   }
@@ -163,7 +153,6 @@ export function markAnomalyReported(marker: StorageMarker, customStorage?: Stora
     const storage = customStorage ?? (typeof localStorage !== 'undefined' ? localStorage : null);
     if (!storage) return;
     storage.setItem(getStorageAnomalyReportedKey(owner), String(marker.timestamp));
-    storage.removeItem(STORAGE_ANOMALY_REPORTED_KEY);
   } catch {
     // Ignore storage errors
   }

@@ -1,12 +1,10 @@
-import { readBrowserValueStrict, removeBrowserValue, writeBrowserValue } from '../sync/browserStorage';
-import { deviceKey, protectedDeviceKey } from '../sync/deviceStorage';
+import { readBrowserValueStrict, writeBrowserValue } from '../sync/browserStorage';
+import { protectedDeviceKey } from '../sync/deviceStorage';
 import { openLocalText, sealLocalText } from '../sync/secureArchiveCipher';
 import { isVaultUnlocked, requireUnlockedLocalKey } from '../sync/secureArchiveSession';
 
-/** Technical diagnostics are best-effort, but never stored as new plaintext.
- * Before account/guest vault readiness they can remain in RAM for this tab.
- * An existing plaintext queue from an older build is sealed and read back
- * before its old owner-scoped copy is deleted.
+/** Technical diagnostics are best-effort and never persisted as plaintext.
+ * Before account/guest vault readiness they remain only in this tab's RAM.
  */
 export function readEncryptedTelemetry(owner: string): string | null {
   if (!isVaultUnlocked(owner)) return null;
@@ -35,11 +33,6 @@ export function storeEncryptedTelemetry(owner: string, serialized: string): bool
   if (stored !== ciphertext || openLocalText(secret, owner, key, stored) !== serialized) {
     return false;
   }
-  removeBrowserValue(deviceKey('telemetry_queue', owner));
   return true;
 }
 
-export function discardLegacyUnscopedTelemetry(): void {
-  // Legacy global queue is never an owner authorization source after migration.
-  removeBrowserValue('logbook_telemetry_queue');
-}

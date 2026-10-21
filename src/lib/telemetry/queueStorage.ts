@@ -4,14 +4,13 @@ import { isVaultUnlocked } from '../sync/secureArchiveSession';
 import {
   TELEMETRY_QUEUE_CAPACITY,
   TELEMETRY_QUEUE_MAX_AGE_MS,
-  TELEMETRY_QUEUE_KEY,
   type QueuedTelemetryItem,
   type TelemetryErrorPayload,
   type TelemetryEventPayload,
 } from './contracts';
 import { sanitizeTelemetryDetails } from './detailSanitizer';
 import { createTelemetryId } from './id';
-import { readEncryptedTelemetry, storeEncryptedTelemetry, discardLegacyUnscopedTelemetry } from './secureQueueDevice';
+import { readEncryptedTelemetry, storeEncryptedTelemetry } from './secureQueueDevice';
 
 function minimizeEventPayload(payload: TelemetryEventPayload): TelemetryEventPayload {
   if (payload.details === undefined) return payload;
@@ -74,8 +73,8 @@ export class TelemetryQueueStorage {
   }
 
   public getQueueStorageKey(): string {
-    // Logical owner identity, retained for lifecycle fencing and old-tab
-    // migration; new reports are stored ONLY under the sealed namespace.
+    // Logical owner identity retained for lifecycle fencing.
+    // New reports are stored only under the sealed namespace.
     return deviceKey('telemetry_queue', this.getOwner());
   }
 
@@ -96,48 +95,10 @@ export class TelemetryQueueStorage {
           const parsed = parseQueuedItems(protectedRaw);
           const recent = retainUnexpiredItems(parsed);
           if (recent.length !== parsed.length) storeEncryptedTelemetry(owner, JSON.stringify(recent));
-          // An obsolete tab can recreate the old plaintext queue after a
-          // sealed write. Only the protected copy is authoritative.
-          localStorage.removeItem(ownerKey);
-          discardLegacyUnscopedTelemetry();
+          // Encrypted owner-scoped storage is the only durable source.
           return recent;
         }
 
-        // One-way migration of existing unencrypted technical reports.
-        // Never erase the last owner-scoped copy until AEAD read-back succeeds.
-        const legacyRaw = localStorage.getItem(ownerKey);
-        const globalRaw = localStorage.getItem(TELEMETRY_QUEUE_KEY);
-        const source = legacyRaw ?? globalRaw;
-        if (source !== null) {
-          const uid = this.getUserId();
-          let items: QueuedTelemetryItem[];
-          try {
-            items = retainUnexpiredItems(parseQueuedItems(source));
-          } catch {
-            // Only obsolete plaintext diagnostics are expendable. Never treat
-            // an encrypted read/decryption failure as authorization to erase.
-            localStorage.removeItem(ownerKey);
-            discardLegacyUnscopedTelemetry();
-            return [];
-          }
-          const filtered = items.filter(item => uid && uid !== 'anonymous'
-            ? item.payload?.userId === uid
-            : !item.payload?.userId || item.payload.userId === 'anonymous');
-          if (storeEncryptedTelemetry(owner, JSON.stringify(filtered))) {
-            discardLegacyUnscopedTelemetry();
-          } else if (!isVaultUnlocked(owner)) {
-            // Previously saved plaintext diagnostics must not stay on disk
-            // indefinitely while the account/guest vault is unavailable.
-            // Retain the valid remainder in RAM, then erase only the legacy
-            // best-effort copy; business snapshots are never handled here.
-            this.cachedQueue = filtered;
-            this.cachedQueueKey = ownerKey;
-            this.needsUnlockReconciliation = true;
-            localStorage.removeItem(ownerKey);
-            discardLegacyUnscopedTelemetry();
-          }
-          return filtered;
-        }
       }
     } catch {
       // A missing key, corrupted ciphertext, quota error or unavailable
