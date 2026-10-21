@@ -20,6 +20,12 @@ type EmailAuthDependencies = {
 export function useEmailAuthActions({
     isGuestActiveStrict, setSaveError, setEmailVerificationRequired, migrationDataRef,
 }: EmailAuthDependencies) {
+    const cleanupFailedOwnIntent = (id: string | null) => {
+        if (id === null) return;
+        try { clearGuestMigrationIntent(id); }
+        catch { /* Another auth attempt replaced or consumed this intent. */ }
+    };
+
     const handleAuthError = useCallback((error: unknown): never => {
         setSaveError(describeEmailAuthError(error));
         throw error;
@@ -27,14 +33,15 @@ export function useEmailAuthActions({
 
     const loginWithEmail = useCallback(async (email: string, pass: string, guestPolicy?: GuestMigrationPolicy) => {
         setSaveError(null);
+        let intentId: string | null = null;
         if (isGuestActiveStrict()) {
             if (!guestPolicy) throw new Error('Scelta di trasferimento guest richiesta.');
-            beginGuestMigrationIntent(guestPolicy, 'email', { email });
+            intentId = beginGuestMigrationIntent(guestPolicy, 'email', { email }).id;
         }
         try {
             await signInWithEmailAndPassword(auth, email, pass);
         } catch (error) {
-            try { clearGuestMigrationIntent(); } catch { /* best effort */ }
+            cleanupFailedOwnIntent(intentId)
             handleAuthError(error);
         }
     }, [handleAuthError, isGuestActiveStrict, setSaveError]);
@@ -49,16 +56,17 @@ export function useEmailAuthActions({
         }
 
         migrationDataRef.current = useAppStore.getState().userData;
+        let intentId: string | null = null;
         if (isGuestActiveStrict()) {
             if (!guestPolicy) throw new Error('Scelta di trasferimento guest richiesta.');
-            beginGuestMigrationIntent(guestPolicy, 'email', { email });
+            intentId = beginGuestMigrationIntent(guestPolicy, 'email', { email }).id;
         }
 
         let credential: Awaited<ReturnType<typeof createUserWithEmailAndPassword>>;
         try {
             credential = await createUserWithEmailAndPassword(auth, email, pass);
         } catch (error) {
-            try { clearGuestMigrationIntent(); } catch { /* best effort */ }
+            cleanupFailedOwnIntent(intentId)
             handleAuthError(error);
             return;
         }
