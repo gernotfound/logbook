@@ -255,15 +255,14 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
         const keyA = 'logbook:v2:user:test-user-id:guest-migration-sync-recovery';
         const keyB = 'logbook:v2:user:second-user:guest-migration-sync-recovery';
         localStorage.setItem(keyA, 'test-user-id');
-        const originalGet = localStorageMock.getItem.getMockImplementation()!;
+        const originalRemove = localStorageMock.removeItem.getMockImplementation()!;
         let switched = false;
-        localStorageMock.getItem.mockImplementation((key: string) => {
-            const value = originalGet(key);
+        localStorageMock.removeItem.mockImplementation((key: string) => {
             if (key === keyA && !switched) {
                 switched = true;
                 localStorage.setItem(keyB, 'second-user');
             }
-            return value;
+            originalRemove(key);
         });
 
         await DB.purgeAllLocalUserData('user:test-user-id');
