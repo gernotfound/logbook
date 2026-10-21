@@ -1,6 +1,7 @@
 import { useCallback, type Dispatch, type RefObject, type SetStateAction } from 'react';
 import { auth, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendEmailVerification, reload } from '../../lib/firebase';
 import { useAppStore } from '../../store/useAppStore';
+import { captureSession, isCurrentSession } from '../../lib/sync/session';
 import { validatePasswordAgainstPolicy } from '../../lib/auth/passwordPolicy';
 import { describeEmailAuthError } from '../../lib/auth/emailAuthError';
 import { beginGuestMigrationIntent, clearGuestMigrationIntent } from '../../lib/auth/guestMigrationIntent';
@@ -18,9 +19,9 @@ type EmailAuthDependencies = {
 // The email sign-in/verification actions share the provider's guest migration
 // intent and error boundary; they never authorize owner-scoped data hydration.
 /** A failed asynchronous login may only retire its own Auth handoff. */
-function abandonOwnGuestIntent(id: string | null): void {
+async function abandonOwnGuestIntent(id: string | null): Promise<void> {
     if (id === null) return;
-    try { clearGuestMigrationIntent(id); }
+    try { await clearGuestMigrationIntent(id); }
     catch { /* A newer Auth attempt owns the currently stored intent. */ }
 }
 
@@ -37,12 +38,15 @@ export function useEmailAuthActions({
         let intentId: string | null = null;
         if (isGuestActiveStrict()) {
             if (!guestPolicy) throw new Error('Scelta di trasferimento guest richiesta.');
-            intentId = beginGuestMigrationIntent(guestPolicy, 'email', { email }).id;
+            const guestSession = captureSession();
+            intentId = (await beginGuestMigrationIntent(guestPolicy, 'email', {
+                email, assertCurrent: () => isGuestActiveStrict() && isCurrentSession(guestSession),
+            })).id;
         }
         try {
             await signInWithEmailAndPassword(auth, email, pass);
         } catch (error) {
-            abandonOwnGuestIntent(intentId);
+            await abandonOwnGuestIntent(intentId);
             handleAuthError(error);
         }
     }, [handleAuthError, isGuestActiveStrict, setSaveError]);
@@ -60,14 +64,17 @@ export function useEmailAuthActions({
         let intentId: string | null = null;
         if (isGuestActiveStrict()) {
             if (!guestPolicy) throw new Error('Scelta di trasferimento guest richiesta.');
-            intentId = beginGuestMigrationIntent(guestPolicy, 'email', { email }).id;
+            const guestSession = captureSession();
+            intentId = (await beginGuestMigrationIntent(guestPolicy, 'email', {
+                email, assertCurrent: () => isGuestActiveStrict() && isCurrentSession(guestSession),
+            })).id;
         }
 
         let credential: Awaited<ReturnType<typeof createUserWithEmailAndPassword>>;
         try {
             credential = await createUserWithEmailAndPassword(auth, email, pass);
         } catch (error) {
-            abandonOwnGuestIntent(intentId);
+            await abandonOwnGuestIntent(intentId);
             handleAuthError(error);
             return;
         }

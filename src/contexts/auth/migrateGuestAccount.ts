@@ -32,14 +32,14 @@ type MigrateGuestAccountOptions = {
     policy: GuestMigrationPolicy;
     setUserData: (data: UserData) => void;
     setSyncing: (value: boolean) => void;
-    onLocalReady: () => void;
+    onLocalReady: () => Promise<void> | void;
     isCurrent: () => boolean;
 };
 
 export async function migrateGuestAccount({ user, guestData, policy, setUserData, setSyncing, onLocalReady, isCurrent }: MigrateGuestAccountOptions): Promise<SyncResult> {
     let localReady = false;
     const assertCurrent = () => { if (!isCurrent()) throw new StaleGuestMigrationError(); };
-    const markLocalReady = () => { assertCurrent(); localReady = true; onLocalReady(); };
+    const markLocalReady = async () => { assertCurrent(); localReady = true; await onLocalReady(); };
     const applyLocalData = (data: UserData) => {
         assertCurrent();
         if (localReady) {
@@ -119,7 +119,7 @@ export async function migrateGuestAccount({ user, guestData, policy, setUserData
         // An account may already hold its own pending journal even when the
         // guest intentionally skips the transfer. Hydration is not cloud ACK.
         const finishWithoutGuestMerge = async (): Promise<SyncResult> => {
-            markLocalReady();
+            await markLocalReady();
             const { readLocal } = await import('../../lib/sync/localRepository');
             const beforeReplay = await readLocal(user.uid);
             assertCurrent();
@@ -176,7 +176,7 @@ export async function migrateGuestAccount({ user, guestData, policy, setUserData
             const mergedData = mergeUserData(hydratedEnv.data, guestData);
             await commitLocal(user.uid, mergedData, hydratedEnv.data, isCurrent);
             assertCurrent();
-            markLocalReady();
+            await markLocalReady();
 
             const syncResult = await replicateJournal(userOwner(user.uid));
             assertCurrent();

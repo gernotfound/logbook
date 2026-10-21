@@ -4,9 +4,10 @@ import type { UserData } from '../../types';
 import { useAppStore } from '../../store/useAppStore';
 import { draftRegistry } from '../../lib/utils/draftRegistry';
 import { bindGuestMigrationIntentToUser, clearGuestMigrationIntent } from '../../lib/auth/guestMigrationIntent';
-import { removeBrowserValue } from '../../lib/sync/browserStorage';
+import { readBrowserValueStrict, removeBrowserValue } from '../../lib/sync/browserStorage';
 import { isLegalConsentRequiredError } from '../../lib/sync/replicateJournal';
 import { migrateGuestAccount } from './migrateGuestAccount';
+import { withGuestLifecycleLock } from '../../lib/sync/guestLifecycleLock';
 import type { GuestMigrationPolicy } from '../AuthContextDef';
 
 type GuestMigrationStatus = 'idle' | 'pending' | 'failed';
@@ -32,7 +33,17 @@ export async function startInitialGuestMigration(
         setGuestMigrationStatus, setLoading, setUserData, setSyncing,
         setSaveError, markGuestMigrationSyncRecovery, clearGuestMigrationSyncRecovery,
     }: InitialMigrationDependencies,
-): Promise<void> {
+): Promise<boolean> {
+    let guestAlreadyRetired = false;
+    await withGuestLifecycleLock(async () => {
+    // The reservation is immutable while this tab is transferring ownership.
+    // A second tab observing the Firebase sign-in may not race the same guest
+    // archive through a different choice or consume a completed handoff.
+    if (readBrowserValueStrict(guestKey) !== 'true') {
+        guestAlreadyRetired = true;
+        return;
+    }
+    if (!isCurrentRun()) return;
     setGuestMigrationStatus('pending');
     setLoading(false);
     draftRegistry.flushAll();
@@ -40,7 +51,7 @@ export async function startInitialGuestMigration(
     let policy: GuestMigrationPolicy;
     let intentId: string;
     try {
-        const intent = bindGuestMigrationIntentToUser(user);
+        const intent = await bindGuestMigrationIntentToUser(user);
         policy = intent.policy;
         intentId = intent.id;
     } catch (error) {
@@ -58,12 +69,12 @@ export async function startInitialGuestMigration(
             setUserData,
             setSyncing,
             isCurrent: isCurrentRun,
-            onLocalReady: () => {
+            onLocalReady: async () => {
                 // Persist recovery before changing owner. If any critical
                 // storage transition fails, migration remains recoverable.
                 markGuestMigrationSyncRecovery(user.uid);
                 removeBrowserValue(guestKey);
-                clearGuestMigrationIntent(intentId);
+                await clearGuestMigrationIntent(intentId);
                 isGuestRef.current = false;
                 setIsGuest(false);
                 migrationDataRef.current = null;
@@ -88,4 +99,6 @@ export async function startInitialGuestMigration(
         setGuestMigrationStatus('failed');
         setSaveError('Preparazione account non completata. I dati locali sono conservati e possono essere recuperati. Riprova.');
     }
+    });
+    return guestAlreadyRetired;
 }

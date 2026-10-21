@@ -47,7 +47,7 @@ describe('guest -> account skip policy', () => {
         expect((await readLocal(user.uid))?.pending.length).toBeGreaterThan(0);
         await initializeLocal('guest', guest);
         localStorage.setItem('logbook_is_guest', 'true');
-        beginGuestMigrationIntent('skip', 'recovery', { uid: user.uid });
+        await beginGuestMigrationIntent('skip', 'recovery', { uid: user.uid });
         useAppStore.getState().setUserData(guest);
         const offline = vi.spyOn(window.navigator, 'onLine', 'get').mockReturnValue(false);
         try {
@@ -143,7 +143,7 @@ describe('guest -> account skip policy', () => {
 
         await initializeLocal('guest', guest);
         localStorage.setItem('logbook_is_guest', 'true');
-        beginGuestMigrationIntent('skip', 'recovery', { uid: user.uid });
+        await beginGuestMigrationIntent('skip', 'recovery', { uid: user.uid });
         useAppStore.getState().setUserData(guest);
 
         vi.mocked(DB.loadCloudPayload).mockResolvedValueOnce({

@@ -29,7 +29,12 @@ export function useGuestMigrationRetry({
             try {
                 const uid = auth.currentUser?.uid;
                 if (!uid || !policy) throw new Error('Scegli esplicitamente se trasferire o non trasferire i dati locali.');
-                beginGuestMigrationIntent(policy, 'recovery', { uid });
+                const guestSession = captureSession();
+                await beginGuestMigrationIntent(policy, 'recovery', {
+                    uid,
+                    assertCurrent: () => isGuestActiveStrict()
+                        && auth.currentUser?.uid === uid && isCurrentSession(guestSession),
+                });
                 await safeHardReload();
             } catch (error) {
                 setGuestMigrationStatus('failed');
@@ -57,6 +62,22 @@ export function useGuestMigrationRetry({
             && !isGuestActiveStrict();
 
         if (!isCurrentRetry()) return;
+
+        // A different tab can retire the guest while this tab still carries
+        // the former guest snapshot in RAM. Journal replication alone cannot
+        // turn that foreign snapshot into an authenticated owner view.
+        // Re-bootstrap only through the existing strict reload barrier.
+        const state = useAppStore.getState();
+        if ((state.userData !== null || state.localWorkout !== null) && state.dataOwner !== expectedOwner) {
+            try {
+                await safeHardReload();
+            } catch (error) {
+                if (!isCurrentRetry()) return;
+                setGuestMigrationStatus('failed');
+                setSaveError(error instanceof Error ? error.message : 'Ricaricamento sicuro non disponibile. Dati locali preservati.');
+            }
+            return;
+        }
 
         setGuestMigrationStatus('pending');
         setSyncing(true);

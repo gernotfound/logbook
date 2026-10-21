@@ -24,6 +24,7 @@ import * as localRepository from '../src/lib/sync/localRepository';
 import { useAppStore } from '../src/store/useAppStore';
 import type { UserData } from '../src/types';
 import { beginGuestMigrationIntent } from '../src/lib/auth/guestMigrationIntent';
+import { bootstrapAuthenticatedSession } from '../src/contexts/auth/bootstrapAuthenticatedSession';
 import { createAndMigrateVault } from '../src/lib/sync/secureArchiveMigration';
 import { lockAllVaults } from '../src/lib/sync/secureArchiveSession';
 import { saveWorkoutDeviceIntent } from '../src/lib/sync/workoutDeviceIntent';
@@ -69,7 +70,7 @@ describe('guest migration restart recovery', () => {
     it('mounts only the blocking migration UI during automatic guest recovery without a session overlay marker', async () => {
         const { cloud, guest } = fixtures();
         localStorage.setItem(GUEST_KEY, 'true');
-        beginGuestMigrationIntent('merge', 'recovery', { uid: user.uid });
+        await beginGuestMigrationIntent('merge', 'recovery', { uid: user.uid });
         useAppStore.getState().setUserData(guest);
         let resolveCloud!: (value: any) => void;
         const cloudRequest = new Promise(resolve => { resolveCloud = resolve; });
@@ -85,6 +86,63 @@ describe('guest migration restart recovery', () => {
         await waitFor(() => expect(useAppStore.getState().saveError).toContain('Offline: account preparato sul dispositivo'));
         await waitFor(() => expect(screen.getByTestId('bottom-nav')).toBeTruthy());
         expect(document.getElementById('app-container')).toBeTruthy();
+    });
+
+    it('ends authenticated bootstrap in a recoverable failed state when another tab retires guest ownership while waiting', async () => {
+        const { guest } = fixtures();
+        localStorage.setItem(GUEST_KEY, 'true');
+        await beginGuestMigrationIntent('merge', 'recovery', { uid: user.uid });
+        useAppStore.getState().setUserData(guest);
+        const before = await localRepository.readLocal('guest');
+
+        // The auth gate observes the original guest. Between the last
+        // wasGuest observation and lock acquisition a different tab removes
+        // its flag. This must not silently leave loading=true or load a
+        // foreign in-memory snapshot into the authenticated owner.
+        let observations = 0;
+        const isGuestActiveStrict = () => {
+            observations++;
+            const active = localStorage.getItem(GUEST_KEY) === 'true';
+            if (observations === 2) localStorage.removeItem(GUEST_KEY);
+            return active;
+        };
+        const setIsGuest = vi.fn();
+        const setLoading = vi.fn();
+        const setGuestMigrationStatus = vi.fn();
+        const setSaveError = vi.fn();
+        const loadData = vi.fn(async () => {});
+        const markRecovery = vi.fn();
+
+        await bootstrapAuthenticatedSession(user, () => true, {
+            awaitingRedirectKey: 'logbook_awaiting_redirect',
+            guestKey: GUEST_KEY,
+            isGuestActiveStrict,
+            readGuestMigrationRecoveryStrict: () => false,
+            isGuestRef: { current: true },
+            migrationDataRef: { current: null },
+            setIsGuest,
+            setCurrentUser: vi.fn(),
+            setEmailVerificationRequired: vi.fn(),
+            setGuestMigrationStatus,
+            setLoading,
+            setUserData: vi.fn(),
+            setSyncing: vi.fn(),
+            setSaveError,
+            markGuestMigrationSyncRecovery: markRecovery,
+            clearGuestMigrationSyncRecovery: vi.fn(),
+            loadData,
+        });
+
+        expect(observations).toBeGreaterThanOrEqual(2);
+        expect(setGuestMigrationStatus).toHaveBeenCalledWith('failed');
+        expect(setIsGuest).toHaveBeenCalledWith(false);
+        expect(setLoading).toHaveBeenCalledWith(false);
+        expect(setSaveError).toHaveBeenCalledWith(expect.stringContaining('sessione locale è cambiata'));
+        expect(markRecovery).not.toHaveBeenCalled();
+        expect(loadData).not.toHaveBeenCalled();
+        expect(DB.loadCloudPayload).not.toHaveBeenCalled();
+        expect(await localRepository.readLocal('guest')).toEqual(before);
+        expect(localStorage.getItem('guest_migration_intent_v1')).not.toBeNull();
     });
 
     it('does not consume guest data without an explicit migration intent', async () => {
@@ -237,7 +295,7 @@ describe('guest migration restart recovery', () => {
         const userA = { uid: 'account-a', email: 'a@example.com', displayName: 'A' } as any;
         const userB = { uid: 'account-b', email: 'b@example.com', displayName: 'B' } as any;
         localStorage.setItem(GUEST_KEY, 'true');
-        beginGuestMigrationIntent('merge', 'recovery', { uid: userA.uid });
+        await beginGuestMigrationIntent('merge', 'recovery', { uid: userA.uid });
         useAppStore.getState().setUserData(guest);
         let authCallback!: (nextUser: any) => Promise<void>;
         vi.mocked(onAuthStateChanged).mockImplementation((_auth, callback: any) => { authCallback = callback; return () => {}; });
@@ -265,14 +323,14 @@ describe('guest migration restart recovery', () => {
         expect(screen.getByRole('status', { name: 'Preparazione account in corso' })).toBeTruthy();
         let bRun!: Promise<void>;
         act(() => { (auth as any).currentUser = userB; bRun = authCallback(userB); });
-        await act(async () => { await bRun; });
+        // B must wait behind A's held guest lifecycle lock. Releasing A's
+        // suspended local commit comes BEFORE observing B's rejection.
+        releaseACommit();
+        await act(async () => { await aRun; await bRun; });
 
         // B cannot inherit the merge/skip decision that was bound to A.
         await waitFor(() => expect(screen.getByText('Accesso non completato')).toBeTruthy());
         expect(DB.loadCloudPayload).toHaveBeenCalledTimes(1);
-
-        releaseACommit();
-        await act(async () => { await aRun; });
         expect(localStorage.getItem(GUEST_KEY)).toBe('true');
         expect(localStorage.getItem(SYNC_RECOVERY_KEY)).toBeNull();
         expect(document.getElementById('app-container')).toBeNull();
@@ -286,7 +344,7 @@ describe('guest migration restart recovery', () => {
         expect(await localRepository.readLocal(userB.uid)).toBeUndefined();
 
         // A fresh explicit decision for B is required before B may own the guest data.
-        beginGuestMigrationIntent('merge', 'recovery', { uid: userB.uid });
+        await beginGuestMigrationIntent('merge', 'recovery', { uid: userB.uid });
         let retryB!: Promise<void>;
         act(() => { retryB = authCallback(userB); });
         await waitFor(() => expect(DB.loadCloudPayload).toHaveBeenCalledTimes(2));
