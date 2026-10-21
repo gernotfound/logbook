@@ -85,7 +85,7 @@ export function useGoogleAuthActions({
         }
         if (intentId) {
             try {
-                await confirmGuestMigrationCredential(intentId, credential.user);
+                await confirmGuestMigrationCredential(intentId, credential);
             } catch (error) {
                 rejectGuestMigrationAuthWaiters(intentId, 'Risultato di questo accesso Google non verificabile.');
                 console.error('Prova dell’accesso Google non confermata:', error);
@@ -139,7 +139,7 @@ export function useGoogleAuthActions({
         }
         if (intentId) {
             try {
-                await confirmGuestMigrationCredential(intentId, credential.user);
+                await confirmGuestMigrationCredential(intentId, credential);
             } catch (error) {
                 rejectGuestMigrationAuthWaiters(intentId, 'Risultato di questo collegamento Google non verificabile.');
                 console.error('Prova del collegamento Google non confermata:', error);
