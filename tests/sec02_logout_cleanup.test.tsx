@@ -218,7 +218,7 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
         // Auth creates this ownerless intent before an account UID exists.
         // A different account's purge has no proof it owns the intent, even
         // when the intent predates the purge and the shared value is stable.
-        const intent = beginGuestMigrationIntent('merge', 'google');
+        const intent = await beginGuestMigrationIntent('merge', 'google');
         const raw = localStorage.getItem('guest_migration_intent_v1');
         expect(raw).toContain(intent.id);
 
@@ -229,7 +229,7 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
     });
 
     it('preserves guest migration ownership through an interrupted account purge and a retry', async () => {
-        const intent = beginGuestMigrationIntent('skip', 'email', { email: 'other@example.test' });
+        const intent = await beginGuestMigrationIntent('skip', 'email', { email: 'other@example.test' });
         const raw = localStorage.getItem('guest_migration_intent_v1');
         vi.mocked(idb.del).mockRejectedValueOnce(new Error('interrupted IndexedDB cleanup'));
 
