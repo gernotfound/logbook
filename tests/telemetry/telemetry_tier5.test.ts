@@ -8,6 +8,7 @@ import {
 import { getTelemetryContext } from '../../src/lib/telemetrySanitizer';
 import { DomainParsers } from '../../src/lib/schema';
 import { installTelemetryTestHarness, mockSetDoc } from './telemetryTestHarness';
+import { seedCurrentTelemetryQueue } from './seedCurrentQueue';
 
 describe('Unified Telemetry Hub E2E Suite — Tier 5', () => {
   installTelemetryTestHarness();
@@ -174,7 +175,7 @@ describe('Unified Telemetry Hub E2E Suite — Tier 5', () => {
           },
         }));
 
-        localStorage.setItem(telemetryHub.getQueueStorageKey(), JSON.stringify(items));
+        await seedCurrentTelemetryQueue('user_t5_6', items);
 
         // First item succeeds, subsequent items fail due to network drop
         mockSetDoc
@@ -197,9 +198,7 @@ describe('Unified Telemetry Hub E2E Suite — Tier 5', () => {
         telemetryHub.init();
         telemetryHub.setUserId('user_t5_7');
 
-        localStorage.setItem(
-          telemetryHub.getQueueStorageKey(),
-          JSON.stringify([
+        await seedCurrentTelemetryQueue('user_t5_7', [
             {
               id: 'queued_item_1',
               timestamp: Date.now(),
@@ -217,8 +216,7 @@ describe('Unified Telemetry Hub E2E Suite — Tier 5', () => {
                 lastSeen: Date.now(),
               },
             },
-          ])
-        );
+          ]);
 
         // Trigger multiple concurrent flushes and track calls
         const flush1 = telemetryHub.flushQueue();
@@ -263,9 +261,7 @@ describe('Unified Telemetry Hub E2E Suite — Tier 5', () => {
         telemetryHub.init();
         telemetryHub.setUserId('user_t5_8b');
 
-        localStorage.setItem(
-          telemetryHub.getQueueStorageKey(),
-          JSON.stringify([
+        await seedCurrentTelemetryQueue('user_t5_8b', [
             {
               id: 'poison_pill_1',
               timestamp: Date.now(),
@@ -283,8 +279,7 @@ describe('Unified Telemetry Hub E2E Suite — Tier 5', () => {
                 lastSeen: Date.now(),
               },
             },
-          ])
-        );
+          ]);
 
         // Mock failure for all flush attempts
         mockSetDoc.mockRejectedValue(new Error('Persistent telemetry transport error'));
@@ -489,7 +484,7 @@ describe('Unified Telemetry Hub E2E Suite — Tier 5', () => {
           },
         ];
 
-        localStorage.setItem(telemetryHub.getQueueStorageKey(), JSON.stringify(corruptQueue));
+        await seedCurrentTelemetryQueue('user_t5_14', corruptQueue);
 
         await telemetryHub.flushQueue();
 

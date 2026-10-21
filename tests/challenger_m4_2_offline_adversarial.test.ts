@@ -7,6 +7,7 @@ import {
   type QueuedTelemetryItem,
 } from '../src/lib/telemetryHub';
 import { getTelemetryContext } from '../src/lib/telemetrySanitizer';
+import { seedCurrentTelemetryQueue } from './telemetry/seedCurrentQueue';
 
 describe('Empirical Challenger M4.2: Offline Queue, Circuit Breaker & Poison Pill Hardening', () => {
   let mockSetDoc: any;
@@ -97,7 +98,7 @@ describe('Empirical Challenger M4.2: Offline Queue, Circuit Breaker & Poison Pil
           timestamp: Date.now() - 2000 + i * 100,
         },
       }));
-      localStorage.setItem(telemetryHub.getQueueStorageKey(), JSON.stringify(initialItems));
+      await seedCurrentTelemetryQueue('user_circuit_breaker', initialItems);
 
       // Mock Sentry boundary: Item 1 succeeds, then sudden network failure for subsequent items
       mockSetDoc
@@ -172,7 +173,7 @@ describe('Empirical Challenger M4.2: Offline Queue, Circuit Breaker & Poison Pil
         },
       ];
 
-      localStorage.setItem(telemetryHub.getQueueStorageKey(), JSON.stringify(queueWithPoisonPill));
+      await seedCurrentTelemetryQueue('user_poison_pill', queueWithPoisonPill);
 
       // Configure mock: Poison pill rejects
       mockSetDoc.mockRejectedValue(new Error('Firestore write permanently rejected for poison pill'));
@@ -248,7 +249,7 @@ describe('Empirical Challenger M4.2: Offline Queue, Circuit Breaker & Poison Pil
         },
       ];
 
-      localStorage.setItem(telemetryHub.getQueueStorageKey(), JSON.stringify(items));
+      await seedCurrentTelemetryQueue('user_poison_hetero', items);
 
       // Mock: poison fails, valid succeeds
       mockSetDoc.mockImplementation(async (_kind: any, data: any) => {
@@ -320,7 +321,7 @@ describe('Empirical Challenger M4.2: Offline Queue, Circuit Breaker & Poison Pil
 
         // Diagnostic state stays in RAM if the account key is not ready;
         // recovering from invalid legacy JSON must never write new plaintext.
-        expect(localStorage.getItem(telemetryHub.getQueueStorageKey())).toBeNull();
+        expect(localStorage.getItem(telemetryHub.getQueueStorageKey())).toBe(corrupt);
         const parsed = telemetryHub.getQueuedEvents();
         expect(Array.isArray(parsed)).toBe(true);
         expect(parsed.length).toBe(1);

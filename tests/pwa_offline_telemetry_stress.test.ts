@@ -8,6 +8,7 @@ import {
   type TelemetryEventPayload,
   type TelemetryErrorPayload,
 } from '../src/lib/telemetryHub';
+import { seedCurrentTelemetryQueue } from './telemetry/seedCurrentQueue';
 
 describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () => {
   let mockSetDoc: any;
@@ -108,7 +109,7 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
       ];
 
       telemetryHub.setUserId('user_malformed_test');
-      localStorage.setItem(telemetryHub.getQueueStorageKey(), JSON.stringify(malformedQueue));
+      await seedCurrentTelemetryQueue('user_malformed_test', malformedQueue);
 
       // Should not throw unhandled exception
       await expect(telemetryHub.flushQueue()).resolves.not.toThrow();
@@ -139,7 +140,7 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
       ];
 
       telemetryHub.setUserId('u1');
-      localStorage.setItem(telemetryHub.getQueueStorageKey(), JSON.stringify(hostileQueue));
+      await seedCurrentTelemetryQueue('u1', hostileQueue);
 
       // flushQueue must not throw or crash on any element
       await expect(telemetryHub.flushQueue()).resolves.not.toThrow();
@@ -168,7 +169,7 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
         { id: 'corrupt_2', itemType: 'error', payload: null },
       ];
 
-      localStorage.setItem(telemetryHub.getQueueStorageKey(), JSON.stringify(hostileQueue));
+      await seedCurrentTelemetryQueue('u_purge_race', hostileQueue);
 
       mockSetDoc.mockImplementation(async () => {
         await new Promise((r) => setTimeout(r, 20));
@@ -448,7 +449,7 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
       ];
 
       telemetryHub.setUserId('u1');
-      localStorage.setItem(telemetryHub.getQueueStorageKey(), JSON.stringify(items));
+      await seedCurrentTelemetryQueue('u1', items);
 
       // Mock setDoc: succeed for 1 and 3, reject for 2 and 4
       mockSetDoc.mockImplementation(async (_kind: any, payload: any) => {

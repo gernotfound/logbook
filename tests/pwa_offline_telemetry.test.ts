@@ -4,6 +4,7 @@ import * as sentryClient from '../src/lib/sentryClient';
 import { renderHook, act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import React from 'react';
 import { telemetryHub, TELEMETRY_QUEUE_CAPACITY } from '../src/lib/telemetryHub';
+import { seedCurrentTelemetryQueue } from './telemetry/seedCurrentQueue';
 import { usePWAInstall } from '../src/hooks/usePWAInstall';
 import { useWorkoutSession } from '../src/hooks/useWorkoutSession';
 import { useAppStore } from '../src/store/useAppStore';
@@ -531,9 +532,7 @@ describe('Milestone 2: PWA, offline workout and telemetry boundaries', () => {
     it('automatically replays queued items upon telemetryHub.init() if online at bootstrap', async () => {
       telemetryHub.setUserId('user_boot_test');
       // Seed a pre-existing queue for the same authenticated owner.
-      localStorage.setItem(
-        telemetryHub.getQueueStorageKey(),
-        JSON.stringify([
+      await seedCurrentTelemetryQueue('user_boot_test', [
           {
             id: 'item_boot_1',
             timestamp: Date.now() - 10000,
@@ -546,8 +545,7 @@ describe('Milestone 2: PWA, offline workout and telemetry boundaries', () => {
               sessionId: 'sess_1',
             },
           },
-        ])
-      );
+        ]);
 
       Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
       telemetryHub.init();
@@ -591,9 +589,7 @@ describe('Milestone 2: PWA, offline workout and telemetry boundaries', () => {
 
     it('retains failing items in queue if Firestore write fails during flush', async () => {
       telemetryHub.setUserId('user_failing');
-      localStorage.setItem(
-        telemetryHub.getQueueStorageKey(),
-        JSON.stringify([
+      await seedCurrentTelemetryQueue('user_failing', [
           {
             id: 'item_failing_1',
             timestamp: Date.now(),
@@ -606,8 +602,7 @@ describe('Milestone 2: PWA, offline workout and telemetry boundaries', () => {
               sessionId: 'sess_1',
             },
           },
-        ])
-      );
+        ]);
 
       mockSetDoc.mockRejectedValueOnce(new Error('Network drop during replay'));
 
