@@ -7,7 +7,6 @@ import { markTabSnapshotClean } from '../../lib/sync/tabSnapshotCausality';
 import { getInitialLocalWorkout } from '../../store/slices/createWorkoutSlice';
 import { recoverWorkoutDeviceIntent } from '../../lib/sync/workoutDeviceIntent';
 import { removeBrowserValue } from '../../lib/sync/browserStorage';
-import { clearGuestMigrationIntent } from '../../lib/auth/guestMigrationIntent';
 import type { UserData } from '../../types';
 
 type GuestMigrationStatus = 'idle' | 'pending' | 'failed';
@@ -67,7 +66,10 @@ export async function resumePersistedGuestMigration(
                 try {
                     if (!isCurrentRun()) return true;
                     removeBrowserValue(guestKey);
-                    try { clearGuestMigrationIntent(); } catch { /* recovery may predate the intent protocol */ }
+                    // A persisted envelope proves authenticated data ownership,
+                    // not ownership of a shared Auth intent written by another tab.
+                    // Only the initial migration path has the original intent ID
+                    // and may consume that exact record.
                     isGuestRef.current = false;
                     setIsGuest(false);
                     migrationDataRef.current = null;
