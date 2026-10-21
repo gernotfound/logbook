@@ -11,9 +11,9 @@ const AWAITING_REDIRECT_KEY = 'logbook_awaiting_redirect';
 
 // An auth failure owns only the attempt it started. A stale popup callback
 // must not erase a guest migration intent replaced by a newer login/tab.
-function abandonOwnGuestIntent(intentId: string | null): void {
+async function abandonOwnGuestIntent(intentId: string | null): Promise<void> {
     if (intentId === null) return;
-    try { clearGuestMigrationIntent(intentId); }
+    try { await clearGuestMigrationIntent(intentId); }
     catch { /* Another attempt replaced/consumed the intent; preserve it. */ }
 }
 
@@ -52,7 +52,7 @@ export function useGoogleAuthActions({
         let intentId: string | null = null;
         if (isGuestActiveStrict()) {
             if (!guestPolicy) throw new Error('Scelta di trasferimento guest richiesta.');
-            intentId = beginGuestMigrationIntent(guestPolicy, 'google').id;
+            intentId = (await beginGuestMigrationIntent(guestPolicy, 'google')).id;
         }
         try {
             await signInWithPopup(auth, provider);
@@ -62,17 +62,17 @@ export function useGoogleAuthActions({
                 try {
                     await startGoogleRedirect();
                 } catch {
-                    abandonOwnGuestIntent(intentId);
+                    await abandonOwnGuestIntent(intentId);
                     console.error('Accesso Google tramite redirect non riuscito.');
                     setSaveError("Accesso fallito. Riprova.");
                 }
             } else if (failure === 'cancelled') {
-                abandonOwnGuestIntent(intentId);
+                await abandonOwnGuestIntent(intentId);
             } else if (failure === 'network') {
-                abandonOwnGuestIntent(intentId);
+                await abandonOwnGuestIntent(intentId);
                 setSaveError("Connessione non disponibile. Riprova quando sei online.");
             } else if (failure === 'error') {
-                abandonOwnGuestIntent(intentId);
+                await abandonOwnGuestIntent(intentId);
                 console.error('Accesso Google non riuscito.');
                 setSaveError('Accesso Google non riuscito. Riprova.');
             }
@@ -86,7 +86,7 @@ export function useGoogleAuthActions({
         let intentId: string | null = null;
         if (isGuestActiveStrict()) {
             if (!guestPolicy) throw new Error('Scelta di trasferimento guest richiesta.');
-            intentId = beginGuestMigrationIntent(guestPolicy, 'google').id;
+            intentId = (await beginGuestMigrationIntent(guestPolicy, 'google')).id;
         }
         try {
             await signInWithPopup(auth, provider);
@@ -96,23 +96,23 @@ export function useGoogleAuthActions({
                 try {
                     await startGoogleRedirect();
                 } catch {
-                    abandonOwnGuestIntent(intentId);
+                    await abandonOwnGuestIntent(intentId);
                     console.error('Collegamento Google tramite redirect non riuscito.');
                     setSaveError("Accesso fallito. Riprova.");
                 }
                 return;
             }
             if (failure === 'cancelled') {
-                abandonOwnGuestIntent(intentId);
+                await abandonOwnGuestIntent(intentId);
                 return;
             }
             if (failure === 'network') {
-                abandonOwnGuestIntent(intentId);
+                await abandonOwnGuestIntent(intentId);
                 setSaveError("Connessione non disponibile. Riprova quando sei online.");
                 return;
             }
             if (failure === 'error') {
-                abandonOwnGuestIntent(intentId);
+                await abandonOwnGuestIntent(intentId);
                 console.error('Collegamento account Google non riuscito.');
                 setSaveError("Collegamento fallito. Riprova.");
             }
