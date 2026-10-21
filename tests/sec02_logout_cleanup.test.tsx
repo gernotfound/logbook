@@ -378,6 +378,26 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
         expect(localStorage.getItem('logbook:local-purge-legacy-snapshot:v1:user:test-user-id')).toBeNull();
     });
 
+    it('resumes an older fingerprint snapshot without claiming guest/Auth ownership', async () => {
+        const owner = 'user:test-user-id';
+        const key = 'logbook:local-purge-legacy-snapshot:v1:' + owner;
+        const original = beginGuestMigrationIntent('merge', 'google');
+        const raw = localStorage.getItem('guest_migration_intent_v1');
+        // A frozen snapshot from 1.114.0 could have tracked the ownerless
+        // guest intent. It is not proof that the old account owned it.
+        const hashes: (string | null)[] = Array(13).fill(null);
+        hashes[11] = 'a'.repeat(64);
+        localStorage.setItem(key, JSON.stringify({ version: 1, owner, hashes }));
+        beginLocalPurge(owner);
+
+        await DB.purgeAllLocalUserData(owner);
+
+        expect(localStorage.getItem('guest_migration_intent_v1')).toBe(raw);
+        expect(raw).toContain(original.id);
+        expect(localStorage.getItem(key)).toBeNull();
+        expect(isLocalPurgePending(owner)).toBe(true);
+    });
+
     it('purgeAllLocalUserData removes IndexedDB sensitive keys', async () => {
         await DB.purgeAllLocalUserData();
 
