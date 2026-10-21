@@ -4,7 +4,7 @@ import {
     signInWithPopup, signInWithRedirect, signInWithEmailAndPassword,
     createUserWithEmailAndPassword,
 } from 'firebase/auth';
-import type { User } from 'firebase/auth';
+import type { User, UserCredential } from 'firebase/auth';
 import { useGoogleAuthActions } from '../../src/contexts/auth/useGoogleAuthActions';
 import { useEmailAuthActions } from '../../src/contexts/auth/useEmailAuthActions';
 import { beginGuestMigrationIntent } from '../../src/lib/auth/guestMigrationIntent';
@@ -104,7 +104,7 @@ describe('serialized guest migration intent belongs to an exact Auth attempt', (
         await expect(bindGuestMigrationIntentToUser(user)).rejects.toThrow('origine da questa scheda');
         expect(JSON.parse(localStorage.getItem(KEY)!).policy).toBe('merge');
         sessionStorage.setItem('logbook:guest-auth-attempt', receipt!);
-        await confirmGuestMigrationCredential(attempt.id, user);
+        await confirmGuestMigrationCredential(attempt.id, { user, providerId: 'password' } as UserCredential);
         const bound = await bindGuestMigrationIntentToUser(user);
         expect(bound.id).toBe(attempt.id);
         expect(bound.policy).toBe('merge');
