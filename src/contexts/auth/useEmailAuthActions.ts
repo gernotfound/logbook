@@ -1,6 +1,7 @@
 import { useCallback, type Dispatch, type RefObject, type SetStateAction } from 'react';
 import { auth, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendEmailVerification, reload } from '../../lib/firebase';
 import { useAppStore } from '../../store/useAppStore';
+import { captureSession, isCurrentSession } from '../../lib/sync/session';
 import { validatePasswordAgainstPolicy } from '../../lib/auth/passwordPolicy';
 import { describeEmailAuthError } from '../../lib/auth/emailAuthError';
 import { beginGuestMigrationIntent, clearGuestMigrationIntent } from '../../lib/auth/guestMigrationIntent';
@@ -37,7 +38,10 @@ export function useEmailAuthActions({
         let intentId: string | null = null;
         if (isGuestActiveStrict()) {
             if (!guestPolicy) throw new Error('Scelta di trasferimento guest richiesta.');
-            intentId = (await beginGuestMigrationIntent(guestPolicy, 'email', { email })).id;
+            const guestSession = captureSession();
+            intentId = (await beginGuestMigrationIntent(guestPolicy, 'email', {
+                email, assertCurrent: () => isGuestActiveStrict() && isCurrentSession(guestSession),
+            })).id;
         }
         try {
             await signInWithEmailAndPassword(auth, email, pass);
@@ -60,7 +64,10 @@ export function useEmailAuthActions({
         let intentId: string | null = null;
         if (isGuestActiveStrict()) {
             if (!guestPolicy) throw new Error('Scelta di trasferimento guest richiesta.');
-            intentId = (await beginGuestMigrationIntent(guestPolicy, 'email', { email })).id;
+            const guestSession = captureSession();
+            intentId = (await beginGuestMigrationIntent(guestPolicy, 'email', {
+                email, assertCurrent: () => isGuestActiveStrict() && isCurrentSession(guestSession),
+            })).id;
         }
 
         let credential: Awaited<ReturnType<typeof createUserWithEmailAndPassword>>;
