@@ -205,7 +205,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                                     const displayKg = s.kg !== null && s.kg !== undefined && s.kg !== '' ? s.kg : '?';
                                     const displayReps = s.reps !== null && s.reps !== undefined && s.reps !== '' ? s.reps : '?';
                                     const displayTime = s.time !== null && s.time !== undefined && s.time !== '' ? s.time : '?';
-                                    const displayRir = Number.isInteger(s.rir) && s.rir >= 0 && s.rir <= 10 ? s.rir : undefined;
+                                    const displayRir = typeof s.rir === 'number' && Number.isInteger(s.rir) && s.rir >= 0 && s.rir <= 10 ? s.rir : undefined;
 
                                     const cardioDetails = libDef?.trackingType === 'cardio'
                                         ? [
