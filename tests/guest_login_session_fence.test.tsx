@@ -58,6 +58,11 @@ describe('guest vault readiness: exact owner and session fences', () => {
         await expect(checkAfterReady).resolves.toBe(false);
     });
 
+    it('does not publish guest state for an authenticated owner snapshot', () => {
+        const guest = beginGuest('guest-during-account-handoff');
+        expect(isGuestVaultReadinessCurrent({ ...guest, owner: 'user:other-account' })).toBe(false);
+    });
+
     it('fails closed when the guest generation has been revoked', () => {
         const session = beginGuest('guest-generation-revoked');
         localStorage.setItem(GUEST_REVOCATION_KEY, 'revoked');
