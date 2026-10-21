@@ -16,6 +16,7 @@ const authResultWaiters = new Map<string, Set<(error?: Error) => void>>();
 // After a reload (other than an own verified redirect), recovery must require
 // an explicit new decision, rather than treating onAuthStateChanged as proof.
 const provenAuthResults = new Map<string, string>();
+const failedAuthResults = new Map<string, Error>();
 const realmClaim = createId();
 
 export type GuestMigrationMethod = 'email' | 'google' | 'recovery';
@@ -121,6 +122,7 @@ function awaitOwnAuthResult(intentId: string): Promise<void> {
         try {
             const latest = readGuestMigrationIntentStrict();
             if (latest.id !== intentId) settle(new Error('Il tentativo Auth è stato sostituito.'));
+            else if (failedAuthResults.has(intentId)) settle(failedAuthResults.get(intentId));
             else if (provenAuthResults.has(intentId)) settle();
         } catch (error) {
             settle(error instanceof Error ? error : new Error('Tentativo Auth non verificabile.'));
@@ -151,6 +153,9 @@ export async function confirmGuestMigrationCredential(intentId: string, user: Us
             throw new Error('La credenziale non appartiene al tentativo Auth corrente.');
         }
         assertUserMatchesIntent(intent, user);
+        if (failedAuthResults.has(intentId)) {
+            throw failedAuthResults.get(intentId);
+        }
         const provenUid = provenAuthResults.get(intentId);
         if (provenUid && provenUid !== user.uid) {
             throw new Error('La credenziale del tentativo Auth è cambiata.');
@@ -166,7 +171,13 @@ export function readGuestMigrationTabReceipt(): string | null {
 }
 
 export function rejectGuestMigrationAuthWaiters(intentId: string, reason: string): void {
-    settleAuthResultWaiters(intentId, new Error(reason));
+    // A redirect failure may arrive before Auth bootstrap subscribes.
+    // Keep the failure in this realm so a late subscriber cannot wait 15 s
+    // or infer a successful login from the broadcast.
+    if (provenAuthResults.has(intentId)) return;
+    const error = new Error(reason);
+    failedAuthResults.set(intentId, error);
+    settleAuthResultWaiters(intentId, error);
 }
 
 function readTabReceipt(): string | null {
@@ -215,6 +226,7 @@ export function beginGuestMigrationIntent(
         }
         if (previousId && previousId !== intent.id) {
             provenAuthResults.delete(previousId);
+            failedAuthResults.delete(previousId);
             settleAuthResultWaiters(previousId, new Error('Tentativo Auth sostituito da un recupero esplicito.'));
         }
         return intent;
@@ -229,6 +241,9 @@ export async function bindGuestMigrationIntentToUser(user: User): Promise<GuestM
         throw new Error('Questo accesso non ha origine da questa scheda.');
     }
     assertUserMatchesIntent(prior, user);
+    if (prior.method !== 'recovery' && failedAuthResults.has(prior.id)) {
+        throw failedAuthResults.get(prior.id);
+    }
     if (prior.method !== 'recovery' && provenAuthResults.get(prior.id) !== user.uid) {
         await awaitOwnAuthResult(prior.id);
     }
@@ -263,6 +278,7 @@ export function clearGuestMigrationIntent(expectedId: string): Promise<void> {
         removeBrowserValue(KEY);
         sessionStorage.removeItem(TAB_RECEIPT_KEY);
         provenAuthResults.delete(expectedId);
+        failedAuthResults.delete(expectedId);
         settleAuthResultWaiters(expectedId, new Error('Tentativo Auth terminato.'));
     });
 }
