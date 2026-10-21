@@ -95,6 +95,50 @@ describe('serialized guest migration intent belongs to an exact Auth attempt', (
         expect(localStorage.getItem(KEY)).toBeNull();
     });
 
+    it('requires the actual Google popup result after an earlier same-UID Auth event', async () => {
+        const { bindGuestMigrationIntentToUser } = await import('../../src/lib/auth/guestMigrationIntent');
+        const user = { uid: 'shared-account', email: 'same@example.test',
+            providerData: [{ providerId: 'google.com' }] } as User;
+        let deliver!: (credential: Awaited<ReturnType<typeof signInWithPopup>>) => void;
+        vi.mocked(signInWithPopup).mockImplementationOnce(() =>
+            new Promise(resolve => { deliver = resolve; }));
+        const { result } = google(true);
+        const pendingLogin = result.current.login('merge');
+        await waitFor(() => expect(deliver).toBeTypeOf('function'));
+        const attempted = JSON.parse(localStorage.getItem(KEY)!);
+        let migrated = false;
+        const observed = bindGuestMigrationIntentToUser(user).then(intent => {
+            migrated = true;
+            return intent;
+        });
+        // This callback could have been triggered by a different tab. Matching
+        // user and provider do not release the originating tab's reservation.
+        await Promise.resolve();
+        expect(migrated).toBe(false);
+        deliver({ user, providerId: 'google.com', operationType: 'signIn' } as UserCredential);
+        await act(async () => { await pendingLogin; });
+        await expect(observed).resolves.toMatchObject({ id: attempted.id, policy: 'merge' });
+        expect(migrated).toBe(true);
+        expect(JSON.parse(localStorage.getItem(KEY)!)).not.toHaveProperty('credentialUid');
+    });
+
+    it('does not fall back to redirect when a successful popup has the wrong credential provider', async () => {
+        const user = { uid: 'shared-account', email: 'same@example.test',
+            providerData: [{ providerId: 'google.com' }] } as User;
+        vi.mocked(signInWithPopup).mockResolvedValueOnce(
+            { user, providerId: 'password', operationType: 'signIn' } as UserCredential);
+        const { result } = google(true);
+        const logger = vi.spyOn(console, 'error').mockImplementation(() => {});
+        try {
+            await act(async () => { await result.current.login('merge'); });
+            expect(signInWithRedirect).not.toHaveBeenCalled();
+            expect(useAppStore.getState().saveError).toContain('trasferimento guest non autorizzato');
+            expect(JSON.parse(localStorage.getItem(KEY)!)).toMatchObject({ policy: 'merge' });
+        } finally {
+            logger.mockRestore();
+        }
+    });
+
     it('rejects a Firebase broadcast observed in a tab without the initiating receipt', async () => {
         const { bindGuestMigrationIntentToUser, confirmGuestMigrationCredential } = await import('../../src/lib/auth/guestMigrationIntent');
         const attempt = await beginGuestMigrationIntent('merge', 'email', { email: 'same@example.test' });
