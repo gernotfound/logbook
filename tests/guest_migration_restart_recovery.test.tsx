@@ -265,14 +265,14 @@ describe('guest migration restart recovery', () => {
         expect(screen.getByRole('status', { name: 'Preparazione account in corso' })).toBeTruthy();
         let bRun!: Promise<void>;
         act(() => { (auth as any).currentUser = userB; bRun = authCallback(userB); });
-        await act(async () => { await bRun; });
+        // B must wait behind A's held guest lifecycle lock. Releasing A's
+        // suspended local commit comes BEFORE observing B's rejection.
+        releaseACommit();
+        await act(async () => { await aRun; await bRun; });
 
         // B cannot inherit the merge/skip decision that was bound to A.
         await waitFor(() => expect(screen.getByText('Accesso non completato')).toBeTruthy());
         expect(DB.loadCloudPayload).toHaveBeenCalledTimes(1);
-
-        releaseACommit();
-        await act(async () => { await aRun; });
         expect(localStorage.getItem(GUEST_KEY)).toBe('true');
         expect(localStorage.getItem(SYNC_RECOVERY_KEY)).toBeNull();
         expect(document.getElementById('app-container')).toBeNull();
