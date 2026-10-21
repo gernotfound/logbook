@@ -679,7 +679,7 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
                 const exItem = {
                     exId: 'ex_bike',
                     sessionNote: '',
-                    sets: [{ id: 's_cardio', time: '', distance: '', speed: '' }]
+                    sets: [{ id: 's_cardio', kg: '', reps: '', time: '', distance: '', speed: '' }]
                 };
 
                 const onUpdateSet = vi.fn();

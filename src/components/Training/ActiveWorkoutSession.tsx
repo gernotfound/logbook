@@ -10,8 +10,9 @@ import { BufferedWorkoutScope } from '../UI/bufferedWorkoutScope';
 import { ExerciseSearchDropdown } from './ExerciseSearchDropdown';
 import { resumeWorkoutClock, sampleWorkoutClock } from '../../lib/workoutClockGuard';
 import { useAppStore } from '../../store/useAppStore';
+import type { SessionExerciseSet } from '../../types';
 
-const EMPTY_HISTORY_ARRAY: Array<{ date: string; sets: any[]; note: string }> = [];
+const EMPTY_HISTORY_ARRAY: Array<{ date: string; sets: SessionExerciseSet[]; note: string }> = [];
 
 const remapIndexAfterMove = (index: number | null, fromIndex: number, toIndex: number): number | null => {
     if (index === null || fromIndex === toIndex) return index;
@@ -167,7 +168,7 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory, onRequestEnd }: Acti
         void removeLastSet(exIndex);
     }, [removeLastSet]);
 
-    const handleUpdateSet = useCallback((exIndex: number, setId: string, field: string, val: any) => {
+    const handleUpdateSet = useCallback((exIndex: number, setId: string, field: string, val: unknown) => {
         updateSet(exIndex, setId, field, val);
     }, [updateSet]);
 
@@ -175,7 +176,7 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory, onRequestEnd }: Acti
         addSpecialSet(exIndex, setId, type, () => setOpenSpecialMenuId(null));
     }, [addSpecialSet]);
 
-    const handleUpdateSpecialSet = useCallback((exIndex: number, setId: string, type: 'dropsets' | 'isometrics' | 'segments', idx: number, field: string, val: any) => {
+    const handleUpdateSpecialSet = useCallback((exIndex: number, setId: string, type: 'dropsets' | 'isometrics' | 'segments', idx: number, field: string, val: unknown) => {
         updateSpecialSet(exIndex, setId, type, idx, field, val);
     }, [updateSpecialSet]);
 
@@ -192,7 +193,7 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory, onRequestEnd }: Acti
     }, []);
 
     const exerciseHistoryMap = useMemo(() => {
-        const map = new Map<string, Array<{ date: string; sets: any[]; note: string }>>();
+        const map = new Map<string, Array<{ date: string; sets: SessionExerciseSet[]; note: string }>>();
         if (!history || history.length === 0) return map;
 
         for (const workout of history) {
@@ -251,7 +252,7 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory, onRequestEnd }: Acti
                         Nessun esercizio presente in questa sessione.
                     </div>
                 ) : (
-                    activeWorkout.exercises.map((exItem: any, exIndex: number) => {
+                    activeWorkout.exercises.map((exItem, exIndex: number) => {
                         const libDef = libraryMap.get(exItem.exId);
                         const pastWorkouts = exerciseHistoryMap.get(exItem.exId) || EMPTY_HISTORY_ARRAY;
 

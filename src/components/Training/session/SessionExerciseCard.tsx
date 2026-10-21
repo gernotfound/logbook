@@ -4,13 +4,15 @@ import { useDialogStore } from '../../../store/useDialogStore';
 import SessionSetRow from './SessionSetRow';
 import { BufferedInput, BufferedTextarea } from '../../UI/BufferedInput';
 import { sessionSetHasMeaningfulData } from '../../../lib/workoutSetData';
+import { deriveCardioSpeed } from './deriveCardioSpeed';
+import type { Exercise, SessionExercise, SessionExerciseSet } from '../../../types';
 
 interface SessionExerciseCardProps {
-    exItem: any;
+    exItem: SessionExercise;
     exIndex: number;
     totalExercises?: number;
-    libDef: any;
-    pastWorkouts: Array<{ date: string; sets: any[]; note: string }>;
+    libDef?: Omit<Partial<Exercise>, 'trackingType'> & { name: string; trackingType?: string };
+    pastWorkouts: Array<{ date: string; sets: Partial<SessionExerciseSet>[]; note: string }>;
     isHistoryOpen: boolean;
     isSetupOpen: boolean;
     openSpecialMenuId: string | null;
@@ -24,9 +26,9 @@ interface SessionExerciseCardProps {
     onUpdateTechnicalStandard: (exIndex: number, value: string) => void;
     onAddSet: (exIndex: number) => void;
     onRemoveSet: (exIndex: number, sIndex: number) => void;
-    onUpdateSet: (exIndex: number, setId: string, field: string, value: any) => void;
+    onUpdateSet: (exIndex: number, setId: string, field: string, value: unknown) => void;
     onAddSpecialSet: (exIndex: number, type: string, setId: string) => void;
-    onUpdateSpecialSet: (exIndex: number, setId: string, type: 'dropsets' | 'isometrics' | 'segments', idx: number, field: string, value: any) => void;
+    onUpdateSpecialSet: (exIndex: number, setId: string, type: 'dropsets' | 'isometrics' | 'segments', idx: number, field: string, value: unknown) => void;
     onRemoveSpecialSet: (exIndex: number, setId: string, type: 'dropsets' | 'isometrics' | 'segments', idx: number) => void;
     onUpdateSetTarget: (exIndex: number, setId: string, reps: number | undefined) => void;
     onToggleSpecialMenu: (setId: string) => void;
@@ -110,19 +112,8 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
         
         onUpdateSet(exIndex, setId, field, value);
 
-        const currentSet = exItem.sets[0];
-        const newTimeStr = field === 'time' ? value : (currentSet?.time || '');
-        const newDistStr = field === 'distance' ? value : (currentSet?.distance || '');
-        
-        const timeVal = parseFloat(newTimeStr.replace(',', '.'));
-        const distVal = parseFloat(newDistStr.replace(',', '.'));
-        
-        if (!isNaN(timeVal) && !isNaN(distVal) && timeVal > 0) {
-            const speed = distVal / (timeVal / 60);
-            onUpdateSet(exIndex, setId, 'speed', speed.toFixed(2));
-        } else if (newTimeStr === '' || newDistStr === '') {
-            onUpdateSet(exIndex, setId, 'speed', '');
-        }
+        const speed = deriveCardioSpeed(exItem.sets[0], field, value);
+        if (speed !== undefined) onUpdateSet(exIndex, setId, 'speed', speed);
     };
 
     return (
@@ -203,7 +194,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                         pastWorkouts.map((pw, idx) => (
                             <div key={idx} style={{ marginBottom: '8px', paddingBottom: '8px', borderBottom: '1px dashed var(--glass-border)' }}>
                                 <strong style={{ fontSize: 'var(--font-size-meta)', color: 'var(--primary-color)' }}>{pw.date}</strong><br />
-                                {pw.sets.map((s: any, sIdx: number) => {
+                                {pw.sets.map((s, sIdx: number) => {
                                     // Salta la serie se entrambi i campi sono assenti (weight_reps)
                                     if (libDef?.trackingType !== 'time' && libDef?.trackingType !== 'cardio') {
                                         const hasKg = s.kg !== null && s.kg !== undefined && s.kg !== '';
@@ -214,7 +205,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                                     const displayKg = s.kg !== null && s.kg !== undefined && s.kg !== '' ? s.kg : '?';
                                     const displayReps = s.reps !== null && s.reps !== undefined && s.reps !== '' ? s.reps : '?';
                                     const displayTime = s.time !== null && s.time !== undefined && s.time !== '' ? s.time : '?';
-                                    const displayRir = Number.isInteger(s.rir) && s.rir >= 0 && s.rir <= 10 ? s.rir : undefined;
+                                    const displayRir = typeof s.rir === 'number' && Number.isInteger(s.rir) && s.rir >= 0 && s.rir <= 10 ? s.rir : undefined;
 
                                     const cardioDetails = libDef?.trackingType === 'cardio'
                                         ? [
@@ -310,7 +301,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                                 type="text" 
                                 inputMode="decimal"
                                 value={exItem.sets[0]?.speed || ''} 
-                                onChange={val => onUpdateSet(exIndex, exItem.sets[0]?.id, 'speed', val)}
+                                onChange={val => { const id = exItem.sets[0]?.id; if (id) onUpdateSet(exIndex, id, 'speed', val); }}
                                 placeholder="es. 10.5"
                                 className="w-full bg-black-20 border-glass text-white p-8 rounded-8"
                                 style={{ fontSize: '16px', boxSizing: 'border-box' }}
@@ -323,7 +314,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                                 type="text" 
                                 inputMode="decimal"
                                 value={exItem.sets[0]?.incline || ''} 
-                                onChange={val => onUpdateSet(exIndex, exItem.sets[0]?.id, 'incline', val)}
+                                onChange={val => { const id = exItem.sets[0]?.id; if (id) onUpdateSet(exIndex, id, 'incline', val); }}
                                 placeholder="es. 2.0"
                                 className="w-full bg-black-20 border-glass text-white p-8 rounded-8"
                                 style={{ fontSize: '16px', boxSizing: 'border-box' }}
@@ -337,7 +328,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                             type="text" 
                             inputMode="decimal"
                             value={exItem.sets[0]?.kcal || ''} 
-                            onChange={val => onUpdateSet(exIndex, exItem.sets[0]?.id, 'kcal', val)}
+                            onChange={val => { const id = exItem.sets[0]?.id; if (id) onUpdateSet(exIndex, id, 'kcal', val); }}
                             placeholder="es. 350"
                             className="w-full bg-black-20 border-glass text-white p-8 rounded-8"
                             style={{ fontSize: '16px', boxSizing: 'border-box' }}
@@ -346,7 +337,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                 </div>
             ) : (
                 <>
-                    {(exItem.sets || []).map((s: any, sIndex: number) => (
+                    {(exItem.sets || []).map((s, sIndex: number) => (
                         <SessionSetRow
                             key={s.id || sIndex}
                             set={s}
