@@ -4,7 +4,7 @@ import { TestDB as DB } from './testUtils';
 import * as idb from 'idb-keyval';
 import { useAppStore } from '../src/store/useAppStore';
 import { storageOwner } from '../src/lib/sync/session';
-import { isLocalPurgePending } from '../src/lib/sync/localPurgeFence';
+import { beginLocalPurge, isLocalPurgeIncomplete, isLocalPurgePending } from '../src/lib/sync/localPurgeFence';
 import * as localRepository from '../src/lib/sync/localRepository';
 import { localStorageMock, mockFirebaseAuth } from './setup';
 import { markAccountDeletion, isAccountDeletionPending } from '../src/lib/sync/accountGate';
@@ -275,6 +275,72 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
         expect(introduced).toBe(true);
         expect(localStorage.getItem('draft_routine')).toBe('new-tab-draft');
         expect(isLocalPurgePending('user:test-user-id')).toBe(true);
+    });
+
+    it('never re-adopts a new unscoped draft as old-owner data on a later purge retry', async () => {
+        let started!: () => void;
+        let finish!: () => void;
+        const entered = new Promise<void>(resolve => { started = resolve; });
+        const blocked = new Promise<void>(resolve => { finish = resolve; });
+        vi.mocked(idb.del).mockImplementationOnce(async () => { started(); await blocked; });
+        const operation = DB.purgeAllLocalUserData();
+        await entered;
+        localStorage.setItem('draft_exercise', 'new-owner-draft-after-fence');
+        finish();
+        await expect(operation).rejects.toThrow('Pulizia locale incompleta');
+        const fingerprintKey = 'logbook:local-purge-legacy-snapshot:v1:user:test-user-id';
+        const recorded = localStorage.getItem(fingerprintKey);
+        expect(recorded).not.toBeNull();
+        expect(recorded).not.toContain('new-owner-draft-after-fence');
+
+        // Simulate a full reload: no in-memory baseline survives. Before this
+        // regression, the next invocation silently chose a fresh baseline and
+        // destroyed the previously preserved new-owner draft.
+        await expect(DB.purgeAllLocalUserData()).rejects.toThrow('senza provenienza');
+        expect(localStorage.getItem('draft_exercise')).toBe('new-owner-draft-after-fence');
+        expect(localStorage.getItem(fingerprintKey)).toBe(recorded);
+        expect(isLocalPurgeIncomplete('user:test-user-id')).toBe(true);
+    });
+
+    it('retains a replaced global guest migration intent across repeated purge attempts', async () => {
+        localStorage.setItem('guest_migration_intent_v1', 'old-intent');
+        let started!: () => void;
+        let finish!: () => void;
+        const entered = new Promise<void>(resolve => { started = resolve; });
+        const blocked = new Promise<void>(resolve => { finish = resolve; });
+        vi.mocked(idb.del).mockImplementationOnce(async () => { started(); await blocked; });
+        const operation = DB.purgeAllLocalUserData();
+        await entered;
+        localStorage.setItem('guest_migration_intent_v1', 'new-intent');
+        finish();
+        await expect(operation).rejects.toThrow('Pulizia locale incompleta');
+        await expect(DB.purgeAllLocalUserData()).rejects.toThrow('senza provenienza');
+        expect(localStorage.getItem('guest_migration_intent_v1')).toBe('new-intent');
+        expect(isLocalPurgeIncomplete('user:test-user-id')).toBe(true);
+    });
+
+    it('refuses to manufacture provenance for an old incomplete purge without a durable snapshot', async () => {
+        beginLocalPurge('user:test-user-id');
+        localStorage.setItem('draft_measurement', 'unattributed-old-draft');
+        await expect(DB.purgeAllLocalUserData()).rejects.toThrow('Provenienza delle chiavi legacy');
+        expect(idb.del).not.toHaveBeenCalled();
+        expect(localStorage.getItem('draft_measurement')).toBe('unattributed-old-draft');
+    });
+
+    it('resumes a stable original legacy snapshot after an IndexedDB failure and cleans its metadata', async () => {
+        const owner = 'user:test-user-id';
+        const fingerprintKey = 'logbook:local-purge-legacy-snapshot:v1:' + owner;
+        localStorage.setItem('draft_measurement', 'original-owner-draft');
+        vi.mocked(idb.del).mockRejectedValueOnce(new Error('temporary IndexedDB error'));
+        await expect(DB.purgeAllLocalUserData()).rejects.toThrow('Pulizia locale incompleta');
+        expect(localStorage.getItem('draft_measurement')).toBe('original-owner-draft');
+        expect(localStorage.getItem(fingerprintKey)).not.toBeNull();
+
+        await DB.purgeAllLocalUserData();
+        expect(localStorage.getItem('draft_measurement')).toBeNull();
+        expect(localStorage.getItem(fingerprintKey)).toBeNull();
+        expect(isLocalPurgeIncomplete(owner)).toBe(false);
+        expect(isLocalPurgePending(owner)).toBe(true);
     });
 
     it('purgeAllLocalUserData removes IndexedDB sensitive keys', async () => {
