@@ -7,6 +7,7 @@ import {
 import { deviceVaultKeyId } from '../sync/secureArchiveKeys';
 import { vaultControlMirrorId } from '../sync/secureArchiveControlRecovery';
 import { stableStorageKeyInventory } from '../sync/stableStorageKeyInventory';
+import { readBrowserValueStrict, removeBrowserValue, writeBrowserValue } from '../sync/browserStorage';
 
 // This boundary owns the write fence and the physical device purge only.
 // Account/consent authorization and server-complete evidence stay with db_account.
@@ -22,6 +23,75 @@ const UNSCOPED_LEGACY_KEYS = [
     'guest_migration_intent_v1', 'guest_migration_policy',
 ] as const;
 const UNSCOPED_LEGACY_KEY_SET: ReadonlySet<string> = new Set(UNSCOPED_LEGACY_KEYS);
+ 
+// A purge restart must not adopt unowned values created after its first attempt.
+// Persist only SHA-256 fingerprints (never plaintext recovery data) BEFORE
+// starting asynchronous IndexedDB deletion.
+const purgeLegacySnapshotKey = (owner: string) => 'logbook:local-purge-legacy-snapshot:v1:' + owner;
+const HEX_SHA256 = /^[a-f0-9]{64}$/;
+
+async function fingerprintLegacyValue(value: string | null): Promise<string | null> {
+    if (value === null) return null;
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
+    return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
+async function readFrozenLegacySnapshot(owner: string, resuming: boolean): Promise<Map<string, string | null>> {
+    const key = purgeLegacySnapshotKey(owner);
+    const initial = new Map(UNSCOPED_LEGACY_KEYS.map(name => [name, readBrowserValueStrict(name)]));
+    const existing = readBrowserValueStrict(key);
+    const hashes = await Promise.all([...initial.values()].map(fingerprintLegacyValue));
+    // Web Crypto is async. Do not publish a baseline for values that were
+    // modified while computing their fingerprints.
+    if (UNSCOPED_LEGACY_KEYS.some(name => readBrowserValueStrict(name) !== initial.get(name))) {
+        throw new Error('Chiavi legacy cambiate prima della registrazione della pulizia.');
+    }
+    if (resuming) {
+        if (existing === null) {
+            // Older interrupted purges, or a crash after installing the fence
+            // but before recording the snapshot, have no proven provenance.
+            // An active redirect belongs to Auth and is never deleted here.
+            if (UNSCOPED_LEGACY_KEYS.some(name => name !== 'logbook_awaiting_redirect'
+                && initial.get(name) !== null)
+                || (initial.get('logbook_awaiting_redirect') !== null
+                    && initial.get('logbook_awaiting_redirect') !== 'true')) {
+                throw new Error('Provenienza delle chiavi legacy dopo una pulizia interrotta non verificabile.');
+            }
+        } else {
+            let saved: unknown;
+            try { saved = JSON.parse(existing) as unknown; } catch {
+                throw new Error('Prova delle chiavi legacy non valida: pulizia sospesa.');
+            }
+            const record = saved as { version?: unknown; owner?: unknown; hashes?: unknown } | null;
+            if (!record || record.version !== 1 || record.owner !== owner
+                || !Array.isArray(record.hashes) || record.hashes.length !== UNSCOPED_LEGACY_KEYS.length
+                || record.hashes.some(value => value !== null && (typeof value !== 'string' || !HEX_SHA256.test(value)))) {
+                throw new Error('Prova delle chiavi legacy non valida: pulizia sospesa.');
+            }
+            for (let i = 0; i < hashes.length; i++) {
+                const name = UNSCOPED_LEGACY_KEYS[i];
+                // An active Google redirect belongs to the next auth flow.
+                if (name === 'logbook_awaiting_redirect' && initial.get(name) === 'true') continue;
+                // Absence is safe: an earlier pass may have removed this key
+                // before a crash. A present value must match the *first* attempt.
+                if (hashes[i] !== null && hashes[i] !== record.hashes[i]) {
+                    throw new Error('Chiave legacy senza provenienza dopo il riavvio: ' + name);
+                }
+            }
+        }
+    } else {
+        if (existing !== null) {
+            throw new Error('Prova precedente della pulizia legacy non riconciliata.');
+        }
+        const serialized = JSON.stringify({ version: 1, owner, hashes });
+        writeBrowserValue(key, serialized);
+        if (readBrowserValueStrict(key) !== serialized) {
+            throw new Error('Prova durevole delle chiavi legacy non verificabile.');
+        }
+    }
+    return initial;
+}
+
 
 function collectLocalPurgeKeys(owner: string): Set<string> {
     const keys = new Set<string>(UNSCOPED_LEGACY_KEYS);
@@ -94,9 +164,8 @@ export async function purgeOwnerLocalData(owner: string, resumeOnly = false, gat
         // Capture legacy globals before the first awaited IndexedDB operation.
         // A new session can write a value before Firebase publishes its UID;
         // the owner identity gate alone cannot attribute that shared key.
-        const legacyAtStart = new Map<string, string | null>(
-            UNSCOPED_LEGACY_KEYS.map(key => [key, localStorage.getItem(key)]),
-        );
+        const legacyAtStart = await readFrozenLegacySnapshot(owner, previouslyIncomplete);
+        gate?.assertStillSafe?.();
         const legacyRemoved = new Set<string>();
         lockVault(owner);
         const failures: unknown[] = [];
@@ -206,6 +275,10 @@ export async function purgeOwnerLocalData(owner: string, resumeOnly = false, gat
     // Drop the resident DEK only once all encrypted and device records have
     // been verified removed. An incomplete deletion remains recoverable.
     lockVault(owner);
+    // The original fingerprints are no longer needed once all deletes and
+    // encryption-key cleanup have succeeded. If interrupted here, only absent
+    // unscoped values may be resumed without the removed snapshot.
+    removeBrowserValue(purgeLegacySnapshotKey(owner));
     markLocalPurgeComplete(owner);
     // Keep the non-secret fence after removal. If the last suspended tab sees
     // no vault control, it must not fall back to plaintext legacy storage.

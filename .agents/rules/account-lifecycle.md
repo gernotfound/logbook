@@ -140,6 +140,8 @@ L'eliminazione volontaria dell'account ha un boundary di finalizzazione separato
 
 `purgeAllLocalUserData` tenta ogni rimozione e rigetta con un errore aggregato se alcune falliscono: la UI comunica la pulizia incompleta. Durante una cancellazione server la receipt viene esclusa dal purge ordinario e rimossa solo dopo il successo di tutte le altre operazioni locali.
 
+**MUST (CRITICAL, riavvio purge e chiavi legacy globali):** la prima pulizia di un owner congela *prima* di cancellazioni IndexedDB asincrone le impronte SHA-256 delle chiavi localStorage storiche senza owner, in un marker durevole separato dal fence, senza duplicare valori personali in chiaro. Dopo un crash/retry non si può ridefinire come proprio un valore comparso o modificato nel frattempo; una chiave già rimossa può restare assente, ma una chiave presente deve corrispondere alla testimonianza originale. Se manca o è corrotta la prova di una pulizia già iniziata, preservare i valori non attribuibili e sospendere la ripresa. Il redirect Google attivo (`true`) rimane proprietà del flusso Auth. Queste impronte attestano solo la stabilità osservabile dei byte, **non** la proprietà effettiva dei record legacy né una transazione atomica fra schede: senza provenienza dimostrabile non reinterpretare un retry come autorizzazione alla cancellazione. La prova temporanea è ritirata solo dopo la pulizia completa dei dati e delle chiavi dell'owner.
+
 **MUST:** Non eliminare la cache del service worker durante logout: contiene gli asset necessari all'avvio offline.
 
 ### Chiave locale automatica e purge
