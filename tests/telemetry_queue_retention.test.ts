@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   TELEMETRY_QUEUE_CAPACITY,
-  TELEMETRY_QUEUE_KEY,
   TELEMETRY_QUEUE_MAX_AGE_MS,
   type QueuedTelemetryItem,
 } from '../src/lib/telemetry/contracts';
@@ -12,6 +11,7 @@ import { createAndMigrateVault } from '../src/lib/sync/secureArchiveMigration';
 import { lockAllVaults, unlockVaultForOwner } from '../src/lib/sync/secureArchiveSession';
 
 const CLOCK = new Date('2026-10-11T12:00:00Z');
+const RETIRED_GLOBAL_QUEUE_KEY = 'logbook_telemetry_queue';
 
 function queued(id: string, timestamp: number, userId = 'owner-a'): QueuedTelemetryItem {
   return {
@@ -45,14 +45,13 @@ describe('Offline technical telemetry data minimization', () => {
     vi.useRealTimers();
   });
 
-  it('expires old on-disk reports while retaining recent reports and migrating old timestamp-only entries', () => {
+  it('expires encrypted reports while retaining valid timestamps', () => {
     const storage = new TelemetryQueueStorage(() => 'owner-a');
-    const key = storage.getQueueStorageKey();
     const now = Date.now();
     const old = queued('old', now - TELEMETRY_QUEUE_MAX_AGE_MS - 1);
     const recent = queued('recent', now - TELEMETRY_QUEUE_MAX_AGE_MS + 1);
     delete recent.queuedAt;
-    localStorage.setItem(key, JSON.stringify([old, recent]));
+    expect(storeEncryptedTelemetry('user:owner-a', JSON.stringify([old, recent]))).toBe(true);
 
     expect(storage.getQueuedEvents().map(item => item.id)).toEqual(['recent']);
     expect(JSON.parse(readEncryptedTelemetry('user:owner-a') || '[]').map((item: QueuedTelemetryItem) => item.id)).toEqual(['recent']);
@@ -79,32 +78,35 @@ describe('Offline technical telemetry data minimization', () => {
     expect(JSON.parse(readEncryptedTelemetry('user:owner-a') || '[]')).toHaveLength(1);
   });
 
-  it('prunes legacy unscoped reports at migration and caps oversized persisted queues', () => {
+  it('never adopts or deletes an unsupported global plaintext queue', () => {
     const storage = new TelemetryQueueStorage(() => 'owner-a');
-    const now = Date.now();
-    const longQueue = Array.from({ length: TELEMETRY_QUEUE_CAPACITY + 10 },
-      (_, n) => queued('entry-' + n, now - 1000));
-    localStorage.setItem(TELEMETRY_QUEUE_KEY, JSON.stringify([
-      queued('old', now - TELEMETRY_QUEUE_MAX_AGE_MS - 1),
-      ...longQueue,
-    ]));
-    const result = storage.getQueuedEvents();
-    expect(result).toHaveLength(TELEMETRY_QUEUE_CAPACITY);
-    expect(result[0].id).toBe('entry-10');
-    expect(localStorage.getItem(TELEMETRY_QUEUE_KEY)).toBeNull();
+    const old = JSON.stringify([queued('old-shared', Date.now())]);
+    localStorage.setItem(RETIRED_GLOBAL_QUEUE_KEY, old);
+
+    expect(storage.getQueuedEvents()).toEqual([]);
+    expect(localStorage.getItem(RETIRED_GLOBAL_QUEUE_KEY)).toBe(old);
+
+    storage.enqueueItem('event', queued('current', Date.now()).payload);
+    expect(storage.getQueuedEvents().map(item => item.id)).toHaveLength(1);
+    expect(JSON.parse(readEncryptedTelemetry('user:owner-a') || '[]')).toHaveLength(1);
+    expect(localStorage.getItem(RETIRED_GLOBAL_QUEUE_KEY)).toBe(old);
   });
 
-  it('cleans malformed owner data without touching another account queue', async () => {
+  it('ignores unsupported plaintext in two accounts while retaining valid ciphertext', async () => {
     const ownerA = new TelemetryQueueStorage(() => 'owner-a');
     await createAndMigrateVault('user:owner-b');
     const ownerB = new TelemetryQueueStorage(() => 'owner-b');
     const keyA = ownerA.getQueueStorageKey();
     const keyB = ownerB.getQueueStorageKey();
     localStorage.setItem(keyA, '{broken json with sensitive data');
-    localStorage.setItem(keyB, JSON.stringify([queued('b', Date.now(), 'owner-b')]));
+    localStorage.setItem(keyB, JSON.stringify([queued('retired-b', Date.now(), 'owner-b')]));
+    expect(storeEncryptedTelemetry('user:owner-b',
+      JSON.stringify([queued('sealed-b', Date.now(), 'owner-b')]))).toBe(true);
+
     expect(ownerA.getQueuedEvents()).toEqual([]);
-    expect(localStorage.getItem(keyA)).toBeNull();
-    expect(ownerB.getQueuedEvents().map(item => item.id)).toEqual(['b']);
+    expect(localStorage.getItem(keyA)).toBe('{broken json with sensitive data');
+    expect(ownerB.getQueuedEvents().map(item => item.id)).toEqual(['sealed-b']);
+    expect(localStorage.getItem(keyB)).not.toBeNull();
   });
 
   it('drops reports whose timestamps cannot establish a safe retention window', () => {
@@ -116,7 +118,7 @@ describe('Offline technical telemetry data minimization', () => {
     const noTime = queued('missing', now);
     noTime.timestamp = Number.NaN;
     delete noTime.queuedAt;
-    localStorage.setItem(storage.getQueueStorageKey(), JSON.stringify([invalid, future, noTime]));
+    expect(storeEncryptedTelemetry('user:owner-a', JSON.stringify([invalid, future, noTime]))).toBe(true);
     expect(storage.getQueuedEvents()).toEqual([]);
   });
   it('stores diagnostic payload only as owner-bound authenticated ciphertext', () => {
@@ -145,22 +147,26 @@ describe('Offline technical telemetry data minimization', () => {
     expect(localStorage.getItem(protectedDeviceKey('telemetry_queue', 'user:owner-a'))).toBeNull();
   });
 
-  it('retires a legacy plaintext queue without exposing its payload when the vault is locked', () => {
+  it('keeps newly queued reports in RAM without importing plaintext while locked', () => {
     lockAllVaults();
     const storage = new TelemetryQueueStorage(() => 'owner-a');
-    localStorage.setItem(storage.getQueueStorageKey(), JSON.stringify([queued('legacy', Date.now())]));
-    expect(storage.getQueuedEvents().map(x => x.id)).toEqual(['legacy']);
-    expect(localStorage.getItem(storage.getQueueStorageKey())).toBeNull();
-    expect(storage.getQueuedEvents().map(x => x.id)).toEqual(['legacy']);
+    const raw = JSON.stringify([queued('retired', Date.now())]);
+    localStorage.setItem(storage.getQueueStorageKey(), raw);
+
+    expect(storage.getQueuedEvents()).toEqual([]);
+    expect(localStorage.getItem(storage.getQueueStorageKey())).toBe(raw);
+    storage.enqueueItem('event', queued('volatile', Date.now()).payload);
+    expect(storage.getQueuedEvents().map(item => item.id)).toEqual(['volatile']);
+    expect(localStorage.getItem(storage.getQueueStorageKey())).toBe(raw);
     expect(localStorage.getItem(protectedDeviceKey('telemetry_queue', 'user:owner-a'))).toBeNull();
   });
 
-  it('purges a legacy non-array JSON payload instead of leaving plaintext on disk', () => {
+  it('never interprets unsupported plaintext non-array JSON as an encrypted report', () => {
     lockAllVaults();
     const storage = new TelemetryQueueStorage(() => 'owner-a');
     localStorage.setItem(storage.getQueueStorageKey(), 'null');
     expect(storage.getQueuedEvents()).toEqual([]);
-    expect(localStorage.getItem(storage.getQueueStorageKey())).toBeNull();
+    expect(localStorage.getItem(storage.getQueueStorageKey())).toBe('null');
   });
 
   it('preserves durable encrypted reports when volatile reports arrive before unlock', async () => {
