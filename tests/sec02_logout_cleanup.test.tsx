@@ -109,41 +109,37 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
         expect(isLocalPurgePending(foreignOwner)).toBe(false);
     });
 
-    it('purgeAllLocalUserData removes all sensitive keys from localStorage and preserves device-specific ones', async () => {
-        const sensitiveKeys = [
-            'logbook_local_workout',
-            'logbook_timer_state',
-            'logbook_timer_start',
-            'logbook_timer_accumulated',
-            'draft_measurement',
-            'draft_exercise',
-            'draft_routine',
-            'logbook_is_guest',
-            'logbook_awaiting_redirect',
-            'guest_migration_intent_v1',
-            'guest_migration_policy'
-        ];
+    it.each([
+        'logbook_local_workout', 'logbook_timer_state', 'logbook_timer_start',
+        'logbook_timer_accumulated', 'draft_measurement', 'draft_exercise', 'draft_routine',
+    ])('never attributes a pre-existing ownerless business value to account or guest (%s)', async key => {
+        const raw = 'another-session-private-value';
+        localStorage.setItem(key, raw);
+        const { auth } = await import('../src/lib/firebase');
+        await expect(DB.secureLogOut()).rejects.toThrow('senza proprietario verificabile');
+        expect(auth.signOut).not.toHaveBeenCalled();
+        expect(isLocalPurgePending('user:test-user-id')).toBe(false);
+        expect(idb.del).not.toHaveBeenCalled();
+        expect(localStorage.getItem(key)).toBe(raw);
 
-        const deviceKeys = [
-            'logbook_ios_install_prompt'
-        ];
-
-        sensitiveKeys.forEach(k => localStorage.setItem(k, 'sensitive_data'));
-        deviceKeys.forEach(k => localStorage.setItem(k, 'device_pref'));
-        // An explicit guest reset belongs to a guest session, not the
-        // authenticated fixture used by the other logout tests.
         mockFirebaseAuth.currentUser = null;
         localStorage.setItem('logbook_is_guest', 'true');
+        await expect(DB.purgeAllLocalUserData('guest')).rejects.toThrow('senza proprietario verificabile');
+        expect(isLocalPurgePending('guest')).toBe(false);
+        expect(localStorage.getItem(key)).toBe(raw);
+    });
 
+    it('still clears guest-owned data and the Auth handoff when no ownerless business data exists', async () => {
+        mockFirebaseAuth.currentUser = null;
+        localStorage.setItem('logbook_is_guest', 'true');
+        localStorage.setItem('guest_migration_intent_v1', 'guest-auth-intent');
+        localStorage.setItem('logbook_ios_install_prompt', 'device-pref');
+        localStorage.setItem('logbook:v2:guest:draft:private', 'guest-private-draft');
         await DB.purgeAllLocalUserData('guest');
-
-        sensitiveKeys.forEach(k => {
-            expect(localStorage.getItem(k)).toBeNull();
-        });
-
-        deviceKeys.forEach(k => {
-            expect(localStorage.getItem(k)).toBe('device_pref');
-        });
+        expect(localStorage.getItem('logbook_is_guest')).toBeNull();
+        expect(localStorage.getItem('guest_migration_intent_v1')).toBeNull();
+        expect(localStorage.getItem('logbook:v2:guest:draft:private')).toBeNull();
+        expect(localStorage.getItem('logbook_ios_install_prompt')).toBe('device-pref');
     });
 
     it('stops before shared IndexedDB and localStorage cleanup when Auth changes during owner IDB deletion', async () => {
@@ -204,7 +200,7 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
             await pendingDelete;
         });
 
-        localStorage.setItem('draft_measurement', 'previous-owner-legacy');
+        localStorage.setItem('logbook:v2:user:test-user-id:draft:prior-owner', 'previous-owner-legacy');
         const operation = DB.purgeAllLocalUserData();
         await requested;
         // The next login can begin before its Firebase UID is available:
@@ -215,7 +211,7 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
         await operation;
 
         expect(localStorage.getItem('logbook_awaiting_redirect')).toBe('true');
-        expect(localStorage.getItem('draft_measurement')).toBeNull();
+        expect(localStorage.getItem('logbook:v2:user:test-user-id:draft:prior-owner')).toBeNull();
         expect(isLocalPurgePending('user:test-user-id')).toBe(true);
     });
 
@@ -241,7 +237,7 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
         localStorage.setItem('draft_exercise', 'new-session-draft');
         finish();
 
-        await expect(operation).rejects.toThrow('Pulizia locale incompleta');
+        await expect(operation).rejects.toThrow('senza proprietario verificabile');
         expect(localStorage.getItem('draft_exercise')).toBe('new-session-draft');
         expect(isLocalPurgePending('user:test-user-id')).toBe(true);
     });
@@ -271,7 +267,7 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
         let introduced = false;
         localStorageMock.removeItem.mockImplementation((key: string) => {
             priorRemoval(key);
-            if (!introduced && key === 'logbook_local_workout') {
+            if (!introduced && key === 'logbook_storage_marker') {
                 introduced = true;
                 localStorage.setItem('draft_routine', 'new-tab-draft');
             }
@@ -292,7 +288,7 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
         await entered;
         localStorage.setItem('draft_exercise', 'new-owner-draft-after-fence');
         finish();
-        await expect(operation).rejects.toThrow('Pulizia locale incompleta');
+        await expect(operation).rejects.toThrow('senza proprietario verificabile');
         const fingerprintKey = 'logbook:local-purge-legacy-snapshot:v1:user:test-user-id';
         const recorded = localStorage.getItem(fingerprintKey);
         expect(recorded).not.toBeNull();
@@ -301,7 +297,7 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
         // Simulate a full reload: no in-memory baseline survives. Before this
         // regression, the next invocation silently chose a fresh baseline and
         // destroyed the previously preserved new-owner draft.
-        await expect(DB.purgeAllLocalUserData()).rejects.toThrow('senza provenienza');
+        await expect(DB.purgeAllLocalUserData()).rejects.toThrow('senza proprietario verificabile');
         expect(localStorage.getItem('draft_exercise')).toBe('new-owner-draft-after-fence');
         expect(localStorage.getItem(fingerprintKey)).toBe(recorded);
         expect(isLocalPurgeIncomplete('user:test-user-id')).toBe(true);
@@ -327,7 +323,7 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
     it('refuses to manufacture provenance for an old incomplete purge without a durable snapshot', async () => {
         beginLocalPurge('user:test-user-id');
         localStorage.setItem('draft_measurement', 'unattributed-old-draft');
-        await expect(DB.purgeAllLocalUserData()).rejects.toThrow('Provenienza delle chiavi legacy');
+        await expect(DB.purgeAllLocalUserData()).rejects.toThrow('senza proprietario verificabile');
         expect(idb.del).not.toHaveBeenCalled();
         expect(localStorage.getItem('draft_measurement')).toBe('unattributed-old-draft');
     });
@@ -335,14 +331,14 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
     it('resumes a stable original legacy snapshot after an IndexedDB failure and cleans its metadata', async () => {
         const owner = 'user:test-user-id';
         const fingerprintKey = 'logbook:local-purge-legacy-snapshot:v1:' + owner;
-        localStorage.setItem('draft_measurement', 'original-owner-draft');
+        localStorage.setItem('logbook_storage_marker', 'original-owner-draft');
         vi.mocked(idb.del).mockRejectedValueOnce(new Error('temporary IndexedDB error'));
         await expect(DB.purgeAllLocalUserData()).rejects.toThrow('Pulizia locale incompleta');
-        expect(localStorage.getItem('draft_measurement')).toBe('original-owner-draft');
+        expect(localStorage.getItem('logbook_storage_marker')).toBe('original-owner-draft');
         expect(localStorage.getItem(fingerprintKey)).not.toBeNull();
 
         await DB.purgeAllLocalUserData();
-        expect(localStorage.getItem('draft_measurement')).toBeNull();
+        expect(localStorage.getItem('logbook_storage_marker')).toBeNull();
         expect(localStorage.getItem(fingerprintKey)).toBeNull();
         expect(isLocalPurgeIncomplete(owner)).toBe(false);
         expect(isLocalPurgePending(owner)).toBe(true);
@@ -521,13 +517,13 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
         vi.mocked(idb.del).mockRejectedValueOnce(new Error('IndexedDB quota exceeded'));
         const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
-        localStorage.setItem('draft_measurement', 'draft_data');
+        localStorage.setItem('logbook:v2:user:test-user-id:draft:current', 'draft_data');
 
         await expect(DB.purgeAllLocalUserData()).rejects.toThrow('Pulizia locale incompleta');
 
         // Deleting drafts before the IndexedDB failure is resolved can orphan
         // the encrypted journal. All remaining local bytes stay recoverable.
-        expect(localStorage.getItem('draft_measurement')).toBe('draft_data');
+        expect(localStorage.getItem('logbook:v2:user:test-user-id:draft:current')).toBe('draft_data');
         expect(isLocalPurgePending(storageOwner())).toBe(true);
 
         consoleWarnSpy.mockRestore();
@@ -538,21 +534,21 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
         const originalRemoveItem = localStorage.removeItem;
         let throwCount = 0;
         localStorage.removeItem = vi.fn((key: string) => {
-            if (key === 'logbook_local_workout' && throwCount === 0) {
+            if (key === 'logbook_storage_marker' && throwCount === 0) {
                 throwCount++;
                 throw new Error('Simulated localStorage error');
             }
             originalRemoveItem.call(localStorage, key);
         });
 
-        localStorage.setItem('logbook_local_workout', 'data');
-        localStorage.setItem('draft_measurement', 'draft');
+        localStorage.setItem('logbook_storage_marker', 'data');
+        localStorage.setItem('logbook_storage_anomaly_reported', 'draft');
         
         const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
         await expect(DB.purgeAllLocalUserData()).rejects.toThrow('Pulizia locale incompleta');
         // Ensure subsequent keys were still deleted
-        expect(localStorage.getItem('draft_measurement')).toBeNull();
+        expect(localStorage.getItem('logbook_storage_anomaly_reported')).toBeNull();
 
         localStorage.removeItem = originalRemoveItem;
         consoleWarnSpy.mockRestore();
@@ -630,10 +626,10 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
 
     it('purgeAllLocalUserData is idempotent (safe to call twice)', async () => {
         const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-        localStorage.setItem('logbook_local_workout', 'data');
+        localStorage.setItem('logbook_storage_marker', 'data');
 
         await DB.purgeAllLocalUserData();
-        expect(localStorage.getItem('logbook_local_workout')).toBeNull();
+        expect(localStorage.getItem('logbook_storage_marker')).toBeNull();
 
         await expect(DB.purgeAllLocalUserData()).resolves.toBeUndefined();
         
