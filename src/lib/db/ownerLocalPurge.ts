@@ -44,14 +44,39 @@ const UNSCOPED_LEGACY_KEYS = [
     'logbook_telemetry_queue', 'logbook_storage_marker', 'logbook_storage_anomaly_reported',
     'guest_migration_intent_v1', 'guest_migration_policy',
 ] as const;
+// Historical fingerprint vectors retain their physical positions for retry.
+// No account or guest-generation identity exists in these seven business keys.
+const OWNERLESS_LEGACY_BUSINESS_KEYS = UNSCOPED_LEGACY_KEYS.slice(0, 7);
+const OWNERLESS_LEGACY_BUSINESS_KEY_SET: ReadonlySet<string> = new Set(OWNERLESS_LEGACY_BUSINESS_KEYS);
 const UNSCOPED_LEGACY_KEY_SET: ReadonlySet<string> = new Set(UNSCOPED_LEGACY_KEYS);
+
+export class OwnerlessLegacyLocalStorageError extends Error {
+    constructor(key: string) {
+        super('Pulizia sospesa: dati locali legacy senza proprietario verificabile (' + key + ').');
+        this.name = 'OwnerlessLegacyLocalStorageError';
+    }
+}
+export function assertNoOwnerlessLegacyBusinessData(): void {
+    for (const key of OWNERLESS_LEGACY_BUSINESS_KEYS) {
+        if (readBrowserValueStrict(key) !== null) {
+            throw new OwnerlessLegacyLocalStorageError(key);
+        }
+    }
+}
+
+/** Guest logout/recovery uses this before durable guest revocation. */
+export async function preflightOwnerlessLegacyPurge(): Promise<void> {
+    assertNoOwnerlessLegacyBusinessData();
+    await assertNoOwnerlessLegacyIndexedDbData();
+    assertNoOwnerlessLegacyBusinessData();
+}
 
 // The active guest→account migration intent belongs to the guest/Auth flow,
 // not to any account being signed out or deleted. The guest reset still owns it.
 // Keep the historical fingerprint vector shape for resumed v1 purge evidence.
 const GUEST_AUTH_INTENT = 'guest_migration_intent_v1';
 const purgeOwnsLegacyKey = (owner: string, key: string): boolean =>
-    key !== GUEST_AUTH_INTENT || owner === 'guest';
+    !OWNERLESS_LEGACY_BUSINESS_KEY_SET.has(key) && (key !== GUEST_AUTH_INTENT || owner === 'guest');
 
  
 // A purge restart must not adopt unowned values created after its first attempt.
@@ -186,12 +211,16 @@ export async function purgeOwnerLocalData(owner: string, resumeOnly = false, gat
             // Run this asynchronous probe BEFORE the final owner/journal
             // preflight; no new await is introduced between that gate and
             // installation of the synchronous writer fence.
-            await assertNoOwnerlessLegacyIndexedDbData();
+            await preflightOwnerlessLegacyPurge();
             if (gate) await gate.preflight();
+            // Synchronous check immediately before the fence: no new await
+            // between the final journal/identity preflight and this decision.
+            assertNoOwnerlessLegacyBusinessData();
         }
         beginLocalPurge(owner);
         if (gate) {
             try {
+                assertNoOwnerlessLegacyBusinessData();
                 await gate.afterFence();
             } catch (error) {
                 // No deletion occurred yet. Restore write access only if this
@@ -202,6 +231,7 @@ export async function purgeOwnerLocalData(owner: string, resumeOnly = false, gat
             }
         }
         gate?.assertStillSafe?.();
+        assertNoOwnerlessLegacyBusinessData();
         // Capture legacy globals before the first awaited IndexedDB operation.
         // A new session can write a value before Firebase publishes its UID;
         // the owner identity gate alone cannot attribute that shared key.
@@ -219,6 +249,7 @@ export async function purgeOwnerLocalData(owner: string, resumeOnly = false, gat
         // session's legacy writes; keep the durable fence for reconciliation.
         await assertNoOwnerlessLegacyIndexedDbData();
         gate?.assertStillSafe?.();
+        assertNoOwnerlessLegacyBusinessData();
         try {
             await del(ownerKey);
             if ((await get<unknown>(ownerKey)) !== undefined) {
@@ -233,14 +264,17 @@ export async function purgeOwnerLocalData(owner: string, resumeOnly = false, gat
         gate?.assertStillSafe?.();
         await assertNoOwnerlessLegacyIndexedDbData();
         gate?.assertStillSafe?.();
+        assertNoOwnerlessLegacyBusinessData();
 
     let remaining = new Set<string>();
     try {
         for (let pass = 0; pass < LOCAL_PURGE_MAX_PASSES; pass++) {
             gate?.assertStillSafe?.();
+            assertNoOwnerlessLegacyBusinessData();
             const keys = collectLocalPurgeKeys(owner);
             for (const storageKey of keys) {
                 gate?.assertStillSafe?.();
+                assertNoOwnerlessLegacyBusinessData();
                 // This active auth marker belongs to the new Google redirect,
                 // not the old owner. Its normal lifecycle clears it.
                 if (storageKey === 'logbook_awaiting_redirect'
@@ -284,6 +318,7 @@ export async function purgeOwnerLocalData(owner: string, resumeOnly = false, gat
     gate?.assertStillSafe?.();
     await assertNoOwnerlessLegacyIndexedDbData();
     gate?.assertStillSafe?.();
+    assertNoOwnerlessLegacyBusinessData();
 
     // Both the non-extractable device key and the wrapping metadata are owner
     // scoped. NEVER remove the device key until the encrypted business envelope
@@ -312,6 +347,7 @@ export async function purgeOwnerLocalData(owner: string, resumeOnly = false, gat
     gate?.assertStillSafe?.();
     await assertNoOwnerlessLegacyIndexedDbData();
     gate?.assertStillSafe?.();
+    assertNoOwnerlessLegacyBusinessData();
     // The original fingerprints are no longer needed once all deletes and
     // encryption-key cleanup have succeeded. If interrupted here, only absent
     // unscoped values may be resumed without the removed snapshot.
