@@ -20,10 +20,17 @@ const OWNERLESS_LEGACY_IDB_KEYS = [
     'logbook_cached_user_data', 'pending_sync_token', 'pending_sync_payload', 'sync_failed',
 ] as const;
 
+class OwnerlessLegacyIndexedDbError extends Error {
+    constructor(key: string) {
+        super('Pulizia sospesa: dati IndexedDB legacy senza proprietario verificabile (' + key + ').');
+        this.name = 'OwnerlessLegacyIndexedDbError';
+    }
+}
+
 async function assertNoOwnerlessLegacyIndexedDbData(): Promise<void> {
     for (const key of OWNERLESS_LEGACY_IDB_KEYS) {
         if (await get<unknown>(key) !== undefined) {
-            throw new Error('Pulizia sospesa: dati IndexedDB legacy senza proprietario verificabile (' + key + ').');
+            throw new OwnerlessLegacyIndexedDbError(key);
         }
     }
 }

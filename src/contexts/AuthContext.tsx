@@ -417,9 +417,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 const localStorageFailure = error instanceof AggregateError
                     || error instanceof BrowserStorageError
                     || error?.name === 'BrowserStorageError';
-                await useDialogStore.getState().showAlert(error instanceof Error && (error.name === 'HealthConsentTransitionPendingError' || error.name === 'UnsyncedLogoutError' || error.name === 'CloudIntegrityBlockedError')
-                    ? error.message
-                    : localStorageFailure
+                await useDialogStore.getState().showAlert(error?.name === 'OwnerlessLegacyIndexedDbError'
+                    ? 'Pulizia locale sospesa: sono presenti vecchi dati del dispositivo senza proprietario verificabile. Queste copie sono state preservate; non cancellare i dati del sito.'
+                    : error instanceof Error && (error.name === 'HealthConsentTransitionPendingError' || error.name === 'UnsyncedLogoutError' || error.name === 'CloudIntegrityBlockedError')
+                        ? error.message
+                        : localStorageFailure
                         ? 'Impossibile completare il logout perché la memoria locale del dispositivo non è disponibile o non è stata pulita completamente. I dati locali potrebbero essere ancora presenti. Riprova.'
                         : 'Errore durante il logout. Controlla la connessione e riprova.');
             } finally {

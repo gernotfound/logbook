@@ -138,6 +138,25 @@ describe('M5 logout protection through AuthProvider', () => {
         expect(dialogs.showAlert).toHaveBeenCalledWith('Modifiche locali non sincronizzate.');
     });
 
+    it('explains an unattributed legacy IDB blocker without suggesting an unrelated network retry', async () => {
+        const failure = Object.assign(new Error('Pulizia sospesa: dati IndexedDB legacy senza proprietario verificabile.'), {
+            name: 'OwnerlessLegacyIndexedDbError',
+        });
+        vi.mocked(DB.secureLogOut).mockRejectedValueOnce(failure);
+        const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+        const { result } = renderAuth();
+        await waitFor(() => expect(result.current.currentUser?.uid).toBe('logout-user'));
+
+        await act(async () => { await result.current.logout({ mode: 'force' }); });
+
+        expect(dialogs.showAlert).toHaveBeenCalledWith(
+            'Pulizia locale sospesa: sono presenti vecchi dati del dispositivo senza proprietario verificabile. Queste copie sono state preservate; non cancellare i dati del sito.'
+        );
+        expect(useAppStore.getState().userData?.routines?.[0]?.id).toBe('routine-1');
+        expect(DB.resetCache).not.toHaveBeenCalled();
+        consoleError.mockRestore();
+    });
+
     it('executes the authenticated safe logout through DB and resets the in-memory session', async () => {
         const { result } = renderAuth();
         await waitFor(() => expect(result.current.currentUser?.uid).toBe('logout-user'));
