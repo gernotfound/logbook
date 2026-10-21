@@ -5,11 +5,12 @@ import * as firebaseLib from '../../src/lib/firebase';
 import { getTelemetryContext } from '../../src/lib/telemetrySanitizer';
 import {
   telemetryHub,
-  TELEMETRY_QUEUE_KEY,
   TELEMETRY_QUEUE_CAPACITY,
   type TelemetryEventPayload,
 } from '../../src/lib/telemetryHub';
 import { installTelemetryTestHarness, mockSetDoc } from './telemetryTestHarness';
+
+const RETIRED_GLOBAL_QUEUE_KEY = 'logbook_telemetry_queue';
 
 describe('Unified Telemetry Hub E2E Suite — Tier 1 Product', () => {
   installTelemetryTestHarness();
@@ -203,38 +204,26 @@ describe('Unified Telemetry Hub E2E Suite — Tier 1 Product', () => {
 
         expect(telemetryHub.getQueuedEvents()).toHaveLength(1);
         expect(localStorage.getItem(telemetryHub.getQueueStorageKey())).toBeNull();
-        expect(localStorage.getItem(TELEMETRY_QUEUE_KEY)).toBeNull();
+        expect(localStorage.getItem(RETIRED_GLOBAL_QUEUE_KEY)).toBeNull();
 
         Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
       });
 
-      it('F9-2b: migrates only legacy telemetry that proves ownership for the current user', () => {
+      it('F9-2b: never imports the unsupported global queue into current telemetry', () => {
         Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
-        localStorage.setItem(TELEMETRY_QUEUE_KEY, JSON.stringify([
-          {
-            id: 'legacy-a',
-            timestamp: Date.now() - 1,
-            itemType: 'event',
-            payload: { type: 'a', timestamp: Date.now() - 1, context: getTelemetryContext(), userId: 'user_a' },
-          },
-          {
-            id: 'legacy-b',
-            timestamp: Date.now(),
-            itemType: 'event',
-            payload: { type: 'b', timestamp: Date.now(), context: getTelemetryContext(), userId: 'user_b' },
-          },
-        ]));
+        const retired = JSON.stringify([{
+          id: 'old-shared', timestamp: Date.now(), itemType: 'event',
+          payload: { type: 'retired', timestamp: Date.now(),
+            context: getTelemetryContext(), userId: 'user_b' },
+        }]);
+        localStorage.setItem(RETIRED_GLOBAL_QUEUE_KEY, retired);
 
         telemetryHub.init();
         telemetryHub.setUserId('user_b');
 
-        const queued = telemetryHub.getQueuedEvents();
-        expect(queued.map(item => item.id)).toEqual(['legacy-b']);
-        expect(localStorage.getItem(TELEMETRY_QUEUE_KEY)).toBeNull();
+        expect(telemetryHub.getQueuedEvents()).toEqual([]);
+        expect(localStorage.getItem(RETIRED_GLOBAL_QUEUE_KEY)).toBe(retired);
         expect(localStorage.getItem(telemetryHub.getQueueStorageKey())).toBeNull();
-        // Legacy reports are filtered to the matching UID then retained
-        // in memory when the owner has not unlocked a cryptographic key.
-
         Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
       });
 
