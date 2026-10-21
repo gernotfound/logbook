@@ -11,6 +11,8 @@ import { beginGuestMigrationIntent } from '../../src/lib/auth/guestMigrationInte
 import { resumePersistedGuestMigration } from '../../src/contexts/auth/resumePersistedGuestMigration';
 import * as localRepository from '../../src/lib/sync/localRepository';
 import { useAppStore } from '../../src/store/useAppStore';
+import { activateGuestSession, GUEST_SESSION_KEY } from '../../src/lib/sync/session';
+import { withGuestLifecycleLock } from '../../src/lib/sync/guestLifecycleLock';
 
 const KEY = 'guest_migration_intent_v1';
 
@@ -39,6 +41,11 @@ describe('serialized guest migration intent belongs to an exact Auth attempt', (
         vi.clearAllMocks();
         localStorage.clear();
         sessionStorage.clear();
+        // Auth hooks are tested against a real current guest generation, not
+        // only a stub returning true without a durable guest session.
+        localStorage.setItem('logbook_is_guest', 'true');
+        localStorage.setItem(GUEST_SESSION_KEY, 'guest-intent-test-generation');
+        activateGuestSession('guest-intent-test-generation');
     });
     afterEach(() => vi.restoreAllMocks());
 
@@ -62,6 +69,31 @@ describe('serialized guest migration intent belongs to an exact Auth attempt', (
         },
     );
 
+
+    it('rejects Google sign-in started in a revoked guest generation while the Auth lock was queued', async () => {
+        let releaseLock!: () => void;
+        let notifyEntered!: () => void;
+        const entered = new Promise<void>(resolve => { notifyEntered = resolve; });
+        const blocked = new Promise<void>(resolve => { releaseLock = resolve; });
+        const holder = withGuestLifecycleLock(async () => {
+            notifyEntered();
+            await blocked;
+        });
+        await entered;
+        const { result } = google(true);
+        const pending = result.current.login('merge');
+        // A new guest generation must never inherit an older generation's
+        // merge/skip selection after lock scheduling.
+        localStorage.setItem(GUEST_SESSION_KEY, 'new-guest-intent-generation');
+        activateGuestSession('new-guest-intent-generation');
+        releaseLock();
+        await holder;
+        await act(async () => {
+            await expect(pending).rejects.toThrow('non più attiva');
+        });
+        expect(signInWithPopup).not.toHaveBeenCalled();
+        expect(localStorage.getItem(KEY)).toBeNull();
+    });
 
     it('rejects a Firebase broadcast observed in a tab without the initiating receipt', async () => {
         const { bindGuestMigrationIntentToUser } = await import('../../src/lib/auth/guestMigrationIntent');
