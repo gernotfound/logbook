@@ -8,6 +8,7 @@ import {
   type TelemetryErrorPayload,
 } from '../src/lib/telemetryHub';
 import { APP_VERSION } from '../src/lib/telemetrySanitizer';
+import { seedCurrentTelemetryQueue } from './telemetry/seedCurrentQueue';
 
 describe('Adversarial Stress & Edge-Case Suite: TelemetryHub', () => {
   let mockSetDoc: any;
@@ -274,7 +275,7 @@ describe('Adversarial Stress & Edge-Case Suite: TelemetryHub', () => {
         { id: 'item_4', timestamp: Date.now() + 4, itemType: 'event' as const, payload: { timestamp: Date.now() + 4, type: 'evt4', context: {} as any, userId: 'user_flapping', sessionId: 's1' } },
         { id: 'item_5', timestamp: Date.now() + 5, itemType: 'event' as const, payload: { timestamp: Date.now() + 5, type: 'evt5', context: {} as any, userId: 'user_flapping', sessionId: 's1' } },
       ];
-      localStorage.setItem(telemetryHub.getQueueStorageKey(), JSON.stringify(items));
+      await seedCurrentTelemetryQueue('user_flapping', items);
 
       // Simulate first 2 writes succeed, 3rd fails, 4th and 5th fail
       let callCount = 0;
