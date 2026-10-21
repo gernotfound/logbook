@@ -504,7 +504,6 @@ vi.mock('../src/lib/db', () => ({
     deleteAccount: vi.fn().mockResolvedValue(undefined),
     purgeAllLocalUserData: vi.fn().mockImplementation(async (owner = 'user:test-user-id') => {
       delete idbStore[`logbook:v2:${owner}`];
-      localStorage.removeItem(deviceKey('workout'));
       const ownerPrefix = 'logbook:v2:' + owner + ':';
       for (let i = localStorage.length - 1; i >= 0; i--) {
         const key = localStorage.key(i);
