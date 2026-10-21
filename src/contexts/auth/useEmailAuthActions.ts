@@ -17,6 +17,13 @@ type EmailAuthDependencies = {
 
 // The email sign-in/verification actions share the provider's guest migration
 // intent and error boundary; they never authorize owner-scoped data hydration.
+/** A failed asynchronous login may only retire its own Auth handoff. */
+function abandonOwnGuestIntent(id: string | null): void {
+    if (id === null) return;
+    try { clearGuestMigrationIntent(id); }
+    catch { /* A newer Auth attempt owns the currently stored intent. */ }
+}
+
 export function useEmailAuthActions({
     isGuestActiveStrict, setSaveError, setEmailVerificationRequired, migrationDataRef,
 }: EmailAuthDependencies) {
@@ -27,14 +34,15 @@ export function useEmailAuthActions({
 
     const loginWithEmail = useCallback(async (email: string, pass: string, guestPolicy?: GuestMigrationPolicy) => {
         setSaveError(null);
+        let intentId: string | null = null;
         if (isGuestActiveStrict()) {
             if (!guestPolicy) throw new Error('Scelta di trasferimento guest richiesta.');
-            beginGuestMigrationIntent(guestPolicy, 'email', { email });
+            intentId = beginGuestMigrationIntent(guestPolicy, 'email', { email }).id;
         }
         try {
             await signInWithEmailAndPassword(auth, email, pass);
         } catch (error) {
-            try { clearGuestMigrationIntent(); } catch { /* best effort */ }
+            abandonOwnGuestIntent(intentId);
             handleAuthError(error);
         }
     }, [handleAuthError, isGuestActiveStrict, setSaveError]);
@@ -49,16 +57,17 @@ export function useEmailAuthActions({
         }
 
         migrationDataRef.current = useAppStore.getState().userData;
+        let intentId: string | null = null;
         if (isGuestActiveStrict()) {
             if (!guestPolicy) throw new Error('Scelta di trasferimento guest richiesta.');
-            beginGuestMigrationIntent(guestPolicy, 'email', { email });
+            intentId = beginGuestMigrationIntent(guestPolicy, 'email', { email }).id;
         }
 
         let credential: Awaited<ReturnType<typeof createUserWithEmailAndPassword>>;
         try {
             credential = await createUserWithEmailAndPassword(auth, email, pass);
         } catch (error) {
-            try { clearGuestMigrationIntent(); } catch { /* best effort */ }
+            abandonOwnGuestIntent(intentId);
             handleAuthError(error);
             return;
         }
