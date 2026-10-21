@@ -26,8 +26,8 @@ type BootstrapDependencies = {
     setUserData: ReturnType<typeof useAppStore.getState>['setUserData'];
     setSyncing: ReturnType<typeof useAppStore.getState>['setSyncing'];
     setSaveError: ReturnType<typeof useAppStore.getState>['setSaveError'];
-    markGuestMigrationSyncRecovery: (uid: string) => void;
-    clearGuestMigrationSyncRecovery: (uid: string) => void;
+    markGuestMigrationSyncRecovery: (uid: string) => string;
+    clearGuestMigrationSyncRecovery: (uid: string, expectedId: string) => void;
     loadData: (user: User) => Promise<void>;
 };
 
