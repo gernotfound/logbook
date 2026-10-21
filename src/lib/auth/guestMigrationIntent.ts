@@ -10,6 +10,8 @@ const KEY = 'guest_migration_intent_v1';
 const TAB_RECEIPT_KEY = 'logbook:guest-auth-attempt';
 const INTENT_LOCK = 'thelogbook:guest-auth-intent';
 const MAX_AGE_MS = 24 * 60 * 60 * 1000;
+const AUTH_PROOF_WAIT_MS = 15_000;
+const authResultWaiters = new Map<string, Set<(error?: Error) => void>>();
 const realmClaim = createId();
 
 export type GuestMigrationMethod = 'email' | 'google' | 'recovery';
@@ -24,6 +26,7 @@ export interface GuestMigrationIntent {
     expectedUid?: string;
     boundUid?: string;
     claimedBy?: string;
+    credentialUid?: string;
 }
 
 function normalizeEmail(email: string | null | undefined): string | undefined {
@@ -56,6 +59,7 @@ function parse(raw: string | null): GuestMigrationIntent {
         || (value.method !== 'email' && value.method !== 'google' && value.method !== 'recovery')
         || typeof value.startedAt !== 'number' || !Number.isFinite(value.startedAt) || value.startedAt <= 0
         || (value.claimedBy !== undefined && (typeof value.claimedBy !== 'string' || !value.claimedBy))
+        || (value.credentialUid !== undefined && (typeof value.credentialUid !== 'string' || !value.credentialUid))
     ) {
         throw new Error('Tentativo di trasferimento guest non valido.');
     }
@@ -67,6 +71,7 @@ function parse(raw: string | null): GuestMigrationIntent {
     if (typeof value.expectedUid === 'string' && value.expectedUid) intent.expectedUid = value.expectedUid;
     if (typeof value.boundUid === 'string' && value.boundUid) intent.boundUid = value.boundUid;
     if (typeof value.claimedBy === 'string' && value.claimedBy) intent.claimedBy = value.claimedBy;
+    if (typeof value.credentialUid === 'string' && value.credentialUid) intent.credentialUid = value.credentialUid;
     return intent;
 }
 
@@ -83,6 +88,83 @@ function withIntentLock<T>(operation: () => Promise<T>): Promise<T> {
         throw new Error('Coordinamento Auth tra schede non disponibile.');
     }
     return navigator.locks.request(INTENT_LOCK, { mode: 'exclusive' }, operation);
+}
+
+function settleAuthResultWaiters(intentId: string, error?: Error): void {
+    const listeners = authResultWaiters.get(intentId);
+    if (!listeners) return;
+    for (const notify of Array.from(listeners)) notify(error);
+}
+
+function awaitOwnAuthResult(intentId: string): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+        let listeners = authResultWaiters.get(intentId);
+        if (!listeners) {
+            listeners = new Set();
+            authResultWaiters.set(intentId, listeners);
+        }
+        let settled = false;
+        const timer = setTimeout(() => settle(new Error('Autenticazione non confermata da questo tentativo. Riprova.')), AUTH_PROOF_WAIT_MS);
+        const settle = (error?: Error) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            listeners!.delete(settle);
+            if (listeners!.size === 0) authResultWaiters.delete(intentId);
+            if (error) reject(error);
+            else resolve();
+        };
+        listeners.add(settle);
+        // Close the read/subscription gap. The credential may have completed
+        // just before this waiter was registered.
+        try {
+            const latest = readGuestMigrationIntentStrict();
+            if (latest.id !== intentId) settle(new Error('Il tentativo Auth è stato sostituito.'));
+            else if (latest.credentialUid) settle();
+        } catch (error) {
+            settle(error instanceof Error ? error : new Error('Tentativo Auth non verificabile.'));
+        }
+    });
+}
+
+function assertUserMatchesIntent(intent: GuestMigrationIntent, user: User): void {
+    const uid = user.uid;
+    if (intent.expectedUid && intent.expectedUid !== uid) {
+        throw new Error('Il tentativo di trasferimento appartiene a un account diverso.');
+    }
+    const userEmail = normalizeEmail(user.email);
+    if (intent.method === 'email' && intent.expectedEmail && intent.expectedEmail !== userEmail) {
+        throw new Error('Il tentativo email non corrisponde all’account autenticato.');
+    }
+    if (intent.method === 'google' && !(user.providerData ?? []).some(provider => provider.providerId === 'google.com')) {
+        throw new Error('Il tentativo Google non corrisponde all’account autenticato.');
+    }
+}
+
+/** Only a successful Firebase UserCredential from this initiating Auth action can
+ * authorize a migration. onAuthStateChanged alone may report another tab's login. */
+export async function confirmGuestMigrationCredential(intentId: string, user: User): Promise<void> {
+    await withIntentLock(async () => {
+        const intent = readGuestMigrationIntentStrict();
+        if (readTabReceipt() !== intentId || intent.id !== intentId || intent.method === 'recovery') {
+            throw new Error('La credenziale non appartiene al tentativo Auth corrente.');
+        }
+        assertUserMatchesIntent(intent, user);
+        if (intent.credentialUid && intent.credentialUid !== user.uid) {
+            throw new Error('La credenziale del tentativo Auth è cambiata.');
+        }
+        writeBrowserJson(KEY, { ...intent, credentialUid: user.uid });
+        settleAuthResultWaiters(intentId);
+    });
+}
+
+/** Captured at redirect bootstrap before Auth can clear its navigation marker. */
+export function readGuestMigrationTabReceipt(): string | null {
+    return readTabReceipt();
+}
+
+export function rejectGuestMigrationAuthWaiters(intentId: string, reason: string): void {
+    settleAuthResultWaiters(intentId, new Error(reason));
 }
 
 function readTabReceipt(): string | null {
@@ -120,6 +202,7 @@ export function beginGuestMigrationIntent(
         if (email) intent.expectedEmail = email;
         if (options.uid) intent.expectedUid = options.uid;
         const oldReceipt = readTabReceipt();
+        const previousId = raw ? parse(raw).id : null;
         sessionStorage.setItem(TAB_RECEIPT_KEY, intent.id);
         try {
             writeBrowserJson(KEY, intent);
@@ -128,15 +211,26 @@ export function beginGuestMigrationIntent(
             else sessionStorage.setItem(TAB_RECEIPT_KEY, oldReceipt);
             throw error;
         }
+        if (previousId && previousId !== intent.id) settleAuthResultWaiters(previousId, new Error('Tentativo Auth sostituito da un recupero esplicito.'));
         return intent;
     }));
 }
 
-export function bindGuestMigrationIntentToUser(user: User): Promise<GuestMigrationIntent> {
+export async function bindGuestMigrationIntentToUser(user: User): Promise<GuestMigrationIntent> {
+    // Register a local waiter before binding: Firebase auth broadcasts do not
+    // establish that this tab's popup/email/redirect has returned a credential.
+    const prior = readGuestMigrationIntentStrict();
+    if (readTabReceipt() !== prior.id) {
+        throw new Error('Questo accesso non ha origine da questa scheda.');
+    }
+    assertUserMatchesIntent(prior, user);
+    if (prior.method !== 'recovery' && !prior.credentialUid) {
+        await awaitOwnAuthResult(prior.id);
+    }
     return withIntentLock(async () => {
         const intent = readGuestMigrationIntentStrict();
-        if (readTabReceipt() !== intent.id) {
-            throw new Error('Questo accesso non ha origine da questa scheda.');
+        if (intent.id !== prior.id || readTabReceipt() !== intent.id) {
+            throw new Error('Il tentativo Auth corrente è cambiato.');
         }
         const uid = user.uid;
         if (intent.claimedBy && intent.claimedBy !== realmClaim) {
@@ -145,15 +239,9 @@ export function bindGuestMigrationIntentToUser(user: User): Promise<GuestMigrati
         if (intent.boundUid && intent.boundUid !== uid) {
             throw new Error('Il tentativo di trasferimento appartiene a una sessione diversa.');
         }
-        if (intent.expectedUid && intent.expectedUid !== uid) {
-            throw new Error('Il tentativo di trasferimento appartiene a un account diverso.');
-        }
-        const userEmail = normalizeEmail(user.email);
-        if (intent.method === 'email' && intent.expectedEmail && intent.expectedEmail !== userEmail) {
-            throw new Error('Il tentativo email non corrisponde all’account autenticato.');
-        }
-        if (intent.method === 'google' && !(user.providerData ?? []).some(provider => provider.providerId === 'google.com')) {
-            throw new Error('Il tentativo Google non corrisponde all’account autenticato.');
+        assertUserMatchesIntent(intent, user);
+        if (intent.method !== 'recovery' && intent.credentialUid !== uid) {
+            throw new Error('L’identità non è stata confermata dal login avviato in questa scheda.');
         }
         const bound = { ...intent, boundUid: uid, claimedBy: realmClaim };
         writeBrowserJson(KEY, bound);
@@ -169,5 +257,6 @@ export function clearGuestMigrationIntent(expectedId: string): Promise<void> {
         }
         removeBrowserValue(KEY);
         sessionStorage.removeItem(TAB_RECEIPT_KEY);
+        settleAuthResultWaiters(expectedId, new Error('Tentativo Auth terminato.'));
     });
 }
