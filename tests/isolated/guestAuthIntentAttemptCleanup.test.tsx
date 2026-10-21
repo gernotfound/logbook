@@ -96,7 +96,7 @@ describe('serialized guest migration intent belongs to an exact Auth attempt', (
     });
 
     it('rejects a Firebase broadcast observed in a tab without the initiating receipt', async () => {
-        const { bindGuestMigrationIntentToUser } = await import('../../src/lib/auth/guestMigrationIntent');
+        const { bindGuestMigrationIntentToUser, confirmGuestMigrationCredential } = await import('../../src/lib/auth/guestMigrationIntent');
         const attempt = await beginGuestMigrationIntent('merge', 'email', { email: 'same@example.test' });
         const receipt = sessionStorage.getItem('logbook:guest-auth-attempt');
         sessionStorage.removeItem('logbook:guest-auth-attempt');
@@ -104,6 +104,7 @@ describe('serialized guest migration intent belongs to an exact Auth attempt', (
         await expect(bindGuestMigrationIntentToUser(user)).rejects.toThrow('origine da questa scheda');
         expect(JSON.parse(localStorage.getItem(KEY)!).policy).toBe('merge');
         sessionStorage.setItem('logbook:guest-auth-attempt', receipt!);
+        await confirmGuestMigrationCredential(attempt.id, user);
         const bound = await bindGuestMigrationIntentToUser(user);
         expect(bound.id).toBe(attempt.id);
         expect(bound.policy).toBe('merge');
