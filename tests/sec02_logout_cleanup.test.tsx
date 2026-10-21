@@ -188,6 +188,38 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
         expect(isLocalPurgePending('user:test-user-id')).toBe(true);
     });
 
+    it('preserves a new Google redirect marker started while the previous owner purge awaits IndexedDB', async () => {
+        let entered!: () => void;
+        let release!: () => void;
+        const requested = new Promise<void>(resolve => { entered = resolve; });
+        const pendingDelete = new Promise<void>(resolve => { release = resolve; });
+        vi.mocked(idb.del).mockImplementationOnce(async key => {
+            expect(key).toBe('logbook:v2:user:test-user-id');
+            entered();
+            await pendingDelete;
+        });
+
+        localStorage.setItem('draft_measurement', 'previous-owner-legacy');
+        const operation = DB.purgeAllLocalUserData();
+        await requested;
+        // The next login can begin before its Firebase UID is available:
+        // its shared redirect flag must never be cleared by the old purge.
+        localStorage.setItem('logbook_awaiting_redirect', 'true');
+
+        release();
+        await operation;
+
+        expect(localStorage.getItem('logbook_awaiting_redirect')).toBe('true');
+        expect(localStorage.getItem('draft_measurement')).toBeNull();
+        expect(isLocalPurgePending('user:test-user-id')).toBe(true);
+    });
+
+    it('still removes a failed non-active redirect marker on logout', async () => {
+        localStorage.setItem('logbook_awaiting_redirect', 'failed');
+        await DB.purgeAllLocalUserData();
+        expect(localStorage.getItem('logbook_awaiting_redirect')).toBeNull();
+    });
+
     it('purgeAllLocalUserData removes IndexedDB sensitive keys', async () => {
         await DB.purgeAllLocalUserData();
 
