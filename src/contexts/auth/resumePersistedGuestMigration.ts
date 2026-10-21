@@ -6,7 +6,10 @@ import { captureSession, isCurrentSession, userOwner } from '../../lib/sync/sess
 import { markTabSnapshotClean } from '../../lib/sync/tabSnapshotCausality';
 import { getInitialLocalWorkout } from '../../store/slices/createWorkoutSlice';
 import { recoverWorkoutDeviceIntent } from '../../lib/sync/workoutDeviceIntent';
-import { removeBrowserValue } from '../../lib/sync/browserStorage';
+import { readBrowserValueStrict, removeBrowserValue } from '../../lib/sync/browserStorage';
+import { GUEST_SESSION_KEY } from '../../lib/sync/sessionKeys';
+import { readGuestMigrationSyncWitness } from '../../lib/auth/guestMigrationSyncRecovery';
+import { withGuestLifecycleLock } from '../../lib/sync/guestLifecycleLock';
 import type { UserData } from '../../types';
 
 type GuestMigrationStatus = 'idle' | 'pending' | 'failed';
@@ -19,7 +22,7 @@ type RecoveryDependencies = {
     setGuestMigrationStatus: Dispatch<SetStateAction<GuestMigrationStatus>>;
     setSyncing: ReturnType<typeof useAppStore.getState>['setSyncing'];
     setSaveError: ReturnType<typeof useAppStore.getState>['setSaveError'];
-    clearGuestMigrationSyncRecovery: (uid: string) => void;
+    clearGuestMigrationSyncRecovery: (uid: string, expectedId: string) => void;
 };
 
 // Called only after authenticated vault unlock and consent verification.
@@ -32,7 +35,11 @@ export async function resumePersistedGuestMigration(
         setIsGuest, setGuestMigrationStatus, setSyncing,
         setSaveError, clearGuestMigrationSyncRecovery,
     } = dependencies;
+    try {
+        return await withGuestLifecycleLock(async () => {
             if (!isCurrentRun()) return true;
+            const witness = readGuestMigrationSyncWitness(user.uid);
+            if (!witness) return false;
             setGuestMigrationStatus('pending');
 
             let authenticatedEnvelope: Awaited<ReturnType<typeof import('../../lib/sync/localRepository')['readLocal']>>;
@@ -50,10 +57,17 @@ export async function resumePersistedGuestMigration(
 
             if (!isCurrentRun()) return true;
 
-            const guestStillActive = isGuestActiveStrict();
+            const guestFlagActive = readBrowserValueStrict(guestKey) === 'true';
+            // A newer guest generation must not be retired by an older
+            // account handoff, even if Firebase still reports the same UID.
+            if (guestFlagActive && readBrowserValueStrict(GUEST_SESSION_KEY) !== witness.guestSessionId) {
+                setGuestMigrationStatus('failed');
+                setSaveError('Una nuova sessione locale è attiva: il vecchio recupero account non può sostituirla.');
+                return true;
+            }
             if (!authenticatedEnvelope) {
-                if (guestStillActive) {
-                    clearGuestMigrationSyncRecovery(user.uid);
+                if (guestFlagActive) {
+                    clearGuestMigrationSyncRecovery(user.uid, witness.id);
                     return false;
                 }
 
@@ -62,7 +76,7 @@ export async function resumePersistedGuestMigration(
                 return true;
             }
 
-            if (guestStillActive) {
+            if (guestFlagActive) {
                 try {
                     if (!isCurrentRun()) return true;
                     removeBrowserValue(guestKey);
@@ -124,7 +138,7 @@ export async function resumePersistedGuestMigration(
                 if (!isCurrentRun()) return true;
 
                 if (result.status === 'synced' || result.status === 'local-pending') {
-                    clearGuestMigrationSyncRecovery(user.uid);
+                    clearGuestMigrationSyncRecovery(user.uid, witness.id);
                     setGuestMigrationStatus('idle');
                     if (result.status === 'local-pending') {
                         setSaveError(isLegalConsentRequiredError(result.error)
@@ -145,4 +159,12 @@ export async function resumePersistedGuestMigration(
             }
 
             return true;
+        });
+    } catch (error) {
+        if (!isCurrentRun()) return true;
+        console.error('Coordinamento recovery guest→account non riuscito:', error);
+        setGuestMigrationStatus('failed');
+        setSaveError('Recupero account non coordinabile. Dati locali preservati: riprova.');
+        return true;
+    }
 }
