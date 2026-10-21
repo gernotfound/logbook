@@ -172,8 +172,16 @@ export async function purgeOwnerLocalData(owner: string, resumeOnly = false, gat
             return;
         }
         if (resumeOnly && !isLocalPurgeIncomplete(owner)) return;
-        if (gate && !isLocalPurgeIncomplete(owner)) await gate.preflight();
         const previouslyIncomplete = isLocalPurgeIncomplete(owner);
+        if (!previouslyIncomplete) {
+            // Known unattributed IDB bytes must prevent sign-out and the
+            // durable fence, not strand the user in an unfinished purge.
+            // Run this asynchronous probe BEFORE the final owner/journal
+            // preflight; no new await is introduced between that gate and
+            // installation of the synchronous writer fence.
+            await assertNoOwnerlessLegacyIndexedDbData();
+            if (gate) await gate.preflight();
+        }
         beginLocalPurge(owner);
         if (gate) {
             try {

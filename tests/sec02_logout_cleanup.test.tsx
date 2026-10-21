@@ -418,9 +418,30 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
             await expect(DB.purgeAllLocalUserData()).rejects.toThrow('senza proprietario verificabile');
             expect(idb.del).not.toHaveBeenCalled();
             expect(await idb.get(key)).toBe(foreignRecord);
-            expect(isLocalPurgeIncomplete('user:test-user-id')).toBe(true);
+            expect(isLocalPurgePending('user:test-user-id')).toBe(false);
         },
     );
+
+    it('does not invalidate Firebase Auth when an unowned legacy IDB record is present at logout preflight', async () => {
+        const { auth } = await import('../src/lib/firebase');
+        const orphan = { archived: 'old-device-payload' };
+        vi.mocked(idb.get).mockImplementation(async key =>
+            key === 'logbook_cached_user_data' ? orphan : undefined);
+        await expect(DB.secureLogOut()).rejects.toThrow('senza proprietario verificabile');
+        expect(auth.signOut).not.toHaveBeenCalled();
+        expect(idb.del).not.toHaveBeenCalled();
+        expect(isLocalPurgePending(storageOwner())).toBe(false);
+        expect(await idb.get('logbook_cached_user_data')).toBe(orphan);
+    });
+
+    it('does not create an irreversible fence if the preflight IDB read fails', async () => {
+        const { auth } = await import('../src/lib/firebase');
+        vi.mocked(idb.get).mockRejectedValueOnce(new Error('IndexedDB unavailable'));
+        await expect(DB.secureLogOut()).rejects.toThrow('IndexedDB unavailable');
+        expect(auth.signOut).not.toHaveBeenCalled();
+        expect(idb.del).not.toHaveBeenCalled();
+        expect(isLocalPurgePending(storageOwner())).toBe(false);
+    });
 
     it('retains a global IDB value written by a legacy tab while owner deletion is in flight', async () => {
         const records = new Map<string, unknown>();
