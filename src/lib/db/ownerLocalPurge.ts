@@ -19,6 +19,12 @@ function collectLocalPurgeKeys(owner: string): Set<string> {
         'logbook_telemetry_queue', 'logbook_storage_marker', 'logbook_storage_anomaly_reported',
         'guest_migration_intent_v1', 'guest_migration_policy'
     ]);
+    // An in-flight Google login redirect belongs to the AUTH flow, not to
+    // the account or guest archive being removed. It can begin while an
+    // older account's IndexedDB cleanup is still pending.
+    if (localStorage.getItem('logbook_awaiting_redirect') === 'true') {
+        keys.delete('logbook_awaiting_redirect');
+    }
     const ownerUid = owner.startsWith('user:') ? owner.slice('user:'.length) : null;
     if (ownerUid && localStorage.getItem('logbook_guest_migration_sync_recovery') === ownerUid) {
         keys.add('logbook_guest_migration_sync_recovery');
@@ -126,6 +132,10 @@ export async function purgeOwnerLocalData(owner: string, resumeOnly = false, gat
             for (const storageKey of keys) {
                 try {
                     gate?.assertStillSafe?.();
+                    // Recheck at removal time: a new Google redirect may have
+                    // activated after the first inventory pass.
+                    if (storageKey === 'logbook_awaiting_redirect'
+                        && localStorage.getItem(storageKey) === 'true') continue;
                     localStorage.removeItem(storageKey);
                 } catch (error) {
                     failures.push(error);
