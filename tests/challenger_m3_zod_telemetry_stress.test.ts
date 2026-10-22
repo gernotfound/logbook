@@ -23,7 +23,7 @@ import {
 } from '../src/lib/telemetryHub';
 
 describe('Empirical Challenger: Milestone 3 (R1: Zod Integration) Adversarial Stress Suite', () => {
-    let mockSetDoc: any;
+    let mockSentryTransport: any;
 
     beforeEach(() => {
         localStorage.clear();
@@ -32,7 +32,7 @@ describe('Empirical Challenger: Milestone 3 (R1: Zod Integration) Adversarial St
         vi.useRealTimers();
         Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
 
-        mockSetDoc = vi.spyOn(sentryClient, 'sendTelemetryToSentry').mockResolvedValue(true);
+        mockSentryTransport = vi.spyOn(sentryClient, 'sendTelemetryToSentry').mockResolvedValue(true);
 
         setSchemaFallbackListener(null);
         telemetryHub.reset();
@@ -365,7 +365,7 @@ describe('Empirical Challenger: Milestone 3 (R1: Zod Integration) Adversarial St
     // 5. Telemetry Deduplication & Queue Safety under Zod Storm
     // =========================================================================
     describe('5. Telemetry Deduplication & Queue Invariant under Storm', () => {
-        it('deduplicates 1,000 rapid schema fallbacks into aggregated rate limiters without duplicate firestore writes', async () => {
+        it('deduplicates 1,000 rapid schema fallbacks into one technical error dispatch', async () => {
             vi.useFakeTimers();
 
             for (let i = 0; i < 1000; i++) {
@@ -385,8 +385,8 @@ describe('Empirical Challenger: Milestone 3 (R1: Zod Integration) Adversarial St
             // Active rate limiters should only have 1 entry (deduplicated by hash)
             expect(telemetryHub.getActiveRateLimiterCount()).toBe(1);
 
-            // Exactly 1 Firestore dispatch occurred for the initial occurrence
-            const errorCalls = mockSetDoc.mock.calls.filter((c: any) => c[1].type === 'ZodSchemaFallbackError');
+            // Exactly one Sentry-transport technical error report for this fingerprint
+            const errorCalls = mockSentryTransport.mock.calls.filter((c: any) => c[1].type === 'ZodSchemaFallbackError');
             expect(errorCalls.length).toBe(1);
 
             const payload = errorCalls[0][1] as TelemetryErrorPayload;
@@ -437,7 +437,7 @@ describe('Empirical Challenger: Milestone 3 (R1: Zod Integration) Adversarial St
             await telemetryHub.flushQueue();
 
             expect(telemetryHub.getQueuedEvents().length).toBe(0);
-            expect(mockSetDoc).toHaveBeenCalled();
+            expect(mockSentryTransport).toHaveBeenCalled();
         });
     });
 
@@ -460,10 +460,16 @@ describe('Empirical Challenger: Milestone 3 (R1: Zod Integration) Adversarial St
 
             DomainParsers.parseProfile(maliciousProfile);
             UserDataSchema.parse(maliciousProfile);
+            // Force the real parser fallback: absent dispatch must fail this
+            // test rather than make the subsequent PII loop pass vacuously.
+            DomainParsers.parseProfile('malformed_' + maliciousProfile.email);
 
             await vi.advanceTimersByTimeAsync(50);
 
-            for (const call of mockSetDoc.mock.calls) {
+            expect(mockSentryTransport.mock.calls.some((call: any) =>
+                call[0] === 'error' && call[1]?.source === 'zod_schema_fallback'
+            )).toBe(true);
+            for (const call of mockSentryTransport.mock.calls) {
                 const serialized = JSON.stringify(call[1]);
                 expect(serialized).not.toContain('victim_user_private@company.org');
                 expect(serialized).not.toContain('eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9');
