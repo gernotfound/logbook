@@ -567,7 +567,7 @@ describe('Workout Reorder (R2) and Live Sync & Badges (R3) Suite', () => {
             fireEvent.click(setupBtns[0]);
 
             // Setup input should be visible for ex_bench
-            const setupInput = container.querySelector('#setup-ex_bench') as HTMLInputElement;
+            const setupInput = container.querySelector('#setup-se_1') as HTMLInputElement;
             expect(setupInput).not.toBeNull();
             expect(setupInput.defaultValue).toBe('Gomiti a 45 gradi');
 
@@ -578,7 +578,7 @@ describe('Workout Reorder (R2) and Live Sync & Badges (R3) Suite', () => {
             fireEvent.click(posOption2b);
 
             // After move, Setup panel should remain open on ex_bench (now at index 1)
-            const setupInputAfter = container.querySelector('#setup-ex_bench') as HTMLInputElement;
+            const setupInputAfter = container.querySelector('#setup-se_1') as HTMLInputElement;
             expect(setupInputAfter).not.toBeNull();
             expect(setupInputAfter.defaultValue).toBe('Gomiti a 45 gradi');
 
