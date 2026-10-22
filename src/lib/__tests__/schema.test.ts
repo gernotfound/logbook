@@ -20,14 +20,9 @@ describe('UserDataSchema', () => {
         expect(parsed.profile.height).toBe('180');
     });
 
-    it('safeParse should return success false instead of throwing', () => {
-        // Zod schemas with .catch() actually don't fail, they return the fallback!
-        // But let's verify that the fallback kicks in.
+    it('safeParse applies the fallback for an invalid profile without throwing', () => {
         const parsed = UserDataSchema.safeParse({ profile: 'invalid string' } as any);
-        expect(parsed.success).toBe(true);
-        if (parsed.success) {
-            expect(parsed.data.profile).toEqual({}); // Fallback applied
-        }
+        expect(parsed).toMatchObject({ success: true, data: { profile: {} } });
     });
 });
 
