@@ -631,7 +631,7 @@ describe('durable owner-scoped journal', () => {
         }) as unknown as UserData;
         await hydrateLocal('a', newlyHydrated, ['2026-09'], undefined, 'window');
         const beforeAck = (await readLocal('a'))!;
-        expect(beforeAck.data.nutrition['2026-09-01']?.weight).toBe(80);
+        expect(beforeAck.data.nutrition?.['2026-09-01']?.weight).toBe(80);
         expect(beforeAck.pending.length).toBe(delivered.pending.length);
 
         await acknowledgeThrough('a', delivered.pending.at(-1)!.seq, sentRoot, [], undefined,
@@ -639,8 +639,8 @@ describe('durable owner-scoped journal', () => {
         const after = (await readLocal('a'))!;
         expect(after.pending).toHaveLength(0);
         expect(after.data.profile?.height).toBe('171');
-        expect(after.data.nutrition['2026-09-01']?.weight).toBe(80);
-        expect(after.baseline.nutrition['2026-09-01']?.weight).toBe(80);
+        expect(after.data.nutrition?.['2026-09-01']?.weight).toBe(80);
+        expect(after.baseline.nutrition?.['2026-09-01']?.weight).toBe(80);
     });
 
     it('keeps a newly hydrated root when an older month-only delivery is acknowledged', async () => {
@@ -672,7 +672,7 @@ describe('durable owner-scoped journal', () => {
         expect(after.pending).toHaveLength(0);
         expect(after.data.profile?.height).toBe('172');
         expect(after.baseline.profile?.height).toBe('172');
-        expect(after.data.nutrition['2026-09-01']?.weight).toBe(71);
+        expect(after.data.nutrition?.['2026-09-01']?.weight).toBe(71);
     });
 
     it('acknowledges only the delivered prefix while preserving a newer local edit', async () => {
