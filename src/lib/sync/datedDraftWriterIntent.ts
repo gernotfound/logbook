@@ -1,6 +1,7 @@
 import { deviceKey, readDeviceValueStrict, writeDeviceValue } from './deviceStorage';
 import { assertWorkoutSnapshotEpoch, readDeviceConsentRevision } from './workoutDeviceIntent';
 import { stableStorageKeyInventory } from './stableStorageKeyInventory';
+import { newWriterRevisionId, type WriterLineageReference } from './writerLineage';
 
 const PREFIX = 'draft:dated-intent:';
 const ID = /^[a-f0-9]{32}$/;
@@ -15,6 +16,8 @@ type DatedIntent = {
     draftName: string;
     values: Record<string, string>;
     consentRevision?: number;
+    revisionId?: string;
+    parent?: WriterLineageReference;
 };
 
 export type DatedWriterEvidence = {
@@ -22,6 +25,8 @@ export type DatedWriterEvidence = {
     raw: string;
     values: Record<string, string>;
     consentRevision?: number;
+    revisionId?: string;
+    parent?: WriterLineageReference;
 };
 export type DatedRecoveryEntry = {
     name: string;
@@ -53,11 +58,24 @@ function parse(name: string, owner: string, raw: string): DatedWriterEvidence & 
         || d.__logbookDatedWriterIntent !== 1 || d.owner !== owner
         || typeof d.draftName !== 'string' || !DATED_KEY.test(d.draftName)
         || !validValues(d.values)
+        || (d.revisionId !== undefined
+            && (typeof d.revisionId !== 'string' || !ID.test(d.revisionId)))
+        || (d.parent !== undefined
+            && (!d.parent || typeof d.parent !== 'object'
+                || typeof d.parent.name !== 'string'
+                || !d.parent.name.startsWith(PREFIX)
+                || !ID.test(d.parent.name.slice(PREFIX.length))
+                || d.parent.name === name
+                || !((typeof d.parent.revisionId === 'string' && ID.test(d.parent.revisionId)
+                    && d.parent.raw === undefined)
+                    || (typeof d.parent.raw === 'string'
+                        && d.parent.revisionId === undefined))))
         || (d.consentRevision !== undefined && (!Number.isSafeInteger(d.consentRevision)
             || d.consentRevision < 1))) {
         throw new Error('Metadati copia datata non validi: originale conservato.');
     }
-    return { name, raw, draftName: d.draftName, values: d.values, consentRevision: d.consentRevision };
+    return { name, raw, draftName: d.draftName, values: d.values, consentRevision: d.consentRevision,
+        revisionId: d.revisionId, parent: d.parent };
 }
 
 function ownerNames(owner: string): Set<string> {
@@ -136,20 +154,26 @@ export class DatedWriterConsumedError extends Error {
 export function writeDatedWriterIntent(
     name: string, owner: string, draftName: string, values: Record<string, string>,
     expectedRaw: string | null, expectedConsentGeneration?: string | null,
+    parent?: WriterLineageReference,
 ): string {
     if (!name.startsWith(PREFIX) || !ID.test(name.slice(PREFIX.length)) || !DATED_KEY.test(draftName)
         || !validValues(values)) throw new Error('Identità o contenuto della copia datata non validi.');
     const current = readDeviceValueStrict(name, owner);
     if (current === null && expectedRaw !== null) throw new DatedWriterConsumedError();
     if (current !== expectedRaw) throw new Error('Copia datata modificata: originale conservato.');
+    let previousParent: WriterLineageReference | undefined;
     if (current !== null) {
         const previous = parse(name, owner, current);
         assertWorkoutSnapshotEpoch(owner, previous.consentRevision);
         if (previous.draftName !== draftName) throw new Error('Copia datata associata a un altro campo.');
+        previousParent = previous.parent;
     }
     const revision = assertRevision(owner, expectedConsentGeneration);
     const raw = JSON.stringify({
         __logbookDatedWriterIntent: 1, owner, draftName, values,
+        revisionId: newWriterRevisionId(),
+        ...((previousParent ?? (current === null ? parent : undefined))
+            ? { parent: previousParent ?? parent } : {}),
         ...(owner.startsWith('user:') && revision !== undefined ? { consentRevision: revision } : {}),
     } satisfies DatedIntent);
     writeDeviceValue(name, raw, owner);

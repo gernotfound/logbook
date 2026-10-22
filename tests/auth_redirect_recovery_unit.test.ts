@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { attachAuthRedirectRecovery } from '../src/contexts/auth/attachAuthRedirectRecovery';
+import { AWAITING_REDIRECT_KEY, readAuthRedirectAttempt, tryRemoveAuthRedirectMarker, writeAuthRedirectMarker } from '../src/lib/auth/authRedirectMarker';
 
 describe('isolated foreground redirect recovery', () => {
     const detachAll: Array<() => void> = [];
@@ -127,6 +128,61 @@ describe('isolated foreground redirect recovery', () => {
         await vi.waitFor(() => expect(marker).toBeNull());
         expect(reload).not.toHaveBeenCalled();
     });
+
+    it('rejects old marker cleanup after a new login attempt has replaced it in the same tab', () => {
+        const oldAttempt = writeAuthRedirectMarker('true');
+        const newAttempt = writeAuthRedirectMarker('true');
+        expect(oldAttempt).not.toBe(newAttempt);
+        expect(readAuthRedirectAttempt()).toBe(newAttempt);
+        expect(tryRemoveAuthRedirectMarker(AWAITING_REDIRECT_KEY, oldAttempt)).toBe(false);
+        expect(sessionStorage.getItem(AWAITING_REDIRECT_KEY)).toBe('true');
+        expect(tryRemoveAuthRedirectMarker(AWAITING_REDIRECT_KEY, newAttempt)).toBe(true);
+        expect(sessionStorage.getItem(AWAITING_REDIRECT_KEY)).toBeNull();
+        expect(readAuthRedirectAttempt()).toBeNull();
+    });
+
+    it.each(['resolved', 'rejected'] as const)(
+        'does not consume a newer attempt when a previously active redirect promise is %s',
+        async outcome => {
+            let resolve!: (value: unknown) => void;
+            let reject!: (reason: unknown) => void;
+            const pending = new Promise<unknown>((yes, no) => { resolve = yes; reject = no; });
+            let marker: string | null = 'true';
+            let attempt: string | null = 'attempt-p0';
+            let foreground = () => {};
+            const remove = vi.fn((_key: string, expected?: string | null) => {
+                if (attempt !== expected) return false;
+                marker = null;
+                return true;
+            });
+            const reload = vi.fn(async () => {});
+            const setSaveError = vi.fn();
+            const detach = attachAuthRedirectRecovery({
+                awaitingRedirectKey: AWAITING_REDIRECT_KEY,
+                redirectLaunchFailedRef: { current: false }, setSaveError,
+            }, {
+                visibility: () => 'visible',
+                listen: handler => { foreground = handler; return () => {}; },
+                read: () => marker,
+                readAttempt: () => attempt,
+                remove, reload, getRedirect: () => pending,
+            });
+            detachAll.push(detach);
+            attempt = 'attempt-p1';
+            marker = 'true';
+            foreground();
+            if (outcome === 'resolved') resolve(null);
+            else reject(new Error('old redirect failed'));
+            await Promise.resolve();
+            await Promise.resolve();
+            await Promise.resolve();
+            expect(remove).not.toHaveBeenCalled();
+            expect(reload).not.toHaveBeenCalled();
+            expect(marker).toBe('true');
+            expect(attempt).toBe('attempt-p1');
+            expect(setSaveError).not.toHaveBeenCalled();
+        },
+    );
 
     it('does not remove a later redirect marker when the startup SDK probe returns null', async () => {
         let marker: string | null = null;
