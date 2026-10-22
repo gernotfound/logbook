@@ -1,6 +1,7 @@
 import { deviceKey, readDeviceValueStrict, writeDeviceValue } from './deviceStorage';
 import { readDeviceConsentRevision, assertWorkoutSnapshotEpoch } from './workoutDeviceIntent';
 import { stableStorageKeyInventory } from './stableStorageKeyInventory';
+import { newWriterRevisionId, type WriterLineageReference } from './writerLineage';
 
 const INTENT_PREFIX = 'draft:buffered-intent:';
 
@@ -10,9 +11,11 @@ type BufferedWriterIntent = {
     draftName: string;
     value: string;
     consentRevision?: number;
+    revisionId?: string;
+    parent?: WriterLineageReference;
 };
 
-export type BufferedWriterEvidence = { name: string; raw: string; value: string };
+export type BufferedWriterEvidence = { name: string; raw: string; value: string; revisionId?: string; parent?: WriterLineageReference };
 export type BufferedRecoveryEntry = {
     name: string;
     draftName: string;
@@ -39,12 +42,24 @@ function parseWriterEvidence(
     if (record.__logbookBufferedWriterIntent !== 1 || record.owner !== owner
         || typeof record.draftName !== 'string' || !record.draftName.startsWith('draft:buffered:')
         || typeof record.value !== 'string'
+        || (record.revisionId !== undefined
+            && (typeof record.revisionId !== 'string' || !/^[a-f0-9]{32}$/.test(record.revisionId)))
+        || (record.parent !== undefined
+            && (!record.parent || typeof record.parent !== 'object'
+                || typeof record.parent.name !== 'string'
+                || !/^draft:buffered-intent:[a-f0-9]{32}$/.test(record.parent.name)
+                || record.parent.name === name
+                || !((typeof record.parent.revisionId === 'string'
+                    && /^[a-f0-9]{32}$/.test(record.parent.revisionId)
+                    && record.parent.raw === undefined)
+                    || (typeof record.parent.raw === 'string'
+                        && record.parent.revisionId === undefined))))
         || (record.consentRevision !== undefined
             && (!Number.isSafeInteger(record.consentRevision) || record.consentRevision < 1))) {
         throw new Error('Metadati intenzione bozza non validi: originale conservato.');
     }
     if (validateEpoch) assertWorkoutSnapshotEpoch(owner, record.consentRevision);
-    return { name, raw, value: record.value, revision: record.consentRevision };
+    return { name, raw, value: record.value, revision: record.consentRevision, revisionId: record.revisionId, parent: record.parent };
 }
 
 /** 
@@ -170,6 +185,7 @@ export class BufferedWriterConsumedError extends Error {
 export function writeBufferedWriterIntent(
     name: string, owner: string, draftName: string, value: string,
     expectedRaw: string | null, expectedConsentGeneration?: string | null,
+    parent?: WriterLineageReference,
 ): string {
     if (!name.startsWith(INTENT_PREFIX) || !draftName.startsWith('draft:buffered:')) {
         throw new Error('Identità intenzione bozza non valida.');
@@ -177,14 +193,19 @@ export function writeBufferedWriterIntent(
     const current = readDeviceValueStrict(name, owner);
     if (current === null && expectedRaw !== null) throw new BufferedWriterConsumedError();
     if (current !== expectedRaw) throw new Error('Intenzione bozza modificata esternamente: copia conservata.');
+    let previousParent: WriterLineageReference | undefined;
     if (current !== null) {
         const evidence = parseWriterEvidence(name, owner, current);
         const parsed = JSON.parse(evidence.raw) as BufferedWriterIntent;
         if (parsed.draftName !== draftName) throw new Error('Intenzione bozza associata a un altro campo.');
+        previousParent = evidence.parent;
     }
     const revision = checkConsent(owner, expectedConsentGeneration);
     const raw = JSON.stringify({
         __logbookBufferedWriterIntent: 1, owner, draftName, value,
+        revisionId: newWriterRevisionId(),
+        ...((previousParent ?? (current === null ? parent : undefined))
+            ? { parent: previousParent ?? parent } : {}),
         ...(owner.startsWith('user:') && revision !== undefined ? { consentRevision: revision } : {}),
     } satisfies BufferedWriterIntent);
     writeDeviceValue(name, raw, owner);
