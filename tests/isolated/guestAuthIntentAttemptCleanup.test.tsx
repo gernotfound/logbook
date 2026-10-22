@@ -90,7 +90,7 @@ describe('serialized guest migration intent belongs to an exact Auth attempt', (
         releaseLock();
         await holder;
         await act(async () => {
-            await expect(pending).rejects.toThrow('non più attiva');
+            await expect(pending).rejects.toThrow('non è più attiva');
         });
         expect(signInWithPopup).not.toHaveBeenCalled();
         expect(localStorage.getItem(KEY)).toBeNull();
@@ -176,7 +176,7 @@ describe('serialized guest migration intent belongs to an exact Auth attempt', (
         const original = await beginGuestMigrationIntent('merge', 'email', { email: 'a@example.test' });
         await expect(beginGuestMigrationIntent('skip', 'recovery', {
             uid: 'account-b', assertCurrent: () => false,
-        })).rejects.toThrow('non più attiva');
+        })).rejects.toThrow('non è più attiva');
         expect(JSON.parse(localStorage.getItem(KEY)!).id).toBe(original.id);
     });
 
@@ -194,6 +194,10 @@ describe('serialized guest migration intent belongs to an exact Auth attempt', (
         const reload = vi.spyOn(safeReload, 'safeHardReload').mockRejectedValueOnce(new Error('Bozza locale non verificata'));
         const replicate = vi.spyOn(journal, 'replicateJournal');
         try {
+            // A different tab completed the guest handoff, but this tab still
+            // holds the old guest UI snapshot. Auth/session ownership must now
+            // be authenticated for the strict reload barrier to be reachable.
+            localStorage.removeItem('logbook_is_guest');
             (auth as { currentUser: User | null }).currentUser = user;
             useAppStore.setState({
                 dataOwner: 'guest',
@@ -214,6 +218,7 @@ describe('serialized guest migration intent belongs to an exact Auth attempt', (
             expect(useAppStore.getState().dataOwner).toBe('guest');
             hook.unmount();
         } finally {
+            localStorage.setItem('logbook_is_guest', 'true');
             (auth as { currentUser: User | null }).currentUser = originalUser;
             useAppStore.setState({
                 dataOwner: snapshot.dataOwner,
@@ -322,7 +327,7 @@ describe('serialized guest migration intent belongs to an exact Auth attempt', (
         const originalBytes = localStorage.getItem(KEY);
         release({ data: {}, pending: [] });
         await run;
-        await expect(newAttempt).rejects.toThrow('non più attiva');
+        await expect(newAttempt).rejects.toThrow('non è più attiva');
         expect(localStorage.getItem('logbook_is_guest')).toBeNull();
         expect(localStorage.getItem(KEY)).toBe(originalBytes);
         expect(JSON.parse(originalBytes!).id).toBe(old.id);
