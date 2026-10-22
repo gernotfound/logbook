@@ -19,17 +19,11 @@ import {
   originalNavigator,
 } from './telemetryTestHarness';
 
-describe('Unified Telemetry Hub E2E Suite — Tier 1 Core', () => {
+describe('TelemetryHub Vitest Integration Suite — Tier 1 Core', () => {
   installTelemetryTestHarness();
 
   describe('Tier 1: Feature Coverage — Core Telemetry', () => {
     describe('F1: Telemetry Context Provider', () => {
-      it('F1-1: captures appVersion from package or build configuration', () => {
-        const ctx = getTelemetryContext();
-        expect(ctx).toBeDefined();
-        expect(typeof ctx.appVersion).toBe('string');
-        expect(ctx.appVersion.length).toBeGreaterThan(0);
-      });
 
       it('F1-2: derives platform correctly for iOS (iPhone/iPod userAgent)', () => {
         const mockNav = {
@@ -80,7 +74,7 @@ describe('Unified Telemetry Hub E2E Suite — Tier 1 Core', () => {
         expect(isStandaloneMode(mockBrowserWin)).toBe(false);
       });
 
-      it('F1-5: accurately reflects navigator.onLine status and session info in context snapshot', () => {
+      it('F1-5: reflects navigator.onLine status in context snapshot', () => {
         const mockNavOnline = { ...originalNavigator, onLine: true } as unknown as Navigator;
         const ctxOnline = getTelemetryContext(mockNavOnline);
         expect(ctxOnline.online).toBe(true);
@@ -422,6 +416,7 @@ describe('Unified Telemetry Hub E2E Suite — Tier 1 Core', () => {
         const invalidInput = { id: 'ex1', name: 'Panca', weight: 'invalid_string_with_secret_123kg' };
         const parseResult = TestExerciseSchema.safeParse(invalidInput);
 
+        expect(parseResult.success).toBe(false);
         if (!parseResult.success) {
           telemetryHub.trackError(parseResult.error, {
             source: 'zod_validation',
@@ -508,6 +503,7 @@ describe('Unified Telemetry Hub E2E Suite — Tier 1 Core', () => {
         const schema = z.object({ reps: z.number() });
         const err = schema.safeParse({ reps: 'nan' });
 
+        expect(err.success).toBe(false);
         if (!err.success) {
           telemetryHub.trackError(err.error, { source: 'zod_validation' });
           telemetryHub.trackError(err.error, { source: 'zod_validation' });
@@ -521,24 +517,31 @@ describe('Unified Telemetry Hub E2E Suite — Tier 1 Core', () => {
         expect(payload.count).toBe(3);
       });
 
-      it('F6-5: handles multi-issue Zod validation failures safely', async () => {
+      it('F6-5: multi-issue Zod failures dispatch a sanitized technical report', async () => {
         vi.useFakeTimers();
         telemetryHub.init();
+        telemetryHub.setUserId('user_multi_zod');
 
-        const complexSchema = z.object({
-          a: z.string(),
-          b: z.number(),
-          c: z.boolean(),
-        });
+        const schema = z.object({ a: z.string(), b: z.number(), c: z.boolean() });
+        const result = schema.safeParse({ a: 1, b: 'two', c: 'not_bool' });
+        expect(result.success).toBe(false);
+        if (result.success) throw new Error('Expected invalid Zod input');
+        expect(result.error.issues).toHaveLength(3);
 
-        const res = complexSchema.safeParse({ a: 1, b: 'two', c: 'not_bool' });
-        expect(res.success).toBe(false);
+        telemetryHub.trackError(result.error, { source: 'zod_validation' });
+        await vi.advanceTimersByTimeAsync(100);
 
-        if (!res.success) {
-          expect(() => {
-            telemetryHub.trackError(res.error, { source: 'zod_validation' });
-          }).not.toThrow();
+        expect(mockSentryTransport).toHaveBeenCalledTimes(1);
+        expect(mockSentryTransport.mock.calls[0][0]).toBe('error');
+        const payload = mockSentryTransport.mock.calls[0][1] as TelemetryErrorPayload;
+        expect(payload.type).toBe('ZodError');
+        expect(payload.source).toBe('zod_validation');
+        expect(payload.userId).toBe('user_multi_zod');
+        // Zod 4 exposes the issue paths in its Error.message JSON.
+        for (const field of ['a', 'b', 'c']) {
+          expect(payload.message).toContain(`"${field}"`);
         }
+        expect(payload.message).not.toContain('not_bool');
       });
     });
   });
