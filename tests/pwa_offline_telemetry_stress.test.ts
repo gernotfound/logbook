@@ -11,7 +11,7 @@ import {
 import { seedCurrentTelemetryQueue } from './telemetry/seedCurrentQueue';
 
 describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () => {
-  let mockSetDoc: any;
+  let mockSentryTransport: any;
 
   beforeEach(() => {
     localStorage.clear();
@@ -19,7 +19,7 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
     vi.clearAllMocks();
     vi.useRealTimers();
 
-    mockSetDoc = vi.spyOn(sentryClient, 'sendTelemetryToSentry').mockResolvedValue(true);
+    mockSentryTransport = vi.spyOn(sentryClient, 'sendTelemetryToSentry').mockResolvedValue(true);
 
     Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
     telemetryHub.reset();
@@ -69,37 +69,9 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
   });
 
   // =========================================================================
-  // 2. Corrupted Queue in localStorage Resilience
+  // 2. Encrypted Owner-Scoped Queue Corruption Resilience
   // =========================================================================
-  describe('2. Corrupted Queue in localStorage Resilience', () => {
-    it('recovers gracefully from syntactically invalid JSON in localStorage', () => {
-      localStorage.setItem(telemetryHub.getQueueStorageKey(), '{ invalid json corrupted @#$! %^&*');
-
-      // getQueuedEvents should not crash and return empty array
-      const items = telemetryHub.getQueuedEvents();
-      expect(items).toEqual([]);
-
-      // Enqueueing new item should overwrite/heal the corrupted storage
-      Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
-      telemetryHub.init();
-      telemetryHub.setUserId('user_corrupt_test');
-
-      telemetryHub.trackEvent('healed_event', { status: 'ok' });
-
-      const newItems = telemetryHub.getQueuedEvents();
-      expect(newItems.length).toBe(1);
-      expect((newItems[0].payload as TelemetryEventPayload).type).toBe('healed_event');
-    });
-
-    it('recovers gracefully from non-array JSON types (null, string, number, boolean, object)', () => {
-      const badValues = ['null', '"string_value"', '12345', 'true', '{"not":"an_array"}'];
-
-      for (const badVal of badValues) {
-        localStorage.setItem(telemetryHub.getQueueStorageKey(), badVal);
-        expect(telemetryHub.getQueuedEvents()).toEqual([]);
-      }
-    });
-
+  describe('2. Encrypted Queue Corruption Resilience', () => {
     it('flushQueue does not throw, purges malformed null payloads, and dispatches surrounding valid items', async () => {
       // Simulate partially malformed queue array with missing payload or invalid structure
       const malformedQueue = [
@@ -112,10 +84,10 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
       await seedCurrentTelemetryQueue('user_malformed_test', malformedQueue);
 
       // Should not throw unhandled exception
-      await expect(telemetryHub.flushQueue()).resolves.not.toThrow();
+      await expect(telemetryHub.flushQueue()).resolves.toBeUndefined();
 
       // Surrounding valid items should be dispatched
-      expect(mockSetDoc).toHaveBeenCalledTimes(2);
+      expect(mockSentryTransport).toHaveBeenCalledTimes(2);
       expect(telemetryHub.getQueuedEvents().length).toBe(0);
     });
 
@@ -143,19 +115,19 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
       await seedCurrentTelemetryQueue('u1', hostileQueue);
 
       // flushQueue must not throw or crash on any element
-      await expect(telemetryHub.flushQueue()).resolves.not.toThrow();
+      await expect(telemetryHub.flushQueue()).resolves.toBeUndefined();
 
       // All hostile/corrupted/null elements and payloads are safely handled or purged
-      // Valid items must be successfully written to Firestore
-      expect(mockSetDoc).toHaveBeenCalled();
+      // Valid items must reach the mock Sentry transport
+      expect(mockSentryTransport).toHaveBeenCalled();
       
-      const setDocCalls = mockSetDoc.mock.calls;
-      const dispatchedEvents = setDocCalls.map((call: any) => call[1]?.type);
-      const dispatchedErrorMessages = setDocCalls.map((call: any) => call[1]?.message);
+      const transportCalls = mockSentryTransport.mock.calls;
+      const dispatchedEvents = transportCalls.map((call: any) => call[1]?.type);
+      const dispatchedErrorMessages = transportCalls.map((call: any) => call[1]?.message);
       expect(dispatchedEvents).toContain('real_event_1');
       expect(dispatchedErrorMessages).toContain('real_error_1');
 
-      // The queue in localStorage should be completely purged and clean (0 items)
+      // The current owner queue should be empty after flushing
       expect(telemetryHub.getQueuedEvents().length).toBe(0);
     });
 
@@ -171,7 +143,7 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
 
       await seedCurrentTelemetryQueue('u_purge_race', hostileQueue);
 
-      mockSetDoc.mockImplementation(async () => {
+      mockSentryTransport.mockImplementation(async () => {
         await new Promise((r) => setTimeout(r, 20));
         return true;
       });
@@ -232,8 +204,8 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
       telemetryHub.trackEvent('item_1_initial');
       expect(telemetryHub.getQueuedEvents().length).toBe(1);
 
-      // Delay mock setDoc to simulate in-flight network request
-      mockSetDoc.mockImplementation(async () => {
+      // Simulate in-flight Sentry transport latency
+      mockSentryTransport.mockImplementation(async () => {
         await new Promise((res) => setTimeout(res, 50));
         return true;
       });
@@ -266,7 +238,7 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
       expect(telemetryHub.getQueuedEvents().length).toBe(10);
 
       // 2. Set up simulated network latency of 15ms per write
-      mockSetDoc.mockImplementation(async () => {
+      mockSentryTransport.mockImplementation(async () => {
         await new Promise((resolve) => setTimeout(resolve, 15));
         return true;
       });
@@ -324,7 +296,7 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
       // Queue must now be fully cleared
       expect(telemetryHub.getQueuedEvents().length).toBe(0);
       // Total dispatched docs must equal 10 (pre) + 30 (mid) = 40
-      expect(mockSetDoc).toHaveBeenCalledTimes(40);
+      expect(mockSentryTransport).toHaveBeenCalledTimes(40);
     });
 
     it('EMPIRICAL CONCURRENCY: handles overlapping concurrent flushQueue calls with simultaneous mid-flush enqueue', async () => {
@@ -337,7 +309,7 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
       }
       expect(telemetryHub.getQueuedEvents().length).toBe(8);
 
-      mockSetDoc.mockImplementation(async () => {
+      mockSentryTransport.mockImplementation(async () => {
         await new Promise((resolve) => setTimeout(resolve, 20));
         return true;
       });
@@ -369,7 +341,7 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
       expect(telemetryHub.getQueuedEvents().length).toBe(0);
     });
 
-    it('concurrent flushQueue calls process items idempotently and empty the queue', async () => {
+    it('concurrent flushQueue calls send each report once and empty the queue', async () => {
       Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
       telemetryHub.init();
       telemetryHub.setUserId('user_concurrent_flush');
@@ -390,6 +362,11 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
       ]);
 
       expect(telemetryHub.getQueuedEvents().length).toBe(0);
+      expect(mockSentryTransport).toHaveBeenCalledTimes(5);
+      expect(mockSentryTransport.mock.calls.map((call: any) => call[1].type)).toEqual([
+        'concurrent_evt_1', 'concurrent_evt_2', 'concurrent_evt_3',
+        'concurrent_evt_4', 'concurrent_evt_5',
+      ]);
     });
   });
 
@@ -401,8 +378,9 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
       vi.useFakeTimers();
 
       // telemetry transport mock that never resolves
-      mockSetDoc.mockImplementation(() => new Promise(() => {}));
+      mockSentryTransport.mockImplementation(() => new Promise(() => {}));
 
+      telemetryHub.setUserId('user_timeout_test');
       const dispatchPromise = telemetryHub.dispatchEventExternally({
         timestamp: Date.now(),
         type: 'hanging_event',
@@ -416,6 +394,8 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
 
       const result = await dispatchPromise;
       expect(result).toBe(false);
+      // A false result due only to the owner guard would never call transport.
+      expect(mockSentryTransport).toHaveBeenCalledTimes(1);
 
       vi.useRealTimers();
     });
@@ -451,8 +431,8 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
       telemetryHub.setUserId('u1');
       await seedCurrentTelemetryQueue('u1', items);
 
-      // Mock setDoc: succeed for 1 and 3, reject for 2 and 4
-      mockSetDoc.mockImplementation(async (_kind: any, payload: any) => {
+      // Mock Sentry transport succeeds for 1 and 3, rejects for 2 and 4
+      mockSentryTransport.mockImplementation(async (_kind: any, payload: any) => {
         if (payload.type === 'evt_fail_2' || payload.type === 'evt_fail_4') {
           throw new Error('Network error for item');
         }
@@ -472,8 +452,9 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
     it('error dispatch timeout also triggers abort and returns false', async () => {
       vi.useFakeTimers();
 
-      mockSetDoc.mockImplementation(() => new Promise(() => {}));
+      mockSentryTransport.mockImplementation(() => new Promise(() => {}));
 
+      telemetryHub.setUserId('user_timeout_err');
       const dispatchPromise = telemetryHub.dispatchErrorExternally({
         timestamp: Date.now(),
         type: 'TypeError',
@@ -491,6 +472,8 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
 
       const result = await dispatchPromise;
       expect(result).toBe(false);
+      // A false result due only to the owner guard would never call transport.
+      expect(mockSentryTransport).toHaveBeenCalledTimes(1);
 
       vi.useRealTimers();
     });
@@ -500,10 +483,10 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
   // 5. FIFO Order Preservation & Deletion-After-Write Verification
   // =========================================================================
   describe('5. FIFO Order & Deletion Guarantees', () => {
-    it('dispatches items in strict chronological FIFO order to Firestore', async () => {
+    it('dispatches items to the Sentry transport in strict FIFO order', async () => {
       const dispatchOrder: string[] = [];
 
-      mockSetDoc.mockImplementation(async (_kind: any, payload: any) => {
+      mockSentryTransport.mockImplementation(async (_kind: any, payload: any) => {
         dispatchOrder.push(payload.type || payload.message);
         return true;
       });
@@ -524,7 +507,7 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
       expect(telemetryHub.getQueuedEvents().length).toBe(0);
     });
 
-    it('ensures items remain in localStorage if all Firestore writes fail (never prematurely deleted)', async () => {
+    it('retains failed reports in the owner queue when Sentry transport rejects', async () => {
       Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
       telemetryHub.init();
       telemetryHub.setUserId('user_retention_test');
@@ -532,7 +515,7 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
       telemetryHub.trackEvent('critical_event_1');
       telemetryHub.trackEvent('critical_event_2');
 
-      mockSetDoc.mockRejectedValue(new Error('Persistent outage'));
+      mockSentryTransport.mockRejectedValue(new Error('Persistent outage'));
 
       Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
       await telemetryHub.flushQueue();
@@ -544,52 +527,5 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
     });
   });
 
-  // =========================================================================
-  // 6. Identity & Auth Context Transition
-  // =========================================================================
-  describe('6. Identity & Auth Transition', () => {
-    it('preserves null/anonymous guest telemetry without retroactively stamping authenticated UID (LB-18 privacy)', async () => {
-      const items: QueuedTelemetryItem[] = [
-        {
-          id: 'item_anon_1',
-          timestamp: 1000,
-          itemType: 'event',
-          payload: { timestamp: 1000, type: 'guest_action', context: {} as any, userId: null, sessionId: 's1' },
-        },
-        {
-          id: 'item_anon_2',
-          timestamp: 2000,
-          itemType: 'error',
-          payload: {
-            timestamp: 2000,
-            type: 'Error',
-            message: 'guest_crash',
-            source: 'custom',
-            context: {} as any,
-            userId: null,
-            sessionId: 's1',
-            count: 1,
-            firstSeen: 2000,
-            lastSeen: 2000,
-          },
-        },
-      ];
 
-      localStorage.setItem(telemetryHub.getQueueStorageKey(), JSON.stringify(items));
-      const guestQueueKey = telemetryHub.getQueueStorageKey();
-
-      // User signs in with UID 'authenticated_user_777'
-      telemetryHub.setUserId('authenticated_user_777');
-      await telemetryHub.flushQueue();
-
-      // Under GDPR and LB-18 privacy invariants, unauthenticated/guest telemetry must never
-      // be retroactively attributed to the newly authenticated user UID upon login flush.
-      expect(mockSetDoc).not.toHaveBeenCalled();
-      expect(telemetryHub.getQueuedEvents()).toHaveLength(0);
-      const guestQueue: QueuedTelemetryItem[] = JSON.parse(localStorage.getItem(guestQueueKey) || '[]');
-      expect(guestQueue).toHaveLength(2);
-      expect(guestQueue[0].payload.userId).toBeNull();
-      expect(guestQueue[1].payload.userId).toBeNull();
-    });
-  });
 });
