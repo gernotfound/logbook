@@ -219,7 +219,7 @@ describe('EMPIRICAL CHALLENGER: Pure Math, State & Schema Adversarial Stress Sui
                 // Random session pains (user might report soreness or none)
                 const sessionPains = (i % 2 === 0) ? [exChoice.muscles[0]] : [];
 
-                const healedPains = mergeActivePains(initialPains, [{ exId: exChoice.id }], allExercises, sessionPains);
+                const healedPains = mergeActivePains(initialPains, sessionPains);
 
                 // INVARIANT 1: Result is always a string array
                 expect(Array.isArray(healedPains)).toBe(true);

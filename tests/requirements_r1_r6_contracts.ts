@@ -12,11 +12,4 @@ export const calculateWorkoutVolumeContract = Logic.calculateWorkoutVolume;
 // Share the real calculator invoked by CustomFoodForm; never reimplement it in a test.
 export { calculateCustomFoodKcal as calculateRealtimeKcalContract } from '../src/lib/nutrition/calculateCustomFoodKcal';
 
-export function mergeActivePainsContract(
-    activePains: string[] = [],
-    _sessionExercises: Array<{ exId?: string }> = [],
-    _library: Array<{ id: string; muscles?: string[] }> = [],
-    sessionPains: string[] = []
-): string[] {
-    return Logic.mergeActivePains(activePains, sessionPains);
-}
+export const mergeActivePainsContract = Logic.mergeActivePains;

@@ -466,16 +466,10 @@ export function searchMuscles(query: string, limit: number = 10): Array<{ id: st
 
 export function mergeActivePains(
     activePains: string[] = [],
-    sessionPainsOrLegacyExercises: string[] | Array<{ exId?: string }> = [],
-    _legacyLibrary: Array<{ id: string; muscles?: string[] }> = [],
-    legacySessionPains?: string[]
+    reportedSessionPains: string[] = []
 ): string[] {
     const active = Array.isArray(activePains) ? activePains : [];
-    const sessionPains = legacySessionPains !== undefined
-        ? (Array.isArray(legacySessionPains) ? legacySessionPains : [])
-        : (Array.isArray(sessionPainsOrLegacyExercises)
-            ? sessionPainsOrLegacyExercises.filter((pain): pain is string => typeof pain === 'string')
-            : []);
+    const sessionPains = Array.isArray(reportedSessionPains) ? reportedSessionPains : [];
     const result: string[] = [];
     const seen = new Set<string>();
 
