@@ -133,7 +133,6 @@ it('requires a fresh in-transaction control advance on every business write, inc
     const controlRef = doc(db, 'users/a/sync_control/state');
     const replica = await fencedWrite(db, 'users/a', { profile: { height: '175' } });
     const rootData = (await getDoc(root)).data()!;
-    const control = (await getDoc(controlRef)).data()!;
 
     // The old "advance" action and lastSeq remain stored after commit. That
     // state must not authorize a later standalone business write.
