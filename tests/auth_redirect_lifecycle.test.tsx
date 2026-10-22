@@ -84,6 +84,48 @@ describe('Google redirect lifecycle', () => {
     expect(useAppStore.getState().saveError).toContain('Connessione non disponibile');
   });
 
+  it('does not report a stale launch rejection as failure of a newer Google redirect', async () => {
+    let failOld!: (error: Error) => void;
+    let completeNew!: () => void;
+    const oldLaunch = new Promise<void>((_resolve, reject) => { failOld = reject; });
+    const newLaunch = new Promise<void>(resolve => { completeNew = resolve; });
+    vi.mocked(signInWithRedirect)
+      .mockImplementationOnce(() => oldLaunch)
+      .mockImplementationOnce(() => newLaunch);
+    const { result } = renderHook(() => useAuth(), { wrapper });
+    await act(async () => { await Promise.resolve(); });
+
+    let first!: Promise<void>;
+    await act(async () => {
+      first = result.current.login();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(signInWithRedirect).toHaveBeenCalledTimes(1);
+
+    let second!: Promise<void>;
+    await act(async () => {
+      second = result.current.login();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(signInWithRedirect).toHaveBeenCalledTimes(2);
+    expect(sessionStorage.getItem(REDIRECT_KEY)).toBe('true');
+
+    await act(async () => {
+      failOld(redirectRejected);
+      await first;
+    });
+    expect(sessionStorage.getItem(REDIRECT_KEY)).toBe('true');
+    expect(useAppStore.getState().saveError).toBeNull();
+
+    await act(async () => {
+      completeNew();
+      await second;
+    });
+    expect(sessionStorage.getItem(REDIRECT_KEY)).toBe('true');
+  });
+
   it('ignores a redirect marker written by another tab into shared localStorage', async () => {
     localStorage.setItem(REDIRECT_KEY, 'true');
     sessionStorage.removeItem(REDIRECT_KEY);
