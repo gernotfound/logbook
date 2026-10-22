@@ -93,9 +93,8 @@ export function attachAuthRedirectRecovery({
         if (expectedIntentId) {
             rejectGuestMigrationAuthWaiters(expectedIntentId, 'Ripresa redirect Google non riuscita.');
         }
-        if (recoveringRedirect && isOriginalAttemptCurrent()) {
-            environment.remove(awaitingRedirectKey, capturedAttempt);
-        }
+        if (recoveringRedirect && !isOriginalAttemptCurrent()) return;
+        if (recoveringRedirect) environment.remove(awaitingRedirectKey, capturedAttempt);
         console.error('Ripresa redirect Google non riuscita.');
         setSaveError("Accesso Google non completato. Riprova.");
     }).finally(() => {
