@@ -62,9 +62,16 @@ export function useNutritionMeasurements(selectedDate?: string) {
         setEditingDate(day.date);
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
-    const handleCancelEdit = () => {
-        try { draft.clear(); setEditingDate(null); }
-        catch { /* The storage error is exposed by the shared draft hook. */ }
+    const handleCancelEdit = (): boolean => {
+        try {
+            if (!draft.clear()) return false;
+            setEditingDate(null);
+            return true;
+        } catch {
+            // The shared draft hook reports the storage failure. The editor
+            // must stay open until its persisted recovery copy is dealt with.
+            return false;
+        }
     };
     const handleDeleteMeasurement = async (dateStr: string) => {
         const session = captureSession();

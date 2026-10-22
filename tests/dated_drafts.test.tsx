@@ -1,4 +1,6 @@
-import { act, renderHook } from '@testing-library/react';
+import { act, fireEvent, render, renderHook, screen } from '@testing-library/react';
+import { useState } from 'react';
+import DataView from '../src/components/Data/DataView';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { useNutritionMeasurements } from '../src/hooks/useNutritionMeasurements';
 import { useSleepMeasurements } from '../src/hooks/useSleepMeasurements';
@@ -14,7 +16,7 @@ import {
 import { mockFirebaseAuth } from './setup';
 import { draftRegistry } from '../src/lib/utils/draftRegistry';
 import { UserDataSchema } from '../src/lib/schema';
-import type { SyncResult } from '../src/types';
+import type { DataSubTab, SyncResult } from '../src/types';
 import { useLocalStorage } from '../src/hooks/useLocalStorage';
 import { requireHealthConsentWritable } from '../src/lib/healthConsent';
 const data = (nutrition = {}) => UserDataSchema.parse({ profile: { height: '180', gender: 'M' }, nutrition }) as any;
@@ -734,6 +736,43 @@ it('preserves a dirty sleep form when an unrelated meal is received', () => {
     act(() => useAppStore.setState({ userData: data({ [hook.result.current.selectedDate]: day(hook.result.current.selectedDate, { sleepHours: '08:00', kcal: 2000 }) }) }));
     expect(hook.result.current.sleepHours).toBe('07:30');
 });
+it('stays in the measurement editor when draft cancellation fails and navigates only after retry', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 9, 5, 12, 0, 0));
+    const date = '2026-10-05';
+    const owner = storageOwner();
+    const name = 'draft:measurement:' + date;
+    useAppStore.setState({ userData: data({ [date]: day(date, { weight: 80 }) }), dataOwner: owner });
+
+    const Harness = () => {
+        const [tab, setTab] = useState<DataSubTab>('history');
+        return <DataView subTab={tab} setSubTab={setTab} />;
+    };
+    const view = render(<Harness />);
+    fireEvent.click(screen.getByRole('button', { name: 'Opzioni' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Modifica misurazione' }));
+    expect(view.container.querySelector('#data-panel-measurements')).not.toBeNull();
+    const weight = view.container.querySelector('#measure-weight') as HTMLInputElement;
+    fireEvent.change(weight, { target: { value: '79' } });
+    expect(readFencedDatedDraft(name, owner)?.weight).toBe('79');
+
+    const originalSetItem = vi.mocked(localStorage.setItem).getMockImplementation()!;
+    vi.mocked(localStorage.setItem).mockImplementation((key, value) => {
+        if (key === deviceKey(name, owner)) throw new Error('quota');
+        originalSetItem(key, value);
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Annulla' }));
+    expect(view.container.querySelector('#data-panel-measurements')).not.toBeNull();
+    expect(view.container.querySelector('#data-panel-history')).toBeNull();
+    expect(readFencedDatedDraft(name, owner)?.weight).toBe('79');
+
+    vi.mocked(localStorage.setItem).mockImplementation(originalSetItem);
+    fireEvent.click(screen.getByRole('button', { name: 'Annulla' }));
+    expect(view.container.querySelector('#data-panel-history')).not.toBeNull();
+    expect(readFencedDatedDraft(name, owner)).toBeNull();
+    view.unmount();
+});
+
 it('keeps the in-memory draft and blocks strict reload when storage writes fail', () => {
     const hook = renderHook(() => useNutritionMeasurements('2026-09-11'));
     vi.spyOn(localStorage, 'setItem').mockImplementation(() => { throw new Error('quota'); });
