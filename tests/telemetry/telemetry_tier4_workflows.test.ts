@@ -61,7 +61,7 @@ describe('Unified Telemetry Hub E2E Suite — Tier 4', () => {
       telemetryHub.init();
       telemetryHub.setUserId(null); // Guest mode
 
-      telemetryHub.trackEvent('guest_offline_action', { action: 'view_catalog' });
+      telemetryHub.trackEvent('zod_schema_fallback', { schema: 'profile' });
       const guestBeforeLogin = telemetryHub.getQueuedEvents();
       expect(guestBeforeLogin).toHaveLength(1);
       expect(guestBeforeLogin[0].payload.userId).toBeNull();

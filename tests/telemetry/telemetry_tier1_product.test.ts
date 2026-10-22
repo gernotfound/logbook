@@ -96,7 +96,7 @@ describe('Technical telemetry queue and dispatch — Tier 1', () => {
         });
       });
 
-      it('F9-5: clears local queue buffer only after successful Firestore write dispatch', async () => {
+      it('F9-5: clears its diagnostics queue only after the Sentry transport stub accepts a report', async () => {
         telemetryHub.init();
         telemetryHub.setUserId('user_clear_check');
 
