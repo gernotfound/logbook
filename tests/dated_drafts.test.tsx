@@ -508,6 +508,25 @@ it('rejects business save when a later witness update fails but a previous witne
     hook.unmount();
 });
 
+it('does not create a new writer when an untouched recovered draft is flushed', () => {
+    const owner = storageOwner();
+    const name = 'draft:measurement:2026-09-11';
+    const initial = renderHook(() => useNutritionMeasurements('2026-09-11'));
+    act(() => initial.result.current.setWeight('75'));
+    initial.unmount();
+    const before = readDatedWriterEvidence(owner, name);
+    expect(before).toHaveLength(1);
+    const canonical = readFencedDatedDraftImage(name, owner).raw;
+
+    const recovered = renderHook(() => useNutritionMeasurements('2026-09-11'));
+    expect(recovered.result.current.weight).toBe('75');
+    act(() => draftRegistry.flushAll({ strict: true }));
+    expect(readDatedWriterEvidence(owner, name)).toEqual(before);
+    expect(readFencedDatedDraftImage(name, owner).raw).toBe(canonical);
+    expect(useAppStore.getState().localPersistenceBlocked).toBe(false);
+    recovered.unmount();
+});
+
 it('preserves a mounted old editor\'s next edit when a second confirmed form consumed its witness', async () => {
     const owner = storageOwner();
     const name = 'draft:measurement:2026-09-11';
