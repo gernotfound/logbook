@@ -9,6 +9,8 @@ import {
 import { getTelemetryContext } from '../../src/lib/telemetrySanitizer';
 import { DomainParsers } from '../../src/lib/schema';
 import { protectedDeviceKey } from '../../src/lib/sync/deviceStorage';
+import { isVaultUnlocked } from '../../src/lib/sync/secureArchiveSession';
+import { TelemetryQueueStorage } from '../../src/lib/telemetry/queueStorage';
 import { installTelemetryTestHarness, mockSetDoc } from './telemetryTestHarness';
 import { seedCurrentTelemetryQueue } from './seedCurrentQueue';
 
@@ -477,32 +479,40 @@ describe('Unified Telemetry Hub E2E Suite — Tier 5', () => {
         expect(telemetryHub.getQueuedEvents().length).toBe(0);
       });
 
-      it('T5-15: quota rejection of the actual encrypted queue write retains RAM diagnostics', async () => {
-        Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
-        telemetryHub.init();
-        telemetryHub.setUserId('user_t5_15');
-        await seedCurrentTelemetryQueue('user_t5_15', []);
-
-        const sealedKey = protectedDeviceKey('telemetry_queue', 'user:user_t5_15');
+      it('T5-15: quota failure on encrypted queue persistence preserves RAM reports and prior ciphertext', async () => {
+        const uid = 'user_t5_15';
+        await seedCurrentTelemetryQueue(uid, []);
+        const queue = new TelemetryQueueStorage(() => uid);
+        const sealedKey = protectedDeviceKey('telemetry_queue', 'user:' + uid);
         const originalCiphertext = localStorage.getItem(sealedKey);
         expect(originalCiphertext).toMatch(/^tlb-sealed:v1:/);
+        expect(isVaultUnlocked('user:' + uid)).toBe(true);
 
         const setItemSpy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
           throw new DOMException('The quota has been exceeded.', 'QuotaExceededError');
         });
+        const now = Date.now();
         try {
           expect(() => {
-            telemetryHub.trackError(new Error('Quota error test'));
-            telemetryHub.trackEvent('quota_event_test');
+            queue.enqueueItem('error', {
+              type: 'Error', message: 'Quota error test', source: 'custom',
+              context: getTelemetryContext(), userId: uid, sessionId: 'sess_1',
+              timestamp: now, count: 1, firstSeen: now, lastSeen: now,
+            });
+            queue.enqueueItem('event', {
+              type: 'quota_event_test', context: getTelemetryContext(),
+              userId: uid, sessionId: 'sess_1', timestamp: now,
+            });
           }).not.toThrow();
 
-          expect(setItemSpy.mock.calls.some(call => call[0] === sealedKey)).toBe(true);
-          expect(telemetryHub.getQueuedEvents().map(item => item.itemType)).toEqual(['error', 'event']);
+          // The directly exercised production queue has the matching owner:
+          // this must fail if encryption/write is skipped instead of quota.
+          expect(setItemSpy.mock.calls.filter(call => call[0] === sealedKey).length).toBeGreaterThan(0);
+          expect(queue.getQueuedEvents().map(item => item.itemType)).toEqual(['error', 'event']);
           expect(localStorage.getItem(sealedKey)).toBe(originalCiphertext);
-          expect(localStorage.getItem(telemetryHub.getQueueStorageKey())).toBeNull();
+          expect(localStorage.getItem(queue.getQueueStorageKey())).toBeNull();
         } finally {
           setItemSpy.mockRestore();
-          Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
         }
       });
     });
