@@ -3,7 +3,7 @@ import * as sentryClient from '../../src/lib/sentryClient';
 import * as firebaseLib from '../../src/lib/firebase';
 import { telemetryHub } from '../../src/lib/telemetryHub';
 
-export let mockSetDoc: any;
+export let mockSentryTransport: any;
 export const originalNavigator = { ...globalThis.navigator };
 
 export function installTelemetryTestHarness(): void {
@@ -14,7 +14,7 @@ export function installTelemetryTestHarness(): void {
     vi.useRealTimers();
     Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
 
-    mockSetDoc = vi.spyOn(sentryClient, 'sendTelemetryToSentry').mockResolvedValue(true);
+    mockSentryTransport = vi.spyOn(sentryClient, 'sendTelemetryToSentry').mockResolvedValue(true);
     vi.spyOn(firebaseLib, 'ensureAppCheck').mockResolvedValue({
       success: true,
       appCheck: {} as any,

@@ -15,7 +15,7 @@ import {
 } from '../../src/lib/telemetryHub';
 import {
   installTelemetryTestHarness,
-  mockSetDoc,
+  mockSentryTransport,
   originalNavigator,
 } from './telemetryTestHarness';
 
@@ -164,8 +164,8 @@ describe('Unified Telemetry Hub E2E Suite — Tier 1 Core', () => {
 
         await vi.advanceTimersByTimeAsync(100);
 
-        expect(mockSetDoc).toHaveBeenCalledTimes(1);
-        const payload = mockSetDoc.mock.calls[0][1] as TelemetryErrorPayload;
+        expect(mockSentryTransport).toHaveBeenCalledTimes(1);
+        const payload = mockSentryTransport.mock.calls[0][1] as TelemetryErrorPayload;
         expect(payload.type).toBe('Error');
         expect(payload.message).toContain('Network timeout on workout sync');
         expect(payload.count).toBe(3);
@@ -187,7 +187,7 @@ describe('Unified Telemetry Hub E2E Suite — Tier 1 Core', () => {
 
         await vi.advanceTimersByTimeAsync(100);
 
-        const payload = mockSetDoc.mock.calls[mockSetDoc.mock.calls.length - 1][1] as TelemetryErrorPayload;
+        const payload = mockSentryTransport.mock.calls[mockSentryTransport.mock.calls.length - 1][1] as TelemetryErrorPayload;
         expect(payload.firstSeen).toBe(baseTime);
         expect(payload.lastSeen).toBe(baseTime + 15000);
         expect(payload.count).toBe(2);
@@ -203,9 +203,9 @@ describe('Unified Telemetry Hub E2E Suite — Tier 1 Core', () => {
 
         await vi.advanceTimersByTimeAsync(100);
 
-        expect(mockSetDoc).toHaveBeenCalledTimes(2);
-        const p1 = mockSetDoc.mock.calls[0][1] as TelemetryErrorPayload;
-        const p2 = mockSetDoc.mock.calls[1][1] as TelemetryErrorPayload;
+        expect(mockSentryTransport).toHaveBeenCalledTimes(2);
+        const p1 = mockSentryTransport.mock.calls[0][1] as TelemetryErrorPayload;
+        const p2 = mockSentryTransport.mock.calls[1][1] as TelemetryErrorPayload;
 
         expect(p1.type).toBe('TypeError');
         expect(p2.type).toBe('RangeError');
@@ -221,8 +221,8 @@ describe('Unified Telemetry Hub E2E Suite — Tier 1 Core', () => {
 
         await vi.advanceTimersByTimeAsync(100);
 
-        expect(mockSetDoc).toHaveBeenCalledTimes(1);
-        const payload = mockSetDoc.mock.calls[0][1] as TelemetryErrorPayload;
+        expect(mockSentryTransport).toHaveBeenCalledTimes(1);
+        const payload = mockSentryTransport.mock.calls[0][1] as TelemetryErrorPayload;
 
         expect(payload).toHaveProperty('timestamp');
         expect(payload).toHaveProperty('type', 'Error');
@@ -252,8 +252,8 @@ describe('Unified Telemetry Hub E2E Suite — Tier 1 Core', () => {
 
         await vi.advanceTimersByTimeAsync(100);
 
-        expect(mockSetDoc).toHaveBeenCalledTimes(1);
-        const payload = mockSetDoc.mock.calls[0][1] as TelemetryErrorPayload;
+        expect(mockSentryTransport).toHaveBeenCalledTimes(1);
+        const payload = mockSentryTransport.mock.calls[0][1] as TelemetryErrorPayload;
         expect(payload.source).toBe('react_caught');
         expect(payload.componentStack).toContain('ExerciseList');
       });
@@ -268,8 +268,8 @@ describe('Unified Telemetry Hub E2E Suite — Tier 1 Core', () => {
 
         await vi.advanceTimersByTimeAsync(100);
 
-        expect(mockSetDoc).toHaveBeenCalledTimes(1);
-        const payload = mockSetDoc.mock.calls[0][1] as TelemetryErrorPayload;
+        expect(mockSentryTransport).toHaveBeenCalledTimes(1);
+        const payload = mockSentryTransport.mock.calls[0][1] as TelemetryErrorPayload;
         expect(payload.source).toBe('react_uncaught');
         expect(payload.message).toContain('Fatal root crash in App');
       });
@@ -284,8 +284,8 @@ describe('Unified Telemetry Hub E2E Suite — Tier 1 Core', () => {
 
         await vi.advanceTimersByTimeAsync(100);
 
-        expect(mockSetDoc).toHaveBeenCalledTimes(1);
-        const payload = mockSetDoc.mock.calls[0][1] as TelemetryErrorPayload;
+        expect(mockSentryTransport).toHaveBeenCalledTimes(1);
+        const payload = mockSentryTransport.mock.calls[0][1] as TelemetryErrorPayload;
         expect(payload.source).toBe('react_recoverable');
       });
 
@@ -304,7 +304,7 @@ describe('Unified Telemetry Hub E2E Suite — Tier 1 Core', () => {
 
         await vi.advanceTimersByTimeAsync(100);
 
-        const payload = mockSetDoc.mock.calls[0][1] as TelemetryErrorPayload;
+        const payload = mockSentryTransport.mock.calls[0][1] as TelemetryErrorPayload;
         expect(payload.componentStack).not.toContain('C:\\Users\\example-user');
         expect(payload.componentStack).not.toContain('athlete@gym.it');
         expect(payload.componentStack).toContain('[REDACTED_PATH]');
@@ -318,7 +318,7 @@ describe('Unified Telemetry Hub E2E Suite — Tier 1 Core', () => {
         telemetryHub.trackError(new Error('Root test'), { source: 'react_root' });
         await vi.advanceTimersByTimeAsync(100);
 
-        const payload = mockSetDoc.mock.calls[0][1] as TelemetryErrorPayload;
+        const payload = mockSentryTransport.mock.calls[0][1] as TelemetryErrorPayload;
         expect(payload.source).toBe('react_root');
       });
     });
@@ -340,8 +340,8 @@ describe('Unified Telemetry Hub E2E Suite — Tier 1 Core', () => {
         window.dispatchEvent(errEvent);
         await vi.advanceTimersByTimeAsync(100);
 
-        expect(mockSetDoc).toHaveBeenCalled();
-        const payload = mockSetDoc.mock.calls[0][1] as TelemetryErrorPayload;
+        expect(mockSentryTransport).toHaveBeenCalled();
+        const payload = mockSentryTransport.mock.calls[0][1] as TelemetryErrorPayload;
         expect(payload.type).toMatch(/TypeError|Error/);
         expect(payload.source).toBe('window_error');
       });
@@ -361,8 +361,8 @@ describe('Unified Telemetry Hub E2E Suite — Tier 1 Core', () => {
         window.dispatchEvent(rejectionEvent);
         await vi.advanceTimersByTimeAsync(100);
 
-        expect(mockSetDoc).toHaveBeenCalled();
-        const payload = mockSetDoc.mock.calls[0][1] as TelemetryErrorPayload;
+        expect(mockSentryTransport).toHaveBeenCalled();
+        const payload = mockSentryTransport.mock.calls[0][1] as TelemetryErrorPayload;
         expect(payload.source).toBe('unhandled_rejection');
         expect(payload.message).toContain('Async fetch failed in background');
       });
@@ -382,8 +382,8 @@ describe('Unified Telemetry Hub E2E Suite — Tier 1 Core', () => {
         window.dispatchEvent(stringRejection);
         await vi.advanceTimersByTimeAsync(100);
 
-        expect(mockSetDoc).toHaveBeenCalled();
-        const payload = mockSetDoc.mock.calls[0][1] as TelemetryErrorPayload;
+        expect(mockSentryTransport).toHaveBeenCalled();
+        const payload = mockSentryTransport.mock.calls[0][1] as TelemetryErrorPayload;
         expect(payload.message).toContain('Plain string rejection reason');
       });
 
@@ -431,8 +431,8 @@ describe('Unified Telemetry Hub E2E Suite — Tier 1 Core', () => {
 
         await vi.advanceTimersByTimeAsync(100);
 
-        expect(mockSetDoc).toHaveBeenCalledTimes(1);
-        const payload = mockSetDoc.mock.calls[0][1] as TelemetryErrorPayload;
+        expect(mockSentryTransport).toHaveBeenCalledTimes(1);
+        const payload = mockSentryTransport.mock.calls[0][1] as TelemetryErrorPayload;
         expect(payload.source).toBe('zod_validation');
         expect(payload.message).not.toContain('invalid_string_with_secret_123kg');
         expect(payload.type).toMatch(/ZodError|ValidationError/);
@@ -455,10 +455,10 @@ describe('Unified Telemetry Hub E2E Suite — Tier 1 Core', () => {
         });
         await vi.advanceTimersByTimeAsync(100);
 
-        const eventCall = mockSetDoc.mock.calls.find((call: any) =>
+        const eventCall = mockSentryTransport.mock.calls.find((call: any) =>
           call[0] === 'event' && call[1].type === 'zod_schema_fallback'
         );
-        const errorCall = mockSetDoc.mock.calls.find((call: any) =>
+        const errorCall = mockSentryTransport.mock.calls.find((call: any) =>
           call[0] === 'error' && call[1].source === 'zod_schema_fallback'
         );
         expect(eventCall).toBeDefined();
@@ -471,7 +471,7 @@ describe('Unified Telemetry Hub E2E Suite — Tier 1 Core', () => {
         });
         expect(errorCall).toBeDefined();
         expect(errorCall[1].message).toContain('UserProfileSchema [age]: invalid_type');
-        expect(JSON.stringify(mockSetDoc.mock.calls)).not.toContain('private-value');
+        expect(JSON.stringify(mockSentryTransport.mock.calls)).not.toContain('private-value');
       });
 
       it('F6-3: actual DomainParsers fallback emits a technical error and bounded event metadata', async () => {
@@ -484,10 +484,10 @@ describe('Unified Telemetry Hub E2E Suite — Tier 1 Core', () => {
         expect(typeof parsed).toBe('object');
         await vi.advanceTimersByTimeAsync(100);
 
-        const eventCall = mockSetDoc.mock.calls.find((call: any) =>
+        const eventCall = mockSentryTransport.mock.calls.find((call: any) =>
           call[0] === 'event' && call[1].type === 'zod_schema_fallback'
         );
-        const errorCall = mockSetDoc.mock.calls.find((call: any) =>
+        const errorCall = mockSentryTransport.mock.calls.find((call: any) =>
           call[0] === 'error' && call[1].source === 'zod_schema_fallback'
         );
         expect(eventCall).toBeDefined();
@@ -497,7 +497,7 @@ describe('Unified Telemetry Hub E2E Suite — Tier 1 Core', () => {
         });
         expect(errorCall).toBeDefined();
         expect(errorCall[1].type).toBe('ZodSchemaFallbackError');
-        expect(JSON.stringify(mockSetDoc.mock.calls)).not.toContain('invalid_profile_root');
+        expect(JSON.stringify(mockSentryTransport.mock.calls)).not.toContain('invalid_profile_root');
       });
 
       it('F6-4: deduplicates identical Zod schema validation errors', async () => {
@@ -516,8 +516,8 @@ describe('Unified Telemetry Hub E2E Suite — Tier 1 Core', () => {
 
         await vi.advanceTimersByTimeAsync(100);
 
-        expect(mockSetDoc).toHaveBeenCalledTimes(1);
-        const payload = mockSetDoc.mock.calls[0][1] as TelemetryErrorPayload;
+        expect(mockSentryTransport).toHaveBeenCalledTimes(1);
+        const payload = mockSentryTransport.mock.calls[0][1] as TelemetryErrorPayload;
         expect(payload.count).toBe(3);
       });
 

@@ -4,7 +4,7 @@ import {
   telemetryHub,
   TELEMETRY_QUEUE_CAPACITY,
 } from '../../src/lib/telemetryHub';
-import { installTelemetryTestHarness, mockSetDoc } from './telemetryTestHarness';
+import { installTelemetryTestHarness, mockSentryTransport } from './telemetryTestHarness';
 import { seedCurrentTelemetryQueue } from './seedCurrentQueue';
 
 const RETIRED_GLOBAL_QUEUE_KEY = 'logbook_telemetry_queue';
@@ -91,7 +91,7 @@ describe('Technical telemetry queue and dispatch — Tier 1', () => {
         window.dispatchEvent(new Event('online'));
 
         await vi.waitFor(() => {
-          expect(mockSetDoc).toHaveBeenCalled();
+          expect(mockSentryTransport).toHaveBeenCalled();
           expect(telemetryHub.getQueuedEvents().length).toBe(0);
         });
       });
@@ -116,7 +116,7 @@ describe('Technical telemetry queue and dispatch — Tier 1', () => {
 
         await telemetryHub.flushQueue();
 
-        expect(mockSetDoc).toHaveBeenCalled();
+        expect(mockSentryTransport).toHaveBeenCalled();
         const remaining = localStorage.getItem(telemetryHub.getQueueStorageKey());
         const parsedRemaining = remaining ? JSON.parse(remaining) : [];
         expect(parsedRemaining.length).toBe(0);
@@ -134,7 +134,7 @@ describe('Technical telemetry queue and dispatch — Tier 1', () => {
       });
 
       it('F11-2: Sentry transport timeout does not synchronously interrupt callers', async () => {
-        mockSetDoc.mockImplementation(
+        mockSentryTransport.mockImplementation(
           () => new Promise((_, reject) => setTimeout(() => reject(new Error('Network timeout')), 6000))
         );
 
@@ -147,7 +147,7 @@ describe('Technical telemetry queue and dispatch — Tier 1', () => {
       });
 
       it('F11-3: Sentry transport rejection does not throw to the UI', async () => {
-        mockSetDoc.mockRejectedValue(new Error('FirebaseError: [code=permission-denied]'));
+        mockSentryTransport.mockRejectedValue(new Error('FirebaseError: [code=permission-denied]'));
 
         telemetryHub.init();
         telemetryHub.setUserId('user_perm_denied');
@@ -180,7 +180,7 @@ describe('Technical telemetry queue and dispatch — Tier 1', () => {
         }
 
         await vi.advanceTimersByTimeAsync(100);
-        expect(mockSetDoc).toHaveBeenCalledTimes(20);
+        expect(mockSentryTransport).toHaveBeenCalledTimes(20);
       });
     });
   });
