@@ -614,8 +614,4 @@ describe('Milestone 2: PWA, offline workout and telemetry boundaries', () => {
     });
   });
 
-  // =========================================================================
-  // Diagnostic transport is exercised separately; product funnel helpers were retired.
-  // =========================================================================
-
 });
