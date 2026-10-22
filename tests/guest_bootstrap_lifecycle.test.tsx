@@ -76,6 +76,71 @@ describe('Milestone M2: Guest Bootstrap & Cold Start Lifecycle', () => {
         expect(parseInt(screen.getByTestId('food-count').textContent || '0')).toBe(0);
     });
 
+    it('does not replay a completed guest purge after returning to the login screen', async () => {
+        const { result } = renderHook(() => useAuth(), {
+            wrapper: ({ children }) => <AuthProvider>{children}</AuthProvider>,
+        });
+        await act(async () => { await result.current.loginAsGuest(); });
+        await confirmRealGuestVault();
+        // The shared UI fixture mocks DB.purgeAllLocalUserData; exercise the
+        // production purge to verify the durable retired marker after logout.
+        const purge = vi.spyOn(DB, 'purgeAllLocalUserData')
+            .mockImplementationOnce(owner => purgeRealLocalUserData(owner));
+        await act(async () => { await result.current.logout({ mode: 'normal' }); });
+        expect(purge).toHaveBeenCalledWith('guest');
+
+        const fenceKey = 'logbook:local-purge-fence:v1:guest';
+        expect(result.current.isGuest).toBe(false);
+        expect(localStorage.getItem('logbook_is_guest')).toBeNull();
+        expect(localStorage.getItem(fenceKey)).toBe('purge-complete:v1');
+
+        // The storage fence still rejects direct archive access; only unsolicited
+        // foreground/reconnect replay is inapplicable to a logged-out owner.
+        await expect(useAppStore.getState().flushPendingSyncs()).rejects.toThrow('Pulizia archivio locale non conclusa');
+
+        const flush = vi.spyOn(useAppStore.getState(), 'flushPendingSyncs').mockResolvedValue(undefined);
+        act(() => {
+            window.dispatchEvent(new Event('online'));
+            document.dispatchEvent(new Event('visibilitychange'));
+        });
+        expect(flush).not.toHaveBeenCalled();
+        expect(localStorage.getItem(fenceKey)).toBe('purge-complete:v1');
+    });
+
+    it('does not retry a genuinely incomplete guest purge while logged out', () => {
+        const fenceKey = 'logbook:local-purge-fence:v1:guest';
+        localStorage.setItem(fenceKey, 'purge-in-progress:v1');
+        const flush = vi.spyOn(useAppStore.getState(), 'flushPendingSyncs').mockResolvedValue(undefined);
+
+        act(() => { window.dispatchEvent(new Event('online')); });
+
+        expect(flush).not.toHaveBeenCalled();
+        expect(localStorage.getItem(fenceKey)).toBe('purge-in-progress:v1');
+    });
+
+    it('does not replay an unauthenticated former account owner on reconnect', () => {
+        localStorage.setItem('logbook_authenticated_owner', 'user:former');
+        const flush = vi.spyOn(useAppStore.getState(), 'flushPendingSyncs').mockResolvedValue(undefined);
+
+        act(() => { window.dispatchEvent(new Event('online')); });
+
+        expect(flush).not.toHaveBeenCalled();
+        expect(localStorage.getItem('logbook_authenticated_owner')).toBe('user:former');
+    });
+
+    it('continues to replay a live guest session on reconnect', async () => {
+        const { result } = renderHook(() => useAuth(), {
+            wrapper: ({ children }) => <AuthProvider>{children}</AuthProvider>,
+        });
+        await act(async () => { await result.current.loginAsGuest(); });
+        await confirmRealGuestVault();
+        const flush = vi.spyOn(useAppStore.getState(), 'flushPendingSyncs').mockResolvedValue(undefined);
+
+        act(() => { window.dispatchEvent(new Event('online')); });
+
+        expect(flush).toHaveBeenCalledTimes(1);
+    });
+
     it('does not treat unsupported prelaunch drafts as the new guest archive', async () => {
         const { result } = renderHook(() => useAuth(), {
             wrapper: ({ children }) => <AuthProvider>{children}</AuthProvider>,
