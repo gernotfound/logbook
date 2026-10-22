@@ -130,7 +130,13 @@ export function useDatedDraft<T extends Record<string, string>>(kind: string, da
         if (draft.writerName !== null && draft.writerRaw === null) {
             throw new DatedDraftConflictError();
         }
-        const evidence = traceWriterLineage(readDatedWriterEvidence(draft.session.owner, draft.name));
+        let evidence: DatedWriterEvidence[];
+        try {
+            evidence = traceWriterLineage(readDatedWriterEvidence(draft.session.owner, draft.name));
+        } catch (error) {
+            if (error instanceof DatedDraftConflictError) throw error;
+            throw new DatedDraftConflictError();
+        }
         const expected = [...draft.sourceLineage,
             ...(draft.writerName && draft.writerRaw
                 ? [{ name: draft.writerName, raw: draft.writerRaw }] : [])];
