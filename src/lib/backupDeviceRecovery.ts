@@ -2,8 +2,19 @@ import { readDeviceValueStrict, writeDeviceValue } from './sync/deviceStorage';
 import { draftRegistry } from './utils/draftRegistry';
 
 const MAX_DEVICE_RECOVERY_DRAFTS = 1024;
-const draftKey = (name: string) => name === 'draft_exercise' || name === 'draft_routine'
-    || /^draft:[a-z-]+:[a-zA-Z0-9_.:-]{1,128}$/.test(name);
+// The backup also contains raw, owner/epoch-bound recovery witnesses. Those
+// remain exportable evidence, not portable drafts: never install them into a
+// new device/session merely because their names begin with "draft:".
+const draftKey = (name: string): boolean => {
+    if (name === 'draft_exercise' || name === 'draft_routine') return true;
+    const match = /^draft:([a-z0-9-]+):([a-zA-Z0-9_.:-]{1,128})$/.exec(name);
+    if (!match) return false;
+    const [, kind, target] = match;
+    if (kind === 'pre-session' || kind === 'post-session') return true;
+    if (kind === 'measurement' || kind === 'sleep' || kind === 'activity-steps') return true;
+    if (kind.startsWith('activity-cardio-') && kind.length > 'activity-cardio-'.length) return true;
+    return kind === 'buffered' && /^(input|textarea):[a-zA-Z0-9_.:-]{1,128}$/.test(target);
+};
 const isRecord = (value: unknown): value is Record<string, unknown> =>
     value !== null && typeof value === 'object' && !Array.isArray(value);
 
@@ -16,7 +27,9 @@ interface BackupDeviceDraft {
  * The recovery section is untrusted file content, not a local vault backup.
  * Workouts, timer and the causal envelope cannot be transplanted across
  * storage generations. Only independent drafts are eligible for a guarded
- * no-overwrite restore after the business import.
+ * no-overwrite restore after the business import. In particular, independent
+ * buffered/dated writer intents stay in the raw backup as provenance evidence
+ * and are never counted or installed as portable drafts.
  */
 export function selectBackupDeviceDrafts(recovery: unknown): BackupDeviceDraft[] {
     if (recovery === null || recovery === undefined) return [];

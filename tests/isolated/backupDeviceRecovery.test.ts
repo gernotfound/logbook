@@ -34,39 +34,49 @@ describe('backup device draft recovery', () => {
         expect(storage.flush).toHaveBeenCalledWith({ strict: true });
     });
 
-    it('accepts more than 64 independent writer witnesses without overwriting existing evidence', () => {
-        const device = Object.fromEntries(Array.from({ length: 65 }, (_, index) => [
+    it('excludes every independent buffered witness even when more than 64 exist', () => {
+        const witnesses = Object.fromEntries(Array.from({ length: 65 }, (_, index) => [
             'draft:buffered-intent:' + index.toString(16).padStart(32, '0'),
             JSON.stringify({ __logbookBufferedWriterIntent: 1, owner: 'user:a',
                 draftName: 'draft:buffered:input:workout-' + index + ':notes',
                 consentRevision: 3, value: 'Note ' + index }),
         ]));
+        const device = { ...witnesses, draft_routine: '{"name":"recoverable"}' };
         const drafts = selectBackupDeviceDrafts({ device });
-        expect(drafts).toHaveLength(65);
-        const firstName = drafts[0].name;
-        storage.drafts.set(firstName, '{"newer":"existing copy"}');
-        const result = restoreMissingBackupDeviceDrafts(drafts, 'user:a', () => {});
-        expect(result).toEqual({ restored: 64, preserved: 1 });
-        expect(storage.drafts.get(firstName)).toBe('{"newer":"existing copy"}');
-        expect(storage.drafts.size).toBe(65);
-        expect(storage.flush).toHaveBeenCalledWith({ strict: true });
+        expect(drafts).toEqual([{ name: 'draft_routine', value: '{"name":"recoverable"}' }]);
+        expect(device).toEqual({ ...witnesses, draft_routine: '{"name":"recoverable"}' });
+        expect(restoreMissingBackupDeviceDrafts(drafts, 'user:a', () => {}))
+            .toEqual({ restored: 1, preserved: 0 });
+        expect([...storage.drafts.keys()]).toEqual(['draft_routine']);
+        expect(storage.write).toHaveBeenCalledExactlyOnceWith('draft_routine', '{"name":"recoverable"}', 'user:a');
     });
 
-    it('retains dated independent witnesses in explicit backup recovery without promoting business data', () => {
+    it('keeps dated independent witnesses in the backup but never installs them as portable drafts', () => {
         const dated = JSON.stringify({ __logbookDatedWriterIntent: 1, owner: 'user:a',
             draftName: 'draft:measurement:2026-10-20', consentRevision: 3,
             values: { weight: '75', waist: '85' } });
-        const drafts = selectBackupDeviceDrafts({ device: {
+        const device = {
             'draft:dated-intent:00000000000000000000000000000001': dated,
             'draft:dated-intent:00000000000000000000000000000002': dated,
-        } });
-        expect(drafts).toHaveLength(2);
-        storage.drafts.set(drafts[0].name, 'existing owner evidence');
-        const result = restoreMissingBackupDeviceDrafts(drafts, 'user:a', () => {});
-        expect(result).toEqual({ restored: 1, preserved: 1 });
-        expect(storage.write).toHaveBeenCalledExactlyOnceWith(drafts[1].name, dated, 'user:a');
-        expect(storage.drafts.get(drafts[0].name)).toBe('existing owner evidence');
-        expect(storage.drafts.has('draft:measurement:2026-10-20')).toBe(false);
+            'draft:measurement:2026-10-20': '{"weight":"75"}',
+        };
+        const drafts = selectBackupDeviceDrafts({ device });
+        expect(drafts).toEqual([{ name: 'draft:measurement:2026-10-20', value: '{"weight":"75"}' }]);
+        expect(restoreMissingBackupDeviceDrafts(drafts, 'user:a', () => {}))
+            .toEqual({ restored: 1, preserved: 0 });
+        expect(storage.drafts.has('draft:dated-intent:00000000000000000000000000000001')).toBe(false);
+        expect(storage.drafts.has('draft:dated-intent:00000000000000000000000000000002')).toBe(false);
+        expect(device['draft:dated-intent:00000000000000000000000000000001']).toBe(dated);
+    });
+
+    it('refuses a technical witness even when passed directly to the restore function', () => {
+        for (const name of ['draft:buffered-intent:' + 'a'.repeat(32), 'draft:dated-intent:' + 'b'.repeat(32),
+            'draft:unknown-intent:' + 'c'.repeat(32)]) {
+            expect(() => restoreMissingBackupDeviceDrafts([{ name, value: '{}' }], 'user:a', () => {}))
+                .toThrow('Chiave bozza non autorizzata');
+        }
+        expect(storage.read).not.toHaveBeenCalled();
+        expect(storage.write).not.toHaveBeenCalled();
     });
 
     it('rejects malformed or oversized draft bytes before any write', () => {

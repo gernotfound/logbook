@@ -35,7 +35,7 @@ afterEach(() => vi.unstubAllGlobals());
 
 it('preserves business import when optional device recovery exceeds its bounded limit', () => {
     const device = Object.fromEntries(Array.from({ length: 1025 }, (_, index) => [
-        'draft:buffered-intent:' + index.toString(16).padStart(32, '0'), '{}',
+        'draft:activity-cardio-cardio' + index + ':2026-10-04', '{"duration":"20"}',
     ]));
     const original = createBackup(parse({ profile: { height: '175' } }), 'user:a',
         { scope: 'device', months: [] }, { device });
@@ -43,6 +43,20 @@ it('preserves business import when optional device recovery exceeds its bounded 
     expect(decoded.data).toMatchObject({ profile: { height: '175' } });
     expect(decoded.deviceDrafts).toEqual([]);
     expect(decoded.deviceDraftRecoveryWarning).toContain('troppe bozze');
+    expect((original.recovery as { device: Record<string, string> }).device).toEqual(device);
+});
+
+
+it('does not count raw independent witnesses against optional portable-draft recovery limits', () => {
+    const witnesses = Object.fromEntries(Array.from({ length: 1025 }, (_, index) => [
+        'draft:buffered-intent:' + index.toString(16).padStart(32, '0'), '{}',
+    ]));
+    const device = { ...witnesses, draft_routine: '{"name":"restorable"}' };
+    const original = createBackup(parse({ profile: { height: '175' } }), 'user:a',
+        { scope: 'device', months: [] }, { device });
+    const decoded = decodeImport(original, 'user:a');
+    expect(decoded.deviceDrafts).toEqual([{ name: 'draft_routine', value: '{"name":"restorable"}' }]);
+    expect(decoded.deviceDraftRecoveryWarning).toBeNull();
     expect((original.recovery as { device: Record<string, string> }).device).toEqual(device);
 });
 
