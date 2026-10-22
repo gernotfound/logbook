@@ -245,7 +245,7 @@ export const Exporter = {
                     ? '\nIl backup è parziale: storico e nutrizione non presenti nel file saranno conservati.'
                     : '') +
                 (decoded.ownerUnknown ? '\nIl backup non identifica un proprietario. Conferma solo se questi dati sono tuoi.' : '') +
-                (decoded.hasDeviceRecovery ? '\nIl file contiene dati di recupero. Le bozze valide possono essere ripristinate separatamente e, se possibile, anche l’allenamento interrotto con timer in pausa. Il journal causale originale NON viene trapiantato; conserva il backup.' : '') +
+                (decoded.hasDeviceRecovery ? '\nIl file contiene dati di recupero. Le bozze valide possono essere ripristinate separatamente e, se possibile, anche l’allenamento interrotto con timer in pausa. Le testimonianze tecniche degli editor e il journal causale originale restano esclusivamente nel backup e NON vengono trapiantati; conserva il file originale.' : '') +
                 (decoded.deviceDraftRecoveryWarning
                     ? '\nATTENZIONE: ' + decoded.deviceDraftRecoveryWarning +
                       ' Le bozze del file NON saranno ripristinate in questa importazione. Il backup originale rimane indispensabile per un recupero successivo; i dati principali possono essere importati separatamente.'
