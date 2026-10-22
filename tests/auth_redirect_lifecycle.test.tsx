@@ -84,6 +84,49 @@ describe('Google redirect lifecycle', () => {
     expect(useAppStore.getState().saveError).toContain('Connessione non disponibile');
   });
 
+  it('does not report a stale launch rejection as failure of a newer Google redirect', async () => {
+    let failOld!: (error: Error) => void;
+    // Firebase signInWithRedirect returns Promise<never>: a successful
+    // browser navigation does not settle its initiating JS call.
+    const oldLaunch = new Promise<never>((_resolve, reject) => { failOld = reject; });
+    const newLaunch = new Promise<never>(() => {});
+    vi.mocked(signInWithRedirect)
+      .mockImplementationOnce(() => oldLaunch)
+      .mockImplementationOnce(() => newLaunch);
+    const { result } = renderHook(() => useAuth(), { wrapper });
+    await act(async () => { await Promise.resolve(); });
+
+    let first!: Promise<void>;
+    await act(async () => {
+      first = result.current.login();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(signInWithRedirect).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      void result.current.login();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(signInWithRedirect).toHaveBeenCalledTimes(2);
+    expect(sessionStorage.getItem(REDIRECT_KEY)).toBe('true');
+    const newerAttempt = sessionStorage.getItem('logbook_awaiting_redirect_attempt');
+    expect(newerAttempt).toMatch(/^[a-f0-9]{32}$/);
+
+    await act(async () => {
+      failOld(redirectRejected);
+      await first;
+    });
+    expect(sessionStorage.getItem(REDIRECT_KEY)).toBe('true');
+    expect(sessionStorage.getItem('logbook_awaiting_redirect_attempt')).toBe(newerAttempt);
+    expect(useAppStore.getState().saveError).toBeNull();
+
+    // The newer redirect remains in flight and retains its marker; it must
+    // not be artificially resolved (real SDK return type is Promise<never>).
+    expect(sessionStorage.getItem(REDIRECT_KEY)).toBe('true');
+  });
+
   it('ignores a redirect marker written by another tab into shared localStorage', async () => {
     localStorage.setItem(REDIRECT_KEY, 'true');
     sessionStorage.removeItem(REDIRECT_KEY);
@@ -162,6 +205,7 @@ describe('Google redirect lifecycle', () => {
 
     const originalSetItem = sessionStorageMock.setItem.getMockImplementation();
     sessionStorageMock.setItem
+      .mockImplementationOnce((key, value) => originalSetItem?.(key, value))
       .mockImplementationOnce((key, value) => originalSetItem?.(key, value))
       .mockImplementationOnce(() => {
         throw new Error('storage write blocked');

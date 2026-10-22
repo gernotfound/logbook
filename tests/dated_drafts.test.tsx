@@ -13,6 +13,7 @@ import {
     createDatedWriterIntentName, inspectDatedRecoveryEvidence, readDatedWriterEvidence,
     writeDatedWriterIntent,
 } from '../src/lib/sync/datedDraftWriterIntent';
+import { writerParentReference } from '../src/lib/sync/writerLineage';
 import { mockFirebaseAuth } from './setup';
 import { draftRegistry } from '../src/lib/utils/draftRegistry';
 import { UserDataSchema } from '../src/lib/schema';
@@ -508,6 +509,81 @@ it('rejects business save when a later witness update fails but a previous witne
     expect(readFencedDatedDraft(name, owner)?.weight).toBe('75');
     expect(() => draftRegistry.flushAll({ strict: true })).toThrow('bozze');
     hook.unmount();
+});
+
+it('recovers several sequential dated edits after crashes without confusing lineage with concurrency', async () => {
+    const owner = storageOwner();
+    const name = 'draft:measurement:2026-09-11';
+    const original = renderHook(() => useNutritionMeasurements('2026-09-11'));
+    act(() => original.result.current.setWeight('75'));
+    original.unmount();
+
+    const firstRecovery = renderHook(() => useNutritionMeasurements('2026-09-11'));
+    expect(firstRecovery.result.current.weight).toBe('75');
+    act(() => firstRecovery.result.current.setWeight('76'));
+    expect(useAppStore.getState().localPersistenceBlocked).toBe(false);
+    expect(readDatedWriterEvidence(owner, name)).toHaveLength(2);
+    firstRecovery.unmount();
+
+    const secondRecovery = renderHook(() => useNutritionMeasurements('2026-09-11'));
+    expect(secondRecovery.result.current.weight).toBe('76');
+    act(() => secondRecovery.result.current.setWeight('77'));
+    expect(useAppStore.getState().localPersistenceBlocked).toBe(false);
+    expect(readDatedWriterEvidence(owner, name)).toHaveLength(3);
+    secondRecovery.unmount();
+
+    const dispatch = vi.fn().mockResolvedValue({ ok: true, status: 'synced' } as SyncResult);
+    useAppStore.setState({ dispatchDomainOperation: dispatch });
+    const confirmed = renderHook(() => useNutritionMeasurements('2026-09-11'));
+    expect(confirmed.result.current.weight).toBe('77');
+    await act(async () => { await confirmed.result.current.calculateAndSave(); });
+    expect(dispatch).toHaveBeenCalledTimes(1);
+    expect(readFencedDatedDraft(name, owner)).toBeNull();
+    expect(readDatedWriterEvidence(owner, name)).toEqual([]);
+    confirmed.unmount();
+});
+
+it('rejects sibling dated successors rather than adopting a concurrent shared draft', () => {
+    const owner = storageOwner();
+    const name = 'draft:measurement:2026-09-11';
+    const original = renderHook(() => useNutritionMeasurements('2026-09-11'));
+    act(() => original.result.current.setWeight('75'));
+    original.unmount();
+    const [source] = readDatedWriterEvidence(owner, name);
+    const parent = writerParentReference(source);
+    const a = createDatedWriterIntentName();
+    const b = createDatedWriterIntentName();
+    writeDatedWriterIntent(a, owner, name, { weight: '76' }, null, undefined, parent);
+    writeDatedWriterIntent(b, owner, name, { weight: '77' }, null, undefined, parent);
+    const before = readFencedDatedDraftImage(name, owner).raw;
+    writeFencedDatedDraft(name, owner, { weight: '77' }, before);
+
+    const recovery = renderHook(() => useNutritionMeasurements('2026-09-11'));
+    expect(recovery.result.current.weight).toBe('');
+    expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
+    expect(readDatedWriterEvidence(owner, name)).toHaveLength(3);
+    recovery.unmount();
+});
+
+it('fails closed when a dated successor references a missing predecessor', () => {
+    const owner = storageOwner();
+    const name = 'draft:measurement:2026-09-11';
+    const original = renderHook(() => useNutritionMeasurements('2026-09-11'));
+    act(() => original.result.current.setWeight('75'));
+    original.unmount();
+    const [source] = readDatedWriterEvidence(owner, name);
+    const next = createDatedWriterIntentName();
+    writeDatedWriterIntent(next, owner, name, { weight: '76' },
+        null, undefined, writerParentReference(source));
+    writeFencedDatedDraft(name, owner, { weight: '76' },
+        readFencedDatedDraftImage(name, owner).raw);
+    localStorage.removeItem(deviceKey(source.name, owner));
+
+    const recovery = renderHook(() => useNutritionMeasurements('2026-09-11'));
+    expect(recovery.result.current.weight).toBe('');
+    expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
+    expect(readDatedWriterEvidence(owner, name)).toHaveLength(1);
+    recovery.unmount();
 });
 
 it('does not create a new writer when an untouched recovered draft is flushed', () => {
