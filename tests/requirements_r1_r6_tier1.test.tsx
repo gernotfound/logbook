@@ -657,10 +657,10 @@ describe('TheLogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => 
                 );
 
                 const chestPath = container.querySelector('[data-muscle-path="chest-upper-left"]');
-                if (chestPath) {
-                    fireEvent.click(chestPath);
-                    expect(mockToggle).toHaveBeenCalledTimes(1);
-                }
+                expect(chestPath).not.toBeNull();
+                fireEvent.click(chestPath!);
+                expect(mockToggle).toHaveBeenCalledTimes(1);
+                expect(mockToggle).toHaveBeenCalledWith(expect.any(String));
             });
 
             it('T1.5.5: SessionRatings renders post-workout rating fields (mood, pump, fatigue, water)', () => {
@@ -692,17 +692,7 @@ describe('TheLogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => 
                 expect(screen.getByText('TheLogBook')).toBeDefined();
             });
 
-            it('T1.5.7: toggling muscle adds it if absent, removes it if present in activePains state', () => {
-                let pains = ['petto'];
-                const toggle = (m: string) => {
-                    pains = pains.includes(m) ? pains.filter(p => p !== m) : [...pains, m];
-                };
 
-                toggle('dorso');
-                expect(pains).toEqual(['petto', 'dorso']);
-                toggle('petto');
-                expect(pains).toEqual(['dorso']);
-            });
         });
 
         // ---------------------------------------------------------------------
