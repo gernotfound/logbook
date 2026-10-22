@@ -2,10 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as sentryClient from '../src/lib/sentryClient';
 import {
   telemetryHub,
-  TELEMETRY_QUEUE_CAPACITY,
   type TelemetryErrorPayload,
-  type TelemetryEventPayload,
-  type QueuedTelemetryItem,
 } from '../src/lib/telemetryHub';
 
 describe('Empirical Challenger 2: Telemetry Offline Queueing, Capacity & Online Flush Stress Suite', () => {
@@ -173,6 +170,7 @@ describe('Empirical Challenger 2: Telemetry Offline Queueing, Capacity & Online 
 
       expect(dispatchedDocs.map(item => item.data.message))
         .toEqual(['Report 1', 'Report 3', 'Report 2', 'Report 4']);
+      expect(dispatchedDocs.every(item => item.kind === 'error')).toBe(true);
       expect(telemetryHub.getQueuedEvents()).toHaveLength(0);
     });
 
@@ -205,12 +203,13 @@ describe('Empirical Challenger 2: Telemetry Offline Queueing, Capacity & Online 
       await telemetryHub.flushQueue();
       expect(dispatchedDocs.map(item => item.data.message))
         .toEqual(['Initial 1', 'Initial 2', 'In-flight 3']);
+      expect(dispatchedDocs.every(item => item.kind === 'error')).toBe(true);
       expect(telemetryHub.getQueuedEvents()).toHaveLength(0);
     });
   });
 
   // =========================================================================
-  // 4. Guest / Anonymous to Authenticated User ID Migration upon Login
+  // 4. Guest / Anonymous Owner Isolation upon Authentication Change
   // =========================================================================
   describe('4. Guest / Anonymous User ID Isolation upon Login Flush (LB-18 Privacy)', () => {
 
@@ -229,6 +228,7 @@ describe('Empirical Challenger 2: Telemetry Offline Queueing, Capacity & Online 
 
       // User authenticates
       telemetryHub.setUserId('authenticated_user_abc');
+      expect(telemetryHub.getQueueStorageKey()).not.toBe(anonymousQueueKey);
       Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
 
       await telemetryHub.flushQueue();
@@ -245,7 +245,7 @@ describe('Empirical Challenger 2: Telemetry Offline Queueing, Capacity & Online 
   // =========================================================================
   describe('5. Hostile Edge Cases & Defensive Invariants', () => {
 
-    it('5.3: Sanitizes nested PII, API tokens, and emails in offline queued payloads before storage', () => {
+    it('5.3: sanitizes API keys, emails and paths in offline error reports', () => {
       Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
       telemetryHub.init();
 
