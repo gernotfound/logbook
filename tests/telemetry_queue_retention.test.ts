@@ -243,6 +243,42 @@ describe('Offline technical telemetry data minimization', () => {
       .map((item: QueuedTelemetryItem) => item.id)).toEqual(['durable', 'volatile']);
   });
 
+  it('preserves another tab\'s appended events when a previously persisted tab queues again', () => {
+    const firstTab = new TelemetryQueueStorage(() => 'owner-a');
+    const secondTab = new TelemetryQueueStorage(() => 'owner-a');
+    firstTab.enqueueItem('event', { ...queued('a', Date.now()).payload, id: 'a' });
+    secondTab.enqueueItem('event', { ...queued('b', Date.now()).payload, id: 'b' });
+
+    firstTab.enqueueItem('event', { ...queued('c', Date.now()).payload, id: 'c' });
+
+    expect(new TelemetryQueueStorage(() => 'owner-a').getQueuedEvents()
+      .map(item => item.id)).toEqual(['a', 'b', 'c']);
+    expect(firstTab.getQueuedEvents().map(item => item.id)).toEqual(['a', 'b', 'c']);
+  });
+
+  it('does not resurrect events removed by another tab before the next enqueue', () => {
+    const firstTab = new TelemetryQueueStorage(() => 'owner-a');
+    const secondTab = new TelemetryQueueStorage(() => 'owner-a');
+    firstTab.enqueueItem('event', { ...queued('delivered', Date.now()).payload, id: 'delivered' });
+    secondTab.replaceQueue([]);
+    expect(new TelemetryQueueStorage(() => 'owner-a').getQueuedEvents()).toEqual([]);
+
+    firstTab.enqueueItem('event', { ...queued('fresh', Date.now()).payload, id: 'fresh' });
+    expect(new TelemetryQueueStorage(() => 'owner-a').getQueuedEvents()
+      .map(item => item.id)).toEqual(['fresh']);
+  });
+
+  it('refreshes a persisted cache on read without erasing another tab\'s new encrypted report', () => {
+    const firstTab = new TelemetryQueueStorage(() => 'owner-a');
+    firstTab.enqueueItem('event', { ...queued('old', Date.now()).payload, id: 'old' });
+    const secondTab = new TelemetryQueueStorage(() => 'owner-a');
+    secondTab.enqueueItem('event', { ...queued('new', Date.now()).payload, id: 'new' });
+    const durable = readEncryptedTelemetry('user:owner-a');
+
+    expect(firstTab.getQueuedEvents().map(item => item.id)).toEqual(['old', 'new']);
+    expect(readEncryptedTelemetry('user:owner-a')).toBe(durable);
+  });
+
   it('does not overwrite another tab\'s newer durable queue after a successful local save', () => {
     const firstTab = new TelemetryQueueStorage(() => 'owner-a');
     firstTab.enqueueItem('event', { ...queued('first', Date.now()).payload, id: 'first' });
