@@ -108,7 +108,7 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
             expect(updatedDay.fat).toBe(6);
         });
 
-        it('T3.3: DOMS Pain Tracking in Home -> Workout Session -> Explicit Persistence on Completion (R5 + R6)', () => {
+        it('T3.3: DOMS merge preserves pains before the state update (R5 + R6)', () => {
             // Initial state: User has DOMS in 'petto' and 'bicipiti'
             const initialUserData: any = {
                 ...defaultMockUserData,
@@ -119,15 +119,9 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
             };
 
             // User performs Bench Press (Primary: petto)
-            const sessionExercises = [{ exId: 'ex_bench' }];
             const sessionRatingsPains: string[] = []; // User notes chest pain is gone!
 
-            const newActivePains = mergeActivePainsContract(
-                initialUserData.activePains,
-                sessionExercises,
-                initialUserData.library,
-                sessionRatingsPains
-            );
+            const newActivePains = mergeActivePainsContract(initialUserData.activePains, sessionRatingsPains);
 
             // 'petto' was trained and not re-selected -> preserved explicitly. 'bicipiti' was untrained -> retained.
             expect(newActivePains).toEqual(['petto', 'bicipiti']);
@@ -177,7 +171,7 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
             // 2. DOMS persistence: initial pain was 'dorso', user experienced new 'bicipiti' soreness
             const initialPains = ['dorso'];
             const sessionPains = ['bicipiti']; // Dorso unselected, bicipiti selected
-            const updatedPains = mergeActivePainsContract(initialPains, session.exercises, library, sessionPains);
+            const updatedPains = mergeActivePainsContract(initialPains, sessionPains);
             expect(updatedPains).toEqual(['dorso', 'bicipiti']);
 
             // 3. Post-workout snack auto-calculated kcal
@@ -223,7 +217,7 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
             // Explicit persistence: active pains were 'petto', 'quadricipiti', 'polpacci'
             // User re-selected 'petto' in session pains, left 'quadricipiti' empty
             const activePains = ['petto', 'quadricipiti', 'polpacci'];
-            const resolvedPains = mergeActivePainsContract(activePains, session.exercises, library, ['petto']);
+            const resolvedPains = mergeActivePainsContract(activePains, ['petto']);
             // 'petto' retained because reselected
             // 'quadricipiti' healed because trained as primary and not reselected
             // 'polpacci' retained because untrained
