@@ -101,7 +101,7 @@ async function fencedWrite(db: any, path: string, business: Record<string, unkno
             ...control.replicas,
             [activeReplica.slot]: { ...currentEntry, lastSeq: seq },
         },
-        mutation: { slot: activeReplica.slot, action: 'advance' },
+        mutation: { slot: activeReplica.slot, action: 'advance', batchId: `test-${crypto.randomUUID()}` },
     });
     batch.set(doc(db, path), {
         ...business,
@@ -125,6 +125,41 @@ it('allows only Protocol 3 fenced owner writes and denies direct root deletion',
     await fencedWrite(db, 'users/a', { profile: { height: '176' }, nutritionPlanningOrigin: 'user-edited' }, replica);
     expect((await assertSucceeds(getDoc(ref))).data()?.profile.height).toBe('176');
     await assertFails(deleteDoc(ref));
+});
+
+it('requires a fresh in-transaction control advance on every business write, including replay', async () => {
+    const db = asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore());
+    const root = doc(db, 'users/a');
+    const controlRef = doc(db, 'users/a/sync_control/state');
+    const replica = await fencedWrite(db, 'users/a', { profile: { height: '175' } });
+    const rootData = (await getDoc(root)).data()!;
+    const control = (await getDoc(controlRef)).data()!;
+
+    // The old "advance" action and lastSeq remain stored after commit. That
+    // state must not authorize a later standalone business write.
+    await assertFails(setDoc(root, { ...rootData, profile: { height: '999' } }));
+    for (const collection of ['history_months', 'nutrition_months']) {
+        const ref = doc(db, `users/a/${collection}/2026-09`);
+        await fencedWrite(db, ref.path, {}, replica);
+        const month = (await getDoc(ref)).data()!;
+        await assertFails(setDoc(ref, month));
+    }
+
+    const latestControl = (await getDoc(controlRef)).data()!;
+    const unchangedControlBatch = writeBatch(db);
+    unchangedControlBatch.set(controlRef, latestControl);
+    unchangedControlBatch.set(root, { ...rootData, profile: { height: '999' } });
+    await assertFails(unchangedControlBatch.commit());
+
+    // After a lost ack, lastSeq may legitimately stay unchanged, but the
+    // replay must publish a distinct batch ID atomically with its document.
+    const replay = writeBatch(db);
+    replay.set(controlRef, { ...latestControl,
+        mutation: { slot: replica.slot, action: 'advance', batchId: `replay-${crypto.randomUUID()}` } });
+    replay.set(root, rootData);
+    await assertSucceeds(replay.commit());
+    await assertFails(setDoc(root, { ...rootData, profile: { height: '999' } }));
+    expect((await getDoc(root)).data()?.profile.height).toBe('175');
 });
 
 it('rejects markerless or unfenced business writes while allowing the current first-account baseline', async () => {
@@ -167,7 +202,7 @@ it('denies client-side monthly physical deletion before and after Protocol 3 reg
             ...control.replicas,
             s00: { ...control.replicas.s00, lastSeq: control.replicas.s00.lastSeq + 1 },
         },
-        mutation: { slot: 's00', action: 'advance' },
+        mutation: { slot: 's00', action: 'advance', batchId: `test-${crypto.randomUUID()}` },
     });
     forgedDeleteBatch.delete(monthRef);
 
@@ -353,7 +388,7 @@ it('rejects malformed sync envelopes while allowing the current structural contr
                 ...control.replicas,
                 s00: { ...control.replicas.s00, lastSeq: seq },
             },
-            mutation: { slot: 's00', action: 'advance' },
+            mutation: { slot: 's00', action: 'advance', batchId: `test-${crypto.randomUUID()}` },
         });
         batch.set(root, { profile: { name }, _schemaVersion: 1, _sync: sync });
         await batch.commit();
@@ -392,7 +427,7 @@ it('rejects unknown causal clock actors on fenced root and monthly writes withou
         batch.set(controlRef, {
             ...control,
             replicas: { ...control.replicas, [replica.slot]: { ...entry, lastSeq: seq } },
-            mutation: { slot: replica.slot, action: 'advance' },
+            mutation: { slot: replica.slot, action: 'advance', batchId: `test-${crypto.randomUUID()}` },
         });
         batch.set(doc(db, path), {
             ...business,
@@ -433,7 +468,7 @@ it('rejects unsafe Protocol 3 clock coordinates in otherwise fenced business wri
         batch.set(controlRef, {
             ...control,
             replicas: { ...control.replicas, [replica.slot]: { ...entry, lastSeq: seq } },
-            mutation: { slot: replica.slot, action: 'advance' },
+            mutation: { slot: replica.slot, action: 'advance', batchId: `test-${crypto.randomUUID()}` },
         });
         batch.set(doc(db, 'users/a'), {
             profile: { height: '175' },

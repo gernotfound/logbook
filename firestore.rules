@@ -152,6 +152,9 @@ service cloud.firestore {
         && control.mutation is map
         && control.mutation.action == 'advance'
         && control.mutation.slot == writer.slot
+        // A prior advance does not authorize a new write. The nonce must
+        // change in the same atomic request as the business document.
+        && control.mutation.batchId != get(/databases/$(database)/documents/users/$(userId)/sync_control/state).data.mutation.get('batchId', '')
         && matchesConsentEpoch(userId, writer)
         && matchesConsentEpoch(userId, control)
         && writer.slot in control.replicas
@@ -243,7 +246,13 @@ service cloud.firestore {
           's08','s09','s10','s11','s12','s13','s14','s15'
         ])
         && data.mutation is map
-        && data.mutation.keys().hasOnly(['slot', 'action'])
+        && data.mutation.keys().hasOnly(['slot', 'action', 'batchId'])
+        && (data.mutation.action == 'advance'
+          ? ('batchId' in data.mutation
+            && data.mutation.batchId is string
+            && data.mutation.batchId.size() >= 16
+            && data.mutation.batchId.size() <= 128)
+          : !('batchId' in data.mutation))
         && isReplicaSlot(data.mutation.slot)
         && (
           data.mutation.action == 'register'
@@ -311,6 +320,7 @@ service cloud.firestore {
             && newData.mutation.action == 'advance'
             && oldData.replicas[slot].status == 'active'
             && oldData.replicas[slot].leaseUntilMs >= request.time.toMillis()
+            && newData.mutation.batchId != oldData.mutation.get('batchId', '')
             && next.diff(oldData.replicas[slot]).affectedKeys().hasOnly(['lastSeq'])
             && next.lastSeq >= oldData.replicas[slot].lastSeq
           )
