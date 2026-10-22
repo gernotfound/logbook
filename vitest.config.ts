@@ -28,7 +28,9 @@ export default defineConfig({
       '**/tests-e2e/**',
       '**/teamwork_projects/**',
       '**/.agents/**',
-      '**/tests/isolated/**',
+      // Node-only isolated .test.ts suites have a separate runner. React
+      // .test.tsx suites in the same directory must run here under jsdom.
+      '**/tests/isolated/**/*.test.ts',
       '**/tests/emulator/**',
       '**/tests/fuzz/**',
       '**/tests/recovery/**',

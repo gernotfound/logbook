@@ -17,6 +17,8 @@ Gerarchia corrente:
 
 La parallelizzazione riguarda l'orchestrazione, non la semantica del gate. Unit, integration, isolated, fuzz, recovery, GC, hardening, stress, Firestore Rules emulator, Playwright, build e controlli M7/M8 restano obbligatori.
 
+**MUST:** le suite Node di `tests/isolated/**/*.test.ts` girano con `vitest.isolated.config.ts`; le suite React `tests/isolated/**/*.test.tsx` girano con il runner Vitest standard in `jsdom`, inclusi i suoi setup Auth/storage. Escludere l'intera directory `tests/isolated/**` dal runner standard lascerebbe i test TSX presenti ma mai eseguiti, senza fallire la CI. Ogni nuova suite va verificata anche per discovery reale del runner.
+
 ## Exact HEAD
 
 - MUST: il bump minor applicativo richiesto per ogni integrazione in `main` deve essere incluso **prima** della verifica candidata; ogni merge concorrente richiede nuovo calcolo della versione, nuovo SHA e nuova validazione.
