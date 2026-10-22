@@ -13,6 +13,7 @@ import { isVaultUnlocked } from '../../src/lib/sync/secureArchiveSession';
 import { TelemetryQueueStorage } from '../../src/lib/telemetry/queueStorage';
 import { installTelemetryTestHarness, mockSetDoc } from './telemetryTestHarness';
 import { seedCurrentTelemetryQueue } from './seedCurrentQueue';
+import { localStorageMock } from '../setup';
 
 describe('Unified Telemetry Hub E2E Suite — Tier 5', () => {
   installTelemetryTestHarness();
@@ -488,7 +489,7 @@ describe('Unified Telemetry Hub E2E Suite — Tier 5', () => {
         expect(originalCiphertext).toMatch(/^tlb-sealed:v1:/);
         expect(isVaultUnlocked('user:' + uid)).toBe(true);
 
-        const setItemSpy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+        const setItemSpy = vi.spyOn(localStorageMock, 'setItem').mockImplementation(() => {
           throw new DOMException('The quota has been exceeded.', 'QuotaExceededError');
         });
         const now = Date.now();
