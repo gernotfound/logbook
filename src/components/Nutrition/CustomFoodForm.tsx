@@ -10,6 +10,16 @@ interface CustomFoodFormProps {
     onCancel?: () => void;
 }
 
+/**
+ * The exact calorie calculation used by the editable custom-food form.
+ * Keep one production oracle for UI and numeric boundary tests.
+ */
+export function calculateCustomFoodKcal(carbs: unknown, protein: unknown, fat: unknown): number {
+    const numeric = (value: unknown): number =>
+        parseFloat(String(value ?? '').trim().replace(',', '.')) || 0;
+    return Math.round(numeric(carbs) * 4 + numeric(protein) * 4 + numeric(fat) * 9);
+}
+
 export default function CustomFoodForm({ 
     cfData, 
     setCfData, 
@@ -35,14 +45,9 @@ export default function CustomFoodForm({
         const pStr = field === 'pro' ? value : String(updated.pro ?? '');
         const fStr = field === 'fat' ? value : String(updated.fat ?? '');
 
-        const c = parseFloat(cStr.trim().replace(',', '.')) || 0;
-        const p = parseFloat(pStr.trim().replace(',', '.')) || 0;
-        const f = parseFloat(fStr.trim().replace(',', '.')) || 0;
-
         const hasAnyMacro = Boolean(cStr.trim() || pStr.trim() || fStr.trim());
         if (hasAnyMacro) {
-            const autoKcal = Math.round((c * 4) + (p * 4) + (f * 9));
-            updated.kcal = autoKcal;
+            updated.kcal = calculateCustomFoodKcal(cStr, pStr, fStr);
         } else {
             updated.kcal = '';
         }
