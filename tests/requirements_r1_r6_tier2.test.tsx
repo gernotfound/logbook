@@ -496,7 +496,7 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
             });
 
             it('T2.6.5: empty and whitespace-only reports do not delete active pains', () => {
-                expect(mergeActivePainsContract(['petto'], ['', '  ', '\\t'])).toEqual(['petto']);
+                expect(mergeActivePainsContract(['petto'], ['', '  ', '     '])).toEqual(['petto']);
             });
 
             it('T2.6.6: session ratings where user selects multiple new pains deduplicates gracefully', () => {
