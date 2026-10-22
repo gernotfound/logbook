@@ -431,7 +431,7 @@ describe('EMPIRICAL CHALLENGER: Adversarial Stress Test Suite (Requirements R1 -
             const dsKgInput = screen.getByDisplayValue('70');
             fireEvent.change(dsKgInput, { target: { value: '75' } });
             fireEvent.blur(dsKgInput);
-            expect(mockUpdateSpecial).toHaveBeenCalledWith(0, 'set_1', 'dropsets', 0, 'kg', '75');
+            expect(mockUpdateSpecial).toHaveBeenCalledWith(0, 'set_1', 'dropsets', 'ds_1', 'kg', '75');
         });
     });
 

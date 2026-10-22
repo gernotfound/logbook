@@ -596,8 +596,8 @@ describe('TheLogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => 
                     />
                 );
 
-                expect(container.querySelector('#seg-kg-s1-0')).not.toBeNull();
-                expect(container.querySelector('#seg-reps-s1-0')).not.toBeNull();
+                expect(container.querySelector('#seg-kg-s1-seg1')).not.toBeNull();
+                expect(container.querySelector('#seg-reps-s1-seg1')).not.toBeNull();
                 expect(screen.queryByText('Dettagli tecnici segmento')).toBeNull();
                 expect(screen.queryByText('Eccentrica (s)')).toBeNull();
                 expect(screen.queryByText('Posizione tenuta')).toBeNull();
