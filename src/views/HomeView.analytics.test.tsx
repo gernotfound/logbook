@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { screen, fireEvent } from '@testing-library/react';
+import { screen, fireEvent, within } from '@testing-library/react';
 import HomeView from '../components/Home/HomeView';
 import { renderWithProviders } from '../../tests/setup';
 import type { WorkoutSession, NutritionDay, Exercise } from '../types';
@@ -96,45 +96,32 @@ describe('HomeView Analytics Dashboard Integration Suite (src/views/HomeView.ana
         expect(header).toBeDefined();
     });
 
-    it('renders period selection buttons in WeeklyVolumeChart and toggles period selection', async () => {
-        renderWithProviders(<HomeView onNavigate={() => {}} />, {
-            userData: mockUserData
-        });
+    it('updates selected weeks on the weekly volume chart', async () => {
+        renderWithProviders(<HomeView onNavigate={() => {}} />, { userData: mockUserData });
 
         await screen.findByText('Volume di allenamento settimanale', {}, { timeout: 10000 });
-        const weeklyCard = document.getElementById('weekly-volume-chart-card');
-        expect(weeklyCard).toBeDefined();
+        const controls = within(screen.getByRole('group', { name: 'Periodo del volume di allenamento' }));
+        const btn4 = controls.getByRole('button', { name: '4 sett' });
+        const btn12 = controls.getByRole('button', { name: '12 sett' });
 
-        const btn4 = weeklyCard?.querySelector('button:nth-child(1)');
-        expect(btn4).toBeDefined();
-        if (btn4) {
-            fireEvent.click(btn4);
-            expect(btn4.textContent).toBe('4 sett');
-        }
-
-        const btn12 = weeklyCard?.querySelector('button:nth-child(3)');
-        expect(btn12).toBeDefined();
-        if (btn12) {
-            fireEvent.click(btn12);
-            expect(btn12.textContent).toBe('12 sett');
-        }
+        expect(btn4.getAttribute('aria-pressed')).toBe('false');
+        fireEvent.click(btn4);
+        expect(btn4.getAttribute('aria-pressed')).toBe('true');
+        fireEvent.click(btn12);
+        expect(btn12.getAttribute('aria-pressed')).toBe('true');
+        expect(btn4.getAttribute('aria-pressed')).toBe('false');
     });
 
-    it('renders period selection buttons in VolumeCaloriesCorrelationChart and toggles period selection', async () => {
-        renderWithProviders(<HomeView onNavigate={() => {}} />, {
-            userData: mockUserData
-        });
+    it('updates selected weeks on the volume/calories correlation chart', async () => {
+        renderWithProviders(<HomeView onNavigate={() => {}} />, { userData: mockUserData });
 
         await screen.findByText('Correlazione volume vs calorie', {}, { timeout: 10000 });
-        const corrCard = document.getElementById('volume-calories-correlation-card');
-        expect(corrCard).toBeDefined();
+        const controls = within(screen.getByRole('group', { name: 'Periodo della correlazione volume e calorie' }));
+        const btn24 = controls.getByRole('button', { name: '24 sett' });
 
-        const btn24 = corrCard?.querySelector('button:nth-child(4)');
-        expect(btn24).toBeDefined();
-        if (btn24) {
-            fireEvent.click(btn24);
-            expect(btn24.textContent).toBe('24 sett');
-        }
+        expect(btn24.getAttribute('aria-pressed')).toBe('false');
+        fireEvent.click(btn24);
+        expect(btn24.getAttribute('aria-pressed')).toBe('true');
     });
 
     it('displays empty state fallback in Italian sentence case when history is empty', async () => {

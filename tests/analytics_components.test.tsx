@@ -59,7 +59,7 @@ describe('Analytics UI Components & Dashboard Integration', () => {
             expect(await screen.findByText(/Attuale:/i)).toBeDefined();
         });
 
-        it('renders period buttons and toggles active state on click', () => {
+        it('changes the selected period when a volume chart button is clicked', () => {
             renderWithProviders(
                 <WeeklyVolumeChart
                     history={mockHistory}
@@ -69,16 +69,17 @@ describe('Analytics UI Components & Dashboard Integration', () => {
                 />
             );
 
-            const btn4 = screen.getByText('4 sett');
-            const btn8 = screen.getByText('8 sett');
-            const btn12 = screen.getByText('12 sett');
+            const btn4 = screen.getByRole('button', { name: '4 sett' });
+            const btn8 = screen.getByRole('button', { name: '8 sett' });
+            const btn12 = screen.getByRole('button', { name: '12 sett' });
 
-            expect(btn4).toBeDefined();
-            expect(btn8).toBeDefined();
-            expect(btn12).toBeDefined();
-
+            expect(btn8.getAttribute('aria-pressed')).toBe('true');
             fireEvent.click(btn4);
-            expect(btn4).toBeDefined();
+            expect(btn4.getAttribute('aria-pressed')).toBe('true');
+            expect(btn8.getAttribute('aria-pressed')).toBe('false');
+            fireEvent.click(btn12);
+            expect(btn12.getAttribute('aria-pressed')).toBe('true');
+            expect(btn4.getAttribute('aria-pressed')).toBe('false');
         });
 
         it('renders empty state when history is empty', async () => {
