@@ -91,8 +91,8 @@ const DataView: React.FC<DataViewProps> = ({
                         onDeleteMeasurement={measurementsHook.handleDeleteMeasurement}
                         handleCancelEdit={() => {
                             const wasEditing = !!measurementsHook.editingDate;
-                            measurementsHook.handleCancelEdit();
-                            if (wasEditing) changeSubTab('history');
+                            const cancelled = measurementsHook.handleCancelEdit();
+                            if (wasEditing && cancelled) changeSubTab('history');
                         }}
                         calculateAndSave={async (e, bodyFatMode) => {
                             const wasEditing = !!measurementsHook.editingDate;
