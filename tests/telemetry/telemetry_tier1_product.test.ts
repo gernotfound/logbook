@@ -42,8 +42,6 @@ describe('Technical telemetry queue and dispatch — Tier 1', () => {
         Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
       });
 
-;
-
       it('F9-3: limits queue capacity to maximum 50 items and evicts oldest items FIFO', () => {
         Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
         telemetryHub.init();
@@ -164,8 +162,6 @@ describe('Technical telemetry queue and dispatch — Tier 1', () => {
         expect(queued.map(item => item.itemType).sort()).toEqual(['error', 'event']);
         expect(queued.every(item => item.payload.userId === 'user_perm_denied')).toBe(true);
       });
-
-;
 
       it('F11-5: concurrent diagnostic events reach the accepted-and-dropped transport boundary', async () => {
         vi.useFakeTimers();

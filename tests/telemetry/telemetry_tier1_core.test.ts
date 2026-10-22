@@ -24,7 +24,6 @@ describe('TelemetryHub Vitest Integration Suite — Tier 1 Core', () => {
 
   describe('Tier 1: Feature Coverage — Core Telemetry', () => {
     describe('F1: Telemetry Context Provider', () => {
-;
 
       it('F1-2: derives platform correctly for iOS (iPhone/iPod userAgent)', () => {
         const mockNav = {
