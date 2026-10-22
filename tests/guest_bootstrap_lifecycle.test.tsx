@@ -82,7 +82,12 @@ describe('Milestone M2: Guest Bootstrap & Cold Start Lifecycle', () => {
         });
         await act(async () => { await result.current.loginAsGuest(); });
         await confirmRealGuestVault();
+        // The shared UI fixture mocks DB.purgeAllLocalUserData; exercise the
+        // production purge to verify the durable retired marker after logout.
+        const purge = vi.spyOn(DB, 'purgeAllLocalUserData')
+            .mockImplementationOnce(owner => purgeRealLocalUserData(owner));
         await act(async () => { await result.current.logout({ mode: 'normal' }); });
+        expect(purge).toHaveBeenCalledWith('guest');
 
         const fenceKey = 'logbook:local-purge-fence:v1:guest';
         expect(result.current.isGuest).toBe(false);
