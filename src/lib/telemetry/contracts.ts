@@ -15,17 +15,6 @@ export type ErrorSource =
   | string;
 
 export type TelemetryEventType =
-  | 'pwa_prompt_shown'
-  | 'pwa_install_impression'
-  | 'pwa_install_click'
-  | 'pwa_install_clicked'
-  | 'pwa_install_prompt_outcome'
-  | 'pwa_prompt_accepted'
-  | 'pwa_prompt_dismissed'
-  | 'pwa_appinstalled'
-  | 'pwa_installed'
-  | 'workout_started'
-  | 'workout_saved'
   | 'storage_recovery_anomaly'
   | 'zod_schema_fallback'
   | 'custom_event'
