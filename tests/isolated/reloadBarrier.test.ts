@@ -164,6 +164,38 @@ it('reloads an update-required app without parsing a future local envelope and p
     expect(reload).toHaveBeenCalledTimes(1);
     expect(JSON.parse(disk.get('logbook:v2:user:a:workout')!)).toEqual(app.state.localWorkout);
 });
+it('waits for the replacement service worker to install before a required-update reload', async () => {
+    const worker = Object.assign(new EventTarget(), {
+        state: 'installing' as ServiceWorkerState,
+        postMessage: vi.fn(),
+    });
+    const stateListener = vi.spyOn(worker, 'addEventListener');
+    const registration = {
+        waiting: null as ServiceWorker | null,
+        installing: worker as unknown as ServiceWorker,
+        update: vi.fn(async () => undefined),
+    };
+    vi.stubGlobal('navigator', {
+        serviceWorker: {
+            getRegistration: vi.fn(async () => registration),
+            controller: null,
+        },
+    });
+
+    const reload = vi.fn();
+    const attempt = requiredUpdateHardReload(reload);
+    await vi.waitFor(() => expect(stateListener).toHaveBeenCalledWith('statechange', expect.any(Function)));
+    expect(reload).not.toHaveBeenCalled();
+
+    registration.waiting = worker as unknown as ServiceWorker;
+    worker.state = 'installed';
+    worker.dispatchEvent(new Event('statechange'));
+    await attempt;
+
+    expect(registration.update).toHaveBeenCalledTimes(1);
+    expect(worker.postMessage).toHaveBeenCalledWith({ type: 'SKIP_WAITING' });
+    expect(reload).toHaveBeenCalledTimes(1);
+});
 it('blocks required-update snapshot when the installed dataset belongs to another owner', async () => {
     app.state.dataOwner = 'guest';
     const reload = vi.fn();
