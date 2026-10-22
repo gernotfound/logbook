@@ -64,6 +64,9 @@ export class TelemetryQueueStorage {
   // Reports collected while locked must be merged with any pre-existing
   // ciphertext after unlock, not overwrite it blindly.
   private needsUnlockReconciliation = false;
+  // Count updates are patches, not permission to re-publish a stale whole
+  // queue. Apply them only to matching reports still on the latest disk.
+  private pendingErrorCountUpdates = new Map<string, { count: number; lastSeen: number }>();
 
   constructor(private readonly getUserId: () => string | null) {}
 
@@ -87,7 +90,7 @@ export class TelemetryQueueStorage {
       // Only a fully persisted, unmodified cache may be replaced by the
       // latest durable image. Dirty/locked caches retain unsaved RAM reports.
       if (!this.needsUnlockReconciliation && !this.isDiskSyncScheduled
-        && isVaultUnlocked(owner)) {
+        && this.pendingErrorCountUpdates.size === 0 && isVaultUnlocked(owner)) {
         try {
           const raw = readEncryptedTelemetry(owner);
           if (raw === null) {
@@ -137,6 +140,7 @@ export class TelemetryQueueStorage {
 
   private saveQueuedEvents(items: QueuedTelemetryItem[], immediateDiskSync: boolean = true): void {
     const ownerKey = this.getQueueStorageKey();
+    if (this.cachedQueueKey !== ownerKey) this.pendingErrorCountUpdates.clear();
     this.cachedQueue = retainUnexpiredItems(items);
     this.cachedQueueKey = ownerKey;
     if (!isVaultUnlocked(this.getOwner())) this.needsUnlockReconciliation = true;
@@ -152,6 +156,19 @@ export class TelemetryQueueStorage {
       // In-memory diagnostics still work if the archive is locked or unavailable.
       const owner = this.getOwner();
       if (!isVaultUnlocked(owner)) return false;
+      if (this.pendingErrorCountUpdates.size > 0 && !this.needsUnlockReconciliation) {
+        // Count aggregation can be queued to a microtask. A different tab
+        // may have appended or delivered reports since this RAM image was
+        // read; never replay removed IDs or drop new durable IDs.
+        const raw = readEncryptedTelemetry(owner);
+        if (raw === null) {
+          this.cachedQueue = [];
+        } else {
+          const parsed: unknown = JSON.parse(raw);
+          if (!Array.isArray(parsed)) throw new Error('Unsupported encrypted telemetry queue.');
+          this.cachedQueue = retainUnexpiredItems(parseQueuedItems(raw));
+        }
+      }
       if (this.needsUnlockReconciliation) {
         const persisted = readEncryptedTelemetry(owner);
         if (persisted !== null) {
@@ -161,7 +178,18 @@ export class TelemetryQueueStorage {
           this.cachedQueue = retainUnexpiredItems([...previous, ...additions]);
         }
       }
+      if (this.pendingErrorCountUpdates.size > 0) {
+        this.cachedQueue = this.cachedQueue.map(item => {
+          const patch = this.pendingErrorCountUpdates.get(item.id);
+          if (!patch || item.itemType !== 'error') return item;
+          return {
+            ...item,
+            payload: { ...item.payload, count: patch.count, lastSeen: patch.lastSeen },
+          };
+        });
+      }
       const saved = storeEncryptedTelemetry(owner, JSON.stringify(this.cachedQueue));
+      if (saved) this.pendingErrorCountUpdates.clear();
       // A failed save may conceal durable reports that become readable again.
       // Reconcile on the next attempt rather than blindly replacing them.
       this.needsUnlockReconciliation = !saved;
@@ -180,6 +208,7 @@ export class TelemetryQueueStorage {
       if (this.cachedQueue === null || this.cachedQueueKey !== ownerKey) {
         this.cachedQueue = this.getQueuedEvents();
         this.cachedQueueKey = ownerKey;
+        this.pendingErrorCountUpdates.clear();
       }
 
       let found = false;
@@ -192,6 +221,9 @@ export class TelemetryQueueStorage {
         }
       }
 
+      if (found) {
+        this.pendingErrorCountUpdates.set(id, { count, lastSeen });
+      }
       if (found && !this.isDiskSyncScheduled) {
         this.isDiskSyncScheduled = true;
         queueMicrotask(() => {
@@ -214,6 +246,7 @@ export class TelemetryQueueStorage {
     payload: TelemetryErrorPayload | TelemetryEventPayload
   ): void {
     try {
+      this.flushPendingDiskSync();
       const items = [...this.getQueuedEvents()];
       const minimizedPayload = kind === 'event'
         ? minimizeEventPayload(payload as TelemetryEventPayload)
@@ -261,7 +294,8 @@ export class TelemetryQueueStorage {
     // A successfully persisted cache can be discarded: reread disk so we
     // do not overwrite reports added by another tab. Only retry a dirty cache.
     if (this.cachedQueue !== null && this.cachedQueueKey === ownerKey
-      && (this.needsUnlockReconciliation || this.isDiskSyncScheduled)
+      && (this.needsUnlockReconciliation || this.isDiskSyncScheduled
+        || this.pendingErrorCountUpdates.size > 0)
       && !this.syncQueueToDisk(ownerKey)) return;
     this.invalidateCache();
   }
@@ -271,6 +305,7 @@ export class TelemetryQueueStorage {
     this.cachedQueueKey = null;
     this.isDiskSyncScheduled = false;
     this.needsUnlockReconciliation = false;
+    this.pendingErrorCountUpdates.clear();
   }
 
   public replaceQueue(items: QueuedTelemetryItem[]): void {
