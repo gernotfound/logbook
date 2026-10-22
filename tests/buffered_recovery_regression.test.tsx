@@ -951,7 +951,7 @@ describe('advanced workout segment identity across removal and draft recovery', 
     });
 });
 
-describe('F-001 — duplicate catalog exercises have independent buffered recovery identities', () => {
+describe('F-001 — stable exercise instance recovery with shared catalog editor boundaries', () => {
     const workoutId = 'w-duplicate-exercises';
     const first = { id: 'se-first', exId: 'bench', sessionNote: '', technicalStandard: '',
         sets: [{ id: 'set-shared', kg: '90', reps: '6' }] };
@@ -1008,14 +1008,12 @@ describe('F-001 — duplicate catalog exercises have independent buffered recove
         vi.restoreAllMocks();
     });
 
-    it('saves and recovers two different standards, catalog-note editors and equal set IDs without collisions', () => {
+    it('saves and recovers two different standards and equal set IDs without collision', () => {
         const view = render(cards());
         const values = [
             ['technical-standard-se-first', 'Prima: fermo 2 s'],
             ['technical-standard-se-second', 'Seconda: fermo 1 s'],
-            ['setup-se-first', 'Altezza sedile 5'],
-            ['setup-se-second', 'Altezza sedile 7'],
-            ['se-first-kg-set-shared', '91'],
+             ['se-first-kg-set-shared', '91'],
             ['se-second-kg-set-shared', '86'],
         ] as const;
         for (const [id, value] of values) fireEvent.change(input(view.container, id), { target: { value } });
@@ -1024,6 +1022,10 @@ describe('F-001 — duplicate catalog exercises have independent buffered recove
                 name: `draft:buffered:input:${workoutId}:${id}`, value,
             });
         }
+        // Setup UI is per-instance, but both editors write one catalog item.
+        expect(input(view.container, 'setup-se-first')).not.toBe(input(view.container, 'setup-se-second'));
+        expect(input(view.container, 'setup-se-first').value).toBe('Setup condiviso');
+        expect(input(view.container, 'setup-se-second').value).toBe('Setup condiviso');
         expect(useAppStore.getState().localPersistenceBlocked).toBe(false);
         // React unmount flushes editor callbacks, but business acknowledgment is
         // intentionally withheld, modeling a reload before commit confirmation.
@@ -1037,19 +1039,24 @@ describe('F-001 — duplicate catalog exercises have independent buffered recove
         reopened.unmount();
     });
 
-    it('preserves one shared catalog target while keeping each editor recovery identity independent', () => {
+    it('preserves one shared catalog recovery target and rejects a conflicting second editor', () => {
         const view = render(cards());
         const firstSetup = input(view.container, 'setup-se-first');
         const secondSetup = input(view.container, 'setup-se-second');
+        const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
         fireEvent.change(firstSetup, { target: { value: 'Catalog change 1' } });
         fireEvent.blur(firstSetup);
+        const sharedRaw = draft('setup-bench');
+        expect(JSON.parse(sharedRaw!)).toMatchObject({ value: 'Catalog change 1' });
+        expect(onUpdateSetupNote).toHaveBeenCalledExactlyOnceWith('bench', 'Catalog change 1');
+        // A second concurrently mounted editor cannot publish a stale
+        // alternative under the same catalog field without reconciliation.
         fireEvent.change(secondSetup, { target: { value: 'Catalog change 2' } });
         fireEvent.blur(secondSetup);
-        expect(onUpdateSetupNote).toHaveBeenNthCalledWith(1, 'bench', 'Catalog change 1');
-        expect(onUpdateSetupNote).toHaveBeenNthCalledWith(2, 'bench', 'Catalog change 2');
-        expect(JSON.parse(draft('setup-se-first')!)).toMatchObject({ value: 'Catalog change 1' });
-        expect(JSON.parse(draft('setup-se-second')!)).toMatchObject({ value: 'Catalog change 2' });
-        expect(useAppStore.getState().localPersistenceBlocked).toBe(false);
+        expect(draft('setup-bench')).toBe(sharedRaw);
+        expect(onUpdateSetupNote).toHaveBeenCalledTimes(1);
+        expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
+        expect(consoleError).toHaveBeenCalled();
         view.unmount();
     });
 });

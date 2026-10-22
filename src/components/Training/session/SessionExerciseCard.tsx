@@ -253,6 +253,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                     <label className="text-muted" style={{ fontSize: 'var(--font-size-meta)', fontWeight: 400 }} htmlFor={`setup-${exerciseInstanceId}`}>Note esercizio</label>
                     <BufferedInput
                         id={`setup-${exerciseInstanceId}`}
+                        recoveryId={`setup-${exItem.exId}`}
                         type="text"
                         value={exNotes}
                         placeholder="Es. altezza sedile abituale"

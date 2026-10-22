@@ -12,6 +12,8 @@ import {
 import type { BufferedWriterEvidence } from '../../lib/sync/bufferedDraftWriterIntent';
 
  interface BufferedInputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange'> {
+    /** Business recovery identity, distinct from the label/DOM ID when editors share a target. */
+    recoveryId?: string;
     value: string | number | undefined;
     onChange: (value: string) => void;
 }
@@ -81,9 +83,9 @@ function createInitialRecovery(
 }
 
 export const BufferedInput = React.forwardRef<HTMLInputElement, BufferedInputProps>(
-    ({ id, value, onChange, onBlur, onFocus, onKeyDown, type, inputMode, ...props }, ref) => {
+    ({ id, recoveryId, value, onChange, onBlur, onFocus, onKeyDown, type, inputMode, ...props }, ref) => {
         const workoutId = React.useContext(BufferedWorkoutScope);
-        const [initialRecovery] = useState(() => createInitialRecovery('input', id, workoutId));
+        const [initialRecovery] = useState(() => createInitialRecovery('input', recoveryId ?? id, workoutId));
         const initialValue = initialRecovery.recovered ?? value ?? '';
         const [localValue, setLocalValue] = useState(initialValue);
         const recoveryKey = useRef(initialRecovery.key);
