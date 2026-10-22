@@ -10,6 +10,7 @@ import {
     readBufferedWriterEvidence, writeBufferedWriterIntent,
 } from '../../lib/sync/bufferedDraftWriterIntent';
 import type { BufferedWriterEvidence } from '../../lib/sync/bufferedDraftWriterIntent';
+import { traceWriterLineage, writerParentReference } from '../../lib/sync/writerLineage';
 
  interface BufferedInputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange'> {
     /** Business recovery identity, distinct from the label/DOM ID when editors share a target. */
@@ -57,6 +58,7 @@ type InitialBufferedRecovery = {
     recovered: string | null;
     observedRaw: string | null;
     sourceIntent: BufferedWriterEvidence | null;
+    sourceLineage: BufferedWriterEvidence[];
     error: unknown | null;
 };
 
@@ -70,15 +72,16 @@ function createInitialRecovery(
         const session = captureSession();
         const snapshot = readRecoveryStrict(key, session.owner);
         const intents = key ? readBufferedWriterEvidence(session.owner, key) : [];
-        if (intents.length > 1 || (intents.length === 1 && intents[0].value !== snapshot.value)) {
+        const lineage = traceWriterLineage(intents);
+        if (lineage.length && lineage[lineage.length - 1].value !== snapshot.value) {
             throw new Error('Bozze concorrenti non riconciliabili: originali conservati per esportazione.');
         }
         return {
             session, key, recovered: snapshot.value, observedRaw: snapshot.raw,
-            sourceIntent: intents[0] ?? null, error: null,
+            sourceIntent: lineage.at(-1) ?? null, sourceLineage: lineage, error: null,
         };
     } catch (error) {
-        return { session: null, key, recovered: null, observedRaw: null, sourceIntent: null, error };
+        return { session: null, key, recovered: null, observedRaw: null, sourceIntent: null, sourceLineage: [], error };
     }
 }
 
@@ -98,6 +101,7 @@ export const BufferedInput = React.forwardRef<HTMLInputElement, BufferedInputPro
         const writerIntentName = useRef<string | null>(null);
         const writerIntentRaw = useRef<string | null>(null);
         const sourceIntent = useRef(initialRecovery.sourceIntent);
+        const sourceLineage = useRef(initialRecovery.sourceLineage);
 
         useEffect(() => {
             if (initialRecovery.error) blockBufferedPersistence(initialRecovery.error);
@@ -134,6 +138,7 @@ export const BufferedInput = React.forwardRef<HTMLInputElement, BufferedInputPro
                 writerIntentRaw.current = writeBufferedWriterIntent(
                     writerIntentName.current, session.owner, key, raw,
                     writerIntentRaw.current, session.consentGeneration,
+                    writerIntentRaw.current === null ? writerParentReference(sourceIntent.current) : undefined,
                 );
             } catch (error) {
                 // Another editor can durably acknowledge and consume a source
@@ -171,6 +176,17 @@ export const BufferedInput = React.forwardRef<HTMLInputElement, BufferedInputPro
                         if (!isCurrentSession(session) || !isCurrentWorkoutScope(workoutId)) {
                             throw new Error('Sessione workout cambiata prima della pulizia della bozza.');
                         }
+                        const present = traceWriterLineage(
+                            readBufferedWriterEvidence(session.owner, recoveryKey.current),
+                        );
+                        const expected = [...sourceLineage.current,
+                            ...(writerIntentName.current && writerIntentRaw.current
+                                ? [{ name: writerIntentName.current, raw: writerIntentRaw.current }] : [])];
+                        if (present.length !== expected.length
+                            || present.some(entry => !expected.some(item =>
+                                item.name === entry.name && item.raw === entry.raw))) {
+                            throw new Error('Testimonianze modificate da un altro editor: originale preservato.');
+                        }
                         observedRaw.current = writeBufferedDraft(
                             recoveryKey.current, session.owner, null,
                             session.consentGeneration, observedRaw.current,
@@ -185,13 +201,13 @@ export const BufferedInput = React.forwardRef<HTMLInputElement, BufferedInputPro
                             );
                             writerIntentRaw.current = null;
                         }
-                        if (sourceIntent.current) {
+                        for (const ancestor of [...sourceLineage.current].reverse()) {
                             clearBufferedWriterIntent(
-                                sourceIntent.current.name, session.owner,
-                                sourceIntent.current.raw, session.consentGeneration,
+                                ancestor.name, session.owner, ancestor.raw, session.consentGeneration,
                             );
-                            sourceIntent.current = null;
                         }
+                        sourceLineage.current = [];
+                        sourceIntent.current = null;
                         recoveryValue.current = null;
                     } catch (error) {
                         blockBufferedPersistence(error);
@@ -348,6 +364,7 @@ export const BufferedTextarea = React.forwardRef<HTMLTextAreaElement, BufferedTe
         const writerIntentName = useRef<string | null>(null);
         const writerIntentRaw = useRef<string | null>(null);
         const sourceIntent = useRef(initialRecovery.sourceIntent);
+        const sourceLineage = useRef(initialRecovery.sourceLineage);
 
         useEffect(() => {
             if (initialRecovery.error) blockBufferedPersistence(initialRecovery.error);
@@ -380,6 +397,7 @@ export const BufferedTextarea = React.forwardRef<HTMLTextAreaElement, BufferedTe
                 writerIntentRaw.current = writeBufferedWriterIntent(
                     writerIntentName.current, session.owner, key, raw,
                     writerIntentRaw.current, session.consentGeneration,
+                    writerIntentRaw.current === null ? writerParentReference(sourceIntent.current) : undefined,
                 );
             } catch (error) {
                 // Another editor can durably acknowledge and consume a source
@@ -410,6 +428,17 @@ export const BufferedTextarea = React.forwardRef<HTMLTextAreaElement, BufferedTe
                         if (!isCurrentSession(session) || !isCurrentWorkoutScope(workoutId)) {
                             throw new Error('Sessione workout cambiata prima della pulizia della bozza.');
                         }
+                        const present = traceWriterLineage(
+                            readBufferedWriterEvidence(session.owner, recoveryKey.current),
+                        );
+                        const expected = [...sourceLineage.current,
+                            ...(writerIntentName.current && writerIntentRaw.current
+                                ? [{ name: writerIntentName.current, raw: writerIntentRaw.current }] : [])];
+                        if (present.length !== expected.length
+                            || present.some(entry => !expected.some(item =>
+                                item.name === entry.name && item.raw === entry.raw))) {
+                            throw new Error('Testimonianze modificate da un altro editor: originale preservato.');
+                        }
                         observedRaw.current = writeBufferedDraft(
                             recoveryKey.current, session.owner, null,
                             session.consentGeneration, observedRaw.current,
@@ -424,13 +453,13 @@ export const BufferedTextarea = React.forwardRef<HTMLTextAreaElement, BufferedTe
                             );
                             writerIntentRaw.current = null;
                         }
-                        if (sourceIntent.current) {
+                        for (const ancestor of [...sourceLineage.current].reverse()) {
                             clearBufferedWriterIntent(
-                                sourceIntent.current.name, session.owner,
-                                sourceIntent.current.raw, session.consentGeneration,
+                                ancestor.name, session.owner, ancestor.raw, session.consentGeneration,
                             );
-                            sourceIntent.current = null;
                         }
+                        sourceLineage.current = [];
+                        sourceIntent.current = null;
                         recoveryValue.current = null;
                     } catch (error) {
                         blockBufferedPersistence(error);
