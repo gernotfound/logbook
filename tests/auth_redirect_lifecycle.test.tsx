@@ -111,12 +111,15 @@ describe('Google redirect lifecycle', () => {
     });
     expect(signInWithRedirect).toHaveBeenCalledTimes(2);
     expect(sessionStorage.getItem(REDIRECT_KEY)).toBe('true');
+    const newerAttempt = sessionStorage.getItem('logbook_awaiting_redirect_attempt');
+    expect(newerAttempt).toMatch(/^[a-f0-9]{32}$/);
 
     await act(async () => {
       failOld(redirectRejected);
       await first;
     });
     expect(sessionStorage.getItem(REDIRECT_KEY)).toBe('true');
+    expect(sessionStorage.getItem('logbook_awaiting_redirect_attempt')).toBe(newerAttempt);
     expect(useAppStore.getState().saveError).toBeNull();
 
     // The newer redirect remains in flight and retains its marker; it must
