@@ -8,12 +8,10 @@ import {
   isStandaloneMode,
   getTelemetryContext,
   hashError,
-  sanitizeErrorPayload,
 } from '../../src/lib/telemetrySanitizer';
 import {
   telemetryHub,
   type TelemetryErrorPayload,
-  type TelemetryEventPayload,
 } from '../../src/lib/telemetryHub';
 import {
   installTelemetryTestHarness,
