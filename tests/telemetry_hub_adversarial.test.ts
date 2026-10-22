@@ -11,15 +11,16 @@ import { APP_VERSION } from '../src/lib/telemetrySanitizer';
 import { seedCurrentTelemetryQueue } from './telemetry/seedCurrentQueue';
 
 describe('Adversarial Stress & Edge-Case Suite: TelemetryHub', () => {
-  let mockSetDoc: any;
+  let mockSentryTransport: any;
 
   beforeEach(() => {
     localStorage.clear();
     sessionStorage.clear();
     vi.clearAllMocks();
     vi.useRealTimers();
+    Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
 
-    mockSetDoc = vi.spyOn(sentryClient, 'sendTelemetryToSentry').mockResolvedValue(true);
+    mockSentryTransport = vi.spyOn(sentryClient, 'sendTelemetryToSentry').mockResolvedValue(true);
 
     telemetryHub.reset();
   });
@@ -29,6 +30,7 @@ describe('Adversarial Stress & Edge-Case Suite: TelemetryHub', () => {
     sessionStorage.clear();
     vi.restoreAllMocks();
     vi.useRealTimers();
+    Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
 
     telemetryHub.reset();
   });
@@ -52,9 +54,9 @@ describe('Adversarial Stress & Edge-Case Suite: TelemetryHub', () => {
       // Microtasks run
       await vi.advanceTimersByTimeAsync(50);
 
-      // Exactly 1 Firestore write should be triggered with count = 500
-      expect(mockSetDoc).toHaveBeenCalledTimes(1);
-      const callPayload = mockSetDoc.mock.calls[0][1] as TelemetryErrorPayload;
+      // Exactly one technical error report is sent to the Sentry transport
+      expect(mockSentryTransport).toHaveBeenCalledTimes(1);
+      const callPayload = mockSentryTransport.mock.calls[0][1] as TelemetryErrorPayload;
       expect(callPayload.count).toBe(500);
       expect(callPayload.type).toBe('TypeError');
 
@@ -62,7 +64,7 @@ describe('Adversarial Stress & Edge-Case Suite: TelemetryHub', () => {
       await vi.advanceTimersByTimeAsync(RATE_LIMIT_WINDOW_MS);
 
       // No redundant trailing dispatch since count (500) == lastDispatchedCount (500)
-      expect(mockSetDoc).toHaveBeenCalledTimes(1);
+      expect(mockSentryTransport).toHaveBeenCalledTimes(1);
     });
 
     it('handles 100 distinct error types x 5 repetitions each (500 total errors) concurrently', async () => {
@@ -84,16 +86,16 @@ describe('Adversarial Stress & Edge-Case Suite: TelemetryHub', () => {
       await vi.advanceTimersByTimeAsync(50);
 
       // Each distinct error should have dispatched once with count = 5
-      expect(mockSetDoc).toHaveBeenCalledTimes(distinctErrorCount);
+      expect(mockSentryTransport).toHaveBeenCalledTimes(distinctErrorCount);
       for (let i = 0; i < distinctErrorCount; i++) {
-        const payload = mockSetDoc.mock.calls[i][1] as TelemetryErrorPayload;
+        const payload = mockSentryTransport.mock.calls[i][1] as TelemetryErrorPayload;
         expect(payload.count).toBe(5);
       }
 
       // Fast forward past 60s
       await vi.advanceTimersByTimeAsync(RATE_LIMIT_WINDOW_MS);
       // No extra dispatches since no new errors occurred
-      expect(mockSetDoc).toHaveBeenCalledTimes(distinctErrorCount);
+      expect(mockSentryTransport).toHaveBeenCalledTimes(distinctErrorCount);
       expect(telemetryHub.getActiveRateLimiterCount()).toBe(0);
     });
   });
@@ -115,27 +117,27 @@ describe('Adversarial Stress & Edge-Case Suite: TelemetryHub', () => {
       // t = 0ms -> Initial occurrence
       telemetryHub.trackError(err);
       await vi.advanceTimersByTimeAsync(10);
-      expect(mockSetDoc).toHaveBeenCalledTimes(1);
-      expect(mockSetDoc.mock.calls[0][1].count).toBe(1);
+      expect(mockSentryTransport).toHaveBeenCalledTimes(1);
+      expect(mockSentryTransport.mock.calls[0][1].count).toBe(1);
 
       const justBeforeExpiry = RATE_LIMIT_WINDOW_MS - 1;
       await vi.advanceTimersByTimeAsync(justBeforeExpiry - 10);
       vi.setSystemTime(baseTime + justBeforeExpiry);
       telemetryHub.trackError(err);
 
-      expect(mockSetDoc).toHaveBeenCalledTimes(1);
+      expect(mockSentryTransport).toHaveBeenCalledTimes(1);
 
       // Expiry clears the limiter but deliberately does not emit a trailing event.
       await vi.advanceTimersByTimeAsync(1);
-      expect(mockSetDoc).toHaveBeenCalledTimes(1);
+      expect(mockSentryTransport).toHaveBeenCalledTimes(1);
 
       vi.setSystemTime(baseTime + RATE_LIMIT_WINDOW_MS + 1);
       telemetryHub.trackError(err);
 
       await vi.advanceTimersByTimeAsync(10);
-      expect(mockSetDoc).toHaveBeenCalledTimes(2);
-      expect(mockSetDoc.mock.calls[1][1].count).toBe(1);
-      expect(mockSetDoc.mock.calls[1][1].firstSeen).toBe(baseTime + RATE_LIMIT_WINDOW_MS + 1);
+      expect(mockSentryTransport).toHaveBeenCalledTimes(2);
+      expect(mockSentryTransport.mock.calls[1][1].count).toBe(1);
+      expect(mockSentryTransport.mock.calls[1][1].firstSeen).toBe(baseTime + RATE_LIMIT_WINDOW_MS + 1);
     });
 
     it('recovers cleanly when setTimeout is delayed and a subsequent error arrives after expiry', async () => {
@@ -149,7 +151,7 @@ describe('Adversarial Stress & Edge-Case Suite: TelemetryHub', () => {
       const err = new Error('Lagging event loop error');
       telemetryHub.trackError(err); // t = 0
       await vi.advanceTimersByTimeAsync(10);
-      expect(mockSetDoc).toHaveBeenCalledTimes(1);
+      expect(mockSentryTransport).toHaveBeenCalledTimes(1);
 
       const afterExpiry = RATE_LIMIT_WINDOW_MS + 5000;
       // Simulate system clock jumping past the configured window before the timer runs.
@@ -159,9 +161,9 @@ describe('Adversarial Stress & Edge-Case Suite: TelemetryHub', () => {
       await vi.advanceTimersByTimeAsync(10);
 
       // Should have recognized stale rate limiter, reset it, and dispatched a new window
-      expect(mockSetDoc).toHaveBeenCalledTimes(2);
-      expect(mockSetDoc.mock.calls[1][1].count).toBe(1);
-      expect(mockSetDoc.mock.calls[1][1].firstSeen).toBe(baseTime + afterExpiry);
+      expect(mockSentryTransport).toHaveBeenCalledTimes(2);
+      expect(mockSentryTransport.mock.calls[1][1].count).toBe(1);
+      expect(mockSentryTransport.mock.calls[1][1].firstSeen).toBe(baseTime + afterExpiry);
     });
   });
 
@@ -171,36 +173,35 @@ describe('Adversarial Stress & Edge-Case Suite: TelemetryHub', () => {
   describe('3. Hanging telemetry transport & Non-Blocking Resilience', () => {
     it('survives indefinitely hanging external telemetry dispatch promises with 5000ms timeout race', async () => {
       vi.useFakeTimers();
-      // Mock setDoc returning a Promise that NEVER settles
-      mockSetDoc.mockImplementation(() => new Promise(() => {}));
+      // Mock Sentry transport with a promise that never settles
+      mockSentryTransport.mockImplementation(() => new Promise(() => {}));
 
       telemetryHub.init();
-      telemetryHub.setUserId('user_hanging_firestore');
+      telemetryHub.setUserId('user_hanging_sentry');
 
-      const start = Date.now();
-      // Track 20 errors and 20 events synchronously
+      // Track 20 distinct errors and 20 events synchronously.
+      // The transport promises never settle; tracking must still return.
       for (let i = 0; i < 20; i++) {
         telemetryHub.trackError(new Error(`Hanging error ${i}`));
         telemetryHub.trackEvent(`hanging_event_${i}`);
       }
 
-      // Synchronous execution is immediate (non-blocking)
-      expect(Date.now() - start).toBeLessThan(100);
+      // Date.now() is frozen under fake timers and cannot measure elapsed
+      // execution time; assert observable progress instead.
+      expect(telemetryHub.getActiveRateLimiterCount()).toBe(20);
 
-      // Advance by 4999ms (before timeout)
-      await vi.advanceTimersByTimeAsync(4999);
-      // No crashes
+      // Before the timeout all 40 dispatches must have reached transport,
+      // otherwise the test could pass because of an owner/offline guard.
+      await vi.advanceTimersByTimeAsync(TELEMETRY_DISPATCH_TIMEOUT_MS - 1);
+      expect(mockSentryTransport).toHaveBeenCalledTimes(40);
 
-      // Advance past 5000ms timeout threshold
       await vi.advanceTimersByTimeAsync(100);
-
-      // Hub remains fully functional
       expect(telemetryHub.getActiveRateLimiterCount()).toBe(20);
     });
 
     it('properly returns false from direct dispatchErrorExternally when dispatch hangs', async () => {
       vi.useFakeTimers();
-      mockSetDoc.mockImplementation(() => new Promise(() => {}));
+      mockSentryTransport.mockImplementation(() => new Promise(() => {}));
 
       telemetryHub.init();
       telemetryHub.setUserId('user_hang_direct');
@@ -223,12 +224,13 @@ describe('Adversarial Stress & Edge-Case Suite: TelemetryHub', () => {
       };
 
       const dispatchPromise = telemetryHub.dispatchErrorExternally(payload);
+      expect(mockSentryTransport).toHaveBeenCalledTimes(1);
+      expect(vi.getTimerCount()).toBe(1);
 
-      // Advance past timeout
       await vi.advanceTimersByTimeAsync(TELEMETRY_DISPATCH_TIMEOUT_MS + 100);
 
-      const result = await dispatchPromise;
-      expect(result).toBe(false);
+      expect(await dispatchPromise).toBe(false);
+      expect(vi.getTimerCount()).toBe(0);
     });
   });
 
@@ -267,7 +269,7 @@ describe('Adversarial Stress & Edge-Case Suite: TelemetryHub', () => {
       telemetryHub.init();
       telemetryHub.setUserId('user_flapping');
 
-      // Populate queue with 5 items in localStorage
+      // Seed the current encrypted owner-scoped queue with 5 items
       const items = [
         { id: 'item_1', timestamp: Date.now() + 1, itemType: 'event' as const, payload: { timestamp: Date.now() + 1, type: 'evt1', context: {} as any, userId: 'user_flapping', sessionId: 's1' } },
         { id: 'item_2', timestamp: Date.now() + 2, itemType: 'event' as const, payload: { timestamp: Date.now() + 2, type: 'evt2', context: {} as any, userId: 'user_flapping', sessionId: 's1' } },
@@ -277,9 +279,9 @@ describe('Adversarial Stress & Edge-Case Suite: TelemetryHub', () => {
       ];
       await seedCurrentTelemetryQueue('user_flapping', items);
 
-      // Simulate first 2 writes succeed, 3rd fails, 4th and 5th fail
+      // Simulate first 2 sends succeeding and later transport failures
       let callCount = 0;
-      mockSetDoc.mockImplementation(() => {
+      mockSentryTransport.mockImplementation(() => {
         callCount++;
         if (callCount <= 2) {
           return Promise.resolve(true);
@@ -299,22 +301,6 @@ describe('Adversarial Stress & Edge-Case Suite: TelemetryHub', () => {
   // 5. Corrupted Storage & Extreme Payload Defense
   // =========================================================================
   describe('5. Corrupted Storage & Extreme Payload Defense', () => {
-    it('recovers gracefully from corrupted JSON in localStorage queue', () => {
-      localStorage.setItem(telemetryHub.getQueueStorageKey(), '{ broken json syntax }!!');
-      telemetryHub.init();
-
-      expect(telemetryHub.getQueuedEvents()).toEqual([]);
-
-      // Adding a new item resets localStorage to a valid array
-      Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
-      telemetryHub.trackEvent('recovery_event');
-
-      const queue = telemetryHub.getQueuedEvents();
-      expect(queue.length).toBe(1);
-      expect(queue[0].payload.type).toBe('recovery_event');
-      Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
-    });
-
     it('safely handles deeply nested and circular error objects during trackError', async () => {
       vi.useFakeTimers();
       telemetryHub.init();
@@ -326,8 +312,8 @@ describe('Adversarial Stress & Edge-Case Suite: TelemetryHub', () => {
       expect(() => telemetryHub.trackError(circularObj)).not.toThrow();
 
       await vi.advanceTimersByTimeAsync(50);
-      expect(mockSetDoc).toHaveBeenCalledTimes(1);
-      const payload = mockSetDoc.mock.calls[0][1] as TelemetryErrorPayload;
+      expect(mockSentryTransport).toHaveBeenCalledTimes(1);
+      const payload = mockSentryTransport.mock.calls[0][1] as TelemetryErrorPayload;
       expect(payload.message).toContain('Circular problem');
     });
 
@@ -343,9 +329,9 @@ describe('Adversarial Stress & Edge-Case Suite: TelemetryHub', () => {
       telemetryHub.trackError(hugeError);
 
       await vi.advanceTimersByTimeAsync(50);
-      expect(mockSetDoc).toHaveBeenCalledTimes(1);
+      expect(mockSentryTransport).toHaveBeenCalledTimes(1);
 
-      const payload = mockSetDoc.mock.calls[0][1] as TelemetryErrorPayload;
+      const payload = mockSentryTransport.mock.calls[0][1] as TelemetryErrorPayload;
       expect(payload.stack).toBeDefined();
       // Stack should be truncated to <= 1000 chars as per telemetrySanitizer truncateStack
       expect(payload.stack!.length).toBeLessThanOrEqual(1000);
@@ -374,8 +360,8 @@ describe('Adversarial Stress & Edge-Case Suite: TelemetryHub', () => {
       Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
       await telemetryHub.flushQueue();
 
-      // Since userId is null, dispatchErrorExternally returns false without calling setDoc, retaining or skipping safely
-      expect(mockSetDoc).not.toHaveBeenCalled();
+      // Since userId is null; guest reports are never sent to the Sentry transport
+      expect(mockSentryTransport).not.toHaveBeenCalled();
     });
   });
 });

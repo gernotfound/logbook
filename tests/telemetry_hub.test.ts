@@ -18,11 +18,12 @@ import {
   RATE_LIMIT_WINDOW_MS,
   SESSION_ID_KEY,
   TELEMETRY_QUEUE_CAPACITY,
+  TELEMETRY_DISPATCH_TIMEOUT_MS,
   type TelemetryErrorPayload,
 } from '../src/lib/telemetryHub';
 
 describe('Telemetry Sanitizer & Telemetry Hub Unit & Integration Suite', () => {
-  let mockSetDoc: any;
+  let mockSentryTransport: any;
 
   beforeEach(() => {
     localStorage.clear();
@@ -31,7 +32,7 @@ describe('Telemetry Sanitizer & Telemetry Hub Unit & Integration Suite', () => {
     vi.useRealTimers();
     Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
 
-    mockSetDoc = vi.spyOn(sentryClient, 'sendTelemetryToSentry').mockResolvedValue(true);
+    mockSentryTransport = vi.spyOn(sentryClient, 'sendTelemetryToSentry').mockResolvedValue(true);
 
     telemetryHub.reset();
   });
@@ -360,8 +361,8 @@ describe('Telemetry Sanitizer & Telemetry Hub Unit & Integration Suite', () => {
       // Microtask execution
       await vi.advanceTimersByTimeAsync(100);
 
-      expect(mockSetDoc).toHaveBeenCalledTimes(1);
-      const payload = mockSetDoc.mock.calls[0][1] as TelemetryErrorPayload;
+      expect(mockSentryTransport).toHaveBeenCalledTimes(1);
+      const payload = mockSentryTransport.mock.calls[0][1] as TelemetryErrorPayload;
       expect(payload.type).toBe('TypeError');
       expect(payload.message).toBe('Failed to load exercise list');
       expect(payload.count).toBe(3);
@@ -383,7 +384,7 @@ describe('Telemetry Sanitizer & Telemetry Hub Unit & Integration Suite', () => {
 
       await vi.advanceTimersByTimeAsync(100);
 
-      const payload = mockSetDoc.mock.calls[0][1] as TelemetryErrorPayload;
+      const payload = mockSentryTransport.mock.calls[0][1] as TelemetryErrorPayload;
       expect(payload.firstSeen).toBe(baseTime);
       expect(payload.lastSeen).toBe(baseTime + 20000);
       expect(payload.count).toBe(2);
@@ -401,7 +402,7 @@ describe('Telemetry Sanitizer & Telemetry Hub Unit & Integration Suite', () => {
       telemetryHub.trackError(err); // Initial dispatch
 
       await vi.advanceTimersByTimeAsync(100);
-      expect(mockSetDoc).toHaveBeenCalledTimes(1);
+      expect(mockSentryTransport).toHaveBeenCalledTimes(1);
 
       // Subsequent errors occur at t = 10s
       vi.setSystemTime(baseTime + 10000);
@@ -410,11 +411,11 @@ describe('Telemetry Sanitizer & Telemetry Hub Unit & Integration Suite', () => {
 
       // No new immediate dispatch
       await vi.advanceTimersByTimeAsync(100);
-      expect(mockSetDoc).toHaveBeenCalledTimes(1);
+      expect(mockSentryTransport).toHaveBeenCalledTimes(1);
 
       // Expiry clears the limiter without emitting a second external event.
       await vi.advanceTimersByTimeAsync(RATE_LIMIT_WINDOW_MS);
-      expect(mockSetDoc).toHaveBeenCalledTimes(1);
+      expect(mockSentryTransport).toHaveBeenCalledTimes(1);
     });
 
     it('starts a new rate limiting window after the configured window expires', async () => {
@@ -428,7 +429,7 @@ describe('Telemetry Sanitizer & Telemetry Hub Unit & Integration Suite', () => {
       const err = new Error('Cache miss error');
       telemetryHub.trackError(err);
       await vi.advanceTimersByTimeAsync(100);
-      expect(mockSetDoc).toHaveBeenCalledTimes(1);
+      expect(mockSentryTransport).toHaveBeenCalledTimes(1);
 
       const nextWindow = RATE_LIMIT_WINDOW_MS + 5000;
       vi.setSystemTime(baseTime + nextWindow);
@@ -437,7 +438,7 @@ describe('Telemetry Sanitizer & Telemetry Hub Unit & Integration Suite', () => {
       // New occurrence starts new window
       telemetryHub.trackError(err);
       await vi.advanceTimersByTimeAsync(100);
-      expect(mockSetDoc).toHaveBeenCalledTimes(2);
+      expect(mockSentryTransport).toHaveBeenCalledTimes(2);
     });
 
     it('allows manual flushing of rate limiters via flushRateLimiters', async () => {
@@ -448,13 +449,13 @@ describe('Telemetry Sanitizer & Telemetry Hub Unit & Integration Suite', () => {
       const err = new Error('Flushable error');
       telemetryHub.trackError(err);
       await vi.advanceTimersByTimeAsync(100);
-      expect(mockSetDoc).toHaveBeenCalledTimes(1);
+      expect(mockSentryTransport).toHaveBeenCalledTimes(1);
 
       telemetryHub.trackError(err);
       telemetryHub.trackError(err);
 
       await telemetryHub.flushRateLimiters();
-      expect(mockSetDoc).toHaveBeenCalledTimes(2);
+      expect(mockSentryTransport).toHaveBeenCalledTimes(2);
       expect(telemetryHub.getActiveRateLimiterCount()).toBe(0);
     });
 
@@ -471,10 +472,10 @@ describe('Telemetry Sanitizer & Telemetry Hub Unit & Integration Suite', () => {
   });
 
   // =========================================================================
-  // 7. Non-Blocking Firestore Dispatch & Timeout Resilience
+  // 7. Sentry Transport Dispatch & Timeout Resilience
   // =========================================================================
-  describe('7. Non-Blocking Firestore Dispatch & Timeout Resilience', () => {
-    it('returns false and does not attempt Firestore write when userId is null (guest mode)', async () => {
+  describe('7. Sentry Transport Dispatch & Timeout Resilience', () => {
+    it('returns false without reaching Sentry for an unauthenticated guest', async () => {
       localStorage.setItem('logbook_is_guest', 'true');
       telemetryHub.init();
       telemetryHub.setUserId(null);
@@ -493,13 +494,12 @@ describe('Telemetry Sanitizer & Telemetry Hub Unit & Integration Suite', () => {
 
       const result = await telemetryHub.dispatchErrorExternally(payload);
       expect(result).toBe(false);
-      expect(mockSetDoc).not.toHaveBeenCalled();
+      expect(mockSentryTransport).not.toHaveBeenCalled();
     });
 
-    it('handles Firestore network timeouts gracefully within 5000ms timeout', async () => {
-      mockSetDoc.mockImplementation(
-        () => new Promise((_, reject) => setTimeout(() => reject(new Error('Firestore timeout')), 6000))
-      );
+    it('returns false after the actual Sentry transport timeout, with a matching owner', async () => {
+      vi.useFakeTimers();
+      mockSentryTransport.mockImplementation(() => new Promise<boolean>(() => {}));
 
       telemetryHub.init();
       telemetryHub.setUserId('user_timeout_check');
@@ -516,12 +516,21 @@ describe('Telemetry Sanitizer & Telemetry Hub Unit & Integration Suite', () => {
         lastSeen: Date.now(),
       };
 
-      const result = await telemetryHub.dispatchErrorExternally(payload);
-      expect(result).toBe(false);
+      const pending = telemetryHub.dispatchErrorExternally(payload);
+      // An owner mismatch would return false without creating a deadline.
+      expect(mockSentryTransport).toHaveBeenCalledTimes(1);
+      expect(vi.getTimerCount()).toBe(1);
+
+      await vi.advanceTimersByTimeAsync(TELEMETRY_DISPATCH_TIMEOUT_MS - 1);
+      expect(vi.getTimerCount()).toBe(1);
+      await vi.advanceTimersByTimeAsync(1);
+
+      expect(await pending).toBe(false);
+      expect(vi.getTimerCount()).toBe(0);
     });
 
-    it('suppresses Firestore permission-denied errors without throwing to UI', async () => {
-      mockSetDoc.mockRejectedValue(new Error('FirebaseError: [code=permission-denied]'));
+    it('handles rejected Sentry transport promises and retains the technical error for retry', async () => {
+      mockSentryTransport.mockRejectedValue(new Error('Sentry transport temporarily unavailable'));
 
       telemetryHub.init();
       telemetryHub.setUserId('user_perm');
@@ -530,6 +539,22 @@ describe('Telemetry Sanitizer & Telemetry Hub Unit & Integration Suite', () => {
         telemetryHub.trackError(new Error('Perm test'));
         telemetryHub.trackEvent('custom_event');
       }).not.toThrow();
+
+      // The synchronous not.toThrow assertion alone cannot prove that the
+      // asynchronous rejection was observed or that recovery occurred.
+      await vi.waitFor(() => {
+        expect(mockSentryTransport).toHaveBeenCalledWith(
+          'error',
+          expect.objectContaining({ userId: 'user_perm', message: 'Perm test' })
+        );
+        expect(mockSentryTransport).toHaveBeenCalledWith(
+          'event',
+          expect.objectContaining({ userId: 'user_perm', type: 'custom_event' })
+        );
+        const errors = telemetryHub.getQueuedEvents().filter(item => item.itemType === 'error');
+        expect(errors).toHaveLength(1);
+        expect((errors[0].payload as TelemetryErrorPayload).message).toBe('Perm test');
+      });
     });
   });
 
@@ -550,8 +575,8 @@ describe('Telemetry Sanitizer & Telemetry Hub Unit & Integration Suite', () => {
       window.dispatchEvent(errEvent);
       await vi.advanceTimersByTimeAsync(100);
 
-      expect(mockSetDoc).toHaveBeenCalledTimes(1);
-      const payload = mockSetDoc.mock.calls[0][1] as TelemetryErrorPayload;
+      expect(mockSentryTransport).toHaveBeenCalledTimes(1);
+      const payload = mockSentryTransport.mock.calls[0][1] as TelemetryErrorPayload;
       expect(payload.source).toBe('window_error');
       expect(payload.type).toBe('TypeError');
       expect(payload.count).toBe(1);
@@ -574,8 +599,8 @@ describe('Telemetry Sanitizer & Telemetry Hub Unit & Integration Suite', () => {
         }));
         await vi.advanceTimersByTimeAsync(100);
 
-        expect(mockSetDoc).toHaveBeenCalledTimes(1);
-        expect((mockSetDoc.mock.calls[0][1] as TelemetryErrorPayload).count).toBe(1);
+        expect(mockSentryTransport).toHaveBeenCalledTimes(1);
+        expect((mockSentryTransport.mock.calls[0][1] as TelemetryErrorPayload).count).toBe(1);
 
         telemetryHub.destroy();
         expect(window.onerror).toBe(thirdPartyHandler);
@@ -601,8 +626,8 @@ describe('Telemetry Sanitizer & Telemetry Hub Unit & Integration Suite', () => {
       window.dispatchEvent(rejection);
       await vi.advanceTimersByTimeAsync(100);
 
-      expect(mockSetDoc).toHaveBeenCalledTimes(1);
-      const payload = mockSetDoc.mock.calls[0][1] as TelemetryErrorPayload;
+      expect(mockSentryTransport).toHaveBeenCalledTimes(1);
+      const payload = mockSentryTransport.mock.calls[0][1] as TelemetryErrorPayload;
       expect(payload.source).toBe('unhandled_rejection');
       expect(payload.message).toContain('Rejected string reason');
     });
@@ -639,7 +664,7 @@ describe('Telemetry Sanitizer & Telemetry Hub Unit & Integration Suite', () => {
   // 10. Offline Queue & Replay
   // =========================================================================
   describe('10. Offline Queue & Replay', () => {
-    it('enqueues errors and events into localStorage when offline', () => {
+    it('keeps offline errors and events in the owner queue without plaintext writes', () => {
       Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
       telemetryHub.init();
       telemetryHub.setUserId('user_offline_test');
@@ -651,6 +676,7 @@ describe('Telemetry Sanitizer & Telemetry Hub Unit & Integration Suite', () => {
       expect(queue.length).toBe(2);
       expect(queue[0].itemType).toBe('error');
       expect(queue[1].itemType).toBe('event');
+      expect(localStorage.getItem(telemetryHub.getQueueStorageKey())).toBeNull();
 
       Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
     });
@@ -683,7 +709,7 @@ describe('Telemetry Sanitizer & Telemetry Hub Unit & Integration Suite', () => {
       window.dispatchEvent(new Event('online'));
 
       await vi.waitFor(() => {
-        expect(mockSetDoc).toHaveBeenCalled();
+        expect(mockSentryTransport).toHaveBeenCalled();
         expect(telemetryHub.getQueuedEvents().length).toBe(0);
       });
     });
