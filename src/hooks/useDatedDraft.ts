@@ -18,6 +18,7 @@ import {
     DatedWriterConsumedError, clearDatedWriterIntent, createDatedWriterIntentName,
     readDatedWriterEvidence, writeDatedWriterIntent, type DatedWriterEvidence,
 } from '../lib/sync/datedDraftWriterIntent';
+import { traceWriterLineage, writerParentReference } from '../lib/sync/writerLineage';
 
 function readDraft(name: string, owner: string): DatedDraftImage {
     try {
@@ -52,6 +53,7 @@ type CurrentDraft<T extends Record<string, string>> = {
     writerName: string | null;
     writerRaw: string | null;
     sourceIntent: DatedWriterEvidence | null;
+    sourceLineage: DatedWriterEvidence[];
 };
 
 export function useDatedDraft<T extends Record<string, string>>(kind: string, date: string, source: T) {
@@ -62,21 +64,23 @@ export function useDatedDraft<T extends Record<string, string>>(kind: string, da
     // The consent generation is part of the read scope: a mounted form must
     // re-check provenance when another tab advances the owner's epoch.
     const readScope = key ? JSON.stringify([key, session?.consentGeneration, session?.consentMarker]) : null;
-    const { image, sourceIntent, provenanceError } = useMemo(() => {
+    const { image, sourceIntent, sourceLineage, provenanceError } = useMemo(() => {
         try {
             const image = readScope && owner ? readDraft(name, owner) : { values: null, raw: null };
             const evidence = readScope && owner ? readDatedWriterEvidence(owner, name) : [];
-            if (evidence.length > 1 || (evidence.length === 1
-                && JSON.stringify(evidence[0].values) !== JSON.stringify(image.values))) {
-                // Conflicting witnesses are evidence, never a new canonical value.
+            // Multiple independent witnesses are safe only when every link
+            // authenticates a single unbranched predecessor→successor history.
+            const lineage = traceWriterLineage(evidence);
+            const latest = lineage.at(-1);
+            if (latest && JSON.stringify(latest.values) !== JSON.stringify(image.values)) {
                 throw new DatedDraftConflictError();
             }
-            return { image, sourceIntent: evidence[0] ?? null,
+            return { image, sourceIntent: latest ?? null, sourceLineage: lineage,
                 provenanceError: null as Error | null };
         } catch (error) {
             // Corruption and unavailable storage are also blocking errors:
             // never interpret unreadable witness evidence as an empty draft.
-            return { image: { values: null, raw: null }, sourceIntent: null,
+            return { image: { values: null, raw: null }, sourceIntent: null, sourceLineage: [],
                 provenanceError: error instanceof Error ? error : new Error('Copie datate non verificabili.') };
         }
     }, [readScope, name, owner]);
@@ -96,7 +100,7 @@ export function useDatedDraft<T extends Record<string, string>>(kind: string, da
     const values = readScope && edited?.scope === readScope ? edited.values ?? source : loaded ?? source;
     const current = useRef<CurrentDraft<T>>({
         key, name: key ? name : null, scope: readScope, values, dirty: false, session,
-        observedRaw: image.raw, writerName: null, writerRaw: null, sourceIntent,
+        observedRaw: image.raw, writerName: null, writerRaw: null, sourceIntent, sourceLineage,
     });
     // The reload registry callback is intentionally registered once. Keep
     // provenance current across consent-generation changes without capturing
@@ -117,6 +121,7 @@ export function useDatedDraft<T extends Record<string, string>>(kind: string, da
             writerName: sameScope ? current.current.writerName : null,
             writerRaw: sameScope ? current.current.writerRaw : null,
             sourceIntent: sameScope ? current.current.sourceIntent : sourceIntent,
+            sourceLineage: sameScope ? current.current.sourceLineage : sourceLineage,
         };
     });
 
@@ -125,23 +130,22 @@ export function useDatedDraft<T extends Record<string, string>>(kind: string, da
         if (draft.writerName !== null && draft.writerRaw === null) {
             throw new DatedDraftConflictError();
         }
-        const evidence = readDatedWriterEvidence(draft.session.owner, draft.name);
-        for (const entry of evidence) {
-            const own = entry.name === draft.writerName && entry.raw === draft.writerRaw;
-            const source = entry.name === draft.sourceIntent?.name
-                && entry.raw === draft.sourceIntent.raw;
-            if (!own && !source) throw new DatedDraftConflictError();
+        const evidence = traceWriterLineage(readDatedWriterEvidence(draft.session.owner, draft.name));
+        const expected = [...draft.sourceLineage,
+            ...(draft.writerName && draft.writerRaw
+                ? [{ name: draft.writerName, raw: draft.writerRaw }] : [])];
+        if (evidence.length !== expected.length
+            || evidence.some(entry => !expected.some(item =>
+                entry.name === item.name && entry.raw === item.raw))) {
+            throw new DatedDraftConflictError();
         }
         if (draft.writerRaw && !evidence.some(e => e.name === draft.writerName
             && e.raw === draft.writerRaw
             && JSON.stringify(e.values) === JSON.stringify(draft.values))) {
-            // A quota/error may leave a previously successful witness intact
-            // while a newer edit exists only in RAM. Never commit that draft
-            // as though the current keystrokes were independently protected.
+            // A failed writer update must never cause a previous independent
+            // witness to be treated as proof of newer keystrokes in RAM.
             throw new DatedDraftConflictError();
         }
-        if (draft.sourceIntent && !evidence.some(e => e.name === draft.sourceIntent?.name
-            && e.raw === draft.sourceIntent.raw)) throw new DatedDraftConflictError();
     };
 
     const verifyCurrentDraft = () => {
@@ -179,6 +183,7 @@ export function useDatedDraft<T extends Record<string, string>>(kind: string, da
                 draft.writerRaw = writeDatedWriterIntent(
                     draft.writerName, draft.session.owner, draft.name, draft.values,
                     draft.writerRaw, draft.session.consentGeneration,
+                    draft.writerRaw === null ? writerParentReference(draft.sourceIntent) : undefined,
                 );
             } catch (error) {
                 // A different editor can confirm the value we loaded and
@@ -240,11 +245,14 @@ export function useDatedDraft<T extends Record<string, string>>(kind: string, da
                 draft.writerName = null;
                 draft.writerRaw = null;
             }
-            if (draft.sourceIntent) {
-                clearDatedWriterIntent(draft.sourceIntent.name, session.owner,
-                    draft.sourceIntent.raw, session.consentGeneration);
-                draft.sourceIntent = null;
+            // The business commit has been confirmed; clear only the exact
+            // authenticated chain loaded by this editor, newest first.
+            for (const ancestor of [...draft.sourceLineage].reverse()) {
+                clearDatedWriterIntent(ancestor.name, session.owner,
+                    ancestor.raw, session.consentGeneration);
             }
+            draft.sourceLineage = [];
+            draft.sourceIntent = null;
         } catch (error) {
             if (error instanceof UnverifiedDatedDraftEpochError || error instanceof DatedDraftConflictError) {
                 blockProvenance(error);
