@@ -57,26 +57,4 @@ describe('historical session order for the progression report', () => {
         expect(orderedEarlierSessions(history, current).map(item => item.id))
             .toEqual(originalOrder.map(item => item.id));
     });
-
-    it('records non-gating sort cost on a deterministic large workload', () => {
-        const current = session('now', '2026-10-01');
-        const history = Array.from({ length: 600 }, (_, i) => (
-            session('w-' + i, '2026-09-' + String(1 + i % 30).padStart(2, '0'), i * 1000)
-        ));
-        const exercises = 12;
-        const elapsed = (fn: () => void): number => {
-            const start = performance.now();
-            fn();
-            return Math.round((performance.now() - start) * 100) / 100;
-        };
-        // Diagnostic only: wall-clock timings vary on shared CI runners.
-        const repeatedMs = elapsed(() => {
-            for (let i = 0; i < exercises; i++) orderedEarlierSessions(history, current);
-        });
-        const sharedMs = elapsed(() => { orderedEarlierSessions(history, current); });
-        console.info('progression-history-sort-diagnostic', JSON.stringify({
-            historyLength: history.length, exerciseCount: exercises,
-            legacyRepeatedMs: repeatedMs, sharedOnceMs: sharedMs,
-        }));
-    });
 });

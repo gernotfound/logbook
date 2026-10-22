@@ -1,8 +1,9 @@
-import { render } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import App from './App';
 import { expect, test } from 'vitest';
 
-test('renders App without crashing', () => {
+test('shows the unauthenticated entry screen with the application heading', () => {
     const { container } = render(<App />);
-    expect(container).toBeTruthy();
+    expect(container.querySelector('#auth-overlay')).not.toBeNull();
+    expect(screen.getByRole('heading', { name: 'TheLogBook' })).toBeDefined();
 });
