@@ -86,9 +86,10 @@ describe('Google redirect lifecycle', () => {
 
   it('does not report a stale launch rejection as failure of a newer Google redirect', async () => {
     let failOld!: (error: Error) => void;
-    let completeNew!: () => void;
-    const oldLaunch = new Promise<void>((_resolve, reject) => { failOld = reject; });
-    const newLaunch = new Promise<void>(resolve => { completeNew = resolve; });
+    // Firebase signInWithRedirect returns Promise<never>: a successful
+    // browser navigation does not settle its initiating JS call.
+    const oldLaunch = new Promise<never>((_resolve, reject) => { failOld = reject; });
+    const newLaunch = new Promise<never>(() => {});
     vi.mocked(signInWithRedirect)
       .mockImplementationOnce(() => oldLaunch)
       .mockImplementationOnce(() => newLaunch);
@@ -103,9 +104,8 @@ describe('Google redirect lifecycle', () => {
     });
     expect(signInWithRedirect).toHaveBeenCalledTimes(1);
 
-    let second!: Promise<void>;
     await act(async () => {
-      second = result.current.login();
+      void result.current.login();
       await Promise.resolve();
       await Promise.resolve();
     });
@@ -119,10 +119,8 @@ describe('Google redirect lifecycle', () => {
     expect(sessionStorage.getItem(REDIRECT_KEY)).toBe('true');
     expect(useAppStore.getState().saveError).toBeNull();
 
-    await act(async () => {
-      completeNew();
-      await second;
-    });
+    // The newer redirect remains in flight and retains its marker; it must
+    // not be artificially resolved (real SDK return type is Promise<never>).
     expect(sessionStorage.getItem(REDIRECT_KEY)).toBe('true');
   });
 
