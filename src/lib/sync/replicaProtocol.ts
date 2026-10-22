@@ -189,7 +189,7 @@ export function matchesReplica(entry: ReplicaControlEntry | undefined, identity:
         && entry.generation === identity.generation);
 }
 
-export function advanceReplicaControl(control: ReplicaControl, identity: ReplicaIdentity, lastSeq: number): ReplicaControl {
+export function advanceReplicaControl(control: ReplicaControl, identity: ReplicaIdentity, lastSeq: number, batchId = generateId('sync-advance')): ReplicaControl {
     const entry = control.replicas[identity.slot];
     if (!matchesReplica(entry, identity)) throw new ReplicaFencedError();
     const nextSeq = Math.max(entry.lastSeq, parseSafeInteger(lastSeq, 'Replica sequence'));
@@ -202,7 +202,7 @@ export function advanceReplicaControl(control: ReplicaControl, identity: Replica
         },
         // Lost-ack replay may repeat lastSeq but must always publish a fresh
         // batch identifier; Rules compare it to the pre-transaction control.
-        mutation: { slot: identity.slot, action: 'advance', batchId: generateId('sync-advance') },
+        mutation: { slot: identity.slot, action: 'advance', batchId },
     };
 }
 
