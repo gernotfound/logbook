@@ -279,6 +279,43 @@ describe('Offline technical telemetry data minimization', () => {
     expect(readEncryptedTelemetry('user:owner-a')).toBe(durable);
   });
 
+  it('applies delayed error-count patches without discarding another tab\'s reports', async () => {
+    const firstTab = new TelemetryQueueStorage(() => 'owner-a');
+    const secondTab = new TelemetryQueueStorage(() => 'owner-a');
+    const now = Date.now();
+    firstTab.enqueueItem('error', {
+      id: 'error-a', timestamp: now, type: 'error', message: 'offline',
+      source: 'custom', userId: 'owner-a', sessionId: 's',
+      context: { appVersion: '1.1.0', platform: 'other', displayMode: 'browser', online: false },
+      count: 1, firstSeen: now, lastSeen: now,
+    });
+    firstTab.updateQueuedErrorCount('error-a', 3, now);
+    // A separate tab writes after the RAM count mutation but before its
+    // scheduled microtask synchronizes the encrypted queue.
+    secondTab.enqueueItem('event', { ...queued('event-b', now).payload, id: 'event-b' });
+    await Promise.resolve();
+
+    const events = new TelemetryQueueStorage(() => 'owner-a').getQueuedEvents();
+    expect(events.map(item => item.id)).toEqual(['error-a', 'event-b']);
+    expect((events[0].payload as { count: number }).count).toBe(3);
+  });
+
+  it('does not resurrect a delivered error through a delayed count update', async () => {
+    const firstTab = new TelemetryQueueStorage(() => 'owner-a');
+    const secondTab = new TelemetryQueueStorage(() => 'owner-a');
+    const now = Date.now();
+    firstTab.enqueueItem('error', {
+      id: 'already-delivered', timestamp: now, type: 'error', message: 'offline',
+      source: 'custom', userId: 'owner-a', sessionId: 's',
+      context: { appVersion: '1.1.0', platform: 'other', displayMode: 'browser', online: false },
+      count: 1, firstSeen: now, lastSeen: now,
+    });
+    firstTab.updateQueuedErrorCount('already-delivered', 2, now);
+    secondTab.replaceQueue([]);
+    await Promise.resolve();
+    expect(new TelemetryQueueStorage(() => 'owner-a').getQueuedEvents()).toEqual([]);
+  });
+
   it('does not overwrite another tab\'s newer durable queue after a successful local save', () => {
     const firstTab = new TelemetryQueueStorage(() => 'owner-a');
     firstTab.enqueueItem('event', { ...queued('first', Date.now()).payload, id: 'first' });
