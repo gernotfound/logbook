@@ -470,8 +470,8 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
             it('T2.6.1: missing reported pains does not clear active pain', () => {
                 const activePains = ['petto'];
 
-                const updated = mergeActivePainsContract(activePains, sessionPains);
-                expect(updated).toEqual(['petto']); // Petto was not trained, so retained
+                const updated = mergeActivePainsContract(activePains, []);
+                expect(updated).toEqual(['petto']); // No explicit removal: the pain remains active.
             });
 
             it('T2.6.2: no reported pains does not alter activePains', () => {
