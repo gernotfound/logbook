@@ -605,6 +605,76 @@ describe('durable owner-scoped journal', () => {
         expect(await readLocal('a')).toEqual(before);
     });
 
+    it('keeps a newly hydrated month and its baseline when an older root-only delivery is acknowledged', async () => {
+        const base = UserDataSchema.parse({
+            profile: { height: '170' },
+            nutrition: { '2026-09-01': { date: '2026-09-01', weight: 70 } },
+        }) as unknown as UserData;
+        await initializeLocal('a', base, ['2026-09']);
+        const now = Date.now();
+        const identity = { slot: 's00', replicaId: 'root-ack-month-hydration', generation: 1,
+            checkpointAtMs: now, leaseUntilMs: now + 31_104_000_000 };
+        await adoptReplicaCheckpoint('a', { identity, baseSeq: 0 },
+            { clock: {}, syncMetaByDocument: {} });
+        const sentRoot = UserDataSchema.parse({
+            ...base, profile: { height: '171' },
+        }) as unknown as UserData;
+        await commitLocal('a', sentRoot, base);
+        const delivered = (await readLocal('a'))!;
+        expect(delivered.pending.length).toBeGreaterThan(0);
+        expect(delivered.pending.every(op => op.docPath === '')).toBe(true);
+
+        // Remote response still carries weight=70 from the pre-hydration snapshot.
+        // Another tab completes an authoritative month hydration before local ack.
+        const newlyHydrated = UserDataSchema.parse({
+            ...base, nutrition: { '2026-09-01': { date: '2026-09-01', weight: 80 } },
+        }) as unknown as UserData;
+        await hydrateLocal('a', newlyHydrated, ['2026-09'], undefined, 'window');
+        const beforeAck = (await readLocal('a'))!;
+        expect(beforeAck.data.nutrition['2026-09-01']?.weight).toBe(80);
+        expect(beforeAck.pending.length).toBe(delivered.pending.length);
+
+        await acknowledgeThrough('a', delivered.pending.at(-1)!.seq, sentRoot, [], undefined,
+            { operations: delivered.pending, replica: identity });
+        const after = (await readLocal('a'))!;
+        expect(after.pending).toHaveLength(0);
+        expect(after.data.profile?.height).toBe('171');
+        expect(after.data.nutrition['2026-09-01']?.weight).toBe(80);
+        expect(after.baseline.nutrition['2026-09-01']?.weight).toBe(80);
+    });
+
+    it('keeps a newly hydrated root when an older month-only delivery is acknowledged', async () => {
+        const base = UserDataSchema.parse({
+            profile: { height: '170' },
+            nutrition: { '2026-09-01': { date: '2026-09-01', weight: 70 } },
+        }) as unknown as UserData;
+        await initializeLocal('a', base, ['2026-09']);
+        const now = Date.now();
+        const identity = { slot: 's00', replicaId: 'month-ack-root-hydration', generation: 1,
+            checkpointAtMs: now, leaseUntilMs: now + 31_104_000_000 };
+        await adoptReplicaCheckpoint('a', { identity, baseSeq: 0 },
+            { clock: {}, syncMetaByDocument: {} });
+        const sentMonth = UserDataSchema.parse({
+            ...base, nutrition: { '2026-09-01': { date: '2026-09-01', weight: 71 } },
+        }) as unknown as UserData;
+        await commitLocal('a', sentMonth, base);
+        const delivered = (await readLocal('a'))!;
+        expect(delivered.pending.length).toBeGreaterThan(0);
+        expect(delivered.pending.every(op => op.docPath === 'nutrition_months/2026-09')).toBe(true);
+
+        const newlyHydrated = UserDataSchema.parse({
+            ...sentMonth, profile: { height: '172' },
+        }) as unknown as UserData;
+        await hydrateLocal('a', newlyHydrated, ['2026-09'], undefined, 'window');
+        await acknowledgeThrough('a', delivered.pending.at(-1)!.seq, sentMonth, ['2026-09'], undefined,
+            { operations: delivered.pending, replica: identity });
+        const after = (await readLocal('a'))!;
+        expect(after.pending).toHaveLength(0);
+        expect(after.data.profile?.height).toBe('172');
+        expect(after.baseline.profile?.height).toBe('172');
+        expect(after.data.nutrition['2026-09-01']?.weight).toBe(71);
+    });
+
     it('acknowledges only the delivered prefix while preserving a newer local edit', async () => {
         const base = data(170);
         await initializeLocal('a', base);
