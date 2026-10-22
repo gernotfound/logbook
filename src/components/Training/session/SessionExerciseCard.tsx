@@ -64,6 +64,10 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
 }) => {
     const exName = libDef ? libDef.name : "Esercizio rimosso";
     const exNotes = libDef ? (libDef.notes || '') : "";
+    // A catalog exercise can occur multiple times in the same workout.
+    // Runtime session instances have their own ID; the fallback mirrors the
+    // existing accordion key for older in-memory snapshots lacking one.
+    const exerciseInstanceId = exItem.id || `${exItem.exId}_${exIndex}`;
     const lastNote = pastWorkouts[0]?.note?.trim() || '';
 
     const [showPositionMenu, setShowPositionMenu] = React.useState(false);
@@ -237,18 +241,19 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
 
             {isSetupOpen && (
                 <div id={`session-setup-${exIndex}`} style={{ padding: '12px', background: 'var(--surface-light)', borderRadius: '8px', marginBottom: '15px', border: '1px solid var(--glass-border)' }}>
-                    <label className="text-muted" style={{ fontSize: 'var(--font-size-meta)', fontWeight: 400 }} htmlFor={`technical-standard-${exItem.exId}`}>Standard tecnico di questa sessione</label>
+                    <label className="text-muted" style={{ fontSize: 'var(--font-size-meta)', fontWeight: 400 }} htmlFor={`technical-standard-${exerciseInstanceId}`}>Standard tecnico di questa sessione</label>
                     <BufferedInput
-                        id={`technical-standard-${exItem.exId}`}
+                        id={`technical-standard-${exerciseInstanceId}`}
                         type="text"
                         value={exItem.technicalStandard || ''}
                         placeholder="Es. stesso macchinario, ROM completo, fermo 1 s"
                         onChange={value => onUpdateTechnicalStandard(exIndex, value)}
                         style={{ margin: '4px 0 10px', width: '100%', fontSize: '16px' }}
                     />
-                    <label className="text-muted" style={{ fontSize: 'var(--font-size-meta)', fontWeight: 400 }} htmlFor={`setup-${exItem.exId}`}>Note esercizio</label>
+                    <label className="text-muted" style={{ fontSize: 'var(--font-size-meta)', fontWeight: 400 }} htmlFor={`setup-${exerciseInstanceId}`}>Note esercizio</label>
                     <BufferedInput
-                        id={`setup-${exItem.exId}`}
+                        id={`setup-${exerciseInstanceId}`}
+                        recoveryId={`setup-${exItem.exId}`}
                         type="text"
                         value={exNotes}
                         placeholder="Es. altezza sedile abituale"
@@ -343,6 +348,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                             set={s}
                             sIndex={sIndex}
                             exIndex={exIndex}
+                            exerciseInstanceId={exerciseInstanceId}
                             trackingType={libDef?.trackingType}
                             isOpenMenu={openSpecialMenuId === s.id}
                             onToggleMenu={onToggleSpecialMenu}

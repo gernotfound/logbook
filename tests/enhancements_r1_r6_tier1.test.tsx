@@ -410,7 +410,7 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
                     />
                 );
 
-                const setupInput = container.querySelector('#setup-ex_lat') as HTMLInputElement;
+                const setupInput = container.querySelector('#setup-ex_lat_0') as HTMLInputElement;
                 expect(setupInput).not.toBeNull();
                 expect(setupInput.defaultValue).toBe('Altezza cuscino 3, presa prona');
                 expect(container.textContent).toContain('Note esercizio');

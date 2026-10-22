@@ -4,6 +4,7 @@ import { act, fireEvent, render, renderHook, screen } from '@testing-library/rea
 import { BufferedInput, BufferedTextarea } from '../src/components/UI/BufferedInput';
 import { BufferedWorkoutScope } from '../src/components/UI/bufferedWorkoutScope';
 import SessionSetRow from '../src/components/Training/session/SessionSetRow';
+import SessionExerciseCard from '../src/components/Training/session/SessionExerciseCard';
 import { useWorkoutSetMutations } from '../src/hooks/workout/useWorkoutSetMutations';
 import type { WorkoutSession } from '../src/types';
 import { deviceKey } from '../src/lib/sync/deviceStorage';
@@ -947,5 +948,115 @@ describe('advanced workout segment identity across removal and draft recovery', 
         expect(workout).toBe(after);
         act(() => result.current.updateSpecialSet(0, 'set-identity', collection, 'second', 'kg', '42'));
         expect(workout.exercises[0].sets[0][collection]?.[0]).toMatchObject({ id: 'second', kg: '42' });
+    });
+});
+
+describe('F-001 — stable exercise instance recovery with shared catalog editor boundaries', () => {
+    const workoutId = 'w-duplicate-exercises';
+    const first = { id: 'se-first', exId: 'bench', sessionNote: '', technicalStandard: '',
+        sets: [{ id: 'set-shared', kg: '90', reps: '6' }] };
+    const second = { id: 'se-second', exId: 'bench', sessionNote: '', technicalStandard: '',
+        sets: [{ id: 'set-shared', kg: '85', reps: '7' }] };
+    const onUpdateSetupNote = vi.fn();
+    const onUpdateTechnicalStandard = vi.fn();
+    const onUpdateSet = vi.fn();
+    const handlers = {
+        onToggleHistory: vi.fn(), onToggleSetup: vi.fn(),
+        onRemoveExercise: vi.fn(), onUpdateSessionNote: vi.fn(),
+        onUpdateSetupNote, onUpdateTechnicalStandard, onUpdateSet,
+        onAddSet: vi.fn(), onRemoveSet: vi.fn(),
+        onAddSpecialSet: vi.fn(), onUpdateSpecialSet: vi.fn(),
+        onRemoveSpecialSet: vi.fn(), onUpdateSetTarget: vi.fn(),
+        onToggleSpecialMenu: vi.fn(),
+    };
+    const cards = () => (
+        <BufferedWorkoutScope.Provider value={workoutId}>
+            {[first, second].map((exItem, exIndex) => (
+                <SessionExerciseCard key={exItem.id} exItem={exItem} exIndex={exIndex}
+                    libDef={{ name: 'Panca', trackingType: 'weight_reps', notes: 'Setup condiviso' }}
+                    pastWorkouts={[]} isHistoryOpen={false} isSetupOpen={true}
+                    openSpecialMenuId={null} {...handlers} />
+            ))}
+        </BufferedWorkoutScope.Provider>
+    );
+    const input = (container: HTMLElement, id: string) => {
+        const field = container.querySelector<HTMLInputElement>(`#${id}`);
+        expect(field).not.toBeNull();
+        return field!;
+    };
+    const draft = (id: string) => {
+        const key = deviceKey(`draft:buffered:input:${workoutId}:${id}`, captureSession().owner);
+        return localStorage.getItem(key);
+    };
+
+    beforeEach(() => {
+        localStorageMock.getItem.mockImplementation(initialGetItem);
+        localStorageMock.setItem.mockImplementation(initialSetItem);
+        localStorage.clear();
+        vi.clearAllMocks();
+        useAppStore.setState({
+            localWorkout: { id: workoutId } as WorkoutSession,
+            localPersistenceBlocked: false, syncHealth: 'synced',
+            syncPresentation: 'normal', saveError: null,
+        });
+        localStorage.setItem(`logbook:v2:${captureSession().owner}:health-consent-generation`, '3');
+    });
+    afterEach(() => {
+        useAppStore.setState({ localWorkout: null });
+        localStorageMock.getItem.mockImplementation(initialGetItem);
+        localStorageMock.setItem.mockImplementation(initialSetItem);
+        vi.restoreAllMocks();
+    });
+
+    it('saves and recovers two different standards and equal set IDs without collision', () => {
+        const view = render(cards());
+        const values = [
+            ['technical-standard-se-first', 'Prima: fermo 2 s'],
+            ['technical-standard-se-second', 'Seconda: fermo 1 s'],
+             ['se-first-kg-set-shared', '91'],
+            ['se-second-kg-set-shared', '86'],
+        ] as const;
+        for (const [id, value] of values) fireEvent.change(input(view.container, id), { target: { value } });
+        for (const [id, value] of values) {
+            expect(JSON.parse(draft(id)!)).toMatchObject({
+                name: `draft:buffered:input:${workoutId}:${id}`, value,
+            });
+        }
+        // Setup UI is per-instance, but both editors write one catalog item.
+        expect(input(view.container, 'setup-se-first')).not.toBe(input(view.container, 'setup-se-second'));
+        expect(input(view.container, 'setup-se-first').value).toBe('Setup condiviso');
+        expect(input(view.container, 'setup-se-second').value).toBe('Setup condiviso');
+        expect(useAppStore.getState().localPersistenceBlocked).toBe(false);
+        // React unmount flushes editor callbacks, but business acknowledgment is
+        // intentionally withheld, modeling a reload before commit confirmation.
+        view.unmount();
+        const reopened = render(cards());
+        for (const [id, value] of values) {
+            expect(input(reopened.container, id).value).toBe(value);
+            expect(JSON.parse(draft(id)!)).toMatchObject({ value });
+        }
+        expect(useAppStore.getState().localPersistenceBlocked).toBe(false);
+        reopened.unmount();
+    });
+
+    it('preserves one shared catalog recovery target and rejects a conflicting second editor', () => {
+        const view = render(cards());
+        const firstSetup = input(view.container, 'setup-se-first');
+        const secondSetup = input(view.container, 'setup-se-second');
+        const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+        fireEvent.change(firstSetup, { target: { value: 'Catalog change 1' } });
+        fireEvent.blur(firstSetup);
+        const sharedRaw = draft('setup-bench');
+        expect(JSON.parse(sharedRaw!)).toMatchObject({ value: 'Catalog change 1' });
+        expect(onUpdateSetupNote).toHaveBeenCalledExactlyOnceWith('bench', 'Catalog change 1');
+        // A second concurrently mounted editor cannot publish a stale
+        // alternative under the same catalog field without reconciliation.
+        fireEvent.change(secondSetup, { target: { value: 'Catalog change 2' } });
+        fireEvent.blur(secondSetup);
+        expect(draft('setup-bench')).toBe(sharedRaw);
+        expect(onUpdateSetupNote).toHaveBeenCalledTimes(1);
+        expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
+        expect(consoleError).toHaveBeenCalled();
+        view.unmount();
     });
 });
