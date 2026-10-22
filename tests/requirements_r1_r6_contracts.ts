@@ -10,7 +10,7 @@ export const calculateSetVolumeContract = Logic.calculateSetVolume;
 export const calculateWorkoutVolumeContract = Logic.calculateWorkoutVolume;
 
 // Share the real calculator invoked by CustomFoodForm; never reimplement it in a test.
-export { calculateCustomFoodKcal as calculateRealtimeKcalContract } from '../src/components/Nutrition/CustomFoodForm';
+export { calculateCustomFoodKcal as calculateRealtimeKcalContract } from '../src/lib/nutrition/calculateCustomFoodKcal';
 
 export function mergeActivePainsContract(
     activePains: string[] = [],
