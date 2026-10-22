@@ -36,7 +36,7 @@ export function useGoogleAuthActions({
         } catch (error) {
             // An older failing redirect cannot clear a newer attempt (or
             // veto its foreground completion via the shared failure ref).
-            if (attempt !== null && !isCurrentAuthRedirectAttempt(attempt)) throw error;
+            if (attempt !== null && !isCurrentAuthRedirectAttempt(attempt)) return;
             redirectLaunchFailedRef.current = true;
             if (attempt !== null && !tryRemoveAuthRedirectMarker(AWAITING_REDIRECT_KEY, attempt)
                 && isCurrentAuthRedirectAttempt(attempt)) {
