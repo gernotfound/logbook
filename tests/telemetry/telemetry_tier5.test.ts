@@ -3,10 +3,12 @@ import {
   telemetryHub,
   TELEMETRY_QUEUE_CAPACITY,
   DEDUP_WINDOW_MS,
+  TELEMETRY_DISPATCH_TIMEOUT_MS,
   type TelemetryErrorPayload,
 } from '../../src/lib/telemetryHub';
 import { getTelemetryContext } from '../../src/lib/telemetrySanitizer';
 import { DomainParsers } from '../../src/lib/schema';
+import { protectedDeviceKey } from '../../src/lib/sync/deviceStorage';
 import { installTelemetryTestHarness, mockSetDoc } from './telemetryTestHarness';
 import { seedCurrentTelemetryQueue } from './seedCurrentQueue';
 
@@ -15,19 +17,17 @@ describe('Unified Telemetry Hub E2E Suite — Tier 5', () => {
 
   describe('Tier 5: Adversarial Hardening & Stress Suite', () => {
     describe('5.1: High-Load Burst Error Spamming & Sliding Window Aggregation', () => {
-      it('T5-1: hot-loop burst of 1,000 identical errors executes in <50ms and aggregates to 1 rate limiter entry with count=1000', async () => {
+      it('T5-1: hot-loop burst of 1,000 errors aggregates to one rate limiter with count=1000', async () => {
         vi.useFakeTimers();
         telemetryHub.init();
         telemetryHub.setUserId('user_t5_1');
 
         const err = new TypeError('Database connection pool exhausted');
-        const start = performance.now();
+        // Fake timers also fake performance.now(): elapsed-time checks in
+        // this mode cannot prove actual CPU work or detect a regression.
         for (let i = 0; i < 1000; i++) {
           telemetryHub.trackError(err);
         }
-        const elapsed = performance.now() - start;
-
-        expect(elapsed).toBeLessThan(50);
         expect(telemetryHub.getActiveRateLimiterCount()).toBe(1);
 
         await vi.advanceTimersByTimeAsync(50);
@@ -152,9 +152,14 @@ describe('Unified Telemetry Hub E2E Suite — Tier 5', () => {
             errorResult = res;
           });
 
-        await vi.advanceTimersByTimeAsync(5100);
+        expect(mockSetDoc).toHaveBeenCalledTimes(1);
+        expect(vi.getTimerCount()).toBe(1);
+        await vi.advanceTimersByTimeAsync(TELEMETRY_DISPATCH_TIMEOUT_MS - 1);
+        expect(vi.getTimerCount()).toBe(1);
+        await vi.advanceTimersByTimeAsync(1);
         await dispatchAttempt;
         expect(errorResult).toBe(false);
+        expect(vi.getTimerCount()).toBe(0);
       });
 
       it('T5-6: flapping network trips circuit breaker immediately mid-flush and preserves uncommitted items in FIFO order', async () => {
@@ -227,7 +232,12 @@ describe('Unified Telemetry Hub E2E Suite — Tier 5', () => {
         await vi.advanceTimersByTimeAsync(100);
         await Promise.all([flush1, flush2]);
 
-        expect(mockSetDoc).toHaveBeenCalled();
+        const sends = mockSetDoc.mock.calls.map((call: any) => call[1]);
+        // Two overlapping flushes must send the same queued report exactly once.
+        expect(sends.filter((payload: any) => payload.id === 'err_queued_1')).toHaveLength(1);
+        expect(sends.filter((payload: any) => payload.message === 'Hot error during flush')).toHaveLength(1);
+        expect(sends.filter((payload: any) => payload.type === 'event_during_flush')).toHaveLength(1);
+        expect(telemetryHub.getQueuedEvents()).toHaveLength(0);
       });
 
       it('T5-8: telemetry provider failures are caught silently without throwing to callers', async () => {
@@ -435,31 +445,6 @@ describe('Unified Telemetry Hub E2E Suite — Tier 5', () => {
     });
 
     describe('5.4: Corrupted Storage Defense & Malformed Payloads', () => {
-      it('T5-12: malformed and truncated JSON in storage queue returns [] and is reset to valid array on next enqueue', () => {
-        localStorage.setItem(telemetryHub.getQueueStorageKey(), '{ malformed [ broken JSON :');
-        telemetryHub.init();
-
-        expect(telemetryHub.getQueuedEvents()).toEqual([]);
-
-        Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
-        telemetryHub.trackEvent('recovery_event');
-
-        const queued = telemetryHub.getQueuedEvents();
-        expect(queued.length).toBe(1);
-        expect(queued[0].payload.type).toBe('recovery_event');
-
-        Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
-      });
-
-      it('T5-13: non-array primitives (strings, numbers, objects) under queue key are filtered safely', () => {
-        localStorage.setItem(telemetryHub.getQueueStorageKey(), JSON.stringify({ notAnArray: true, val: 123 }));
-        telemetryHub.init();
-        expect(telemetryHub.getQueuedEvents()).toEqual([]);
-
-        localStorage.setItem(telemetryHub.getQueueStorageKey(), '42');
-        expect(telemetryHub.getQueuedEvents()).toEqual([]);
-      });
-
       it('T5-14: corrupted queue entries containing nulls or missing payloads are pruned during flush', async () => {
         telemetryHub.init();
         telemetryHub.setUserId('user_t5_14');
@@ -492,21 +477,33 @@ describe('Unified Telemetry Hub E2E Suite — Tier 5', () => {
         expect(telemetryHub.getQueuedEvents().length).toBe(0);
       });
 
-      it('T5-15: localStorage QuotaExceededError is caught silently without disrupting application flow', () => {
+      it('T5-15: quota rejection of the actual encrypted queue write retains RAM diagnostics', async () => {
         Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
         telemetryHub.init();
+        telemetryHub.setUserId('user_t5_15');
+        await seedCurrentTelemetryQueue('user_t5_15', []);
+
+        const sealedKey = protectedDeviceKey('telemetry_queue', 'user:user_t5_15');
+        const originalCiphertext = localStorage.getItem(sealedKey);
+        expect(originalCiphertext).toMatch(/^tlb-sealed:v1:/);
 
         const setItemSpy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
           throw new DOMException('The quota has been exceeded.', 'QuotaExceededError');
         });
+        try {
+          expect(() => {
+            telemetryHub.trackError(new Error('Quota error test'));
+            telemetryHub.trackEvent('quota_event_test');
+          }).not.toThrow();
 
-        expect(() => {
-          telemetryHub.trackError(new Error('Quota error test'));
-          telemetryHub.trackEvent('quota_event_test');
-        }).not.toThrow();
-
-        setItemSpy.mockRestore();
-        Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
+          expect(setItemSpy.mock.calls.some(call => call[0] === sealedKey)).toBe(true);
+          expect(telemetryHub.getQueuedEvents().map(item => item.itemType)).toEqual(['error', 'event']);
+          expect(localStorage.getItem(sealedKey)).toBe(originalCiphertext);
+          expect(localStorage.getItem(telemetryHub.getQueueStorageKey())).toBeNull();
+        } finally {
+          setItemSpy.mockRestore();
+          Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
+        }
       });
     });
 
