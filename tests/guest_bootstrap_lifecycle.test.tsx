@@ -82,7 +82,7 @@ describe('Milestone M2: Guest Bootstrap & Cold Start Lifecycle', () => {
         });
         await act(async () => { await result.current.loginAsGuest(); });
         await confirmRealGuestVault();
-        await act(async () => { await result.current.logout({ mode: 'normal', skipConfirm: true }); });
+        await act(async () => { await result.current.logout({ mode: 'normal' }); });
 
         const fenceKey = 'logbook:local-purge-fence:v1:guest';
         expect(result.current.isGuest).toBe(false);
