@@ -10,7 +10,6 @@ import {
 } from '../../src/lib/telemetrySanitizer';
 import {
   telemetryHub,
-  DEDUP_WINDOW_MS,
   type TelemetryErrorPayload,
 } from '../../src/lib/telemetryHub';
 import { installTelemetryTestHarness, mockSentryTransport } from './telemetryTestHarness';
@@ -20,7 +19,7 @@ describe('TelemetryHub Vitest Integration Suite — Tier 2 Core', () => {
 
   describe('Tier 2: Boundary & Corner Cases — Core Telemetry', () => {
     describe('F1 Boundaries: Context Provider Edge Conditions', () => {
-      it('F1-B1: handles navigator being undefined or null in non-browser context', () => {
+      it('F1-B1: handles omitted navigator in non-browser context', () => {
         const platform = detectDerivedPlatform(undefined);
         expect(platform).toBe('other');
 
@@ -49,7 +48,7 @@ describe('TelemetryHub Vitest Integration Suite — Tier 2 Core', () => {
         expect(detectDerivedPlatform(mockNavNaN)).toBe('other');
       });
 
-      it('F1-B4: handles matchMedia throwing or returning undefined in restricted iframes', () => {
+      it('F1-B4: handles matchMedia throwing in restricted iframes', () => {
         const mockWinThrow = {
           navigator: { standalone: false },
           matchMedia: vi.fn().mockImplementation(() => {
@@ -117,7 +116,7 @@ describe('TelemetryHub Vitest Integration Suite — Tier 2 Core', () => {
         expect(scrubPII('')).toBe('');
       });
 
-      it('F2-B6: handles non-string error messages (numbers, objects, symbols, circular references)', () => {
+      it('F2-B6: handles non-string error messages (numbers, null and circular objects)', () => {
         const circularObj: any = { message: 'Circular error' };
         circularObj.self = circularObj;
 
@@ -177,6 +176,10 @@ describe('TelemetryHub Vitest Integration Suite — Tier 2 Core', () => {
 
         await vi.advanceTimersByTimeAsync(100);
         expect(mockSentryTransport).toHaveBeenCalledTimes(1);
+        expect(mockSentryTransport.mock.calls[0][0]).toBe('error');
+        const payload = mockSentryTransport.mock.calls[0][1] as TelemetryErrorPayload;
+        expect(payload.source).toBe('react_caught');
+        expect(payload.componentStack).toBeUndefined();
       });
 
       it('F4-B2: a failed Sentry transport retains the current owner report', async () => {
@@ -240,7 +243,7 @@ describe('TelemetryHub Vitest Integration Suite — Tier 2 Core', () => {
 
         await vi.advanceTimersByTimeAsync(100);
         expect(mockSentryTransport).toHaveBeenCalledTimes(50);
-        expect(mockSentryTransport.mock.calls.every((call: any) => call[0] === 'error' && call[1].source === 'react_caught')).toBe(true);
+        expect(mockSentryTransport.mock.calls.every((call: [string, TelemetryErrorPayload]) => call[0] === 'error' && call[1].source === 'react_caught')).toBe(true);
       });
     });
 
@@ -290,7 +293,7 @@ describe('TelemetryHub Vitest Integration Suite — Tier 2 Core', () => {
         expect(payload.message).toBe('Unhandled rejection');
       });
 
-      it('F5-B4: onunhandledrejection with primitive reason (number, boolean, symbol)', async () => {
+      it('F5-B4: onunhandledrejection with numeric reason', async () => {
         vi.useFakeTimers();
         telemetryHub.init();
 
@@ -326,7 +329,7 @@ describe('TelemetryHub Vitest Integration Suite — Tier 2 Core', () => {
 
         await vi.advanceTimersByTimeAsync(100);
         expect(mockSentryTransport).toHaveBeenCalledTimes(10);
-        expect(mockSentryTransport.mock.calls.every((call: any) => call[0] === 'error' && call[1].source === 'unhandled_rejection')).toBe(true);
+        expect(mockSentryTransport.mock.calls.every((call: [string, TelemetryErrorPayload]) => call[0] === 'error' && call[1].source === 'unhandled_rejection')).toBe(true);
       });
     });
 

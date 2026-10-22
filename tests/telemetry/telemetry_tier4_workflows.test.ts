@@ -25,13 +25,14 @@ describe('TelemetryHub Vitest Integration Suite — Tier 4', () => {
       await vi.advanceTimersByTimeAsync(100);
 
       expect(mockSentryTransport).toHaveBeenCalledTimes(1);
+      expect(mockSentryTransport.mock.calls[0][0]).toBe('error');
       const payload = mockSentryTransport.mock.calls[0][1] as TelemetryErrorPayload;
       expect(payload.source).toBe('react_uncaught');
       expect(payload.componentStack).not.toContain('C:\\Users\\athlete');
       expect(payload.componentStack!.length).toBeLessThanOrEqual(1000);
     });
 
-    it('T4-4: Privacy Boundary Stress Test: payload with JWT, Bearer token, IP, email, local file paths, and notes is completely sanitized', async () => {
+    it('T4-4: error diagnostics redact JWT, Bearer token, IP, email, and local file paths', async () => {
       vi.useFakeTimers();
       telemetryHub.init();
       telemetryHub.setUserId('privacy_tester');
@@ -43,6 +44,8 @@ describe('TelemetryHub Vitest Integration Suite — Tier 4', () => {
       telemetryHub.trackError(dirtyError);
       await vi.advanceTimersByTimeAsync(100);
 
+      expect(mockSentryTransport).toHaveBeenCalledTimes(1);
+      expect(mockSentryTransport.mock.calls[0][0]).toBe('error');
       const payload = mockSentryTransport.mock.calls[0][1] as TelemetryErrorPayload;
       expect(payload.message).not.toContain('eyJhbGci');
       expect(payload.message).not.toContain('10.0.0.1');

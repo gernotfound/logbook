@@ -30,6 +30,7 @@ describe('TelemetryHub Vitest Integration Suite — Tier 3', () => {
       await telemetryHub.flushQueue();
 
       expect(mockSentryTransport).toHaveBeenCalledTimes(1);
+      expect(mockSentryTransport.mock.calls[0][0]).toBe('error');
       expect((mockSentryTransport.mock.calls[0][1] as TelemetryErrorPayload).count).toBe(10);
     });
 
@@ -77,6 +78,7 @@ describe('TelemetryHub Vitest Integration Suite — Tier 3', () => {
       await telemetryHub.flushQueue();
 
       expect(mockSentryTransport).toHaveBeenCalledTimes(1);
+      expect(mockSentryTransport.mock.calls[0][0]).toBe('error');
       const payload = mockSentryTransport.mock.calls[0][1] as TelemetryErrorPayload;
       expect(payload.source).toBe('zod_validation');
     });
@@ -115,8 +117,8 @@ describe('TelemetryHub Vitest Integration Suite — Tier 3', () => {
       await telemetryHub.flushQueue();
 
       expect(mockSentryTransport).toHaveBeenCalledTimes(3);
-      expect(mockSentryTransport.mock.calls.map((call: any) => call[0])).toEqual(['error', 'error', 'error']);
-      expect(mockSentryTransport.mock.calls.map((call: any) => call[1].message)).toEqual(expected);
+      expect(mockSentryTransport.mock.calls.map((call: [string, TelemetryErrorPayload]) => call[0])).toEqual(['error', 'error', 'error']);
+      expect(mockSentryTransport.mock.calls.map((call: [string, TelemetryErrorPayload]) => call[1].message)).toEqual(expected);
       expect(telemetryHub.getQueuedEvents()).toHaveLength(0);
     });
 
