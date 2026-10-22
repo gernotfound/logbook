@@ -176,11 +176,11 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory, onRequestEnd }: Acti
         addSpecialSet(exIndex, setId, type, () => setOpenSpecialMenuId(null));
     }, [addSpecialSet]);
 
-    const handleUpdateSpecialSet = useCallback((exIndex: number, setId: string, type: 'dropsets' | 'isometrics' | 'segments', idx: number, field: string, val: unknown) => {
+    const handleUpdateSpecialSet = useCallback((exIndex: number, setId: string, type: 'dropsets' | 'isometrics' | 'segments', idx: number | string, field: string, val: unknown) => {
         updateSpecialSet(exIndex, setId, type, idx, field, val);
     }, [updateSpecialSet]);
 
-    const handleRemoveSpecialSet = useCallback((exIndex: number, setId: string, type: 'dropsets' | 'isometrics' | 'segments', idx: number) => {
+    const handleRemoveSpecialSet = useCallback((exIndex: number, setId: string, type: 'dropsets' | 'isometrics' | 'segments', idx: number | string) => {
         removeSpecialSet(exIndex, setId, type, idx);
     }, [removeSpecialSet]);
 

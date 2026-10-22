@@ -1,8 +1,10 @@
 import React, { useLayoutEffect } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, renderHook, screen } from '@testing-library/react';
 import { BufferedInput, BufferedTextarea } from '../src/components/UI/BufferedInput';
 import { BufferedWorkoutScope } from '../src/components/UI/bufferedWorkoutScope';
+import SessionSetRow from '../src/components/Training/session/SessionSetRow';
+import { useWorkoutSetMutations } from '../src/hooks/workout/useWorkoutSetMutations';
 import type { WorkoutSession } from '../src/types';
 import { deviceKey } from '../src/lib/sync/deviceStorage';
 import { readBufferedDraftSnapshot, writeBufferedDraft } from '../src/lib/sync/bufferedDraftEpoch';
@@ -840,5 +842,110 @@ describe.each(['input', 'textarea'] as const)('independent same-workout %s write
         expect(readBufferedWriterEvidence(owner, draftName)).toMatchObject([
             { name, raw: newer, value: 'version 2' },
         ]);
+    });
+});
+
+describe('advanced workout segment identity across removal and draft recovery', () => {
+    const workoutId = 'w-segment-identity';
+    const segmentA = { id: 'seg-a', kg: '90', reps: '5', technique: 'cluster' as const };
+    const segmentB = { id: 'seg-b', kg: '80', reps: '4', technique: 'cluster' as const };
+    const initialSet = {
+        id: 'set-identity', kg: '100', reps: '8', technique: 'cluster' as const,
+        segments: [segmentA, segmentB],
+    };
+    const handlers = {
+        onToggleMenu: vi.fn(), onRemoveSet: vi.fn(), onUpdateSet: vi.fn(),
+        onAddSpecialSet: vi.fn(), onUpdateSpecialSet: vi.fn(),
+        onRemoveSpecialSet: vi.fn(), onUpdateSetTarget: vi.fn(),
+    };
+    const row = (set: typeof initialSet) => (
+        <BufferedWorkoutScope.Provider value={workoutId}>
+            <SessionSetRow set={set} sIndex={0} exIndex={0} isOpenMenu={false} {...handlers} />
+        </BufferedWorkoutScope.Provider>
+    );
+
+    beforeEach(() => {
+        localStorageMock.getItem.mockImplementation(initialGetItem);
+        localStorageMock.setItem.mockImplementation(initialSetItem);
+        localStorage.clear();
+        vi.clearAllMocks();
+        useAppStore.setState({
+            localWorkout: { id: workoutId } as WorkoutSession,
+            localPersistenceBlocked: false, syncHealth: 'synced',
+            syncPresentation: 'normal', saveError: null,
+        });
+        localStorage.setItem(`logbook:v2:${captureSession().owner}:health-consent-generation`, '3');
+    });
+    afterEach(() => {
+        useAppStore.setState({ localWorkout: null });
+        localStorageMock.getItem.mockImplementation(initialGetItem);
+        localStorageMock.setItem.mockImplementation(initialSetItem);
+        vi.restoreAllMocks();
+    });
+
+    it('keeps the later segment DOM and durable recovery key when the earlier dirty segment unmounts', () => {
+        const owner = captureSession().owner;
+        const keyB = deviceKey(`draft:buffered:input:${workoutId}:seg-kg-set-identity-seg-b`, owner);
+        const view = render(row(initialSet));
+        const inputA = view.container.querySelector('#seg-kg-set-identity-seg-a') as HTMLInputElement;
+        const inputB = view.container.querySelector('#seg-kg-set-identity-seg-b') as HTMLInputElement;
+        expect(inputA).not.toBeNull();
+        expect(inputB).not.toBeNull();
+
+        fireEvent.change(inputA, { target: { value: '91' } });
+        fireEvent.change(inputB, { target: { value: '77' } });
+        const bRaw = localStorage.getItem(keyB);
+        expect(bRaw).not.toBeNull();
+        expect(JSON.parse(bRaw!)).toMatchObject({ value: '77', name: `draft:buffered:input:${workoutId}:seg-kg-set-identity-seg-b` });
+
+        view.rerender(row({ ...initialSet, segments: [segmentB] }));
+        const surviving = view.container.querySelector('#seg-kg-set-identity-seg-b') as HTMLInputElement;
+        expect(surviving).toBe(inputB);
+        expect(surviving.value).toBe('77');
+        expect(localStorage.getItem(keyB)).toBe(bRaw);
+        expect(handlers.onUpdateSpecialSet).toHaveBeenCalledWith(0, 'set-identity', 'segments', 'seg-a', 'kg', '91');
+        fireEvent.blur(surviving);
+        expect(handlers.onUpdateSpecialSet).toHaveBeenCalledWith(0, 'set-identity', 'segments', 'seg-b', 'kg', '77');
+        expect(localStorage.getItem(keyB)).toBe(bRaw);
+        expect(view.container.querySelector('#seg-kg-set-identity-seg-a')).toBeNull();
+        view.unmount();
+    });
+
+    it('ignores an unmounted segment callback and updates only the surviving ID', () => {
+        let workout = { id: workoutId, exercises: [{ id: 'exercise-a', exId: 'bench',
+            sets: [initialSet] }] } as unknown as WorkoutSession;
+        const setLocalWorkout = (updater: (prev: WorkoutSession | null) => WorkoutSession | null) => {
+            workout = updater(workout) ?? workout;
+        };
+        const { result } = renderHook(() => useWorkoutSetMutations({
+            setLocalWorkout, showConfirm: async () => true,
+        }));
+        act(() => result.current.removeSpecialSet(0, 'set-identity', 'segments', 'seg-a'));
+        expect(workout.exercises[0].sets[0].segments?.map(x => x.id)).toEqual(['seg-b']);
+        const afterRemoval = workout;
+        act(() => result.current.updateSpecialSet(0, 'set-identity', 'segments', 'seg-a', 'kg', '999'));
+        expect(workout).toBe(afterRemoval);
+        act(() => result.current.updateSpecialSet(0, 'set-identity', 'segments', 'seg-b', 'kg', '77'));
+        expect(workout.exercises[0].sets[0].segments?.[0]).toMatchObject({ id: 'seg-b', kg: '77' });
+    });
+
+    it.each(['dropsets', 'isometrics'] as const)('prevents stale %s callbacks retargeting the next child', collection => {
+        const children = collection === 'dropsets'
+            ? [{ id: 'first', kg: '55', reps: '8' }, { id: 'second', kg: '45', reps: '6' }]
+            : [{ id: 'first', kg: '55', time: '15' }, { id: 'second', kg: '45', time: '10' }];
+        let workout = { id: workoutId, exercises: [{ id: 'exercise-a', exId: 'bench',
+            sets: [{ id: 'set-identity', kg: '100', reps: '8', [collection]: children }] }] } as unknown as WorkoutSession;
+        const setLocalWorkout = (updater: (prev: WorkoutSession | null) => WorkoutSession | null) => {
+            workout = updater(workout) ?? workout;
+        };
+        const { result } = renderHook(() => useWorkoutSetMutations({
+            setLocalWorkout, showConfirm: async () => true,
+        }));
+        act(() => result.current.removeSpecialSet(0, 'set-identity', collection, 'first'));
+        const after = workout;
+        act(() => result.current.updateSpecialSet(0, 'set-identity', collection, 'first', 'kg', '999'));
+        expect(workout).toBe(after);
+        act(() => result.current.updateSpecialSet(0, 'set-identity', collection, 'second', 'kg', '42'));
+        expect(workout.exercises[0].sets[0][collection]?.[0]).toMatchObject({ id: 'second', kg: '42' });
     });
 });
