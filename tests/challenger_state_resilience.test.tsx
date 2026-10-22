@@ -320,36 +320,30 @@ describe('Challenger 2: Adversarial State Management, Schemas, Guest Merge & UI 
             expect(getLatestUserWeight({}, {})).toBe(80);
         });
 
-        it('3.4 mergeActivePains: preserves active pains regardless of trained muscle mapping', () => {
-            const library = [
-                { id: 'ex_bench', muscles: ['chest'], secondaryMuscles: ['triceps', 'deltoids_front'] },
-                { id: 'ex_squat', muscles: ['quadriceps', 'glutes'], secondaryMuscles: ['hamstrings'] },
-                { id: 'ex_lat_raise', muscles: ['shoulders_left', 'shoulders_right'] }
-            ];
-
-            // Scenario A: training the related base muscle does not imply recovery.
+        it('3.4 mergeActivePains: preserves active pains regardless of muscle laterality or grouping', () => {
+            // Scenario A: The base muscle identifier does not implicitly resolve unilateral soreness.
             const activeA = ['chest_left', 'back_lats'];
-            const resA = mergeActivePains(activeA, [{ exId: 'ex_bench' }], library, []);
+            const resA = mergeActivePains(activeA, []);
             expect(resA).toEqual(['chest_left', 'back_lats']);
 
-            // Scenario B: unilateral exercise metadata does not clear a base pain.
+            // Scenario B: A base pain is not cleared automatically.
             const activeB = ['shoulders', 'biceps'];
-            const resB = mergeActivePains(activeB, [{ exId: 'ex_lat_raise' }], library, []);
+            const resB = mergeActivePains(activeB, []);
             expect(resB).toEqual(['shoulders', 'biceps']);
 
-            // Scenario C: primary/secondary metadata is irrelevant to recovery state.
+            // Scenario C: Existing pains require explicit removal.
             const activeC = ['triceps'];
-            const resC = mergeActivePains(activeC, [{ exId: 'ex_bench' }], library, []);
+            const resC = mergeActivePains(activeC, []);
             expect(resC).toEqual(['triceps']);
 
             // Scenario D: re-reporting an active pain is deduplicated.
             const activeD = ['chest'];
-            const resD = mergeActivePains(activeD, [{ exId: 'ex_bench' }], library, ['chest']);
+            const resD = mergeActivePains(activeD, ['chest']);
             expect(resD).toEqual(['chest']);
 
             // Scenario E: existing pains stay and new session pains are appended.
             const activeE = ['legs'];
-            const resE = mergeActivePains(activeE, [{ exId: 'ex_bench' }], library, ['abs']);
+            const resE = mergeActivePains(activeE, ['abs']);
             expect(resE).toContain('legs');
             expect(resE).toContain('abs');
         });
