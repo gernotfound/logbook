@@ -21,22 +21,26 @@ describe('atomic workout timer storage', () => {
         vi.restoreAllMocks();
     });
 
-    it('ignores obsolete three-key timer state when the canonical snapshot is absent', () => {
-        localStorage.setItem(deviceKey('timer_state', OWNER), 'running');
-        localStorage.setItem(deviceKey('timer_start', OWNER), '1000');
-        localStorage.setItem(deviceKey('timer_accumulated', OWNER), '250');
-
+    it('returns stopped without writing when the canonical snapshot is absent', () => {
         expect(readWorkoutTimerSnapshot(OWNER)).toEqual(stoppedWorkoutTimer());
         expect(localStorage.getItem(deviceKey('timer', OWNER))).toBeNull();
+        expect(localStorageMock.setItem).not.toHaveBeenCalled();
+        expect(localStorageMock.removeItem).not.toHaveBeenCalled();
     });
 
-    it('keeps the canonical stopped snapshot authoritative over obsolete keys', () => {
-        localStorage.setItem(deviceKey('timer_state', OWNER), 'running');
-        localStorage.setItem(deviceKey('timer_start', OWNER), '1000');
-        localStorage.setItem(deviceKey('timer_accumulated', OWNER), '250');
-        localStorage.setItem(deviceKey('timer', OWNER), JSON.stringify(stoppedWorkoutTimer()));
+    it.each([
+        ['invalid JSON', '{broken'],
+        ['unsupported snapshot version', JSON.stringify({ version: 2, state: 'stopped', startTime: 0, accumulated: 0 })],
+        ['invalid running timestamp', JSON.stringify({ version: 1, state: 'running', startTime: 0, accumulated: 250 })],
+    ])('fails closed for %s rather than silently resetting a damaged timer', (_description, value) => {
+        localStorage.setItem(deviceKey('timer', OWNER), value);
+        localStorageMock.setItem.mockClear();
+        localStorageMock.removeItem.mockClear();
 
-        expect(readWorkoutTimerSnapshot(OWNER)).toEqual(stoppedWorkoutTimer());
+        expect(() => readWorkoutTimerSnapshot(OWNER)).toThrow();
+        expect(localStorage.getItem(deviceKey('timer', OWNER))).toBe(value);
+        expect(localStorageMock.setItem).not.toHaveBeenCalled();
+        expect(localStorageMock.removeItem).not.toHaveBeenCalled();
     });
 
     it('persists a complete running state with one canonical setItem call', () => {
