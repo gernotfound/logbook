@@ -39,7 +39,7 @@ Solo dopo quel commit è ammesso ripristinare un timer mancante, convertendo lo 
 
 ## Esportazione CSV
 
-`Exporter.exportToCSV` genera dal dataset disponibile in memoria `allenamenti.csv`, `misurazioni.csv` e, quando presenti, `passi.csv` e `cardio.csv`. È un export analitico tabellare: il CSV non ha la completezza del percorso Backup JSON cloud paginato e la UI non deve presentarlo come copia completa o ripristinabile.
+`buildCsvFiles` in `src/lib/csvExport.ts` genera in modo deterministico dal dataset disponibile in memoria `allenamenti.csv`, `misurazioni.csv` e, quando presenti, `passi.csv` e `cardio.csv`. `Exporter.exportToCSV` orchestra esclusivamente l'avviso per lo storico vuoto e il salvataggio sequenziale, con annullamento che interrompe gli output successivi. `Exporter.downloadFile` aggiunge il BOM UTF-8 al contenuto CSV prima del salvataggio. È un export analitico tabellare: il CSV non ha la completezza del percorso Backup JSON cloud paginato e la UI non deve presentarlo come copia completa o ripristinabile.
 
 - **MUST:** I CSV includono il BOM UTF-8 per compatibilità Excel. Markdown, sorgenti e JSON restano UTF-8 senza BOM.
 - **MUST:** Nuove metriche business da esportare devono essere mappate esplicitamente nel contratto tipizzato CSV oppure classificate deliberatamente come escluse.
