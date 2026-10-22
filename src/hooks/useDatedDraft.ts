@@ -95,7 +95,7 @@ export function useDatedDraft<T extends Record<string, string>>(kind: string, da
     const [edited, setEdited] = useState<{ scope: string; values: T | null } | null>(null);
     const values = readScope && edited?.scope === readScope ? edited.values ?? source : loaded ?? source;
     const current = useRef<CurrentDraft<T>>({
-        key, name: key ? name : null, scope: readScope, values, dirty: !!loaded, session,
+        key, name: key ? name : null, scope: readScope, values, dirty: false, session,
         observedRaw: image.raw, writerName: null, writerRaw: null, sourceIntent,
     });
     // The reload registry callback is intentionally registered once. Keep
@@ -110,7 +110,8 @@ export function useDatedDraft<T extends Record<string, string>>(kind: string, da
         const sameScope = current.current.scope === readScope;
         current.current = {
             key, name: key ? name : null, scope: readScope, values,
-            dirty: Boolean(key) && (edited?.scope === readScope ? edited.values !== null : !!loaded),
+            // A recovered snapshot is already durable; only new edits need a flush.
+            dirty: Boolean(key) && edited?.scope === readScope && edited.values !== null,
             session,
             observedRaw: sameScope ? current.current.observedRaw : image.raw,
             writerName: sameScope ? current.current.writerName : null,

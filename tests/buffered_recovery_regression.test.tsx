@@ -703,6 +703,72 @@ describe.each(['input', 'textarea'] as const)('independent same-workout %s write
         second.unmount();
     });
 
+    it('recovers a verified successor after successive crashes and confirms the whole lineage', () => {
+        const owner = captureSession().owner;
+        const first = mount(vi.fn());
+        fireEvent.change(edited(first), { target: { value: '75' } });
+        first.unmount();
+
+        const successor = mount(vi.fn());
+        expect(edited(successor).value).toBe('75');
+        fireEvent.change(edited(successor), { target: { value: '76' } });
+        expect(readBufferedWriterEvidence(owner, draftName)).toHaveLength(2);
+        successor.unmount();
+
+        const confirmed = vi.fn();
+        const recovered = mount(confirmed);
+        expect(edited(recovered).value).toBe('76');
+        expect(useAppStore.getState().localPersistenceBlocked).toBe(false);
+        fireEvent.blur(edited(recovered));
+        recovered.rerender(
+            <BufferedWorkoutScope.Provider value={workoutId}>
+                {field(kind, confirmed, '76')}
+            </BufferedWorkoutScope.Provider>,
+        );
+        expect(readBufferedDraftSnapshot(draftName, owner).raw).toBeNull();
+        expect(readBufferedWriterEvidence(owner, draftName)).toHaveLength(0);
+        recovered.unmount();
+    });
+
+    it('refuses sibling successors rather than declaring two editors one causal sequence', () => {
+        const owner = captureSession().owner;
+        const root = createBufferedWriterIntentName();
+        const first = writeBufferedWriterIntent(root, owner, draftName, 'original', null, '3');
+        const nextA = createBufferedWriterIntentName();
+        const nextB = createBufferedWriterIntentName();
+        const parent = { name: root, revisionId: (JSON.parse(first) as { revisionId: string }).revisionId };
+        writeBufferedWriterIntent(nextA, owner, draftName, 'A', null, '3', parent);
+        writeBufferedWriterIntent(nextB, owner, draftName, 'B', null, '3', parent);
+        writeBufferedDraft(draftName, owner, 'B', '3');
+        const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+        const view = mount(vi.fn());
+        expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
+        expect(readBufferedWriterEvidence(owner, draftName)).toHaveLength(3);
+        expect(readBufferedDraftSnapshot(draftName, owner).value).toBe('B');
+        expect(spy).toHaveBeenCalled();
+        view.unmount();
+    });
+
+    it('rejects a successor whose predecessor was edited after the cited revision', () => {
+        const owner = captureSession().owner;
+        const root = createBufferedWriterIntentName();
+        const rootRaw = writeBufferedWriterIntent(root, owner, draftName, '75', null, '3');
+        const parent = { name: root, revisionId: (JSON.parse(rootRaw) as { revisionId: string }).revisionId };
+        const successor = createBufferedWriterIntentName();
+        writeBufferedWriterIntent(successor, owner, draftName, '76', null, '3', parent);
+        writeBufferedDraft(draftName, owner, '76', '3');
+
+        // The still-live original writer changed the same independent key.
+        writeBufferedWriterIntent(root, owner, draftName, '77', rootRaw, '3');
+        const report = vi.spyOn(console, 'error').mockImplementation(() => {});
+        const reopened = mount(vi.fn());
+        expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
+        expect(readBufferedWriterEvidence(owner, draftName)).toHaveLength(2);
+        expect(readBufferedDraftSnapshot(draftName, owner).value).toBe('76');
+        expect(report).toHaveBeenCalled();
+        reopened.unmount();
+    });
+
     it('reseals the live source editor when another acknowledged editor consumed its former witness', () => {
         const owner = captureSession().owner;
         const source = mount(vi.fn());
