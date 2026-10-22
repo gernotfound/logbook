@@ -44,6 +44,7 @@ beforeEach(async () => {
     app.state = { userData: parse(170), localWorkout: { id: 'active', exercises: [] }, dataOwner: 'user:a' };
     await initializeLocal('user:a', app.state.userData);
     markTabSnapshotClean(captureSession(), app.state.userData);
+    disk.set('logbook:v2:user:a:workout', JSON.stringify(app.state.localWorkout));
 });
 afterEach(() => vi.unstubAllGlobals());
 it('allows offline update only with the durable copy and synchronous active workout snapshot', async () => {
@@ -70,6 +71,7 @@ it('repairs a lagging guest snapshot without creating a cloud journal', async ()
     app.state.userData = base;
     app.state.dataOwner = 'guest';
     await initializeLocal('guest', base);
+    disk.set('logbook:v2:guest:workout', JSON.stringify(app.state.localWorkout));
     markTabSnapshotClean(captureSession(), base);
     markTabSnapshotDirty(captureSession(), base);
     app.state.userData = parse(171);
@@ -83,16 +85,20 @@ it('still blocks reload when the durable envelope is missing', async () => {
     await clear();
     app.flush.mockRejectedValue(new Error('offline'));
     await expect(prepareForReload()).rejects.toThrow('non sono ancora salvate');
-    expect(disk.size).toBe(0);
+    expect(disk.get('logbook:v2:user:a:workout')).toBeTruthy();
 });
 it('blocks reload when the synchronous workout snapshot fails', async () => {
+    const flush = () => { app.state.localWorkout = { id: 'new-draft', exercises: [] }; };
+    draftRegistry.register(flush);
     vi.spyOn(localStorage, 'setItem').mockImplementation(() => { throw new Error('quota'); });
-    await expect(prepareForReload()).rejects.toBeInstanceOf(BrowserStorageError);
+    try {
+        await expect(prepareForReload()).rejects.toBeInstanceOf(BrowserStorageError);
+    } finally { draftRegistry.unregister(flush); }
 });
 it('blocks reload on identity changes while awaiting persistence', async () => {
     app.flush.mockImplementation(async () => { app.auth.currentUser = { uid: 'b' }; invalidateSession(); });
     await expect(prepareForReload()).rejects.toThrow('Sessione cambiata');
-    expect(disk.size).toBe(0);
+    expect(disk.get('logbook:v2:user:a:workout')).toBeTruthy();
 });
 it('propagates a failed input flush and does not proceed to reload', async () => {
     const badDraft = () => { throw new Error('invalid draft'); };
@@ -139,6 +145,13 @@ it('fences a login-screen update if the session changes after preparation', asyn
     invalidateSession();
     expect(isReloadSessionCurrent(prepared)).toBe(false);
 });
+it('rejects reload when another tab advanced the device workout', async () => {
+    const newer = { id: 'newer-tab', exercises: [] };
+    disk.set('logbook:v2:user:a:workout', JSON.stringify(newer));
+    await expect(prepareForReload()).rejects.toThrow('modificato da un’altra scheda');
+    expect(JSON.parse(disk.get('logbook:v2:user:a:workout')!)).toEqual(newer);
+});
+
 it('hard reloads only after the durable reload barrier succeeds', async () => {
     app.flush.mockRejectedValue(new Error('offline'));
     const reload = vi.fn();
@@ -202,11 +215,14 @@ it('blocks required-update snapshot when the installed dataset belongs to anothe
 
     await expect(requiredUpdateHardReload(reload)).rejects.toThrow('non attribuibile');
     expect(reload).not.toHaveBeenCalled();
-    expect(disk.get('logbook:v2:user:a:workout')).toBeUndefined();
+    expect(JSON.parse(disk.get('logbook:v2:user:a:workout')!)).toEqual(app.state.localWorkout);
 });
 
 it('still blocks update-required reload when the device-critical workout snapshot cannot be persisted', async () => {
-    vi.spyOn(localStorage, 'setItem').mockImplementation(() => { throw new Error('quota'); });
+    vi.spyOn(localStorage, 'getItem').mockImplementation((key: string) => {
+        if (key === 'logbook:v2:user:a:workout') throw new Error('storage unavailable');
+        return disk.get(key) ?? null;
+    });
     const reload = vi.fn();
 
     await expect(requiredUpdateHardReload(reload)).rejects.toBeInstanceOf(BrowserStorageError);
@@ -255,6 +271,7 @@ it('does not erase a concurrent guest change from a clean stale tab', async () =
     app.state.userData = base;
     app.state.dataOwner = 'guest';
     await initializeLocal('guest', base);
+    disk.set('logbook:v2:guest:workout', JSON.stringify(app.state.localWorkout));
     markTabSnapshotClean(captureSession(), base);
     const concurrent = UserDataSchema.parse({
         ...base,

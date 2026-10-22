@@ -272,6 +272,7 @@ describe('Audit 18 device-critical persistence', () => {
 
     it('persists the workout produced by a synchronous draft flush, not its previous snapshot', () => {
         const updated = workout('w-current', '12');
+        localStorage.setItem(deviceKey('workout', owner), JSON.stringify(workout('w-current')));
         const flushDraft = () => { useAppStore.setState({ localWorkout: updated }); };
         draftRegistry.register(flushDraft);
         try {
@@ -286,4 +287,32 @@ describe('Audit 18 device-critical persistence', () => {
         }
     });
 
+    it.each([false, true])('preserves a newer tab workout when a stale tab backgrounds (draft=%s)', flushesDraft => {
+        const latest = workout('w-current', '14');
+        // This tab still has reps=8 while another tab published reps=14.
+        const key = deviceKey('workout', owner);
+        localStorage.setItem(key, JSON.stringify(latest));
+        const staleDraft = () => useAppStore.setState({ localWorkout: workout('w-current', '12') });
+        if (flushesDraft) draftRegistry.register(staleDraft);
+        try {
+            Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });
+            document.dispatchEvent(new Event('visibilitychange'));
+            expect(JSON.parse(localStorage.getItem(key)!)).toEqual(latest);
+            expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
+            expect(useAppStore.getState().saveError).toContain('mettere al sicuro');
+        } finally {
+            if (flushesDraft) draftRegistry.unregister(staleDraft);
+        }
+    });
+
+    it('does not publish a normal workout edit over a newer observed shared snapshot', () => {
+        const key = deviceKey('workout', owner);
+        const latest = workout('w-current', '16');
+        localStorage.setItem(key, JSON.stringify(latest));
+        expect(() => useAppStore.getState().setLocalWorkout(workout('w-current', '17')))
+            .toThrow('modificato da un’altra scheda');
+        expect(JSON.parse(localStorage.getItem(key)!)).toEqual(latest);
+        expect(useAppStore.getState().localWorkout?.exercises[0].sets[0].reps).toBe('8');
+        expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
+    });
 });

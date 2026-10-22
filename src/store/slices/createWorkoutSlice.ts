@@ -38,8 +38,8 @@ function blockWorkoutPersistence(set: (partial: Partial<AppState>) => void, erro
     });
 }
 
-function persistLocalWorkout(workout: WorkoutSession | null, owner?: string): void {
-    persistPlainWorkoutSnapshot(workout, owner);
+function persistLocalWorkout(workout: WorkoutSession | null, owner?: string, expectedPrevious?: WorkoutSession | null): void {
+    persistPlainWorkoutSnapshot(workout, owner, expectedPrevious);
 }
 
 function uniqueRecoveredId(raw: unknown, prefix: string, seen: Set<string>): string {
@@ -159,7 +159,7 @@ export const createWorkoutSlice: StateCreator<AppState, [], [], WorkoutSlice> = 
             if (existingIntent && nextWorkout !== null && !nextWorkout.isEditingHistory) {
                 throw new Error('Intento workout ancora in recupero: salvataggio generico non consentito.');
             }
-            persistLocalWorkout(nextWorkout);
+            persistLocalWorkout(nextWorkout, undefined, currentWorkout);
         } catch (error) {
             blockWorkoutPersistence(set, error);
             throw error;
@@ -193,7 +193,7 @@ export const createWorkoutSlice: StateCreator<AppState, [], [], WorkoutSlice> = 
                     captureSession().owner, currentWorkout, persistedWorkout, get().userData?.activeWorkout ?? null,
                 );
             } else {
-                persistLocalWorkout(persistedWorkout);
+                persistLocalWorkout(persistedWorkout, undefined, currentWorkout);
             }
         } catch (error) {
             blockWorkoutPersistence(set, error);
