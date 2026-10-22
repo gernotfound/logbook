@@ -537,9 +537,10 @@ describe('TelemetryHub Vitest Integration Suite — Tier 1 Core', () => {
         expect(payload.type).toBe('ZodError');
         expect(payload.source).toBe('zod_validation');
         expect(payload.userId).toBe('user_multi_zod');
-        expect(payload.message).toContain('a:');
-        expect(payload.message).toContain('b:');
-        expect(payload.message).toContain('c:');
+        // Zod 4 exposes the issue paths in its Error.message JSON.
+        for (const field of ['a', 'b', 'c']) {
+          expect(payload.message).toContain(`"${field}"`);
+        }
         expect(payload.message).not.toContain('not_bool');
       });
     });
