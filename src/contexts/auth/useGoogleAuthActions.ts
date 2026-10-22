@@ -2,7 +2,7 @@ import { useCallback, type RefObject } from 'react';
 import { auth, provider, signInWithPopup, signInWithRedirect } from '../../lib/firebase';
 import { useAppStore } from '../../store/useAppStore';
 import { captureSession, isCurrentSession } from '../../lib/sync/session';
-import { writeAuthRedirectMarker, tryRemoveAuthRedirectMarker } from '../../lib/auth/authRedirectMarker';
+import { AWAITING_REDIRECT_KEY, isCurrentAuthRedirectAttempt, writeAuthRedirectMarker, tryRemoveAuthRedirectMarker } from '../../lib/auth/authRedirectMarker';
 import { beginGuestMigrationIntent, clearGuestMigrationIntent, confirmGuestMigrationCredential, rejectGuestMigrationAuthWaiters } from '../../lib/auth/guestMigrationIntent';
 import { classifyGooglePopupFailure } from './googlePopup';
 import type { GuestMigrationPolicy } from '../AuthContextDef';
@@ -29,12 +29,17 @@ export function useGoogleAuthActions({
 }: GoogleAuthDependencies) {
     const startGoogleRedirect = useCallback(async () => {
         redirectLaunchFailedRef.current = false;
+        let attempt: string | null = null;
         try {
-            writeAuthRedirectMarker('true');
+            attempt = writeAuthRedirectMarker('true');
             await signInWithRedirect(auth, provider);
         } catch (error) {
+            // An older failing redirect cannot clear a newer attempt (or
+            // veto its foreground completion via the shared failure ref).
+            if (attempt !== null && !isCurrentAuthRedirectAttempt(attempt)) throw error;
             redirectLaunchFailedRef.current = true;
-            if (!tryRemoveAuthRedirectMarker()) {
+            if (attempt !== null && !tryRemoveAuthRedirectMarker(AWAITING_REDIRECT_KEY, attempt)
+                && isCurrentAuthRedirectAttempt(attempt)) {
                 try {
                     writeAuthRedirectMarker('failed');
                 } catch {
