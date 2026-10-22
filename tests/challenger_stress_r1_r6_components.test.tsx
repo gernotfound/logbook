@@ -537,68 +537,55 @@ describe('EMPIRICAL CHALLENGER: Adversarial Stress Test Suite (Requirements R1 -
     /* =========================================================================
      * REQUIREMENT R6: DOMS EXPLICIT PERSISTENCE LOGIC ADVERSARIAL STRESS
      * ========================================================================= */
-    describe('R6: DOMS Explicit Persistence Logic - Complex Exercise & Symmetry Scenarios', () => {
+    describe('R6: DOMS Explicit Persistence Logic - Pain and Laterality Scenarios', () => {
 
-        const library = [
-            { id: 'ex_bench', muscles: ['chest', 'triceps', 'shoulders_anterior'] },
-            { id: 'ex_lat', muscles: ['latissimus_dorsi', 'biceps'] },
-            { id: 'ex_squat', muscles: ['quadriceps', 'gluteus'] },
-            { id: 'ex_unilateral_curl', muscles: ['biceps_left'] }
-        ];
-
-        it('preserves a trained active pain when it is not re-selected in session pains', () => {
+        it('preserves active pain when it is not re-reported after a session', () => {
             const activePains = ['chest', 'quadriceps'];
-            const sessionExercises = [{ exId: 'ex_bench' }];
-            const result = mergeActivePains(activePains, sessionExercises, library, []);
+            const result = mergeActivePains(activePains, []);
             expect(result).toEqual(['chest', 'quadriceps']);
         });
 
-        it('preserves trained muscle if explicitly re-selected in session pains', () => {
+        it('deduplicates previously active pain explicitly re-reported after a session', () => {
             const activePains = ['chest', 'quadriceps'];
-            const sessionExercises = [{ exId: 'ex_bench' }];
             const sessionPains = ['chest']; // user still feels chest pain
 
-            const result = mergeActivePains(activePains, sessionExercises, library, sessionPains);
+            const result = mergeActivePains(activePains, sessionPains);
             expect(result).toContain('chest');
             expect(result).toContain('quadriceps');
         });
 
         it('adds newly reported session pains and merges with preserved pains', () => {
             const activePains = ['quadriceps'];
-            const sessionExercises = [{ exId: 'ex_lat' }];
             const sessionPains = ['latissimus_dorsi', 'shoulders']; // new soreness
 
-            const result = mergeActivePains(activePains, sessionExercises, library, sessionPains);
+            const result = mergeActivePains(activePains, sessionPains);
             expect(result).toContain('quadriceps'); // preserved
             expect(result).toContain('latissimus_dorsi'); // new/re-selected
             expect(result).toContain('shoulders'); // new
         });
 
-        it('does not infer bilateral recovery from training a related base muscle', () => {
+        it('preserves unilateral pain identifiers without implying bilateral recovery', () => {
             const activePains = ['chest_left', 'biceps'];
-            const sessionExercises = [{ exId: 'ex_bench' }];
-            const result = mergeActivePains(activePains, sessionExercises, library, []);
+            const result = mergeActivePains(activePains, []);
             expect(result).toEqual(['chest_left', 'biceps']);
         });
 
-        it('does not infer base-muscle recovery from unilateral training', () => {
+        it('preserves base-muscle pain until explicit removal', () => {
             const activePains = ['biceps'];
-            const sessionExercises = [{ exId: 'ex_unilateral_curl' }];
-            const result = mergeActivePains(activePains, sessionExercises, library, []);
+            const result = mergeActivePains(activePains, []);
             expect(result).toEqual(['biceps']);
         });
 
-        it('multi-muscle compound exercises preserve all active pains and deduplicate reported ones', () => {
+        it('preserves all active pains and deduplicates reported ones', () => {
             const activePains = ['chest', 'triceps', 'shoulders_anterior', 'calves'];
-            const sessionExercises = [{ exId: 'ex_bench' }];
-            const result = mergeActivePains(activePains, sessionExercises, library, ['triceps']);
+            const result = mergeActivePains(activePains, ['triceps']);
             expect(result).toEqual(['chest', 'triceps', 'shoulders_anterior', 'calves']);
         });
 
-        it('handles boundary conditions: empty active pains, empty library, corrupt entries', () => {
-            expect(mergeActivePains([], [], [], [])).toEqual([]);
-            expect(mergeActivePains(undefined as any, null as any, null as any, undefined as any)).toEqual([]);
-            expect(mergeActivePains(['chest', '', null as any], [{ exId: 'missing' }], [], [])).toEqual(['chest']);
+        it('handles empty lists and corrupt pain entries without dropping valid pains', () => {
+            expect(mergeActivePains([], [])).toEqual([]);
+            expect(mergeActivePains(undefined as any, null as any)).toEqual([]);
+            expect(mergeActivePains(['chest', '', null as any], [])).toEqual(['chest']);
         });
     });
 });
