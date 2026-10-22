@@ -94,11 +94,6 @@ export const initApp = async () => {
     return;
   }
 
-  // Retire GA4 opt-in independently of error monitoring initialization. Existing
-  // tabs running the older build receive a storage event when this key is removed.
-  // This preference is best-effort and never blocks the local data bootstrap.
-  try { localStorage.removeItem('logbook_ga4_consent_v1'); } catch { /* Optional storage. */ }
-
   try {
     initSentry();
     telemetryHub.init();

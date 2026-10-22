@@ -62,37 +62,22 @@ describe('Storage Bootstrap & Telemetry Integration Flow', () => {
     expect(createRoot).toHaveBeenCalledTimes(1);
   });
 
-  it('clears the retired GA4 opt-in even if error-monitoring initialization fails', async () => {
-    localStorage.setItem('logbook_ga4_consent_v1', 'true');
+  it('continues startup when technical error-monitoring initialization fails', async () => {
     localStorage.setItem('unrelated_preference', 'keep');
     const report = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const telemetryFailure = new Error('synthetic telemetry init failure');
     vi.spyOn(telemetryHub, 'init').mockImplementationOnce(() => {
-      throw new Error('synthetic telemetry init failure');
-    });
-    vi.spyOn(idbKeyval, 'get').mockResolvedValue(null);
-
-    try {
-      await initApp();
-
-      expect(localStorage.getItem('logbook_ga4_consent_v1')).toBeNull();
-      expect(localStorage.getItem('unrelated_preference')).toBe('keep');
-      expect(createRoot).toHaveBeenCalledTimes(1);
-      expect(useAppStore.getState().localPersistenceBlocked).toBe(false);
-    } finally {
-      report.mockRestore();
-    }
-  });
-
-  it('does not block bootstrap when removing the retired GA4 preference is unavailable', async () => {
-    localStorage.setItem('logbook_ga4_consent_v1', 'true');
-    vi.mocked(localStorageMock.removeItem).mockImplementationOnce(() => {
-      throw new DOMException('storage write blocked', 'SecurityError');
+      throw telemetryFailure;
     });
     vi.spyOn(idbKeyval, 'get').mockResolvedValue(null);
 
     await initApp();
 
-    expect(localStorage.getItem('logbook_ga4_consent_v1')).toBe('true');
+    expect(report).toHaveBeenCalledWith(
+      '[TelemetryHub] Inizializzazione fallita (non bloccante):',
+      telemetryFailure,
+    );
+    expect(localStorage.getItem('unrelated_preference')).toBe('keep');
     expect(createRoot).toHaveBeenCalledTimes(1);
     expect(useAppStore.getState().localPersistenceBlocked).toBe(false);
   });

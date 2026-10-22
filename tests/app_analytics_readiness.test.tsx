@@ -14,6 +14,7 @@ describe('Retired usage analytics boundary', () => {
     expect(existsSync('src/lib/googleAnalytics.ts')).toBe(false);
     expect(existsSync('src/lib/analyticsConsent.ts')).toBe(false);
     expect(main).not.toContain('initOptionalGoogleAnalytics');
+    expect(main).not.toContain('logbook_ga4_consent_v1');
     expect(firebase).not.toContain('measurementId');
     expect(main).not.toContain('firebase/analytics');
     expect(firebase).not.toContain('firebase/analytics');
