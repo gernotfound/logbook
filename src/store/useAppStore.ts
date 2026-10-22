@@ -42,13 +42,14 @@ if (typeof document !== 'undefined') {
     document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'hidden') {
             try {
-                // Draft callbacks can update the workout synchronously: capture only after the flush.
+                // Preserve pre-flush evidence against a newer competing tab.
+                const beforeFlush = useAppStore.getState().localWorkout;
                 draftRegistry.flushAll({ strict: true });
                 const state = useAppStore.getState();
                 if (state.localPersistenceBlocked) throw new Error('Persistenza locale bloccata.');
                 if (state.userData === null && state.dataOwner === null && state.localWorkout === null) return;
                 const session = captureSession();
-                persistOwnerBoundWorkoutSnapshot(session, state.dataOwner, state.localWorkout);
+                persistOwnerBoundWorkoutSnapshot(session, state.dataOwner, state.localWorkout, beforeFlush);
             } catch (error) {
                 console.error('Persistenza device-critical fallita durante visibilitychange:', error);
                 useAppStore.setState({

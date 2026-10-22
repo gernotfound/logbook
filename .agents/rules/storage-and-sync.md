@@ -318,6 +318,9 @@ Quando `document.visibilityState === 'hidden'`:
 2. i dati device-critical vengono scritti sincronicamente tramite le chiavi owner-scoped di `deviceStorage.ts` (per esempio `deviceKey('workout')`);
 3. l'operazione è protetta secondo il boundary applicabile.
 
+**MUST (CRITICAL, background e schede concorrenti):** il salvataggio automatico su `visibilitychange === 'hidden'` confronta lo snapshot device corrente con il workout osservato **prima** del flush dei draft. Se lo snapshot coincide già con il workout finale, non effettua una scrittura ridondante; se differisce dalla baseline precedente, rifiuta la sovrascrittura, preserva i dati e blocca la persistenza. Un nuovo workout pubblicato da un flush partendo da una baseline device coerente viene invece salvato sincronicamente. Dati device non leggibili o di una generazione di consenso precedente falliscono chiusi. Questo confronto non è CAS atomico fra schede: protegge soltanto i conflitti osservabili. I normali setter e i percorsi di editor/reload mantengono i contratti specialistici distinti.
+
+
 ## PWA Update Barrier
 
 Il componente di ricarica della PWA (`src/lib/sync/reloadBarrier.ts`) regola gli aggiornamenti del Service Worker per prevenire perdita/corruzione dati.
