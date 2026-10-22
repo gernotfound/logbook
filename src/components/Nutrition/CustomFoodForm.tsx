@@ -1,4 +1,5 @@
 import { Pencil, Plus, Save } from 'lucide-react';
+import { calculateCustomFoodKcal } from '../../lib/nutrition/calculateCustomFoodKcal';
 
 interface CustomFoodFormProps {
     cfData: any;
@@ -8,16 +9,6 @@ interface CustomFoodFormProps {
     setShowCustomModal: (show: boolean) => void;
     isEditing?: boolean;
     onCancel?: () => void;
-}
-
-/**
- * The exact calorie calculation used by the editable custom-food form.
- * Keep one production oracle for UI and numeric boundary tests.
- */
-export function calculateCustomFoodKcal(carbs: unknown, protein: unknown, fat: unknown): number {
-    const numeric = (value: unknown): number =>
-        parseFloat(String(value ?? '').trim().replace(',', '.')) || 0;
-    return Math.round(numeric(carbs) * 4 + numeric(protein) * 4 + numeric(fat) * 9);
 }
 
 export default function CustomFoodForm({ 
