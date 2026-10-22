@@ -1,7 +1,7 @@
 // Redirect recovery is tab-scoped. A settled older SDK promise must not
 // consume a marker launched by a later login attempt in the same tab.
 export const AWAITING_REDIRECT_KEY = 'logbook_awaiting_redirect';
-export const AWAITING_REDIRECT_ATTEMPT_KEY = 'logbook_awaiting_redirect_attempt';
+const AWAITING_REDIRECT_ATTEMPT_KEY = 'logbook_awaiting_redirect_attempt';
 
 export function readAuthRedirectMarker(key: string = AWAITING_REDIRECT_KEY): string | null {
     return sessionStorage.getItem(key);
