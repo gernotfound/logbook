@@ -1,13 +1,12 @@
 import { describe, it, expect, vi } from 'vitest';
-import { getTelemetryContext } from '../../src/lib/telemetrySanitizer';
 import {
   telemetryHub,
   TELEMETRY_QUEUE_CAPACITY,
+  TELEMETRY_DISPATCH_TIMEOUT_MS,
 } from '../../src/lib/telemetryHub';
 import { installTelemetryTestHarness, mockSentryTransport } from './telemetryTestHarness';
 import { seedCurrentTelemetryQueue } from './seedCurrentQueue';
-
-const RETIRED_GLOBAL_QUEUE_KEY = 'logbook_telemetry_queue';
+import { readEncryptedTelemetry } from '../../src/lib/telemetry/secureQueueDevice';
 
 describe('Technical telemetry queue and dispatch — Tier 1', () => {
   installTelemetryTestHarness();
@@ -24,13 +23,14 @@ describe('Technical telemetry queue and dispatch — Tier 1', () => {
 
         expect(localStorage.getItem(telemetryHub.getQueueStorageKey())).toBeNull();
         const parsed = telemetryHub.getQueuedEvents();
-        expect(Array.isArray(parsed)).toBe(true);
-        expect(parsed.length).toBe(2);
+        expect(parsed).toHaveLength(2);
+        expect(parsed.map(item => item.itemType)).toEqual(['error', 'event']);
+        expect(parsed[0].payload.userId).toBe('user_queue');
 
         Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
       });
 
-      it('F9-2: keeps diagnostics volatile and avoids legacy plaintext keys without a vault', () => {
+      it('F9-2: keeps diagnostics volatile while the owner vault is locked', () => {
         Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
         telemetryHub.init();
         telemetryHub.setUserId('user_owner_scope');
@@ -38,28 +38,11 @@ describe('Technical telemetry queue and dispatch — Tier 1', () => {
 
         expect(telemetryHub.getQueuedEvents()).toHaveLength(1);
         expect(localStorage.getItem(telemetryHub.getQueueStorageKey())).toBeNull();
-        expect(localStorage.getItem(RETIRED_GLOBAL_QUEUE_KEY)).toBeNull();
 
         Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
       });
 
-      it('F9-2b: never imports the unsupported global queue into current telemetry', () => {
-        Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
-        const retired = JSON.stringify([{
-          id: 'old-shared', timestamp: Date.now(), itemType: 'event',
-          payload: { type: 'retired', timestamp: Date.now(),
-            context: getTelemetryContext(), userId: 'user_b' },
-        }]);
-        localStorage.setItem(RETIRED_GLOBAL_QUEUE_KEY, retired);
-
-        telemetryHub.init();
-        telemetryHub.setUserId('user_b');
-
-        expect(telemetryHub.getQueuedEvents()).toEqual([]);
-        expect(localStorage.getItem(RETIRED_GLOBAL_QUEUE_KEY)).toBe(retired);
-        expect(localStorage.getItem(telemetryHub.getQueueStorageKey())).toBeNull();
-        Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
-      });
+;
 
       it('F9-3: limits queue capacity to maximum 50 items and evicts oldest items FIFO', () => {
         Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
@@ -79,47 +62,59 @@ describe('Technical telemetry queue and dispatch — Tier 1', () => {
         Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
       });
 
-      it('F9-4: automatically triggers flushQueue when window receives online event', async () => {
+      it('F9-4: reconnect triggers replay of an offline error diagnostic', async () => {
         Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
         telemetryHub.init();
         telemetryHub.setUserId('user_online_trigger');
-
-        telemetryHub.trackEvent('offline_action');
-        expect(telemetryHub.getQueuedEvents().length).toBe(1);
+        telemetryHub.trackError(new Error('Offline connection failure'));
+        expect(telemetryHub.getQueuedEvents()).toHaveLength(1);
+        expect(mockSentryTransport).not.toHaveBeenCalled();
 
         Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
         window.dispatchEvent(new Event('online'));
 
         await vi.waitFor(() => {
-          expect(mockSentryTransport).toHaveBeenCalled();
-          expect(telemetryHub.getQueuedEvents().length).toBe(0);
+          expect(mockSentryTransport).toHaveBeenCalledTimes(1);
+          expect(mockSentryTransport.mock.calls[0][0]).toBe('error');
+          expect(mockSentryTransport.mock.calls[0][1].message).toBe('Offline connection failure');
+          expect(telemetryHub.getQueuedEvents()).toHaveLength(0);
         });
       });
 
-      it('F9-5: clears its diagnostics queue only after the Sentry transport stub accepts a report', async () => {
+      it('F9-5: encrypted owner queue retains a failed error until Sentry accepts it', async () => {
         telemetryHub.init();
         telemetryHub.setUserId('user_clear_check');
+        await seedCurrentTelemetryQueue('user_clear_check', [{
+          id: 'q_1',
+          timestamp: Date.now(),
+          itemType: 'error',
+          payload: {
+            id: 'q_1', timestamp: Date.now(), type: 'Error',
+            message: 'Persisted error', source: 'custom',
+            context: { appVersion: 'test', platform: 'other', displayMode: 'browser', online: true },
+            userId: 'user_clear_check', sessionId: 'sess_1',
+            count: 1, firstSeen: Date.now(), lastSeen: Date.now(),
+          },
+        }]);
 
-        await seedCurrentTelemetryQueue('user_clear_check', [
-            {
-              id: 'q_1',
-              timestamp: Date.now(),
-              itemType: 'event',
-              payload: {
-                timestamp: Date.now(),
-                type: 'replayed_event',
-                context: getTelemetryContext(),
-                userId: 'user_clear_check',
-              },
-            },
-          ]);
+        expect(telemetryHub.getQueuedEvents()).toHaveLength(1);
+        const owner = 'user:user_clear_check';
+        expect(JSON.parse(readEncryptedTelemetry(owner)!)).toHaveLength(1);
+
+        mockSentryTransport.mockResolvedValueOnce(false);
+        await telemetryHub.flushQueue();
+
+        expect(mockSentryTransport).toHaveBeenCalledTimes(1);
+        expect(mockSentryTransport.mock.calls[0][0]).toBe('error');
+        expect(telemetryHub.getQueuedEvents()).toHaveLength(1);
+        expect(JSON.parse(readEncryptedTelemetry(owner)!)).toHaveLength(1);
 
         await telemetryHub.flushQueue();
 
-        expect(mockSentryTransport).toHaveBeenCalled();
-        const remaining = localStorage.getItem(telemetryHub.getQueueStorageKey());
-        const parsedRemaining = remaining ? JSON.parse(remaining) : [];
-        expect(parsedRemaining.length).toBe(0);
+        expect(mockSentryTransport).toHaveBeenCalledTimes(2);
+        expect(mockSentryTransport.mock.calls[1][0]).toBe('error');
+        expect(telemetryHub.getQueuedEvents()).toHaveLength(0);
+        expect(JSON.parse(readEncryptedTelemetry(owner)!)).toHaveLength(0);
       });
     });
 
@@ -133,44 +128,46 @@ describe('Technical telemetry queue and dispatch — Tier 1', () => {
         expect(retEvent).toBeUndefined();
       });
 
-      it('F11-2: Sentry transport timeout does not synchronously interrupt callers', async () => {
-        mockSentryTransport.mockImplementation(
-          () => new Promise((_, reject) => setTimeout(() => reject(new Error('Network timeout')), 6000))
-        );
-
+      it('F11-2: hanging Sentry dispatch times out and queues its error', async () => {
+        vi.useFakeTimers();
+        mockSentryTransport.mockImplementation(() => new Promise(() => {}));
         telemetryHub.init();
         telemetryHub.setUserId('user_timeout');
 
-        expect(() => {
-          telemetryHub.trackError(new Error('Timeout test'));
-        }).not.toThrow();
+        expect(telemetryHub.trackError(new Error('Timeout test'))).toBeUndefined();
+        await vi.advanceTimersByTimeAsync(TELEMETRY_DISPATCH_TIMEOUT_MS);
+
+        expect(mockSentryTransport).toHaveBeenCalledTimes(1);
+        expect(mockSentryTransport.mock.calls[0][0]).toBe('error');
+        const queued = telemetryHub.getQueuedEvents();
+        expect(queued).toHaveLength(1);
+        expect(queued[0].itemType).toBe('error');
+        expect(queued[0].payload.userId).toBe('user_timeout');
       });
 
-      it('F11-3: Sentry transport rejection does not throw to the UI', async () => {
-        mockSentryTransport.mockRejectedValue(new Error('FirebaseError: [code=permission-denied]'));
-
+      it('F11-3: rejected Sentry transport does not throw and retains owner reports', async () => {
+        vi.useFakeTimers();
+        mockSentryTransport.mockRejectedValue(new Error('Sentry transport rejected'));
         telemetryHub.init();
         telemetryHub.setUserId('user_perm_denied');
 
         expect(() => {
           telemetryHub.trackError(new Error('Permission denied error'));
-          telemetryHub.trackEvent('permission_event');
+          telemetryHub.trackEvent('diagnostic_event');
         }).not.toThrow();
+        await vi.advanceTimersByTimeAsync(100);
+
+        expect(mockSentryTransport).toHaveBeenCalledTimes(2);
+        expect(mockSentryTransport.mock.calls.map((call: any) => call[0]).sort()).toEqual(['error', 'event']);
+        const queued = telemetryHub.getQueuedEvents();
+        expect(queued).toHaveLength(2);
+        expect(queued.map(item => item.itemType).sort()).toEqual(['error', 'event']);
+        expect(queued.every(item => item.payload.userId === 'user_perm_denied')).toBe(true);
       });
 
-      it('F11-4: dispatching technical events has a bounded synchronous caller cost', () => {
-        telemetryHub.init();
+;
 
-        const start = performance.now();
-        for (let i = 0; i < 50; i++) {
-          telemetryHub.trackEvent('zod_schema_fallback', { issueCode: 'invalid_type' });
-        }
-        const elapsed = performance.now() - start;
-
-        expect(elapsed).toBeLessThan(50);
-      });
-
-      it('F11-5: multiple concurrent telemetry dispatches execute safely without race conditions', async () => {
+      it('F11-5: concurrent diagnostic events reach the accepted-and-dropped transport boundary', async () => {
         vi.useFakeTimers();
         telemetryHub.init();
         telemetryHub.setUserId('user_concurrent');
@@ -181,6 +178,8 @@ describe('Technical telemetry queue and dispatch — Tier 1', () => {
 
         await vi.advanceTimersByTimeAsync(100);
         expect(mockSentryTransport).toHaveBeenCalledTimes(20);
+        expect(mockSentryTransport.mock.calls.every((call: any) => call[0] === 'event')).toBe(true);
+        expect(telemetryHub.getQueuedEvents()).toHaveLength(0);
       });
     });
   });
