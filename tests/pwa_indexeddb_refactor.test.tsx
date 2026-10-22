@@ -1,4 +1,5 @@
 import { deviceKey } from '../src/lib/sync/deviceStorage';
+import { draftRegistry } from '../src/lib/utils/draftRegistry';
 import React from 'react';
 import { describe, test, expect, beforeEach, vi, afterEach } from 'vitest';
 import { render } from '@testing-library/react';
@@ -349,16 +350,19 @@ describe('PWA IndexedDB Cache & Sync Lock Refactor Suite', () => {
         exercises: []
       };
 
-      useAppStore.setState({ localWorkout: mockWorkout, dataOwner: 'user:test-user-id' });
-
-      // Simulate visibility change to hidden
-      Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });
-      document.dispatchEvent(new Event('visibilitychange'));
-
-      const saved = localStorage.getItem(deviceKey('workout'));
-      expect(saved).toBeTruthy();
-      const parsed = JSON.parse(saved!);
-      expect(parsed.id).toBe('session-vis-test');
+      useAppStore.setState({ localWorkout: null, dataOwner: 'user:test-user-id' });
+      // A synchronous input flush publishes new RAM data that is not yet
+      // present on disk; the background boundary must durably save it.
+      const flush = () => useAppStore.setState({ localWorkout: mockWorkout });
+      draftRegistry.register(flush);
+      try {
+        Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });
+        document.dispatchEvent(new Event('visibilitychange'));
+        const saved = localStorage.getItem(deviceKey('workout'));
+        expect(saved).toBeTruthy();
+        const parsed = JSON.parse(saved!);
+        expect(parsed.id).toBe('session-vis-test');
+      } finally { draftRegistry.unregister(flush); }
     });
   });
 

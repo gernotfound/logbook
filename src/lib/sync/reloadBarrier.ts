@@ -37,7 +37,7 @@ export function isReloadSessionCurrent(session: ReturnType<typeof captureSession
 export function prepareForRequiredUpdateReload() {
     const session = captureSession();
     const state = useAppStore.getState();
-    persistOwnerBoundWorkoutSnapshot(session, state.dataOwner, state.localWorkout, state.localWorkout);
+    persistOwnerBoundWorkoutSnapshot(session, state.dataOwner, state.localWorkout);
     if (!isCurrentSession(session)) throw new Error('Sessione cambiata. Ripeti l’aggiornamento.');
     return session;
 }
@@ -64,7 +64,6 @@ function isConsentSuspended(owner: string): boolean {
 
 export async function prepareForReload(options: ReloadOptions = {}) {
     const session = captureSession();
-    const beforeFlushWorkout = useAppStore.getState().localWorkout;
     flushSync(() => draftRegistry.flushAll({ strict: true }));
     if (useAppStore.getState().localPersistenceBlocked) {
         throw new Error('Persistenza locale bloccata: le ultime bozze non sono state salvate. Riapri TheLogBook senza eliminare i dati.');
@@ -127,7 +126,7 @@ export async function prepareForReload(options: ReloadOptions = {}) {
             throw new UnverifiedTabSnapshotError();
         }
     } else {
-        persistOwnerBoundWorkoutSnapshot(session, state.dataOwner, state.localWorkout, beforeFlushWorkout);
+        persistOwnerBoundWorkoutSnapshot(session, state.dataOwner, state.localWorkout);
     }
     if (!isCurrentSession(session)) throw new Error('Sessione cambiata. Ripeti l’operazione.');
     return session;

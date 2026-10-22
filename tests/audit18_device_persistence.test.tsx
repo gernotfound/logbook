@@ -305,14 +305,5 @@ describe('Audit 18 device-critical persistence', () => {
         }
     });
 
-    it('does not publish a normal workout edit over a newer observed shared snapshot', () => {
-        const key = deviceKey('workout', owner);
-        const latest = workout('w-current', '16');
-        localStorage.setItem(key, JSON.stringify(latest));
-        expect(() => useAppStore.getState().setLocalWorkout(workout('w-current', '17')))
-            .toThrow('modificato da un’altra scheda');
-        expect(JSON.parse(localStorage.getItem(key)!)).toEqual(latest);
-        expect(useAppStore.getState().localWorkout?.exercises[0].sets[0].reps).toBe('8');
-        expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
-    });
+
 });

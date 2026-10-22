@@ -220,21 +220,8 @@ export function unwrapWorkoutDeviceSnapshot(value: unknown, owner: string): {
 }
 
 /** A single device record carries both workout and origin epoch; no two-key torn witness. */
-export function persistPlainWorkoutSnapshot(
-    workout: WorkoutSession | null, owner = storageOwner(), expectedPrevious?: WorkoutSession | null,
-): void {
+export function persistPlainWorkoutSnapshot(workout: WorkoutSession | null, owner = storageOwner()): void {
     const current = readDeviceConsentRevision(owner);
-    // Ordinary edits must not overwrite a newer observed device snapshot.
-    // This guards detected conflicts; localStorage has no atomic cross-tab CAS.
-    if (expectedPrevious !== undefined) {
-        const raw = readDeviceValueStrict('workout', owner);
-        const source = raw === null ? null : unwrapWorkoutDeviceSnapshot(JSON.parse(raw) as unknown, owner);
-        if (source) assertWorkoutSnapshotEpoch(owner, source.consentRevision);
-        const stored = (source?.workout ?? null) as WorkoutSession | null;
-        if (!equivalentWorkoutSnapshot(stored, expectedPrevious)) {
-            throw new Error('Workout modificato da un’altra scheda: copia dispositivo preservata.');
-        }
-    }
     if (owner.startsWith('user:')) {
         const old = readDeviceValueStrict('workout', owner);
         if (old !== null) {

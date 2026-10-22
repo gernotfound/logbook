@@ -15,6 +15,7 @@ import {
 import { useAppStore } from '../src/store/useAppStore';
 import { DB } from '../src/lib/db';
 import { deviceKey } from '../src/lib/sync/deviceStorage';
+import { draftRegistry } from '../src/lib/utils/draftRegistry';
 import { renderWithProviders, defaultMockUserData } from './setup';
 import CustomFoodForm from '../src/components/Nutrition/CustomFoodForm';
 import { SessionRatings } from '../src/components/Training/session/SessionRatings';
@@ -408,15 +409,16 @@ describe('Challenger 2: Adversarial State Management, Schemas, Guest Merge & UI 
                 exercises: []
             };
 
-            useAppStore.setState({ localWorkout: mockWorkout as any });
-
-            // Simulate visibility change to hidden
-            Object.defineProperty(document, 'visibilityState', { value: 'hidden', writable: true, configurable: true });
-            document.dispatchEvent(new Event('visibilitychange'));
-
-            const stored = localStorage.getItem(deviceKey('workout'));
-            expect(stored).toBeDefined();
-            expect(JSON.parse(stored!)).toEqual(mockWorkout);
+            // A last-second draft flush changes RAM from a known empty state.
+            const flush = () => useAppStore.setState({ localWorkout: mockWorkout as any });
+            draftRegistry.register(flush);
+            try {
+                Object.defineProperty(document, 'visibilityState', { value: 'hidden', writable: true, configurable: true });
+                document.dispatchEvent(new Event('visibilitychange'));
+                const stored = localStorage.getItem(deviceKey('workout'));
+                expect(stored).toBeDefined();
+                expect(JSON.parse(stored!)).toEqual(mockWorkout);
+            } finally { draftRegistry.unregister(flush); }
         });
     });
 
