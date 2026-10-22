@@ -38,7 +38,7 @@ describe('Unified Telemetry Hub E2E Suite — Tier 5', () => {
         expect(payload.count).toBe(1000);
       });
 
-      it('T5-2: high-cardinality burst of 100 distinct types x 20 repetitions aggregates into 100 rate limiters and 100 writes with count=20', async () => {
+      it('T5-2: high-cardinality burst of 100 distinct types x 20 repetitions aggregates into 100 limiter entries and Sentry dispatches', async () => {
         vi.useFakeTimers();
         telemetryHub.init();
         telemetryHub.setUserId('user_t5_2');
@@ -128,7 +128,7 @@ describe('Unified Telemetry Hub E2E Suite — Tier 5', () => {
     });
 
     describe('5.2: Network Failure, Backoff & Non-Blocking FlushQueue', () => {
-      it('T5-5: indefinitely hanging setDoc promise is safely aborted by 5000ms safety timeout without throwing', async () => {
+      it('T5-5: hanging Sentry transport dispatch times out after 5000ms without throwing', async () => {
         vi.useFakeTimers();
         mockSetDoc.mockImplementation(() => new Promise(() => {})); // Never settles
 
@@ -231,7 +231,7 @@ describe('Unified Telemetry Hub E2E Suite — Tier 5', () => {
       });
 
       it('T5-8: telemetry provider failures are caught silently without throwing to callers', async () => {
-        mockSetDoc.mockRejectedValue(new Error('FirebaseError: [code=permission-denied] Permission denied'));
+        mockSetDoc.mockRejectedValue(new Error('Sentry transport unavailable'));
 
         telemetryHub.init();
         telemetryHub.setUserId('user_t5_8');
@@ -413,7 +413,7 @@ describe('Unified Telemetry Hub E2E Suite — Tier 5', () => {
         }
       });
 
-      it('T5-11: full replay of 50-item capped offline queue upon online event writes all 50 items and empties storage', async () => {
+      it('T5-11: online replay hands 50 queued diagnostics to the stub transport and clears the queue', async () => {
         Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
         telemetryHub.init();
         telemetryHub.setUserId('user_t5_11');
@@ -535,10 +535,19 @@ describe('Unified Telemetry Hub E2E Suite — Tier 5', () => {
 
           // 3. Nutrition planning with hostile calories
           DomainParsers.parseNutritionPlanning({ targetCalories: hostile });
+
+          // Force the real parser fallback for each hostile value, rather than
+          // allowing a vacuous privacy assertion when no report was emitted.
+          DomainParsers.parseProfile(hostile);
+          DomainParsers.parseWorkoutSession(hostile);
+          DomainParsers.parseNutritionPlanning(hostile);
         }
 
         await vi.advanceTimersByTimeAsync(100);
 
+        expect(mockSetDoc.mock.calls.some((call: any) =>
+          call[0] === 'error' && call[1].source === 'zod_schema_fallback'
+        )).toBe(true);
         for (const call of mockSetDoc.mock.calls) {
           const payload = call[1];
           const serialized = JSON.stringify(payload);

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { TelemetryErrorPayload } from '../src/lib/telemetry/contracts';
+import type { TelemetryErrorPayload, TelemetryEventPayload } from '../src/lib/telemetry/contracts';
 
 const sentry = vi.hoisted(() => {
   const scope = {
@@ -65,4 +65,23 @@ describe('Sentry technical error privacy boundary', () => {
     expect(JSON.stringify(event)).not.toContain('SYNTH_SECRET');
     expect(JSON.stringify(event)).not.toContain('Synthetic');
   });
+  it.each([false, true])('accepts but never emits standalone usage events (initialized=%s)', async (initialized) => {
+    const { initSentry, sendTelemetryToSentry } = await import('../src/lib/sentryClient');
+    if (initialized) expect(initSentry()).toBe(true);
+
+    const usageEvent: TelemetryEventPayload = {
+      timestamp: Date.now(),
+      type: 'workout_saved',
+      context: { appVersion: 'test', platform: 'other', displayMode: 'browser', online: true },
+      userId: 'synthetic-private-owner',
+      sessionId: 'synthetic-session',
+      details: { routineName: 'synthetic-private-routine' },
+    };
+
+    expect(await sendTelemetryToSentry('event', usageEvent)).toBe(true);
+    expect(sentry.captureException).not.toHaveBeenCalled();
+    expect(sentry.withScope).not.toHaveBeenCalled();
+    expect(sentry.scope.setContext).not.toHaveBeenCalled();
+  });
+
 });

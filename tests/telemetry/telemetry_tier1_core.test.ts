@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { z } from 'zod';
+import { DomainParsers, reportZodSchemaFallback } from '../../src/lib/schema';
 import {
   scrubPII,
   truncateStack,
@@ -7,12 +8,10 @@ import {
   isStandaloneMode,
   getTelemetryContext,
   hashError,
-  sanitizeErrorPayload,
 } from '../../src/lib/telemetrySanitizer';
 import {
   telemetryHub,
   type TelemetryErrorPayload,
-  type TelemetryEventPayload,
 } from '../../src/lib/telemetryHub';
 import {
   installTelemetryTestHarness,
@@ -153,7 +152,7 @@ describe('Unified Telemetry Hub E2E Suite — Tier 1 Core', () => {
         expect(key1.length).toBeGreaterThan(0);
       });
 
-      it('F3-2: aggregates repeated errors within 60s sliding window into single document with incremented count', async () => {
+      it('F3-2: aggregates consecutive errors into one Sentry dispatch with count=3', async () => {
         vi.useFakeTimers();
         telemetryHub.init();
         telemetryHub.setUserId('user_test_123');
@@ -194,7 +193,7 @@ describe('Unified Telemetry Hub E2E Suite — Tier 1 Core', () => {
         expect(payload.count).toBe(2);
       });
 
-      it('F3-4: sends distinct telemetry documents for errors with different messages or types', async () => {
+      it('F3-4: dispatches distinct technical error payloads for different error types', async () => {
         vi.useFakeTimers();
         telemetryHub.init();
         telemetryHub.setUserId('user_test_123');
@@ -439,35 +438,66 @@ describe('Unified Telemetry Hub E2E Suite — Tier 1 Core', () => {
         expect(payload.type).toMatch(/ZodError|ValidationError/);
       });
 
-      it('F6-2: extracts schema name, path, and error code from ZodError issues', () => {
-        const schema = z.object({ age: z.number() });
-        const result = schema.safeParse({ age: 'twenty' });
-        expect(result.success).toBe(false);
-
-        if (!result.success) {
-          const sanitized = sanitizeErrorPayload(result.error, { source: 'zod_validation' });
-          expect(sanitized.type).toMatch(/ZodError|ValidationError/);
-          expect(sanitized.source).toBe('zod_validation');
-        }
-      });
-
-      it('F6-3: records fallback activation when DomainParsers encounter malformed data', async () => {
+      it('F6-2: production fallback reporter extracts a Zod issue path and code without raw input', async () => {
         vi.useFakeTimers();
         telemetryHub.init();
         telemetryHub.setUserId('user_zod_test');
 
-        telemetryHub.trackEvent('zod_schema_fallback', {
-          schema: 'UserDataSchema',
-          field: 'nutritionPlanning',
-          fallbackUsed: 'defaultUserDataFallback',
-        });
+        const schema = z.object({ age: z.number() });
+        const result = schema.safeParse({ age: 'private-value' });
+        expect(result.success).toBe(false);
+        if (result.success) throw new Error('Expected invalid Zod input');
 
+        reportZodSchemaFallback({
+          schema: 'UserProfileSchema',
+          fallbackUsed: 'default_empty_profile',
+          error: result.error,
+        });
         await vi.advanceTimersByTimeAsync(100);
 
-        expect(mockSetDoc).toHaveBeenCalledTimes(1);
-        const payload = mockSetDoc.mock.calls[0][1] as TelemetryEventPayload;
-        expect(payload.type).toBe('zod_schema_fallback');
-        expect(payload.details?.schema).toBe('UserDataSchema');
+        const eventCall = mockSetDoc.mock.calls.find((call: any) =>
+          call[0] === 'event' && call[1].type === 'zod_schema_fallback'
+        );
+        const errorCall = mockSetDoc.mock.calls.find((call: any) =>
+          call[0] === 'error' && call[1].source === 'zod_schema_fallback'
+        );
+        expect(eventCall).toBeDefined();
+        expect(eventCall[1].details).toMatchObject({
+          schema: 'UserProfileSchema',
+          field: 'age',
+          issueCode: 'invalid_type',
+          expectedType: 'number',
+          fallbackUsed: 'default_empty_profile',
+        });
+        expect(errorCall).toBeDefined();
+        expect(errorCall[1].message).toContain('UserProfileSchema [age]: invalid_type');
+        expect(JSON.stringify(mockSetDoc.mock.calls)).not.toContain('private-value');
+      });
+
+      it('F6-3: actual DomainParsers fallback emits a technical error and bounded event metadata', async () => {
+        vi.useFakeTimers();
+        telemetryHub.init();
+        telemetryHub.setUserId('user_zod_test');
+
+        const parsed = DomainParsers.parseProfile('invalid_profile_root');
+        expect(parsed).toBeDefined();
+        expect(typeof parsed).toBe('object');
+        await vi.advanceTimersByTimeAsync(100);
+
+        const eventCall = mockSetDoc.mock.calls.find((call: any) =>
+          call[0] === 'event' && call[1].type === 'zod_schema_fallback'
+        );
+        const errorCall = mockSetDoc.mock.calls.find((call: any) =>
+          call[0] === 'error' && call[1].source === 'zod_schema_fallback'
+        );
+        expect(eventCall).toBeDefined();
+        expect(eventCall[1].details).toMatchObject({
+          schema: 'UserProfileSchema',
+          fallbackUsed: 'default_empty_profile',
+        });
+        expect(errorCall).toBeDefined();
+        expect(errorCall[1].type).toBe('ZodSchemaFallbackError');
+        expect(JSON.stringify(mockSetDoc.mock.calls)).not.toContain('invalid_profile_root');
       });
 
       it('F6-4: deduplicates identical Zod schema validation errors', async () => {
