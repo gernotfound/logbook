@@ -123,8 +123,7 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
 
             it('T2.2.6: negative macro values clamp or evaluate mathematically without crash', () => {
                 const kcal = calculateRealtimeKcalContract(-10, 20, 5);
-                expect(typeof kcal).toBe('number');
-                expect(isNaN(kcal)).toBe(false);
+                expect(kcal).toBe(85); // -10*4 + 20*4 + 5*9
             });
 
             it('T2.2.7: fractional rounding boundary (e.g. 0.125g macros)', () => {
