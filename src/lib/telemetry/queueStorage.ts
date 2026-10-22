@@ -82,6 +82,34 @@ export class TelemetryQueueStorage {
     const ownerKey = this.getQueueStorageKey();
     const owner = this.getOwner();
     if (this.cachedQueue !== null && this.cachedQueueKey === ownerKey) {
+      // The last successful write is not an authority over other tabs: they
+      // can add reports, deliver them or clear the encrypted queue afterward.
+      // Only a fully persisted, unmodified cache may be replaced by the
+      // latest durable image. Dirty/locked caches retain unsaved RAM reports.
+      if (!this.needsUnlockReconciliation && !this.isDiskSyncScheduled
+        && isVaultUnlocked(owner)) {
+        try {
+          const raw = readEncryptedTelemetry(owner);
+          if (raw === null) {
+            this.cachedQueue = [];
+          } else {
+            const parsed: unknown = JSON.parse(raw);
+            if (!Array.isArray(parsed)) {
+              throw new Error('Unsupported encrypted telemetry queue.');
+            }
+            this.cachedQueue = retainUnexpiredItems(parseQueuedItems(raw));
+            if (this.cachedQueue.length !== parsed.length) {
+              this.saveQueuedEvents(this.cachedQueue, true);
+            }
+          }
+          return this.cachedQueue;
+        } catch {
+          // An unreadable durable image is not empty. Preserve the RAM copy
+          // and let the existing guarded reconciliation retry without
+          // replacing unknown ciphertext.
+          this.needsUnlockReconciliation = true;
+        }
+      }
       const recent = retainUnexpiredItems(this.cachedQueue);
       if (recent.length !== this.cachedQueue.length) this.saveQueuedEvents(recent, true);
       else this.syncQueueToDisk(ownerKey); // Persist an in-memory pre-unlock queue once the vault is ready.
