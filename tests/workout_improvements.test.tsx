@@ -69,18 +69,20 @@ describe('Workout Improvements & History Edit Suite', () => {
   });
 
   describe('2. Top Timer Reset on Session Actions', () => {
-    test('resetGlobalWorkoutTimer clears localStorage and dispatches event', () => {
-      localStorage.setItem(deviceKey('timer_state'), 'running');
-      localStorage.setItem(deviceKey('timer_start'), '123456789');
-      localStorage.setItem(deviceKey('timer_accumulated'), '5000');
+    test('resetGlobalWorkoutTimer persists stopped snapshot and updates displayed timer', () => {
+      localStorage.setItem(deviceKey('timer'), JSON.stringify({
+        version: 1, state: 'running', startTime: Date.now() - 5000, accumulated: 0,
+      }));
 
       const { container } = renderWithProviders(<WorkoutTimer />);
 
       act(() => {
-        resetGlobalWorkoutTimer();
+        expect(resetGlobalWorkoutTimer()).toBe(true);
       });
 
-      expect(localStorage.getItem(deviceKey('timer_state'))).toBeNull();
+      expect(JSON.parse(localStorage.getItem(deviceKey('timer'))!)).toEqual({
+        version: 1, state: 'stopped', startTime: 0, accumulated: 0,
+      });
       expect(container.textContent).toContain('00:00');
     });
   });
