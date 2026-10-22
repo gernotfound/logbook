@@ -699,60 +699,44 @@ describe('TheLogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => 
         // Requirement R6: Persistenza esplicita dei dolori
         // ---------------------------------------------------------------------
         describe('R6: Persistenza esplicita dei dolori', () => {
-            it('T1.6.1: preserves trained primary muscle until explicitly cleared', () => {
+            it('T1.6.1: keeps a pre-existing pain until explicitly cleared', () => {
                 const activePains = ['petto'];
-                const sessionExercises = [{ exId: 'ex_bench' }];
-                const library = [{ id: 'ex_bench', muscles: ['petto'] }];
                 const sessionPains: string[] = []; // User did not re-select petto
 
-                const updated = mergeActivePainsContract(activePains, sessionExercises, library, sessionPains);
+                const updated = mergeActivePainsContract(activePains, sessionPains);
                 expect(updated).toEqual(['petto']); // Il dolore resta attivo finché l'utente non lo rimuove.
             });
 
             it('T1.6.2: preserves active pain if user explicitly re-selects it in session ratings', () => {
                 const activePains = ['petto'];
-                const sessionExercises = [{ exId: 'ex_bench' }];
-                const library = [{ id: 'ex_bench', muscles: ['petto'] }];
                 const sessionPains = ['petto']; // User re-selected petto
 
-                const updated = mergeActivePainsContract(activePains, sessionExercises, library, sessionPains);
+                const updated = mergeActivePainsContract(activePains, sessionPains);
                 expect(updated).toEqual(['petto']);
             });
 
-            it('T1.6.3: leaves unrelated untrained active pains intact', () => {
+            it('T1.6.3: preserves multiple active pains in the absence of new reports', () => {
                 const activePains = ['gambe', 'spalle'];
-                const sessionExercises = [{ exId: 'ex_squat' }];
-                const library = [{ id: 'ex_squat', muscles: ['gambe'] }];
                 const sessionPains: string[] = []; // Training does not imply that either active pain resolved.
 
-                const updated = mergeActivePainsContract(activePains, sessionExercises, library, sessionPains);
+                const updated = mergeActivePainsContract(activePains, sessionPains);
                 expect(updated).toEqual(['gambe', 'spalle']);
             });
 
             it('T1.6.4: adds brand new pains selected during workout session evaluation', () => {
                 const activePains = ['dorso'];
-                const sessionExercises = [{ exId: 'ex_curls' }];
-                const library = [{ id: 'ex_curls', muscles: ['bicipiti'] }];
                 const sessionPains = ['bicipiti']; // Newly experienced pain
 
-                const updated = mergeActivePainsContract(activePains, sessionExercises, library, sessionPains);
+                const updated = mergeActivePainsContract(activePains, sessionPains);
                 expect(updated).toContain('dorso');
                 expect(updated).toContain('bicipiti');
             });
 
-            it('T1.6.5: multi-exercise session preserves all pre-existing active pains', () => {
+            it('T1.6.5: preserves all pre-existing active pains without implicit recovery', () => {
                 const activePains = ['petto', 'tricipiti', 'spalle'];
-                const sessionExercises = [
-                    { exId: 'ex_bench' }, // muscles: ['petto']
-                    { exId: 'ex_dips' }    // muscles: ['tricipiti']
-                ];
-                const library = [
-                    { id: 'ex_bench', muscles: ['petto'] },
-                    { id: 'ex_dips', muscles: ['tricipiti'] }
-                ];
                 const sessionPains: string[] = []; // Neither petto nor tricipiti reselected
 
-                const updated = mergeActivePainsContract(activePains, sessionExercises, library, sessionPains);
+                const updated = mergeActivePainsContract(activePains, sessionPains);
                 expect(updated).toEqual(['petto', 'tricipiti', 'spalle']); // Training does not imply that an active pain resolved.
             });
 
@@ -768,11 +752,9 @@ describe('TheLogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => 
 
             it('T1.6.7: completing session without active pains simply adopts any newly added session pains', () => {
                 const activePains: string[] = [];
-                const sessionExercises = [{ exId: 'ex_deadlift' }];
-                const library = [{ id: 'ex_deadlift', muscles: ['femorali', 'schiena'] }];
                 const sessionPains = ['femorali'];
 
-                const updated = mergeActivePainsContract(activePains, sessionExercises, library, sessionPains);
+                const updated = mergeActivePainsContract(activePains, sessionPains);
                 expect(updated).toEqual(['femorali']);
             });
         });
