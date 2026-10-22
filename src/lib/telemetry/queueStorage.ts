@@ -230,6 +230,13 @@ export class TelemetryQueueStorage {
           // A delayed microtask must not persist or discard another account's cache.
           if (!this.isDiskSyncScheduled || this.cachedQueueKey !== ownerKey) return;
           this.isDiskSyncScheduled = false;
+          // A read may already have flushed this batch. No second blind
+          // write is authorized after a different tab changes the disk.
+          if (this.pendingErrorCountUpdates.size === 0
+            && !this.needsUnlockReconciliation) {
+            this.invalidateCache();
+            return;
+          }
           if (this.syncQueueToDisk(ownerKey)) {
             this.cachedQueue = null;
             this.cachedQueueKey = null;
@@ -279,6 +286,10 @@ export class TelemetryQueueStorage {
     if (!this.isDiskSyncScheduled) return;
 
     this.isDiskSyncScheduled = false;
+    if (this.pendingErrorCountUpdates.size === 0 && !this.needsUnlockReconciliation) {
+      this.invalidateCache();
+      return;
+    }
     if (this.cachedQueueKey !== null && this.syncQueueToDisk(this.cachedQueueKey)) {
       this.cachedQueue = null;
       this.cachedQueueKey = null;
@@ -309,6 +320,9 @@ export class TelemetryQueueStorage {
   }
 
   public replaceQueue(items: QueuedTelemetryItem[]): void {
+    // A completed dispatch may remove items. Flush any pending count patch
+    // before applying this explicit replacement, not the other way around.
+    this.flushPendingDiskSync();
     this.saveQueuedEvents(items.map(minimizeQueuedItem), true);
   }
 
