@@ -17,7 +17,8 @@ export function isCurrentAuthRedirectAttempt(attempt: string | null): boolean {
 
 export function writeAuthRedirectMarker(value: 'true' | 'failed'): string | null {
     if (value === 'true') {
-        const attempt = crypto.randomUUID();
+        const attempt = Array.from(crypto.getRandomValues(new Uint8Array(16)),
+            byte => byte.toString(16).padStart(2, '0')).join('');
         // Establish generation before the active marker. If the second write
         // fails, no older reader may consume the newly claimed generation.
         sessionStorage.setItem(AWAITING_REDIRECT_ATTEMPT_KEY, attempt);
