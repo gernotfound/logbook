@@ -6,10 +6,10 @@ import { useDialogStore } from '../store/useDialogStore';
 import { Logic } from '../lib/logic';
 import { readWorkoutRecoveryDraft, writeWorkoutRecoveryDraft } from '../lib/sync/workoutRecoveryDraft';
 import { captureSession, isCurrentSession } from '../lib/sync/session';
-import { PlannedSetTechnique, ProgressionContract, RoutineExercise, SetTechnique, WorkoutRoutine } from '../types';
+import type { Exercise, PlannedSetTechnique, ProgressionContract, RoutineExercise, SetTechnique, WorkoutRoutine } from '../types';
 
 const EMPTY_ROUTINES: WorkoutRoutine[] = [];
-const EMPTY_LIBRARY: any[] = [];
+const EMPTY_LIBRARY: Exercise[] = [];
 const ROUTINE_DRAFT_KEY = 'draft_routine';
 
 function blockRoutineDraft(error: unknown): void {

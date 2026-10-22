@@ -7,6 +7,7 @@ import { useLocalStorage } from '../../hooks/useLocalStorage';
 import { ownerUiPreferenceKey } from '../../lib/uiPreferenceKeys';
 import { storageOwner } from '../../lib/sync/session';
 import { z } from '../../lib/zod';
+import type { WorkoutRoutine } from '../../types';
 import './routines/routines.css';
 
 const TrainingRoutines: React.FC = () => {
@@ -27,7 +28,7 @@ const TrainingRoutines: React.FC = () => {
 
     const editMuscles: string[] = [];
     const editSecMuscles: string[] = [];
-    routineExercises.forEach((ex: any) => {
+    routineExercises.forEach(ex => {
         const libDef = library.find(l => l.id === ex.exId);
         if (libDef) {
             if (libDef.muscles) {
@@ -49,7 +50,7 @@ const TrainingRoutines: React.FC = () => {
 
     const editorOpen = isCreating || Boolean(editingRoutineId);
 
-    const handleEditItem = (rtn: any) => {
+    const handleEditItem = (rtn: WorkoutRoutine) => {
         setIsCreating(false);
         handleEditClick(rtn);
     };

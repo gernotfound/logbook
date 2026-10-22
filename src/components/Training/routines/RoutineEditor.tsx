@@ -3,13 +3,13 @@ import { Pencil, Save, Plus } from 'lucide-react';
 import MuscleModel from '../MuscleModel';
 import { RoutineExerciseItem } from './RoutineExerciseItem';
 import { ExerciseSearchDropdown } from '../ExerciseSearchDropdown';
-import { ExerciseLibraryItem } from '../../../types';
+import type { ExerciseLibraryItem, ProgressionContract, RoutineExercise, SetTechnique } from '../../../types';
 
 interface RoutineEditorProps {
     routineName: string;
     setRoutineName: (name: string) => void;
     editingRoutineId: string | null;
-    routineExercises: any[];
+    routineExercises: RoutineExercise[];
     library: ExerciseLibraryItem[];
     editMuscles: string[];
     editSecMuscles: string[];
@@ -18,9 +18,9 @@ interface RoutineEditorProps {
     onRemoveExercise: (index: number) => void;
     onUpdateSetsCount: (index: number, value: string) => void;
     onUpdateReps: (index: number, field: 'minReps' | 'maxReps', value: string) => void;
-    onUpdateSetPlan: (exerciseIndex: number, setIndex: number, tech: import('../../../types').SetTechnique) => void;
+    onUpdateSetPlan: (exerciseIndex: number, setIndex: number, tech: SetTechnique) => void;
     onUpdateSetPlanField: (exerciseIndex: number, setIndex: number, field: 'restSeconds' | 'segmentCount' | 'targetReps', value: string) => void;
-    onUpdateExerciseMetadata: (exerciseIndex: number, field: 'technicalStandard' | keyof import('../../../types').ProgressionContract, value: string) => void;
+    onUpdateExerciseMetadata: (exerciseIndex: number, field: 'technicalStandard' | keyof ProgressionContract, value: string) => void;
     onSave: () => void;
     onCancel: () => void;
     isSaving?: boolean;
@@ -103,7 +103,7 @@ export const RoutineEditor: React.FC<RoutineEditorProps> = ({
                 {routineExercises.length === 0 ? (
                     <div className="routine-empty-state">Nessun esercizio presente.</div>
                 ) : (
-                    routineExercises.map((exercise: any, index: number) => {
+                    routineExercises.map((exercise, index) => {
                         const libraryItem = library.find(item => item.id === exercise.exId);
                         return (
                             <RoutineExerciseItem
