@@ -749,6 +749,26 @@ describe.each(['input', 'textarea'] as const)('independent same-workout %s write
         view.unmount();
     });
 
+    it('rejects a successor whose predecessor was edited after the cited revision', () => {
+        const owner = captureSession().owner;
+        const root = createBufferedWriterIntentName();
+        const rootRaw = writeBufferedWriterIntent(root, owner, draftName, '75', null, '3');
+        const parent = { name: root, revisionId: (JSON.parse(rootRaw) as { revisionId: string }).revisionId };
+        const successor = createBufferedWriterIntentName();
+        writeBufferedWriterIntent(successor, owner, draftName, '76', null, '3', parent);
+        writeBufferedDraft(draftName, owner, '76', '3');
+
+        // The still-live original writer changed the same independent key.
+        writeBufferedWriterIntent(root, owner, draftName, '77', rootRaw, '3');
+        const report = vi.spyOn(console, 'error').mockImplementation(() => {});
+        const reopened = mount(vi.fn());
+        expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
+        expect(readBufferedWriterEvidence(owner, draftName)).toHaveLength(2);
+        expect(readBufferedDraftSnapshot(draftName, owner).value).toBe('76');
+        expect(report).toHaveBeenCalled();
+        reopened.unmount();
+    });
+
     it('reseals the live source editor when another acknowledged editor consumed its former witness', () => {
         const owner = captureSession().owner;
         const source = mount(vi.fn());
