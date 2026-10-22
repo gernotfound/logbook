@@ -3,9 +3,9 @@ import {
   telemetryHub,
   type TelemetryErrorPayload,
 } from '../../src/lib/telemetryHub';
-import { installTelemetryTestHarness, mockSetDoc } from './telemetryTestHarness';
+import { installTelemetryTestHarness, mockSentryTransport } from './telemetryTestHarness';
 
-describe('Unified Telemetry Hub E2E Suite — Tier 4', () => {
+describe('TelemetryHub Vitest Integration Suite — Tier 4', () => {
   installTelemetryTestHarness();
 
   describe('Tier 4: Technical diagnostic and owner/privacy boundaries', () => {
@@ -24,8 +24,8 @@ describe('Unified Telemetry Hub E2E Suite — Tier 4', () => {
 
       await vi.advanceTimersByTimeAsync(100);
 
-      expect(mockSetDoc).toHaveBeenCalledTimes(1);
-      const payload = mockSetDoc.mock.calls[0][1] as TelemetryErrorPayload;
+      expect(mockSentryTransport).toHaveBeenCalledTimes(1);
+      const payload = mockSentryTransport.mock.calls[0][1] as TelemetryErrorPayload;
       expect(payload.source).toBe('react_uncaught');
       expect(payload.componentStack).not.toContain('C:\\Users\\athlete');
       expect(payload.componentStack!.length).toBeLessThanOrEqual(1000);
@@ -43,7 +43,7 @@ describe('Unified Telemetry Hub E2E Suite — Tier 4', () => {
       telemetryHub.trackError(dirtyError);
       await vi.advanceTimersByTimeAsync(100);
 
-      const payload = mockSetDoc.mock.calls[0][1] as TelemetryErrorPayload;
+      const payload = mockSentryTransport.mock.calls[0][1] as TelemetryErrorPayload;
       expect(payload.message).not.toContain('eyJhbGci');
       expect(payload.message).not.toContain('10.0.0.1');
       expect(payload.message).not.toContain('athlete@fitness.com');
@@ -56,15 +56,17 @@ describe('Unified Telemetry Hub E2E Suite — Tier 4', () => {
     });
 
     it('T4-5: guest telemetry keeps its original identity and is not uploaded after Google login', async () => {
-      // 1. Guest user offline actions
+      // 1. Collect a guest technical report offline
       Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
       telemetryHub.init();
       telemetryHub.setUserId(null); // Guest mode
 
-      telemetryHub.trackEvent('zod_schema_fallback', { schema: 'profile' });
+      telemetryHub.trackError(new Error('Guest offline technical diagnostic'));
       const guestBeforeLogin = telemetryHub.getQueuedEvents();
       expect(guestBeforeLogin).toHaveLength(1);
       expect(guestBeforeLogin[0].payload.userId).toBeNull();
+      expect(guestBeforeLogin[0].itemType).toBe('error');
+      expect((guestBeforeLogin[0].payload as TelemetryErrorPayload).message).toBe('Guest offline technical diagnostic');
       const guestQueueKey = telemetryHub.getQueueStorageKey();
       expect(localStorage.getItem(guestQueueKey)).toBeNull();
 
@@ -72,12 +74,12 @@ describe('Unified Telemetry Hub E2E Suite — Tier 4', () => {
       Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
       telemetryHub.setUserId('google_auth_uid_999');
 
-      // 3. Login cannot retroactively assign guest events to an account.
+      // 3. Login cannot retroactively assign guest diagnostics to an account.
       await telemetryHub.flushQueue();
 
-      expect(mockSetDoc).not.toHaveBeenCalled();
+      expect(mockSentryTransport).not.toHaveBeenCalled();
       expect(telemetryHub.getQueuedEvents()).toHaveLength(0);
-      // Without an unlocked guest vault the old guest report existed only in
+      // Without an unlocked guest vault the guest report existed only in
       // memory; the Auth switch discards it rather than reassigning ownership.
       expect(localStorage.getItem(guestQueueKey)).toBeNull();
     });

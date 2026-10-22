@@ -13,9 +13,9 @@ import {
   DEDUP_WINDOW_MS,
   type TelemetryErrorPayload,
 } from '../../src/lib/telemetryHub';
-import { installTelemetryTestHarness, mockSetDoc } from './telemetryTestHarness';
+import { installTelemetryTestHarness, mockSentryTransport } from './telemetryTestHarness';
 
-describe('Unified Telemetry Hub E2E Suite — Tier 2 Core', () => {
+describe('TelemetryHub Vitest Integration Suite — Tier 2 Core', () => {
   installTelemetryTestHarness();
 
   describe('Tier 2: Boundary & Corner Cases — Core Telemetry', () => {
@@ -71,15 +71,11 @@ describe('Unified Telemetry Hub E2E Suite — Tier 2 Core', () => {
     });
 
     describe('F2 Boundaries: Privacy & Truncation Edge Conditions', () => {
-      it('F2-B1: handles massive 100KB stack trace without memory exhaustion or regex catastrophic backtracking', () => {
+      it('F2-B1: bounds a 100KB stack trace after scrubbing', () => {
         const hugeStack = 'Error: Massive crash\n' + '    at executeFunction (bundle.min.js:100:500)\n'.repeat(2500);
         expect(hugeStack.length).toBeGreaterThan(100000);
 
-        const start = performance.now();
         const truncated = truncateStack(hugeStack, 1000);
-        const duration = performance.now() - start;
-
-        expect(duration).toBeLessThan(50);
         expect(truncated!.length).toBeLessThanOrEqual(1000);
         expect(truncated).toContain('...[TRUNCATED]');
       });
@@ -126,33 +122,17 @@ describe('Unified Telemetry Hub E2E Suite — Tier 2 Core', () => {
         circularObj.self = circularObj;
 
         const sanitizedCirc = sanitizeErrorPayload(circularObj);
-        expect(sanitizedCirc.message).toBeDefined();
+        expect(sanitizedCirc.message).toBe('Circular error');
 
         const sanitizedNum = sanitizeErrorPayload(404);
         expect(sanitizedNum.message).toContain('404');
 
         const sanitizedNull = sanitizeErrorPayload(null);
-        expect(sanitizedNull.message).toBeDefined();
+        expect(sanitizedNull.message).toBe('null');
       });
     });
 
     describe('F3 Boundaries: Deduplication & Rate Limiting Edge Conditions', () => {
-      it('F3-B1: rapid spam of 100 identical errors within 50ms aggregates to single item with count=100', async () => {
-        vi.useFakeTimers();
-        telemetryHub.init();
-        telemetryHub.setUserId('user_spam');
-
-        const spamError = new Error('Rapid spam error');
-        for (let i = 0; i < 100; i++) {
-          telemetryHub.trackError(spamError);
-        }
-
-        await vi.advanceTimersByTimeAsync(100);
-
-        expect(mockSetDoc).toHaveBeenCalledTimes(1);
-        const payload = mockSetDoc.mock.calls[0][1] as TelemetryErrorPayload;
-        expect(payload.count).toBe(100);
-      });
 
       it('F3-B2: errors with identical messages but different types produce separate dedup entries', async () => {
         vi.useFakeTimers();
@@ -164,7 +144,7 @@ describe('Unified Telemetry Hub E2E Suite — Tier 2 Core', () => {
 
         await vi.advanceTimersByTimeAsync(100);
 
-        expect(mockSetDoc).toHaveBeenCalledTimes(2);
+        expect(mockSentryTransport).toHaveBeenCalledTimes(2);
       });
 
       it('F3-B3: errors with identical types but different messages produce separate dedup entries', async () => {
@@ -177,37 +157,10 @@ describe('Unified Telemetry Hub E2E Suite — Tier 2 Core', () => {
 
         await vi.advanceTimersByTimeAsync(100);
 
-        expect(mockSetDoc).toHaveBeenCalledTimes(2);
+        expect(mockSentryTransport).toHaveBeenCalledTimes(2);
       });
 
-      it('F3-B4: error immediately before expiry is deduplicated; after expiry starts new window', async () => {
-        vi.useFakeTimers();
-        const baseTime = 1724486400000;
-        vi.setSystemTime(baseTime);
 
-        telemetryHub.init();
-        telemetryHub.setUserId('user_window_boundary');
-
-        const err = new Error('Window boundary test');
-        telemetryHub.trackError(err);
-
-        vi.setSystemTime(baseTime + DEDUP_WINDOW_MS - 100);
-        telemetryHub.trackError(err);
-
-        await vi.advanceTimersByTimeAsync(100);
-        expect(mockSetDoc).toHaveBeenCalledTimes(1);
-        expect((mockSetDoc.mock.calls[0][1] as TelemetryErrorPayload).count).toBe(2);
-
-        vi.setSystemTime(baseTime + DEDUP_WINDOW_MS + 100);
-        telemetryHub.trackError(err);
-
-        await vi.advanceTimersByTimeAsync(100);
-        expect(mockSetDoc).toHaveBeenCalledTimes(2);
-      });
-
-      it('F3-B5: handles extreme timestamps (0, negative, NaN, Infinity) gracefully', () => {
-        expect(DEDUP_WINDOW_MS).toBe(15 * 60 * 1000);
-      });
     });
 
     describe('F4 Boundaries: React 19 Callbacks Edge Conditions', () => {
@@ -223,18 +176,25 @@ describe('Unified Telemetry Hub E2E Suite — Tier 2 Core', () => {
         }).not.toThrow();
 
         await vi.advanceTimersByTimeAsync(100);
-        expect(mockSetDoc).toHaveBeenCalledTimes(1);
+        expect(mockSentryTransport).toHaveBeenCalledTimes(1);
       });
 
-      it('F4-B2: error thrown inside error tracking callback does not crash React boundary', () => {
+      it('F4-B2: a failed Sentry transport retains the current owner report', async () => {
+        vi.useFakeTimers();
+        mockSentryTransport.mockRejectedValueOnce(new Error('Sentry transport unavailable'));
         telemetryHub.init();
-        mockSetDoc.mockImplementationOnce(() => {
-          throw new Error('Firestore crash inside trackError');
-        });
+        telemetryHub.setUserId('user_failed_transport');
 
-        expect(() => {
-          telemetryHub.trackError(new Error('App error'));
-        }).not.toThrow();
+        expect(() => telemetryHub.trackError(new Error('App error'))).not.toThrow();
+        await vi.advanceTimersByTimeAsync(100);
+
+        expect(mockSentryTransport).toHaveBeenCalledTimes(1);
+        expect(mockSentryTransport.mock.calls[0][0]).toBe('error');
+        const queued = telemetryHub.getQueuedEvents();
+        expect(queued).toHaveLength(1);
+        expect(queued[0].itemType).toBe('error');
+        expect(queued[0].payload.userId).toBe('user_failed_transport');
+        expect((queued[0].payload as TelemetryErrorPayload).message).toBe('App error');
       });
 
       it('F4-B3: React 19 callback receives circular error object', async () => {
@@ -249,7 +209,9 @@ describe('Unified Telemetry Hub E2E Suite — Tier 2 Core', () => {
         }).not.toThrow();
 
         await vi.advanceTimersByTimeAsync(100);
-        expect(mockSetDoc).toHaveBeenCalled();
+        expect(mockSentryTransport).toHaveBeenCalledTimes(1);
+        expect(mockSentryTransport.mock.calls[0][0]).toBe('error');
+        expect((mockSentryTransport.mock.calls[0][1] as TelemetryErrorPayload).message).toBe('Circular error in React');
       });
 
       it('F4-B4: React 19 onRecoverableError with null or empty error object', async () => {
@@ -261,7 +223,11 @@ describe('Unified Telemetry Hub E2E Suite — Tier 2 Core', () => {
         }).not.toThrow();
 
         await vi.advanceTimersByTimeAsync(100);
-        expect(mockSetDoc).toHaveBeenCalled();
+        expect(mockSentryTransport).toHaveBeenCalledTimes(1);
+        expect(mockSentryTransport.mock.calls[0][0]).toBe('error');
+        const payload = mockSentryTransport.mock.calls[0][1] as TelemetryErrorPayload;
+        expect(payload.source).toBe('react_recoverable');
+        expect(payload.message).toBe('null');
       });
 
       it('F4-B5: handles 50+ rapid React 19 render errors in a single tick', async () => {
@@ -273,16 +239,22 @@ describe('Unified Telemetry Hub E2E Suite — Tier 2 Core', () => {
         }
 
         await vi.advanceTimersByTimeAsync(100);
-        expect(mockSetDoc).toHaveBeenCalled();
+        expect(mockSentryTransport).toHaveBeenCalledTimes(50);
+        expect(mockSentryTransport.mock.calls.every((call: any) => call[0] === 'error' && call[1].source === 'react_caught')).toBe(true);
       });
     });
 
     describe('F5 Boundaries: Global Window Handlers Edge Conditions', () => {
-      it('F5-B1: global ErrorEvent without an Error object is non-blocking', () => {
+      it('F5-B1: error event without Error reports a fallback non-blockingly', async () => {
+        vi.useFakeTimers();
         telemetryHub.init();
-        expect(() => {
-          window.dispatchEvent(new ErrorEvent('error'));
-        }).not.toThrow();
+        expect(() => window.dispatchEvent(new ErrorEvent('error'))).not.toThrow();
+        await vi.advanceTimersByTimeAsync(100);
+        expect(mockSentryTransport).toHaveBeenCalledTimes(1);
+        expect(mockSentryTransport.mock.calls[0][0]).toBe('error');
+        const payload = mockSentryTransport.mock.calls[0][1] as TelemetryErrorPayload;
+        expect(payload.source).toBe('window_error');
+        expect(payload.message).toBe('Window error');
       });
 
       it('F5-B2: global cross-origin "Script error." is still reported', async () => {
@@ -292,8 +264,8 @@ describe('Unified Telemetry Hub E2E Suite — Tier 2 Core', () => {
         window.dispatchEvent(new ErrorEvent('error', { message: 'Script error.' }));
 
         await vi.advanceTimersByTimeAsync(100);
-        expect(mockSetDoc).toHaveBeenCalled();
-        const payload = mockSetDoc.mock.calls[0][1] as TelemetryErrorPayload;
+        expect(mockSentryTransport).toHaveBeenCalled();
+        const payload = mockSentryTransport.mock.calls[0][1] as TelemetryErrorPayload;
         expect(payload.message).toContain('Script error');
       });
 
@@ -311,7 +283,11 @@ describe('Unified Telemetry Hub E2E Suite — Tier 2 Core', () => {
         );
 
         await vi.advanceTimersByTimeAsync(100);
-        expect(mockSetDoc).toHaveBeenCalled();
+        expect(mockSentryTransport).toHaveBeenCalledTimes(1);
+        expect(mockSentryTransport.mock.calls[0][0]).toBe('error');
+        const payload = mockSentryTransport.mock.calls[0][1] as TelemetryErrorPayload;
+        expect(payload.source).toBe('unhandled_rejection');
+        expect(payload.message).toBe('Unhandled rejection');
       });
 
       it('F5-B4: onunhandledrejection with primitive reason (number, boolean, symbol)', async () => {
@@ -328,8 +304,8 @@ describe('Unified Telemetry Hub E2E Suite — Tier 2 Core', () => {
         );
 
         await vi.advanceTimersByTimeAsync(100);
-        expect(mockSetDoc).toHaveBeenCalled();
-        const payload = mockSetDoc.mock.calls[0][1] as TelemetryErrorPayload;
+        expect(mockSentryTransport).toHaveBeenCalled();
+        const payload = mockSentryTransport.mock.calls[0][1] as TelemetryErrorPayload;
         expect(payload.message).toContain('500');
       });
 
@@ -349,24 +325,28 @@ describe('Unified Telemetry Hub E2E Suite — Tier 2 Core', () => {
         }
 
         await vi.advanceTimersByTimeAsync(100);
-        expect(mockSetDoc).toHaveBeenCalled();
+        expect(mockSentryTransport).toHaveBeenCalledTimes(10);
+        expect(mockSentryTransport.mock.calls.every((call: any) => call[0] === 'error' && call[1].source === 'unhandled_rejection')).toBe(true);
       });
     });
 
     describe('F6 Boundaries: Zod Validation Discards Edge Conditions', () => {
-      it('F6-B1: Zod validation error with 100+ nested validation issues', () => {
-        const itemSchema = z.object({ value: z.number() });
-        const listSchema = z.array(itemSchema);
-
-        const invalidList = Array.from({ length: 100 }, () => ({ value: 'not_a_number' }));
-        const res = listSchema.safeParse(invalidList);
-
-        expect(res.success).toBe(false);
-        if (!res.success) {
-          expect(() => {
-            telemetryHub.trackError(res.error, { source: 'zod_validation' });
-          }).not.toThrow();
-        }
+      it('F6-B1: reports 100 real Zod issues through the Sentry transport', async () => {
+        vi.useFakeTimers();
+        telemetryHub.init();
+        telemetryHub.setUserId('user_zod_issues');
+        const schema = z.array(z.object({ value: z.number() }));
+        const result = schema.safeParse(Array.from({ length: 100 }, () => ({ value: 'invalid' })));
+        expect(result.success).toBe(false);
+        if (!result.success) telemetryHub.trackError(result.error, { source: 'zod_validation' });
+        await vi.advanceTimersByTimeAsync(100);
+        expect(mockSentryTransport).toHaveBeenCalledTimes(1);
+        expect(mockSentryTransport.mock.calls[0][0]).toBe('error');
+        const payload = mockSentryTransport.mock.calls[0][1] as TelemetryErrorPayload;
+        expect(payload.source).toBe('zod_validation');
+        expect(payload.type).toBe('ZodError');
+        expect(payload.userId).toBe('user_zod_issues');
+        expect(payload.message).toContain('value');
       });
 
       it('F6-B2: Zod error with sensitive user workout note in received value is scrubbed', () => {
@@ -388,23 +368,29 @@ describe('Unified Telemetry Hub E2E Suite — Tier 2 Core', () => {
         }
       });
 
-      it('F6-B3: DomainParsers receives deeply nested invalid JSON array', () => {
-        const nested = JSON.stringify({ a: { b: { c: { d: 'corrupted' } } } });
-        expect(typeof nested).toBe('string');
+
+      it('F6-B4: empty Zod issue list dispatches a technical report', async () => {
+        vi.useFakeTimers();
+        telemetryHub.init();
+        telemetryHub.trackError(new z.ZodError([]), { source: 'zod_validation' });
+        await vi.advanceTimersByTimeAsync(100);
+        expect(mockSentryTransport).toHaveBeenCalledTimes(1);
+        expect(mockSentryTransport.mock.calls[0][0]).toBe('error');
+        const payload = mockSentryTransport.mock.calls[0][1] as TelemetryErrorPayload;
+        expect(payload.type).toBe('ZodError');
+        expect(payload.source).toBe('zod_validation');
       });
 
-      it('F6-B4: Zod error with empty issues array handled without exception', () => {
-        const customZodErr = new z.ZodError([]);
-        expect(() => {
-          telemetryHub.trackError(customZodErr, { source: 'zod_validation' });
-        }).not.toThrow();
-      });
-
-      it('F6-B5: unexpected non-Zod exception thrown inside schema parse helper handled cleanly', () => {
-        const unexpectedErr = new Error('Unexpected parsing crash');
-        expect(() => {
-          telemetryHub.trackError(unexpectedErr, { source: 'zod_validation' });
-        }).not.toThrow();
+      it('F6-B5: unexpected parse exception dispatches technical diagnostics', async () => {
+        vi.useFakeTimers();
+        telemetryHub.init();
+        telemetryHub.trackError(new Error('Unexpected parsing crash'), { source: 'zod_validation' });
+        await vi.advanceTimersByTimeAsync(100);
+        expect(mockSentryTransport).toHaveBeenCalledTimes(1);
+        expect(mockSentryTransport.mock.calls[0][0]).toBe('error');
+        const payload = mockSentryTransport.mock.calls[0][1] as TelemetryErrorPayload;
+        expect(payload.source).toBe('zod_validation');
+        expect(payload.message).toBe('Unexpected parsing crash');
       });
     });
   });

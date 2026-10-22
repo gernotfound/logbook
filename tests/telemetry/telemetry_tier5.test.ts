@@ -11,7 +11,7 @@ import { DomainParsers } from '../../src/lib/schema';
 import { protectedDeviceKey } from '../../src/lib/sync/deviceStorage';
 import { isVaultUnlocked } from '../../src/lib/sync/secureArchiveSession';
 import { TelemetryQueueStorage } from '../../src/lib/telemetry/queueStorage';
-import { installTelemetryTestHarness, mockSetDoc } from './telemetryTestHarness';
+import { installTelemetryTestHarness, mockSentryTransport } from './telemetryTestHarness';
 import { seedCurrentTelemetryQueue } from './seedCurrentQueue';
 import { localStorageMock } from '../setup';
 
@@ -34,8 +34,8 @@ describe('Unified Telemetry Hub E2E Suite — Tier 5', () => {
         expect(telemetryHub.getActiveRateLimiterCount()).toBe(1);
 
         await vi.advanceTimersByTimeAsync(50);
-        expect(mockSetDoc).toHaveBeenCalledTimes(1);
-        const payload = mockSetDoc.mock.calls[0][1] as TelemetryErrorPayload;
+        expect(mockSentryTransport).toHaveBeenCalledTimes(1);
+        const payload = mockSentryTransport.mock.calls[0][1] as TelemetryErrorPayload;
         expect(payload.type).toBe('TypeError');
         expect(payload.message).toBe('Database connection pool exhausted');
         expect(payload.count).toBe(1000);
@@ -60,9 +60,9 @@ describe('Unified Telemetry Hub E2E Suite — Tier 5', () => {
 
         await vi.advanceTimersByTimeAsync(50);
 
-        expect(mockSetDoc).toHaveBeenCalledTimes(distinctCount);
+        expect(mockSentryTransport).toHaveBeenCalledTimes(distinctCount);
         for (let i = 0; i < distinctCount; i++) {
-          const payload = mockSetDoc.mock.calls[i][1] as TelemetryErrorPayload;
+          const payload = mockSentryTransport.mock.calls[i][1] as TelemetryErrorPayload;
           expect(payload.count).toBe(reps);
         }
 
@@ -83,25 +83,25 @@ describe('Unified Telemetry Hub E2E Suite — Tier 5', () => {
         // 1. t = 0ms: First occurrence
         telemetryHub.trackError(error);
         await vi.advanceTimersByTimeAsync(10);
-        expect(mockSetDoc).toHaveBeenCalledTimes(1);
-        expect((mockSetDoc.mock.calls[0][1] as TelemetryErrorPayload).count).toBe(1);
+        expect(mockSentryTransport).toHaveBeenCalledTimes(1);
+        expect((mockSentryTransport.mock.calls[0][1] as TelemetryErrorPayload).count).toBe(1);
 
         // Duplicate immediately before expiry is suppressed.
         const justBeforeExpiry = DEDUP_WINDOW_MS - 1;
         vi.setSystemTime(baseTime + justBeforeExpiry);
         telemetryHub.trackError(error);
-        expect(mockSetDoc).toHaveBeenCalledTimes(1);
+        expect(mockSentryTransport).toHaveBeenCalledTimes(1);
 
         // Expiry clears the limiter without a redundant trailing event.
         await vi.advanceTimersByTimeAsync(DEDUP_WINDOW_MS);
-        expect(mockSetDoc).toHaveBeenCalledTimes(1);
+        expect(mockSentryTransport).toHaveBeenCalledTimes(1);
 
         // A new occurrence after expiry starts a fresh window.
         vi.setSystemTime(baseTime + DEDUP_WINDOW_MS + 1);
         telemetryHub.trackError(error);
         await vi.advanceTimersByTimeAsync(10);
-        expect(mockSetDoc).toHaveBeenCalledTimes(2);
-        expect((mockSetDoc.mock.calls[1][1] as TelemetryErrorPayload).count).toBe(1);
+        expect(mockSentryTransport).toHaveBeenCalledTimes(2);
+        expect((mockSentryTransport.mock.calls[1][1] as TelemetryErrorPayload).count).toBe(1);
       });
 
       it('T5-4: timer drift and a forward clock jump past expiry purge the stale limiter', async () => {
@@ -115,7 +115,7 @@ describe('Unified Telemetry Hub E2E Suite — Tier 5', () => {
         const error = new Error('Clock drift test');
         telemetryHub.trackError(error);
         await vi.advanceTimersByTimeAsync(10);
-        expect(mockSetDoc).toHaveBeenCalledTimes(1);
+        expect(mockSentryTransport).toHaveBeenCalledTimes(1);
 
         const afterExpiry = DEDUP_WINDOW_MS + 5000;
         // OS suspension / clock jump beyond the configured window.
@@ -124,8 +124,8 @@ describe('Unified Telemetry Hub E2E Suite — Tier 5', () => {
         telemetryHub.trackError(error);
         await vi.advanceTimersByTimeAsync(10);
 
-        expect(mockSetDoc).toHaveBeenCalledTimes(2);
-        const secondPayload = mockSetDoc.mock.calls[1][1] as TelemetryErrorPayload;
+        expect(mockSentryTransport).toHaveBeenCalledTimes(2);
+        const secondPayload = mockSentryTransport.mock.calls[1][1] as TelemetryErrorPayload;
         expect(secondPayload.count).toBe(1);
       });
     });
@@ -133,7 +133,7 @@ describe('Unified Telemetry Hub E2E Suite — Tier 5', () => {
     describe('5.2: Network Failure, Backoff & Non-Blocking FlushQueue', () => {
       it('T5-5: hanging Sentry transport dispatch times out after 5000ms without throwing', async () => {
         vi.useFakeTimers();
-        mockSetDoc.mockImplementation(() => new Promise(() => {})); // Never settles
+        mockSentryTransport.mockImplementation(() => new Promise(() => {})); // Never settles
 
         telemetryHub.init();
         telemetryHub.setUserId('user_t5_5');
@@ -155,7 +155,7 @@ describe('Unified Telemetry Hub E2E Suite — Tier 5', () => {
             errorResult = res;
           });
 
-        expect(mockSetDoc).toHaveBeenCalledTimes(1);
+        expect(mockSentryTransport).toHaveBeenCalledTimes(1);
         expect(vi.getTimerCount()).toBe(1);
         await vi.advanceTimersByTimeAsync(TELEMETRY_DISPATCH_TIMEOUT_MS - 1);
         expect(vi.getTimerCount()).toBe(1);
@@ -186,7 +186,7 @@ describe('Unified Telemetry Hub E2E Suite — Tier 5', () => {
         await seedCurrentTelemetryQueue('user_t5_6', items);
 
         // First item succeeds, subsequent items fail due to network drop
-        mockSetDoc
+        mockSentryTransport
           .mockResolvedValueOnce(true)
           .mockRejectedValue(new Error('Network drop mid-flush'));
 
@@ -198,7 +198,7 @@ describe('Unified Telemetry Hub E2E Suite — Tier 5', () => {
         expect(remaining[0].id).toBe('item_2');
         expect(remaining[8].id).toBe('item_10');
         // Circuit breaker tripped quickly (at 3 calls) rather than cascading through all 10 items
-        expect(mockSetDoc).toHaveBeenCalledTimes(3);
+        expect(mockSentryTransport).toHaveBeenCalledTimes(3);
       });
 
       it('T5-7: concurrent flushQueue calls and hot-path trackError execute safely without race conditions or duplicated writes', async () => {
@@ -235,7 +235,7 @@ describe('Unified Telemetry Hub E2E Suite — Tier 5', () => {
         await vi.advanceTimersByTimeAsync(100);
         await Promise.all([flush1, flush2]);
 
-        const sends = mockSetDoc.mock.calls.map((call: any) => call[1]);
+        const sends = mockSentryTransport.mock.calls.map((call: any) => call[1]);
         // Two overlapping flushes must send the same queued report exactly once.
         expect(sends.filter((payload: any) => payload.id === 'err_queued_1')).toHaveLength(1);
         expect(sends.filter((payload: any) => payload.message === 'Hot error during flush')).toHaveLength(1);
@@ -244,7 +244,7 @@ describe('Unified Telemetry Hub E2E Suite — Tier 5', () => {
       });
 
       it('T5-8: telemetry provider failures are caught silently without throwing to callers', async () => {
-        mockSetDoc.mockRejectedValue(new Error('Sentry transport unavailable'));
+        mockSentryTransport.mockRejectedValue(new Error('Sentry transport unavailable'));
 
         telemetryHub.init();
         telemetryHub.setUserId('user_t5_8');
@@ -295,7 +295,7 @@ describe('Unified Telemetry Hub E2E Suite — Tier 5', () => {
           ]);
 
         // Mock failure for all flush attempts
-        mockSetDoc.mockRejectedValue(new Error('Persistent telemetry transport error'));
+        mockSentryTransport.mockRejectedValue(new Error('Persistent telemetry transport error'));
 
         // Attempt 1: retryCount becomes 1
         await telemetryHub.flushQueue();
@@ -441,7 +441,7 @@ describe('Unified Telemetry Hub E2E Suite — Tier 5', () => {
         window.dispatchEvent(new Event('online'));
 
         await vi.waitFor(() => {
-          expect(mockSetDoc).toHaveBeenCalledTimes(50);
+          expect(mockSentryTransport).toHaveBeenCalledTimes(50);
           expect(telemetryHub.getQueuedEvents().length).toBe(0);
         });
       });
@@ -476,7 +476,7 @@ describe('Unified Telemetry Hub E2E Suite — Tier 5', () => {
 
         await telemetryHub.flushQueue();
 
-        expect(mockSetDoc).toHaveBeenCalledTimes(1);
+        expect(mockSentryTransport).toHaveBeenCalledTimes(1);
         expect(telemetryHub.getQueuedEvents().length).toBe(0);
       });
 
@@ -553,10 +553,10 @@ describe('Unified Telemetry Hub E2E Suite — Tier 5', () => {
 
         await vi.advanceTimersByTimeAsync(100);
 
-        expect(mockSetDoc.mock.calls.some((call: any) =>
+        expect(mockSentryTransport.mock.calls.some((call: any) =>
           call[0] === 'error' && call[1].source === 'zod_schema_fallback'
         )).toBe(true);
-        for (const call of mockSetDoc.mock.calls) {
+        for (const call of mockSentryTransport.mock.calls) {
           const payload = call[1];
           const serialized = JSON.stringify(payload);
           for (const hostile of hostileInputs) {

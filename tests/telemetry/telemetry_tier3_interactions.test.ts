@@ -4,9 +4,9 @@ import {
   telemetryHub,
   type TelemetryErrorPayload,
 } from '../../src/lib/telemetryHub';
-import { installTelemetryTestHarness, mockSetDoc } from './telemetryTestHarness';
+import { installTelemetryTestHarness, mockSentryTransport } from './telemetryTestHarness';
 
-describe('Unified Telemetry Hub E2E Suite — Tier 3', () => {
+describe('TelemetryHub Vitest Integration Suite — Tier 3', () => {
   installTelemetryTestHarness();
 
   describe('Tier 3: Cross-Feature Interactions & Combinations', () => {
@@ -29,8 +29,8 @@ describe('Unified Telemetry Hub E2E Suite — Tier 3', () => {
       Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
       await telemetryHub.flushQueue();
 
-      expect(mockSetDoc).toHaveBeenCalledTimes(1);
-      expect((mockSetDoc.mock.calls[0][1] as TelemetryErrorPayload).count).toBe(10);
+      expect(mockSentryTransport).toHaveBeenCalledTimes(1);
+      expect((mockSentryTransport.mock.calls[0][1] as TelemetryErrorPayload).count).toBe(10);
     });
 
     it('T3-2: React 19 onCaughtError + Privacy PII Scrubbing + Stack Truncation: React component stack containing email and huge trace is sanitized and truncated', async () => {
@@ -48,8 +48,8 @@ describe('Unified Telemetry Hub E2E Suite — Tier 3', () => {
 
       await vi.advanceTimersByTimeAsync(100);
 
-      expect(mockSetDoc).toHaveBeenCalledTimes(1);
-      const payload = mockSetDoc.mock.calls[0][1] as TelemetryErrorPayload;
+      expect(mockSentryTransport).toHaveBeenCalledTimes(1);
+      const payload = mockSentryTransport.mock.calls[0][1] as TelemetryErrorPayload;
 
       expect(payload.componentStack).not.toContain('john.doe@gym.com');
       expect(payload.componentStack).not.toContain('C:\\Users\\example-user');
@@ -65,6 +65,7 @@ describe('Unified Telemetry Hub E2E Suite — Tier 3', () => {
 
       const schema = z.object({ sets: z.number() });
       const parseRes = schema.safeParse({ sets: 'corrupted_string' });
+      expect(parseRes.success).toBe(false);
 
       if (!parseRes.success) {
         telemetryHub.trackError(parseRes.error, { source: 'zod_validation' });
@@ -75,40 +76,48 @@ describe('Unified Telemetry Hub E2E Suite — Tier 3', () => {
       Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
       await telemetryHub.flushQueue();
 
-      expect(mockSetDoc).toHaveBeenCalledTimes(1);
-      const payload = mockSetDoc.mock.calls[0][1] as TelemetryErrorPayload;
+      expect(mockSentryTransport).toHaveBeenCalledTimes(1);
+      const payload = mockSentryTransport.mock.calls[0][1] as TelemetryErrorPayload;
       expect(payload.source).toBe('zod_validation');
     });
 
-    it('T3-5: offline schema diagnostics, an unhandled rejection and FIFO replay preserve ordered technical reports', async () => {
+    it('T3-5: offline Zod failures and a rejected promise replay as FIFO technical reports', async () => {
       Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
       telemetryHub.init();
       telemetryHub.setUserId('user_t3_5');
 
-      telemetryHub.trackEvent('zod_schema_fallback', { schema: 'profile' });
+      const profile = z.object({ age: z.number() }).safeParse({ age: 'invalid' });
+      expect(profile.success).toBe(false);
+      if (!profile.success) {
+        telemetryHub.trackError(profile.error, { source: 'zod_validation', customMessage: 'Profile schema rejected' });
+      }
+
       const rejPromise = Promise.reject(new Error('Timer tick promise rejection'));
       rejPromise.catch(() => {});
-      window.dispatchEvent(
-        new PromiseRejectionEvent('unhandledrejection', {
-          promise: rejPromise,
-          reason: new Error('Timer tick promise rejection'),
-        })
-      );
-      telemetryHub.trackEvent('zod_schema_fallback', { schema: 'nutrition' });
+      window.dispatchEvent(new PromiseRejectionEvent('unhandledrejection', {
+        promise: rejPromise,
+        reason: new Error('Timer tick promise rejection'),
+      }));
+
+      const nutrition = z.object({ servings: z.number() }).safeParse({ servings: 'invalid' });
+      expect(nutrition.success).toBe(false);
+      if (!nutrition.success) {
+        telemetryHub.trackError(nutrition.error, { source: 'zod_validation', customMessage: 'Nutrition schema rejected' });
+      }
 
       const queued = telemetryHub.getQueuedEvents();
-      expect(queued.length).toBe(3);
-      expect(queued[0].payload.type).toBe('zod_schema_fallback');
-      expect(queued[1].payload.type).toBe('Error');
-      expect(queued[2].payload.type).toBe('zod_schema_fallback');
+      expect(queued).toHaveLength(3);
+      expect(queued.map(item => item.itemType)).toEqual(['error', 'error', 'error']);
+      const expected = ['Profile schema rejected', 'Timer tick promise rejection', 'Nutrition schema rejected'];
+      expect(queued.map(item => (item.payload as TelemetryErrorPayload).message)).toEqual(expected);
 
       Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
       await telemetryHub.flushQueue();
 
-      expect(mockSetDoc).toHaveBeenCalledTimes(3);
-      expect(mockSetDoc.mock.calls[0][1].details?.schema).toBe('profile');
-      expect(mockSetDoc.mock.calls[1][1].type).toBe('Error');
-      expect(mockSetDoc.mock.calls[2][1].details?.schema).toBe('nutrition');
+      expect(mockSentryTransport).toHaveBeenCalledTimes(3);
+      expect(mockSentryTransport.mock.calls.map((call: any) => call[0])).toEqual(['error', 'error', 'error']);
+      expect(mockSentryTransport.mock.calls.map((call: any) => call[1].message)).toEqual(expected);
+      expect(telemetryHub.getQueuedEvents()).toHaveLength(0);
     });
 
     it('T3-6: Privacy Engine Output + Diagnostic Payload Whitelist: all sanitized payloads strictly conform to the telemetry payload allowlist without disallowed keys', async () => {
@@ -121,7 +130,9 @@ describe('Unified Telemetry Hub E2E Suite — Tier 3', () => {
 
       await vi.advanceTimersByTimeAsync(100);
 
-      const dispatchedPayload = mockSetDoc.mock.calls[0][1] as TelemetryErrorPayload;
+      expect(mockSentryTransport).toHaveBeenCalledTimes(1);
+      expect(mockSentryTransport.mock.calls[0][0]).toBe('error');
+      const dispatchedPayload = mockSentryTransport.mock.calls[0][1] as TelemetryErrorPayload;
 
       // Whitelist verification
       const allowedKeys = new Set([
@@ -139,7 +150,6 @@ describe('Unified Telemetry Hub E2E Suite — Tier 3', () => {
         'lastSeen',
         'source',
         'componentStack',
-        'expireAt',
       ]);
 
       const keys = Object.keys(dispatchedPayload);

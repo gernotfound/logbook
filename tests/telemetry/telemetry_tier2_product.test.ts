@@ -3,7 +3,7 @@ import { getTelemetryContext } from '../../src/lib/telemetrySanitizer';
 import {
   telemetryHub,
 } from '../../src/lib/telemetryHub';
-import { installTelemetryTestHarness, mockSetDoc } from './telemetryTestHarness';
+import { installTelemetryTestHarness, mockSentryTransport } from './telemetryTestHarness';
 import { seedCurrentTelemetryQueue } from './seedCurrentQueue';
 
 describe('Technical telemetry queue and dispatch — Tier 2', () => {
@@ -60,7 +60,7 @@ describe('Technical telemetry queue and dispatch — Tier 2', () => {
             { id: '2', timestamp: Date.now(), itemType: 'event', payload: { type: 'item2', context: getTelemetryContext(), userId: 'user_partial_replay', timestamp: Date.now() } },
           ]);
 
-        mockSetDoc
+        mockSentryTransport
           .mockResolvedValueOnce(true)
           .mockRejectedValueOnce(new Error('Network dropped during flush'));
 
@@ -82,7 +82,7 @@ describe('Technical telemetry queue and dispatch — Tier 2', () => {
     describe('F11 Boundaries: Async Fire-and-Forget Edge Conditions', () => {
       it('F11-B1: an unresponsive Sentry transport cannot block event callers', async () => {
         vi.useFakeTimers();
-        mockSetDoc.mockImplementation(() => new Promise(() => {}));
+        mockSentryTransport.mockImplementation(() => new Promise(() => {}));
 
         telemetryHub.init();
         telemetryHub.setUserId('user_hang');
@@ -90,11 +90,11 @@ describe('Technical telemetry queue and dispatch — Tier 2', () => {
         telemetryHub.trackEvent('hanging_event');
         await vi.advanceTimersByTimeAsync(6000);
 
-        expect(mockSetDoc).toHaveBeenCalled();
+        expect(mockSentryTransport).toHaveBeenCalled();
       });
 
       it('F11-B2: rejected Sentry transport is non-blocking', async () => {
-        mockSetDoc.mockRejectedValue(new Error('FirebaseError: Missing permissions'));
+        mockSentryTransport.mockRejectedValue(new Error('FirebaseError: Missing permissions'));
 
         telemetryHub.init();
         expect(() => {
