@@ -678,52 +678,5 @@ export class TelemetryHub {
     return dispatchTelemetryEvent(payload, () => this.getUserId());
   }
 
-  public trackPWAImpression(details?: Record<string, any>): void {
-    this.trackEvent('pwa_install_impression', details);
-  }
 
-  public trackPWAInstallClick(details?: Record<string, any>): void {
-    this.trackEvent('pwa_install_click', details);
-  }
-
-  public trackPWAOutcome(
-    outcome: 'accepted' | 'dismissed',
-    details?: Record<string, any>
-  ): void {
-    this.trackEvent('pwa_install_prompt_outcome', { outcome, ...details });
-  }
-
-  public trackPWAInstalled(details?: Record<string, any>): void {
-    this.trackEvent('pwa_appinstalled', details);
-  }
-
-  public trackWorkoutStarted(details: {
-    offline?: boolean;
-    routineId?: string | null;
-    routineName?: string | null;
-    [key: string]: any;
-  }): void {
-    const isOff =
-      details.offline !== undefined ? details.offline : this.isOffline();
-    this.trackEvent('workout_started', {
-      ...details,
-      offline: isOff,
-      routineId: details.routineId ?? null,
-      routineName: details.routineName ?? null,
-    });
-  }
-
-  public trackWorkoutSaved(details: {
-    offline?: boolean;
-    duration?: string | number;
-    exerciseCount?: number;
-    [key: string]: any;
-  }): void {
-    const isOff =
-      details.offline !== undefined ? details.offline : this.isOffline();
-    this.trackEvent('workout_saved', {
-      ...details,
-      offline: isOff,
-    });
-  }
 }

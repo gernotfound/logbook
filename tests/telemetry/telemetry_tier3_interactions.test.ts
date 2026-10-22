@@ -58,7 +58,7 @@ describe('Unified Telemetry Hub E2E Suite — Tier 3', () => {
       expect(payload.componentStack!.length).toBeLessThanOrEqual(1000);
     });
 
-    it('T3-3: Zod Schema Discard + Offline Queue + Online Replay: Zod validation error is queued while offline and replayed to Firestore upon reconnecting', async () => {
+    it('T3-3: Zod Schema Discard + Offline Queue + Online Replay: Zod validation error is queued while offline and replayed through the diagnostics transport upon reconnecting', async () => {
       Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
       telemetryHub.init();
       telemetryHub.setUserId('user_t3_3');
@@ -80,30 +80,12 @@ describe('Unified Telemetry Hub E2E Suite — Tier 3', () => {
       expect(payload.source).toBe('zod_validation');
     });
 
-    it('T3-4: PWA Install Funnel + Concurrent Error Tracking: install event dispatch and background error logging run simultaneously without interfering', async () => {
-      vi.useFakeTimers();
-      telemetryHub.init();
-      telemetryHub.setUserId('user_t3_4');
-
-      telemetryHub.trackEvent('pwa_install_clicked');
-      telemetryHub.trackError(new Error('Concurrent background sync error'));
-      telemetryHub.trackEvent('pwa_prompt_accepted');
-
-      await vi.advanceTimersByTimeAsync(100);
-
-      expect(mockSetDoc).toHaveBeenCalledTimes(3);
-      const types = mockSetDoc.mock.calls.map((call: any) => call[1].type);
-      expect(types).toContain('pwa_install_clicked');
-      expect(types).toContain('Error');
-      expect(types).toContain('pwa_prompt_accepted');
-    });
-
-    it('T3-5: Offline Workout Lifecycle + Global Unhandled Rejection + FIFO Replay: workout events and unhandled promise rejections maintain strict FIFO sequence upon replay', async () => {
+    it('T3-5: offline schema diagnostics, an unhandled rejection and FIFO replay preserve ordered technical reports', async () => {
       Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
       telemetryHub.init();
       telemetryHub.setUserId('user_t3_5');
 
-      telemetryHub.trackEvent('workout_started', { offline: true });
+      telemetryHub.trackEvent('zod_schema_fallback', { schema: 'profile' });
       const rejPromise = Promise.reject(new Error('Timer tick promise rejection'));
       rejPromise.catch(() => {});
       window.dispatchEvent(
@@ -112,24 +94,24 @@ describe('Unified Telemetry Hub E2E Suite — Tier 3', () => {
           reason: new Error('Timer tick promise rejection'),
         })
       );
-      telemetryHub.trackEvent('workout_saved', { offline: true, durationMinutes: 45 });
+      telemetryHub.trackEvent('zod_schema_fallback', { schema: 'nutrition' });
 
       const queued = telemetryHub.getQueuedEvents();
       expect(queued.length).toBe(3);
-      expect(queued[0].payload.type).toBe('workout_started');
+      expect(queued[0].payload.type).toBe('zod_schema_fallback');
       expect(queued[1].payload.type).toBe('Error');
-      expect(queued[2].payload.type).toBe('workout_saved');
+      expect(queued[2].payload.type).toBe('zod_schema_fallback');
 
       Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
       await telemetryHub.flushQueue();
 
       expect(mockSetDoc).toHaveBeenCalledTimes(3);
-      expect(mockSetDoc.mock.calls[0][1].type).toBe('workout_started');
+      expect(mockSetDoc.mock.calls[0][1].details?.schema).toBe('profile');
       expect(mockSetDoc.mock.calls[1][1].type).toBe('Error');
-      expect(mockSetDoc.mock.calls[2][1].type).toBe('workout_saved');
+      expect(mockSetDoc.mock.calls[2][1].details?.schema).toBe('nutrition');
     });
 
-    it('T3-6: Privacy Engine Output + Firestore Security Rules Whitelist: all sanitized payloads strictly conform to Firestore rules schema without disallowed keys', async () => {
+    it('T3-6: Privacy Engine Output + Diagnostic Payload Whitelist: all sanitized payloads strictly conform to the telemetry payload allowlist without disallowed keys', async () => {
       vi.useFakeTimers();
       telemetryHub.init();
       telemetryHub.setUserId('user_t3_6');

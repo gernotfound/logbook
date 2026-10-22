@@ -513,8 +513,8 @@ describe('Milestone 2: PWA, offline workout and telemetry boundaries', () => {
       telemetryHub.init();
       telemetryHub.setUserId('user_replay_test');
 
-      telemetryHub.trackEvent('workout_started', { offline: true, routineId: 'r1' });
-      telemetryHub.trackEvent('workout_saved', { offline: true, duration: '00:45:00' });
+      telemetryHub.trackEvent('zod_schema_fallback', { schema: 'profile' });
+      telemetryHub.trackEvent('zod_schema_fallback', { schema: 'history' });
       expect(telemetryHub.getQueuedEvents().length).toBe(2);
 
       Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
@@ -539,7 +539,7 @@ describe('Milestone 2: PWA, offline workout and telemetry boundaries', () => {
             itemType: 'event',
             payload: {
               timestamp: Date.now() - 10000,
-              type: 'pwa_install_impression',
+              type: 'zod_schema_fallback',
               context: { appVersion: '1.0.0', platform: 'other', displayMode: 'browser', online: false },
               userId: 'user_boot_test',
               sessionId: 'sess_1',
@@ -567,7 +567,7 @@ describe('Milestone 2: PWA, offline workout and telemetry boundaries', () => {
             itemType: 'event',
             payload: {
               timestamp: Date.now() - 5000,
-              type: 'workout_started',
+              type: 'zod_schema_fallback',
               context: { appVersion: '1.0.0', platform: 'other', displayMode: 'browser', online: false },
               userId: null,
               sessionId: 'sess_guest',
@@ -615,47 +615,7 @@ describe('Milestone 2: PWA, offline workout and telemetry boundaries', () => {
   });
 
   // =========================================================================
-  // 4. Convenience Helpers
+  // Diagnostic transport is exercised separately; product funnel helpers were retired.
   // =========================================================================
-  describe('4. TelemetryHub Convenience Helpers', () => {
-    it('dispatches PWA helpers correctly', async () => {
-      telemetryHub.init();
-      telemetryHub.setUserId('user_helpers');
 
-      telemetryHub.trackPWAImpression({ platform: 'ios' });
-      telemetryHub.trackPWAInstallClick({ source: 'settings' });
-      telemetryHub.trackPWAOutcome('accepted', { durationSec: 5 });
-      telemetryHub.trackPWAInstalled({ promptUsed: true });
-
-      await waitFor(() => {
-        const types = mockSetDoc.mock.calls.map((c: any) => c[1].type);
-        expect(types).toContain('pwa_install_impression');
-        expect(types).toContain('pwa_install_click');
-        expect(types).toContain('pwa_install_prompt_outcome');
-        expect(types).toContain('pwa_appinstalled');
-      });
-    });
-
-    it('dispatches Workout helpers with offline auto-detection', async () => {
-      telemetryHub.init();
-      telemetryHub.setUserId('user_helpers');
-
-      telemetryHub.trackWorkoutStarted({ routineId: 'r_leg_day', routineName: 'Leg Day' });
-      telemetryHub.trackWorkoutSaved({ duration: '01:10:00', exerciseCount: 5 });
-
-      await waitFor(() => {
-        const started = mockSetDoc.mock.calls.find((c: any) => c[1].type === 'workout_started');
-        expect(started).toBeDefined();
-        expect(started[1].details?.offline).toBe(false);
-        expect(started[1].details?.routineId).toBe('r_leg_day');
-        expect(started[1].details?.routineName).toBeUndefined();
-
-        const saved = mockSetDoc.mock.calls.find((c: any) => c[1].type === 'workout_saved');
-        expect(saved).toBeDefined();
-        expect(saved[1].details?.offline).toBe(false);
-        expect(saved[1].details?.duration).toBe('01:10:00');
-        expect(saved[1].details?.exerciseCount).toBe(5);
-      });
-    });
-  });
 });

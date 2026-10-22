@@ -49,9 +49,9 @@ describe('Empirical Challenger 2: Telemetry Offline Queueing, Capacity & Online 
       telemetryHub.setUserId('user_offline_001');
 
       telemetryHub.trackError(new TypeError('Network disconnected'));
-      telemetryHub.trackEvent('workout_started', { offline: true, routineId: 'r1' });
-      telemetryHub.trackPWAInstallClick({ source: 'settings_banner' });
-      telemetryHub.trackWorkoutSaved({ offline: true, exerciseCount: 5 });
+      telemetryHub.trackEvent('zod_schema_fallback', { schema: 'profile' });
+      telemetryHub.trackEvent('zod_schema_fallback', { schema: 'history' });
+      telemetryHub.trackEvent('zod_schema_fallback', { schema: 'nutrition' });
 
       expect(localStorage.getItem(telemetryHub.getQueueStorageKey())).toBeNull();
       const queuedItems: QueuedTelemetryItem[] = telemetryHub.getQueuedEvents();
@@ -60,13 +60,13 @@ describe('Empirical Challenger 2: Telemetry Offline Queueing, Capacity & Online 
       expect(queuedItems[0].itemType).toBe('error');
       expect(queuedItems[0].payload.type).toBe('TypeError');
       expect(queuedItems[1].itemType).toBe('event');
-      expect(queuedItems[1].payload.type).toBe('workout_started');
+      expect(queuedItems[1].payload.type).toBe('zod_schema_fallback');
       expect(queuedItems[2].itemType).toBe('event');
-      expect(queuedItems[2].payload.type).toBe('pwa_install_click');
+      expect((queuedItems[2].payload as TelemetryEventPayload).details?.schema).toBe('history');
       expect(queuedItems[3].itemType).toBe('event');
-      expect(queuedItems[3].payload.type).toBe('workout_saved');
+      expect((queuedItems[3].payload as TelemetryEventPayload).details?.schema).toBe('nutrition');
 
-      // Ensure zero Firestore writes occurred while offline
+      // Ensure no external diagnostic dispatch occurred while offline
       expect(mockSetDoc).not.toHaveBeenCalled();
     });
 
@@ -334,8 +334,8 @@ describe('Empirical Challenger 2: Telemetry Offline Queueing, Capacity & Online 
       telemetryHub.setUserId(null); // Guest mode
 
       telemetryHub.trackError(new Error('Guest offline error'));
-      telemetryHub.trackEvent('workout_started', { offline: true });
-      telemetryHub.trackPWAInstallClick();
+      telemetryHub.trackEvent('zod_schema_fallback', { schema: 'profile' });
+      telemetryHub.trackEvent('zod_schema_fallback', { schema: 'history' });
 
       const queueBefore = telemetryHub.getQueuedEvents();
       expect(queueBefore.length).toBe(3);
@@ -352,7 +352,7 @@ describe('Empirical Challenger 2: Telemetry Offline Queueing, Capacity & Online 
       // Step 3: Trigger flush
       await telemetryHub.flushQueue();
 
-      // Under GDPR and LB-18 invariants, anonymous guest events must never be dispatched under the user's UID
+      // Owner-isolation invariant: guest diagnostics cannot be dispatched under a new UID
       expect(mockSetDoc).not.toHaveBeenCalled();
       expect(dispatchedDocs.length).toBe(0);
       expect(telemetryHub.getQueuedEvents()).toHaveLength(0);
