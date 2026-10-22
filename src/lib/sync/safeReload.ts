@@ -1,5 +1,6 @@
 import { isReloadSessionCurrent, prepareForReload, prepareForRequiredUpdateReload } from './reloadBarrier';
 import { isCurrentSession } from './session';
+import { checkForWaitingServiceWorker } from '../pwaUpdate';
 
 const REQUIRED_UPDATE_SW_TIMEOUT_MS = 3000;
 
@@ -14,9 +15,12 @@ async function refreshServiceWorkerForRequiredUpdate(): Promise<void> {
         ]);
         if (!registration) return;
 
+        // update() may resolve while the replacement worker is still
+        // installing. Reuse the same settle barrier as the ordinary update
+        // prompt, bounded so a blocked browser cannot trap the reload.
         await Promise.race([
-            registration.update().then(() => undefined),
-            delay(REQUIRED_UPDATE_SW_TIMEOUT_MS),
+            checkForWaitingServiceWorker(registration, REQUIRED_UPDATE_SW_TIMEOUT_MS),
+            delay(REQUIRED_UPDATE_SW_TIMEOUT_MS).then(() => false),
         ]);
 
         const waiting = registration.waiting;
