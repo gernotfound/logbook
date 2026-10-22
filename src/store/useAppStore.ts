@@ -2,7 +2,8 @@ import { create } from 'zustand';
 import { createDataSlice, getInitialUserData, type DataSlice } from './slices/createDataSlice';
 import { createWorkoutSlice, type WorkoutSlice } from './slices/createWorkoutSlice';
 import { createSyncSlice, type SyncSlice } from './slices/createSyncSlice';
-import { captureSession } from '../lib/sync/session';
+import { captureSession, isActiveGuestSession } from '../lib/sync/session';
+import { auth } from '../lib/firebase';
 import { persistOwnerBoundWorkoutSnapshot } from '../lib/sync/deviceCriticalState';
 import { draftRegistry } from '../lib/utils/draftRegistry';
 import { UPDATE_REQUIRED_EVENT } from '../lib/schemaEvolution';
@@ -87,6 +88,23 @@ const journalRetry = typeof window !== 'undefined' ? createJournalRetry(
 if (typeof window !== 'undefined') {
     const replay = () => {
         journalRetry?.reset();
+        try {
+            const session = captureSession();
+            // The login screen resolves to the guest owner as a storage fallback,
+            // even after logout has retired that archive. Only live sessions replay.
+            const ownerActive = session.owner === 'guest'
+                ? isActiveGuestSession()
+                : session.owner.startsWith('user:') && auth.currentUser?.uid === session.owner.slice(5);
+            if (!ownerActive) {
+                journalRetry?.refresh();
+                return;
+            }
+        } catch (error) {
+            // Unreadable ownership storage is not permission to resume a journal.
+            console.warn('Ripresa sincronizzazione non completata:', error);
+            journalRetry?.refresh();
+            return;
+        }
         void useAppStore.getState().flushPendingSyncs().catch(error => {
             console.warn('Ripresa sincronizzazione non completata:', error);
         }).finally(() => journalRetry?.refresh());
