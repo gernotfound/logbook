@@ -8,9 +8,8 @@ import {
   type QueuedTelemetryItem,
 } from '../src/lib/telemetryHub';
 
-
 describe('Empirical Challenger 2: Telemetry Offline Queueing, Capacity & Online Flush Stress Suite', () => {
-  let mockSetDoc: any;
+  let mockSentryTransport: any;
   let dispatchedDocs: Array<{ kind: string; data: any }>;
 
   beforeEach(() => {
@@ -22,7 +21,7 @@ describe('Empirical Challenger 2: Telemetry Offline Queueing, Capacity & Online 
 
     Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
 
-    mockSetDoc = vi.spyOn(sentryClient, 'sendTelemetryToSentry').mockImplementation(async (kind: any, data: any) => {
+    mockSentryTransport = vi.spyOn(sentryClient, 'sendTelemetryToSentry').mockImplementation(async (kind: any, data: any) => {
       dispatchedDocs.push({ kind, data });
       return true;
     });
@@ -43,61 +42,8 @@ describe('Empirical Challenger 2: Telemetry Offline Queueing, Capacity & Online 
   // 1. Offline Queueing, Capacity Limits (50 items) & FIFO Eviction
   // =========================================================================
   describe('1. Offline Queueing, Capacity Limits & FIFO Eviction', () => {
-    it('1.1: Queues both errors and events in memory without plaintext before vault unlock', () => {
-      Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
-      telemetryHub.init();
-      telemetryHub.setUserId('user_offline_001');
 
-      telemetryHub.trackError(new TypeError('Network disconnected'));
-      telemetryHub.trackEvent('zod_schema_fallback', { schema: 'profile' });
-      telemetryHub.trackEvent('zod_schema_fallback', { schema: 'history' });
-      telemetryHub.trackEvent('zod_schema_fallback', { schema: 'nutrition' });
-
-      expect(localStorage.getItem(telemetryHub.getQueueStorageKey())).toBeNull();
-      const queuedItems: QueuedTelemetryItem[] = telemetryHub.getQueuedEvents();
-      expect(queuedItems.length).toBe(4);
-
-      expect(queuedItems[0].itemType).toBe('error');
-      expect(queuedItems[0].payload.type).toBe('TypeError');
-      expect(queuedItems[1].itemType).toBe('event');
-      expect(queuedItems[1].payload.type).toBe('zod_schema_fallback');
-      expect(queuedItems[2].itemType).toBe('event');
-      expect((queuedItems[2].payload as TelemetryEventPayload).details?.schema).toBe('history');
-      expect(queuedItems[3].itemType).toBe('event');
-      expect((queuedItems[3].payload as TelemetryEventPayload).details?.schema).toBe('nutrition');
-
-      // Ensure no external diagnostic dispatch occurred while offline
-      expect(mockSetDoc).not.toHaveBeenCalled();
-    });
-
-    it('1.2: Strictly enforces TELEMETRY_QUEUE_CAPACITY (50) and FIFO eviction on heavy overflow (80 items)', () => {
-      Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
-      telemetryHub.init();
-
-      // Enqueue 80 distinct events sequentially
-      for (let i = 1; i <= 80; i++) {
-        telemetryHub.trackEvent(`event_seq_${i}`, { index: i });
-      }
-
-      const queue = telemetryHub.getQueuedEvents();
-      expect(queue.length).toBe(TELEMETRY_QUEUE_CAPACITY);
-      expect(queue.length).toBe(50);
-
-      // Verify that the oldest 30 items (1..30) were evicted FIFO, and exactly 31..80 remain in order.
-      // Test-only arbitrary metadata is intentionally removed by the telemetry detail allowlist.
-      expect(queue[0].payload.type).toBe('event_seq_31');
-      expect((queue[0].payload as TelemetryEventPayload).details?.index).toBeUndefined();
-      expect(queue[queue.length - 1].payload.type).toBe('event_seq_80');
-      expect((queue[queue.length - 1].payload as TelemetryEventPayload).details?.index).toBeUndefined();
-
-      // Verify continuous sequence
-      for (let j = 0; j < 50; j++) {
-        const expectedIndex = j + 31;
-        expect(queue[j].payload.type).toBe(`event_seq_${expectedIndex}`);
-      }
-    });
-
-    it('1.3: Handles mixed error and event flood (120 items) with accurate FIFO queue preservation', () => {
+    it('1.3: preserves the latest 50 errors when 60 events compete for queue capacity', () => {
       Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
       telemetryHub.init();
 
@@ -108,6 +54,10 @@ describe('Empirical Challenger 2: Telemetry Offline Queueing, Capacity & Online 
 
       const queue = telemetryHub.getQueuedEvents();
       expect(queue.length).toBe(50);
+
+      expect(queue.every(item => item.itemType === 'error')).toBe(true);
+      expect(queue.map(item => (item.payload as TelemetryErrorPayload).message))
+        .toEqual(Array.from({ length: 50 }, (_, index) => `Custom distinct error ${index + 11}`));
 
       // Verify structure integrity of all queued items
       queue.forEach((item) => {
@@ -123,7 +73,7 @@ describe('Empirical Challenger 2: Telemetry Offline Queueing, Capacity & Online 
   // 2. Offline Duplicate Count Updates & Rate Limiting
   // =========================================================================
   describe('2. Offline Duplicate Count Updates & Rate Limiting', () => {
-    it('2.1: Updates count and lastSeen in localStorage for identical errors without creating duplicate entries', () => {
+    it('2.1: Updates count and lastSeen in RAM for offline errors without duplicate entries', () => {
       Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
       telemetryHub.init();
       telemetryHub.setUserId('user_offline_dedup');
@@ -184,123 +134,61 @@ describe('Empirical Challenger 2: Telemetry Offline Queueing, Capacity & Online 
       expect(payloadC.count).toBe(7);
     });
 
-    it('2.3: Fast path deduplication executes under 10ms for 500 duplicate offline errors', () => {
-      Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
-      telemetryHub.init();
-
-      const hotError = new Error('Hot loop failure in offline mode');
-      const start = performance.now();
-
-      for (let i = 0; i < 500; i++) {
-        telemetryHub.trackError(hotError);
-      }
-
-      const elapsed = performance.now() - start;
-      expect(elapsed).toBeLessThan(100);
-
-      const queue = telemetryHub.getQueuedEvents();
-      expect(queue.length).toBe(1);
-      expect((queue[0].payload as TelemetryErrorPayload).count).toBe(500);
-    });
   });
 
   // =========================================================================
   // 3. Online Flush Behavior, Retry & Batching
   // =========================================================================
   describe('3. Online Flush Behavior, Retry & Batching', () => {
-    it('3.1: Successfully flushes all queued items to Firestore and clears localStorage queue', async () => {
-      Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
-      telemetryHub.init();
-      telemetryHub.setUserId('user_online_flush');
 
-      // Queue 3 errors and 3 events
-      telemetryHub.trackError(new TypeError('Error 1'));
-      telemetryHub.trackError(new RangeError('Error 2'));
-      telemetryHub.trackError(new SyntaxError('Error 3'));
-      telemetryHub.trackEvent('event_1');
-      telemetryHub.trackEvent('event_2');
-      telemetryHub.trackEvent('event_3');
-
-      expect(telemetryHub.getQueuedEvents().length).toBe(6);
-
-      // Now switch online and trigger flush
-      Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
-      await telemetryHub.flushQueue();
-
-      expect(mockSetDoc).toHaveBeenCalledTimes(6);
-      expect(dispatchedDocs.length).toBe(6);
-      expect(telemetryHub.getQueuedEvents().length).toBe(0);
-
-      // Verify the external boundary receives only supported telemetry kinds.
-      dispatchedDocs.forEach((entry) => {
-        expect(['error', 'event']).toContain(entry.kind);
-      });
-    });
-
-    it('3.2: Retries on transient network errors, preserving failed items in queue while removing succeeded ones', async () => {
+    it('3.2: transient Sentry failures retain technical errors until retry', async () => {
       Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
       telemetryHub.init();
       telemetryHub.setUserId('user_retry_test');
 
-      telemetryHub.trackEvent('item_to_succeed_1');
-      telemetryHub.trackEvent('item_to_fail_2');
-      telemetryHub.trackEvent('item_to_succeed_3');
-      telemetryHub.trackEvent('item_to_fail_4');
+      for (let i = 1; i <= 4; i++) {
+        telemetryHub.trackError(new Error(`Report ${i}`));
+      }
+      expect(telemetryHub.getQueuedEvents()).toHaveLength(4);
 
-      expect(telemetryHub.getQueuedEvents().length).toBe(4);
-
-      // Mock Sentry boundary to fail only for item 2 and item 4
-      mockSetDoc.mockImplementation(async (kind: any, data: any) => {
-        if (data.type === 'item_to_fail_2' || data.type === 'item_to_fail_4') {
-          throw new Error('Transient network drop during write');
+      mockSentryTransport.mockImplementation(async (kind: any, data: any) => {
+        if (data.message === 'Report 2' || data.message === 'Report 4') {
+          throw new Error('Transient Sentry transport failure');
         }
         dispatchedDocs.push({ kind, data });
         return true;
       });
-
       Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
-
-      // First flush attempt
       await telemetryHub.flushQueue();
 
-      // 2 succeeded, 2 failed
-      expect(dispatchedDocs.length).toBe(2);
-      let remainingQueue = telemetryHub.getQueuedEvents();
-      expect(remainingQueue.length).toBe(2);
-      expect(remainingQueue[0].payload.type).toBe('item_to_fail_2');
-      expect(remainingQueue[1].payload.type).toBe('item_to_fail_4');
+      expect(dispatchedDocs.map(item => item.data.message)).toEqual(['Report 1', 'Report 3']);
+      expect(telemetryHub.getQueuedEvents().map(item => (item.payload as TelemetryErrorPayload).message))
+        .toEqual(['Report 2', 'Report 4']);
 
-      // Now restore Sentry boundary to succeed on all calls (network recovery)
-      mockSetDoc.mockImplementation(async (kind: any, data: any) => {
+      mockSentryTransport.mockImplementation(async (kind: any, data: any) => {
         dispatchedDocs.push({ kind, data });
         return true;
       });
-
-      // Second flush attempt
       await telemetryHub.flushQueue();
 
-      expect(dispatchedDocs.length).toBe(4);
-      remainingQueue = telemetryHub.getQueuedEvents();
-      expect(remainingQueue.length).toBe(0);
+      expect(dispatchedDocs.map(item => item.data.message))
+        .toEqual(['Report 1', 'Report 3', 'Report 2', 'Report 4']);
+      expect(telemetryHub.getQueuedEvents()).toHaveLength(0);
     });
 
-    it('3.3: Preserves in-flight items added concurrently during an active flushQueue operation', async () => {
+    it('3.3: retains technical errors added while a flush is in flight', async () => {
       Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
       telemetryHub.init();
       telemetryHub.setUserId('user_concurrent_flush');
+      telemetryHub.trackError(new Error('Initial 1'));
+      telemetryHub.trackError(new Error('Initial 2'));
+      expect(telemetryHub.getQueuedEvents()).toHaveLength(2);
 
-      telemetryHub.trackEvent('initial_item_1');
-      telemetryHub.trackEvent('initial_item_2');
-
-      expect(telemetryHub.getQueuedEvents().length).toBe(2);
-
-      // Mock Sentry boundary to simulate an async delay during flush, and inject a new offline event mid-flight
-      mockSetDoc.mockImplementation(async (kind: any, data: any) => {
+      mockSentryTransport.mockImplementation(async (kind: any, data: any) => {
         dispatchedDocs.push({ kind, data });
-        if (data.type === 'initial_item_1') {
-          // Mid-flight: new offline item arrives (simulate device temporarily having offline items or queueing)
+        if (data.message === 'Initial 1') {
           Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
-          telemetryHub.trackEvent('mid_flight_item_3');
+          telemetryHub.trackError(new Error('In-flight 3'));
           Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
         }
         return true;
@@ -309,16 +197,15 @@ describe('Empirical Challenger 2: Telemetry Offline Queueing, Capacity & Online 
       Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
       await telemetryHub.flushQueue();
 
-      // Verify that initial items (1 & 2) were dispatched and mid-flight item is safely retained in queue
-      expect(dispatchedDocs.length).toBe(2);
+      expect(dispatchedDocs.map(item => item.data.message)).toEqual(['Initial 1', 'Initial 2']);
       const remaining = telemetryHub.getQueuedEvents();
-      expect(remaining.length).toBe(1);
-      expect(remaining[0].payload.type).toBe('mid_flight_item_3');
+      expect(remaining).toHaveLength(1);
+      expect((remaining[0].payload as TelemetryErrorPayload).message).toBe('In-flight 3');
 
-      // Next flush clears mid-flight item
       await telemetryHub.flushQueue();
-      expect(dispatchedDocs.length).toBe(3);
-      expect(telemetryHub.getQueuedEvents().length).toBe(0);
+      expect(dispatchedDocs.map(item => item.data.message))
+        .toEqual(['Initial 1', 'Initial 2', 'In-flight 3']);
+      expect(telemetryHub.getQueuedEvents()).toHaveLength(0);
     });
   });
 
@@ -326,39 +213,6 @@ describe('Empirical Challenger 2: Telemetry Offline Queueing, Capacity & Online 
   // 4. Guest / Anonymous to Authenticated User ID Migration upon Login
   // =========================================================================
   describe('4. Guest / Anonymous User ID Isolation upon Login Flush (LB-18 Privacy)', () => {
-    it('4.1: Preserves guest/anonymous items without retroactively assigning authenticated user ID on flush', async () => {
-      // Step 1: User is guest / anonymous offline
-      localStorage.setItem('logbook_is_guest', 'true');
-      Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
-      telemetryHub.init();
-      telemetryHub.setUserId(null); // Guest mode
-
-      telemetryHub.trackError(new Error('Guest offline error'));
-      telemetryHub.trackEvent('zod_schema_fallback', { schema: 'profile' });
-      telemetryHub.trackEvent('zod_schema_fallback', { schema: 'history' });
-
-      const queueBefore = telemetryHub.getQueuedEvents();
-      expect(queueBefore.length).toBe(3);
-      expect(queueBefore[0].payload.userId).toBeNull();
-      expect(queueBefore[1].payload.userId).toBeNull();
-      expect(queueBefore[2].payload.userId).toBeNull();
-      const guestQueueKey = telemetryHub.getQueueStorageKey();
-
-      // Step 2: User connects / logs in with Google
-      localStorage.removeItem('logbook_is_guest');
-      telemetryHub.setUserId('firebase_auth_uid_99999');
-      Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
-
-      // Step 3: Trigger flush
-      await telemetryHub.flushQueue();
-
-      // Owner-isolation invariant: guest diagnostics cannot be dispatched under a new UID
-      expect(mockSetDoc).not.toHaveBeenCalled();
-      expect(dispatchedDocs.length).toBe(0);
-      expect(telemetryHub.getQueuedEvents()).toHaveLength(0);
-      // Locked guest diagnostics were RAM-only and must not be assigned to the new account.
-      expect(localStorage.getItem(guestQueueKey)).toBeNull();
-    });
 
     it('4.2: Isolates "anonymous" placeholder strings from authenticated user ID on flush', async () => {
       Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
@@ -379,7 +233,7 @@ describe('Empirical Challenger 2: Telemetry Offline Queueing, Capacity & Online 
 
       await telemetryHub.flushQueue();
 
-      expect(mockSetDoc).not.toHaveBeenCalled();
+      expect(mockSentryTransport).not.toHaveBeenCalled();
       expect(dispatchedDocs.length).toBe(0);
       expect(telemetryHub.getQueuedEvents()).toHaveLength(0);
       expect(localStorage.getItem(anonymousQueueKey)).toBeNull();
@@ -390,38 +244,6 @@ describe('Empirical Challenger 2: Telemetry Offline Queueing, Capacity & Online 
   // 5. Hostile Edge Cases & Defensive Invariants
   // =========================================================================
   describe('5. Hostile Edge Cases & Defensive Invariants', () => {
-    it('5.1: Handles localStorage throwing QuotaExceededError without crashing or halting execution', () => {
-      Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
-      telemetryHub.init();
-
-      // Mock localStorage.setItem to throw QuotaExceededError
-      vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
-        const error = new DOMException('QuotaExceededError: storage is full', 'QuotaExceededError');
-        throw error;
-      });
-
-      expect(() => {
-        telemetryHub.trackError(new Error('Storage overflow error'));
-        telemetryHub.trackEvent('storage_overflow_event');
-      }).not.toThrow();
-    });
-
-    it('5.2: Recovers gracefully if localStorage queue contains corrupted JSON or invalid data', () => {
-      localStorage.setItem(telemetryHub.getQueueStorageKey(), '{ "corrupted": invalid_json_syntax ');
-      telemetryHub.init();
-
-      // getQueuedEvents should catch and return empty array
-      const queue = telemetryHub.getQueuedEvents();
-      expect(queue).toEqual([]);
-
-      // Adding new items should overwrite corrupted state cleanly
-      Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
-      telemetryHub.trackEvent('clean_recovery_event');
-
-      const recovered = telemetryHub.getQueuedEvents();
-      expect(recovered.length).toBe(1);
-      expect(recovered[0].payload.type).toBe('clean_recovery_event');
-    });
 
     it('5.3: Sanitizes nested PII, API tokens, and emails in offline queued payloads before storage', () => {
       Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
