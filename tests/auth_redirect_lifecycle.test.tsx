@@ -163,6 +163,7 @@ describe('Google redirect lifecycle', () => {
     const originalSetItem = sessionStorageMock.setItem.getMockImplementation();
     sessionStorageMock.setItem
       .mockImplementationOnce((key, value) => originalSetItem?.(key, value))
+      .mockImplementationOnce((key, value) => originalSetItem?.(key, value))
       .mockImplementationOnce(() => {
         throw new Error('storage write blocked');
       });
