@@ -95,6 +95,7 @@ describe('transaction writer retry safety', () => {
         const controlWrite = harness.attempts[0].find(write => write.path.endsWith('/sync_control/state'));
         expect(businessWrite?.data.profile.height).toBe('171');
         expect(controlWrite?.data.replicas.s00.lastSeq).toBe(1);
+        expect(controlWrite?.data.mutation.batchId).toMatch(/^sync-advance_/);
         expect(businessWrite?.data._sync.writer).toMatchObject({
             slot: 's00', replicaId: 'replica-a', generation: 1, seq: 1,
         });

@@ -1,4 +1,5 @@
 import { doc, runTransaction, type Firestore } from 'firebase/firestore';
+import { generateId } from '../utils/date';
 import { UserDataSchema } from '../schema';
 import { checkDocSize } from '../checkDocSize';
 import { removeUndefinedValues } from '../utils/object';
@@ -52,6 +53,9 @@ export async function applyDocumentChanges(
         throw new Error(`Transazione sync troppo grande: ${documentCount} documenti, massimo ${MAX_SYNC_DOCUMENTS_PER_TRANSACTION}.`);
     }
 
+    // The Firestore SDK may retry this callback within one invocation. Preserve
+    // byte-identical writes across retries while using a new ID for a new drain.
+    const batchId = generateId('sync-advance');
     return runTransaction(db, async transaction => {
         if (!isCurrent()) throw new Error('Sessione cambiata');
 
@@ -125,7 +129,7 @@ export async function applyDocumentChanges(
             transaction.set(refs[refIndex], finalData);
         }
 
-        transaction.set(controlRef, advanceReplicaControl(control, replica, deliveredSeq));
+        transaction.set(controlRef, advanceReplicaControl(control, replica, deliveredSeq, batchId));
 
         return { documents: newDocs, syncMeta: newSyncMetas };
     }, { maxAttempts: 5 });

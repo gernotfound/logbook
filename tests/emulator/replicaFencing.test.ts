@@ -98,7 +98,7 @@ it('fences an old replica generation after an expired slot is reused', async () 
                 ...currentControl.replicas,
                 s00: { ...currentControl.replicas.s00, lastSeq: seq },
             },
-            mutation: { slot: 's00', action: 'advance' },
+            mutation: { slot: 's00', action: 'advance', batchId: `test-${crypto.randomUUID()}` },
         });
         batch.set(rootRef, {
             profile: { height: '180' },
@@ -165,7 +165,7 @@ it('rejects Protocol 1/2 writers both before and after the account creates its r
             ...control.replicas,
             s00: { ...control.replicas.s00, lastSeq: 1 },
         },
-        mutation: { slot: 's00', action: 'advance' },
+        mutation: { slot: 's00', action: 'advance', batchId: `test-${crypto.randomUUID()}` },
     });
     baselineBatch.set(rootRef, {
         profile: { height: '170' },
@@ -188,7 +188,7 @@ it('rejects Protocol 1/2 writers both before and after the account creates its r
                 ...current.replicas,
                 s00: { ...current.replicas.s00, lastSeq: 2 },
             },
-            mutation: { slot: 's00', action: 'advance' },
+            mutation: { slot: 's00', action: 'advance', batchId: `test-${crypto.randomUUID()}` },
         });
         legacyBatch.set(rootRef, {
             profile: { height: '171' },

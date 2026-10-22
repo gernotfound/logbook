@@ -66,7 +66,10 @@ describe('Sync Protocol 3 replica registry', () => {
         const advanced = advanceReplicaControl(current, identity('s00'), 6);
         expect(advanced.replicas.s00.lastSeq).toBe(6);
         expect(advanced.replicas.s01).toEqual(current.replicas.s01);
-        expect(advanced.mutation).toEqual({ slot: 's00', action: 'advance' });
+        expect(advanced.mutation).toMatchObject({ slot: 's00', action: 'advance',
+            batchId: expect.stringMatching(/^sync-advance_/) });
+        expect(advanceReplicaControl(advanced, identity('s00'), 6).mutation.batchId)
+            .not.toBe(advanced.mutation.batchId);
     });
 
     it('derives checkpoints only from normalized cloud sync metadata', () => {

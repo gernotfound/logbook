@@ -43,6 +43,7 @@ export interface ReplicaControl {
     mutation: {
         slot: string;
         action: ReplicaMutationAction;
+        batchId?: string;
     };
 }
 
@@ -135,8 +136,14 @@ export function parseReplicaControl(raw: unknown): ReplicaControl {
     if (action !== 'register' && action !== 'checkpoint' && action !== 'advance' && action !== 'retire' && action !== 'reuse-expired') {
         throw new Error('Mutazione registro repliche non valida');
     }
+    const batchId = raw.mutation.batchId;
+    if (batchId !== undefined && (action !== 'advance' || typeof batchId !== 'string'
+        || batchId.length < 16 || batchId.length > 128)) {
+        throw new Error('Identificatore avanzamento replica non valido');
+    }
     const revision = raw.consentRevision === undefined ? undefined : parseSafeInteger(raw.consentRevision, 'consent revision');
-    return { protocolVersion: 3, ...(revision !== undefined ? { consentRevision: revision } : {}), replicas, mutation: { slot: raw.mutation.slot, action } };
+    return { protocolVersion: 3, ...(revision !== undefined ? { consentRevision: revision } : {}),
+        replicas, mutation: { slot: raw.mutation.slot, action, ...(batchId !== undefined ? { batchId } : {}) } };
 }
 
 function emptyControl(slot = 's00'): ReplicaControl {
@@ -182,7 +189,7 @@ export function matchesReplica(entry: ReplicaControlEntry | undefined, identity:
         && entry.generation === identity.generation);
 }
 
-export function advanceReplicaControl(control: ReplicaControl, identity: ReplicaIdentity, lastSeq: number): ReplicaControl {
+export function advanceReplicaControl(control: ReplicaControl, identity: ReplicaIdentity, lastSeq: number, batchId = generateId('sync-advance')): ReplicaControl {
     const entry = control.replicas[identity.slot];
     if (!matchesReplica(entry, identity)) throw new ReplicaFencedError();
     const nextSeq = Math.max(entry.lastSeq, parseSafeInteger(lastSeq, 'Replica sequence'));
@@ -193,7 +200,9 @@ export function advanceReplicaControl(control: ReplicaControl, identity: Replica
             ...control.replicas,
             [identity.slot]: { ...entry, lastSeq: nextSeq },
         },
-        mutation: { slot: identity.slot, action: 'advance' },
+        // Lost-ack replay may repeat lastSeq but must always publish a fresh
+        // batch identifier; Rules compare it to the pre-transaction control.
+        mutation: { slot: identity.slot, action: 'advance', batchId },
     };
 }
 
