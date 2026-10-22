@@ -9,12 +9,8 @@ export const calculateEffectiveSetWeightContract = Logic.calculateEffectiveSetWe
 export const calculateSetVolumeContract = Logic.calculateSetVolume;
 export const calculateWorkoutVolumeContract = Logic.calculateWorkoutVolume;
 
-export function calculateRealtimeKcalContract(carbs: any, pro: any, fat: any): number {
-    const c = typeof carbs === 'number' ? carbs : parseFloat(String(carbs || '0').trim().replace(',', '.')) || 0;
-    const p = typeof pro === 'number' ? pro : parseFloat(String(pro || '0').trim().replace(',', '.')) || 0;
-    const f = typeof fat === 'number' ? fat : parseFloat(String(fat || '0').trim().replace(',', '.')) || 0;
-    return Math.round(c * 4 + p * 4 + f * 9);
-}
+// Share the real calculator invoked by CustomFoodForm; never reimplement it in a test.
+export { calculateCustomFoodKcal as calculateRealtimeKcalContract } from '../src/lib/nutrition/calculateCustomFoodKcal';
 
 export function mergeActivePainsContract(
     activePains: string[] = [],

@@ -1,4 +1,5 @@
 import { Pencil, Plus, Save } from 'lucide-react';
+import { calculateCustomFoodKcal } from '../../lib/nutrition/calculateCustomFoodKcal';
 
 interface CustomFoodFormProps {
     cfData: any;
@@ -35,14 +36,9 @@ export default function CustomFoodForm({
         const pStr = field === 'pro' ? value : String(updated.pro ?? '');
         const fStr = field === 'fat' ? value : String(updated.fat ?? '');
 
-        const c = parseFloat(cStr.trim().replace(',', '.')) || 0;
-        const p = parseFloat(pStr.trim().replace(',', '.')) || 0;
-        const f = parseFloat(fStr.trim().replace(',', '.')) || 0;
-
         const hasAnyMacro = Boolean(cStr.trim() || pStr.trim() || fStr.trim());
         if (hasAnyMacro) {
-            const autoKcal = Math.round((c * 4) + (p * 4) + (f * 9));
-            updated.kcal = autoKcal;
+            updated.kcal = calculateCustomFoodKcal(cStr, pStr, fStr);
         } else {
             updated.kcal = '';
         }
