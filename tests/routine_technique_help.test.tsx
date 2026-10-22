@@ -6,10 +6,11 @@ vi.unmock('../src/store/useDialogStore');
 
 import { RoutineExerciseItem } from '../src/components/Training/routines/RoutineExerciseItem';
 import { useDialogStore } from '../src/store/useDialogStore';
+import type { RoutineExercise } from '../src/types';
 
 const noop = vi.fn();
 
-function renderItem(exercise: any = { exId: 'bench', setsCount: 1 }) {
+function renderItem(exercise: RoutineExercise = { exId: 'bench', setsCount: 1 }) {
     return render(
         <RoutineExerciseItem
             exercise={exercise}
@@ -52,6 +53,42 @@ describe('routine technique help', () => {
         expect(dialog.message).toContain('confrontare le prestazioni');
     });
 
+    it('routes form edits through typed callbacks without transforming the stored routine fields', () => {
+        render(
+            <RoutineExerciseItem
+                exercise={{
+                    exId: 'bench', setsCount: '4', minReps: 6, maxReps: 10,
+                    technicalStandard: 'Fermo 1 s',
+                    progressionContract: { role: 'primary', metric: 'performance' },
+                    setPlans: [{ technique: 'cluster', segmentCount: 3, restSeconds: 20 }],
+                }}
+                index={2}
+                totalExercises={4}
+                onMove={noop}
+                onRemove={noop}
+                onUpdateSetsCount={noop}
+                onUpdateReps={noop}
+                onUpdateSetPlan={noop}
+                onUpdateSetPlanField={noop}
+                onUpdateExerciseMetadata={noop}
+            />,
+        );
+
+        expect((screen.getByLabelText('Serie:') as HTMLInputElement).value).toBe('4');
+        expect((screen.getByLabelText('Ripetizioni minime') as HTMLInputElement).value).toBe('6');
+        expect((screen.getByLabelText('Ripetizioni massime') as HTMLInputElement).value).toBe('10');
+        fireEvent.change(screen.getByLabelText('Serie:'), { target: { value: '5' } });
+        expect(noop).toHaveBeenCalledWith(2, '5');
+
+        fireEvent.click(screen.getByText('Tecnica e progressione'));
+        expect((screen.getByLabelText('Tecnica serie 1') as HTMLSelectElement).value).toBe('cluster');
+        expect((screen.getByLabelText('Segmenti serie 1') as HTMLInputElement).value).toBe('3');
+        fireEvent.change(screen.getByLabelText('Segmenti serie 1'), { target: { value: '4' } });
+        expect(noop).toHaveBeenCalledWith(2, 0, 'segmentCount', '4');
+        fireEvent.change(screen.getByLabelText('Esecuzione da mantenere'), { target: { value: 'ROM pieno' } });
+        expect(noop).toHaveBeenCalledWith(2, 'technicalStandard', 'ROM pieno');
+    });
+
     it('keeps per-set techniques inside the Tecnica panel and lays multiple techniques out as ordered cards', () => {
         const view = renderItem({
             exId: 'bench',
@@ -60,8 +97,8 @@ describe('routine technique help', () => {
                 { technique: 'dropset' },
                 { technique: 'rest_pause', restSeconds: 20 },
                 { technique: 'cluster', restSeconds: 15, segmentCount: 3 },
-                { technique: 'rep_match', restSeconds: 20, target: { reps: 10 } },
-                { technique: 'diminishing', restSeconds: 20, target: { reps: 8 } },
+                { technique: 'rep_match', restSeconds: 20, target: { type: 'reps', reps: 10 } },
+                { technique: 'diminishing', restSeconds: 20, target: { type: 'reps', reps: 8 } },
             ],
         });
 

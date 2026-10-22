@@ -1,7 +1,7 @@
 import { MAX_ROUTINE_SEGMENTS, MAX_ROUTINE_SETS, previewRoutineSets } from '../../../lib/routineSessionLimits';
 import React, { useId } from 'react';
 import { ArrowUp, ArrowDown, Trash2, Activity, CircleHelp } from 'lucide-react';
-import { ExerciseLibraryItem, PlannedSetTechnique, ProgressionContract, SetTechnique } from '../../../types';
+import type { ExerciseLibraryItem, PlannedSetTechnique, ProgressionContract, RoutineExercise, SetTechnique } from '../../../types';
 import { useDialogStore } from '../../../store/useDialogStore';
 
 const TECHNIQUE_HELP = {
@@ -22,7 +22,7 @@ const TECHNIQUE_HELP = {
 type TechniqueHelpKey = keyof typeof TECHNIQUE_HELP;
 
 interface RoutineExerciseItemProps {
-    exercise: any;
+    exercise: RoutineExercise;
     index: number;
     totalExercises: number;
     libDef?: ExerciseLibraryItem;
