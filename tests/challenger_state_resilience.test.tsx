@@ -461,6 +461,13 @@ describe('Challenger 2: Adversarial State Management, Schemas, Guest Merge & UI 
 
             // 50*4 + 30*4 + 10*9 = 200 + 120 + 90 = 410 kcal
             expect(kcalInput.value).toBe('410');
+
+            // Emptying every macro field must restore the form's blank kcal state,
+            // not silently persist a computed zero.
+            fireEvent.change(carbsInput, { target: { value: '' } });
+            fireEvent.change(proInput, { target: { value: '' } });
+            fireEvent.change(fatInput, { target: { value: '' } });
+            expect(kcalInput.value).toBe('');
         });
 
         it('5.2 CustomFoodForm handles decimal macro inputs and updates kcal accurately', () => {
