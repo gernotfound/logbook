@@ -2,15 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { createFoodSearcher, searchFoods } from './nutrition';
 import { createExerciseLibrarySearcher, searchExerciseLibrary } from './workout';
 
-// Diagnostic only: CI load differs across runners, so timings must not become a release threshold.
-function elapsedMs(task: () => void): number {
-    const start = performance.now();
-    task();
-    return Math.round((performance.now() - start) * 100) / 100;
-}
-
-describe('catalog search scaling diagnostic', () => {
-    it('compares fresh indexes with reused indexes on large deterministic catalogs', () => {
+describe('catalog search index equivalence', () => {
+    it('reuses indexes without changing search results on large deterministic catalogs', () => {
         const foodNames = ['Pollo arrosto', 'Riso integrale', 'Yogurt greco', 'Fagioli rossi'];
         const foods = Array.from({ length: 600 }, (_, i) => ({
             id: `food-${i}`,
@@ -46,28 +39,5 @@ describe('catalog search scaling diagnostic', () => {
                 .toEqual(searchExerciseLibrary(exercises, query).map(item => item.id));
         }
 
-        const rounds = 3;
-        const freshFoodMs = elapsedMs(() => {
-            for (let i = 0; i < rounds; i++) for (const query of foodQueries) searchFoods(foods, query);
-        });
-        const reusedFoodMs = elapsedMs(() => {
-            for (let i = 0; i < rounds; i++) for (const query of foodQueries) preparedFoods(query);
-        });
-        const freshExerciseMs = elapsedMs(() => {
-            for (let i = 0; i < rounds; i++) for (const query of exerciseQueries) searchExerciseLibrary(exercises, query);
-        });
-        const reusedExerciseMs = elapsedMs(() => {
-            for (let i = 0; i < rounds; i++) for (const query of exerciseQueries) preparedExercises(query);
-        });
-
-        // Collected in CI logs for comparisons; results are observational, not a timing assertion.
-        console.info('search-index-diagnostic', JSON.stringify({
-            catalogSize: foods.length,
-            searchesPerCategory: rounds * foodQueries.length,
-            foodFreshMs: freshFoodMs,
-            foodReusedMs: reusedFoodMs,
-            exerciseFreshMs: freshExerciseMs,
-            exerciseReusedMs: reusedExerciseMs,
-        }));
     });
 });
