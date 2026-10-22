@@ -849,14 +849,31 @@ export async function acknowledgeThrough(
         const newClock = { ...current.clock };
         if (syncMeta) for (const meta of Object.values(syncMeta)) for (const [actor, seq] of Object.entries(meta.clock)) newClock[actor] = Math.max(newClock[actor] || 0, seq);
         const newSyncMeta = { ...current.syncMetaByDocument, ...(syncMeta || {}) };
-        const remoteDocs = projectDocuments(parsed, catalog);
+        // The confirmed transaction touched only the delivered document paths.
+        // Preserve unrelated months/root hydrated by another tab while it was in flight.
+        const projectedRemote = projectDocuments(parsed, catalog);
+        const deliveredDocs = delivery
+            ? new Map<string, DocumentData>(
+                [...new Set(delivery.operations.map(op => op.docPath))]
+                    .map(path => [path, projectedRemote.get(path) ?? {}]),
+            )
+            : null;
+        // A delivered empty monthly document must clear that month, but must
+        // never clear a different month absent from this transaction.
+        const acknowledgedBaseline = deliveredDocs
+            ? parse(applyRemoteDocuments(current.baseline, deliveredDocs, catalog))
+            : parsed;
+        const acknowledgedState = deliveredDocs
+            ? parse(applyRemoteDocuments(current.data, deliveredDocs, catalog))
+            : parsed;
+        const remoteDocs = projectDocuments(acknowledgedState, catalog);
         const { documents: mergedDocs } = applySemanticOperations(remoteDocs, pending, newSyncMeta);
         const reconciled = applyRemoteDocuments(current.data, mergedDocs, catalog);
         reconciled.pendingConflicts = current.data.pendingConflicts;
         const data = parse(reconciled);
         // Persist only server-confirmed metadata; replayed pending operations are
         // speculative and must never become evidence that a cloud document exists.
-        return { ...current, clock: newClock, baseline: parsed, data, pending, completeMonths: [...new Set([...current.completeMonths, ...months])], syncMetaByDocument: newSyncMeta };
+        return { ...current, clock: newClock, baseline: acknowledgedBaseline, data, pending, completeMonths: [...new Set([...current.completeMonths, ...months])], syncMetaByDocument: newSyncMeta };
     });
 }
 

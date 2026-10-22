@@ -52,6 +52,8 @@ Un nuovo `commitLocal()` può completarsi mentre una generazione precedente è t
 
 **MUST:** se `actorSeq` locale è già avanzato, `acknowledgeThrough()` non deve sostituire `data` con lo snapshot remoto più vecchio.
 
+**MUST:** l'ack di un batch attestato riconcilia esclusivamente i `docPath` effettivamente consegnati; se una scheda ha installato durante remote→ack un root o mese estraneo al batch, tanto `data` quanto `baseline` devono conservarne il valore più recente. Un documento mensile vuoto incluso nel batch può essere svuotato, ma la sua assenza dal batch non autorizza a cancellare altri mesi.
+
 ### Restart / hydration
 
 Un reload può avvenire con journal non vuoto anche quando il remote commit corrispondente è già stato applicato.
