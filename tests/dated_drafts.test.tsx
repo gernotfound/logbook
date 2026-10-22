@@ -16,7 +16,7 @@ import {
 import { mockFirebaseAuth } from './setup';
 import { draftRegistry } from '../src/lib/utils/draftRegistry';
 import { UserDataSchema } from '../src/lib/schema';
-import type { SyncResult } from '../src/types';
+import type { DataSubTab, SyncResult } from '../src/types';
 import { useLocalStorage } from '../src/hooks/useLocalStorage';
 import { requireHealthConsentWritable } from '../src/lib/healthConsent';
 const data = (nutrition = {}) => UserDataSchema.parse({ profile: { height: '180', gender: 'M' }, nutrition }) as any;
@@ -745,7 +745,7 @@ it('stays in the measurement editor when draft cancellation fails and navigates 
     useAppStore.setState({ userData: data({ [date]: day(date, { weight: 80 }) }), dataOwner: owner });
 
     const Harness = () => {
-        const [tab, setTab] = useState<'history' | 'measurements'>('history');
+        const [tab, setTab] = useState<DataSubTab>('history');
         return <DataView subTab={tab} setSubTab={setTab} />;
     };
     const view = render(<Harness />);
