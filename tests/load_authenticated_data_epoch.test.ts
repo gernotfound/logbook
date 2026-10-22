@@ -119,13 +119,16 @@ describe('authenticated hydration session fencing', () => {
     it('installs a durable fence when a cloud month fails strict integrity validation', async () => {
         await clear();
         const { loadAuthenticatedData, readLocal, initializeLocal, invalidateSession } = await loadModules();
-        const { IncompleteCloudMonthError } = await import('../src/lib/sync/monthlyIntegrity');
+        const { IncompleteCloudMonthError, requireCompleteHistoryMonthDocument } =
+            await import('../src/lib/sync/monthlyIntegrity');
         invalidateSession();
         const local = data('170');
         await initializeLocal('user:user-a', local);
-        dbState.loadCloudPayload.mockRejectedValueOnce(
-            new IncompleteCloudMonthError('Shard storico 2026-09 non integro: copia cloud conservata.'),
-        );
+        let invalidMonthError: unknown;
+        try { requireCompleteHistoryMonthDocument('2026-09', { malformed: {} }); }
+        catch (error) { invalidMonthError = error; }
+        expect(invalidMonthError).toBeInstanceOf(IncompleteCloudMonthError);
+        dbState.loadCloudPayload.mockRejectedValueOnce(invalidMonthError);
         const setSaveError = vi.fn();
 
         const result = await loadAuthenticatedData({
@@ -140,7 +143,7 @@ describe('authenticated hydration session fencing', () => {
         expect(result).toBe('blocked');
         expect(preserved?.data.profile?.height).toBe('170');
         expect(preserved?.cloudIntegrityFence).toEqual(expect.any(String));
-        expect(storeState.current.cloudIntegrityBlocked).toBe(true);
+        expect('cloudIntegrityBlocked' in storeState.current && storeState.current.cloudIntegrityBlocked).toBe(true);
         expect(setSaveError).toHaveBeenCalledWith(expect.stringContaining('sincronizzazione sospesa'));
         await clear();
     });
