@@ -107,6 +107,6 @@ export async function fetchAccountDeletionStatus(marker: AccountDeletionMarker, 
     if (body.uid !== marker.uid || !['requested', 'deleting', 'verifying', 'complete', 'failed'].includes(String(body.status))) {
         throw new Error('Stato della cancellazione non coerente con l’account richiesto. Copia locale conservata.');
     }
-    return body as ServerDeletionStatus;
+    return body as unknown as ServerDeletionStatus;
 }
 
