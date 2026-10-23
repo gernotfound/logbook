@@ -5,7 +5,7 @@ import { DB } from '../../src/lib/db';
 import { Logic } from '../../src/lib/logic';
 import { UserDataSchema } from '../../src/lib/schema';
 import { calculateLoggedMealTotals } from '../../src/lib/nutrition/calculateLoggedMealTotals';
-import { captureSession } from '../../src/lib/sync/session';
+import { activateGuestSession, captureSession, GUEST_SESSION_KEY, invalidateSession } from '../../src/lib/sync/session';
 import { initializeLocal, readLocal } from '../../src/lib/sync/localRepository';
 import { prepareUnlockedTestArchive } from '../secureVaultFixture';
 import { useNutritionMeals } from '../../src/hooks/useNutritionMeals';
@@ -53,6 +53,37 @@ beforeEach(() => {
         compatibilityStatus: 'ok',
         compatibilityError: null,
     });
+
+    it('writes current nutrition only to the active guest archive, not the previous account owner', async () => {
+        const previousUser = (auth as any).currentUser;
+        const guestSessionId = 'chat14-nutrition-guest';
+        try {
+            (auth as any).currentUser = null;
+            localStorage.setItem('logbook_is_guest', 'true');
+            localStorage.setItem(GUEST_SESSION_KEY, guestSessionId);
+            activateGuestSession(guestSessionId);
+            const guestData = fixture();
+            await prepareUnlockedTestArchive('guest');
+            await initializeLocal('guest', guestData);
+            useAppStore.setState({ userData: guestData, dataOwner: 'guest' });
+            expect(captureSession().owner).toBe('guest');
+
+            const { result } = renderHook(() => useNutritionMeals(DATE));
+            await runMutation(() => result.current.handleQuickAdd({
+                name: 'Guest rice', kcal: 200, carbs: 40, pro: 10, fat: 2,
+            }));
+            const guestArchive = await readLocal('guest');
+            expect(guestArchive?.data.nutrition?.[DATE]?.meals?.[0]?.name).toBe('Guest rice');
+            const previousOwnerArchive = await readLocal('user:nutrition-hardening-user');
+            expect(previousOwnerArchive?.data.nutrition?.[DATE]?.meals?.some(meal => meal.name === 'Guest rice')).not.toBe(true);
+        } finally {
+            (auth as any).currentUser = previousUser;
+            localStorage.removeItem('logbook_is_guest');
+            localStorage.removeItem(GUEST_SESSION_KEY);
+            invalidateSession();
+        }
+    });
+
     it('keeps meal identities distinct across same-timestamp edits, deletes and durable readback', async () => {
         const owner = captureSession().owner;
         await prepareUnlockedTestArchive(owner);
@@ -77,7 +108,6 @@ beforeEach(() => {
         expect(after.map(meal => meal.id)).toEqual(['meal-a']);
         const disk = await readLocal(owner);
         expect(disk?.data.nutrition?.[DATE]?.meals?.map(meal => meal.id)).toEqual(['meal-a']);
-        expect(disk?.pending.length).toBeGreaterThanOrEqual(0);
     });
 
 });
