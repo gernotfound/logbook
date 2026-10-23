@@ -772,9 +772,9 @@ describe('Analytics Engine 4-Tier Test Suite (src/lib/calc/analytics.ts)', () =>
 
         it('parses Italian decimal weights and rejects trailing units in weekly averages', () => {
             const nutrition = {
-                '2026-08-17': { date: '2026-08-17', weight: '79,5' },
-                '2026-08-18': { date: '2026-08-18', weight: '80.5' },
-                '2026-08-19': { date: '2026-08-19', weight: '82kg' },
+                '2026-08-17': { date: '2026-08-17', kcal: 0, carbs: 0, pro: 0, fat: 0, weight: '79,5' },
+                '2026-08-18': { date: '2026-08-18', kcal: 0, carbs: 0, pro: 0, fat: 0, weight: '80.5' },
+                '2026-08-19': { date: '2026-08-19', kcal: 0, carbs: 0, pro: 0, fat: 0, weight: '82kg' },
             } as Record<string, NutritionDay>;
             const result = computeWeeklyWeightSeries(nutrition, 1, '2026-08-23');
             expect(result.points[0].averageWeightKg).toBe(80);
