@@ -1,4 +1,12 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+import { firestoreMockStore } from './setup';
+import { getDocFromServer } from 'firebase/firestore';
+import { prepareUnlockedTestArchive } from './secureVaultFixture';
+import { readDeviceValueStrict, writeDeviceValue } from '../src/lib/sync/deviceStorage';
+import { DeviceWorkoutCorruptError, getInitialLocalWorkout } from '../src/store/slices/createWorkoutSlice';
+
+vi.unmock('../src/lib/db');
+import { DB } from '../src/lib/db';
 import {
     UserDataSchema,
     UserProfileSchema,
@@ -351,7 +359,7 @@ describe('Zod Schema Resilience & Defensive Catches', () => {
     });
 
     describe('Runtime Gateway in DB.loadUserData', () => {
-        it('DB.loadUserData sanitizes corrupted firestore snapshots into safe UserData', async () => {
+        it('UserDataSchema normalizes non-authoritative malformed objects', () => {
             const mockFirestoreData = {
                 profile: { height: 175 },
                 library: [{ id: 'ex1', name: 'Deadlift', setsCount: 5, sets: [] }],
@@ -367,6 +375,31 @@ describe('Zod Schema Resilience & Defensive Catches', () => {
             expect(parsed.customFoods).toEqual([]);
             expect(parsed.trainingCycles).toEqual([]);
             expect(parsed.activeWorkout).toBeNull();
+        });
+
+        it('rejects lossy Firestore root data during real DB.loadUserData', async () => {
+            const rootPath = 'users/test-user-id';
+            const original = firestoreMockStore[rootPath];
+            const cloudRoot = {
+                _schemaVersion: 1,
+                _sync: {
+                    protocolVersion: 3, clock: {}, fields: {},
+                    writer: { slot: 's00', replicaId: 'replica-test', generation: 1, seq: 0 },
+                },
+                profile: { height: 175 },
+                routines: 'corrupted string',
+            };
+            firestoreMockStore[rootPath] = cloudRoot;
+            try {
+                await expect(DB.loadUserData()).rejects.toThrow(/dati cloud non validi/i);
+                expect(vi.mocked(getDocFromServer).mock.calls.some(([ref]) =>
+                    (ref as { path?: string }).path === rootPath
+                )).toBe(true);
+                expect(firestoreMockStore[rootPath]).toBe(cloudRoot);
+            } finally {
+                if (original === undefined) delete firestoreMockStore[rootPath];
+                else firestoreMockStore[rootPath] = original;
+            }
         });
     });
 
@@ -504,7 +537,7 @@ describe('Zod Schema Resilience & Defensive Catches', () => {
             expect(parsedValid.neck).toBe(39.5);
         });
 
-        it('recovers localWorkout from completely corrupted localStorage entries via WorkoutSessionSchema', () => {
+        it('normalizes malformed optional workout fields in the standalone schema', () => {
             const corruptedLocalWorkout = {
                 id: 'w-corrupted',
                 exercises: 'not an array',
@@ -517,6 +550,15 @@ describe('Zod Schema Resilience & Defensive Catches', () => {
             expect(sanitized.exercises).toEqual([]);
             expect(sanitized.moodRating).toBeNull();
             expect(sanitized.pumpRating).toBe(3);
+        });
+
+        it('fails closed on malformed encrypted device workout and preserves original bytes', async () => {
+            const owner = 'user:test-user-id';
+            await prepareUnlockedTestArchive(owner);
+            const original = '{invalid-workout-json';
+            writeDeviceValue('workout', original, owner);
+            expect(() => getInitialLocalWorkout(owner)).toThrow(DeviceWorkoutCorruptError);
+            expect(readDeviceValueStrict('workout', owner)).toBe(original);
         });
 
         it('verifies deep passthrough preservation across schemas', () => {
