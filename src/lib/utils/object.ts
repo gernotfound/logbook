@@ -32,51 +32,50 @@ export function setOwnDataProperty<T>(target: Record<string, T>, key: string, va
  * - In plain objects, keys with `undefined` values are omitted entirely.
  * - In arrays, elements are recursively cleaned; `undefined` elements are converted to `null`.
  * - Non-plain objects (Date, Firestore FieldValue, RegExp, Blob, etc.) are preserved intact.
- * - Defends against circular references using a WeakSet.
+ * - Reuses sanitized copies for shared references; rejects circular graphs before Firestore serialization.
  *
  * @param value The value or data structure to sanitize.
  * @param seen Internal tracker to prevent infinite loops on circular references.
  * @returns A sanitized clone of the input with no `undefined` properties.
  */
 export function removeUndefinedValues<T>(value: T, seen?: WeakSet<object>): T {
-    if (value === null || typeof value !== 'object') {
-        return value;
-    }
+    const active = seen ?? new WeakSet<object>();
+    const copies = new WeakMap<object, unknown>();
 
-    // Guard against circular references
-    const visited = seen || new WeakSet<object>();
-    if (visited.has(value)) {
-        return value;
-    }
-    visited.add(value);
+    const sanitize = (current: unknown): unknown => {
+        if (current === null || typeof current !== 'object') return current;
+        if (!Array.isArray(current) && !isPlainObject(current)) return current;
 
-    // Arrays: recursively sanitize each element
-    if (Array.isArray(value)) {
-        const len = value.length;
-        const result = new Array(len);
-        for (let i = 0; i < len; i++) {
-            const item = value[i];
-            result[i] = item === undefined ? null : removeUndefinedValues(item, visited);
-        }
-        return result as unknown as T;
-    }
+        // An alias is valid; a back-edge is not serializable by Firestore.
+        if (active.has(current)) throw new Error('Riferimento circolare nel payload Firestore');
+        const previous = copies.get(current);
+        if (previous) return previous;
 
-    // Plain objects: omit undefined keys and recursively sanitize defined values
-    if (isPlainObject(value)) {
-        const result: Record<string, any> = {};
-        const keys = Object.keys(value);
-        for (let i = 0; i < keys.length; i++) {
-            const key = keys[i];
-            const val = (value as Record<string, any>)[key];
-            if (val !== undefined) {
-                setOwnDataProperty(result, key, removeUndefinedValues(val, visited));
+        const copy: Record<string, unknown> | unknown[] = Array.isArray(current)
+            ? new Array(current.length)
+            : {};
+        copies.set(current, copy);
+        active.add(current);
+        try {
+            if (Array.isArray(current)) {
+                for (let i = 0; i < current.length; i++) {
+                    copy[i] = current[i] === undefined ? null : sanitize(current[i]);
+                }
+            } else {
+                for (const key of Object.keys(current)) {
+                    const member = (current as Record<string, unknown>)[key];
+                    if (member !== undefined) {
+                        setOwnDataProperty(copy as Record<string, unknown>, key, sanitize(member));
+                    }
+                }
             }
+        } finally {
+            active.delete(current);
         }
-        return result as unknown as T;
-    }
+        return copy;
+    };
 
-    // Non-plain objects (Date, FieldValue, RegExp, Blob, DocumentReference, etc.)
-    return value;
+    return sanitize(value) as T;
 }
 
 import type { NutritionPlanning } from '../../types';
