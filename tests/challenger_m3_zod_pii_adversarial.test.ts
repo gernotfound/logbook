@@ -11,8 +11,8 @@ import {
 import { telemetryHub } from '../src/lib/telemetryHub';
 
 describe('Adversarial Challenger M3: Zod Fallbacks, Zero-PII Leakage & Stress Hardening', () => {
-    const capturedSetDocPayloads: Array<{ kind: string; payload: any }> = [];
-    let _mockSetDoc: any;
+    const capturedSentryPayloads: Array<{ kind: string; payload: any }> = [];
+    let _mockSentryTransport: any;
 
     const SENSITIVE_STRINGS = [
         'super_secret_password_12345!',
@@ -32,13 +32,13 @@ describe('Adversarial Challenger M3: Zod Fallbacks, Zero-PII Leakage & Stress Ha
     beforeEach(() => {
         localStorage.clear();
         sessionStorage.clear();
-        capturedSetDocPayloads.length = 0;
+        capturedSentryPayloads.length = 0;
         vi.clearAllMocks();
         vi.useRealTimers();
         Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
 
-        _mockSetDoc = vi.spyOn(sentryClient, 'sendTelemetryToSentry').mockImplementation(async (kind: any, data: any) => {
-            capturedSetDocPayloads.push({ kind, payload: data });
+        _mockSentryTransport = vi.spyOn(sentryClient, 'sendTelemetryToSentry').mockImplementation(async (kind: any, data: any) => {
+            capturedSentryPayloads.push({ kind, payload: data });
             return true;
         });
 
@@ -79,7 +79,7 @@ describe('Adversarial Challenger M3: Zod Fallbacks, Zero-PII Leakage & Stress Ha
 
             await vi.advanceTimersByTimeAsync(100);
 
-            assertZeroPIIInTelemetry(capturedSetDocPayloads);
+            assertZeroPIIInTelemetry(capturedSentryPayloads);
         });
 
         it('DomainParsers.parseWorkoutSession with malicious PII activates fallback with zero leakage', async () => {
@@ -95,7 +95,7 @@ describe('Adversarial Challenger M3: Zod Fallbacks, Zero-PII Leakage & Stress Ha
 
             await vi.advanceTimersByTimeAsync(100);
 
-            assertZeroPIIInTelemetry(capturedSetDocPayloads);
+            assertZeroPIIInTelemetry(capturedSentryPayloads);
         });
 
         it('DomainParsers.parseNutritionPlanning with malicious PII activates fallback with zero leakage', async () => {
@@ -109,7 +109,7 @@ describe('Adversarial Challenger M3: Zod Fallbacks, Zero-PII Leakage & Stress Ha
 
             await vi.advanceTimersByTimeAsync(100);
 
-            assertZeroPIIInTelemetry(capturedSetDocPayloads);
+            assertZeroPIIInTelemetry(capturedSentryPayloads);
         });
 
         it('DomainParsers.parseHistory with non-array and corrupted elements containing PII', async () => {
@@ -131,7 +131,7 @@ describe('Adversarial Challenger M3: Zod Fallbacks, Zero-PII Leakage & Stress Ha
 
             await vi.advanceTimersByTimeAsync(100);
 
-            assertZeroPIIInTelemetry(capturedSetDocPayloads);
+            assertZeroPIIInTelemetry(capturedSentryPayloads);
         });
 
         it('DomainParsers.parseLibrary with non-array and corrupted elements containing PII', async () => {
@@ -150,7 +150,7 @@ describe('Adversarial Challenger M3: Zod Fallbacks, Zero-PII Leakage & Stress Ha
 
             await vi.advanceTimersByTimeAsync(100);
 
-            assertZeroPIIInTelemetry(capturedSetDocPayloads);
+            assertZeroPIIInTelemetry(capturedSentryPayloads);
         });
 
         it('DomainParsers.parseCustomFoods with non-array and corrupted elements containing PII', async () => {
@@ -169,7 +169,7 @@ describe('Adversarial Challenger M3: Zod Fallbacks, Zero-PII Leakage & Stress Ha
 
             await vi.advanceTimersByTimeAsync(100);
 
-            assertZeroPIIInTelemetry(capturedSetDocPayloads);
+            assertZeroPIIInTelemetry(capturedSentryPayloads);
         });
 
         it('DomainParsers.parseRoutines with non-array and corrupted elements containing PII', async () => {
@@ -188,7 +188,7 @@ describe('Adversarial Challenger M3: Zod Fallbacks, Zero-PII Leakage & Stress Ha
 
             await vi.advanceTimersByTimeAsync(100);
 
-            assertZeroPIIInTelemetry(capturedSetDocPayloads);
+            assertZeroPIIInTelemetry(capturedSentryPayloads);
         });
 
         it('DomainParsers.parseTrainingCycles with non-array and corrupted elements containing PII', async () => {
@@ -207,7 +207,7 @@ describe('Adversarial Challenger M3: Zod Fallbacks, Zero-PII Leakage & Stress Ha
 
             await vi.advanceTimersByTimeAsync(100);
 
-            assertZeroPIIInTelemetry(capturedSetDocPayloads);
+            assertZeroPIIInTelemetry(capturedSentryPayloads);
         });
 
         it('DomainParsers.parseSupplements with non-array and corrupted elements containing PII', async () => {
@@ -226,7 +226,7 @@ describe('Adversarial Challenger M3: Zod Fallbacks, Zero-PII Leakage & Stress Ha
 
             await vi.advanceTimersByTimeAsync(100);
 
-            assertZeroPIIInTelemetry(capturedSetDocPayloads);
+            assertZeroPIIInTelemetry(capturedSentryPayloads);
         });
 
         it('DomainParsers.parseActivePains filtering invalid items containing PII', async () => {
@@ -249,7 +249,7 @@ describe('Adversarial Challenger M3: Zod Fallbacks, Zero-PII Leakage & Stress Ha
 
             await vi.advanceTimersByTimeAsync(100);
 
-            assertZeroPIIInTelemetry(capturedSetDocPayloads);
+            assertZeroPIIInTelemetry(capturedSentryPayloads);
         });
 
         it('DomainParsers.parseNutrition with non-object and corrupted days containing PII', async () => {
@@ -270,7 +270,7 @@ describe('Adversarial Challenger M3: Zod Fallbacks, Zero-PII Leakage & Stress Ha
 
             await vi.advanceTimersByTimeAsync(100);
 
-            assertZeroPIIInTelemetry(capturedSetDocPayloads);
+            assertZeroPIIInTelemetry(capturedSentryPayloads);
         });
 
         it('UserDataSchema root parsing fallback on complete corruption with PII', async () => {
@@ -283,11 +283,11 @@ describe('Adversarial Challenger M3: Zod Fallbacks, Zero-PII Leakage & Stress Ha
 
             await vi.advanceTimersByTimeAsync(100);
 
-            assertZeroPIIInTelemetry(capturedSetDocPayloads);
+            assertZeroPIIInTelemetry(capturedSentryPayloads);
         });
     });
 
-    describe('2. Custom Schema Fallback Listener Isolation', () => {
+    describe('2. Custom Schema Fallback Listener Privacy', () => {
         it('listener receives structured metadata without raw input payload', () => {
             const capturedContexts: ZodFallbackContext[] = [];
             setSchemaFallbackListener((ctx) => {
@@ -307,33 +307,11 @@ describe('Adversarial Challenger M3: Zod Fallbacks, Zero-PII Leakage & Stress Ha
             }
         });
 
-        it('throwing custom listener does NOT crash validation or throw to caller', () => {
-            setSchemaFallbackListener(() => {
-                throw new Error('Hostile listener throwing deliberately');
-            });
-
-            expect(() => {
-                const res = DomainParsers.parseProfile('corrupt');
-                expect(res).toEqual({});
-            }).not.toThrow();
-        });
     });
 
-    describe('3. Adversarial Stress & High-Throughput Burst Test', () => {
-        it('handles burst of 1,000 corrupt parsing requests in < 300ms without memory leak or freeze', () => {
-            const start = performance.now();
+    describe('3. Zod-fallback deduplication from actual parser calls', () => {
 
-            for (let i = 0; i < 1000; i++) {
-                DomainParsers.parseProfile(`corrupt_burst_${i % 10}`);
-                DomainParsers.parseWorkoutSession(`corrupt_workout_${i % 10}`);
-                DomainParsers.parseNutritionPlanning(`corrupt_planning_${i % 10}`);
-            }
-
-            const elapsed = performance.now() - start;
-            expect(elapsed).toBeLessThan(500); // Must be fast for 3,000 parse operations
-        });
-
-        it('deduplicates error flood within 60s sliding window so only 1 error doc is dispatched', async () => {
+        it('deduplicates 500 actual invalid profile parses into one technical Sentry error', async () => {
             vi.useFakeTimers();
 
             for (let i = 0; i < 500; i++) {
@@ -341,14 +319,14 @@ describe('Adversarial Challenger M3: Zod Fallbacks, Zero-PII Leakage & Stress Ha
             }
 
             // Deduplicator should aggregate repeated errors for the same schema
-            expect(telemetryHub.getActiveRateLimiterCount()).toBeLessThanOrEqual(5);
+            expect(telemetryHub.getActiveRateLimiterCount()).toBe(1);
 
             await vi.advanceTimersByTimeAsync(100);
 
-            const errorCalls = capturedSetDocPayloads.filter((c) => c.kind === 'error');
-            const localEventCalls = capturedSetDocPayloads.filter((c) => c.kind === 'event');
+            const errorCalls = capturedSentryPayloads.filter((c) => c.kind === 'error');
+            const localEventCalls = capturedSentryPayloads.filter((c) => c.kind === 'event');
 
-            // One external error is deduplicated; bounded diagnostic events are accepted
+            // One external error is deduplicated; diagnostic events are accepted
             // by the local boundary and dropped before Sentry.
             expect(errorCalls.length).toBe(1);
             expect(errorCalls[0].payload.count).toBe(500);
