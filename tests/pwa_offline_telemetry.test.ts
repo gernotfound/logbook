@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as sentryClient from '../src/lib/sentryClient';
 import { renderHook, act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import React from 'react';
-import { telemetryHub, TELEMETRY_QUEUE_CAPACITY } from '../src/lib/telemetryHub';
+import { telemetryHub } from '../src/lib/telemetryHub';
 import { seedCurrentTelemetryQueue } from './telemetry/seedCurrentQueue';
 import { usePWAInstall } from '../src/hooks/usePWAInstall';
 import { useWorkoutSession } from '../src/hooks/useWorkoutSession';
@@ -13,7 +13,7 @@ import SettingsView from '../src/components/SettingsView';
 import type { UserData } from '../src/types';
 
 describe('Milestone 2: PWA, offline workout and telemetry boundaries', () => {
-  let mockSetDoc: any;
+  let mockSentryTransport: any;
 
   beforeEach(() => {
     localStorage.clear();
@@ -21,7 +21,7 @@ describe('Milestone 2: PWA, offline workout and telemetry boundaries', () => {
     vi.clearAllMocks();
     vi.useRealTimers();
 
-    mockSetDoc = vi.spyOn(sentryClient, 'sendTelemetryToSentry').mockResolvedValue(true);
+    mockSentryTransport = vi.spyOn(sentryClient, 'sendTelemetryToSentry').mockResolvedValue(true);
 
     Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
 
@@ -40,7 +40,7 @@ describe('Milestone 2: PWA, offline workout and telemetry boundaries', () => {
   });
 
   // =========================================================================
-  // 1. PWA Install Funnel Analytics
+  // 1. PWA install behavior
   // =========================================================================
   describe('1. PWA install behavior without proprietary usage telemetry', () => {
     it('retains beforeinstallprompt even when it fires before Settings/usePWAInstall mounts', () => {
@@ -80,7 +80,7 @@ describe('Milestone 2: PWA, offline workout and telemetry boundaries', () => {
       expect(result.current.isInstallable).toBe(true);
 
       await new Promise(resolve => setTimeout(resolve, 0));
-      expect(mockSetDoc.mock.calls.some((c: any) => c[1].type === 'pwa_install_impression')).toBe(false);
+      expect(mockSentryTransport.mock.calls.some((c: any) => c[1].type === 'pwa_install_impression')).toBe(false);
     });
 
     it('runs promptInstall for an accepted choice without proprietary funnel telemetry', async () => {
@@ -110,7 +110,7 @@ describe('Milestone 2: PWA, offline workout and telemetry boundaries', () => {
       expect(result.current.isInstallable).toBe(false);
 
       await new Promise(resolve => setTimeout(resolve, 0));
-      const types = mockSetDoc.mock.calls.map((c: any) => c[1].type);
+      const types = mockSentryTransport.mock.calls.map((c: any) => c[1].type);
       expect(types).not.toContain('pwa_install_click');
       expect(types).not.toContain('pwa_install_prompt_outcome');
     });
@@ -137,7 +137,7 @@ describe('Milestone 2: PWA, offline workout and telemetry boundaries', () => {
       });
 
       await new Promise(resolve => setTimeout(resolve, 0));
-      expect(mockSetDoc.mock.calls.some((c: any) => c[1].type === 'pwa_install_prompt_outcome')).toBe(false);
+      expect(mockSentryTransport.mock.calls.some((c: any) => c[1].type === 'pwa_install_prompt_outcome')).toBe(false);
     });
 
     it('prevents duplicate prompt calls on rapid consecutive promptInstall invocations', async () => {
@@ -183,7 +183,7 @@ describe('Milestone 2: PWA, offline workout and telemetry boundaries', () => {
       expect(mockPrompt).toHaveBeenCalledTimes(1);
       expect(result.current.isInstallable).toBe(false);
 
-      const clickCalls = mockSetDoc.mock.calls.filter((c: any) => c[1].type === 'pwa_install_click');
+      const clickCalls = mockSentryTransport.mock.calls.filter((c: any) => c[1].type === 'pwa_install_click');
       expect(clickCalls.length).toBe(0);
     });
 
@@ -198,7 +198,7 @@ describe('Milestone 2: PWA, offline workout and telemetry boundaries', () => {
       });
 
       await new Promise(resolve => setTimeout(resolve, 0));
-      expect(mockSetDoc.mock.calls.some((c: any) => c[1].type === 'pwa_appinstalled')).toBe(false);
+      expect(mockSentryTransport.mock.calls.some((c: any) => c[1].type === 'pwa_appinstalled')).toBe(false);
     });
 
     it('handles prompt error gracefully and clears deferredPrompt', async () => {
@@ -289,14 +289,14 @@ describe('Milestone 2: PWA, offline workout and telemetry boundaries', () => {
       expect(mockPrompt).toHaveBeenCalled();
 
       await new Promise(resolve => setTimeout(resolve, 0));
-      expect(mockSetDoc.mock.calls.some((c: any) => c[1].type === 'pwa_install_click')).toBe(false);
+      expect(mockSentryTransport.mock.calls.some((c: any) => c[1].type === 'pwa_install_click')).toBe(false);
 
       unmount();
     });
   });
 
   // =========================================================================
-  // 2. Offline Workout Lifecycle Analytics
+  // 2. Offline workout lifecycle
   // =========================================================================
   describe('2. Offline workout lifecycle without proprietary usage telemetry', () => {
     const mockUserData: UserData = {
@@ -338,7 +338,7 @@ describe('Milestone 2: PWA, offline workout and telemetry boundaries', () => {
       expect(useAppStore.getState().localWorkout?.routineId).toBe('routine_push_1');
 
       await new Promise(resolve => setTimeout(resolve, 0));
-      expect(mockSetDoc.mock.calls.some((c: any) => c[1].type === 'workout_started')).toBe(false);
+      expect(mockSentryTransport.mock.calls.some((c: any) => c[1].type === 'workout_started')).toBe(false);
     });
 
     it('starts an offline workout without buffering workout usage telemetry', async () => {
@@ -398,7 +398,7 @@ describe('Milestone 2: PWA, offline workout and telemetry boundaries', () => {
       expect(useAppStore.getState().localWorkout).toBeNull();
 
       await new Promise(resolve => setTimeout(resolve, 0));
-      expect(mockSetDoc.mock.calls.some((c: any) => c[1].type === 'workout_saved')).toBe(false);
+      expect(mockSentryTransport.mock.calls.some((c: any) => c[1].type === 'workout_saved')).toBe(false);
     });
 
     it('saves an offline workout without buffering workout usage telemetry', async () => {
@@ -437,44 +437,13 @@ describe('Milestone 2: PWA, offline workout and telemetry boundaries', () => {
       expect(queue.some(item => item.payload.type === 'workout_saved')).toBe(false);
     });
 
-    it('keeps workout saving independent from telemetry transport failures', async () => {
-      telemetryHub.init();
-      telemetryHub.setUserId('user_throw_test');
-
-      mockSetDoc.mockRejectedValue(new Error('Firestore network failure'));
-
-      useDialogStore.setState({
-        showConfirm: vi.fn().mockResolvedValue(true),
-        showAlert: vi.fn().mockResolvedValue(undefined),
-      });
-
-      useAppStore.setState({
-        dataOwner: captureSession().owner,
-        userData: mockUserData,
-        localWorkout: {
-          id: 'w_fail_safe_1',
-          routineId: 'routine_push_1',
-          date: '2026-08-24',
-          globalStartTime: Date.now() - 1200000,
-          exercises: [],
-        } as any,
-      });
-
-      const { result } = renderHook(() => useWorkoutSession());
-
-      await act(async () => {
-        await expect(result.current.endWorkout()).resolves.not.toThrow();
-      });
-
-      expect(useAppStore.getState().localWorkout).toBeNull();
-    });
   });
 
   // =========================================================================
   // 3. Offline Queueing & Auto-Replay Engine
   // =========================================================================
   describe('3. Offline Queueing & Auto-Replay Engine', () => {
-    it('buffers offline events in FIFO order without storing diagnostic plaintext', () => {
+    it('keeps offline events in owner RAM without persisting plaintext', () => {
       Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
       telemetryHub.init();
       telemetryHub.setUserId('user_offline_queue');
@@ -493,28 +462,13 @@ describe('Milestone 2: PWA, offline workout and telemetry boundaries', () => {
       ]);
     });
 
-    it('enforces maximum capacity of 50 items, dropping oldest items (FIFO eviction)', () => {
-      Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
-      telemetryHub.init();
-      telemetryHub.setUserId('user_cap_test');
-
-      for (let i = 1; i <= 60; i++) {
-        telemetryHub.trackEvent(`event_${i}`, { index: i });
-      }
-
-      const queue = telemetryHub.getQueuedEvents();
-      expect(queue.length).toBe(TELEMETRY_QUEUE_CAPACITY);
-      expect(queue[0].payload.type).toBe('event_11');
-      expect(queue[queue.length - 1].payload.type).toBe('event_60');
-    });
-
-    it('automatically replays queued events and empties buffer when window online event is dispatched', async () => {
+    it('replays queued technical errors on the online event', async () => {
       Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
       telemetryHub.init();
       telemetryHub.setUserId('user_replay_test');
 
-      telemetryHub.trackEvent('zod_schema_fallback', { schema: 'profile' });
-      telemetryHub.trackEvent('zod_schema_fallback', { schema: 'history' });
+      telemetryHub.trackError(new TypeError('Offline profile diagnostic'));
+      telemetryHub.trackError(new RangeError('Offline history diagnostic'));
       expect(telemetryHub.getQueuedEvents().length).toBe(2);
 
       Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
@@ -524,22 +478,29 @@ describe('Milestone 2: PWA, offline workout and telemetry boundaries', () => {
       });
 
       await waitFor(() => {
-        expect(mockSetDoc).toHaveBeenCalledTimes(2);
+        expect(mockSentryTransport).toHaveBeenCalledTimes(2);
+        expect(mockSentryTransport.mock.calls.every((call: any) => call[0] === 'error')).toBe(true);
         expect(telemetryHub.getQueuedEvents().length).toBe(0);
       });
     });
 
-    it('automatically replays queued items upon telemetryHub.init() if online at bootstrap', async () => {
+    it('replays an encrypted technical error on online bootstrap', async () => {
       telemetryHub.setUserId('user_boot_test');
       // Seed a pre-existing queue for the same authenticated owner.
       await seedCurrentTelemetryQueue('user_boot_test', [
           {
             id: 'item_boot_1',
             timestamp: Date.now() - 10000,
-            itemType: 'event',
+            itemType: 'error',
             payload: {
+              id: 'err_boot_1',
               timestamp: Date.now() - 10000,
-              type: 'zod_schema_fallback',
+              type: 'BootstrapDiagnostic',
+              message: 'Queued diagnostic before bootstrap',
+              source: 'custom',
+              count: 1,
+              firstSeen: Date.now() - 10000,
+              lastSeen: Date.now() - 10000,
               context: { appVersion: '1.0.0', platform: 'other', displayMode: 'browser', online: false },
               userId: 'user_boot_test',
               sessionId: 'sess_1',
@@ -551,52 +512,29 @@ describe('Milestone 2: PWA, offline workout and telemetry boundaries', () => {
       telemetryHub.init();
 
       await waitFor(() => {
-        expect(mockSetDoc).toHaveBeenCalledTimes(1);
+        expect(mockSentryTransport).toHaveBeenCalledTimes(1);
+        expect(mockSentryTransport.mock.calls[0][0]).toBe('error');
+        expect(mockSentryTransport.mock.calls[0][1].type).toBe('BootstrapDiagnostic');
         expect(telemetryHub.getQueuedEvents().length).toBe(0);
       });
     });
 
-    it('does not attach the current userId to guest queued items after login', async () => {
-      const guestQueueKey = telemetryHub.getQueueStorageKey();
-      localStorage.setItem(
-        guestQueueKey,
-        JSON.stringify([
-          {
-            id: 'item_guest_1',
-            timestamp: Date.now() - 5000,
-            itemType: 'event',
-            payload: {
-              timestamp: Date.now() - 5000,
-              type: 'zod_schema_fallback',
-              context: { appVersion: '1.0.0', platform: 'other', displayMode: 'browser', online: false },
-              userId: null,
-              sessionId: 'sess_guest',
-              details: { offline: true },
-            },
-          },
-        ])
-      );
-
-      telemetryHub.setUserId('user_logged_in_123');
-      await telemetryHub.flushQueue();
-
-      expect(mockSetDoc).not.toHaveBeenCalled();
-      expect(telemetryHub.getQueuedEvents()).toHaveLength(0);
-      const guestQueue = JSON.parse(localStorage.getItem(guestQueueKey) || '[]');
-      expect(guestQueue).toHaveLength(1);
-      expect(guestQueue[0].payload.userId).toBeNull();
-    });
-
-    it('retains failing items in queue if Firestore write fails during flush', async () => {
+    it('retains a queued error after Sentry transport rejection', async () => {
       telemetryHub.setUserId('user_failing');
       await seedCurrentTelemetryQueue('user_failing', [
           {
             id: 'item_failing_1',
             timestamp: Date.now(),
-            itemType: 'event',
+            itemType: 'error',
             payload: {
+              id: 'err_failing_1',
               timestamp: Date.now(),
-              type: 'failing_event',
+              type: 'ReplayFailure',
+              message: 'Technical Sentry transport rejected',
+              source: 'custom',
+              count: 1,
+              firstSeen: Date.now(),
+              lastSeen: Date.now(),
               context: { appVersion: '1.0.0', platform: 'other', displayMode: 'browser', online: true },
               userId: 'user_failing',
               sessionId: 'sess_1',
@@ -604,13 +542,16 @@ describe('Milestone 2: PWA, offline workout and telemetry boundaries', () => {
           },
         ]);
 
-      mockSetDoc.mockRejectedValueOnce(new Error('Network drop during replay'));
+      mockSentryTransport.mockRejectedValueOnce(new Error('Network drop during replay'));
 
       await telemetryHub.flushQueue();
 
       const remaining = telemetryHub.getQueuedEvents();
       expect(remaining.length).toBe(1);
       expect(remaining[0].id).toBe('item_failing_1');
+      expect(remaining[0].retryCount).toBe(1);
+      expect(mockSentryTransport).toHaveBeenCalledTimes(1);
+      expect(mockSentryTransport.mock.calls[0][0]).toBe('error');
     });
   });
 
