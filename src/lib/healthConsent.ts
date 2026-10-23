@@ -5,6 +5,7 @@ import { LEGAL_VERSIONS } from './legalVersions';
 import { auth, ensureAppCheck } from './firebase';
 import { getLimitedUseAppCheckToken } from './appCheck';
 import { readBrowserValueStrict, removeBrowserValue, writeBrowserValue } from './sync/browserStorage';
+import { captureSessionForOwner, userOwner } from './sync/session';
 
 export type HealthConsentStatus = 'unregistered' | 'checking' | 'active' | 'withdrawn' | 'pending' | 'reaccepting' | 'recovery-required' | 'erasure-required' | 'stale-request' | 'error';
 type ServerStatus = { status: 'unregistered' | 'active' | 'withdrawn'; revision: number; acceptedAt?: string; privacyVersion?: string; termsVersion?: string; erasedBeforeRevision?: number };
@@ -245,13 +246,18 @@ async function serverRequest(user: User, method: 'GET' | 'POST', body?: unknown)
   // An old token must not submit a consent transition after a new login.
   const startingUid = auth.currentUser?.uid ?? null;
   if (startingUid !== null && startingUid !== user.uid) throw new Error('Sessione cambiata.');
+  const originalEpoch = captureSessionForOwner(userOwner(user.uid)).epoch;
+  const sameSession = () => (auth.currentUser?.uid ?? null) === startingUid
+    && captureSessionForOwner(userOwner(user.uid)).epoch === originalEpoch;
   await ensureAppCheck();
+  if (!sameSession()) throw new Error('Sessione cambiata.');
   const token = await getLimitedUseAppCheckToken();
+  if (!sameSession()) throw new Error('Sessione cambiata.');
   if (!token) throw new Error('App Check non disponibile.');
   // Token acquisition is a separate auth gate: a Firebase token failure
   // must not be confused with a transient transport outage.
   const idToken = await user.getIdToken();
-  if ((auth.currentUser?.uid ?? null) !== startingUid) throw new Error('Sessione cambiata.');
+  if (!sameSession()) throw new Error('Sessione cambiata.');
   let response: Response;
   try {
     response = await fetch(API + '/api/health-consent', {
@@ -275,9 +281,11 @@ async function serverRequest(user: User, method: 'GET' | 'POST', body?: unknown)
     }
     throw error;
   }
+  if (!sameSession()) throw new Error('Sessione cambiata.');
   if (response.status === 409) throw new ConsentRevisionConflictError();
   if (!response.ok) throw new Error('Verifica del consenso non disponibile (HTTP ' + response.status + ').');
   const result: unknown = await response.json();
+  if (!sameSession()) throw new Error('Sessione cambiata.');
   if (!result || typeof result !== 'object') throw new Error('Risposta server non valida.');
   const state = result as Partial<ServerStatus>;
   if ((state.status !== 'active' && state.status !== 'withdrawn' && state.status !== 'unregistered')
@@ -365,6 +373,9 @@ export async function refreshHealthConsent(user: User): Promise<HealthConsentSta
   const uid = user.uid;
   const startingAuthUid = auth.currentUser?.uid ?? null;
   if (startingAuthUid !== null && startingAuthUid !== uid) return currentHealthConsentStatus(uid);
+  // A different login to the SAME UID is still a different authorization
+  // generation. A delayed GET must never publish consent into that session.
+  const startingSessionEpoch = captureSessionForOwner(userOwner(uid)).epoch;
   const saved = readMarker(uid);
   const offlineReaccept = parseOfflineReaccept(saved);
   const offlineReacceptValid = offlineReaccept !== null
@@ -382,6 +393,7 @@ export async function refreshHealthConsent(user: User): Promise<HealthConsentSta
   const serial = invalidateConsentChecks(uid);
   const isSameDecision = () => verificationSerials.get(uid) === serial
     && (auth.currentUser?.uid ?? null) === startingAuthUid
+    && captureSessionForOwner(userOwner(uid)).epoch === startingSessionEpoch
     && readMarker(uid) === saved
     && readBrowserValueStrict(generationMarker(uid)) === observedGeneration;
   const recoverCachedOfflineConsent = (): boolean => {
