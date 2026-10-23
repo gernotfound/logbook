@@ -16,7 +16,7 @@ vi.mock('../firebase', () => ({
     reauthenticateWithRedirect: mocks.redirectReauth,
 }));
 
-import { reauthenticateForSensitiveAction } from './recentAuth';
+import { isSensitiveReauthCancellation, reauthenticateForSensitiveAction } from './recentAuth';
 
 function user(providerIds: string[], email = 'test@example.com'): User {
     return {
@@ -49,6 +49,38 @@ describe('reauthenticateForSensitiveAction', () => {
 
         await expect(reauthenticateForSensitiveAction(current)).resolves.toBe('redirect-started');
         expect(mocks.redirectReauth).toHaveBeenCalledWith(current, expect.anything());
+    });
+
+    it('chooses password reauthentication for a linked password/Google account when provided', async () => {
+        const current = user(['google.com', 'password']);
+        await expect(reauthenticateForSensitiveAction(current, 'Secret1!')).resolves.toBe('reauthenticated');
+        expect(mocks.credentialReauth).toHaveBeenCalledTimes(1);
+        expect(mocks.popupReauth).not.toHaveBeenCalled();
+    });
+
+    it('does not attempt password credentials when the account email is absent', async () => {
+        await expect(reauthenticateForSensitiveAction(user(['password'], ''))).resolves.toBe('password-required');
+        await expect(reauthenticateForSensitiveAction(user(['password'], ''), 'Secret1!')).resolves.toBe('unsupported');
+        expect(mocks.credentialReauth).not.toHaveBeenCalled();
+    });
+
+    it.each([
+        ['auth/popup-closed-by-user', true],
+        ['auth/cancelled-popup-request', true],
+        ['auth/network-request-failed', false],
+    ])('propagates %s without initiating a redirect', async (code, cancelled) => {
+        const error = Object.assign(new Error('provider error'), { code });
+        mocks.popupReauth.mockRejectedValueOnce(error);
+        await expect(reauthenticateForSensitiveAction(user(['google.com']))).rejects.toBe(error);
+        expect(isSensitiveReauthCancellation(error)).toBe(cancelled);
+        expect(mocks.redirectReauth).not.toHaveBeenCalled();
+    });
+
+    it('propagates rejected password reauthentication without claiming success', async () => {
+        const error = Object.assign(new Error('wrong credential'), { code: 'auth/wrong-password' });
+        mocks.credentialReauth.mockRejectedValueOnce(error);
+        await expect(reauthenticateForSensitiveAction(user(['password']), 'incorrect')).rejects.toBe(error);
+        expect(mocks.popupReauth).not.toHaveBeenCalled();
     });
 
     it('fails closed for unsupported provider sets', async () => {
