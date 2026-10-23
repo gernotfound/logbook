@@ -1,6 +1,6 @@
 const BASELINE_DATA_SCHEMA = 1 as const;
 const BASELINE_SYNC_PROTOCOL = 3 as const;
-const BASELINE_LOCAL_ENVELOPE = 4 as const;
+const BASELINE_LOCAL_ENVELOPE = 5 as const;
 const BASELINE_BACKUP_SCHEMA = 3 as const;
 
 export const CURRENT_DATA_SCHEMA = 1 as const;
@@ -125,9 +125,8 @@ const DATA_MIGRATIONS: MigrationRegistry<DataMigrationCarrier> = {};
 // Pre-launch clean cut: no real account data exists below Protocol 3.
 // Future entries are added only for post-launch N->N+1 migrations.
 const SYNC_PROTOCOL_MIGRATIONS: MigrationRegistry<SyncProtocolMigrationCarrier> = {};
-const LOCAL_ENVELOPE_MIGRATIONS: MigrationRegistry<PersistedRecord> = {
-    4: record => ({ ...structuredClone(record), replica: null }),
-};
+// The first supported local envelope is V5. Pre-launch V4 data is not migrated.
+const LOCAL_ENVELOPE_MIGRATIONS: MigrationRegistry<PersistedRecord> = {};
 const BACKUP_MIGRATIONS: MigrationRegistry<PersistedRecord> = {};
 
 export interface NormalizedCloudDocument {

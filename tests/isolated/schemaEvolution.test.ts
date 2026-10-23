@@ -69,7 +69,7 @@ describe('Schema Evolution registry', () => {
             const source: DataMigrationCarrier = {
                 scope,
                 record: {
-                    version: scope === 'local-envelope' ? 4 : 3,
+                    version: scope === 'local-envelope' ? 5 : 3,
                     dataSchemaVersion: 1,
                     syncProtocolVersion: 1,
                     payload: { oldName: 'A' },
@@ -89,7 +89,7 @@ describe('Schema Evolution registry', () => {
 
             expect(dataMigrated.scope).toBe(scope);
             if (dataMigrated.scope === 'cloud') throw new Error('Unexpected cloud carrier');
-            expect(dataMigrated.record.version).toBe(scope === 'local-envelope' ? 4 : 3);
+            expect(dataMigrated.record.version).toBe(scope === 'local-envelope' ? 5 : 3);
             expect(dataMigrated.record.payload).toEqual({ name: 'A' });
 
             const syncSource: SyncProtocolMigrationCarrier = { scope, record: dataMigrated.record };
@@ -101,7 +101,7 @@ describe('Schema Evolution registry', () => {
 
             expect(syncMigrated.scope).toBe(scope);
             if (syncMigrated.scope === 'cloud') throw new Error('Unexpected cloud carrier');
-            expect(syncMigrated.record.version).toBe(scope === 'local-envelope' ? 4 : 3);
+            expect(syncMigrated.record.version).toBe(scope === 'local-envelope' ? 5 : 3);
             expect(syncMigrated.record.syncMarker).toBe('migrated');
         }
     });
@@ -125,7 +125,7 @@ describe('Schema Evolution registry', () => {
             })).toThrow(LegacyVersionError);
 
             expect(() => normalizeLocalEnvelopeRecord({
-                version: 4,
+                version: 5,
                 dataSchemaVersion: CURRENT_DATA_SCHEMA,
                 syncProtocolVersion: protocolVersion,
                 owner: 'user:a',
@@ -150,6 +150,19 @@ describe('Schema Evolution registry', () => {
                 userData: {},
             })).toThrow(LegacyVersionError);
         }
+    });
+
+    it('rejects pre-launch Local Envelope 4 even when the nested schema and sync protocol are current', () => {
+        const obsolete = {
+            version: 4,
+            dataSchemaVersion: CURRENT_DATA_SCHEMA,
+            syncProtocolVersion: CURRENT_SYNC_PROTOCOL,
+            owner: 'user:a', actorId: 'actor', actorSeq: 0, clock: {},
+            data: {}, baseline: {}, completeMonths: [], pending: [],
+            syncMetaByDocument: {}, revision: 0,
+        };
+        expect(() => normalizeLocalEnvelopeRecord(obsolete)).toThrow(LegacyVersionError);
+        expect(obsolete.version).toBe(4);
     });
 
     it('rejects persisted Firestore documents missing the current schema or sync markers', () => {
