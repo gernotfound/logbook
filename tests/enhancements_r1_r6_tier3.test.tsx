@@ -131,7 +131,7 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
             expect(next2?.nextSessionIndex).toBe(2);
         });
 
-        it('T3.3: Sleep Logging + Nutrition Day State + History Display + CSV Export', async () => {
+        it('T3.3: Previously recorded sleep and nutrition are displayed in history and exported to CSV', async () => {
             const downloadFileSpy = vi.spyOn(Exporter, 'downloadFile').mockResolvedValue(true);
 
             const nutritionData = {
