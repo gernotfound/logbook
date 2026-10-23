@@ -5,6 +5,7 @@ import TrainingPlanning from '../src/components/Training/planning/TrainingPlanni
 import { useAppStore } from '../src/store/useAppStore';
 import { useDialogStore } from '../src/store/useDialogStore';
 import { update as updateIndexedDb } from 'idb-keyval';
+import { DB } from '../src/lib/db';
 import type { UserData } from '../src/types';
 
 const originalDispatch = useAppStore.getState().dispatchDomainOperation;
@@ -89,6 +90,37 @@ describe('audit regression: TrainingPlanning persistence failures', () => {
         ));
         expect(screen.getByDisplayValue('Modifica non salvata')).toBeDefined();
         expect(useAppStore.getState().userData?.trainingCycles?.[0]?.name).toBe('Ciclo persistente');
+    });
+
+    it('fails closed after the actual local archive update rejects before cloud sync', async () => {
+        const update = vi.mocked(updateIndexedDb);
+        update.mockClear();
+        update.mockRejectedValueOnce(new Error('IndexedDB quota exceeded'));
+        vi.mocked(DB.saveUserData).mockClear();
+        useAppStore.setState({ dispatchDomainOperation: originalDispatch });
+
+        render(<TrainingPlanning />);
+        fireEvent.click(screen.getByTitle('Opzioni'));
+        fireEvent.click(screen.getByRole('menuitem', { name: /Modifica/i }));
+        fireEvent.change(screen.getByDisplayValue('Ciclo persistente'), {
+            target: { value: 'Modifica da salvare' },
+        });
+        fireEvent.click(screen.getByRole('button', { name: /Salva modifiche/i }));
+        await act(async () => {
+            await useAppStore.getState().flushPendingSyncs();
+        });
+
+        await waitFor(() => expect(showAlert).toHaveBeenCalledWith(
+            'Salvataggio del ciclo non riuscito. Le modifiche sono ancora nel form: riprova.'
+        ));
+        expect(update).toHaveBeenCalled();
+        expect(DB.saveUserData).not.toHaveBeenCalled();
+        expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
+        expect(screen.getByDisplayValue('Modifica da salvare')).toBeDefined();
+        await expect(useAppStore.getState().dispatchDomainOperation({
+            type: 'training-cycle.upsert',
+            cycle: userData.trainingCycles![0],
+        })).rejects.toThrow('Archivio locale non leggibile');
     });
 
     it('refuses a planning mutation before IndexedDB when local persistence is blocked', async () => {
