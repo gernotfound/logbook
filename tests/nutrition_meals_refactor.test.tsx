@@ -1,7 +1,9 @@
-import React from 'react';
-import { fireEvent, screen } from '@testing-library/react';
+import React, { useState } from 'react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import NutritionMeals from '../src/components/Nutrition/NutritionMeals';
+import { NutritionMealSection } from '../src/components/Nutrition/meals/NutritionMealSection';
+import type { LoggedMealItem } from '../src/types';
 import { Logic } from '../src/lib/logic';
 import { renderWithProviders } from './setup';
 
@@ -10,7 +12,7 @@ describe('NutritionMeals decomposition parity', () => {
         const setSelectedDate = vi.fn();
         const handleSearch = vi.fn();
         const addFood = vi.fn();
-        const removeFood = vi.fn();
+        const removeFood = vi.fn().mockResolvedValue(true);
         const food = {
             id: 'rice',
             name: 'Riso basmati',
@@ -52,7 +54,7 @@ describe('NutritionMeals decomposition parity', () => {
             meals: [meal],
             addFood,
             removeFood,
-            updateMealItem: vi.fn(),
+            updateMealItem: vi.fn().mockResolvedValue(true),
             targetDateStr: '2026-08-16',
         };
 
@@ -79,4 +81,59 @@ describe('NutritionMeals decomposition parity', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Rimuovi' }));
         expect(removeFood).toHaveBeenCalledWith('m1');
     });
+    it('targets the correct meal by ID when timestamps collide or are absent', async () => {
+        const first: LoggedMealItem = { id: 'meal-a', name: 'Avena', meal: 'Colazione', quantity: 100, baseQty: 100, kcal: 100, carbs: 10, pro: 5, fat: 4, time: 123 };
+        const second: LoggedMealItem = { ...first, id: 'meal-b', name: 'Riso', time: 123 };
+        const third: LoggedMealItem = { ...first, id: 'meal-c', name: 'Pasta', time: undefined };
+        const fourth: LoggedMealItem = { ...first, id: 'meal-d', name: 'Orzo', time: undefined };
+        const onRemove = vi.fn().mockResolvedValue(true);
+        const onUpdate = vi.fn().mockResolvedValue(true);
+        function Harness() {
+            const [editing, setEditing] = useState<LoggedMealItem | null>(null);
+            return <NutritionMealSection mealType="Colazione" mealItems={[first, second, third, fourth]}
+                editingMealItem={editing} onEditingMealItemChange={setEditing}
+                onUpdateMealItem={onUpdate} onRemoveFood={onRemove} />;
+        }
+        render(<Harness />);
+        fireEvent.click(screen.getByRole('button', { name: 'Modifica porzione di Riso' }));
+        expect(screen.getAllByRole('heading', { name: 'Modifica porzione' })).toHaveLength(1);
+        expect(screen.getByText('Riso')).toBeDefined();
+        fireEvent.click(screen.getByRole('button', { name: 'Rimuovi' }));
+        await waitFor(() => expect(onRemove).toHaveBeenCalledWith('meal-b'));
+        await waitFor(() => expect(screen.queryByRole('heading', { name: 'Modifica porzione' })).toBeNull());
+        fireEvent.click(screen.getByRole('button', { name: 'Modifica porzione di Orzo' }));
+        expect(screen.getAllByRole('heading', { name: 'Modifica porzione' })).toHaveLength(1);
+        fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '50' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Salva' }));
+        await waitFor(() => expect(onUpdate).toHaveBeenCalledWith(expect.objectContaining({ id: 'meal-d', quantity: 50 })));
+        expect(onRemove).not.toHaveBeenCalledWith('meal-a');
+        expect(onRemove).not.toHaveBeenCalledWith('meal-c');
+    });
+
+    it('keeps an unsaved quantity editable until the asynchronous device commit succeeds', async () => {
+        const meal: LoggedMealItem = { id: 'meal-1', name: 'Avena', meal: 'Colazione', quantity: 100, baseQty: 100, kcal: 100, carbs: 10, pro: 5, fat: 4 };
+        let settleFirst!: (saved: boolean) => void;
+        const onUpdate = vi.fn()
+            .mockImplementationOnce(() => new Promise<boolean>(resolve => { settleFirst = resolve; }))
+            .mockResolvedValueOnce(true);
+        function Harness() {
+            const [editing, setEditing] = useState<LoggedMealItem | null>(meal);
+            return <NutritionMealSection mealType="Colazione" mealItems={[meal]}
+                editingMealItem={editing} onEditingMealItemChange={setEditing}
+                onUpdateMealItem={onUpdate} onRemoveFood={vi.fn().mockResolvedValue(true)} />;
+        }
+        render(<Harness />);
+        fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '75' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Salva' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Salva' }));
+        expect(onUpdate).toHaveBeenCalledTimes(1);
+        expect(screen.getByRole('heading', { name: 'Modifica porzione' })).toBeDefined();
+        await act(async () => settleFirst(false));
+        expect((screen.getByRole('spinbutton') as HTMLInputElement).value).toBe('75');
+        fireEvent.click(screen.getByRole('button', { name: 'Salva' }));
+        await waitFor(() => expect(screen.queryByRole('heading', { name: 'Modifica porzione' })).toBeNull());
+        expect(onUpdate).toHaveBeenCalledTimes(2);
+        expect(onUpdate).toHaveBeenLastCalledWith(expect.objectContaining({ id: 'meal-1', quantity: 75 }));
+    });
+
 });
