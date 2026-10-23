@@ -54,6 +54,24 @@ it('coalesces simultaneous downloads into one manifest and document request', as
     arrange(); const [a, b] = await Promise.all([syncGlobalCatalog({} as never), syncGlobalCatalog({} as never)]);
     expect(a).toEqual(b); expect(remote.get).toHaveBeenCalledTimes(3);
 });
+it('ignores a timed-out obsolete manifest response after a later successful sync', async () => {
+    const before = getSeedCatalog();
+    await saveCatalogToCache(before);
+    let resolveObsolete!: (value: ReturnType<typeof snap>) => void;
+    remote.get.mockImplementationOnce(() => new Promise(resolve => { resolveObsolete = resolve; }));
+    const stale = await syncGlobalCatalog({} as never, { timeoutMs: 10 });
+    expect(stale.updated).toBe(false);
+
+    arrange([exercise], [food], 'fresh-v4');
+    const fresh = await syncGlobalCatalog({} as never);
+    expect(fresh.updated).toBe(true);
+    expect(fresh.catalog.manifest.version).toBe('fresh-v4');
+
+    resolveObsolete(snap({ ...before.manifest, version: 'stale-v2' }));
+    await Promise.resolve();
+    expect((await getCachedCatalog()).manifest.version).toBe('fresh-v4');
+});
+
 it('preserves distinct IDs sharing a name and gives the custom identity precedence on ID collision', () => {
     const custom = { ...exercise, id: 'b', sets: [], setsCount: 3, isDefault: false };
     expect(resolveEffectiveExercises([exercise], [custom]).map(item => item.id)).toEqual(['b', 'a']);
