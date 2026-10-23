@@ -24,21 +24,23 @@ export function setOwnDataProperty<T>(target: Record<string, T>, key: string, va
 }
 
 /**
- * Recursively sanitizes data structures by removing properties with `undefined` values.
- * Designed for Firestore payloads to avoid "Unsupported field value: undefined" errors
- * without the CPU and GC overhead of JSON.parse(JSON.stringify(...)).
- *
- * - Primitives (strings, numbers, booleans, null) are returned as-is.
- * - In plain objects, keys with `undefined` values are omitted entirely.
- * - In arrays, elements are recursively cleaned; `undefined` elements are converted to `null`.
- * - Non-plain objects (Date, Firestore FieldValue, RegExp, Blob, etc.) are preserved intact.
- * - Reuses sanitized copies for shared references; rejects circular graphs before Firestore serialization.
- *
- * @param value The value or data structure to sanitize.
- * @param seen Internal tracker to prevent infinite loops on circular references.
- * @returns A sanitized clone of the input with no `undefined` properties.
+ * Removes undefined properties while preserving the historical non-throwing
+ * behavior for circular references. This general-purpose helper is NOT a
+ * Firestore serialization boundary: back-edges still refer to the source.
  */
 export function removeUndefinedValues<T>(value: T, seen?: WeakSet<object>): T {
+    return sanitizeUndefined(value, false, seen);
+}
+
+/**
+ * Cleans a Firestore-bound payload and rejects cycles before the SDK sees it.
+ * Shared but acyclic objects reuse their sanitized clone.
+ */
+export function removeUndefinedValuesForFirestore<T>(value: T): T {
+    return sanitizeUndefined(value, true);
+}
+
+function sanitizeUndefined<T>(value: T, rejectCycles: boolean, seen?: WeakSet<object>): T {
     const active = seen ?? new WeakSet<object>();
     const copies = new WeakMap<object, unknown>();
 
@@ -46,8 +48,10 @@ export function removeUndefinedValues<T>(value: T, seen?: WeakSet<object>): T {
         if (current === null || typeof current !== 'object') return current;
         if (!Array.isArray(current) && !isPlainObject(current)) return current;
 
-        // An alias is valid; a back-edge is not serializable by Firestore.
-        if (active.has(current)) throw new Error('Riferimento circolare nel payload Firestore');
+        if (active.has(current)) {
+            if (rejectCycles) throw new Error('Riferimento circolare nel payload Firestore');
+            return current;
+        }
         const previous = copies.get(current);
         if (previous) return previous;
 
