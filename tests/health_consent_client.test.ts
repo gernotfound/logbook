@@ -22,6 +22,19 @@ import {
 const user = (uid: string) => ({ uid, getIdToken: vi.fn(async () => 'id-token') }) as any;
 const key = (uid: string) => `logbook:v2:user:${uid}:health-consent-withdrawal`;
 const accepted = { acceptedTerms: true as const, acceptedHealthData: true as const, privacyVersion: '1.3.4', termsVersion: '1.2.1' };
+// A trusted GET has complete acceptance evidence. Keep the fixture realistic
+// rather than silently teaching the client that active/revision alone is proof.
+const trustedConsentResponse = (payload: Record<string, unknown>, init?: ResponseInit): Response => {
+  if (payload.status !== 'active' || typeof payload.revision !== 'number' || payload.revision < 1) {
+    return Response.json(payload, init);
+  }
+  return Response.json({
+    acceptedAt: '2026-10-13T10:00:00.000Z',
+    privacyVersion: accepted.privacyVersion,
+    termsVersion: accepted.termsVersion,
+    ...payload,
+  }, init);
+};
 
 beforeEach(() => { localStorage.clear(); vi.unstubAllGlobals(); (auth as { currentUser: unknown }).currentUser = null; });
 
@@ -30,7 +43,7 @@ describe('first trusted consent registration', () => {
     const uid = 'unregistered-' + crypto.randomUUID();
     const actor = user(uid);
     (auth as { currentUser: unknown }).currentUser = actor;
-    const fetchMock = vi.fn(async () => Response.json({ status: 'unregistered', revision: 0 }));
+    const fetchMock = vi.fn(async () => trustedConsentResponse({ status: 'unregistered', revision: 0 }));
     vi.stubGlobal('fetch', fetchMock);
     beginHealthConsentVerification(uid);
     expect(await refreshHealthConsent(actor)).toBe('unregistered');
@@ -45,8 +58,8 @@ describe('first trusted consent registration', () => {
     const actor = user(uid);
     (auth as { currentUser: unknown }).currentUser = actor;
     const fetchMock = vi.fn(async (_url: string, init: RequestInit) => init.method === 'POST'
-      ? Response.json({ status: 'active', revision: 1, acceptedAt: '2026-10-13T10:00:00.000Z' })
-      : Response.json(fetchMock.mock.calls.length <= 1 ? { status: 'unregistered', revision: 0 }
+      ? trustedConsentResponse({ status: 'active', revision: 1, acceptedAt: '2026-10-13T10:00:00.000Z' })
+      : trustedConsentResponse(fetchMock.mock.calls.length <= 1 ? { status: 'unregistered', revision: 0 }
         : { status: 'active', revision: 1, acceptedAt: '2026-10-13T10:00:00.000Z',
           privacyVersion: accepted.privacyVersion, termsVersion: accepted.termsVersion }));
     vi.stubGlobal('fetch', fetchMock);
@@ -54,7 +67,7 @@ describe('first trusted consent registration', () => {
     expect(await refreshHealthConsent(actor)).toBe('unregistered');
     expect(await registerInitialHealthConsent(actor, accepted)).toBe('2026-10-13T10:00:00.000Z');
     expect(isHealthConsentCloudWritable('user:' + uid)).toBe(false);
-    expect(fetchMock.mock.calls[1]?.[1]?.headers).toMatchObject({ 'x-consent-contract': '2' });
+    expect(fetchMock.mock.calls[1]?.[1]?.headers).toMatchObject({ authorization: 'Bearer id-token' });
     expect(await refreshHealthConsent(actor)).toBe('active');
     expect(getVerifiedHealthConsentRevision(uid)).toBe(1);
     expect(getServerConfirmedLegalConsent(uid)).toMatchObject({ hasAcceptedTerms: true,
@@ -67,11 +80,25 @@ describe('first trusted consent registration', () => {
     const uid = 'invalid-' + crypto.randomUUID();
     const actor = user(uid);
     (auth as { currentUser: unknown }).currentUser = actor;
-    vi.stubGlobal('fetch', vi.fn(async () => Response.json({ status: 'active', revision: 0 })));
+    vi.stubGlobal('fetch', vi.fn(async () => trustedConsentResponse({ status: 'active', revision: 0 })));
     beginHealthConsentVerification(uid);
     expect(await refreshHealthConsent(actor)).toBe('error');
     expect(isHealthConsentCloudWritable('user:' + uid)).toBe(false);
     await expect(registerInitialHealthConsent(actor, accepted)).rejects.toThrow();
+  });
+});
+
+describe('incomplete active trusted proof is never usable', () => {
+  it('refuses apparently active HTTP 200 missing acceptance metadata, without publishing a cloud epoch', async () => {
+    const uid = 'incomplete-proof-' + crypto.randomUUID();
+    const actor = user(uid);
+    (auth as { currentUser: unknown }).currentUser = actor;
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json({ status: 'active', revision: 1 })));
+    beginHealthConsentVerification(uid);
+    expect(await refreshHealthConsent(actor)).toBe('error');
+    expect(isHealthConsentWritable('user:' + uid)).toBe(false);
+    expect(isHealthConsentCloudWritable('user:' + uid)).toBe(false);
+    expect(getServerConfirmedLegalConsent(uid)).toBeNull();
   });
 });
 
@@ -89,7 +116,7 @@ describe('same-UID consent check session fencing', () => {
 
     invalidateSession();
     (auth as { currentUser: unknown }).currentUser = user(uid);
-    resolveGet(Response.json({ status: 'active', revision: 1,
+    resolveGet(trustedConsentResponse({ status: 'active', revision: 1,
       acceptedAt: '2026-10-20T10:00:00.000Z',
       privacyVersion: accepted.privacyVersion, termsVersion: accepted.termsVersion }));
     await previous;
@@ -103,7 +130,7 @@ describe('same-UID consent check session fencing', () => {
     const uid = 'consent-aba-post-' + crypto.randomUUID();
     const actor = user(uid);
     (auth as { currentUser: unknown }).currentUser = actor;
-    const fetchMock = vi.fn(async () => Response.json({ status: 'unregistered', revision: 0 }));
+    const fetchMock = vi.fn(async () => trustedConsentResponse({ status: 'unregistered', revision: 0 }));
     vi.stubGlobal('fetch', fetchMock);
     beginHealthConsentVerification(uid);
     expect(await refreshHealthConsent(actor)).toBe('unregistered');
@@ -131,7 +158,7 @@ describe('erased acknowledged local consent generation', () => {
     const original = await readLocal(owner);
     expect(original?.pending).toEqual([]);
 
-    vi.stubGlobal('fetch', vi.fn(async () => Response.json({
+    vi.stubGlobal('fetch', vi.fn(async () => trustedConsentResponse({
       status: 'active', revision: 4, erasedBeforeRevision: 2,
       acceptedAt: '2026-10-12T05:00:00.000Z',
       privacyVersion: accepted.privacyVersion, termsVersion: accepted.termsVersion,
@@ -157,7 +184,7 @@ describe('erased acknowledged local consent generation', () => {
     await initializeLocal(owner, UserDataSchema.parse({ profile: { height: '180' } }) as any);
     const original = await readLocal(owner);
     localStorage.setItem(key(uid), 'withdrawn');
-    vi.stubGlobal('fetch', vi.fn(async () => Response.json({
+    vi.stubGlobal('fetch', vi.fn(async () => trustedConsentResponse({
       status: 'active', revision: 4, erasedBeforeRevision: 2,
       acceptedAt: '2026-10-12T05:00:00.000Z',
     })));
@@ -186,7 +213,7 @@ describe('durable health-consent client barrier', () => {
     const calls: string[] = [];
     vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
       calls.push(init.method ?? 'GET');
-      return Response.json(init.method === 'GET'
+      return trustedConsentResponse(init.method === 'GET'
         ? { status: 'active', revision: 1 }
         : { status: 'withdrawn', revision: 2 });
     }));
@@ -198,7 +225,7 @@ describe('durable health-consent client barrier', () => {
 
   it('recognizes a remote revocation and prevents normal writes', async () => {
     const uid = 'remote-' + crypto.randomUUID();
-    vi.stubGlobal('fetch', vi.fn(async () => Response.json({ status: 'withdrawn', revision: 1 })));
+    vi.stubGlobal('fetch', vi.fn(async () => trustedConsentResponse({ status: 'withdrawn', revision: 1 })));
     expect(await refreshHealthConsent(user(uid))).toBe('withdrawn');
     expect(localStorage.getItem(key(uid))).toBe('withdrawn');
     expect(isHealthConsentWritable('user:' + uid)).toBe(false);
@@ -207,7 +234,7 @@ describe('durable health-consent client barrier', () => {
   it('keeps revocation durable across uncertain server failures', async () => {
     const uid = 'offline-' + crypto.randomUUID();
     vi.stubGlobal('fetch', vi.fn(async (_url: string, request: RequestInit) => {
-      if (request.method === 'GET') return Response.json({ status: 'active', revision: 1 });
+      if (request.method === 'GET') return trustedConsentResponse({ status: 'active', revision: 1 });
       throw new Error('offline');
     }));
     expect(await refreshHealthConsent(user(uid))).toBe('active');
@@ -220,7 +247,7 @@ describe('durable health-consent client barrier', () => {
     const uid = 'reactivate-' + crypto.randomUUID();
     localStorage.setItem(key(uid), 'reaccepting:1');
     vi.stubGlobal('fetch', vi.fn(async () =>
-      Response.json({ status: 'active', revision: 2, acceptedAt: '2026-10-12T00:00:00.000Z' })));
+      trustedConsentResponse({ status: 'active', revision: 2, acceptedAt: '2026-10-12T00:00:00.000Z' })));
     expect(await reacceptHealthConsent(user(uid), accepted)).toBe('2026-10-12T00:00:00.000Z');
     expect(currentHealthConsentStatus(uid)).toBe('reaccepting');
     // An acknowledged server action alone does NOT make the old local journal
@@ -251,18 +278,18 @@ describe('out-of-order consent checks', () => {
     let resolveOld!: (response: Response) => void;
     let reads = 0;
     vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
-      if (init.method === 'POST') return Response.json({
+      if (init.method === 'POST') return trustedConsentResponse({
         status: 'active', revision: 2, acceptedAt: '2026-10-12T05:00:00.000Z',
       });
       reads += 1;
       if (reads === 1) return new Promise<Response>(resolve => { resolveOld = resolve; });
-      if (reads === 2) return Response.json({ status: 'withdrawn', revision: 1 });
-      return Response.json({ status: 'active', revision: 2, acceptedAt: '2026-10-12T05:00:00.000Z' });
+      if (reads === 2) return trustedConsentResponse({ status: 'withdrawn', revision: 1 });
+      return trustedConsentResponse({ status: 'active', revision: 2, acceptedAt: '2026-10-12T05:00:00.000Z' });
     }));
     const olderCheck = refreshHealthConsent(user(uid));
     await reacceptHealthConsent(user(uid), accepted);
     expect(localStorage.getItem(key(uid))).toBe('reaccepting:1');
-    resolveOld(Response.json({ status: 'withdrawn', revision: 1 }));
+    resolveOld(trustedConsentResponse({ status: 'withdrawn', revision: 1 }));
     expect(await olderCheck).toBe('reaccepting');
     expect(localStorage.getItem(key(uid))).toBe('reaccepting:1');
     expect(await refreshHealthConsent(user(uid))).toBe('active');
@@ -278,12 +305,12 @@ describe('overlapping consent verification', () => {
     vi.stubGlobal('fetch', vi.fn(async () => {
       requests += 1;
       if (requests === 1) return new Promise<Response>(resolve => { resolveOlder = resolve; });
-      return Response.json({ status: 'active', revision: 1 });
+      return trustedConsentResponse({ status: 'active', revision: 1 });
     }));
     const older = refreshHealthConsent(user(uid));
     await vi.waitFor(() => expect(requests).toBe(1));
     expect(await refreshHealthConsent(user(uid))).toBe('active');
-    resolveOlder(Response.json({ status: 'withdrawn', revision: 1 }));
+    resolveOlder(trustedConsentResponse({ status: 'withdrawn', revision: 1 }));
     expect(await older).toBe('active');
     expect(localStorage.getItem(key(uid))).toBeNull();
     expect(isHealthConsentWritable('user:' + uid)).toBe(true);
@@ -296,14 +323,14 @@ describe('overlapping consent verification', () => {
     let requests = 0;
     vi.stubGlobal('fetch', vi.fn(async () => {
       requests += 1;
-      if (requests === 1) return Response.json({ status: 'active', revision: 2 });
+      if (requests === 1) return trustedConsentResponse({ status: 'active', revision: 2 });
       return new Promise<Response>(resolve => { resolveServer = resolve; });
     }));
     expect(await refreshHealthConsent(user(uid))).toBe('stale-request');
     const retaining = retainNewerHealthConsent(user(uid));
     await vi.waitFor(() => expect(requests).toBe(2));
     localStorage.setItem(key(uid), 'pending:2');
-    resolveServer(Response.json({ status: 'active', revision: 2 }));
+    resolveServer(trustedConsentResponse({ status: 'active', revision: 2 }));
     await expect(retaining).rejects.toThrow('revoca locale è cambiata');
     expect(localStorage.getItem(key(uid))).toBe('pending:2');
     expect(isHealthConsentWritable('user:' + uid)).toBe(false);
@@ -318,14 +345,14 @@ describe('stale withdrawal explicit reconfirmation', () => {
     const methods: string[] = [];
     vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
       methods.push(init.method ?? 'GET');
-      if (methods.length === 1) return Response.json({ status: 'active', revision: 2 });
+      if (methods.length === 1) return trustedConsentResponse({ status: 'active', revision: 2 });
       return new Promise<Response>(resolve => { resolveCheck = resolve; });
     }));
     expect(await refreshHealthConsent(user(uid))).toBe('stale-request');
     const ongoing = reconfirmStaleHealthWithdrawal(user(uid));
     await vi.waitFor(() => expect(methods).toHaveLength(2));
     localStorage.setItem(key(uid), 'withdrawn');
-    resolveCheck(Response.json({ status: 'active', revision: 2 }));
+    resolveCheck(trustedConsentResponse({ status: 'active', revision: 2 }));
     await expect(ongoing).rejects.toThrow('scelta locale è cambiata');
     expect(localStorage.getItem(key(uid))).toBe('withdrawn');
     expect(methods).toEqual(['GET', 'GET']);
@@ -337,7 +364,7 @@ describe('later reacceptance on another device', () => {
   it('offers a choice when the durable withdrawn marker is older than the active server consent', async () => {
     const uid = 'remote-accept-' + crypto.randomUUID();
     localStorage.setItem(key(uid), 'withdrawn');
-    vi.stubGlobal('fetch', vi.fn(async () => Response.json({
+    vi.stubGlobal('fetch', vi.fn(async () => trustedConsentResponse({
       status: 'active', revision: 2, acceptedAt: '2026-10-12T05:00:00.000Z',
     })));
     expect(await refreshHealthConsent(user(uid))).toBe('stale-request');
@@ -357,9 +384,9 @@ describe('withdrawal acknowledgement racing with a newer consent', () => {
         // The withdrawal committed at rev 2, but another device reaccepted
         // at rev 3 before this acknowledgement reached the browser.
         latestRevision = 3;
-        return Response.json({ status: 'withdrawn', revision: 2 });
+        return trustedConsentResponse({ status: 'withdrawn', revision: 2 });
       }
-      return Response.json(latestRevision === 0
+      return trustedConsentResponse(latestRevision === 0
         ? { status: 'active', revision: 1 }
         : { status: 'active', revision: 3, acceptedAt: '2026-10-12T05:00:00.000Z' });
     }));
@@ -419,7 +446,7 @@ describe('stale withdrawal race', () => {
     const calls: string[] = [];
     vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
       calls.push(init.method ?? 'GET');
-      return Response.json({ status: 'active', revision: 2, acceptedAt: '2026-10-12T00:00:00.000Z' });
+      return trustedConsentResponse({ status: 'active', revision: 2, acceptedAt: '2026-10-12T00:00:00.000Z' });
     }));
     expect(await refreshHealthConsent(user(uid))).toBe('stale-request');
     expect(calls).toEqual(['GET']);
@@ -434,7 +461,7 @@ describe('explicit acknowledgement of newer consent from another device', () => 
     const methods: string[] = [];
     vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
       methods.push(init.method ?? 'GET');
-      return Response.json({ status: 'active', revision: 2, acceptedAt: '2026-10-12T00:00:00.000Z' });
+      return trustedConsentResponse({ status: 'active', revision: 2, acceptedAt: '2026-10-12T00:00:00.000Z' });
     }));
     expect(await refreshHealthConsent(user(uid))).toBe('stale-request');
     expect(await retainNewerHealthConsent(user(uid))).toBe('active');
@@ -451,7 +478,7 @@ describe('offline consent cache and reconnect privacy boundary', () => {
     (auth as { currentUser: unknown }).currentUser = actor;
     let resolveRecheck!: (response: Response) => void;
     const fetchMock = vi.fn()
-      .mockResolvedValueOnce(Response.json({ status: 'active', revision: 1 }))
+      .mockResolvedValueOnce(trustedConsentResponse({ status: 'active', revision: 1 }))
       .mockImplementationOnce(() => new Promise<Response>(resolve => { resolveRecheck = resolve; }));
     vi.stubGlobal('fetch', fetchMock);
     const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
@@ -464,7 +491,7 @@ describe('offline consent cache and reconnect privacy boundary', () => {
       expect(currentHealthConsentStatus(uid)).toBe('active');
       expect(isHealthConsentWritable('user:' + uid)).toBe(true);
       expect(isHealthConsentCloudWritable('user:' + uid)).toBe(false);
-      resolveRecheck(Response.json({ status: 'withdrawn', revision: 1 }));
+      resolveRecheck(trustedConsentResponse({ status: 'withdrawn', revision: 1 }));
       expect(await rechecking).toBe('withdrawn');
       expect(currentHealthConsentStatus(uid)).toBe('withdrawn');
       expect(isHealthConsentWritable('user:' + uid)).toBe(false);
@@ -478,7 +505,7 @@ describe('offline consent cache and reconnect privacy boundary', () => {
     const uid = 'cached-' + crypto.randomUUID();
     const actor = user(uid);
     (auth as { currentUser: unknown }).currentUser = actor;
-    const fetchMock = vi.fn(async () => Response.json({ status: 'active', revision: 1 }));
+    const fetchMock = vi.fn(async () => trustedConsentResponse({ status: 'active', revision: 1 }));
     vi.stubGlobal('fetch', fetchMock);
     const onLine = vi.spyOn(navigator, 'onLine', 'get');
     try {
@@ -497,7 +524,7 @@ describe('offline consent cache and reconnect privacy boundary', () => {
       expect(fetchMock).toHaveBeenCalledTimes(1); // No network attempt while disconnected.
 
       onLine.mockReturnValue(true);
-      fetchMock.mockResolvedValueOnce(Response.json({ status: 'withdrawn', revision: 1 }));
+      fetchMock.mockResolvedValueOnce(trustedConsentResponse({ status: 'withdrawn', revision: 1 }));
       expect(await refreshHealthConsent(actor)).toBe('withdrawn');
       expect(isHealthConsentWritable('user:' + uid)).toBe(false);
       expect(isHealthConsentCloudWritable('user:' + uid)).toBe(false);
@@ -516,7 +543,7 @@ describe('offline consent cache and reconnect privacy boundary', () => {
     const uid = 'first-' + crypto.randomUUID();
     const actor = user(uid);
     (auth as { currentUser: unknown }).currentUser = actor;
-    const fetchMock = vi.fn(async () => Response.json({ status: 'active', revision: 2 }));
+    const fetchMock = vi.fn(async () => trustedConsentResponse({ status: 'active', revision: 2 }));
     vi.stubGlobal('fetch', fetchMock);
     const onLine = vi.spyOn(navigator, 'onLine', 'get');
     try {
@@ -546,7 +573,7 @@ describe('offline consent cache and reconnect privacy boundary', () => {
     const actor = user(uid);
     (auth as { currentUser: unknown }).currentUser = actor;
     vi.stubGlobal('fetch', vi.fn()
-      .mockResolvedValueOnce(Response.json({ status: 'active', revision: 1 }))
+      .mockResolvedValueOnce(trustedConsentResponse({ status: 'active', revision: 1 }))
       .mockRejectedValueOnce(new TypeError('Failed to fetch')));
     const onLine = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
     try {
@@ -565,7 +592,7 @@ describe('offline consent cache and reconnect privacy boundary', () => {
     const actor = user(uid);
     (auth as { currentUser: unknown }).currentUser = actor;
     const fetchMock = vi.fn()
-      .mockResolvedValueOnce(Response.json({ status: 'active', revision: 1 }))
+      .mockResolvedValueOnce(trustedConsentResponse({ status: 'active', revision: 1 }))
       .mockRejectedValueOnce(new Error('unavailable'));
     vi.stubGlobal('fetch', fetchMock);
     const onLine = vi.spyOn(navigator, 'onLine', 'get');
@@ -590,7 +617,7 @@ describe('account offline withdrawal and explicit local-only reacceptance', () =
     const actor = user(uid);
     (auth as { currentUser: unknown }).currentUser = actor;
     const online = vi.spyOn(navigator, 'onLine', 'get');
-    const requests = vi.fn(async () => Response.json({
+    const requests = vi.fn(async () => trustedConsentResponse({
       status: 'active', revision: 1, acceptedAt: '2026-10-14T10:00:00.000Z',
       privacyVersion: accepted.privacyVersion, termsVersion: accepted.termsVersion,
     }));
@@ -629,7 +656,7 @@ describe('account offline withdrawal and explicit local-only reacceptance', () =
       } else if (action === 'reaccept') {
         state = 'active'; revision = 3;
       }
-      return Response.json({
+      return trustedConsentResponse({
         status: state, revision,
         ...(state === 'active'
           ? { acceptedAt: '2026-10-15T09:00:00.000Z',
@@ -667,11 +694,11 @@ describe('account offline withdrawal and explicit local-only reacceptance', () =
       if (disconnected) throw new TypeError('Failed to fetch');
       const payload = init.body ? JSON.parse(init.body as string) as { action: string } : null;
       methods.push(payload?.action ?? 'GET');
-      if (payload?.action === 'withdraw') return Response.json({ status: 'withdrawn', revision: 2 });
-      if (payload?.action === 'reaccept') return Response.json({
+      if (payload?.action === 'withdraw') return trustedConsentResponse({ status: 'withdrawn', revision: 2 });
+      if (payload?.action === 'reaccept') return trustedConsentResponse({
         status: 'active', revision: 3, acceptedAt: '2026-10-15T10:00:00.000Z',
       });
-      return Response.json({ status: 'active', revision: methods.includes('reaccept') ? 3 : 1,
+      return trustedConsentResponse({ status: 'active', revision: methods.includes('reaccept') ? 3 : 1,
         acceptedAt: methods.includes('reaccept') ? '2026-10-15T10:00:00.000Z' : '2026-10-14T10:00:00.000Z',
         privacyVersion: accepted.privacyVersion, termsVersion: accepted.termsVersion });
     }));
@@ -718,7 +745,7 @@ describe('account offline withdrawal and explicit local-only reacceptance', () =
     localStorage.setItem(key(uid), 'offline-reaccepted:1:1.3.4:1.2.1');
     localStorage.setItem('logbook:v2:user:' + uid + ':health-consent-generation', '3');
     localStorage.setItem('logbook:v2:user:' + uid + ':health-consent-last-active', '1');
-    const fetchMock = vi.fn(async () => Response.json({
+    const fetchMock = vi.fn(async () => trustedConsentResponse({
       status: 'active', revision: 3, acceptedAt: '2026-10-15T10:00:00.000Z',
       privacyVersion: accepted.privacyVersion, termsVersion: accepted.termsVersion,
     }));
@@ -738,14 +765,14 @@ describe('account offline withdrawal and explicit local-only reacceptance', () =
     const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
     try {
       beginHealthConsentVerification(uid);
-      vi.stubGlobal('fetch', vi.fn(async () => Response.json({ status: 'active', revision: 1 })));
+      vi.stubGlobal('fetch', vi.fn(async () => trustedConsentResponse({ status: 'active', revision: 1 })));
       expect(await refreshHealthConsent(actor)).toBe('active');
       online.mockReturnValue(false);
       vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('offline'); }));
       await expect(withdrawHealthConsent(actor)).resolves.toBeUndefined();
       reacceptHealthConsentLocally(actor, accepted);
       online.mockReturnValue(true);
-      const network = vi.fn(async () => Response.json({ status: 'active', revision: 5,
+      const network = vi.fn(async () => trustedConsentResponse({ status: 'active', revision: 5,
         acceptedAt: '2026-10-15T12:00:00.000Z',
         privacyVersion: accepted.privacyVersion, termsVersion: accepted.termsVersion }));
       vi.stubGlobal('fetch', network);
@@ -767,7 +794,7 @@ describe('account offline withdrawal and explicit local-only reacceptance', () =
     try {
       online.mockReturnValue(true);
       beginHealthConsentVerification(uid);
-      vi.stubGlobal('fetch', vi.fn(async () => Response.json({ status: 'active', revision: 1 })));
+      vi.stubGlobal('fetch', vi.fn(async () => trustedConsentResponse({ status: 'active', revision: 1 })));
       expect(await refreshHealthConsent(actor)).toBe('active');
       online.mockReturnValue(false);
       vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('offline'); }));
@@ -795,7 +822,7 @@ describe('account offline withdrawal and explicit local-only reacceptance', () =
     try {
       online.mockReturnValue(true);
       beginHealthConsentVerification(uid);
-      vi.stubGlobal('fetch', vi.fn(async () => Response.json({ status: 'active', revision: 1 })));
+      vi.stubGlobal('fetch', vi.fn(async () => trustedConsentResponse({ status: 'active', revision: 1 })));
       expect(await refreshHealthConsent(actor)).toBe('active');
       online.mockReturnValue(false);
       vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('offline'); }));
@@ -805,14 +832,14 @@ describe('account offline withdrawal and explicit local-only reacceptance', () =
       online.mockReturnValue(true);
       vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) =>
         init.method === 'GET'
-          ? Response.json({ status: 'active', revision: 1 })
-          : Response.json({ error: 'consent revision conflict' }, { status: 409 })));
+          ? trustedConsentResponse({ status: 'active', revision: 1 })
+          : trustedConsentResponse({ error: 'consent revision conflict' }, { status: 409 })));
       expect(await refreshHealthConsent(actor)).toBe('pending');
       expect(localStorage.getItem(key(uid))).toBe('pending:1');
       expect(isHealthConsentWritable('user:' + uid)).toBe(false);
       expect(isHealthConsentCloudWritable('user:' + uid)).toBe(false);
       beginHealthConsentVerification(uid);
-      vi.stubGlobal('fetch', vi.fn(async () => Response.json({
+      vi.stubGlobal('fetch', vi.fn(async () => trustedConsentResponse({
         status: 'active', revision: 5, acceptedAt: '2026-10-15T12:00:00.000Z',
         privacyVersion: accepted.privacyVersion, termsVersion: accepted.termsVersion,
       })));
@@ -841,7 +868,7 @@ describe('account offline withdrawal and explicit local-only reacceptance', () =
     const actor = user(uid);
     (auth as { currentUser: unknown }).currentUser = actor;
     const onLine = vi.spyOn(navigator, 'onLine', 'get');
-    const fetchMock = vi.fn(async () => Response.json({ status: 'active', revision: 1 }));
+    const fetchMock = vi.fn(async () => trustedConsentResponse({ status: 'active', revision: 1 }));
     vi.stubGlobal('fetch', fetchMock);
     try {
       onLine.mockReturnValue(true);
@@ -852,7 +879,7 @@ describe('account offline withdrawal and explicit local-only reacceptance', () =
       await expect(withdrawHealthConsent(actor)).resolves.toBeUndefined();
       reacceptHealthConsentLocally(actor, accepted);
       onLine.mockReturnValue(true);
-      const newer = vi.fn(async () => Response.json({ status: 'withdrawn', revision: 4 }));
+      const newer = vi.fn(async () => trustedConsentResponse({ status: 'withdrawn', revision: 4 }));
       vi.stubGlobal('fetch', newer);
       expect(await refreshHealthConsent(actor)).toBe('withdrawn');
       expect(newer).toHaveBeenCalledTimes(1);
@@ -875,7 +902,7 @@ describe('consent responses across authenticated owner changes', () => {
     const pending = refreshHealthConsent(actor);
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
     (auth as { currentUser: unknown }).currentUser = user('other-account');
-    resolveGet(Response.json({ status: 'active', revision: 2, acceptedAt: '2026-10-12T00:00:00.000Z' }));
+    resolveGet(trustedConsentResponse({ status: 'active', revision: 2, acceptedAt: '2026-10-12T00:00:00.000Z' }));
     expect(await pending).not.toBe('active');
     expect(localStorage.getItem('logbook:v2:user:' + uid + ':health-consent-generation')).toBeNull();
     expect(localStorage.getItem('logbook:v2:user:' + uid + ':health-consent-last-active')).toBeNull();
@@ -889,14 +916,14 @@ describe('consent responses across authenticated owner changes', () => {
     localStorage.setItem(key(uid), 'pending:1');
     let resolveKeep!: (response: Response) => void;
     const fetchMock = vi.fn()
-      .mockResolvedValueOnce(Response.json({ status: 'active', revision: 2, acceptedAt: '2026-10-12T00:00:00.000Z' }))
+      .mockResolvedValueOnce(trustedConsentResponse({ status: 'active', revision: 2, acceptedAt: '2026-10-12T00:00:00.000Z' }))
       .mockImplementationOnce(() => new Promise<Response>(resolve => { resolveKeep = resolve; }));
     vi.stubGlobal('fetch', fetchMock);
     expect(await refreshHealthConsent(actor)).toBe('stale-request');
     const keep = retainNewerHealthConsent(actor);
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
     (auth as { currentUser: unknown }).currentUser = user('other-account');
-    resolveKeep(Response.json({ status: 'active', revision: 2, acceptedAt: '2026-10-12T00:00:00.000Z' }));
+    resolveKeep(trustedConsentResponse({ status: 'active', revision: 2, acceptedAt: '2026-10-12T00:00:00.000Z' }));
     await expect(keep).rejects.toThrow('Sessione');
     expect(localStorage.getItem(key(uid))).toBe('pending:1');
     expect(localStorage.getItem('logbook:v2:user:' + uid + ':health-consent-generation')).toBeNull();
@@ -915,7 +942,7 @@ describe('no trusted consent POST after an authenticated owner switch', () => {
     const reaccepting = reacceptHealthConsent(actor, accepted);
     await vi.waitFor(() => expect(request).toHaveBeenCalledOnce());
     (auth as { currentUser: unknown }).currentUser = user('other-account');
-    resolveRead(Response.json({ status: 'withdrawn', revision: 1 }));
+    resolveRead(trustedConsentResponse({ status: 'withdrawn', revision: 1 }));
     await expect(reaccepting).rejects.toThrow('Sessione cambiata');
     expect(localStorage.getItem(key(uid))).toBe('withdrawn');
     expect(request).toHaveBeenCalledTimes(1);
@@ -930,7 +957,7 @@ describe('no trusted consent POST after an authenticated owner switch', () => {
       .mockImplementationOnce(() => normalGetIdToken())
       .mockImplementationOnce(() => new Promise<string>(resolve => { releaseToken = resolve; }));
     (auth as { currentUser: unknown }).currentUser = actor;
-    const request = vi.fn(async () => Response.json({ status: 'active', revision: 1 }));
+    const request = vi.fn(async () => trustedConsentResponse({ status: 'active', revision: 1 }));
     vi.stubGlobal('fetch', request);
     beginHealthConsentVerification(uid);
     expect(await refreshHealthConsent(actor)).toBe('active');
@@ -950,14 +977,14 @@ describe('no trusted consent POST after an authenticated owner switch', () => {
     localStorage.setItem(key(uid), 'pending:1');
     let resolveRead!: (response: Response) => void;
     const request = vi.fn()
-      .mockResolvedValueOnce(Response.json({ status: 'active', revision: 2, acceptedAt: '2026-10-12T00:00:00.000Z' }))
+      .mockResolvedValueOnce(trustedConsentResponse({ status: 'active', revision: 2, acceptedAt: '2026-10-12T00:00:00.000Z' }))
       .mockImplementationOnce(() => new Promise<Response>(resolve => { resolveRead = resolve; }));
     vi.stubGlobal('fetch', request);
     expect(await refreshHealthConsent(actor)).toBe('stale-request');
     const reconfirming = reconfirmStaleHealthWithdrawal(actor);
     await vi.waitFor(() => expect(request).toHaveBeenCalledTimes(2));
     (auth as { currentUser: unknown }).currentUser = user('other-account');
-    resolveRead(Response.json({ status: 'active', revision: 2 }));
+    resolveRead(trustedConsentResponse({ status: 'active', revision: 2 }));
     await expect(reconfirming).rejects.toThrow('Sessione cambiata');
     expect(localStorage.getItem(key(uid))).toBe('pending:1');
     expect(request).toHaveBeenCalledTimes(2);
