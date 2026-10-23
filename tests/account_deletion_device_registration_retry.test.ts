@@ -29,16 +29,7 @@ async function loadSubject() {
   // The shared UI harness suppresses incidental registration; this dedicated
   // suite must exercise the real device-recovery code instead.
   vi.doUnmock('../src/lib/deletionDeviceRecovery');
-  const subject = await import('../src/lib/deletionDeviceRecovery');
-  // The production code lazy-imports this boundary after awaits. In Vitest,
-  // resetModules can expose the real module instead of the hoisted mock.
-  // Spy on the actual resolved export so the test never depends on a live provider.
-  const loaded = await import('../src/lib/appCheck');
-  if (loaded.getLimitedUseAppCheckToken !== appCheck.getLimitedUseAppCheckToken) {
-    vi.spyOn(loaded, 'getLimitedUseAppCheckToken')
-      .mockImplementation(() => appCheck.getLimitedUseAppCheckToken());
-  }
-  return subject;
+  return import('../src/lib/deletionDeviceRecovery');
 }
 
 describe('account deletion recovery device registration retries', () => {
@@ -636,6 +627,17 @@ describe('account deletion recovery device registration retries', () => {
     const request = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) =>
       new Response(JSON.stringify({ registered: true }), { status: 200 }));
     vi.stubGlobal('fetch', request);
+    // The lazy App Check import can resolve the actual production module in
+    // Vitest despite a hoisted mock. Boot the real provider against the mocked
+    // Firebase App Check SDK, never treat provider failure as a test success.
+    const realAppCheck = await vi.importActual<typeof import('../src/lib/appCheck')>('../src/lib/appCheck');
+    const appCheckOptions = { siteKey: 'synthetic-app-check-site-key' };
+    const app = {} as Parameters<typeof realAppCheck.ensureAppCheckProvider>[0];
+    expect(realAppCheck.ensureAppCheckProvider(app, appCheckOptions).providerInitialized).toBe(true);
+    const resolvedAppCheck = await import('../src/lib/appCheck');
+    if (resolvedAppCheck !== realAppCheck && typeof resolvedAppCheck.ensureAppCheckProvider === 'function') {
+      expect(resolvedAppCheck.ensureAppCheckProvider(app, appCheckOptions).providerInitialized).toBe(true);
+    }
     const original = new Map<string, string>();
     for (const id of ['a', 'b', 'c', 'd']) {
       const current = user(id);
