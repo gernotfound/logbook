@@ -8,6 +8,7 @@ import { DB } from '../src/lib/db';
 import { auth, onAuthStateChanged } from '../src/lib/firebase';
 import { refreshHealthConsent, suspendHealthConsentCloudAccess } from '../src/lib/healthConsent';
 import * as localRepository from '../src/lib/sync/localRepository';
+import { UserDataSchema } from '../src/lib/schema';
 import { createAndMigrateVault } from '../src/lib/sync/secureArchiveMigration';
 import { lockAllVaults } from '../src/lib/sync/secureArchiveSession';
 import { invalidateSession } from '../src/lib/sync/session';
@@ -48,15 +49,28 @@ describe('PWA & iPhone Startup Resilience Tests', () => {
     await createAndMigrateVault('user:test-user-id');
   });
 
-  test('auth becomes READY only after the authenticated owner has been hydrated', async () => {
-    render(
-      <AuthProvider>
-        <TestAuthConsumer />
-      </AuthProvider>
-    );
+  test('publishes the authenticated owner and sealed local snapshot before reporting READY', async () => {
+    const persisted = UserDataSchema.parse({ profile: { height: '183' }, activeWorkout: { id: 'w-snapshot', date: '2026-10-03', exercises: [] } }) as UserData;
+    await localRepository.initializeLocal('user:test-user-id', persisted);
+    expect(idbStore['logbook:v2:user:test-user-id']).toMatch(/^tlb-sealed:v1:/);
 
+    let completeCloudRead!: (result: null) => void;
+    vi.mocked(DB.loadCloudPayload).mockImplementationOnce(
+      () => new Promise(resolve => { completeCloudRead = resolve; }),
+    );
+    render(<AuthProvider><TestAuthConsumer /></AuthProvider>);
+    await waitFor(() => expect(DB.loadCloudPayload).toHaveBeenCalledTimes(1));
+
+    expect(screen.getByTestId('loading-state').textContent).toBe('LOADING');
+    expect(screen.getByTestId('data-state').textContent).toBe('183');
+    expect(useAppStore.getState().dataOwner).toBe('user:test-user-id');
+    expect(useAppStore.getState().localWorkout?.id).toBe('w-snapshot');
+    expect((await localRepository.readLocal('user:test-user-id'))?.data.profile?.height).toBe('183');
+
+    await act(async () => { completeCloudRead(null); });
     await waitFor(() => expect(screen.getByTestId('loading-state').textContent).toBe('READY'));
     expect(screen.getByTestId('user-state').textContent).toBe('test@example.com');
+    expect(screen.getByTestId('data-state').textContent).toBe('183');
   });
 
   test('does not load user data before the pending trusted consent check completes', async () => {
@@ -363,7 +377,7 @@ describe('PWA & iPhone Startup Resilience Tests', () => {
 
     // When store is updated or loaded, it syncs with IndexedDB cache
     useAppStore.getState().setUserData(mockCache);
-    await new Promise(r => setTimeout(r, 0));
+    await waitFor(() => expect(idbStore['logbook:v2:user:test-user-id']).toMatch(/^tlb-sealed:v1:/));
 
     const cachedInStorage = idbStore['logbook:v2:user:test-user-id'];
     expect(cachedInStorage).toMatch(/^tlb-sealed:v1:/);
@@ -371,7 +385,7 @@ describe('PWA & iPhone Startup Resilience Tests', () => {
     expect((await localRepository.readLocal('user:test-user-id'))?.data.profile?.height).toBe('180');
   });
 
-  test('Save and Reset Store manages local cached data correctly', async () => {
+  test('persists sealed data before the fixture DB purge and clears the in-memory store', async () => {
     const sampleData: UserData = {
       profile: { height: '176' },
       library: [],
@@ -384,29 +398,46 @@ describe('PWA & iPhone Startup Resilience Tests', () => {
     };
 
     useAppStore.getState().setUserData(sampleData);
-    await new Promise(r => setTimeout(r, 0));
-    expect(idbStore['logbook:v2:user:test-user-id']).toMatch(/^tlb-sealed:v1:/);
+    await waitFor(() => expect(idbStore['logbook:v2:user:test-user-id']).toMatch(/^tlb-sealed:v1:/));
     expect((await localRepository.readLocal('user:test-user-id'))?.data.profile?.height).toBe('176');
 
+    // The shared DB fixture models purge by deleting the mock IDB key.
+    // This is not a proof of the production vault/key lifecycle.
     await DB.purgeAllLocalUserData();
+    expect(DB.purgeAllLocalUserData).toHaveBeenCalledOnce();
     useAppStore.getState().resetStore();
     expect(idbStore['logbook:v2:user:test-user-id']).toBeUndefined();
     expect(useAppStore.getState().userData).toBeNull();
   });
 
-  test('Network slow or hanging DB.loadUserData does not throw unhandled exception or lock syncing', async () => {
-    const originalLoad = DB.loadUserData;
-    DB.loadUserData = vi.fn().mockRejectedValue(new Error('Network timeout'));
+  test('a rejected production cloud load with no local archive remains blocked and recoverable', async () => {
+    vi.mocked(DB.loadCloudPayload).mockRejectedValueOnce(new Error('Network timeout'));
+    render(<AuthProvider><TestAuthConsumer /></AuthProvider>);
 
-    render(
-      <AuthProvider>
-        <TestAuthConsumer />
-      </AuthProvider>
-    );
-
-    // App should still become READY without crashing
+    await waitFor(() => expect(DB.loadCloudPayload).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(screen.getByTestId('loading-state').textContent).toBe('READY'));
+    expect(screen.getByTestId('data-state').textContent).toBe('NO_DATA');
+    expect(useAppStore.getState().dataOwner).toBeNull();
+    expect(useAppStore.getState().saveError).toContain('nessun archivio locale disponibile');
+    expect(DB.purgeAllLocalUserData).not.toHaveBeenCalled();
 
-    DB.loadUserData = originalLoad;
+    // A later explicit retry is allowed; the failure did not destroy local storage.
+    expect(await localRepository.readLocal('user:test-user-id')).toBeUndefined();
+  });
+
+  test('a failed cloud load preserves the sealed owner snapshot for offline recovery', async () => {
+    const persisted = UserDataSchema.parse({ profile: { height: '179' } }) as UserData;
+    await localRepository.initializeLocal('user:test-user-id', persisted);
+    const ciphertext = idbStore['logbook:v2:user:test-user-id'];
+    vi.mocked(DB.loadCloudPayload).mockRejectedValueOnce(new Error('Network timeout'));
+    render(<AuthProvider><TestAuthConsumer /></AuthProvider>);
+
+    await waitFor(() => expect(DB.loadCloudPayload).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByTestId('loading-state').textContent).toBe('READY'));
+    expect(screen.getByTestId('data-state').textContent).toBe('179');
+    expect(useAppStore.getState().dataOwner).toBe('user:test-user-id');
+    expect(idbStore['logbook:v2:user:test-user-id']).toBe(ciphertext);
+    expect((await localRepository.readLocal('user:test-user-id'))?.data.profile?.height).toBe('179');
+    expect(DB.purgeAllLocalUserData).not.toHaveBeenCalled();
   });
 });
