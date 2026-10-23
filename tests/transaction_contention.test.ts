@@ -1,4 +1,9 @@
 import 'fake-indexeddb/auto';
+import { vi } from 'vitest';
+
+// The shared jsdom idb-keyval stub awaits each updater and permits concurrent
+// reads of the same old value; this suite needs genuine serialized IDB updates.
+vi.unmock('idb-keyval');
 import { clear } from 'idb-keyval';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { UserDataSchema } from '../src/lib/schema';
