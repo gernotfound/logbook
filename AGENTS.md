@@ -247,7 +247,7 @@ Per modifiche non banali:
 ### Versionamento della PWA
 
 - **MUST (decisione prodotto):** a ogni commit che entra in `main` tramite normale squash merge incrementare di uno la componente minor della versione applicativa in `package.json` e azzerare la patch (da `MAJOR.MINOR.PATCH` a `MAJOR.(MINOR+1).0`). Calcolare il numero dal vero HEAD remoto di `main`, non dalla versione iniziale del branch; in caso di merge concorrente riallineare e rivalidare.
-- **MUST:** includere il bump e la sincronizzazione dei due campi root in `package-lock.json` nel candidato PR **prima** della CI exact-SHA e review. Non introdurre bump post-verifica, commit CI automatici o push diretti a `main` e non incrementare per commit intermedi del branch.
+- **MUST:** includere il bump e la sincronizzazione dei due campi root in `package-lock.json` nel candidato PR **prima** della CI exact-SHA e review. `test:version-bump` ne controlla la transizione in sola lettura rispetto alla base Git appropriata; non sostituisce il riallineamento dopo merge concorrenti. Non introdurre bump post-verifica, commit CI automatici o push diretti a `main` e non incrementare per commit intermedi del branch.
 - **MUST:** non duplicare la versione pubblica in `AGENTS.md`. Il bump non modifica automaticamente Data Schema, Sync Protocol, Local Envelope, Backup Schema, manifest catalogo o versioni dei documenti legali.
 - **VERIFY:** i manifest package sono input del selettore Vercel backend; anche un bump senza modifiche di codice può provocare un deploy. Verificarne l'esito senza indebolire il rilevamento dei cambi alle dipendenze server.
 

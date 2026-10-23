@@ -4,7 +4,7 @@
 
 Il Service Worker non salva direttamente dati utente e non conserva credenziali o payload di sincronizzazione.
 Quando riceve l'evento `logbook-sync`, invia `LOGBOOK_SYNC_REQUIRED` alle finestre TheLogBook aperte.
-L'app risponde rieseguendo il journal durevole associato all'owner corrente.
+L'app valuta il replay del journal durevole soltanto quando esiste una sessione attiva: guest non revocato oppure account Firebase autenticato con UID corrispondente. Dopo il logout la schermata di accesso non deve riprendere il vecchio archivio. Valgono comunque i gate di consenso, persistenza e autorizzazione cloud; una notifica non prova la conferma remota.
 
 Lo stesso replay viene richiesto anche quando:
 

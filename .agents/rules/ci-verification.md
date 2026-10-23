@@ -22,6 +22,7 @@ La parallelizzazione riguarda l'orchestrazione, non la semantica del gate. Unit,
 ## Exact HEAD
 
 - MUST: il bump minor applicativo richiesto per ogni integrazione in `main` deve essere incluso **prima** della verifica candidata; ogni merge concorrente richiede nuovo calcolo della versione, nuovo SHA e nuova validazione.
+- MUST: `test:version-bump` prova senza riscritture che la versione del candidato incrementi esattamente di uno il minor della base Git della PR (`github.event.pull_request.base.sha`), con patch zero e due campi root coerenti in `package-lock.json`. Sui push `main` usa il commit genitore; in locale usa il merge-base con `origin/main` quando possibile. Le regressioni negative sono obbligatorie nel leaf di `verify:m8` e della CI. Dopo un merge concorrente ricalcolare la versione e riverificare il nuovo SHA.
 - MUST: non creare workflow che riscrivano automaticamente commit dopo il gate. Un eventuale controllo automatico della versione deve essere read-only e confrontare la base Git appropriata.
 
 - MUST: ogni shard che esegue codice della PR fa checkout esplicito di `github.event.pull_request.head.sha`, non del merge ref sintetico.

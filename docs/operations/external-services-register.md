@@ -1,6 +1,6 @@
 # Registro servizi esterni TheLogBook
 
-> Stato: registro operativo stabile. Ultimo consolidamento: 2026-10-10.
+> Stato: registro operativo stabile; ricognizione iniziale 2026-10-10. Le sezioni riportano verifiche e decisioni a date differenti: non attestano lo stato live odierno.
 >
 > Questo file documenta **perché** esistono le integrazioni e quali impostazioni devono essere preservate. Non è un inventario di segreti e non sostituisce la verifica live nelle console dei provider.
 
