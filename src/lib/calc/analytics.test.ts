@@ -780,6 +780,11 @@ describe('Analytics Engine 4-Tier Test Suite (src/lib/calc/analytics.ts)', () =>
             expect(result.points[0].averageWeightKg).toBe(80);
             expect(result.points[0].recordedDaysCount).toBe(2);
             expect(getLatestUserWeight(nutrition)).toBe(80.5);
+            // A newer malformed entry must not override the planned-weight fallback.
+            expect(getLatestUserWeight({
+                '2026-08-20': { weight: '82kg' },
+                '2026-08-21': { weight: '-3' },
+            }, { weight: '79,5' })).toBe(79.5);
         });
     });
 });
