@@ -12,7 +12,7 @@ export interface ZodFallbackContext {
     error?: unknown;
 }
 
-export type SchemaFallbackListener = (context: ZodFallbackContext) => void;
+export type SchemaFallbackListener = (context: ZodFallbackContext) => void | Promise<void>;
 let customFallbackListener: SchemaFallbackListener | null = null;
 
 export function setSchemaFallbackListener(listener: SchemaFallbackListener | null): void {
@@ -23,7 +23,12 @@ export function reportZodSchemaFallback(ctx: ZodFallbackContext): void {
     try {
         if (customFallbackListener) {
             try {
-                customFallbackListener(ctx);
+                const completed = customFallbackListener(ctx);
+                if (completed) {
+                    // Schema parsing stays synchronous; a rejected observer must not
+                    // surface as an unhandled Promise rejection or block recovery.
+                    void Promise.resolve(completed).catch(() => undefined);
+                }
             } catch {
                 // Safe fail-through
             }
