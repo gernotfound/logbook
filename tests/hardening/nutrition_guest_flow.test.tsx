@@ -54,6 +54,9 @@ beforeEach(() => {
         compatibilityError: null,
     });
 
+});
+
+describe('M5 nutrition account flow through useNutritionMeals', () => {
     it('writes current nutrition only to the active guest archive, not the previous account owner', async () => {
         const previousUser = (auth as any).currentUser;
         const guestSessionId = 'chat14-nutrition-guest';
@@ -110,9 +113,6 @@ beforeEach(() => {
         expect(disk?.data.nutrition?.[DATE]?.meals?.map(meal => meal.id)).toEqual(['meal-a']);
     });
 
-});
-
-describe('M5 nutrition account flow through useNutritionMeals', () => {
     it('returns the same ranked production results using the prepared search index', () => {
         const { result } = renderHook(() => useNutritionMeals(DATE));
 
