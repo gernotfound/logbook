@@ -1,6 +1,7 @@
 import { startOfWeek, endOfWeek, subWeeks, addDays, format, parseISO, isValid } from 'date-fns';
 import { it } from 'date-fns/locale';
 import { calculateWorkoutVolume } from './workout';
+import { compareSessionChronology } from './progressionHistory';
 import { Logic } from '../logic';
 import type { WorkoutSession, Exercise, NutritionDay } from '../../types';
 
@@ -457,7 +458,11 @@ export function computeWeeklyWeightSeries(
                 daysConsidered++;
                 const dateStr = format(cur, 'yyyy-MM-dd');
                 const raw = safeNutrition[dateStr]?.weight;
-                const weight = typeof raw === 'number' ? raw : Number.parseFloat(String(raw ?? ''));
+                const numeric = typeof raw === 'string' ? raw.trim().replace(',', '.') : raw;
+                const weight = typeof numeric === 'number'
+                    ? numeric
+                    : typeof numeric === 'string' && /^\d+(?:\.\d+)?$/.test(numeric)
+                        ? Number(numeric) : Number.NaN;
                 if (Number.isFinite(weight) && weight > 0) {
                     sumWeight += weight;
                     recordedDaysCount++;
@@ -511,7 +516,7 @@ export function computeReadinessTrends(
 ): ReadinessTrendStats {
     const sessions = (Array.isArray(history) ? history : [])
         .filter(session => session?.readiness)
-        .sort((a, b) => (getWorkoutDateString(b) || '').localeCompare(getWorkoutDateString(a) || ''))
+        .sort((a, b) => compareSessionChronology(b, a))
         .slice(0, Math.max(1, maxSessions));
 
     const dimension = (key: 'energy' | 'stress' | 'motivation' | 'muscleRecovery'): ReadinessTrendDimension => {

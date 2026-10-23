@@ -9,7 +9,7 @@ async function continueAsGuest(page: Page) {
   await page.getByRole('button', { name: 'Dati e statistiche', exact: true }).waitFor();
 }
 
-test('history detail remains touch-scrollable on a short mobile viewport', async ({ page }) => {
+test('history detail supports browser-driven scrolling on a short mobile viewport', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 420 });
   await continueAsGuest(page);
 
@@ -51,9 +51,10 @@ test('history detail remains touch-scrollable on a short mobile viewport', async
   expect(metrics.overflowY).toBe('auto');
   expect(metrics.touchAction).toBe('pan-y');
 
-  await scrollArea.evaluate(element => {
-    element.scrollTop = element.scrollHeight;
-  });
+  // Use browser input instead of directly assigning scrollTop in the page.
+  await scrollArea.hover();
+  await page.mouse.wheel(0, 640);
   await expect.poll(() => scrollArea.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
-  await expect(dialog.getByRole('button', { name: 'Chiudi', exact: true })).toBeVisible();
+  await dialog.getByRole('button', { name: 'Chiudi', exact: true }).click();
+  await expect(dialog).toHaveCount(0);
 });

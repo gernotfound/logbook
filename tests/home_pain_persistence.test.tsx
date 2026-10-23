@@ -1,9 +1,17 @@
 import React from 'react';
-import { act } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { act, renderHook, waitFor } from '@testing-library/react';
+import { update } from 'idb-keyval';
+import { captureSession } from '../src/lib/sync/session';
+import { initializeLocal, readLocal } from '../src/lib/sync/localRepository';
+import { prepareUnlockedTestArchive } from './secureVaultFixture';
+import { UserDataSchema } from '../src/lib/schema';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useHomeView } from '../src/hooks/useHomeView';
 import { useAppStore } from '../src/store/useAppStore';
 import { emptyUserData, renderWithProviders } from './setup';
+
+const originalDispatch = useAppStore.getState().dispatchDomainOperation;
+afterEach(() => { useAppStore.setState({ dispatchDomainOperation: originalDispatch }); });
 
 describe('home pain persistence', () => {
     it('observes a rejected domain write so it cannot become an unhandled rejection', async () => {
@@ -34,5 +42,29 @@ describe('home pain persistence', () => {
             type: 'active-pains.set',
             pains: ['chest_upper'],
         });
+    });
+
+    it('rolls back optimistic pains when the encrypted IndexedDB commit fails', async () => {
+        const owner = captureSession().owner;
+        await prepareUnlockedTestArchive(owner);
+        const data = UserDataSchema.parse({ activePains: [] });
+        await initializeLocal(owner, data);
+        useAppStore.setState({
+            dataOwner: owner, userData: data, dispatchDomainOperation: originalDispatch,
+            localPersistenceBlocked: false, saveError: null,
+        });
+
+        const { result } = renderHook(() => useHomeView());
+        await waitFor(() => expect(result.current.loading).toBe(false));
+        vi.mocked(update).mockRejectedValueOnce(new Error('Injected IndexedDB pain write failure'));
+        act(() => result.current.toggleActivePain('chest_upper'));
+        await act(async () => { await useAppStore.getState().flushPendingSyncs(); });
+
+        await waitFor(() => expect(useAppStore.getState().syncHealth).toBe('failed'));
+        expect(useAppStore.getState().userData?.activePains).toEqual([]);
+        const durable = await readLocal(owner);
+        expect(durable?.data.activePains).toEqual([]);
+        expect(durable?.pending).toEqual([]);
+        expect(useAppStore.getState().saveError).toContain('IndexedDB pain write failure');
     });
 });

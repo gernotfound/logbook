@@ -295,6 +295,7 @@ export function getWorkoutDatesSet(history: any[]): Set<string> {
 export interface VolumeExerciseRef {
     isBodyweight?: boolean;
     equipmentWeight?: number;
+    trackingType?: 'weight_reps' | 'time' | 'cardio';
 }
 
 export function getLatestUserWeight(
@@ -365,7 +366,7 @@ export function calculateSetVolume(
 
 export function calculateWorkoutVolume(
     session: { exercises?: Array<{ exId?: string; sets?: any[] }> },
-    library: Array<{ id: string; isBodyweight?: boolean; equipmentWeight?: number }> | ReadonlyMap<string, VolumeExerciseRef> = [],
+    library: Array<{ id: string; isBodyweight?: boolean; equipmentWeight?: number; trackingType?: 'weight_reps' | 'time' | 'cardio' }> | ReadonlyMap<string, VolumeExerciseRef> = [],
     userWeight: number = 80
 ): number {
     if (!session || !Array.isArray(session.exercises)) return 0;
@@ -386,6 +387,8 @@ export function calculateWorkoutVolume(
     for (const ex of session.exercises) {
         if (!ex) continue;
         const libEx = ex.exId ? libMap.get(ex.exId) : null;
+        // Numeric set fields on cardio/time exercises must not contribute mechanical tonnage.
+        if (libEx?.trackingType === 'cardio' || libEx?.trackingType === 'time') continue;
         for (const s of (ex.sets || [])) {
             totalVolume += calculateSetVolume(s, libEx, userWeight);
         }
