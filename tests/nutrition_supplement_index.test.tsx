@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { NutritionSupplementIntakes } from '../src/components/Nutrition/meals/NutritionSupplementIntakes';
 
 describe('supplement intake catalogue lookups', () => {
-    it('shows the correct per-owner name and unit, including deleted supplements', () => {
+    it('resolves supplement names and units from the current library props, including deleted items', () => {
         const intakes = [
             { id: 'a', supplementId: 'one', amount: 5, time: 1 },
             { id: 'b', supplementId: 'gone', amount: 2, time: 2 },
