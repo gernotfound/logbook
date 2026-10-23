@@ -479,6 +479,8 @@ describe('Workout Reorder (R2) and Live Sync & Badges (R3) Suite', () => {
                 onAddSpecialSet: vi.fn(),
                 onUpdateSpecialSet: vi.fn(),
                 onRemoveSpecialSet: vi.fn(),
+                onUpdateSetTarget: vi.fn(),
+                onUpdateTechnicalStandard: vi.fn(),
                 onToggleSpecialMenu: vi.fn()
             };
 
