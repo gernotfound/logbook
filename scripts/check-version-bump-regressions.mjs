@@ -32,37 +32,37 @@ function run(ctx, extra = {}) {
     env: { ...process.env, GITHUB_EVENT_NAME: 'pull_request', LOGBOOK_VERSION_BASE_SHA: ctx.base, ...extra },
   });
 }
-test('allows the exact minor bump and matching lockfile roots without mutations', t => {
+await test('allows the exact minor bump and matching lockfile roots without mutations', t => {
   const ctx = setup(t);
   save(ctx.cwd, '1.163.0'); commit(ctx.cwd);
   assert.equal(run(ctx).status, 0);
   assert.equal(git(ctx.cwd, 'status', '--porcelain'), '');
 });
 for (const v of ['1.162.0', '1.164.0', '1.163.1', '2.163.0', 'v1.163.0']) {
-  test('rejects incorrect version ' + v, t => {
+  await test('rejects incorrect version ' + v, t => {
     const ctx = setup(t);
     save(ctx.cwd, v); commit(ctx.cwd);
     assert.equal(run(ctx).status, 1);
   });
 }
-test('rejects a top-level lockfile mismatch', t => {
+await test('rejects a top-level lockfile mismatch', t => {
   const ctx = setup(t);
   save(ctx.cwd, '1.163.0', '1.162.0'); commit(ctx.cwd);
   assert.equal(run(ctx).status, 1);
 });
-test('rejects a nested lockfile mismatch', t => {
+await test('rejects a nested lockfile mismatch', t => {
   const ctx = setup(t);
   save(ctx.cwd, '1.163.0', '1.163.0', '1.162.0'); commit(ctx.cwd);
   assert.equal(run(ctx).status, 1);
 });
-test('requires an exact base on pull requests', t => {
+await test('requires an exact base on pull requests', t => {
   const ctx = setup(t);
   save(ctx.cwd, '1.163.0'); commit(ctx.cwd);
   const result = run(ctx, { LOGBOOK_VERSION_BASE_SHA: '' });
   assert.equal(result.status, 1);
   assert.match(result.stderr, /missing PR base/);
 });
-test('rejects unknown base commits', t => {
+await test('rejects unknown base commits', t => {
   const ctx = setup(t);
   save(ctx.cwd, '1.163.0'); commit(ctx.cwd);
   assert.equal(run(ctx, { LOGBOOK_VERSION_BASE_SHA: '0'.repeat(40) }).status, 1);
