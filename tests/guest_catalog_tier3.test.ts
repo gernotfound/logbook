@@ -198,6 +198,7 @@ describe('Integration Suite: Guest Mode & Global Catalog Resolution', () => {
                 waterLiters: 1.5,
                 exercises: [
                     {
+                        id: 'session-ex-bench',
                         exId: 'panca-piana-bilanciere',
                         sessionNote: 'Ottimo carico, 90kg stabili',
                         sets: [
@@ -208,6 +209,7 @@ describe('Integration Suite: Guest Mode & Global Catalog Resolution', () => {
                         ]
                     },
                     {
+                        id: 'session-ex-incline',
                         exId: 'panca-inclinata-bilanciere',
                         sessionNote: '70kg x 10',
                         sets: [
@@ -216,6 +218,7 @@ describe('Integration Suite: Guest Mode & Global Catalog Resolution', () => {
                         ]
                     },
                     {
+                        id: 'session-ex-custom',
                         exId: customExId,
                         sessionNote: 'Bruciore elevato',
                         sets: [
