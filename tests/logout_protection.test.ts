@@ -13,6 +13,7 @@ import { BrowserStorageError } from '../src/lib/sync/browserStorage';
 import { createAndMigrateVault } from '../src/lib/sync/secureArchiveMigration';
 import { initializeLocal, commitLocal } from '../src/lib/sync/localRepository';
 import { lockAllVaults } from '../src/lib/sync/secureArchiveSession';
+import { invalidateSession } from '../src/lib/sync/session';
 import type { UserData } from '../src/types';
 
 const exporter = vi.hoisted(() => ({
@@ -231,7 +232,33 @@ describe('M5 logout protection through AuthProvider', () => {
         expect(dialogs.showUnsyncedDataLogout).not.toHaveBeenCalled();
         expect(DB.secureLogOut).not.toHaveBeenCalled();
         expect(useAppStore.getState().userData).not.toBeNull();
-        expect(useAppStore.getState().syncing).toBe(false);
+        // This test changes Firebase's mock UID without delivering the Auth
+        // state-change callback. The expired logout must not clear syncing on
+        // behalf of the successor: the actual Auth callback owns that reset.
+        expect(useAppStore.getState().syncing).toBe(true);
+    });
+
+    it('does not apply an old logout to a fresh login with the same UID', async () => {
+        useAppStore.setState({ syncHealth: 'local-pending' });
+        let releasePendingWrites!: () => void;
+        vi.mocked(waitForPendingWrites).mockImplementationOnce(
+            () => new Promise<void>(resolve => { releasePendingWrites = resolve; }),
+        );
+        const { result } = renderAuth();
+        await waitFor(() => expect(result.current.currentUser?.uid).toBe('logout-user'));
+
+        let logoutPromise!: Promise<void>;
+        act(() => { logoutPromise = result.current.logout({ mode: 'normal' }); });
+        await waitFor(() => expect(waitForPendingWrites).toHaveBeenCalledOnce());
+        // The Auth generation has moved even though Firebase reports the same UID.
+        invalidateSession();
+        (auth as any).currentUser = { ...authenticatedUser };
+        releasePendingWrites();
+        await act(async () => { await logoutPromise; });
+
+        expect(DB.secureLogOut).not.toHaveBeenCalled();
+        expect(dialogs.showUnsyncedDataLogout).not.toHaveBeenCalled();
+        expect(useAppStore.getState().userData?.routines?.[0]?.id).toBe('routine-1');
     });
 
     it('coalesces rapid authenticated logout requests while the first secure logout is in flight', async () => {
