@@ -4,6 +4,9 @@ import { doc, writeBatch } from 'firebase/firestore';
 
 vi.unmock('../src/lib/db');
 import { ConsentedTestDB as DB } from './testUtils';
+import { DB as RealDB } from '../src/lib/db';
+import { prepareUnlockedTestArchive } from './secureVaultFixture';
+import { initializeLocal } from '../src/lib/sync/localRepository';
 import { getCachedCatalog, clearCatalogCache } from '../src/lib/catalog/catalogService';
 import { storageOwner } from '../src/lib/sync/session';
 import { mergeUserData } from '../src/lib/merge';
@@ -144,65 +147,36 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
             vi.useRealTimers();
         });
 
-        it('T5.5.3: Error propagation in saveUserData: if DB.saveUserData throws, all coalesced Promises reject, saveError is set, and syncing resets to false', async () => {
-            // Test error propagation directly with simulated rejection in saveUserData pipeline
-            const createMockData = (label: string): UserData => ({
-                profile: { height: label === 'DirectSaveFail' ? '181' : '182' },
-                library: [],
-                customFoods: [],
-                catalogOverrides: {},
-                routines: [],
-                history: [],
-                nutrition: {},
-                trainingCycles: [],
-                activeCycleId: null,
-                supplements: [],
-                activeWorkout: null
-            });
-
-            delete idbStore[`logbook:v2:${storageOwner()}`];
-            DB.resetCache();
-            useAppStore.getState().setUserData(createMockData('Initial'));
-
-            const simulatedFirestoreError = new Error("Firestore Network Failure: Simulated Offline Drop");
-            const failingBatch = {
-                set: vi.fn(),
-                delete: vi.fn(),
-                commit: vi.fn().mockRejectedValue(simulatedFirestoreError)
+        it('T5.5.3: Coalesced save callers all reject on a failing production DB boundary', async () => {
+            const initial: UserData = {
+                profile: { height: '175' }, library: [], customFoods: [], catalogOverrides: {},
+                routines: [], history: [], nutrition: {}, trainingCycles: [], activeCycleId: null,
+                supplements: [], activeWorkout: null,
             };
-            vi.mocked(writeBatch).mockReturnValue(failingBatch as any);
-            const { getDoc } = await import('firebase/firestore');
-            vi.mocked(getDoc).mockResolvedValueOnce({
-                exists: () => true,
-                data: () => ({
-                    profile: { height: '172' },
-                    library: [],
-                    customFoods: [],
-                    catalogOverrides: {},
-                    routines: [],
-                    trainingCycles: [],
-                    activeCycleId: null,
-                    supplements: [],
-                    activeWorkout: null,
-                    _schemaVersion: 1,
-                    _sync: {
-                        protocolVersion: 3,
-                        clock: {},
-                        fields: {},
-                        writer: { slot: 's00', replicaId: 'network-seed', generation: 1, seq: 0 },
-                    },
-                })
-            } as any);
-
-            const result = await DB.saveUserData(createMockData('DirectSaveFail'));
-            expect(result.ok).toBe(false);
-            expect(result.status).toBe('failed');
-            if (result.ok) throw new Error('A failed cloud write cannot report success');
-            expect((result.error as Error).message).toContain("Firestore Network Failure");
-
-            // Verify store error handling when saveError is set
-            useAppStore.getState().setSaveError("Errore sincronizzazione. Verifica la connessione.");
-            expect(useAppStore.getState().saveError).toBe("Errore sincronizzazione. Verifica la connessione.");
+            const owner = storageOwner();
+            await prepareUnlockedTestArchive(owner);
+            await initializeLocal(owner, initial);
+            useAppStore.setState({ userData: initial, dataOwner: owner });
+            const error = new Error('Simulated cloud write failure');
+            const saveSpy = vi.spyOn(RealDB, 'saveUserData').mockResolvedValue({ ok: false, status: 'failed', error });
+            try {
+                const calls = [1, 2, 3].map(i => useAppStore.getState().saveUserData(previous => ({
+                    ...previous!, profile: { height: String(175 + i) }
+                })));
+                const settled = Promise.allSettled(calls);
+                await expect(useAppStore.getState().flushPendingSyncs()).rejects.toThrow(error.message);
+                const results = await settled;
+                expect(results.map(result => result.status)).toEqual(['rejected', 'rejected', 'rejected']);
+                for (const result of results) {
+                    if (result.status === 'rejected') expect(result.reason).toBe(error);
+                }
+                expect(saveSpy).toHaveBeenCalledTimes(1);
+                expect(useAppStore.getState().saveError).toBe(error.message);
+                expect(useAppStore.getState().syncHealth).toBe('failed');
+                expect(useAppStore.getState().syncing).toBe(false);
+            } finally {
+                saveSpy.mockRestore();
+            }
         });
 
         it('T5.5.4: Account linking during pending debounced save merges freshest in-memory state without data loss', () => {
@@ -261,10 +235,10 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
             vi.useFakeTimers();
 
             let saveCount = 0;
-            const originalSaveUserData = DB.saveUserData;
-            DB.saveUserData = vi.fn(async (state: any) => {
+            // The store imports RealDB, not the spread-copy exported by testUtils.
+            const saveSpy = vi.spyOn(RealDB, 'saveUserData').mockImplementation(async () => {
                 saveCount++;
-                return originalSaveUserData(state);
+                return { ok: true, status: 'synced' };
             });
 
             useAppStore.getState().setUserData({
@@ -303,7 +277,7 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
             expect(saveCount).toBe(0);
 
             vi.useRealTimers();
-            DB.saveUserData = originalSaveUserData;
+            saveSpy.mockRestore();
         });
     });
 });
