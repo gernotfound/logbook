@@ -41,7 +41,9 @@ await test('allows the exact minor bump and matching lockfile roots without muta
 for (const v of ['1.162.0', '1.164.0', '1.163.1', '2.163.0', 'v1.163.0']) {
   await test('rejects incorrect version ' + v, t => {
     const ctx = setup(t);
-    save(ctx.cwd, v); commit(ctx.cwd);
+    save(ctx.cwd, v);
+    if (v === '1.162.0') writeFileSync(join(ctx.cwd, 'source-change.txt'), 'unrelated source fix\n');
+    commit(ctx.cwd);
     assert.equal(run(ctx).status, 1);
   });
 }
