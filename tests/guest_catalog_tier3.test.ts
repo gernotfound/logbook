@@ -3,6 +3,8 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 vi.unmock('../src/lib/db');
 import { TestDB as DB } from './testUtils';
 import { getSeedCatalog, clearCatalogCache } from '../src/lib/catalog/catalogService';
+import { UserDataSchema } from '../src/lib/schema';
+import { applyDomainOperations } from '../src/lib/sync/domainOperations';
 import {
     resolveEffectiveExercises,
     resolveEffectiveFoods,
@@ -20,7 +22,8 @@ import type {
     CatalogOverrides,
     WorkoutSession,
     WorkoutRoutine,
-    NutritionDay
+    NutritionDay,
+    UserData
 } from '../src/types';
 import { idbStore } from './setup';
 
@@ -147,7 +150,7 @@ describe('Integration Suite: Guest Mode & Global Catalog Resolution', () => {
             expect(effectiveFoods.find(f => f.id === 'petto-di-tacchino-crudo')).toBeUndefined();
         });
 
-        it('T3.3: Guest builds a routine and executes a workout session with mixed exercise sources', () => {
+        it('T3.3: Workout completion Domain Operation preserves mixed-source exercise IDs', () => {
             const seed = getSeedCatalog();
 
             const customExId = 'custom_ex_cable_fly';
@@ -222,24 +225,29 @@ describe('Integration Suite: Guest Mode & Global Catalog Resolution', () => {
                 ]
             };
 
-            // Populate store with guest state
-            const store = useAppStore.getState();
-            store.setUserData({
+            const initial = UserDataSchema.parse({
                 library: effectiveExercises,
                 routines: [routine],
-                history: [workoutSession],
+                history: [],
                 catalogOverrides: overrides,
-                activeWorkout: null
+                activeWorkout: workoutSession,
+            }) as unknown as UserData;
+            const completed = applyDomainOperations(initial, {
+                type: 'workout.complete',
+                workout: workoutSession,
+                expectedActiveWorkoutId: String(workoutSession.id),
+                activePains: [],
             });
-
-            const savedState = useAppStore.getState().userData!;
-            expect(savedState.history).toHaveLength(1);
-            expect(savedState.history?.[0].routineName).toBe('Chest Focus Hypertrophy');
-            expect(savedState.history?.[0].exercises).toHaveLength(3);
-            expect(savedState.activeWorkout).toBeNull();
+            expect(initial.history).toHaveLength(0);
+            expect(initial.activeWorkout?.id).toBe(workoutSession.id);
+            expect(completed.history).toHaveLength(1);
+            expect(completed.history?.[0].routineName).toBe('Chest Focus Hypertrophy');
+            expect(completed.history?.[0].exercises.map(ex => ex.exId))
+                .toEqual(['panca-piana-bilanciere', 'panca-inclinata-bilanciere', customExId]);
+            expect(completed.activeWorkout).toBeNull();
         });
 
-        it('T3.4: Guest logs meal with mixed food items (base + overridden + custom) and calculates exact macros', () => {
+        it('T3.4: Nutrition Domain Operations calculate totals for overridden and custom food items', () => {
             const customFood: Food = {
                 id: 'cf_oats_gold',
                 name: 'Fiocchi di Avena Integrale Gold',
@@ -277,19 +285,16 @@ describe('Integration Suite: Guest Mode & Global Catalog Resolution', () => {
                 ]
             };
 
-            const store = useAppStore.getState();
-            store.setUserData({
-                nutrition: {
-                    '2026-08-23': nutritionDay
-                },
-                customFoods: [customFood],
-                catalogOverrides: overrides
-            });
-
-            const currentData = useAppStore.getState().userData!;
-            expect(currentData.nutrition?.['2026-08-23']).toBeDefined();
-            expect(currentData.nutrition?.['2026-08-23'].meals).toHaveLength(3);
-            expect(currentData.nutrition?.['2026-08-23'].weight).toBe(79.5);
+            const initial = UserDataSchema.parse({
+                nutrition: {}, customFoods: [customFood], catalogOverrides: overrides,
+            }) as unknown as UserData;
+            const logged = applyDomainOperations(initial, (nutritionDay.meals ?? []).map(meal => ({
+                type: 'nutrition-meal.upsert' as const, date: '2026-08-23', meal,
+            })));
+            const day = logged.nutrition?.['2026-08-23'];
+            expect(initial.nutrition?.['2026-08-23']).toBeUndefined();
+            expect(day?.meals?.map(meal => meal.id)).toEqual(['m1', 'm2', 'm3']);
+            expect(day).toMatchObject({ kcal: 693, pro: 62.5, carbs: 91.6, fat: 8.1 });
         });
     });
 });
