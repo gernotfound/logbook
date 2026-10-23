@@ -8,6 +8,11 @@ const appCheck = vi.hoisted(() => ({
   getLimitedUseAppCheckToken: vi.fn(async () => 'app-check-token'),
 }));
 
+// The subject lazy-imports App Check after awaits. Static mocks stay registered
+// across vi.resetModules and cannot accidentally fall back to a real provider.
+vi.mock('../src/lib/firebase', () => firebase);
+vi.mock('../src/lib/appCheck', () => appCheck);
+
 function setOnline(value: boolean) {
   Object.defineProperty(navigator, 'onLine', { configurable: true, value });
 }
@@ -24,8 +29,6 @@ async function loadSubject() {
   // The shared UI harness suppresses incidental registration; this dedicated
   // suite must exercise the real device-recovery code instead.
   vi.doUnmock('../src/lib/deletionDeviceRecovery');
-  vi.doMock('../src/lib/firebase', () => firebase);
-  vi.doMock('../src/lib/appCheck', () => appCheck);
   return import('../src/lib/deletionDeviceRecovery');
 }
 
@@ -42,8 +45,6 @@ describe('account deletion recovery device registration retries', () => {
   afterEach(() => {
     firebase.auth.currentUser = null;
     vi.unstubAllGlobals();
-    vi.doUnmock('../src/lib/firebase');
-    vi.doUnmock('../src/lib/appCheck');
   });
 
   it('registers the authenticated device immediately with a limited-use App Check token', async () => {
