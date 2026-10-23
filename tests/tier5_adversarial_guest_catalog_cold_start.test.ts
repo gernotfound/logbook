@@ -10,7 +10,6 @@ import {
     clearCatalogCache,
     CATALOG_CACHE_KEY
 } from '../src/lib/catalog/catalogService';
-import { storageOwner } from '../src/lib/sync/session';
 import { resolveEffectiveExercises, resolveEffectiveFoods } from '../src/lib/catalog/deltaResolver';
 import { mergeNutrition } from '../src/lib/merge';
 import { applyDomainOperations } from '../src/lib/sync/domainOperations';
