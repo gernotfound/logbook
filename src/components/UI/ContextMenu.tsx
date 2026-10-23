@@ -190,7 +190,6 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
         e.preventDefault();
         e.stopPropagation();
         notifyPeers();
-        notifyPeers();
         toggleOpen(true);
         setTimeout(() => {
           const buttons = getItemButtons();
@@ -201,6 +200,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
       if (!isOpen) {
         e.preventDefault();
         e.stopPropagation();
+        notifyPeers();
         toggleOpen(true);
         setTimeout(() => {
           const buttons = getItemButtons();
