@@ -18,7 +18,7 @@ import type { UserData } from './types'
 import { getCachedCatalog } from './lib/catalog/catalogService';
 import { resolveEffectiveExercises, resolveEffectiveFoods } from './lib/catalog/deltaResolver';
 
-import { requestDurableStorage, setStorageDiagnosticData, getStorageDiagnosticData } from './lib/storageStatus';
+import { requestDurableStorage, setStorageDiagnosticData } from './lib/storageStatus';
 import {
   getStorageMarker,
   updateStorageMarker,
