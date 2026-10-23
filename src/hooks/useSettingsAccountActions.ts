@@ -36,8 +36,10 @@ export function useSettingsAccountActions({ currentUser, isGuest, logout }: Acco
         if (revokingSessionsBusy.current || !currentUser) return;
         revokingSessionsBusy.current = true;
         const expectedUid = currentUser.uid;
-        const session = captureSession();
+        let requestSession: ReturnType<typeof captureSession> | null = null;
         try {
+            const session = captureSession();
+            requestSession = session;
             const assertCurrent = () => {
                 if (!isCurrentSession(session) || auth.currentUser?.uid !== expectedUid) {
                     throw new Error('Sessione cambiata: operazione annullata.');
@@ -111,7 +113,7 @@ export function useSettingsAccountActions({ currentUser, isGuest, logout }: Acco
             }
         } catch (error) {
             // Errors from a superseded request must not open an account A dialog over B.
-            if (auth.currentUser?.uid !== expectedUid || !isCurrentSession(session)) return;
+            if (auth.currentUser?.uid !== expectedUid || (requestSession && !isCurrentSession(requestSession))) return;
             if (isSensitiveReauthCancellation(error)) return;
             const code = (error as { code?: unknown } | null)?.code;
             if (code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
