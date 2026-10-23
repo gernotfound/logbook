@@ -66,16 +66,14 @@ describe('Training Session UI Improvements Suite (R1, R2, R3)', () => {
                 }
             });
 
-            // Heading of routine exists
-            const routineHeading = screen.getByText('Scheda Petto');
-            expect(routineHeading).toBeDefined();
-
-            // The parent of the exercise list should NOT have the .card class
-            const exerciseContainer = routineHeading.parentElement;
-            expect(exerciseContainer?.classList.contains('card')).toBe(false);
+            expect(screen.getByText('Scheda Petto')).toBeDefined();
+            const exerciseList = document.querySelector('#view-training .session-exercise-list');
+            expect(exerciseList).not.toBeNull();
+            expect(exerciseList?.classList.contains('card')).toBe(false);
+            expect(exerciseList?.querySelector('.session-exercise-shell')).not.toBeNull();
         });
 
-        it('R1.2: SessionSetRow has border styled with fluo blue variable (var(--primary-color))', () => {
+        it('R1.2: SessionSetRow exposes the semantic primary border token (jsdom structural check)', () => {
             const setObj = { id: 's1', kg: '80', reps: '10' };
 
             const { container } = render(
@@ -97,9 +95,7 @@ describe('Training Session UI Improvements Suite (R1, R2, R3)', () => {
 
             const row = container.querySelector('.set-row');
             expect(row).not.toBeNull();
-            // Style contains border with var(--primary-color)
-            const styleAttr = row?.getAttribute('style') || '';
-            expect(styleAttr).toContain('var(--primary-color)');
+            expect((row as HTMLElement).style.border).toContain('var(--primary-color)');
         });
 
     });

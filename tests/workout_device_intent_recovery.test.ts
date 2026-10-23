@@ -522,7 +522,7 @@ describe('authenticated device-intent replay into semantic journal', () => {
         expect(readWorkoutDeviceIntent(testOwner)?.workout.exercises[0].sets[0].kg).toBe('55');
     });
 
-    it('replays the same encrypted device snapshot into IndexedDB and the pending journal after a crash', async () => {
+    it('replays a persisted device intent into the journal idempotently in the same test realm', async () => {
         const before = data(workout('50'));
         await initializeLocal(owner, before);
         const changed = workout('55');
