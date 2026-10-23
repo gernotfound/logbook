@@ -298,6 +298,15 @@ export interface VolumeExerciseRef {
     trackingType?: 'weight_reps' | 'time' | 'cardio';
 }
 
+/** A single strict parser for local-day weight aggregates and current-weight lookup. */
+export function parsePositiveWeight(raw: unknown): number | null {
+    if (typeof raw !== 'number' && typeof raw !== 'string') return null;
+    const normalized = typeof raw === 'string' ? raw.trim().replace(',', '.') : raw;
+    if (typeof normalized === 'string' && !/^\d+(?:\.\d+)?$/.test(normalized)) return null;
+    const value = Number(normalized);
+    return Number.isFinite(value) && value > 0 ? value : null;
+}
+
 export function getLatestUserWeight(
     nutrition?: Record<string, { weight?: string | number | null } | undefined> | null,
     nutritionPlanning?: { weight?: number | string } | null
@@ -310,19 +319,17 @@ export function getLatestUserWeight(
             // Normalize dates before comparing; malformed keys cannot establish recency.
             const canonicalDate = parseDateInput(date);
             if (!canonicalDate || !day || day.weight === undefined || day.weight === null || day.weight === '') continue;
-            const raw = typeof day.weight === 'string' ? day.weight.trim().replace(',', '.') : day.weight;
-            const num = parseFloat(String(raw));
-            if (Number.isFinite(num) && num > 0 && (latestDate === null || canonicalDate >= latestDate)) {
+            const weight = parsePositiveWeight(day.weight);
+            if (weight !== null && (latestDate === null || canonicalDate >= latestDate)) {
                 latestDate = canonicalDate;
-                latestWeight = num;
+                latestWeight = weight;
             }
         }
     }
     if (latestWeight !== null) return latestWeight;
     if (nutritionPlanning?.weight) {
-        const raw = typeof nutritionPlanning.weight === 'string' ? nutritionPlanning.weight.trim().replace(',', '.') : nutritionPlanning.weight;
-        const planWeight = parseFloat(String(raw));
-        if (!isNaN(planWeight) && planWeight > 0) return planWeight;
+        const planWeight = parsePositiveWeight(nutritionPlanning.weight);
+        if (planWeight !== null) return planWeight;
     }
     return 80;
 }

@@ -1,6 +1,6 @@
 import { startOfWeek, endOfWeek, subWeeks, addDays, format, parseISO, isValid } from 'date-fns';
 import { it } from 'date-fns/locale';
-import { calculateWorkoutVolume } from './workout';
+import { calculateWorkoutVolume, parsePositiveWeight } from './workout';
 import { compareSessionChronology } from './progressionHistory';
 import { Logic } from '../logic';
 import type { WorkoutSession, Exercise, NutritionDay } from '../../types';
@@ -458,12 +458,8 @@ export function computeWeeklyWeightSeries(
                 daysConsidered++;
                 const dateStr = format(cur, 'yyyy-MM-dd');
                 const raw = safeNutrition[dateStr]?.weight;
-                const numeric = typeof raw === 'string' ? raw.trim().replace(',', '.') : raw;
-                const weight = typeof numeric === 'number'
-                    ? numeric
-                    : typeof numeric === 'string' && /^\d+(?:\.\d+)?$/.test(numeric)
-                        ? Number(numeric) : Number.NaN;
-                if (Number.isFinite(weight) && weight > 0) {
+                const weight = parsePositiveWeight(raw);
+                if (weight !== null) {
                     sumWeight += weight;
                     recordedDaysCount++;
                 }

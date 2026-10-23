@@ -13,7 +13,7 @@ import {
     getWorkoutDateString
 } from './analytics';
 import { getLocalDateString } from '../utils/date';
-import { calculateWorkoutVolume } from './workout';
+import { calculateWorkoutVolume, getLatestUserWeight } from './workout';
 import { format, subDays } from 'date-fns';
 import type { WorkoutSession, Exercise, NutritionDay } from '../../types';
 
@@ -779,6 +779,7 @@ describe('Analytics Engine 4-Tier Test Suite (src/lib/calc/analytics.ts)', () =>
             const result = computeWeeklyWeightSeries(nutrition, 1, '2026-08-23');
             expect(result.points[0].averageWeightKg).toBe(80);
             expect(result.points[0].recordedDaysCount).toBe(2);
+            expect(getLatestUserWeight(nutrition)).toBe(80.5);
         });
     });
 });
