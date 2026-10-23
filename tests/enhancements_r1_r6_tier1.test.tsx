@@ -5,7 +5,7 @@ import { renderWithProviders, emptyUserData } from './setup';
 import { useAppStore } from '../src/store/useAppStore';
 import { captureSession } from '../src/lib/sync/session';
 
-import { initializeLocal } from '../src/lib/sync/localRepository';
+import { initializeLocal, readLocal } from '../src/lib/sync/localRepository';
 import { prepareUnlockedTestArchive } from './secureVaultFixture';
 import { Logic } from '../src/lib/logic';
 import { NutritionDaySchema, TrainingCycleSchema } from '../src/lib/schema';
@@ -886,6 +886,8 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
                 expect(savedWorkout?.exercises.length).toBe(2);
                 expect(savedWorkout?.exercises[1].exId).toBe('ex_adhoc_curl');
                 expect(savedWorkout?.exercises[1].sessionNote).toBe('Extra blast');
+            const persisted = await readLocal(owner);
+            expect(persisted?.data.history?.find(workout => workout.id === activeSession.id)?.exercises[1].exId).toBe('ex_adhoc_curl');
             });
 
             it('T1.6.5: Original routine blueprint in userData.routines remains strictly unchanged after session ends with ad-hoc exercises', async () => {
@@ -933,6 +935,8 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
                 expect(state.userData?.routines).toEqual(originalRoutines);
                 expect(state.userData?.routines?.[0].exercises.length).toBe(1);
                 expect(state.userData?.routines?.[0].exercises[0].exId).toBe('ex_bench');
+            const persisted = await readLocal(owner);
+            expect(persisted?.data.routines).toEqual(originalRoutines);
             });
         });
     });
