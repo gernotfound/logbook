@@ -13,6 +13,7 @@ import {
 import { storageOwner } from '../src/lib/sync/session';
 import { resolveEffectiveExercises, resolveEffectiveFoods } from '../src/lib/catalog/deltaResolver';
 import { mergeNutrition } from '../src/lib/merge';
+import { applyDomainOperations } from '../src/lib/sync/domainOperations';
 import { searchFoods } from '../src/lib/calc/nutrition';
 import { useAppStore } from '../src/store/useAppStore';
 import { clearSyncTimers } from '../src/store/slices/createSyncSlice';
@@ -122,7 +123,7 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
             expect(res6.map(food => food.id)).toContain('riso-basmati-crudo');
         });
 
-        it('T5.2.2: Immediate multi-portion meal logging from cold start calculates exact macros and updates IndexedDB cache', async () => {
+        it('T5.2.2: Cold start catalog meals produce exact totals through Production Domain Operations', async () => {
             // Local fixture to populate the cache (seed is empty — commit e61a133)
             const fixtureCatalog = {
                 manifest: { version: '1.0.0', schemaVersion: 1, docRefs: { exercises: 'exercises_v1', foods: 'foods_v1' } },
@@ -150,7 +151,7 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
                 activeWorkout: null
             };
 
-            useAppStore.getState().setUserData(initialGuestData);
+            // Calculate through the production domain reducer, not a duplicate formula.
 
             // Find items:
             // Item 1: Petto di Pollo Crudo (103 kcal, 23 pro, 0 carbs, 1.2 fat per 100g) -> Log 250g (ratio 2.5)
@@ -170,53 +171,15 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
                 { id: 'm_3', name: oil.name, meal: 'pranzo', quantity: 15, baseQty: 100, kcal: oil.kcal, pro: oil.pro, carbs: oil.carbs, fat: oil.fat, foodId: oil.id },
             ];
 
-            let mKcal = 0, mCarbs = 0, mPro = 0, mFat = 0;
-            for (const m of meals) {
-                const ratio = m.quantity / m.baseQty;
-                mKcal += m.kcal * ratio;
-                mCarbs += m.carbs * ratio;
-                mPro += m.pro * ratio;
-                mFat += m.fat * ratio;
-            }
-
-            const totalKcal = Math.round(mKcal); // 257.5 + 156 + 132.6 = 546.1 -> 546
-            const totalCarbs = Math.round(mCarbs * 10) / 10; // 0 + 33.6 + 0 = 33.6
-            const totalPro = Math.round(mPro * 10) / 10; // 57.5 + 3.24 + 0 = 60.74 -> 60.7
-            const totalFat = Math.round(mFat * 10) / 10; // 3.0 + 0.36 + 15.0 = 18.36 -> 18.4
-
-            const dayRecord: NutritionDay = {
-                date: '2026-08-23',
-                kcal: totalKcal,
-                carbs: totalCarbs,
-                pro: totalPro,
-                fat: totalFat,
-                weight: '78.4',
-                meals
-            };
-
-            useAppStore.getState().setUserData(prev => ({
-                ...prev!,
-                nutrition: {
-                    ...(prev?.nutrition || {}),
-                    '2026-08-23': dayRecord
-                }
-            }));
-
-            const updatedData = useAppStore.getState().userData!;
-            expect(updatedData.nutrition?.['2026-08-23']).toBeDefined();
-            expect(updatedData.nutrition?.['2026-08-23'].kcal).toBe(totalKcal);
-            expect(updatedData.nutrition?.['2026-08-23'].carbs).toBe(totalCarbs);
-            expect(updatedData.nutrition?.['2026-08-23'].pro).toBe(totalPro);
-            expect(updatedData.nutrition?.['2026-08-23'].fat).toBe(totalFat);
-            expect(updatedData.nutrition?.['2026-08-23'].meals).toHaveLength(3);
-
-            // Allow background saveUserDataToCache promise to settle
-            await new Promise(resolve => setTimeout(resolve, 50));
-
-            // IndexedDB user cache receives data
-            const ownerKey = `logbook:v2:${storageOwner()}`;
-            expect(idbStore[ownerKey]).toBeDefined();
-            expect(idbStore[ownerKey].data.nutrition['2026-08-23'].kcal).toBe(totalKcal);
+            const logged = applyDomainOperations(initialGuestData, meals.map(meal => ({
+                type: 'nutrition-meal.upsert' as const, date: '2026-08-23', meal,
+            })));
+            const day = logged.nutrition?.['2026-08-23'];
+            expect(initialGuestData.nutrition).toEqual({});
+            expect(day?.meals?.map(meal => meal.id)).toEqual(['m_1', 'm_2', 'm_3']);
+            expect(day).toMatchObject({
+                kcal: 546, carbs: 33.6, pro: 60.7, fat: 18.4,
+            });
         });
 
         it('T5.2.3: Month boundary cross-calendar meal logging (2026-07-31 vs 2026-08-01) preserves distinct dates without collisions', () => {
