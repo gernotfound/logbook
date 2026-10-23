@@ -1,6 +1,5 @@
 import * as Sentry from '@sentry/react';
 import type { TelemetryErrorPayload, TelemetryEventPayload } from './telemetry/contracts';
-import { scrubPII } from './telemetrySanitizer';
 
 type StorageAnomalyPayload = {
   type: 'storage_recovery_anomaly';
