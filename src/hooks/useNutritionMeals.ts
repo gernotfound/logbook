@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { captureSession, isCurrentSession } from '../lib/sync/session';
 import { createFoodSearcher } from '../lib/calc/nutrition';
 import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
@@ -159,40 +160,43 @@ export function useNutritionMeals(dateStr?: string) {
 
     const clearSearch = () => setSearchQuery('');
 
-    const updateMealItem = async (updatedItem: any) => {
-        const targetId = updatedItem.itemId || updatedItem.time || updatedItem.id;
-        const current = meals.find((meal: any) => (meal.itemId || meal.time || meal.id) === targetId);
-        if (!current?.id) {
+    const updateMealItem = async (updatedItem: LoggedMealItem): Promise<boolean> => {
+        const current = meals.find(meal => meal.id === updatedItem.id);
+        if (!current) {
             await showAlert("Alimento non trovato o privo di identificativo.");
-            return;
+            return false;
         }
+        const session = captureSession();
         try {
             await persistNutrition({
                 type: 'nutrition-meal.upsert',
                 date: targetDateStr,
                 meal: { ...current, ...updatedItem, id: current.id },
             });
+            return isCurrentSession(session);
         } catch {
-            void showAlert("Errore durante l'aggiornamento dell'alimento.");
+            if (isCurrentSession(session)) await showAlert("Errore durante l'aggiornamento dell'alimento.");
+            return false;
         }
     };
 
-    const removeFood = async (itemTime: number | string) => {
-        const current = meals.find((meal: any) => (meal.itemId || meal.time || meal.id) === itemTime);
-        if (!current?.id) {
+    const removeFood = async (mealId: string): Promise<boolean> => {
+        const current = meals.find(meal => meal.id === mealId);
+        if (!current) {
             await showAlert("Alimento non trovato o privo di identificativo.");
-            return;
+            return false;
         }
+        const session = captureSession();
         try {
             await persistNutrition({ type: 'nutrition-meal.delete', date: targetDateStr, mealId: current.id });
+            return isCurrentSession(session);
         } catch {
-            void showAlert("Errore durante la rimozione dell'alimento.");
+            if (isCurrentSession(session)) await showAlert("Errore durante la rimozione dell'alimento.");
+            return false;
         }
     };
 
-    const handleDeleteItem = async (itemTime: number) => {
-        await removeFood(itemTime);
-    };
+    const handleDeleteItem = async (mealId: string): Promise<boolean> => removeFood(mealId);
 
     const clearDay = async () => {
         try {
