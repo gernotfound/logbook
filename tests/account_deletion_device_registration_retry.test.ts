@@ -154,7 +154,7 @@ describe('account deletion recovery device registration retries', () => {
       { uid: 'user-a', token: 'A'.repeat(43) },
     ]));
     firebase.auth.currentUser = user('user-b');
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ status: 'complete' }), {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ uid: 'user-a', status: 'complete' }), {
       status: 200,
       headers: { 'content-type': 'application/json' },
     }));
@@ -178,7 +178,7 @@ describe('account deletion recovery device registration retries', () => {
     localStorage.setItem('logbook_deletion_recovery_devices_v1', JSON.stringify([
       { uid: 'user-a', token: 'A'.repeat(43) },
     ]));
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ status: 'complete' }), {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ uid: 'user-a', status: 'complete' }), {
       status: 200,
       headers: { 'content-type': 'application/json' },
     }));
@@ -222,7 +222,7 @@ describe('account deletion recovery device registration retries', () => {
     localStorage.setItem('logbook_deletion_recovery_devices_v1', JSON.stringify([
       { uid: 'user-a', token: 'A'.repeat(43) },
     ]));
-    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ status: 'complete' }), {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ uid: 'user-a', status: 'complete' }), {
       status: 200,
       headers: { 'content-type': 'application/json' },
     })));
@@ -311,7 +311,7 @@ describe('account deletion recovery device registration retries', () => {
           status: 200,
           json: stalledJson,
         })
-        .mockResolvedValueOnce(new Response(JSON.stringify({ status: 'complete' }), {
+        .mockResolvedValueOnce(new Response(JSON.stringify({ uid: 'user-b', status: 'complete' }), {
           status: 200,
           headers: { 'content-type': 'application/json' },
         }));
@@ -336,10 +336,9 @@ describe('account deletion recovery device registration retries', () => {
       { uid: 'user-a', token: 'A'.repeat(43) },
       { uid: 'user-b', token: 'B'.repeat(43) },
     ]));
-    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ status: 'complete' }), {
-      status: 200,
-      headers: { 'content-type': 'application/json' },
-    })));
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ uid: 'user-a', status: 'complete' }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ uid: 'user-b', status: 'complete' }), { status: 200 })));
     const finalize = vi.fn(async (uid: string) => {
       if (uid === 'user-a') throw new Error('A: IndexedDB unavailable');
       return { status: 'complete' as const };
@@ -406,7 +405,7 @@ describe('account deletion recovery device registration retries', () => {
       { uid: 'user-a', token: 'A'.repeat(43) },
     ]));
     const fetchMock = vi.fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify({ status: 'failed', error: 'backend detail' }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ uid: 'user-a', status: 'failed', error: 'backend detail' }), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ status: 'unrecognized' }), { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
     const finalize = vi.fn();
@@ -420,6 +419,22 @@ describe('account deletion recovery device registration retries', () => {
       kind: 'invalid-response',
     });
     expect(finalize).not.toHaveBeenCalled();
+  });
+
+  it('rejects a completed device proof for another UID without clearing the credential', async () => {
+    const { recoverDeletedAccountOnThisDevice } = await loadSubject();
+    const raw = JSON.stringify([{ uid: 'user-a', token: 'A'.repeat(43) }]);
+    localStorage.setItem('logbook_deletion_recovery_devices_v1', raw);
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
+      uid: 'user-b', status: 'complete',
+    }), { status: 200 })));
+    const finalize = vi.fn();
+
+    await expect(recoverDeletedAccountOnThisDevice(finalize)).rejects.toMatchObject({
+      operation: 'routine-check', phase: 'server-status', kind: 'invalid-response',
+    });
+    expect(finalize).not.toHaveBeenCalled();
+    expect(localStorage.getItem('logbook_deletion_recovery_devices_v1')).toBe(raw);
   });
 
   it('rejects corrupt proof JSON and preserves credentials instead of treating it as no deletion', async () => {
@@ -500,8 +515,8 @@ describe('account deletion recovery device registration retries', () => {
       { uid: 'user-b', token: 'B'.repeat(43) },
     ]));
     vi.stubGlobal('fetch', vi.fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify({ status: 'failed' }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ status: 'complete' }), { status: 200 })));
+      .mockResolvedValueOnce(new Response(JSON.stringify({ uid: 'user-a', status: 'failed' }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ uid: 'user-b', status: 'complete' }), { status: 200 })));
     const finalize = vi.fn(async () => ({ status: 'complete' as const }));
 
     await expect(recoverDeletedAccountOnThisDevice(finalize)).rejects.toMatchObject({ kind: 'remote-failed' });
@@ -519,8 +534,8 @@ describe('account deletion recovery device registration retries', () => {
     ]));
     vi.stubGlobal('fetch', vi.fn()
       .mockResolvedValueOnce(new Response('{}', { status: 503 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ status: 'failed' }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ status: 'complete' }), { status: 200 })));
+      .mockResolvedValueOnce(new Response(JSON.stringify({ uid: 'user-b', status: 'failed' }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ uid: 'user-c', status: 'complete' }), { status: 200 })));
     const finalize = vi.fn(async () => ({ status: 'complete' as const }));
 
     await expect(recoverDeletedAccountOnThisDevice(finalize)).rejects.toMatchObject({ kind: 'remote-failed' });
@@ -608,19 +623,14 @@ describe('account deletion recovery device registration retries', () => {
 
   it('retains all four account proofs across login switches and repeated registration', async () => {
     const { registerDeletionRecoveryDevice } = await loadSubject();
-    const request = vi.fn(async () => new Response(JSON.stringify({ registered: true }), { status: 200 }));
+    const request = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) =>
+      new Response(JSON.stringify({ registered: true }), { status: 200 }));
     vi.stubGlobal('fetch', request);
     const original = new Map<string, string>();
     for (const id of ['a', 'b', 'c', 'd']) {
       const current = user(id);
       firebase.auth.currentUser = current;
-      try {
-        await registerDeletionRecoveryDevice(current);
-      } catch (error) {
-        // Registration may be blocked by App Check in this unit harness.
-        // The local proof must remain available for a later retry.
-        expect(error).toMatchObject({ operation: 'device-registration', phase: 'app-check', kind: 'provider' });
-      }
+      await registerDeletionRecoveryDevice(current);
       const credentials = JSON.parse(localStorage.getItem('logbook_deletion_recovery_devices_v1')!);
       const proof = credentials.find((entry: { uid: string }) => entry.uid === id);
       expect(proof).toBeDefined();
@@ -629,38 +639,65 @@ describe('account deletion recovery device registration retries', () => {
     // Reentering a known identity must reuse its proof even at capacity.
     const again = user('b');
     firebase.auth.currentUser = again;
-    const results = await Promise.allSettled([registerDeletionRecoveryDevice(again), registerDeletionRecoveryDevice(again)]);
-    for (const result of results) if (result.status === 'rejected') {
-      expect(result.reason).toMatchObject({ operation: 'device-registration', phase: 'app-check', kind: 'provider' });
-    }
+    await Promise.all([registerDeletionRecoveryDevice(again), registerDeletionRecoveryDevice(again)]);
     const credentials = JSON.parse(localStorage.getItem('logbook_deletion_recovery_devices_v1')!);
     expect(credentials).toHaveLength(4);
     expect(new Set(credentials.map((entry: { uid: string }) => entry.uid)).size).toBe(4);
     for (const entry of credentials) expect(entry.token).toBe(original.get(entry.uid));
-    expect(request.mock.calls.length).toBeLessThanOrEqual(6);
+    expect(request).toHaveBeenCalledTimes(6);
+    for (const [, init] of request.mock.calls) {
+      const { deviceToken } = JSON.parse(String(init?.body)) as { deviceToken: string };
+      expect([...original.values()]).toContain(deviceToken);
+    }
   });
 
-  it('uses an exclusive browser lock to avoid concurrent proof overwrites when supported', async () => {
-    const { registerDeletionRecoveryDevice } = await loadSubject();
+  it('coordinates separate module queues using an exclusive browser lock', async () => {
+    const first = await loadSubject();
+    const second = await loadSubject();
     const descriptor = Object.getOwnPropertyDescriptor(navigator, 'locks');
-    const requestLock = vi.fn(async (_name: string, _options: unknown, task: () => unknown) => task());
-    Object.defineProperty(navigator, 'locks', { configurable: true, value: { request: requestLock } });
-    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ registered: true }), { status: 200 })));
+    let releaseFirst!: () => void;
+    const blocked = new Promise<void>(resolve => { releaseFirst = resolve; });
+    let lastUnlock: () => void = () => {};
+    let tail = Promise.resolve();
+    let active = false;
+    let index = 0;
+    const lockRequest = vi.fn(async (_name: string, _options: unknown, action: () => unknown) => {
+      const predecessor = tail;
+      tail = new Promise<void>(resolve => { lastUnlock = resolve; });
+      const unlock = lastUnlock;
+      const ordinal = ++index;
+      await predecessor;
+      if (ordinal === 1) await blocked;
+      expect(active).toBe(false);
+      active = true;
+      try { return await action(); } finally { active = false; unlock(); }
+    });
+    Object.defineProperty(navigator, 'locks', { configurable: true, value: { request: lockRequest } });
+    const network = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) =>
+      new Response(JSON.stringify({ registered: true }), { status: 200 }));
+    vi.stubGlobal('fetch', network);
     const current = user('lock-owner');
     firebase.auth.currentUser = current;
     try {
-      const results = await Promise.allSettled([registerDeletionRecoveryDevice(current), registerDeletionRecoveryDevice(current)]);
-      for (const result of results) if (result.status === 'rejected') {
-        expect(result.reason).toMatchObject({ operation: 'device-registration', phase: 'app-check', kind: 'provider' });
-      }
-      expect(requestLock).toHaveBeenCalledTimes(2);
-      expect(requestLock.mock.calls[0][1]).toEqual({ mode: 'exclusive' });
+      const a = first.registerDeletionRecoveryDevice(current);
+      await vi.waitFor(() => expect(lockRequest).toHaveBeenCalledTimes(1));
+      const b = second.registerDeletionRecoveryDevice(current);
+      await vi.waitFor(() => expect(lockRequest).toHaveBeenCalledTimes(2));
+      expect(localStorage.getItem('logbook_deletion_recovery_devices_v1')).toBeNull();
+      releaseFirst();
+      await Promise.all([a, b]);
+      expect(lockRequest.mock.calls.map(call => call[1])).toEqual([{ mode: 'exclusive' }, { mode: 'exclusive' }]);
       const credentials = JSON.parse(localStorage.getItem('logbook_deletion_recovery_devices_v1')!);
       expect(credentials).toHaveLength(1);
+      expect(network).toHaveBeenCalledTimes(2);
+      for (const [, init] of network.mock.calls) {
+        const { deviceToken } = JSON.parse(String(init?.body)) as { deviceToken: string };
+        expect(deviceToken).toBe(credentials[0].token);
+      }
     } finally {
+      releaseFirst();
       if (descriptor) Object.defineProperty(navigator, 'locks', descriptor);
       else Reflect.deleteProperty(navigator, 'locks');
     }
   });
-
 });
