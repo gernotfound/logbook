@@ -4,18 +4,21 @@ import { vi } from 'vitest';
 // The shared jsdom idb-keyval stub awaits each updater and permits concurrent
 // reads of the same old value; this suite needs genuine serialized IDB updates.
 vi.unmock('idb-keyval');
-import { clear } from 'idb-keyval';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { UserDataSchema } from '../src/lib/schema';
 import type { UserData } from '../src/types';
-import { commitLocal, initializeLocal, readLocal } from '../src/lib/sync/localRepository';
 
 describe('Transaction Contention & ActorSeq Invatiants', () => {
     beforeEach(async () => {
+        // The shared UI setup has already imported a module graph bound to its
+        // non-transactional IDB stub. Re-import after resetting that graph.
+        vi.resetModules();
+        const { clear } = await import('idb-keyval');
         await clear();
     });
 
     it('correctly increments actorSeq and maintains clock invariants under concurrent commits', async () => {
+        const { commitLocal, initializeLocal, readLocal } = await import('../src/lib/sync/localRepository');
         const base = UserDataSchema.parse({}) as unknown as UserData;
         await initializeLocal('user:a', base);
 
