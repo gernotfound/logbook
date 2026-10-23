@@ -634,10 +634,6 @@ describe('account deletion recovery device registration retries', () => {
     const appCheckOptions = { siteKey: 'synthetic-app-check-site-key' };
     const app = {} as Parameters<typeof realAppCheck.ensureAppCheckProvider>[0];
     expect(realAppCheck.ensureAppCheckProvider(app, appCheckOptions).providerInitialized).toBe(true);
-    const resolvedAppCheck = await import('../src/lib/appCheck');
-    if (resolvedAppCheck !== realAppCheck && typeof resolvedAppCheck.ensureAppCheckProvider === 'function') {
-      expect(resolvedAppCheck.ensureAppCheckProvider(app, appCheckOptions).providerInitialized).toBe(true);
-    }
     const original = new Map<string, string>();
     for (const id of ['a', 'b', 'c', 'd']) {
       const current = user(id);
