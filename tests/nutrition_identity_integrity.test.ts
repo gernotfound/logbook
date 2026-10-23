@@ -15,6 +15,7 @@ import { createBackup, decodeImport } from '../src/lib/backup';
 import { mergeNutrition } from '../src/lib/merge';
 import { applyDomainOperations } from '../src/lib/sync/domainOperations';
 import { applyRemoteDocuments, projectDocuments } from '../src/lib/sync/documentProjection';
+import { requireCompleteNutritionMonthDocument, IncompleteCloudMonthError } from '../src/lib/sync/monthlyIntegrity';
 
 const catalog: CachedGlobalCatalog = {
     manifest: {
@@ -103,6 +104,20 @@ describe('F-003 nutrition identity integrity', () => {
         } | undefined;
         expect(projectedDay?.meals?.map(item => item.id)).toEqual(['meal-ok']);
         expect(projectedDay?.supplementsIntake?.map(item => item.id)).toEqual(['intake-ok']);
+    });
+
+    it('rejects an authoritative nutrition shard with quarantined identities before applying or projecting it', () => {
+        const original = { '2026-09-29': malformedDay };
+        const unchanged = structuredClone(original);
+        expect(() => requireCompleteNutritionMonthDocument('2026-09', original))
+            .toThrow(IncompleteCloudMonthError);
+        expect(original).toEqual(unchanged);
+        const good = { '2026-09-29': { date: '2026-09-29', kcal: 350, carbs: 75, pro: 7, fat: 1, meals: [validMeal] } };
+        const cleaned = requireCompleteNutritionMonthDocument('2026-09', good);
+        expect((cleaned['2026-09-29'] as { meals: Array<{ id: string }> }).meals.map(meal => meal.id)).toEqual(['meal-ok']);
+        expect(() => requireCompleteNutritionMonthDocument('2026-09', {
+            ...good, '2026-09-30': { ...malformedDay, date: '2026-09-30' },
+        })).toThrow(IncompleteCloudMonthError);
     });
 
     it('keeps normal ID-based delete and upsert usable after malformed hydration', () => {
