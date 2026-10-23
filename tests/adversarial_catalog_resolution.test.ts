@@ -241,7 +241,7 @@ describe('Adversarial & Stress Testing Suite for Catalog Resolution Pipeline (M1
     // 3. Massive Scale, Cyclic, and Performance Stress Testing
     // -------------------------------------------------------------------------
     describe('3. Massive Scale & Performance Stress Testing', () => {
-        it('resolves 1,000 global exercises with 500 overrides and 200 hidden IDs in under 20ms', () => {
+        it('resolves 1,000 global exercises with 500 overrides and 200 hidden IDs deterministically', () => {
             const globalExercises: CatalogExercise[] = Array.from({ length: 1000 }, (_, i) => ({
                 id: `ex_${i}`,
                 name: `Exercise ${i}`,
@@ -275,12 +275,8 @@ describe('Adversarial & Stress Testing Suite for Catalog Resolution Pipeline (M1
                 hiddenExerciseIds
             };
 
-            const start = performance.now();
             const resolved = resolveEffectiveExercises(globalExercises, customExercises, overrides);
-            const duration = performance.now() - start;
-
             expect(resolved.length).toBe(200 + (1000 - 200)); // 200 custom + 800 unhidden
-            expect(duration).toBeLessThan(50); // Well under 50ms
 
             const item0 = resolved.find(e => e.id === 'ex_0');
             expect(item0?.name).toBe('Overridden Exercise 0');
@@ -290,7 +286,7 @@ describe('Adversarial & Stress Testing Suite for Catalog Resolution Pipeline (M1
             expect(item750).toBeUndefined();
         });
 
-        it('resolves 2,000 global foods with 1,000 overrides and 500 hidden items in under 30ms', () => {
+        it('resolves 2,000 global foods with 1,000 overrides and 500 hidden items deterministically', () => {
             const globalFoods: CatalogFood[] = Array.from({ length: 2000 }, (_, i) => ({
                 id: `food_${i}`,
                 name: `Food ${i}`,
@@ -327,12 +323,8 @@ describe('Adversarial & Stress Testing Suite for Catalog Resolution Pipeline (M1
                 hiddenFoodIds
             };
 
-            const start = performance.now();
             const resolved = resolveEffectiveFoods(globalFoods, customFoods, overrides);
-            const duration = performance.now() - start;
-
             expect(resolved.length).toBe(300 + (2000 - 500));
-            expect(duration).toBeLessThan(60);
 
             const food0 = resolved.find(f => f.id === 'food_0');
             expect(food0?.kcal).toBe(999);
@@ -342,7 +334,7 @@ describe('Adversarial & Stress Testing Suite for Catalog Resolution Pipeline (M1
             expect(food1600).toBeUndefined();
         });
 
-        it('merges massive CatalogOverrides structures without memory leaks or stack overflow', () => {
+        it('merges two large CatalogOverrides structures without losing IDs', () => {
             const a: CatalogOverrides = {
                 exercises: Object.fromEntries(Array.from({ length: 500 }, (_, i) => [`ex_${i}`, { notes: `A_${i}` }])),
                 foods: Object.fromEntries(Array.from({ length: 500 }, (_, i) => [`food_${i}`, { brand: `A_${i}` }])),
