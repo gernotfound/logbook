@@ -228,27 +228,40 @@ describe('R3: Object Sanitization & removeUndefinedValues Suite', () => {
     });
 
     describe('Circular References Protection', () => {
-        it('handles circular object references without throwing stack overflow errors', () => {
+        it('rejects circular objects without leaking unsanitized references', () => {
             const cyclicObj: any = { name: 'cyclic', omit: undefined };
             cyclicObj.self = cyclicObj;
 
-            expect(() => {
-                const result = removeUndefinedValues(cyclicObj);
-                expect(result.name).toBe('cyclic');
-                expect('omit' in result).toBe(false);
-                expect(result.self).toBe(cyclicObj);
-            }).not.toThrow();
+            expect(() => removeUndefinedValues(cyclicObj)).toThrow('Riferimento circolare');
+            expect(cyclicObj.self).toBe(cyclicObj);
         });
 
-        it('handles circular array references without throwing stack overflow errors', () => {
+        it('rejects circular arrays before they reach Firestore', () => {
             const cyclicArr: any = [1, undefined];
             cyclicArr.push(cyclicArr);
 
-            expect(() => {
-                const result = removeUndefinedValues(cyclicArr);
-                expect(result[0]).toBe(1);
-                expect(result[1]).toBe(null);
-            }).not.toThrow();
+            expect(() => removeUndefinedValues(cyclicArr)).toThrow('Riferimento circolare');
+            expect(cyclicArr[1]).toBeUndefined();
+        });
+
+        it('sanitizes shared references consistently without mutating either branch', () => {
+            const shared = { id: 'same', omit: undefined, nested: [undefined, { hidden: undefined, saved: 1 }] };
+            const result = removeUndefinedValues({ first: shared, second: shared });
+            expect(result.first).toBe(result.second);
+            expect(result).toEqual({
+                first: { id: 'same', nested: [null, { saved: 1 }] },
+                second: { id: 'same', nested: [null, { saved: 1 }] },
+            });
+            expect(Object.hasOwn(shared, 'omit')).toBe(true);
+            expect(shared.nested[0]).toBeUndefined();
+        });
+
+        it('preserves own __proto__ keys as data without prototype pollution', () => {
+            const input = JSON.parse('{"__proto__":{"keep":1,"drop":null},"missing":null}');
+            const result = removeUndefinedValues(input);
+            expect(Object.hasOwn(result, '__proto__')).toBe(true);
+            expect((result as any).__proto__).toEqual({ keep: 1, drop: null });
+            expect(({} as any).keep).toBeUndefined();
         });
     });
 
