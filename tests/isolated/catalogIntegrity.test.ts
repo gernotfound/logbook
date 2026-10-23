@@ -44,9 +44,13 @@ it.each([null, [], [{ id: '', name: 'Rotto' }], [exercise, exercise]])('retains 
 it('does not advance freshness when one document is absent', async () => {
     arrange(); const get = remote.get.getMockImplementation()!;
     remote.get.mockImplementation((path: string) => path.endsWith('foods_v1') ? Promise.resolve(snap(undefined)) : get(path));
-    expect((await getCachedCatalog()).exercises).toEqual(getSeedCatalog().exercises);
+    const result = await syncGlobalCatalog({} as never);
+    expect(result.updated).toBe(false);
+    expect(result.catalog.exercises).toEqual(getSeedCatalog().exercises);
+    expect((await getCachedCatalog()).manifest.version).toBe(getSeedCatalog().manifest.version);
+    expect(remote.get).toHaveBeenCalledTimes(3);
 });
-it('coalesces overlapping downloads without a late old response replacing the new catalog', async () => {
+it('coalesces simultaneous downloads into one manifest and document request', async () => {
     arrange(); const [a, b] = await Promise.all([syncGlobalCatalog({} as never), syncGlobalCatalog({} as never)]);
     expect(a).toEqual(b); expect(remote.get).toHaveBeenCalledTimes(3);
 });
@@ -67,4 +71,11 @@ it('reports a new catalog as memory-only if IndexedDB rejects the write', async 
     expect(result.updated).toBe(true);
     expect(result.persisted).toBe(false);
     expect((await getCachedCatalog()).exercises.map(item => item.id)).toEqual(['a']);
+    // A fresh module has no in-memory copy. The failed IDB write must not
+    // masquerade as durable data after restart.
+    vi.resetModules();
+    const restarted = await import('../../src/lib/catalog/catalogService');
+    const offline = await restarted.getCachedCatalog();
+    expect(offline.exercises).toEqual(getSeedCatalog().exercises);
+    expect(offline.manifest.version).toBe(getSeedCatalog().manifest.version);
 });
