@@ -44,3 +44,27 @@ test('representative guest surfaces have no serious automated accessibility viol
 
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
 });
+
+test('keyboard-opened routine menu retains focus and fits a narrow real viewport', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 850 });
+  await continueAsGuest(page);
+  await page.getByRole('tab', { name: 'Schede', exact: true }).click();
+  await page.getByRole('button', { name: 'Crea scheda' }).click();
+  await page.getByPlaceholder('Nome scheda').fill('Scheda accessibile');
+  await page.locator('#routine-creation-form').getByRole('button', { name: 'Salva', exact: true }).click();
+
+  const card = page.locator('.routine-library-card').filter({ hasText: 'Scheda accessibile' });
+  const trigger = card.getByRole('button', { name: 'Opzioni' });
+  await trigger.focus();
+  await page.keyboard.press('ArrowDown');
+  const menu = card.getByRole('menu');
+  await expect(menu).toBeVisible();
+  await expect(menu.getByRole('menuitem').first()).toBeFocused();
+  const bounds = await menu.boundingBox();
+  expect(bounds).not.toBeNull();
+  expect(bounds!.x).toBeGreaterThanOrEqual(0);
+  expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(320);
+  await page.keyboard.press('Escape');
+  await expect(menu).toHaveCount(0);
+  await expect(trigger).toBeFocused();
+});

@@ -147,6 +147,30 @@ test('Schede stays inside a 320px viewport and keeps the full muscle model in bo
 
   await page.locator('#routine-creation-form').getByRole('button', { name: 'Salva', exact: true }).click();
   await expect(page.getByText('Scheda mobile', { exact: true })).toBeVisible();
+  const routineCard = page.locator('.routine-library-card').filter({ hasText: 'Scheda mobile' });
+  const menuTrigger = routineCard.getByRole('button', { name: 'Opzioni' });
+  await menuTrigger.click();
+  const menu = routineCard.getByRole('menu');
+  await expect(menu).toBeVisible();
+  // Inject a stress-length label into the actual DOM to exercise browser wrapping.
+  await menu.locator('.context-menu-item-label').first().evaluate(label => {
+    label.textContent = 'Voce lunga del menu SupercalifragilisticexpialidociousSupercalifragilisticexpialidocious';
+  });
+  for (const width of [320, 390]) {
+    await page.setViewportSize({ width, height: 850 });
+    const bounds = await menu.boundingBox();
+    const trigger = await menuTrigger.boundingBox();
+    expect(bounds).not.toBeNull();
+    expect(trigger).not.toBeNull();
+    expect(bounds!.x).toBeGreaterThanOrEqual(0);
+    expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width);
+    expect(trigger!.width).toBeGreaterThanOrEqual(44);
+    expect(trigger!.height).toBeGreaterThanOrEqual(44);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
+  }
+  await page.keyboard.press('Escape');
+  await expect(menu).toHaveCount(0);
+  await page.setViewportSize({ width: 320, height: 850 });
   await page.getByRole('button', { name: 'Apri scheda Scheda mobile' }).click();
   await expect(page.getByText('Muscoli coinvolti')).toBeVisible();
 
