@@ -5,6 +5,9 @@ import { DB } from '../../src/lib/db';
 import { Logic } from '../../src/lib/logic';
 import { UserDataSchema } from '../../src/lib/schema';
 import { calculateLoggedMealTotals } from '../../src/lib/nutrition/calculateLoggedMealTotals';
+import { captureSession } from '../../src/lib/sync/session';
+import { initializeLocal, readLocal } from '../../src/lib/sync/localRepository';
+import { prepareUnlockedTestArchive } from '../secureVaultFixture';
 import { useNutritionMeals } from '../../src/hooks/useNutritionMeals';
 import { useDialogStore } from '../../src/store/useDialogStore';
 import { useAppStore } from '../../src/store/useAppStore';
@@ -50,9 +53,36 @@ beforeEach(() => {
         compatibilityStatus: 'ok',
         compatibilityError: null,
     });
+    it('keeps meal identities distinct across same-timestamp edits, deletes and durable readback', async () => {
+        const owner = captureSession().owner;
+        await prepareUnlockedTestArchive(owner);
+        await initializeLocal(owner, useAppStore.getState().userData!);
+        const a = { id: 'meal-a', meal: 'pranzo', name: 'Avena', quantity: 100, baseQty: 100, kcal: 100, carbs: 10, pro: 5, fat: 4, time: 123 };
+        const b = { ...a, id: 'meal-b', name: 'Riso' };
+        await runMutation(() => useAppStore.getState().dispatchDomainOperation([
+            { type: 'nutrition-meal.upsert', date: DATE, meal: a },
+            { type: 'nutrition-meal.upsert', date: DATE, meal: b },
+        ]));
+        const { result } = renderHook(() => useNutritionMeals(DATE));
+        let changed = false;
+        await runMutation(async () => {
+            changed = await result.current.updateMealItem({ ...b, quantity: 50 });
+        });
+        expect(changed).toBe(true);
+        const edited = useAppStore.getState().userData?.nutrition?.[DATE]?.meals ?? [];
+        expect(edited.find(meal => meal.id === 'meal-a')?.quantity).toBe(100);
+        expect(edited.find(meal => meal.id === 'meal-b')?.quantity).toBe(50);
+        await runMutation(() => result.current.removeFood('meal-b'));
+        const after = useAppStore.getState().userData?.nutrition?.[DATE]?.meals ?? [];
+        expect(after.map(meal => meal.id)).toEqual(['meal-a']);
+        const disk = await readLocal(owner);
+        expect(disk?.data.nutrition?.[DATE]?.meals?.map(meal => meal.id)).toEqual(['meal-a']);
+        expect(disk?.pending.length).toBeGreaterThanOrEqual(0);
+    });
+
 });
 
-describe('M5 nutrition guest flow through useNutritionMeals', () => {
+describe('M5 nutrition account flow through useNutritionMeals', () => {
     it('returns the same ranked production results using the prepared search index', () => {
         const { result } = renderHook(() => useNutritionMeals(DATE));
 
@@ -95,7 +125,7 @@ describe('M5 nutrition guest flow through useNutritionMeals', () => {
         expect({ kcal: day?.kcal, carbs: day?.carbs, pro: day?.pro, fat: day?.fat }).toEqual(calculateLoggedMealTotals(day?.meals ?? []));
 
         const updated = day!.meals![0] as any;
-        await runMutation(() => result.current.removeFood(updated.itemId || updated.time || updated.id));
+        await runMutation(() => result.current.removeFood(updated.id));
 
         day = useAppStore.getState().userData?.nutrition?.[DATE];
         expect(day?.meals).toEqual([]);
