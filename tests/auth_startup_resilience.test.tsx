@@ -50,7 +50,7 @@ describe('PWA & iPhone Startup Resilience Tests', () => {
   });
 
   test('publishes the authenticated owner and sealed local snapshot before reporting READY', async () => {
-    const persisted = UserDataSchema.parse({ profile: { height: '183' } }) as UserData;
+    const persisted = UserDataSchema.parse({ profile: { height: '183' }, activeWorkout: { id: 'w-snapshot', date: '2026-10-03', exercises: [] } }) as UserData;
     await localRepository.initializeLocal('user:test-user-id', persisted);
     expect(idbStore['logbook:v2:user:test-user-id']).toMatch(/^tlb-sealed:v1:/);
 
@@ -64,6 +64,7 @@ describe('PWA & iPhone Startup Resilience Tests', () => {
     expect(screen.getByTestId('loading-state').textContent).toBe('LOADING');
     expect(screen.getByTestId('data-state').textContent).toBe('183');
     expect(useAppStore.getState().dataOwner).toBe('user:test-user-id');
+    expect(useAppStore.getState().localWorkout?.id).toBe('w-snapshot');
     expect((await localRepository.readLocal('user:test-user-id'))?.data.profile?.height).toBe('183');
 
     await act(async () => { completeCloudRead(null); });
