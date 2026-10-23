@@ -84,6 +84,22 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     });
   }, [onOpenChange]);
 
+  // Pointer outside clicks do not arbitrate keyboard-only openings across cards.
+  // Notify peer menus before a new one opens, keeping focus in the new menu.
+  useEffect(() => {
+    const onPeerOpen = (event: Event) => {
+      if ((event as CustomEvent<HTMLDivElement>).detail !== containerRef.current && isOpen) {
+        toggleOpen(false);
+      }
+    };
+    document.addEventListener('logbook:context-menu-open', onPeerOpen);
+    return () => document.removeEventListener('logbook:context-menu-open', onPeerOpen);
+  }, [isOpen, toggleOpen]);
+
+  const notifyPeers = () => {
+    document.dispatchEvent(new CustomEvent('logbook:context-menu-open', { detail: containerRef.current }));
+  };
+
   // Gestione click outside (mousedown + touchstart)
   useEffect(() => {
     if (!isOpen) return;
@@ -164,6 +180,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
   const handleTriggerClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
+    if (!isOpen) notifyPeers();
     toggleOpen();
   };
 
@@ -172,6 +189,8 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
       if (!isOpen) {
         e.preventDefault();
         e.stopPropagation();
+        notifyPeers();
+        notifyPeers();
         toggleOpen(true);
         setTimeout(() => {
           const buttons = getItemButtons();

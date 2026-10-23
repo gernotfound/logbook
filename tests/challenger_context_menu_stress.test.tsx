@@ -633,34 +633,39 @@ describe('Empirical Adversarial Stress Suite: ContextMenu & Integrations', () =>
     });
   });
 
+  it('keeps a single active menu when switching cards using only the keyboard', () => {
+    vi.useFakeTimers();
+    try {
+      render(
+        <div>
+          <ContextMenu ariaLabel="Opzioni A" items={[{ label: 'Azione A', onClick: vi.fn() }]} />
+          <ContextMenu ariaLabel="Opzioni B" items={[{ label: 'Azione B', onClick: vi.fn() }]} />
+        </div>,
+      );
+      const a = screen.getByRole('button', { name: 'Opzioni A' });
+      const b = screen.getByRole('button', { name: 'Opzioni B' });
+      a.focus();
+      fireEvent.keyDown(a, { key: 'Enter' });
+      vi.runAllTimers();
+      expect(screen.getByRole('menu', { name: 'Opzioni A' })).not.toBeNull();
+      b.focus();
+      fireEvent.keyDown(b, { key: 'ArrowDown' });
+      vi.runAllTimers();
+      expect(screen.queryByRole('menu', { name: 'Opzioni A' })).toBeNull();
+      expect(a.getAttribute('aria-expanded')).toBe('false');
+      expect(screen.getAllByRole('menu')).toHaveLength(1);
+      expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Azione B' }));
+      fireEvent.keyDown(document, { key: 'Escape' });
+      expect(document.activeElement).toBe(b);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   /* -------------------------------------------------------------------------- */
   /* 6. ACCESSIBILITY & DESIGN SYSTEM CONFORMANCE                               */
   /* -------------------------------------------------------------------------- */
   describe('6. A11y & Italian Sentence Case Conformance', () => {
-    it('verifies Italian sentence case for all standard menu labels', () => {
-      const labels = [
-        'Modifica scheda',
-        'Elimina scheda',
-        'Modifica ciclo',
-        'Duplica ciclo',
-        'Elimina ciclo',
-        'Modifica esercizio',
-        'Elimina esercizio',
-        'Modifica alimento',
-        'Elimina alimento',
-      ];
-
-      for (const label of labels) {
-        // First character uppercase
-        expect(label[0]).toBe(label[0].toUpperCase());
-        // Remaining words start with lowercase unless proper nouns
-        const words = label.split(' ');
-        for (let w = 1; w < words.length; w++) {
-          expect(words[w][0]).toBe(words[w][0].toLowerCase());
-        }
-      }
-    });
-
     it('has accessible roles, labels, and aria attributes', () => {
       render(<ContextMenu items={sampleItems} ariaLabel="Opzioni scheda" triggerTitle="Menu azioni" />);
 
@@ -686,14 +691,25 @@ describe('Empirical Adversarial Stress Suite: ContextMenu & Integrations', () =>
   /* 7. ASYNC LIFECYCLE & TOUCH TORTURE STRESS                                   */
   /* -------------------------------------------------------------------------- */
   describe('7. Lifecycle Races & Touch Stress', () => {
-    it('survives synchronous unmount immediately following keyboard trigger activation before setTimeout tick', () => {
-      for (let i = 0; i < 10; i++) {
-        const { unmount } = render(<ContextMenu items={sampleItems} />);
-        const trigger = screen.getByRole('button', { name: 'Opzioni' });
-        // Press ArrowDown to schedule focus in setTimeout
-        fireEvent.keyDown(trigger, { key: 'ArrowDown' });
-        // Immediately unmount before setTimeout fires
-        unmount();
+    it('does not focus a detached menu after immediate unmount', () => {
+      vi.useFakeTimers();
+      const outside = document.createElement('button');
+      document.body.appendChild(outside);
+      try {
+        for (let i = 0; i < 10; i++) {
+          const { unmount } = render(<ContextMenu items={sampleItems} />);
+          const trigger = screen.getByRole('button', { name: 'Opzioni' });
+          fireEvent.keyDown(trigger, { key: 'ArrowDown' });
+          expect(screen.getByRole('menu')).not.toBeNull();
+          unmount();
+          outside.focus();
+          vi.runAllTimers();
+          expect(document.activeElement).toBe(outside);
+          expect(screen.queryByRole('menu')).toBeNull();
+        }
+      } finally {
+        outside.remove();
+        vi.useRealTimers();
       }
     });
 

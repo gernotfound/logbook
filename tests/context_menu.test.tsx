@@ -360,12 +360,21 @@ describe('ContextMenu Component (Milestone M1)', () => {
     expect(parentClick).not.toHaveBeenCalled();
   });
 
-  it('cleans up event listeners cleanly on unmount', () => {
+  it('removes document listeners installed by the expanded menu on unmount', () => {
+    const add = vi.spyOn(document, 'addEventListener');
+    const remove = vi.spyOn(document, 'removeEventListener');
     const { unmount } = render(<ContextMenu items={sampleItems} />);
-    const trigger = screen.getByRole('button', { name: 'Opzioni' });
-    fireEvent.click(trigger);
-
+    fireEvent.click(screen.getByRole('button', { name: 'Opzioni' }));
     expect(screen.getByRole('menu')).not.toBeNull();
-    expect(() => unmount()).not.toThrow();
+    const names = new Set(['mousedown', 'touchstart', 'keydown', 'logbook:context-menu-open']);
+    const installed = add.mock.calls.filter(([name]) => names.has(name));
+    unmount();
+    const removed = remove.mock.calls.filter(([name]) => names.has(name));
+    for (const [name, listener] of installed) {
+      expect(removed.some(([removedName, removedListener]) => removedName === name && removedListener === listener)).toBe(true);
+    }
+    expect(installed.map(([name]) => name)).toEqual(expect.arrayContaining([...names]));
+    add.mockRestore();
+    remove.mockRestore();
   });
 });
