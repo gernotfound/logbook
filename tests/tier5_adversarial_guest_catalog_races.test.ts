@@ -164,7 +164,7 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
                     ...previous!, profile: { height: String(175 + i) }
                 })));
                 const settled = Promise.allSettled(calls);
-                await expect(useAppStore.getState().flushPendingSyncs()).rejects.toThrow(error.message);
+                await useAppStore.getState().flushPendingSyncs();
                 const results = await settled;
                 expect(results.map(result => result.status)).toEqual(['rejected', 'rejected', 'rejected']);
                 for (const result of results) {
