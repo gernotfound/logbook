@@ -287,14 +287,24 @@ describe('Empirical Challenger: Layout Geometry, Accessibility, Z-Index & Online
       await renderSettledApp();
 
       for (let i = 0; i < 20; i++) {
+        const transientError = i % 3 === 0 ? `Errore transitorio #${i}` : null;
         act(() => {
-          useAppStore.setState({ syncing: i % 2 === 0, saveError: i % 3 === 0 ? `Errore transitorio #${i}` : null });
+          useAppStore.setState({ syncing: i % 2 === 0, saveError: transientError });
+        });
+        act(() => {
           window.dispatchEvent(new Event(i % 2 === 0 ? 'online' : 'offline'));
         });
-        // Online clears the error; offline must not invent or discard one.
+        // Restoring connectivity does not dismiss unrelated save errors.
         expect(useAppStore.getState().syncing).toBe(i % 2 === 0);
-        expect(useAppStore.getState().saveError).toBe(i % 2 === 0 || i % 3 !== 0 ? null : `Errore transitorio #${i}`);
+        expect(useAppStore.getState().saveError).toBe(transientError);
       }
+      act(() => {
+        useAppStore.setState({ saveError: 'Connessione assente durante il salvataggio' });
+      });
+      act(() => {
+        window.dispatchEvent(new Event('online'));
+      });
+      expect(useAppStore.getState().saveError).toBeNull();
 
       // Cleanup
       act(() => {
