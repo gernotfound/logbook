@@ -19,7 +19,7 @@ describe('Logic Library Tests', () => {
         expect(macros.totalKcal).toBeCloseTo(2480);
     });
 
-    it('calculateBodyFat: calculates BMI-based body fat for Male correctly', () => {
+    it('calculateBodyFat: uses US Navy male circumference formula', () => {
         const weight = 80; // kg
         const profile = {
             gender: 'M',
@@ -29,11 +29,11 @@ describe('Logic Library Tests', () => {
         };
         // Expected BF based on Navy formula
         const bf = Logic.calculateBodyFat(weight, profile);
-        expect(Number(bf)).toBeGreaterThan(10);
-        expect(Number(bf)).toBeLessThan(25);
+        // US Navy independent reference: 495 / (1.0324 - 0.19077*log10(85-38) + 0.15456*log10(180)) - 450.
+        expect(bf).toBe(16.1);
     });
 
-    it('calculateBodyFat: calculates BMI-based body fat for Female correctly', () => {
+    it('calculateBodyFat: uses US Navy female circumference formula', () => {
         const weight = 65; // kg
         const profile = {
             gender: 'F',
@@ -43,8 +43,8 @@ describe('Logic Library Tests', () => {
             hip: 95
         };
         const bf = Logic.calculateBodyFat(weight, profile);
-        expect(Number(bf)).toBeGreaterThan(15);
-        expect(Number(bf)).toBeLessThan(35);
+        // US Navy independent reference: 495 / (1.29579 - 0.35004*log10(70+95-34) + 0.22100*log10(165)) - 450.
+        expect(bf).toBe(23.8);
     });
 
     it('calculateTDEE: estimates TDEE correctly from chronoData', () => {
