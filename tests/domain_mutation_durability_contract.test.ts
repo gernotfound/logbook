@@ -10,7 +10,7 @@ describe('domain mutation durability boundary', () => {
         await expect(dispatchDurableOperation(dispatch, operation)).resolves.toBeUndefined();
         expect(dispatch).toHaveBeenCalledWith(operation);
     });
-    it('accepts verified local journal persistence while offline', async () => {
+    it('accepts a dispatcher-reported local-pending result, not proof of journal persistence', async () => {
         const dispatch = vi.fn().mockResolvedValue({ ok: false, status: 'local-pending', error: new Error('offline') } satisfies SyncResult);
         await expect(dispatchDurableOperation(dispatch, operation)).resolves.toBeUndefined();
     });
