@@ -145,6 +145,37 @@ test.describe('Offline scenarios & Background suspension', () => {
     // This triggers the real prompt listener, not a replacement service worker.
     await page.evaluate(() => window.dispatchEvent(new Event('logbook:pwa-update-waiting')));
     await expect(page.getByText('Nuova versione disponibile')).toBeVisible();
+
+    // A 320px browser viewport verifies actual geometry, not CSS regex matches.
+    await page.setViewportSize({ width: 320, height: 640 });
+    const positions = await page.evaluate(() => {
+      const toast = document.querySelector('.reload-prompt-toast')!.getBoundingClientRect();
+      const nav = document.querySelector('.bottom-nav')!.getBoundingClientRect();
+      return { toastBottom: toast.bottom, navTop: nav.top, toastLeft: toast.left, toastRight: toast.right };
+    });
+    expect(positions.toastBottom).toBeLessThanOrEqual(positions.navTop);
+    expect(positions.toastLeft).toBeGreaterThanOrEqual(0);
+    expect(positions.toastRight).toBeLessThanOrEqual(320);
+
+    // Force a real owner-storage read failure at the reload barrier. Clicking
+    // update must keep this JS realm alive and must not erase the saved routine.
+    await page.evaluate(() => {
+      const get = Storage.prototype.getItem;
+      (window as Window & { __restoreOwnerRead?: () => void; __reloadSentinel?: string }).__restoreOwnerRead = () => {
+        Storage.prototype.getItem = get;
+      };
+      (window as Window & { __reloadSentinel?: string }).__reloadSentinel = 'same-realm';
+      Storage.prototype.getItem = function(key: string) {
+        if (key === 'logbook_is_guest') throw new DOMException('Owner storage blocked', 'SecurityError');
+        return get.call(this, key);
+      };
+    });
+    await page.getByRole('button', { name: 'Aggiorna applicazione' }).click();
+    await expect(page.locator('.reload-prompt-toast p[role="alert"]')).toBeVisible();
+    expect(await page.evaluate(() => (window as Window & { __reloadSentinel?: string }).__reloadSentinel)).toBe('same-realm');
+    await expect(page.getByText('Scheda aggiornamento PWA', { exact: true })).toBeVisible();
+    await page.evaluate(() => (window as Window & { __restoreOwnerRead?: () => void }).__restoreOwnerRead?.());
+
     await page.getByRole('button', { name: 'Chiudi notifica' }).click();
     await expect(page.getByText('Nuova versione disponibile')).toHaveCount(0);
 
