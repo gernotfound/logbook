@@ -67,6 +67,10 @@ test('guest logout revokes another tab and removes its durable archive without r
   await page.getByRole('button', { name: 'Continua senza account' }).click();
   await expect(page.locator('.guest-banner')).toBeVisible();
   await expect(background.locator('.guest-banner')).toHaveCount(0);
+  // A new guest generation requires fresh consent before the data views are interactive.
+  await page.waitForSelector('text=Aggiornamento Termini e Privacy');
+  for (const checkbox of await page.locator('input[type="checkbox"]').all()) await checkbox.check();
+  await page.getByRole('button', { name: 'Accetta e Continua' }).click();
   await page.getByRole('button', { name: 'Allenamento', exact: true }).click();
   await page.locator('button.sub-nav-btn:has-text("Schede")').click();
   await expect(page.getByText(routineName, { exact: true })).toHaveCount(0);
