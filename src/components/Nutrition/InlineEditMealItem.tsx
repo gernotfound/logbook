@@ -1,11 +1,11 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Pencil, Trash2, Save } from 'lucide-react';
 
 interface EditMealItemModalProps {
     item: any;
     onClose: () => void;
-    onSave: (updatedItem: any) => void;
-    onDelete: (itemId: number | string) => void;
+    onSave: (updatedItem: any) => Promise<boolean>;
+    onDelete: (itemId: string) => Promise<boolean>;
 }
 
 const MEAL_TYPES = ['Colazione', 'Pranzo', 'Cena', 'Spuntini'];
@@ -13,6 +13,8 @@ const MEAL_TYPES = ['Colazione', 'Pranzo', 'Cena', 'Spuntini'];
 export default function EditMealItemModal({ item, onClose, onSave, onDelete }: EditMealItemModalProps) {
     const [quantity, setQuantity] = useState<number | string>(item.quantity ?? item.baseQty ?? 100);
     const [meal, setMeal] = useState<string>(item.meal || 'Colazione');
+    const [saving, setSaving] = useState(false);
+    const submitting = useRef(false);
 
     const base = item.baseQty ?? 100;
     const numQty = parseFloat(quantity as string) || 0;
@@ -23,19 +25,28 @@ export default function EditMealItemModal({ item, onClose, onSave, onDelete }: E
     const currentPro = Math.round((parseFloat(item.pro) || 0) * ratio * 10) / 10;
     const currentFat = Math.round((parseFloat(item.fat) || 0) * ratio * 10) / 10;
 
-    const handleSave = () => {
-        onSave({
-            ...item,
-            quantity: numQty,
-            meal
-        });
-        onClose();
+    const submit = async (operation: () => Promise<boolean>) => {
+        if (submitting.current) return;
+        submitting.current = true;
+        setSaving(true);
+        try {
+            // Keep the editable draft mounted unless the device commit is acknowledged.
+            if (await operation()) onClose();
+        } catch (error) {
+            console.error('Modifica del pasto non completata:', error);
+        } finally {
+            submitting.current = false;
+            setSaving(false);
+        }
     };
 
-    const handleDelete = () => {
-        onDelete(item.time || item.id);
-        onClose();
-    };
+    const handleSave = () => submit(() => onSave({
+        ...item,
+        quantity: numQty,
+        meal
+    }));
+
+    const handleDelete = () => submit(() => onDelete(item.id));
 
     return (
         <div 
@@ -143,7 +154,8 @@ export default function EditMealItemModal({ item, onClose, onSave, onDelete }: E
                     type="button" 
                     className="btn" 
                     style={{ background: 'var(--danger-soft)', color: 'var(--danger-color)', border: '1px solid var(--danger-color)', flex: 1, marginBottom: 0 }}
-                    onClick={handleDelete}
+                    onClick={() => { void handleDelete(); }}
+                    disabled={saving}
                 >
                     <Trash2 size={16} aria-hidden="true" style={{marginRight: '6px'}} /> Rimuovi
                 </button>
@@ -151,7 +163,8 @@ export default function EditMealItemModal({ item, onClose, onSave, onDelete }: E
                     type="button" 
                     className="btn btn-primary" 
                     style={{ flex: 2, marginBottom: 0 }}
-                    onClick={handleSave}
+                    onClick={() => { void handleSave(); }}
+                    disabled={saving}
                 >
                     <Save size={16} aria-hidden="true" style={{marginRight: '6px'}} /> Salva
                 </button>
