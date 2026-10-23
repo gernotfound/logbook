@@ -484,17 +484,18 @@ describe('Workout Reorder (R2) and Live Sync & Badges (R3) Suite', () => {
 
             const { rerender } = render(<SessionExerciseCard {...initialProps} />);
             const position = screen.getByRole('button', { name: 'Cambia posizione esercizio' });
-            expect(position).toHaveTextContent('#1');
-            expect(position).toBeDisabled();
+            expect(position.textContent).toContain('#1');
+            expect((position as HTMLButtonElement).disabled).toBe(true);
 
             rerender(<SessionExerciseCard {...initialProps} totalExercises={3} exIndex={1} onMoveToPosition={latestMove} />);
-            expect(position).toHaveTextContent('#2');
-            expect(position).toBeEnabled();
+            expect(position.textContent).toContain('#2');
+            expect((position as HTMLButtonElement).disabled).toBe(false);
             fireEvent.click(position);
 
-            expect(screen.getByRole('button', { name: '✓ 2ª posizione' })).toBeDisabled();
+            expect((screen.getByRole('button', { name: '✓ 2ª posizione' }) as HTMLButtonElement).disabled).toBe(true);
             fireEvent.click(screen.getByRole('button', { name: '3ª posizione' }));
-            expect(latestMove).toHaveBeenCalledExactlyOnceWith(1, 2);
+            expect(latestMove).toHaveBeenCalledTimes(1);
+            expect(latestMove).toHaveBeenCalledWith(1, 2);
             expect(originalMove).not.toHaveBeenCalled();
         });
     });
