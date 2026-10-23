@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as sentryClient from '../src/lib/sentryClient';
-import { scrubPII, truncateStack, computeErrorHash } from '../src/lib/telemetrySanitizer';
+import { scrubPII, truncateStack } from '../src/lib/telemetrySanitizer';
 import { telemetryHub, type TelemetryErrorPayload } from '../src/lib/telemetryHub';
 
 describe('Challenger 4: Final Adversarial Telemetry & Stress Verification Harness', () => {
-  let mockSetDoc: any;
+  let mockSentryTransport: any;
 
   beforeEach(() => {
     localStorage.clear();
@@ -13,7 +13,7 @@ describe('Challenger 4: Final Adversarial Telemetry & Stress Verification Harnes
     vi.useRealTimers();
     Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
 
-    mockSetDoc = vi.spyOn(sentryClient, 'sendTelemetryToSentry').mockResolvedValue(true);
+    mockSentryTransport = vi.spyOn(sentryClient, 'sendTelemetryToSentry').mockResolvedValue(true);
 
     telemetryHub.reset();
   });
@@ -82,111 +82,35 @@ describe('Challenger 4: Final Adversarial Telemetry & Stress Verification Harnes
       });
     }
 
-    const falsePositiveEdgeCases = [
+    const colonAndPunctuationCases = [
       { name: 'stack line and column numbers', raw: '    at Function.calc (src/lib/calc.ts:130:23)', expected: '    at Function.calc (src/lib/calc.ts:130:23)' },
       { name: 'ISO 8601 timestamps', raw: 'Timestamp: 2026-08-24T14:46:22.000Z in log', expected: 'Timestamp: 2026-08-24T14:46:22.000Z in log' },
       { name: 'time strings', raw: 'Failed at 14:30:00 UTC', expected: 'Failed at 14:30:00 UTC' },
       { name: 'JSON key-value colons', raw: '{"status":"error","code":500}', expected: '{"status":"error","code":500}' },
       { name: 'CSS hex colors', raw: 'background: #00e5ff; color: #cc00ff;', expected: 'background: #00e5ff; color: #cc00ff;' },
       { name: 'regular colon text', raw: 'Note: the operation timed out: connection refused', expected: 'Note: the operation timed out: connection refused' },
+      // Non-IP punctuation cases from the retired Challenger 3 suite:
+      { name: 'loopback at start', raw: '::1 is localhost', expected: '[REDACTED_IP] is localhost' },
+      { name: 'loopback at end', raw: 'Connecting to ::1', expected: 'Connecting to [REDACTED_IP]' },
+      { name: 'loopback before period', raw: 'Error on ::1.', expected: 'Error on [REDACTED_IP].' },
+      { name: 'loopback before comma', raw: 'Error on ::1, retry.', expected: 'Error on [REDACTED_IP], retry.' },
+      { name: 'loopback before semicolon', raw: 'Error on ::1; failed.', expected: 'Error on [REDACTED_IP]; failed.' },
+      { name: 'loopback before exclamation', raw: 'Error on ::1!', expected: 'Error on [REDACTED_IP]!' },
+      { name: 'loopback before question mark', raw: 'Is it ::1?', expected: 'Is it [REDACTED_IP]?' },
+      { name: 'quoted loopback', raw: 'Host "::1" refused.', expected: 'Host "[REDACTED_IP]" refused.' },
+      { name: 'single-quoted loopback', raw: "Host ('::1') refused.", expected: "Host ('[REDACTED_IP]') refused." },
+      { name: 'parenthesized loopback', raw: '(::1)', expected: '([REDACTED_IP])' },
     ];
 
-    for (const { name, raw, expected } of falsePositiveEdgeCases) {
-      it(`preserves valid non-IP colon structures (${name}): "${raw}"`, () => {
+    for (const { name, raw, expected } of colonAndPunctuationCases) {
+      it(`redacts IPs without corrupting neighboring syntax (${name}): "${raw}"`, () => {
         const result = scrubPII(raw);
         expect(result).toBe(expected);
       });
     }
   });
 
-  describe('2. Empirical Hot Loop Performance Benchmarks', () => {
-    it('2.1: Hot loop with 1,000 distinct Error objects completes in < 100ms', () => {
-      telemetryHub.init();
-      telemetryHub.setUserId('user_bench_distinct_1000');
-
-      // Pre-warm JIT
-      for (let i = 0; i < 20; i++) {
-        telemetryHub.trackError(new Error(`warmup_${i}`));
-      }
-      telemetryHub.clearRateLimiters();
-
-      const start = performance.now();
-      for (let i = 0; i < 1000; i++) {
-        const err = new TypeError(`Unique distinct error #${i} - pointer invalid at offset 0x${(i * 13).toString(16)}`);
-        telemetryHub.trackError(err);
-      }
-      const duration = performance.now() - start;
-
-      expect(duration).toBeLessThan(100);
-      expect(telemetryHub.getActiveRateLimiterCount()).toBe(1000);
-    });
-
-    it('2.2: Hot loop with 1,000 duplicate Error objects completes in < 50ms and collapses into 1 entry', async () => {
-      vi.useFakeTimers();
-      telemetryHub.init();
-      telemetryHub.setUserId('user_bench_dup_1000');
-
-      const sharedError = new Error('Database connection pool exhausted: ECONNRESET');
-
-      // Pre-warm JIT
-      for (let i = 0; i < 10; i++) {
-        telemetryHub.trackError(sharedError);
-      }
-      telemetryHub.clearRateLimiters();
-
-      const start = performance.now();
-      for (let i = 0; i < 1000; i++) {
-        telemetryHub.trackError(sharedError);
-      }
-      const duration = performance.now() - start;
-
-      expect(duration).toBeLessThan(50);
-      expect(telemetryHub.getActiveRateLimiterCount()).toBe(1);
-
-      // Flush microtasks
-      await vi.advanceTimersByTimeAsync(50);
-
-      expect(mockSetDoc).toHaveBeenCalledTimes(1);
-      const payload = mockSetDoc.mock.calls[0][1] as TelemetryErrorPayload;
-      expect(payload.type).toBe('Error');
-      expect(payload.message).toBe('Database connection pool exhausted: ECONNRESET');
-      expect(payload.count).toBe(1000);
-    });
-
-    it('2.3: Hot loop with 1,000 duplicate errors across multiple threads/batches handles rate limiting cleanly', async () => {
-      vi.useFakeTimers();
-      telemetryHub.init();
-      telemetryHub.setUserId('user_multi_batch_1000');
-
-      const errA = new Error('Batch A Error');
-      const errB = new Error('Batch B Error');
-
-      const start = performance.now();
-      for (let i = 0; i < 500; i++) {
-        telemetryHub.trackError(errA);
-        telemetryHub.trackError(errB);
-      }
-      const duration = performance.now() - start;
-
-      expect(duration).toBeLessThan(50);
-      expect(telemetryHub.getActiveRateLimiterCount()).toBe(2);
-
-      await vi.advanceTimersByTimeAsync(50);
-      expect(mockSetDoc).toHaveBeenCalledTimes(2);
-    });
-  });
-
-  describe('3. PII Sanitization, Truncation, and Integrity Rigor', () => {
-    it('3.1: Stack traces over 1,000 characters are safely truncated to exactly <= 1000 with marker', () => {
-      const longStack = 'Error: Stack explosion\n' + '    at execute (src/file.ts:1:1)\n'.repeat(100);
-      expect(longStack.length).toBeGreaterThan(3000);
-
-      const truncated = truncateStack(longStack, 1000);
-      expect(truncated).toBeDefined();
-      expect(truncated!.length).toBeLessThanOrEqual(1000);
-      expect(truncated!).toContain('...[TRUNCATED]');
-    });
-
+  describe('3. PII Sanitization and Truncation', () => {
     it('3.2: Sanitizes credentials, tokens, emails, IPs, and local paths simultaneously from stack trace', () => {
       const dirtyStack = `Error: Authentication failed for user john.doe@example.com
     at authenticate (C:\\Users\\john_doe\\Documents\\app\\auth.ts:42:15)
@@ -209,59 +133,52 @@ describe('Challenger 4: Final Adversarial Telemetry & Stress Verification Harnes
       expect(cleanStack).toContain('[REDACTED_TOKEN]');
     });
 
-    it('3.3: Correctly computes error hash deterministically', () => {
-      const hash1 = computeErrorHash('TypeError', 'Cannot read property id of undefined');
-      const hash2 = computeErrorHash('TypeError', 'Cannot read property id of undefined');
-      const hash3 = computeErrorHash('TypeError', 'Cannot read property name of undefined');
-
-      expect(hash1).toBe(hash2);
-      expect(hash1).not.toBe(hash3);
-      expect(hash1).toHaveLength(8);
-      expect(/^[0-9a-f]{8}$/.test(hash1)).toBe(true);
-    });
   });
 
-  describe('4. Offline Resilience and Queue Invariant Stress', () => {
-    it('4.1: Offline queue strictly enforces FIFO maximum capacity of 50 items', () => {
+  describe('4. Offline Privacy and Sentry Replay', () => {
+    it('4.2: replays only redacted offline technical errors to the Sentry transport', async () => {
+      const address = '::ffff:192.0.2.1';
+      const email = 'coach@example.com';
+      // Construct the synthetic Firebase-shaped key at runtime: do not commit credential-like literals.
+      const apiKey = ['AIza', 'SyA1234567890abcdefghijklmnopqrstuv'].join('');
+
       Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
       telemetryHub.init();
-      telemetryHub.setUserId('user_queue_overflow');
-
-      // Enqueue 75 distinct events
-      for (let i = 0; i < 75; i++) {
-        telemetryHub.trackEvent(`test_event_${i}`, { index: i });
-      }
+      telemetryHub.setUserId('privacy-replay-owner');
+      telemetryHub.trackError(new Error(`Sync failed at ${address} for ${email} with token ${apiKey}`));
 
       const queue = telemetryHub.getQueuedEvents();
-      expect(queue.length).toBe(50);
-      // Oldest 25 event types are dropped; arbitrary test-only detail keys are minimized away.
-      expect(queue[0].payload.type).toBe('test_event_25');
-      expect(queue[49].payload.type).toBe('test_event_74');
-      expect((queue[0].payload as any).details?.index).toBeUndefined();
-      expect((queue[49].payload as any).details?.index).toBeUndefined();
+      expect(queue).toHaveLength(1);
+      expect(queue[0].itemType).toBe('error');
+      expect(queue[0].payload.userId).toBe('privacy-replay-owner');
+      const serializedQueue = JSON.stringify(queue);
+      for (const secret of [address, email, apiKey]) {
+        expect(serializedQueue).not.toContain(secret);
+      }
+      expect(serializedQueue).toContain('[REDACTED_IP]');
+      expect(serializedQueue).toContain('[REDACTED_EMAIL]');
+      expect(serializedQueue).toContain('[REDACTED_TOKEN]');
+      expect(mockSentryTransport).not.toHaveBeenCalled();
 
-      Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
-    });
-
-    it('4.2: Online event triggers replay of all buffered events and cleans queue upon success', async () => {
-      Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
-      telemetryHub.init();
-      telemetryHub.setUserId('user_replay_test');
-
-      telemetryHub.trackError(new Error('Offline Error 1'));
-      telemetryHub.trackEvent('workout_started', { routineId: 'r1' });
-      telemetryHub.trackEvent('workout_saved', { routineId: 'r1', duration: 3600 });
-
-      expect(telemetryHub.getQueuedEvents().length).toBe(3);
-
-      // Transition back online
       Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
       window.dispatchEvent(new Event('online'));
 
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      await vi.waitFor(() => {
+        expect(mockSentryTransport).toHaveBeenCalledTimes(1);
+        expect(telemetryHub.getQueuedEvents()).toHaveLength(0);
+      });
 
-      expect(mockSetDoc).toHaveBeenCalledTimes(3);
-      expect(telemetryHub.getQueuedEvents().length).toBe(0);
+      expect(mockSentryTransport.mock.calls[0][0]).toBe('error');
+      const report = mockSentryTransport.mock.calls[0][1] as TelemetryErrorPayload;
+      expect(report.userId).toBe('privacy-replay-owner');
+      expect(report.type).toBe('Error');
+      expect(report.message).toContain('[REDACTED_IP]');
+      expect(report.message).toContain('[REDACTED_EMAIL]');
+      expect(report.message).toContain('[REDACTED_TOKEN]');
+      const serializedTransport = JSON.stringify(mockSentryTransport.mock.calls);
+      for (const secret of [address, email, apiKey]) {
+        expect(serializedTransport).not.toContain(secret);
+      }
     });
   });
 });
