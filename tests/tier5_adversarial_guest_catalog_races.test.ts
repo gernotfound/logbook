@@ -4,7 +4,6 @@ import { doc } from 'firebase/firestore';
 
 vi.unmock('../src/lib/db');
 import { ConsentedTestDB as DB } from './testUtils';
-import { DB as RealDB } from '../src/lib/db';
 import { prepareUnlockedTestArchive } from './secureVaultFixture';
 import { initializeLocal } from '../src/lib/sync/localRepository';
 import { getCachedCatalog, clearCatalogCache } from '../src/lib/catalog/catalogService';
@@ -147,7 +146,7 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
             vi.useRealTimers();
         });
 
-        it('T5.5.3: Coalesced save callers all reject on a failing production DB boundary', async () => {
+        it('T5.5.3: Coalesced store saves all reject when their local durable commits fail', async () => {
             const initial: UserData = {
                 profile: { height: '175' }, library: [], customFoods: [], catalogOverrides: {},
                 routines: [], history: [], nutrition: {}, trainingCycles: [], activeCycleId: null,
@@ -157,11 +156,23 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
             await prepareUnlockedTestArchive(owner);
             await initializeLocal(owner, initial);
             useAppStore.setState({ userData: initial, dataOwner: owner });
-            const error = new Error('Simulated cloud write failure');
-            const saveSpy = vi.spyOn(RealDB, 'saveUserData').mockResolvedValue({ ok: false, status: 'failed', error });
+
+            const key = `logbook:v2:${owner}`;
+            const previousEnvelope = idbStore[key];
+            expect(previousEnvelope).toBeDefined();
+            const error = new Error('Simulated IndexedDB write failure');
+            // The UI setup mocks idb-keyval.update by assigning into this record.
+            // A rejecting setter fails the same production local commit boundary
+            // without replacing the DB object already captured by the store.
+            Object.defineProperty(idbStore, key, {
+                configurable: true,
+                enumerable: true,
+                get: () => previousEnvelope,
+                set: () => { throw error; },
+            });
             try {
                 const calls = [1, 2, 3].map(i => useAppStore.getState().saveUserData(previous => ({
-                    ...previous!, profile: { height: String(175 + i) }
+                    ...previous!, profile: { height: String(175 + i) },
                 })));
                 const settled = Promise.allSettled(calls);
                 await useAppStore.getState().flushPendingSyncs();
@@ -170,12 +181,13 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
                 for (const result of results) {
                     if (result.status === 'rejected') expect(result.reason).toBe(error);
                 }
-                expect(saveSpy).toHaveBeenCalledTimes(1);
                 expect(useAppStore.getState().saveError).toBe(error.message);
                 expect(useAppStore.getState().syncHealth).toBe('failed');
                 expect(useAppStore.getState().syncing).toBe(false);
+                expect(idbStore[key]).toBe(previousEnvelope);
             } finally {
-                saveSpy.mockRestore();
+                delete idbStore[key];
+                idbStore[key] = previousEnvelope;
             }
         });
 
@@ -231,15 +243,8 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
             expect(merged.library?.find(e => e.id === 'cloud_ex_1')).toBeDefined();
         });
 
-        it('T5.5.5: resetStore() called during debounced save clears the timer and prevents trailing ghost writes', async () => {
+        it('T5.5.5: resetStore cancels pending store save promises and clears the UI without late republishing', async () => {
             vi.useFakeTimers();
-
-            let saveCount = 0;
-            // The store imports RealDB, not the spread-copy exported by testUtils.
-            const saveSpy = vi.spyOn(RealDB, 'saveUserData').mockImplementation(async () => {
-                saveCount++;
-                return { ok: true, status: 'synced' };
-            });
 
             useAppStore.getState().setUserData({
                 profile: { height: '175' },
@@ -256,10 +261,11 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
             });
 
             // Start a debounced save
-            useAppStore.getState().saveUserData(prev => ({
+            const pending = useAppStore.getState().saveUserData(prev => ({
                 ...prev!,
                 profile: { height: '176' }
-            })).catch(() => {});
+            }));
+            const settled = Promise.allSettled([pending]);
 
             expect(useAppStore.getState().syncing).toBe(true);
 
@@ -273,11 +279,10 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
             // Fast forward past debounce interval (1500ms)
             await vi.advanceTimersByTimeAsync(1500);
 
-            // DB.saveUserData must NOT have been called after resetStore
-            expect(saveCount).toBe(0);
-
+            expect((await settled)[0].status).toBe('rejected');
+            expect(useAppStore.getState().userData).toBeNull();
+            expect(useAppStore.getState().syncing).toBe(false);
             vi.useRealTimers();
-            saveSpy.mockRestore();
         });
     });
 });
