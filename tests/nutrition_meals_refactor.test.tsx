@@ -81,6 +81,41 @@ describe('NutritionMeals decomposition parity', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Rimuovi' }));
         expect(removeFood).toHaveBeenCalledWith('m1');
     });
+
+    it('returns to the actual local today using the production nutrition date navigator', () => {
+        vi.useFakeTimers();
+        vi.stubEnv('TZ', 'Europe/Rome');
+        vi.setSystemTime(new Date(2026, 9, 20, 14, 0, 0));
+        try {
+            function Harness() {
+                const [date, setDate] = useState('2026-10-18');
+                const hook: any = {
+                    todayNutrition: { date, kcal: 0, pro: 0, carbs: 0, fat: 0, meals: [] },
+                    dailyTarget: { kcal: 0, pro: 0, carbs: 0, fat: 0 },
+                    isDayOn: undefined, setDayType: vi.fn(), searchQuery: '', handleSearch: vi.fn(),
+                    searchResults: [], clearSearch: vi.fn(), showCustomModal: false, setShowCustomModal: vi.fn(),
+                    editingFoodId: null, cancelCustomFood: vi.fn(), cfData: {}, setCfData: vi.fn(),
+                    saveCustomFood: vi.fn(), meals: [], addFood: vi.fn(), removeFood: vi.fn().mockResolvedValue(true),
+                    updateMealItem: vi.fn().mockResolvedValue(true), targetDateStr: date,
+                };
+                return <>
+                    <output data-testid="chosen-day">{date}</output>
+                    <NutritionMeals mealsHook={hook} selectedDate={date} setSelectedDate={setDate} />
+                </>;
+            }
+            renderWithProviders(<Harness />);
+            fireEvent.click(screen.getByTitle('Torna a oggi'));
+            expect(screen.getByTestId('chosen-day').textContent).toBe('2026-10-20');
+            fireEvent.click(screen.getByRole('button', { name: 'Giorno precedente' }));
+            expect(screen.getByTestId('chosen-day').textContent).toBe('2026-10-19');
+            fireEvent.click(screen.getByTitle('Torna a oggi'));
+            expect(screen.getByTestId('chosen-day').textContent).toBe('2026-10-20');
+        } finally {
+            vi.useRealTimers();
+            vi.unstubAllEnvs();
+        }
+    });
+
     it('targets the correct meal by ID when timestamps collide or are absent', async () => {
         const first: LoggedMealItem = { id: 'meal-a', name: 'Avena', meal: 'Colazione', quantity: 100, baseQty: 100, kcal: 100, carbs: 10, pro: 5, fat: 4, time: 123 };
         const second: LoggedMealItem = { ...first, id: 'meal-b', name: 'Riso', time: 123 };
