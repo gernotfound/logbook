@@ -36,6 +36,36 @@ beforeEach(async () => {
     await adoptReplicaCheckpoint(owner, { identity: replica, baseSeq: 0 }, {
         clock: {}, syncMetaByDocument: {},
     });
+
+});
+
+describe('acknowledgeThrough reconciliation', () => {
+    it('preserves remote changes while replaying only newer local pending operations', async () => {
+        await commitLocal(owner, data(171), data(170));
+        await commitLocal(owner, data(172), data(171));
+
+        const before = await readLocal(owner);
+        expect(before?.actorSeq).toBe(2);
+        expect(before?.pending.some(operation => operation.seq === 1)).toBe(true);
+        expect(before?.pending.some(operation => operation.seq === 2)).toBe(true);
+
+        // The acknowledged cloud state contains seq 1 plus an independent change
+        // made by another device while local seq 2 is still pending.
+        const delivered = before!.pending.filter(operation => operation.seq === 1);
+        expect(delivered).toHaveLength(1);
+        await acknowledgeThrough(owner, 1, data(171, '39'), [], undefined, {
+            operations: delivered, replica,
+        });
+
+        const after = await readLocal(owner);
+        expect(after?.baseline.profile?.height).toBe('171');
+        expect(after?.baseline.profile?.neck).toBe('39');
+        expect(after?.data.profile?.height).toBe('172');
+        expect(after?.data.profile?.neck).toBe('39');
+        expect(after?.pending.length).toBeGreaterThan(0);
+        expect(after?.pending.every(operation => operation.seq > 1)).toBe(true);
+        expect(after?.pending.some(operation => operation.seq === 2)).toBe(true);
+    });
     it.each(['altered-payload', 'wrong-replica', 'wrong-generation', 'wrong-prefix', 'wrong-sequence'] as const)(
         'preserves the complete local journal if delivered evidence is %s', async scenario => {
             await commitLocal(owner, data(171), data(170));
@@ -71,33 +101,4 @@ beforeEach(async () => {
             expect(await readLocal(owner)).toEqual(before);
         },
     );
-});
-
-describe('acknowledgeThrough reconciliation', () => {
-    it('preserves remote changes while replaying only newer local pending operations', async () => {
-        await commitLocal(owner, data(171), data(170));
-        await commitLocal(owner, data(172), data(171));
-
-        const before = await readLocal(owner);
-        expect(before?.actorSeq).toBe(2);
-        expect(before?.pending.some(operation => operation.seq === 1)).toBe(true);
-        expect(before?.pending.some(operation => operation.seq === 2)).toBe(true);
-
-        // The acknowledged cloud state contains seq 1 plus an independent change
-        // made by another device while local seq 2 is still pending.
-        const delivered = before!.pending.filter(operation => operation.seq === 1);
-        expect(delivered).toHaveLength(1);
-        await acknowledgeThrough(owner, 1, data(171, '39'), [], undefined, {
-            operations: delivered, replica,
-        });
-
-        const after = await readLocal(owner);
-        expect(after?.baseline.profile?.height).toBe('171');
-        expect(after?.baseline.profile?.neck).toBe('39');
-        expect(after?.data.profile?.height).toBe('172');
-        expect(after?.data.profile?.neck).toBe('39');
-        expect(after?.pending.length).toBeGreaterThan(0);
-        expect(after?.pending.every(operation => operation.seq > 1)).toBe(true);
-        expect(after?.pending.some(operation => operation.seq === 2)).toBe(true);
-    });
 });
