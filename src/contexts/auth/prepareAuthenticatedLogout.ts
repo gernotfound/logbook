@@ -1,7 +1,7 @@
 import { auth } from '../../lib/firebase';
 import { useAppStore } from '../../store/useAppStore';
 import { useDialogStore } from '../../store/useDialogStore';
-import { userOwner } from '../../lib/sync/session';
+import { captureSession, isCurrentSession, userOwner } from '../../lib/sync/session';
 import { classifySyncFailure } from '../../lib/sync/syncFailure';
 import { SyncTimeoutError } from '../../lib/db/db_core';
 
@@ -15,6 +15,12 @@ export async function prepareAuthenticatedLogout(
 ): Promise<boolean | null> {
     // The preflight belongs to the account which initiated logout.
     if (!initialUid || auth.currentUser?.uid !== initialUid) return null;
+    const session = captureSession();
+    if (session.owner !== userOwner(initialUid) || !isCurrentSession(session)) return null;
+    // UID equality alone is insufficient: a pending cloud wait or confirmation
+    // can finish after sign-out and sign-in to the SAME account. That older
+    // request must not authorize discarding the new session's local data.
+    const stillCurrent = () => auth.currentUser?.uid === initialUid && isCurrentSession(session);
     let discardUnsynced = false;
     setSyncing(true);
     // Firestore's write queue is separate from the durable IndexedDB journal.
@@ -23,20 +29,22 @@ export async function prepareAuthenticatedLogout(
         try {
             const { readLocal } = await import('../../lib/sync/localRepository');
             const envelope = await readLocal(userOwner(initialUid));
-            if (auth.currentUser?.uid !== initialUid) return null;
+            if (!stillCurrent()) return null;
             if (envelope?.cloudIntegrityFence) {
                 await useDialogStore.getState().showAlert('Logout sospeso: lo snapshot cloud non è ancora verificato. La copia locale è preservata; riconnetti e completa il recupero prima di uscire.');
                 return null;
             }
             return (envelope?.pending.length ?? 0) > 0;
         } catch {
-            await useDialogStore.getState().showAlert('Non posso verificare i dati locali prima del logout. Archivio preservato: riprova dopo aver riaperto TheLogBook.');
+            if (stillCurrent()) {
+                await useDialogStore.getState().showAlert('Non posso verificare i dati locali prima del logout. Archivio preservato: riprova dopo aver riaperto TheLogBook.');
+            }
             return null;
         }
     };
     let durablePending = await readDurablePending();
-    if (durablePending === null) {
-        setSyncing(false);
+    if (durablePending === null || !stillCurrent()) {
+        if (stillCurrent()) setSyncing(false);
         return null;
     }
     const state = useAppStore.getState();
@@ -61,20 +69,18 @@ export async function prepareAuthenticatedLogout(
             }
         }
 
-        if (auth.currentUser?.uid !== initialUid) {
-            setSyncing(false);
-            return null;
-        }
+        if (!stillCurrent()) return null;
 
         const refreshedPending = await readDurablePending();
-        if (refreshedPending === null) {
-            setSyncing(false);
+        if (refreshedPending === null || !stillCurrent()) {
+            if (stillCurrent()) setSyncing(false);
             return null;
         }
         durablePending = refreshedPending;
         const finalState = useAppStore.getState();
         isSafe = finalState.syncHealth === 'synced' && !finalState.localWorkout && !finalState.userData?.pendingConflicts && !durablePending && pendingWriteStatus === null;
     }
+    if (!stillCurrent()) return null;
     setSyncing(false);
 
     if (!isSafe) {
@@ -91,12 +97,11 @@ export async function prepareAuthenticatedLogout(
 
         const action = await useDialogStore.getState().showUnsyncedDataLogout(reason);
 
-        if (auth.currentUser?.uid !== initialUid) {
-            return null;
-        }
+        if (!stillCurrent()) return null;
 
         if (action === 'export') {
             const { Exporter } = await import('../../lib/export');
+            if (!stillCurrent()) return null;
             const currentState = useAppStore.getState().userData;
             if (currentState) {
                 Exporter.exportEmergencyJSON(currentState);
@@ -109,7 +114,7 @@ export async function prepareAuthenticatedLogout(
         } else if (action === 'safe-exit') {
             // A new edit can reach IndexedDB while the dialog is visible.
             const latestPending = await readDurablePending();
-            if (latestPending !== false || pendingWriteStatus !== null) return null;
+            if (latestPending !== false || pendingWriteStatus !== null || !stillCurrent()) return null;
             const finalCheck = useAppStore.getState();
             if (finalCheck.syncHealth !== 'synced' || finalCheck.localWorkout || finalCheck.userData?.pendingConflicts) {
                 return null;
@@ -120,5 +125,5 @@ export async function prepareAuthenticatedLogout(
             return null;
         }
     }
-    return discardUnsynced;
+    return stillCurrent() ? discardUnsynced : null;
 }

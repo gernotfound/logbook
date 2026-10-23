@@ -372,8 +372,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 return;
             }
 
+            // The preflight can suspend over Firestore waits or a user dialog.
+            // Capture the original generation BEFORE it: a same-UID re-login
+            // is a different session and must not reach secureLogOut.
+            const logoutSession = captureSession();
+            if (!initialUid || logoutSession.owner !== userOwner(initialUid)
+                || !isCurrentSession(logoutSession)) return;
             const discardUnsynced = mode === 'force' ? true : await prepareAuthenticatedLogout(initialUid, setSyncing);
-            if (discardUnsynced === null) return;
+            if (discardUnsynced === null || auth.currentUser?.uid !== initialUid
+                || !isCurrentSession(logoutSession)) return;
 
             // A draft can fail while a confirmation dialog or cloud check is open.
             if (useAppStore.getState().localPersistenceBlocked) {
