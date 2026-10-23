@@ -58,5 +58,12 @@ export async function linkEmailPasswordWithEnumerationProtection(
         throw authError(payload.error?.message || `Identity Toolkit HTTP ${response.status}`);
     }
 
+    // HTTP 2xx alone is not proof that the requested identity was linked.
+    // The Identity Toolkit signUp response must identify this same Firebase user.
+    const linkedAccount: { localId?: unknown } | null = await response.json().catch(() => null);
+    if (linkedAccount?.localId !== user.uid) {
+        throw authError('Identity Toolkit response missing the matching account identity');
+    }
+
     await reload(user);
 }
