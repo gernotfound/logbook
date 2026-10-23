@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import TrainingPlanning from '../src/components/Training/planning/TrainingPlanning';
 import { useAppStore } from '../src/store/useAppStore';
 import { useDialogStore } from '../src/store/useDialogStore';
+import { update as updateIndexedDb } from 'idb-keyval';
 import type { UserData } from '../src/types';
 
 const originalDispatch = useAppStore.getState().dispatchDomainOperation;
@@ -35,6 +36,9 @@ describe('audit regression: TrainingPlanning persistence failures', () => {
         dispatchDomainOperation.mockRejectedValue(new Error('write failed'));
         useAppStore.setState({
             userData: structuredClone(userData),
+            dataOwner: 'user:test-user-id',
+            localPersistenceBlocked: false,
+            compatibilityStatus: 'ok',
             dispatchDomainOperation
         });
         vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
@@ -42,7 +46,7 @@ describe('audit regression: TrainingPlanning persistence failures', () => {
 
     afterEach(() => {
         act(() => {
-            useAppStore.setState({ dispatchDomainOperation: originalDispatch });
+            useAppStore.setState({ dispatchDomainOperation: originalDispatch, localPersistenceBlocked: false });
         });
         vi.restoreAllMocks();
     });
@@ -66,5 +70,47 @@ describe('audit regression: TrainingPlanning persistence failures', () => {
 
         expect(screen.getByText(/Modifica ciclo/i)).toBeDefined();
         expect(screen.getByDisplayValue('Ciclo persistente')).toBeDefined();
+    });
+
+    it('keeps the editor open on a resolved but non-durable failure status', async () => {
+        dispatchDomainOperation.mockResolvedValueOnce({
+            ok: false, status: 'failed', error: new Error('IndexedDB unavailable'),
+        });
+        render(<TrainingPlanning />);
+        fireEvent.click(screen.getByTitle('Opzioni'));
+        fireEvent.click(screen.getByRole('menuitem', { name: /Modifica/i }));
+        fireEvent.change(screen.getByDisplayValue('Ciclo persistente'), {
+            target: { value: 'Modifica non salvata' },
+        });
+        fireEvent.click(screen.getByRole('button', { name: /Salva modifiche/i }));
+
+        await waitFor(() => expect(showAlert).toHaveBeenCalledWith(
+            'Salvataggio del ciclo non riuscito. Le modifiche sono ancora nel form: riprova.'
+        ));
+        expect(screen.getByDisplayValue('Modifica non salvata')).toBeDefined();
+        expect(useAppStore.getState().userData?.trainingCycles?.[0]?.name).toBe('Ciclo persistente');
+    });
+
+    it('refuses a planning mutation before IndexedDB when local persistence is blocked', async () => {
+        vi.mocked(updateIndexedDb).mockClear();
+        useAppStore.setState({
+            dispatchDomainOperation: originalDispatch,
+            localPersistenceBlocked: true,
+        });
+        const original = structuredClone(useAppStore.getState().userData);
+        render(<TrainingPlanning />);
+        fireEvent.click(screen.getByTitle('Opzioni'));
+        fireEvent.click(screen.getByRole('menuitem', { name: /Modifica/i }));
+        fireEvent.change(screen.getByDisplayValue('Ciclo persistente'), {
+            target: { value: 'Mai persistito' },
+        });
+        fireEvent.click(screen.getByRole('button', { name: /Salva modifiche/i }));
+
+        await waitFor(() => expect(showAlert).toHaveBeenCalledWith(
+            'Salvataggio del ciclo non riuscito. Le modifiche sono ancora nel form: riprova.'
+        ));
+        expect(screen.getByDisplayValue('Mai persistito')).toBeDefined();
+        expect(useAppStore.getState().userData).toEqual(original);
+        expect(updateIndexedDb).not.toHaveBeenCalled();
     });
 });

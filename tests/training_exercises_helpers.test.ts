@@ -19,6 +19,13 @@ describe('Training exercise muscle helpers', () => {
         expect(results[0].id).toBe('biceps');
     });
 
+    it('uses fuzzy search for a misspelling that has no literal or stem match', () => {
+        const results = filterMuscles('biciptii');
+        expect(results.map(muscle => muscle.id)).toContain('biceps');
+        expect(results.map(muscle => muscle.id).filter(id => id === 'biceps')).toHaveLength(1);
+        expect(results.length).toBeLessThanOrEqual(10);
+    });
+
     it('expands a bilateral base muscle to its left and right ids', () => {
         expect(Array.from(getExpandedMuscleIds([{ id: 'biceps' }])).sort()).toEqual([
             'biceps_left',

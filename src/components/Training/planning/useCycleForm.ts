@@ -15,7 +15,7 @@ import type {
     WorkoutRoutine,
 } from '../../../types';
 
-function computeEndDate(startIso: string, weeks: number): string {
+export function computeEndDate(startIso: string, weeks: number): string {
     try {
         const parsed = typeof startIso === 'string' && !startIso.includes('T') ? parseISO(startIso) : new Date(startIso);
         if (!isValid(parsed)) return startIso;
@@ -27,7 +27,7 @@ function computeEndDate(startIso: string, weeks: number): string {
     }
 }
 
-function computeWeeksFromDates(startIso: string, endIso: string): number {
+export function computeWeeksFromDates(startIso: string, endIso: string): number {
     try {
         const start = typeof startIso === 'string' && !startIso.includes('T') ? parseISO(startIso) : new Date(startIso);
         const end = typeof endIso === 'string' && !endIso.includes('T') ? parseISO(endIso) : new Date(endIso);
@@ -281,6 +281,12 @@ export function useCycleForm({ initialCycle, routines, onSave, showAlert }: UseC
             await showAlert('Inserisci date di inizio e fine valide, con la fine non precedente all’inizio.');
             return;
         }
+        // A blank/nonpositive duration is normalized on save. Its preview may
+        // retain the old end date while editing; never persist that stale end.
+        // Explicit date edits already update durationWeeks and stay untouched.
+        const savedEndDate = durationWeeks.trim() === '' || rawWeeks < 1
+            ? computeEndDate(validStartDate, weeks)
+            : validEndDate;
         const hasStrategyDetails = Boolean(strategyIntent || primaryMuscles.length || secondaryMuscles.length);
         const editableStrategy: TrainingCycleStrategy | undefined = hasStrategyDetails
             ? {
@@ -299,7 +305,7 @@ export function useCycleForm({ initialCycle, routines, onSave, showAlert }: UseC
             sessionsPerWeek: freqPerWeek,
             progressionMode: initialCycle?.progressionMode ?? 'sequential',
             startDate: validStartDate,
-            endDate: validEndDate,
+            endDate: savedEndDate,
             notes: notes.trim(),
             ...(strategy ? { strategy } : {}),
             routines: cycleRoutines,
