@@ -24,6 +24,7 @@ import {
     extractCustomExercisesAndOverrides,
     extractCustomFoodsAndOverrides
 } from '../src/lib/catalog/deltaResolver';
+import { calculateWorkoutVolume, searchExerciseLibrary } from '../src/lib/calc/workout';
 import type {
     CatalogExercise,
     CatalogFood,
@@ -168,16 +169,13 @@ describe('Adversarial & Stress Testing Suite for Catalog Resolution Pipeline (M1
             ];
 
             const resolved = resolveEffectiveExercises(globalExercises, userCustom);
-            // Custom item should be at the front with isDefault: false
-            expect(resolved.length).toBe(2);
-            expect(resolved[0].id).toBe('bench-press');
-            expect(resolved[0].name).toBe('Custom Overwriting Bench Press');
-            expect(resolved[0].isDefault).toBe(false);
-
-            // Global item is second with isDefault: true
-            expect(resolved[1].id).toBe('bench-press');
-            expect(resolved[1].name).toBe('Global Bench Press');
-            expect(resolved[1].isDefault).toBe(true);
+            expect(resolved).toHaveLength(1);
+            expect(resolved[0]).toMatchObject({ id: 'bench-press', name: 'Custom Overwriting Bench Press', isDefault: false });
+            expect(searchExerciseLibrary(resolved, 'bench').map(ex => ex.id)).toEqual(['bench-press']);
+            expect(calculateWorkoutVolume({ exercises: [{ exId: 'bench-press', sets: [{ kg: '10', reps: '2' }] }] }, resolved)).toBe(20);
+            // Duplicate names remain distinct when their stable IDs differ.
+            expect(resolveEffectiveExercises([...globalExercises, { ...globalExercises[0], id: 'second-bench' }], userCustom).map(ex => ex.id))
+                .toEqual(['bench-press', 'second-bench']);
         });
 
         it('handles custom food with numeric ID 0 and colliding string ID "0"', () => {
