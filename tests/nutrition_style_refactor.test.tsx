@@ -243,7 +243,7 @@ renderWithProviders(
     });
 
     describe('R1 & R2: NutritionSupplements', () => {
-        it('renders supplements library headings with var(--text-main)', () => {
+        it('renders the supplements create action in the themed panel', () => {
             renderWithProviders(
                 <NutritionSupplements selectedDate="2026-08-16" />
             );
