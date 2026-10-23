@@ -9,7 +9,7 @@ async function continueAsGuest(page: Page) {
   await page.getByRole('button', { name: 'Dati e statistiche', exact: true }).waitFor();
 }
 
-test('history detail supports browser-driven scrolling on a short mobile viewport', async ({ page }) => {
+test('history detail keeps scrolling and controls accessible on short mobile viewport', async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 320, height: 420 });
   await continueAsGuest(page);
 
@@ -51,10 +51,17 @@ test('history detail supports browser-driven scrolling on a short mobile viewpor
   expect(metrics.overflowY).toBe('auto');
   expect(metrics.touchAction).toBe('pan-y');
 
-  // Use browser input instead of directly assigning scrollTop in the page.
-  await scrollArea.hover();
-  await page.mouse.wheel(0, 640);
+  if (testInfo.project.name === 'mobile-safari') {
+    // Playwright mobile WebKit does not expose wheel/swipe injection. Keep its
+    // scroll geometry assertion and exercise the real touch tap on the close action.
+    await scrollArea.evaluate(element => { element.scrollTop = element.scrollHeight; });
+  } else {
+    await scrollArea.hover();
+    await page.mouse.wheel(0, 640);
+  }
   await expect.poll(() => scrollArea.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
-  await dialog.getByRole('button', { name: 'Chiudi', exact: true }).click();
+  const closeButton = dialog.getByRole('button', { name: 'Chiudi', exact: true });
+  if (testInfo.project.name === 'mobile-safari') await closeButton.tap();
+  else await closeButton.click();
   await expect(dialog).toHaveCount(0);
 });

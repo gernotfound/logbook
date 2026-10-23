@@ -57,7 +57,11 @@ describe('home pain persistence', () => {
         const { result } = renderHook(() => useHomeView());
         await waitFor(() => expect(result.current.loading).toBe(false));
         vi.mocked(update).mockRejectedValueOnce(new Error('Injected IndexedDB pain write failure'));
-        act(() => { result.current.toggleActivePain('chest_upper'); });
+        act(() => {
+            const home = result.current;
+            if (home.loading) throw new Error('Home hook not ready');
+            home.toggleActivePain('chest_upper');
+        });
         await act(async () => { await useAppStore.getState().flushPendingSyncs(); });
 
         await waitFor(() => expect(useAppStore.getState().syncHealth).toBe('failed'));
