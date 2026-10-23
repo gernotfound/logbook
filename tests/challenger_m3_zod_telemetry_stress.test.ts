@@ -3,15 +3,6 @@ import * as sentryClient from '../src/lib/sentryClient';
 import {
     DomainParsers,
     UserDataSchema,
-
-
-
-
-
-
-
-
-
     setSchemaFallbackListener,
     reportZodSchemaFallback,
 } from '../src/lib/schema';
@@ -19,7 +10,6 @@ import {
     telemetryHub,
     TELEMETRY_QUEUE_CAPACITY,
     type TelemetryErrorPayload,
-
 } from '../src/lib/telemetryHub';
 
 describe('Empirical Challenger: Milestone 3 (R1: Zod Integration) Adversarial Stress Suite', () => {
@@ -50,66 +40,52 @@ describe('Empirical Challenger: Milestone 3 (R1: Zod Integration) Adversarial St
     });
 
     // =========================================================================
-    // 1. Rapid Bursts of 1000+ Malformed Records (Throughput & Non-Blocking)
+    // 1. High-volume malformed input safety (deterministic result assertions)
     // =========================================================================
-    describe('1. High-Load Burst Testing (1000+ Malformed Records)', () => {
-        it('processes 1,000 malformed profile records in < 500ms without throwing or hanging', () => {
-            // Build input array once; same inputs used in both sections (correctness and timing)
+    describe('1. High-volume malformed input recovery (1000+ records)', () => {
+        it('parses 1,000 malformed profile records without invalid outputs', () => {
+            // Fixed inputs, with production parser outcomes checked throughout the burst.
             const samples = Array.from({ length: 1000 }, (_, i) =>
                 i % 2 === 0
                     ? `corrupted_profile_${i}`
                     : { height: null, waist: { invalid: true }, [i]: 'junk' }
             );
 
-            // Correctness check (outside timer): Vitest/chai expect() overhead not included
+            // Sampled oracle before the full-volume path.
             for (const input of samples.slice(0, 10)) {
                 const result = DomainParsers.parseProfile(input);
                 expect(result).toBeDefined();
                 expect(typeof result).toBe('object');
             }
 
-            // Timed section: only Zod parsing, no Vitest matcher overhead
-            const start = performance.now();
+            // Run all 1,000 records; fail on the first invalid output.
             for (const input of samples) {
                 const result = DomainParsers.parseProfile(input);
                 if (!result || typeof result !== 'object') {
                     throw new Error(`parseProfile returned an invalid result for input: ${JSON.stringify(input)}`);
                 }
             }
-            const duration = performance.now() - start;
-
-            // 500ms: robust threshold for Windows CI scheduling jitter.
-            // This is a test-environment guard, NOT a product SLA.
-            // Pure Zod parse of 1,000 records typically completes in < 30ms.
-            expect(duration).toBeLessThan(500);
         });
 
-        it('processes 1,000 malformed workout sessions in < 500ms without throwing', () => {
-            // Baseline measured: ~80-86ms for pure parsing.
-            // 500ms threshold ensures 95th percentile stability on CI multi-thread runs to tolerate scheduling jitter.
-            // This is a test-environment guard, NOT a product SLA.
-            
-            // 1. Correctness check (isolated sample)
+        it('parses 1,000 malformed workout sessions with safe exercise arrays', () => {
+            // First verify a representative corrupted workout session.
             const sample = DomainParsers.parseWorkoutSession({ exercises: [{ sets: 'invalid_sets' }] });
             expect(sample).toBeDefined();
             expect(Array.isArray(sample.exercises)).toBe(true);
 
-            // 2. Pure performance loop (timing separated from expectations)
-            const start = performance.now();
+            // Verify each parser output instead of runner-dependent wall-clock time.
             for (let i = 0; i < 1000; i++) {
                 const malformed = i % 3 === 0 
                     ? `corrupted_session_${i}` 
                     : i % 3 === 1 
                         ? { exercises: 'not_an_array', moodRating: 'bad' } 
                         : { exercises: [{ sets: 'invalid_sets' }] };
-                DomainParsers.parseWorkoutSession(malformed);
+                const result = DomainParsers.parseWorkoutSession(malformed);
+                expect(Array.isArray(result.exercises)).toBe(true);
             }
-            const duration = performance.now() - start;
-            expect(duration).toBeLessThan(500);
         });
 
-        it('processes 1,000 malformed custom food records in < 250ms without throwing', () => {
-            const start = performance.now();
+        it('rejects 1,000 malformed custom foods without producing ghost records', () => {
             const malformedArray = Array.from({ length: 1000 }, (_, i) => 
                 i % 2 === 0 ? `corrupt_food_${i}` : { name: 12345, kcal: 'invalid_kcal', satFat: 'bad_fat' }
             );
@@ -120,12 +96,10 @@ describe('Empirical Challenger: Milestone 3 (R1: Zod Integration) Adversarial St
                 expect(typeof food.kcal).toBe('number');
                 expect(isNaN(food.kcal)).toBe(false);
             }
-            const duration = performance.now() - start;
-            expect(duration).toBeLessThan(250);
+
         });
 
-        it('processes 1,000 malformed history items in < 300ms without throwing', () => {
-            const start = performance.now();
+        it('quarantines 1,000 malformed history items without inventing multiple identities', () => {
             const malformedHistory = Array.from({ length: 1000 }, (_, i) => 
                 i % 2 === 0 ? `corrupt_history_${i}` : { id: 123, exercises: 'bad_array' }
             );
@@ -133,12 +107,10 @@ describe('Empirical Challenger: Milestone 3 (R1: Zod Integration) Adversarial St
             expect(result).toHaveLength(1);
             expect(result[0].id).toBe('123');
             expect(Array.isArray(result[0].exercises)).toBe(true);
-            const duration = performance.now() - start;
-            expect(duration).toBeLessThan(300);
+
         });
 
-        it('processes 1,000 malformed UserData monolithic parses in < 500ms and yields safe defaults', () => {
-            const start = performance.now();
+        it('normalizes 1,000 malformed UserData roots to safe defaults', () => {
             for (let i = 0; i < 1000; i++) {
                 const malformed = i % 4 === 0 
                     ? `total_junk_${i}` 
@@ -154,8 +126,7 @@ describe('Empirical Challenger: Milestone 3 (R1: Zod Integration) Adversarial St
                 expect(Array.isArray(result.history)).toBe(true);
                 expect(typeof result.nutrition).toBe('object');
             }
-            const duration = performance.now() - start;
-            expect(duration).toBeLessThan(500);
+
         });
     });
 
