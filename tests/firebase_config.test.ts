@@ -71,7 +71,11 @@ describe('R2: Firebase Config Security & Fail-Fast Suite', () => {
         it('keeps retired Analytics out of the Firebase core module', () => {
             const firebaseSource = fs.readFileSync(path.resolve(__dirname, '../src/lib/firebase.ts'), 'utf-8');
             const appSource = fs.readFileSync(path.resolve(__dirname, '../src/App.tsx'), 'utf-8');
-            const vercelConfig = fs.readFileSync(path.resolve(__dirname, '../vercel.json'), 'utf-8');
+            const firebaseHosting = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../firebase.json'), 'utf-8')) as {
+                hosting: { headers: Array<{ source: string; headers: Array<{ key: string; value: string }> }> };
+            };
+            const globalHeaders = firebaseHosting.hosting.headers.find(entry => entry.source === '/**');
+            const csp = globalHeaders?.headers.find(entry => entry.key.toLowerCase() === 'content-security-policy')?.value;
 
             expect(firebaseSource).not.toContain('firebase/analytics');
             expect(firebaseSource).not.toContain('measurementId');
@@ -80,11 +84,11 @@ describe('R2: Firebase Config Security & Fail-Fast Suite', () => {
             expect(firebaseSource).not.toContain('persistentLocalCache');
             expect(firebaseSource).not.toContain('persistentMultipleTabManager');
             expect(appSource).not.toContain('firebase/analytics');
-            expect(vercelConfig).not.toContain('google-analytics.com');
-            expect(vercelConfig).not.toContain('googletagmanager.com');
-            expect(vercelConfig).not.toContain('fonts.googleapis.com');
-            expect(vercelConfig).not.toContain('fonts.gstatic.com');
-            expect(vercelConfig).not.toContain('firebaseio.com');
+            // Firebase Hosting serves the frontend: Vercel config does not control its browser CSP.
+            expect(csp).toBeDefined();
+            expect(csp).toContain("connect-src 'self'");
+            expect(csp).not.toMatch(/google-analytics\.com|googletagmanager\.com|firebaseio\.com|fonts\.(?:googleapis|gstatic)\.com/);
+            expect(csp).not.toMatch(/\*\.googleapis\.com|connect-src[^;]*\s\*/);
         });
     });
 
