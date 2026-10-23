@@ -1,7 +1,9 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import { get as idbGet } from 'idb-keyval';
 import {
     getSeedCatalog,
     getCachedCatalog,
+    CATALOG_CACHE_KEY,
     getInMemoryCatalog,
 
     clearCatalogCache,
@@ -83,7 +85,9 @@ describe('Catalog Resolution Pipeline & Service Unit Tests (M1)', () => {
             expect(Array.isArray(catalog.foods)).toBe(true);
             // Must mark the catalog as loaded into in-memory cache
             expect(isCatalogInMemory()).toBe(true);
-            // Verify the IDB cache was actually written: a second call must return the same manifest
+            // Read the mocked persistence boundary, not merely the same in-memory singleton.
+            const stored = await idbGet(CATALOG_CACHE_KEY);
+            expect(stored).toMatchObject({ manifest: { version: catalog.manifest.version } });
             const catalog2 = await getCachedCatalog();
             expect(catalog2.manifest.version).toBe(catalog.manifest.version);
         });
