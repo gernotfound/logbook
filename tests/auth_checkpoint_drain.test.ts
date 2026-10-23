@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { User } from 'firebase/auth';
+import { auth } from '../src/lib/firebase';
+import { invalidateSession } from '../src/lib/sync/session';
 import { loadAndDrainAuthenticatedData } from '../src/contexts/auth/loadAndDrainAuthenticatedData';
 
 const mocks = {
@@ -32,6 +34,11 @@ const checkpointed = { replica: { actorId: 'replica-a' }, pending: [{ id: 'pendi
 describe('authenticated checkpoint journal drain', () => {
     beforeEach(() => {
         vi.resetAllMocks();
+        localStorage.clear();
+        invalidateSession();
+        // The real loader uses Firebase Auth + the owner-scoped session,
+        // not only the injected currentUid callback.
+        (auth as { currentUser: unknown }).currentUser = { uid: 'account-a' };
         mocks.currentUid.mockReturnValue('account-a');
         mocks.isOnline.mockReturnValue(true);
         mocks.load.mockResolvedValue(undefined);
@@ -47,7 +54,7 @@ describe('authenticated checkpoint journal drain', () => {
             user: args.user, setUserData: args.setUserData,
             setSyncing: args.setSyncing, setSaveError: args.setSaveError,
         }));
-        expect(mocks.readLocal).toHaveBeenCalledWith('account-a');
+        expect(mocks.readLocal).toHaveBeenCalledWith('user:account-a');
         expect(mocks.flush).not.toHaveBeenCalled();
 
         mocks.readLocal.mockResolvedValueOnce({ replica: {}, pending: [] });
@@ -132,6 +139,49 @@ describe('authenticated checkpoint journal drain', () => {
         resolveRead(checkpointed);
         await draining;
         expect(mocks.flush).not.toHaveBeenCalled();
+    });
+
+    it('does not replay after hydration from a prior login with the same UID', async () => {
+        let releaseHydration!: () => void;
+        mocks.load.mockImplementationOnce(() => new Promise<void>(resolve => { releaseHydration = resolve; }));
+        const draining = loadAndDrainAuthenticatedData(options(), environment);
+        await vi.waitFor(() => expect(mocks.load).toHaveBeenCalledOnce());
+        invalidateSession();
+        // A new Firebase login with the identical UID must not adopt the old request.
+        (auth as { currentUser: unknown }).currentUser = { uid: 'account-a' };
+        releaseHydration();
+        await draining;
+        expect(mocks.readLocal).not.toHaveBeenCalled();
+        expect(mocks.flush).not.toHaveBeenCalled();
+    });
+
+    it('does not replay an old IndexedDB journal into a new same-UID session', async () => {
+        let resolveRead!: (value: unknown) => void;
+        mocks.readLocal.mockImplementationOnce(() => new Promise(resolve => { resolveRead = resolve; }));
+        const draining = loadAndDrainAuthenticatedData(options(), environment);
+        await vi.waitFor(() => expect(mocks.readLocal).toHaveBeenCalledOnce());
+        invalidateSession();
+        (auth as { currentUser: unknown }).currentUser = { uid: 'account-a' };
+        resolveRead(checkpointed);
+        await draining;
+        expect(mocks.flush).not.toHaveBeenCalled();
+    });
+
+    it('does not retry replica-fenced recovery after a same-UID session replacement', async () => {
+        const fenced = Object.assign(new Error('checkpoint required'), { code: 'replica-fenced' });
+        let releaseRehydration!: () => void;
+        mocks.readLocal.mockResolvedValue(checkpointed);
+        mocks.flush.mockRejectedValueOnce(fenced);
+        mocks.load.mockResolvedValueOnce('ready')
+            .mockImplementationOnce(() => new Promise<void>(resolve => { releaseRehydration = resolve; }));
+        const draining = loadAndDrainAuthenticatedData(options(), environment);
+        await vi.waitFor(() => expect(mocks.load).toHaveBeenCalledTimes(2));
+        invalidateSession();
+        (auth as { currentUser: unknown }).currentUser = { uid: 'account-a' };
+        releaseRehydration();
+        await draining;
+        expect(mocks.flush).toHaveBeenCalledOnce();
+        expect(mocks.readLocal).toHaveBeenCalledOnce();
     });
 
     it('does not drain an offline journal', async () => {

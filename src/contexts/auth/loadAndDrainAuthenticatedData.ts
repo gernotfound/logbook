@@ -1,6 +1,7 @@
 import type { User } from 'firebase/auth';
 import type { UserData } from '../../types';
 import { auth } from '../../lib/firebase';
+import { captureSessionForOwner, isCurrentSession, userOwner } from '../../lib/sync/session';
 import { useAppStore } from '../../store/useAppStore';
 import { loadAuthenticatedData } from './loadAuthenticatedData';
 
@@ -34,6 +35,14 @@ type AuthenticatedDataSyncOptions = {
 export async function loadAndDrainAuthenticatedData({
     user, isGuestActive, setUserData, setSyncing, setSaveError,
 }: AuthenticatedDataSyncOptions, environment: DrainEnvironment = productionEnvironment): Promise<void> {
+    // A delayed hydration or IndexedDB read must not authorize the global
+    // store flush after signing out and back in with the SAME Firebase UID.
+    // The owner string alone cannot distinguish these session generations.
+    const session = captureSessionForOwner(userOwner(user.uid));
+    const isCurrentOwner = () => environment.currentUid() === user.uid
+        && auth.currentUser?.uid === user.uid
+        && isCurrentSession(session)
+        && !isGuestActive() && environment.isOnline();
     const outcome = await environment.load({
         user,
         isGuestActive,
@@ -42,11 +51,9 @@ export async function loadAndDrainAuthenticatedData({
         setSaveError,
     });
 
-    const isCurrentOwner = () => environment.currentUid() === user.uid
-        && !isGuestActive() && environment.isOnline();
     if (outcome === 'blocked' || !isCurrentOwner()) return;
     const drainCheckpointedJournal = async () => {
-        const envelope = await environment.readLocal(user.uid);
+        const envelope = await environment.readLocal(session.owner);
         // The global flush uses the current store owner; a delayed IndexedDB
         // read must not flush a later authenticated session.
         if (!isCurrentOwner() || !envelope?.replica || !envelope.pending.length) return;
