@@ -231,7 +231,10 @@ describe('M5 logout protection through AuthProvider', () => {
         expect(dialogs.showUnsyncedDataLogout).not.toHaveBeenCalled();
         expect(DB.secureLogOut).not.toHaveBeenCalled();
         expect(useAppStore.getState().userData).not.toBeNull();
-        expect(useAppStore.getState().syncing).toBe(false);
+        // This test changes Firebase's mock UID without delivering the Auth
+        // state-change callback. The expired logout must not clear syncing on
+        // behalf of the successor: the actual Auth callback owns that reset.
+        expect(useAppStore.getState().syncing).toBe(true);
     });
 
     it('coalesces rapid authenticated logout requests while the first secure logout is in flight', async () => {
