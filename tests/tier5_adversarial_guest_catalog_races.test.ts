@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { set as idbSet } from 'idb-keyval';
-import { doc, writeBatch } from 'firebase/firestore';
+import { doc } from 'firebase/firestore';
 
 vi.unmock('../src/lib/db');
 import { ConsentedTestDB as DB } from './testUtils';
