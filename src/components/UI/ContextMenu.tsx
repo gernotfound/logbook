@@ -87,8 +87,9 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
   // Pointer outside clicks do not arbitrate keyboard-only openings across cards.
   // Notify peer menus before a new one opens, keeping focus in the new menu.
   useEffect(() => {
+    if (!isOpen) return;
     const onPeerOpen = (event: Event) => {
-      if ((event as CustomEvent<HTMLDivElement>).detail !== containerRef.current && isOpen) {
+      if ((event as CustomEvent<HTMLDivElement>).detail !== containerRef.current) {
         toggleOpen(false);
       }
     };
