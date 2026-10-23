@@ -192,10 +192,6 @@ describe('Technical telemetry queue and dispatch — Tier 2', () => {
         expect(telemetryHub.getQueuedEvents()).toHaveLength(0);
       });
 
-      // The Telemetry Hub intentionally does not subscribe to visibilitychange;
-      // its owner-scoped offline retry trigger is the window 'online' event,
-      // verified by the Tier 1 product suite.
-
     });
   });
 });
