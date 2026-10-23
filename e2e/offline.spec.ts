@@ -1,6 +1,21 @@
 import { test, expect } from './fixtures';
 
 test.describe('Offline scenarios & Background suspension', () => {
+  test('unreadable ownership storage renders the recovery barrier instead of mounting account data', async ({ page }) => {
+    await page.addInitScript(() => {
+      const read = Storage.prototype.getItem;
+      Storage.prototype.getItem = function (key: string) {
+        if (key === 'logbook_is_guest') throw new DOMException('Owner storage blocked', 'SecurityError');
+        return read.call(this, key);
+      };
+    });
+    await page.goto('/');
+    await expect(page.locator('#storage-unavailable')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Archivio non disponibile' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Riprova' })).toBeVisible();
+    await expect(page.locator('#view-training')).toHaveCount(0);
+  });
+
   test('Local workout and durable UserData survive offline page loss', async ({ page, context }) => {
     // 1. Apri l'app
     await page.goto('/');

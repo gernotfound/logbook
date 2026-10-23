@@ -60,6 +60,11 @@ describe('Storage Bootstrap & Telemetry Integration Flow', () => {
     expect(useAppStore.getState().syncHealth).toBe('failed');
     expect(useAppStore.getState().saveError).toContain('Archivio del dispositivo non disponibile');
     expect(createRoot).toHaveBeenCalledTimes(1);
+    const rendered = vi.mocked(vi.mocked(createRoot).mock.results[0].value.render).mock.calls[0][0] as {
+      props: { children: { props: { id: string; role: string } } };
+    };
+    expect(rendered.props.children.props.id).toBe('storage-unavailable');
+    expect(rendered.props.children.props.role).toBe('alert');
   });
 
   it('continues startup when technical error-monitoring initialization fails', async () => {
@@ -101,9 +106,11 @@ describe('Storage Bootstrap & Telemetry Integration Flow', () => {
       pending: [], syncMetaByDocument: {}, completeMonths: [], revision: 0
     } : undefined);
     const dispatchSpy = vi.spyOn(storageTelemetryModule, 'dispatchStorageRecoveryAnomaly');
+    const ownerRead = vi.spyOn(idbKeyval, 'get');
 
     await initApp();
 
+    expect(ownerRead.mock.calls.some(([key]) => key === 'logbook:v2:user:test-user-id')).toBe(false);
     // Firebase has not verified this hint. The owner data is inaccessible here.
     expect(window.__INITIAL_USER_DATA__).toBeNull();
     expect(useAppStore.getState().userData).toBeNull();
@@ -119,6 +126,7 @@ describe('Storage Bootstrap & Telemetry Integration Flow', () => {
     await initApp();
 
     expect(window.__INITIAL_USER_DATA__).toBeNull();
+    expect(vi.mocked(idbKeyval.get).mock.calls.some(([key]) => key === 'logbook:v2:user:test-user-id')).toBe(false);
     expect(getStorageMarker()?.timestamp).toBe(1000);
     expect(dispatchSpy).not.toHaveBeenCalled();
     expect(useAppStore.getState().localPersistenceBlocked).toBe(false);
