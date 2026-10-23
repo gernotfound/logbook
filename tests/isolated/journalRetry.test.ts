@@ -26,17 +26,16 @@ describe('foreground durable journal backoff', () => {
     it('retries at increasing capped delays while journal stays pending, without duplicating a queue', async () => {
         vi.useFakeTimers();
         const retry = fixture();
-        await vi.advanceTimersByTimeAsync(19_999);
-        expect(retry.flush).not.toHaveBeenCalled();
-        await vi.advanceTimersByTimeAsync(1);
-        expect(retry.flush).toHaveBeenCalledTimes(1);
-        await vi.advanceTimersByTimeAsync(39_999);
-        expect(retry.flush).toHaveBeenCalledTimes(1);
-        await vi.advanceTimersByTimeAsync(1);
-        expect(retry.flush).toHaveBeenCalledTimes(2);
+        const delays = [20_000, 40_000, 80_000, 160_000, 300_000, 300_000];
+        for (const [index, delay] of delays.entries()) {
+            await vi.advanceTimersByTimeAsync(delay - 1);
+            expect(retry.flush).toHaveBeenCalledTimes(index);
+            await vi.advanceTimersByTimeAsync(1);
+            expect(retry.flush).toHaveBeenCalledTimes(index + 1);
+        }
         retry.controller.dispose();
-        await vi.advanceTimersByTimeAsync(300_000);
-        expect(retry.flush).toHaveBeenCalledTimes(2);
+        await vi.advanceTimersByTimeAsync(600_000);
+        expect(retry.flush).toHaveBeenCalledTimes(delays.length);
     });
 
     it('never retries while offline, backgrounded, rejected, saving or storage-blocked', async () => {
@@ -61,7 +60,7 @@ describe('foreground durable journal backoff', () => {
         retry.controller.dispose();
     });
 
-    it('resets attempts after success and cancels timers for session transitions', async () => {
+    it('resets attempts after a confirmed sync and cancels timers on disposal', async () => {
         vi.useFakeTimers();
         const retry = fixture();
         await vi.advanceTimersByTimeAsync(20_000);
@@ -71,6 +70,21 @@ describe('foreground durable journal backoff', () => {
         retry.update({ syncHealth: 'local-pending' });
         await vi.advanceTimersByTimeAsync(20_000);
         expect(retry.flush).toHaveBeenCalledTimes(2);
+        retry.controller.dispose();
+    });
+
+    it('does not replay a previously scheduled timer while the caller disallows cloud sync', async () => {
+        vi.useFakeTimers();
+        const retry = fixture();
+        await vi.advanceTimersByTimeAsync(10_000);
+        retry.eligible(false); // E.g. background, revoked consent, or owner transition.
+        await vi.advanceTimersByTimeAsync(600_000);
+        expect(retry.flush).not.toHaveBeenCalled();
+        retry.eligible(true);
+        await vi.advanceTimersByTimeAsync(19_999);
+        expect(retry.flush).not.toHaveBeenCalled();
+        await vi.advanceTimersByTimeAsync(1);
+        expect(retry.flush).toHaveBeenCalledTimes(1);
         retry.controller.dispose();
     });
 });
