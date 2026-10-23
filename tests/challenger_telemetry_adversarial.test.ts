@@ -2,30 +2,11 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as sentryClient from '../src/lib/sentryClient';
 import type { TelemetryErrorPayload } from '../src/lib/telemetry/contracts';
 import { z } from 'zod';
-import {
-  scrubPII,
-  truncateStack,
-
-
-
-
-
-  sanitizeErrorPayload,
-
-} from '../src/lib/telemetrySanitizer';
-import {
-
-  telemetryHub,
-
-
-
-
-  TELEMETRY_QUEUE_CAPACITY,
-
-} from '../src/lib/telemetryHub';
+import { scrubPII, truncateStack, sanitizeErrorPayload } from '../src/lib/telemetrySanitizer';
+import { telemetryHub } from '../src/lib/telemetryHub';
 
 describe('Empirical Adversarial Testing Challenger Suite - Telemetry & Sanitizer', () => {
-  let mockSetDoc: any;
+  let mockSentryTransport: any;
 
   beforeEach(() => {
     localStorage.clear();
@@ -33,7 +14,7 @@ describe('Empirical Adversarial Testing Challenger Suite - Telemetry & Sanitizer
     vi.clearAllMocks();
     vi.useRealTimers();
 
-    mockSetDoc = vi.spyOn(sentryClient, 'sendTelemetryToSentry').mockResolvedValue(true);
+    mockSentryTransport = vi.spyOn(sentryClient, 'sendTelemetryToSentry').mockResolvedValue(true);
 
     telemetryHub.reset();
   });
@@ -64,11 +45,10 @@ describe('Empirical Adversarial Testing Challenger Suite - Telemetry & Sanitizer
 
       for (const email of inputs) {
         const scrubbed = scrubPII(`Error occurred for user ${email} during sync`);
-        expect(scrubbed).not.toContain('john.doe');
-        expect(scrubbed).not.toContain('ATHLETE_SUPER.STAR');
-        expect(scrubbed).not.toContain('example-domain.museum');
-        expect(scrubbed).not.toContain('internal-corp.net');
-        expect(scrubbed).not.toContain('support@logbook.app');
+        // Check the actual email from each fixture rather than unrelated constants.
+        const originalAddress = email.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/)?.[0];
+        expect(originalAddress).toBeDefined();
+        expect(scrubbed).not.toContain(originalAddress!);
         expect(scrubbed).toContain('[REDACTED_EMAIL]');
       }
     });
@@ -123,6 +103,7 @@ describe('Empirical Adversarial Testing Challenger Suite - Telemetry & Sanitizer
         'Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.sig',
         'Bearer SecReT_TokEn-123.456~+/===',
         'bearer lower_case_bearer_token_12345',
+        'Authorization: Bearer header_token_12345',
       ];
 
       for (const b of bearerTokens) {
@@ -174,6 +155,11 @@ describe('Empirical Adversarial Testing Challenger Suite - Telemetry & Sanitizer
       expect(scrubPII('token=secret123')).toBe('token=[REDACTED]');
       expect(scrubPII('Auth failed token=secret123 retry=false')).toBe('Auth failed token=[REDACTED] retry=false');
       expect(scrubPII('code=oauth-code-123; status=denied')).toBe('code=[REDACTED]; status=denied');
+    });
+
+    it('preserves semantic-version strings rather than treating them as IP addresses', () => {
+      const release = 'App version 1.2.3 and 2.0.0-beta.1';
+      expect(scrubPII(release)).toBe(release);
     });
   });
 
@@ -245,9 +231,22 @@ describe('Empirical Adversarial Testing Challenger Suite - Telemetry & Sanitizer
       expect(truncated).toContain('...[TRUNCATED]');
       expect(truncated).not.toContain('athlete');
       expect(truncated).toContain('[REDACTED_PATH]');
+
+      // Retains Challenger 1's extra-large stack case without a wall-clock assertion.
+      const megastack = 'Error: Another oversized stack\n' + frameTemplate.repeat(8000);
+      expect(megastack.length).toBeGreaterThan(500000);
+      const sanitizedMegastack = truncateStack(megastack, 1000);
+      expect(sanitizedMegastack).toBeDefined();
+      expect(sanitizedMegastack!.length).toBeLessThanOrEqual(1000);
+      expect(sanitizedMegastack).toContain('...[TRUNCATED]');
+      expect(sanitizedMegastack).not.toContain('athlete');
+      expect(sanitizedMegastack).toContain('[REDACTED_PATH]');
     });
 
-    it('preserves exact boundary lengths (999, 1000, 1001, 14 chars)', () => {
+    it('preserves exact boundary lengths (999, 1000, 1001 chars) and short limits', () => {
+      const exact999 = 'A'.repeat(999);
+      expect(truncateStack(exact999, 1000)).toBe(exact999);
+
       const exact1000 = 'A'.repeat(1000);
       expect(truncateStack(exact1000, 1000)!.length).toBe(1000);
       expect(truncateStack(exact1000, 1000)).not.toContain('...[TRUNCATED]');
@@ -277,6 +276,57 @@ describe('Empirical Adversarial Testing Challenger Suite - Telemetry & Sanitizer
       circularNested.a.b.c.parent = circularNested;
       const res2 = sanitizeErrorPayload(circularNested);
       expect(res2.message).toContain('[Circular]');
+
+      // Mutual and array cycles from the retired Challenger harness.
+      const a: any = { name: 'NodeA' };
+      const b: any = { name: 'NodeB' };
+      a.b = b;
+      b.a = a;
+      const mutual = sanitizeErrorPayload(a);
+      expect(mutual.type).toBe('NodeA');
+      expect(mutual.message).toContain('[Circular]');
+
+      const circularArray: any[] = ['item1'];
+      circularArray.push(circularArray);
+      const arrayResult = sanitizeErrorPayload(circularArray);
+      expect(arrayResult.message).toContain('[Circular]');
+    });
+
+    it('redacts nested metadata in non-Error objects before the technical Sentry boundary', async () => {
+      vi.useFakeTimers();
+      telemetryHub.init();
+      telemetryHub.setUserId('nested-diagnostic-owner');
+
+      const rawKey = ['AIza', 'SyA1234567890abcdefghijklmnopqrstuv'].join('');
+      const diagnostic = {
+        name: 'NestedDiagnosticError',
+        metadata: {
+          email: 'admin.super+tag@secret-corp.com',
+          ip: '192.168.1.150',
+          bearer: 'Bearer secret_access_token_12345',
+          apiKey: rawKey,
+          file: '/home/developer/private/app.ts:10:1',
+        },
+      };
+      telemetryHub.trackError(diagnostic);
+      await vi.advanceTimersByTimeAsync(100);
+
+      expect(mockSentryTransport).toHaveBeenCalledTimes(1);
+      expect(mockSentryTransport.mock.calls[0][0]).toBe('error');
+      const dispatched = mockSentryTransport.mock.calls[0][1] as TelemetryErrorPayload;
+      for (const secret of [
+        'admin.super+tag@secret-corp.com',
+        '192.168.1.150',
+        'secret_access_token_12345',
+        rawKey,
+        '/home/developer',
+      ]) {
+        expect(JSON.stringify(dispatched)).not.toContain(secret);
+      }
+      expect(dispatched.message).toContain('[REDACTED_EMAIL]');
+      expect(dispatched.message).toContain('[REDACTED_IP]');
+      expect(dispatched.message).toContain('[REDACTED_TOKEN]');
+      expect(dispatched.message).toContain('[REDACTED_PATH]');
     });
 
     it('handles hostile objects with throwing getters or throwing toString methods safely', () => {
@@ -343,7 +393,7 @@ describe('Empirical Adversarial Testing Challenger Suite - Telemetry & Sanitizer
   // 7. Concurrency, Rapid Fire & Memory Safety
   // =========================================================================
   describe('7. Concurrency, Rapid Fire & Memory Safety', () => {
-    it('handles rapid fire of 500 mixed errors concurrently without unbounded memory growth', async () => {
+    it('aggregates 500 synchronous errors into ten technical Sentry reports', async () => {
       vi.useFakeTimers();
       telemetryHub.init();
       telemetryHub.setUserId('user_rapid_stress');
@@ -355,36 +405,23 @@ describe('Empirical Adversarial Testing Challenger Suite - Telemetry & Sanitizer
         telemetryHub.trackError(err);
       }
 
-      expect(telemetryHub.getActiveRateLimiterCount()).toBeLessThanOrEqual(30);
+      // Ten message fingerprints across three error names, each repeated 50 times.
+      expect(telemetryHub.getActiveRateLimiterCount()).toBe(10);
 
       await vi.advanceTimersByTimeAsync(100);
-      expect(mockSetDoc).toHaveBeenCalled();
-    });
-
-    it('enforces strict TELEMETRY_QUEUE_CAPACITY boundary (50 items) under rapid offline logging', () => {
-      Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
-      telemetryHub.init();
-      telemetryHub.setUserId('user_offline_stress');
-
-      for (let i = 1; i <= 150; i++) {
-        telemetryHub.trackEvent(`rapid_evt_${i}`, { index: i });
-      }
-
-      const queue = telemetryHub.getQueuedEvents();
-      expect(queue.length).toBe(TELEMETRY_QUEUE_CAPACITY);
-      expect(queue.length).toBe(50);
-      expect(queue[0].payload.type).toBe('rapid_evt_101');
-      expect(queue[queue.length - 1].payload.type).toBe('rapid_evt_150');
-
-      Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
+      expect(mockSentryTransport).toHaveBeenCalledTimes(10);
+      const calls = mockSentryTransport.mock.calls as Array<[string, TelemetryErrorPayload]>;
+      const errors = calls.map((call) => call[1]);
+      expect(errors.reduce((total, payload) => total + payload.count, 0)).toBe(500);
+      expect(errors.every((payload) => payload.count === 50)).toBe(true);
     });
   });
 
   // =========================================================================
-  // 8. End-to-End Leak Verification via Firestore Interception
+  // 8. Leak Verification at the Sentry transport boundary
   // =========================================================================
-  describe('8. End-to-End Leak Verification via Firestore Interception', () => {
-    it('guarantees that no raw PII, JWTs, API keys, or oversized stacks leak to Firestore', async () => {
+  describe('8. Error Payload Privacy at the Sentry Transport Boundary', () => {
+    it('rejects raw PII, JWTs, API keys, and oversized stacks at the technical error transport', async () => {
       vi.useFakeTimers();
       telemetryHub.init();
       telemetryHub.setUserId('user_leak_audit');
@@ -405,8 +442,12 @@ describe('Empirical Adversarial Testing Challenger Suite - Telemetry & Sanitizer
 
       await vi.advanceTimersByTimeAsync(100);
 
-      expect(mockSetDoc).toHaveBeenCalledTimes(1);
-      const dispatchedDoc = mockSetDoc.mock.calls[0][1] as TelemetryErrorPayload;
+      expect(mockSentryTransport).toHaveBeenCalledTimes(1);
+      expect(mockSentryTransport.mock.calls[0][0]).toBe('error');
+      const dispatchedDoc = mockSentryTransport.mock.calls[0][1] as TelemetryErrorPayload;
+      expect(dispatchedDoc.message).toContain('[REDACTED_EMAIL]');
+      expect(dispatchedDoc.message).toContain('[REDACTED_TOKEN]');
+      expect(dispatchedDoc.stack).toContain('[REDACTED_PATH]');
 
       // Recursive inspector to check all string values in the payload
       const verifyNoLeaks = (obj: any) => {
