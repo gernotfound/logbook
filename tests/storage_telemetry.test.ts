@@ -15,6 +15,7 @@ import {
   shouldReportAnomaly,
   createStorageRecoveryAnomalyPayload,
   dispatchStorageRecoveryAnomaly,
+  reportMissingAuthenticatedStorage,
 } from '../src/lib/storageTelemetry';
 import * as sentryClient from '../src/lib/sentryClient';
 import * as firebaseLib from '../src/lib/firebase';
@@ -468,8 +469,9 @@ describe('Storage Recovery Telemetry Suite', () => {
       expect(JSON.stringify(sendSpy.mock.calls[0])).not.toContain('test_user_uid_123');
     });
 
-    it('does not throw or reject if the Sentry boundary rejects', async () => {
-      vi.spyOn(sentryClient, 'sendTelemetryToSentry')
+    it('returns false after an authenticated Sentry rejection without throwing', async () => {
+      Object.assign(firebaseLib.auth, { currentUser: { uid: 'test_user_uid_123' } });
+      const sendSpy = vi.spyOn(sentryClient, 'sendTelemetryToSentry')
         .mockRejectedValue(new Error('Sentry transport failure'));
 
       const payload = createStorageRecoveryAnomalyPayload({
@@ -477,7 +479,51 @@ describe('Storage Recovery Telemetry Suite', () => {
         timestamp: 1724486500000,
       });
 
-      await expect(dispatchStorageRecoveryAnomaly(payload, 'test_user_uid_123')).resolves.not.toThrow();
+      await expect(dispatchStorageRecoveryAnomaly(payload, 'test_user_uid_123')).resolves.toBe(false);
+      expect(sendSpy).toHaveBeenCalledExactlyOnceWith('storage-anomaly', payload);
+    });
+
+    it('reports a missing authenticated owner envelope once after Sentry accepts the diagnostic', async () => {
+      Object.assign(firebaseLib.auth, { currentUser: { uid: 'owner-a' } });
+      const marker = updateStorageMarker(12345, undefined, 'user:owner-a')!;
+      const sendSpy = vi.spyOn(sentryClient, 'sendTelemetryToSentry').mockResolvedValue(true);
+      reportMissingAuthenticatedStorage('user:owner-a', 'owner-a', () => true);
+      await vi.waitFor(() => expect(isAnomalyAlreadyReported(marker, undefined, 'user:owner-a')).toBe(true));
+      expect(sendSpy).toHaveBeenCalledExactlyOnceWith('storage-anomaly', expect.objectContaining({
+        type: 'storage_recovery_anomaly', elapsedMs: expect.any(Number),
+      }));
+      reportMissingAuthenticatedStorage('user:owner-a', 'owner-a', () => true);
+      expect(sendSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not mark a missing-envelope anomaly after its owner session expires', async () => {
+      Object.assign(firebaseLib.auth, { currentUser: { uid: 'owner-a' } });
+      const marker = updateStorageMarker(12345, undefined, 'user:owner-a')!;
+      let finish!: (accepted: boolean) => void;
+      const sendSpy = vi.spyOn(sentryClient, 'sendTelemetryToSentry')
+        .mockImplementation(() => new Promise<boolean>(resolve => { finish = resolve; }));
+      let current = true;
+      reportMissingAuthenticatedStorage('user:owner-a', 'owner-a', () => current);
+      await vi.waitFor(() => expect(sendSpy).toHaveBeenCalledOnce());
+      current = false;
+      Object.assign(firebaseLib.auth, { currentUser: { uid: 'owner-b' } });
+      finish(true);
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(isAnomalyAlreadyReported(marker, undefined, 'user:owner-a')).toBe(false);
+      expect(isAnomalyAlreadyReported(marker, undefined, 'user:owner-b')).toBe(false);
+    });
+
+    it('ignores missing-envelope markers without verified owner and keeps rejected reports retryable', async () => {
+      Object.assign(firebaseLib.auth, { currentUser: { uid: 'owner-a' } });
+      const marker = updateStorageMarker(12345, undefined, 'user:owner-a')!;
+      const sendSpy = vi.spyOn(sentryClient, 'sendTelemetryToSentry').mockResolvedValue(false);
+      reportMissingAuthenticatedStorage('user:owner-b', 'owner-a', () => true);
+      reportMissingAuthenticatedStorage('user:owner-a', 'owner-a', () => false);
+      expect(sendSpy).not.toHaveBeenCalled();
+      reportMissingAuthenticatedStorage('user:owner-a', 'owner-a', () => true);
+      await vi.waitFor(() => expect(sendSpy).toHaveBeenCalledOnce());
+      expect(isAnomalyAlreadyReported(marker, undefined, 'user:owner-a')).toBe(false);
     });
 
     it('does not send a storage anomaly if unauthenticated/guest without uid', async () => {

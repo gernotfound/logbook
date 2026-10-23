@@ -66,7 +66,7 @@ describe('Offline technical telemetry data minimization', () => {
     expect(JSON.parse(readEncryptedTelemetry('user:owner-a') || '[]')).toEqual([]);
   });
 
-  it('never restores stale reports during an in-flight flush reconciliation', () => {
+  it('does not restore stale reports when replacing a queue with expired items', () => {
     const storage = new TelemetryQueueStorage(() => 'owner-a');
     const now = Date.now();
     storage.replaceQueue([

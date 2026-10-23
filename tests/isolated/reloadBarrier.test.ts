@@ -34,13 +34,15 @@ import { captureSession, invalidateSession } from '../../src/lib/sync/session';
 import { markTabSnapshotClean, markTabSnapshotDirty } from '../../src/lib/sync/tabSnapshotCausality';
 import { draftRegistry } from '../../src/lib/utils/draftRegistry';
 import { BrowserStorageError } from '../../src/lib/sync/browserStorage';
+import { createAndMigrateVault } from '../../src/lib/sync/secureArchiveMigration';
+import { readDeviceValueStrict, protectedDeviceKey } from '../../src/lib/sync/deviceStorage';
 import type { UserData } from '../../src/types';
 const parse = (height: number) => UserDataSchema.parse({ profile: { height } }) as unknown as UserData;
 let disk: Map<string, string>;
 beforeEach(async () => {
     await clear(); invalidateSession(); vi.resetAllMocks(); app.auth.currentUser = { uid: 'a' }; app.suspendedConsent = null;
     disk = new Map();
-    vi.stubGlobal('localStorage', { getItem: (key: string) => disk.get(key) ?? null, setItem: (key: string, value: string) => disk.set(key, value), removeItem: (key: string) => disk.delete(key) });
+    vi.stubGlobal('localStorage', { get length() { return disk.size; }, key: (index: number) => Array.from(disk.keys())[index] ?? null, getItem: (key: string) => disk.get(key) ?? null, setItem: (key: string, value: string) => disk.set(key, value), removeItem: (key: string) => disk.delete(key) });
     app.state = { userData: parse(170), localWorkout: { id: 'active', exercises: [] }, dataOwner: 'user:a' };
     await initializeLocal('user:a', app.state.userData);
     markTabSnapshotClean(captureSession(), app.state.userData);
@@ -51,6 +53,15 @@ it('allows offline update only with the durable copy and synchronous active work
     await prepareForReload();
     expect(JSON.parse(disk.get('logbook:v2:user:a:workout')!)).toEqual(app.state.localWorkout);
     expect((await readLocal('user:a'))?.data).toEqual(UserDataSchema.parse(app.state.userData));
+});
+it('protects the active workout with authenticated ciphertext before a safe reload', async () => {
+    await createAndMigrateVault('user:a');
+    app.flush.mockRejectedValue(new Error('offline'));
+    await prepareForReload();
+    expect(disk.has('logbook:v2:user:a:workout')).toBe(false);
+    const ciphertext = disk.get(protectedDeviceKey('workout', 'user:a'));
+    expect(ciphertext).toMatch(/^tlb-sealed:/);
+    expect(JSON.parse(readDeviceValueStrict('workout', 'user:a')!)).toEqual(app.state.localWorkout);
 });
 it('repairs a lagging durable snapshot before reload', async () => {
     markTabSnapshotDirty(captureSession(), app.state.userData);

@@ -260,6 +260,34 @@ export function createStorageRecoveryAnomalyPayload({
 }
 
 /**
+ * Report a missing owner envelope only after Firebase Auth has established this
+ * owner and the authenticated vault read has successfully returned no record.
+ * Callers must enforce verified consent and must never invoke this on read errors.
+ * Technical telemetry is best-effort and never authorizes creating an empty archive.
+ */
+export function reportMissingAuthenticatedStorage(
+  owner: string,
+  uid: string,
+  isCurrent: () => boolean,
+): void {
+  if (owner !== `user:${uid}` || !uid || !isCurrent() || auth.currentUser?.uid !== uid) return;
+  const marker = getStorageMarker(undefined, owner);
+  if (!marker || !shouldReportAnomaly('missing', marker)
+    || isAnomalyAlreadyReported(marker, undefined, owner)) return;
+
+  const payload = createStorageRecoveryAnomalyPayload({ marker });
+  void dispatchStorageRecoveryAnomaly(payload, uid).then(accepted => {
+    // An asynchronous Sentry success from an expired owner/session must not
+    // create a new local marker in another authenticated session.
+    if (accepted && isCurrent() && auth.currentUser?.uid === uid) {
+      markAnomalyReported(marker, undefined, owner);
+    }
+  }).catch(() => {
+    // A rejected diagnostic dispatch must remain retryable.
+  });
+}
+
+/**
  * Dispatches the anomaly to Sentry in a fire-and-forget, non-blocking manner.
  * The authenticated UID is used only as a local eligibility gate and is never sent to Sentry.
  */
