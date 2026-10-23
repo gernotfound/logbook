@@ -59,7 +59,7 @@ export function removeUndefinedValues<T>(value: T, seen?: WeakSet<object>): T {
         try {
             if (Array.isArray(current)) {
                 for (let i = 0; i < current.length; i++) {
-                    copy[i] = current[i] === undefined ? null : sanitize(current[i]);
+                    (copy as unknown[])[i] = current[i] === undefined ? null : sanitize(current[i]);
                 }
             } else {
                 for (const key of Object.keys(current)) {
