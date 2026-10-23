@@ -3,6 +3,18 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as sentryClient from '../src/lib/sentryClient';
 import * as Sentry from '@sentry/react';
 import { getTelemetryContext } from '../src/lib/telemetrySanitizer';
+
+// Keep the real LogBook Sentry adapter, but observe the SDK egress through
+// supported module mocking: ESM namespace exports cannot be spied on in Vitest.
+vi.mock('@sentry/react', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@sentry/react')>();
+  return {
+    ...actual,
+    captureException: vi.fn(),
+    captureMessage: vi.fn(),
+    captureEvent: vi.fn(),
+  };
+});
 import { renderHook, act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import React from 'react';
 import { telemetryHub } from '../src/lib/telemetryHub';
@@ -49,9 +61,12 @@ describe('Milestone 2: PWA, offline workout and telemetry boundaries', () => {
       // Queue stress tests mock the adapter to control latency. This test
       // separately verifies the actual external privacy boundary.
       mockSentryTransport.mockRestore();
-      const exception = vi.spyOn(Sentry, 'captureException');
-      const message = vi.spyOn(Sentry, 'captureMessage');
-      const event = vi.spyOn(Sentry, 'captureEvent');
+      const exception = vi.mocked(Sentry.captureException);
+      const message = vi.mocked(Sentry.captureMessage);
+      const event = vi.mocked(Sentry.captureEvent);
+      exception.mockClear();
+      message.mockClear();
+      event.mockClear();
 
       const result = await sentryClient.sendTelemetryToSentry('event', {
         timestamp: Date.now(),
