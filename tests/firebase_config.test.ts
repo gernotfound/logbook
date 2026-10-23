@@ -87,8 +87,15 @@ describe('R2: Firebase Config Security & Fail-Fast Suite', () => {
             // Firebase Hosting serves the frontend: Vercel config does not control its browser CSP.
             expect(csp).toBeDefined();
             expect(csp).toContain("connect-src 'self'");
-            expect(csp).not.toMatch(/google-analytics\.com|googletagmanager\.com|firebaseio\.com|fonts\.(?:googleapis|gstatic)\.com/);
-            expect(csp).not.toMatch(/\*\.googleapis\.com|connect-src[^;]*\s\*/);
+            for (const disallowed of [
+                'google-analytics.com', 'googletagmanager.com', 'firebaseio.com',
+                'fonts.googleapis.com', 'fonts.gstatic.com', '*.googleapis.com',
+            ]) {
+                expect(csp).not.toContain(disallowed);
+            }
+            const connectSources = csp?.split(';').map(item => item.trim())
+                .find(item => item.startsWith('connect-src '))?.split(/\s+/);
+            expect(connectSources).not.toContain('*');
         });
     });
 
