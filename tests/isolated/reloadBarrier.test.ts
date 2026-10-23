@@ -7,8 +7,8 @@ vi.mock('../../src/store/useAppStore', () => ({ useAppStore: {
     setState: (patch: any) => { app.state = { ...app.state, ...(typeof patch === 'function' ? patch(app.state) : patch) }; },
 } }));
 vi.mock('../../src/lib/firebase', () => ({ auth: app.auth }));
-// This legacy persistence suite assumes a verified, still-active server consent
-// at revision zero. Real revocation/fencing is tested in dedicated suites.
+// Reload tests assume verified, still-active account consent at revision zero.
+// Consent epoch and revocation fences also have dedicated suites.
 vi.mock('../../src/lib/healthConsent', async () => {
     const actual = await vi.importActual<typeof import('../../src/lib/healthConsent')>('../../src/lib/healthConsent');
     const writable = (owner: string) => owner.startsWith('user:')
@@ -30,39 +30,85 @@ import { isReloadSessionCurrent, prepareForReload, UnverifiedTabSnapshotError } 
 import { requiredUpdateHardReload, safeHardReload } from '../../src/lib/sync/safeReload';
 import { commitLocal, initializeLocal, readLocal } from '../../src/lib/sync/localRepository';
 import { UserDataSchema } from '../../src/lib/schema';
-import { captureSession, invalidateSession } from '../../src/lib/sync/session';
+import { activateGuestSession, captureSession, GUEST_SESSION_KEY, invalidateSession } from '../../src/lib/sync/session';
 import { markTabSnapshotClean, markTabSnapshotDirty } from '../../src/lib/sync/tabSnapshotCausality';
 import { draftRegistry } from '../../src/lib/utils/draftRegistry';
 import { BrowserStorageError } from '../../src/lib/sync/browserStorage';
 import { createAndMigrateVault } from '../../src/lib/sync/secureArchiveMigration';
-import { readDeviceValueStrict, protectedDeviceKey } from '../../src/lib/sync/deviceStorage';
+import { deviceKey, protectedDeviceKey, readDeviceValueStrict, writeDeviceValue } from '../../src/lib/sync/deviceStorage';
+import { lockAllVaults, lockVault, requireUnlockedLocalKey, LocalVaultLockedError } from '../../src/lib/sync/secureArchiveSession';
+import { LocalCiphertextError, openLocalJson, sealLocalJson } from '../../src/lib/sync/secureArchiveCipher';
 import type { UserData } from '../../src/types';
 const parse = (height: number) => UserDataSchema.parse({ profile: { height } }) as unknown as UserData;
 let disk: Map<string, string>;
 beforeEach(async () => {
+    lockAllVaults();
     await clear(); invalidateSession(); vi.resetAllMocks(); app.auth.currentUser = { uid: 'a' }; app.suspendedConsent = null;
     disk = new Map();
     vi.stubGlobal('localStorage', { get length() { return disk.size; }, key: (index: number) => Array.from(disk.keys())[index] ?? null, getItem: (key: string) => disk.get(key) ?? null, setItem: (key: string, value: string) => disk.set(key, value), removeItem: (key: string) => disk.delete(key) });
+    vi.stubGlobal('navigator', { locks: { request: async (_name: string, _options: unknown, run: () => Promise<unknown>) => run() } });
+    // Authenticated hydration is permitted only after the owner vault is ready.
+    await createAndMigrateVault('user:a');
     app.state = { userData: parse(170), localWorkout: { id: 'active', exercises: [] }, dataOwner: 'user:a' };
     await initializeLocal('user:a', app.state.userData);
     markTabSnapshotClean(captureSession(), app.state.userData);
 });
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => { lockAllVaults(); vi.unstubAllGlobals(); });
 it('allows offline update only with the durable copy and synchronous active workout snapshot', async () => {
     app.flush.mockRejectedValue(new Error('offline'));
     await prepareForReload();
-    expect(JSON.parse(disk.get('logbook:v2:user:a:workout')!)).toEqual(app.state.localWorkout);
+    expect(JSON.parse(readDeviceValueStrict('workout', 'user:a')!)).toEqual(app.state.localWorkout);
+    expect(disk.has(deviceKey('workout', 'user:a'))).toBe(false);
+    expect(disk.get(protectedDeviceKey('workout', 'user:a'))).toMatch(/^tlb-sealed:/);
+    expect(await get('logbook:v2:user:a')).toMatch(/^tlb-sealed:/);
     expect((await readLocal('user:a'))?.data).toEqual(UserDataSchema.parse(app.state.userData));
 });
 it('protects the active workout with authenticated ciphertext before a safe reload', async () => {
-    await createAndMigrateVault('user:a');
     app.flush.mockRejectedValue(new Error('offline'));
     await prepareForReload();
-    expect(disk.has('logbook:v2:user:a:workout')).toBe(false);
+    expect(disk.has(deviceKey('workout', 'user:a'))).toBe(false);
     const ciphertext = disk.get(protectedDeviceKey('workout', 'user:a'));
     expect(ciphertext).toMatch(/^tlb-sealed:/);
     expect(JSON.parse(readDeviceValueStrict('workout', 'user:a')!)).toEqual(app.state.localWorkout);
 });
+it('fails closed on corrupted ciphertext and preserves the original bytes', async () => {
+    writeDeviceValue('workout', JSON.stringify(app.state.localWorkout), 'user:a');
+    const key = protectedDeviceKey('workout', 'user:a');
+    const corrupted = 'tlb-sealed:v1:invalid-ciphertext';
+    disk.set(key, corrupted);
+    const reload = vi.fn();
+    await expect(safeHardReload(reload)).rejects.toBeInstanceOf(LocalCiphertextError);
+    expect(reload).not.toHaveBeenCalled();
+    expect(disk.get(key)).toBe(corrupted);
+});
+
+it('blocks a reload when the owner vault is locked without modifying ciphertext', async () => {
+    writeDeviceValue('workout', JSON.stringify(app.state.localWorkout), 'user:a');
+    const key = protectedDeviceKey('workout', 'user:a');
+    const ciphertext = disk.get(key);
+    const envelope = await get('logbook:v2:user:a');
+    lockVault('user:a');
+    const reload = vi.fn();
+    await expect(safeHardReload(reload)).rejects.toBeInstanceOf(LocalVaultLockedError);
+    expect(reload).not.toHaveBeenCalled();
+    expect(disk.get(key)).toBe(ciphertext);
+    expect(await get('logbook:v2:user:a')).toBe(envelope);
+});
+
+it('blocks stale plaintext reappearing alongside owner ciphertext instead of overwriting either copy', async () => {
+    writeDeviceValue('workout', JSON.stringify(app.state.localWorkout), 'user:a');
+    const sealedKey = protectedDeviceKey('workout', 'user:a');
+    const sealed = disk.get(sealedKey);
+    const plainKey = deviceKey('workout', 'user:a');
+    const stale = JSON.stringify({ id: 'stale-tab', exercises: [] });
+    disk.set(plainKey, stale);
+    const reload = vi.fn();
+    await expect(safeHardReload(reload)).rejects.toBeInstanceOf(LocalCiphertextError);
+    expect(reload).not.toHaveBeenCalled();
+    expect(disk.get(sealedKey)).toBe(sealed);
+    expect(disk.get(plainKey)).toBe(stale);
+});
+
 it('repairs a lagging durable snapshot before reload', async () => {
     markTabSnapshotDirty(captureSession(), app.state.userData);
     app.state.userData = parse(171);
@@ -75,8 +121,10 @@ it('repairs a lagging durable snapshot before reload', async () => {
 it('repairs a lagging guest snapshot without creating a cloud journal', async () => {
     await clear();
     disk.set('logbook_is_guest', 'true');
+    disk.set(GUEST_SESSION_KEY, 'reload-test-guest');
     (app.auth as any).currentUser = null;
-    invalidateSession();
+    activateGuestSession('reload-test-guest');
+    await createAndMigrateVault('guest');
     const base = parse(170);
     app.state.userData = base;
     app.state.dataOwner = 'guest';
@@ -89,12 +137,13 @@ it('repairs a lagging guest snapshot without creating a cloud journal', async ()
     const durable = await readLocal('guest');
     expect(durable?.data).toEqual(UserDataSchema.parse(app.state.userData));
     expect(durable?.pending).toHaveLength(0);
+    expect(await get('logbook:v2:guest')).toMatch(/^tlb-sealed:/);
 });
 it('still blocks reload when the durable envelope is missing', async () => {
     await clear();
     app.flush.mockRejectedValue(new Error('offline'));
     await expect(prepareForReload()).rejects.toThrow('non sono ancora salvate');
-    expect(disk.size).toBe(0);
+    expect(disk.has(protectedDeviceKey('workout', 'user:a'))).toBe(false);
 });
 it('blocks reload when the synchronous workout snapshot fails', async () => {
     vi.spyOn(localStorage, 'setItem').mockImplementation(() => { throw new Error('quota'); });
@@ -103,7 +152,7 @@ it('blocks reload when the synchronous workout snapshot fails', async () => {
 it('blocks reload on identity changes while awaiting persistence', async () => {
     app.flush.mockImplementation(async () => { app.auth.currentUser = { uid: 'b' }; invalidateSession(); });
     await expect(prepareForReload()).rejects.toThrow('Sessione cambiata');
-    expect(disk.size).toBe(0);
+    expect(disk.has(protectedDeviceKey('workout', 'user:a'))).toBe(false);
 });
 it('propagates a failed input flush and does not proceed to reload', async () => {
     const badDraft = () => { throw new Error('invalid draft'); };
@@ -164,8 +213,12 @@ it('never hard reloads when the durable reload barrier rejects', async () => {
     expect(reload).not.toHaveBeenCalled();
 });
 it('reloads an update-required app without parsing a future local envelope and preserves the active workout snapshot', async () => {
-    const raw = await get<any>('logbook:v2:user:a');
-    await set('logbook:v2:user:a', { ...raw, dataSchemaVersion: 99 });
+    const archiveKey = 'logbook:v2:user:a';
+    const sealed = await get<string>(archiveKey);
+    expect(sealed).toMatch(/^tlb-sealed:/);
+    const key = requireUnlockedLocalKey('user:a');
+    const raw = openLocalJson(key, 'user:a', archiveKey, sealed!) as Record<string, unknown>;
+    await set(archiveKey, sealLocalJson(key, 'user:a', archiveKey, { ...raw, dataSchemaVersion: 99 }));
 
     await expect(prepareForReload()).rejects.toThrow(/aggiorna TheLogBook/i);
 
@@ -173,7 +226,9 @@ it('reloads an update-required app without parsing a future local envelope and p
     await requiredUpdateHardReload(reload);
 
     expect(reload).toHaveBeenCalledTimes(1);
-    expect(JSON.parse(disk.get('logbook:v2:user:a:workout')!)).toEqual(app.state.localWorkout);
+    expect(JSON.parse(readDeviceValueStrict('workout', 'user:a')!)).toEqual(app.state.localWorkout);
+    expect(disk.has(deviceKey('workout', 'user:a'))).toBe(false);
+    expect(disk.get(protectedDeviceKey('workout', 'user:a'))).toMatch(/^tlb-sealed:/);
 });
 it('waits for the replacement service worker to install before a required-update reload', async () => {
     const worker = Object.assign(new EventTarget(), {
@@ -213,7 +268,7 @@ it('blocks required-update snapshot when the installed dataset belongs to anothe
 
     await expect(requiredUpdateHardReload(reload)).rejects.toThrow('non attribuibile');
     expect(reload).not.toHaveBeenCalled();
-    expect(disk.get('logbook:v2:user:a:workout')).toBeUndefined();
+    expect(disk.get(protectedDeviceKey('workout', 'user:a'))).toBeUndefined();
 });
 
 it('still blocks update-required reload when the device-critical workout snapshot cannot be persisted', async () => {
@@ -260,8 +315,10 @@ it('preserves a concurrent authenticated change while durably replaying this tab
 it('does not erase a concurrent guest change from a clean stale tab', async () => {
     await clear();
     disk.set('logbook_is_guest', 'true');
+    disk.set(GUEST_SESSION_KEY, 'reload-test-guest');
     (app.auth as any).currentUser = null;
-    invalidateSession();
+    activateGuestSession('reload-test-guest');
+    await createAndMigrateVault('guest');
     const base = parse(170);
     app.state.userData = base;
     app.state.dataOwner = 'guest';
@@ -279,6 +336,7 @@ it('does not erase a concurrent guest change from a clean stale tab', async () =
     const durable = await readLocal('guest');
     expect(durable?.data.routines?.map(routine => routine.id)).toContain('guest-routine-a');
     expect(durable?.pending).toHaveLength(0);
+    expect(await get('logbook:v2:guest')).toMatch(/^tlb-sealed:/);
 });
 
 it('blocks reload with a readable envelope while an unsaved UI draft has blocked local persistence', async () => {
@@ -348,7 +406,8 @@ it('keeps storage failures blocking consent-suspended reload even with explicit 
 
 it('does not erase a stored workout while reloading a consent-suspended screen', async () => {
     const saved = JSON.stringify({ id: 'saved-workout', exercises: [] });
-    disk.set('logbook:v2:user:a:workout', saved);
+    writeDeviceValue('workout', saved, 'user:a');
+    const ciphertext = disk.get(protectedDeviceKey('workout', 'user:a'));
     disk.set('logbook:v2:user:a:health-consent-withdrawal', 'withdrawn');
     app.state.localWorkout = null; // Suspended UI has no active RAM workout.
     app.flush.mockRejectedValue(new Error('offline'));
@@ -357,12 +416,15 @@ it('does not erase a stored workout while reloading a consent-suspended screen',
     await safeHardReload(reload);
 
     expect(reload).toHaveBeenCalledTimes(1);
-    expect(disk.get('logbook:v2:user:a:workout')).toBe(saved);
+    expect(readDeviceValueStrict('workout', 'user:a')).toBe(saved);
+    expect(disk.get(protectedDeviceKey('workout', 'user:a'))).toBe(ciphertext);
+    expect(disk.has(deviceKey('workout', 'user:a'))).toBe(false);
 });
 
 it('does not replace an old stored workout when reloading a server-erased local archive', async () => {
     const saved = JSON.stringify({ id: 'old-acknowledged-workout', exercises: [] });
-    disk.set('logbook:v2:user:a:workout', saved);
+    writeDeviceValue('workout', saved, 'user:a');
+    const ciphertext = disk.get(protectedDeviceKey('workout', 'user:a'));
     app.state.localWorkout = null;
     app.suspendedConsent = 'erasure-required';
     app.flush.mockRejectedValue(new Error('offline'));
@@ -371,5 +433,7 @@ it('does not replace an old stored workout when reloading a server-erased local 
     await safeHardReload(reload);
 
     expect(reload).toHaveBeenCalledTimes(1);
-    expect(disk.get('logbook:v2:user:a:workout')).toBe(saved);
+    expect(readDeviceValueStrict('workout', 'user:a')).toBe(saved);
+    expect(disk.get(protectedDeviceKey('workout', 'user:a'))).toBe(ciphertext);
+    expect(disk.has(deviceKey('workout', 'user:a'))).toBe(false);
 });
