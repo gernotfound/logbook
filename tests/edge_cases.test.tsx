@@ -299,15 +299,22 @@ describe('Empirical Challenger Suite: Edge Cases & Stress Verification', () => {
   });
 
   describe('5. Component Boundary States & Stress Inputs', () => {
-    test('NutritionMeals handles special regex characters in search query', () => {
-      const { container } = renderWithProviders(<NutritionMeals />);
+    test('NutritionMeals handles literal regex metacharacters and still finds a known food', () => {
+      renderWithProviders(<NutritionMeals />, { userData: {
+        ...emptyUserData,
+        customFoods: [{ id: 'food-pollo', name: 'Pollo Test', kcal: 105, pro: 23, carbs: 0, fat: 1 }],
+      } });
       const searchInput = screen.getByPlaceholderText(/Cerca alimento/i) as HTMLInputElement;
+      const metacharacters = '[.*+?^$()|[\\]\\\\]';
 
-      act(() => {
-        fireEvent.change(searchInput, { target: { value: '[.*+?^${}()|[\\]\\\\]' } });
-      });
+      fireEvent.change(searchInput, { target: { value: metacharacters } });
+      expect(searchInput.value).toBe(metacharacters);
+      expect(screen.getByRole('status').textContent).toContain('Nessun alimento trovato');
 
-      expect(container).toBeDefined();
+      fireEvent.change(searchInput, { target: { value: 'Pollo' } });
+      expect(searchInput.value).toBe('Pollo');
+      expect(screen.getByText('Pollo Test')).toBeDefined();
+      expect(screen.queryByRole('status')).toBeNull();
     });
 
     test('TrainingSession handles active workout with empty sets and non-numeric inputs', () => {
