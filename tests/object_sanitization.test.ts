@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { removeUndefinedValues, isPlainObject } from '../src/lib/utils/object';
+import { removeUndefinedValues, removeUndefinedValuesForFirestore, isPlainObject } from '../src/lib/utils/object';
+import { rootDocument } from '../src/lib/sync/documentProjection';
+import type { UserData } from '../src/types';
 import { Logic } from '../src/lib/logic';
 
 describe('R3: Object Sanitization & removeUndefinedValues Suite', () => {
@@ -232,7 +234,7 @@ describe('R3: Object Sanitization & removeUndefinedValues Suite', () => {
             const cyclicObj: any = { name: 'cyclic', omit: undefined };
             cyclicObj.self = cyclicObj;
 
-            expect(() => removeUndefinedValues(cyclicObj)).toThrow('Riferimento circolare');
+            expect(() => removeUndefinedValuesForFirestore(cyclicObj)).toThrow('Riferimento circolare');
             expect(cyclicObj.self).toBe(cyclicObj);
         });
 
@@ -240,8 +242,26 @@ describe('R3: Object Sanitization & removeUndefinedValues Suite', () => {
             const cyclicArr: any = [1, undefined];
             cyclicArr.push(cyclicArr);
 
-            expect(() => removeUndefinedValues(cyclicArr)).toThrow('Riferimento circolare');
+            expect(() => removeUndefinedValuesForFirestore(cyclicArr)).toThrow('Riferimento circolare');
             expect(cyclicArr[1]).toBeUndefined();
+        });
+
+        it('retains the non-throwing generic cycle behavior without claiming Firestore safety', () => {
+            const cyc: any = { saved: 1, omit: undefined };
+            cyc.self = cyc;
+            const cleaned = removeUndefinedValues(cyc);
+            expect(cleaned.saved).toBe(1);
+            expect('omit' in cleaned).toBe(false);
+            expect(cleaned.self).toBe(cyc);
+        });
+
+        it('rejects cyclic user profile fields at the actual root Firestore projection', () => {
+            const profile: any = { height: '180', omit: undefined };
+            profile.loop = profile;
+            const userData = { profile } as unknown as UserData;
+            expect(() => rootDocument(userData)).toThrow('Riferimento circolare');
+            expect(profile.loop).toBe(profile);
+            expect(Object.hasOwn(profile, 'omit')).toBe(true);
         });
 
         it('sanitizes shared references consistently without mutating either branch', () => {
