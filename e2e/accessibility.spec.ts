@@ -48,6 +48,7 @@ test('representative guest surfaces have no serious automated accessibility viol
 test('keyboard-opened routine menu retains focus and fits a narrow real viewport', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 850 });
   await continueAsGuest(page);
+  await page.getByRole('button', { name: 'Allenamento', exact: true }).click();
   await page.getByRole('tab', { name: 'Schede', exact: true }).click();
   await page.getByRole('button', { name: 'Crea scheda' }).click();
   await page.getByPlaceholder('Nome scheda').fill('Scheda accessibile');
