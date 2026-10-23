@@ -169,7 +169,7 @@ describe('Integration Suite: Guest Mode & Global Catalog Resolution', () => {
             expect(currentData?.customFoods?.map(f => f.id)).toEqual(['std-food']);
         });
 
-        it('T1.5: Zero-flash transition: Seed -> IDB Cache -> Remote Sync never flashes an empty list', async () => {
+        it('T1.5: Catalog snapshots stay available across local cache and remote manifest no-op', async () => {
             // Step 1: Initial Cold State (using a populated fixture since seed is empty)
             const stage1Catalog = {
                 manifest: { version: '1.0.0', schemaVersion: 1, docRefs: { exercises: 'exercises_v1', foods: 'foods_v1' }, itemCounts: { exercises: 5, foods: 5 } },
