@@ -66,7 +66,9 @@ describe('authenticated logout preflight', () => {
         releaseWrite();
 
         expect(await pending).toBeNull();
-        expect(setSyncing).toHaveBeenLastCalledWith(false);
+        // No Firebase Auth state-change callback is emitted by this test: the
+        // expired preflight cannot mutate the successor session's sync state.
+        expect(setSyncing).toHaveBeenCalledExactlyOnceWith(true);
         expect(useDialogStore.getState().showUnsyncedDataLogout).not.toHaveBeenCalled();
     });
 
