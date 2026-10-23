@@ -380,7 +380,7 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
                 expect(container.textContent).not.toContain('Squat Classico');
             });
 
-            it('T1.3.3: Updating library notes reflects when opening Setup panel in SessionExerciseCard', () => {
+            it('T1.3.3: SessionExerciseCard opens with notes from the supplied library definition', () => {
                 const libDef = { id: 'ex_lat', name: 'Lat Machine', notes: 'Altezza cuscino 3, presa prona' };
                 const exItem = { exId: 'ex_lat', sessionNote: '', sets: [] };
 
@@ -546,7 +546,7 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
                 expect(matches.map(m => m.id)).toEqual(['1', '3']);
             });
 
-            it('T1.4.4: Adding an exercise updates the displayed exercise count in RoutineEditor', () => {
+            it('T1.4.4: RoutineEditor renders an already assigned exercise and its count', () => {
                 const routineExercises = [
                     { exId: 'ex1', setsCount: 4, minReps: 8, maxReps: 12 }
                 ];
@@ -580,7 +580,7 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
                 expect(container.textContent).toContain('Panca Piana');
             });
 
-            it('T1.4.5: Adding multiple distinct exercises to routine preserves their order and names', () => {
+            it('T1.4.5: RoutineEditor presents assigned exercises in input order', () => {
                 const routineExercises = [
                     { exId: 'ex1', setsCount: 3 },
                     { exId: 'ex2', setsCount: 4 },
@@ -625,7 +625,7 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
         // Requirement R5: Data di Fine nei Cicli di Allenamento
         // ---------------------------------------------------------------------
         describe('R5: Data di Fine nei Cicli di Allenamento', () => {
-            it('T1.5.1: CycleEditor initializes with start date and duration weeks', () => {
+            it('T1.5.1: CycleEditor renders its accessible heading and form fields', () => {
                 const routines: WorkoutRoutine[] = [
                     { id: 'r1', name: 'Upper A', exercises: [] }
                 ];
@@ -709,6 +709,7 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
 
                 fireEvent.change(durationInput, { target: { value: '8' } });
                 expect(container.textContent).toContain('8 settimane');
+                expect(container.textContent).toContain((screen.getByLabelText('Data di fine') as HTMLInputElement).value);
             });
 
             it('T1.5.5: Submitting CycleEditor form produces valid TrainingCycle conforming to schema', () => {
