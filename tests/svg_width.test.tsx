@@ -1,5 +1,5 @@
 import React from 'react';
-import { describe, test, expect, beforeEach } from 'vitest';
+import { describe, test, expect, beforeEach, vi } from 'vitest';
 import { renderWithProviders } from './setup';
 import { screen, fireEvent } from '@testing-library/react';
 import MuscleModel from '../src/components/Training/MuscleModel';
@@ -30,7 +30,7 @@ describe('SVG Muscle Model Layout Width Verification', () => {
     expect(ruleBody).toMatch(/max-height:\s*none/);
   });
 
-  test('computes layout width of MuscleModel SVG vs parent container and asserts SVG width >= 90% of container width', () => {
+  test('checks SVG responsive CSS and model viewBox without simulating layout in jsdom', () => {
     const { container } = renderWithProviders(
       <div style={{ width: '350px' }}>
         <MuscleModel selectedMuscles={['petto']} />
@@ -49,30 +49,12 @@ describe('SVG Muscle Model Layout Width Verification', () => {
     expect(computedSvgStyle.maxHeight).toBe('none');
     expect(computedSvgStyle.width).toBe('100%');
 
-    // Simulate container layout width (350px mobile card width)
-    const computedContainerWidth = 350;
-
-    // The SVG keeps width: 100% with no max-height constraint; the exercise-specific
-    // viewBox framing is verified separately so the full head and feet stay visible.
-    const maxHeightValue = computedSvgStyle.maxHeight;
-    let computedSvgWidth = computedContainerWidth;
-    if (maxHeightValue && maxHeightValue !== 'none' && maxHeightValue.endsWith('px')) {
-      const maxH = parseFloat(maxHeightValue);
-      const aspectWidth = maxH / 1.3125;
-      computedSvgWidth = Math.min(computedContainerWidth, aspectWidth);
-    }
-
-    const widthRatio = computedSvgWidth / computedContainerWidth;
-
-    console.log(`[TEST OUTPUT] Computed Container Width: ${computedContainerWidth}px`);
-    console.log(`[TEST OUTPUT] Computed SVG Width: ${computedSvgWidth}px`);
-    console.log(`[TEST OUTPUT] SVG / Container Width Ratio: ${(widthRatio * 100).toFixed(2)}%`);
-
-    expect(widthRatio).toBeGreaterThanOrEqual(0.90);
-    expect(computedSvgWidth).toBeGreaterThanOrEqual(0.90 * computedContainerWidth);
+    // Geometric ratios must use a browser layout engine; see redesign-ux E2E.
+    expect(svgElement.getAttribute('viewBox')).toBe('0 0 70 94');
+    expect(svgElement.querySelectorAll('path[data-muscle-path]').length).toBeGreaterThan(20);
   });
 
-  test('verifies MuscleModel in TrainingExercises card container expands to >= 90% width', () => {
+  test('keeps the full muscle SVG style contract inside TrainingExercises', () => {
     const { container } = renderWithProviders(
       <div style={{ width: '400px' }}>
         <TrainingExercises />
@@ -91,14 +73,12 @@ describe('SVG Muscle Model Layout Width Verification', () => {
     const computedSvgStyle = window.getComputedStyle(svgElement);
     expect(computedSvgStyle.maxHeight).toBe('none');
 
-    const computedContainerWidth = 400;
-    const computedSvgWidth = computedContainerWidth; // width 100%
-
-    expect(computedSvgWidth / computedContainerWidth).toBeGreaterThanOrEqual(0.90);
+    expect(computedSvgStyle.width).toBe('100%');
+    expect(svgElement.getAttribute('viewBox')).toBe('0 0 70 94');
   });
 
   describe('Adversarial Edge Cases & Stress Tests', () => {
-    test('handles long exercise names without layout distortion or SVG container shrinkage', () => {
+    test('preserves model structure with long exercise names (layout measured in E2E)', () => {
       const longNameUserData = {
         profile: {},
         library: [
@@ -139,11 +119,7 @@ describe('SVG Muscle Model Layout Width Verification', () => {
       expect(computedSvgStyle.maxHeight).toBe('none');
       expect(computedSvgStyle.width).toBe('100%');
 
-      const computedContainerWidth = 350;
-      const computedSvgWidth = computedContainerWidth;
-      const widthRatio = computedSvgWidth / computedContainerWidth;
-
-      expect(widthRatio).toBeGreaterThanOrEqual(0.90);
+      expect(svgElement.querySelectorAll('path[data-muscle-path]').length).toBeGreaterThan(20);
     });
 
     test('handles different muscle selection states (empty, multiple, secondary overlap, invalid IDs)', () => {
@@ -172,9 +148,7 @@ describe('SVG Muscle Model Layout Width Verification', () => {
         expect(computedSvgStyle.maxHeight).toBe('none');
         expect(computedSvgStyle.width).toBe('100%');
 
-        const computedSvgWidth = 350;
-        const widthRatio = computedSvgWidth / 350;
-        expect(widthRatio).toBeGreaterThanOrEqual(0.90);
+        expect(svgElement.getAttribute('viewBox')).toBe('0 0 70 94');
       });
     });
 
@@ -189,8 +163,7 @@ describe('SVG Muscle Model Layout Width Verification', () => {
       expect(muscleMapContainerNonInt.classList.contains('interactive')).toBe(false);
 
       // Interactive mode
-      let toggledMuscleId = '';
-      const handleToggle = (id: string) => { toggledMuscleId = id; };
+      const handleToggle = vi.fn();
 
       const { container: containerInteractive } = renderWithProviders(
         <div style={{ width: '350px' }}>
@@ -205,12 +178,11 @@ describe('SVG Muscle Model Layout Width Verification', () => {
       expect(computedSvgStyleInt.maxHeight).toBe('none');
       expect(computedSvgStyleInt.width).toBe('100%');
 
-      // Click on chest path element
-      const chestPath = svgElementInt.querySelector('path[data-muscle-path*="chest"], path[data-muscle-path*="pectoral"], path[data-muscle-path*="petto"]') || svgElementInt.querySelector('path');
-      if (chestPath) {
-        chestPath.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-        expect(typeof toggledMuscleId).toBe('string');
-      }
+      const chestPath = svgElementInt.querySelector('path[data-muscle-path="chest-lower-left"]');
+      expect(chestPath).not.toBeNull();
+      fireEvent.click(chestPath!);
+      expect(handleToggle).toHaveBeenCalledTimes(1);
+      expect(handleToggle).toHaveBeenCalledWith(expect.any(String));
     });
 
     test('verifies no CSS property collisions between index.css and global.css', () => {

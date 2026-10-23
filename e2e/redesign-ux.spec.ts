@@ -130,6 +130,21 @@ test('Schede stays inside a 320px viewport and keeps the full muscle model in bo
   });
   expect(muscleFitsViewBox).toBe(true);
 
+  for (const width of [320, 390]) {
+    await page.setViewportSize({ width, height: 850 });
+    const rect = await muscleSvg.evaluate(svg => {
+      const parent = svg.parentElement?.getBoundingClientRect();
+      const own = svg.getBoundingClientRect();
+      return { svgWidth: own.width, svgLeft: own.left, svgRight: own.right, parentWidth: parent?.width ?? 0 };
+    });
+    expect(rect.parentWidth).toBeGreaterThan(0);
+    expect(rect.svgWidth / rect.parentWidth).toBeGreaterThanOrEqual(0.9);
+    expect(rect.svgLeft).toBeGreaterThanOrEqual(0);
+    expect(rect.svgRight).toBeLessThanOrEqual(width);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
+  }
+  await page.setViewportSize({ width: 320, height: 850 });
+
   await page.locator('#routine-creation-form').getByRole('button', { name: 'Salva', exact: true }).click();
   await expect(page.getByText('Scheda mobile', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Apri scheda Scheda mobile' }).click();

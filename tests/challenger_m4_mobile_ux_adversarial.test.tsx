@@ -51,7 +51,7 @@ describe('Adversarial Challenger Suite: Mobile UX, Layout, Sentence Case & Edge 
       expect(trigger.getAttribute('type')).toBe('button');
     });
 
-    it('verifies all 5 target components render ContextMenu with touch-friendly trigger button', () => {
+    it('verifies the CycleCard, RoutineCard and FoodItemRow menu triggers', () => {
       // 1. CycleCard
       const mockCycle: TrainingCycle = {
         id: 'c1',
@@ -178,22 +178,6 @@ describe('Adversarial Challenger Suite: Mobile UX, Layout, Sentence Case & Edge 
       return true;
     };
 
-    it('validates sentence case for ContextMenu default ariaLabel and items', () => {
-      expect(isStrictSentenceCase('Opzioni')).toBe(true);
-      expect(isStrictSentenceCase('Modifica scheda')).toBe(true);
-      expect(isStrictSentenceCase('Elimina scheda')).toBe(true);
-      expect(isStrictSentenceCase('Modifica ciclo')).toBe(true);
-      expect(isStrictSentenceCase('Duplica ciclo')).toBe(true);
-      expect(isStrictSentenceCase('Elimina ciclo')).toBe(true);
-      expect(isStrictSentenceCase('Modifica allenamento')).toBe(true);
-      expect(isStrictSentenceCase('Elimina allenamento')).toBe(true);
-      expect(isStrictSentenceCase('Vedi report')).toBe(true);
-      expect(isStrictSentenceCase('Modifica esercizio')).toBe(true);
-      expect(isStrictSentenceCase('Elimina esercizio')).toBe(true);
-      expect(isStrictSentenceCase('Modifica alimento')).toBe(true);
-      expect(isStrictSentenceCase('Elimina alimento')).toBe(true);
-    });
-
     it('verifies CycleCard ContextMenu items conform strictly to Italian sentence case', () => {
       const mockCycle: TrainingCycle = {
         id: 'c1',
@@ -315,7 +299,7 @@ describe('Adversarial Challenger Suite: Mobile UX, Layout, Sentence Case & Edge 
   /* 4. EDGE CASE TESTING                                                       */
   /* -------------------------------------------------------------------------- */
   describe('4. Edge Cases: Long Labels, Missing Icons, Disabled/Hidden Items, 320px Viewport', () => {
-    it('Edge Case A: Handles excessively long labels without breaking layout (ellipsis and overflow containment)', () => {
+    it('Edge Case A: preserves long menu labels (geometry checked in browser)', () => {
       const longLabel = 'Questa è una descrizione estremamente lunga per una voce di menu contestuale che potrebbe potenzialmente rompere il layout su dispositivi mobili con schermi stretti';
       const items: ContextMenuItem[] = [
         {
@@ -409,7 +393,7 @@ describe('Adversarial Challenger Suite: Mobile UX, Layout, Sentence Case & Edge 
       expect(screen.getByText('Visibile 2')).not.toBeNull();
     });
 
-    it('Edge Case E: Renders gracefully inside 320px narrow mobile viewport containers', () => {
+    it('Edge Case E: mounts inside a 320px container (geometry checked in browser)', () => {
       const mockCycle: TrainingCycle = {
         id: 'c1',
         name: 'Ciclo Forza Avanzata per Atleti Competitivi',
