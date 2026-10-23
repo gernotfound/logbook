@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { getDocFromServer } from 'firebase/firestore';
 
 vi.mock('../src/lib/telemetryHub', () => ({
     telemetryHub: { trackEvent: vi.fn(), trackError: vi.fn() },
@@ -16,6 +17,7 @@ import { mergeNutrition } from '../src/lib/merge';
 import { applyDomainOperations } from '../src/lib/sync/domainOperations';
 import { applyRemoteDocuments, projectDocuments } from '../src/lib/sync/documentProjection';
 import { requireCompleteNutritionMonthDocument, IncompleteCloudMonthError } from '../src/lib/sync/monthlyIntegrity';
+import { loadNutritionMonths } from '../src/lib/db/db_nutrition';
 
 const catalog: CachedGlobalCatalog = {
     manifest: {
@@ -118,6 +120,38 @@ describe('F-003 nutrition identity integrity', () => {
         expect(() => requireCompleteNutritionMonthDocument('2026-09', {
             ...good, '2026-09-30': { ...malformedDay, date: '2026-09-30' },
         })).toThrow(IncompleteCloudMonthError);
+    });
+
+
+    it('aborts an entire multi-month Firestore read without publishing partial nutrition or sync metadata', async () => {
+        const sync = {
+            protocolVersion: 3, clock: {}, fields: {},
+            writer: { slot: 's00', replicaId: 'nutrition-test', generation: 1, seq: 1 },
+        };
+        const monthlyDocument = (entries: Record<string, unknown>) => ({
+            _schemaVersion: 1, _sync: sync, ...entries,
+        });
+        const docs = [
+            monthlyDocument({ '2026-08-03': {
+                date: '2026-08-03', kcal: 120, carbs: 10, pro: 15, fat: 2, meals: [validMeal],
+            } }),
+            monthlyDocument({ '2026-09-29': malformedDay }),
+        ];
+        const firestore = vi.mocked(getDocFromServer);
+        firestore.mockClear();
+        for (const doc of docs) {
+            firestore.mockResolvedValueOnce({
+                exists: () => true, data: () => doc,
+            } as any);
+        }
+        const state = { nutrition: { '2026-07-01': { date: '2026-07-01', kcal: 0 } as unknown } };
+        const initial = structuredClone(state.nutrition);
+        const cloudDocuments = new Map<string, Record<string, unknown>>();
+        await expect(loadNutritionMonths({ uid: 'account-14' }, ['2026-08', '2026-09'], state, cloudDocuments))
+            .rejects.toThrow(IncompleteCloudMonthError);
+        expect(firestore).toHaveBeenCalledTimes(2);
+        expect(state.nutrition).toEqual(initial);
+        expect(cloudDocuments.size).toBe(0);
     });
 
     it('keeps normal ID-based delete and upsert usable after malformed hydration', () => {
