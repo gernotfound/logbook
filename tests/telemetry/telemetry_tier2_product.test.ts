@@ -173,7 +173,7 @@ describe('Technical telemetry queue and dispatch — Tier 2', () => {
         expect(telemetryHub.getQueuedEvents()).toHaveLength(1);
 
         let finish!: () => void;
-        mockSentryTransport.mockImplementation((_kind: string, payload: { message: string }) =>
+        mockSentryTransport.mockImplementation((_kind: unknown, payload: any) =>
           payload.message === 'Queued error'
             ? new Promise<boolean>(resolve => { finish = () => resolve(true); })
             : Promise.resolve(true));
