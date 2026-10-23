@@ -27,13 +27,26 @@ describe('Transaction Contention & ActorSeq Invatiants', () => {
 
         const finalState = await readLocal('user:a');
         expect(finalState).toBeDefined();
-        expect(finalState?.pending).toBeDefined();
-        
-        // Since we fired 3 concurrent commits that modify different or same fields,
-        // actorSeq should end up correctly incremented without dropping operations.
-        // Wait, because we are using idb-keyval which manages a transaction queue,
-        // it inherently handles this if update() is used correctly. 
-        expect(finalState?.actorSeq).toBeGreaterThanOrEqual(1);
-        expect(finalState?.actorSeq).toBeLessThanOrEqual(3);
+        if (!finalState) throw new Error('The durable envelope was not created');
+
+        // Three distinct intents must survive the IDB transaction queue. A mere
+        // actorSeq range would also pass if two concurrent commits were lost.
+        expect(finalState.actorSeq).toBe(3);
+        expect(finalState.clock[finalState.actorId]).toBe(3);
+        expect([...new Set(finalState.pending.map(op => op.seq))]).toEqual([1, 2, 3]);
+        expect(finalState.pending.every(op =>
+            op.actorId === finalState.actorId && op.clock[finalState.actorId] === op.seq,
+        )).toBe(true);
+        expect(finalState.pending.some(op => op.path.join('/') === 'profile/height' && op.value === '170')).toBe(true);
+        expect(finalState.pending.some(op => op.path.join('/') === 'profile/gender' && op.value === 'M')).toBe(true);
+        expect(finalState.pending.some(op => op.path.join('/') === 'profile/height' && op.value === '171')).toBe(true);
+        expect(finalState.data.profile?.height).toBe('171');
+        expect(finalState.data.profile?.gender).toBe('M');
+
+        // Re-read the serialized envelope rather than accepting the Promise results
+        // or a potentially optimistic in-memory view as proof of persistence.
+        const reopened = await readLocal('user:a');
+        expect(reopened?.pending).toEqual(finalState.pending);
+        expect(reopened?.data).toEqual(finalState.data);
     });
 });
