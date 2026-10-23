@@ -456,7 +456,7 @@ describe('Empirical Challenger: Milestone 3 (R1: Zod Integration) Adversarial St
     // 7. Pluggable Fallback Listener Resilience
     // =========================================================================
     describe('7. Schema Fallback Listener Isolation', () => {
-        it('survives throwing, async-failing, and mutating listeners without interrupting parsing pipeline', () => {
+        it('isolates throwing and mutating synchronous listeners from parsing', () => {
             let listenerInvoked = false;
             setSchemaFallbackListener((ctx) => {
                 listenerInvoked = true;
@@ -464,13 +464,21 @@ describe('Empirical Challenger: Milestone 3 (R1: Zod Integration) Adversarial St
                 throw new Error('Hostile listener failure');
             });
 
-            expect(() => {
-                const parsed = DomainParsers.parseWorkoutSession('invalid_session_string');
-                expect(parsed).toBeDefined();
-                expect(Array.isArray(parsed.exercises)).toBe(true);
-            }).not.toThrow();
-
+            const parsed = DomainParsers.parseWorkoutSession('invalid_session_string');
+            expect(parsed.exercises).toEqual([]);
             expect(listenerInvoked).toBe(true);
+        });
+
+        it('consumes asynchronous listener rejections without interrupting the schema fallback', async () => {
+            const listener = vi.fn(async () => { throw new Error('Async observer rejected'); });
+            setSchemaFallbackListener(listener);
+            const parsed = DomainParsers.parseProfile('corrupted_async_profile');
+            expect(parsed).toEqual({});
+            expect(listener).toHaveBeenCalledTimes(1);
+            // Allow the rejected observer microtask to settle before the test exits.
+            await Promise.resolve();
+            await Promise.resolve();
+            expect(telemetryHub.getActiveRateLimiterCount()).toBe(1);
         });
     });
 });
