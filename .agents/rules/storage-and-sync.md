@@ -155,7 +155,7 @@ Il product owner dichiara nessun utente/account/browser/backup di sviluppo o tes
 
 - la baseline M1 non introdusse una migrazione prodotto da local envelope V3 a V4;
 - nessuna importazione compatibile di backup V1/V2;
-- Sync Protocol 3 è la baseline del primo account reale: Protocol 1/2 vengono rifiutati fail-closed e non vengono migrati; la migrazione Local Envelope 4→5 resta separata perché riguarda storage device-local già prodotto durante lo sviluppo;
+- Sync Protocol 3 è la baseline del primo account reale: Protocol 1/2 vengono rifiutati fail-closed e non vengono migrati; l'antica migrazione Local Envelope 4→5 era destinata soltanto a dati di sviluppo ed è ritirata dal fresh start. La baseline corrente accetta Local Envelope 5;
 - vecchi formati locali/backup vengono rifiutati e non riscritti;
 - la vecchia cache locale non attribuita `logbook_cached_user_data` non viene letta, preservata né esportata dal prodotto corrente;
 - il timer legge esclusivamente lo snapshot owner-scoped `timer`; eventuali chiavi timer obsolete possono essere eliminate best-effort ma non vengono mai usate come fallback;
@@ -206,7 +206,7 @@ I boundary bulk — bootstrap/initialize, hydration, guest→account merge, impo
 
 **MUST:** nuovi consumer business ordinari non possono introdurre bypass snapshot fuori dall'allowlist verificata dal gate M8.
 
-**MUST:** Data Schema resta 1 e Backup Schema resta 3. Sync Protocol 3 è la baseline account corrente e richiede Local Envelope 5 perché l'envelope persiste l'identità replica; l'eventuale migrazione del container locale 4→5 resta una dimensione distinta e non riabilita Protocol 1/2.
+**MUST:** Data Schema resta 1 e Backup Schema resta 3. Sync Protocol 3 è la baseline account corrente e richiede Local Envelope 5 perché l'envelope persiste l'identità replica; Local Envelope 4 è fuori supporto e viene rifiutato senza conversione. I gate di crash recovery dell'Envelope 5 restano obbligatori.
 
 **MUST:** nessuna ottimizzazione del debounce cloud può posticipare la persistenza IndexedDB immediata.
 
