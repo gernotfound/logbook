@@ -2,15 +2,36 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as sentryClient from '../src/lib/sentryClient';
 import {
   telemetryHub,
-  TELEMETRY_QUEUE_CAPACITY,
-  type TelemetryErrorPayload,
   type QueuedTelemetryItem,
+  type TelemetryErrorPayload,
 } from '../src/lib/telemetryHub';
 import { getTelemetryContext } from '../src/lib/telemetrySanitizer';
 import { seedCurrentTelemetryQueue } from './telemetry/seedCurrentQueue';
 
-describe('Empirical Challenger M4.2: Offline Queue, Circuit Breaker & Poison Pill Hardening', () => {
-  let mockSetDoc: any;
+function errorQueueItem(id: string, type: string, owner: string, timestamp = Date.now()): QueuedTelemetryItem {
+  return {
+    id,
+    timestamp,
+    itemType: 'error',
+    payload: {
+      id: 'err_' + id,
+      timestamp,
+      type,
+      message: 'Diagnostic ' + id,
+      source: 'custom',
+      context: getTelemetryContext(),
+      userId: owner,
+      sessionId: 'sess_m4_retry',
+      count: 1,
+      firstSeen: timestamp,
+      lastSeen: timestamp,
+    },
+    retryCount: 0,
+  };
+}
+
+describe('Milestone 4 Challenger: Offline Error Delivery & Retry', () => {
+  let mockSentryTransport: any;
 
   beforeEach(() => {
     localStorage.clear();
@@ -18,12 +39,8 @@ describe('Empirical Challenger M4.2: Offline Queue, Circuit Breaker & Poison Pil
     vi.clearAllMocks();
     vi.useRealTimers();
     Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
-
-    mockSetDoc = vi.spyOn(sentryClient, 'sendTelemetryToSentry').mockResolvedValue(true);
-
-    if (telemetryHub && typeof telemetryHub.reset === 'function') {
-      telemetryHub.reset();
-    }
+    mockSentryTransport = vi.spyOn(sentryClient, 'sendTelemetryToSentry').mockResolvedValue(true);
+    telemetryHub.reset();
   });
 
   afterEach(() => {
@@ -32,306 +49,87 @@ describe('Empirical Challenger M4.2: Offline Queue, Circuit Breaker & Poison Pil
     vi.restoreAllMocks();
     vi.useRealTimers();
     Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
+    telemetryHub.reset();
+  });
 
-    if (telemetryHub && typeof telemetryHub.reset === 'function') {
-      telemetryHub.reset();
+  it('halts a failed technical-error replay after two consecutive failures and retries in FIFO order', async () => {
+    vi.useFakeTimers();
+    const owner = 'user_circuit_breaker';
+    telemetryHub.init();
+    telemetryHub.setUserId(owner);
+
+    const items = Array.from({ length: 20 }, (_, i) =>
+      errorQueueItem('item_' + (i + 1), 'TransportError', owner, Date.now() - 2000 + i * 100)
+    );
+    await seedCurrentTelemetryQueue(owner, items);
+
+    mockSentryTransport
+      .mockResolvedValueOnce(true)
+      .mockRejectedValue(new Error('Sentry transport unavailable'));
+
+    await telemetryHub.flushQueue();
+
+    expect(mockSentryTransport).toHaveBeenCalledTimes(3);
+    expect(mockSentryTransport.mock.calls.every((call: [string]) => call[0] === 'error')).toBe(true);
+
+    const remaining = telemetryHub.getQueuedEvents();
+    expect(remaining).toHaveLength(19);
+    expect(remaining[0].id).toBe('item_2');
+    expect(remaining[0].retryCount).toBe(1);
+    expect(remaining[1].id).toBe('item_3');
+    expect(remaining[1].retryCount).toBe(1);
+    expect(remaining[18].id).toBe('item_20');
+
+    mockSentryTransport.mockReset().mockResolvedValue(true);
+
+    await vi.advanceTimersByTimeAsync(500);
+    expect(mockSentryTransport).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(500);
+    await vi.waitFor(() => {
+      expect(mockSentryTransport).toHaveBeenCalledTimes(19);
+      expect(telemetryHub.getQueuedEvents()).toHaveLength(0);
+    });
+
+    const replayedIds = mockSentryTransport.mock.calls.map((call: [string, TelemetryErrorPayload]) => call[1].id);
+    expect(replayedIds).toEqual(remaining.map(item => 'err_' + item.id));
+    expect(mockSentryTransport.mock.calls.every((call: [string]) => call[0] === 'error')).toBe(true);
+  });
+
+  it('delivers a valid technical error after a rejected poison item, then evicts only the poison after retry exhaustion', async () => {
+    vi.useFakeTimers();
+    const owner = 'user_poison_hetero';
+    telemetryHub.init();
+    telemetryHub.setUserId(owner);
+    await seedCurrentTelemetryQueue(owner, [
+      errorQueueItem('poison_item', 'PoisonType', owner),
+      errorQueueItem('valid_item_after', 'ValidType', owner, Date.now() + 1),
+    ]);
+
+    mockSentryTransport.mockImplementation(async (kind: string, payload: TelemetryErrorPayload) => {
+      expect(kind).toBe('error');
+      return payload.type !== 'PoisonType';
+    });
+
+    await telemetryHub.flushQueue();
+    let queue = telemetryHub.getQueuedEvents();
+    expect(queue).toHaveLength(1);
+    expect(queue[0].id).toBe('poison_item');
+    expect(queue[0].retryCount).toBe(1);
+    expect(mockSentryTransport).toHaveBeenCalledTimes(2);
+    expect(mockSentryTransport.mock.calls[1][1].type).toBe('ValidType');
+
+    for (const attempt of [2, 3]) {
+      await telemetryHub.flushQueue();
+      queue = telemetryHub.getQueuedEvents();
+      expect(queue).toHaveLength(1);
+      expect(queue[0].id).toBe('poison_item');
+      expect(queue[0].retryCount).toBe(attempt);
     }
-  });
 
-  // -------------------------------------------------------------------------
-  // Challenge 1: Offline 100-Item Enqueue with Error Priority (50 Cap)
-  // -------------------------------------------------------------------------
-  describe('Challenge 1: Offline Enqueue & Error-Priority Eviction', () => {
-    it('enqueues 100 mixed items without letting dropped event telemetry evict error diagnostics', () => {
-      Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
-      telemetryHub.init();
-      telemetryHub.setUserId('user_fifo_stress');
-
-      // Enqueue 100 mixed items (50 events, 50 distinct errors)
-      for (let i = 1; i <= 100; i++) {
-        if (i % 2 === 0) {
-          telemetryHub.trackEvent(`test_event_${i}`, { index: i, seq: `seq_${i}` });
-        } else {
-          telemetryHub.trackError(new Error(`test_error_${i}`));
-        }
-      }
-
-      expect(localStorage.getItem(telemetryHub.getQueueStorageKey())).toBeNull();
-      const storedQueue: QueuedTelemetryItem[] = telemetryHub.getQueuedEvents();
-      expect(storedQueue.length).toBe(TELEMETRY_QUEUE_CAPACITY);
-      expect(storedQueue.length).toBe(50);
-
-      const inMemoryQueue = telemetryHub.getQueuedEvents();
-      expect(inMemoryQueue.length).toBe(50);
-
-      // All 50 distinct errors are retained in FIFO order, not displaced by events.
-      expect(inMemoryQueue.every(item => item.itemType === 'error')).toBe(true);
-      for (let idx = 0; idx < 50; idx++) {
-        expect((inMemoryQueue[idx].payload as TelemetryErrorPayload).message)
-          .toBe(`test_error_${idx * 2 + 1}`);
-      }
-
-      Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
-    });
-  });
-
-  // -------------------------------------------------------------------------
-  // Challenge 2: Network Failure, Immediate Circuit Breaker & Exponential Backoff
-  // -------------------------------------------------------------------------
-  describe('Challenge 2: Network Failure & Immediate Circuit Breaker Tripping', () => {
-    it('simulates network failure during flushQueue(), verifies circuit breaker trips immediately without cascading timeouts, and schedules exponential backoff', async () => {
-      vi.useFakeTimers();
-      telemetryHub.init();
-      telemetryHub.setUserId('user_circuit_breaker');
-
-      // Populate queue with 20 items
-      const initialItems: QueuedTelemetryItem[] = Array.from({ length: 20 }, (_, i) => ({
-        id: `item_${i + 1}`,
-        timestamp: Date.now() - 2000 + i * 100,
-        itemType: 'event',
-        payload: {
-          id: `evt_${i + 1}`,
-          type: `event_${i + 1}`,
-          context: getTelemetryContext(),
-          userId: 'user_circuit_breaker',
-          sessionId: 'sess_cb',
-          timestamp: Date.now() - 2000 + i * 100,
-        },
-      }));
-      await seedCurrentTelemetryQueue('user_circuit_breaker', initialItems);
-
-      // Mock Sentry boundary: Item 1 succeeds, then sudden network failure for subsequent items
-      mockSetDoc
-        .mockResolvedValueOnce(true)
-        .mockRejectedValue(new Error('Network unreachable: connection reset by peer'));
-
-      await telemetryHub.flushQueue();
-
-      // Assertions:
-      // 1. Sentry boundary should only have been called 3 times (1 success + 2 consecutive failures triggering circuit breaker)
-      //    It must NOT iterate through all 20 items (which would cause 20 calls or cascading 5s timeouts).
-      expect(mockSetDoc).toHaveBeenCalledTimes(3);
-
-      // 2. Queue must retain item 1 evicted (success), item 2 and 3 incremented retry count, items 4..20 preserved
-      const remaining = telemetryHub.getQueuedEvents();
-      expect(remaining.length).toBe(19);
-      expect(remaining[0].id).toBe('item_2');
-      expect(remaining[0].retryCount).toBe(1);
-      expect(remaining[1].id).toBe('item_3');
-      expect(remaining[1].retryCount).toBe(1);
-      expect(remaining[18].id).toBe('item_20');
-
-      // 3. Exponential backoff verification:
-      // First retry scheduled after INITIAL_RETRY_DELAY_MS (1000ms * 2^0 = 1000ms)
-      mockSetDoc.mockReset();
-      // On next retry, simulate network restoration
-      mockSetDoc.mockResolvedValue(true);
-
-      // Advance by 500ms (should not have triggered yet)
-      await vi.advanceTimersByTimeAsync(500);
-      expect(mockSetDoc).not.toHaveBeenCalled();
-
-      // Advance remaining 500ms (1000ms total) -> triggers automatic flush
-      await vi.advanceTimersByTimeAsync(500);
-      expect(mockSetDoc).toHaveBeenCalled();
-
-      // Wait for microtasks in flushQueue to settle
-      await vi.waitFor(() => {
-        const finalQueue = telemetryHub.getQueuedEvents();
-        expect(finalQueue.length).toBe(0);
-      });
-    });
-  });
-
-  // -------------------------------------------------------------------------
-  // Challenge 3: Poison Pill Eviction (Max 3 Retries) without Blocking Subqueue
-  // -------------------------------------------------------------------------
-  describe('Challenge 3: Poison Pill Item Isolation & Eviction', () => {
-    it('injects a poison pill item that always rejects and verifies it is evicted after 3 attempts without blocking subsequent valid items', async () => {
-      vi.useFakeTimers();
-      telemetryHub.init();
-      telemetryHub.setUserId('user_poison_pill');
-
-      const queueWithPoisonPill: QueuedTelemetryItem[] = [
-        {
-          id: 'poison_pill_bad_payload',
-          timestamp: Date.now(),
-          itemType: 'error',
-          payload: {
-            id: 'err_poison_1',
-            type: 'CorruptedPayloadError',
-            message: 'Permanently fails Firestore validation',
-            source: 'custom',
-            context: getTelemetryContext(),
-            userId: 'user_poison_pill',
-            sessionId: 'sess_poison',
-            count: 1,
-            firstSeen: Date.now(),
-            lastSeen: Date.now(),
-          },
-          retryCount: 0,
-        },
-      ];
-
-      await seedCurrentTelemetryQueue('user_poison_pill', queueWithPoisonPill);
-
-      // Configure mock: Poison pill rejects
-      mockSetDoc.mockRejectedValue(new Error('Firestore write permanently rejected for poison pill'));
-
-      // --- Attempt 1 ---
-      await telemetryHub.flushQueue();
-      let q = telemetryHub.getQueuedEvents();
-      expect(q.length).toBe(1);
-      expect(q[0].id).toBe('poison_pill_bad_payload');
-      expect(q[0].retryCount).toBe(1);
-
-      // --- Attempt 2 (via backoff after 1000ms) ---
-      await vi.advanceTimersByTimeAsync(1000);
-      q = telemetryHub.getQueuedEvents();
-      expect(q.length).toBe(1);
-      expect(q[0].retryCount).toBe(2);
-
-      // --- Attempt 3 (via backoff after 2000ms) ---
-      await vi.advanceTimersByTimeAsync(2000);
-      q = telemetryHub.getQueuedEvents();
-      expect(q.length).toBe(1);
-      expect(q[0].retryCount).toBe(3);
-
-      // --- Attempt 4 (via backoff after 4000ms) -> exceeds MAX_ITEM_RETRIES (3) -> poison pill evicted! ---
-      await vi.advanceTimersByTimeAsync(4000);
-      q = telemetryHub.getQueuedEvents();
-      expect(q.length).toBe(0);
-
-      // Now verify a newly added valid event can be flushed immediately without interference
-      mockSetDoc.mockResolvedValue(true);
-      telemetryHub.trackEvent('fresh_after_poison_cleared');
-      await vi.advanceTimersByTimeAsync(100);
-      expect(mockSetDoc).toHaveBeenCalled();
-    });
-
-    it('processes a heterogeneous queue where a poison pill item fails while subsequent items can be retried and flushed once poison is evicted', async () => {
-      vi.useFakeTimers();
-      telemetryHub.init();
-      telemetryHub.setUserId('user_poison_hetero');
-
-      const items: QueuedTelemetryItem[] = [
-        {
-          id: 'poison_item',
-          timestamp: Date.now(),
-          itemType: 'error',
-          payload: {
-            id: 'err_poison',
-            type: 'PoisonType',
-            message: 'Reject always',
-            source: 'custom',
-            context: getTelemetryContext(),
-            userId: 'user_poison_hetero',
-            sessionId: 'sess_1',
-            count: 1,
-            firstSeen: Date.now(),
-            lastSeen: Date.now(),
-          },
-          retryCount: 0,
-        },
-        {
-          id: 'valid_item_after',
-          timestamp: Date.now() + 1,
-          itemType: 'event',
-          payload: {
-            id: 'evt_valid_after',
-            type: 'workout_saved',
-            context: getTelemetryContext(),
-            userId: 'user_poison_hetero',
-            sessionId: 'sess_1',
-            timestamp: Date.now() + 1,
-          },
-          retryCount: 0,
-        },
-      ];
-
-      await seedCurrentTelemetryQueue('user_poison_hetero', items);
-
-      // Mock: poison fails, valid succeeds
-      mockSetDoc.mockImplementation(async (_kind: any, data: any) => {
-        if (data.type === 'PoisonType' || data.message?.includes('Reject always')) {
-          throw new Error('Poison rejected');
-        }
-        return true;
-      });
-
-      // Flush: poison fails (retry 1), valid succeeds and is evicted!
-      await telemetryHub.flushQueue();
-
-      let q = telemetryHub.getQueuedEvents();
-      expect(q.length).toBe(1);
-      expect(q[0].id).toBe('poison_item');
-      expect(q[0].retryCount).toBe(1);
-
-      // Next attempt: manual flush
-      await telemetryHub.flushQueue();
-      q = telemetryHub.getQueuedEvents();
-      expect(q[0].retryCount).toBe(2);
-
-      // Third attempt
-      await telemetryHub.flushQueue();
-      q = telemetryHub.getQueuedEvents();
-      expect(q[0].retryCount).toBe(3);
-
-      // Fourth attempt -> evicted
-      await telemetryHub.flushQueue();
-      q = telemetryHub.getQueuedEvents();
-      expect(q.length).toBe(0);
-    });
-  });
-
-  // -------------------------------------------------------------------------
-  // Challenge 4: Malformed and Corrupted JSON Storage Recovery
-  // -------------------------------------------------------------------------
-  describe('Challenge 4: Corrupted Storage Recovery', () => {
-    it('handles corrupted and truncated JSON in logbook_telemetry_queue, recovers without crashing, and restores clean queue operations', () => {
-      const corruptedPayloads = [
-        '{ truncated json',
-        '{"id": "broken", invalid syntax}',
-        'null',
-        'undefined',
-        '12345',
-        '"just a string"',
-        '{"someObj": true}',
-        '[{ "id": 123 }, null, undefined, { "noPayload": true }]',
-      ];
-
-      for (const corrupt of corruptedPayloads) {
-        const ownerKey = telemetryHub.getQueueStorageKey();
-        localStorage.removeItem(ownerKey);
-        localStorage.setItem(telemetryHub.getQueueStorageKey(), corrupt);
-        telemetryHub.init();
-
-        // 1. Must safely return an empty array or valid array of items without throwing
-        let items: QueuedTelemetryItem[] = [];
-        expect(() => {
-          items = telemetryHub.getQueuedEvents();
-        }).not.toThrow();
-        expect(Array.isArray(items)).toBe(true);
-
-        // 2. Next trackEvent/trackError while offline must successfully write a valid JSON array to localStorage
-        Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
-        expect(() => {
-          telemetryHub.trackEvent('recovery_event_check', { corruptPayloadTested: true });
-        }).not.toThrow();
-
-        // Diagnostic state stays in RAM if the account key is not ready;
-        // recovering from invalid legacy JSON must never write new plaintext.
-        expect(localStorage.getItem(telemetryHub.getQueueStorageKey())).toBe(corrupt);
-        const parsed = telemetryHub.getQueuedEvents();
-        expect(Array.isArray(parsed)).toBe(true);
-        expect(parsed.length).toBe(1);
-        expect(parsed[0].payload.type).toBe('recovery_event_check');
-
-        telemetryHub.destroy();
-        localStorage.removeItem(ownerKey);
-      }
-
-      Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
-    });
+    await telemetryHub.flushQueue();
+    expect(telemetryHub.getQueuedEvents()).toHaveLength(0);
+    expect(mockSentryTransport).toHaveBeenCalledTimes(5);
+    expect(mockSentryTransport.mock.calls.filter((call: [string, TelemetryErrorPayload]) => call[1].type === 'ValidType')).toHaveLength(1);
   });
 });
