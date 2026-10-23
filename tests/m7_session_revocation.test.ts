@@ -85,7 +85,7 @@ describe('trusted all-device Firebase session revocation', () => {
     expect(state.revoke).not.toHaveBeenCalled();
   });
 
-  it('does not erase an existing stronger barrier on retry',
+  it('does not erase an existing stronger barrier on retry', async () => {
     const now = vi.spyOn(Date, 'now').mockReturnValue(4_000_000);
     try {
       state.seconds = 5_000;
