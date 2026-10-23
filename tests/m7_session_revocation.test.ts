@@ -59,14 +59,33 @@ describe('trusted all-device Firebase session revocation', () => {
     }
   });
 
-  it('rejects a concurrent account deletion before touching Auth or creating an orphan', async () => {
+  it('rejects an already-present account deletion before touching Auth or creating an orphan', async () => {
     state.deletionJobExists = true;
     await expect(revokeAllUserSessions('owner')).rejects.toThrow('Account deletion in progress.');
     expect(state.seconds).toBeNull();
     expect(state.revoke).not.toHaveBeenCalled();
   });
 
-  it('does not erase an existing stronger barrier on retry', async () => {
+  it('fails closed when a transaction is retried after account deletion appears', async () => {
+    const commitAttempt = state.transaction.getMockImplementation()!;
+    state.transaction.mockImplementationOnce(async (callback: (transaction: any) => Promise<number>) => {
+      let staged = false;
+      await callback({
+        get: async () => ({ exists: false, data: () => ({}) }),
+        set: () => { staged = true; },
+      });
+      expect(staged).toBe(true);
+      // Model an optimistic transaction conflict: uncommitted first attempt
+      // is retried against the now-present deletion document.
+      state.deletionJobExists = true;
+      return commitAttempt(callback);
+    });
+    await expect(revokeAllUserSessions('owner')).rejects.toThrow('Account deletion in progress.');
+    expect(state.seconds).toBeNull();
+    expect(state.revoke).not.toHaveBeenCalled();
+  });
+
+  it('does not erase an existing stronger barrier on retry',
     const now = vi.spyOn(Date, 'now').mockReturnValue(4_000_000);
     try {
       state.seconds = 5_000;

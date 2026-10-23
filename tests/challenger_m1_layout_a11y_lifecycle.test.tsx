@@ -99,7 +99,9 @@ describe('Empirical Challenger: Layout Geometry, Accessibility, Z-Index & Online
         fireEvent.click(trainingTabBtn);
       });
 
-      // Navigating does not throw and sync indicator stays rendered
+      // The actual tab must change even while the saving indicator is visible.
+      expect(trainingTabBtn.getAttribute('aria-current')).toBe('page');
+      expect(screen.getByRole('button', { name: 'Home' }).getAttribute('aria-current')).toBeNull();
       const indicator = container.querySelector('.sync-indicator');
       expect(indicator).not.toBeNull();
     });
@@ -289,6 +291,9 @@ describe('Empirical Challenger: Layout Geometry, Accessibility, Z-Index & Online
           useAppStore.setState({ syncing: i % 2 === 0, saveError: i % 3 === 0 ? `Errore transitorio #${i}` : null });
           window.dispatchEvent(new Event(i % 2 === 0 ? 'online' : 'offline'));
         });
+        // Online clears the error; offline must not invent or discard one.
+        expect(useAppStore.getState().syncing).toBe(i % 2 === 0);
+        expect(useAppStore.getState().saveError).toBe(i % 2 === 0 || i % 3 !== 0 ? null : `Errore transitorio #${i}`);
       }
 
       // Cleanup

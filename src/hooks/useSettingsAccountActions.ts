@@ -36,8 +36,8 @@ export function useSettingsAccountActions({ currentUser, isGuest, logout }: Acco
         if (revokingSessionsBusy.current || !currentUser) return;
         revokingSessionsBusy.current = true;
         const expectedUid = currentUser.uid;
+        const session = captureSession();
         try {
-            const session = captureSession();
             const assertCurrent = () => {
                 if (!isCurrentSession(session) || auth.currentUser?.uid !== expectedUid) {
                     throw new Error('Sessione cambiata: operazione annullata.');
@@ -46,13 +46,21 @@ export function useSettingsAccountActions({ currentUser, isGuest, logout }: Acco
             const assertSafeLocalState = async () => {
                 assertCurrent();
                 const state = useAppStore.getState();
-                if (state.localPersistenceBlocked || state.localWorkout || state.userData?.pendingConflicts) {
+                if (state.localPersistenceBlocked || state.localWorkout || state.userData?.pendingConflicts || state.cloudIntegrityBlocked) {
                     throw new Error('Completa l’allenamento e risolvi i salvataggi locali prima di disconnettere tutti i dispositivi.');
                 }
                 if (session.owner === 'user:' + expectedUid) {
                     const local = await readLocal(session.owner);
                     assertCurrent();
-                    if ((local?.pending.length ?? 0) !== 0 || (state.userData !== null && state.syncHealth !== 'synced')) {
+                    // Hydration may lag behind a durable integrity fence installed by another task/tab.
+                    const latest = useAppStore.getState();
+                    if (local?.cloudIntegrityFence || latest.cloudIntegrityBlocked) {
+                        throw new Error('Snapshot cloud non verificato: completa il recupero dei dati prima di revocare le sessioni.');
+                    }
+                    if (latest.localPersistenceBlocked || latest.localWorkout || latest.userData?.pendingConflicts) {
+                        throw new Error('Completa l’allenamento e risolvi i salvataggi locali prima di disconnettere tutti i dispositivi.');
+                    }
+                    if ((local?.pending.length ?? 0) !== 0 || (latest.userData !== null && latest.syncHealth !== 'synced')) {
                         throw new Error('Ci sono dati non ancora sincronizzati. Sincronizzali oppure esporta un backup prima di proseguire.');
                     }
                 }
@@ -90,16 +98,20 @@ export function useSettingsAccountActions({ currentUser, isGuest, logout }: Acco
 
             await assertSafeLocalState();
             await revokeSessionsOnServer(auth.currentUser!);
+            // A new login to the same UID must not inherit the old request's local logout.
+            if (!isCurrentSession(session) || auth.currentUser?.uid !== expectedUid) return;
             // The server barrier now rejects the previous sessions at the
             // Firestore boundary. Use the ordinary guarded logout so no local
             // pending journal or vault metadata is discarded inappropriately.
             if (auth.currentUser?.uid === expectedUid) {
                 await logout({ mode: 'normal' });
             }
-            if (auth.currentUser?.uid === expectedUid) {
+            if (isCurrentSession(session) && auth.currentUser?.uid === expectedUid) {
                 await showAlert('Accesso cloud dagli altri dispositivi revocato. Il logout locale non è completo: verifica i dati non sincronizzati e ripeti “Esci dall’account”.');
             }
         } catch (error) {
+            // Errors from a superseded request must not open an account A dialog over B.
+            if (auth.currentUser?.uid !== expectedUid || !isCurrentSession(session)) return;
             if (isSensitiveReauthCancellation(error)) return;
             const code = (error as { code?: unknown } | null)?.code;
             if (code === 'auth/wrong-password' || code === 'auth/invalid-credential') {

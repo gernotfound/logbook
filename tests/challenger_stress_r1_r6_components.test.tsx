@@ -20,6 +20,7 @@ import {
     FoodSchema
 } from '../src/lib/schema';
 import CustomFoodForm from '../src/components/Nutrition/CustomFoodForm';
+import { calculateCustomFoodKcal } from '../src/lib/nutrition/calculateCustomFoodKcal';
 import DataMeasurements from '../src/components/Data/DataMeasurements';
 import SessionSetRow from '../src/components/Training/session/SessionSetRow';
 import SessionRatings from '../src/components/Training/session/SessionRatings';
@@ -215,29 +216,22 @@ describe('EMPIRICAL CHALLENGER: Adversarial Stress Test Suite (Requirements R1 -
      * ========================================================================= */
     describe('R2: Food Real-time Calories Calculation - Boundaries & UI Reactivity', () => {
 
-        const calculateKcal = (carbs: any, pro: any, fat: any): number => {
-            const c = typeof carbs === 'number' ? carbs : parseFloat(String(carbs ?? '').trim().replace(',', '.')) || 0;
-            const p = typeof pro === 'number' ? pro : parseFloat(String(pro ?? '').trim().replace(',', '.')) || 0;
-            const f = typeof fat === 'number' ? fat : parseFloat(String(fat ?? '').trim().replace(',', '.')) || 0;
-            return Math.round(c * 4 + p * 4 + f * 9);
-        };
-
         it('adheres precisely to the formula: 10g C, 10g P, 10g F = 170 kcal', () => {
-            expect(calculateKcal(10, 10, 10)).toBe(170);
+            expect(calculateCustomFoodKcal(10, 10, 10)).toBe(170);
         });
 
         it('handles boundary zeroes, empty strings, commas, and decimals correctly', () => {
-            expect(calculateKcal(0, 0, 0)).toBe(0);
-            expect(calculateKcal('', '', '')).toBe(0);
-            expect(calculateKcal('   ', null, undefined)).toBe(0);
-            expect(calculateKcal('12,5', '20,5', '5,5')).toBe(182); // 12.5*4 (50) + 20.5*4 (82) + 5.5*9 (49.5) = 181.5 -> 182
-            expect(calculateKcal('0.1', '0.2', '0.3')).toBe(4); // 0.4 + 0.8 + 2.7 = 3.9 -> 4
+            expect(calculateCustomFoodKcal(0, 0, 0)).toBe(0);
+            expect(calculateCustomFoodKcal('', '', '')).toBe(0);
+            expect(calculateCustomFoodKcal('   ', null, undefined)).toBe(0);
+            expect(calculateCustomFoodKcal('12,5', '20,5', '5,5')).toBe(182); // 12.5*4 (50) + 20.5*4 (82) + 5.5*9 (49.5) = 181.5 -> 182
+            expect(calculateCustomFoodKcal('0.1', '0.2', '0.3')).toBe(4); // 0.4 + 0.8 + 2.7 = 3.9 -> 4
         });
 
         it('handles non-numeric strings, negative numbers, and extreme macro values', () => {
-            expect(calculateKcal('abc', 'def', 'ghi')).toBe(0);
-            expect(calculateKcal(-10, -5, -2)).toBe(-78);
-            expect(calculateKcal(5000, 2000, 1000)).toBe(37000); // 20000 + 8000 + 9000 = 37000
+            expect(calculateCustomFoodKcal('abc', 'def', 'ghi')).toBe(0);
+            expect(calculateCustomFoodKcal(-10, -5, -2)).toBe(-78);
+            expect(calculateCustomFoodKcal(5000, 2000, 1000)).toBe(37000); // 20000 + 8000 + 9000 = 37000
         });
 
         it('FoodSchema parses and sanitizes food items without NaN or schema failure', () => {
@@ -254,7 +248,7 @@ describe('EMPIRICAL CHALLENGER: Adversarial Stress Test Suite (Requirements R1 -
             expect(parsed.fat).toBe(50);
         });
 
-        it('CustomFoodForm allows updating macros and triggers save', () => {
+        it('CustomFoodForm recomputes edited macros and invokes save only on click', () => {
             const mockSave = vi.fn().mockResolvedValue(undefined);
             const mockSetData = vi.fn();
             const initialData = { name: 'Pasta Integrale', carbs: 65, pro: 12, fat: 2, kcal: 326, unit: 'g' };
@@ -271,7 +265,10 @@ describe('EMPIRICAL CHALLENGER: Adversarial Stress Test Suite (Requirements R1 -
 
             const carbsInput = screen.getByDisplayValue('65');
             fireEvent.change(carbsInput, { target: { value: '70' } });
-            expect(mockSetData).toHaveBeenCalled();
+            expect(mockSetData).toHaveBeenCalledWith(expect.objectContaining({ carbs: '70', kcal: 346 }));
+            expect(mockSave).not.toHaveBeenCalled();
+            fireEvent.click(screen.getByRole('button', { name: 'Salva alimento' }));
+            expect(mockSave).toHaveBeenCalledTimes(1);
         });
     });
 
@@ -550,8 +547,7 @@ describe('EMPIRICAL CHALLENGER: Adversarial Stress Test Suite (Requirements R1 -
             const sessionPains = ['chest']; // user still feels chest pain
 
             const result = mergeActivePains(activePains, sessionPains);
-            expect(result).toContain('chest');
-            expect(result).toContain('quadriceps');
+            expect(result).toEqual(['chest', 'quadriceps']);
         });
 
         it('adds newly reported session pains and merges with preserved pains', () => {

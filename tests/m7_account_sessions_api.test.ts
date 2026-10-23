@@ -12,6 +12,7 @@ vi.mock('../server/accountDeletion/httpAuth', () => {
 vi.mock('../server/accountDeletion/sessionRevocation', () => sessions);
 
 import { OPTIONS, POST } from '../api/account-sessions';
+import { RequestAuthError } from '../server/accountDeletion/httpAuth';
 
 function request(origin = 'https://thelogbook.web.app', method = 'POST'): Request {
   return new Request('https://logbook-gnf.vercel.app/api/account-sessions', {
@@ -31,7 +32,7 @@ describe('global session revocation API', () => {
     sessions.revokeAllUserSessions.mockResolvedValue(undefined);
   });
 
-  it('derives the owner exclusively from fresh authenticated claims and consumes App Check upstream', async () => {
+  it('derives the owner from the upstream verified requester and dispatches only that UID', async () => {
     const response = await POST(request());
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ status: 'revoked' });
@@ -47,10 +48,14 @@ describe('global session revocation API', () => {
     expect(sessions.revokeAllUserSessions).not.toHaveBeenCalled();
   });
 
-  it('does not mutate sessions after recent authentication or App Check rejection', async () => {
-    auth.verifyDeletionRequester.mockRejectedValueOnce(new Error('revoked-token'));
+  it.each([
+    ['revoked or expired token', 401],
+    ['rejected App Check token', 403],
+  ] as const)('preserves the %s rejection status without revoking sessions', async (_reason, status) => {
+    auth.verifyDeletionRequester.mockRejectedValueOnce(new RequestAuthError('Authentication rejected', status));
     const response = await POST(request());
-    expect(response.status).toBe(503);
+    expect(response.status).toBe(status);
+    expect(response.headers.get('cache-control')).toBe('no-store');
     expect(sessions.revokeAllUserSessions).not.toHaveBeenCalled();
   });
 
