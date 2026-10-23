@@ -67,7 +67,7 @@ describe('Training Session UI Improvements Suite (R1, R2, R3)', () => {
             });
 
             expect(screen.getByText('Scheda Petto')).toBeDefined();
-            const exerciseList = document.querySelector('#view-training .session-exercise-list');
+            const exerciseList = document.querySelector('.session-exercise-list');
             expect(exerciseList).not.toBeNull();
             expect(exerciseList?.classList.contains('card')).toBe(false);
             expect(exerciseList?.querySelector('.session-exercise-shell')).not.toBeNull();
