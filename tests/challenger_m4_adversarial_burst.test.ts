@@ -32,8 +32,7 @@ describe('Milestone 4 Challenger: Empirical Stress & Burst Verification', () => 
     telemetryHub.reset();
   });
 
-
-  it('Stress 2a: Rapid generation of 1,500 distinct errors strictly caps activeRateLimiters at 1000 with LRU eviction and timer cleanup', async () => {
+  it('Stress 2a: 1,500 deterministic distinct errors cap active rate limiters at 1,000', async () => {
     vi.useFakeTimers();
 
     telemetryHub.init();
@@ -76,7 +75,7 @@ describe('Milestone 4 Challenger: Empirical Stress & Burst Verification', () => 
     await vi.advanceTimersByTimeAsync(50);
     expect(mockSentryTransport).toHaveBeenCalledTimes(distinctCount);
 
-    // Advance 60s: all active rate limiters expire and clean up their timer handles
+    // Advance beyond the configured deduplication window; all limiters must expire.
     await vi.advanceTimersByTimeAsync(RATE_LIMIT_WINDOW_MS + 100);
     expect(telemetryHub.getActiveRateLimiterCount()).toBe(0);
   });
@@ -108,5 +107,4 @@ describe('Milestone 4 Challenger: Empirical Stress & Burst Verification', () => 
     expect(p2.message).toBe('Property undefined on catalog item');
     expect(p2.count).toBe(1000);
   });
-
 });
