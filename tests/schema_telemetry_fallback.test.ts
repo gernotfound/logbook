@@ -1,39 +1,30 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as sentryClient from '../src/lib/sentryClient';
-import * as firebaseLib from '../src/lib/firebase';
 import {
     DomainParsers,
     UserDataSchema,
-
-
-
-
-
-
-
-
 
     setSchemaFallbackListener,
 
     type ZodFallbackContext
 } from '../src/lib/schema';
-import { telemetryHub, type TelemetryErrorPayload, type TelemetryEventPayload } from '../src/lib/telemetryHub';
+import { telemetryHub, type TelemetryErrorPayload } from '../src/lib/telemetryHub';
 
 describe('Zod Schema Fallback & Telemetry Integration (Milestone 3 R1)', () => {
-    let mockSetDoc: any;
+    let mockSentryTransport: any;
+    const fallbackContexts: ZodFallbackContext[] = [];
 
     beforeEach(() => {
         localStorage.clear();
         sessionStorage.clear();
         vi.clearAllMocks();
+        fallbackContexts.length = 0;
         vi.useRealTimers();
         Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
 
-        mockSetDoc = vi.spyOn(sentryClient, 'sendTelemetryToSentry').mockResolvedValue(true);
-        vi.spyOn(firebaseLib, 'ensureAppCheck').mockResolvedValue({ success: true, appCheck: null, isFallbackOffline: false, phase: 'token-ready', providerInitialized: true, tokenAvailable: true, retryable: false });
-        vi.spyOn(firebaseLib, 'getDb').mockReturnValue({} as any);
+        mockSentryTransport = vi.spyOn(sentryClient, 'sendTelemetryToSentry').mockResolvedValue(true);
 
-        setSchemaFallbackListener(null);
+        setSchemaFallbackListener((ctx) => fallbackContexts.push(ctx));
         telemetryHub.reset();
         telemetryHub.init();
         telemetryHub.setUserId('test_zod_user');
@@ -48,8 +39,8 @@ describe('Zod Schema Fallback & Telemetry Integration (Milestone 3 R1)', () => {
         telemetryHub.reset();
     });
 
-    describe('1. ErrorSource and Schema Fallback Reporting', () => {
-        it('supports zod_schema_fallback source in telemetryHub.trackError', async () => {
+    describe('1. Technical error dispatch and fallback reporting', () => {
+        it('dispatches zod_schema_fallback as a technical Sentry error', async () => {
             vi.useFakeTimers();
             const syntheticError = new Error('Zod fallback in UserProfileSchema [height]: invalid_type');
             syntheticError.name = 'ZodSchemaFallbackError';
@@ -61,36 +52,14 @@ describe('Zod Schema Fallback & Telemetry Integration (Milestone 3 R1)', () => {
 
             await vi.advanceTimersByTimeAsync(50);
 
-            expect(mockSetDoc).toHaveBeenCalledTimes(1);
-            const payload = mockSetDoc.mock.calls[0][1] as TelemetryErrorPayload;
+            expect(mockSentryTransport).toHaveBeenCalledTimes(1);
+            expect(mockSentryTransport.mock.calls[0][0]).toBe('error');
+            const payload = mockSentryTransport.mock.calls[0][1] as TelemetryErrorPayload;
             expect(payload.source).toBe('zod_schema_fallback');
             expect(payload.type).toBe('ZodSchemaFallbackError');
             expect(payload.message).toContain('Zod fallback in UserProfileSchema');
         });
 
-        it('dispatches zod_schema_fallback event with structural metadata', async () => {
-            vi.useFakeTimers();
-            telemetryHub.trackEvent('zod_schema_fallback', {
-                schema: 'ExerciseSchema',
-                field: 'setsCount',
-                issueCode: 'invalid_type',
-                expectedType: 'number',
-                receivedType: 'string',
-                fallbackUsed: 'default_empty_exercise',
-            });
-
-            await vi.advanceTimersByTimeAsync(50);
-
-            expect(mockSetDoc).toHaveBeenCalledTimes(1);
-            const payload = mockSetDoc.mock.calls[0][1] as TelemetryEventPayload;
-            expect(payload.type).toBe('zod_schema_fallback');
-            expect(payload.details?.schema).toBe('ExerciseSchema');
-            expect(payload.details?.field).toBe('setsCount');
-            expect(payload.details?.issueCode).toBe('invalid_type');
-            expect(payload.details?.expectedType).toBe('number');
-            expect(payload.details?.receivedType).toBe('string');
-            expect(payload.details?.fallbackUsed).toBe('default_empty_exercise');
-        });
     });
 
     describe('2. DomainParsers Telemetry Triggering & Fallbacks', () => {
@@ -104,12 +73,15 @@ describe('Zod Schema Fallback & Telemetry Integration (Milestone 3 R1)', () => {
 
             await vi.advanceTimersByTimeAsync(50);
 
-            expect(mockSetDoc).toHaveBeenCalled();
-            const calls = mockSetDoc.mock.calls;
-            const eventCall = calls.find((c: any) => c[1].type === 'zod_schema_fallback');
-            expect(eventCall).toBeDefined();
-            expect(eventCall[1].details.schema).toBe('UserProfileSchema');
-            expect(eventCall[1].details.fallbackUsed).toBe('default_empty_profile');
+            expect(mockSentryTransport).toHaveBeenCalled();
+            const calls = mockSentryTransport.mock.calls;
+            const context = fallbackContexts.find(ctx => ctx.schema === 'UserProfileSchema');
+            expect(context).toBeDefined();
+            const report = calls.find((call: any) => call[0] === 'error' && call[1].source === 'zod_schema_fallback' && call[1].message.includes('UserProfileSchema'));
+            expect(report).toBeDefined();
+            expect(report[1].message).toContain('Zod fallback in ' + 'UserProfileSchema');
+            expect(context?.schema).toBe('UserProfileSchema');
+            expect(context?.fallbackUsed).toBe('default_empty_profile');
         });
 
         it('notifies telemetry when parseWorkoutSession encounters corrupt non-object data', async () => {
@@ -122,12 +94,15 @@ describe('Zod Schema Fallback & Telemetry Integration (Milestone 3 R1)', () => {
 
             await vi.advanceTimersByTimeAsync(50);
 
-            expect(mockSetDoc).toHaveBeenCalled();
-            const calls = mockSetDoc.mock.calls;
-            const eventCall = calls.find((c: any) => c[1].type === 'zod_schema_fallback');
-            expect(eventCall).toBeDefined();
-            expect(eventCall[1].details.schema).toBe('WorkoutSessionSchema');
-            expect(eventCall[1].details.fallbackUsed).toBe('default_empty_session');
+            expect(mockSentryTransport).toHaveBeenCalled();
+            const calls = mockSentryTransport.mock.calls;
+            const context = fallbackContexts.find(ctx => ctx.schema === 'WorkoutSessionSchema');
+            expect(context).toBeDefined();
+            const report = calls.find((call: any) => call[0] === 'error' && call[1].source === 'zod_schema_fallback' && call[1].message.includes('WorkoutSessionSchema'));
+            expect(report).toBeDefined();
+            expect(report[1].message).toContain('Zod fallback in ' + 'WorkoutSessionSchema');
+            expect(context?.schema).toBe('WorkoutSessionSchema');
+            expect(context?.fallbackUsed).toBe('default_empty_session');
         });
 
         it('notifies telemetry and returns fallback object when parseNutritionPlanning receives invalid non-object', async () => {
@@ -139,12 +114,15 @@ describe('Zod Schema Fallback & Telemetry Integration (Milestone 3 R1)', () => {
 
             await vi.advanceTimersByTimeAsync(50);
 
-            expect(mockSetDoc).toHaveBeenCalled();
-            const calls = mockSetDoc.mock.calls;
-            const eventCall = calls.find((c: any) => c[1].type === 'zod_schema_fallback');
-            expect(eventCall).toBeDefined();
-            expect(eventCall[1].details.schema).toBe('NutritionPlanningSchema');
-            expect(eventCall[1].details.fallbackUsed).toBe('default_empty_planning');
+            expect(mockSentryTransport).toHaveBeenCalled();
+            const calls = mockSentryTransport.mock.calls;
+            const context = fallbackContexts.find(ctx => ctx.schema === 'NutritionPlanningSchema');
+            expect(context).toBeDefined();
+            const report = calls.find((call: any) => call[0] === 'error' && call[1].source === 'zod_schema_fallback' && call[1].message.includes('NutritionPlanningSchema'));
+            expect(report).toBeDefined();
+            expect(report[1].message).toContain('Zod fallback in ' + 'NutritionPlanningSchema');
+            expect(context?.schema).toBe('NutritionPlanningSchema');
+            expect(context?.fallbackUsed).toBe('default_empty_planning');
         });
 
         it('returns null cleanly for null or undefined in parseNutritionPlanning', () => {
@@ -165,12 +143,15 @@ describe('Zod Schema Fallback & Telemetry Integration (Milestone 3 R1)', () => {
 
             await vi.advanceTimersByTimeAsync(50);
 
-            expect(mockSetDoc).toHaveBeenCalled();
-            const calls = mockSetDoc.mock.calls;
-            const eventCall = calls.find((c: any) => c[1].type === 'zod_schema_fallback');
-            expect(eventCall).toBeDefined();
-            expect(eventCall[1].details.schema).toBe('WorkoutSessionSchema');
-            expect(eventCall[1].details.fallbackUsed).toBe('record_quarantined');
+            expect(mockSentryTransport).toHaveBeenCalled();
+            const calls = mockSentryTransport.mock.calls;
+            const context = fallbackContexts.find(ctx => ctx.schema === 'WorkoutSessionSchema');
+            expect(context).toBeDefined();
+            const report = calls.find((call: any) => call[0] === 'error' && call[1].source === 'zod_schema_fallback' && call[1].message.includes('WorkoutSessionSchema'));
+            expect(report).toBeDefined();
+            expect(report[1].message).toContain('Zod fallback in ' + 'WorkoutSessionSchema');
+            expect(context?.schema).toBe('WorkoutSessionSchema');
+            expect(context?.fallbackUsed).toBe('record_quarantined');
         });
 
         it('handles non-array history input safely and notifies telemetry', async () => {
@@ -180,13 +161,16 @@ describe('Zod Schema Fallback & Telemetry Integration (Milestone 3 R1)', () => {
 
             await vi.advanceTimersByTimeAsync(50);
 
-            expect(mockSetDoc).toHaveBeenCalled();
-            const calls = mockSetDoc.mock.calls;
-            const eventCall = calls.find((c: any) => c[1].type === 'zod_schema_fallback');
-            expect(eventCall).toBeDefined();
-            expect(eventCall[1].details.schema).toBe('WorkoutSessionSchema');
-            expect(eventCall[1].details.field).toBe('history');
-            expect(eventCall[1].details.expectedType).toBe('array');
+            expect(mockSentryTransport).toHaveBeenCalled();
+            const calls = mockSentryTransport.mock.calls;
+            const context = fallbackContexts.find(ctx => ctx.schema === 'WorkoutSessionSchema');
+            expect(context).toBeDefined();
+            const report = calls.find((call: any) => call[0] === 'error' && call[1].source === 'zod_schema_fallback' && call[1].message.includes('WorkoutSessionSchema'));
+            expect(report).toBeDefined();
+            expect(report[1].message).toContain('Zod fallback in ' + 'WorkoutSessionSchema');
+            expect(context?.schema).toBe('WorkoutSessionSchema');
+            expect(context?.field).toBe('history');
+            expect(context?.expectedType).toBe('array');
         });
 
         it('sanitizes corrupt library items and notifies telemetry', async () => {
@@ -202,12 +186,15 @@ describe('Zod Schema Fallback & Telemetry Integration (Milestone 3 R1)', () => {
 
             await vi.advanceTimersByTimeAsync(50);
 
-            expect(mockSetDoc).toHaveBeenCalled();
-            const calls = mockSetDoc.mock.calls;
-            const eventCall = calls.find((c: any) => c[1].type === 'zod_schema_fallback');
-            expect(eventCall).toBeDefined();
-            expect(eventCall[1].details.schema).toBe('ExerciseSchema');
-            expect(eventCall[1].details.fallbackUsed).toBe('default_empty_exercise');
+            expect(mockSentryTransport).toHaveBeenCalled();
+            const calls = mockSentryTransport.mock.calls;
+            const context = fallbackContexts.find(ctx => ctx.schema === 'ExerciseSchema');
+            expect(context).toBeDefined();
+            const report = calls.find((call: any) => call[0] === 'error' && call[1].source === 'zod_schema_fallback' && call[1].message.includes('ExerciseSchema'));
+            expect(report).toBeDefined();
+            expect(report[1].message).toContain('Zod fallback in ' + 'ExerciseSchema');
+            expect(context?.schema).toBe('ExerciseSchema');
+            expect(context?.fallbackUsed).toBe('default_empty_exercise');
         });
 
         it('sanitizes corrupt customFoods and notifies telemetry', async () => {
@@ -223,12 +210,15 @@ describe('Zod Schema Fallback & Telemetry Integration (Milestone 3 R1)', () => {
 
             await vi.advanceTimersByTimeAsync(50);
 
-            expect(mockSetDoc).toHaveBeenCalled();
-            const calls = mockSetDoc.mock.calls;
-            const eventCall = calls.find((c: any) => c[1].type === 'zod_schema_fallback');
-            expect(eventCall).toBeDefined();
-            expect(eventCall[1].details.schema).toBe('FoodSchema');
-            expect(eventCall[1].details.fallbackUsed).toBe('default_empty_food');
+            expect(mockSentryTransport).toHaveBeenCalled();
+            const calls = mockSentryTransport.mock.calls;
+            const context = fallbackContexts.find(ctx => ctx.schema === 'FoodSchema');
+            expect(context).toBeDefined();
+            const report = calls.find((call: any) => call[0] === 'error' && call[1].source === 'zod_schema_fallback' && call[1].message.includes('FoodSchema'));
+            expect(report).toBeDefined();
+            expect(report[1].message).toContain('Zod fallback in ' + 'FoodSchema');
+            expect(context?.schema).toBe('FoodSchema');
+            expect(context?.fallbackUsed).toBe('default_empty_food');
         });
 
         it('sanitizes corrupt routines and notifies telemetry', async () => {
@@ -244,12 +234,15 @@ describe('Zod Schema Fallback & Telemetry Integration (Milestone 3 R1)', () => {
 
             await vi.advanceTimersByTimeAsync(50);
 
-            expect(mockSetDoc).toHaveBeenCalled();
-            const calls = mockSetDoc.mock.calls;
-            const eventCall = calls.find((c: any) => c[1].type === 'zod_schema_fallback');
-            expect(eventCall).toBeDefined();
-            expect(eventCall[1].details.schema).toBe('WorkoutRoutineSchema');
-            expect(eventCall[1].details.fallbackUsed).toBe('default_empty_routine');
+            expect(mockSentryTransport).toHaveBeenCalled();
+            const calls = mockSentryTransport.mock.calls;
+            const context = fallbackContexts.find(ctx => ctx.schema === 'WorkoutRoutineSchema');
+            expect(context).toBeDefined();
+            const report = calls.find((call: any) => call[0] === 'error' && call[1].source === 'zod_schema_fallback' && call[1].message.includes('WorkoutRoutineSchema'));
+            expect(report).toBeDefined();
+            expect(report[1].message).toContain('Zod fallback in ' + 'WorkoutRoutineSchema');
+            expect(context?.schema).toBe('WorkoutRoutineSchema');
+            expect(context?.fallbackUsed).toBe('default_empty_routine');
         });
 
         it('sanitizes corrupt trainingCycles and notifies telemetry', async () => {
@@ -265,12 +258,15 @@ describe('Zod Schema Fallback & Telemetry Integration (Milestone 3 R1)', () => {
 
             await vi.advanceTimersByTimeAsync(50);
 
-            expect(mockSetDoc).toHaveBeenCalled();
-            const calls = mockSetDoc.mock.calls;
-            const eventCall = calls.find((c: any) => c[1].type === 'zod_schema_fallback');
-            expect(eventCall).toBeDefined();
-            expect(eventCall[1].details.schema).toBe('TrainingCycleSchema');
-            expect(eventCall[1].details.fallbackUsed).toBe('default_empty_cycle');
+            expect(mockSentryTransport).toHaveBeenCalled();
+            const calls = mockSentryTransport.mock.calls;
+            const context = fallbackContexts.find(ctx => ctx.schema === 'TrainingCycleSchema');
+            expect(context).toBeDefined();
+            const report = calls.find((call: any) => call[0] === 'error' && call[1].source === 'zod_schema_fallback' && call[1].message.includes('TrainingCycleSchema'));
+            expect(report).toBeDefined();
+            expect(report[1].message).toContain('Zod fallback in ' + 'TrainingCycleSchema');
+            expect(context?.schema).toBe('TrainingCycleSchema');
+            expect(context?.fallbackUsed).toBe('default_empty_cycle');
         });
 
         it('sanitizes corrupt supplements and notifies telemetry', async () => {
@@ -286,12 +282,15 @@ describe('Zod Schema Fallback & Telemetry Integration (Milestone 3 R1)', () => {
 
             await vi.advanceTimersByTimeAsync(50);
 
-            expect(mockSetDoc).toHaveBeenCalled();
-            const calls = mockSetDoc.mock.calls;
-            const eventCall = calls.find((c: any) => c[1].type === 'zod_schema_fallback');
-            expect(eventCall).toBeDefined();
-            expect(eventCall[1].details.schema).toBe('SupplementSchema');
-            expect(eventCall[1].details.fallbackUsed).toBe('default_empty_supplement');
+            expect(mockSentryTransport).toHaveBeenCalled();
+            const calls = mockSentryTransport.mock.calls;
+            const context = fallbackContexts.find(ctx => ctx.schema === 'SupplementSchema');
+            expect(context).toBeDefined();
+            const report = calls.find((call: any) => call[0] === 'error' && call[1].source === 'zod_schema_fallback' && call[1].message.includes('SupplementSchema'));
+            expect(report).toBeDefined();
+            expect(report[1].message).toContain('Zod fallback in ' + 'SupplementSchema');
+            expect(context?.schema).toBe('SupplementSchema');
+            expect(context?.fallbackUsed).toBe('default_empty_supplement');
         });
 
         it('filters invalid activePains entries and notifies telemetry', async () => {
@@ -303,12 +302,15 @@ describe('Zod Schema Fallback & Telemetry Integration (Milestone 3 R1)', () => {
 
             await vi.advanceTimersByTimeAsync(50);
 
-            expect(mockSetDoc).toHaveBeenCalled();
-            const calls = mockSetDoc.mock.calls;
-            const eventCall = calls.find((c: any) => c[1].type === 'zod_schema_fallback');
-            expect(eventCall).toBeDefined();
-            expect(eventCall[1].details.schema).toBe('UserDataSchema');
-            expect(eventCall[1].details.field).toBe('activePains[]');
+            expect(mockSentryTransport).toHaveBeenCalled();
+            const calls = mockSentryTransport.mock.calls;
+            const context = fallbackContexts.find(ctx => ctx.schema === 'UserDataSchema');
+            expect(context).toBeDefined();
+            const report = calls.find((call: any) => call[0] === 'error' && call[1].source === 'zod_schema_fallback' && call[1].message.includes('UserDataSchema'));
+            expect(report).toBeDefined();
+            expect(report[1].message).toContain('Zod fallback in ' + 'UserDataSchema');
+            expect(context?.schema).toBe('UserDataSchema');
+            expect(context?.field).toBe('activePains[]');
         });
 
         it('sanitizes corrupt nutrition days and notifies telemetry', async () => {
@@ -325,12 +327,15 @@ describe('Zod Schema Fallback & Telemetry Integration (Milestone 3 R1)', () => {
 
             await vi.advanceTimersByTimeAsync(50);
 
-            expect(mockSetDoc).toHaveBeenCalled();
-            const calls = mockSetDoc.mock.calls;
-            const eventCall = calls.find((c: any) => c[1].type === 'zod_schema_fallback');
-            expect(eventCall).toBeDefined();
-            expect(eventCall[1].details.schema).toBe('NutritionDaySchema');
-            expect(eventCall[1].details.fallbackUsed).toBe('default_empty_day');
+            expect(mockSentryTransport).toHaveBeenCalled();
+            const calls = mockSentryTransport.mock.calls;
+            const context = fallbackContexts.find(ctx => ctx.schema === 'NutritionDaySchema');
+            expect(context).toBeDefined();
+            const report = calls.find((call: any) => call[0] === 'error' && call[1].source === 'zod_schema_fallback' && call[1].message.includes('NutritionDaySchema'));
+            expect(report).toBeDefined();
+            expect(report[1].message).toContain('Zod fallback in ' + 'NutritionDaySchema');
+            expect(context?.schema).toBe('NutritionDaySchema');
+            expect(context?.fallbackUsed).toBe('default_empty_day');
         });
     });
 
@@ -343,8 +348,8 @@ describe('Zod Schema Fallback & Telemetry Integration (Milestone 3 R1)', () => {
 
             await vi.advanceTimersByTimeAsync(50);
 
-            expect(mockSetDoc).toHaveBeenCalled();
-            for (const call of mockSetDoc.mock.calls) {
+            expect(mockSentryTransport).toHaveBeenCalled();
+            for (const call of mockSentryTransport.mock.calls) {
                 const payloadStr = JSON.stringify(call[1]);
                 expect(payloadStr).not.toContain('user@gym.it');
                 expect(payloadStr).not.toContain('eyJhbGciOiJIUzI1NiJ9');
@@ -362,8 +367,8 @@ describe('Zod Schema Fallback & Telemetry Integration (Milestone 3 R1)', () => {
 
             await vi.advanceTimersByTimeAsync(50);
 
-            expect(mockSetDoc).toHaveBeenCalled();
-            for (const call of mockSetDoc.mock.calls) {
+            expect(mockSentryTransport).toHaveBeenCalled();
+            for (const call of mockSentryTransport.mock.calls) {
                 const payloadStr = JSON.stringify(call[1]);
                 expect(payloadStr).not.toContain('+393331234567');
                 expect(payloadStr).not.toContain('completely_invalid_root_string');
