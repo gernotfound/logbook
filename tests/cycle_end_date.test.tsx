@@ -319,7 +319,9 @@ describe('Training Cycle End Date & Two-Way Binding (Milestone 2 - Requirement R
             fireEvent.change(screen.getByLabelText('Durata (settimane)'), {
                 target: { value: entered },
             });
-            fireEvent.click(screen.getByRole('button', { name: /Salva modifiche/i }));
+            // Exercise the form's submit handler even for input values that the
+            // native number-input min/required attributes prevent users from submitting.
+            fireEvent.submit(document.querySelector('#cycle-editor-form') as HTMLFormElement);
 
             expect(onSave).toHaveBeenCalledTimes(1);
             const saved: TrainingCycle = onSave.mock.calls[0][0];
