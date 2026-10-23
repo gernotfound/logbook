@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { useAppStore } from '../../src/store/useAppStore';
 import { FutureVersionError } from '../../src/lib/schemaEvolution';
+import { captureSession } from '../../src/lib/sync/session';
 
 describe('update-required application state', () => {
     beforeEach(() => {
@@ -16,7 +17,9 @@ describe('update-required application state', () => {
 
     it('becomes persistent and blocks subsequent local/store writes', async () => {
         const original = { profile: { name: 'before' } } as any;
-        useAppStore.setState({ userData: original });
+        const owner = captureSession().owner;
+        useAppStore.setState({ userData: original, dataOwner: owner });
+        expect(useAppStore.getState().dataOwner).toBe(owner);
 
         const error = new FutureVersionError('Firestore root data schema', 2, 1);
         useAppStore.getState().setUpdateRequired(error);

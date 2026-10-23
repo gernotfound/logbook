@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useRegisterSW } from 'virtual:pwa-register/react';
 import { isReloadSessionCurrent, prepareForReload } from '../../lib/sync/reloadBarrier';
+import { safeHardReload } from '../../lib/sync/safeReload';
 import { checkForWaitingServiceWorker } from '../../lib/pwaUpdate';
 
 const ReloadPrompt: React.FC = () => {
@@ -109,10 +110,15 @@ const ReloadPrompt: React.FC = () => {
     setUpdating(true);
     setUpdateError(null);
     try {
-      const session = await prepareForReload();
-      if (!isReloadSessionCurrent(session)) throw new Error('Sessione cambiata.');
-      if (chunkFailed) window.location.reload();
-      else await updateServiceWorker(true);
+      if (chunkFailed) {
+        // The chunk-failure path needs the same durable reload barrier as all
+        // other hard navigations; keep the reload itself behind that boundary.
+        await safeHardReload();
+      } else {
+        const session = await prepareForReload();
+        if (!isReloadSessionCurrent(session)) throw new Error('Sessione cambiata.');
+        await updateServiceWorker(true);
+      }
     } catch (err) {
       setUpdateError(err instanceof Error ? err.message : 'Aggiornamento non riuscito. Riprova.');
     } finally {

@@ -85,6 +85,36 @@ describe('authenticated hydration session fencing', () => {
         dbState.loadCloudPayload.mockReset();
     });
 
+    it('reports an authenticated missing local envelope without creating a replacement journal', async () => {
+        await clear();
+        const { loadAuthenticatedData, readLocal, invalidateSession } = await loadModules();
+        const storageTelemetry = await import('../src/lib/storageTelemetry');
+        const sentryClient = await import('../src/lib/sentryClient');
+        invalidateSession();
+        storeState.current = { userData: null, localWorkout: null, localPersistenceBlocked: false };
+        const marker = storageTelemetry.updateStorageMarker(12345, undefined, 'user:user-a')!;
+        const sendSpy = vi.spyOn(sentryClient, 'sendTelemetryToSentry').mockResolvedValue(true);
+        dbState.loadCloudPayload.mockRejectedValueOnce(Object.assign(new Error('Cloud unavailable'), { code: 'unavailable' }));
+
+        const result = await loadAuthenticatedData({
+            user: { uid: 'user-a' } as any,
+            isGuestActive: () => false,
+            setUserData: vi.fn(),
+            setSyncing: vi.fn(),
+            setSaveError: vi.fn(),
+        });
+
+        expect(result).toBe('blocked');
+        expect(dbState.loadCloudPayload).toHaveBeenCalledOnce();
+        await vi.waitFor(() => expect(sendSpy).toHaveBeenCalledWith(
+            'storage-anomaly', expect.objectContaining({ type: 'storage_recovery_anomaly' }),
+        ));
+        await vi.waitFor(() => expect(storageTelemetry.isAnomalyAlreadyReported(marker, undefined, 'user:user-a')).toBe(true));
+        expect(await readLocal('user:user-a')).toBeUndefined();
+        expect(storeState.current.userData).toBeNull();
+        await clear();
+    });
+
     it('rejects a stale workout when an owner envelope appears during an offline cloud-load failure', async () => {
         await clear();
         const { loadAuthenticatedData, readLocal, initializeLocal, commitDomainOperations, invalidateSession } = await loadModules();

@@ -9,6 +9,7 @@ import { localStorageMock, mockFirebaseAuth, renderWithProviders } from './setup
 import { useAppStore } from '../src/store/useAppStore';
 import { BufferedInput } from '../src/components/UI/BufferedInput';
 import { invalidateSession } from '../src/lib/sync/session';
+import * as safeReloadModule from '../src/lib/sync/safeReload';
 
 describe('Service Worker Update Lifecycle (ReloadPrompt) Suite', () => {
   let mockSetNeedRefresh = vi.fn<(value: React.SetStateAction<boolean>) => void>();
@@ -55,6 +56,35 @@ describe('Service Worker Update Lifecycle (ReloadPrompt) Suite', () => {
     expect(mockUpdateServiceWorker).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: /Chiudi/i }));
     expect(screen.queryByText('Aggiornamento richiesto per caricare questa schermata')).toBeNull();
+  });
+
+  test('a chunk failure requests the protected hard reload instead of updating the worker', async () => {
+    const reload = vi.spyOn(safeReloadModule, 'safeHardReload').mockResolvedValue(undefined);
+    vi.mocked(useRegisterSW).mockReturnValue({
+      needRefresh: [false, mockSetNeedRefresh],
+      offlineReady: [false, vi.fn()],
+      updateServiceWorker: mockUpdateServiceWorker,
+    });
+    render(<ReloadPrompt />);
+    act(() => { window.dispatchEvent(new Event('vite:preloadError', { cancelable: true })); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /Aggiorna/i })); });
+    expect(reload).toHaveBeenCalledOnce();
+    expect(mockUpdateServiceWorker).not.toHaveBeenCalled();
+  });
+
+  test('a rejected chunk-failure reload barrier keeps the update prompt visible', async () => {
+    vi.spyOn(safeReloadModule, 'safeHardReload').mockRejectedValue(new Error('Ultime modifiche non salvate'));
+    vi.mocked(useRegisterSW).mockReturnValue({
+      needRefresh: [false, mockSetNeedRefresh],
+      offlineReady: [false, vi.fn()],
+      updateServiceWorker: mockUpdateServiceWorker,
+    });
+    render(<ReloadPrompt />);
+    act(() => { window.dispatchEvent(new Event('vite:preloadError', { cancelable: true })); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /Aggiorna/i })); });
+    expect(screen.getByText('Ultime modifiche non salvate')).toBeDefined();
+    expect(screen.getByText('Aggiornamento richiesto per caricare questa schermata')).toBeDefined();
+    expect(mockUpdateServiceWorker).not.toHaveBeenCalled();
   });
 
   test('unmount flushes a buffered input only in its original session', () => {

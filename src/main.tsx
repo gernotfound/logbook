@@ -18,16 +18,11 @@ import type { UserData } from './types'
 import { getCachedCatalog } from './lib/catalog/catalogService';
 import { resolveEffectiveExercises, resolveEffectiveFoods } from './lib/catalog/deltaResolver';
 
-import { requestDurableStorage, setStorageDiagnosticData, getStorageDiagnosticData } from './lib/storageStatus';
+import { requestDurableStorage, setStorageDiagnosticData } from './lib/storageStatus';
 import {
   getStorageMarker,
   updateStorageMarker,
   diagnoseStorageState,
-  shouldReportAnomaly,
-  isAnomalyAlreadyReported,
-  markAnomalyReported,
-  createStorageRecoveryAnomalyPayload,
-  dispatchStorageRecoveryAnomaly,
 } from './lib/storageTelemetry';
 import { telemetryHub } from './lib/telemetryHub';
 import { initSentry } from './lib/sentryClient';
@@ -188,24 +183,7 @@ export const initApp = async () => {
     } else if (status !== 'read_error') {
       window.__INITIAL_USER_DATA__ = null;
 
-      if (shouldReportAnomaly(status, marker) && bootstrapOwner?.startsWith('user:')) {
-        if (!isAnomalyAlreadyReported(marker!, undefined, bootstrapOwner)) {
-          const payload = createStorageRecoveryAnomalyPayload({
-            marker: marker!,
-            persisted: getStorageDiagnosticData()?.persistent ?? null,
-          });
-          // Bind the report to the owner whose local data was actually inspected.
-          // A guest anomaly must not be sent after a subsequent account login.
-          const owner = bootstrapOwner;
-          void dispatchStorageRecoveryAnomaly(payload, owner.slice('user:'.length))
-            .then(accepted => {
-              if (accepted) markAnomalyReported(marker!, undefined, owner);
-            })
-            .catch(err => {
-              console.warn("Invio telemetria anomalia storage fallito (non bloccante):", err);
-            });
-        }
-      }
+
     }
   } catch (e) {
     console.warn("Errore generale durante bootstrap storage:", e);

@@ -85,8 +85,12 @@ describe('Telemetry owner isolation at the production boundary', () => {
     finish(false);
     await vi.advanceTimersByTimeAsync(0);
 
-    expect(JSON.parse(localStorage.getItem(queueKeyA) || '[]')).toHaveLength(0);
-    expect(JSON.parse(localStorage.getItem(queueKeyB) || '[]')).toHaveLength(0);
+    expect(queueKeyA).not.toBe(queueKeyB);
+    expect(localStorage.getItem(queueKeyA)).toBeNull();
+    expect(localStorage.getItem(queueKeyB)).toBeNull();
+    // The current runtime retains pre-vault diagnostics in RAM; checking only
+    // plaintext keys would pass even if A were appended to B's live queue.
+    expect(telemetryHub.getQueuedEvents()).toEqual([]);
   });
 
   it('never attributes a late failed online event to another authenticated owner', async () => {
