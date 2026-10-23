@@ -13,6 +13,7 @@ import {
 import { storageOwner } from '../src/lib/sync/session';
 import { resolveEffectiveExercises, resolveEffectiveFoods } from '../src/lib/catalog/deltaResolver';
 import { mergeNutrition } from '../src/lib/merge';
+import { searchFoods } from '../src/lib/calc/nutrition';
 import { useAppStore } from '../src/store/useAppStore';
 import { clearSyncTimers } from '../src/store/slices/createSyncSlice';
 import type { UserData, NutritionDay } from '../src/types';
@@ -88,35 +89,27 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
             const catalog = await getCachedCatalog();
             const effectiveFoods = resolveEffectiveFoods(catalog.foods);
 
-            const searchFood = (query: string) => {
-                const q = query.trim().toLowerCase();
-                if (!q) return [];
-                return effectiveFoods.filter(f => 
-                    f.name.toLowerCase().includes(q) ||
-                    (f.brand && f.brand.toLowerCase().includes(q)) ||
-                    (f.category && f.category.toLowerCase().includes(q))
-                );
-            };
+            const searchFood = (query: string) => searchFoods(effectiveFoods, query);
 
             // 1. Exact query
             expect(() => searchFood('Petto di Pollo Crudo')).not.toThrow();
             const res1 = searchFood('Petto di Pollo Crudo');
-            expect(res1.length).toBeGreaterThanOrEqual(1);
+            expect(res1.map(food => food.id)).toContain('petto-di-pollo-crudo');
 
             // 2. Uppercase query
             expect(() => searchFood('PETTO DI TACCHINO CRUDO')).not.toThrow();
             const res2 = searchFood('PETTO DI TACCHINO CRUDO');
-            expect(res2.length).toBeGreaterThanOrEqual(1);
+            expect(res2.map(food => food.id)).toContain('petto-di-tacchino-crudo');
 
             // 3. Partial substring
             expect(() => searchFood('pollo')).not.toThrow();
             const res3 = searchFood('pollo');
-            expect(res3.length).toBeGreaterThanOrEqual(1);
+            expect(res3.map(food => food.id)).toContain('petto-di-pollo-crudo');
 
             // 4. Brand search
             expect(() => searchFood('Generico')).not.toThrow();
             const res4 = searchFood('Generico');
-            expect(res4.length).toBeGreaterThanOrEqual(1);
+            expect(res4.map(food => food.id)).toEqual(expect.arrayContaining(['petto-di-pollo-crudo', 'petto-di-tacchino-crudo']));
 
             // 5. Non-existent query
             expect(() => searchFood('unicorn-meat-super-hyper-rare-999')).not.toThrow();
@@ -126,7 +119,7 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
             // 6. Special characters / whitespace
             expect(() => searchFood('   riso   ')).not.toThrow();
             const res6 = searchFood('   riso   ');
-            expect(res6.length).toBeGreaterThanOrEqual(1);
+            expect(res6.map(food => food.id)).toContain('riso-basmati-crudo');
         });
 
         it('T5.2.2: Immediate multi-portion meal logging from cold start calculates exact macros and updates IndexedDB cache', async () => {
