@@ -29,7 +29,16 @@ async function loadSubject() {
   // The shared UI harness suppresses incidental registration; this dedicated
   // suite must exercise the real device-recovery code instead.
   vi.doUnmock('../src/lib/deletionDeviceRecovery');
-  return import('../src/lib/deletionDeviceRecovery');
+  const subject = await import('../src/lib/deletionDeviceRecovery');
+  // The production code lazy-imports this boundary after awaits. In Vitest,
+  // resetModules can expose the real module instead of the hoisted mock.
+  // Spy on the actual resolved export so the test never depends on a live provider.
+  const loaded = await import('../src/lib/appCheck');
+  if (loaded.getLimitedUseAppCheckToken !== appCheck.getLimitedUseAppCheckToken) {
+    vi.spyOn(loaded, 'getLimitedUseAppCheckToken')
+      .mockImplementation(() => appCheck.getLimitedUseAppCheckToken());
+  }
+  return subject;
 }
 
 describe('account deletion recovery device registration retries', () => {
