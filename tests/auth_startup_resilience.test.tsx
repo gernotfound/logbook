@@ -10,6 +10,8 @@ import { refreshHealthConsent, suspendHealthConsentCloudAccess } from '../src/li
 import * as localRepository from '../src/lib/sync/localRepository';
 import { createAndMigrateVault } from '../src/lib/sync/secureArchiveMigration';
 import { lockAllVaults } from '../src/lib/sync/secureArchiveSession';
+import { invalidateSession } from '../src/lib/sync/session';
+import { waitForPendingWrites } from 'firebase/firestore';
 import type { UserData } from '../src/types';
 
 import { idbStore, localStorageMock } from './setup';
@@ -137,6 +139,44 @@ describe('PWA & iPhone Startup Resilience Tests', () => {
     (auth as any).currentUser = { uid: 'another-account', emailVerified: true };
     await act(async () => { finishCheck('active'); await Promise.resolve(); });
     expect(vi.mocked(DB.loadCloudPayload).mock.calls.length).toBe(previousCloudReads);
+  });
+
+  test('does not hydrate an expired SAME-UID session after an online consent check returns', async () => {
+    render(<AuthProvider><TestAuthConsumer /></AuthProvider>);
+    await waitFor(() => expect(screen.getByTestId('loading-state').textContent).toBe('READY'));
+    const checksBefore = vi.mocked(refreshHealthConsent).mock.calls.length;
+    const readsBefore = vi.mocked(DB.loadCloudPayload).mock.calls.length;
+    let answer!: (status: 'active') => void;
+    vi.mocked(refreshHealthConsent).mockImplementationOnce(() => new Promise(resolve => { answer = resolve; }));
+    await act(async () => { window.dispatchEvent(new Event('online')); });
+    await waitFor(() => expect(vi.mocked(refreshHealthConsent)).toHaveBeenCalledTimes(checksBefore + 1));
+
+    // Simulate sign-out + sign-in using the same account, while the old
+    // response is pending. UID checks alone would let the old callback hydrate.
+    invalidateSession();
+    (auth as any).currentUser = { ...auth.currentUser };
+    await act(async () => { answer('active'); await Promise.resolve(); });
+
+    expect(DB.loadCloudPayload).toHaveBeenCalledTimes(readsBefore);
+  });
+
+  test('does not hydrate an expired SAME-UID session after Firestore writes settle', async () => {
+    render(<AuthProvider><TestAuthConsumer /></AuthProvider>);
+    await waitFor(() => expect(screen.getByTestId('loading-state').textContent).toBe('READY'));
+    const readsBefore = vi.mocked(DB.loadCloudPayload).mock.calls.length;
+    const writesBefore = vi.mocked(waitForPendingWrites).mock.calls.length;
+    let releaseWrites!: () => void;
+    vi.mocked(waitForPendingWrites).mockImplementationOnce(
+      () => new Promise<void>(resolve => { releaseWrites = resolve; }),
+    );
+    await act(async () => { window.dispatchEvent(new Event('online')); });
+    await waitFor(() => expect(waitForPendingWrites).toHaveBeenCalledTimes(writesBefore + 1));
+
+    invalidateSession();
+    (auth as any).currentUser = { ...auth.currentUser };
+    await act(async () => { releaseWrites(); await Promise.resolve(); });
+
+    expect(DB.loadCloudPayload).toHaveBeenCalledTimes(readsBefore);
   });
 
   test('does not hydrate after an unverifiable consent recheck on reconnect', async () => {

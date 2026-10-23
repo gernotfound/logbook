@@ -19,7 +19,9 @@ type ConsentLifecycleDependencies = {
 export function createAuthConsentLifecycleHandlers({
     isMounted, isGuestActiveStrict, loadData, setLoading, setSaveError,
 }: ConsentLifecycleDependencies) {
-        let isReloading = false;
+        // Track the owner generation rather than one global boolean: a stale
+        // request must not block a new login's own reconnect verification.
+        let reloadingSession: ReturnType<typeof captureSession> | null = null;
         let reactivationRequest = 0;
         const handleConsentReactivated = (event: Event) => {
             const uid = (event as CustomEvent<{uid:string}>).detail?.uid;
@@ -43,7 +45,7 @@ export function createAuthConsentLifecycleHandlers({
         window.addEventListener('logbook:health-consent-reactivated', handleConsentReactivated);
 
         const handleVisibilityChange = async (event?: Event) => {
-            if (isGuestActiveStrict() || isReloading) return;
+            if (isGuestActiveStrict()) return;
             // The "online" event must check consent even if this tab is hidden.
             if (event?.type !== 'online' && document.visibilityState !== 'visible') return;
             const user = auth.currentUser;
@@ -51,14 +53,19 @@ export function createAuthConsentLifecycleHandlers({
                 || !isVaultUnlocked(userOwner(user.uid))
                 || isAccountDeletionPending(userOwner(user.uid))) return;
 
-            isReloading = true;
+            const session = captureSession();
+            if (session.owner !== userOwner(user.uid) || !isCurrentSession(session)) return;
+            if (reloadingSession && isCurrentSession(reloadingSession)) return;
+            reloadingSession = session;
             const uid = user.uid;
+            const stillCurrent = () => isMounted() && auth.currentUser?.uid === uid
+                && !isGuestActiveStrict() && isCurrentSession(session);
             try {
                 // A cached offline approval only authorizes local actions. On
                 // reconnect/foreground check the server BEFORE cloud hydration
                 // or delivering a journal that accumulated while disconnected.
                 const status = await refreshHealthConsent(user);
-                if (!isMounted() || auth.currentUser?.uid !== uid || isGuestActiveStrict()) return;
+                if (!stillCurrent()) return;
                 if (status !== 'active') {
                     useAppStore.getState().cancelPendingSyncs();
                     return;
@@ -68,13 +75,12 @@ export function createAuthConsentLifecycleHandlers({
                     waitForPendingWrites(getDb()),
                     new Promise(resolve => setTimeout(resolve, 1500))
                 ]);
-                if (!isMounted() || auth.currentUser?.uid !== uid
-                    || !isHealthConsentWritable(userOwner(uid))) return;
+                if (!stillCurrent() || !isHealthConsentWritable(userOwner(uid))) return;
                 await loadData(user);
             } catch (error) {
                 console.warn('Verifica consenso/aggiornamento dopo riconnessione non riusciti:', error);
             } finally {
-                isReloading = false;
+                if (reloadingSession === session) reloadingSession = null;
             }
         };
         const handleOffline = () => {

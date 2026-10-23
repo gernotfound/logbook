@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { auth } from '../src/lib/firebase';
 import { UserDataSchema } from '../src/lib/schema';
 import { initializeLocal, readLocal } from '../src/lib/sync/localRepository';
+import { invalidateSession } from '../src/lib/sync/session';
 // Unlike the rest of the UI fixture, this suite exercises the real policy module.
 vi.unmock('../src/lib/healthConsent');
 
@@ -71,6 +72,52 @@ describe('first trusted consent registration', () => {
     expect(await refreshHealthConsent(actor)).toBe('error');
     expect(isHealthConsentCloudWritable('user:' + uid)).toBe(false);
     await expect(registerInitialHealthConsent(actor, accepted)).rejects.toThrow();
+  });
+});
+
+describe('same-UID consent check session fencing', () => {
+  it('never publishes the old session approval after reauthentication with the same UID', async () => {
+    const uid = 'consent-aba-' + crypto.randomUUID();
+    const actor = user(uid);
+    (auth as { currentUser: unknown }).currentUser = actor;
+    beginHealthConsentVerification(uid);
+    let resolveGet!: (response: Response) => void;
+    const fetchMock = vi.fn(() => new Promise<Response>(resolve => { resolveGet = resolve; }));
+    vi.stubGlobal('fetch', fetchMock);
+    const previous = refreshHealthConsent(actor);
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
+
+    invalidateSession();
+    (auth as { currentUser: unknown }).currentUser = user(uid);
+    resolveGet(Response.json({ status: 'active', revision: 1,
+      acceptedAt: '2026-10-20T10:00:00.000Z',
+      privacyVersion: accepted.privacyVersion, termsVersion: accepted.termsVersion }));
+    await previous;
+
+    expect(isHealthConsentCloudWritable('user:' + uid)).toBe(false);
+    expect(getServerConfirmedLegalConsent(uid)).toBeNull();
+    expect(localStorage.getItem('logbook:v2:user:' + uid + ':health-consent-generation')).toBeNull();
+  });
+
+  it('does not submit a stale initial-consent POST after same-UID reauthentication during token acquisition', async () => {
+    const uid = 'consent-aba-post-' + crypto.randomUUID();
+    const actor = user(uid);
+    (auth as { currentUser: unknown }).currentUser = actor;
+    const fetchMock = vi.fn(async () => Response.json({ status: 'unregistered', revision: 0 }));
+    vi.stubGlobal('fetch', fetchMock);
+    beginHealthConsentVerification(uid);
+    expect(await refreshHealthConsent(actor)).toBe('unregistered');
+    let releaseToken!: (token: string) => void;
+    actor.getIdToken = vi.fn(() => new Promise<string>(resolve => { releaseToken = resolve; }));
+    const post = registerInitialHealthConsent(actor, accepted);
+    await vi.waitFor(() => expect(actor.getIdToken).toHaveBeenCalledOnce());
+
+    invalidateSession();
+    (auth as { currentUser: unknown }).currentUser = user(uid);
+    releaseToken('stale-id-token');
+
+    await expect(post).rejects.toThrow('Sessione cambiata');
+    expect(fetchMock).toHaveBeenCalledOnce();
   });
 });
 
