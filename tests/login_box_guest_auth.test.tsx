@@ -71,6 +71,79 @@ describe('LoginBox guest Google authentication', () => {
         vi.mocked(sendPasswordResetEmail).mockResolvedValue(undefined);
     });
 
+    it('submits the normal email/password login through the production LoginBox form', async () => {
+        authState.isGuest = false;
+        render(<LoginBox />);
+        fireEvent.change(screen.getByRole('textbox', { name: 'Email' }), {
+            target: { value: 'existing@example.com' },
+        });
+        fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'ExistingPassword1!' } });
+        fireEvent.click(screen.getAllByRole('button', { name: 'Accedi' }).at(-1)!);
+
+        await waitFor(() => expect(authMocks.loginWithEmail).toHaveBeenCalledExactlyOnceWith(
+            'existing@example.com', 'ExistingPassword1!', undefined,
+        ));
+        expect(authMocks.login).not.toHaveBeenCalled();
+        expect(authMocks.registerWithEmail).not.toHaveBeenCalled();
+        expect(screen.queryByRole('alert')).toBeNull();
+    });
+
+    it.each([
+        ['merge', false],
+        ['skip', true],
+    ] as const)('preserves the %s guest migration decision for email sign-in', async (policy, chooseSkip) => {
+        authState.isGuest = true;
+        render(<LoginBox onCancel={() => {}} />);
+        if (chooseSkip) fireEvent.click(screen.getByLabelText('Non trasferire i progressi'));
+        fireEvent.change(screen.getByRole('textbox', { name: 'Email' }), {
+            target: { value: 'guest-to-account@example.com' },
+        });
+        fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'ExistingPassword1!' } });
+        fireEvent.click(screen.getAllByRole('button', { name: 'Accedi' }).at(-1)!);
+
+        await waitFor(() => expect(authMocks.loginWithEmail).toHaveBeenCalledExactlyOnceWith(
+            'guest-to-account@example.com', 'ExistingPassword1!', policy,
+        ));
+        expect(authMocks.loginAsGuest).not.toHaveBeenCalled();
+        expect(authMocks.linkGoogleAccount).not.toHaveBeenCalled();
+    });
+
+    it('blocks duplicate email form submissions while Auth is unresolved', async () => {
+        authState.isGuest = false;
+        let finish!: () => void;
+        authMocks.loginWithEmail.mockImplementationOnce(() => new Promise<void>(resolve => { finish = resolve; }));
+        render(<LoginBox />);
+        fireEvent.change(screen.getByRole('textbox', { name: 'Email' }), {
+            target: { value: 'existing@example.com' },
+        });
+        fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'ExistingPassword1!' } });
+        const submit = screen.getAllByRole('button', { name: 'Accedi' }).at(-1)!;
+        fireEvent.click(submit);
+        await waitFor(() => expect(submit.hasAttribute('disabled')).toBe(true));
+        expect(authMocks.loginWithEmail).toHaveBeenCalledTimes(1);
+        fireEvent.click(submit);
+        expect(authMocks.loginWithEmail).toHaveBeenCalledTimes(1);
+        finish();
+        await waitFor(() => expect(submit.hasAttribute('disabled')).toBe(false));
+    });
+
+    it('sanitizes email sign-in failure without exposing Firebase provider details', async () => {
+        authState.isGuest = false;
+        authMocks.loginWithEmail.mockRejectedValueOnce(
+            Object.assign(new Error('PRIVATE_AUTH_PROVIDER_DETAILS'), { code: 'auth/wrong-password' }),
+        );
+        render(<LoginBox />);
+        fireEvent.change(screen.getByRole('textbox', { name: 'Email' }), {
+            target: { value: 'existing@example.com' },
+        });
+        fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'WrongPassword1!' } });
+        fireEvent.click(screen.getAllByRole('button', { name: 'Accedi' }).at(-1)!);
+
+        await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('Email o password errati.'));
+        expect(screen.getByRole('alert').textContent).not.toContain('PRIVATE_AUTH_PROVIDER_DETAILS');
+        expect(authMocks.loginWithEmail).toHaveBeenCalledTimes(1);
+    });
+
     it('identifies the email input as the username for autofill and password managers', () => {
         render(<LoginBox />);
         const emailField = screen.getByRole('textbox', { name: 'Email' });
