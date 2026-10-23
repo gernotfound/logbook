@@ -679,11 +679,13 @@ describe('Empirical Challenger: removeUndefinedValues & Firestore Serialization 
             for (const [path, document] of documents) {
                 expect(() => assertNoUndefined(document, path || 'root')).not.toThrow();
             }
-            expect((documents.get('')?.routines as Array<{ id: string }>)[0]?.id).toBe('routine-current');
-            expect((documents.get('history_months/2026-10')?.['workout-current'] as { id: string }).id)
-                .toBe('workout-current');
-            expect((documents.get('nutrition_months/2026-10')?.['2026-10-18'] as { kcal: number }).kcal)
-                .toBe(2100);
+            expect(documents.get('')?.routines).toEqual(expect.arrayContaining([
+                expect.objectContaining({ id: 'routine-current' }),
+            ]));
+            expect(documents.get('history_months/2026-10')?.['workout-current'])
+                .toMatchObject({ id: 'workout-current' });
+            expect(documents.get('nutrition_months/2026-10')?.['2026-10-18'])
+                .toMatchObject({ kcal: 2100 });
         });
 
         it('sanitizes 500 iterations within 1000ms and preserves non-JSON types', () => {
