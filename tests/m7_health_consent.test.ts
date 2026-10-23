@@ -67,13 +67,26 @@ const acceptance = {
 describe('trusted health consent boundary', () => {
   beforeEach(() => { storage.documents.clear(); vi.clearAllMocks(); });
 
-  it('does not expose records as personal business documents before withdrawal', async () => {
-    expect(await readHealthConsentState('account-1')).toEqual({ status: 'active', revision: 0 });
+  it('treats an absent trusted consent record as unregistered for every API request', async () => {
+    expect(await readHealthConsentState('account-1')).toEqual({ status: 'unregistered', revision: 0 });
     const response = await GET(req('GET'));
     expect(response.status).toBe(200);
     expect(response.headers.get('cache-control')).toBe('no-store');
-    expect(await response.json()).toEqual({ status: 'active', revision: 0 });
+    expect(await response.json()).toEqual({ status: 'unregistered', revision: 0 });
     expect(auth.verifyHealthConsentRequester).toHaveBeenCalledTimes(1);
+  });
+
+  it('fails closed on active consent records missing the acceptance proof or with another UID', async () => {
+    const key = 'health_consent_withdrawals/account-1';
+    for (const state of [
+      { uid: 'account-1', status: 'active', revision: 1 },
+      { uid: 'other', status: 'active', revision: 1, acceptedAt: '2026-10-13T10:00:00.000Z', ...acceptance },
+      { uid: 'account-1', status: 'active', revision: 1, acceptedAt: 'invalid', privacyVersion: acceptance.privacyVersion, termsVersion: acceptance.termsVersion },
+    ]) {
+      storage.documents.set(key, state);
+      expect((await GET(req('GET'))).status).toBe(503);
+    }
+    storage.documents.clear();
   });
 
   it('keeps consent-status and withdrawal rights but forbids acceptance without verified email', async () => {
@@ -121,7 +134,10 @@ describe('trusted health consent boundary', () => {
 
   it('reenables only after explicit acceptance; retry is idempotent and later revocation advances revision', async () => {
     await recordHealthConsentWithdrawal('account-1', 0);
+    storage.documents.set('users/account-1', { _schemaVersion: 1, _sync: { writer: { seq: 5 } }, legalConsent: { acceptedAt: 'old' } });
+    const originalRoot = structuredClone(storage.documents.get('users/account-1'));
     const accepted = await recordHealthConsentReacceptance('account-1', acceptance, 1);
+    expect(storage.documents.get('users/account-1')).toEqual(originalRoot);
     expect(accepted).toMatchObject({ status: 'active', revision: 2, acceptedAt: expect.any(String) });
     expect(await recordHealthConsentReacceptance('account-1', acceptance, 1)).toEqual(accepted);
     expect(await recordHealthConsentWithdrawal('account-1', 2)).toEqual({ status: 'withdrawn', revision: 3 });
@@ -217,7 +233,7 @@ describe('trusted initial account health consent registration', () => {
       privacyVersion: acceptance.privacyVersion, termsVersion: acceptance.termsVersion,
       acceptedAt: value.acceptedAt });
     expect(await recordInitialHealthConsentAcceptance('account-1', acceptance)).toEqual(value);
-    expect(await readHealthConsentState('account-1', true)).toMatchObject({ status: 'active', revision: 1,
+    expect(await readHealthConsentState('account-1')).toMatchObject({ status: 'active', revision: 1,
       acceptedAt: value.acceptedAt, privacyVersion: acceptance.privacyVersion, termsVersion: acceptance.termsVersion });
     expect(storage.documents.size).toBe(1);
   });
