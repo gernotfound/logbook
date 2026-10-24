@@ -16,6 +16,7 @@ Leggere **solo ciò che riguarda il task**; per cambi trasversali consultare tut
 | Documento | Stato | Per quale attività |
 |---|---|---|
 | [Archivio locale cifrato](architecture/secure-local-archive-design.md) | Specifica approvata e rilasciata; smoke reali separati | Cifratura, migrazione, recovery, modello di minaccia |
+| [Strategia cifratura cloud](architecture/cloud-e2ee-strategy.md) | Direzione di prodotto scelta; PROPOSTA TECNICA NON IMPLEMENTATA | Piano minimo E2EE contenuti, chiavi, sincronizzazione e compromessi funzionali |
 | [Gateway cloud trusted](architecture/trusted-sync-gateway-design.md) | PROPOSTA NON IMPLEMENTATA | Valutare alternative e costi prima di eventuale decisione |
 
 ## Operazioni e configurazioni esterne
