@@ -531,6 +531,66 @@ describe('Training Session UI Improvements Suite (R1, R2, R3)', () => {
             expect(showConfirmSpy).toHaveBeenCalledTimes(1);
             expect(onRemoveSetSpy).toHaveBeenCalledWith(0, 0);
         });
+
+        it('R3.5: protects isometry-only and RIR-zero sets before deleting the last series', async () => {
+            const showConfirm = vi.spyOn(useDialogStore.getState(), 'showConfirm').mockResolvedValue(false);
+            const onRemoveSet = vi.fn();
+            const isoExercise = {
+                id: 'item_isometry',
+                exId: 'ex_bench',
+                sessionNote: '',
+                sets: [{
+                    id: 's_iso', kg: '', reps: '',
+                    isometrics: [{ id: 'iso_1', kg: '', time: '20' }]
+                }]
+            };
+            const props = {
+                exIndex: 0,
+                libDef: { id: 'ex_bench', name: 'Panca Piana', trackingType: 'weight_reps' as const },
+                pastWorkouts: [],
+                isHistoryOpen: false,
+                isSetupOpen: false,
+                openSpecialMenuId: null,
+                onToggleHistory: vi.fn(),
+                onToggleSetup: vi.fn(),
+                onRemoveExercise: vi.fn(),
+                onUpdateSetupNote: vi.fn(),
+                onUpdateSessionNote: vi.fn(),
+                onAddSet: vi.fn(),
+                onRemoveSet,
+                onUpdateSet: vi.fn(),
+                onAddSpecialSet: vi.fn(),
+                onUpdateSpecialSet: vi.fn(),
+                onRemoveSpecialSet: vi.fn(),
+                onToggleSpecialMenu: vi.fn(),
+                onUpdateSetTarget: vi.fn(),
+                onUpdateTechnicalStandard: vi.fn()
+            };
+            const view = render(<SessionExerciseCard {...props} exItem={isoExercise} />);
+            await act(async () => {
+                fireEvent.click(screen.getByText('- Rimuovi serie'));
+            });
+            expect(showConfirm).toHaveBeenCalledTimes(1);
+            expect(onRemoveSet).not.toHaveBeenCalled();
+
+            showConfirm.mockResolvedValue(true);
+            await act(async () => {
+                fireEvent.click(screen.getByText('- Rimuovi serie'));
+            });
+            expect(onRemoveSet).toHaveBeenCalledWith(0, 0);
+
+            showConfirm.mockClear();
+            onRemoveSet.mockClear();
+            view.rerender(<SessionExerciseCard {...props} exItem={{
+                ...isoExercise,
+                sets: [{ id: 's_rir', kg: '', reps: '', rir: 0 }]
+            }} />);
+            await act(async () => {
+                fireEvent.click(screen.getByText('- Rimuovi serie'));
+            });
+            expect(showConfirm).toHaveBeenCalledTimes(1);
+            expect(onRemoveSet).toHaveBeenCalledWith(0, 0);
+        });
     });
 
     describe('Full Session Integration Lifecycle', () => {
