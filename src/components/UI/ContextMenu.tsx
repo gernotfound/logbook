@@ -95,12 +95,6 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     target?.focus();
   }, [isOpen]);
 
-  // If the last visible action disappears, a future action must not reopen
-  // a previously expanded menu without another explicit user gesture.
-  useEffect(() => {
-    if (isOpen && visibleItems.length === 0) toggleOpen(false);
-  }, [isOpen, visibleItems.length, toggleOpen]);
-
   // Pointer outside clicks do not arbitrate keyboard-only openings across cards.
   // Notify peer menus before a new one opens, keeping focus in the new menu.
   useEffect(() => {
