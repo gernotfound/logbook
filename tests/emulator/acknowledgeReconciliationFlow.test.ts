@@ -280,7 +280,8 @@ describe('remote commit to local acknowledgement reconciliation', () => {
         expect(finalEnvelope?.clock).toMatchObject({ [remoteActor]: 1, [localActor]: 2 });
         expect(finalEnvelope?.syncMetaByDocument[''].fields['profile/name']).toMatchObject({ actorId: remoteActor, seq: 1 });
         expect(finalEnvelope?.syncMetaByDocument[''].fields['profile/height']).toMatchObject({ actorId: localActor, seq: 2 });
-        expect(finalCloud.profile).toMatchObject({ height: '172', name: 'remote-device' });
+        expect(openCloudDocument(new Uint8Array(32).fill(18), 'a', '', finalCloud).business.profile)
+            .toMatchObject({ height: '172', name: 'remote-device' });
         expect(finalCloud._sync).toEqual(finalEnvelope?.syncMetaByDocument['']);
     });
 });
