@@ -1,4 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { getDocFromServer } from 'firebase/firestore';
+import { firestoreMockStore } from './setup';
+
+// The hydration regressions must exercise the real DB loader, not a mocked return value.
+vi.unmock('../src/lib/db');
+vi.mock('../src/lib/catalog/catalogService', async importOriginal => ({
+    ...await importOriginal<typeof import('../src/lib/catalog/catalogService')>(),
+    syncGlobalCatalog: vi.fn(async () => ({ catalog: { exercises: [], foods: [] }, updated: false })),
+    getCachedCatalog: vi.fn(async () => ({ exercises: [], foods: [] })),
+}));
 import { mergeUserData, isDefaultNutritionPlanning } from '../src/lib/merge';
 import { createDefaultNutritionPlanning } from '../src/lib/nutritionDefaults';
 import { UserData, NutritionPlanning } from '../src/types';
@@ -175,81 +185,77 @@ describe('PR 3: FNC-MERGE-01 Nutrition Planning Merge Policy', () => {
     });
 });
 
-// ----- Tests for PATCH: nutritionPlanningOrigin rehydration from Firestore -----
-describe('PATCH: DB.loadUserData nutritionPlanningOrigin rehydration', () => {
+// Read real Firestore-root normalization through DB.loadCloudPayload, with only
+// the remote Firestore documents stubbed. The transport mock is shared with CI.
+describe('Current Firestore nutritionPlanningOrigin hydration', () => {
+    const ownerRoot = 'users/test-user-id';
+
+    function seedRoot(origin: unknown, includeOrigin = true) {
+        const document: Record<string, unknown> = {
+            _schemaVersion: 1,
+            _sync: {
+                protocolVersion: 3,
+                clock: {},
+                fields: {},
+                writer: { slot: 's00', replicaId: 'cloud-test', generation: 1, seq: 0 },
+            },
+            profile: { height: '180' },
+            nutritionPlanning: { ...createDefaultNutritionPlanning(), weight: 90 },
+        };
+        if (includeOrigin) document.nutritionPlanningOrigin = origin;
+        firestoreMockStore[ownerRoot] = document;
+    }
+
     beforeEach(() => {
         vi.clearAllMocks();
+        seedRoot('user-edited');
     });
 
-    it('R1. Firestore returns user-edited: origin is rehydrated correctly', async () => {
-        vi.spyOn(DB, 'loadUserData').mockResolvedValue({
-            ...defaultUserDataFallback,
-            nutritionPlanningOrigin: 'user-edited',
-            nutritionPlanning: { ...createDefaultNutritionPlanning(), weight: 90 }
-        });
-
-        const result = await DB.loadUserData();
-        expect(result?.nutritionPlanningOrigin).toBe('user-edited');
-        expect(result?.nutritionPlanning?.weight).toBe(90);
+    it('R1. Firestore returns user-edited: real hydration preserves the explicit origin', async () => {
+        const result = await DB.loadCloudPayload();
+        expect(result?.data.nutritionPlanningOrigin).toBe('user-edited');
+        expect(result?.data.nutritionPlanning?.weight).toBe(90);
+        expect(result?.cloudDocuments.get('')?.nutritionPlanningOrigin).toBe('user-edited');
+        expect(vi.mocked(getDocFromServer).mock.calls.some(([ref]) =>
+            (ref as { path?: string }).path === ownerRoot,
+        )).toBe(true);
     });
 
-    it('R2. Firestore returns generated-default: origin is rehydrated correctly', async () => {
-        vi.spyOn(DB, 'loadUserData').mockResolvedValue({
-            ...defaultUserDataFallback,
-            nutritionPlanningOrigin: 'generated-default'
-        });
-
-        const result = await DB.loadUserData();
-        expect(result?.nutritionPlanningOrigin).toBe('generated-default');
+    it('R2. Firestore returns generated-default: real hydration preserves the explicit origin', async () => {
+        seedRoot('generated-default');
+        const result = await DB.loadCloudPayload();
+        expect(result?.data.nutritionPlanningOrigin).toBe('generated-default');
+        expect(result?.cloudDocuments.get('')?.nutritionPlanningOrigin).toBe('generated-default');
     });
 
-    it('R3. Firestore field absent: origin becomes undefined, legacy fallback active', async () => {
-        const dataWithoutOrigin = { ...defaultUserDataFallback };
-        delete (dataWithoutOrigin as any).nutritionPlanningOrigin;
-
-        vi.spyOn(DB, 'loadUserData').mockResolvedValue(dataWithoutOrigin);
-
-        const result = await DB.loadUserData();
-        expect(result?.nutritionPlanningOrigin).toBeUndefined();
-        // nutritionPlanning should still be intact
-        expect(result?.nutritionPlanning).toBeDefined();
+    it('R3. Firestore root without origin: real hydration leaves origin undefined', async () => {
+        seedRoot(undefined, false);
+        const result = await DB.loadCloudPayload();
+        expect(result?.data.nutritionPlanningOrigin).toBeUndefined();
+        expect(result?.data.nutritionPlanning?.weight).toBe(90);
+        expect(Object.hasOwn(result?.cloudDocuments.get('') ?? {}, 'nutritionPlanningOrigin')).toBe(false);
     });
 
-    it('R4. Firestore returns invalid value: origin becomes undefined, no crash, nutritionPlanning preserved', async () => {
-        // Simulate what the strict normalization in db.ts should do:
-        // raw 'invalid_value' -> undefined after normalization
-        const rawOrigin: any = 'invalid_value';
-        const normalized = (rawOrigin === 'generated-default' || rawOrigin === 'user-edited')
-            ? rawOrigin
-            : undefined;
-
-        expect(normalized).toBeUndefined();
-
-        // And confirm that a loadUserData mock with corrupted origin still returns nutritionPlanning intact
-        vi.spyOn(DB, 'loadUserData').mockResolvedValue({
-            ...defaultUserDataFallback,
-            nutritionPlanningOrigin: undefined, // after normalization
-            nutritionPlanning: { ...createDefaultNutritionPlanning(), weight: 75 }
-        });
-
-        const result = await DB.loadUserData();
-        expect(result?.nutritionPlanningOrigin).toBeUndefined();
-        expect(result?.nutritionPlanning?.weight).toBe(75);
+    it('R4. Invalid Firestore origin fails closed rather than accepting a lossy normalized root', async () => {
+        seedRoot('invalid_value');
+        const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+        try {
+            await expect(DB.loadCloudPayload()).rejects.toThrow();
+            expect(vi.mocked(getDocFromServer).mock.calls.some(([ref]) =>
+                (ref as { path?: string }).path === ownerRoot,
+            )).toBe(true);
+        } finally {
+            log.mockRestore();
+        }
     });
 
     it('R5. Hydration merge uses rehydrated cloud origin, not just heuristic', () => {
-        // Cloud has 'user-edited' on a plan that happens to equal defaults numerically
-        // Without rehydration, isDefaultNutritionPlanning() would misclassify it as 'generated-default'
-        // With rehydration, the explicit origin wins
-        const defaultPlan = createDefaultNutritionPlanning(); // identical to defaults
-        const cloudData = buildUserData(defaultPlan, 'user-edited'); // but explicitly user-edited
+        const defaultPlan = createDefaultNutritionPlanning();
+        const cloudData = buildUserData(defaultPlan, 'user-edited');
         const guestData = buildUserData({ ...defaultPlan, weight: 70 }, 'user-edited');
-
         const merged = mergeUserData(cloudData, guestData);
 
-        // Cloud wins (both user-edited, both present, differ)
-        expect(merged.nutritionPlanning?.weight).toBe(defaultPlan.weight); // cloud weight
-        // Guest stored in conflict because origins differ in value (guestPlan.weight=70 != cloudPlan.weight=default)
+        expect(merged.nutritionPlanning?.weight).toBe(defaultPlan.weight);
         expect(merged.pendingConflicts?.nutritionPlanning?.weight).toBe(70);
     });
 });
