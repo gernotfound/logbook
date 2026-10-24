@@ -26,8 +26,8 @@ function json(body: unknown, status: number, origin: string | null): Response {
 function errorResponse(error: unknown, origin: string | null): Response {
   if (error instanceof RequestAuthError) return json({ error: error.message }, error.status, origin);
   if (error instanceof CloudKeyProvisioningConflictError) return json({ error: error.message }, 409, origin);
-  // Neither upstream IAM errors nor key material should reach logs, errors or
-  // monitoring. Offline local work remains independent of this endpoint.
+  // Neither server wrapping secrets nor ADK bytes may appear in logs,
+  // errors or monitoring. Offline local work remains independent of this endpoint.
   console.error('[cloud-key] trusted key service unavailable', {
     kind: error instanceof Error ? error.name : 'unknown',
   });
