@@ -1,8 +1,6 @@
 import { captureSession } from '../src/lib/sync/session';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as sentryClient from '../src/lib/sentryClient';
-import * as Sentry from '@sentry/react';
-import { getTelemetryContext } from '../src/lib/telemetrySanitizer';
 
 // Keep the real LogBook Sentry adapter, but observe the SDK egress through
 // supported module mocking: ESM namespace exports cannot be spied on in Vitest.
