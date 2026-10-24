@@ -31,6 +31,7 @@ Sono fuori perimetro: anonimato della rete, nuovo identity provider, backend che
 2. Derivare con Web Crypto/HKDF, usando contesto di applicazione e UID, una chiave di wrapping dal codice casuale. Salvare su Firestore soltanto un **envelope autenticato con ADK wrappata**, versione, salt/context e nonce; verificare owner e formato. La potenza del codice casuale evita di introdurre KDF costose per password umane.
 3. Sul dispositivo iniziale conservare la ADK solo **wrappata sotto la protezione locale owner-scoped già esistente**, mai in chiaro in storage. Riaprirla automaticamente dopo accesso Auth/consenso sullo stesso profilo, anche offline quando la sessione è già valida. La chiave in RAM deve essere invalidata su logout/cambio owner.
 4. Su **un nuovo browser/dispositivo**, dopo Firebase Auth e consenso, chiedere il codice di recupero una sola volta. Scaricare l'envelope della ADK, decifrarla sul dispositivo e conservarla protetta nel vault locale. Non scaricare né idratare dati business prima del corretto sblocco.
+   **Logout:** il comportamento corrente elimina archivio e chiavi locali dell'owner; per conservare la sicurezza di logout senza eccezioni, **anche un login successivo sullo stesso browser richiederà nuovamente il codice di recupero**. La riapertura automatica vale soltanto durante la sessione persistente legittima e finché l'utente non effettua logout/purge. Non lasciare una ADK riutilizzabile in un archivio escluso dal purge.
 5. Da un dispositivo già sbloccato consentire la **rigenerazione del codice**, sostituendo in maniera verificata l'envelope di wrapping della stessa ADK. Nessuna ricifratura di tutti i dati; il vecchio codice non deve più sbloccare un nuovo dispositivo. Considerare esplicitamente concorrenza fra rotazione codice e onboarding.
 6. Se non esiste più alcun dispositivo sbloccato e il codice è smarrito, **i contenuti cloud non sono recuperabili**, anche dal proprietario del servizio. Nessun reset automatico della chiave su ciphertext esistente, nessuna cancellazione implicita. La cancellazione dell'account deve comunque funzionare dal backend senza conoscere ADK.
 
@@ -47,6 +48,7 @@ Non introdurre PIN, passphrase o prompt quotidiani. Il codice è richiesto all'a
 | Esportazione e importazione JSON/CSV attuali | **Conservata**, dopo sblocco; file espliciti potenzialmente in chiaro e da avvisare |
 | Cancellazione dati/account, revoca consenso, accesso al solo metadata tecnico | **Conservata** |
 | Ripristino automatico del contenuto cloud su un browser vergine con il solo Firebase Auth | **Non disponibile**: serve codice o dispositivo precedentemente autorizzato |
+| Nuovo login dopo logout completo, anche sullo stesso browser | **Richiede il codice**, perché il logout attuale elimina anche le chiavi locali e deve continuare a farlo |
 | Recupero del contenuto da assistenza/amministratore senza alcuna chiave | **Non disponibile** |
 | Lettura dei valori personali dalla console Firestore o da API Admin | **Non disponibile** |
 | Esportazione leggibile dei dati cloud dal backend senza chiave | **Non disponibile**: l'API può trasportare ciphertext, poi il client deve decifrare |
