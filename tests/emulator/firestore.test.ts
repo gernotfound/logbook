@@ -697,6 +697,3 @@ it('stores monthly contents only in the sealed envelope regardless of business e
     expect(openCloudDocument(new Uint8Array(32).fill(5), 'a', 'nutrition_months/2026-10', saved).business)
         .toMatchObject(days);
 });
-
-
-});
