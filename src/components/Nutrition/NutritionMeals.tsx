@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { shiftDateString } from '../../lib/utils/date';
 import { useNutritionMeals } from '../../hooks/useNutritionMeals';
 import { useDialogStore } from '../../store/useDialogStore';
+import { useAppStore } from '../../store/useAppStore';
 import { useSupplements } from '../../hooks/useSupplements';
 import { Logic } from '../../lib/logic';
 import type { LoggedMealItem } from '../../types';
@@ -42,7 +43,25 @@ function NutritionMealsContent({
 
     const { removeIntake, supplementsLibrary } = useSupplements(selectedDate);
     const showConfirm = useDialogStore(state => state.showConfirm);
-    const [editingMealItem, setEditingMealItem] = useState<LoggedMealItem | null>(null);
+    const dataOwner = useAppStore(state => state.dataOwner);
+    const [editContext, setEditContext] = useState<{
+        owner: string | null; date: string; item: LoggedMealItem;
+    } | null>(null);
+    const editingMealItem = editContext?.owner === dataOwner && editContext.date === targetDateStr
+        ? editContext.item : null;
+    const setEditingMealItem = (item: LoggedMealItem | null) => {
+        setEditContext(item ? { owner: dataOwner, date: targetDateStr, item } : null);
+    };
+    const visibleMealItems = (type: string) => {
+        const visible = meals.filter(item => item.meal === type
+            && (editingMealItem?.id !== item.id || editingMealItem.meal === type));
+        // Anchor the editor while an optimistic commit moves its record to a
+        // different group, so a rejected commit cannot unmount its draft.
+        if (editingMealItem?.meal === type && !visible.some(item => item.id === editingMealItem.id)) {
+            return [...visible, editingMealItem];
+        }
+        return visible;
+    };
 
     const handlePrevDay = () => {
         if (!setSelectedDate || !targetDateStr) return;
@@ -143,17 +162,17 @@ function NutritionMealsContent({
                 <NutritionMealSection
                     key={mealType}
                     mealType={mealType}
-                    mealItems={meals.filter(meal => meal.meal === mealType)}
+                    mealItems={visibleMealItems(mealType)}
                     editingMealItem={editingMealItem}
                     onEditingMealItemChange={setEditingMealItem}
                     onUpdateMealItem={updateMealItem}
                     onRemoveFood={removeFood}
                 />
             ))}
-            {meals.some(meal => meal.meal === 'quick') && (
+            {(meals.some(meal => meal.meal === 'quick') || editingMealItem?.meal === 'quick') && (
                 <NutritionMealSection
                     mealType="Aggiunte rapide"
-                    mealItems={meals.filter(meal => meal.meal === 'quick')}
+                    mealItems={visibleMealItems('quick')}
                     editingMealItem={editingMealItem}
                     onEditingMealItemChange={setEditingMealItem}
                     onUpdateMealItem={updateMealItem}
