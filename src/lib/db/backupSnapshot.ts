@@ -8,7 +8,7 @@ import { getCachedCatalog } from '../catalog/catalogService';
 import { applyRemoteDocuments, projectDocuments, type DocumentData } from '../sync/documentProjection';
 import { applySemanticOperations, coversVectorClock, parseSyncMeta, type SyncMeta } from '../sync/semanticProjection';
 import { readAccountCloudDocument } from '../sync/cloudDocumentRead';
-import { requireRightsExportAccountDataKey } from '../sync/cloudAccountKeyAccess';
+import { requireCloudAccountDataKey, requireRightsExportAccountDataKey } from '../sync/cloudAccountKeyAccess';
 
 import { UserDataSchema } from '../schema';
 import { withTimeout } from './db_core';
@@ -147,6 +147,8 @@ export async function collectBackupSnapshot(fallback: UserData, includeCloud: bo
             const withdrawnDocuments = await fetchWithdrawnCloudBackup(uid, assertCurrent);
             for (const [path, raw] of withdrawnDocuments) { assertCurrent(); addRawDoc(path, raw); }
         } else {
+            effectiveCloudKey = await requireCloudAccountDataKey(uid, assertCurrent);
+            assertCurrent();
             const db = getDb();
             // Every supported client business transaction also advances the
             // replica control. Compare it around this non-atomic page scan so
