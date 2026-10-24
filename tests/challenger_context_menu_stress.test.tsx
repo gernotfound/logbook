@@ -157,6 +157,13 @@ describe('Empirical Adversarial Stress Suite: ContextMenu & Integrations', () =>
       rerender(<ContextMenu items={allHiddenItems} />);
       // All hidden actions must be absent from the rendered menu.
       expect(screen.queryByRole('menu')).toBeNull();
+
+      rerender(<ContextMenu items={initialItems} />);
+      const restoredTrigger = screen.getByRole('button', { name: 'Opzioni' });
+      expect(restoredTrigger.getAttribute('aria-expanded')).toBe('false');
+      expect(screen.queryByRole('menu')).toBeNull();
+      fireEvent.click(restoredTrigger);
+      expect(screen.getAllByRole('menuitem')).toHaveLength(2);
     });
   });
 

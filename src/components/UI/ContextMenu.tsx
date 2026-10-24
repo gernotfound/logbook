@@ -58,8 +58,10 @@ const renderIcon = (icon: ContextMenuItem['icon']) => {
   return icon as React.ReactNode;
 };
 
-export const ContextMenu: React.FC<ContextMenuProps> = ({
-  items,
+type RenderedContextMenuProps = ContextMenuProps & { visibleItems: ContextMenuItem[] };
+
+const RenderedContextMenu: React.FC<RenderedContextMenuProps> = ({
+  visibleItems,
   ariaLabel = 'Opzioni',
   triggerTitle,
   triggerClassName = '',
@@ -73,9 +75,6 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const requestedFocus = useRef<'first' | 'last' | null>(null);
-
-  // Filtra elementi visibili
-  const visibleItems = items.filter(item => !item.hidden);
 
   const toggleOpen = useCallback((openState?: boolean) => {
     const next = openState ?? !isOpen;
@@ -255,8 +254,6 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     item.onClick(e);
   };
 
-  if (visibleItems.length === 0) return null;
-
   const resolvedTriggerTitle = triggerTitle || ariaLabel;
   const containerClassName = `context-menu-container ${className}`.trim();
   const triggerBtnClassName = `context-menu-trigger ${triggerClassName}`.trim();
@@ -330,4 +327,12 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
       )}
     </div>
   );
+};
+
+export const ContextMenu: React.FC<ContextMenuProps> = props => {
+  const visibleItems = props.items.filter(item => !item.hidden);
+  if (visibleItems.length === 0) return null;
+  // Unmount the stateful menu when its last action disappears. Reintroduced
+  // actions must not resurrect a dropdown that the user no longer sees.
+  return <RenderedContextMenu {...props} visibleItems={visibleItems} />;
 };
