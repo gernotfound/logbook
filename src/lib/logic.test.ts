@@ -98,7 +98,13 @@ describe('Logic Library Tests', () => {
         ascendingData[13].weight = 76;
 
         const descendingData = [...ascendingData].reverse();
-        const shuffledData = [...ascendingData].sort(() => 0.5 - Math.random());
+        // Deterministic odd/even permutation: unlike random sort, this always
+        // exercises non-chronological input without nondeterministic CI outcomes.
+        const shuffledData = [
+            ...ascendingData.filter((_, i) => i % 2 === 1),
+            ...ascendingData.filter((_, i) => i % 2 === 0),
+        ];
+        expect(shuffledData.map(day => day.date)).not.toEqual(ascendingData.map(day => day.date));
 
         const resAsc = Logic.calculateTDEE(ascendingData);
         const resDesc = Logic.calculateTDEE(descendingData);
