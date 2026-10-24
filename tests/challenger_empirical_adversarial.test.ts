@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { doc, getDoc, getDocFromServer, writeBatch } from 'firebase/firestore';
 
 vi.unmock('../src/lib/db');
-import { ConsentedTestDB as DB } from './testUtils';
+import { ConsentedTestDB as DB, openTestCloudBusiness, openTestCloudDocument } from './testUtils';
 import { DomainParsers } from '../src/lib/schema';
 import type { UserData } from '../src/types';
 
@@ -239,13 +239,15 @@ describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & D
 
             // Check that all mutations (profile, routines, history) are reflected in the committed writeBatch
             const setCalls = mockBatch.set.mock.calls;
-            const userDocCall = setCalls.find((c: any) => c[1]?.profile !== undefined);
-            expect(userDocCall[1].profile.height).toBe('182');
-            expect(userDocCall[1].routines).toHaveLength(2);
+            const userDocCall = setCalls.find((c: any) => c[0]?.path === 'users/test-user-id' && c[1]?._sealed);
+            expect(userDocCall).toBeDefined();
+            const rootBusiness = openTestCloudBusiness(userDocCall[1]);
+            expect(rootBusiness.profile.height).toBe('182');
+            expect(rootBusiness.routines).toHaveLength(2);
 
             const historyDocCall = setCalls.find((c: any) => c[0].path?.includes('history_months') || c[1]?.h_2 !== undefined);
             expect(historyDocCall).toBeDefined();
-            expect(historyDocCall[1].h_2).toBeDefined();
+            expect(openTestCloudBusiness(historyDocCall[1], 'history_months/2026-08').h_2).toBeDefined();
 
             mockBatch.set.mockClear();
             mockBatch.commit.mockClear();
@@ -510,8 +512,10 @@ describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & D
             expect(businessWrites).toHaveLength(1);
             const [writtenRef, writtenData] = businessWrites[0];
             expect(writtenRef?.path || '').toContain('history_months/2026-07');
-            expect(writtenData.h_jul_1).toBeUndefined();
-            expect(writtenData._sync?.fields?.['h_jul_1']).toMatchObject({ deleted: true });
+            const july = openTestCloudDocument(writtenData, 'history_months/2026-07');
+            expect(july.business.h_jul_1).toBeUndefined();
+            expect(july.sync.fields['h_jul_1']).toMatchObject({ deleted: true });
+            expect(writtenData._sync.fields).toEqual({});
 
             // August is unchanged so it must not be rewritten.
             expect(writtenRef?.path || '').not.toContain('2026-08');

@@ -7,7 +7,9 @@ import { stableStorageKeyInventory } from '../sync/stableStorageKeyInventory';
 import { getCachedCatalog } from '../catalog/catalogService';
 import { applyRemoteDocuments, projectDocuments, type DocumentData } from '../sync/documentProjection';
 import { applySemanticOperations, coversVectorClock, parseSyncMeta, type SyncMeta } from '../sync/semanticProjection';
-import { normalizeCloudDocument } from '../schemaEvolution';
+import { readAccountCloudDocument } from '../sync/cloudDocumentRead';
+import { requireCloudAccountDataKey, requireRightsExportAccountDataKey } from '../sync/cloudAccountKeyAccess';
+
 import { UserDataSchema } from '../schema';
 import { withTimeout } from './db_core';
 import type { UserData } from '../../types';
@@ -80,10 +82,11 @@ export function hasDeviceRecoveryBackupSource(owner: string): boolean {
     return Object.keys(readStableDeviceRecovery(owner)).length > 0;
 }
 
-export async function collectBackupSnapshot(fallback: UserData, includeCloud: boolean, consistencyAttempt = 0) {
+export async function collectBackupSnapshot(fallback: UserData, includeCloud: boolean, consistencyAttempt = 0, accountKey?: Uint8Array) {
     const session = captureSession();
     const assertCurrent = () => { if (!isCurrentSession(session)) throw new Error('Sessione cambiata durante il backup.'); };
     const coverage: BackupCoverage = { scope: 'device', months: [] };
+    let effectiveCloudKey = accountKey;
     const documents = new Map<string, DocumentData>();
     const businessDocuments = new Map<string, DocumentData>();
     const syncMetaByDocument: Record<string, SyncMeta> = {};
@@ -91,8 +94,10 @@ export async function collectBackupSnapshot(fallback: UserData, includeCloud: bo
     assertCurrent();
 
     const addRawDoc = (path: string, raw: unknown) => {
-        documents.set(path, structuredClone((raw ?? {}) as DocumentData));
-        const normalized = normalizeCloudDocument(raw ?? {}, `Backup ${path || 'root'} data schema`);
+        const normalized = readAccountCloudDocument(raw ?? {}, `Backup ${path || 'root'} data schema`, session.owner.slice(5), path, effectiveCloudKey);
+        // Explicit exported recovery remains readable JSON by user choice;
+        // no encrypted envelope is stored in the human-readable backup.
+        documents.set(path, structuredClone({ ...normalized.business, _schemaVersion: normalized.dataSchemaVersion, _sync: normalized.sync }));
         const business = path.startsWith('history_months/')
             ? requireCompleteHistoryMonthDocument(path.slice('history_months/'.length), normalized.business)
             : path.startsWith('nutrition_months/')
@@ -132,9 +137,18 @@ export async function collectBackupSnapshot(fallback: UserData, includeCloud: bo
         if (useTrustedExport) {
             // Rules deny direct reads while the server is withdrawn. Rights
             // export uses a separate authenticated, paginated Admin boundary.
+            // The Admin export deliberately transports ciphertext only.
+            // Decryption happens after the authenticated, revision-bracketed
+            // scan, solely in the owner's browser. The rights-specific key
+            // endpoint permits *existing* ADK retrieval while withdrawn but
+            // never provisions a new key or re-enables cloud writes.
+            effectiveCloudKey = await requireRightsExportAccountDataKey(uid, assertCurrent);
+            assertCurrent();
             const withdrawnDocuments = await fetchWithdrawnCloudBackup(uid, assertCurrent);
             for (const [path, raw] of withdrawnDocuments) { assertCurrent(); addRawDoc(path, raw); }
         } else {
+            effectiveCloudKey = await requireCloudAccountDataKey(uid, assertCurrent);
+            assertCurrent();
             const db = getDb();
             // Every supported client business transaction also advances the
             // replica control. Compare it around this non-atomic page scan so
@@ -158,7 +172,7 @@ export async function collectBackupSnapshot(fallback: UserData, includeCloud: bo
             const afterControl = await withTimeout(getDocFromServer(controlRef), 10000, 'Controllo versione cloud non disponibile.');
             assertCurrent();
             if (!sameCloudControlState(beforeControl, afterControl)) {
-                if (consistencyAttempt === 0) return collectBackupSnapshot(fallback, includeCloud, 1);
+                if (consistencyAttempt === 0) return collectBackupSnapshot(fallback, includeCloud, 1, accountKey);
                 throw new Error('Il cloud è cambiato durante il backup: non è possibile garantire una copia completa coerente. Riprova quando gli altri dispositivi sono inattivi.');
             }
         }
@@ -175,7 +189,7 @@ export async function collectBackupSnapshot(fallback: UserData, includeCloud: bo
     assertCurrent();
     if (includeCloud && !equal(localBaseline, envelope)) {
         if (consistencyAttempt === 0) {
-            return collectBackupSnapshot(fallback, includeCloud, 1);
+            return collectBackupSnapshot(fallback, includeCloud, 1, accountKey);
         }
         throw new Error('I dati locali sono cambiati durante il backup. Riprova quando le modifiche sono stabili.');
     }

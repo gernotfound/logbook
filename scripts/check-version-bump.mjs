@@ -46,8 +46,15 @@ try {
   const [nextMajor, nextMinor, nextPatch] = version(pkg.version, 'candidate');
   lockMatches(oldLock, oldPkg.version, 'base');
   lockMatches(lock, pkg.version, 'candidate');
-  if (nextMajor !== major || nextMinor !== minor + 1 || nextPatch !== 0) {
-    throw new Error('expected ' + major + '.' + (minor + 1) + '.0 relative to ' + oldPkg.version + ', got ' + pkg.version);
+  // The product owner explicitly designated cloud encryption as the one-time
+  // 2.0.0 major release. Keep every other candidate on the exact minor-bump
+  // policy; this is not a wildcard major or patch bypass.
+  const expectedMinor = nextMajor === major && nextMinor === minor + 1 && nextPatch === 0;
+  const authorizedV2 = major === 1 && nextMajor === 2 && nextMinor === 0 && nextPatch === 0;
+  if (!expectedMinor && !authorizedV2) {
+    throw new Error('expected ' + major + '.' + (minor + 1)
+      + '.0 or one-time 2.0.0 transition from major 1, relative to '
+      + oldPkg.version + ', got ' + pkg.version);
   }
   console.log('Version bump OK: ' + oldPkg.version + ' -> ' + pkg.version + ' base=' + base + ' head=' + head);
 } catch (error) {

@@ -1,10 +1,11 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const harness = vi.hoisted(() => ({
     writes: [] as Array<{ path: string, data?: any, deleted?: boolean }>,
     checkDocSize: vi.fn(),
     checkpointClock: {} as Record<string, number>,
     lastSeq: 0,
+    remoteDocument: null as Record<string, unknown> | null,
 }));
 
 vi.mock('../../src/lib/checkDocSize', () => ({ checkDocSize: harness.checkDocSize }));
@@ -46,18 +47,7 @@ vi.mock('firebase/firestore', () => ({
                 })
                 : ({
                 exists: () => true,
-                data: () => ({
-                    _schemaVersion: 1,
-                    _sync: {
-                        protocolVersion: 3,
-                        clock: { s01: 2 },
-                        fields: {
-                            '2026-09-14': { actorId: 's01', seq: 2, clock: { s01: 2 }, deleted: true },
-                            '2026-09-14/weight': { actorId: 's01', seq: 1, clock: { s01: 1 } },
-                        },
-                        writer: { slot: 's00', replicaId: 'replica-s00', generation: 1, seq: 0 },
-                    },
-                }),
+                data: () => harness.remoteDocument,
             }),
             set: (ref: { path: string }, data: any) => harness.writes.push({ path: ref.path, data: structuredClone(data) }),
             delete: (ref: { path: string }) => harness.writes.push({ path: ref.path, deleted: true }),
@@ -67,9 +57,23 @@ vi.mock('firebase/firestore', () => ({
 }));
 
 import { applyDocumentChanges } from '../../src/lib/sync/transactionWriter';
+import { sealCloudDocument, openCloudDocument } from '../../src/lib/sync/cloudDocumentCipher';
 import type { SemanticOperation } from '../../src/lib/sync/semanticProjection';
 
+const cloudKey = new Uint8Array(32).fill(18);
 describe('M4 transaction write-boundary compaction', () => {
+    beforeEach(() => {
+        harness.remoteDocument = sealCloudDocument(cloudKey, 'user-a', 'nutrition_months/2026-09', {}, {
+            protocolVersion: 3,
+            clock: { s01: 2 },
+            fields: {
+                '2026-09-14': { actorId: 's01', seq: 2, clock: { s01: 2 }, deleted: true },
+                '2026-09-14/weight': { actorId: 's01', seq: 1, clock: { s01: 1 } },
+            },
+            writer: { slot: 's00', replicaId: 'replica-s00', generation: 1, seq: 0 },
+        });
+        harness.checkDocSize.mockClear();
+    });
     it('persists the terminal tombstone while removing a causally summarized descendant stamp', async () => {
         harness.checkDocSize.mockClear();
         harness.checkpointClock = {};
@@ -91,19 +95,22 @@ describe('M4 transaction write-boundary compaction', () => {
             generation: 1,
             checkpointAtMs: now,
             leaseUntilMs: now + 360 * 24 * 60 * 60 * 1000,
-        });
+        }, cloudKey);
 
         expect(harness.writes).toHaveLength(2);
         expect(harness.writes.find(write => write.path.includes('nutrition_months'))!.deleted).not.toBe(true);
-        expect(harness.writes.find(write => write.path.includes('nutrition_months'))!.data._sync.fields['2026-09-14']).toMatchObject({
+        const written = harness.writes.find(write => write.path.includes('nutrition_months'))!.data;
+        expect(written._sync.fields).toEqual({});
+        const read = openCloudDocument(cloudKey, 'user-a', 'nutrition_months/2026-09', written);
+        expect(read.sync.fields['2026-09-14']).toMatchObject({
             actorId: 's01',
             seq: 2,
             deleted: true,
             clock: { s01: 2 },
             deleteClock: { s01: 2 },
         });
-        expect(harness.writes.find(write => write.path.includes('nutrition_months'))!.data._sync.clock).toEqual({ s01: 2, s00: 1 });
-        expect(harness.writes.find(write => write.path.includes('nutrition_months'))!.data._sync.fields['2026-09-14/weight']).toBeUndefined();
+        expect(read.sync.clock).toEqual({ s01: 2, s00: 1 });
+        expect(read.sync.fields['2026-09-14/weight']).toBeUndefined();
 
         expect(outcome.syncMeta['']).toBeUndefined();
         expect(outcome.syncMeta['nutrition_months/2026-09'].fields['2026-09-14']).toMatchObject({
@@ -138,7 +145,7 @@ describe('M4 transaction write-boundary compaction', () => {
             generation: 1,
             checkpointAtMs: now,
             leaseUntilMs: now + 360 * 24 * 60 * 60 * 1000,
-        });
+        }, cloudKey);
 
         const documentWrite = harness.writes.find(write => write.path.includes('nutrition_months'))!;
         expect(documentWrite.deleted).not.toBe(true);
@@ -151,7 +158,8 @@ describe('M4 transaction write-boundary compaction', () => {
                 writer: { slot: 's00', replicaId: 'replica-s00', generation: 1, seq: 1 },
             },
         });
-        expect(Object.keys(documentWrite.data).sort()).toEqual(['_schemaVersion', '_sync']);
+        expect(Object.keys(documentWrite.data).sort()).toEqual(['_schemaVersion', '_sealed', '_sync']);
+        expect(openCloudDocument(cloudKey, 'user-a', 'nutrition_months/2026-09', documentWrite.data).sync.fields).toEqual({});
         expect(outcome.syncMeta['nutrition_months/2026-09'].fields).toEqual({});
         expect(harness.writes.some(write => write.deleted)).toBe(false);
     });

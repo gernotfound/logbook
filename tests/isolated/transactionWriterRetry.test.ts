@@ -1,9 +1,10 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const harness = vi.hoisted(() => ({
     attempts: [] as Array<Array<{ path: string, data?: any, deleted?: boolean }>>,
     checkDocSize: vi.fn(),
     now: 1_791_114_651_000,
+    remoteDocument: null as Record<string, unknown> | null,
 }));
 
 vi.mock('../../src/lib/checkDocSize', () => ({
@@ -37,7 +38,7 @@ vi.mock('firebase/firestore', () => ({
                     })
                     : ({
                         exists: () => true,
-                        data: () => ({
+                        data: () => harness.remoteDocument ?? ({
                             profile: { height: '170' },
                             _schemaVersion: 1,
                             _sync: {
@@ -64,9 +65,16 @@ vi.mock('firebase/firestore', () => ({
 
 import { applyDocumentChanges } from '../../src/lib/sync/transactionWriter';
 import type { SemanticOperation } from '../../src/lib/sync/semanticProjection';
+import { openCloudDocument, sealCloudDocument, CloudCiphertextError } from '../../src/lib/sync/cloudDocumentCipher';
 
 describe('transaction writer retry safety', () => {
-    it('produces byte-equivalent writes when Firestore re-runs the transaction callback', async () => {
+    afterEach(() => { harness.remoteDocument = null; });
+    it('keeps authenticated causal semantics and one batch identity across transaction retries', async () => {
+        const key = new Uint8Array(32).fill(18);
+        harness.remoteDocument = sealCloudDocument(key, 'user-a', '', { profile: { height: '170' } }, {
+            protocolVersion: 3, clock: {}, fields: {},
+            writer: { slot: 's00', replicaId: 'replica-a', generation: 1, seq: 0 },
+        });
         harness.attempts.length = 0;
         harness.checkDocSize.mockClear();
         const ops: SemanticOperation[] = [{
@@ -86,30 +94,137 @@ describe('transaction writer retry safety', () => {
             generation: 1,
             checkpointAtMs: now,
             leaseUntilMs: now + 360 * 24 * 60 * 60 * 1000,
-        });
+        }, key);
 
         expect(harness.attempts).toHaveLength(2);
-        expect(harness.attempts[1]).toEqual(harness.attempts[0]);
         expect(harness.attempts[0]).toHaveLength(2);
+        const openAttempt = (index: number) => {
+            const writes = harness.attempts[index];
+            const sealed = writes.find(write => write.path === 'users/user-a')?.data;
+            const control = writes.find(write => write.path.endsWith('/sync_control/state'))?.data;
+            return { opened: openCloudDocument(key, 'user-a', '', sealed), control };
+        };
+        expect(openAttempt(1)).toEqual(openAttempt(0));
         const businessWrite = harness.attempts[0].find(write => write.path === 'users/user-a');
         const controlWrite = harness.attempts[0].find(write => write.path.endsWith('/sync_control/state'));
-        expect(businessWrite?.data.profile.height).toBe('171');
+        expect(businessWrite?.data).not.toHaveProperty('profile');
+        expect(openCloudDocument(key, 'user-a', '', businessWrite?.data).business.profile).toEqual({ height: '171' });
         expect(controlWrite?.data.replicas.s00.lastSeq).toBe(1);
         expect(controlWrite?.data.mutation.batchId).toMatch(/^sync-advance_/);
         expect(businessWrite?.data._sync.writer).toMatchObject({
             slot: 's00', replicaId: 'replica-a', generation: 1, seq: 1,
         });
-        expect(businessWrite?.data._sync.fields['profile/height']).toMatchObject({
+        expect(openCloudDocument(key, 'user-a', '', businessWrite?.data).sync.fields['profile/height']).toMatchObject({
             actorId: 's00',
             seq: 1,
             clock: { s00: 1 }
         });
         expect(outcome.syncMeta[''].fields['profile/height'].seq).toBe(1);
 
-        // Size checks happen once per callback attempt, after _sync has been attached.
+        // Each encrypted attempt is checked for final encoded Firestore size.
         expect(harness.checkDocSize).toHaveBeenCalledTimes(2);
         for (const [payload] of harness.checkDocSize.mock.calls) {
-            expect(payload._sync.fields['profile/height']).toMatchObject({ actorId: 's00', seq: 1 });
+            expect(payload._sealed.ciphertext).toBeTruthy();
+            expect(payload._sync.fields).toEqual({});
+            expect(payload).not.toHaveProperty('profile');
         }
     });
+    it('encrypts business and causal fields on BOTH Firestore transaction retries without leaking plaintext', async () => {
+        const key = crypto.getRandomValues(new Uint8Array(32));
+        harness.remoteDocument = sealCloudDocument(key, 'user-a', '', { profile: { height: '170' } }, {
+            protocolVersion: 3, clock: {}, fields: {},
+            writer: { slot: 's00', replicaId: 'replica-a', generation: 1, seq: 0 },
+        });
+        harness.attempts.length = 0;
+        harness.checkDocSize.mockClear();
+        const ops: SemanticOperation[] = [{
+            docPath: '', path: ['profile', 'height'], value: 'secret medical note',
+            isDelete: false, actorId: 's00', seq: 1, clock: { s00: 1 },
+        }];
+        try {
+            const now = Date.now();
+            const result = await applyDocumentChanges({} as any, 'user-a', ops, () => true, {
+                slot: 's00', replicaId: 'replica-a', generation: 1,
+                checkpointAtMs: now, leaseUntilMs: now + 360 * 24 * 60 * 60 * 1000,
+            }, key);
+            expect(harness.attempts).toHaveLength(2);
+            const decoded = harness.attempts.map(writes => {
+                const business = writes.find(write => write.path === 'users/user-a')?.data;
+                const control = writes.find(write => write.path.endsWith('/sync_control/state'))?.data;
+                expect(business).toBeDefined();
+                expect(business).not.toHaveProperty('profile');
+                expect(business._sync.fields).toEqual({});
+                expect(JSON.stringify(business)).not.toContain('secret medical note');
+                expect(control.mutation.batchId).toMatch(/^sync-advance_/);
+                return { read: openCloudDocument(key, 'user-a', '', business), control };
+            });
+            expect(decoded[0].read).toEqual(decoded[1].read);
+            expect(decoded[0].control).toEqual(decoded[1].control);
+            expect(decoded[0].read.business.profile).toEqual({ height: 'secret medical note' });
+            expect(decoded[0].read.sync.fields['profile/height'].seq).toBe(1);
+            expect(result.syncMeta[''].fields['profile/height'].seq).toBe(1);
+            // Each retry may produce fresh AEAD bytes without breaking the
+            // Firestore batchId or causal idempotency. Size measured post-seal.
+            expect(harness.checkDocSize).toHaveBeenCalledTimes(2);
+            for (const [payload] of harness.checkDocSize.mock.calls) {
+                expect(payload._sealed.ciphertext).toBeTruthy();
+                expect(payload).not.toHaveProperty('profile');
+            }
+        } finally {
+            harness.remoteDocument = null;
+        }
+    });
+
+    it('fails before contacting Firestore when the account key is missing or malformed', async () => {
+        const now = Date.now();
+        const replica = {
+            slot: 's00', replicaId: 'replica-a', generation: 1,
+            checkpointAtMs: now, leaseUntilMs: now + 360 * 24 * 60 * 60 * 1000,
+        };
+        const operations: SemanticOperation[] = [{
+            docPath: '', path: ['profile', 'height'], value: 'new',
+            isDelete: false, actorId: 's00', seq: 1, clock: { s00: 1 },
+        }];
+        harness.attempts.length = 0;
+        await expect(applyDocumentChanges({} as any, 'user-a', operations, () => true,
+            replica, undefined as unknown as Uint8Array)).rejects.toBeInstanceOf(CloudCiphertextError);
+        await expect(applyDocumentChanges({} as any, 'user-a', operations, () => true,
+            replica, new Uint8Array(31))).rejects.toBeInstanceOf(CloudCiphertextError);
+        expect(harness.attempts).toHaveLength(0);
+    });
+
+    it('refuses a plaintext or corrupted remote doc when an account ADK is supplied', async () => {
+        const key = crypto.getRandomValues(new Uint8Array(32));
+        const ops: SemanticOperation[] = [{
+            docPath: '', path: ['profile', 'height'], value: 'new',
+            isDelete: false, actorId: 's00', seq: 1, clock: { s00: 1 },
+        }];
+        const now = Date.now();
+        const replica = {
+            slot: 's00', replicaId: 'replica-a', generation: 1,
+            checkpointAtMs: now, leaseUntilMs: now + 360 * 24 * 60 * 60 * 1000,
+        };
+        try {
+            harness.remoteDocument = {
+                profile: { height: 'plaintext' }, _schemaVersion: 1,
+                _sync: { protocolVersion: 3, clock: {}, fields: {},
+                    writer: { slot: 's00', replicaId: 'replica-a', generation: 1, seq: 0 } },
+            };
+            harness.attempts.length = 0;
+            await expect(applyDocumentChanges({} as any, 'user-a', ops, () => true, replica, key))
+                .rejects.toBeInstanceOf(CloudCiphertextError);
+            expect(harness.attempts).toHaveLength(0);
+            const sealed = sealCloudDocument(key, 'user-a', '', { profile: { height: 'encrypted' } }, {
+                protocolVersion: 3, clock: {}, fields: {},
+                writer: { slot: 's00', replicaId: 'replica-a', generation: 1, seq: 0 },
+            });
+            harness.remoteDocument = { ...sealed, _sealed: { ...sealed._sealed, nonce: 'WRONG' } };
+            await expect(applyDocumentChanges({} as any, 'user-a', ops, () => true, replica, key))
+                .rejects.toBeInstanceOf(CloudCiphertextError);
+            expect(harness.attempts).toHaveLength(0);
+        } finally {
+            harness.remoteDocument = null;
+        }
+    });
+
 });

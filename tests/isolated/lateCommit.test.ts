@@ -24,6 +24,10 @@ vi.mock('../../src/lib/healthConsent', async () => {
 vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackEvent: vi.fn(), trackError: vi.fn() } }));
 vi.mock('../../src/lib/catalog/catalogService', () => ({ getCachedCatalog: async () => ({ exercises: [], foods: [] }) }));
 vi.mock('../../src/lib/sync/transactionWriter', () => ({ applyDocumentChanges: remote.apply }));
+// Delayed-ACK tests use the real journal but isolate the independent online key transport.
+vi.mock('../../src/lib/sync/cloudAccountKeyAccess', () => ({
+    requireCloudAccountDataKey: vi.fn(async () => new Uint8Array(32).fill(18)),
+}));
 
 import { replicateJournal, waitForJournalIdle } from '../../src/lib/sync/replicateJournal';
 import { adoptReplicaCheckpoint, initializeLocal, commitLocal, readLocal } from '../../src/lib/sync/localRepository';

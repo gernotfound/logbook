@@ -3,7 +3,7 @@ import { getDocFromServer, getDocs, writeBatch } from 'firebase/firestore';
 
 vi.unmock('../src/lib/db');
 
-import { ConsentedTestDB as DB } from './testUtils';
+import { ConsentedTestDB as DB, openTestCloudBusiness } from './testUtils';
 
 
 describe('DB Persistence for Training Cycles and Planning', () => {
@@ -52,17 +52,18 @@ describe('DB Persistence for Training Cycles and Planning', () => {
 
         expect(mockBatch.set).toHaveBeenCalled();
         const setCalls = mockBatch.set.mock.calls;
-        const userDocCall = setCalls.find((call: any) => call[1]?.trainingCycles !== undefined);
+        const userDocCall = setCalls.find((call: any) => call[0]?.path === 'users/test-user-id' && call[1]?._sealed);
         expect(userDocCall).toBeDefined();
-        expect(userDocCall[1].trainingCycles).toHaveLength(1);
-        expect(userDocCall[1].trainingCycles[0].name).toBe('Mesociclo Massa');
-        expect(userDocCall[1].trainingCycles[0].strategy).toEqual({
+        const business = openTestCloudBusiness(userDocCall[1]);
+        expect(business.trainingCycles).toHaveLength(1);
+        expect(business.trainingCycles[0].name).toBe('Mesociclo Massa');
+        expect(business.trainingCycles[0].strategy).toEqual({
             intent: 'development',
             progressionFocus: 'volume',
             primaryMuscles: ['quads'],
             secondaryMuscles: ['triceps']
         });
-        expect(userDocCall[1].activeCycleId).toBe('cycle_test');
+        expect(business.activeCycleId).toBe('cycle_test');
         expect(mockBatch.commit).toHaveBeenCalled();
     });
 

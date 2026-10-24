@@ -14,6 +14,10 @@ import { beginGuestMigrationIntent } from '../src/lib/auth/guestMigrationIntent'
 import { createAndMigrateVault } from '../src/lib/sync/secureArchiveMigration';
 import { lockAllVaults } from '../src/lib/sync/secureArchiveSession';
 
+vi.mock('../src/lib/sync/cloudAccountKeyAccess', () => ({
+    requireCloudAccountDataKey: vi.fn(async () => new Uint8Array(32).fill(18)),
+    requireRightsExportAccountDataKey: vi.fn(async () => new Uint8Array(32).fill(18)),
+}));
 const parse = (value: unknown) => UserDataSchema.parse(value) as unknown as UserData;
 const user = { uid: 'a', email: 'a@example.com', displayName: 'A' } as any;
 let onlineSpy: ReturnType<typeof vi.spyOn> | undefined;
@@ -94,7 +98,7 @@ describe('guest -> account V3 migration', () => {
 
         const routines = useAppStore.getState().userData?.routines ?? [];
         expect(routines.map(routine => routine.id)).toEqual(expect.arrayContaining(['cloud-routine', 'guest-routine']));
-        expect(DB.loadCloudPayload).toHaveBeenNthCalledWith(1, { allMonths: true });
+        expect(DB.loadCloudPayload).toHaveBeenNthCalledWith(1, expect.objectContaining({ allMonths: true, cloudKey: expect.any(Uint8Array) }));
         expect(DB.loadCloudPayload).toHaveBeenCalledTimes(2);
         expect(localStorage.getItem('logbook_is_guest')).toBeNull();
     });

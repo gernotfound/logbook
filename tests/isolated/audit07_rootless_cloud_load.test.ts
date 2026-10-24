@@ -42,6 +42,8 @@ vi.mock('firebase/firestore', () => ({
 }));
 
 import { DB } from '../../src/lib/db';
+import { sealCloudDocument, CloudCiphertextError } from '../../src/lib/sync/cloudDocumentCipher';
+import type { SyncMeta } from '../../src/lib/sync/semanticProjection/contracts';
 
 
 
@@ -55,6 +57,39 @@ beforeEach(async () => {
     harness.page.mockResolvedValue({ size: 0, docs: [] });
 });
 
+
+it('hydrates encrypted root and full history+nutrition scans, refusing a missing or wrong ADK', async () => {
+    const key = crypto.getRandomValues(new Uint8Array(32));
+    const sync: SyncMeta = {
+        protocolVersion: 3, clock: {}, fields: {},
+        writer: { slot: 's00', replicaId: 'root-cloud-test', generation: 1, seq: 0 },
+    };
+    const root = sealCloudDocument(key, 'a', '', { profile: { height: '179' } }, sync);
+    const month = sealCloudDocument(key, 'a', 'history_months/2026-10',
+        { w1: { id: 'w1', date: '2026-10-24', exercises: [] } }, sync);
+    const nutrition = sealCloudDocument(key, 'a', 'nutrition_months/2026-10',
+        { '2026-10-24': { date: '2026-10-24', weight: 79 } }, sync);
+    harness.root.mockImplementation(async (path: string) => path.endsWith('/sync_control/state')
+        ? { exists: () => true, data: () => ({ protocolVersion: 3, replicas: {} }) }
+        : { exists: () => true, data: () => root });
+    harness.page.mockImplementation(async ({ path }: { path: string }) => ({
+        size: 1, docs: [{ id: '2026-10',
+            data: () => path.endsWith('/history_months') ? month : nutrition }],
+    }));
+    const payload = await DB.loadCloudPayload({ allMonths: true, cloudKey: key });
+    expect(payload?.data.profile?.height).toBe('179');
+    expect(payload?.data.history?.map(w => w.id)).toEqual(['w1']);
+    expect(payload?.data.nutrition?.['2026-10-24']?.weight).toBe(79);
+    expect(payload?.cloudDocuments.get('')).not.toHaveProperty('_sealed');
+    expect(payload?.cloudDocuments.get('history_months/2026-10')).not.toHaveProperty('_sealed');
+    const silentConsole = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+        await expect(DB.loadCloudPayload({ allMonths: true }))
+            .rejects.toBeInstanceOf(CloudCiphertextError);
+        await expect(DB.loadCloudPayload({ allMonths: true, cloudKey: crypto.getRandomValues(new Uint8Array(32)) }))
+            .rejects.toBeInstanceOf(CloudCiphertextError);
+    } finally { silentConsole.mockRestore(); }
+});
 
 it('requires a server-confirmed root even when the memory cache reports a miss', async () => {
     harness.cacheRoot.mockResolvedValue({ exists: () => false });

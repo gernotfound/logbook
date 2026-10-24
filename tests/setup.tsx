@@ -52,6 +52,15 @@ vi.mock('../src/lib/healthConsent', () => ({
   finishHealthConsentReacceptance: vi.fn(),
 }));
 
+// UI suites exercise application session/journal lifecycles against an
+// already authenticated synthetic account. The real trusted key-transport
+// contract is tested separately in Node (isolated runner) and emulator.
+// Never generate real App Check tokens or contact Vercel in UI tests.
+vi.mock('../src/lib/sync/cloudAccountKeyAccess', () => ({
+  requireCloudAccountDataKey: vi.fn(async () => new Uint8Array(32).fill(18)),
+  requireRightsExportAccountDataKey: vi.fn(async () => new Uint8Array(32).fill(18)),
+}));
+
 // Fail closed: UI tests must not contact real services. Record unexpected
 // requests so even errors swallowed by application catch handlers fail the test.
 const unexpectedNetworkRequests: string[] = [];

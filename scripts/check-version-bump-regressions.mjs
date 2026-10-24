@@ -38,7 +38,13 @@ await test('allows the exact minor bump and matching lockfile roots without muta
   assert.equal(run(ctx).status, 0);
   assert.equal(git(ctx.cwd, 'status', '--porcelain'), '');
 });
-for (const v of ['1.162.0', '1.164.0', '1.163.1', '2.163.0', 'v1.163.0']) {
+await test('permits the designated one-time major release 2.0.0 with both lockfile roots', t => {
+  const ctx = setup(t);
+  save(ctx.cwd, '2.0.0'); commit(ctx.cwd);
+  assert.equal(run(ctx).status, 0);
+  assert.equal(git(ctx.cwd, 'status', '--porcelain'), '');
+});
+for (const v of ['1.162.0', '1.164.0', '1.163.1', '2.163.0', '2.0.1', '2.1.0', '3.0.0', 'v1.163.0']) {
   await test('rejects incorrect version ' + v, t => {
     const ctx = setup(t);
     save(ctx.cwd, v);

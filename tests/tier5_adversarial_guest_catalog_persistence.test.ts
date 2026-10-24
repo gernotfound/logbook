@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { doc, writeBatch } from 'firebase/firestore';
 
 vi.unmock('../src/lib/db');
-import { ConsentedTestDB as DB } from './testUtils';
+import { ConsentedTestDB as DB, openTestCloudBusiness } from './testUtils';
 import { getSeedCatalog, saveCatalogToCache, clearCatalogCache } from '../src/lib/catalog/catalogService';
 import { resolveEffectiveExercises, resolveEffectiveFoods } from '../src/lib/catalog/deltaResolver';
 import { checkDocSize, calculateDocSizeBytes, DOC_SIZE_LIMIT_BYTES } from '../src/lib/checkDocSize';
@@ -102,8 +102,8 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
             const mockBatch = {
                 set: vi.fn((ref: any, data: any) => {
                     // Inspect ref path to know destination
-                    if (data.profile !== undefined) {
-                        capturedUserDocWrite = data;
+                    if (String(ref) === 'users/test-user-id' && data?._sealed) {
+                        capturedUserDocWrite = openTestCloudBusiness(data);
                     } else if (ref && String(ref).includes('history_months')) {
                         capturedHistoryMonthWrites[String(ref)] = data;
                     } else if (ref && String(ref).includes('nutrition_months')) {
@@ -245,7 +245,7 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
             let capturedUserDocWrite: any = null;
             const mockBatch = {
                 set: vi.fn((_ref: any, data: any) => {
-                    if (data.profile !== undefined) capturedUserDocWrite = data;
+                    if (String(_ref) === 'users/test-user-id' && data?._sealed) capturedUserDocWrite = openTestCloudBusiness(data);
                 }),
                 delete: vi.fn(),
                 commit: vi.fn().mockResolvedValue(undefined)

@@ -4,6 +4,18 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 const sdk = vi.hoisted(() => ({ auth: { currentUser: { uid: 'a' } }, root: vi.fn(), control: vi.fn(), page: vi.fn() }));
 vi.mock('../../src/lib/firebase', () => ({ auth: sdk.auth, getDb: () => ({}), ensureAppCheck: async () => {} }));
 vi.mock('../../src/lib/catalog/catalogService', () => ({ getCachedCatalog: async () => ({ exercises: [], foods: [] }) }));
+// Cloud backups require a verified active session and the online account key.
+// Supply those trusted boundaries explicitly; device recovery and AEAD parsing remain real.
+vi.mock('../../src/lib/healthConsent', async () => ({
+    ...await vi.importActual<typeof import('../../src/lib/healthConsent')>('../../src/lib/healthConsent'),
+    currentHealthConsentStatus: () => 'active',
+    hasUnreconciledOfflineReaccept: () => false,
+    getVerifiedHealthConsentRevision: () => 0,
+}));
+vi.mock('../../src/lib/sync/cloudAccountKeyAccess', () => ({
+    requireCloudAccountDataKey: async () => new Uint8Array(32).fill(18),
+    requireRightsExportAccountDataKey: async () => new Uint8Array(32).fill(18),
+}));
 vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackEvent: vi.fn(), trackError: vi.fn() } }));
 vi.mock('firebase/firestore', () => ({
     doc: (_db: unknown, ...path: string[]) => path.join('/'), collection: (_db: unknown, ...path: string[]) => path.join('/'),
@@ -16,12 +28,16 @@ import { collectBackupSnapshot, hasDeviceRecoveryBackupSource } from '../../src/
 import { createBackup, decodeImport } from '../../src/lib/backup';
 import { acknowledgeThrough, initializeLocal, commitLocal, readLocal } from '../../src/lib/sync/localRepository';
 import { UserDataSchema } from '../../src/lib/schema';
-import { CURRENT_DATA_SCHEMA, CURRENT_SYNC_PROTOCOL, FutureVersionError } from '../../src/lib/schemaEvolution';
+import { CURRENT_DATA_SCHEMA, CURRENT_SYNC_PROTOCOL } from '../../src/lib/schemaEvolution';
 import { invalidateSession } from '../../src/lib/sync/session';
 import type { UserData } from '../../src/types';
+import { sealCloudDocument, CloudCiphertextError } from '../../src/lib/sync/cloudDocumentCipher';
+import type { SyncMeta } from '../../src/lib/sync/semanticProjection/contracts';
 const parse = (value: unknown) => UserDataSchema.parse(value) as unknown as UserData;
 const emptySync = { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {}, writer: { slot: 's00', replicaId: 'backup-seed', generation: 1, seq: 0 } };
-const currentCloudDoc = (business: Record<string, unknown>, sync: unknown = emptySync) => ({ ...business, _schemaVersion: CURRENT_DATA_SCHEMA, _sync: sync });
+const testKey = new Uint8Array(32).fill(18);
+const currentCloudDoc = (business: Record<string, unknown>, sync: SyncMeta = emptySync, path = '') =>
+    sealCloudDocument(testKey, 'a', path, business, sync);
 
 beforeEach(async () => {
     await clear(); vi.resetAllMocks(); invalidateSession(); sdk.auth.currentUser = { uid: 'a' };
@@ -78,6 +94,33 @@ it('makes a malformed optional device draft visible without blocking valid busin
     expect(decoded.deviceDraftRecoveryWarning).toContain('non JSON');
 });
 
+it('exports a complete authenticated cloud snapshot without leaking ciphertext or accepting plaintext under an ADK', async () => {
+    const key = testKey;
+    const sync: SyncMeta = {
+        protocolVersion: 3, clock: {}, fields: {},
+        writer: { slot: 's00', replicaId: 'backup-seed', generation: 1, seq: 0 },
+    };
+    const base = parse({ profile: { height: '175' } });
+    await initializeLocal('user:a', base);
+    const root = sealCloudDocument(key, 'a', '', { profile: { height: '174', gender: 'M' } }, sync);
+    const month = sealCloudDocument(key, 'a', 'history_months/2026-05',
+        { w1: { id: 'w1', date: '2026-05-11', exercises: [] } }, sync);
+    sdk.root.mockResolvedValue({ exists: () => true, data: () => root });
+    sdk.page.mockImplementation(async ({ path }) => path.endsWith('/history_months')
+        ? { size: 1, docs: [{ id: '2026-05', data: () => month }] }
+        : { size: 0, docs: [] });
+    const backup = await collectBackupSnapshot(base, true, 0, key);
+    expect(backup.coverage.scope).toBe('cloud-and-device');
+    expect(backup.data.profile?.height).toBe('174');
+    expect(backup.data.history?.map(w => w.id)).toEqual(['w1']);
+    expect((backup.recovery.cloudDocuments as Record<string, any>)['']).not.toHaveProperty('_sealed');
+    expect((backup.recovery.cloudDocuments as Record<string, any>)['history_months/2026-05']).not.toHaveProperty('_sealed');
+
+    sdk.root.mockResolvedValue({ exists: () => true, data: () =>
+        ({ profile: { height: 'plaintext' }, _schemaVersion: CURRENT_DATA_SCHEMA, _sync: emptySync }) });
+    await expect(collectBackupSnapshot(base, true, 0, key)).rejects.toBeInstanceOf(CloudCiphertextError);
+});
+
 it('collects every page of historical documents beyond the 3-month view and retains a concurrent local edit', async () => {
     const base = parse({ profile: { height: '170', gender: 'M' } });
     await initializeLocal('user:a', base);
@@ -90,7 +133,7 @@ it('collects every page of historical documents beyond the 3-month view and reta
             mutated = true;
             await commitLocal('user:a', parse({ profile: { height: '175', gender: 'M' } }), base);
         }
-        return { size: ids.length, docs: ids.map(id => ({ id, data: () => currentCloudDoc({ ['h' + id]: { id: 'h' + id, date: id + '-01' } }) })) };
+        return { size: ids.length, docs: ids.map(id => ({ id, data: () => currentCloudDoc({ ['h' + id]: { id: 'h' + id, date: id + '-01' } }, emptySync, 'history_months/' + id) })) };
     });
     const backup = await collectBackupSnapshot(base, true);
     expect(backup.data.history).toHaveLength(105);
@@ -164,21 +207,13 @@ it('uses root _sync metadata when replaying pending local operations', async () 
     const remoteSeq = envelope!.actorSeq + 1;
     sdk.root.mockResolvedValue({
         exists: () => true,
-        data: () => ({
-            profile: { height: '180', gender: 'M' },
-            _schemaVersion: CURRENT_DATA_SCHEMA,
-            _sync: {
-                protocolVersion: CURRENT_SYNC_PROTOCOL,
-                clock: { [actorId]: remoteSeq },
-                fields: {
-                    'profile/height': {
-                        clock: { [actorId]: remoteSeq },
-                        actorId,
-                        seq: remoteSeq
-                    }
-                },
-                writer: { slot: 's00', replicaId: 'backup-seed', generation: 1, seq: remoteSeq }
-            }
+        data: () => sealCloudDocument(testKey, 'a', '', { profile: { height: '180', gender: 'M' } }, {
+            protocolVersion: CURRENT_SYNC_PROTOCOL,
+            clock: { [actorId]: remoteSeq },
+            fields: {
+                'profile/height': { clock: { [actorId]: remoteSeq }, actorId, seq: remoteSeq }
+            },
+            writer: { slot: 's00', replicaId: 'backup-seed', generation: 1, seq: remoteSeq }
         })
     });
 
@@ -193,20 +228,16 @@ it('keeps schema/sync metadata out of history and nutrition business data while 
         if (path.endsWith('history_months')) {
             return {
                 size: 1,
-                docs: [{ id: '2026-09', data: () => ({
+                docs: [{ id: '2026-09', data: () => currentCloudDoc({
                     w1: { id: 'w1', date: '2026-09-10', routineName: 'A', duration: '20m', exercises: [] },
-                    _schemaVersion: CURRENT_DATA_SCHEMA,
-                    _sync: emptySync
-                }) }]
+                }, emptySync, 'history_months/2026-09') }]
             };
         }
         return {
             size: 1,
-            docs: [{ id: '2026-09', data: () => ({
+            docs: [{ id: '2026-09', data: () => currentCloudDoc({
                 '2026-09-10': { date: '2026-09-10', weight: 80 },
-                _schemaVersion: CURRENT_DATA_SCHEMA,
-                _sync: emptySync
-            }) }]
+            }, emptySync, 'nutrition_months/2026-09') }]
         };
     });
 
@@ -226,7 +257,7 @@ it('refuses to label a cloud backup complete if any monthly record would be sile
         ? { size: 1, docs: [{ id: '2026-09', data: () => currentCloudDoc({
             good: { id: 'good', date: '2026-09-10', exercises: [] },
             damaged: { id: 'different', date: '2026-09-11', exercises: [] },
-        }) }] }
+        }, emptySync, 'history_months/2026-09') }] }
         : { size: 0, docs: [] });
     await expect(collectBackupSnapshot(data, true)).rejects.toThrow('Shard storico 2026-09 non integro');
     expect((await collectBackupSnapshot(data, false)).coverage.scope).toBe('device');
@@ -237,10 +268,13 @@ it('fails safe when cloud causal metadata is malformed', async () => {
     await initializeLocal('user:a', base);
     sdk.root.mockResolvedValue({
         exists: () => true,
-        data: () => currentCloudDoc({ profile: { height: '180' } }, { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: { broken: 'invalid' }, writer: { slot: 's00', replicaId: 'backup-seed', generation: 1, seq: 0 } })
+        data: () => ({
+            ...currentCloudDoc({ profile: { height: '180' } }),
+            _sync: { ...emptySync, fields: { broken: 'invalid' } }
+        })
     });
 
-    await expect(collectBackupSnapshot(base, true)).rejects.toThrow('Metadati _sync non validi');
+    await expect(collectBackupSnapshot(base, true)).rejects.toBeInstanceOf(CloudCiphertextError);
 });
 
 it('refuses future data or sync versions before producing a backup snapshot', async () => {
@@ -250,22 +284,20 @@ it('refuses future data or sync versions before producing a backup snapshot', as
     sdk.root.mockResolvedValue({
         exists: () => true,
         data: () => ({
-            profile: { height: '180' },
+            ...currentCloudDoc({ profile: { height: '180' } }),
             _schemaVersion: CURRENT_DATA_SCHEMA + 1,
-            _sync: emptySync,
         })
     });
-    await expect(collectBackupSnapshot(base, true)).rejects.toThrow(FutureVersionError);
+    await expect(collectBackupSnapshot(base, true)).rejects.toBeInstanceOf(CloudCiphertextError);
 
     sdk.root.mockResolvedValue({
         exists: () => true,
         data: () => ({
-            profile: { height: '180' },
-            _schemaVersion: CURRENT_DATA_SCHEMA,
-            _sync: { protocolVersion: CURRENT_SYNC_PROTOCOL + 1, clock: {}, fields: {} }
+            ...currentCloudDoc({ profile: { height: '180' } }),
+            _sync: { ...emptySync, protocolVersion: CURRENT_SYNC_PROTOCOL + 1 }
         })
     });
-    await expect(collectBackupSnapshot(base, true)).rejects.toThrow(FutureVersionError);
+    await expect(collectBackupSnapshot(base, true)).rejects.toBeInstanceOf(CloudCiphertextError);
 });
 
 it('exports only allowlisted recovery device data and excludes account-deletion receipts', async () => {

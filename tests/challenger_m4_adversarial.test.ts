@@ -4,7 +4,7 @@ import fs from 'fs';
 import path from 'path';
 
 vi.unmock('../src/lib/db');
-import { ConsentedTestDB as DB } from './testUtils';
+import { ConsentedTestDB as DB, openTestCloudBusiness } from './testUtils';
 import { mergeUserData } from '../src/lib/merge';
 import { DomainParsers } from '../src/lib/schema';
 import { useAppStore } from '../src/store/useAppStore';
@@ -396,30 +396,13 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
             // Check that recursive wildcard was removed from users doc
             expect(rulesContent).not.toMatch(/match\s+\/users\/\{userId\}\/\{document=\*\*\}/);
 
-            const expectedKeys = [
-                '_schemaVersion',
-                '_sync',
-                'profile',
-                'library',
-                'routines',
-                'customFoods',
-                'activeWorkout',
-                'trainingCycles',
-                'activeCycleId',
-                'nutritionPlanning',
-                'supplements',
-                'activePains',
-                'catalogOverrides',
-                'legalConsent',
-                'nutritionPlanningOrigin'
-            ];
+            const expectedKeys = ['_schemaVersion', '_sync', '_sealed'];
 
-            expectedKeys.forEach(key => {
-                expect(rulesContent).toContain(`'${key}'`);
-            });
+            expectedKeys.forEach(key => expect(rulesContent).toContain(`'${key}'`));
+            expect(rulesContent).toContain('data._sync.fields.keys().size() == 0');
 
             // Match the keys array in incomingData().keys().hasOnly([...])
-            const match = rulesContent.match(/incomingData\(\)\.keys\(\)\.hasOnly\(\[\s*([\s\S]*?)\s*\]\)/);
+            const match = rulesContent.match(/function isSealedCloudDocument\(data\)[\s\S]*?data\.keys\(\)\.hasOnly\(\[\s*([\s\S]*?)\s*\]\)/);
             expect(match).not.toBeNull();
             const extractedKeys = match![1]
                 .split(',')
@@ -449,27 +432,12 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
             await DB.saveUserData(sampleUserData);
             expect(mockBatch.set).toHaveBeenCalled();
 
-            const userDocCall = mockBatch.set.mock.calls.find((call: any) => call[1]?.profile !== undefined);
+            const userDocCall = mockBatch.set.mock.calls.find((call: any) => call[0]?.path === 'users/test-user-id' && call[1]?._sealed);
             expect(userDocCall).toBeDefined();
             const writtenKeys = Object.keys(userDocCall[1]);
+            expect(openTestCloudBusiness(userDocCall[1]).profile.name).toBe('Test');
 
-            const expectedKeys = [
-                '_schemaVersion',
-                '_sync',
-                'profile',
-                'library',
-                'routines',
-                'customFoods',
-                'activeWorkout',
-                'trainingCycles',
-                'activeCycleId',
-                'nutritionPlanning',
-                'supplements',
-                'activePains',
-                'catalogOverrides',
-                'legalConsent',
-                'nutritionPlanningOrigin'
-            ];
+            const expectedKeys = ['_schemaVersion', '_sync', '_sealed'];
 
             expect(writtenKeys.sort()).toEqual(expectedKeys.sort());
             // Ensure neither history nor nutrition leaked into the root document!
