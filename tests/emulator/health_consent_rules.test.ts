@@ -4,8 +4,13 @@ import { assertFails, assertSucceeds, initializeTestEnvironment, type RulesTestE
 import { doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
 
 let env: RulesTestEnvironment;
+const proof = (uid: string, revision: number) => ({
+  uid, status: 'active' as const, revision,
+  acceptedAt: '2026-10-13T10:00:00.000Z',
+  privacyVersion: '1.3.4', termsVersion: '1.2.1',
+});
 const mark = (status: 'active' | 'withdrawn') => ({
-  uid: 'u', status, revision: 1, withdrawnAt: new Date(),
+  ...(status === 'active' ? proof('u', 1) : { uid: 'u', status, revision: 1, withdrawnAt: new Date() }),
 });
 
 beforeAll(async () => {
@@ -63,7 +68,7 @@ it('retains direct owner reads when consent is active', async () => {
 // clients without a consent generation must not create or renew replicas.
 it('rejects a stale replica registration after reacceptance', async () => {
   await env.withSecurityRulesDisabled(async context => {
-    await setDoc(doc(context.firestore(), 'health_consent_withdrawals/u'), { uid: 'u', status: 'active', revision: 2 });
+    await setDoc(doc(context.firestore(), 'health_consent_withdrawals/u'), proof('u', 2));
     await setDoc(doc(context.firestore(), 'users/u'), { profile: { name: 'Test' } });
   });
   const db = env.authenticatedContext('u', { email_verified: true }).firestore();
@@ -88,6 +93,25 @@ it('denies reads for malformed server consent records rather than treating them 
   await assertFails(getDoc(doc(db, 'users/u')));
 });
 
+it('rejects active consent records missing owner-matched evidence fields', async () => {
+  const db = env.authenticatedContext('u', { email_verified: true }).firestore();
+  const admin = async (record: Record<string, unknown>) => {
+    await env.withSecurityRulesDisabled(async context => {
+      await setDoc(doc(context.firestore(), 'health_consent_withdrawals/u'), record);
+    });
+    await assertFails(getDoc(doc(db, 'users/u')));
+  };
+  await env.withSecurityRulesDisabled(async context => {
+    await setDoc(doc(context.firestore(), 'users/u'), { profile: { name: 'Protected' } });
+  });
+  await admin({ status: 'active', uid: 'u', revision: 1 });
+  await admin({ ...proof('u', 1), uid: 'other' });
+  await env.withSecurityRulesDisabled(async context => {
+    await setDoc(doc(context.firestore(), 'health_consent_withdrawals/u'), proof('u', 1));
+  });
+  await assertSucceeds(getDoc(doc(db, 'users/u')));
+});
+
 it('rejects private shards, telemetry and replica-control reads during withdrawal', async () => {
   await env.withSecurityRulesDisabled(async context => {
     await setDoc(doc(context.firestore(), 'health_consent_withdrawals/u'), mark('withdrawn'));
@@ -106,7 +130,7 @@ it('rejects private shards, telemetry and replica-control reads during withdrawa
 
 it('rejects legacy telemetry without consent epoch even after a new explicit acceptance', async () => {
   await env.withSecurityRulesDisabled(async context => {
-    await setDoc(doc(context.firestore(), 'health_consent_withdrawals/u'), { uid: 'u', status: 'active', revision: 2 });
+    await setDoc(doc(context.firestore(), 'health_consent_withdrawals/u'), proof('u', 2));
   });
   const db = env.authenticatedContext('u', { email_verified: true }).firestore();
   await assertFails(setDoc(doc(db, 'users/u/telemetry_events/obsolete'), {
@@ -151,7 +175,7 @@ it('fails closed for malformed revocation metadata and preserves unrelated accou
     await setDoc(doc(db, 'health_consent_withdrawals/u'), mark('active'));
     await setDoc(doc(db, 'users/u'), { profile: { name: 'Preserved' } });
     await setDoc(doc(db, 'session_revocations/u'), { revokedAfterSeconds: 'invalid' });
-    await setDoc(doc(db, 'health_consent_withdrawals/other'), { uid: 'other', status: 'active', revision: 1 });
+    await setDoc(doc(db, 'health_consent_withdrawals/other'), proof('other', 1));
     await setDoc(doc(db, 'users/other'), { profile: { name: 'Unrelated' } });
   });
   await assertFails(getDoc(doc(env.authenticatedContext('u', { email_verified: true, auth_time: 10000 }).firestore(), 'users/u')));

@@ -37,7 +37,7 @@ describe('data-only erasure trusted API', () => {
     erasure.readHealthDataErasureStatus.mockResolvedValue({ status: 'complete', complete: true });
   });
 
-  it('requires recent Auth and limited-use App Check before creating any destructive job', async () => {
+  it('delegates destructive-job authorization to the recent-Auth/App Check verifier before creating the job', async () => {
     auth.verifyDeletionRequester.mockRejectedValueOnce(new Error('Authentication failed'));
     const denied = await POST(request('POST'));
     expect(denied.status).toBe(503);
@@ -47,6 +47,8 @@ describe('data-only erasure trusted API', () => {
     expect(result.status).toBe(200);
     expect(erasure.createHealthDataErasureJob).toHaveBeenCalledWith('owner-A');
     expect(erasure.processHealthDataErasure).toHaveBeenCalledWith('owner-A', expect.any(Number));
+    expect(auth.verifyDeletionRequester).toHaveBeenCalledTimes(2);
+    expect(auth.verifyRecoveryRegistrationRequester).not.toHaveBeenCalled();
   });
 
   it('does not declare completion when erasure is queued or partially failed', async () => {

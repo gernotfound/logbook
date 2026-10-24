@@ -76,7 +76,7 @@ import { useAppStore } from '../src/store/useAppStore';
 
 const OVERLAY_SESSION_KEY = 'logbook_guest_login_overlay';
 
-describe('guest login overlay lifecycle', () => {
+describe('guest login overlay presentation only (useAuth mocked; not a Firebase lifecycle test)', () => {
     beforeEach(() => {
         localStorage.clear();
         sessionStorage.clear();

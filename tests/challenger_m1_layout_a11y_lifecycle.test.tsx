@@ -99,7 +99,9 @@ describe('Empirical Challenger: Layout Geometry, Accessibility, Z-Index & Online
         fireEvent.click(trainingTabBtn);
       });
 
-      // Navigating does not throw and sync indicator stays rendered
+      // The actual tab must change even while the saving indicator is visible.
+      expect(trainingTabBtn.getAttribute('aria-current')).toBe('page');
+      expect(screen.getByRole('button', { name: 'Home' }).getAttribute('aria-current')).toBeNull();
       const indicator = container.querySelector('.sync-indicator');
       expect(indicator).not.toBeNull();
     });
@@ -285,11 +287,24 @@ describe('Empirical Challenger: Layout Geometry, Accessibility, Z-Index & Online
       await renderSettledApp();
 
       for (let i = 0; i < 20; i++) {
+        const transientError = i % 3 === 0 ? `Errore transitorio #${i}` : null;
         act(() => {
-          useAppStore.setState({ syncing: i % 2 === 0, saveError: i % 3 === 0 ? `Errore transitorio #${i}` : null });
+          useAppStore.setState({ syncing: i % 2 === 0, saveError: transientError });
+        });
+        act(() => {
           window.dispatchEvent(new Event(i % 2 === 0 ? 'online' : 'offline'));
         });
+        // Restoring connectivity does not dismiss unrelated save errors.
+        expect(useAppStore.getState().syncing).toBe(i % 2 === 0);
+        expect(useAppStore.getState().saveError).toBe(transientError);
       }
+      act(() => {
+        useAppStore.setState({ saveError: 'Connessione assente durante il salvataggio' });
+      });
+      act(() => {
+        window.dispatchEvent(new Event('online'));
+      });
+      expect(useAppStore.getState().saveError).toBeNull();
 
       // Cleanup
       act(() => {
