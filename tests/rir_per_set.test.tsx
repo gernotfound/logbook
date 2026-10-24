@@ -31,7 +31,7 @@ import { projectDocuments } from '../src/lib/sync/documentProjection';
 import { applySemanticOperations } from '../src/lib/sync/semanticProjection';
 import type { CachedGlobalCatalog, UserData, WorkoutSession } from '../src/types';
 
-vi.mock('../src/lib/telemetryHub', () => ({ telemetryHub: { trackEvent: vi.fn(), trackError: vi.fn() } }));
+vi.mock('../src/lib/telemetryHub', () => ({ telemetryHub: { trackError: vi.fn() } }));
 
 const parseUserData = (value: unknown) => UserDataSchema.parse(value) as unknown as UserData;
 const catalog: CachedGlobalCatalog = {
