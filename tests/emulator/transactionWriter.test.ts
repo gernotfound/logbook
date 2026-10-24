@@ -103,7 +103,7 @@ it('2. V3 API: replay is idempotent', async () => {
     await applyDocumentChanges(db, 'a', ops, () => true, replica);
     await applyDocumentChanges(db, 'a', ops, () => true, replica);
 
-    const saved = (await getDoc(doc(db, 'users/a'))).data()!;
+    const saved = plain((await getDoc(doc(db, 'users/a'))).data());
     expect(saved.profile.name).toBe('Test');
     expect(saved._schemaVersion).toBe(CURRENT_DATA_SCHEMA);
     expect(saved._sync.fields['profile/name'].seq).toBe(1);
@@ -134,7 +134,7 @@ it('2b. V3 API: replay converges after an interfering out-of-band write', async 
     // A deliberate replay must converge regardless of which write was last.
     await applyDocumentChanges(db, 'a', ops, () => true, replica);
 
-    const saved = (await getDoc(doc(db, 'users/a'))).data()!;
+    const saved = plain((await getDoc(doc(db, 'users/a'))).data());
     expect(saved.profile.name).toBe('TestRetry');
     expect(saved._schemaVersion).toBe(CURRENT_DATA_SCHEMA);
 });
@@ -244,7 +244,7 @@ it('4. V3 API: remote FieldStamp can defeat a concurrent local operation', async
 
     await applyDocumentChanges(db, 'a', ops, () => true, replica);
 
-    const saved = (await getDoc(doc(db, 'users/a'))).data()!;
+    const saved = plain((await getDoc(doc(db, 'users/a'))).data());
     expect(saved.profile.height).toBe('190');
     expect(saved._schemaVersion).toBe(CURRENT_DATA_SCHEMA);
     expect(saved._sync.clock.s00).toBe(1);
@@ -262,7 +262,7 @@ it('5. V3 API: checkDocSize receives a document that already contains schema and
     const result = await applyDocumentChanges(db, 'a', ops, () => true, replica);
     expect(result.syncMeta[''].fields['profile/name']).toBeDefined();
 
-    const saved = (await getDoc(doc(db, 'users/a'))).data()!;
+    const saved = plain((await getDoc(doc(db, 'users/a'))).data());
     expect(saved.profile.name).toHaveLength(500);
     expect(saved._schemaVersion).toBe(CURRENT_DATA_SCHEMA);
     expect(saved._sync.fields['profile/name']).toBeDefined();
