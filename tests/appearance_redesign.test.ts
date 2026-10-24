@@ -8,8 +8,10 @@ const bootstrap = readFileSync(resolve('public/appearance.js'), 'utf8');
 let stop: (() => void) | undefined;
 let dark = false;
 let listeners: Set<() => void>;
+let originalHeadHTML: string;
 
 beforeEach(() => {
+  originalHeadHTML = document.head.innerHTML;
   vi.resetModules();
   const values = new Map<string, string>();
   vi.stubGlobal('localStorage', {
@@ -34,6 +36,7 @@ afterEach(() => {
   stop = undefined;
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  document.head.innerHTML = originalHeadHTML;
 });
 
 function runBootstrap() {
