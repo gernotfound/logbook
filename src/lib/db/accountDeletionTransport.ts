@@ -103,6 +103,10 @@ export async function fetchAccountDeletionStatus(marker: AccountDeletionMarker, 
             ? body.error
             : 'Impossibile verificare lo stato della cancellazione. Copia locale conservata.');
     }
+    // A server receipt authorizes cleanup only for its exact owner.
+    if (body.uid !== marker.uid || !['requested', 'deleting', 'verifying', 'complete', 'failed'].includes(String(body.status))) {
+        throw new Error('Stato della cancellazione non coerente con l’account richiesto. Copia locale conservata.');
+    }
     return body as unknown as ServerDeletionStatus;
 }
 

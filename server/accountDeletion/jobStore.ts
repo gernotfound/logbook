@@ -2,6 +2,7 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 import { FieldPath, FieldValue, Timestamp, type QueryDocumentSnapshot, type Transaction } from 'firebase-admin/firestore';
 import { adminAuth, adminDb } from './firebaseAdmin.js';
 import { completedDeletionPurgeAfter } from './retention.js';
+import { removeHealthConsentStateForDeletedAccount } from '../healthConsent/withdrawal.js';
 import {
   PRIVATE_ACCOUNT_COLLECTIONS,
   type AccountDeletionCursor,
@@ -269,6 +270,7 @@ export async function deleteUserRoot(uidValue: string, leaseOwner: string): Prom
     // A data-only erasure keeps Auth, but when the entire account is deleted
     // its server-owned erasure receipt must be removed as well.
     transaction.delete(adminDb().collection('health_data_erasures').doc(uid));
+    await removeHealthConsentStateForDeletedAccount(uid, transaction);
     transaction.update(ref, {
       status: 'deleting', cursor: { phase: 'root' }, updatedAt: Timestamp.now(),
     });
@@ -300,6 +302,9 @@ export async function verifyNoAccountResidue(uidValue: string): Promise<void> {
 
   const erasureMarker = await adminDb().collection('health_data_erasures').doc(uid).get();
   if (erasureMarker.exists) throw new Error('Health-data erasure receipt remains after account deletion.');
+
+  const consentMarker = await adminDb().collection('health_consent_withdrawals').doc(uid).get();
+  if (consentMarker.exists) throw new Error('Health consent marker remains after account deletion.');
 
   const revocationMarker = await adminDb().collection('session_revocations').doc(uid).get();
   if (revocationMarker.exists) throw new Error('Session revocation marker still exists after deletion.');

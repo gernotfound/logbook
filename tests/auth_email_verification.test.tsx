@@ -10,7 +10,6 @@ import { idbStore } from './setup';
 import { draftRegistry } from '../src/lib/utils/draftRegistry';
 import { UserDataSchema } from '../src/lib/schema';
 import { useUnverifiedLocalContinuation } from '../src/contexts/auth/useUnverifiedLocalContinuation';
-
 const wrapper = ({ children }: { children: React.ReactNode }) => <AuthProvider>{children}</AuthProvider>;
 
 function account(verified: boolean, providerId = 'password') {
@@ -68,22 +67,28 @@ describe('email verification lifecycle', () => {
         startWith(user);
         const { result } = renderHook(() => useAuth(), { wrapper });
         await waitFor(() => expect(result.current.loading).toBe(false));
+        // Shared setup imports AuthProvider before a suite-local module mock could
+        // replace safeHardReload. Observe its actual persistence barrier instead.
+        const flush = vi.spyOn(draftRegistry, 'flushAll');
+        try {
+            await act(async () => {
+                await result.current.refreshEmailVerification();
+            });
+            expect(reload).toHaveBeenCalledWith(user);
+            expect(user.getIdToken).not.toHaveBeenCalled();
+            expect(flush).not.toHaveBeenCalled();
 
-        await act(async () => {
-            await result.current.refreshEmailVerification();
-        });
-        expect(reload).toHaveBeenCalledWith(user);
-        expect(user.getIdToken).not.toHaveBeenCalled();
-
-
-        vi.mocked(reload).mockImplementationOnce(async () => {
-            user.emailVerified = true;
-        });
-        await act(async () => {
-            await result.current.refreshEmailVerification();
-        });
-        expect(user.getIdToken).toHaveBeenCalledWith(true);
-
+            vi.mocked(reload).mockImplementationOnce(async () => { user.emailVerified = true; });
+            await act(async () => {
+                await result.current.refreshEmailVerification();
+            });
+            expect(user.getIdToken).toHaveBeenCalledWith(true);
+            expect(flush).toHaveBeenCalledWith({ strict: true });
+            expect(user.getIdToken.mock.invocationCallOrder[0])
+                .toBeLessThan(flush.mock.invocationCallOrder[0]);
+        } finally {
+            flush.mockRestore();
+        }
     });
 
     it.each([
@@ -181,14 +186,42 @@ describe('email verification lifecycle', () => {
 
         vi.mocked(reload).mockImplementationOnce(async () => { user.emailVerified = true; });
         user.getIdToken.mockRejectedValueOnce(new Error('token refresh unavailable'));
-
-        await act(async () => {
-            await expect(result.current.refreshEmailVerification()).rejects.toThrow('token refresh unavailable');
-        });
-
-        expect(user.getIdToken).toHaveBeenCalledWith(true);
-        expect(result.current.emailVerificationRequired).toBe(true);
+        const flush = vi.spyOn(draftRegistry, 'flushAll');
+        try {
+            await act(async () => {
+                await expect(result.current.refreshEmailVerification()).rejects.toThrow('token refresh unavailable');
+            });
+            expect(user.getIdToken).toHaveBeenCalledWith(true);
+            expect(result.current.emailVerificationRequired).toBe(true);
+            expect(flush).not.toHaveBeenCalled();
+        } finally {
+            flush.mockRestore();
+        }
         expect(idbStore['logbook:v2:user:unverified-user']).toBe(archived);
+        expect(DB.purgeAllLocalUserData).not.toHaveBeenCalled();
+    });
+
+    it('does not bypass the reload barrier when it rejects after refreshed claims', async () => {
+        const user = account(false);
+        startWith(user);
+        const { result } = renderHook(() => useAuth(), { wrapper });
+        await waitFor(() => expect(result.current.emailVerificationRequired).toBe(true));
+
+        vi.mocked(reload).mockImplementationOnce(async () => { user.emailVerified = true; });
+        const flush = vi.spyOn(draftRegistry, 'flushAll').mockImplementationOnce(() => {
+            throw new Error('unsafe pending local draft');
+        });
+        try {
+            await act(async () => {
+                await expect(result.current.refreshEmailVerification()).rejects.toThrow('unsafe pending local draft');
+            });
+            expect(user.getIdToken).toHaveBeenCalledWith(true);
+            expect(flush).toHaveBeenCalledWith({ strict: true });
+            expect(result.current.emailVerificationRequired).toBe(true);
+        } finally {
+            flush.mockRestore();
+        }
+        expect(DB.loadCloudPayload).not.toHaveBeenCalled();
         expect(DB.purgeAllLocalUserData).not.toHaveBeenCalled();
     });
 
