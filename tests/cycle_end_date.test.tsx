@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import React from 'react';
 import { TrainingCycleSchema, DomainParsers } from '../src/lib/schema';
 import { calculateCycleTimeline, calculateCycleSchedule } from '../src/lib/calc/planning';
@@ -330,6 +330,33 @@ describe('Training Cycle End Date & Two-Way Binding (Milestone 2 - Requirement R
             const timeline = calculateCycleTimeline(saved, '2026-09-01');
             expect(timeline.totalWeeks).toBe(expectedWeeks);
             expect(timeline.endDate).toBe(expectedEndDate);
+        });
+
+        it('submits a cycle once while a save is pending and allows a retry afterwards', async () => {
+            let settleFirst!: () => void;
+            const firstSave = new Promise<void>(resolve => { settleFirst = resolve; });
+            const onSave = vi.fn().mockReturnValueOnce(firstSave).mockResolvedValue(undefined);
+            render(
+                <CycleEditor
+                    initialCycle={{
+                        id: 'single-submit',
+                        name: 'Ciclo',
+                        durationWeeks: 4,
+                        startDate: '2026-09-01',
+                        routines: [{ routineId: 'r_push', frequencyPerWeek: 1 }],
+                    }}
+                    routines={mockRoutines}
+                    onSave={onSave}
+                    onCancel={vi.fn()}
+                />
+            );
+            const form = document.querySelector('#cycle-editor-form') as HTMLFormElement;
+            fireEvent.submit(form);
+            fireEvent.submit(form);
+            expect(onSave).toHaveBeenCalledTimes(1);
+            await act(async () => { settleFirst(); await firstSave; });
+            fireEvent.submit(form);
+            expect(onSave).toHaveBeenCalledTimes(2);
         });
 
         it('submits cycle with both startDate and endDate on save', () => {

@@ -123,6 +123,41 @@ describe('audit regression: TrainingPlanning persistence failures', () => {
         })).rejects.toThrow('Archivio locale non leggibile');
     });
 
+    it.each(['synced', 'rejected'] as const)(
+        'does not close a newly opened editor when an earlier save settles %s',
+        async outcome => {
+            let resolve!: (value: { ok: true; status: 'synced' }) => void;
+            let reject!: (error: Error) => void;
+            const pending = new Promise<{ ok: true; status: 'synced' }>((yes, no) => {
+                resolve = yes;
+                reject = no;
+            });
+            dispatchDomainOperation.mockReturnValueOnce(pending);
+            render(<TrainingPlanning />);
+
+            fireEvent.click(screen.getByTitle('Opzioni'));
+            fireEvent.click(screen.getByRole('menuitem', { name: /Modifica/i }));
+            fireEvent.click(screen.getByRole('button', { name: /Salva modifiche/i }));
+            await waitFor(() => expect(dispatchDomainOperation).toHaveBeenCalledTimes(1));
+
+            fireEvent.click(screen.getByRole('button', { name: 'Chiudi' }));
+            fireEvent.click(screen.getByRole('button', { name: 'Crea ciclo' }));
+            fireEvent.change(screen.getByPlaceholderText('Es. Mesociclo ipertrofia 4 giorni'), {
+                target: { value: 'Nuovo ciclo in lavorazione' },
+            });
+
+            await act(async () => {
+                if (outcome === 'synced') resolve({ ok: true, status: 'synced' });
+                else reject(new Error('Old save failed'));
+                await pending.catch(() => undefined);
+            });
+
+            expect(screen.getByDisplayValue('Nuovo ciclo in lavorazione')).toBeDefined();
+            expect(screen.getByRole('heading', { name: /Nuovo ciclo/i })).toBeDefined();
+            expect(showAlert).not.toHaveBeenCalled();
+        },
+    );
+
     it('refuses a planning mutation before IndexedDB when local persistence is blocked', async () => {
         vi.mocked(updateIndexedDb).mockClear();
         useAppStore.setState({

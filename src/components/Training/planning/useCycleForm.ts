@@ -49,6 +49,7 @@ export interface UseCycleFormProps {
 
 export function useCycleForm({ initialCycle, routines, onSave, showAlert }: UseCycleFormProps) {
     const startDatePickerRef = useRef<HTMLInputElement>(null);
+    const saveInFlightRef = useRef(false);
     const endDatePickerRef = useRef<HTMLInputElement>(null);
 
     const initialIso = initialCycle?.startDate || Logic.getLocalDateString();
@@ -313,7 +314,15 @@ export function useCycleForm({ initialCycle, routines, onSave, showAlert }: UseC
             isActive: initialCycle?.isActive ?? false
         };
 
-        await onSave(cycle);
+        // A rapid second submit must not enqueue another upsert (or generate
+        // a different ID for a new cycle) before the first durable save settles.
+        if (saveInFlightRef.current) return;
+        saveInFlightRef.current = true;
+        try {
+            await onSave(cycle);
+        } finally {
+            saveInFlightRef.current = false;
+        }
     };
 
     // Preview may be bounded while the form keeps the original invalid input
