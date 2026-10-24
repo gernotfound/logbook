@@ -476,8 +476,8 @@ describe('Analytics Engine 4-Tier Test Suite (src/lib/calc/analytics.ts)', () =>
 
         it('excludes future-dated workout history from a current-week snapshot', () => {
             const history: WorkoutSession[] = [
-                { id: 'completed', date: '2026-08-17', exercises: [{ exId: 'ex_bench', sets: [{ id: 's1', kg: '100', reps: '10' }] }] },
-                { id: 'future', date: '2026-08-19', exercises: [{ exId: 'ex_bench', sets: [{ id: 's2', kg: '200', reps: '10' }] }] },
+                { id: 'completed', date: '2026-08-17', exercises: [{ exId: 'ex_bench', sessionNote: '', sets: [{ id: 's1', kg: '100', reps: '10' }] }] },
+                { id: 'future', date: '2026-08-19', exercises: [{ exId: 'ex_bench', sessionNote: '', sets: [{ id: 's2', kg: '200', reps: '10' }] }] },
             ];
             const now = computeWeeklyVolumeSeries(history, mockLibrary, 80, 1, '2026-08-18');
             expect(now.points[0]).toMatchObject({ volumeKg: 1000, workoutCount: 1, sessionIds: ['completed'] });
