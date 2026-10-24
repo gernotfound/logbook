@@ -213,7 +213,7 @@ describe('Challenger 2: Adversarial State Management, Schemas, Guest Merge & UI 
             expect(hasUserData(dataWithLibOnly)).toBe(true);
         });
 
-        it('2.4 High volume stress merge: merges 500 conflicting items rapidly without error', () => {
+        it('2.4 High volume merge preserves the identity and guest precedence of all 500 collisions', () => {
             const cloudLib: Exercise[] = [];
             const guestLib: Exercise[] = [];
             for (let i = 0; i < 500; i++) {
@@ -224,14 +224,18 @@ describe('Challenger 2: Adversarial State Management, Schemas, Guest Merge & UI 
             const cloudData: UserData = { ...defaultUserDataFallback, library: cloudLib, activePains: ['chest'] };
             const guestData: UserData = { ...defaultUserDataFallback, library: guestLib, activePains: ['back_lats'] };
 
-            const start = performance.now();
             const merged = mergeUserData(cloudData, guestData);
-            const duration = performance.now() - start;
 
-            expect(duration).toBeLessThan(500); // sub-500ms
             expect(merged.library).toHaveLength(500);
-            expect(merged.library?.[0]?.name).toBe('Guest Ex 0');
-            expect(merged.library?.[0]?.isBodyweight).toBe(true);
+            expect(new Set(merged.library?.map(exercise => exercise.id)).size).toBe(500);
+            for (let i = 0; i < 500; i++) {
+                expect(merged.library?.find(exercise => exercise.id === `ex_${i}`)).toMatchObject({
+                    name: `Guest Ex ${i}`,
+                    setsCount: 4,
+                    isBodyweight: i % 2 === 0,
+                    equipmentWeight: i,
+                });
+            }
             expect(merged.activePains).toEqual(['chest', 'back_lats']);
         });
     });

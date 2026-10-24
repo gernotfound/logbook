@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto';
 import { webcrypto } from 'node:crypto';
 import { clear, del, get } from 'idb-keyval';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createLocalKeyVault, deviceVaultKeyId, LocalUnlockError, unlockLocalKeyVault } from '../src/lib/sync/secureArchiveKeys';
 import { openLocalText, sealLocalText } from '../src/lib/sync/secureArchiveCipher';
 
@@ -11,6 +11,8 @@ beforeEach(async () => {
     vi.stubGlobal('crypto', webcrypto);
     await clear();
 });
+
+afterEach(() => vi.unstubAllGlobals());
 
 describe('automatic account-bound device encryption key', () => {
     it('creates a non-extractable AES-256 device key and resumes decryption offline', async () => {
@@ -27,12 +29,17 @@ describe('automatic account-bound device encryption key', () => {
         expect(openLocalText(await unlockLocalKeyVault(vault, owner), owner, 'journal', ciphertext)).toBe('heartRate=147');
     });
 
-    it('does not derive a key from a UID, Firebase token, API key or additional password', async () => {
+    it('generates owner-bound random wrapped keys entirely offline without credential or network input', async () => {
+        const fetchAttempt = vi.fn(() => { throw new Error('unexpected network credential request'); });
+        vi.stubGlobal('fetch', fetchAttempt);
         const first = await createLocalKeyVault(owner);
         const second = await createLocalKeyVault('user:another-account');
         expect(first.vault.wrappedDek).not.toBe(second.vault.wrappedDek);
+        expect(first.dataKey).not.toEqual(second.dataKey);
+        expect(await unlockLocalKeyVault(first.vault, owner)).toEqual(first.dataKey);
         await expect(unlockLocalKeyVault(first.vault, 'user:another-account')).rejects.toBeInstanceOf(LocalUnlockError);
         expect(JSON.stringify(first.vault)).not.toContain('password');
+        expect(fetchAttempt).not.toHaveBeenCalled();
     });
 
     it('fails closed if the device key is lost, or the wrapped DEK is tampered with', async () => {

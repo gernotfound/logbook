@@ -97,7 +97,7 @@ describe('LogBook Background Sync & Error Toast 4-Tier Test Suite', () => {
         expect(document.querySelector('#sync-overlay')).toBeNull();
       });
 
-      test('T1.3_R1: No fixed full-screen blocking backdrop covers the viewport during active sync', async () => {
+      test('T1.3_R1: Legacy sync-overlay ID is absent from the rendered subtree during sync', async () => {
         const { container } = await renderSettledApp();
         act(() => {
           useAppStore.setState({ syncing: true });
@@ -108,7 +108,7 @@ describe('LogBook Background Sync & Error Toast 4-Tier Test Suite', () => {
         });
       });
 
-      test('T1.4_R1: Main application container remains visible and accessible during syncing', async () => {
+      test('T1.4_R1: Main application container remains mounted during syncing', async () => {
         const { container } = await renderSettledApp();
         act(() => {
           useAppStore.setState({ syncing: true });
@@ -117,7 +117,7 @@ describe('LogBook Background Sync & Error Toast 4-Tier Test Suite', () => {
         expect(mainContainer).not.toBeNull();
       });
 
-      test('T1.5_R1: Bottom navigation remains rendered and interactive during syncing', async () => {
+      test('T1.5_R1: Bottom navigation remains mounted during syncing', async () => {
         const { container } = await renderSettledApp();
         act(() => {
           useAppStore.setState({ syncing: true });
@@ -452,13 +452,15 @@ describe('LogBook Background Sync & Error Toast 4-Tier Test Suite', () => {
         expect(screen.getByText(/Salvataggio in corso/i)).toBeDefined();
       });
 
-      test('T2.7_R2: Sync indicator has appropriate accessibility role or attributes', async () => {
+      test('T2.7_R2: Sync indicator exposes a polite status role', async () => {
         const { container } = await renderSettledApp();
         act(() => {
           useAppStore.setState({ syncing: true });
         });
-        const indicator = container.querySelector('.sync-indicator') || screen.getByText(/Salvataggio in corso/i).closest('div');
+        const indicator = container.querySelector('.sync-indicator');
         expect(indicator).not.toBeNull();
+        expect(indicator?.getAttribute('role')).toBe('status');
+        expect(indicator?.getAttribute('aria-live')).toBe('polite');
       });
 
       test('T2.8_R2: Coexistence of syncing === true AND saveError !== null without DOM collisions', async () => {
@@ -986,7 +988,7 @@ describe('LogBook Background Sync & Error Toast 4-Tier Test Suite', () => {
       expect(screen.queryByText(/Salvataggio in corso/i)).toBeNull();
     }, 10000);
 
-    test('T4.4_workload: Multi-tab routine editor and manual error dismissal workflow', async () => {
+    test('T4.4_workload: Manually dismisses an error toast without displaying legacy sync overlay', async () => {
       const { container } = await renderSettledApp();
 
       // Trigger an error in Training tab
@@ -1009,7 +1011,7 @@ describe('LogBook Background Sync & Error Toast 4-Tier Test Suite', () => {
       expect(container.querySelector('#sync-overlay')).toBeNull();
     });
 
-    test('T4.5_workload: Offline draft survival and online auto-recovery workflow', async () => {
+    test('T4.5_workload: Simulated transport failure and retry update the UI error state', async () => {
       const { container } = await renderSettledApp();
 
       // Simulate offline failure
@@ -1032,7 +1034,8 @@ describe('LogBook Background Sync & Error Toast 4-Tier Test Suite', () => {
 
       expect(screen.getByText(/Quota limit or offline/i)).toBeDefined();
 
-      // Reconnection replays the durable journal before clearing the error.
+      // This jsdom test verifies the UI response to a mocked retry; journal replay
+      // and offline durability require the separate repository/recovery suites.
       vi.mocked(DB.saveUserData).mockResolvedValueOnce({ ok: true, status: 'synced' });
       await act(async () => {
         window.dispatchEvent(new Event('online'));
