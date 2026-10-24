@@ -113,6 +113,9 @@ export async function getCachedCatalog(): Promise<CachedGlobalCatalog> {
 
     try {
         const rawCached = await idbGet<unknown>(CATALOG_CACHE_KEY);
+        // A network update or explicit save may complete while the IDB read is pending.
+        // Never publish an older IDB snapshot over that newer in-memory catalog.
+        if (inMemoryCatalogCache && isLoadedFromPersistentCache) return inMemoryCatalogCache;
         if (rawCached) {
             const parsed = CachedGlobalCatalogSchema.safeParse(rawCached);
             if (parsed.success && validManifest(parsed.data.manifest) && validItems(parsed.data.exercises, parsed.data.manifest.itemCounts.exercises) && validItems(parsed.data.foods, parsed.data.manifest.itemCounts.foods)) {
@@ -131,10 +134,9 @@ export async function getCachedCatalog(): Promise<CachedGlobalCatalog> {
     inMemoryCatalogCache = seedCatalog;
     isLoadedFromPersistentCache = true;
 
-    // Asynchronously populate IndexedDB in background
-    saveCatalogToCache(seedCatalog).catch(err => {
-        console.warn("[CatalogService] Impossibile salvare il seed in IndexedDB:", err);
-    });
+    // The bundled seed is reproducible and needs no IndexedDB write. A delayed
+    // seed write could overwrite a newly downloaded catalog or a failed read's
+    // last recoverable cache entry.
 
     return seedCatalog;
 }
