@@ -13,7 +13,6 @@ export {
 
 export type {
   TelemetryErrorPayload,
-  TelemetryEventPayload,
   QueuedTelemetryItem,
 } from './telemetry/contracts';
 
