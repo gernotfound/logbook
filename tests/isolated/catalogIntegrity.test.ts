@@ -1,10 +1,27 @@
 import 'fake-indexeddb/auto';
-const storageFault = vi.hoisted(() => ({ failNextSet: false }));
+const storageFault = vi.hoisted(() => ({
+    failNextSet: false,
+    stallNextGet: false,
+    resolveGet: null as null | ((value: unknown) => void),
+    rejectGet: null as null | ((reason: Error) => void),
+    setCalls: 0,
+}));
 vi.mock('idb-keyval', async (importOriginal) => {
     const original = await importOriginal<typeof import('idb-keyval')>();
     return {
         ...original,
+        get: (...args: Parameters<typeof original.get>) => {
+            if (storageFault.stallNextGet) {
+                storageFault.stallNextGet = false;
+                return new Promise((resolve, reject) => {
+                    storageFault.resolveGet = resolve;
+                    storageFault.rejectGet = reject;
+                });
+            }
+            return original.get(...args);
+        },
         set: (...args: Parameters<typeof original.set>) => {
+            storageFault.setCalls += 1;
             if (storageFault.failNextSet) {
                 storageFault.failNextSet = false;
                 return Promise.reject(new Error('quota exceeded'));
@@ -22,12 +39,48 @@ import { resolveEffectiveExercises, resolveEffectiveFoods } from '../../src/lib/
 const snap = (data: unknown) => ({ exists: () => data !== undefined, data: () => data });
 const exercise = { id: 'a', name: 'Omonimo', trackingType: 'weight_reps' as const };
 const food = { id: '0', name: 'Omonimo', kcal: 100, pro: 0, carbs: 25, fat: 0 };
-beforeEach(async () => { await clearCatalogCache(); remote.get.mockReset(); vi.stubGlobal('navigator', { onLine: true }); });
+beforeEach(async () => {
+    await clearCatalogCache();
+    remote.get.mockReset();
+    storageFault.failNextSet = false;
+    storageFault.stallNextGet = false;
+    storageFault.resolveGet = null;
+    storageFault.rejectGet = null;
+    storageFault.setCalls = 0;
+    vi.stubGlobal('navigator', { onLine: true });
+});
 const arrange = (exercises: unknown = [exercise], foods: unknown = [food], version = '1.0.0') => {
     const manifest = { ...getSeedCatalog().manifest, version, itemCounts: { exercises: 1, foods: 1 } };
     remote.get.mockImplementation(async (path: string) => snap(path.endsWith('manifest') ? manifest : path.endsWith('exercises_v1') ? exercises === undefined ? undefined : { items: exercises } : foods === undefined ? undefined : { items: foods }));
     return manifest;
 };
+it('does not persist the reproducible empty seed or overwrite the cache on a failed read', async () => {
+    const empty = await getCachedCatalog();
+    expect(empty.exercises).toEqual([]);
+    expect(storageFault.setCalls).toBe(0);
+    expect(await (await import('idb-keyval')).get('logbook_cached_global_catalog')).toBeUndefined();
+});
+
+it.each(['fulfilled', 'rejected'] as const)('a stale %s IndexedDB read cannot undo a concurrent catalog save', async outcome => {
+    storageFault.stallNextGet = true;
+    const pending = getCachedCatalog();
+    expect(storageFault.resolveGet).toBeTypeOf('function');
+    const fresh = {
+        ...getSeedCatalog(),
+        manifest: { ...getSeedCatalog().manifest, version: 'newer-v6', itemCounts: { exercises: 1, foods: 1 } },
+        exercises: [exercise],
+        foods: [food],
+    };
+    expect(await saveCatalogToCache(fresh)).toBe(true);
+    if (outcome === 'fulfilled') storageFault.resolveGet!(undefined);
+    else storageFault.rejectGet!(new Error('database temporarily unavailable'));
+    const resolved = await pending;
+    expect(resolved.manifest.version).toBe('newer-v6');
+    expect(resolved.exercises.map(item => item.id)).toEqual(['a']);
+    expect((await getCachedCatalog()).manifest.version).toBe('newer-v6');
+    expect(storageFault.setCalls).toBe(1);
+});
+
 it('downloads a populated manifest even when the empty seed shares its version', async () => {
     arrange(); const result = await syncGlobalCatalog({} as never);
     expect(result.updated).toBe(true); expect(result.catalog.exercises.map(item => item.id)).toEqual(['a']);
