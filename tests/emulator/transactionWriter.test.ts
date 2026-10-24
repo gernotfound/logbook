@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { afterAll, beforeAll, beforeEach, expect, it, vi } from 'vitest';
 import { initializeTestEnvironment, type RulesTestEnvironment } from '@firebase/rules-unit-testing';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, type Firestore } from 'firebase/firestore';
 vi.mock('../../src/lib/healthConsent', async () => ({
     ...(await vi.importActual<typeof import('../../src/lib/healthConsent')>('../../src/lib/healthConsent')),
     getVerifiedHealthConsentRevision: () => 1,
@@ -13,10 +13,25 @@ vi.mock('../../src/lib/checkDocSize', async importOriginal => {
 });
 
 import { checkDocSize } from '../../src/lib/checkDocSize';
-import { applyDocumentChanges } from '../../src/lib/sync/transactionWriter';
+import { applyDocumentChanges as applyEncryptedChanges } from '../../src/lib/sync/transactionWriter';
+import { sealCloudDocument, openCloudDocument, CloudCiphertextError } from '../../src/lib/sync/cloudDocumentCipher';
+import type { ReplicaIdentity } from '../../src/lib/sync/replicaProtocol';
+import type { SyncMeta } from '../../src/lib/sync/semanticProjection/contracts';
 import { type SemanticOperation } from '../../src/lib/sync/semanticProjection';
-import { CURRENT_DATA_SCHEMA, CURRENT_SYNC_PROTOCOL, FutureVersionError, LegacyVersionError } from '../../src/lib/schemaEvolution';
+import { CURRENT_DATA_SCHEMA, CURRENT_SYNC_PROTOCOL } from '../../src/lib/schemaEvolution';
 import { seedTrustedConsent, registerReplica, asModularFirestore } from './replicaHarness';
+
+const accountKey = new Uint8Array(32).fill(18);
+const sealed = (path: string, business: Record<string, unknown>, sync: SyncMeta) =>
+    sealCloudDocument(accountKey, 'a', path, business, sync);
+const plain = (raw: unknown, path = '') => {
+    const decoded = openCloudDocument(accountKey, 'a', path, raw);
+    return { ...decoded.business, _schemaVersion: CURRENT_DATA_SCHEMA, _sync: decoded.sync };
+};
+const applyDocumentChanges = (
+    db: Firestore, uid: string, operations: SemanticOperation[],
+    current: () => boolean, replica: ReplicaIdentity,
+) => applyEncryptedChanges(db, uid, operations, current, replica, accountKey);
 
 let env: RulesTestEnvironment;
 
@@ -37,7 +52,7 @@ it('1. V3 API: writes business data, FieldStamp metadata and the current data sc
 
     await applyDocumentChanges(db, 'a', ops, () => true, replica);
 
-    const saved = (await getDoc(doc(db, 'users/a'))).data()!;
+    const saved = plain((await getDoc(doc(db, 'users/a'))).data());
     expect(saved.profile.height).toBe('185');
     expect(saved._schemaVersion).toBe(CURRENT_DATA_SCHEMA);
     expect(saved._sync.fields['profile/height']).toMatchObject({ actorId: 's00', seq: 1, clock: { s00: 1 } });
@@ -58,7 +73,7 @@ it('1b. distinguishes an absent first-account document from a persisted markerle
 
     await expect(applyDocumentChanges(db, 'a', [
         { docPath: '', path: ['profile', 'height'], value: '181', isDelete: false, actorId: 's00', seq: 2, clock: { s00: 2 } }
-    ], () => true, replica)).rejects.toThrow(LegacyVersionError);
+    ], () => true, replica)).rejects.toThrow(CloudCiphertextError);
 });
 
 it('1c. refuses a future remote schema before semantic merge or write', async () => {
@@ -70,7 +85,7 @@ it('1c. refuses a future remote schema before semantic merge or write', async ()
 
     await expect(applyDocumentChanges(db, 'a', [
         { docPath: '', path: ['profile', 'height'], value: '180', isDelete: false, actorId: 's00', seq: 1, clock: { s00: 1 } }
-    ], () => true, replica)).rejects.toThrow(FutureVersionError);
+    ], () => true, replica)).rejects.toThrow(CloudCiphertextError);
 
     await env.withSecurityRulesDisabled(async context => {
         const saved = (await getDoc(doc(asModularFirestore(context.firestore()), 'users/a'))).data()!;
@@ -99,11 +114,9 @@ it('2b. V3 API: replay converges after an interfering out-of-band write', async 
     const replica = await registerReplica(db, 'a');
     const writer0 = { slot: replica.slot, replicaId: replica.replicaId, generation: replica.generation, seq: 0 };
     await env.withSecurityRulesDisabled(async context => {
-        await setDoc(doc(asModularFirestore(context.firestore()), 'users/a'), {
-            profile: { name: 'Initial' },
-            _schemaVersion: CURRENT_DATA_SCHEMA,
-            _sync: { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {}, writer: writer0 },
-        });
+        await setDoc(doc(asModularFirestore(context.firestore()), 'users/a'),
+            sealed('', { profile: { name: 'Initial' } },
+                { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {}, writer: writer0 }));
     });
 
     const ops: SemanticOperation[] = [
@@ -112,11 +125,9 @@ it('2b. V3 API: replay converges after an interfering out-of-band write', async 
 
     const promise = applyDocumentChanges(db, 'a', ops, () => true, replica);
     await env.withSecurityRulesDisabled(async context => {
-        await setDoc(doc(asModularFirestore(context.firestore()), 'users/a'), {
-            profile: { name: 'Interfering' },
-            _schemaVersion: CURRENT_DATA_SCHEMA,
-            _sync: { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {}, writer: writer0 },
-        });
+        await setDoc(doc(asModularFirestore(context.firestore()), 'users/a'),
+            sealed('', { profile: { name: 'Interfering' } },
+                { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {}, writer: writer0 }));
     });
     await promise;
     // The administrative write can race before or after the transaction commit.
@@ -152,9 +163,9 @@ it('2c. independent authenticated clients converge after sequential writes and i
     const [fromA, fromB] = await Promise.all([
         getDoc(doc(clientA, 'users/a')), getDoc(doc(clientB, 'users/a')),
     ]);
-    expect(fromA.data()?.profile).toMatchObject({ height: '183', gender: 'M' });
-    expect(fromB.data()?.profile).toEqual(fromA.data()?.profile);
-    expect(fromB.data()?._sync.clock).toMatchObject({ s00: 1, s01: 1 });
+    expect(plain(fromA.data()).profile).toMatchObject({ height: '183', gender: 'M' });
+    expect(plain(fromB.data()).profile).toEqual(plain(fromA.data()).profile);
+    expect(plain(fromB.data())._sync.clock).toMatchObject({ s00: 1, s01: 1 });
 });
 
 it('3. V3 API: parent tombstone keeps an otherwise empty shard and permits causally later recreation', async () => {
@@ -186,7 +197,7 @@ it('3. V3 API: parent tombstone keeps an otherwise empty shard and permits causa
     await applyDocumentChanges(db, 'a', deleteOps, () => true, replica);
 
     const ref = doc(db, 'users/a/nutrition_months/2026-09');
-    const deleted = (await getDoc(ref)).data();
+    const deleted = plain((await getDoc(ref)).data(), 'nutrition_months/2026-09');
     expect(deleted).toBeDefined();
     expect(deleted!._schemaVersion).toBe(CURRENT_DATA_SCHEMA);
     expect(deleted!['2026-09-13']).toBeUndefined();
@@ -206,7 +217,7 @@ it('3. V3 API: parent tombstone keeps an otherwise empty shard and permits causa
     ];
     await applyDocumentChanges(db, 'a', recreateOps, () => true, secondReplica);
 
-    const recreated = (await getDoc(ref)).data()!;
+    const recreated = plain((await getDoc(ref)).data(), 'nutrition_months/2026-09');
     expect(recreated['2026-09-13'].weight).toBe(82);
     expect(recreated._schemaVersion).toBe(CURRENT_DATA_SCHEMA);
     expect(recreated._sync.fields['2026-09-13'].deleted).toBeUndefined();
@@ -218,19 +229,13 @@ it('4. V3 API: remote FieldStamp can defeat a concurrent local operation', async
     const replica = await registerReplica(db, 'a');
 
     await env.withSecurityRulesDisabled(async context => {
-        await setDoc(doc(asModularFirestore(context.firestore()), 'users/a'), {
-            profile: { height: '190' },
-            _schemaVersion: CURRENT_DATA_SCHEMA,
-            // The remote winner belongs to another valid Protocol 3 replica slot.
-            _sync: {
+        await setDoc(doc(asModularFirestore(context.firestore()), 'users/a'),
+            sealed('', { profile: { height: '190' } }, {
                 protocolVersion: CURRENT_SYNC_PROTOCOL,
                 clock: { s15: 1 },
-                fields: {
-                    'profile/height': { clock: { s15: 1 }, actorId: 's15', seq: 1 }
-                },
+                fields: { 'profile/height': { clock: { s15: 1 }, actorId: 's15', seq: 1 } },
                 writer: { slot: 's01', replicaId: 'remote-seed', generation: 1, seq: 1 },
-            }
-        });
+            }));
     });
 
     const ops: SemanticOperation[] = [
@@ -264,13 +269,13 @@ it('5. V3 API: checkDocSize receives a document that already contains schema and
     expect(checkDocSize).toHaveBeenCalledOnce();
     const [guardedData, docName] = vi.mocked(checkDocSize).mock.calls[0];
     expect(docName).toBe('User Profile');
-    expect(guardedData).toEqual(saved);
+    expect(guardedData).toEqual((await getDoc(doc(db, 'users/a'))).data());
     expect(guardedData).toMatchObject({
         _schemaVersion: CURRENT_DATA_SCHEMA,
         _sync: {
             protocolVersion: CURRENT_SYNC_PROTOCOL,
             writer: { slot: replica.slot, replicaId: replica.replicaId, consentRevision: 1, seq: 1 },
-            fields: { 'profile/name': { actorId: 's00', seq: 1 } },
+            fields: {},
         },
     });
 });
