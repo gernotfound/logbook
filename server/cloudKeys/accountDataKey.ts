@@ -16,12 +16,12 @@ function validIdentity(uid: string): void {
   if (!uid || uid.length > 128 || uid.includes('/')) throw new AccountKeyUnavailableError();
 }
 
-function trustedConsent(data: FirebaseFirestore.DocumentData | undefined, uid: string): boolean {
-  return data?.uid === uid && data.status === 'active'
+function trustedConsent(data: FirebaseFirestore.DocumentData | undefined, uid: string, purpose: 'sync' | 'rights-export'): boolean {
+  return data?.uid === uid && data.status === (purpose === 'sync' ? 'active' : 'withdrawn')
     && Number.isSafeInteger(data.revision) && data.revision > 0
-    && typeof data.acceptedAt === 'string'
-    && typeof data.privacyVersion === 'string' && data.privacyVersion.length > 0
-    && typeof data.termsVersion === 'string' && data.termsVersion.length > 0;
+    && (purpose === 'rights-export' || (typeof data.acceptedAt === 'string'
+      && typeof data.privacyVersion === 'string' && data.privacyVersion.length > 0
+      && typeof data.termsVersion === 'string' && data.termsVersion.length > 0));
 }
 
 /**
@@ -29,7 +29,7 @@ function trustedConsent(data: FirebaseFirestore.DocumentData | undefined, uid: s
  * read here. Firestore retries this transaction when a revocation races key
  * provisioning; a revoked account never silently creates a new key.
  */
-export async function releaseAccountDataKey(uid: string): Promise<Buffer> {
+export async function releaseAccountDataKey(uid: string, purpose: 'sync' | 'rights-export' = 'sync'): Promise<Buffer> {
   validIdentity(uid);
   const db = adminDb();
   const keyRef = db.collection(KEY_COLLECTION).doc(uid);
@@ -43,7 +43,7 @@ export async function releaseAccountDataKey(uid: string): Promise<Buffer> {
   // already-persisted account ADK.
   const wasPresent = (await keyRef.get()).exists;
   let wrappedCandidate: Awaited<ReturnType<typeof wrapAccountDataKey>> | null = null;
-  if (!wasPresent) {
+  if (!wasPresent && purpose === 'sync') {
     // KMS side effects MUST stay outside the Firestore retry callback.
     // A race loser discards its candidate and uses the persisted winner.
     const candidate = randomBytes(32);
@@ -59,7 +59,7 @@ export async function releaseAccountDataKey(uid: string): Promise<Buffer> {
       transaction.get(keyRef), transaction.get(consentRef), transaction.get(deletionRef),
       transaction.get(erasureRef),
     ]);
-    if (!trustedConsent(consent.data(), uid) || deletion.exists
+    if (!trustedConsent(consent.data(), uid, purpose) || deletion.exists
         || (erasure.exists && erasure.data()?.status !== 'complete')) throw new AccountKeyUnavailableError();
     if (stored.exists) {
       const data = stored.data();
@@ -69,6 +69,9 @@ export async function releaseAccountDataKey(uid: string): Promise<Buffer> {
       }
       return data;
     }
+    // Rights-only access NEVER provisions keys: withdrawal may export existing
+    // ciphertext, but cannot create fresh cloud storage or re-enable sync.
+    if (purpose === 'rights-export') throw new AccountKeyUnavailableError();
     // This is NOT a migration: if any existing cloud business state is
     // present, creating a new key would make it appear that an existing
     // plaintext/ciphertext archive belonged to the newly generated ADK.
@@ -96,7 +99,7 @@ export async function releaseAccountDataKey(uid: string): Promise<Buffer> {
       deletionRef.get(),
       erasureRef.get(),
     ]);
-    if (consent.status !== 'active' || deletion.exists
+    if (consent.status !== (purpose === 'sync' ? 'active' : 'withdrawn') || deletion.exists
         || (erasure.exists && erasure.data()?.status !== 'complete')) throw new AccountKeyUnavailableError();
     return key;
   } catch {
