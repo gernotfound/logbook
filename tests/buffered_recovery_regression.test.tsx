@@ -703,7 +703,7 @@ describe.each(['input', 'textarea'] as const)('independent same-workout %s write
         second.unmount();
     });
 
-    it('recovers a verified successor after successive crashes and confirms the whole lineage', () => {
+    it('recovers a verified successor across successive React remounts and confirms its lineage', () => {
         const owner = captureSession().owner;
         const first = mount(vi.fn());
         fireEvent.change(edited(first), { target: { value: '75' } });

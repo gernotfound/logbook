@@ -543,7 +543,7 @@ describe('Empirical Challenger: Deterministic Guest Merge (R5) Stress & Adversar
     });
 
     describe('5. Large Scale Dataset Merge (Volume, Performance & Memory Stress)', () => {
-        it('merges large scale datasets in sub-second execution time (< 350ms)', () => {
+        it('merges large datasets with deterministic collisions within the asserted 1500ms budget', () => {
             const ITEM_COUNT = 60; // 60 cloud + 60 guest with 30 collisions each = 90 items per collection (within schema max limits: cycles/supps <= 100, routines <= 300, lib/foods <= 500)
 
             const cloudLibrary: any[] = [];

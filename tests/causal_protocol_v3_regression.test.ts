@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import type { DocumentData } from '../src/lib/sync/documentProjection';
 import {
     applySemanticOperations,
+    coversVectorClock,
     type SemanticOperation,
-    type SyncMeta,
 } from '../src/lib/sync/semanticProjection';
 import { CURRENT_SYNC_PROTOCOL } from '../src/lib/schemaEvolution';
 
@@ -268,14 +268,21 @@ describe('Sync Protocol 3 causal convergence regressions', () => {
         expect((together.documents.get('')!.routines as any[]).map(item => item.id)).toEqual(['r3', 'r2', 'r1']);
     });
 
-    it('keeps current-protocol SyncMeta internally covered after every regression scenario', () => {
-        const meta: SyncMeta = {
-            protocolVersion: CURRENT_SYNC_PROTOCOL,
-            clock: { A: 2, B: 1 },
-            fields: {
-                'profile/name': { actorId: 'A', seq: 2, clock: { A: 2, B: 1 } },
-            },
-        };
+    it('produces a current-protocol frontier covering the actual causal winner', () => {
+        const base = new Map<string, DocumentData>([['', { profile: { name: 'Base' } }]]);
+        const operations: SemanticOperation[] = [
+            { docPath: '', path: ['profile', 'name'], value: 'Ancestor', isDelete: false, actorId: 'A', seq: 1, clock: { A: 1 } },
+            { docPath: '', path: ['profile', 'name'], value: 'Descendant', isDelete: false, actorId: 'B', seq: 1, clock: { A: 1, B: 1 } },
+        ];
+        const result = deliver(base, operations, [[1], [0]]);
+        const meta = result.syncMetas[''];
+        const winner = meta.fields['profile/name'];
+
+        expect(result.documents.get('')?.profile).toEqual({ name: 'Descendant' });
         expect(meta.protocolVersion).toBe(CURRENT_SYNC_PROTOCOL);
+        expect(meta.clock).toEqual({ A: 1, B: 1 });
+        expect(winner).toMatchObject({ actorId: 'B', seq: 1, clock: { A: 1, B: 1 } });
+        expect(coversVectorClock(meta.clock, winner.clock)).toBe(true);
+        expect(coversVectorClock({ A: 1 }, winner.clock)).toBe(false);
     });
 });

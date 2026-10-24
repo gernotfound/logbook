@@ -65,31 +65,43 @@ describe('CSV portability contract', () => {
         expect(csv).toContain('"heightCm"');
     });
 
-    it('finishes only after every generated file has been saved', async () => {
-        const calls: string[] = [];
-        vi.spyOn(Exporter, 'downloadFile').mockImplementation(async filename => {
-            await Promise.resolve();
-            calls.push(filename);
-            return true;
-        });
-        const workout: WorkoutSession = {
-            id: 'w1',
-            date: '2026-10-04',
-            exercises: [],
-        };
+    it('waits for each pending save before starting the next CSV or reporting completion', async () => {
+        const pending: Array<(saved: boolean) => void> = [];
+        const save = vi.spyOn(Exporter, 'downloadFile').mockImplementation(() =>
+            new Promise<boolean>(resolve => { pending.push(resolve); }));
+        const workout: WorkoutSession = { id: 'w1', date: '2026-10-04', exercises: [] };
         const day: NutritionDay = {
-            date: '2026-10-04',
-            kcal: 0,
-            carbs: 0,
-            pro: 0,
-            fat: 0,
-            steps: 1000,
-            cardioSessions: [{ id: 'c1', modality: 'walk', durationMinutes: 20 }],
+            date: '2026-10-04', kcal: 0, carbs: 0, pro: 0, fat: 0,
+            steps: 1000, cardioSessions: [{ id: 'c1', modality: 'walk', durationMinutes: 20 }],
         };
+        let completed = false;
+        const exportPromise = Exporter.exportToCSV([workout], { [day.date]: day }, [])
+            .then(result => { completed = true; return result; });
 
-        const result = await Exporter.exportToCSV([workout], { [day.date]: day }, []);
-        expect(result).toBe(true);
-        expect(calls).toEqual(['allenamenti.csv', 'misurazioni.csv', 'passi.csv', 'cardio.csv']);
+        const filenames = ['allenamenti.csv', 'misurazioni.csv', 'passi.csv', 'cardio.csv'];
+        for (const [index] of filenames.entries()) {
+            await vi.waitFor(() => expect(save).toHaveBeenCalledTimes(index + 1));
+            expect(save.mock.calls.map(call => call[0])).toEqual(filenames.slice(0, index + 1));
+            expect(completed).toBe(false);
+            pending[index](true);
+        }
+        expect(await exportPromise).toBe(true);
+        expect(completed).toBe(true);
+        expect(save.mock.calls.map(call => call[0]))
+            .toEqual(['allenamenti.csv', 'misurazioni.csv', 'passi.csv', 'cardio.csv']);
+    });
+    it('propagates a late save error and never starts subsequent files', async () => {
+        let failSecond: (reason: Error) => void = () => { throw new Error('Second file not started'); };
+        const save = vi.spyOn(Exporter, 'downloadFile')
+            .mockResolvedValueOnce(true)
+            .mockImplementationOnce(() => new Promise<boolean>((_resolve, reject) => { failSecond = reject; }));
+        const workout: WorkoutSession = { id: 'w1', date: '2026-10-04', exercises: [] };
+        const day: NutritionDay = { date: '2026-10-04', kcal: 0, carbs: 0, pro: 0, fat: 0, steps: 1000 };
+        const exportPromise = Exporter.exportToCSV([workout], { [day.date]: day }, []);
+        await vi.waitFor(() => expect(save).toHaveBeenCalledTimes(2));
+        failSecond(new Error('disk full'));
+        await expect(exportPromise).rejects.toThrow('disk full');
+        expect(save.mock.calls.map(call => call[0])).toEqual(['allenamenti.csv', 'misurazioni.csv']);
     });
     it('keeps complete output and stable row order for large datasets', async () => {
         const exported: Record<string, string> = {};

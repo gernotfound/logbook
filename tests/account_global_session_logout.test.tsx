@@ -37,6 +37,7 @@ vi.mock('../src/store/useDialogStore', () => ({
 
 import { auth } from '../src/lib/firebase';
 import { useSettings } from '../src/hooks/useSettings';
+import { invalidateSession } from '../src/lib/sync/session';
 import { useAppStore } from '../src/store/useAppStore';
 
 describe('all-device session revocation UX', () => {
@@ -60,6 +61,46 @@ describe('all-device session revocation UX', () => {
     expect(data.reauth).toHaveBeenCalledTimes(1);
     expect(data.revoke).toHaveBeenCalledWith(data.account);
     expect(data.logout).toHaveBeenCalledWith({ mode: 'normal' });
+    expect(data.showConfirm.mock.invocationCallOrder[0]).toBeLessThan(data.reauth.mock.invocationCallOrder[0]);
+    expect(data.reauth.mock.invocationCallOrder[0]).toBeLessThan(data.revoke.mock.invocationCallOrder[0]);
+    expect(data.revoke.mock.invocationCallOrder[0]).toBeLessThan(data.logout.mock.invocationCallOrder[0]);
+  });
+
+  it('does not log out the successor of an in-flight revocation with the same UID', async () => {
+    let finishRevocation!: () => void;
+    data.revoke.mockImplementationOnce(() => new Promise<void>(resolve => { finishRevocation = resolve; }));
+    const { result } = renderHook(() => useSettings());
+    let pending!: Promise<void>;
+    act(() => { pending = result.current.handleLogoutEverywhere(); });
+    await vi.waitFor(() => expect(data.revoke).toHaveBeenCalledOnce());
+
+    invalidateSession();
+    (auth as any).currentUser = { ...data.account };
+    finishRevocation();
+    await act(async () => { await pending; });
+
+    expect(data.logout).not.toHaveBeenCalled();
+    expect(data.showAlert).not.toHaveBeenCalled();
+  });
+
+  it('refuses global revocation when the durable cloud integrity fence is present', async () => {
+    data.readLocal.mockResolvedValue({ pending: [], cloudIntegrityFence: 'unverified-cloud' });
+    const { result } = renderHook(() => useSettings());
+    await act(async () => result.current.handleLogoutEverywhere());
+    expect(data.revoke).not.toHaveBeenCalled();
+    expect(data.logout).not.toHaveBeenCalled();
+    expect(data.showAlert).toHaveBeenCalledWith(expect.stringContaining('Snapshot cloud non verificato'));
+  });
+
+  it('rechecks the cloud integrity fence after reauthentication, before remote revocation', async () => {
+    data.readLocal.mockResolvedValueOnce({ pending: [] })
+      .mockResolvedValueOnce({ pending: [] })
+      .mockResolvedValueOnce({ pending: [], cloudIntegrityFence: 'new-fence' });
+    const { result } = renderHook(() => useSettings());
+    await act(async () => result.current.handleLogoutEverywhere());
+    expect(data.reauth).toHaveBeenCalledOnce();
+    expect(data.revoke).not.toHaveBeenCalled();
+    expect(data.logout).not.toHaveBeenCalled();
   });
 
   it('does not touch remote sessions after canceling the confirmation', async () => {

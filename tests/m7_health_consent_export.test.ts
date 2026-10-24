@@ -5,6 +5,8 @@ const mock = vi.hoisted(() => ({
   owner: 'owner-1',
   users: new Map<string, Record<string, unknown>>(),
   months: new Map<string, Record<string, unknown>>(),
+  erasure: null as null | { uid: string; status: string },
+  changeDuringPage: false,
   verify: vi.fn(async () => ({ uid: 'owner-1' })),
 }));
 vi.mock('firebase-admin/firestore', () => ({ FieldPath: { documentId: () => '__name__' } }));
@@ -22,6 +24,9 @@ vi.mock('../server/healthConsent/withdrawal', () => ({
 }));
 vi.mock('../server/accountDeletion/firebaseAdmin', () => ({
   adminDb: () => ({ collection: (kind: string) => {
+    if (kind === 'health_data_erasures') return { doc: (_uid: string) => ({
+      get: async () => ({ exists: mock.erasure !== null, data: () => mock.erasure }),
+    }) };
     if (kind !== 'users') throw new Error('Unexpected collection');
     return { doc: (uid: string) => ({
       get: async () => ({ exists: mock.users.has(uid), data: () => mock.users.get(uid) }),
@@ -37,6 +42,10 @@ vi.mock('../server/accountDeletion/firebaseAdmin', () => ({
               .map(([key, raw]) => ({ id: key.split('/').at(-1)!, data: () => raw }))
               .filter(d => d.id > query.cursor).sort((a,b) => a.id.localeCompare(b.id))
               .slice(0, query.size);
+            if (mock.changeDuringPage) {
+              mock.changeDuringPage = false;
+              mock.erasure = { uid, status: 'deleting' };
+            }
             return { docs };
           },
         };
@@ -48,13 +57,45 @@ vi.mock('../server/accountDeletion/firebaseAdmin', () => ({
 
 import { GET } from '../api/health-consent-export';
 import { readWithdrawnHealthExportPage } from '../server/healthConsent/export';
+vi.mock('../src/lib/appCheck', () => ({
+  getLimitedUseAppCheckToken: vi.fn(async () => 'test-consumable-appcheck-token'),
+}));
+import { fetchWithdrawnCloudBackup } from '../src/lib/db/withdrawnBackupTransport';
+import { auth as clientAuth } from '../src/lib/firebase';
 const request = (params: string, origin='https://thelogbook.web.app') => new Request(
   'https://backend.example/api/health-consent-export?' + params, { headers: { origin } },
 );
 
+describe('withdrawn client export final consistency checkpoint', () => {
+  it('refuses a different consent revision at the final checkpoint without returning an incomplete snapshot', async () => {
+    const original = clientAuth.currentUser;
+    (clientAuth as { currentUser: unknown }).currentUser = {
+      uid: 'owner-1', getIdToken: vi.fn(async () => 'trusted-id'),
+    };
+    const requests: string[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      const section = new URL(url).searchParams.get('collection');
+      requests.push(section ?? '');
+      return Response.json({
+        documents: [], nextCursor: null,
+        consentRevision: section === 'checkpoint' ? 4 : 3,
+      });
+    }));
+    try {
+      await expect(fetchWithdrawnCloudBackup('owner-1', () => {}))
+        .rejects.toThrow('Verifica finale dell’esportazione non valida');
+      expect(requests).toEqual(['root', 'history_months', 'nutrition_months', 'checkpoint']);
+    } finally {
+      (clientAuth as { currentUser: unknown }).currentUser = original;
+      vi.unstubAllGlobals();
+    }
+  });
+});
+
 describe('server-mediated cloud export during consent withdrawal', () => {
   beforeEach(() => {
     mock.users.clear(); mock.months.clear(); mock.status = 'withdrawn'; mock.owner = 'owner-1';
+    mock.erasure = null; mock.changeDuringPage = false;
     vi.clearAllMocks();
     mock.users.set('owner-1', { profile: { displayName: 'Owner' }, _schemaVersion: 1 });
     mock.users.set('other', { profile: { displayName: 'Other user' } });
@@ -88,6 +129,22 @@ describe('server-mediated cloud export during consent withdrawal', () => {
     const two = await second.json();
     expect(two.documents).toEqual([{path:'history_months/2026-03',data:{value:'March'}}]);
     expect(two.nextCursor).toBeNull();
+  });
+  it('blocks export before and during a concurrent erasure instead of reporting incomplete data', async () => {
+    mock.erasure = { uid: 'owner-1', status: 'requested' };
+    expect((await GET(request('collection=root'))).status).toBe(503);
+    mock.erasure = null;
+    mock.changeDuringPage = true;
+    expect((await GET(request('collection=history_months'))).status).toBe(503);
+    const checkpoint = await GET(request('collection=checkpoint'));
+    expect(checkpoint.status).toBe(503);
+  });
+  it('offers a final generation checkpoint for paginated withdrawn export', async () => {
+    const first = await GET(request('collection=history_months'));
+    expect((await first.json()).consentRevision).toBe(1);
+    const checkpoint = await GET(request('collection=checkpoint'));
+    expect(await checkpoint.json()).toEqual({ documents: [], nextCursor: null, consentRevision: 1 });
+    expect((await GET(request('collection=checkpoint&after=2026-01'))).status).toBe(400);
   });
   it('rejects traversal, unknown sections and cursor injection', async () => {
     for (const query of [

@@ -35,15 +35,16 @@ service cloud.firestore {
     // A server-only revocation record cannot be undone by a stale client update
     // to users/{uid}. Reads remain available for lawful export and account rights.
     function consentWithdrawn(userId) {
-      // Missing first-acceptance evidence fails closed. Only the trusted
-      // backend may create or reactivate a consent record for this UID.
+      // Keep this check expression-bounded: Protocol 3 transactions approach
+      // the Firestore Rules evaluation limit. Full timestamp/version validation
+      // happens in the server-only status reader and in the client proof parser.
       let record = /databases/$(database)/documents/health_consent_withdrawals/$(userId);
       return !exists(record) || (
-        !('status' in get(record).data)
+        !get(record).data.keys().hasAll(['status', 'revision', 'uid', 'acceptedAt', 'privacyVersion', 'termsVersion'])
         || get(record).data.status != 'active'
-        || !('revision' in get(record).data)
         || !(get(record).data.revision is int)
         || get(record).data.revision < 1
+        || get(record).data.uid != userId
       );
     }
 

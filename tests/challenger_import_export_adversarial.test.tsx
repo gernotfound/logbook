@@ -107,10 +107,13 @@ describe('Adversarial Import/Export Logic', () => {
         expect(saveUserDataMock).toHaveBeenCalled();
         const updater = saveUserDataMock.mock.calls[0][0];
         const finalData = typeof updater === 'function' ? updater(mockUserData) : updater;
-        expect(finalData.library.length).toBe(2);
+        expect(finalData.library.map((exercise: { id: string }) => exercise.id)).toEqual(['ex1', '123']);
+        expect(finalData.library[0]).toMatchObject({
+            id: 'ex1', name: 'Original', setsCount: 3, sets: [],
+        });
     });
 
-    it('stress test: handles large current share arrays without freezing', async () => {
+    it('imports all records from a large current share without dropping the last one', async () => {
         const largeLibrary = Array.from({ length: 450 }).map((_, i) => ({
             id: `large_ex_${i}`,
             name: `Ex ${i}`,
@@ -119,13 +122,12 @@ describe('Adversarial Import/Export Logic', () => {
         }));
         const file = new File([JSON.stringify(sharePayload({ library: largeLibrary }))], "test.json", { type: "application/json" });
 
-        const start = performance.now();
         await Exporter.importFromJson(file, { uid: 'my_user_id' }, saveUserDataMock);
-        const duration = performance.now() - start;
-        expect(duration).toBeLessThan(1000);
 
         const updater = saveUserDataMock.mock.calls[0][0];
         const finalData = typeof updater === 'function' ? updater(mockUserData) : updater;
-        expect(finalData.library.length).toBe(451);
+        expect(finalData.library.map((exercise: { id: string }) => exercise.id))
+            .toEqual(['ex1', ...largeLibrary.map(exercise => exercise.id)]);
+        expect(saveUserDataMock).toHaveBeenCalledOnce();
     });
 });

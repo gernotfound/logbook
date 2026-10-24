@@ -57,13 +57,13 @@ describe('RISK-02: Legal Consent Lifecycle', () => {
         expect(state.syncHealth).toBe('synced');
     });
 
-    it('Scenario 2: Offline (local-pending) - Il consenso è accettato localmente', async () => {
+    it('Scenario 2: local-pending persists the legalConsent domain operation, not trusted server health authorization', async () => {
         vi.spyOn(DB, 'saveUserData').mockResolvedValue({ ok: false, status: 'local-pending', error: { code: 'unavailable' } });
 
         await useAppStore.getState().submitLegalConsent(mockConsent);
 
         const state = useAppStore.getState();
-        // Essendo offline-first, local-pending è trattato come successo
+        // This is local durable business state, not permission for first-time account health consent.
         expect(state.userData?.legalConsent).toEqual(mockConsent);
         expect(state.syncHealth).toBe('local-pending');
     });
