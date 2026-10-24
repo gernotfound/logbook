@@ -9,7 +9,7 @@ async function continueAsGuest(page: Page) {
   await page.getByRole('button', { name: 'Dati e statistiche', exact: true }).waitFor();
 }
 
-test('history detail keeps scrolling and controls accessible on short mobile viewport', async ({ page }, testInfo) => {
+test('history detail exposes scrollable geometry and a reachable close action on a short mobile viewport', async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 320, height: 420 });
   await continueAsGuest(page);
 
@@ -52,8 +52,9 @@ test('history detail keeps scrolling and controls accessible on short mobile vie
   expect(metrics.touchAction).toBe('pan-y');
 
   if (testInfo.project.name === 'mobile-safari') {
-    // Playwright mobile WebKit does not expose wheel/swipe injection. Keep its
-    // scroll geometry assertion and exercise the real touch tap on the close action.
+    // This project asserts scroll geometry and sets the scroll offset directly in WebKit;
+    // it does not claim to simulate a native swipe or inertial scrolling.
+    // The close button is exercised with a browser touch tap.
     await scrollArea.evaluate(element => { element.scrollTop = element.scrollHeight; });
   } else {
     await scrollArea.hover();

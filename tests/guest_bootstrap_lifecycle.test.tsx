@@ -7,6 +7,7 @@ import { DB } from '../src/lib/db';
 import { purgeAllLocalUserData as purgeRealLocalUserData } from '../src/lib/db/db_account';
 import { useAuth } from '../src/hooks/useAuth';
 import { useAppStore } from '../src/store/useAppStore';
+import { useDialogStore } from '../src/store/useDialogStore';
 import { clearCatalogCache, saveCatalogToCache } from '../src/lib/catalog/catalogService';
 import { resolveEffectiveExercises, resolveEffectiveFoods } from '../src/lib/catalog/deltaResolver';
 import type { UserData, Exercise, Food } from '../src/types';
@@ -274,6 +275,32 @@ describe('Milestone M2: Guest Bootstrap & Cold Start Lifecycle', () => {
         expect(result.current.isGuest).toBe(false);
         expect(useAppStore.getState().userData).toBeNull();
         expect(localStorage.getItem(GUEST_REVOCATION_KEY)).toBe('another-tab');
+    });
+
+
+    it('revokes the guest view and reports incomplete cleanup without falling through to authenticated logout', async () => {
+        const { result } = renderHook(() => useAuth(), {
+            wrapper: ({ children }) => <AuthProvider>{children}</AuthProvider>,
+        });
+        await act(async () => { await result.current.loginAsGuest(); });
+        await confirmRealGuestVault();
+        const previousSession = captureSession();
+        expect(useAppStore.getState().userData).not.toBeNull();
+
+        const purge = vi.spyOn(DB, 'purgeAllLocalUserData')
+            .mockRejectedValueOnce(new Error('device cleanup unavailable'));
+        const authenticatedLogout = vi.spyOn(DB, 'secureLogOut');
+        const alert = vi.spyOn(useDialogStore.getState(), 'showAlert').mockResolvedValue(undefined);
+
+        await act(async () => { await result.current.logout({ mode: 'normal' }); });
+
+        expect(purge).toHaveBeenCalledExactlyOnceWith('guest');
+        expect(authenticatedLogout).not.toHaveBeenCalled();
+        expect(result.current.isGuest).toBe(false);
+        expect(useAppStore.getState().userData).toBeNull();
+        expect(isCurrentSession(previousSession)).toBe(false);
+        expect(localStorage.getItem(GUEST_REVOCATION_KEY)).not.toBeNull();
+        expect(alert).toHaveBeenCalledWith(expect.stringContaining('pulizia del dispositivo incompleta'));
     });
 
     it('serializes an incomplete guest purge against a concurrent new guest login', async () => {
