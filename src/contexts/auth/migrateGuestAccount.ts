@@ -7,6 +7,7 @@ import { hasUserData, mergeUserData } from '../../lib/merge';
 import { useAppStore } from '../../store/useAppStore';
 import { getCachedCatalog, getInMemoryCatalog, isCatalogInMemory } from '../../lib/catalog/catalogService';
 import { replicateJournal } from '../../lib/sync/replicateJournal';
+import { requireCloudAccountDataKey } from '../../lib/sync/cloudAccountKeyAccess';
 import { captureSession, isCurrentSession, userOwner } from '../../lib/sync/session';
 import { markTabSnapshotClean } from '../../lib/sync/tabSnapshotCausality';
 import { getResolvedDefaultUserData } from './defaultUserData';
@@ -79,7 +80,9 @@ export async function migrateGuestAccount({ user, guestData, policy, setUserData
     try {
         assertCurrent();
         setSyncing(true);
-        const cloudPayload = await DB.loadCloudPayload({ allMonths: true });
+        const cloudKey = await requireCloudAccountDataKey(user.uid, assertCurrent);
+        assertCurrent();
+        const cloudPayload = await DB.loadCloudPayload({ allMonths: true, cloudKey });
         assertCurrent();
         const cloudData = cloudPayload?.data || null;
         const cloudHasData = hasUserData(cloudData);
@@ -189,7 +192,7 @@ export async function migrateGuestAccount({ user, guestData, policy, setUserData
                 applyLocalData(preservedEnv?.data ?? mergedData); return syncResult;
             }
 
-            const resolvedPayload = await DB.loadCloudPayload();
+            const resolvedPayload = await DB.loadCloudPayload({ cloudKey });
             assertCurrent();
             const resolvedData = resolvedPayload?.data || mergedData;
             const hydratedFinal = await hydrateLocal(user.uid, resolvedData, resolvedPayload?.completeMonths || [], resolvedPayload?.cloudDocuments, 'window', isCurrent);
