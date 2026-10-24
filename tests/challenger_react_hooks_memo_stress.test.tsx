@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { useAppStore } from '../src/store/useAppStore';
@@ -279,7 +279,7 @@ describe('Empirical Challenger: React Hooks, Memoization & Re-render Loop Stress
     // SECTION 2: TrainingSession & Memoization Stress Testing
     // =========================================================================
     describe('2. TrainingSession & React.memo Render Isolation Stress', () => {
-        it('2.1 GlobalTimer & WorkoutTimer Isolation: Timer ticks do NOT cause TrainingSession or Cards to re-render', () => {
+        it('2.1 TrainingSession remains usable after visibility change during a workout', () => {
             const activeWorkout: WorkoutSession = {
                 id: 'sess_1',
                 routineId: 'routine_push',
@@ -307,184 +307,70 @@ describe('Empirical Challenger: React Hooks, Memoization & Re-render Loop Stress
             expect(screen.getByRole('heading', { name: 'Squat' })).toBeDefined();
         });
 
-        it('2.2 SessionExerciseCard React.memo: Typing in Exercise 0 does NOT re-render Exercise 1', () => {
-            let ex0Renders = 0;
-            let ex1Renders = 0;
-
-            const libDefBench = { id: 'ex_bench', name: 'Panca Piana', trackingType: 'weight_reps' };
-            const libDefSquat = { id: 'ex_squat', name: 'Squat', trackingType: 'weight_reps' };
-            const emptyHistory: any[] = [];
-
-            const TrackedExerciseCard = React.memo((props: any) => {
-                if (props.exIndex === 0) ex0Renders++;
-                if (props.exIndex === 1) ex1Renders++;
-                return <SessionExerciseCard {...props} />;
-            }, (prev, next) => {
-                return (
-                    prev.exItem === next.exItem &&
-                    prev.libDef === next.libDef &&
-                    prev.pastWorkouts === next.pastWorkouts &&
-                    prev.isHistoryOpen === next.isHistoryOpen &&
-                    prev.isSetupOpen === next.isSetupOpen &&
-                    prev.openSpecialMenuId === next.openSpecialMenuId &&
-                    prev.exIndex === next.exIndex
-                );
-            });
-
-            let currentExercises = [
-                { id: 'item_0', exId: 'ex_bench', sets: [{ id: 's0', kg: '80', reps: '8' }], sessionNote: '' },
-                { id: 'item_1', exId: 'ex_squat', sets: [{ id: 's1', kg: '120', reps: '5' }], sessionNote: '' }
-            ];
-
-            const HostComponent = () => {
-                const [exercises, setExercises] = useState(currentExercises);
-                React.useEffect(() => { (window as any).__setHostExercises = setExercises; }, [setExercises]);
-
-                return (
-                    <div>
-                        <TrackedExerciseCard
-                            exItem={exercises[0]}
-                            exIndex={0}
-                            libDef={libDefBench}
-                            pastWorkouts={emptyHistory}
-                            isHistoryOpen={false}
-                            isSetupOpen={false}
-                            openSpecialMenuId={null}
-                            onToggleHistory={() => {}}
-                            onToggleSetup={() => {}}
-                            onRemoveExercise={() => {}}
-                            onUpdateSetupNote={() => {}}
-                            onUpdateSessionNote={() => {}}
-                            onAddSet={() => {}}
-                            onRemoveSet={() => {}}
-                            onUpdateSet={() => {}}
-                            onAddSpecialSet={() => {}}
-                            onUpdateSpecialSet={() => {}}
-                            onRemoveSpecialSet={() => {}}
-                            onToggleSpecialMenu={() => {}}
-                        />
-                        <TrackedExerciseCard
-                            exItem={exercises[1]}
-                            exIndex={1}
-                            libDef={libDefSquat}
-                            pastWorkouts={emptyHistory}
-                            isHistoryOpen={false}
-                            isSetupOpen={false}
-                            openSpecialMenuId={null}
-                            onToggleHistory={() => {}}
-                            onToggleSetup={() => {}}
-                            onRemoveExercise={() => {}}
-                            onUpdateSetupNote={() => {}}
-                            onUpdateSessionNote={() => {}}
-                            onAddSet={() => {}}
-                            onRemoveSet={() => {}}
-                            onUpdateSet={() => {}}
-                            onAddSpecialSet={() => {}}
-                            onUpdateSpecialSet={() => {}}
-                            onRemoveSpecialSet={() => {}}
-                            onToggleSpecialMenu={() => {}}
-                        />
-                    </div>
-                );
+        it('2.2 Real SessionExerciseCard receives updated exercise props without disturbing its sibling', () => {
+            const handlers = {
+                onToggleHistory: vi.fn(), onToggleSetup: vi.fn(), onRemoveExercise: vi.fn(),
+                onUpdateTechnicalStandard: vi.fn(), onUpdateSetTarget: vi.fn(),
+                onUpdateSetupNote: vi.fn(), onUpdateSessionNote: vi.fn(), onAddSet: vi.fn(),
+                onRemoveSet: vi.fn(), onUpdateSet: vi.fn(), onAddSpecialSet: vi.fn(),
+                onUpdateSpecialSet: vi.fn(), onRemoveSpecialSet: vi.fn(),
+                onToggleSpecialMenu: vi.fn()
             };
-
-            render(<HostComponent />);
-
-            expect(ex0Renders).toBe(1);
-            expect(ex1Renders).toBe(1);
-
-            // Simulate 50 keystrokes typing into Exercise 0 (Panca Piana)
-            // preserving immutable reference of Exercise 1 (Squat)
-            for (let i = 1; i <= 50; i++) {
-                act(() => {
-                    const nextEx0 = {
-                        ...currentExercises[0],
-                        sets: [{ id: 's0', kg: `${80 + i}`, reps: '8' }]
-                    };
-                    currentExercises = [nextEx0, currentExercises[1]];
-                    (window as any).__setHostExercises(currentExercises);
-                });
-            }
-
-            // Exercise 0 re-rendered 50 times (1 initial + 50 updates = 51)
-            expect(ex0Renders).toBe(51);
-            // Exercise 1 MUST REMAIN EXACTLY 1 (ZERO unnecessary re-renders!)
-            expect(ex1Renders).toBe(1);
+            const bench = { id: 'card-bench', exId: 'ex_bench', sessionNote: '', sets: [{ id: 'bench-set', kg: '80', reps: '8' }] };
+            const squat = { id: 'card-squat', exId: 'ex_squat', sessionNote: '', sets: [{ id: 'squat-set', kg: '120', reps: '5' }] };
+            const benchDef = { id: 'ex_bench', name: 'Panca Piana', setsCount: 1, sets: [] };
+            const readSquatName = vi.fn(() => 'Squat');
+            const squatDef = { id: 'ex_squat', get name() { return readSquatName(); }, setsCount: 1, sets: [] };
+            const history: any[] = [];
+            const Host = ({ first }: { first: typeof bench }) => (
+                <div>
+                    <SessionExerciseCard {...handlers} exItem={first} exIndex={0} libDef={benchDef}
+                        pastWorkouts={history} isHistoryOpen={false} isSetupOpen={false} openSpecialMenuId={null} />
+                    <SessionExerciseCard {...handlers} exItem={squat} exIndex={1} libDef={squatDef}
+                        pastWorkouts={history} isHistoryOpen={false} isSetupOpen={false} openSpecialMenuId={null} />
+                </div>
+            );
+            const { rerender } = render(<Host first={bench} />);
+            expect(screen.getByDisplayValue('80')).toBeDefined();
+            expect(screen.getByDisplayValue('120')).toBeDefined();
+            const stableSiblingReads = readSquatName.mock.calls.length;
+            expect(stableSiblingReads).toBeGreaterThan(0);
+            rerender(<Host first={{ ...bench, sets: [{ ...bench.sets[0], kg: '85' }] }} />);
+            expect(screen.getByDisplayValue('85')).toBeDefined();
+            expect(screen.getByDisplayValue('120')).toBeDefined();
+            expect(readSquatName).toHaveBeenCalledTimes(stableSiblingReads);
         });
 
-        it('2.3 SessionSetRow React.memo: Typing into Set 0 does NOT re-render Set 1 or Set 2', () => {
-            let set0Renders = 0;
-            let set1Renders = 0;
-            let set2Renders = 0;
-
-            const TrackedSetRow = React.memo((props: any) => {
-                if (props.sIndex === 0) set0Renders++;
-                if (props.sIndex === 1) set1Renders++;
-                if (props.sIndex === 2) set2Renders++;
-                return <SessionSetRow {...props} />;
-            }, (prev, next) => {
-                return (
-                    prev.set === next.set &&
-                    prev.sIndex === next.sIndex &&
-                    prev.exIndex === next.exIndex &&
-                    prev.trackingType === next.trackingType &&
-                    prev.isOpenMenu === next.isOpenMenu
-                );
-            });
-
-            let currentSets = [
-                { id: 's0', kg: '80', reps: '8' },
-                { id: 's1', kg: '80', reps: '8' },
-                { id: 's2', kg: '80', reps: '8' }
-            ];
-
-            const SetsHostComponent = () => {
-                const [sets, setSets] = useState(currentSets);
-                React.useEffect(() => { (window as any).__setHostSets = setSets; }, [setSets]);
-
-                return (
-                    <div>
-                        {sets.map((s, idx) => (
-                            <TrackedSetRow
-                                key={s.id}
-                                set={s}
-                                sIndex={idx}
-                                exIndex={0}
-                                trackingType="weight_reps"
-                                isOpenMenu={false}
-                                onToggleMenu={() => {}}
-                                onRemoveSet={() => {}}
-                                onUpdateSet={() => {}}
-                                onAddSpecialSet={() => {}}
-                                onUpdateSpecialSet={() => {}}
-                                onRemoveSpecialSet={() => {}}
-                            />
-                        ))}
-                    </div>
-                );
+        it('2.3 Real SessionSetRow updates one set without altering another set input', () => {
+            const handlers = {
+                onToggleMenu: vi.fn(), onRemoveSet: vi.fn(), onUpdateSet: vi.fn(),
+                onUpdateSetTarget: vi.fn(),
+                onAddSpecialSet: vi.fn(), onUpdateSpecialSet: vi.fn(),
+                onRemoveSpecialSet: vi.fn()
             };
-
-            render(<SetsHostComponent />);
-
-            expect(set0Renders).toBe(1);
-            expect(set1Renders).toBe(1);
-            expect(set2Renders).toBe(1);
-
-            // Simulate 30 rapid keystrokes updating only Set 0
-            for (let i = 1; i <= 30; i++) {
-                act(() => {
-                    const nextS0 = { ...currentSets[0], reps: `${8 + (i % 5)}` };
-                    currentSets = [nextS0, currentSets[1], currentSets[2]];
-                    (window as any).__setHostSets(currentSets);
-                });
-            }
-
-            expect(set0Renders).toBe(31);
-            expect(set1Renders).toBe(1); // Pristine isolation!
-            expect(set2Renders).toBe(1); // Pristine isolation!
+            const first = { id: 'set-0', kg: '80', reps: '8' };
+            const readSecondWeight = vi.fn(() => '120');
+            const second = { id: 'set-1', get kg() { return readSecondWeight(); }, reps: '5' };
+            const Host = ({ current }: { current: typeof first }) => (
+                <div>
+                    <SessionSetRow {...handlers} set={current} exIndex={0} sIndex={0}
+                        trackingType="weight_reps" isOpenMenu={false} />
+                    <SessionSetRow {...handlers} set={second} exIndex={0} sIndex={1}
+                        trackingType="weight_reps" isOpenMenu={false} />
+                </div>
+            );
+            const { rerender } = render(<Host current={first} />);
+            expect(screen.getByDisplayValue('80')).toBeDefined();
+            expect(screen.getByDisplayValue('120')).toBeDefined();
+            const stableSecondReads = readSecondWeight.mock.calls.length;
+            expect(stableSecondReads).toBeGreaterThan(0);
+            rerender(<Host current={{ ...first, kg: '90' }} />);
+            expect(screen.getByDisplayValue('90')).toBeDefined();
+            expect(screen.getByDisplayValue('120')).toBeDefined();
+            expect(readSecondWeight).toHaveBeenCalledTimes(stableSecondReads);
         });
 
-        it('2.4 EMPTY_HISTORY_ARRAY Reference Stability: Empty history does not break React.memo equality', () => {
+        it('2.4 Session without prior history preserves user-entered notes', () => {
             const activeWorkout: WorkoutSession = {
                 id: 'sess_new_ex',
                 routineId: 'routine_push',

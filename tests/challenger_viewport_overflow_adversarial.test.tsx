@@ -209,7 +209,7 @@ describe('EMPIRICAL CHALLENGER: Viewport & Overflow Adversarial Stress Suite (m2
             expect(homeCss).toMatch(/\.home-macros\s*>\s*div\s*\{[^}]*flex-wrap:\s*wrap/);
         });
 
-        it('2.4: HomeView stats cards (Massa grassa, Streak, Sessioni) render correctly without overflow', () => {
+        it('2.4: HomeView stats cards render with their labels (no overflow measurement)', () => {
             renderWithProviders(<HomeView onNavigate={vi.fn()} />);
 
             const bfCard = screen.getByText(/Massa grassa/i).closest('.card') as HTMLElement;
@@ -406,7 +406,7 @@ render(
             expect(macroContainer.style.flexWrap).toBe('wrap');
         });
 
-        it('3.3: 320px viewport simulation: layout contracts smoothly without horizontal overflow', () => {
+        it('3.3: 320px wrapper mounts FoodItemRow controls in jsdom (layout not measured)', () => {
             // Emulate container constrained to 320px width (iPhone SE 1st gen)
             const rootWrapper = document.createElement('div');
             rootWrapper.id = 'app-container';
@@ -473,7 +473,7 @@ render(
     /* =========================================================================
      * SECTION 5: VIEWPORT ADVERSARIAL STRESS MATRIX (320px, 375px, 390px, 430px, Desktop)
      * ========================================================================= */
-    describe('5. Viewport Adversarial Stress Matrix', () => {
+    describe('5. DOM rendering matrix; actual browser geometry is not exercised', () => {
         const viewports = [
             { name: 'Ultra-Narrow Mobile (iPhone SE 1st gen)', width: 320 },
             { name: 'Compact Mobile (iPhone SE 2nd/3rd gen, 13 mini)', width: 375 },
@@ -483,7 +483,7 @@ render(
         ];
 
         for (const vp of viewports) {
-            it(`5.x: Viewport ${vp.width}px (${vp.name}) renders core interactive forms without syntax or layout blowouts`, () => {
+            it(`5.x: ${vp.width}px (${vp.name}) mounts accessible controls in jsdom`, () => {
                 const wrapper = document.createElement('div');
                 wrapper.id = 'app-container';
                 wrapper.style.width = `${Math.min(vp.width, 600)}px`;

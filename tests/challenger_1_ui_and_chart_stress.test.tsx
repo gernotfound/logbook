@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { screen, fireEvent } from '@testing-library/react';
+import { screen, fireEvent, waitFor } from '@testing-library/react';
+import { Chart as ChartJS } from 'chart.js';
 import WeeklyVolumeChart from '../src/components/analytics/WeeklyVolumeChart';
 import VolumeCaloriesCorrelationChart from '../src/components/analytics/VolumeCaloriesCorrelationChart';
 import { renderWithProviders } from './setup';
@@ -13,12 +14,15 @@ describe('Challenger 1: UI & Chart Component Stress Testing', () => {
         { id: 'ex_squat', name: 'Squat', equipmentWeight: 20, setsCount: 3, sets: [] }
     ];
 
-    it('renders WeeklyVolumeChart with 500 workouts across 24 weeks seamlessly without lag or crash', async () => {
+    it('renders WeeklyVolumeChart with 500 workouts across 24 weeks without errors', async () => {
         const history: WorkoutSession[] = [];
-        const baseDate = new Date(2026, 7, 20, 12).getTime();
+        const anchor = new Date();
+        anchor.setHours(12, 0, 0, 0);
 
         for (let i = 0; i < 500; i++) {
-            const dateStr = getLocalDateString(baseDate - (i * 12 * 60 * 60 * 1000));
+            const date = new Date(anchor);
+            date.setDate(date.getDate() - (i % (23 * 7)));
+            const dateStr = getLocalDateString(date);
             history.push({
                 id: 'w_' + i,
                 date: dateStr,
@@ -42,6 +46,10 @@ describe('Challenger 1: UI & Chart Component Stress Testing', () => {
         expect(screen.getByText('Volume di allenamento settimanale')).toBeDefined();
         expect(await screen.findByText(/Attuale:/i)).toBeDefined();
         expect(await screen.findByText(/Media:/i)).toBeDefined();
+        const canvas = await screen.findByRole('img', { name: /Volume settimanale/i });
+        await waitFor(() => expect(ChartJS.getChart(canvas as HTMLCanvasElement)?.data.labels).toHaveLength(24));
+        const values = ChartJS.getChart(canvas as HTMLCanvasElement)!.data.datasets[0].data;
+        expect(values.map(value => Number(value)).reduce((sum, value) => sum + value, 0)).toBe(500000);
     });
 
     it('handles interactive period toggling across 4, 8, 12, and 24 weeks without error', () => {

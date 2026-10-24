@@ -15,6 +15,7 @@ import {
 import {
     FoodSchema
 } from '../src/lib/schema';
+import { calculateCustomFoodKcal } from '../src/lib/nutrition/calculateCustomFoodKcal';
 
 describe('EMPIRICAL CHALLENGER: Pure Math, State & Schema Adversarial Stress Suite (R1 - R6)', () => {
 
@@ -23,7 +24,7 @@ describe('EMPIRICAL CHALLENGER: Pure Math, State & Schema Adversarial Stress Sui
      * ========================================================================= */
     describe('R1 Stress: Combinatorial Weight, Ballast & Volume Matrix', () => {
 
-        it('Combinatorial Stress: 1000 combinations of ballast, equipment, userWeight, reps', () => {
+        it('Combinatorial Stress: 3,150 weight/equipment combinations with five rep inputs', () => {
             const ballasts = ['0', '5', '12.5', '15,75', '-10', '100', ''];
             const equipWeights = [0, 5, 20, 2.5, 10.5, undefined];
             const isBodyweightFlags = [true, false, undefined];
@@ -36,6 +37,9 @@ describe('EMPIRICAL CHALLENGER: Pure Math, State & Schema Adversarial Stress Sui
                         for (const uw of userWeights) {
                             const ex = { isBodyweight: bw, equipmentWeight: eq };
                             const effWeight = calculateEffectiveSetWeight(b, ex, uw);
+                            const parsedBallast = Number(b.trim().replace(',', '.')) || 0;
+                            const expectedWeight = parsedBallast + (bw ? uw : 0) + (eq ?? 0);
+                            expect(effWeight).toBeCloseTo(expectedWeight, 8);
 
                             // Invariant: effective weight must be a valid finite number (never NaN or Infinity)
                             expect(Number.isFinite(effWeight)).toBe(true);
@@ -48,6 +52,7 @@ describe('EMPIRICAL CHALLENGER: Pure Math, State & Schema Adversarial Stress Sui
                             for (const r of repsArr) {
                                 const vol = calculateSetVolume({ kg: b, reps: r }, ex, uw);
                                 expect(Number.isFinite(vol)).toBe(true);
+                                expect(vol).toBeCloseTo(expectedWeight * Number(r), 8);
                             }
                         }
                     }
@@ -79,7 +84,7 @@ describe('EMPIRICAL CHALLENGER: Pure Math, State & Schema Adversarial Stress Sui
             expect(vol).toBe(manualExpected);
         });
 
-        it('Large Workout Sessions (100 exercises x 10 sets each) compute under 50ms', () => {
+        it('Large Workout Sessions (100 exercises x 10 sets each) compute finite volume', () => {
             const library = Array.from({ length: 100 }, (_, idx) => ({
                 id: `ex_${idx}`,
                 isBodyweight: idx % 3 === 0,
@@ -96,12 +101,11 @@ describe('EMPIRICAL CHALLENGER: Pure Math, State & Schema Adversarial Stress Sui
                 }))
             };
 
-            const t0 = performance.now();
             const totalVol = calculateWorkoutVolume(session, library, 75);
-            const elapsed = performance.now() - t0;
-
             expect(totalVol).toBeGreaterThan(0);
-            expect(elapsed).toBeLessThan(50);
+            expect(Number.isFinite(totalVol)).toBe(true);
+            const expectedTotal = library.reduce((sum, ex) => sum + 100 * (50 + (ex.isBodyweight ? 75 : 0) + ex.equipmentWeight), 0);
+            expect(totalVol).toBe(expectedTotal);
         });
     });
 
@@ -109,23 +113,17 @@ describe('EMPIRICAL CHALLENGER: Pure Math, State & Schema Adversarial Stress Sui
      * R2: FOOD CALORIES CALCULATION FORMULA & SCHEMA RESILIENCE
      * ========================================================================= */
     describe('R2 Stress: Macro Combinations & Schema Boundary Testing', () => {
-        const calculateKcal = (carbs: any, pro: any, fat: any): number => {
-            const c = typeof carbs === 'number' ? carbs : parseFloat(String(carbs ?? '').trim().replace(',', '.')) || 0;
-            const p = typeof pro === 'number' ? pro : parseFloat(String(pro ?? '').trim().replace(',', '.')) || 0;
-            const f = typeof fat === 'number' ? fat : parseFloat(String(fat ?? '').trim().replace(',', '.')) || 0;
-            return Math.round(c * 4 + p * 4 + f * 9);
-        };
 
         it('Macro boundary permutations: zero, integer, decimal, string format invariance', () => {
-            expect(calculateKcal(0, 0, 0)).toBe(0);
-            expect(calculateKcal(10, 10, 10)).toBe(170);
-            expect(calculateKcal('10', '10', '10')).toBe(170);
-            expect(calculateKcal('10.0', '10.0', '10.0')).toBe(170);
-            expect(calculateKcal('10,0', '10,0', '10,0')).toBe(170);
-            expect(calculateKcal(' 10.5 ', ' 20.2 ', ' 5.1 ')).toBe(169); // 42 + 80.8 + 45.9 = 168.7 -> 169
+            expect(calculateCustomFoodKcal(0, 0, 0)).toBe(0);
+            expect(calculateCustomFoodKcal(10, 10, 10)).toBe(170);
+            expect(calculateCustomFoodKcal('10', '10', '10')).toBe(170);
+            expect(calculateCustomFoodKcal('10.0', '10.0', '10.0')).toBe(170);
+            expect(calculateCustomFoodKcal('10,0', '10,0', '10,0')).toBe(170);
+            expect(calculateCustomFoodKcal(' 10.5 ', ' 20.2 ', ' 5.1 ')).toBe(169); // 42 + 80.8 + 45.9 = 168.7 -> 169
         });
 
-        it('FoodSchema validates and parses 100 foods with random variations', () => {
+        it('FoodSchema validates and parses 100 deterministic macro combinations', () => {
             for (let i = 0; i < 100; i++) {
                 const food = {
                     id: `food_${i}`,
@@ -133,7 +131,7 @@ describe('EMPIRICAL CHALLENGER: Pure Math, State & Schema Adversarial Stress Sui
                     carbs: (i * 1.5) % 100,
                     pro: (i * 0.8) % 50,
                     fat: (i * 0.5) % 40,
-                    kcal: calculateKcal((i * 1.5) % 100, (i * 0.8) % 50, (i * 0.5) % 40),
+                    kcal: calculateCustomFoodKcal((i * 1.5) % 100, (i * 0.8) % 50, (i * 0.5) % 40),
                     isCustom: i % 2 === 0
                 };
                 const parsed = FoodSchema.parse(food);
@@ -183,7 +181,7 @@ describe('EMPIRICAL CHALLENGER: Pure Math, State & Schema Adversarial Stress Sui
      * ========================================================================= */
     describe('R5 & R6 Stress: Search Benchmarks & Pain Persistence State Invariants', () => {
 
-        it('searchMuscles fuzzing with 50 arbitrary strings does not crash or throw', () => {
+        it('searchMuscles accepts the 23 declared adversarial queries does not crash or throw', () => {
             const queries = [
                 'p', 'pe', 'pet', 'pett', 'petto', 'pettorali',
                 'spalle', 'deltoid', 'deltoidi anteriori',
@@ -202,7 +200,7 @@ describe('EMPIRICAL CHALLENGER: Pure Math, State & Schema Adversarial Stress Sui
             }
         });
 
-        it('mergeActivePains State Invariants across 200 randomized workout transitions', () => {
+        it('mergeActivePains State Invariants across 200 deterministic workout transitions', () => {
             const allMuscles = ['chest', 'latissimus_dorsi', 'trapezius', 'deltoid_anterior', 'deltoid_lateral', 'biceps', 'triceps', 'quadriceps', 'hamstrings', 'calves', 'abs'];
             const allExercises = [
                 { id: 'ex_1', muscles: ['chest', 'triceps'] },

@@ -1,7 +1,10 @@
 import React from 'react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, renderHook, act } from '@testing-library/react';
 import { emptyUserData } from './setup';
+import { captureSession } from '../src/lib/sync/session';
+import { initializeLocal, readLocal } from '../src/lib/sync/localRepository';
+import { useNutritionMeasurements } from '../src/hooks/useNutritionMeasurements';
 import { useAppStore } from '../src/store/useAppStore';
 import { Logic } from '../src/lib/logic';
 import {
@@ -10,7 +13,6 @@ import {
 } from '../src/lib/schema';
 import SessionSetRow from '../src/components/Training/session/SessionSetRow';
 import MuscleModel from '../src/components/Training/MuscleModel';
-import type { NutritionDay } from '../src/types';
 import {
     calculateEffectiveSetWeightContract,
     calculateSetVolumeContract,
@@ -158,28 +160,41 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                 expect(next).toBe('2024-02-29');
             });
 
-            it('T2.3.4: logging measurements on a past date preserves existing meals in nutrition record', () => {
-                const existingDay: NutritionDay = {
-                    date: '2026-08-10',
-                    kcal: 2500,
-                    carbs: 300,
-                    pro: 170,
-                    fat: 70,
-                    meals: [
-                        { id: 'm1', name: 'Pranzo', meal: 'pranzo', quantity: 1, kcal: 800, carbs: 100, pro: 50, fat: 20 }
-                    ]
-                };
-
-                const updatedDay: NutritionDay = {
-                    ...existingDay,
-                    weight: 76.0,
-                    waist: 82.0
-                };
-
-                expect(updatedDay.meals?.length).toBe(1);
-                expect(updatedDay.meals?.[0].name).toBe('Pranzo');
-                expect(updatedDay.weight).toBe(76.0);
+            it('T2.3.4: rejected measurement save leaves the previous meals and durable day unchanged', async () => {
+                const date = '2026-08-10';
+                const owner = captureSession().owner;
+                const initial = UserDataSchema.parse({
+                    ...emptyUserData,
+                    nutrition: {
+                        [date]: {
+                            date, kcal: 2500, carbs: 300, pro: 170, fat: 70, weight: 75,
+                            meals: [{ id: 'm1', name: 'Pranzo', meal: 'Pranzo', quantity: 1, kcal: 800, carbs: 100, pro: 50, fat: 20 }]
+                        }
+                    }
+                });
+                await initializeLocal(owner, initial);
+                const originalDispatch = useAppStore.getState().dispatchDomainOperation;
+                useAppStore.setState({
+                    userData: initial, dataOwner: owner, localPersistenceBlocked: false,
+                    dispatchDomainOperation: vi.fn(async () => ({
+                        ok: false as const, status: 'rejected' as const, error: new Error('Local commit rejected')
+                    }))
+                });
+                try {
+                    const { result } = renderHook(() => useNutritionMeasurements(date));
+                    act(() => result.current.setWeight('76'));
+                    await act(async () => { expect(await result.current.calculateAndSave()).toBe(false); });
+                    expect(useAppStore.getState().dispatchDomainOperation).toHaveBeenCalledWith(
+                        expect.objectContaining({ type: 'nutrition-day.patch', date, patch: expect.objectContaining({ weight: 76 }) })
+                    );
+                    expect(useAppStore.getState().userData?.nutrition?.[date]?.weight).toBe(75);
+                    expect((await readLocal(owner))?.data.nutrition?.[date]?.meals?.[0]?.id).toBe('m1');
+                    expect((await readLocal(owner))?.data.nutrition?.[date]?.weight).toBe(75);
+                } finally {
+                    useAppStore.setState({ dispatchDomainOperation: originalDispatch });
+                }
             });
+
 
             it('T2.3.5: saving measurements with all optional circumferences left blank saves cleanly', () => {
                 const dayData = {
@@ -202,9 +217,12 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
             });
 
             it('T2.3.7: getCalendarMonthGrid creates calendar matrix with valid week structure', () => {
-                const grid = Logic.getCalendarMonthGrid(2026, 8); // August 2026
+                const grid = Logic.getCalendarMonthGrid(2026, 7); // August 2026 (zero-based month)
                 expect(Array.isArray(grid)).toBe(true);
-                expect(grid.length).toBeGreaterThanOrEqual(4);
+                expect(grid.length).toBe(42);
+                expect(grid.filter(day => day.isCurrentMonth)).toHaveLength(31);
+                expect(grid[0].dateStr).toBe('2026-07-27');
+                expect(grid[grid.length - 1].dateStr).toBe('2026-09-06');
             });
         });
 
@@ -415,7 +433,7 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                 expect((parsed as any).activePains).toEqual([]);
             });
 
-            it('T2.5.2: undefined activePains field in legacy UserData defaults gracefully', () => {
+            it('T2.5.2: optional activePains field in supported UserData defaults safely', () => {
                 const parsed = UserDataSchema.parse(emptyUserData);
                 expect((parsed as any).activePains === undefined || Array.isArray((parsed as any).activePains)).toBe(true);
             });
@@ -431,7 +449,7 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
 
             it('T2.5.4: duplicate muscle IDs in activePains list are handled safely', () => {
                 const pains = ['petto', 'petto', 'petto'];
-                const uniquePains = Array.from(new Set(pains));
+                const uniquePains = mergeActivePainsContract(pains, [' petto ', 'petto']);
                 expect(uniquePains).toEqual(['petto']);
             });
 

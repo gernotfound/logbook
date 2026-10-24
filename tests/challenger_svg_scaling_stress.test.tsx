@@ -22,7 +22,7 @@ describe('Empirical Challenger: SVG Width Scaling & Horizontal Overflow Stress S
   const testWidths = [280, 320, 375, 414, 480, 600, 768, 900, 1024, 1150, 1200];
 
   testWidths.forEach((containerWidth) => {
-    test(`MuscleModel SVG width ratio >= 90% for container width ${containerWidth}px`, () => {
+    test(`MuscleModel SVG CSS width contract at container width ${containerWidth}px (jsdom smoke)`, () => {
       const { container } = renderWithProviders(
         <div className="card" style={{ width: `${containerWidth}px`, padding: '15px', boxSizing: 'border-box' }}>
           <MuscleModel selectedMuscles={['petto', 'gambe']} />
@@ -42,18 +42,13 @@ describe('Empirical Challenger: SVG Width Scaling & Horizontal Overflow Stress S
       expect(computedSvgStyle.width).toBe('100%');
       expect(computedSvgStyle.maxWidth).toBe('100%');
 
-      // Calculate layout width: since max-height: none and width: 100%, SVG expands to fill container width
-      const computedSvgWidth = containerWidth;
-      const widthRatio = computedSvgWidth / containerWidth;
-
-      console.log(`[STRESS TEST] Container Width: ${containerWidth}px -> Computed SVG Width: ${computedSvgWidth}px (Ratio: ${(widthRatio * 100).toFixed(1)}%)`);
-
-      expect(widthRatio).toBeGreaterThanOrEqual(0.90);
-      expect(computedSvgWidth).toBeGreaterThanOrEqual(0.90 * containerWidth);
+      // jsdom has no layout engine. The CSS contract is observable here; actual
+      // occupied width and clipping need an independent browser test.
+      expect(svgElement.getAttribute('viewBox')).toBeTruthy();
     });
   });
 
-  test('Horizontal Overflow Prevention Assertion: scrollWidth <= clientWidth across container range (280px - 1200px)', () => {
+  test('CSS overflow containment contract across container widths (not measured layout)', () => {
     testWidths.forEach((width) => {
       const { container } = renderWithProviders(
         <div className="card-wrapper" style={{ width: `${width}px`, overflowX: 'hidden' }}>
@@ -66,27 +61,21 @@ describe('Empirical Challenger: SVG Width Scaling & Horizontal Overflow Stress S
       expect(wrapper).not.toBeNull();
       expect(muscleMapContainer).not.toBeNull();
 
-      // Configure layout properties in JSDOM environment
-      Object.defineProperty(wrapper, 'clientWidth', { get: () => width, configurable: true });
-      Object.defineProperty(wrapper, 'scrollWidth', { get: () => width, configurable: true });
-
-      Object.defineProperty(muscleMapContainer, 'clientWidth', { get: () => width, configurable: true });
-      Object.defineProperty(muscleMapContainer, 'scrollWidth', { get: () => width, configurable: true });
-
-      // Assert no horizontal overflow
-      expect(wrapper.scrollWidth).toBeLessThanOrEqual(wrapper.clientWidth);
-      expect(muscleMapContainer.scrollWidth).toBeLessThanOrEqual(muscleMapContainer.clientWidth);
+      // Do not stub clientWidth/scrollWidth: that would make overflow assertions tautological.
+      expect(wrapper.style.width).toBe(`${width}px`);
+      expect(wrapper.style.overflowX).toBe('hidden');
+      expect(muscleMapContainer.querySelector('svg')).not.toBeNull();
     });
   });
 
-  test('Stress tests TrainingExercises component at Mobile (320px), Tablet (600px), Desktop (1024px)', () => {
+  test('TrainingExercises renders the SVG CSS contract in jsdom at three container widths', () => {
     const keyViewports = [
       { name: 'Mobile 320px', width: 320 },
       { name: 'Tablet 600px', width: 600 },
       { name: 'Desktop 1024px', width: 1024 },
     ];
 
-    keyViewports.forEach(({ name, width }) => {
+    keyViewports.forEach(({ width }) => {
       // TrainingExercises intentionally persists creation state in localStorage.
       // Each viewport is an independent scenario, so do not leak that state across iterations.
       localStorage.removeItem('logbook_creating_exercise');
@@ -112,11 +101,7 @@ describe('Empirical Challenger: SVG Width Scaling & Horizontal Overflow Stress S
         expect(computedSvgStyle.maxHeight).toBe('none');
         expect(computedSvgStyle.width).toBe('100%');
 
-        const computedSvgWidth = width;
-        const ratio = computedSvgWidth / width;
-
-        console.log(`[VIEWPORT STRESS - Exercises] ${name}: Container ${width}px, SVG ${computedSvgWidth}px, Ratio ${(ratio * 100).toFixed(1)}%`);
-        expect(ratio).toBeGreaterThanOrEqual(0.90);
+        expect(svgElement.getAttribute('viewBox')).toBeTruthy();
       } finally {
         rendered.unmount();
         localStorage.removeItem('logbook_creating_exercise');
@@ -124,7 +109,7 @@ describe('Empirical Challenger: SVG Width Scaling & Horizontal Overflow Stress S
     });
   });
 
-  test('Stress tests TrainingRoutines component at Mobile (320px), Tablet (600px), Desktop (1024px)', () => {
+  test('TrainingRoutines CSS smoke at three widths; no layout assertion', () => {
     const keyViewports = [
       { name: 'Mobile 320px', width: 320 },
       { name: 'Tablet 600px', width: 600 },

@@ -1,9 +1,10 @@
 import React from 'react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, fireEvent, renderHook } from '@testing-library/react';
+import { render, screen, fireEvent, renderHook, act } from '@testing-library/react';
 import { renderWithProviders, emptyUserData, defaultMockUserData } from './setup';
 import { useAppStore } from '../src/store/useAppStore';
 import { captureSession } from '../src/lib/sync/session';
+import { initializeLocal, readLocal } from '../src/lib/sync/localRepository';
 import { Logic } from '../src/lib/logic';
 import {
     UserDataSchema,
@@ -244,20 +245,31 @@ describe('TheLogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => 
                 expect(typeof result.current.calculateAndSave).toBe('function');
             });
 
-            it('T1.3.3: saving measurements on a specific date writes to userData.nutrition[date]', async () => {
+            it('T1.3.3: nutrition-day.patch persists the selected-date measurement and preserves meals', async () => {
                 const targetDate = '2026-08-10';
-                useAppStore.setState({
-                    userData: {
-                        ...emptyUserData,
-                        nutrition: {
-                            [targetDate]: { date: targetDate, weight: 75.0, kcal: 2200, carbs: 250, pro: 150, fat: 60 }
+                const owner = captureSession().owner;
+                const initial = UserDataSchema.parse({
+                    ...emptyUserData,
+                    nutrition: {
+                        [targetDate]: {
+                            date: targetDate, kcal: 2200, carbs: 250, pro: 150, fat: 60,
+                            meals: [{ id: 'meal-1', name: 'Pranzo', meal: 'Pranzo', quantity: 1, kcal: 800, carbs: 90, pro: 40, fat: 25 }]
                         }
                     }
                 });
-
-                const state = useAppStore.getState();
-                expect(state.userData?.nutrition?.[targetDate]?.weight).toBe(75.0);
+                await initializeLocal(owner, initial);
+                useAppStore.setState({ userData: initial, dataOwner: owner, localPersistenceBlocked: false });
+                const { result } = renderHook(() => useNutritionMeasurements(targetDate));
+                act(() => result.current.setWeight('75'));
+                await act(async () => {
+                    expect(await result.current.calculateAndSave()).toBe(true);
+                });
+                expect(useAppStore.getState().userData?.nutrition?.[targetDate]?.weight).toBe(75);
+                const persisted = await readLocal(owner);
+                expect(persisted?.data.nutrition?.[targetDate]?.weight).toBe(75);
+                expect(persisted?.data.nutrition?.[targetDate]?.meals?.[0]?.id).toBe('meal-1');
             });
+
 
             it('T1.3.4: switching to edit mode changes title to Modifica misurazione', () => {
                 render(
@@ -383,7 +395,7 @@ describe('TheLogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => 
             it('T1.3.7: formatItalianDate displays canonical Italian sentence date', () => {
                 const dateStr = '2026-08-20';
                 const formatted = Logic.formatItalianDate(dateStr);
-                expect(formatted).toContain('2026');
+                expect(formatted).toBe('20/08/2026');
             });
         });
 
@@ -391,7 +403,7 @@ describe('TheLogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => 
         // Requirement R4: Session Set Dot Vertical Centering
         // ---------------------------------------------------------------------
         describe('R4: Session Set Dot Vertical Centering', () => {
-            it('T1.4.1: SessionSetRow renders S1 set index and an ellipsis options button with centered flex alignment', () => {
+            it('T1.4.1: SessionSetRow renders S1 and an accessible options button', () => {
                 const set = { id: 's1', kg: '80', reps: '10' };
                 render(
                     <SessionSetRow 
@@ -747,7 +759,7 @@ describe('TheLogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => 
                     pains: ['petto', 'tricipiti']
                 };
                 const parsed = WorkoutSessionSchema.parse(session);
-                expect(parsed).toBeDefined();
+                expect(parsed.pains).toEqual(['petto', 'tricipiti']);
             });
 
             it('T1.6.7: completing session without active pains simply adopts any newly added session pains', () => {
