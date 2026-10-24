@@ -3,6 +3,18 @@ import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { seedCatalog, validateSeed } from '../../scripts/seed-catalog.mjs';
+const admin = vi.hoisted(() => ({
+    initializeApp: vi.fn(),
+    deleteApp: vi.fn(async () => {}),
+    getFirestore: vi.fn(),
+}));
+vi.mock('firebase-admin/app', () => ({
+    initializeApp: admin.initializeApp,
+    deleteApp: admin.deleteApp,
+    cert: vi.fn(),
+}));
+vi.mock('firebase-admin/firestore', () => ({ getFirestore: admin.getFirestore }));
+
 it('refuses empty seed before credentials and remote writes can be reached', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'logbook-seed-empty-'));
     try {
@@ -33,4 +45,57 @@ it('dry-runs synthetic input with an explicit target without initializing Fireba
         await expect(seedCatalog(args)).rejects.toThrow('Scrittura non autorizzata');
         await expect(seedCatalog([...args, '--confirm=wrong-project'])).rejects.toThrow('Scrittura non autorizzata');
     } finally { output.mockRestore(); await rm(directory, { recursive: true }); }
+});
+
+it('publishes one catalog version with manifest last and archives the previous manifest in a mocked transaction', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'logbook-seed-txn-'));
+    const printed = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const operations: string[] = [];
+    const app = { name: 'catalog-transaction-test' };
+    admin.initializeApp.mockReturnValue(app);
+    const transaction = {
+        get: vi.fn(async (ref: string) => {
+            operations.push('get:' + ref);
+            return { exists: true, data: () => ({ version: 'previous' }) };
+        }),
+        create: vi.fn((ref: string, value: unknown) => {
+            operations.push('create:' + ref);
+            expect(value).toBeDefined();
+        }),
+        set: vi.fn((ref: string, value: unknown) => {
+            operations.push('set:' + ref);
+            expect(value).toMatchObject({ version: 'test-2' });
+        }),
+    };
+    const db = {
+        collection: vi.fn((name: string) => ({ doc: (id: string) => name + '/' + id })),
+        runTransaction: vi.fn(async (callback: (tx: typeof transaction) => Promise<void>) => callback(transaction)),
+    };
+    admin.getFirestore.mockReturnValue(db);
+    try {
+        await writeFile(join(directory, 'exercises.json'), JSON.stringify([{ id: 'ex-1', name: 'Squat' }]));
+        await writeFile(join(directory, 'foods.json'), JSON.stringify([{ id: 'food-1', name: 'Riso', kcal: 100, pro: 2, carbs: 20, fat: 1 }]));
+        await seedCatalog([
+            '--project=demo-logbook-audit', '--version=test-2',
+            '--exercises=' + join(directory, 'exercises.json'),
+            '--foods=' + join(directory, 'foods.json'),
+            '--confirm=demo-logbook-audit',
+        ]);
+        expect(admin.initializeApp).toHaveBeenCalledWith({ projectId: 'demo-logbook-audit' });
+        expect(operations).toEqual([
+            'get:global_catalog/manifest',
+            'create:global_catalog/exercises_test-2',
+            'create:global_catalog/foods_test-2',
+            'create:global_catalog/previous_manifest_test-2',
+            'set:global_catalog/manifest',
+        ]);
+        expect(db.runTransaction).toHaveBeenCalledTimes(1);
+        expect(admin.deleteApp).toHaveBeenCalledWith(app);
+    } finally {
+        printed.mockRestore();
+        admin.initializeApp.mockReset();
+        admin.getFirestore.mockReset();
+        admin.deleteApp.mockClear();
+        await rm(directory, { recursive: true });
+    }
 });

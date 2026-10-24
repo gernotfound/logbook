@@ -63,11 +63,11 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
     // =========================================================================
     describe('5.1: Rapid Guest Login/Logout & Lifecycle Flapping Stress', () => {
 
-        it('T5.1.1: Rapid flapping between guest login and logout (25 cycles) leaves store and storage in deterministic state', async () => {
+        it('T5.1.1: Repeated direct store reset under guest flag leaves deterministic transient state', async () => {
             const GUEST_KEY = 'logbook_is_guest';
 
             for (let i = 0; i < 25; i++) {
-                // 1. Simulate loginAsGuest
+                // This is a direct store-transition stress test, not an AuthProvider login.
                 localStorage.setItem(GUEST_KEY, 'true');
                 const catalog = await getCachedCatalog();
                 
@@ -111,7 +111,7 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
             expect(idbStore['logbook_cached_user_data']).toBeUndefined();
         });
 
-        it('T5.1.2: Guest session with mutations -> rejected logout preserves data -> confirmed logout wipes all data -> subsequent login starts pristine', async () => {
+        it('T5.1.2: Store reset preserves data until explicitly requested and clean fixture has no stale data', async () => {
             const GUEST_KEY = 'logbook_is_guest';
             localStorage.setItem(GUEST_KEY, 'true');
 
@@ -178,7 +178,7 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
             expect(hasUserData(currentState)).toBe(false);
         });
 
-        it('T5.1.3: Guest login self-heals incomplete state (missing catalog or undefined overrides) without erasing custom profile or routines', async () => {
+        it('T5.1.3: Catalog resolver can reconstruct default items from a partial store fixture', async () => {
             // Local fixture to populate the cache (seed is empty — commit e61a133)
             const fixtureCatalog = {
                 manifest: { version: '1.0.0', schemaVersion: 1, docRefs: { exercises: 'exercises_v1', foods: 'foods_v1' } },

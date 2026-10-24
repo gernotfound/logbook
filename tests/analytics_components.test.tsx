@@ -36,7 +36,7 @@ describe('Analytics UI Components & Dashboard Integration', () => {
     ];
 
     const mockNutrition: Record<string, NutritionDay> = {
-        currentDay: {
+        [currentDay]: {
             date: currentDay,
             kcal: 2500,
             carbs: 300,
@@ -97,7 +97,7 @@ describe('Analytics UI Components & Dashboard Integration', () => {
     });
 
     describe('VolumeCaloriesCorrelationChart', () => {
-        it('renders correlation chart header in sentence case', () => {
+        it('renders correlation chart header and plots a real matching nutrition day', async () => {
             renderWithProviders(
                 <VolumeCaloriesCorrelationChart
                     history={mockHistory}
@@ -108,6 +108,8 @@ describe('Analytics UI Components & Dashboard Integration', () => {
             );
 
             expect(screen.getByText('Correlazione volume vs calorie')).toBeDefined();
+            expect(await screen.findByRole('img', { name: /Volume e calorie nelle ultime/ })).toBeDefined();
+            expect(screen.queryByText('Dati insufficienti per calcolare la correlazione.')).toBeNull();
         });
 
         it('renders empty state when no workouts or calories exist', async () => {

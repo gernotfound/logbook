@@ -14,12 +14,6 @@ export type ErrorSource =
   | 'custom'
   | string;
 
-export type TelemetryEventType =
-  | 'storage_recovery_anomaly'
-  | 'zod_schema_fallback'
-  | 'custom_event'
-  | string;
-
 export interface TelemetryErrorPayload {
   timestamp?: number;
   id?: string;
@@ -37,16 +31,6 @@ export interface TelemetryErrorPayload {
   lastSeen: number;
 }
 
-export interface TelemetryEventPayload {
-  timestamp: number;
-  id?: string;
-  type: TelemetryEventType;
-  details?: Record<string, any>;
-  context: TelemetryContext;
-  userId: string | null;
-  sessionId: string;
-}
-
 export interface TrackErrorOptions {
   source?: ErrorSource;
   componentStack?: string;
@@ -56,8 +40,8 @@ export interface TrackErrorOptions {
 export interface QueuedTelemetryItem {
   id: string;
   timestamp: number;
-  itemType: 'error' | 'event';
-  payload: TelemetryErrorPayload | TelemetryEventPayload;
+  itemType: 'error';
+  payload: TelemetryErrorPayload;
   queuedAt?: number;
   retryCount?: number;
 }
