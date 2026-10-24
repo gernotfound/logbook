@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 vi.unmock('../src/lib/db');
 import { TestDB as DB } from './testUtils';
 import * as idb from 'idb-keyval';
@@ -29,15 +29,36 @@ vi.mock('../src/lib/firebase', async () => {
     };
 });
 
+// vi.clearAllMocks does not restore mockImplementation. Reset functions changed by
+// concurrency tests so their instrumentation cannot leak across test cases.
+const originalStorageKey = localStorageMock.key.getMockImplementation()!;
+const originalStorageRemove = localStorageMock.removeItem.getMockImplementation()!;
+
 describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        localStorageMock.key.mockImplementation(originalStorageKey);
+        localStorageMock.removeItem.mockImplementation(originalStorageRemove);
+        localStorage.removeItem = localStorageMock.removeItem;
         // Later regression cases replace the IDB implementation; prevent
         // their mock storage from becoming the next test's initial state.
         vi.mocked(idb.get).mockReset();
         vi.mocked(idb.del).mockReset();
         Object.defineProperty(navigator, 'locks', { configurable: true, value: { request: async (_key: string, _options: unknown, action: () => Promise<unknown>) => action() } });
         localStorage.clear();
+    });
+    afterEach(() => {
+        localStorageMock.key.mockImplementation(originalStorageKey);
+        localStorageMock.removeItem.mockImplementation(originalStorageRemove);
+        localStorage.removeItem = localStorageMock.removeItem;
+    });
+
+    it('starts with a working storage enumeration and deletion mock', () => {
+        const key = 'logbook:v2:user:test-user-id:draft:baseline';
+        localStorage.setItem(key, 'ciphertext');
+        expect(localStorage.key(0)).toBe(key);
+        localStorage.removeItem(key);
+        expect(localStorage.getItem(key)).toBeNull();
     });
 
     it('does not adopt pre-launch business or IDB globals in owner cleanup', async () => {

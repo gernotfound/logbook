@@ -47,9 +47,26 @@ describe('M3: Storage & Persistence Delta Isolation Suite', () => {
     });
 
     describe('DB.saveUserData Delta Isolation', () => {
-        it('persists strictly custom exercises and custom foods, isolating them from 176+ seed items', async () => {
+        it('persists only custom exercises and foods even with a populated global catalog', async () => {
             const seed = getSeedCatalog();
-            await saveCatalogToCache(seed);
+            // Bundled launch seeds are intentionally empty. Use realistic
+            // populated catalog data so the global-item exclusion is observable.
+            const catalog = {
+                ...seed,
+                manifest: { ...seed.manifest, version: 'delta-exclusion-fixture',
+                    itemCounts: { exercises: 2, foods: 2 } },
+                exercises: [
+                    { id: 'global_bench', name: 'Bench', muscles: ['chest'], setsCount: 3, trackingType: 'weight_reps', isDefault: true },
+                    { id: 'global_squat', name: 'Squat', muscles: ['quads'], setsCount: 3, trackingType: 'weight_reps', isDefault: true },
+                ],
+                foods: [
+                    { id: 'global_rice', name: 'Rice', kcal: 130, pro: 2.5, carbs: 28, fat: 0.3, isCustom: false },
+                    { id: 'global_chicken', name: 'Chicken', kcal: 120, pro: 25, carbs: 0, fat: 2, isCustom: false },
+                ],
+            } as import('../src/types').CachedGlobalCatalog;
+            await saveCatalogToCache(catalog);
+            expect(catalog.exercises).toHaveLength(2);
+            expect(catalog.foods).toHaveLength(2);
 
             const customExercise1: Exercise = {
                 id: 'custom_ex_hack_squat',
@@ -87,11 +104,11 @@ describe('M3: Storage & Persistence Delta Isolation Suite', () => {
                 isCustom: true
             };
 
-            const fullResolvedLibrary = resolveEffectiveExercises(seed.exercises, [customExercise1, customExercise2]);
-            const fullResolvedFoods = resolveEffectiveFoods(seed.foods, [customFood1, customFood2]);
+            const fullResolvedLibrary = resolveEffectiveExercises(catalog.exercises, [customExercise1, customExercise2]);
+            const fullResolvedFoods = resolveEffectiveFoods(catalog.foods, [customFood1, customFood2]);
 
-            expect(fullResolvedLibrary.length).toBe(seed.exercises.length + 2);
-            expect(fullResolvedFoods.length).toBe(seed.foods.length + 2);
+            expect(fullResolvedLibrary).toHaveLength(4);
+            expect(fullResolvedFoods).toHaveLength(4);
 
             const stateToSave: UserData = {
                 profile: { height: '178' },
@@ -112,16 +129,16 @@ describe('M3: Storage & Persistence Delta Isolation Suite', () => {
             expect(mockBatch.commit).toHaveBeenCalled();
             expect(capturedUserDocData).toBeDefined();
 
-            // Library in Firestore contains ONLY the 2 custom items, NOT the 176+ seed items!
+            // The Firestore user document must not include either global exercise.
             expect(capturedUserDocData.library).toHaveLength(2);
-            expect(capturedUserDocData.library.map((e: any) => e.id)).toEqual(
-                expect.arrayContaining(['custom_ex_hack_squat', 'custom_ex_reverse_fly'])
+            expect(capturedUserDocData.library.map((e: Exercise) => e.id).sort()).toEqual(
+                ['custom_ex_hack_squat', 'custom_ex_reverse_fly']
             );
 
-            // customFoods in Firestore contains ONLY the 2 custom items, NOT the 221+ seed items!
+            // The Firestore user document must not include either global food.
             expect(capturedUserDocData.customFoods).toHaveLength(2);
-            expect(capturedUserDocData.customFoods.map((f: any) => f.id)).toEqual(
-                expect.arrayContaining(['custom_food_clear_whey', 'custom_food_rice_creme'])
+            expect(capturedUserDocData.customFoods.map((f: Food) => f.id).sort()).toEqual(
+                ['custom_food_clear_whey', 'custom_food_rice_creme']
             );
 
             // Document size is tiny (< 15KB, well below 950KB limit)
@@ -330,7 +347,7 @@ describe('M3: Storage & Persistence Delta Isolation Suite', () => {
     });
 
     describe('createDataSlice Cache Tiering', () => {
-        it('saveUserDataToCache stores and removes user data in an owner-scoped IndexedDB envelope', async () => {
+        it('saveUserDataToCache stores and removes an owner-scoped envelope in the unsealed in-memory IDB mock', async () => {
             const testData: UserData = {
                 profile: { height: '176' },
                 library: [],
@@ -341,6 +358,7 @@ describe('M3: Storage & Persistence Delta Isolation Suite', () => {
                 activeWorkout: null,
                             };
 
+            // This isolated shape check does not establish encrypted bytes-at-rest or crash durability.
             await saveUserDataToCache(testData);
             expect(idbStore['logbook:v2:user:test-user-id']).toBeDefined();
             expect(idbStore['logbook:v2:user:test-user-id'].data.profile.height).toBe('176');

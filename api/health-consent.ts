@@ -10,7 +10,7 @@ import {
 } from '../server/healthConsent/withdrawal.js';
 
 export const maxDuration = 30;
-const HEADERS = 'authorization, content-type, x-firebase-appcheck, x-consent-contract';
+const HEADERS = 'authorization, content-type, x-firebase-appcheck';
 
 function json(body: unknown, status: number, origin: string | null): Response {
   return Response.json(body, { status, headers: { ...accountDeletionCorsHeaders(origin, HEADERS), 'cache-control': 'no-store' } });
@@ -39,7 +39,7 @@ export async function GET(request: Request): Promise<Response> {
   try {
     requireAccountDeletionOrigin(request);
     const { uid } = await verifyHealthConsentRequester(request);
-    return json(await readHealthConsentState(uid, request.headers.get('x-consent-contract') === '2'), 200, origin);
+    return json(await readHealthConsentState(uid), 200, origin);
   } catch (error) { return errorResponse(error, origin); }
 }
 

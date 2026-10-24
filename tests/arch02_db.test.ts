@@ -28,6 +28,8 @@ describe('ARCH-02: DB.saveUserData', () => {
         expect(result).toBeDefined();
         expect(result?.ok).toBe(false);
         expect(result?.status).toBe('rejected');
+        expect(mockBatch.set).toHaveBeenCalled();
+        expect(mockBatch.commit).toHaveBeenCalledOnce();
     });
 
     it('should handle offline scenario by returning local-pending', async () => {
@@ -38,5 +40,7 @@ describe('ARCH-02: DB.saveUserData', () => {
         expect(result).toBeDefined();
         expect(result?.ok).toBe(false);
         expect(result?.status).toBe('local-pending');
+        expect(mockBatch.set).toHaveBeenCalled();
+        expect(mockBatch.commit).toHaveBeenCalledOnce();
     });
 });

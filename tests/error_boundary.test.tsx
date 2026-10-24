@@ -1,15 +1,16 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import ErrorBoundary from '../src/components/UI/ErrorBoundary';
+import * as safeReloadModule from '../src/lib/sync/safeReload';
 import { DB } from '../src/lib/db';
 import { useDialogStore } from '../src/store/useDialogStore';
 import { idbStore, localStorageMock } from './setup';
 import { activateGuestSession, GUEST_REVOCATION_KEY, GUEST_SESSION_KEY, storageOwner, isActiveGuestSession, invalidateSession } from '../src/lib/sync/session';
 import { markAccountDeletion } from '../src/lib/sync/accountGate';
 
-const ProblemChild = ({ shouldThrow }: { shouldThrow: boolean }) => {
+const ProblemChild = ({ shouldThrow, message = 'Test error boundary explosion' }: { shouldThrow: boolean; message?: string }) => {
     if (shouldThrow) {
-        throw new Error('Test error boundary explosion');
+        throw new Error(message);
     }
     return <div>Normal Content</div>;
 };
@@ -81,6 +82,30 @@ describe('R2: ErrorBoundary & Dialog Hardening Suite', () => {
         consoleErrorSpy.mockRestore();
     });
 
+    it('keeps the error screen and reports a blocked protected reload', async () => {
+        const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+        vi.spyOn(safeReloadModule, 'safeHardReload').mockRejectedValueOnce(new Error('Durable copy missing'));
+
+        render(<ErrorBoundary><ProblemChild shouldThrow={true} /></ErrorBoundary>);
+        await act(async () => { fireEvent.click(screen.getByText(/Ricarica pagina/i)); });
+
+        expect(window.location.reload).not.toHaveBeenCalled();
+        expect(screen.getByText('Ops, qualcosa è andato storto!')).toBeDefined();
+        expect(useDialogStore.getState().showAlert).toHaveBeenCalledWith(
+            'Impossibile ricaricare in sicurezza: alcune modifiche locali potrebbero non essere ancora state salvate. Riprova tra qualche secondo.'
+        );
+        log.mockRestore();
+    });
+
+    it('shows the offline recovery fallback for an uncaught dynamic import failure', () => {
+        const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+        render(<ErrorBoundary><ProblemChild shouldThrow={true} message="Failed to fetch dynamically imported module" /></ErrorBoundary>);
+        expect(screen.getByRole('heading', { name: 'Sei offline' })).toBeDefined();
+        expect(screen.getByText(/Connettiti a internet/i)).toBeDefined();
+        expect(screen.getByRole('button', { name: /Ricarica pagina/i })).toBeDefined();
+        log.mockRestore();
+    });
+
     it('asks for explicit confirmation before deleting local data', async () => {
         const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
         vi.mocked(useDialogStore.getState().showConfirm).mockResolvedValue(false);
@@ -124,7 +149,7 @@ describe('R2: ErrorBoundary & Dialog Hardening Suite', () => {
             fireEvent.click(screen.getByText(/Azzera dati locali/i));
         });
 
-        expect(DB.purgeAllLocalUserData).toHaveBeenCalledTimes(1);
+        expect(DB.purgeAllLocalUserData).toHaveBeenCalledExactlyOnceWith('user:test-user-id');
         expect(idbStore['logbook:v2:user:test-user-id']).toBeUndefined();
         expect(localStorage.getItem('logbook:v2:user:test-user-id:workout')).toBeNull();
         expect(localStorage.getItem('unrelated-app-key')).toBe('keep-me');

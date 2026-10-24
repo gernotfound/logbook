@@ -130,6 +130,41 @@ afterAll(async () => {
 });
 
 describe('remote commit to local acknowledgement reconciliation', () => {
+    it('preserves a durable offline journal until reconnect, then acknowledges it once', async () => {
+        const db = firebaseHarness.db;
+        const replica = await registerReplica(db, 'a', 's00', 'offline-device');
+        await adoptReplicaCheckpoint(owner, { identity: replica, baseSeq: 0 }, {
+            clock: {}, syncMetaByDocument: {},
+        });
+
+        vi.stubGlobal('navigator', { onLine: false });
+        await commitLocal(owner, data(173), data(170));
+        const staged = await readLocal(owner);
+        expect(staged?.pending.length).toBeGreaterThan(0);
+        expect(staged?.pending.every(op => op.seq === 1)).toBe(true);
+
+        const offline = await replicateJournal(owner);
+        expect(offline).toMatchObject({ ok: false, status: 'local-pending' });
+        expect((await getDoc(doc(db, 'users/a'))).exists()).toBe(false);
+        const stillPending = await readLocal(owner);
+        expect(stillPending?.pending).toEqual(staged?.pending);
+
+        vi.stubGlobal('navigator', { onLine: true });
+        expect(await replicateJournal(owner)).toMatchObject({ ok: true, status: 'synced' });
+        const acknowledged = await readLocal(owner);
+        expect(acknowledged?.pending).toEqual([]);
+        expect(acknowledged?.baseline.profile?.height).toBe('173');
+        const remote = (await getDoc(doc(db, 'users/a'))).data()!;
+        expect(remote.profile.height).toBe('173');
+        expect(remote._sync.fields['profile/height']).toMatchObject({ actorId: replica.slot, seq: 1 });
+
+        const controlRef = doc(db, 'users/a/sync_control/state');
+        const beforeRepeat = (await getDoc(controlRef)).data()!;
+        expect(await replicateJournal(owner)).toMatchObject({ ok: true, status: 'synced' });
+        expect((await getDoc(controlRef)).data()).toEqual(beforeRepeat);
+    });
+
+
     it('keeps the remote causal baseline, replays a concurrent local edit, and converges on the next acknowledgement', async () => {
         const initial = data(170);
         const remoteDesired = data(170, 'remote-device');
