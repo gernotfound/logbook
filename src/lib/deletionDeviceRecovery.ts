@@ -161,6 +161,10 @@ export async function recoverDeletedAccountOnThisDevice(finalize:(uid:string)=>P
        throw new DeletionDeviceOperationError('routine-check','server-status','invalid-response');
      }
      const remoteStatus=(body as {status:string}).status;
+     // A completed device proof must be bound to the same owner as the credential.
+     if(remoteStatus!=='none' && (body as {uid?:unknown}).uid!==cred.uid){
+       throw new DeletionDeviceOperationError('routine-check','server-status','invalid-response');
+     }
      if(remoteStatus==='failed')throw new DeletionDeviceOperationError('routine-check','server-status','remote-failed');
      if(!['none','requested','deleting','verifying','complete'].includes(remoteStatus)){
        throw new DeletionDeviceOperationError('routine-check','server-status','invalid-response');

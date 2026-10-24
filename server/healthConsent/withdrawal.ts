@@ -1,4 +1,4 @@
-import { Timestamp } from 'firebase-admin/firestore';
+import { Timestamp, type Transaction } from 'firebase-admin/firestore';
 import { adminDb } from '../accountDeletion/firebaseAdmin.js';
 import { LEGAL_VERSIONS } from '../../src/lib/legalVersions.js';
 
@@ -206,7 +206,16 @@ export async function recordHealthConsentReacceptance(
 }
 
 /** Called by the existing deletion worker; never used by user-side revocation. */
-export async function removeHealthConsentStateForDeletedAccount(uid: string): Promise<void> {
+export async function removeHealthConsentStateForDeletedAccount(
+  uid: string,
+  transaction?: Pick<Transaction, 'delete'>,
+): Promise<void> {
   validUid(uid);
+  // The account deletion worker passes its lease-fenced transaction to remove
+  // the server-owned consent record atomically with the account root.
+  if (transaction) {
+    transaction.delete(consentRef(uid));
+    return;
+  }
   await consentRef(uid).delete();
 }
