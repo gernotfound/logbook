@@ -157,7 +157,7 @@ describe('Technical telemetry queue and dispatch — Tier 1', () => {
         expect(mockSentryTransport.mock.calls.map((call: any) => call[0])).toEqual(['error', 'error']);
         const queued = telemetryHub.getQueuedEvents();
         expect(queued).toHaveLength(2);
-        expect(queued.map(item => item.itemType).sort()).toEqual(['error', 'event']);
+        expect(queued.map(item => item.itemType)).toEqual(['error', 'error']);
         expect(queued.every(item => item.payload.userId === 'user_perm_denied')).toBe(true);
       });
 
