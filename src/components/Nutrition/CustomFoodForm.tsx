@@ -4,7 +4,7 @@ import { calculateCustomFoodKcal } from '../../lib/nutrition/calculateCustomFood
 interface CustomFoodFormProps {
     cfData: any;
     setCfData: (data: any) => void;
-    saveCustomFood: () => Promise<void>;
+    saveCustomFood: () => Promise<void | boolean>;
     showCustomModal: boolean;
     setShowCustomModal: (show: boolean) => void;
     isEditing?: boolean;
