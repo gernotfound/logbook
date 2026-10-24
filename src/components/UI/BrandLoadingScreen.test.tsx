@@ -30,6 +30,9 @@ describe('BrandLoadingScreen', () => {
     const status = screen.getByRole('status', { name: 'Caricamento sezione' });
 
     expect(status.className).toContain('brand-loading-screen--content');
+    expect(status.getAttribute('aria-busy')).toBe('true');
+    expect(status.getAttribute('aria-live')).toBe('polite');
+    expect(container.querySelector('.brand-loading-screen__wordmark h1')?.textContent).toBe('Caricamento');
     expect(container.querySelector('.brand-loading-screen__mascot')).not.toBeNull();
     expect(container.querySelector('.brand-loading-screen__wordmark')).not.toBeNull();
   });

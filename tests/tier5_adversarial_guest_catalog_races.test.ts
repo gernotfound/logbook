@@ -1,9 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { set as idbSet } from 'idb-keyval';
-import { doc, writeBatch } from 'firebase/firestore';
+import { doc } from 'firebase/firestore';
 
 vi.unmock('../src/lib/db');
 import { ConsentedTestDB as DB } from './testUtils';
+import { prepareUnlockedTestArchive } from './secureVaultFixture';
+import { initializeLocal } from '../src/lib/sync/localRepository';
 import { getCachedCatalog, clearCatalogCache } from '../src/lib/catalog/catalogService';
 import { storageOwner } from '../src/lib/sync/session';
 import { mergeUserData } from '../src/lib/merge';
@@ -144,65 +146,49 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
             vi.useRealTimers();
         });
 
-        it('T5.5.3: Error propagation in saveUserData: if DB.saveUserData throws, all coalesced Promises reject, saveError is set, and syncing resets to false', async () => {
-            // Test error propagation directly with simulated rejection in saveUserData pipeline
-            const createMockData = (label: string): UserData => ({
-                profile: { height: label === 'DirectSaveFail' ? '181' : '182' },
-                library: [],
-                customFoods: [],
-                catalogOverrides: {},
-                routines: [],
-                history: [],
-                nutrition: {},
-                trainingCycles: [],
-                activeCycleId: null,
-                supplements: [],
-                activeWorkout: null
-            });
-
-            delete idbStore[`logbook:v2:${storageOwner()}`];
-            DB.resetCache();
-            useAppStore.getState().setUserData(createMockData('Initial'));
-
-            const simulatedFirestoreError = new Error("Firestore Network Failure: Simulated Offline Drop");
-            const failingBatch = {
-                set: vi.fn(),
-                delete: vi.fn(),
-                commit: vi.fn().mockRejectedValue(simulatedFirestoreError)
+        it('T5.5.3: Coalesced store saves all reject when their local durable commits fail', async () => {
+            const initial: UserData = {
+                profile: { height: '175' }, library: [], customFoods: [], catalogOverrides: {},
+                routines: [], history: [], nutrition: {}, trainingCycles: [], activeCycleId: null,
+                supplements: [], activeWorkout: null,
             };
-            vi.mocked(writeBatch).mockReturnValue(failingBatch as any);
-            const { getDoc } = await import('firebase/firestore');
-            vi.mocked(getDoc).mockResolvedValueOnce({
-                exists: () => true,
-                data: () => ({
-                    profile: { height: '172' },
-                    library: [],
-                    customFoods: [],
-                    catalogOverrides: {},
-                    routines: [],
-                    trainingCycles: [],
-                    activeCycleId: null,
-                    supplements: [],
-                    activeWorkout: null,
-                    _schemaVersion: 1,
-                    _sync: {
-                        protocolVersion: 3,
-                        clock: {},
-                        fields: {},
-                        writer: { slot: 's00', replicaId: 'network-seed', generation: 1, seq: 0 },
-                    },
-                })
-            } as any);
+            const owner = storageOwner();
+            await prepareUnlockedTestArchive(owner);
+            await initializeLocal(owner, initial);
+            useAppStore.setState({ userData: initial, dataOwner: owner });
 
-            const result = await DB.saveUserData(createMockData('DirectSaveFail'));
-            expect(result.ok).toBe(false);
-            expect(result.status).toBe('failed');
-            if (result.ok) throw new Error('A failed cloud write cannot report success');
-            expect((result.error as Error).message).toContain("Firestore Network Failure");
-
-            // Verify store error handling when saveError is set
-            useAppStore.getState().setSaveError("Errore sincronizzazione. Verifica la connessione.");
-            expect(useAppStore.getState().saveError).toBe("Errore sincronizzazione. Verifica la connessione.");
+            const key = `logbook:v2:${owner}`;
+            const previousEnvelope = idbStore[key];
+            expect(previousEnvelope).toBeDefined();
+            const error = new Error('Simulated IndexedDB write failure');
+            // The UI setup mocks idb-keyval.update by assigning into this record.
+            // A rejecting setter fails the same production local commit boundary
+            // without replacing the DB object already captured by the store.
+            Object.defineProperty(idbStore, key, {
+                configurable: true,
+                enumerable: true,
+                get: () => previousEnvelope,
+                set: () => { throw error; },
+            });
+            try {
+                const calls = [1, 2, 3].map(i => useAppStore.getState().saveUserData(previous => ({
+                    ...previous!, profile: { height: String(175 + i) },
+                })));
+                const settled = Promise.allSettled(calls);
+                await useAppStore.getState().flushPendingSyncs();
+                const results = await settled;
+                expect(results.map(result => result.status)).toEqual(['rejected', 'rejected', 'rejected']);
+                for (const result of results) {
+                    if (result.status === 'rejected') expect(result.reason).toBe(error);
+                }
+                expect(useAppStore.getState().saveError).toBe(error.message);
+                expect(useAppStore.getState().syncHealth).toBe('failed');
+                expect(useAppStore.getState().syncing).toBe(false);
+                expect(idbStore[key]).toBe(previousEnvelope);
+            } finally {
+                delete idbStore[key];
+                idbStore[key] = previousEnvelope;
+            }
         });
 
         it('T5.5.4: Account linking during pending debounced save merges freshest in-memory state without data loss', () => {
@@ -257,15 +243,8 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
             expect(merged.library?.find(e => e.id === 'cloud_ex_1')).toBeDefined();
         });
 
-        it('T5.5.5: resetStore() called during debounced save clears the timer and prevents trailing ghost writes', async () => {
+        it('T5.5.5: resetStore cancels pending store save promises and clears the UI without late republishing', async () => {
             vi.useFakeTimers();
-
-            let saveCount = 0;
-            const originalSaveUserData = DB.saveUserData;
-            DB.saveUserData = vi.fn(async (state: any) => {
-                saveCount++;
-                return originalSaveUserData(state);
-            });
 
             useAppStore.getState().setUserData({
                 profile: { height: '175' },
@@ -282,10 +261,11 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
             });
 
             // Start a debounced save
-            useAppStore.getState().saveUserData(prev => ({
+            const pending = useAppStore.getState().saveUserData(prev => ({
                 ...prev!,
                 profile: { height: '176' }
-            })).catch(() => {});
+            }));
+            const settled = Promise.allSettled([pending]);
 
             expect(useAppStore.getState().syncing).toBe(true);
 
@@ -299,11 +279,10 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
             // Fast forward past debounce interval (1500ms)
             await vi.advanceTimersByTimeAsync(1500);
 
-            // DB.saveUserData must NOT have been called after resetStore
-            expect(saveCount).toBe(0);
-
+            expect((await settled)[0].status).toBe('rejected');
+            expect(useAppStore.getState().userData).toBeNull();
+            expect(useAppStore.getState().syncing).toBe(false);
             vi.useRealTimers();
-            DB.saveUserData = originalSaveUserData;
         });
     });
 });

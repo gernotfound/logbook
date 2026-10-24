@@ -166,7 +166,7 @@ describe('Telemetry Hub Vitest integration suite — Tier 5', () => {
       });
 
 
-      it('T5-7: overlapping flushes deliver one queued error, one hot error and one accepted internal event', async () => {
+      it('T5-7: overlapping flushes deliver one queued error and one hot error', async () => {
         vi.useFakeTimers();
         telemetryHub.init();
         telemetryHub.setUserId('user_t5_7');
@@ -195,17 +195,13 @@ describe('Telemetry Hub Vitest integration suite — Tier 5', () => {
         const flush1 = telemetryHub.flushQueue();
         const flush2 = telemetryHub.flushQueue();
         telemetryHub.trackError(new Error('Hot error during flush'));
-        telemetryHub.trackEvent('event_during_flush');
 
         await vi.advanceTimersByTimeAsync(100);
         await Promise.all([flush1, flush2]);
 
-        // Technical errors are externally dispatched; the event is only accepted
-        // by the boundary and intentionally dropped by the production Sentry adapter.
         const sends = mockSentryTransport.mock.calls;
         expect(sends.filter((call: any) => call[0] === 'error' && call[1].id === 'err_queued_1')).toHaveLength(1);
         expect(sends.filter((call: any) => call[0] === 'error' && call[1].message === 'Hot error during flush')).toHaveLength(1);
-        expect(sends.filter((call: any) => call[0] === 'event' && call[1].type === 'event_during_flush')).toHaveLength(1);
         expect(telemetryHub.getQueuedEvents()).toHaveLength(0);
       });
 
@@ -217,7 +213,6 @@ describe('Telemetry Hub Vitest integration suite — Tier 5', () => {
 
         expect(() => {
           telemetryHub.trackError(new Error('Permission denied error'));
-          telemetryHub.trackEvent('permission_event');
         }).not.toThrow();
 
         const dispatchRes = await telemetryHub.dispatchErrorExternally({
@@ -289,14 +284,14 @@ describe('Telemetry Hub Vitest integration suite — Tier 5', () => {
     });
 
     describe('5.3: Offline Queue Capacity (50 Items) & Diagnostic Priority', () => {
-      it('T5-9: an offline storm preserves the last 50 errors before dropped standalone events', () => {
+      it('T5-9: an offline storm preserves the last 50 technical errors', () => {
         Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
         telemetryHub.init();
         telemetryHub.setUserId('user_t5_9');
 
         for (let i = 1; i <= 500; i++) {
           if (i % 2 === 0) {
-            telemetryHub.trackEvent(`avalanche_event_${i}`, { seq: i });
+            // No behavioral event is produced by the current telemetry runtime.
           } else {
             telemetryHub.trackError(new Error(`avalanche_error_${i}`));
           }
@@ -306,7 +301,6 @@ describe('Telemetry Hub Vitest integration suite — Tier 5', () => {
         expect(queue.length).toBe(TELEMETRY_QUEUE_CAPACITY);
         expect(queue.length).toBe(50);
 
-        // Events are not externally dispatched; they may never evict actionable errors.
         expect(queue.every(item => item.itemType === 'error')).toBe(true);
         expect((queue[0].payload as TelemetryErrorPayload).message).toBe('avalanche_error_401');
         expect((queue[49].payload as TelemetryErrorPayload).message).toBe('avalanche_error_499');
@@ -314,22 +308,8 @@ describe('Telemetry Hub Vitest integration suite — Tier 5', () => {
         Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
       });
 
-      it('never discards an error when a full offline queue receives standalone events', () => {
-        Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
-        telemetryHub.init();
-        telemetryHub.setUserId('user_t5_priority');
-        for (let i = 0; i < TELEMETRY_QUEUE_CAPACITY; i++) {
-          telemetryHub.trackError(new Error(`must_preserve_${i}`));
-        }
-        telemetryHub.trackEvent('discarded_when_queue_full');
-        const queue = telemetryHub.getQueuedEvents();
-        expect(queue).toHaveLength(TELEMETRY_QUEUE_CAPACITY);
-        expect(queue.every(item => item.itemType === 'error')).toBe(true);
-        expect((queue[0].payload as TelemetryErrorPayload).message).toBe('must_preserve_0');
-        Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
-      });
 
-      it('T5-10: 100 duplicate errors offline aggregate into 1 queue slot with count=100, saving capacity for 49 other events', () => {
+      it('T5-10: 100 duplicate errors offline aggregate into 1 queue slot with count=100, saving capacity for 49 distinct errors', () => {
         Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
         telemetryHub.init();
         telemetryHub.setUserId('user_t5_10');
@@ -340,14 +320,14 @@ describe('Telemetry Hub Vitest integration suite — Tier 5', () => {
         }
 
         for (let i = 1; i <= 49; i++) {
-          telemetryHub.trackEvent(`offline_unique_event_${i}`);
+          telemetryHub.trackError(new Error(`offline_unique_error_${i}`));
         }
 
         const queue = telemetryHub.getQueuedEvents();
         expect(queue.length).toBe(50);
         expect(queue[0].payload.type).toBe('Error');
         expect((queue[0].payload as TelemetryErrorPayload).count).toBe(100);
-        expect(queue[49].payload.type).toBe('offline_unique_event_49');
+        expect(queue[49].payload.message).toBe('offline_unique_error_49');
 
         Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
       });
@@ -449,21 +429,22 @@ describe('Telemetry Hub Vitest integration suite — Tier 5', () => {
         const now = Date.now();
         try {
           expect(() => {
-            queue.enqueueItem('error', {
+            queue.enqueueItem({
               type: 'Error', message: 'Quota error test', source: 'custom',
               context: getTelemetryContext(), userId: uid, sessionId: 'sess_1',
               timestamp: now, count: 1, firstSeen: now, lastSeen: now,
             });
-            queue.enqueueItem('event', {
-              type: 'quota_event_test', context: getTelemetryContext(),
-              userId: uid, sessionId: 'sess_1', timestamp: now,
+            queue.enqueueItem({
+              type: 'Error', message: 'Second quota error', source: 'custom',
+              context: getTelemetryContext(), userId: uid, sessionId: 'sess_1',
+              timestamp: now, count: 1, firstSeen: now, lastSeen: now,
             });
           }).not.toThrow();
 
           // The directly exercised production queue has the matching owner:
           // this must fail if encryption/write is skipped instead of quota.
           expect(setItemSpy.mock.calls.filter(call => call[0] === sealedKey).length).toBeGreaterThan(0);
-          expect(queue.getQueuedEvents().map(item => item.itemType)).toEqual(['error', 'event']);
+          expect(queue.getQueuedEvents().map(item => item.itemType)).toEqual(['error', 'error']);
           expect(localStorage.getItem(sealedKey)).toBe(originalCiphertext);
           expect(localStorage.getItem(queue.getQueueStorageKey())).toBeNull();
         } finally {
