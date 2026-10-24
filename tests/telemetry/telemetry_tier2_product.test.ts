@@ -29,7 +29,7 @@ describe('Technical telemetry queue and dispatch — Tier 2', () => {
         });
         try {
           const timestamp = Date.now();
-          expect(() => storage.enqueueItem('error', {
+          expect(() => storage.enqueueItem({
             id: 'quota-error', timestamp, type: 'Error',
             message: 'Transient storage failure', source: 'custom',
             context: getTelemetryContext(), userId: uid, sessionId: 'sess_1',
@@ -69,13 +69,13 @@ describe('Technical telemetry queue and dispatch — Tier 2', () => {
         telemetryHub.init();
 
         for (let i = 1; i <= 51; i++) {
-          telemetryHub.trackEvent(`event_${i}`);
+          telemetryHub.trackError(new Error(`queue-error-${i}`));
         }
 
         const queued = telemetryHub.getQueuedEvents();
         expect(queued.length).toBe(50);
-        expect(queued[0].payload.type).toBe('event_2');
-        expect(queued[49].payload.type).toBe('event_51');
+        expect(queued[0].payload.message).toBe('queue-error-2');
+        expect(queued[49].payload.message).toBe('queue-error-51');
 
         Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
       });
