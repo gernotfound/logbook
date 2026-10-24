@@ -20,6 +20,7 @@ import {
 } from './replicaProtocol';
 import { distinctDocumentCount, MAX_SYNC_DOCUMENTS_PER_TRANSACTION } from './syncBatching';
 import { assertCloudBusinessPreserved } from './cloudBusinessIntegrity';
+import { openCloudDocument, sealCloudDocument } from './cloudDocumentCipher';
 export { CloudDataIntegrityError } from './cloudBusinessIntegrity';
 
 function normalizeRemote(path: string, raw: DocumentData): DocumentData {
@@ -44,6 +45,7 @@ export async function applyDocumentChanges(
     ops: SemanticOperation[],
     isCurrent: () => boolean,
     replica: ReplicaIdentity,
+    cloudKey?: Uint8Array,
 ): Promise<TransactionOutcome> {
     if (!uid || uid.includes('/')) throw new Error('Identità non valida');
     if (!isCurrent()) throw new Error('Sessione cambiata');
@@ -92,7 +94,13 @@ export async function applyDocumentChanges(
                 return;
             }
 
-            const normalized = normalizeCloudDocument(snapshot.data(), `Firestore ${path || 'root'} data schema`);
+            // The encrypted format preserves Protocol 3 semantics but stores
+            // sensitive field candidates and business entirely inside AEAD.
+            // Decode before the existing integrity and causal validation;
+            // never interpret an authenticated public clock as sufficient.
+            const normalized = cloudKey
+                ? openCloudDocument(cloudKey, uid, path, snapshot.data())
+                : normalizeCloudDocument(snapshot.data(), `Firestore ${path || 'root'} data schema`);
             remoteSyncMetas[path] = parseSyncMeta(normalized.sync);
 
             const remote = removeUndefinedValuesForFirestore(normalizeRemote(path, normalized.business));
@@ -116,9 +124,13 @@ export async function applyDocumentChanges(
             business = removeUndefinedValuesForFirestore(normalizeRemote(path, business)) as DocumentData;
 
             const meta = newSyncMetas[path];
-            const finalData = withCurrentDataSchema(business, meta) as DocumentData;
+            const finalData = cloudKey
+                ? sealCloudDocument(cloudKey, uid, path, business, meta)
+                : withCurrentDataSchema(business, meta) as DocumentData;
 
-            checkDocSize(finalData, path || 'User Profile');
+            // AEAD validates final encoded envelope size; the existing
+            // plaintext branch retains its established size contract.
+            if (!cloudKey) checkDocSize(finalData, path || 'User Profile');
 
             const refIndex = pathsToRead.indexOf(path);
 
