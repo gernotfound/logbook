@@ -54,6 +54,9 @@ vi.mock('../src/lib/catalog/catalogService', () => ({
 vi.mock('../src/lib/db/withdrawnBackupTransport', () => ({
   fetchWithdrawnCloudBackup: boundary.trustedExport,
 }));
+vi.mock('../src/lib/sync/cloudAccountKeyAccess', () => ({
+  requireRightsExportAccountDataKey: vi.fn(async () => new Uint8Array(32).fill(17)),
+}));
 vi.mock('firebase/firestore', () => ({
   doc: (_db: unknown, ...parts: string[]) => ({ path: parts.join('/') }),
   collection: (_db: unknown, ...parts: string[]) => ({ path: parts.join('/') }),
@@ -69,6 +72,7 @@ vi.mock('firebase/firestore', () => ({
 
 import { collectBackupSnapshot } from '../src/lib/db/backupSnapshot';
 import { UserDataSchema } from '../src/lib/schema';
+import { sealCloudDocument } from '../src/lib/sync/cloudDocumentCipher';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -76,14 +80,14 @@ beforeEach(() => {
   boundary.offlineReaccept = false;
   boundary.serverStatus = 'withdrawn';
   boundary.serverRead.mockImplementation(async () => boundary.serverStatus);
-  boundary.trustedExport.mockResolvedValue(new Map([['', {
-    _schemaVersion: 1,
-    _sync: {
+  boundary.trustedExport.mockResolvedValue(new Map([['', sealCloudDocument(
+    new Uint8Array(32).fill(17), 'consent-export-user', '',
+    { profile: { height: '178' } },
+    {
       protocolVersion: 3, clock: {}, fields: {},
       writer: { slot: 's00', replicaId: 'consent-backup-device', generation: 1, seq: 0, consentRevision: 2 },
     },
-    profile: { height: '178' },
-  }]]));
+  )]]));
 });
 
 const exportSnapshot = () => collectBackupSnapshot(UserDataSchema.parse({}), true);
@@ -94,6 +98,9 @@ describe('health consent rights export transport routing', () => {
     expect(snapshot.coverage.scope).toBe('cloud-and-device');
     expect(boundary.serverRead).toHaveBeenCalledTimes(1);
     expect(boundary.trustedExport).toHaveBeenCalledTimes(1);
+    expect(snapshot.data.profile?.height).toBe('178');
+    expect((snapshot.recovery.cloudDocuments as Record<string, any>)[''].profile.height).toBe('178');
+    expect((snapshot.recovery.cloudDocuments as Record<string, any>)['']._sealed).toBeUndefined();
     expect(boundary.directRootRead).not.toHaveBeenCalled();
     expect(boundary.controlRead).not.toHaveBeenCalled();
   });
