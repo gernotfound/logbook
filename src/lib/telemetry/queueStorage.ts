@@ -23,8 +23,7 @@ function parseQueuedItems(raw: string | null): QueuedTelemetryItem[] {
         item.itemType === 'error' &&
         item.payload &&
         typeof item.payload === 'object'
-    )
-     as QueuedTelemetryItem[];
+    ) as QueuedTelemetryItem[];
 }
 
 // The timestamp is the fallback for queues saved by previous builds without queuedAt.
