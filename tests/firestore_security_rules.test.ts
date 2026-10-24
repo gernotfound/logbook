@@ -27,6 +27,7 @@ describe('Firestore Security Rules Whitelist & Parity Verification', () => {
     expect(rulesContent).toMatch(/match\s+\/session_revocations\/\{userId\}\s*\{[\s\S]*?allow\s+read,\s*write:\s*if\s+false;/);
     expect(rulesContent).toMatch(/request\.auth\.token\.auth_time > get\(record\)\.data\.revokedAfterSeconds/);
     expect(rulesContent).toMatch(/match\s+\/account_deletions\/\{userId\}\s*\{[\s\S]*?allow\s+read,\s*write:\s*if\s+false;/);
+    expect(rulesContent).toMatch(/match\s+\/user_data_keys\/\{userId\}\s*\{[\s\S]*?allow\s+read,\s*write:\s*if\s+false;/);
     expect(rulesContent).toContain('function isWritableOwner(userId)');
     expect(rulesContent).toContain('function consentWithdrawn(userId)');
     expect(rulesContent).toContain('function matchesConsentEpoch(userId, candidate)');
