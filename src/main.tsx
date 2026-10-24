@@ -25,6 +25,7 @@ import {
   diagnoseStorageState,
 } from './lib/storageTelemetry';
 import { telemetryHub } from './lib/telemetryHub';
+import { createReactRootTelemetryOptions } from './lib/reactRootTelemetry';
 import { initSentry } from './lib/sentryClient';
 import { markTabSnapshotClean } from './lib/sync/tabSnapshotCausality';
 import { isUpdateRequiredError } from './lib/schemaEvolution';
@@ -191,26 +192,7 @@ export const initApp = async () => {
   }
 
   if (rootElement) {
-    createRoot(rootElement, {
-      onCaughtError(error, errorInfo) {
-        telemetryHub.trackError(error, {
-          source: 'react_caught',
-          componentStack: errorInfo?.componentStack,
-        });
-      },
-      onUncaughtError(error, errorInfo) {
-        telemetryHub.trackError(error, {
-          source: 'react_uncaught',
-          componentStack: errorInfo?.componentStack,
-        });
-      },
-      onRecoverableError(error, errorInfo) {
-        telemetryHub.trackError(error, {
-          source: 'react_recoverable',
-          componentStack: errorInfo?.componentStack,
-        });
-      },
-    }).render(
+    createRoot(rootElement, createReactRootTelemetryOptions()).render(
       <StrictMode>
         <ErrorBoundary>
           <AuthProvider>

@@ -324,26 +324,19 @@ describe('Adversarial Challenger M3: Zod Fallbacks, Zero-PII Leakage & Stress Ha
             await vi.advanceTimersByTimeAsync(100);
 
             const errorCalls = capturedSentryPayloads.filter((c) => c.kind === 'error');
-            const localEventCalls = capturedSentryPayloads.filter((c) => c.kind === 'event');
-
-            // One external error is deduplicated; diagnostic events are accepted
-            // by the local boundary and dropped before Sentry.
+            // The Zod fallback no longer creates a second, discarded event.
             expect(errorCalls.length).toBe(1);
             expect(errorCalls[0].payload.count).toBe(500);
             expect(errorCalls[0].payload.source).toBe('zod_schema_fallback');
-            expect(localEventCalls.length).toBe(500);
+            expect(capturedSentryPayloads.filter((c) => c.kind === 'event')).toHaveLength(0);
         });
     });
 
     describe('4. TelemetryHub Fault Tolerance', () => {
-        it('reportZodSchemaFallback fails safely when telemetryHub.trackEvent and trackError throw', () => {
-            const originalTrackEvent = telemetryHub.trackEvent;
+        it('reportZodSchemaFallback fails safely when technical error tracking throws', () => {
             const originalTrackError = telemetryHub.trackError;
 
             try {
-                (telemetryHub as any).trackEvent = () => {
-                    throw new Error('Explosive trackEvent failure');
-                };
                 (telemetryHub as any).trackError = () => {
                     throw new Error('Explosive trackError failure');
                 };
@@ -361,7 +354,6 @@ describe('Adversarial Challenger M3: Zod Fallbacks, Zero-PII Leakage & Stress Ha
                     expect(result).toEqual({});
                 }).not.toThrow();
             } finally {
-                telemetryHub.trackEvent = originalTrackEvent;
                 telemetryHub.trackError = originalTrackError;
             }
         });

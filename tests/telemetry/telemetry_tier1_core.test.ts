@@ -230,6 +230,19 @@ describe('TelemetryHub Vitest Integration Suite — Tier 1 Core', () => {
       });
     });
 
+    it('Zod fallbacks emit only one technical error and never generate discarded events', async () => {
+      vi.useFakeTimers();
+      telemetryHub.init();
+      telemetryHub.setUserId('zod-error-only');
+      const eventSpy = vi.spyOn(telemetryHub, 'trackEvent');
+      reportZodSchemaFallback({ schema: 'TechnicalSchema', field: 'value', issueCode: 'invalid_type' });
+      await vi.advanceTimersByTimeAsync(100);
+      expect(eventSpy).not.toHaveBeenCalled();
+      expect(mockSentryTransport.mock.calls.map((call: any) => call[0])).toEqual(['error']);
+      expect((mockSentryTransport.mock.calls[0][1] as TelemetryErrorPayload).source)
+        .toBe('zod_schema_fallback');
+    });
+
     describe('F4: React 19 diagnostic metadata (Hub boundary, not root mounting)', () => {
       it('F4-1: accepts simulated react_caught source with componentStack attribution', async () => {
         vi.useFakeTimers();
