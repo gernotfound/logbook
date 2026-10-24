@@ -13,7 +13,7 @@ Vengono inviati soltanto:
 - fallback Zod rappresentati come un unico errore tecnico deduplicato, senza generare eventi locali aggiuntivi;
 - anomalie critiche di recovery della persistenza.
 
-Non vengono abilitati Sentry Session Replay, tracing, logging o Application Metrics. I flussi ordinari di utilizzo (workout, installazione PWA, navigazione) non diventano eventi Sentry.
+Non vengono abilitati Sentry Session Replay, tracing, logging o Application Metrics. I flussi ordinari di utilizzo (workout, installazione PWA, navigazione) non diventano eventi Sentry. Il vecchio percorso `trackEvent`, il relativo trasporto, la sanitizzazione specifica e l'accodamento di eventi sono stati rimossi. La coda AEAD owner-scoped conserva solo errori tecnici: eventuali item preesistenti di tipo `event` sono ignorati in lettura, senza upload.
 
 ## Privacy e minimizzazione
 

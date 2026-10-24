@@ -5,10 +5,17 @@ import {
   TELEMETRY_QUEUE_CAPACITY,
   TELEMETRY_DISPATCH_TIMEOUT_MS,
   type QueuedTelemetryItem,
-  type TelemetryEventPayload,
   type TelemetryErrorPayload,
 } from '../src/lib/telemetryHub';
 import { seedCurrentTelemetryQueue } from './telemetry/seedCurrentQueue';
+
+function errorItem(id: string, userId: string, timestamp = Date.now(), message = id): QueuedTelemetryItem {
+  return { id, timestamp, itemType: 'error', payload: {
+    id, timestamp, type: 'Error', message, source: 'custom',
+    userId, sessionId: 's1', context: { appVersion: '1.183.0', platform: 'other', displayMode: 'browser', online: false },
+    count: 1, firstSeen: timestamp, lastSeen: timestamp,
+  } };
+}
 
 describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () => {
   let mockSentryTransport: any;
@@ -39,15 +46,15 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
   // 1. Queue Overflow & Error-Priority Eviction Stress Test
   // =========================================================================
   describe('1. Queue Overflow & Error-Priority Eviction Stress', () => {
-    it('keeps the last fifty errors during 150 mixed events', () => {
+    it('keeps the last fifty errors during 150 diagnostic attempts', () => {
       Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
       telemetryHub.init();
       telemetryHub.setUserId('user_overflow_stress');
 
-      // Push 150 items (mix of events and errors)
+      // Only technical errors can enter the diagnostic queue.
       for (let i = 1; i <= 150; i++) {
         if (i % 2 === 0) {
-          telemetryHub.trackEvent(`event_${i}`, { sequence: i });
+          // Retired usage events are not produced.
         } else {
           telemetryHub.trackError(new Error(`error_${i}`), { source: 'custom' });
         }
@@ -59,7 +66,6 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
       // Capacity must be strictly bounded at TELEMETRY_QUEUE_CAPACITY (50)
       expect(queued.length).toBe(TELEMETRY_QUEUE_CAPACITY);
 
-      // Event telemetry has no external destination and must not displace errors.
       expect(queued.every(item => item.itemType === 'error')).toBe(true);
       for (let idx = 0; idx < queued.length; idx++) {
         expect((queued[idx].payload as TelemetryErrorPayload).message)
@@ -75,9 +81,9 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
     it('flushQueue does not throw, purges malformed null payloads, and dispatches surrounding valid items', async () => {
       // Simulate partially malformed queue array with missing payload or invalid structure
       const malformedQueue = [
-        { id: 'bad_1', timestamp: Date.now(), itemType: 'event', payload: { id: 'evt_valid_1', type: 'valid_before', context: {}, sessionId: 's1', userId: 'user_malformed_test', timestamp: Date.now() } },
+        errorItem('bad_1', 'user_malformed_test', Date.now(), 'valid_before'),
         { id: 'corrupt_item', timestamp: Date.now(), itemType: 'event', payload: null },
-        { id: 'bad_2', timestamp: Date.now(), itemType: 'event', payload: { id: 'evt_valid_2', type: 'valid_after', context: {}, sessionId: 's1', userId: 'user_malformed_test', timestamp: Date.now() } },
+        errorItem('bad_2', 'user_malformed_test', Date.now(), 'valid_after'),
       ];
 
       telemetryHub.setUserId('user_malformed_test');
@@ -107,7 +113,7 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
         { id: 'item_string_payload', itemType: 'event', payload: 'string_payload_garbage' },
         { id: 'item_number_payload', itemType: 'error', payload: 99999 },
         { id: 'item_unsupported_type', itemType: 'unsupported_type', payload: { id: 'custom_1', type: 'custom', context: {}, sessionId: 's1', userId: 'u1', timestamp: 1002 } },
-        { id: 'valid_evt_1', timestamp: Date.now(), itemType: 'event', payload: { id: 'evt_real_1', type: 'real_event_1', context: {}, sessionId: 's1', userId: 'u1', timestamp: Date.now() } },
+        errorItem('valid_evt_1', 'u1', Date.now(), 'valid_event_error'),
         { id: 'valid_err_1', timestamp: Date.now(), itemType: 'error', payload: { id: 'err_real_1', type: 'TypeError', message: 'real_error_1', source: 'custom', context: {}, sessionId: 's1', userId: 'u1', count: 1, firstSeen: Date.now(), lastSeen: Date.now() } },
       ];
 
@@ -122,22 +128,22 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
       expect(mockSentryTransport).toHaveBeenCalled();
       
       const transportCalls = mockSentryTransport.mock.calls;
-      const dispatchedEvents = transportCalls.map((call: any) => call[1]?.type);
+      const dispatchedEvents = transportCalls.map((call: any) => call[1]?.message);
       const dispatchedErrorMessages = transportCalls.map((call: any) => call[1]?.message);
-      expect(dispatchedEvents).toContain('real_event_1');
+      expect(dispatchedEvents).toContain('valid_event_error');
       expect(dispatchedErrorMessages).toContain('real_error_1');
 
       // The current owner queue should be empty after flushing
       expect(telemetryHub.getQueuedEvents().length).toBe(0);
     });
 
-    it('EMPIRICAL ADVERSARIAL: mid-flush event enqueue while purging corrupted items leaves valid new event intact', async () => {
+    it('EMPIRICAL ADVERSARIAL: mid-flush error enqueue while purging corrupted items leaves valid new error intact', async () => {
       telemetryHub.setUserId('u_purge_race');
 
       const hostileQueue = [
         null,
         { id: 'corrupt_1', itemType: 'event', payload: null },
-        { id: 'valid_slow_1', timestamp: 1000, itemType: 'event', payload: { id: 'evt_slow_1', type: 'slow_1', context: {}, sessionId: 's1', userId: 'u_purge_race', timestamp: 1000 } },
+        errorItem('valid_slow_1', 'u_purge_race', Date.now(), 'slow_1'),
         { id: 'corrupt_2', itemType: 'error', payload: null },
       ];
 
@@ -153,14 +159,14 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
 
       // Enqueue new valid item while corrupted items are being purged
       Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
-      telemetryHub.trackEvent('fresh_valid_event_during_purge', { key: 'val' });
+      telemetryHub.trackError(new Error('fresh_valid_event_during_purge'));
 
       await flushPromise;
 
       // The fresh item must survive intact in localStorage
       const queueAfter = telemetryHub.getQueuedEvents();
       expect(queueAfter.length).toBe(1);
-      expect((queueAfter[0].payload as TelemetryEventPayload).type).toBe('fresh_valid_event_during_purge');
+      expect((queueAfter[0].payload as TelemetryErrorPayload).message).toBe('fresh_valid_event_during_purge');
       expect(queueAfter[0].payload).not.toBeNull();
     });
   });
@@ -176,7 +182,7 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
       // Queue 5 events while offline
       Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
       for (let i = 1; i <= 5; i++) {
-        telemetryHub.trackEvent(`flap_event_${i}`, { idx: i });
+        telemetryHub.trackError(new Error(`flap_event_${i}`));
       }
 
       expect(telemetryHub.getQueuedEvents().length).toBe(5);
@@ -201,7 +207,7 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
       telemetryHub.setUserId('user_race_test');
 
       // Enqueue item 1
-      telemetryHub.trackEvent('item_1_initial');
+      telemetryHub.trackError(new Error('item_1_initial'));
       expect(telemetryHub.getQueuedEvents().length).toBe(1);
 
       // Simulate in-flight Sentry transport latency
@@ -214,7 +220,7 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
       const flushPromise = telemetryHub.flushQueue();
 
       // Enqueue item 2 while flush is in flight
-      telemetryHub.trackEvent('item_2_added_mid_flush');
+      telemetryHub.trackError(new Error('item_2_added_mid_flush'));
 
       // Wait for flush to complete
       await flushPromise;
@@ -223,7 +229,7 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
       const queueAfterFlush = telemetryHub.getQueuedEvents();
       
       // If the engine is completely safe, item 2 should NOT have been erased from storage
-      expect(queueAfterFlush.some(i => (i.payload as any).type === 'item_2_added_mid_flush')).toBe(true);
+      expect(queueAfterFlush.some(i => (i.payload as any).message === 'item_2_added_mid_flush')).toBe(true);
     });
 
     it('EMPIRICAL CONCURRENCY: handles burst of 30 mixed events & errors added during an active 10-item flush', async () => {
@@ -233,7 +239,7 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
       // 1. Pre-populate 10 items in queue
       Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
       for (let i = 1; i <= 10; i++) {
-        telemetryHub.trackEvent(`pre_flush_event_${i}`, { index: i });
+        telemetryHub.trackError(new Error(`pre_flush_event_${i}`));
       }
       expect(telemetryHub.getQueuedEvents().length).toBe(10);
 
@@ -260,11 +266,7 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
           setTimeout(() => {
             // Keep offline so trackEvent enqueues to localStorage without attempting immediate direct dispatch
             Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
-            if (j % 2 === 0) {
-              telemetryHub.trackEvent(itemType, { burstIndex: j });
-            } else {
-              telemetryHub.trackError(new Error(itemType), { source: 'custom' });
-            }
+            telemetryHub.trackError(new Error(itemType), { source: 'custom' });
             resolve();
           }, (j % 5) * 8); // spreads enqueues between 0ms and 32ms
         });
@@ -280,11 +282,7 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
 
       for (const expectedType of midFlushItemTypes) {
         const found = remainingQueue.some((item) => {
-          if (item.itemType === 'event') {
-            return (item.payload as TelemetryEventPayload).type === expectedType;
-          } else {
-            return (item.payload as TelemetryErrorPayload).message === expectedType;
-          }
+          return (item.payload as TelemetryErrorPayload).message === expectedType;
         });
         expect(found, `Expected ${expectedType} to be preserved in queue`).toBe(true);
       }
@@ -305,7 +303,7 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
 
       Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
       for (let i = 1; i <= 8; i++) {
-        telemetryHub.trackEvent(`multi_pre_${i}`);
+        telemetryHub.trackError(new Error(`multi_pre_${i}`));
       }
       expect(telemetryHub.getQueuedEvents().length).toBe(8);
 
@@ -323,8 +321,8 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
       // Mid-flight additions while staying offline so they are not immediately flushed by another call
       await new Promise((r) => setTimeout(r, 10));
       Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
-      telemetryHub.trackEvent('multi_mid_1');
-      telemetryHub.trackEvent('multi_mid_2');
+      telemetryHub.trackError(new Error('multi_mid_1'));
+      telemetryHub.trackError(new Error('multi_mid_2'));
 
       // Wait for initial flushes (flush1 & flush2) to finish
       await Promise.all([flush1, flush2]);
@@ -332,8 +330,8 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
       // multi_mid_1 and multi_mid_2 were added while flush was in flight and must still exist in localStorage
       const remaining = telemetryHub.getQueuedEvents();
       expect(remaining.length).toBe(2);
-      expect((remaining[0].payload as TelemetryEventPayload).type).toBe('multi_mid_1');
-      expect((remaining[1].payload as TelemetryEventPayload).type).toBe('multi_mid_2');
+      expect((remaining[0].payload as TelemetryErrorPayload).message).toBe('multi_mid_1');
+      expect((remaining[1].payload as TelemetryErrorPayload).message).toBe('multi_mid_2');
 
       // Final online replay
       Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
@@ -347,7 +345,7 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
       telemetryHub.setUserId('user_concurrent_flush');
 
       for (let i = 1; i <= 5; i++) {
-        telemetryHub.trackEvent(`concurrent_evt_${i}`);
+        telemetryHub.trackError(new Error(`concurrent_evt_${i}`));
       }
 
       expect(telemetryHub.getQueuedEvents().length).toBe(5);
@@ -363,7 +361,7 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
 
       expect(telemetryHub.getQueuedEvents().length).toBe(0);
       expect(mockSentryTransport).toHaveBeenCalledTimes(5);
-      expect(mockSentryTransport.mock.calls.map((call: any) => call[1].type)).toEqual([
+      expect(mockSentryTransport.mock.calls.map((call: any) => call[1].message)).toEqual([
         'concurrent_evt_1', 'concurrent_evt_2', 'concurrent_evt_3',
         'concurrent_evt_4', 'concurrent_evt_5',
       ]);
@@ -381,9 +379,10 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
       mockSentryTransport.mockImplementation(() => new Promise(() => {}));
 
       telemetryHub.setUserId('user_timeout_test');
-      const dispatchPromise = telemetryHub.dispatchEventExternally({
+      const dispatchPromise = telemetryHub.dispatchErrorExternally({
         timestamp: Date.now(),
-        type: 'hanging_event',
+        type: 'Error', message: 'hanging_event', source: 'custom', count: 1,
+        firstSeen: Date.now(), lastSeen: Date.now(),
         context: { appVersion: '1.0.0', platform: 'other', displayMode: 'browser', online: true },
         userId: 'user_timeout_test',
         sessionId: 'sess_timeout',
@@ -402,30 +401,10 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
 
     it('preserves only failed items in queue during partial network failure while removing succeeded ones', async () => {
       const items: QueuedTelemetryItem[] = [
-        {
-          id: 'item_success_1',
-          timestamp: Date.now() + 1,
-          itemType: 'event',
-          payload: { timestamp: Date.now() + 1, type: 'evt_success_1', context: {} as any, userId: 'u1', sessionId: 's1' },
-        },
-        {
-          id: 'item_fail_2',
-          timestamp: Date.now() + 2,
-          itemType: 'event',
-          payload: { timestamp: Date.now() + 2, type: 'evt_fail_2', context: {} as any, userId: 'u1', sessionId: 's1' },
-        },
-        {
-          id: 'item_success_3',
-          timestamp: Date.now() + 3,
-          itemType: 'event',
-          payload: { timestamp: Date.now() + 3, type: 'evt_success_3', context: {} as any, userId: 'u1', sessionId: 's1' },
-        },
-        {
-          id: 'item_fail_4',
-          timestamp: Date.now() + 4,
-          itemType: 'event',
-          payload: { timestamp: Date.now() + 4, type: 'evt_fail_4', context: {} as any, userId: 'u1', sessionId: 's1' },
-        },
+        errorItem('item_success_1', 'u1'),
+        errorItem('item_fail_2', 'u1'),
+        errorItem('item_success_3', 'u1'),
+        errorItem('item_fail_4', 'u1'),
       ];
 
       telemetryHub.setUserId('u1');
@@ -433,7 +412,7 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
 
       // Mock Sentry transport succeeds for 1 and 3, rejects for 2 and 4
       mockSentryTransport.mockImplementation(async (_kind: any, payload: any) => {
-        if (payload.type === 'evt_fail_2' || payload.type === 'evt_fail_4') {
+        if (payload.message === 'item_fail_2' || payload.message === 'item_fail_4') {
           throw new Error('Network error for item');
         }
         return true;
@@ -444,9 +423,9 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
       const remaining = telemetryHub.getQueuedEvents();
       expect(remaining.length).toBe(2);
       expect(remaining[0].id).toBe('item_fail_2');
-      expect((remaining[0].payload as TelemetryEventPayload).type).toBe('evt_fail_2');
+      expect((remaining[0].payload as TelemetryErrorPayload).message).toBe('item_fail_2');
       expect(remaining[1].id).toBe('item_fail_4');
-      expect((remaining[1].payload as TelemetryEventPayload).type).toBe('evt_fail_4');
+      expect((remaining[1].payload as TelemetryErrorPayload).message).toBe('item_fail_4');
     });
 
     it('error dispatch timeout also triggers abort and returns false', async () => {
@@ -487,7 +466,7 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
       const dispatchOrder: string[] = [];
 
       mockSentryTransport.mockImplementation(async (_kind: any, payload: any) => {
-        dispatchOrder.push(payload.type || payload.message);
+        dispatchOrder.push(payload.message);
         return true;
       });
 
@@ -495,10 +474,10 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
       telemetryHub.init();
       telemetryHub.setUserId('user_fifo_test');
 
-      telemetryHub.trackEvent('seq_1_first');
-      telemetryHub.trackEvent('seq_2_second');
-      telemetryHub.trackEvent('seq_3_third');
-      telemetryHub.trackEvent('seq_4_fourth');
+      telemetryHub.trackError(new Error('seq_1_first'));
+      telemetryHub.trackError(new Error('seq_2_second'));
+      telemetryHub.trackError(new Error('seq_3_third'));
+      telemetryHub.trackError(new Error('seq_4_fourth'));
 
       Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
       await telemetryHub.flushQueue();
@@ -512,8 +491,8 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
       telemetryHub.init();
       telemetryHub.setUserId('user_retention_test');
 
-      telemetryHub.trackEvent('critical_event_1');
-      telemetryHub.trackEvent('critical_event_2');
+      telemetryHub.trackError(new Error('critical_event_1'));
+      telemetryHub.trackError(new Error('critical_event_2'));
 
       mockSentryTransport.mockRejectedValue(new Error('Persistent outage'));
 
@@ -522,8 +501,8 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
 
       const remaining = telemetryHub.getQueuedEvents();
       expect(remaining.length).toBe(2);
-      expect((remaining[0].payload as TelemetryEventPayload).type).toBe('critical_event_1');
-      expect((remaining[1].payload as TelemetryEventPayload).type).toBe('critical_event_2');
+      expect((remaining[0].payload as TelemetryErrorPayload).message).toBe('critical_event_1');
+      expect((remaining[1].payload as TelemetryErrorPayload).message).toBe('critical_event_2');
     });
   });
 

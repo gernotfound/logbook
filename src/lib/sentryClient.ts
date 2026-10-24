@@ -1,5 +1,5 @@
 import * as Sentry from '@sentry/react';
-import type { TelemetryErrorPayload, TelemetryEventPayload } from './telemetry/contracts';
+import type { TelemetryErrorPayload } from './telemetry/contracts';
 
 type StorageAnomalyPayload = {
   type: 'storage_recovery_anomaly';
@@ -11,8 +11,8 @@ type StorageAnomalyPayload = {
   persisted: boolean | null;
 };
 
-type SentryTelemetryKind = 'error' | 'event' | 'storage-anomaly';
-type SentryTelemetryPayload = TelemetryErrorPayload | TelemetryEventPayload | StorageAnomalyPayload;
+type SentryTelemetryKind = 'error' | 'storage-anomaly';
+type SentryTelemetryPayload = TelemetryErrorPayload | StorageAnomalyPayload;
 
 let sentryInitialized = false;
 
@@ -155,15 +155,13 @@ function captureStorageAnomaly(payload: StorageAnomalyPayload): boolean {
  *
  * A true return means the SDK capture method accepted the diagnostic, NOT
  * that the Sentry server acknowledged delivery. SDK network retries are best-effort.
- * "event" is intentionally accepted-and-dropped: LogBook uses Sentry only for
- * error/anomaly monitoring, not behavioral events, logs, tracing or metrics.
+ * There is no standalone usage-event API, only technical errors and storage anomalies.
  */
 export async function sendTelemetryToSentry(
   kind: SentryTelemetryKind,
   payload: SentryTelemetryPayload,
 ): Promise<boolean> {
   try {
-    if (kind === 'event') return true;
     if (kind === 'storage-anomaly') return captureStorageAnomaly(payload as StorageAnomalyPayload);
     return captureError(payload as TelemetryErrorPayload);
   } catch (error) {

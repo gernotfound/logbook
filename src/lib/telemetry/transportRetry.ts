@@ -4,18 +4,15 @@ import {
   INITIAL_RETRY_DELAY_MS,
   MAX_RETRY_DELAY_MS,
   type TelemetryErrorPayload,
-  type TelemetryEventPayload,
 } from './contracts';
-import { sanitizeTelemetryDetails } from './detailSanitizer';
 import { sendTelemetryToSentry } from '../sentryClient';
 
 type UserIdProvider = () => string | null;
 
 async function dispatchWithTimeout(
-  kind: 'error' | 'event',
-  payload: TelemetryErrorPayload | TelemetryEventPayload,
+  payload: TelemetryErrorPayload,
 ): Promise<boolean> {
-  const dispatchPromise = sendTelemetryToSentry(kind, payload);
+  const dispatchPromise = sendTelemetryToSentry('error', payload);
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
   const timeoutPromise = new Promise<boolean>((resolve) => {
     timeoutId = setTimeout(() => resolve(false), TELEMETRY_DISPATCH_TIMEOUT_MS);
@@ -37,32 +34,9 @@ export async function dispatchTelemetryError(
       return false;
     }
 
-    return await dispatchWithTimeout('error', payload);
+    return await dispatchWithTimeout(payload);
   } catch (err) {
     console.warn('[TelemetryHub] dispatchErrorToSentry failed non-blockingly:', err);
-    return false;
-  }
-}
-
-export async function dispatchTelemetryEvent(
-  payload: TelemetryEventPayload,
-  getUserId: UserIdProvider
-): Promise<boolean> {
-  try {
-    const uid = payload.userId;
-    if (!uid || uid === 'anonymous' || uid !== getUserId() || isAccountDeletionPending(`user:${uid}`)) {
-      return false;
-    }
-
-    const sanitizedPayload: TelemetryEventPayload = {
-      ...payload,
-      details: payload.details === undefined ? undefined : sanitizeTelemetryDetails(payload.details),
-    };
-
-    // Accepted at the boundary but intentionally not emitted externally.
-    return await dispatchWithTimeout('event', sanitizedPayload);
-  } catch (err) {
-    console.warn('[TelemetryHub] dispatchEventToSentry failed non-blockingly:', err);
     return false;
   }
 }

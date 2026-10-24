@@ -17,10 +17,11 @@ function queued(id: string, timestamp: number, userId = 'owner-a'): QueuedTeleme
     id,
     timestamp,
     queuedAt: timestamp,
-    itemType: 'event',
+    itemType: 'error',
     payload: {
       timestamp,
-      type: 'technical_failure',
+      type: 'Error', message: `Technical diagnostic ${id}`, source: 'custom',
+      count: 1, firstSeen: timestamp, lastSeen: timestamp,
       context: { appVersion: '1.1.0', platform: 'other', displayMode: 'browser', online: false },
       userId,
       sessionId: 'session-a',
@@ -44,6 +45,19 @@ describe('Offline technical telemetry data minimization', () => {
     vi.useRealTimers();
   });
 
+  it('ignores retired standalone event items from authenticated ciphertext', () => {
+    const technical = queued('technical-error', Date.now());
+    const retiredEvent = {
+      id: 'retired-event', timestamp: Date.now(), itemType: 'event',
+      payload: { id: 'retired-event', timestamp: Date.now(), type: 'workout_saved',
+        context: technical.payload.context, userId: 'owner-a', sessionId: 'session-a' },
+    };
+    expect(storeEncryptedTelemetry('user:owner-a', JSON.stringify([retiredEvent, technical]))).toBe(true);
+    const storage = new TelemetryQueueStorage(() => 'owner-a');
+    expect(storage.getQueuedEvents().map(item => item.id)).toEqual(['technical-error']);
+    expect(storage.getQueuedEvents().every(item => item.itemType === 'error')).toBe(true);
+  });
+
   it('expires encrypted reports while retaining valid timestamps', () => {
     const storage = new TelemetryQueueStorage(() => 'owner-a');
     const now = Date.now();
@@ -58,7 +72,7 @@ describe('Offline technical telemetry data minimization', () => {
 
   it('expires cached items and updates disk when time passes while the app is open', () => {
     const storage = new TelemetryQueueStorage(() => 'owner-a');
-    storage.enqueueItem('event', queued('live', Date.now()).payload);
+    storage.enqueueItem(queued('live', Date.now()).payload);
     expect(storage.getQueuedEvents()).toHaveLength(1);
 
     vi.setSystemTime(Date.now() + TELEMETRY_QUEUE_MAX_AGE_MS);
@@ -85,7 +99,7 @@ describe('Offline technical telemetry data minimization', () => {
     expect(storage.getQueuedEvents()).toEqual([]);
     expect(localStorage.getItem(RETIRED_GLOBAL_QUEUE_KEY)).toBe(old);
 
-    storage.enqueueItem('event', queued('current', Date.now()).payload);
+    storage.enqueueItem(queued('current', Date.now()).payload);
     expect(storage.getQueuedEvents().map(item => item.id)).toHaveLength(1);
     expect(JSON.parse(readEncryptedTelemetry('user:owner-a') || '[]')).toHaveLength(1);
     expect(localStorage.getItem(RETIRED_GLOBAL_QUEUE_KEY)).toBe(old);
@@ -123,7 +137,7 @@ describe('Offline technical telemetry data minimization', () => {
   it('stores diagnostic payload only as owner-bound authenticated ciphertext', () => {
     const storage = new TelemetryQueueStorage(() => 'owner-a');
     const sensitiveMessage = 'diagnostic marker never in plaintext';
-    storage.enqueueItem('error', {
+    storage.enqueueItem({
       type: 'error', message: sensitiveMessage, source: 'custom',
       context: { appVersion: '1.1.0', platform: 'other', displayMode: 'browser', online: false },
       userId: 'owner-a', sessionId: 'session-a', count: 1,
@@ -140,7 +154,7 @@ describe('Offline technical telemetry data minimization', () => {
   it('does not create plaintext when the owner vault is locked or unavailable', () => {
     lockAllVaults();
     const storage = new TelemetryQueueStorage(() => 'owner-a');
-    storage.enqueueItem('event', queued('volatile', Date.now()).payload);
+    storage.enqueueItem(queued('volatile', Date.now()).payload);
     expect(storage.getQueuedEvents().map(x => x.id)).toHaveLength(1);
     expect(localStorage.getItem(storage.getQueueStorageKey())).toBeNull();
     expect(localStorage.getItem(protectedDeviceKey('telemetry_queue', 'user:owner-a'))).toBeNull();
@@ -154,7 +168,7 @@ describe('Offline technical telemetry data minimization', () => {
 
     expect(storage.getQueuedEvents()).toEqual([]);
     expect(localStorage.getItem(storage.getQueueStorageKey())).toBe(raw);
-    storage.enqueueItem('event', { ...queued('volatile', Date.now()).payload, id: 'volatile' });
+    storage.enqueueItem({ ...queued('volatile', Date.now()).payload, id: 'volatile' });
     expect(storage.getQueuedEvents().map(item => item.id)).toEqual(['volatile']);
     expect(localStorage.getItem(storage.getQueueStorageKey())).toBe(raw);
     expect(localStorage.getItem(protectedDeviceKey('telemetry_queue', 'user:owner-a'))).toBeNull();
@@ -176,7 +190,7 @@ describe('Offline technical telemetry data minimization', () => {
 
     lockAllVaults();
     const volatile = new TelemetryQueueStorage(() => 'owner-a');
-    volatile.enqueueItem('event', { ...queued('new', Date.now()).payload, id: 'new' });
+    volatile.enqueueItem({ ...queued('new', Date.now()).payload, id: 'new' });
     expect(volatile.getQueuedEvents().map(item => item.id)).toEqual(['new']);
     expect(localStorage.getItem(volatile.getQueueStorageKey())).toBeNull();
 
@@ -192,7 +206,7 @@ describe('Offline technical telemetry data minimization', () => {
     const tampered = 'tlb-sealed:v1:invalid-ciphertext';
     localStorage.setItem(sealedKey, tampered);
 
-    storage.enqueueItem('event', queued('new', Date.now()).payload);
+    storage.enqueueItem(queued('new', Date.now()).payload);
 
     expect(localStorage.getItem(sealedKey)).toBe(tampered);
     expect(localStorage.getItem(storage.getQueueStorageKey())).toBeNull();
@@ -208,7 +222,7 @@ describe('Offline technical telemetry data minimization', () => {
 
     localStorage.setItem(sealedKey, 'tlb-sealed:v1:invalid-ciphertext');
     const recovering = new TelemetryQueueStorage(() => 'owner-a');
-    recovering.enqueueItem('event', { ...queued('new', Date.now()).payload, id: 'new' });
+    recovering.enqueueItem({ ...queued('new', Date.now()).payload, id: 'new' });
     expect(localStorage.getItem(sealedKey)).toBe('tlb-sealed:v1:invalid-ciphertext');
     expect(recovering.getQueuedEvents().map(item => item.id)).toEqual(['new']);
 
@@ -228,7 +242,7 @@ describe('Offline technical telemetry data minimization', () => {
 
     localStorage.setItem(sealedKey, 'tlb-sealed:v1:invalid-ciphertext');
     const pending = new TelemetryQueueStorage(() => 'owner-a');
-    pending.enqueueItem('event', { ...queued('volatile', Date.now()).payload, id: 'volatile' });
+    pending.enqueueItem({ ...queued('volatile', Date.now()).payload, id: 'volatile' });
     expect(pending.getQueuedEvents().map(item => item.id)).toEqual(['volatile']);
 
     // A completed transport must not clear a volatile queue when the
@@ -243,36 +257,36 @@ describe('Offline technical telemetry data minimization', () => {
       .map((item: QueuedTelemetryItem) => item.id)).toEqual(['durable', 'volatile']);
   });
 
-  it('preserves another tab\'s appended events when a previously persisted tab queues again', () => {
+  it('preserves another tab\'s appended errors when a previously persisted tab queues again', () => {
     const firstTab = new TelemetryQueueStorage(() => 'owner-a');
     const secondTab = new TelemetryQueueStorage(() => 'owner-a');
-    firstTab.enqueueItem('event', { ...queued('a', Date.now()).payload, id: 'a' });
-    secondTab.enqueueItem('event', { ...queued('b', Date.now()).payload, id: 'b' });
+    firstTab.enqueueItem({ ...queued('a', Date.now()).payload, id: 'a' });
+    secondTab.enqueueItem({ ...queued('b', Date.now()).payload, id: 'b' });
 
-    firstTab.enqueueItem('event', { ...queued('c', Date.now()).payload, id: 'c' });
+    firstTab.enqueueItem({ ...queued('c', Date.now()).payload, id: 'c' });
 
     expect(new TelemetryQueueStorage(() => 'owner-a').getQueuedEvents()
       .map(item => item.id)).toEqual(['a', 'b', 'c']);
     expect(firstTab.getQueuedEvents().map(item => item.id)).toEqual(['a', 'b', 'c']);
   });
 
-  it('does not resurrect events removed by another tab before the next enqueue', () => {
+  it('does not resurrect errors removed by another tab before the next enqueue', () => {
     const firstTab = new TelemetryQueueStorage(() => 'owner-a');
     const secondTab = new TelemetryQueueStorage(() => 'owner-a');
-    firstTab.enqueueItem('event', { ...queued('delivered', Date.now()).payload, id: 'delivered' });
+    firstTab.enqueueItem({ ...queued('delivered', Date.now()).payload, id: 'delivered' });
     secondTab.replaceQueue([]);
     expect(new TelemetryQueueStorage(() => 'owner-a').getQueuedEvents()).toEqual([]);
 
-    firstTab.enqueueItem('event', { ...queued('fresh', Date.now()).payload, id: 'fresh' });
+    firstTab.enqueueItem({ ...queued('fresh', Date.now()).payload, id: 'fresh' });
     expect(new TelemetryQueueStorage(() => 'owner-a').getQueuedEvents()
       .map(item => item.id)).toEqual(['fresh']);
   });
 
   it('refreshes a persisted cache on read without erasing another tab\'s new encrypted report', () => {
     const firstTab = new TelemetryQueueStorage(() => 'owner-a');
-    firstTab.enqueueItem('event', { ...queued('old', Date.now()).payload, id: 'old' });
+    firstTab.enqueueItem({ ...queued('old', Date.now()).payload, id: 'old' });
     const secondTab = new TelemetryQueueStorage(() => 'owner-a');
-    secondTab.enqueueItem('event', { ...queued('new', Date.now()).payload, id: 'new' });
+    secondTab.enqueueItem({ ...queued('new', Date.now()).payload, id: 'new' });
     const durable = readEncryptedTelemetry('user:owner-a');
 
     expect(firstTab.getQueuedEvents().map(item => item.id)).toEqual(['old', 'new']);
@@ -283,7 +297,7 @@ describe('Offline technical telemetry data minimization', () => {
     const firstTab = new TelemetryQueueStorage(() => 'owner-a');
     const secondTab = new TelemetryQueueStorage(() => 'owner-a');
     const now = Date.now();
-    firstTab.enqueueItem('error', {
+    firstTab.enqueueItem({
       id: 'error-a', timestamp: now, type: 'error', message: 'offline',
       source: 'custom', userId: 'owner-a', sessionId: 's',
       context: { appVersion: '1.1.0', platform: 'other', displayMode: 'browser', online: false },
@@ -292,7 +306,7 @@ describe('Offline technical telemetry data minimization', () => {
     firstTab.updateQueuedErrorCount('error-a', 3, now);
     // A separate tab writes after the RAM count mutation but before its
     // scheduled microtask synchronizes the encrypted queue.
-    secondTab.enqueueItem('event', { ...queued('event-b', now).payload, id: 'event-b' });
+    secondTab.enqueueItem({ ...queued('event-b', now).payload, id: 'event-b' });
     await Promise.resolve();
 
     const events = new TelemetryQueueStorage(() => 'owner-a').getQueuedEvents();
@@ -304,7 +318,7 @@ describe('Offline technical telemetry data minimization', () => {
     const firstTab = new TelemetryQueueStorage(() => 'owner-a');
     const secondTab = new TelemetryQueueStorage(() => 'owner-a');
     const now = Date.now();
-    firstTab.enqueueItem('error', {
+    firstTab.enqueueItem({
       id: 'already-delivered', timestamp: now, type: 'error', message: 'offline',
       source: 'custom', userId: 'owner-a', sessionId: 's',
       context: { appVersion: '1.1.0', platform: 'other', displayMode: 'browser', online: false },
@@ -318,10 +332,10 @@ describe('Offline technical telemetry data minimization', () => {
 
   it('does not overwrite another tab\'s newer durable queue after a successful local save', () => {
     const firstTab = new TelemetryQueueStorage(() => 'owner-a');
-    firstTab.enqueueItem('event', { ...queued('first', Date.now()).payload, id: 'first' });
+    firstTab.enqueueItem({ ...queued('first', Date.now()).payload, id: 'first' });
 
     const secondTab = new TelemetryQueueStorage(() => 'owner-a');
-    secondTab.enqueueItem('event', { ...queued('second', Date.now()).payload, id: 'second' });
+    secondTab.enqueueItem({ ...queued('second', Date.now()).payload, id: 'second' });
     const beforeRefresh = readEncryptedTelemetry('user:owner-a');
 
     firstTab.refreshAfterFlush();
@@ -337,7 +351,7 @@ describe('Offline technical telemetry data minimization', () => {
     expect(storeEncryptedTelemetry('user:owner-a', '{"version":2}')).toBe(true);
     const previous = localStorage.getItem(sealedKey);
 
-    storage.enqueueItem('event', queued('new', Date.now()).payload);
+    storage.enqueueItem(queued('new', Date.now()).payload);
 
     expect(localStorage.getItem(sealedKey)).toBe(previous);
     expect(storage.getQueuedEvents()).toHaveLength(1);
@@ -345,7 +359,7 @@ describe('Offline technical telemetry data minimization', () => {
 
   it('never drops unexpired encrypted ciphertext when the wrapping key is locked', () => {
     const store = new TelemetryQueueStorage(() => 'owner-a');
-    store.enqueueItem('event', queued('persisted', Date.now()).payload);
+    store.enqueueItem(queued('persisted', Date.now()).payload);
     const ciphertextKey = protectedDeviceKey('telemetry_queue', 'user:owner-a');
     const original = localStorage.getItem(ciphertextKey);
     lockAllVaults();
