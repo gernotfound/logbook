@@ -2,6 +2,8 @@ import { BACKEND_API_ORIGIN as API } from '../backendApi';
 import { auth, ensureAppCheck } from '../firebase';
 import { getLimitedUseAppCheckToken } from '../appCheck';
 import { userOwner } from './owner';
+import { getVerifiedHealthConsentRevision, isHealthConsentCloudWritable } from '../healthConsent';
+import { captureSessionForOwner } from './session';
 import { readCachedAccountDataKey, rememberAccountDataKey } from './cloudAccountKeyCache';
 
 /**
@@ -19,6 +21,11 @@ export class CloudKeyAccessUnavailableError extends Error {
         this.name = 'CloudKeyAccessUnavailableError';
     }
 }
+
+// An ADK cached before a completed health-data erasure may belong to an
+// earlier consent generation. For generation >1, require a fresh server
+// release once per browser/session epoch and revision before trusting cache.
+const verifiedServerKeys = new Map<string, { revision: number; sessionEpoch: string }>();
 
 function decodeKey(value: unknown): Uint8Array {
     if (typeof value !== 'string' || !/^[A-Za-z0-9+/]{43}=$/.test(value)) {
@@ -44,9 +51,18 @@ async function acquireAccountDataKey(
     }
     const owner = userOwner(uid);
     assertCurrent();
+    const revision = purpose === 'sync' ? getVerifiedHealthConsentRevision(uid) : null;
+    if (purpose === 'sync' && (!isHealthConsentCloudWritable(owner) || revision === null || revision < 1)) {
+        throw new CloudKeyAccessUnavailableError();
+    }
+    const sessionEpoch = String(captureSessionForOwner(owner).epoch);
     const cached = await readCachedAccountDataKey(owner);
     assertCurrent();
-    if (cached) return cached;
+    const previouslyVerified = verifiedServerKeys.get(owner);
+    const mustReverify = purpose === 'rights-export'
+        || (revision !== null && revision > 1
+            && (previouslyVerified?.revision !== revision || previouslyVerified.sessionEpoch !== sessionEpoch));
+    if (cached && !mustReverify) return cached;
 
     await ensureAppCheck();
     assertCurrent();
@@ -80,6 +96,7 @@ async function acquireAccountDataKey(
     try {
         await rememberAccountDataKey(owner, fresh);
         assertCurrent();
+        if (revision !== null) verifiedServerKeys.set(owner, { revision, sessionEpoch });
         return fresh;
     } catch (error) {
         fresh.fill(0);
