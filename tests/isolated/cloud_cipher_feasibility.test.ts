@@ -144,4 +144,26 @@ describe('cloud document cipher — isolated contract (#620)', () => {
         expect(() => openCloudDocument(accountKey, 'owner-a', '', { ...sealed, _sealed: null }))
             .toThrow(CloudCiphertextError);
     });
+    it('rejects lossy or non-JSON data before encryption rather than silently dropping it', () => {
+        const accountKey = key();
+        const sync = privateDocument().sync;
+        expect(() => sealCloudDocument(accountKey, 'owner-a', '', { workout: { load: undefined } }, sync))
+            .toThrow(CloudCiphertextError);
+        expect(() => sealCloudDocument(accountKey, 'owner-a', '', { workouts: [undefined] }, sync))
+            .toThrow(CloudCiphertextError);
+        expect(() => sealCloudDocument(accountKey, 'owner-a', '', { load: Number.NaN }, sync))
+            .toThrow(CloudCiphertextError);
+        expect(() => sealCloudDocument(accountKey, 'owner-a', '', { started: new Date() }, sync))
+            .toThrow(CloudCiphertextError);
+    });
+
+    it('measures the ENCRYPTED Firestore document size, including base64 expansion', () => {
+        const accountKey = key();
+        const sync = privateDocument().sync;
+        // Fits under 1 MiB of raw JSON, but its authenticated base64 envelope
+        // exceeds the established 950 KB pre-write safety threshold.
+        expect(() => sealCloudDocument(accountKey, 'owner-a', '', { notes: 'x'.repeat(800_000) }, sync))
+            .toThrow(/limite di dimensione di sicurezza/);
+    });
+
 });
