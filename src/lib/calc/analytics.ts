@@ -1,6 +1,6 @@
 import { startOfWeek, endOfWeek, subWeeks, addDays, format, parseISO, isValid } from 'date-fns';
 import { it } from 'date-fns/locale';
-import { calculateWorkoutVolume } from './workout';
+import { calculateWorkoutVolume, parsePositiveWeight } from './workout';
 import { Logic } from '../logic';
 import type { WorkoutSession, Exercise, NutritionDay } from '../../types';
 
@@ -184,6 +184,8 @@ function* computeWeeklyVolumeSteps(
 
     const firstDay = intervals[0].weekStart;
     const lastDay = intervals[intervals.length - 1].weekEnd;
+    const parsedReference = typeof referenceDate === 'string' ? parseISO(referenceDate) : referenceDate;
+    const referenceDay = format(isValid(parsedReference) ? parsedReference : new Date(), 'yyyy-MM-dd');
     // Bucket sessions once, preserving history order (including sessionIds).
     // A binary search retains the original string-range behavior for legacy dates.
     const weeks: Array<Array<{ session: WorkoutSession; volume: number }>> = intervals.map(() => []);
@@ -192,7 +194,7 @@ function* computeWeeklyVolumeSteps(
         // Keep the main thread responsive when the Worker is unavailable.
         if (++scanned % 128 === 0) yield;
         const dateStr = getWorkoutDateString(session);
-        if (!dateStr || dateStr < firstDay || dateStr > lastDay) continue;
+        if (!dateStr || dateStr < firstDay || dateStr > lastDay || dateStr > referenceDay) continue;
         let low = 0;
         let high = intervals.length - 1;
         while (low <= high) {
@@ -300,6 +302,8 @@ export function computeWeeklyNutritionSeries(
 ): { points: WeeklyNutritionPoint[]; stats: { avgDailyKcalOverall: number; hasData: boolean } } {
     const safeNutrition = nutrition && typeof nutrition === 'object' ? nutrition : {};
     const intervals = generateWeekIntervals(numWeeks, referenceDate);
+    const parsedReference = typeof referenceDate === 'string' ? parseISO(referenceDate) : referenceDate;
+    const referenceDay = format(isValid(parsedReference) ? parsedReference : new Date(), 'yyyy-MM-dd');
 
     let overallKcalSum = 0;
     let overallLoggedDays = 0;
@@ -312,7 +316,8 @@ export function computeWeeklyNutritionSeries(
         let loggedDays = 0;
 
         let cur = parseISO(interval.weekStart);
-        const end = parseISO(interval.weekEnd);
+        const effectiveEnd = interval.weekEnd < referenceDay ? interval.weekEnd : referenceDay;
+        const end = parseISO(effectiveEnd);
 
         while (cur <= end) {
             const dateStr = format(cur, 'yyyy-MM-dd');
@@ -457,8 +462,8 @@ export function computeWeeklyWeightSeries(
                 daysConsidered++;
                 const dateStr = format(cur, 'yyyy-MM-dd');
                 const raw = safeNutrition[dateStr]?.weight;
-                const weight = typeof raw === 'number' ? raw : Number.parseFloat(String(raw ?? ''));
-                if (Number.isFinite(weight) && weight > 0) {
+                const weight = parsePositiveWeight(raw);
+                if (weight !== null) {
                     sumWeight += weight;
                     recordedDaysCount++;
                 }
@@ -505,13 +510,21 @@ export interface ReadinessTrendStats {
     sessionsWithReadiness: number;
 }
 
+/** Uses the recorded check-in time when an imported session lacks workout timestamps. */
+function readinessChronologyTimestamp(session: WorkoutSession): number {
+    const values = [session.globalStartTime, session.globalEndTime, session.endTime, session.readiness?.capturedAt];
+    return values.find(value => typeof value === 'number' && Number.isFinite(value)) ?? 0;
+}
+
 export function computeReadinessTrends(
     history: WorkoutSession[] | null | undefined = [],
     maxSessions: number = 12
 ): ReadinessTrendStats {
     const sessions = (Array.isArray(history) ? history : [])
         .filter(session => session?.readiness)
-        .sort((a, b) => (getWorkoutDateString(b) || '').localeCompare(getWorkoutDateString(a) || ''))
+        .sort((a, b) =>
+            (getWorkoutDateString(b) ?? '').localeCompare(getWorkoutDateString(a) ?? '')
+            || readinessChronologyTimestamp(b) - readinessChronologyTimestamp(a))
         .slice(0, Math.max(1, maxSessions));
 
     const dimension = (key: 'energy' | 'stress' | 'motivation' | 'muscleRecovery'): ReadinessTrendDimension => {

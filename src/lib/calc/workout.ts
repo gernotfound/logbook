@@ -295,6 +295,16 @@ export function getWorkoutDatesSet(history: any[]): Set<string> {
 export interface VolumeExerciseRef {
     isBodyweight?: boolean;
     equipmentWeight?: number;
+    trackingType?: 'weight_reps' | 'time' | 'cardio';
+}
+
+/** A single strict parser for local-day weight aggregates and current-weight lookup. */
+export function parsePositiveWeight(raw: unknown): number | null {
+    if (typeof raw !== 'number' && typeof raw !== 'string') return null;
+    const normalized = typeof raw === 'string' ? raw.trim().replace(',', '.') : raw;
+    if (typeof normalized === 'string' && !/^\d+(?:\.\d+)?$/.test(normalized)) return null;
+    const value = Number(normalized);
+    return Number.isFinite(value) && value > 0 ? value : null;
 }
 
 export function getLatestUserWeight(
@@ -309,19 +319,17 @@ export function getLatestUserWeight(
             // Normalize dates before comparing; malformed keys cannot establish recency.
             const canonicalDate = parseDateInput(date);
             if (!canonicalDate || !day || day.weight === undefined || day.weight === null || day.weight === '') continue;
-            const raw = typeof day.weight === 'string' ? day.weight.trim().replace(',', '.') : day.weight;
-            const num = parseFloat(String(raw));
-            if (Number.isFinite(num) && num > 0 && (latestDate === null || canonicalDate >= latestDate)) {
+            const weight = parsePositiveWeight(day.weight);
+            if (weight !== null && (latestDate === null || canonicalDate >= latestDate)) {
                 latestDate = canonicalDate;
-                latestWeight = num;
+                latestWeight = weight;
             }
         }
     }
     if (latestWeight !== null) return latestWeight;
     if (nutritionPlanning?.weight) {
-        const raw = typeof nutritionPlanning.weight === 'string' ? nutritionPlanning.weight.trim().replace(',', '.') : nutritionPlanning.weight;
-        const planWeight = parseFloat(String(raw));
-        if (!isNaN(planWeight) && planWeight > 0) return planWeight;
+        const planWeight = parsePositiveWeight(nutritionPlanning.weight);
+        if (planWeight !== null) return planWeight;
     }
     return 80;
 }
@@ -365,7 +373,7 @@ export function calculateSetVolume(
 
 export function calculateWorkoutVolume(
     session: { exercises?: Array<{ exId?: string; sets?: any[] }> },
-    library: Array<{ id: string; isBodyweight?: boolean; equipmentWeight?: number }> | ReadonlyMap<string, VolumeExerciseRef> = [],
+    library: Array<{ id: string; isBodyweight?: boolean; equipmentWeight?: number; trackingType?: 'weight_reps' | 'time' | 'cardio' }> | ReadonlyMap<string, VolumeExerciseRef> = [],
     userWeight: number = 80
 ): number {
     if (!session || !Array.isArray(session.exercises)) return 0;
@@ -386,6 +394,8 @@ export function calculateWorkoutVolume(
     for (const ex of session.exercises) {
         if (!ex) continue;
         const libEx = ex.exId ? libMap.get(ex.exId) : null;
+        // Numeric set fields on cardio/time exercises must not contribute mechanical tonnage.
+        if (libEx?.trackingType === 'cardio' || libEx?.trackingType === 'time') continue;
         for (const s of (ex.sets || [])) {
             totalVolume += calculateSetVolume(s, libEx, userWeight);
         }
