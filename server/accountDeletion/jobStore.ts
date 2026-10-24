@@ -267,6 +267,9 @@ export async function deleteUserRoot(uidValue: string, leaseOwner: string): Prom
     // not leave it orphaned after account deletion; the deletion job fences
     // old clients throughout cleanup.
     transaction.delete(adminDb().collection('session_revocations').doc(uid));
+    // The account ADK envelope is a server-only TOP-LEVEL document, not a
+    // private subcollection. The deletion lease must erase it explicitly.
+    transaction.delete(adminDb().collection('user_data_keys').doc(uid));
     // A data-only erasure keeps Auth, but when the entire account is deleted
     // its server-owned erasure receipt must be removed as well.
     transaction.delete(adminDb().collection('health_data_erasures').doc(uid));
@@ -302,6 +305,9 @@ export async function verifyNoAccountResidue(uidValue: string): Promise<void> {
 
   const erasureMarker = await adminDb().collection('health_data_erasures').doc(uid).get();
   if (erasureMarker.exists) throw new Error('Health-data erasure receipt remains after account deletion.');
+
+  const keyMarker = await adminDb().collection('user_data_keys').doc(uid).get();
+  if (keyMarker.exists) throw new Error('Wrapped account data key remains after deletion.');
 
   const consentMarker = await adminDb().collection('health_consent_withdrawals').doc(uid).get();
   if (consentMarker.exists) throw new Error('Health consent marker remains after account deletion.');
