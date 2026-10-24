@@ -58,7 +58,6 @@ export function useAnalyticsWorker(enabled = true) {
 
         return () => {
             mounted.current = false;
-            generationRef.current++;
             abortControllerRef.current?.abort();
             abortControllerRef.current = null;
             if (workerRef.current) {
