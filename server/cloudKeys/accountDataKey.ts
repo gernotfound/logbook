@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { adminDb } from '../accountDeletion/firebaseAdmin.js';
 import { readHealthConsentState } from '../healthConsent/withdrawal.js';
-import { AccountKeyUnavailableError, unwrapAccountDataKey, wrapAccountDataKey } from './kmsEnvelope.js';
+import { AccountKeyUnavailableError, unwrapAccountDataKey, wrapAccountDataKey } from './accountKeyEnvelope.js';
 
 const KEY_COLLECTION = 'user_data_keys';
 
@@ -38,13 +38,13 @@ export async function releaseAccountDataKey(uid: string, purpose: 'sync' | 'righ
   const erasureRef = db.collection('health_data_erasures').doc(uid);
   const root = db.collection('users').doc(uid);
 
-  // Normal unlock needs only KMS DECRYPT. Do not require the encryption
-  // service or primary key version to be healthy just to recover an
-  // already-persisted account ADK.
+  // Normal unlock reads the existing wrapped ADK, without deriving another
+  // account key. The versioned server-only KEK must stay available for as
+  // long as any account envelope was encrypted under it.
   const [existingKey, preflightConsent, preflightDeletion, preflightErasure] = await Promise.all([
     keyRef.get(), consentRef.get(), deletionRef.get(), erasureRef.get(),
   ]);
-  // Avoid spending a KMS ENCRYPT operation for withdrawn, unregistered or
+  // Avoid unnecessary key generation for withdrawn, unregistered or
   // deleting accounts. The transaction below MUST still recheck these same
   // documents to fence any concurrent revocation/erasure after preflight.
   if (!trustedConsent(preflightConsent.data(), uid, purpose)
@@ -54,7 +54,7 @@ export async function releaseAccountDataKey(uid: string, purpose: 'sync' | 'righ
   }
   let wrappedCandidate: Awaited<ReturnType<typeof wrapAccountDataKey>> | null = null;
   if (!existingKey.exists && purpose === 'sync') {
-    // KMS side effects MUST stay outside the Firestore retry callback.
+    // Secret-dependent operations MUST stay outside the Firestore retry callback.
     // A race loser discards its candidate and uses the persisted winner.
     const candidate = randomBytes(32);
     try {
@@ -74,7 +74,9 @@ export async function releaseAccountDataKey(uid: string, purpose: 'sync' | 'righ
     if (stored.exists) {
       const data = stored.data();
       if (!data || data.uid !== uid || data.format !== 'thelogbook-wrapped-account-key'
-          || data.version !== 1 || typeof data.ciphertext !== 'string') {
+          || data.version !== 1 || data.keyVersion !== 1
+          || typeof data.ciphertext !== 'string' || typeof data.iv !== 'string'
+          || typeof data.tag !== 'string') {
         throw new AccountKeyUnavailableError();
       }
       return data;
