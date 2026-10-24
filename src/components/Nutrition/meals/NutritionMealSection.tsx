@@ -40,12 +40,12 @@ export function NutritionMealSection({
                 mealItems.map(item => {
                     const { quantity: qty, ratio } = getLoggedMealPortion(item);
                     const itemKcal = Math.round((Number(item.kcal) || 0) * ratio);
-                    const isEditing = editingMealItem && (editingMealItem.time === item.time || editingMealItem.id === item.id);
+                    const isEditing = editingMealItem?.id === item.id;
 
                     if (isEditing) {
                         return (
                             <InlineEditMealItem
-                                key={`edit-${item.time || item.id}`}
+                                key={`edit-${item.id}`}
                                 item={editingMealItem}
                                 onClose={() => onEditingMealItemChange(null)}
                                 onSave={onUpdateMealItem}
@@ -56,7 +56,7 @@ export function NutritionMealSection({
 
                     return (
                         <div
-                            key={item.time || item.id}
+                            key={item.id}
                             className="tracking-meal-row"
                         >
                             <button type="button" className="tracking-meal-open" onClick={() => onEditingMealItemChange(item)} aria-label={`Modifica porzione di ${item.name}`}>
@@ -73,7 +73,7 @@ export function NutritionMealSection({
                                 className="btn-icon text-danger"
                                 onClick={(event) => {
                                     event.stopPropagation();
-                                    void onRemoveFood(item.time ?? item.id).catch(error => console.error('Rimozione alimento non completata:', error));
+                                    void onRemoveFood(item.id).catch(error => console.error('Rimozione alimento non completata:', error));
                                 }}
                                 aria-label={`Rimuovi ${item.name}`}
                             >

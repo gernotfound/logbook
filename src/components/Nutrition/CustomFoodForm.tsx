@@ -1,10 +1,11 @@
+import { useRef, useState } from 'react';
 import { Pencil, Plus, Save } from 'lucide-react';
 import { calculateCustomFoodKcal } from '../../lib/nutrition/calculateCustomFoodKcal';
 
 interface CustomFoodFormProps {
     cfData: any;
     setCfData: (data: any) => void;
-    saveCustomFood: () => Promise<void>;
+    saveCustomFood: () => Promise<void | boolean>;
     showCustomModal: boolean;
     setShowCustomModal: (show: boolean) => void;
     isEditing?: boolean;
@@ -20,7 +21,25 @@ export default function CustomFoodForm({
     isEditing = false,
     onCancel
 }: CustomFoodFormProps) {
+    const [saving, setSaving] = useState(false);
+    const submitting = useRef(false);
+
     if (!showCustomModal) return null;
+
+    const handleSave = async () => {
+        if (submitting.current) return;
+        submitting.current = true;
+        setSaving(true);
+        try {
+            // One user action must commit at most one new food ID, even on rapid taps.
+            await saveCustomFood();
+        } catch (error) {
+            console.error('Salvataggio alimento non completato:', error);
+        } finally {
+            submitting.current = false;
+            setSaving(false);
+        }
+    };
 
     const handleCancel = () => {
         if (onCancel) {
@@ -55,6 +74,7 @@ export default function CustomFoodForm({
             <div style={{ marginBottom: '10px' }}>
                 <label className="text-muted text-xs block mb-4" htmlFor="cf-name">Nome alimento *</label>
                 <input 
+                    disabled={saving}
                     id="cf-name" 
                     type="text" 
                     placeholder="es. Petto di pollo, Fiocchi di latte..." 
@@ -65,6 +85,7 @@ export default function CustomFoodForm({
                 />
                 <label className="text-muted text-xs block mb-4" htmlFor="cf-brand">Marca (opzionale)</label>
                 <input 
+                    disabled={saving}
                     id="cf-brand" 
                     type="text" 
                     placeholder="es. MyProtein, AIA, Coop..." 
@@ -79,6 +100,7 @@ export default function CustomFoodForm({
                 <div style={{ flex: 1, minWidth: 0 }}>
                     <label className="text-muted text-xs block mb-4">Unità di misura</label>
                     <select 
+                    disabled={saving}
                         value={cfData.unit || 'g'} 
                         onChange={e => setCfData({...cfData, unit: e.target.value})} 
                         style={{ width: '100%', marginBottom: 0, fontSize: '16px' }}
@@ -92,6 +114,7 @@ export default function CustomFoodForm({
                     <div style={{ flex: 1, minWidth: 0 }}>
                         <label className="text-muted text-xs block mb-4" htmlFor="cf-piece-weight">Peso 1 pezzo (g)</label>
                         <input 
+                    disabled={saving}
                             id="cf-piece-weight" 
                             type="number" 
                             inputMode="decimal"
@@ -113,6 +136,7 @@ export default function CustomFoodForm({
                 <div style={{ flex: 1, minWidth: 0 }}>
                     <label className="text-muted text-xs block mb-4" htmlFor="cf-kcal">Kcal</label>
                     <input 
+                    disabled={saving}
                         id="cf-kcal" 
                         type="number" 
                         inputMode="decimal"
@@ -126,6 +150,7 @@ export default function CustomFoodForm({
                 <div style={{ flex: 1, minWidth: 0 }}>
                     <label className="text-muted text-xs block mb-4" htmlFor="cf-pro">Pro (g)</label>
                     <input 
+                    disabled={saving}
                         id="cf-pro" 
                         type="number" 
                         inputMode="decimal"
@@ -140,6 +165,7 @@ export default function CustomFoodForm({
                 <div style={{ flex: 1, minWidth: 0 }}>
                     <label className="text-muted text-xs block mb-4" htmlFor="cf-carbs">Carbo (g)</label>
                     <input 
+                    disabled={saving}
                         id="cf-carbs" 
                         type="number" 
                         inputMode="decimal"
@@ -154,6 +180,7 @@ export default function CustomFoodForm({
                 <div style={{ flex: 1, minWidth: 0 }}>
                     <label className="text-muted text-xs block mb-4" htmlFor="cf-fat">Grassi (g)</label>
                     <input 
+                    disabled={saving}
                         id="cf-fat" 
                         type="number" 
                         inputMode="decimal"
@@ -172,6 +199,7 @@ export default function CustomFoodForm({
                     type="button"
                     className="btn-link flex-1" 
                     onClick={handleCancel}
+                    disabled={saving}
                 >
                     Annulla
                 </button>
@@ -179,7 +207,8 @@ export default function CustomFoodForm({
                     type="button"
                     className="btn btn-primary flex-2" 
                     style={{ marginBottom: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }} 
-                    onClick={saveCustomFood}
+                    onClick={() => { void handleSave(); }}
+                    disabled={saving}
                 >
                     <Save size={18} aria-hidden="true" /> {isEditing ? 'Salva modifiche' : 'Salva alimento'}
                 </button>

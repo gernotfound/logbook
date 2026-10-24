@@ -240,7 +240,7 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
                     });
                 }).not.toThrow();
 
-                expect(localWorkout?.exercises.length).toBeLessThanOrEqual(1);
+                expect(localWorkout?.exercises).toEqual([]);
             });
         });
 
@@ -674,12 +674,12 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
                 expect(localWorkout?.exercises[1].exId).toBe('ex_main');
             });
 
-            it('T2.6.4: Ad-hoc cardio exercise computes speed (dist / (time/60)) and saves into active workout', () => {
+            it('T2.6.4: Cardio input derives speed from stored distance and edited time', () => {
                 const libDef = { id: 'ex_bike', name: 'Cyclette', trackingType: 'cardio' as const };
                 const exItem = {
                     exId: 'ex_bike',
                     sessionNote: '',
-                    sets: [{ id: 's_cardio', kg: '', reps: '', time: '', distance: '', speed: '' }]
+                    sets: [{ id: 's_cardio', kg: '', reps: '', time: '', distance: '3.5', speed: '' }]
                 };
 
                 const onUpdateSet = vi.fn();
@@ -715,6 +715,7 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
                 fireEvent.change(timeInput, { target: { value: '30' } });
                 fireEvent.blur(timeInput);
                 expect(onUpdateSet).toHaveBeenCalledWith(0, 's_cardio', 'time', '30');
+                expect(onUpdateSet).toHaveBeenCalledWith(0, 's_cardio', 'speed', '7.00');
             });
 
             it('T2.6.5: Cancelling history edit (cancelHistoryEdit) discards ad-hoc edits cleanly', async () => {

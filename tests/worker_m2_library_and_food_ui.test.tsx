@@ -10,6 +10,9 @@ import TrainingExercises from '../src/components/Training/TrainingExercises';
 import CustomFoodForm from '../src/components/Nutrition/CustomFoodForm';
 import type { Exercise } from '../src/types';
 import { deviceKey } from '../src/lib/sync/deviceStorage';
+import { captureSession } from '../src/lib/sync/session';
+import { initializeLocal, readLocal } from '../src/lib/sync/localRepository';
+import { prepareUnlockedTestArchive } from './secureVaultFixture';
 
 describe('Worker M2: Exercise Library UI & Food Form Real-Time Calorie Calculation', () => {
 
@@ -170,6 +173,28 @@ describe('Worker M2: Exercise Library UI & Food Form Real-Time Calorie Calculati
             expect(updatedLib[0].equipmentWeight).toBe(20);
         });
 
+
+
+        it('confirms a created exercise in the encrypted owner archive after the domain commit', async () => {
+            const owner = captureSession().owner;
+            const initialData = { ...emptyUserData, library: [] };
+            await prepareUnlockedTestArchive(owner);
+            await initializeLocal(owner, initialData);
+            useAppStore.setState({ userData: initialData, dataOwner: owner });
+            const { result } = renderHook(() => useTrainingExercises());
+            act(() => result.current.setExName('Rematore personale'));
+            let success = false;
+            await act(async () => {
+                const pending = result.current.handleSaveExercise();
+                await useAppStore.getState().flushPendingSyncs();
+                success = await pending;
+            });
+            expect(success).toBe(true);
+            const stored = await readLocal(owner);
+            expect(stored?.data.library?.find(ex => ex.name === 'Rematore personale')).toMatchObject({
+                name: 'Rematore personale', setsCount: 3,
+            });
+        });
 
         it('handleDuplicate creates a unique personal exercise through Domain Operations', async () => {
             const original: Exercise = {

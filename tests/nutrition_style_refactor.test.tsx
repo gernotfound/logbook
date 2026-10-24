@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, render } from '@testing-library/react';
+import { act, fireEvent, screen, render } from '@testing-library/react';
 import { renderWithProviders } from './setup';
 import { prepareUnlockedTestArchive } from './secureVaultFixture';
 
@@ -31,6 +31,33 @@ describe('Nutrition Section Style & Color Refactoring Suite', () => {
             );
             const heading = screen.getByRole('heading', { level: 3 });
             expect(heading.style.color).toBe('var(--text-main)');
+        });
+        it('submits one custom food during repeated clicks and retains the draft until it settles', async () => {
+            let finish!: (saved: boolean) => void;
+            const save = vi.fn(() => new Promise<boolean>(resolve => { finish = resolve; }));
+            render(
+                <CustomFoodForm
+                    cfData={{ name: 'Riso', brand: '', unit: 'g', pieceWeight: '',
+                        kcal: '100', carbs: '10', pro: '10', fat: '2' }}
+                    setCfData={vi.fn()}
+                    saveCustomFood={save}
+                    showCustomModal={true}
+                    setShowCustomModal={vi.fn()}
+                />
+            );
+            const submit = screen.getByRole('button', { name: 'Salva alimento' }) as HTMLButtonElement;
+            fireEvent.click(submit);
+            fireEvent.click(submit);
+            expect(save).toHaveBeenCalledTimes(1);
+            expect(submit.disabled).toBe(true);
+            expect((screen.getByLabelText('Nome alimento *') as HTMLInputElement).disabled).toBe(true);
+            expect((screen.getByRole('button', { name: 'Annulla' }) as HTMLButtonElement).disabled).toBe(true);
+            await act(async () => finish(false));
+            expect(submit.disabled).toBe(false);
+            expect((screen.getByLabelText('Nome alimento *') as HTMLInputElement).value).toBe('Riso');
+            fireEvent.click(submit);
+            expect(save).toHaveBeenCalledTimes(2);
+            await act(async () => finish(true));
         });
     });
 
@@ -243,7 +270,7 @@ renderWithProviders(
     });
 
     describe('R1 & R2: NutritionSupplements', () => {
-        it('renders supplements library headings with var(--text-main)', () => {
+        it('renders the supplements create action in the themed panel', () => {
             renderWithProviders(
                 <NutritionSupplements selectedDate="2026-08-16" />
             );

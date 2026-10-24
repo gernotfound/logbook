@@ -4,7 +4,7 @@ import { screen, act, fireEvent, renderHook } from '@testing-library/react';
 import { renderWithProviders, emptyUserData } from './setup';
 import { prepareUnlockedTestArchive } from './secureVaultFixture';
 import { captureSession } from '../src/lib/sync/session';
-import { initializeLocal } from '../src/lib/sync/localRepository';
+import { initializeLocal, readLocal } from '../src/lib/sync/localRepository';
 import { useAppStore } from '../src/store/useAppStore';
 import { Logic } from '../src/lib/logic';
 import { Exporter } from '../src/lib/export';
@@ -221,7 +221,7 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
             expect(schedule.weeks.length).toBe(12);
         });
 
-        it('T4.4: Scenario: "Athlete Daily Recovery & Biometrics Log Across Full Week"', async () => {
+        it('T4.4: Scenario: "Seven Recorded Recovery Days Display and CSV Export"', async () => {
             const downloadFileSpy = vi.spyOn(Exporter, 'downloadFile').mockResolvedValue(true);
 
             // Record 7 days of sleep and weight
@@ -386,6 +386,9 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
             expect(routineBlueprint?.exercises.length).toBe(2);
             expect(routineBlueprint?.exercises[0].exId).toBe('ex_squat');
             expect(routineBlueprint?.exercises[1].exId).toBe('ex_legpress');
+            const persisted = await readLocal(owner);
+            expect(persisted?.data.history?.[0]?.exercises.map(ex => ex.exId)).toEqual(['ex_treadmill', 'ex_squat']);
+            expect(persisted?.data.routines?.[0]).toEqual(routineBlueprint);
         });
     });
 });

@@ -1,5 +1,5 @@
 import React from 'react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act, render, screen } from '@testing-library/react';
 import { useAppStore } from '../src/store/useAppStore';
 import { useNutritionMeals } from '../src/hooks/useNutritionMeals';
@@ -77,6 +77,8 @@ describe('Challenger 2: Zustand Fine-Grained Selectors & Background Render Isola
             saveError: null
         });
     });
+
+    afterEach(() => { vi.restoreAllMocks(); });
 
     describe('1. useNutritionMeals Hook Isolation during Live Workout Inputs', () => {
         it('does NOT re-render or re-sort nutrition dates when workout session updates occur', () => {

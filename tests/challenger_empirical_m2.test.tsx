@@ -22,6 +22,16 @@ function computeWeeksFromDatesDirect(startIso: string, endIso: string): number {
     return Math.max(1, Math.round((diffDays + 1) / 7));
 }
 
+function assertCycleEndDate(startIso: string, weeks: number): string {
+    const expected = computeEndDateDirect(startIso, weeks);
+    const actual = calculateCycleTimeline({
+        id: 'oracle-cycle', name: 'Calendar oracle', startDate: startIso,
+        durationWeeks: weeks, routines: []
+    }, startIso).endDate;
+    expect(actual).toBe(expected);
+    return actual!;
+}
+
 describe('Empirical Challenger: Training Cycles End Date & Two-Way Binding Adversarial Suite (Milestone 2 - Requirement R5)', () => {
     const sampleRoutines: WorkoutRoutine[] = [
         {
@@ -51,25 +61,31 @@ describe('Empirical Challenger: Training Cycles End Date & Two-Way Binding Adver
     // 1. Boundary & Pathological Weeks (0, Negative, Float, Huge 100-520 weeks)
     // =========================================================================
     describe('1. Boundary & Pathological Weeks Handling', () => {
-        it('clamps 0 weeks and negative weeks to 1 week duration in computeEndDate', () => {
+        it('rejects invalid week counts in production instead of silently clamping them', () => {
             const start = '2026-09-01';
-            // 0 weeks -> clamp to 1 week -> 7 days - 1 = +6 days -> 2026-09-07
-            expect(computeEndDateDirect(start, 0)).toBe('2026-09-07');
-            expect(computeEndDateDirect(start, -1)).toBe('2026-09-07');
-            expect(computeEndDateDirect(start, -52)).toBe('2026-09-07');
+            for (const weeks of [0, -1, -52]) {
+                expect(calculateCycleTimeline({
+                    id: 'invalid-cycle', name: 'Invalid cycle', startDate: start,
+                    durationWeeks: weeks, routines: []
+                }, start).endDate).toBeUndefined();
+            }
+            expect(assertCycleEndDate(start, 1)).toBe('2026-09-07');
         });
 
-        it('computes exact boundaries for 100 weeks and 520 weeks (10 years) without overflow', () => {
+        it('supports 100-week historical timelines and rejects unsupported 520-week durations', () => {
             const start = '2026-01-01';
             // 100 weeks = 700 days -> start + 699 days = 2027-12-01
-            const end100 = computeEndDateDirect(start, 100);
+            const end100 = assertCycleEndDate(start, 100);
             expect(end100).toBe('2027-12-01');
             expect(computeWeeksFromDatesDirect(start, end100)).toBe(100);
 
             // 520 weeks = 3640 days -> start + 3639 days
-            const end520 = computeEndDateDirect(start, 520);
-            expect(end520).toBe('2035-12-19');
-            expect(computeWeeksFromDatesDirect(start, end520)).toBe(520);
+            const unsupported = calculateCycleTimeline({
+                id: 'unsupported', name: 'Unsupported', startDate: start,
+                durationWeeks: 520, routines: []
+            }, start);
+            expect(unsupported.totalWeeks).toBe(0);
+            expect(unsupported.endDate).toBeUndefined();
         });
 
         it('refuses unsafe historical cycle durations without silently replacing the persisted value', () => {
@@ -114,10 +130,20 @@ describe('Empirical Challenger: Training Cycles End Date & Two-Way Binding Adver
     // 2. Temporal Anachronism & Inverted Dates (End Date Before Start Date)
     // =========================================================================
     describe('2. Temporal Anachronism (End Date < Start Date)', () => {
-        it('computeWeeksFromDates safely returns 1 if end date is strictly before start date', () => {
-            expect(computeWeeksFromDatesDirect('2026-09-10', '2026-09-01')).toBe(1);
-            expect(computeWeeksFromDatesDirect('2026-12-31', '2026-01-01')).toBe(1);
-            expect(computeWeeksFromDatesDirect('2030-01-01', '2020-01-01')).toBe(1);
+        it('inverted date oracle agrees with the production timeline fallback', () => {
+            for (const [startDate, endDate] of [
+                ['2026-09-10', '2026-09-01'],
+                ['2026-12-31', '2026-01-01'],
+                ['2030-01-01', '2020-01-01']
+            ]) {
+                expect(computeWeeksFromDatesDirect(startDate, endDate)).toBe(1);
+                const timeline = calculateCycleTimeline({
+                    id: 'inverted', name: 'Inverted', durationWeeks: 1,
+                    startDate, endDate, routines: []
+                }, startDate);
+                expect(timeline.endDate).toBe(computeEndDateDirect(startDate, 1));
+                expect(timeline.totalWeeks).toBe(1);
+            }
         });
 
         it('calculateCycleTimeline disregards invalid endDate when endDate < startDate and falls back to durationWeeks', () => {
@@ -175,12 +201,12 @@ describe('Empirical Challenger: Training Cycles End Date & Two-Way Binding Adver
         it('correctly accounts for Feb 29 in leap year 2024 vs 28 days in 2025', () => {
             // Leap year 2024: Feb 15 + 4 weeks (28 days) -> Feb 15 + 27 days = March 13
             // Feb 2024 has 29 days (15,16,17,18,19,20,21,22,23,24,25,26,27,28,29 = 15 days in Feb -> +13 days in Mar = Mar 13)
-            const leapEnd = computeEndDateDirect('2024-02-15', 4);
+            const leapEnd = assertCycleEndDate('2024-02-15', 4);
             expect(leapEnd).toBe('2024-03-13');
 
             // Non-leap year 2025: Feb 15 + 4 weeks (28 days) -> Feb 15 + 27 days = March 14
             // Feb 2025 has 28 days (15..28 = 14 days in Feb -> +14 days in Mar = Mar 14)
-            const nonLeapEnd = computeEndDateDirect('2025-02-15', 4);
+            const nonLeapEnd = assertCycleEndDate('2025-02-15', 4);
             expect(nonLeapEnd).toBe('2025-03-14');
 
             expect(computeWeeksFromDatesDirect('2024-02-15', leapEnd)).toBe(4);
@@ -190,19 +216,19 @@ describe('Empirical Challenger: Training Cycles End Date & Two-Way Binding Adver
         it('handles start on leap day (2024-02-29) seamlessly', () => {
             const startLeapDay = '2024-02-29';
             // 1 week: Feb 29 + 6 days = March 6
-            const end1w = computeEndDateDirect(startLeapDay, 1);
+            const end1w = assertCycleEndDate(startLeapDay, 1);
             expect(end1w).toBe('2024-03-06');
             expect(computeWeeksFromDatesDirect(startLeapDay, end1w)).toBe(1);
 
             // 8 weeks: Feb 29 + 55 days = April 24
-            const end8w = computeEndDateDirect(startLeapDay, 8);
+            const end8w = assertCycleEndDate(startLeapDay, 8);
             expect(end8w).toBe('2024-04-24');
             expect(computeWeeksFromDatesDirect(startLeapDay, end8w)).toBe(8);
         });
 
         it('crosses into leap year 2028 from late 2027 accurately', () => {
             const startCross = '2027-12-01'; // 16 weeks span
-            const endCross = computeEndDateDirect(startCross, 16);
+            const endCross = assertCycleEndDate(startCross, 16);
             // 16 weeks = 112 days -> start + 111 days = 2028-03-21 (includes Feb 29, 2028)
             expect(endCross).toBe('2028-03-21');
             expect(computeWeeksFromDatesDirect(startCross, endCross)).toBe(16);
@@ -216,13 +242,13 @@ describe('Empirical Challenger: Training Cycles End Date & Two-Way Binding Adver
         it('calculates accurate end dates across Dec 31 -> Jan 01 boundary', () => {
             const startDec = '2026-12-25';
             // 4 weeks (28 days) -> Dec 25 + 27 days = Jan 21, 2027
-            const endDec = computeEndDateDirect(startDec, 4);
+            const endDec = assertCycleEndDate(startDec, 4);
             expect(endDec).toBe('2027-01-21');
             expect(computeWeeksFromDatesDirect(startDec, endDec)).toBe(4);
 
             const startSilvester = '2026-12-31';
             // 1 week -> Dec 31 + 6 days = Jan 06, 2027
-            const endSilvester = computeEndDateDirect(startSilvester, 1);
+            const endSilvester = assertCycleEndDate(startSilvester, 1);
             expect(endSilvester).toBe('2027-01-06');
             expect(computeWeeksFromDatesDirect(startSilvester, endSilvester)).toBe(1);
         });
@@ -230,14 +256,14 @@ describe('Empirical Challenger: Training Cycles End Date & Two-Way Binding Adver
         it('survives European Daylight Savings Time (DST) Spring & Fall transitions without 23h/25h hour drift', () => {
             // Spring transition (March 2026 - clock springs forward)
             const startSpring = '2026-03-15';
-            const endSpring = computeEndDateDirect(startSpring, 4);
+            const endSpring = assertCycleEndDate(startSpring, 4);
             // 4 weeks = 28 days -> start + 27 days = 2026-04-11
             expect(endSpring).toBe('2026-04-11');
             expect(computeWeeksFromDatesDirect(startSpring, endSpring)).toBe(4);
 
             // Fall transition (October 2026 - clock falls back)
             const startFall = '2026-10-15';
-            const endFall = computeEndDateDirect(startFall, 4);
+            const endFall = assertCycleEndDate(startFall, 4);
             // 4 weeks = 28 days -> start + 27 days = 2026-11-11
             expect(endFall).toBe('2026-11-11');
             expect(computeWeeksFromDatesDirect(startFall, endFall)).toBe(4);
@@ -261,7 +287,7 @@ describe('Empirical Challenger: Training Cycles End Date & Two-Way Binding Adver
         testStartDates.forEach(startDate => {
             it(`maintains exact round-trip computeEndDate <-> computeWeeksFromDates for all W in [1..52] starting ${startDate}`, () => {
                 for (let w = 1; w <= 52; w++) {
-                    const endDate = computeEndDateDirect(startDate, w);
+                    const endDate = assertCycleEndDate(startDate, w);
                     const computedWeeks = computeWeeksFromDatesDirect(startDate, endDate);
                     expect(computedWeeks).toBe(w);
 

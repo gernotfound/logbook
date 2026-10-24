@@ -5,6 +5,9 @@ import { DB } from '../../src/lib/db';
 import { Logic } from '../../src/lib/logic';
 import { UserDataSchema } from '../../src/lib/schema';
 import { calculateLoggedMealTotals } from '../../src/lib/nutrition/calculateLoggedMealTotals';
+import { activateGuestSession, captureSession, GUEST_SESSION_KEY, invalidateSession } from '../../src/lib/sync/session';
+import { initializeLocal, readLocal } from '../../src/lib/sync/localRepository';
+import { prepareUnlockedTestArchive } from '../secureVaultFixture';
 import { useNutritionMeals } from '../../src/hooks/useNutritionMeals';
 import { useDialogStore } from '../../src/store/useDialogStore';
 import { useAppStore } from '../../src/store/useAppStore';
@@ -50,9 +53,66 @@ beforeEach(() => {
         compatibilityStatus: 'ok',
         compatibilityError: null,
     });
+
 });
 
-describe('M5 nutrition guest flow through useNutritionMeals', () => {
+describe('M5 nutrition account flow through useNutritionMeals', () => {
+    it('writes current nutrition only to the active guest archive, not the previous account owner', async () => {
+        const previousUser = (auth as any).currentUser;
+        const guestSessionId = 'chat14-nutrition-guest';
+        try {
+            (auth as any).currentUser = null;
+            localStorage.setItem('logbook_is_guest', 'true');
+            localStorage.setItem(GUEST_SESSION_KEY, guestSessionId);
+            activateGuestSession(guestSessionId);
+            const guestData = fixture();
+            await prepareUnlockedTestArchive('guest');
+            await initializeLocal('guest', guestData);
+            useAppStore.setState({ userData: guestData, dataOwner: 'guest' });
+            expect(captureSession().owner).toBe('guest');
+
+            const { result } = renderHook(() => useNutritionMeals(DATE));
+            await runMutation(() => result.current.handleQuickAdd({
+                name: 'Guest rice', kcal: 200, carbs: 40, pro: 10, fat: 2,
+            }));
+            const guestArchive = await readLocal('guest');
+            expect(guestArchive?.data.nutrition?.[DATE]?.meals?.[0]?.name).toBe('Guest rice');
+            const previousOwnerArchive = await readLocal('user:nutrition-hardening-user');
+            expect(previousOwnerArchive?.data.nutrition?.[DATE]?.meals?.some(meal => meal.name === 'Guest rice')).not.toBe(true);
+        } finally {
+            (auth as any).currentUser = previousUser;
+            localStorage.removeItem('logbook_is_guest');
+            localStorage.removeItem(GUEST_SESSION_KEY);
+            invalidateSession();
+        }
+    });
+
+    it('keeps meal identities distinct across same-timestamp edits, deletes and durable readback', async () => {
+        const owner = captureSession().owner;
+        await prepareUnlockedTestArchive(owner);
+        await initializeLocal(owner, useAppStore.getState().userData!);
+        const a = { id: 'meal-a', meal: 'pranzo', name: 'Avena', quantity: 100, baseQty: 100, kcal: 100, carbs: 10, pro: 5, fat: 4, time: 123 };
+        const b = { ...a, id: 'meal-b', name: 'Riso' };
+        await runMutation(() => useAppStore.getState().dispatchDomainOperation([
+            { type: 'nutrition-meal.upsert', date: DATE, meal: a },
+            { type: 'nutrition-meal.upsert', date: DATE, meal: b },
+        ]));
+        const { result } = renderHook(() => useNutritionMeals(DATE));
+        let changed = false;
+        await runMutation(async () => {
+            changed = await result.current.updateMealItem({ ...b, quantity: 50 });
+        });
+        expect(changed).toBe(true);
+        const edited = useAppStore.getState().userData?.nutrition?.[DATE]?.meals ?? [];
+        expect(edited.find(meal => meal.id === 'meal-a')?.quantity).toBe(100);
+        expect(edited.find(meal => meal.id === 'meal-b')?.quantity).toBe(50);
+        await runMutation(() => result.current.removeFood('meal-b'));
+        const after = useAppStore.getState().userData?.nutrition?.[DATE]?.meals ?? [];
+        expect(after.map(meal => meal.id)).toEqual(['meal-a']);
+        const disk = await readLocal(owner);
+        expect(disk?.data.nutrition?.[DATE]?.meals?.map(meal => meal.id)).toEqual(['meal-a']);
+    });
+
     it('returns the same ranked production results using the prepared search index', () => {
         const { result } = renderHook(() => useNutritionMeals(DATE));
 
@@ -95,7 +155,7 @@ describe('M5 nutrition guest flow through useNutritionMeals', () => {
         expect({ kcal: day?.kcal, carbs: day?.carbs, pro: day?.pro, fat: day?.fat }).toEqual(calculateLoggedMealTotals(day?.meals ?? []));
 
         const updated = day!.meals![0] as any;
-        await runMutation(() => result.current.removeFood(updated.itemId || updated.time || updated.id));
+        await runMutation(() => result.current.removeFood(updated.id));
 
         day = useAppStore.getState().userData?.nutrition?.[DATE];
         expect(day?.meals).toEqual([]);
@@ -170,4 +230,94 @@ describe('M5 nutrition guest flow through useNutritionMeals', () => {
         expect(useAppStore.getState().syncHealth).toBe('failed');
         expect(useAppStore.getState().saveError).toBe('persist failure');
     });
+    it('reflects a newer durable day-type value after an earlier user selection', async () => {
+        const { result } = renderHook(() => useNutritionMeals(DATE));
+        await runMutation(() => result.current.setDayType(false));
+        expect(result.current.isDayOn).toBe(false);
+        const current = useAppStore.getState().userData!;
+        const day = current.nutrition?.[DATE]!;
+        act(() => useAppStore.setState({
+            userData: { ...current, nutrition: { ...current.nutrition,
+                [DATE]: { ...day, isDayOn: true },
+            } },
+        }));
+        expect(result.current.isDayOn).toBe(true);
+        const replaced = useAppStore.getState().userData!;
+        act(() => useAppStore.setState({
+            userData: { ...replaced, nutrition: { ...replaced.nutrition,
+                [DATE]: { ...replaced.nutrition![DATE], isDayOn: undefined },
+            } },
+        }));
+        expect(result.current.isDayOn).toBeUndefined();
+    });
+
+    it('keeps the custom-food edit draft after both validation and durable dispatch failure', async () => {
+        const originalDispatch = useAppStore.getState().dispatchDomainOperation;
+        const dispatch = vi.fn().mockResolvedValueOnce({
+            ok: false, status: 'failed', error: new Error('IDB write rejected'),
+        }).mockResolvedValueOnce({ ok: true, status: 'synced' });
+        useAppStore.setState({ dispatchDomainOperation: dispatch });
+        try {
+            const { result } = renderHook(() => useNutritionMeals(DATE));
+            act(() => {
+                result.current.setEditingFoodId('food-chicken');
+                result.current.setShowCustomModal(true);
+                result.current.setCfData({
+                    name: 'Petto di pollo modificato', brand: 'Fixture', unit: 'g', pieceWeight: '',
+                    kcal: '107', carbs: '10', pro: '10', fat: '3',
+                });
+            });
+            let saved = false;
+            await act(async () => { saved = await result.current.saveCustomFood(); });
+            expect(saved).toBe(false);
+            expect(result.current.showCustomModal).toBe(true);
+            expect(result.current.editingFoodId).toBe('food-chicken');
+            expect(result.current.cfData.name).toBe('Petto di pollo modificato');
+            expect(dispatch).toHaveBeenCalledTimes(1);
+            await act(async () => { saved = await result.current.saveCustomFood(); });
+            expect(saved).toBe(true);
+            expect(result.current.showCustomModal).toBe(false);
+            expect(dispatch).toHaveBeenCalledTimes(2);
+            expect(dispatch).toHaveBeenLastCalledWith(expect.objectContaining({
+                type: 'food.upsert', food: expect.objectContaining({ id: 'food-chicken' }),
+            }));
+        } finally {
+            useAppStore.setState({ dispatchDomainOperation: originalDispatch });
+        }
+    });
+
+    it('preserves freshly updated nutrients when a stale meal editor changes only portion and group', async () => {
+        const owner = captureSession().owner;
+        await prepareUnlockedTestArchive(owner);
+        await initializeLocal(owner, useAppStore.getState().userData!);
+        const original = {
+            id: 'shared-meal', name: 'Riso originale', meal: 'Colazione',
+            quantity: 100, baseQty: 100, unit: 'g', kcal: 100, carbs: 10, pro: 5, fat: 2,
+        };
+        await runMutation(() => useAppStore.getState().dispatchDomainOperation({
+            type: 'nutrition-meal.upsert', date: DATE, meal: original,
+        }));
+        const { result } = renderHook(() => useNutritionMeals(DATE));
+        await runMutation(() => useAppStore.getState().dispatchDomainOperation({
+            type: 'nutrition-meal.upsert', date: DATE,
+            meal: { ...original, name: 'Riso aggiornato', kcal: 300, pro: 14 },
+        }));
+        let acknowledged = false;
+        await runMutation(async () => {
+            acknowledged = await result.current.updateMealItem({
+                id: original.id, quantity: 60, meal: 'Pranzo',
+            });
+        });
+        expect(acknowledged).toBe(true);
+        const meal = useAppStore.getState().userData?.nutrition?.[DATE]?.meals?.[0];
+        expect(meal).toMatchObject({
+            id: original.id, name: 'Riso aggiornato', kcal: 300, pro: 14,
+            quantity: 60, meal: 'Pranzo',
+        });
+        const disk = await readLocal(owner);
+        expect(disk?.data.nutrition?.[DATE]?.meals?.[0]).toMatchObject({
+            name: 'Riso aggiornato', kcal: 300, pro: 14, quantity: 60, meal: 'Pranzo',
+        });
+    });
+
 });

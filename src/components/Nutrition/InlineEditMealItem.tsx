@@ -1,11 +1,12 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Pencil, Trash2, Save } from 'lucide-react';
+import type { LoggedMealItem } from '../../types';
 
 interface EditMealItemModalProps {
-    item: any;
+    item: LoggedMealItem;
     onClose: () => void;
-    onSave: (updatedItem: any) => void;
-    onDelete: (itemId: number | string) => void;
+    onSave: (changes: Pick<LoggedMealItem, 'id' | 'quantity' | 'meal'>) => Promise<boolean>;
+    onDelete: (itemId: string) => Promise<boolean>;
 }
 
 const MEAL_TYPES = ['Colazione', 'Pranzo', 'Cena', 'Spuntini'];
@@ -13,29 +14,42 @@ const MEAL_TYPES = ['Colazione', 'Pranzo', 'Cena', 'Spuntini'];
 export default function EditMealItemModal({ item, onClose, onSave, onDelete }: EditMealItemModalProps) {
     const [quantity, setQuantity] = useState<number | string>(item.quantity ?? item.baseQty ?? 100);
     const [meal, setMeal] = useState<string>(item.meal || 'Colazione');
+    const [saving, setSaving] = useState(false);
+    const submitting = useRef(false);
 
     const base = item.baseQty ?? 100;
-    const numQty = parseFloat(quantity as string) || 0;
+    const parsedQty = Number(quantity);
+    const validQty = quantity !== '' && Number.isFinite(parsedQty) && parsedQty >= 0;
+    const numQty = validQty ? parsedQty : 0;
     const ratio = base > 0 ? numQty / base : 1;
 
-    const currentKcal = Math.round((parseFloat(item.kcal) || 0) * ratio);
-    const currentCarbs = Math.round((parseFloat(item.carbs) || 0) * ratio * 10) / 10;
-    const currentPro = Math.round((parseFloat(item.pro) || 0) * ratio * 10) / 10;
-    const currentFat = Math.round((parseFloat(item.fat) || 0) * ratio * 10) / 10;
+    const currentKcal = Math.round((Number(item.kcal) || 0) * ratio);
+    const currentCarbs = Math.round((Number(item.carbs) || 0) * ratio * 10) / 10;
+    const currentPro = Math.round((Number(item.pro) || 0) * ratio * 10) / 10;
+    const currentFat = Math.round((Number(item.fat) || 0) * ratio * 10) / 10;
 
-    const handleSave = () => {
-        onSave({
-            ...item,
-            quantity: numQty,
-            meal
-        });
-        onClose();
+    const submit = async (operation: () => Promise<boolean>) => {
+        if (submitting.current) return;
+        submitting.current = true;
+        setSaving(true);
+        try {
+            // Keep the editable draft mounted unless the device commit is acknowledged.
+            if (await operation()) onClose();
+        } catch (error) {
+            console.error('Modifica del pasto non completata:', error);
+        } finally {
+            submitting.current = false;
+            setSaving(false);
+        }
     };
 
-    const handleDelete = () => {
-        onDelete(item.time || item.id);
-        onClose();
-    };
+    const handleSave = () => submit(() => onSave({
+        id: item.id,
+        quantity: numQty,
+        meal
+    }));
+
+    const handleDelete = () => submit(() => onDelete(item.id));
 
     return (
         <div 
@@ -60,6 +74,8 @@ export default function EditMealItemModal({ item, onClose, onSave, onDelete }: E
                     type="button" 
                     className="btn-icon" 
                     onClick={onClose}
+                    disabled={saving}
+                    aria-label="Chiudi modifica porzione"
                     style={{ color: 'var(--text-muted)', fontSize: 'var(--font-size-section)' }}
                 >
                     ✕
@@ -82,11 +98,13 @@ export default function EditMealItemModal({ item, onClose, onSave, onDelete }: E
                 <select 
                     value={meal} 
                     onChange={e => setMeal(e.target.value)}
+                    disabled={saving}
                     style={{ marginBottom: 0 }}
                 >
                     {MEAL_TYPES.map(mt => (
                         <option key={mt} value={mt}>{mt}</option>
                     ))}
+                    <option value="quick">Aggiunta rapida</option>
                 </select>
             </div>
 
@@ -101,6 +119,8 @@ export default function EditMealItemModal({ item, onClose, onSave, onDelete }: E
                     value={quantity} 
                     onChange={e => setQuantity(e.target.value)}
                     onFocus={e => e.target.select()}
+                    disabled={saving}
+                    aria-invalid={!validQty}
                     style={{ marginBottom: 0, fontSize: 'var(--font-size-section)', fontWeight: 'bold' }}
                     autoFocus
                 />
@@ -143,7 +163,8 @@ export default function EditMealItemModal({ item, onClose, onSave, onDelete }: E
                     type="button" 
                     className="btn" 
                     style={{ background: 'var(--danger-soft)', color: 'var(--danger-color)', border: '1px solid var(--danger-color)', flex: 1, marginBottom: 0 }}
-                    onClick={handleDelete}
+                    onClick={() => { void handleDelete(); }}
+                    disabled={saving}
                 >
                     <Trash2 size={16} aria-hidden="true" style={{marginRight: '6px'}} /> Rimuovi
                 </button>
@@ -151,7 +172,8 @@ export default function EditMealItemModal({ item, onClose, onSave, onDelete }: E
                     type="button" 
                     className="btn btn-primary" 
                     style={{ flex: 2, marginBottom: 0 }}
-                    onClick={handleSave}
+                    onClick={() => { void handleSave(); }}
+                    disabled={saving || !validQty}
                 >
                     <Save size={16} aria-hidden="true" style={{marginRight: '6px'}} /> Salva
                 </button>
