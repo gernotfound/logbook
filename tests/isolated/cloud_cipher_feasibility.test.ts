@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { xchacha20poly1305 } from '@noble/ciphers/chacha.js';
 import { parseSyncMeta } from '../../src/lib/sync/semanticProjection/metadata';
+import { applySemanticOperations } from '../../src/lib/sync/semanticProjection/apply';
+import type { SemanticOperation } from '../../src/lib/sync/semanticProjection/contracts';
 import type { SyncMeta } from '../../src/lib/sync/semanticProjection/contracts';
 
 /**
@@ -137,6 +139,29 @@ describe('issue 620 test-only cloud encryption feasibility', () => {
         expect(first.nonce).not.toEqual(second.nonce);
         expect(first.ciphertext).not.toEqual(second.ciphertext);
         expect(open(key, 'owner-a', 'history_months/2026-10', first)).toEqual(original);
+    });
+
+    it('preserves semantic conflict resolution when the complete causal metadata is restored', () => {
+        const key = newKey();
+        const plain = privateDocument();
+        const recovered = open(key, 'owner-a', '', seal(key, 'owner-a', '', plain));
+        const operation: SemanticOperation = {
+            docPath: '',
+            path: ['profile', 'notes'],
+            value: 'new concurrent private value',
+            isDelete: false,
+            actorId: 's01',
+            seq: 2,
+            clock: { s00: 1, s01: 2 },
+        };
+        const merge = (value: PlainCloud) => applySemanticOperations(
+            new Map([['', value.business]]),
+            [operation],
+            { '': value.sync },
+        );
+        expect(merge(recovered)).toEqual(merge(plain));
+        expect(recovered.sync.fields['profile/notes'].candidates?.[0].value)
+            .toEqual({ notes: 'secret conflict value' });
     });
 
     it('rejects wrong account/path/key and any change to authenticated public causal metadata', () => {
