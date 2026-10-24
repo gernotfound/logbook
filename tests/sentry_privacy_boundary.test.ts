@@ -29,42 +29,88 @@ describe('Sentry technical error privacy boundary', () => {
     vi.unstubAllEnvs();
   });
 
-  it('never sends raw secrets through exception, stack or fallback fingerprint', async () => {
+  it('exports only structured diagnostics, never arbitrary health notes or user-supplied stack text', async () => {
     const { initSentry, sendTelemetryToSentry } = await import('../src/lib/sentryClient');
     expect(initSentry()).toBe(true);
+    const privateNote = 'nota sanitaria: dolore alla spalla destra dopo fisioterapia';
     const payload = {
-      type: 'Error',
-      message: 'Failure {"api_key":"SYNTH_SECRET"}',
-      stack: 'Error at C:\\USERS\\Synthetic\\source.ts:12',
-      source: 'window_error',
-      hash: 'Authorization: Basic SYNTH_FINGERPRINT',
-      sessionId: 'synthetic-session',
+      type: privateNote,
+      message: `Failure ${privateNote} {"api_key":"SYNTH_SECRET"}`,
+      stack: `Error: ${privateNote} at C:\\USERS\\Synthetic\\source.ts:12`,
+      componentStack: privateNote,
+      source: privateNote,
+      hash: privateNote,
+      sessionId: privateNote,
       count: 1,
       firstSeen: 10,
       lastSeen: 20,
-      context: { appVersion: 'test', platform: 'other', displayMode: 'browser', online: true },
+      context: { appVersion: privateNote, platform: 'other', displayMode: 'browser', online: true },
     } as unknown as TelemetryErrorPayload;
 
+    // The SDK spy is the actual capture boundary, not a mock of sendTelemetryToSentry.
     expect(await sendTelemetryToSentry('error', payload)).toBe(true);
-    const error = sentry.captureException.mock.calls[0]?.[0] as Error;
-    expect(error.message).toContain('[REDACTED]');
-    expect(error.message).not.toContain('SYNTH_SECRET');
-    expect(error.stack).toContain('[REDACTED_PATH]');
-    expect(error.stack).not.toContain('Synthetic');
-    expect(JSON.stringify(sentry.scope.setFingerprint.mock.calls)).not.toContain('SYNTH_SECRET');
-    expect(JSON.stringify(sentry.scope.setFingerprint.mock.calls)).not.toContain('SYNTH_FINGERPRINT');
-
-    const config = sentry.init.mock.calls[0]?.[0] as {
-      beforeSend: (event: { message?: string; exception?: { values: Array<{ value?: string }> } }) =>
-        { message?: string; exception?: { values: Array<{ value?: string }> } };
-    };
-    const event = config.beforeSend({
-      message: 'Failure {"client_secret":"SYNTH_SECRET"}',
-      exception: { values: [{ value: 'C:\\USERS\\Synthetic\\app.ts' }] },
+    expect(sentry.captureException).toHaveBeenCalledTimes(1);
+    const error = sentry.captureException.mock.calls[0][0] as Error;
+    expect(error.message).toBe('Technical diagnostic');
+    expect(error.name).toBe('Error');
+    expect(error.stack).toBe('Error: Technical diagnostic');
+    expect(sentry.scope.setFingerprint).toHaveBeenCalledWith([
+      'technical-diagnostic', 'Error', 'custom',
+    ]);
+    expect(sentry.scope.setTag).toHaveBeenCalledWith('source', 'custom');
+    expect(sentry.scope.setTag).toHaveBeenCalledWith('app_version', 'unknown');
+    expect(sentry.scope.setContext).toHaveBeenCalledWith('logbook', {
+      sessionId: undefined, occurrenceCount: 1, firstSeen: 10, lastSeen: 20,
     });
-    expect(JSON.stringify(event)).not.toContain('SYNTH_SECRET');
-    expect(JSON.stringify(event)).not.toContain('Synthetic');
+
+    const sdkCalls = JSON.stringify([
+      sentry.captureException.mock.calls,
+      sentry.scope.setFingerprint.mock.calls,
+      sentry.scope.setTag.mock.calls,
+      sentry.scope.setContext.mock.calls,
+    ]);
+    expect(sdkCalls).not.toContain(privateNote);
+    expect(sdkCalls).not.toContain('SYNTH_SECRET');
+    expect(sdkCalls).not.toContain('Synthetic');
+
+    const config = sentry.init.mock.calls[0][0] as {
+      beforeSend: (event: { message?: string; extra?: unknown; exception?: {
+        values: Array<{ type?: string; value?: string; stacktrace?: unknown }>;
+      } }) => unknown;
+    };
+    const received = config.beforeSend({
+      message: privateNote,
+      extra: { note: privateNote },
+      exception: { values: [{ type: privateNote, value: privateNote,
+        stacktrace: { frames: [{ filename: privateNote }] } }] },
+    });
+    expect(JSON.stringify(received)).not.toContain(privateNote);
+    expect(JSON.stringify(received)).toContain('Technical diagnostic');
   });
+
+  it('retains technical classifications without reporting arbitrary anomaly reasons', async () => {
+    const { initSentry, sendTelemetryToSentry } = await import('../src/lib/sentryClient');
+    expect(initSentry()).toBe(true);
+    const privateNote = 'nota personale ginocchio sinistro';
+    expect(await sendTelemetryToSentry('storage-anomaly', {
+      type: 'storage_recovery_anomaly',
+      reason: privateNote,
+      timestamp: 10, elapsedMs: 20, platform: 'other',
+      standalone: false, persisted: false,
+    })).toBe(true);
+    expect(sentry.captureException).toHaveBeenCalledTimes(1);
+    expect(sentry.scope.setFingerprint).toHaveBeenCalledWith([
+      'storage-recovery-anomaly', 'other_storage_recovery_anomaly',
+    ]);
+    expect(sentry.scope.setContext).toHaveBeenCalledWith('logbook',
+      expect.objectContaining({ reason: 'other_storage_recovery_anomaly' }));
+    expect(JSON.stringify([
+      sentry.captureException.mock.calls,
+      sentry.scope.setFingerprint.mock.calls,
+      sentry.scope.setContext.mock.calls,
+    ])).not.toContain(privateNote);
+  });
+
   it.each([false, true])('accepts but never emits standalone usage events (initialized=%s)', async (initialized) => {
     const { initSentry, sendTelemetryToSentry } = await import('../src/lib/sentryClient');
     if (initialized) expect(initSentry()).toBe(true);

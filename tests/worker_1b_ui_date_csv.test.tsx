@@ -46,7 +46,7 @@ describe('Worker 1B: UI/UX, Date Navigation, CSV Export & PWA Fixes', () => {
     });
 
     describe('P0-2 & P2-6: Exporter.exportToCSV Quoting and Fallbacks', () => {
-        it('encloses dateStr in quotes to prevent locale dates with commas from corrupting columns', async () => {
+        it('quotes canonical workout dates and text in CSV rows', async () => {
             let exportedContent = '';
             const downloadSpy = vi.spyOn(Exporter, 'downloadFile').mockImplementation(async (filename, content) => {
                 if (filename === 'allenamenti.csv') {
@@ -83,7 +83,7 @@ describe('Worker 1B: UI/UX, Date Navigation, CSV Export & PWA Fixes', () => {
             downloadSpy.mockRestore();
         });
 
-        it('falls back to session.date when globalStartTime is absent or 0', async () => {
+        it('uses session.date when globalStartTime is absent or zero', async () => {
             let exportedContent = '';
             const downloadSpy = vi.spyOn(Exporter, 'downloadFile').mockImplementation(async (filename, content) => {
                 if (filename === 'allenamenti.csv') {
@@ -92,25 +92,25 @@ describe('Worker 1B: UI/UX, Date Navigation, CSV Export & PWA Fixes', () => {
                 return true;
             });
 
-            const session: WorkoutSession = {
-                id: 's2',
-                date: '2026-05-14',
-                routineName: 'Gambe B',
-                exercises: [
-                    {
-                        exId: 'ex_1',
-                        sessionNote: '',
-                        sets: [{ id: 'set_1', kg: '120', reps: '5' }]
-                    }
-                ]
-            };
+            for (const globalStartTime of [undefined, 0]) {
+                const session: WorkoutSession = {
+                    id: 's2',
+                    date: '2026-05-14',
+                    globalStartTime,
+                    routineName: 'Gambe B',
+                    exercises: [
+                        {
+                            exId: 'ex_1',
+                            sessionNote: '',
+                            sets: [{ id: 'set_1', kg: '120', reps: '5' }]
+                        }
+                    ]
+                };
 
-            await Exporter.exportToCSV([session], {}, []);
-
-            expect(downloadSpy).toHaveBeenCalledWith('allenamenti.csv', expect.any(String), expect.anything());
-            const lines = exportedContent.split('\n');
-            const dataLine = lines[1];
-            expect(dataLine).toContain('"2026-05-14"');
+                await Exporter.exportToCSV([session], {}, []);
+                expect(downloadSpy).toHaveBeenCalledWith('allenamenti.csv', expect.any(String), expect.anything());
+                expect(exportedContent.split('\n')[1]).toContain('"2026-05-14"');
+            }
 
             downloadSpy.mockRestore();
         });
@@ -312,7 +312,7 @@ describe('Worker 1B: UI/UX, Date Navigation, CSV Export & PWA Fixes', () => {
             expect(screen.getByText('Altre misurazioni')).toBeDefined();
         });
 
-        it('TrainingPlanning duplicates cycle with (copia) in sentence case', async () => {
+        it('TrainingPlanning assigns a collision-safe numeric suffix when duplicating a cycle', async () => {
             render(<TrainingPlanning />);
 
             const optionsBtn = screen.getByTitle('Opzioni');
@@ -348,7 +348,7 @@ describe('Worker 1B: UI/UX, Date Navigation, CSV Export & PWA Fixes', () => {
     });
 
     describe('P2-4: PWA Manifest Configuration', () => {
-        it('vite.config.ts includes id in manifest configuration', () => {
+        it('Vite source config declares a stable basePath PWA manifest id', () => {
             const viteConfigPath = path.resolve(__dirname, '../vite.config.ts');
             const content = fs.readFileSync(viteConfigPath, 'utf-8');
             expect(content).toMatch(/manifest:\s*\{[^}]*id:\s*basePath/s);

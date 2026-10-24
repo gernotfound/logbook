@@ -13,7 +13,7 @@ import type { UserData } from '../../src/types';
 const parse = (value: unknown) => UserDataSchema.parse(value) as unknown as UserData;
 
 describe('versioned backup and non-mutating restore', () => {
-    it('round-trips every field and writes all independent version dimensions', () => {
+    it('round-trips the current representative business fields and all independent version dimensions', () => {
         const data = parse({ profile: { height: 180 }, customFoods: [{ id: 0, name: 'A' }], activeCycleId: 'c',
             activePains: ['knee'], nutritionPlanningOrigin: 'user-edited', pendingConflicts: { nutritionPlanning: { onDaysCount: 0 } },
             catalogOverrides: { foods: { '0': { name: 'Override' } }, hiddenFoodIds: ['x'] }, extension: { flag: true },

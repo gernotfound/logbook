@@ -93,7 +93,7 @@ describe('Firestore Security Rules Whitelist & Parity Verification', () => {
     expect(extractedKeys.length).toBe(expectedRootKeys.length);
   });
 
-  it('simulates security rules whitelist evaluation on valid userDocData', () => {
+  it('checks sample root payload keys against the static Rules whitelist (not authorization)', () => {
     const hasOnlyMatch = rulesContent.match(/incomingData\(\)\.keys\(\)\.hasOnly\(\[\s*([\s\S]*?)\s*\]\)/);
     const allowedKeys = new Set(
       hasOnlyMatch![1]
@@ -131,19 +131,16 @@ describe('Firestore Security Rules Whitelist & Parity Verification', () => {
     expect(rulesContent).toContain('docData.persisted == null || docData.persisted is bool');
   });
 
-  it('telemetry_errors and telemetry_events whitelist verification when configured in rules', () => {
-    if (rulesContent.includes('telemetry_errors')) {
-      expect(rulesContent).toMatch(/match\s+\/telemetry_errors\/\{errorId\}/);
-      expect(rulesContent).toContain('function isValidTelemetryError(docData, userId)');
-      expect(rulesContent).toContain('isValidTelemetryError(incomingData(), userId)');
-      expect(rulesContent).toContain('preservesTelemetryErrorIdentity()');
-    }
-    if (rulesContent.includes('telemetry_events')) {
-      expect(rulesContent).toMatch(/match\s+\/telemetry_events\/\{eventId\}/);
-      expect(rulesContent).toContain('function isValidTelemetryEvent(docData, userId)');
-      expect(rulesContent).toContain('isValidTelemetryEvent(incomingData(), userId)');
-      expect(rulesContent).toContain('isIdenticalTelemetryRetryOrExpiryUpgrade()');
-    }
+  it('requires the current bounded telemetry error/event Rules blocks', () => {
+    expect(rulesContent).toMatch(/match\s+\/telemetry_errors\/\{errorId\}/);
+    expect(rulesContent).toContain('function isValidTelemetryError(docData, userId)');
+    expect(rulesContent).toContain('isValidTelemetryError(incomingData(), userId)');
+    expect(rulesContent).toContain('preservesTelemetryErrorIdentity()');
+
+    expect(rulesContent).toMatch(/match\s+\/telemetry_events\/\{eventId\}/);
+    expect(rulesContent).toContain('function isValidTelemetryEvent(docData, userId)');
+    expect(rulesContent).toContain('isValidTelemetryEvent(incomingData(), userId)');
+    expect(rulesContent).toContain('isIdenticalTelemetryRetryOrExpiryUpgrade()');
   });
 
   it('bounds telemetry types, context, details and mutable fields', () => {

@@ -7,7 +7,12 @@ vi.mock('../../src/lib/healthConsent', async () => ({
     getVerifiedHealthConsentRevision: () => 1,
 }));
 vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackEvent: vi.fn(), trackError: vi.fn() } }));
+vi.mock('../../src/lib/checkDocSize', async importOriginal => {
+    const actual = await importOriginal<typeof import('../../src/lib/checkDocSize')>();
+    return { ...actual, checkDocSize: vi.fn(actual.checkDocSize) };
+});
 
+import { checkDocSize } from '../../src/lib/checkDocSize';
 import { applyDocumentChanges } from '../../src/lib/sync/transactionWriter';
 import { type SemanticOperation } from '../../src/lib/sync/semanticProjection';
 import { CURRENT_DATA_SCHEMA, CURRENT_SYNC_PROTOCOL, FutureVersionError, LegacyVersionError } from '../../src/lib/schemaEvolution';
@@ -123,9 +128,9 @@ it('2b. V3 API: replay converges after an interfering out-of-band write', async 
     expect(saved._schemaVersion).toBe(CURRENT_DATA_SCHEMA);
 });
 
-it('2c. two independent authenticated emulator clients converge after a staged offline edit and idempotent replay', async () => {
-    // Two independent authenticated Firebase contexts emulate two different
-    // clients; the second operation is held in its owner journal while offline.
+it('2c. independent authenticated clients converge after sequential writes and idempotent replay', async () => {
+    // Two independent authenticated contexts exercise the Firestore writer,
+    // not the durable offline journal (covered by the reconciliation suite).
     const clientA = asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore());
     const clientB = asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore());
     expect(clientA).not.toBe(clientB);
@@ -135,15 +140,15 @@ it('2c. two independent authenticated emulator clients converge after a staged o
         docPath: '', path: ['profile', 'height'], value: '183', isDelete: false,
         actorId: 's00', seq: 1, clock: { s00: 1 },
     };
-    const stagedWhileOfflineB: SemanticOperation = {
+    const editB: SemanticOperation = {
         docPath: '', path: ['profile', 'gender'], value: 'M', isDelete: false,
         actorId: 's01', seq: 1, clock: { s01: 1 },
     };
 
     await applyDocumentChanges(clientA, 'a', [editA], () => true, replicaA);
-    // Device B reconnects and sends its original idempotent operation twice.
-    await applyDocumentChanges(clientB, 'a', [stagedWhileOfflineB], () => true, replicaB);
-    await applyDocumentChanges(clientB, 'a', [stagedWhileOfflineB], () => true, replicaB);
+    // Device B submits an independent edit and then replays it idempotently.
+    await applyDocumentChanges(clientB, 'a', [editB], () => true, replicaB);
+    await applyDocumentChanges(clientB, 'a', [editB], () => true, replicaB);
     const [fromA, fromB] = await Promise.all([
         getDoc(doc(clientA, 'users/a')), getDoc(doc(clientB, 'users/a')),
     ]);
@@ -248,6 +253,7 @@ it('5. V3 API: checkDocSize receives a document that already contains schema and
         { docPath: '', path: ['profile', 'name'], value: 'A'.repeat(500), isDelete: false, actorId: 's00', seq: 1, clock: { s00: 1 } }
     ];
 
+    vi.mocked(checkDocSize).mockClear();
     const result = await applyDocumentChanges(db, 'a', ops, () => true, replica);
     expect(result.syncMeta[''].fields['profile/name']).toBeDefined();
 
@@ -255,4 +261,36 @@ it('5. V3 API: checkDocSize receives a document that already contains schema and
     expect(saved.profile.name).toHaveLength(500);
     expect(saved._schemaVersion).toBe(CURRENT_DATA_SCHEMA);
     expect(saved._sync.fields['profile/name']).toBeDefined();
+    expect(checkDocSize).toHaveBeenCalledOnce();
+    const [guardedData, docName] = vi.mocked(checkDocSize).mock.calls[0];
+    expect(docName).toBe('User Profile');
+    expect(guardedData).toEqual(saved);
+    expect(guardedData).toMatchObject({
+        _schemaVersion: CURRENT_DATA_SCHEMA,
+        _sync: {
+            protocolVersion: CURRENT_SYNC_PROTOCOL,
+            writer: { slot: replica.slot, replicaId: replica.replicaId, consentRevision: 1, seq: 1 },
+            fields: { 'profile/name': { actorId: 's00', seq: 1 } },
+        },
+    });
+});
+
+it('5b. aborts the transaction before writes when document-size preflight rejects', async () => {
+    const db = asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore());
+    const replica = await registerReplica(db, 'a');
+    const op: SemanticOperation = {
+        docPath: '', path: ['profile', 'name'], value: 'oversize-probe',
+        isDelete: false, actorId: 's00', seq: 1, clock: { s00: 1 },
+    };
+    vi.mocked(checkDocSize).mockClear();
+    vi.mocked(checkDocSize).mockImplementationOnce(() => { throw new Error('document-size-preflight'); });
+
+    await expect(applyDocumentChanges(db, 'a', [op], () => true, replica))
+        .rejects.toThrow('document-size-preflight');
+    expect(checkDocSize).toHaveBeenCalledOnce();
+    const [guardedData] = vi.mocked(checkDocSize).mock.calls[0];
+    expect(guardedData).toMatchObject({ _schemaVersion: CURRENT_DATA_SCHEMA, _sync: { protocolVersion: 3 } });
+    expect((await getDoc(doc(db, 'users/a'))).exists()).toBe(false);
+    const control = (await getDoc(doc(db, 'users/a/sync_control/state'))).data()!;
+    expect(control.replicas[replica.slot].lastSeq).toBe(0);
 });

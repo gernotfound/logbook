@@ -1,15 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.unmock('../src/lib/db');
+
+import { runTransaction } from 'firebase/firestore';
 import { ConsentedTestDB as DB } from './testUtils';
 import { DB as RealDB } from '../src/lib/db';
-import { writeBatch } from 'firebase/firestore';
+import { readLocal } from '../src/lib/sync/localRepository';
 
-let mockBatch: {
-    set: ReturnType<typeof vi.fn>;
-    delete: ReturnType<typeof vi.fn>;
-    commit: ReturnType<typeof vi.fn>;
-};
-
+const OWNER = 'user:test-user-id';
 const state = {
     profile: { height: '180' },
     history: [],
@@ -22,50 +19,52 @@ const state = {
     activePains: [],
 };
 
-describe('DB.saveUserData cloud failure semantics', () => {
+describe('DB.saveUserData cloud transaction failure semantics', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         DB.resetCache();
-        mockBatch = {
-            set: vi.fn(),
-            delete: vi.fn(),
-            commit: vi.fn().mockResolvedValue(undefined),
-        };
-        vi.mocked(writeBatch).mockReturnValue(mockBatch as never);
     });
 
-    it('classifies permission-denied as rejected instead of offline pending', async () => {
-        mockBatch.commit.mockRejectedValueOnce({ code: 'permission-denied' });
-
+    async function saveWithTransactionFailure(error: unknown) {
+        // Production writes use runTransaction. Inject at that exact transport
+        // boundary rather than depending on the mock adapter's writeBatch internals.
+        vi.mocked(runTransaction).mockRejectedValueOnce(error);
         const result = await DB.saveUserData(state);
+        expect(runTransaction).toHaveBeenCalled();
+        const retained = await readLocal(OWNER);
+        expect(retained?.pending.length).toBeGreaterThan(0);
+        expect(retained?.pending.every(operation =>
+            operation.actorId === retained.actorId && operation.seq <= retained.actorSeq,
+        )).toBe(true);
+        return result;
+    }
 
-        expect(result.ok).toBe(false);
-        expect(result.status).toBe('rejected');
+    it('classifies permission-denied as rejected while preserving the local journal', async () => {
+        const result = await saveWithTransactionFailure({ code: 'permission-denied' });
+        expect(result).toMatchObject({ ok: false, status: 'rejected' });
     });
 
-    it('keeps known transport failures retryable as local-pending', async () => {
-        mockBatch.commit.mockRejectedValueOnce({ code: 'unavailable' });
+    it('keeps a known transport failure retryable and replays the durable journal', async () => {
+        const result = await saveWithTransactionFailure({ code: 'unavailable' });
+        expect(result).toMatchObject({ ok: false, status: 'local-pending' });
 
-        const result = await DB.saveUserData(state);
-
-        expect(result.ok).toBe(false);
-        expect(result.status).toBe('local-pending');
+        const replay = await RealDB.saveUserData(state);
+        expect(replay).toMatchObject({ ok: true, status: 'synced' });
+        const acknowledged = await readLocal(OWNER);
+        expect(acknowledged?.pending).toEqual([]);
+        expect(acknowledged?.data.profile?.height).toBe('180');
     });
 
-    it('does not serialize the input snapshot when the journal is already durable', async () => {
+    it('does not serialize the caller snapshot when the journal is already durable', async () => {
         await DB.saveUserData(state);
         const circular: Record<string, unknown> = {};
         circular.self = circular;
         const result = await RealDB.saveUserData(circular);
-        expect(result.ok).toBe(true);
+        expect(result).toMatchObject({ ok: true, status: 'synced' });
     });
 
-    it('classifies unknown cloud/runtime failures as failed', async () => {
-        mockBatch.commit.mockRejectedValueOnce(new Error('unexpected cloud runtime failure'));
-
-        const result = await DB.saveUserData(state);
-
-        expect(result.ok).toBe(false);
-        expect(result.status).toBe('failed');
+    it('classifies unknown transaction/runtime failures as failed without deleting pending operations', async () => {
+        const result = await saveWithTransactionFailure(new Error('unexpected cloud runtime failure'));
+        expect(result).toMatchObject({ ok: false, status: 'failed' });
     });
 });
