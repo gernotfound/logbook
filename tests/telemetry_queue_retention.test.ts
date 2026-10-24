@@ -45,6 +45,19 @@ describe('Offline technical telemetry data minimization', () => {
     vi.useRealTimers();
   });
 
+  it('ignores retired standalone event items from authenticated ciphertext', () => {
+    const technical = queued('technical-error', Date.now());
+    const retiredEvent = {
+      id: 'retired-event', timestamp: Date.now(), itemType: 'event',
+      payload: { id: 'retired-event', timestamp: Date.now(), type: 'workout_saved',
+        context: technical.payload.context, userId: 'owner-a', sessionId: 'session-a' },
+    };
+    expect(storeEncryptedTelemetry('user:owner-a', JSON.stringify([retiredEvent, technical]))).toBe(true);
+    const storage = new TelemetryQueueStorage(() => 'owner-a');
+    expect(storage.getQueuedEvents().map(item => item.id)).toEqual(['technical-error']);
+    expect(storage.getQueuedEvents().every(item => item.itemType === 'error')).toBe(true);
+  });
+
   it('expires encrypted reports while retaining valid timestamps', () => {
     const storage = new TelemetryQueueStorage(() => 'owner-a');
     const now = Date.now();
