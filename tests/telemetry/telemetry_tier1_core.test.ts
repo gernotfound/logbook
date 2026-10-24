@@ -234,10 +234,9 @@ describe('TelemetryHub Vitest Integration Suite — Tier 1 Core', () => {
       vi.useFakeTimers();
       telemetryHub.init();
       telemetryHub.setUserId('zod-error-only');
-      const eventSpy = vi.spyOn(telemetryHub, 'trackEvent');
       reportZodSchemaFallback({ schema: 'TechnicalSchema', field: 'value', issueCode: 'invalid_type' });
       await vi.advanceTimersByTimeAsync(100);
-      expect(eventSpy).not.toHaveBeenCalled();
+      expect(telemetryHub).not.toHaveProperty('trackEvent');
       expect(mockSentryTransport.mock.calls.map((call: any) => call[0])).toEqual(['error']);
       expect((mockSentryTransport.mock.calls[0][1] as TelemetryErrorPayload).source)
         .toBe('zod_schema_fallback');
