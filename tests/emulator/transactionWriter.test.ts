@@ -26,7 +26,7 @@ const sealed = (path: string, business: Record<string, unknown>, sync: SyncMeta)
     sealCloudDocument(accountKey, 'a', path, business, sync);
 const plain = (raw: unknown, path = '') => {
     const decoded = openCloudDocument(accountKey, 'a', path, raw);
-    return { ...decoded.business, _schemaVersion: CURRENT_DATA_SCHEMA, _sync: decoded.sync };
+    return { ...(decoded.business as Record<string, any>), _schemaVersion: CURRENT_DATA_SCHEMA, _sync: decoded.sync };
 };
 const applyDocumentChanges = (
     db: Firestore, uid: string, operations: SemanticOperation[],
