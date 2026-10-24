@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import NutritionMeals from '../src/components/Nutrition/NutritionMeals';
 import NutritionView from '../src/components/Nutrition/NutritionView';
 import { useAppStore } from '../src/store/useAppStore';
+import { useDialogStore } from '../src/store/useDialogStore';
 import { NutritionMealSection } from '../src/components/Nutrition/meals/NutritionMealSection';
 import type { LoggedMealItem, NutritionSubTab } from '../src/types';
 import { Logic } from '../src/lib/logic';
@@ -301,6 +302,11 @@ describe('NutritionMeals decomposition parity', () => {
             await waitFor(() => expect(dispatch).toHaveBeenCalledTimes(1));
             expect(screen.getByTestId('nutrition-tab').textContent).toBe('meals');
             expect(screen.getByRole('heading', { name: 'Modifica alimento' })).toBeDefined();
+            expect(useDialogStore.getState().isOpen).toBe(true);
+            // A failed save shows a blocking dialog; a retry is allowed only
+            // after the user acknowledges it, not while the form is disabled.
+            act(() => useDialogStore.getState().closeDialog());
+            await waitFor(() => expect((screen.getByRole('button', { name: 'Salva modifiche' }) as HTMLButtonElement).disabled).toBe(false));
             fireEvent.click(screen.getByRole('button', { name: 'Salva modifiche' }));
             await waitFor(() => expect(screen.getByTestId('nutrition-tab').textContent).toBe('archive'));
             expect(dispatch).toHaveBeenCalledTimes(2);
