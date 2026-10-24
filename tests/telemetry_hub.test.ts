@@ -537,7 +537,7 @@ describe('Telemetry Sanitizer & Telemetry Hub Unit & Integration Suite', () => {
 
       expect(() => {
         telemetryHub.trackError(new Error('Perm test'));
-        telemetryHub.trackEvent('custom_event');
+        telemetryHub.trackError(new Error('Additional permission error'));
       }).not.toThrow();
 
       // The synchronous not.toThrow assertion alone cannot prove that the
@@ -548,11 +548,11 @@ describe('Telemetry Sanitizer & Telemetry Hub Unit & Integration Suite', () => {
           expect.objectContaining({ userId: 'user_perm', message: 'Perm test' })
         );
         expect(mockSentryTransport).toHaveBeenCalledWith(
-          'event',
-          expect.objectContaining({ userId: 'user_perm', type: 'custom_event' })
+          'error',
+          expect.objectContaining({ userId: 'user_perm', message: 'Additional permission error' })
         );
         const errors = telemetryHub.getQueuedEvents().filter(item => item.itemType === 'error');
-        expect(errors).toHaveLength(1);
+        expect(errors).toHaveLength(2);
         expect((errors[0].payload as TelemetryErrorPayload).message).toBe('Perm test');
       });
     });
@@ -664,18 +664,18 @@ describe('Telemetry Sanitizer & Telemetry Hub Unit & Integration Suite', () => {
   // 10. Offline Queue & Replay
   // =========================================================================
   describe('10. Offline Queue & Replay', () => {
-    it('keeps offline errors and events in the owner queue without plaintext writes', () => {
+    it('keeps offline technical errors in the owner queue without plaintext writes', () => {
       Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
       telemetryHub.init();
       telemetryHub.setUserId('user_offline_test');
 
       telemetryHub.trackError(new Error('Offline error'));
-      telemetryHub.trackEvent('workout_started', { offline: true });
+      telemetryHub.trackError(new Error('Second offline technical error'));
 
       const queue = telemetryHub.getQueuedEvents();
       expect(queue.length).toBe(2);
       expect(queue[0].itemType).toBe('error');
-      expect(queue[1].itemType).toBe('event');
+      expect(queue[1].itemType).toBe('error');
       expect(localStorage.getItem(telemetryHub.getQueueStorageKey())).toBeNull();
 
       Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
@@ -686,13 +686,13 @@ describe('Telemetry Sanitizer & Telemetry Hub Unit & Integration Suite', () => {
       telemetryHub.init();
 
       for (let i = 1; i <= 60; i++) {
-        telemetryHub.trackEvent(`event_${i}`);
+        telemetryHub.trackError(new Error(`fifo_error_${i}`));
       }
 
       const queue = telemetryHub.getQueuedEvents();
       expect(queue.length).toBe(TELEMETRY_QUEUE_CAPACITY);
-      expect(queue[0].payload.type).toBe('event_11');
-      expect(queue[queue.length - 1].payload.type).toBe('event_60');
+      expect(queue[0].payload.message).toBe('fifo_error_11');
+      expect(queue[queue.length - 1].payload.message).toBe('fifo_error_60');
 
       Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
     });
@@ -702,7 +702,7 @@ describe('Telemetry Sanitizer & Telemetry Hub Unit & Integration Suite', () => {
       telemetryHub.init();
       telemetryHub.setUserId('user_replay_test');
 
-      telemetryHub.trackEvent('offline_item_1');
+      telemetryHub.trackError(new Error('offline_item_1'));
       expect(telemetryHub.getQueuedEvents().length).toBe(1);
 
       Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
