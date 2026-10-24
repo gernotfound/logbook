@@ -53,11 +53,7 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
 
       // Only technical errors can enter the diagnostic queue.
       for (let i = 1; i <= 150; i++) {
-        if (i % 2 === 0) {
-          // Retired usage events are not produced.
-        } else {
-          telemetryHub.trackError(new Error(`error_${i}`), { source: 'custom' });
-        }
+        telemetryHub.trackError(new Error(`error_${i}`), { source: 'custom' });
       }
 
       expect(localStorage.getItem(telemetryHub.getQueueStorageKey())).toBeNull();
@@ -69,7 +65,7 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
       expect(queued.every(item => item.itemType === 'error')).toBe(true);
       for (let idx = 0; idx < queued.length; idx++) {
         expect((queued[idx].payload as TelemetryErrorPayload).message)
-          .toBe(`error_${51 + idx * 2}`);
+          .toBe(`error_${101 + idx}`);
       }
     });
   });
@@ -128,10 +124,13 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
       expect(mockSentryTransport).toHaveBeenCalled();
       
       const transportCalls = mockSentryTransport.mock.calls;
-      const dispatchedEvents = transportCalls.map((call: any) => call[1]?.message);
-      const dispatchedErrorMessages = transportCalls.map((call: any) => call[1]?.message);
-      expect(dispatchedEvents).toContain('valid_event_error');
-      expect(dispatchedErrorMessages).toContain('real_error_1');
+      const dispatches = transportCalls.map(([kind, payload]) => ({
+        kind, message: payload.message, owner: payload.userId,
+      }));
+      expect(dispatches).toEqual([
+        { kind: 'error', message: 'valid_event_error', owner: 'u1' },
+        { kind: 'error', message: 'real_error_1', owner: 'u1' },
+      ]);
 
       // The current owner queue should be empty after flushing
       expect(telemetryHub.getQueuedEvents().length).toBe(0);
