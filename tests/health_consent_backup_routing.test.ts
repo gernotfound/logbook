@@ -105,6 +105,35 @@ describe('health consent rights export transport routing', () => {
     expect(boundary.controlRead).not.toHaveBeenCalled();
   });
 
+  it('decrypts every encrypted month after the signed rights-export scan and rejects tampering', async () => {
+    const key = new Uint8Array(32).fill(17);
+    const sync = {
+      protocolVersion: 3 as const, clock: {}, fields: {},
+      writer: { slot: 's00', replicaId: 'consent-backup-device', generation: 1, seq: 0, consentRevision: 2 },
+    };
+    const goodMonth = sealCloudDocument(key, 'consent-export-user', 'nutrition_months/2026-10',
+      { '2026-10-24': { date: '2026-10-24', weight: 80 } }, sync);
+    const originalRoot = sealCloudDocument(key, 'consent-export-user', '',
+      { profile: { height: '178' } }, sync);
+    boundary.trustedExport.mockResolvedValue(new Map([
+      ['', originalRoot], ['nutrition_months/2026-10', goodMonth],
+    ]));
+    const snapshot = await exportSnapshot();
+    expect(snapshot.coverage.scope).toBe('cloud-and-device');
+    expect(snapshot.coverage.months).toEqual(['2026-10']);
+    expect(snapshot.data.nutrition['2026-10-24'].weight).toBe(80);
+    expect((snapshot.recovery.cloudDocuments as Record<string, any>)['nutrition_months/2026-10']._sealed)
+      .toBeUndefined();
+
+    boundary.trustedExport.mockResolvedValue(new Map([
+      ['', originalRoot], ['nutrition_months/2026-10', {
+        ...goodMonth, _sealed: { ...goodMonth._sealed, ciphertext: 'CORRUPTED' },
+      }],
+    ]));
+    await expect(exportSnapshot()).rejects.toThrow('Documento cloud cifrato non valido');
+    expect(boundary.directRootRead).not.toHaveBeenCalled();
+  });
+
   it('uses ordinary Firestore reads once a reacceptance is already active remotely', async () => {
     boundary.serverStatus = 'active';
     const snapshot = await exportSnapshot();
