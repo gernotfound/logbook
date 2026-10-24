@@ -7,7 +7,9 @@ import { stableStorageKeyInventory } from '../sync/stableStorageKeyInventory';
 import { getCachedCatalog } from '../catalog/catalogService';
 import { applyRemoteDocuments, projectDocuments, type DocumentData } from '../sync/documentProjection';
 import { applySemanticOperations, coversVectorClock, parseSyncMeta, type SyncMeta } from '../sync/semanticProjection';
-import { normalizeCloudDocument } from '../schemaEvolution';
+import { CURRENT_DATA_SCHEMA, normalizeCloudDocument } from '../schemaEvolution';
+import { requireRightsExportAccountDataKey } from '../sync/cloudAccountKeyAccess';
+import { openCloudDocument } from '../sync/cloudDocumentCipher';
 import { UserDataSchema } from '../schema';
 import { withTimeout } from './db_core';
 import type { UserData } from '../../types';
@@ -132,8 +134,19 @@ export async function collectBackupSnapshot(fallback: UserData, includeCloud: bo
         if (useTrustedExport) {
             // Rules deny direct reads while the server is withdrawn. Rights
             // export uses a separate authenticated, paginated Admin boundary.
+            // The Admin export deliberately transports ciphertext only.
+            // Decryption happens after the authenticated, revision-bracketed
+            // scan, solely in the owner's browser. The rights-specific key
+            // endpoint permits *existing* ADK retrieval while withdrawn but
+            // never provisions a new key or re-enables cloud writes.
+            const key = await requireRightsExportAccountDataKey(uid, assertCurrent);
+            assertCurrent();
             const withdrawnDocuments = await fetchWithdrawnCloudBackup(uid, assertCurrent);
-            for (const [path, raw] of withdrawnDocuments) { assertCurrent(); addRawDoc(path, raw); }
+            for (const [path, raw] of withdrawnDocuments) {
+                assertCurrent();
+                const decoded = openCloudDocument(key, uid, path, raw);
+                addRawDoc(path, { ...decoded.business, _schemaVersion: CURRENT_DATA_SCHEMA, _sync: decoded.sync });
+            }
         } else {
             const db = getDb();
             // Every supported client business transaction also advances the
