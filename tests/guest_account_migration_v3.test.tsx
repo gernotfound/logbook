@@ -103,6 +103,26 @@ describe('guest -> account V3 migration', () => {
         expect(localStorage.getItem('logbook_is_guest')).toBeNull();
     });
 
+    it('fences an existing account archive if guest migration encounters undecryptable cloud data', async () => {
+        const { cloud, guest } = fixtures();
+        const { initializeLocal } = await import('../src/lib/sync/localRepository');
+        const { CloudCiphertextError } = await import('../src/lib/sync/cloudDocumentCipher');
+        await initializeLocal('user:a', cloud);
+        localStorage.setItem('logbook_is_guest', 'true');
+        await beginGuestMigrationIntent('merge', 'recovery', { uid: user.uid });
+        useAppStore.getState().setUserData(guest);
+        vi.mocked(DB.loadCloudPayload).mockRejectedValueOnce(new CloudCiphertextError());
+
+        render(<AuthProvider><div>Guest migration integrity check</div></AuthProvider>);
+        await waitFor(async () => {
+            const preserved = await readLocal('user:a');
+            expect(preserved?.data.profile?.gender).toBe('M');
+            expect(preserved?.cloudIntegrityFence).toEqual(expect.any(String));
+            expect(useAppStore.getState().cloudIntegrityBlocked).toBe(true);
+        });
+        expect(DB.loadCloudPayload).toHaveBeenCalled();
+    });
+
     it('keeps guest progress local and does not replicate it before account-specific consent', async () => {
         const guest = parse({
             profile: { height: '175' },

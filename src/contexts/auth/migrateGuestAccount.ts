@@ -217,7 +217,7 @@ export async function migrateGuestAccount({ user, guestData, policy, setUserData
             useAppStore.setState({
                 syncHealth: 'failed', cloudIntegrityBlocked: true, saveError: error.message,
             });
-        } else if (code === 'invalid-cloud-sync-metadata'
+        } else if (code === 'invalid-cloud-sync-metadata' || code === 'invalid-cloud-ciphertext'
             || ['CloudDataIntegrityError', 'LegacyVersionError', 'FutureVersionError', 'ZodError'].includes(
                 error instanceof Error ? error.name : '',
             )) {
