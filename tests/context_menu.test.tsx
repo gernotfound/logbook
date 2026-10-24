@@ -88,6 +88,25 @@ describe('ContextMenu Component (Milestone M1)', () => {
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
+  it('emits exactly one callback per actual transition in React StrictMode', () => {
+    const onOpenChange = vi.fn();
+    render(
+      <React.StrictMode>
+        <ContextMenu items={sampleItems} onOpenChange={onOpenChange} />
+      </React.StrictMode>,
+    );
+    const trigger = screen.getByRole('button', { name: 'Opzioni' });
+    fireEvent.click(trigger);
+    expect(screen.getByRole('menu')).not.toBeNull();
+    expect(onOpenChange).toHaveBeenCalledTimes(1);
+    expect(onOpenChange).toHaveBeenNthCalledWith(1, true);
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(onOpenChange).toHaveBeenCalledTimes(2);
+    expect(onOpenChange).toHaveBeenNthCalledWith(2, false);
+  });
+
   it('supports custom ariaLabel, triggerTitle, triggerClassName, and className', () => {
     render(
       <ContextMenu

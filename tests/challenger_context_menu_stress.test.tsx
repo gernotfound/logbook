@@ -155,8 +155,16 @@ describe('Empirical Adversarial Stress Suite: ContextMenu & Integrations', () =>
         { id: '2', label: 'Opzione 2', onClick: vi.fn(), hidden: true },
       ];
       rerender(<ContextMenu items={allHiddenItems} />);
-      // When all visible items are empty, component returns null safely
+      // When all visible items are empty, component returns null safely.
       expect(screen.queryByRole('menu')).toBeNull();
+
+      // The next set of actions must remain closed until opened again by the user.
+      rerender(<ContextMenu items={initialItems} />);
+      const restoredTrigger = screen.getByRole('button', { name: 'Opzioni' });
+      expect(restoredTrigger.getAttribute('aria-expanded')).toBe('false');
+      expect(screen.queryByRole('menu')).toBeNull();
+      fireEvent.click(restoredTrigger);
+      expect(screen.getAllByRole('menuitem')).toHaveLength(2);
     });
   });
 
@@ -691,6 +699,28 @@ describe('Empirical Adversarial Stress Suite: ContextMenu & Integrations', () =>
   /* 7. ASYNC LIFECYCLE & TOUCH TORTURE STRESS                                   */
   /* -------------------------------------------------------------------------- */
   describe('7. Lifecycle Races & Touch Stress', () => {
+    it('does not run stale keyboard focus after closing and reopening with a pointer', () => {
+      vi.useFakeTimers();
+      const outside = document.createElement('button');
+      document.body.appendChild(outside);
+      try {
+        render(<ContextMenu items={sampleItems} />);
+        const trigger = screen.getByRole('button', { name: 'Opzioni' });
+        fireEvent.keyDown(trigger, { key: 'ArrowDown' });
+        expect(screen.getByRole('menuitem', { name: 'Modifica scheda' })).toBe(document.activeElement);
+        fireEvent.keyDown(document, { key: 'Escape' });
+        expect(screen.queryByRole('menu')).toBeNull();
+        fireEvent.click(trigger);
+        expect(screen.getByRole('menu')).not.toBeNull();
+        outside.focus();
+        vi.runAllTimers();
+        expect(document.activeElement).toBe(outside);
+      } finally {
+        outside.remove();
+        vi.useRealTimers();
+      }
+    });
+
     it('does not focus a detached menu after immediate unmount', () => {
       vi.useFakeTimers();
       const outside = document.createElement('button');
