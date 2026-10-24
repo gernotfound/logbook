@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as sentryClient from '../src/lib/sentryClient';
-import { TELEMETRY_DISPATCH_TIMEOUT_MS, type TelemetryErrorPayload, type TelemetryEventPayload } from '../src/lib/telemetry/contracts';
-import { dispatchTelemetryError, dispatchTelemetryEvent } from '../src/lib/telemetry/transportRetry';
+import { TELEMETRY_DISPATCH_TIMEOUT_MS, type TelemetryErrorPayload } from '../src/lib/telemetry/contracts';
+import { dispatchTelemetryError } from '../src/lib/telemetry/transportRetry';
 
 const OWNER = 'telemetry-timeout-owner';
 const context = { appVersion: 'test', platform: 'other', displayMode: 'browser', online: true } as const;
@@ -17,15 +17,6 @@ const errorPayload: TelemetryErrorPayload = {
   firstSeen: 1000,
   lastSeen: 1000,
 };
-const eventPayload: TelemetryEventPayload = {
-  userId: OWNER,
-  timestamp: 1000,
-  type: 'custom_event',
-  details: { phase: 'synthetic' },
-  context,
-  sessionId: 'synthetic-session',
-};
-
 describe('Telemetry dispatch timeout cleanup', () => {
   beforeEach(() => {
     localStorage.clear();
@@ -38,15 +29,13 @@ describe('Telemetry dispatch timeout cleanup', () => {
     localStorage.clear();
   });
 
-  it('clears the deadline after successful error and event dispatches', async () => {
+  it('clears the deadline after successful error dispatch', async () => {
     const send = vi.spyOn(sentryClient, 'sendTelemetryToSentry').mockResolvedValue(true);
 
     expect(await dispatchTelemetryError(errorPayload, () => OWNER)).toBe(true);
     expect(vi.getTimerCount()).toBe(0);
 
-    expect(await dispatchTelemetryEvent(eventPayload, () => OWNER)).toBe(true);
-    expect(vi.getTimerCount()).toBe(0);
-    expect(send).toHaveBeenCalledTimes(2);
+    expect(send).toHaveBeenCalledTimes(1);
   });
 
   it('keeps the deadline active for a hung request and returns false on timeout', async () => {

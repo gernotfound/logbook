@@ -46,28 +46,34 @@ describe('Render Test Suite - Zero Crash Verification', () => {
     expect(screen.getAllByText(/Sessione/i).length).toBeGreaterThan(0);
   });
 
-  test('renders TrainingView with routines subtab', () => {
+  test('renders TrainingView with routines subtab', async () => {
     const setSubTabMock = vi.fn();
     const { container } = renderWithProviders(
       <TrainingView subTab="routines" setSubTab={setSubTabMock} />
     );
     expect(container).toBeDefined();
+    expect(screen.getByRole('tab', { name: 'Schede' }).getAttribute('aria-selected')).toBe('true');
+    expect(await screen.findByRole('button', { name: /Crea scheda/i })).toBeDefined();
   });
 
-  test('renders TrainingView with history subtab', () => {
+  test('renders TrainingView with history subtab', async () => {
     const setSubTabMock = vi.fn();
     const { container } = renderWithProviders(
       <TrainingView subTab="history" setSubTab={setSubTabMock} />
     );
     expect(container).toBeDefined();
+    expect(screen.getByRole('tab', { name: 'Storico' }).getAttribute('aria-selected')).toBe('true');
+    expect(await screen.findByText(/Storico Allenamenti/i)).toBeDefined();
   });
 
-  test('renders TrainingView with exercises subtab', () => {
+  test('renders TrainingView with exercises subtab', async () => {
     const setSubTabMock = vi.fn();
     const { container } = renderWithProviders(
       <TrainingView subTab="exercises" setSubTab={setSubTabMock} />
     );
     expect(container).toBeDefined();
+    expect(screen.getByRole('tab', { name: 'Esercizi' }).getAttribute('aria-selected')).toBe('true');
+    expect(await screen.findByRole('button', { name: /Crea esercizio/i })).toBeDefined();
   });
 
   test('renders TrainingSession with no active workout', () => {
@@ -126,6 +132,8 @@ describe('Render Test Suite - Zero Crash Verification', () => {
       <NutritionView subTab="meals" setSubTab={setSubTabMock} />
     );
     expect(container).toBeDefined();
+    expect(screen.getByRole('tab', { name: 'Pasti' }).getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByRole('tabpanel', { name: 'Pasti' })).not.toBeNull();
   });
 
   test('renders NutritionMeals without crashing', () => {

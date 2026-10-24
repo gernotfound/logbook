@@ -139,11 +139,15 @@ describe('Integration Suite: Guest Mode & Global Catalog Resolution', () => {
         it('T1.4: Flat store contract: resolveEffectiveExercises and resolveEffectiveFoods produce ready-to-consume lists', () => {
             const catalog = getSeedCatalog();
 
-            const effectiveExercises = resolveEffectiveExercises(catalog.exercises);
-            const effectiveFoods = resolveEffectiveFoods(catalog.foods);
+            expect(catalog.exercises).toHaveLength(0);
+            expect(catalog.foods).toHaveLength(0);
+            const populatedExercises = [{ id: 'std-ex', name: 'Panca', trackingType: 'weight_reps' as const }];
+            const populatedFoods = [{ id: 'std-food', name: 'Riso', kcal: 100, pro: 2, carbs: 20, fat: 1 }];
+            const effectiveExercises = resolveEffectiveExercises(populatedExercises);
+            const effectiveFoods = resolveEffectiveFoods(populatedFoods);
 
-            expect(effectiveExercises).toHaveLength(catalog.exercises.length);
-            expect(effectiveFoods).toHaveLength(catalog.foods.length);
+            expect(effectiveExercises.map(e => e.id)).toEqual(['std-ex']);
+            expect(effectiveFoods.map(f => f.id)).toEqual(['std-food']);
 
             // All global exercises have isDefault = true and sets = []
             expect(effectiveExercises.every(e => e.isDefault === true)).toBe(true);
@@ -161,11 +165,11 @@ describe('Integration Suite: Guest Mode & Global Catalog Resolution', () => {
             });
 
             const currentData = useAppStore.getState().userData;
-            expect(currentData?.library).toHaveLength(catalog.exercises.length);
-            expect(currentData?.customFoods).toHaveLength(catalog.foods.length);
+            expect(currentData?.library?.map(e => e.id)).toEqual(['std-ex']);
+            expect(currentData?.customFoods?.map(f => f.id)).toEqual(['std-food']);
         });
 
-        it('T1.5: Zero-flash transition: Seed -> IDB Cache -> Remote Sync never flashes an empty list', async () => {
+        it('T1.5: Catalog snapshots stay available across local cache and remote manifest no-op', async () => {
             // Step 1: Initial Cold State (using a populated fixture since seed is empty)
             const stage1Catalog = {
                 manifest: { version: '1.0.0', schemaVersion: 1, docRefs: { exercises: 'exercises_v1', foods: 'foods_v1' }, itemCounts: { exercises: 5, foods: 5 } },

@@ -38,7 +38,7 @@ describe('Integration Suite: Guest Mode & Global Catalog Resolution', () => {
     // =========================================================================
     describe('Tier 4: Real-World Scenarios & Cloud Merge Delta Isolation', () => {
 
-        it('T4.1: Full guest lifecycle -> Google linking merges custom data and preserves catalogOverrides', () => {
+        it('T4.1: mergeUserData preserves guest deltas and overrides with existing account data', () => {
             // Cloud user already has data on Firestore
             const cloudData: UserData = {
                 profile: { gender: 'M', height: '178', dob: '1992-04-15' },
@@ -240,7 +240,7 @@ describe('Integration Suite: Guest Mode & Global Catalog Resolution', () => {
             expect(serializedPayload.length).toBeLessThan(10000);
         });
 
-        it('T4.3: Fresh Google account linking with empty cloud doc persists guest deltas without seed bloat', async () => {
+        it('T4.3: Merging guest deltas into an empty cloud document avoids seed bloat', async () => {
             const seed = getSeedCatalog();
             await saveCatalogToCache(seed);
 

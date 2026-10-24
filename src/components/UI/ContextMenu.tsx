@@ -58,8 +58,10 @@ const renderIcon = (icon: ContextMenuItem['icon']) => {
   return icon as React.ReactNode;
 };
 
-export const ContextMenu: React.FC<ContextMenuProps> = ({
-  items,
+type RenderedContextMenuProps = ContextMenuProps & { visibleItems: ContextMenuItem[] };
+
+const RenderedContextMenu: React.FC<RenderedContextMenuProps> = ({
+  visibleItems,
   ariaLabel = 'Opzioni',
   triggerTitle,
   triggerClassName = '',
@@ -72,17 +74,42 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
-
-  // Filtra elementi visibili
-  const visibleItems = items.filter(item => !item.hidden);
+  const requestedFocus = useRef<'first' | 'last' | null>(null);
 
   const toggleOpen = useCallback((openState?: boolean) => {
-    setIsOpen(prev => {
-      const next = openState !== undefined ? openState : !prev;
-      onOpenChange?.(next);
-      return next;
-    });
-  }, [onOpenChange]);
+    const next = openState ?? !isOpen;
+    if (next === isOpen) return;
+    if (!next) requestedFocus.current = null;
+    setIsOpen(next);
+    onOpenChange?.(next);
+  }, [isOpen, onOpenChange]);
+
+  useEffect(() => {
+    if (!isOpen || !requestedFocus.current) return;
+    const buttons = menuRef.current?.querySelectorAll<HTMLButtonElement>(
+      'button[role="menuitem"]:not(:disabled)',
+    );
+    const target = requestedFocus.current === 'first' ? buttons?.[0] : buttons?.[buttons.length - 1];
+    requestedFocus.current = null;
+    target?.focus();
+  }, [isOpen]);
+
+  // Pointer outside clicks do not arbitrate keyboard-only openings across cards.
+  // Notify peer menus before a new one opens, keeping focus in the new menu.
+  useEffect(() => {
+    if (!isOpen) return;
+    const onPeerOpen = (event: Event) => {
+      if ((event as CustomEvent<HTMLDivElement>).detail !== containerRef.current) {
+        toggleOpen(false);
+      }
+    };
+    document.addEventListener('logbook:context-menu-open', onPeerOpen);
+    return () => document.removeEventListener('logbook:context-menu-open', onPeerOpen);
+  }, [isOpen, toggleOpen]);
+
+  const notifyPeers = () => {
+    document.dispatchEvent(new CustomEvent('logbook:context-menu-open', { detail: containerRef.current }));
+  };
 
   // Gestione click outside (mousedown + touchstart)
   useEffect(() => {
@@ -164,6 +191,10 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
   const handleTriggerClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
+    if (!isOpen) {
+      requestedFocus.current = null;
+      notifyPeers();
+    }
     toggleOpen();
   };
 
@@ -172,21 +203,17 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
       if (!isOpen) {
         e.preventDefault();
         e.stopPropagation();
+        requestedFocus.current = 'first';
+        notifyPeers();
         toggleOpen(true);
-        setTimeout(() => {
-          const buttons = getItemButtons();
-          buttons[0]?.focus();
-        }, 0);
       }
     } else if (e.key === 'ArrowUp') {
       if (!isOpen) {
         e.preventDefault();
         e.stopPropagation();
+        requestedFocus.current = 'last';
+        notifyPeers();
         toggleOpen(true);
-        setTimeout(() => {
-          const buttons = getItemButtons();
-          buttons[buttons.length - 1]?.focus();
-        }, 0);
       }
     }
   };
@@ -226,8 +253,6 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     toggleOpen(false);
     item.onClick(e);
   };
-
-  if (visibleItems.length === 0) return null;
 
   const resolvedTriggerTitle = triggerTitle || ariaLabel;
   const containerClassName = `context-menu-container ${className}`.trim();
@@ -302,4 +327,12 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
       )}
     </div>
   );
+};
+
+export const ContextMenu: React.FC<ContextMenuProps> = props => {
+  const visibleItems = props.items.filter(item => !item.hidden);
+  if (visibleItems.length === 0) return null;
+  // Unmount the stateful menu when its last action disappears. Reintroduced
+  // actions must not resurrect a dropdown that the user no longer sees.
+  return <RenderedContextMenu {...props} visibleItems={visibleItems} />;
 };

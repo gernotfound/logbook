@@ -7,18 +7,22 @@ let messageIdCounter = 0;
 export function useAnalyticsWorker(enabled = true) {
     const workerRef = useRef<Worker | null>(null);
     const mounted = useRef(false);
+    // A previous activation must never complete work for a newly activated view.
+    const generationRef = useRef(0);
     const abortControllerRef = useRef<AbortController | null>(null);
     const pendingPromises = useRef<Map<number, { resolve: (val: any) => void, reject: (err: any) => void, timeoutId: ReturnType<typeof setTimeout> }>>(new Map());
 
     useEffect(() => {
         if (!enabled) return;
         mounted.current = true;
+        generationRef.current++;
         abortControllerRef.current = new AbortController();
         const pendingForThisMount = pendingPromises.current;
         try {
-            workerRef.current = new AnalyticsWorker();
-            
-            workerRef.current.onmessage = (e) => {
+            const worker = new AnalyticsWorker();
+            workerRef.current = worker;
+
+            worker.onmessage = (e) => {
                 const { id, type, result, error } = e.data;
                 const promiseHandlers = pendingForThisMount.get(id);
                 if (promiseHandlers) {
@@ -32,11 +36,13 @@ export function useAnalyticsWorker(enabled = true) {
                 }
             };
             
-            workerRef.current.onerror = (e) => {
+            worker.onerror = (e) => {
+                // A late event from a terminated generation cannot terminate its successor.
+                if (workerRef.current !== worker) return;
                 console.warn("Analytics Worker encountered an error:", e);
                 // A failed worker is not retried: terminate it and use the established
                 // synchronous fallback for current and subsequent requests.
-                workerRef.current?.terminate();
+                worker.terminate();
                 workerRef.current = null;
                 const pending = Array.from(pendingForThisMount.entries());
                 pendingForThisMount.clear();
@@ -71,10 +77,13 @@ export function useAnalyticsWorker(enabled = true) {
         type: string, payload: any, fallbackFn: () => any | Promise<any>, timeoutMs = 8000
     ) => {
         if (!mounted.current) throw new Error('Calcolo annullato: vista chiusa');
+        const generation = generationRef.current;
+        const isActiveGeneration = () => mounted.current && generationRef.current === generation;
         const runFallback = async () => {
+            if (!isActiveGeneration()) throw new Error('Calcolo annullato: vista chiusa');
             const start = performance.now();
             const result = await fallbackFn();
-            if (!mounted.current) throw new Error('Calcolo annullato: vista chiusa');
+            if (!isActiveGeneration()) throw new Error('Calcolo annullato: vista chiusa');
             console.info(`Analytics fallback for ${type} took ${(performance.now() - start).toFixed(2)}ms`);
             return result;
         };

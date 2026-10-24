@@ -14,6 +14,9 @@ import { applyDomainOperations } from '../src/lib/sync/domainOperations';
 import { applyRemoteDocuments, projectDocuments } from '../src/lib/sync/documentProjection';
 import { initializeLocal, readLocal } from '../src/lib/sync/localRepository';
 import { sanitizeHistoryMonthDocument } from '../src/lib/sync/monthlyIntegrity';
+import { prepareUnlockedTestArchive } from './secureVaultFixture';
+import { requireUnlockedLocalKey } from '../src/lib/sync/secureArchiveSession';
+import { openLocalJson, sealLocalJson, SEALED_LOCAL_PREFIX } from '../src/lib/sync/secureArchiveCipher';
 
 const catalog: CachedGlobalCatalog = {
     manifest: {
@@ -70,17 +73,23 @@ describe('F-004 training history identity integrity', () => {
         expect(userData.history?.map(item => item.id)).toEqual(expectedIds);
     });
 
-    it('quarantines ghost workouts when hydrating a local envelope', async () => {
+    it('quarantines ghost workouts during encrypted owner envelope recovery', async () => {
+        const owner = 'user:test-user-id';
+        await prepareUnlockedTestArchive(owner);
         const base = UserDataSchema.parse({}) as unknown as UserData;
-        await initializeLocal('guest', base);
+        await initializeLocal(owner, base);
 
-        const key = 'logbook:v2:guest';
-        const raw = await get<any>(key);
-        raw.data.history = malformedHistory;
-        raw.baseline.history = malformedHistory;
-        await set(key, raw);
+        const key = 'logbook:v2:' + owner;
+        const raw = await get<string>(key);
+        expect(raw?.startsWith(SEALED_LOCAL_PREFIX)).toBe(true);
+        const unlocked = requireUnlockedLocalKey(owner);
+        const record = openLocalJson(unlocked, owner, key, raw!) as { data: UserData; baseline: UserData };
+        record.data.history = malformedHistory as WorkoutSession[];
+        record.baseline.history = malformedHistory as WorkoutSession[];
+        await set(key, sealLocalJson(unlocked, owner, key, record));
+        expect((await get<string>(key))?.startsWith(SEALED_LOCAL_PREFIX)).toBe(true);
 
-        const envelope = await readLocal('guest');
+        const envelope = await readLocal(owner);
         expect(envelope?.data.history?.map(item => item.id)).toEqual(expectedIds);
         expect(envelope?.baseline.history?.map(item => item.id)).toEqual(expectedIds);
     });

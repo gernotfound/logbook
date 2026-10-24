@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { screen, fireEvent, render, cleanup, waitFor } from '@testing-library/react';
 import WeeklyVolumeChart from '../src/components/analytics/WeeklyVolumeChart';
+import { Chart as ChartJS } from 'chart.js';
+import { getLocalDateString } from '../src/lib/utils/date';
 import VolumeCaloriesCorrelationChart from '../src/components/analytics/VolumeCaloriesCorrelationChart';
 
 import {   computeVolumeCaloriesCorrelation, calculatePearsonCorrelation, generateWeekIntervals } from '../src/lib/calc/analytics';
@@ -41,8 +43,9 @@ describe('Challenger 2: UI/UX Adversarial & Responsive Stress Test Suite', () =>
     // Relative to the test clock: these suites must not expire on a future date.
     const recentDate = (weeksAgo: number, dayOffset = 0): string => {
         const date = new Date();
-        date.setUTCDate(date.getUTCDate() - 7 * weeksAgo + dayOffset);
-        return date.toISOString().slice(0, 10);
+        date.setHours(12, 0, 0, 0);
+        date.setDate(date.getDate() - 7 * weeksAgo + dayOffset);
+        return getLocalDateString(date);
     };
 
     const generateRealisticHistory = (): WorkoutSession[] => [
@@ -319,10 +322,15 @@ describe('Challenger 2: UI/UX Adversarial & Responsive Stress Test Suite', () =>
 
             // End on 24 sett
             fireEvent.click(btn24);
+            expect(btn24.getAttribute('aria-pressed')).toBe('true');
+            expect(btn4.getAttribute('aria-pressed')).toBe('false');
             await waitFor(() => {
                 expect(container.querySelector('canvas')).not.toBeNull();
             });
-            expect(container.querySelector('canvas')).not.toBeNull();
+            await waitFor(() => {
+                const chart = ChartJS.getChart(container.querySelector('canvas')!);
+                expect(chart?.data.labels).toHaveLength(24);
+            });
         });
 
         it('3.2: Rapidly toggles periods in VolumeCaloriesCorrelationChart without error', async () => {
@@ -350,10 +358,15 @@ describe('Challenger 2: UI/UX Adversarial & Responsive Stress Test Suite', () =>
             }
 
             fireEvent.click(btn12);
+            expect(btn12.getAttribute('aria-pressed')).toBe('true');
+            expect(btn24.getAttribute('aria-pressed')).toBe('false');
             await waitFor(() => {
                 expect(container.querySelector('canvas')).not.toBeNull();
             });
-            expect(container.querySelector('canvas')).not.toBeNull();
+            await waitFor(() => {
+                const chart = ChartJS.getChart(container.querySelector('canvas')!);
+                expect(chart?.data.labels).toHaveLength(12);
+            });
         });
 
         it('3.3: Verifies label formatting changes dynamically with period (d MMM vs dd/MM)', () => {
@@ -369,7 +382,7 @@ describe('Challenger 2: UI/UX Adversarial & Responsive Stress Test Suite', () =>
     // SECTION 4: CANVAS, HIGH-DPI, RESIZE & MEMORY LEAK RESILIENCE
     // =========================================================================
     describe('4. Canvas, High-DPI, Resize & Memory Leak Resilience', () => {
-        it('4.1: High-DPI Retina (DPR 2x and 3x) environment simulation', async () => {
+        it('4.1: Chart mounts with mocked DPR 2x and 3x (no physical Retina test)', async () => {
             // Simulate Retina Display
             const originalDPR = window.devicePixelRatio;
             Object.defineProperty(window, 'devicePixelRatio', {
@@ -418,7 +431,7 @@ describe('Challenger 2: UI/UX Adversarial & Responsive Stress Test Suite', () =>
             });
         });
 
-        it('4.2: Rapid 50-cycle mount/unmount memory leak stress test', () => {
+        it('4.2: 50-cycle mount/unmount smoke (not heap or listener leak proof)', () => {
             const history = generateRealisticHistory();
             const nutrition = generateRealisticNutrition();
 
@@ -448,7 +461,7 @@ describe('Challenger 2: UI/UX Adversarial & Responsive Stress Test Suite', () =>
             expect(document.querySelectorAll('svg')).toHaveLength(0);
         });
 
-        it('4.3: Responsive viewport resizing across mobile (320px), mobile standard (375px), tablet (768px), desktop (1024px)', async () => {
+        it('4.3: Charts survive resize events in jsdom (no layout measurement)', async () => {
             const history = generateRealisticHistory();
             const nutrition = generateRealisticNutrition();
 
@@ -505,24 +518,23 @@ describe('Challenger 2: UI/UX Adversarial & Responsive Stress Test Suite', () =>
             });
         });
 
-        it('5.2: Verifies all Pearson correlation insight strings follow strict sentence case', () => {
-            const insights = [
-                'Dati insufficienti nelle settimane selezionate per stimare una correlazione affidabile.',
-                'Forte correlazione positiva: l\'apporto energetico supporta l\'aumento dei carichi e del volume di lavoro.',
-                'Moderata correlazione positiva: il volume tende a salire nelle settimane con maggior introito calorico.',
-                'Correlazione neutra: il volume di allenamento è indipendente dalle oscillazioni caloriche registrate.',
-                'Moderata correlazione inversa: il volume di allenamento si è mantenuto alto anche con apporto calorico contenuto.',
-                'Forte correlazione inversa: marcata discrepanza tra volume di allenamento ed apporto calorico.',
-                'Registra più settimane con allenamenti e nutrizione per sbloccare l\'analisi predittiva della correlazione.'
-            ];
-
-            insights.forEach(str => {
-                // First character must be uppercase
-                expect(str.charAt(0)).toBe(str.charAt(0).toUpperCase());
-                // No words after the first word (except after colon or acronyms) should be capitalized unless proper
-                // Let's check no Title Case like Volume Di Allenamento
-                expect(str).not.toMatch(/[a-z] [A-Z][a-z]/);
-            });
+        it('5.2: Production insight text distinguishes strong positive and negative correlations', () => {
+            const weeks = generateWeekIntervals(4, '2026-08-22');
+            const dates = weeks.map(week => week.weekStart);
+            const history: WorkoutSession[] = dates.map((date, i) => ({
+                id: `session-${i}`, date,
+                exercises: [{ exId: 'ex_bench', sessionNote: '', sets: [{ id: `set-${i}`, kg: String(10 + i * 10), reps: '10' }] }]
+            }));
+            const nutritionFor = (values: number[]): Record<string, NutritionDay> =>
+                Object.fromEntries(dates.map((date, i) => [date, {
+                    date, kcal: values[i], carbs: 0, pro: 0, fat: 0
+                }]));
+            const positive = computeVolumeCaloriesCorrelation(history, nutritionFor([1800, 2100, 2400, 2700]), mockLibrary, 80, 4, '2026-08-22');
+            const negative = computeVolumeCaloriesCorrelation(history, nutritionFor([2700, 2400, 2100, 1800]), mockLibrary, 80, 4, '2026-08-22');
+            expect(positive.stats.correlationInsight).toMatch(/^Associazione positiva forte osservata/);
+            expect(negative.stats.correlationInsight).toMatch(/^Associazione inversa forte osservata/);
+            expect(positive.stats.correlationInsight).toContain('Non indica un rapporto di causa-effetto.');
+            expect(negative.stats.correlationInsight).toContain('Non indica un rapporto di causa-effetto.');
         });
     });
 
@@ -530,7 +542,7 @@ describe('Challenger 2: UI/UX Adversarial & Responsive Stress Test Suite', () =>
     // SECTION 6: INTERACTION CALLBACKS & CHART HOOKS
     // =========================================================================
     describe('6. Interactive Callbacks & Callback Hooks', () => {
-        it('6.1: onSelectWeek callback fires when defined', () => {
+        it('6.1: Chart.js click option invokes onSelectWeek only for an existing bar', async () => {
             const onSelect = vi.fn();
             const history = generateRealisticHistory();
 
@@ -544,6 +556,17 @@ describe('Challenger 2: UI/UX Adversarial & Responsive Stress Test Suite', () =>
             );
 
             expect(screen.getByText('Volume di allenamento settimanale')).toBeDefined();
+            const canvas = await screen.findByRole('img', { name: /Volume settimanale/i });
+            await waitFor(() => expect(ChartJS.getChart(canvas as HTMLCanvasElement)).toBeDefined());
+            const chart = ChartJS.getChart(canvas as HTMLCanvasElement)!;
+            const chartClick = chart.options.onClick;
+            expect(chartClick).toBeTypeOf('function');
+            chartClick!.call(chart, {} as any, [{ index: 0 }] as any, chart as any);
+            expect(onSelect).toHaveBeenCalledTimes(1);
+            expect(onSelect).toHaveBeenCalledWith(expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/));
+            chartClick!.call(chart, {} as any, [{ index: 999 }] as any, chart as any);
+            chartClick!.call(chart, {} as any, [] as any, chart as any);
+            expect(onSelect).toHaveBeenCalledTimes(1);
         });
 
         it('6.2: Pearson correlation math boundaries (exact 1.0, -1.0, 0.0, NaN guard)', () => {

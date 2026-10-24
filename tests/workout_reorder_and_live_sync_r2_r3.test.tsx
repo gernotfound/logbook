@@ -327,8 +327,11 @@ describe('Workout Reorder (R2) and Live Sync & Badges (R3) Suite', () => {
                 result.current.reorderExercises(0, 5); // out of bounds
             });
 
-            expect(workoutState?.exercises.length).toBe(1);
-            expect(workoutState?.exercises[0].id).toBe('se_1');
+            expect(workoutState).toBe(initialWorkout);
+            expect(workoutState?.exercises).toBe(initialWorkout.exercises);
+            expect(workoutState?.exercises[0]).toBe(initialWorkout.exercises[0]);
+            expect(workoutState?.exercises).toEqual([{ id: 'se_1', exId: 'ex_bench', sessionNote: '', sets: [] }]);
+            expect(setLocalWorkout).toHaveBeenCalledTimes(3);
         });
 
         it('2.6: moveExercise works via useWorkoutSession hook', () => {
@@ -451,49 +454,51 @@ describe('Workout Reorder (R2) and Live Sync & Badges (R3) Suite', () => {
             expect(badges.length).toBe(0);
         });
 
-        it('3.4: React.memo custom comparator correctly re-evaluates when totalExercises or exIndex changes', () => {
+        it('3.4: memoized exercise card updates position controls and callbacks when props change', () => {
             const exItem = { id: 'se_1', exId: 'ex_bench', sets: [], sessionNote: '' };
-            const libDef = mockLibrary[0];
-            let renderCount = 0;
-
-            const WrappedCard: React.FC<any> = (props) => {
-                renderCount++;
-                return <SessionExerciseCard {...props} />;
-            };
-
+            const originalMove = vi.fn();
+            const latestMove = vi.fn();
             const initialProps = {
                 exItem,
                 exIndex: 0,
-                totalExercises: 2,
-                libDef,
+                totalExercises: 1,
+                libDef: mockLibrary[0],
                 pastWorkouts: [],
                 isHistoryOpen: false,
                 isSetupOpen: false,
                 openSpecialMenuId: null,
-                onToggleHistory: () => {},
-                onToggleSetup: () => {},
-                onRemoveExercise: () => {},
-                onUpdateSetupNote: () => {},
-                onUpdateSessionNote: () => {},
-                onAddSet: () => {},
-                onRemoveSet: () => {},
-                onUpdateSet: () => {},
-                onAddSpecialSet: () => {},
-                onUpdateSpecialSet: () => {},
-                onRemoveSpecialSet: () => {},
-                onToggleSpecialMenu: () => {}
+                onMoveToPosition: originalMove,
+                onToggleHistory: vi.fn(),
+                onToggleSetup: vi.fn(),
+                onRemoveExercise: vi.fn(),
+                onUpdateSetupNote: vi.fn(),
+                onUpdateSessionNote: vi.fn(),
+                onAddSet: vi.fn(),
+                onRemoveSet: vi.fn(),
+                onUpdateSet: vi.fn(),
+                onAddSpecialSet: vi.fn(),
+                onUpdateSpecialSet: vi.fn(),
+                onRemoveSpecialSet: vi.fn(),
+                onUpdateSetTarget: vi.fn(),
+                onUpdateTechnicalStandard: vi.fn(),
+                onToggleSpecialMenu: vi.fn()
             };
 
-            const { rerender } = render(<WrappedCard {...initialProps} />);
-            expect(renderCount).toBe(1);
+            const { rerender } = render(<SessionExerciseCard {...initialProps} />);
+            const position = screen.getByRole('button', { name: 'Cambia posizione esercizio' });
+            expect(position.textContent).toContain('#1');
+            expect((position as HTMLButtonElement).disabled).toBe(true);
 
-            // Re-render with new callback references but SAME props -> Memo should prevent inner re-render
-            rerender(<WrappedCard {...initialProps} onToggleHistory={() => {}} />);
-            expect(renderCount).toBe(2); // WrappedCard renders, but SessionExerciseCard memo skips inner render
+            rerender(<SessionExerciseCard {...initialProps} totalExercises={3} exIndex={1} onMoveToPosition={latestMove} />);
+            expect(position.textContent).toContain('#2');
+            expect((position as HTMLButtonElement).disabled).toBe(false);
+            fireEvent.click(position);
 
-            // Re-render with changed totalExercises (e.g. 3) -> Memo detects change
-            rerender(<WrappedCard {...initialProps} totalExercises={3} />);
-            expect(renderCount).toBe(3);
+            expect((screen.getByRole('button', { name: '✓ 2ª posizione' }) as HTMLButtonElement).disabled).toBe(true);
+            fireEvent.click(screen.getByRole('button', { name: '3ª posizione' }));
+            expect(latestMove).toHaveBeenCalledTimes(1);
+            expect(latestMove).toHaveBeenCalledWith(1, 2);
+            expect(originalMove).not.toHaveBeenCalled();
         });
     });
 

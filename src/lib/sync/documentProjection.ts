@@ -3,7 +3,7 @@ import type { UserData, CachedGlobalCatalog, WorkoutSession } from '../../types'
 import { extractCustomExercisesAndOverrides, extractCustomFoodsAndOverrides, resolveEffectiveExercises, resolveEffectiveFoods } from '../catalog/deltaResolver';
 import { getLocalDateString } from '../utils/date';
 import { requireCanonicalWorkoutDate, sanitizeHistoryMonthDocument, sanitizeNutritionMonthDocument } from './monthlyIntegrity';
-import { removeUndefinedValues } from '../utils/object';
+import { removeUndefinedValuesForFirestore } from '../utils/object';
 
 export type DocumentData = Record<string, unknown>;
 
@@ -15,7 +15,7 @@ const monthPattern = /^\d{4}-(0[1-9]|1[0-2])$/;
 const rootKeys = ['profile', 'library', 'routines', 'customFoods', 'activeWorkout', 'trainingCycles', 'activeCycleId', 'nutritionPlanning', 'supplements', 'activePains', 'catalogOverrides', 'legalConsent', 'nutritionPlanningOrigin'] as const;
 
 export function rootDocument(data: UserData): DocumentData {
-    return removeUndefinedValues(Object.fromEntries(rootKeys.map(key => [key, data[key] ?? null]))) as DocumentData;
+    return removeUndefinedValuesForFirestore(Object.fromEntries(rootKeys.map(key => [key, data[key] ?? null]))) as DocumentData;
 }
 
 export function projectDocuments(input: UserData, catalog: CachedGlobalCatalog, scope?: DocumentProjectionScope): Map<string, DocumentData> {
@@ -42,7 +42,7 @@ export function projectDocuments(input: UserData, catalog: CachedGlobalCatalog, 
         }
         // Do not recursively sanitize unrelated root collections on a scoped mutation.
         const root = scope
-            ? removeUndefinedValues(Object.fromEntries([...scope.rootKeys]
+            ? removeUndefinedValuesForFirestore(Object.fromEntries([...scope.rootKeys]
                 .map(key => [key, projected[key as keyof UserData] ?? null]))) as DocumentData
             : rootDocument(projected);
         documents.set('', root);
@@ -53,7 +53,7 @@ export function projectDocuments(input: UserData, catalog: CachedGlobalCatalog, 
         const path = `${collection}/${month}`;
         const document = documents.get(path) ?? {};
         if (Object.hasOwn(document, id)) throw new Error(`Identificativo duplicato nello storico: ${id}`);
-        Object.defineProperty(document, id, { value: removeUndefinedValues(value), enumerable: true, configurable: true, writable: true });
+        Object.defineProperty(document, id, { value: removeUndefinedValuesForFirestore(value), enumerable: true, configurable: true, writable: true });
         documents.set(path, document);
     };
 

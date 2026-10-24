@@ -11,7 +11,7 @@ import { restoreSessionAfterHistoryEdit } from '../src/hooks/workout/historyEdit
 import { useWorkoutSetMutations } from '../src/hooks/workout/useWorkoutSetMutations';
 import { captureSession } from '../src/lib/sync/session';
 import { getInitialLocalWorkout } from '../src/store/slices/createWorkoutSlice';
-import { readWorkoutTimerSnapshot } from '../src/lib/utils/timer';
+import { readWorkoutTimerSnapshot, writeWorkoutTimerSnapshot } from '../src/lib/utils/timer';
 import { readWorkoutRecoveryDraft, writeWorkoutRecoveryDraft } from '../src/lib/sync/workoutRecoveryDraft';
 import PreSessionCheckIn from '../src/components/Training/PreSessionCheckIn';
 import TrainingSession from '../src/components/Training/TrainingSession';
@@ -738,6 +738,32 @@ describe('Workout lifecycle durable recovery regressions', () => {
         expect(useAppStore.getState().localWorkout?.exercises[0].sets.map(set => set.id)).toEqual(['s1', 'new-set']);
     });
 
+
+    it('starts offline through the real workout setter and preserves the owner-scoped pending journal', async () => {
+        const prepared = workout('offline-real-adapter');
+        const initial = userData({ activeWorkout: prepared });
+        await initializeLocal(owner, initial);
+        useAppStore.setState({ userData: initial, dataOwner: owner, localWorkout: prepared });
+        writeWorkoutTimerSnapshot({ version: 1, state: 'running', startTime: 1000, accumulated: 125 }, owner);
+
+        const previousOnline = Object.getOwnPropertyDescriptor(navigator, 'onLine');
+        Object.defineProperty(navigator, 'onLine', { configurable: true, value: false });
+        try {
+            const { result } = renderHook(() => useWorkoutSession());
+            await act(async () => { expect(await result.current.confirmWorkoutStart()).toBe(true); });
+            const durable = await readLocal(owner);
+            expect(durable?.data.activeWorkout?.id).toBe(prepared.id);
+            expect(durable?.data.activeWorkout?.globalStartTime).toBeGreaterThan(0);
+            expect(durable?.pending.length).toBeGreaterThan(0);
+            expect(durable?.pending.some(operation => operation.path.includes('activeWorkout'))).toBe(true);
+            expect(useAppStore.getState().localWorkout?.globalStartTime).toBe(durable?.data.activeWorkout?.globalStartTime);
+            expect(readWorkoutTimerSnapshot(owner).state).toBe('stopped');
+            expect(useAppStore.getState().localPersistenceBlocked).toBe(false);
+        } finally {
+            if (previousOnline) Object.defineProperty(navigator, 'onLine', previousOnline);
+            else Reflect.deleteProperty(navigator, 'onLine');
+        }
+    });
 
     it('accepts a cloud-pending start only when the exact workout was durably committed', async () => {
         const prepared = workout('offline-start');

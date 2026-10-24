@@ -23,7 +23,11 @@ export function reportZodSchemaFallback(ctx: ZodFallbackContext): void {
     try {
         if (customFallbackListener) {
             try {
-                customFallbackListener(ctx);
+                const completed = (customFallbackListener as (context: ZodFallbackContext) => unknown)(ctx);
+                if (completed && typeof (completed as { then?: unknown }).then === 'function') {
+                    // Parsing remains synchronous even when a diagnostic listener rejects.
+                    void Promise.resolve(completed).catch(() => undefined);
+                }
             } catch {
                 // Safe fail-through
             }
@@ -57,24 +61,9 @@ export function reportZodSchemaFallback(ctx: ZodFallbackContext): void {
 
         const safeIssueCode = issueCode || 'validation_fallback';
         const safeField = fieldPath || 'root';
-        const safeFallback = ctx.fallbackUsed || 'default';
 
         const typeInfo = (expectedType && receivedType) ? ` (expected ${expectedType}, received ${receivedType})` : '';
         const syntheticMessage = `Zod fallback in ${ctx.schema} [${safeField}]: ${safeIssueCode}${typeInfo}`;
-
-        // Preserve the bounded diagnostic event for compatibility/tests. The current
-        // Sentry boundary accepts-and-drops standalone events, so this never becomes
-        // behavioral telemetry or consumes Sentry error quota.
-        if (typeof telemetryHub.trackEvent === 'function') {
-            telemetryHub.trackEvent('zod_schema_fallback', {
-                schema: ctx.schema,
-                field: safeField,
-                issueCode: safeIssueCode,
-                expectedType: expectedType || 'unknown',
-                receivedType: receivedType || 'unknown',
-                fallbackUsed: safeFallback,
-            });
-        }
 
         // Dispatch one deduplicated external error.
         if (typeof telemetryHub.trackError === 'function') {
