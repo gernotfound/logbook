@@ -129,6 +129,9 @@ export async function getCachedCatalog(): Promise<CachedGlobalCatalog> {
         console.warn("[CatalogService] Errore lettura cache IndexedDB:", err);
     }
 
+    // The read may also fail after another caller has published a fresh catalog.
+    if (inMemoryCatalogCache && isLoadedFromPersistentCache) return inMemoryCatalogCache;
+
     // Fallback to static bundled seed
     const seedCatalog = getSeedCatalog();
     inMemoryCatalogCache = seedCatalog;
