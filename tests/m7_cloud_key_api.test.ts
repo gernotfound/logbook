@@ -162,6 +162,30 @@ describe('authenticated cloud account key API', () => {
     expect(harness.documents.has('user_data_keys/owner-a')).toBe(false);
   });
 
+  it('permits authenticated rights-only recovery after withdrawal without ever provisioning a new key', async () => {
+    const first = await POST(request());
+    expect(first.status).toBe(200);
+    const original = (await first.json() as { key: string }).key;
+    harness.documents.set('health_consent_withdrawals/owner-a', {
+      uid: 'owner-a', status: 'withdrawn', revision: 2,
+    });
+    harness.verify.mockResolvedValue({ uid: 'owner-a', emailVerified: false });
+    const rights = await POST(new Request('https://backend.test/api/cloud-key?purpose=rights-export', {
+      method: 'POST', headers: { origin: 'https://thelogbook.web.app' },
+    }));
+    expect(rights.status).toBe(200);
+    expect((await rights.json() as { key: string }).key).toBe(original);
+    expect(harness.wrap).toHaveBeenCalledTimes(1);
+    expect((await POST(request())).status).toBe(403);
+
+    harness.documents.delete('user_data_keys/owner-a');
+    const missing = await POST(new Request('https://backend.test/api/cloud-key?purpose=rights-export', {
+      method: 'POST', headers: { origin: 'https://thelogbook.web.app' },
+    }));
+    expect(missing.status).toBe(503);
+    expect(harness.documents.has('user_data_keys/owner-a')).toBe(false);
+  });
+
   it('ignores client-supplied uid/key and always uses verified caller identity', async () => {
     const result = await POST(request('https://thelogbook.web.app', true));
     expect(result.status).toBe(400);
