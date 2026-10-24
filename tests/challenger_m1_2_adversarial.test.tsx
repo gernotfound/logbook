@@ -275,7 +275,7 @@ vi.spyOn(console, 'warn').mockImplementation(() => {});
         it('does not throw when localStorage.setItem throws QuotaExceededError', () => {
             const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
             const setItemSpy = vi.spyOn(window.localStorage, 'setItem').mockImplementation(() => {
-                throw new Error('QuotaExceededError: DOM Exception 22');
+                throw new DOMException('Quota exceeded while writing browser storage', 'QuotaExceededError');
             });
 
             const { result } = renderHook(() => useLocalStorage('quota_test', { val: 1 }));
@@ -288,7 +288,7 @@ vi.spyOn(console, 'warn').mockImplementation(() => {});
             expect(result.current[0]).toEqual({ val: 2 });
             expect(errorSpy).toHaveBeenCalledWith(
                 expect.stringContaining('Errore di salvataggio nel localStorage key "quota_test":'),
-                expect.any(Error)
+                expect.objectContaining({ name: 'QuotaExceededError' })
             );
 
             setItemSpy.mockRestore();

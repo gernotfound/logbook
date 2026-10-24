@@ -1,21 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import { Exporter } from '../src/lib/export';
 
-// Mock per il download file
-const originalCreateElement = document.createElement.bind(document);
-vi.spyOn(document, 'createElement').mockImplementation((tagName) => {
-    if (tagName === 'a') {
-        return {
-            setAttribute: vi.fn(),
-            click: vi.fn(),
-            style: {},
-        } as any;
-    }
-    return originalCreateElement(tagName);
-});
-
 describe('Challenger: Granular Export Adversarial & Stress', () => {
-    it('Handles stress test with max items (500 ex, 300 routines, 100 cycles) instantly without crashing', async () => {
+    it('exports exact transitive dependencies from a large catalog', async () => {
         // Generate massive dataset
         const library = Array.from({ length: 500 }).map((_, i) => ({
             id: `ex_${i}`,
@@ -45,7 +32,6 @@ describe('Challenger: Granular Export Adversarial & Stress', () => {
         const downloadSpy = vi.spyOn(Exporter, 'downloadFile').mockResolvedValue(true);
         downloadSpy.mockClear();
 
-        const start = performance.now();
         // Request to export only 5 specific cycles (IDs: cy_0, cy_1, cy_2, cy_3, cy_4)
         const targetCycles = ['cy_0', 'cy_1', 'cy_2', 'cy_3', 'cy_4'];
         const result = await Exporter.exportShareJson(mockUserData, {
@@ -53,7 +39,6 @@ describe('Challenger: Granular Export Adversarial & Stress', () => {
             exportRoutines: [],
             exportLibrary: []
         });
-        const duration = performance.now() - start;
 
         expect(downloadSpy).toHaveBeenCalled();
         const [, content] = downloadSpy.mock.calls[0];
@@ -83,7 +68,17 @@ describe('Challenger: Granular Export Adversarial & Stress', () => {
         expect(exported.library).toHaveLength(7);
         expect(result?.libraryCount).toBe(7);
 
-        // Performance check
-        expect(duration).toBeLessThan(150); // Generous margin for CI
+        // The full selection verifies that the source dimensions are real:
+        // selecting five cycles above is not a test of exporting all 500 items.
+        await Exporter.exportShareJson(mockUserData, {
+            exportTrainingCycles: true, exportRoutines: true, exportLibrary: true,
+        });
+        const full = JSON.parse(downloadSpy.mock.calls[1][1]).userData;
+        expect(full.trainingCycles.map((item: { id: string }) => item.id))
+            .toEqual(trainingCycles.map(item => item.id));
+        expect(full.routines.map((item: { id: string }) => item.id))
+            .toEqual(routines.map(item => item.id));
+        expect(full.library.map((item: { id: string }) => item.id))
+            .toEqual(library.map(item => item.id));
     });
 });

@@ -266,7 +266,6 @@ async function serverRequest(user: User, method: 'GET' | 'POST', body?: unknown)
       headers: {
         authorization: 'Bearer ' + idToken,
         'x-firebase-appcheck': token,
-        'x-consent-contract': '2',
         ...(method === 'POST' ? { 'content-type': 'application/json' } : {}),
       },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
@@ -297,6 +296,14 @@ async function serverRequest(user: User, method: 'GET' | 'POST', body?: unknown)
         || state.erasedBeforeRevision < 1
         || state.erasedBeforeRevision >= state.revision))) {
     throw new Error('Stato del consenso server non valido.');
+  }
+  // Server proof must be complete before ANY cached revision can authorize
+  // fitness access, including when a client receives a malformed HTTP 200.
+  if (method === 'GET' && state.status === 'active'
+    && (typeof state.acceptedAt !== 'string' || !Number.isFinite(Date.parse(state.acceptedAt))
+      || typeof state.privacyVersion !== 'string' || state.privacyVersion.length === 0
+      || typeof state.termsVersion !== 'string' || state.termsVersion.length === 0)) {
+    throw new Error('Prova del consenso server incompleta.');
   }
   return state as ServerStatus;
 }

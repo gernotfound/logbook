@@ -162,7 +162,7 @@ describe('TelemetryHub Vitest Integration Suite — Tier 2 Core', () => {
 
     });
 
-    describe('F4 Boundaries: React 19 Callbacks Edge Conditions', () => {
+    describe('F4 Boundaries: React 19 source metadata, without mounting a root', () => {
       it('F4-B1: React 19 onCaughtError receives empty or undefined componentStack', async () => {
         vi.useFakeTimers();
         telemetryHub.init();
@@ -352,7 +352,7 @@ describe('TelemetryHub Vitest Integration Suite — Tier 2 Core', () => {
         expect(payload.message).toContain('value');
       });
 
-      it('F6-B2: Zod error with sensitive user workout note in received value is scrubbed', () => {
+      it('F6-B2: a Zod max-length issue does not serialize the rejected workout note', () => {
         const NoteSchema = z.object({
           note: z.string().max(10),
         });
@@ -366,8 +366,11 @@ describe('TelemetryHub Vitest Integration Suite — Tier 2 Core', () => {
 
         if (!res.success) {
           const sanitized = sanitizeErrorPayload(res.error, { source: 'zod_validation' });
-          expect(sanitized.message).not.toContain('athlete@coach.com');
-          expect(sanitized.message).not.toContain('personal secrets');
+          // This verifies the Zod issue shape, NOT sanitization of arbitrary
+          // health notes. That provider-boundary guarantee is tested separately.
+          expect(res.error.message).not.toContain(sensitiveInput.note);
+          expect(sanitized.message).not.toContain(sensitiveInput.note);
+          expect(sanitized.type).toBe('ZodError');
         }
       });
 

@@ -16,7 +16,6 @@ import {
   revokeAccountAccess,
   verifyNoAccountResidue,
 } from './jobStore.js';
-import { removeHealthConsentStateForDeletedAccount } from '../healthConsent/withdrawal.js';
 import { PRIVATE_ACCOUNT_COLLECTIONS, type AccountDeletionPublicStatus } from './types.js';
 
 export type DeletionRunOptions = {
@@ -79,9 +78,8 @@ export async function processAccountDeletion(
       await parkDeletion(uid, 'deleting', { phase: 'root' }, leaseOwner);
       return 'pending';
     }
+    // Root, consent and server-only markers are deleted under one lease fence.
     await deleteUserRoot(uid, leaseOwner);
-    // The server-owned consent marker must not outlive the deleted account.
-    await removeHealthConsentStateForDeletedAccount(uid);
 
     phase = 'verification';
     await markVerifying(uid, leaseOwner);

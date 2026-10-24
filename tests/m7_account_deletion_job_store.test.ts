@@ -193,10 +193,14 @@ describe('M7 native deletion job store', () => {
   it('removes the server-only session marker under the deletion lease', async () => {
     state.docs.add('account_deletions/u');
     state.docs.add('session_revocations/u');
+    state.docs.add('health_consent_withdrawals/u');
+    state.docs.add('health_consent_withdrawals/another-owner');
     state.docs.add('users/u');
     await acquireDeletionLease('u', 'worker-root', Date.now() + 60_000);
     await deleteUserRoot('u', 'worker-root');
     expect(state.docs.has('session_revocations/u')).toBe(false);
+    expect(state.docs.has('health_consent_withdrawals/u')).toBe(false);
+    expect(state.docs.has('health_consent_withdrawals/another-owner')).toBe(true);
     expect(state.docs.has('users/u')).toBe(false);
     await expect(verifyNoAccountResidue('u')).resolves.toBeUndefined();
   });
@@ -206,6 +210,23 @@ describe('M7 native deletion job store', () => {
     await expect(verifyNoAccountResidue('u')).rejects.toThrow(
       'Session revocation marker still exists after deletion.',
     );
+  });
+
+  it('fails closed when the health consent marker remains', async () => {
+    state.docs.add('health_consent_withdrawals/u');
+    await expect(verifyNoAccountResidue('u')).rejects.toThrow('Health consent marker remains after account deletion.');
+  });
+
+  it('preserves root and consent if another worker owns the lease', async () => {
+    state.docs.add('account_deletions/u');
+    state.docs.add('users/u');
+    state.docs.add('health_consent_withdrawals/u');
+    await acquireDeletionLease('u', 'worker-A', Date.now() + 60_000);
+    const job = state.jobData.get('account_deletions/u');
+    state.jobData.set('account_deletions/u', { ...job, leaseOwner: 'worker-B' });
+    await expect(deleteUserRoot('u', 'worker-A')).rejects.toBeInstanceOf(DeletionLeaseLostError);
+    expect(state.docs.has('users/u')).toBe(true);
+    expect(state.docs.has('health_consent_withdrawals/u')).toBe(true);
   });
 
   it('fails closed when the user root document still exists', async () => {
