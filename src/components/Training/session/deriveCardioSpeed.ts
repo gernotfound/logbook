@@ -10,12 +10,21 @@ export function deriveCardioSpeed(
     const newTimeStr = field === 'time' ? value : (currentSet.time || '');
     const newDistStr = field === 'distance' ? value : (currentSet.distance || '');
 
-    const timeVal = parseFloat(newTimeStr.replace(',', '.'));
-    const distVal = parseFloat(newDistStr.replace(',', '.'));
+    // parseFloat also accepts malformed suffixes (for example "5km") and Infinity.
+    // Only complete, finite, nonnegative decimal metrics may produce a saved speed.
+    const parseMetric = (input: string): number | null => {
+        const normalized = input.trim().replace(',', '.');
+        if (!/^(?:[0-9]+(?:[.][0-9]*)?|[.][0-9]+)$/.test(normalized)) return null;
+        const parsed = Number(normalized);
+        return Number.isFinite(parsed) ? parsed : null;
+    };
+    const timeVal = parseMetric(newTimeStr);
+    const distVal = parseMetric(newDistStr);
 
-    if (!Number.isNaN(timeVal) && !Number.isNaN(distVal) && timeVal > 0) {
-        return (distVal / (timeVal / 60)).toFixed(2);
+    if (timeVal !== null && timeVal > 0 && distVal !== null && distVal >= 0) {
+        const speed = distVal / (timeVal / 60);
+        return Number.isFinite(speed) ? speed.toFixed(2) : undefined;
     }
-    if (newTimeStr === '' || newDistStr === '') return '';
+    if (newTimeStr.trim() === '' || newDistStr.trim() === '') return '';
     return undefined;
 }

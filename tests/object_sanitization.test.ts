@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { removeUndefinedValues, isPlainObject } from '../src/lib/utils/object';
+import { removeUndefinedValues, removeUndefinedValuesForFirestore, isPlainObject } from '../src/lib/utils/object';
+import { rootDocument } from '../src/lib/sync/documentProjection';
+import type { UserData } from '../src/types';
 import { Logic } from '../src/lib/logic';
 
 describe('R3: Object Sanitization & removeUndefinedValues Suite', () => {
@@ -228,27 +230,58 @@ describe('R3: Object Sanitization & removeUndefinedValues Suite', () => {
     });
 
     describe('Circular References Protection', () => {
-        it('handles circular object references without throwing stack overflow errors', () => {
+        it('rejects circular objects without leaking unsanitized references', () => {
             const cyclicObj: any = { name: 'cyclic', omit: undefined };
             cyclicObj.self = cyclicObj;
 
-            expect(() => {
-                const result = removeUndefinedValues(cyclicObj);
-                expect(result.name).toBe('cyclic');
-                expect('omit' in result).toBe(false);
-                expect(result.self).toBe(cyclicObj);
-            }).not.toThrow();
+            expect(() => removeUndefinedValuesForFirestore(cyclicObj)).toThrow('Riferimento circolare');
+            expect(cyclicObj.self).toBe(cyclicObj);
         });
 
-        it('handles circular array references without throwing stack overflow errors', () => {
+        it('rejects circular arrays before they reach Firestore', () => {
             const cyclicArr: any = [1, undefined];
             cyclicArr.push(cyclicArr);
 
-            expect(() => {
-                const result = removeUndefinedValues(cyclicArr);
-                expect(result[0]).toBe(1);
-                expect(result[1]).toBe(null);
-            }).not.toThrow();
+            expect(() => removeUndefinedValuesForFirestore(cyclicArr)).toThrow('Riferimento circolare');
+            expect(cyclicArr[1]).toBeUndefined();
+        });
+
+        it('retains the non-throwing generic cycle behavior without claiming Firestore safety', () => {
+            const cyc: any = { saved: 1, omit: undefined };
+            cyc.self = cyc;
+            const cleaned = removeUndefinedValues(cyc);
+            expect(cleaned.saved).toBe(1);
+            expect('omit' in cleaned).toBe(false);
+            expect(cleaned.self).toBe(cyc);
+        });
+
+        it('rejects cyclic user profile fields at the actual root Firestore projection', () => {
+            const profile: any = { height: '180', omit: undefined };
+            profile.loop = profile;
+            const userData = { profile } as unknown as UserData;
+            expect(() => rootDocument(userData)).toThrow('Riferimento circolare');
+            expect(profile.loop).toBe(profile);
+            expect(Object.hasOwn(profile, 'omit')).toBe(true);
+        });
+
+        it('sanitizes shared references consistently without mutating either branch', () => {
+            const shared = { id: 'same', omit: undefined, nested: [undefined, { hidden: undefined, saved: 1 }] };
+            const result = removeUndefinedValues({ first: shared, second: shared });
+            expect(result.first).toBe(result.second);
+            expect(result).toEqual({
+                first: { id: 'same', nested: [null, { saved: 1 }] },
+                second: { id: 'same', nested: [null, { saved: 1 }] },
+            });
+            expect(Object.hasOwn(shared, 'omit')).toBe(true);
+            expect(shared.nested[0]).toBeUndefined();
+        });
+
+        it('preserves own __proto__ keys as data without prototype pollution', () => {
+            const input = JSON.parse('{"__proto__":{"keep":1,"drop":null},"missing":null}');
+            const result = removeUndefinedValues(input);
+            expect(Object.hasOwn(result, '__proto__')).toBe(true);
+            expect((result as any).__proto__).toEqual({ keep: 1, drop: null });
+            expect(({} as any).keep).toBeUndefined();
         });
     });
 

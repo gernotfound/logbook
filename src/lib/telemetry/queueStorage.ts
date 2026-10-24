@@ -6,27 +6,9 @@ import {
   TELEMETRY_QUEUE_MAX_AGE_MS,
   type QueuedTelemetryItem,
   type TelemetryErrorPayload,
-  type TelemetryEventPayload,
 } from './contracts';
-import { sanitizeTelemetryDetails } from './detailSanitizer';
 import { createTelemetryId } from './id';
 import { readEncryptedTelemetry, storeEncryptedTelemetry } from './secureQueueDevice';
-
-function minimizeEventPayload(payload: TelemetryEventPayload): TelemetryEventPayload {
-  if (payload.details === undefined) return payload;
-  return {
-    ...payload,
-    details: sanitizeTelemetryDetails(payload.details),
-  };
-}
-
-function minimizeQueuedItem(item: QueuedTelemetryItem): QueuedTelemetryItem {
-  if (item.itemType !== 'event') return item;
-  return {
-    ...item,
-    payload: minimizeEventPayload(item.payload as TelemetryEventPayload),
-  };
-}
 
 function parseQueuedItems(raw: string | null): QueuedTelemetryItem[] {
   if (!raw) return [];
@@ -38,10 +20,10 @@ function parseQueuedItems(raw: string | null): QueuedTelemetryItem[] {
         item &&
         typeof item === 'object' &&
         typeof item.id === 'string' &&
+        item.itemType === 'error' &&
         item.payload &&
         typeof item.payload === 'object'
-    )
-    .map((item) => minimizeQueuedItem(item as QueuedTelemetryItem));
+    ) as QueuedTelemetryItem[];
 }
 
 // The timestamp is the fallback for queues saved by previous builds without queuedAt.
@@ -249,31 +231,23 @@ export class TelemetryQueueStorage {
   }
 
   public enqueueItem(
-    kind: 'error' | 'event',
-    payload: TelemetryErrorPayload | TelemetryEventPayload
+    payload: TelemetryErrorPayload
   ): void {
     try {
       this.flushPendingDiskSync();
       const items = [...this.getQueuedEvents()];
-      const minimizedPayload = kind === 'event'
-        ? minimizeEventPayload(payload as TelemetryEventPayload)
-        : payload;
       const newItem: QueuedTelemetryItem = {
-        id: minimizedPayload.id || createTelemetryId('item'),
-        timestamp: minimizedPayload.timestamp || Date.now(),
-        itemType: kind,
-        payload: minimizedPayload,
+        id: payload.id || createTelemetryId('item'),
+        timestamp: payload.timestamp || Date.now(),
+        itemType: 'error',
+        payload,
         queuedAt: Date.now(),
         retryCount: 0,
       };
       items.push(newItem);
 
       while (items.length > TELEMETRY_QUEUE_CAPACITY) {
-        // Standalone events are accepted but not emitted by the Sentry boundary.
-        // They must never evict actionable error diagnostics from the offline queue.
-        const eventIndex = items.findIndex(item => item.itemType === 'event');
-        if (eventIndex >= 0) items.splice(eventIndex, 1);
-        else items.shift();
+        items.shift();
       }
 
       this.saveQueuedEvents(items, true);
@@ -323,7 +297,7 @@ export class TelemetryQueueStorage {
     // A completed dispatch may remove items. Flush any pending count patch
     // before applying this explicit replacement, not the other way around.
     this.flushPendingDiskSync();
-    this.saveQueuedEvents(items.map(minimizeQueuedItem), true);
+    this.saveQueuedEvents(items, true);
   }
 
   public reset(): void {

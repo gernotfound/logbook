@@ -1,4 +1,8 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { createElement } from 'react';
+import { act, render, screen } from '@testing-library/react';
+import { GlobalTimer } from '../src/components/Training/ActiveWorkoutSession';
+import { useAppStore } from '../src/store/useAppStore';
 import {
     assertWorkoutClockHealthy,
     resetWorkoutClockGuard,
@@ -11,6 +15,8 @@ import type { WorkoutSession } from '../src/types';
 
 describe('workout clock guard', () => {
     afterEach(() => {
+        vi.useRealTimers();
+        vi.restoreAllMocks();
         resetWorkoutClockGuard();
         Object.defineProperty(document, 'visibilityState', {
             value: 'visible',
@@ -74,6 +80,26 @@ describe('workout clock guard', () => {
         };
 
         expect(() => prepareCompletedWorkout(workout, 7_201_000)).toThrow(WorkoutClockAnomalyError);
+    });
+
+    it('shows the clock warning from the mounted live timer and refuses completion after a visible jump', () => {
+        vi.useFakeTimers();
+        const wall = vi.spyOn(Date, 'now').mockReturnValue(100_000);
+        const monotonic = vi.spyOn(performance, 'now').mockReturnValue(1_000);
+        const current = { id: 'clock-render', date: '2026-10-05', globalStartTime: 100_000, exercises: [] };
+        const { unmount } = render(createElement(GlobalTimer, { workoutId: current.id, startTime: current.globalStartTime }));
+        expect(screen.queryByRole('alert')).toBeNull();
+
+        act(() => {
+            wall.mockReturnValue(222_000);
+            monotonic.mockReturnValue(2_000);
+            vi.advanceTimersByTime(1_000);
+        });
+
+        expect(screen.getByRole('alert').textContent).toContain('Orologio del dispositivo modificato');
+        expect(useAppStore.getState().saveError).toContain('L’orologio del dispositivo è cambiato');
+        expect(() => prepareCompletedWorkout(current, 222_000)).toThrow(WorkoutClockAnomalyError);
+        unmount();
     });
 
     it('fails completion when the end wall clock is materially before the start time', () => {

@@ -377,38 +377,14 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
             expect(brokenLookup() === brokenLookup()).toBe(false);
         });
 
-        it('verifies SessionExerciseCard memoization comparator returns true when pastWorkouts is stable', () => {
-            const comparator = (prev: any, next: any) => {
-                return (
-                    prev.exItem === next.exItem &&
-                    prev.libDef === next.libDef &&
-                    prev.pastWorkouts === next.pastWorkouts &&
-                    prev.isHistoryOpen === next.isHistoryOpen &&
-                    prev.isSetupOpen === next.isSetupOpen &&
-                    prev.openSpecialMenuId === next.openSpecialMenuId &&
-                    prev.exIndex === next.exIndex
-                );
-            };
-
-            const stableHistory: any[] = [];
-            const exItem = { id: 'item1', exId: 'ex1', sets: [] };
-            const libDef = { id: 'ex1', name: 'Squat' };
-
-            const prevProps = {
-                exItem,
-                libDef,
-                pastWorkouts: stableHistory,
-                isHistoryOpen: false,
-                isSetupOpen: false,
-                openSpecialMenuId: null,
-                exIndex: 0
-            };
-
-            const nextPropsWithSameRef = { ...prevProps };
-            expect(comparator(prevProps, nextPropsWithSameRef)).toBe(true);
-
-            const nextPropsWithNewEmptyArray = { ...prevProps, pastWorkouts: [] };
-            expect(comparator(prevProps, nextPropsWithNewEmptyArray)).toBe(false); // Broken memoization!
+        it('Production SessionExerciseCard and SessionSetRow expose their real React.memo boundary', async () => {
+            const { SessionExerciseCard } = await import('../src/components/Training/session/SessionExerciseCard');
+            const { SessionSetRow } = await import('../src/components/Training/session/SessionSetRow');
+            expect((SessionExerciseCard as any).$$typeof).toBe(Symbol.for('react.memo'));
+            expect((SessionSetRow as any).$$typeof).toBe(Symbol.for('react.memo'));
+            // Production uses React.memo's default shallow comparison; no test-side comparator is authoritative.
+            expect((SessionExerciseCard as any).compare).toBeNull();
+            expect((SessionSetRow as any).compare).toBeNull();
         });
     });
 
@@ -416,7 +392,7 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
         const rulesPath = path.resolve(__dirname, '../firestore.rules');
         const rulesContent = fs.readFileSync(rulesPath, 'utf-8');
 
-        it('verifies firestore.rules whitelists the complete root document schema and disallows wildcards', () => {
+        it('static smoke: firestore.rules declares the root whitelist and lacks legacy wildcard', () => {
             // Check that recursive wildcard was removed from users doc
             expect(rulesContent).not.toMatch(/match\s+\/users\/\{userId\}\/\{document=\*\*\}/);
 
@@ -501,7 +477,7 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
             expect(writtenKeys).not.toContain('nutrition');
         });
 
-        it('empirically stress-tests isValidMonthId regex from firestore.rules against boundary and hostile inputs', () => {
+        it('parses the month-ID regex from firestore.rules and tests string boundaries', () => {
             // Extract regex from rules
             const regexMatch = rulesContent.match(/monthId\.matches\('([^']+)'\)/);
             expect(regexMatch).not.toBeNull();
@@ -620,7 +596,7 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
             expect(getDocFromServer).toHaveBeenCalledTimes(9);
         });
 
-        it('server deletion preserves <=400 batches and verifies residues before deleting Auth', () => {
+        it('static smoke: deletion source orders residue verification before Auth cleanup', () => {
             const jobStore = fs.readFileSync(
                 path.resolve(__dirname, '../server/accountDeletion/jobStore.ts'),
                 'utf-8'

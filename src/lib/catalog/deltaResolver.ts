@@ -93,8 +93,16 @@ export function resolveEffectiveExercises(
             sets: c.sets || []
         }));
 
+    // Custom identities take precedence: a duplicate global ID would otherwise
+    // resolve to different exercises depending on the consumer's lookup order.
     const merged = [...cleanUserCustom, ...resolvedGlobal];
-    return merged.filter(ex => Boolean(ex && ex.id));
+    const seenIds = new Set<string>();
+    return merged.filter(ex => {
+        const id = String(ex?.id ?? '').trim();
+        if (!id || seenIds.has(id)) return false;
+        seenIds.add(id);
+        return true;
+    });
 }
 
 /**

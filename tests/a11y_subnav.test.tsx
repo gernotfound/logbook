@@ -48,10 +48,12 @@ describe('A11Y-01: Keyboard Accessibility for Sub-Navigation', () => {
         expect(measurementsTab.getAttribute('aria-selected')).toBe('true');
         expect(sleepTab.getAttribute('aria-selected')).toBe('false');
         
-        // Native button click for Enter/Space
-        fireEvent.click(sleepTab);
+        measurementsTab.focus();
+        fireEvent.keyDown(measurementsTab, { key: 'ArrowRight' });
+        expect(document.activeElement).toBe(sleepTab);
         expect(measurementsTab.getAttribute('aria-selected')).toBe('false');
         expect(sleepTab.getAttribute('aria-selected')).toBe('true');
+        expect(screen.getByRole('tabpanel', { name: 'Sonno' })).not.toBeNull();
     });
 
     it('NutritionView sub-nav uses buttons with role="tab" and is keyboard accessible', async () => {
@@ -75,9 +77,12 @@ describe('A11Y-01: Keyboard Accessibility for Sub-Navigation', () => {
         expect(mealsTab.getAttribute('aria-selected')).toBe('true');
         expect(planningTab.getAttribute('aria-selected')).toBe('false');
         
-        fireEvent.click(planningTab);
+        mealsTab.focus();
+        fireEvent.keyDown(mealsTab, { key: 'ArrowRight' });
+        expect(document.activeElement).toBe(planningTab);
         expect(mealsTab.getAttribute('aria-selected')).toBe('false');
         expect(planningTab.getAttribute('aria-selected')).toBe('true');
+        expect(screen.getByRole('tabpanel', { name: 'Pianificazione' })).not.toBeNull();
     });
 
     it('SettingsView hierarchical menu uses native buttons and accessible back navigation', async () => {
@@ -111,9 +116,12 @@ describe('A11Y-01: Keyboard Accessibility for Sub-Navigation', () => {
         expect(sessionTab.tagName).toBe('BUTTON');
         expect(sessionTab.getAttribute('aria-selected')).toBe('true');
         
-        fireEvent.click(planningTab);
+        sessionTab.focus();
+        fireEvent.keyDown(sessionTab, { key: 'ArrowRight' });
+        expect(document.activeElement).toBe(planningTab);
         expect(sessionTab.getAttribute('aria-selected')).toBe('false');
         expect(planningTab.getAttribute('aria-selected')).toBe('true');
+        expect(screen.getByRole('tabpanel', { name: 'Pianificazione' })).not.toBeNull();
     });
     
     it('BottomNav uses native buttons correctly', () => {

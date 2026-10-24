@@ -13,7 +13,7 @@ import {
     getWorkoutDateString
 } from './analytics';
 import { getLocalDateString } from '../utils/date';
-import { calculateWorkoutVolume } from './workout';
+import { calculateWorkoutVolume, getLatestUserWeight } from './workout';
 import { format, subDays } from 'date-fns';
 import type { WorkoutSession, Exercise, NutritionDay } from '../../types';
 
@@ -258,6 +258,19 @@ describe('Analytics Engine 4-Tier Test Suite (src/lib/calc/analytics.ts)', () =>
             });
         });
 
+        it('excludes future meal entries from a current-week snapshot', () => {
+            const nutrition: Record<string, NutritionDay> = {
+                '2026-08-17': { date: '2026-08-17', kcal: 2000, carbs: 200, pro: 100, fat: 50 },
+                '2026-08-19': { date: '2026-08-19', kcal: 5000, carbs: 500, pro: 200, fat: 100 },
+            };
+            const now = computeWeeklyNutritionSeries(nutrition, 1, '2026-08-18');
+            expect(now.points[0]).toMatchObject({
+                loggedDaysCount: 1, totalKcal: 2000, avgDailyKcal: 2000, avgCarbs: 200,
+            });
+            const later = computeWeeklyNutritionSeries(nutrition, 1, '2026-08-20');
+            expect(later.points[0]).toMatchObject({ loggedDaysCount: 2, totalKcal: 7000, avgDailyKcal: 3500 });
+        });
+
         describe('1.4 computeVolumeCaloriesCorrelation', () => {
             it('T1.15_correlation_sync: synchronizes volume and calories on identical weekly intervals', () => {
                 const history: WorkoutSession[] = [
@@ -461,29 +474,40 @@ describe('Analytics Engine 4-Tier Test Suite (src/lib/calc/analytics.ts)', () =>
             });
         });
 
+        it('excludes future-dated workout history from a current-week snapshot', () => {
+            const history: WorkoutSession[] = [
+                { id: 'completed', date: '2026-08-17', exercises: [{ exId: 'ex_bench', sessionNote: '', sets: [{ id: 's1', kg: '100', reps: '10' }] }] },
+                { id: 'future', date: '2026-08-19', exercises: [{ exId: 'ex_bench', sessionNote: '', sets: [{ id: 's2', kg: '200', reps: '10' }] }] },
+            ];
+            const now = computeWeeklyVolumeSeries(history, mockLibrary, 80, 1, '2026-08-18');
+            expect(now.points[0]).toMatchObject({ volumeKg: 1000, workoutCount: 1, sessionIds: ['completed'] });
+            const later = computeWeeklyVolumeSeries(history, mockLibrary, 80, 1, '2026-08-20');
+            expect(later.points[0]).toMatchObject({ volumeKg: 3000, workoutCount: 2, sessionIds: ['completed', 'future'] });
+        });
+
         describe('2.4 Non-Weight Tracking Types (Cardio & Time)', () => {
-            it('T2.13_cardio_zero_tonnage: cardio tracking type produces 0 tonnage volume', () => {
+            it('T2.13_cardio_zero_tonnage: cardio numeric set fields never produce mechanical tonnage', () => {
                 const history: WorkoutSession[] = [{
                     id: 'w_cardio',
                     date: '2026-08-18',
                     exercises: [{
                         exId: 'ex_run',
                         sessionNote: '',
-                        sets: [{ id: 's1', kg: '0', reps: '0', time: '1800', distance: '5000', speed: '10', kcal: '350' }]
+                        sets: [{ id: 's1', kg: '120', reps: '12', time: '1800', distance: '5000', speed: '10', kcal: '350' }]
                     }]
                 }];
                 const { points } = computeWeeklyVolumeSeries(history, mockLibrary, 80, 4, '2026-08-22');
                 expect(points[points.length - 1].volumeKg).toBe(0);
             });
 
-            it('T2.14_time_zero_tonnage: isometric time tracking type produces 0 tonnage volume', () => {
+            it('T2.14_time_zero_tonnage: timed numeric set fields never produce mechanical tonnage', () => {
                 const history: WorkoutSession[] = [{
                     id: 'w_time',
                     date: '2026-08-18',
                     exercises: [{
                         exId: 'ex_plank',
                         sessionNote: '',
-                        sets: [{ id: 's1', kg: '0', reps: '0', time: '60' }, { id: 's2', kg: '0', reps: '0', time: '60' }, { id: 's3', kg: '0', reps: '0', time: '60' }]
+                        sets: [{ id: 's1', kg: '25', reps: '3', time: '60' }, { id: 's2', kg: '25', reps: '3', time: '60' }, { id: 's3', kg: '25', reps: '3', time: '60' }]
                     }]
                 }];
                 const { points } = computeWeeklyVolumeSeries(history, mockLibrary, 80, 4, '2026-08-22');
@@ -496,8 +520,8 @@ describe('Analytics Engine 4-Tier Test Suite (src/lib/calc/analytics.ts)', () =>
                     date: '2026-08-18',
                     exercises: [
                         { exId: 'ex_bench', sessionNote: '', sets: [{ id: 's1', kg: '100', reps: '10' }] },
-                        { exId: 'ex_plank', sessionNote: '', sets: [{ id: 's2', kg: '0', reps: '0', time: '60' }] },
-                        { exId: 'ex_run', sessionNote: '', sets: [{ id: 's3', kg: '0', reps: '0', time: '1200', distance: '3000' }] }
+                        { exId: 'ex_plank', sessionNote: '', sets: [{ id: 's2', kg: '60', reps: '10', time: '60' }] },
+                        { exId: 'ex_run', sessionNote: '', sets: [{ id: 's3', kg: '100', reps: '10', time: '1200', distance: '3000' }] }
                     ]
                 }];
                 const { points } = computeWeeklyVolumeSeries(history, mockLibrary, 80, 4, '2026-08-22');
@@ -664,7 +688,7 @@ describe('Analytics Engine 4-Tier Test Suite (src/lib/calc/analytics.ts)', () =>
             expect(stats.correlationInsight).toContain('Associazione positiva forte');
         });
 
-        it('T4.2_cutting_phase: 8-week cutting phase with dynamic bodyweight decay and caloric deficit', () => {
+        it('T4.2_cutting_phase: historical weigh-ins do not change tonnage based on the selected current bodyweight', () => {
             const history: WorkoutSession[] = [];
             const nutrition: Record<string, NutritionDay> = {};
             const startDate = new Date(2026, 5, 29, 12);
@@ -696,7 +720,11 @@ describe('Analytics Engine 4-Tier Test Suite (src/lib/calc/analytics.ts)', () =>
             }
             const { points, stats } = computeVolumeCaloriesCorrelation(history, nutrition, mockLibrary, 80, 8, '2026-08-23');
             expect(points).toHaveLength(8);
+            // Each week: 20 repetitions at the supplied 80 kg, regardless of weigh-ins.
+            expect(points.map(point => point.volumeKg)).toEqual(Array(8).fill(1600));
+            expect(points.map(point => point.avgDailyKcal)).toEqual([2300, 2250, 2200, 2150, 2100, 2050, 2000, 1950]);
             expect(stats.validDataPointsCount).toBe(8);
+            expect(stats.correlationCoefficient).toBe(0);
             expect(stats.avgDailyKcal).toBeLessThan(2300);
         });
 
@@ -741,6 +769,33 @@ describe('Analytics Engine 4-Tier Test Suite (src/lib/calc/analytics.ts)', () =>
             expect(result).not.toHaveProperty('score');
         });
 
+        it('orders same-day readiness by actual session time even when archive input is reversed', () => {
+            const day = '2026-08-20';
+            const early: WorkoutSession = { id: 'early', date: day, globalStartTime: new Date(2026, 7, 20, 8).getTime(), readiness: { capturedAt: 1, energy: 1 }, exercises: [] };
+            const late: WorkoutSession = { id: 'late', date: day, globalStartTime: new Date(2026, 7, 20, 18).getTime(), readiness: { capturedAt: 2, energy: 5 }, exercises: [] };
+            for (const history of [[early, late], [late, early]]) {
+                expect(computeReadinessTrends(history, 2).energy).toEqual({
+                    average: 3, latest: 5, previous: 1, deltaFromPrevious: 4, count: 2,
+                });
+            }
+        });
+
+        it('uses capturedAt when same-day sessions have no workout start time', () => {
+            const older: WorkoutSession = { id: 'older', date: '2026-08-20', readiness: { capturedAt: 1000, energy: 2 }, exercises: [] };
+            const newer: WorkoutSession = { id: 'newer', date: '2026-08-20', readiness: { capturedAt: 2000, energy: 5 }, exercises: [] };
+            for (const history of [[older, newer], [newer, older]]) {
+                expect(computeReadinessTrends(history, 2).energy).toEqual({
+                    average: 3.5, latest: 5, previous: 2, deltaFromPrevious: 3, count: 2,
+                });
+            }
+        });
+
+        it('uses a valid workout timestamp to order entries whose date is missing', () => {
+            const dated: WorkoutSession = { id: 'dated', date: '2026-08-19', readiness: { capturedAt: 1000, energy: 1 }, exercises: [] };
+            const undated: WorkoutSession = { id: 'undated', globalStartTime: new Date(2026, 7, 20, 10).getTime(), readiness: { capturedAt: 2000, energy: 5 }, exercises: [] };
+            expect(computeReadinessTrends([dated, undated], 2).energy.latest).toBe(5);
+        });
+
         it('T4.6_training_activity_context: co-visualizes independent weekly metrics without collapsing them into fatigue', () => {
             const history: WorkoutSession[] = [{
                 id: 'ctx-w1',
@@ -755,6 +810,22 @@ describe('Analytics Engine 4-Tier Test Suite (src/lib/calc/analytics.ts)', () =>
             expect(points[0]).not.toHaveProperty('fatigue');
         });
 
+        it('parses Italian decimal weights and rejects trailing units in weekly averages', () => {
+            const nutrition = {
+                '2026-08-17': { date: '2026-08-17', kcal: 0, carbs: 0, pro: 0, fat: 0, weight: '79,5' },
+                '2026-08-18': { date: '2026-08-18', kcal: 0, carbs: 0, pro: 0, fat: 0, weight: '80.5' },
+                '2026-08-19': { date: '2026-08-19', kcal: 0, carbs: 0, pro: 0, fat: 0, weight: '82kg' },
+            } as Record<string, NutritionDay>;
+            const result = computeWeeklyWeightSeries(nutrition, 1, '2026-08-23');
+            expect(result.points[0].averageWeightKg).toBe(80);
+            expect(result.points[0].recordedDaysCount).toBe(2);
+            expect(getLatestUserWeight(nutrition)).toBe(80.5);
+            // A newer malformed entry must not override the planned-weight fallback.
+            expect(getLatestUserWeight({
+                '2026-08-20': { weight: '82kg' },
+                '2026-08-21': { weight: '-3' },
+            }, { weight: '79,5' })).toBe(79.5);
+        });
     });
 });
 describe('Home analytics weekly bucketing regression', () => {
@@ -783,7 +854,7 @@ describe('Home analytics weekly bucketing regression', () => {
                 workoutCount: matching.length,
                 sessionIds: matching.map(session => session.id).filter(Boolean),
                 volumeKg: Math.round(matching.reduce(
-                    (sum, session) => sum + calculateWorkoutVolume(session, library, 80), 0,
+                    (sum, session) => sum + 1.25 * ((Number(session.id?.slice(2)) % 9) + 1), 0,
                 )),
             };
         });

@@ -1,5 +1,5 @@
 import { dispatchDurableOperation } from '../../../lib/sync/dispatchDurableOperation';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useLocalToday } from '../../../hooks/useLocalToday';
 import { Copy, Dumbbell, Pencil, Trash2 } from 'lucide-react';
 import { useAppStore } from '../../../store/useAppStore';
@@ -40,6 +40,7 @@ export default function TrainingPlanning({ onOpenSession }: TrainingPlanningProp
 
     const [isEditing, setIsEditing] = useState(false);
     const [editingCycle, setEditingCycle] = useState<TrainingCycle | null>(null);
+    const editorGenerationRef = useRef(0);
     const [detailsState, setDetailsState] = useState(() => ({ cycleId: activeCycleId, isOpen: false }));
     // Reset details before rendering a different active cycle. This avoids an
     // effect and prevents briefly showing another cycle's expanded content.
@@ -96,12 +97,14 @@ export default function TrainingPlanning({ onOpenSession }: TrainingPlanningProp
             void showAlert('Crea almeno una scheda prima di pianificare un ciclo di allenamento.');
             return;
         }
+        editorGenerationRef.current += 1;
         setEditingCycle(null);
         setIsEditing(true);
         openEditorAtTop();
     };
 
     const handleCancelEditor = () => {
+        editorGenerationRef.current += 1;
         setIsEditing(false);
         setEditingCycle(null);
     };
@@ -120,12 +123,14 @@ export default function TrainingPlanning({ onOpenSession }: TrainingPlanningProp
             const confirmed = await showConfirm('L’editor attuale contiene modifiche che potrebbero non essere salvate. Vuoi abbandonarle e aprire un altro ciclo?');
             if (!confirmed) return;
         }
+        editorGenerationRef.current += 1;
         setEditingCycle(cycle);
         setIsEditing(true);
         openEditorAtTop();
     };
 
     const handleSaveCycle = async (savedCycle: TrainingCycle) => {
+        const editorGeneration = editorGenerationRef.current;
         try {
             const isUpdate = trainingCycles.some(cycle => cycle.id === savedCycle.id);
             const operations: DomainOperation[] = [{ type: 'training-cycle.upsert', cycle: savedCycle }];
@@ -133,10 +138,14 @@ export default function TrainingPlanning({ onOpenSession }: TrainingPlanningProp
                 operations.push({ type: 'active-cycle.set', id: savedCycle.id });
             }
             await dispatchDurableOperation(dispatchDomainOperation, operations);
-            handleCancelEditor();
+            // A different editor may have opened while IndexedDB/cloud settled.
+            // The old completion cannot dismiss that newer unsaved draft.
+            if (editorGenerationRef.current === editorGeneration) handleCancelEditor();
         } catch (error) {
             console.error('Errore salvataggio ciclo:', error);
-            await showAlert('Salvataggio del ciclo non riuscito. Le modifiche sono ancora nel form: riprova.');
+            if (editorGenerationRef.current === editorGeneration) {
+                await showAlert('Salvataggio del ciclo non riuscito. Le modifiche sono ancora nel form: riprova.');
+            }
         }
     };
 

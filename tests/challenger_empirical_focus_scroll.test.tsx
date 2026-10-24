@@ -98,7 +98,7 @@ describe('Empirical Challenger Focus & Scroll Suite', () => {
         });
     });
 
-    describe('2. Mobile Viewport & Virtual Keyboard Avoidance Mathematical & Empirical Proof', () => {
+    describe('2. Pure keyboard occlusion model (not a real-browser viewport test)', () => {
         interface ViewportState {
             layoutViewportHeight: number;
             keyboardHeight: number;
@@ -154,7 +154,7 @@ describe('Empirical Challenger Focus & Scroll Suite', () => {
             };
         }
 
-        it('empirically proves that bottom fields are 100% occluded without native scroll when keyboard opens', () => {
+        it('model predicts lower input occlusion and centering for synthetic dimensions', () => {
             const mobileViewport: ViewportState = {
                 layoutViewportHeight: 800,
                 keyboardHeight: 350,
@@ -182,7 +182,7 @@ describe('Empirical Challenger Focus & Scroll Suite', () => {
             expect(result.isFullyVisibleWithNativeScroll).toBe(true);
         });
 
-        it('empirically proves that mid-screen fields touch the keyboard boundary without native adjustment', () => {
+        it('model predicts mid-screen intersection for synthetic keyboard', () => {
             const mobileViewport: ViewportState = {
                 layoutViewportHeight: 800,
                 keyboardHeight: 350,

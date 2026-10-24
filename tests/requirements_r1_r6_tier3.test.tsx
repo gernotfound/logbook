@@ -24,7 +24,7 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
     });
 
     /* =========================================================================
-     * TIER 3: CROSS-FEATURE COMBINATIONS (Pairwise & Multi-Feature Interactions)
+     * TIER 3: PURE-FUNCTION COMPOSITIONS (not end-to-end persistence tests)
      * ========================================================================= */
     describe('Tier 3: Cross-Feature Combinations', () => {
         it('T3.1: Bodyweight Chin-ups with Dropsets & Equipment Weight (R1 + R4)', () => {
@@ -52,7 +52,7 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
             expect(vol).toBe(1670);
         });
 
-        it('T3.2: Custom Food Auto-Kcal creation -> Logged into Daily Meals -> Nutrition Day verification (R2 + R3)', () => {
+        it('T3.2: Pure calorie calculation and meal object assembly (no saving)', () => {
             // Step 1: User creates custom high-protein pudding in form
             const carbs = 12;
             const pro = 20;
@@ -108,7 +108,7 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
             expect(updatedDay.fat).toBe(6);
         });
 
-        it('T3.3: DOMS merge preserves pains before the state update (R5 + R6)', () => {
+        it('T3.3: Pure DOMS merge followed by test-controlled store assignment', () => {
             // Initial state: User has DOMS in 'petto' and 'bicipiti'
             const initialUserData: any = {
                 ...defaultMockUserData,
@@ -137,7 +137,7 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
             expect(useAppStore.getState().userData?.activePains).toEqual(['petto', 'bicipiti']);
         });
 
-        it('T3.4: Past Date Measurement Logging -> Affects Bodyweight Workout Volume Calculation for Past Workout (R1 + R3)', () => {
+        it('T3.4: Pure volume function differs for two explicitly supplied bodyweights', () => {
             // User weighed 80kg on 2026-08-01, and 75kg on 2026-08-15
             const ex = { id: 'ex_dip', isBodyweight: true, equipmentWeight: 0 };
             const session = {
@@ -156,7 +156,7 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
             expect(volumeCurrent).toBe(850);
         });
 
-        it('T3.5: DOMS Selection in Session Ratings with Auto-Calculated Volume and Custom Food Post-Workout Snack (R1 + R2 + R5 + R6)', () => {
+        it('T3.5: Pure volume, DOMS union and macro functions on shared fixtures', () => {
             // 1. Session volume calculation
             const library = [{ id: 'ex_pullup', isBodyweight: true, equipmentWeight: 0, muscles: ['dorso', 'bicipiti'] }];
             const session = {
@@ -179,7 +179,7 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
             expect(postWorkoutSnackKcal).toBe(318);
         });
 
-        it('T3.6: Multi-Muscle Complex Session with Equipment Base + Bodyweight Ballast + DOMS Persistence (R1 + R4 + R5 + R6)', () => {
+        it('T3.6: Combined equipment/bodyweight calculation and pure DOMS union', () => {
             const library = [
                 { id: 'ex_dip', name: 'Dip alle parallele', isBodyweight: true, equipmentWeight: 3, muscles: ['petto', 'tricipiti'] },
                 { id: 'ex_squat', name: 'Squat con bilanciere', isBodyweight: false, equipmentWeight: 20, muscles: ['quadricipiti'] }

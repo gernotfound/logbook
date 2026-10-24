@@ -20,8 +20,6 @@ import {
   type QueuedTelemetryItem,
   type RateLimitEntry,
   type TelemetryErrorPayload,
-  type TelemetryEventPayload,
-  type TelemetryEventType,
   type TrackErrorOptions,
 } from './contracts';
 import { createTelemetryId } from './id';
@@ -33,7 +31,6 @@ import {
 import { TelemetryQueueStorage } from './queueStorage';
 import {
   dispatchTelemetryError,
-  dispatchTelemetryEvent,
   TelemetryRetryScheduler,
 } from './transportRetry';
 
@@ -296,7 +293,7 @@ export class TelemetryHub {
         if (this.isOffline()) {
           newEntry.isDispatchPending = false;
           newEntry.lastDispatchedCount = newEntry.count;
-          this.queue.enqueueItem('error', newEntry.payload);
+          this.queue.enqueueItem(newEntry.payload);
         } else if (!this.isErrorMicrotaskPending) {
           this.isErrorMicrotaskPending = true;
           queueMicrotask(() => {
@@ -357,7 +354,7 @@ export class TelemetryHub {
         if (this.isOffline()) {
           newEntry.isDispatchPending = false;
           newEntry.lastDispatchedCount = newEntry.count;
-          this.queue.enqueueItem('error', newEntry.payload);
+          this.queue.enqueueItem(newEntry.payload);
         } else if (!this.isErrorMicrotaskPending) {
           this.isErrorMicrotaskPending = true;
           queueMicrotask(() => {
@@ -406,7 +403,7 @@ export class TelemetryHub {
     const currentUid = this.getUserId();
     // Never queue a previous owner's response after an asynchronous auth change.
     if (!accepted && payload.userId && payload.userId === currentUid && ownerEpoch === this.ownerEpoch) {
-      this.queue.enqueueItem('error', payload);
+      this.queue.enqueueItem(payload);
       if (!this.isOffline()) this.scheduleExponentialBackoff();
     }
   }
@@ -441,7 +438,7 @@ export class TelemetryHub {
       if (entry.count > entry.lastDispatchedCount) {
         entry.lastDispatchedCount = entry.count;
         if (this.isOffline()) {
-          this.queue.enqueueItem('error', entry.payload);
+          this.queue.enqueueItem(entry.payload);
         } else {
           await this.dispatchOrQueueError(entry.payload);
         }
@@ -451,55 +448,6 @@ export class TelemetryHub {
 
   public getActiveRateLimiterCount(): number {
     return this.rateLimits.count;
-  }
-
-  public trackEvent(
-    type: TelemetryEventType | string,
-    details?: Record<string, any>
-  ): void {
-    try {
-      const now = Date.now();
-      const eventId = createTelemetryId('evt', now);
-      const context = getTelemetryContext();
-      const userId = this.getUserId();
-      const ownerEpoch = this.ownerEpoch;
-      const payload: TelemetryEventPayload = {
-        timestamp: now,
-        id: eventId,
-        type: type as TelemetryEventType,
-        context,
-        userId,
-        sessionId: this.getSessionId(),
-      };
-
-      if (details && typeof details === 'object') {
-        payload.details = details;
-      }
-
-      if (this.isOffline()) {
-        this.queue.enqueueItem('event', payload);
-      } else {
-        // Async transport completion must never persist the previous owner's
-        // diagnostics under a newly authenticated account.
-        const stillCurrentOwner = (): boolean => {
-          const currentUserId = this.getUserId();
-          return currentUserId === userId && this.ownerEpoch === ownerEpoch;
-        };
-        const queueOnlyForCurrentOwner = (): void => {
-          if (stillCurrentOwner()) this.queue.enqueueItem('event', payload);
-        };
-        queueMicrotask(() => {
-          if (!stillCurrentOwner()) return;
-          this.dispatchEventExternally(payload)
-            .then(success => {
-              if (!success) queueOnlyForCurrentOwner();
-            })
-            .catch(queueOnlyForCurrentOwner);
-        });
-      }
-    } catch (err) {
-      console.warn('[TelemetryHub] trackEvent failed silently:', err);
-    }
   }
 
   public getQueueStorageKey(): string {
@@ -579,15 +527,7 @@ export class TelemetryHub {
         }
 
         let success = false;
-        if (item.itemType === 'error') {
-          success = await this.dispatchErrorExternally(
-            item.payload as TelemetryErrorPayload
-          );
-        } else {
-          success = await this.dispatchEventExternally(
-            item.payload as TelemetryEventPayload
-          );
-        }
+        success = await this.dispatchErrorExternally(item.payload);
 
         if (!this.isQueueOwnerCurrent(ownerKey, ownerEpoch)) return;
         processedCount++;
@@ -672,11 +612,6 @@ export class TelemetryHub {
     return dispatchTelemetryError(payload, () => this.getUserId());
   }
 
-  public async dispatchEventExternally(
-    payload: TelemetryEventPayload
-  ): Promise<boolean> {
-    return dispatchTelemetryEvent(payload, () => this.getUserId());
-  }
 
 
 }

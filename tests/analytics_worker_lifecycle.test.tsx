@@ -23,6 +23,47 @@ it('uses the fallback for a real worker failure while the view is still mounted'
     expect(await result).toEqual({ points: [], stats: {} }); expect(worker.fallback).toHaveBeenCalledTimes(1);
 });
 
+it('does not resolve an old cooperative fallback after the view is reactivated', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    worker.cooperative.mockImplementationOnce(async () => {
+        await gate;
+        return { points: [], stats: {} };
+    });
+    const hook = renderHook(({ enabled }) => useAnalyticsWorker(enabled), { initialProps: { enabled: true } });
+    const history = Array.from({ length: 513 }, (_, i) => ({ id: String(i), date: '2026-08-20', exercises: [] }));
+    const prior = hook.result.current.calculateVolumeStats(history, [], 80, 8).then(
+        () => 'unexpected success',
+        (error: Error) => error.message,
+    );
+    await act(async () => { worker.instance.onerror(new Error('crash')); });
+    expect(worker.cooperative).toHaveBeenCalledTimes(1);
+    hook.rerender({ enabled: false });
+    hook.rerender({ enabled: true });
+    await act(async () => { release(); await gate; });
+    expect(await prior).toContain('annullato');
+    hook.unmount();
+});
+
+it('ignores errors delivered by a previous terminated worker after reactivation', async () => {
+    const hook = renderHook(({ enabled }) => useAnalyticsWorker(enabled), { initialProps: { enabled: true } });
+    const oldWorker = worker.instance;
+    hook.rerender({ enabled: false });
+    hook.rerender({ enabled: true });
+    const currentWorker = worker.instance;
+    const alreadyTerminated = worker.terminate.mock.calls.length;
+    await act(async () => { oldWorker.onerror(new Error('stale worker error')); });
+    expect(worker.terminate).toHaveBeenCalledTimes(alreadyTerminated);
+    const pending = hook.result.current.calculateVolumeStats([], [], 80, 8);
+    const id = worker.post.mock.calls[worker.post.mock.calls.length - 1][0].id;
+    await act(async () => {
+        currentWorker.onmessage({ data: { id, type: 'SUCCESS', result: { points: [], stats: {} } } });
+    });
+    expect(await pending).toEqual({ points: [], stats: {} });
+    expect(worker.fallback).not.toHaveBeenCalled();
+    hook.unmount();
+});
+
 afterEach(() => { vi.useRealTimers(); });
 
 it('terminates a stalled worker and resolves all pending tasks through one fallback each', async () => {

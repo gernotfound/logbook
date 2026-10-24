@@ -23,7 +23,11 @@ export function reportZodSchemaFallback(ctx: ZodFallbackContext): void {
     try {
         if (customFallbackListener) {
             try {
-                customFallbackListener(ctx);
+                const completed = (customFallbackListener as (context: ZodFallbackContext) => unknown)(ctx);
+                if (completed && typeof (completed as { then?: unknown }).then === 'function') {
+                    // Parsing remains synchronous even when a diagnostic listener rejects.
+                    void Promise.resolve(completed).catch(() => undefined);
+                }
             } catch {
                 // Safe fail-through
             }
