@@ -22,11 +22,16 @@ vi.mock('../../src/lib/healthConsent', async () => {
         getVerifiedHealthConsentRevision: () => 1,
     };
 });
+vi.mock('../../src/lib/sync/cloudAccountKeyAccess', () => ({
+    requireCloudAccountDataKey: vi.fn(async () => new Uint8Array(32).fill(18)),
+    requireRightsExportAccountDataKey: vi.fn(async () => new Uint8Array(32).fill(18)),
+}));
 vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackEvent: vi.fn(), trackError: vi.fn() } }));
 import { DB as RealDB } from '../../src/lib/db';
 import { adoptReplicaCheckpoint, advanceLocalConsentRevisionIfClean, readLocal, initializeLocal, commitLocal } from '../../src/lib/sync/localRepository';
 import { seedTrustedConsent, registerReplica } from './replicaHarness';
-import { CURRENT_DATA_SCHEMA, CURRENT_SYNC_PROTOCOL } from '../../src/lib/schemaEvolution';
+import { CURRENT_SYNC_PROTOCOL } from '../../src/lib/schemaEvolution';
+import { sealCloudDocument, openCloudDocument } from '../../src/lib/sync/cloudDocumentCipher';
 const DB = {
     ...RealDB
 };
@@ -56,7 +61,8 @@ it('stages, replicates and acknowledges through the actual DB and SDK path', asy
     const desired = data({ profile: { height: '171' } });
     await commitLocal('user:a', desired, base);
     expect(await DB.saveUserData(desired)).toEqual({ ok: true, status: 'synced' });
-    expect((await getDoc(doc(sdk.db, 'users/a'))).data()?.profile.height).toBe('171');
+    expect((openCloudDocument(new Uint8Array(32).fill(18), 'a', '',
+        (await getDoc(doc(sdk.db, 'users/a'))).data()).business.profile as Record<string, string>).height).toBe('171');
     expect((await readLocal('user:a'))?.pending).toEqual([]);
     expect(await get('pending_sync_token')).toBeUndefined();
     expect(await get('pending_sync_payload')).toBeUndefined();
@@ -93,11 +99,11 @@ it('adopts independent remote fields without overwriting them with the old local
     await initializeLocal('user:a', base);
     const remoteBusiness = projectDocuments(data({ profile: { height: '170', gender: 'F' } }), catalog).get('')!;
     await env.withSecurityRulesDisabled(async context => {
-        await setDoc(doc(context.firestore(), 'users/a'), {
-            ...remoteBusiness,
-            _schemaVersion: CURRENT_DATA_SCHEMA,
-            _sync: { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {}, writer: { slot: 's01', replicaId: 'remote-seed', generation: 1, seq: 0 } },
-        });
+        await setDoc(doc(context.firestore(), 'users/a'),
+            sealCloudDocument(new Uint8Array(32).fill(18), 'a', '', remoteBusiness, {
+                protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {},
+                writer: { slot: 's01', replicaId: 'remote-seed', generation: 1, seq: 0 },
+            }));
     });
     await prepareReplica();
     await commitLocal('user:a', desired, base);
