@@ -221,7 +221,8 @@ export async function loadAuthenticatedData({
         }
     } catch (error: any) {
         if (!isCurrent()) return 'blocked';
-        const integrityError = ['CloudDataIntegrityError', 'IncompleteCloudMonthError', 'LegacyVersionError', 'FutureVersionError', 'ZodError', 'InvalidCloudSyncMetadataError'].includes(error?.name);
+        const integrityError = error?.code === 'invalid-cloud-ciphertext'
+            || ['CloudDataIntegrityError', 'IncompleteCloudMonthError', 'LegacyVersionError', 'FutureVersionError', 'ZodError', 'InvalidCloudSyncMetadataError'].includes(error?.name);
         if (integrityError) {
             if (!(await preserveUnsafeCloud())) return 'blocked';
             setSaveError('Dati cloud non verificabili: sincronizzazione sospesa, archivio locale preservato.');
