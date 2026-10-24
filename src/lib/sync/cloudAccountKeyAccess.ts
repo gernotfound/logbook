@@ -35,7 +35,9 @@ function decodeKey(value: unknown): Uint8Array {
     }
 }
 
-export async function requireCloudAccountDataKey(uid: string, assertCurrent: () => void): Promise<Uint8Array> {
+async function acquireAccountDataKey(
+    uid: string, assertCurrent: () => void, purpose: 'sync' | 'rights-export',
+): Promise<Uint8Array> {
     const user = auth.currentUser;
     if (!uid || uid.includes('/') || !user || user.uid !== uid) {
         throw new CloudKeyAccessUnavailableError();
@@ -55,7 +57,7 @@ export async function requireCloudAccountDataKey(uid: string, assertCurrent: () 
 
     let response: Response;
     try {
-        response = await fetch(API + '/api/cloud-key', {
+        response = await fetch(API + '/api/cloud-key' + (purpose === 'rights-export' ? '?purpose=rights-export' : ''), {
             method: 'POST', cache: 'no-store', signal: AbortSignal.timeout(12_000),
             headers: { authorization: 'Bearer ' + idToken, 'x-firebase-appcheck': token },
         });
@@ -83,4 +85,14 @@ export async function requireCloudAccountDataKey(uid: string, assertCurrent: () 
         fresh.fill(0);
         throw error;
     }
+}
+
+/** Normal cloud operations require fresh authorized health consent. */
+export function requireCloudAccountDataKey(uid: string, assertCurrent: () => void): Promise<Uint8Array> {
+    return acquireAccountDataKey(uid, assertCurrent, 'sync');
+}
+
+/** Read-only capability for an explicit data export after consent withdrawal. */
+export function requireRightsExportAccountDataKey(uid: string, assertCurrent: () => void): Promise<Uint8Array> {
+    return acquireAccountDataKey(uid, assertCurrent, 'rights-export');
 }
