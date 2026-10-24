@@ -199,6 +199,11 @@ async function completeErasure(uid: string, leaseOwner: string): Promise<void> {
     const nextRevision = job.consentRevision + 1;
     if (!Number.isSafeInteger(nextRevision)) throw new Error('Revisione consenso non rappresentabile.');
     const now = Timestamp.now();
+    // Finalize data erasure and destroy the *wrapped* account key in the
+    // SAME leased transaction. Deleting it during the paginated data purge
+    // would irreversibly strand any remaining encrypted shards after a
+    // timeout, retry or unknown-collection failure.
+    tx.delete(db.collection('user_data_keys').doc(uid));
     tx.update(consentRef(uid), {
       revision: nextRevision, status: 'withdrawn', updatedAt: now,
       erasedBeforeRevision: job.consentRevision,
