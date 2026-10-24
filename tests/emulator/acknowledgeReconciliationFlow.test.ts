@@ -82,6 +82,7 @@ import { invalidateSession } from '../../src/lib/sync/session';
 import { projectDocuments, type DocumentData } from '../../src/lib/sync/documentProjection';
 import { diffDocuments } from '../../src/lib/sync/semanticProjection';
 import { applyDocumentChanges } from '../../src/lib/sync/transactionWriter';
+import { sealCloudDocument, openCloudDocument } from '../../src/lib/sync/cloudDocumentCipher';
 import { seedTrustedConsent, registerReplica, asModularFirestore } from './replicaHarness';
 
 const owner = 'user:a';
@@ -159,8 +160,9 @@ describe('remote commit to local acknowledgement reconciliation', () => {
         expect(acknowledged?.pending).toEqual([]);
         expect(acknowledged?.baseline.profile?.height).toBe('173');
         const remote = (await getDoc(doc(db, 'users/a'))).data()!;
-        expect(remote.profile.height).toBe('173');
-        expect(remote._sync.fields['profile/height']).toMatchObject({ actorId: replica.slot, seq: 1 });
+        const decoded = openCloudDocument(new Uint8Array(32).fill(18), 'a', '', remote);
+        expect((decoded.business.profile as Record<string, string>).height).toBe('173');
+        expect(decoded.sync.fields['profile/height']).toMatchObject({ actorId: replica.slot, seq: 1 });
 
         const controlRef = doc(db, 'users/a/sync_control/state');
         const beforeRepeat = (await getDoc(controlRef)).data()!;
@@ -177,16 +179,11 @@ describe('remote commit to local acknowledgement reconciliation', () => {
 
         const initialBusiness = projectDocuments(initial, catalog).get('')!;
         await env.withSecurityRulesDisabled(async context => {
-            await setDoc(doc(asModularFirestore(context.firestore()), 'users/a'), {
-                ...initialBusiness,
-                _schemaVersion: 1,
-                _sync: {
-                    protocolVersion: 3,
-                    clock: {},
-                    fields: {},
+            await setDoc(doc(asModularFirestore(context.firestore()), 'users/a'),
+                sealCloudDocument(new Uint8Array(32).fill(18), 'a', '', initialBusiness, {
+                    protocolVersion: 3, clock: {}, fields: {},
                     writer: { slot: 's01', replicaId: 'seed-remote', generation: 1, seq: 0 },
-                },
-            });
+                }));
         });
         const localReplica = await registerReplica(db, 'a', 's00', 'replica-local');
         await adoptReplicaCheckpoint(owner, { identity: localReplica, baseSeq: 0 }, { clock: {}, syncMetaByDocument: {} });
@@ -198,7 +195,7 @@ describe('remote commit to local acknowledgement reconciliation', () => {
             1,
             { [remoteActor]: 1 },
         );
-        const seeded = await applyDocumentChanges(db, 'a', remoteSeedOps, () => true, remoteReplica);
+        const seeded = await applyDocumentChanges(db, 'a', remoteSeedOps, () => true, remoteReplica, new Uint8Array(32).fill(18));
         expect(seeded.syncMeta[''].fields['profile/name']).toMatchObject({
             actorId: remoteActor,
             seq: 1,
@@ -244,7 +241,8 @@ describe('remote commit to local acknowledgement reconciliation', () => {
         expect(result.status).toBe('synced');
         expect(injected).toBe(true);
 
-        expect(firstAckCloud?.profile).toMatchObject({ height: '171', name: 'remote-device' });
+        expect(openCloudDocument(new Uint8Array(32).fill(18), 'a', '', firstAckCloud).business.profile)
+            .toMatchObject({ height: '171', name: 'remote-device' });
         expect(firstOutcomeSyncMeta?.[''].fields['profile/name']).toMatchObject({ actorId: remoteActor, seq: 1 });
         expect(firstOutcomeSyncMeta?.[''].fields['profile/height']).toMatchObject({ actorId: localActor, seq: 1 });
 
