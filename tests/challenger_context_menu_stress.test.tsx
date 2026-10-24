@@ -112,7 +112,7 @@ describe('Empirical Adversarial Stress Suite: ContextMenu & Integrations', () =>
       expect(container).not.toBeNull();
     });
 
-    it('survives unmounting and remounting immediately while dropdown is open without memory leaks or dangling listeners', () => {
+    it('unmounts and remounts an open menu without leaving DOM nodes or throwing on later events', () => {
       for (let i = 0; i < 20; i++) {
         const { unmount } = render(<ContextMenu items={sampleItems} />);
         const trigger = screen.getByRole('button', { name: 'Opzioni' });

@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { ExerciseArchive } from '../src/components/Training/exercises/ExerciseArchive';
 
 describe('exercise archive normalization', () => {
-    it('preserves token search and replaces old catalogue entries on owner switch', () => {
+    it('preserves token search when a replacement library prop removes previous entries', () => {
         const callbacks = {
             routines: [],
             selectedExId: null,

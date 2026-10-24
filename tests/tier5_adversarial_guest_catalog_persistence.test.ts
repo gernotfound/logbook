@@ -238,7 +238,7 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
             expect(() => checkDocSize(capturedUserDocWrite, "User Profile")).not.toThrow();
         });
 
-        it('T5.3.2: Clean seed state (176 exercises and 130 foods resolved with 0 custom items) serializes empty arrays and tiny doc payload', async () => {
+        it('T5.3.2: Current empty bundled seed with no custom items serializes empty arrays and a small root payload', async () => {
             const seed = getSeedCatalog();
             await saveCatalogToCache(seed);
 
