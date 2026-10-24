@@ -8,7 +8,7 @@ import { getCachedCatalog } from '../catalog/catalogService';
 import { applyRemoteDocuments, projectDocuments, type DocumentData } from '../sync/documentProjection';
 import { applySemanticOperations, coversVectorClock, parseSyncMeta, type SyncMeta } from '../sync/semanticProjection';
 import { readAccountCloudDocument } from '../sync/cloudDocumentRead';
-import { requireRightsExportAccountDataKey } from '../sync/cloudAccountKeyAccess';
+import { requireCloudAccountDataKey, requireRightsExportAccountDataKey } from '../sync/cloudAccountKeyAccess';
 
 import { UserDataSchema } from '../schema';
 import { withTimeout } from './db_core';
@@ -147,6 +147,10 @@ export async function collectBackupSnapshot(fallback: UserData, includeCloud: bo
             const withdrawnDocuments = await fetchWithdrawnCloudBackup(uid, assertCurrent);
             for (const [path, raw] of withdrawnDocuments) { assertCurrent(); addRawDoc(path, raw); }
         } else {
+            // A normal complete backup uses the same ADK as journal and
+            // hydration. No plaintext fallback when the key service fails.
+            effectiveCloudKey = await requireCloudAccountDataKey(uid, assertCurrent);
+            assertCurrent();
             const db = getDb();
             // Every supported client business transaction also advances the
             // replica control. Compare it around this non-atomic page scan so
@@ -187,7 +191,7 @@ export async function collectBackupSnapshot(fallback: UserData, includeCloud: bo
     assertCurrent();
     if (includeCloud && !equal(localBaseline, envelope)) {
         if (consistencyAttempt === 0) {
-            return collectBackupSnapshot(fallback, includeCloud, 1);
+            return collectBackupSnapshot(fallback, includeCloud, 1, accountKey);
         }
         throw new Error('I dati locali sono cambiati durante il backup. Riprova quando le modifiche sono stabili.');
     }
