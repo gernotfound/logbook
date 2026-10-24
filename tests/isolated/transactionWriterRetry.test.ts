@@ -108,7 +108,7 @@ describe('transaction writer retry safety', () => {
         const businessWrite = harness.attempts[0].find(write => write.path === 'users/user-a');
         const controlWrite = harness.attempts[0].find(write => write.path.endsWith('/sync_control/state'));
         expect(businessWrite?.data).not.toHaveProperty('profile');
-        expect(openCloudDocument(key, 'user-a', '', businessWrite?.data).business.profile.height).toBe('171');
+        expect(openCloudDocument(key, 'user-a', '', businessWrite?.data).business.profile).toEqual({ height: '171' });
         expect(controlWrite?.data.replicas.s00.lastSeq).toBe(1);
         expect(controlWrite?.data.mutation.batchId).toMatch(/^sync-advance_/);
         expect(businessWrite?.data._sync.writer).toMatchObject({
@@ -173,6 +173,24 @@ describe('transaction writer retry safety', () => {
         } finally {
             harness.remoteDocument = null;
         }
+    });
+
+    it('fails before contacting Firestore when the account key is missing or malformed', async () => {
+        const now = Date.now();
+        const replica = {
+            slot: 's00', replicaId: 'replica-a', generation: 1,
+            checkpointAtMs: now, leaseUntilMs: now + 360 * 24 * 60 * 60 * 1000,
+        };
+        const operations: SemanticOperation[] = [{
+            docPath: '', path: ['profile', 'height'], value: 'new',
+            isDelete: false, actorId: 's00', seq: 1, clock: { s00: 1 },
+        }];
+        harness.attempts.length = 0;
+        await expect(applyDocumentChanges({} as any, 'user-a', operations, () => true,
+            replica, undefined as unknown as Uint8Array)).rejects.toBeInstanceOf(CloudCiphertextError);
+        await expect(applyDocumentChanges({} as any, 'user-a', operations, () => true,
+            replica, new Uint8Array(31))).rejects.toBeInstanceOf(CloudCiphertextError);
+        expect(harness.attempts).toHaveLength(0);
     });
 
     it('refuses a plaintext or corrupted remote doc when an account ADK is supplied', async () => {

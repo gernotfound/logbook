@@ -55,8 +55,8 @@ export async function applyDocumentChanges(
         throw new Error(`Transazione sync troppo grande: ${documentCount} documenti, massimo ${MAX_SYNC_DOCUMENTS_PER_TRANSACTION}.`);
     }
 
-    // The Firestore SDK may retry this callback within one invocation. Preserve
-    // byte-identical writes across retries while using a new ID for a new drain.
+    // Firestore may retry this callback. Preserve the batch identity and causal
+    // semantics; discarded retries may use fresh AEAD nonces without affecting ACKs.
     const batchId = generateId('sync-advance');
     return runTransaction(db, async transaction => {
         if (!isCurrent()) throw new Error('Sessione cambiata');
