@@ -3,7 +3,7 @@ import { generateId } from '../utils/date';
 import { UserDataSchema } from '../schema';
 import { checkDocSize } from '../checkDocSize';
 import { removeUndefinedValuesForFirestore } from '../utils/object';
-import { normalizeCloudDocument, withCurrentDataSchema } from '../schemaEvolution';
+import { withCurrentDataSchema } from '../schemaEvolution';
 import { rootDocument, type DocumentData } from './documentProjection';
 import type { UserData } from '../../types';
 import { assertHistoryMonthDocument, assertNutritionMonthDocument } from './monthlyIntegrity';
@@ -20,7 +20,8 @@ import {
 } from './replicaProtocol';
 import { distinctDocumentCount, MAX_SYNC_DOCUMENTS_PER_TRANSACTION } from './syncBatching';
 import { assertCloudBusinessPreserved } from './cloudBusinessIntegrity';
-import { openCloudDocument, sealCloudDocument } from './cloudDocumentCipher';
+import { sealCloudDocument } from './cloudDocumentCipher';
+import { readAccountCloudDocument } from './cloudDocumentRead';
 export { CloudDataIntegrityError } from './cloudBusinessIntegrity';
 
 function normalizeRemote(path: string, raw: DocumentData): DocumentData {
@@ -98,9 +99,7 @@ export async function applyDocumentChanges(
             // sensitive field candidates and business entirely inside AEAD.
             // Decode before the existing integrity and causal validation;
             // never interpret an authenticated public clock as sufficient.
-            const normalized = cloudKey
-                ? openCloudDocument(cloudKey, uid, path, snapshot.data())
-                : normalizeCloudDocument(snapshot.data(), `Firestore ${path || 'root'} data schema`);
+            const normalized = readAccountCloudDocument(snapshot.data(), `Firestore ${path || 'root'} data schema`, uid, path, cloudKey);
             remoteSyncMetas[path] = parseSyncMeta(normalized.sync);
 
             const remote = removeUndefinedValuesForFirestore(normalizeRemote(path, normalized.business));
