@@ -1,6 +1,6 @@
 import { getDb } from '../firebase';
 import { doc, getDocFromServer } from 'firebase/firestore';
-import { normalizeCloudDocument } from '../schemaEvolution';
+import { readAccountCloudDocument } from '../sync/cloudDocumentRead';
 import { withTimeout } from './db_core';
 import { requireCompleteHistoryMonthDocument } from '../sync/monthlyIntegrity';
 import { assertCloudBusinessPreserved } from '../sync/cloudBusinessIntegrity';
@@ -11,6 +11,7 @@ export async function loadHistoryMonths(
     targetMonths: readonly string[],
     state: { history: unknown[] },
     cloudDocuments?: Map<string, Record<string, unknown>>,
+    cloudKey?: Uint8Array,
 ): Promise<void> {
     const historyDocs = await withTimeout(
         Promise.all(targetMonths.map(m => getDocFromServer(doc(getDb(), "users", user.uid, "history_months", m)))),
@@ -22,7 +23,7 @@ export async function loadHistoryMonths(
     const staged = historyDocs.flatMap((d, index) => {
         const month = targetMonths[index];
         if (!d || typeof d.exists !== 'function' || !d.exists()) return [];
-        const normalized = normalizeCloudDocument(d.data(), `History ${month} data schema`);
+        const normalized = readAccountCloudDocument(d.data(), `History ${month} data schema`, user.uid, `history_months/${month}`, cloudKey);
         const business = requireCompleteHistoryMonthDocument(month, normalized.business);
         assertCloudBusinessPreserved(`history_months/${month}`, normalized.business, business);
         return [{ month, business, sync: normalized.sync }];
