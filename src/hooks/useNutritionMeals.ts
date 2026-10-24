@@ -40,9 +40,10 @@ export function useNutritionMeals(dateStr?: string) {
     const planning = useAppStore(state => state.userData?.nutritionPlanning);
     const nutritionMap = useAppStore(state => state.userData?.nutrition);
 
-    const [localDayOnMap, setLocalDayOnMap] = useState<Record<string, boolean | undefined>>({});
-    const dbIsDayOn = todayNutrition.isDayOn;
-    const isDayOn = Object.prototype.hasOwnProperty.call(localDayOnMap, targetDateStr) ? localDayOnMap[targetDateStr] : dbIsDayOn;
+    // Domain Operations already updates Zustand optimistically and restores the
+    // durable snapshot after a failed commit. A second local override would hide
+    // subsequent hydration and edits from other tabs or account sessions.
+    const isDayOn = todayNutrition.isDayOn;
 
     // Use the shared parser to handle decimal commas and invalid measurements.
     const latestWeight = useMemo(() => Logic.getLatestUserWeight(nutritionMap), [nutritionMap]);
@@ -66,25 +67,13 @@ export function useNutritionMeals(dateStr?: string) {
         await persistNutrition({ type: 'nutrition-day.patch', date: targetDateStr, patch: { isDayOn: value } });
     };
 
-    const toggleDayType = async () => {
-        const newIsOn = isDayOn === true ? false : true;
-        setLocalDayOnMap(prev => ({ ...prev, [targetDateStr]: newIsOn }));
-        try { await persistDayType(newIsOn); }
-        catch {
-            setLocalDayOnMap(prev => ({ ...prev, [targetDateStr]: dbIsDayOn }));
-            void showAlert("Errore durante il salvataggio.");
-        }
-    };
-
     const setDayType = async (isOn: boolean | undefined) => {
         if (isDayOn === isOn) return;
-        setLocalDayOnMap(prev => ({ ...prev, [targetDateStr]: isOn }));
         try { await persistDayType(isOn); }
-        catch {
-            setLocalDayOnMap(prev => ({ ...prev, [targetDateStr]: dbIsDayOn }));
-            void showAlert("Errore durante il salvataggio.");
-        }
+        catch { await showAlert("Errore durante il salvataggio."); }
     };
+
+    const toggleDayType = async () => setDayType(isDayOn === true ? false : true);
 
     const meals = (todayNutrition.meals || []) as LoggedMealItem[];
 
@@ -206,7 +195,7 @@ export function useNutritionMeals(dateStr?: string) {
         }
     };
 
-    const saveCustomFood = async () => {
+    const saveCustomFood = async (): Promise<boolean> => {
         const foodData = {
             ...cfData,
             baseQty: 100,
@@ -216,21 +205,25 @@ export function useNutritionMeals(dateStr?: string) {
         const validation = Logic.validateCustomFood(foodData);
         if (!validation.isValid) {
             await showAlert("Attenzione: errori nei dati dell'alimento:\n" + Object.values(validation.errors).join('\n'));
-            return;
+            return false;
         }
 
         if (validation.cleanData) {
+            const session = captureSession();
             const currentEditingId = editingFoodId;
             const id = currentEditingId ?? Logic.generateId('food');
             try {
                 await persistNutrition({ type: 'food.upsert', food: { ...validation.cleanData, id } as any });
+                if (!isCurrentSession(session)) return false;
                 setShowCustomModal(false);
                 setEditingFoodId(null);
                 setCfData({ name: '', brand: '', unit: 'g', pieceWeight: '', kcal: '', carbs: '', pro: '', fat: '' });
+                return true;
             } catch {
-                await showAlert("Errore durante il salvataggio dell'alimento.");
+                if (isCurrentSession(session)) await showAlert("Errore durante il salvataggio dell'alimento.");
             }
         }
+        return false;
     };
 
     return {
