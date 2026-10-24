@@ -1,6 +1,20 @@
 import { captureSession } from '../src/lib/sync/session';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as sentryClient from '../src/lib/sentryClient';
+import * as Sentry from '@sentry/react';
+import { getTelemetryContext } from '../src/lib/telemetrySanitizer';
+
+// Keep the real LogBook Sentry adapter, but observe the SDK egress through
+// supported module mocking: ESM namespace exports cannot be spied on in Vitest.
+vi.mock('@sentry/react', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@sentry/react')>();
+  return {
+    ...actual,
+    captureException: vi.fn(),
+    captureMessage: vi.fn(),
+    captureEvent: vi.fn(),
+  };
+});
 import { renderHook, act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import React from 'react';
 import { telemetryHub } from '../src/lib/telemetryHub';
@@ -43,6 +57,30 @@ describe('Milestone 2: PWA, offline workout and telemetry boundaries', () => {
   // 1. PWA install behavior
   // =========================================================================
   describe('1. PWA install behavior without proprietary usage telemetry', () => {
+    it('the real Sentry boundary accepts standalone events without capturing usage telemetry', async () => {
+      // Queue stress tests mock the adapter to control latency. This test
+      // separately verifies the actual external privacy boundary.
+      mockSentryTransport.mockRestore();
+      const exception = vi.mocked(Sentry.captureException);
+      const message = vi.mocked(Sentry.captureMessage);
+      const event = vi.mocked(Sentry.captureEvent);
+      exception.mockClear();
+      message.mockClear();
+      event.mockClear();
+
+      const result = await sentryClient.sendTelemetryToSentry('event', {
+        timestamp: Date.now(),
+        type: 'workout_saved',
+        context: getTelemetryContext(),
+        userId: 'synthetic-uid',
+        sessionId: 'synthetic-session',
+      });
+      expect(result).toBe(true);
+      expect(exception).not.toHaveBeenCalled();
+      expect(message).not.toHaveBeenCalled();
+      expect(event).not.toHaveBeenCalled();
+    });
+
     it('retains beforeinstallprompt even when it fires before Settings/usePWAInstall mounts', () => {
       const earlyEvent = new Event('beforeinstallprompt');
       Object.assign(earlyEvent, {
