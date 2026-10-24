@@ -60,6 +60,18 @@ function validItems(items: unknown, count: number): items is Array<{ id: string 
     });
 }
 
+// Unlike local user input, global food documents are published with numeric
+// macronutrients. A forgiving Zod fallback must not silently turn a corrupt
+// persisted/remote value into 0 kcal or 0 g of protein.
+function validFoodItems(items: unknown, count: number): items is CatalogFood[] {
+    return validItems(items, count) && items.every(item =>
+        (['kcal', 'pro', 'carbs', 'fat'] as const).every(key => {
+            const value = (item as unknown as Record<string, unknown>)[key];
+            return typeof value === 'number' && Number.isFinite(value) && value >= 0;
+        })
+    );
+}
+
 function withTimeout<T>(promise: Promise<T>, ms: number, errMsg = "Timeout operazione catalogo"): Promise<T> {
     let timer: any;
     const timeout = new Promise<never>((_, reject) => {
@@ -118,7 +130,15 @@ export async function getCachedCatalog(): Promise<CachedGlobalCatalog> {
         if (inMemoryCatalogCache && isLoadedFromPersistentCache) return inMemoryCatalogCache;
         if (rawCached) {
             const parsed = CachedGlobalCatalogSchema.safeParse(rawCached);
-            if (parsed.success && validManifest(parsed.data.manifest) && validItems(parsed.data.exercises, parsed.data.manifest.itemCounts.exercises) && validItems(parsed.data.foods, parsed.data.manifest.itemCounts.foods)) {
+            // Validate raw identities and required nutritional values before
+            // permissive schema fallbacks can conceal damaged persisted data.
+            const raw = rawCached as Partial<CachedGlobalCatalog>;
+            if (parsed.success && validManifest(raw.manifest) &&
+                validItems(raw.exercises, raw.manifest.itemCounts.exercises) &&
+                validFoodItems(raw.foods, raw.manifest.itemCounts.foods) &&
+                validManifest(parsed.data.manifest) &&
+                validItems(parsed.data.exercises, parsed.data.manifest.itemCounts.exercises) &&
+                validFoodItems(parsed.data.foods, parsed.data.manifest.itemCounts.foods)) {
                 inMemoryCatalogCache = parsed.data;
                 isLoadedFromPersistentCache = true;
                 return parsed.data;
@@ -262,7 +282,7 @@ async function performCatalogSync(dbInstance: Firestore, options?: { force?: boo
         if (!exercisesSnap.exists() || !foodsSnap.exists()) throw new Error('Documenti catalogo mancanti');
         const exerciseItems: unknown = exercisesSnap.data()?.items;
         const foodItems: unknown = foodsSnap.data()?.items;
-        if (!validItems(exerciseItems, remoteManifest.itemCounts.exercises) || !validItems(foodItems, remoteManifest.itemCounts.foods)) throw new Error('Catalogo incompleto o con identità non valide');
+        if (!validItems(exerciseItems, remoteManifest.itemCounts.exercises) || !validFoodItems(foodItems, remoteManifest.itemCounts.foods)) throw new Error('Catalogo incompleto o con identità non valide');
         const newExercises = exerciseItems.map(item => CatalogExerciseSchema.parse(item));
         const newFoods = foodItems.map(item => CatalogFoodSchema.parse(item));
 
