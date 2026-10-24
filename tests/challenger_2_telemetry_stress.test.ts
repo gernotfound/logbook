@@ -59,7 +59,7 @@ describe('Empirical Challenger 2: Telemetry Offline Queueing, Capacity & Online 
       queue.forEach((item) => {
         expect(item.id).toBeDefined();
         expect(item.timestamp).toBeGreaterThan(0);
-        expect(['error', 'event']).toContain(item.itemType);
+        expect(item.itemType).toBe('error');
         expect(item.payload).toBeDefined();
       });
     });
