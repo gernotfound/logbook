@@ -4,6 +4,7 @@ import { auth, getDb } from '../../lib/firebase';
 import { isHealthConsentCloudWritable } from '../../lib/healthConsent';
 import { DB } from '../../lib/db';
 import { captureSession, isCurrentSession, userOwner } from '../../lib/sync/session';
+import { requireCloudAccountDataKey } from '../../lib/sync/cloudAccountKeyAccess';
 import { useAppStore } from '../../store/useAppStore';
 import { adoptReplicaCheckpoint, readLocal, hydrateLocal, markCloudIntegrityBlocked, completeCloudIntegrityRecovery, IncompleteCloudSnapshotError, markReplicaCheckpointRequired } from '../../lib/sync/localRepository';
 import {
@@ -125,7 +126,14 @@ export async function loadAuthenticatedData({
         if (!cloudAllowed()) return 'blocked';
         if (!cloudAllowed()) return 'blocked';
         const checkpointDue = needsReplicaCheckpoint(durableBeforeCloud?.replica) || Boolean(durableBeforeCloud?.cloudIntegrityFence);
-        const payload = await DB.loadCloudPayload({ allMonths: checkpointDue });
+        // The ADK must be provisioned BEFORE a first replica checkpoint creates
+        // sync_control/state: once cloud state exists, silent key creation is
+        // forbidden to prevent overwriting documents with an unrelated key.
+        const cloudKey = await requireCloudAccountDataKey(user.uid, () => {
+            if (!cloudAllowed()) throw new Error('Consenso o sessione cloud cambiati.');
+        });
+        if (!cloudAllowed()) return 'blocked';
+        const payload = await DB.loadCloudPayload({ allMonths: checkpointDue, cloudKey });
         if (!cloudAllowed()) return 'blocked';
 
         if (payload) {
