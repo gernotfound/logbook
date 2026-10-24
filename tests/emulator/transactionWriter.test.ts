@@ -24,7 +24,7 @@ import { seedTrustedConsent, registerReplica, asModularFirestore } from './repli
 const accountKey = new Uint8Array(32).fill(18);
 const sealed = (path: string, business: Record<string, unknown>, sync: SyncMeta) =>
     sealCloudDocument(accountKey, 'a', path, business, sync);
-const plain = (raw: unknown, path = '') => {
+const plain = (raw: unknown, path = ''): Record<string, any> & { _sync: SyncMeta; _schemaVersion: number } => {
     const decoded = openCloudDocument(accountKey, 'a', path, raw);
     return { ...(decoded.business as Record<string, any>), _schemaVersion: CURRENT_DATA_SCHEMA, _sync: decoded.sync };
 };
