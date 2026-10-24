@@ -230,6 +230,18 @@ describe('TelemetryHub Vitest Integration Suite — Tier 1 Core', () => {
       });
     });
 
+    it('Zod fallbacks emit only one technical error and never generate discarded events', async () => {
+      vi.useFakeTimers();
+      telemetryHub.init();
+      telemetryHub.setUserId('zod-error-only');
+      reportZodSchemaFallback({ schema: 'TechnicalSchema', field: 'value', issueCode: 'invalid_type' });
+      await vi.advanceTimersByTimeAsync(100);
+      expect(telemetryHub).not.toHaveProperty('trackEvent');
+      expect(mockSentryTransport.mock.calls.map((call: any) => call[0])).toEqual(['error']);
+      expect((mockSentryTransport.mock.calls[0][1] as TelemetryErrorPayload).source)
+        .toBe('zod_schema_fallback');
+    });
+
     describe('F4: React 19 diagnostic metadata (Hub boundary, not root mounting)', () => {
       it('F4-1: accepts simulated react_caught source with componentStack attribution', async () => {
         vi.useFakeTimers();
@@ -450,26 +462,18 @@ describe('TelemetryHub Vitest Integration Suite — Tier 1 Core', () => {
         });
         await vi.advanceTimersByTimeAsync(100);
 
-        const eventCall = mockSentryTransport.mock.calls.find((call: any) =>
-          call[0] === 'event' && call[1].type === 'zod_schema_fallback'
-        );
-        const errorCall = mockSentryTransport.mock.calls.find((call: any) =>
+        const errorCalls = mockSentryTransport.mock.calls.filter((call: any) =>
           call[0] === 'error' && call[1].source === 'zod_schema_fallback'
         );
-        expect(eventCall).toBeDefined();
-        expect(eventCall[1].details).toMatchObject({
-          schema: 'UserProfileSchema',
-          field: 'age',
-          issueCode: 'invalid_type',
-          expectedType: 'number',
-          fallbackUsed: 'default_empty_profile',
-        });
-        expect(errorCall).toBeDefined();
-        expect(errorCall[1].message).toContain('UserProfileSchema [age]: invalid_type');
+        expect(mockSentryTransport.mock.calls).toHaveLength(1);
+        expect(errorCalls).toHaveLength(1);
+        expect(errorCalls[0][1].message).toContain('UserProfileSchema [age]: invalid_type');
+        expect(errorCalls[0][1].type).toBe('ZodSchemaFallbackError');
+        expect(mockSentryTransport.mock.calls.some((call: any) => call[0] === 'event')).toBe(false);
         expect(JSON.stringify(mockSentryTransport.mock.calls)).not.toContain('private-value');
       });
 
-      it('F6-3: actual DomainParsers fallback emits a technical error and bounded event metadata', async () => {
+      it('F6-3: actual DomainParsers fallback emits only a technical error', async () => {
         vi.useFakeTimers();
         telemetryHub.init();
         telemetryHub.setUserId('user_zod_test');
@@ -479,19 +483,14 @@ describe('TelemetryHub Vitest Integration Suite — Tier 1 Core', () => {
         expect(typeof parsed).toBe('object');
         await vi.advanceTimersByTimeAsync(100);
 
-        const eventCall = mockSentryTransport.mock.calls.find((call: any) =>
-          call[0] === 'event' && call[1].type === 'zod_schema_fallback'
-        );
-        const errorCall = mockSentryTransport.mock.calls.find((call: any) =>
+        const errorCalls = mockSentryTransport.mock.calls.filter((call: any) =>
           call[0] === 'error' && call[1].source === 'zod_schema_fallback'
         );
-        expect(eventCall).toBeDefined();
-        expect(eventCall[1].details).toMatchObject({
-          schema: 'UserProfileSchema',
-          fallbackUsed: 'default_empty_profile',
-        });
-        expect(errorCall).toBeDefined();
-        expect(errorCall[1].type).toBe('ZodSchemaFallbackError');
+        expect(mockSentryTransport.mock.calls).toHaveLength(1);
+        expect(errorCalls).toHaveLength(1);
+        expect(errorCalls[0][1].type).toBe('ZodSchemaFallbackError');
+        expect(errorCalls[0][1].message).toContain('UserProfileSchema');
+        expect(mockSentryTransport.mock.calls.some((call: any) => call[0] === 'event')).toBe(false);
         expect(JSON.stringify(mockSentryTransport.mock.calls)).not.toContain('invalid_profile_root');
       });
 
