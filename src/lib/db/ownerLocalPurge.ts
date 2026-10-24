@@ -5,7 +5,6 @@ import {
     isLocalPurgePending, markLocalPurgeComplete,
 } from '../sync/localPurgeFence';
 import { deviceVaultKeyId } from '../sync/secureArchiveKeys';
-import { cloudAccountKeyStorageId } from '../sync/cloudAccountKeyCache';
 import { vaultControlMirrorId } from '../sync/secureArchiveControlRecovery';
 import { stableStorageKeyInventory } from '../sync/stableStorageKeyInventory';
 import { readBrowserValueStrict } from '../sync/browserStorage';
@@ -100,21 +99,6 @@ export async function purgeOwnerLocalData(owner: string, resumeOnly = false, gat
             throw new AggregateError(failures, 'Pulizia locale incompleta (IndexedDB). Chiave cifrata e copie residue conservate per il recupero.');
         }
         gate?.assertStillSafe?.();
-        // The cloud ADK is a second owner-scoped IndexedDB record, encrypted
-        // under the device DEK. Remove and verify it BEFORE removing that DEK.
-        // A failed deletion must leave the vault key for safe retry/recovery.
-        if (owner.startsWith('user:')) {
-            const cloudKeyId = cloudAccountKeyStorageId(owner);
-            try {
-                await del(cloudKeyId);
-                if ((await get<unknown>(cloudKeyId)) !== undefined) {
-                    failures.push(new Error('Verifica cancellazione chiave cloud locale fallita.'));
-                }
-            } catch (error) { failures.push(error); }
-        }
-        if (failures.length) {
-            throw new AggregateError(failures, 'Pulizia chiave cloud locale incompleta. Chiave del dispositivo conservata.');
-        }
         gate?.assertStillSafe?.();
 
     let remaining = new Set<string>();
