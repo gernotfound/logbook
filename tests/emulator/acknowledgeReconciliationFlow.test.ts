@@ -49,7 +49,7 @@ vi.mock('../../src/lib/healthConsent', async () => {
         getVerifiedHealthConsentRevision: () => 1,
     };
 });
-vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackEvent: vi.fn(), trackError: vi.fn() } }));
+vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackError: vi.fn() } }));
 vi.mock('../../src/lib/catalog/catalogService', () => ({ getCachedCatalog: async () => catalog }));
 vi.mock('../../src/lib/sync/localRepository', async () => {
     const actual = await vi.importActual<typeof import('../../src/lib/sync/localRepository')>('../../src/lib/sync/localRepository');
