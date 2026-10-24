@@ -1,6 +1,6 @@
 import { getDb } from '../firebase';
 import { doc, getDocFromServer } from 'firebase/firestore';
-import { normalizeCloudDocument } from '../schemaEvolution';
+import { readAccountCloudDocument } from '../sync/cloudDocumentRead';
 import { withTimeout } from './db_core';
 import { requireCompleteNutritionMonthDocument } from '../sync/monthlyIntegrity';
 import { assertCloudBusinessPreserved } from '../sync/cloudBusinessIntegrity';
@@ -11,6 +11,7 @@ export async function loadNutritionMonths(
     targetMonths: readonly string[],
     state: { nutrition: Record<string, unknown> },
     cloudDocuments?: Map<string, Record<string, unknown>>,
+    cloudKey?: Uint8Array,
 ): Promise<void> {
     const nutritionDocs = await withTimeout(
         Promise.all(targetMonths.map(m => getDocFromServer(doc(getDb(), "users", user.uid, "nutrition_months", m)))),
@@ -22,7 +23,7 @@ export async function loadNutritionMonths(
     const staged = nutritionDocs.flatMap((d, index) => {
         const month = targetMonths[index];
         if (!d || typeof d.exists !== 'function' || !d.exists()) return [];
-        const normalized = normalizeCloudDocument(d.data(), `Nutrition ${month} data schema`);
+        const normalized = readAccountCloudDocument(d.data(), `Nutrition ${month} data schema`, user.uid, `nutrition_months/${month}`, cloudKey);
         const business = requireCompleteNutritionMonthDocument(month, normalized.business);
         assertCloudBusinessPreserved(`nutrition_months/${month}`, normalized.business, business);
         return [{ month, business, sync: normalized.sync }];
