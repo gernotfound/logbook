@@ -230,8 +230,8 @@ describe('TelemetryHub Vitest Integration Suite — Tier 1 Core', () => {
       });
     });
 
-    describe('F4: React 19 Root Callbacks Interception', () => {
-      it('F4-1: handles onCaughtError callback with componentStack attribution', async () => {
+    describe('F4: React 19 diagnostic metadata (Hub boundary, not root mounting)', () => {
+      it('F4-1: accepts simulated react_caught source with componentStack attribution', async () => {
         vi.useFakeTimers();
         telemetryHub.init();
         telemetryHub.setUserId('user_react19');
@@ -252,7 +252,7 @@ describe('TelemetryHub Vitest Integration Suite — Tier 1 Core', () => {
         expect(payload.componentStack).toContain('ExerciseList');
       });
 
-      it('F4-2: handles onUncaughtError callback capturing root-level crashes', async () => {
+      it('F4-2: accepts simulated react_uncaught source', async () => {
         vi.useFakeTimers();
         telemetryHub.init();
         telemetryHub.setUserId('user_react19');
@@ -268,7 +268,7 @@ describe('TelemetryHub Vitest Integration Suite — Tier 1 Core', () => {
         expect(payload.message).toContain('Fatal root crash in App');
       });
 
-      it('F4-3: handles onRecoverableError callback with recoverable error context', async () => {
+      it('F4-3: accepts simulated react_recoverable source', async () => {
         vi.useFakeTimers();
         telemetryHub.init();
         telemetryHub.setUserId('user_react19');

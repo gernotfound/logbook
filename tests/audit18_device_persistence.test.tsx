@@ -171,13 +171,24 @@ describe('Audit 18 device-critical persistence', () => {
             />,
         );
 
-        fireEvent.click(screen.getByRole('button', { name: 'Energia: 4 su 5' }));
-
         const key = deviceKey('draft:pre-session:w-current', owner);
-        expect(localStorageMock.setItem).toHaveBeenCalledWith(
-            key,
-            expect.stringContaining('"energy":4'),
-        );
+        const writes = () => localStorageMock.setItem.mock.calls
+            .filter(([writtenKey]) => writtenKey === key)
+            .map(([, raw]) => raw as string);
+        localStorageMock.setItem.mockClear();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Energia: 4 su 5' }));
+        expect(writes()).toHaveLength(1);
+        expect(JSON.parse(writes()[0])).toMatchObject({ energy: 4 });
+
+        fireEvent.click(screen.getByRole('button', { name: 'Stress: 3 su 5' }));
+        expect(writes()).toHaveLength(2);
+        expect(JSON.parse(writes()[1])).toMatchObject({ energy: 4, stress: 3 });
+
+        fireEvent.click(screen.getByRole('button', { name: 'Energia: 5 su 5' }));
+        expect(writes()).toHaveLength(3);
+        expect(JSON.parse(writes()[2])).toMatchObject({ energy: 5, stress: 3 });
+        expect(localStorage.getItem(key)).toBe(writes()[2]);
     });
 
     it('surfaces a pre-session draft write failure instead of waiting for a lifecycle event', () => {

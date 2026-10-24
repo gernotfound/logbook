@@ -1,4 +1,11 @@
-import { deviceKey } from '../src/lib/sync/deviceStorage';
+import { deviceKey, protectedDeviceKey, readDeviceValueStrict } from '../src/lib/sync/deviceStorage';
+import { prepareUnlockedTestArchive } from './secureVaultFixture';
+import { readLocal } from '../src/lib/sync/localRepository';
+import { createDataSlice } from '../src/store/slices/createDataSlice';
+import { createWorkoutSlice } from '../src/store/slices/createWorkoutSlice';
+import { createSyncSlice } from '../src/store/slices/createSyncSlice';
+import { createStore } from 'zustand/vanilla';
+import type { AppState } from '../src/store/useAppStore';
 import { draftRegistry } from '../src/lib/utils/draftRegistry';
 import React from 'react';
 import { describe, test, expect, beforeEach, vi, afterEach } from 'vitest';
@@ -28,7 +35,7 @@ describe('PWA IndexedDB Cache & Sync Lock Refactor Suite', () => {
   });
 
   describe('R1 & R2: IndexedDB UserData Cache & Zustand Integration', () => {
-    test('Zustand store initializes userData from window.__INITIAL_USER_DATA__ synchronously', () => {
+    test('a fresh production store initializer parses window.__INITIAL_USER_DATA__ without a manual setState', () => {
       const mockInitialData: UserData = {
         profile: { height: '178' },
         library: [],
@@ -42,12 +49,24 @@ describe('PWA IndexedDB Cache & Sync Lock Refactor Suite', () => {
 
       window.__INITIAL_USER_DATA__ = mockInitialData;
 
-      // When store is reset/re-evaluated or setUserData with initial
-      useAppStore.setState({ userData: window.__INITIAL_USER_DATA__ });
-      expect(useAppStore.getState().userData?.profile?.height).toBe('178');
+      const freshStore = createStore<AppState>()((...args) => ({
+        ...createDataSlice(...args),
+        ...createWorkoutSlice(...args),
+        ...createSyncSlice(...args),
+      }));
+      expect(freshStore.getState().userData?.profile?.height).toBe('178');
+      expect(freshStore.getState().userData).not.toBe(mockInitialData);
+      window.__INITIAL_USER_DATA__ = '{bad json' as unknown as UserData;
+      const invalidStore = createStore<AppState>()((...args) => ({
+        ...createDataSlice(...args),
+        ...createWorkoutSlice(...args),
+        ...createSyncSlice(...args),
+      }));
+      expect(invalidStore.getState().userData).toBeNull();
     });
 
-    test('saveUserData and setUserData write to IndexedDB via idb-keyval instead of localStorage', async () => {
+    test('setUserData persists authenticated ciphertext through the production vault gateway', async () => {
+      await prepareUnlockedTestArchive('user:test-user-id');
       const mockData: UserData = {
         profile: { height: '185' },
         library: [],
@@ -63,11 +82,10 @@ describe('PWA IndexedDB Cache & Sync Lock Refactor Suite', () => {
       useAppStore.getState().setUserData(mockData);
       await new Promise(r => setTimeout(r, 0));
 
-      // IndexedDB store mock should receive the item
-      expect(idbStore['logbook:v2:user:test-user-id']).toBeDefined();
-      expect(idbStore['logbook:v2:user:test-user-id'].data.profile.height).toBe('185');
-
-      // LocalStorage should NOT contain logbook_cached_user_data
+      const raw = idbStore['logbook:v2:user:test-user-id'];
+      expect(raw).toMatch(/^tlb-sealed:v1:/);
+      expect(raw).not.toContain('"height":"185"');
+      expect((await readLocal('user:test-user-id'))?.data.profile?.height).toBe('185');
       expect(localStorage.getItem('logbook_cached_user_data')).toBeNull();
     });
 
@@ -148,7 +166,8 @@ describe('PWA IndexedDB Cache & Sync Lock Refactor Suite', () => {
       expect(useAppStore.getState().userData).toBeNull();
     });
 
-    test('localWorkout strictly remains in localStorage, never in IndexedDB', async () => {
+    test('localWorkout is sealed in owner-scoped localStorage, not IDB or plaintext keys', async () => {
+      await prepareUnlockedTestArchive('user:test-user-id');
       const mockWorkout: WorkoutSession = {
         id: 'session-123',
         date: '2026-08-14',
@@ -160,17 +179,17 @@ describe('PWA IndexedDB Cache & Sync Lock Refactor Suite', () => {
       // Set local workout
       useAppStore.getState().setLocalWorkout(mockWorkout);
 
-      // Verify it is NOT saved in IndexedDB
       expect(idbStore[deviceKey('workout')]).toBeUndefined();
       expect(idbStore['localWorkout']).toBeUndefined();
-
-      // Verify purgeAllLocalUserData clears local workout from localStorage
-      localStorage.setItem(deviceKey('workout'), JSON.stringify(mockWorkout));
-      expect(localStorage.getItem(deviceKey('workout'))).toBeTruthy();
+      const sealed = localStorage.getItem(protectedDeviceKey('workout'));
+      expect(sealed).toMatch(/^tlb-sealed:v1:/);
+      expect(sealed).not.toContain('session-123');
+      expect(localStorage.getItem(deviceKey('workout'))).toBeNull();
+      expect(JSON.parse(readDeviceValueStrict('workout')!)).toMatchObject({ id: 'session-123' });
 
       await DB.purgeAllLocalUserData();
       useAppStore.getState().resetStore();
-      expect(localStorage.getItem(deviceKey('workout'))).toBeNull();
+      expect(localStorage.getItem(protectedDeviceKey('workout'))).toBeNull();
     });
 
     test('getInitialUserData safely handles corrupt JSON string or non-object structures without crashing', () => {
@@ -341,7 +360,8 @@ describe('PWA IndexedDB Cache & Sync Lock Refactor Suite', () => {
       vi.useRealTimers();
     });
 
-    test('visibilitychange hidden event writes localWorkout to localStorage', () => {
+    test('visibilitychange hidden flushes localWorkout as authenticated device ciphertext', async () => {
+      await prepareUnlockedTestArchive('user:test-user-id');
       const mockWorkout: WorkoutSession = {
         id: 'session-vis-test',
         date: '2026-08-14',
@@ -358,10 +378,11 @@ describe('PWA IndexedDB Cache & Sync Lock Refactor Suite', () => {
       try {
         Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });
         document.dispatchEvent(new Event('visibilitychange'));
-        const saved = localStorage.getItem(deviceKey('workout'));
-        expect(saved).toBeTruthy();
-        const parsed = JSON.parse(saved!);
-        expect(parsed.id).toBe('session-vis-test');
+        const sealed = localStorage.getItem(protectedDeviceKey('workout'));
+        expect(sealed).toMatch(/^tlb-sealed:v1:/);
+        expect(sealed).not.toContain('session-vis-test');
+        expect(localStorage.getItem(deviceKey('workout'))).toBeNull();
+        expect(JSON.parse(readDeviceValueStrict('workout')!).id).toBe('session-vis-test');
       } finally { draftRegistry.unregister(flush); }
     });
   });

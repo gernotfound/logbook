@@ -7,8 +7,7 @@ vi.unmock('../src/store/useDialogStore');
 
 import { GlobalDialog } from '../src/components/UI/GlobalDialog';
 import { useDialogStore } from '../src/store/useDialogStore';
-import * as fs from 'fs';
-import * as path from 'path';
+import { requestDurableStorage } from '../src/lib/storageStatus';
 
 describe('Empirical Challenger: PWA Resilience & Accessibility Stress Suite', () => {
 
@@ -96,101 +95,86 @@ describe('Empirical Challenger: PWA Resilience & Accessibility Stress Suite', ()
         });
     });
 
-    describe('2. navigator.storage.persist Boundary Hardening', () => {
+    describe('2. Browser persistent-storage capability', () => {
         const originalStorage = navigator.storage;
+        const setStorage = (value: unknown) => Object.defineProperty(navigator, 'storage', {
+            value, configurable: true, writable: true,
+        });
 
         afterEach(() => {
-            Object.defineProperty(navigator, 'storage', {
-                value: originalStorage,
-                configurable: true,
-                writable: true,
-            });
+            setStorage(originalStorage);
+            vi.restoreAllMocks();
         });
 
-        it('handles navigator.storage undefined without throwing', () => {
-            Object.defineProperty(navigator, 'storage', {
-                value: undefined,
-                configurable: true,
-                writable: true,
-            });
-
-            expect(() => {
-                if (typeof navigator !== 'undefined' && (navigator as any).storage?.persist) {
-                    (navigator as any).storage.persist().catch(() => {});
-                }
-            }).not.toThrow();
+        it('reports unsupported storage when navigator.storage is missing', async () => {
+            setStorage(undefined);
+            await expect(requestDurableStorage()).resolves.toEqual({ supported: false, persistent: false });
         });
 
-        it('handles navigator.storage.persist undefined without throwing', () => {
-            Object.defineProperty(navigator, 'storage', {
-                value: {},
-                configurable: true,
-                writable: true,
-            });
+        it('requires both persisted and persist capabilities before requesting durability', async () => {
+            const persist = vi.fn().mockResolvedValue(true);
+            setStorage({ persist });
+            await expect(requestDurableStorage()).resolves.toEqual({ supported: false, persistent: false });
+            expect(persist).not.toHaveBeenCalled();
 
-            expect(() => {
-                if (typeof navigator !== 'undefined' && (navigator as any).storage?.persist) {
-                    (navigator as any).storage.persist().catch(() => {});
-                }
-            }).not.toThrow();
+            const persisted = vi.fn().mockResolvedValue(false);
+            setStorage({ persisted });
+            await expect(requestDurableStorage()).resolves.toEqual({ supported: false, persistent: false });
+            expect(persisted).not.toHaveBeenCalled();
         });
 
-        it('handles navigator.storage.persist rejecting promise gracefully without unhandled rejection', async () => {
-            const mockPersist = vi.fn().mockRejectedValue(new Error('Permission denied'));
-            Object.defineProperty(navigator, 'storage', {
-                value: { persist: mockPersist },
-                configurable: true,
-                writable: true,
+        it('reuses an existing durability grant without requesting it again', async () => {
+            const persisted = vi.fn().mockResolvedValue(true);
+            const persist = vi.fn();
+            const estimate = vi.fn().mockResolvedValue({ usage: 128, quota: 1024 });
+            setStorage({ persisted, persist, estimate });
+            await expect(requestDurableStorage()).resolves.toEqual({
+                supported: true, persistent: true, usage: 128, quota: 1024,
             });
-
-            let caughtError: any = null;
-            expect(() => {
-                if (typeof navigator !== 'undefined' && navigator.storage?.persist) {
-                    navigator.storage.persist().catch((err) => {
-                        caughtError = err;
-                    });
-                }
-            }).not.toThrow();
-
-            // Wait for rejected promise microtask
-            await new Promise(resolve => setTimeout(resolve, 10));
-            expect(mockPersist).toHaveBeenCalledTimes(1);
-            expect(caughtError).toBeInstanceOf(Error);
-            expect(caughtError.message).toBe('Permission denied');
+            expect(persisted).toHaveBeenCalledOnce();
+            expect(persist).not.toHaveBeenCalled();
+            expect(estimate).toHaveBeenCalledOnce();
         });
 
-        it('executes navigator.storage.persist successfully when supported', async () => {
-            const mockPersist = vi.fn().mockResolvedValue(true);
-            Object.defineProperty(navigator, 'storage', {
-                value: { persist: mockPersist },
-                configurable: true,
-                writable: true,
+        it('requests persistence when not already granted and returns the browser decision', async () => {
+            const persist = vi.fn().mockResolvedValue(true);
+            setStorage({ persisted: vi.fn().mockResolvedValue(false), persist });
+            await expect(requestDurableStorage()).resolves.toEqual({
+                supported: true, persistent: true, usage: undefined, quota: undefined,
             });
+            expect(persist).toHaveBeenCalledOnce();
 
-            if (typeof navigator !== 'undefined' && navigator.storage?.persist) {
-                navigator.storage.persist().catch(() => {});
-            }
+            persist.mockResolvedValue(false);
+            await expect(requestDurableStorage()).resolves.toEqual({
+                supported: true, persistent: false, usage: undefined, quota: undefined,
+            });
+            expect(persist).toHaveBeenCalledTimes(2);
+        });
 
-            await new Promise(resolve => setTimeout(resolve, 10));
-            expect(mockPersist).toHaveBeenCalledTimes(1);
+        it('contains a rejected persistence request without an unhandled rejection', async () => {
+            const error = new Error('Permission denied');
+            const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+            const persist = vi.fn().mockRejectedValue(error);
+            setStorage({ persisted: vi.fn().mockResolvedValue(false), persist });
+            await expect(requestDurableStorage()).resolves.toEqual({ supported: true, persistent: false });
+            expect(persist).toHaveBeenCalledOnce();
+            expect(log).toHaveBeenCalledWith('Errore durante la richiesta di storage persistente:', error);
+        });
+
+        it('contains persisted/estimate failures instead of blocking bootstrap', async () => {
+            const error = new Error('Storage estimate unavailable');
+            const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+            setStorage({ persisted: vi.fn().mockRejectedValue(error), persist: vi.fn() });
+            await expect(requestDurableStorage()).resolves.toEqual({ supported: true, persistent: false });
+            expect(log).toHaveBeenCalledWith('Errore durante la richiesta di storage persistente:', error);
+
+            const estimate = vi.fn().mockRejectedValue(error);
+            setStorage({ persisted: vi.fn().mockResolvedValue(true), persist: vi.fn(), estimate });
+            await expect(requestDurableStorage()).resolves.toEqual({ supported: true, persistent: false });
+            expect(estimate).toHaveBeenCalledOnce();
         });
     });
 
-    // Chunk-load recovery is exercised against the real ReloadPrompt in
-    // tests/reload_prompt.test.tsx. Do not recreate obsolete reload handlers here.
-
-    describe('4. Workbox & Precache Manifest Verification', () => {
-        it('verifies sw.js and workbox exist and do not contain pruned orphan files', () => {
-            const distPath = path.resolve(__dirname, '../dist');
-            if (fs.existsSync(distPath)) {
-                const swPath = path.join(distPath, 'sw.js');
-                if (fs.existsSync(swPath)) {
-                    const swContent = fs.readFileSync(swPath, 'utf8');
-                    expect(swContent).not.toContain('icon-cropped.png');
-                    expect(swContent).not.toContain('test_manichino.html');
-                    expect(swContent).not.toContain('foods.ts');
-                }
-            }
-        });
-    });
+    // The build-dependent Workbox/precache contract runs in test:pwa:m7 after
+    // npm run build, where missing dist/sw.js fails instead of passing vacuously.
 });

@@ -15,7 +15,7 @@ import { installTelemetryTestHarness, mockSentryTransport } from './telemetryTes
 import { seedCurrentTelemetryQueue } from './seedCurrentQueue';
 import { localStorageMock } from '../setup';
 
-describe('Unified Telemetry Hub E2E Suite — Tier 5', () => {
+describe('Telemetry Hub Vitest integration suite — Tier 5', () => {
   installTelemetryTestHarness();
 
   describe('Tier 5: Adversarial Hardening & Stress Suite', () => {

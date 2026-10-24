@@ -27,7 +27,7 @@ import { createDataSlice } from '../../src/store/slices/createDataSlice';
 import { createWorkoutSlice } from '../../src/store/slices/createWorkoutSlice';
 import { createSyncSlice } from '../../src/store/slices/createSyncSlice';
 import type { AppState } from '../../src/store/useAppStore';
-import { readLocal, initializeLocal, acknowledgeThrough, commitDomainOperations, advanceLocalConsentRevisionIfClean } from '../../src/lib/sync/localRepository';
+import { readLocal, initializeLocal, acknowledgeThrough, adoptReplicaCheckpoint, commitDomainOperations, advanceLocalConsentRevisionIfClean } from '../../src/lib/sync/localRepository';
 import { UserDataSchema } from '../../src/lib/schema';
 import type { UserData } from '../../src/types';
 import { getNutritionConflictFingerprint } from '../../src/lib/utils/object';
@@ -46,7 +46,26 @@ beforeEach(async () => {
     store.getState().resetStore();
     await clear();
     sdk.auth.currentUser = { uid: 'A' };
-    sdk.save.mockReset().mockImplementation(async () => { const saved = await readLocal(`user:${sdk.auth.currentUser?.uid}`); if (saved) await acknowledgeThrough(saved.owner, saved.revision, saved.data); return { ok: true, status: 'synced' }; });
+    sdk.save.mockReset().mockImplementation(async () => {
+        const owner = `user:${sdk.auth.currentUser?.uid}`;
+        let saved = await readLocal(owner);
+        if (!saved) throw new Error('Missing durable journal for test cloud delivery');
+        if (saved.pending.length && !saved.replica) {
+            const now = Date.now();
+            await adoptReplicaCheckpoint(owner, { identity: {
+                slot: 's00', replicaId: 'store-journal-test', generation: 1,
+                checkpointAtMs: now, leaseUntilMs: now + 31_104_000_000,
+            }, baseSeq: 0 }, { clock: {}, syncMetaByDocument: {} });
+            saved = await readLocal(owner);
+        }
+        if (saved?.pending.length) {
+            if (!saved.replica) throw new Error('Missing replica identity for test acknowledgement');
+            const delivered = structuredClone(saved.pending);
+            await acknowledgeThrough(saved.owner, delivered[delivered.length - 1].seq, saved.data,
+                [], undefined, { operations: delivered, replica: saved.replica });
+        }
+        return { ok: true, status: 'synced' };
+    });
     store.setState({ userData: data(170), dataOwner: 'user:A' });
     await initializeLocal('user:A', data(170));
 });
@@ -73,6 +92,21 @@ describe('store with real IndexedDB commits', () => {
         expect(result.ok).toBe(false);
         expect(store.getState().userData?.pendingConflicts).toEqual(conflicted.pendingConflicts);
         expect(sdk.save).not.toHaveBeenCalled();
+    });
+    it('does not mistake metadata-only revision for a delivered journal sequence', async () => {
+        const initial = data(170);
+        await commitDomainOperations('user:A', {
+            type: 'active-workout.set', workout: null, deletedWorkoutId: 'closed-without-operation',
+        }, initial);
+        const metadataOnly = (await readLocal('user:A'))!;
+        expect(metadataOnly.revision).toBeGreaterThan(metadataOnly.actorSeq);
+        const saving = store.getState().saveUserData(data(171));
+        await store.getState().flushPendingSyncs();
+        await expect(saving).resolves.toMatchObject({ ok: true, status: 'synced' });
+        const saved = (await readLocal('user:A'))!;
+        expect(saved.pending).toEqual([]);
+        expect(saved.data.profile?.height).toBe('171');
+        expect(saved.actorSeq).toBeGreaterThan(0);
     });
     it('is dirty immediately and durably stages the edit before the cloud debounce', async () => {
         const saving = store.getState().saveUserData(data(171));
