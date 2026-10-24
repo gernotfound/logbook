@@ -213,11 +213,13 @@ describe('Workout Improvements & History Edit Suite', () => {
         }
       ];
 
-      let currentSubTab: TrainingSubTab = 'history';
-      const setSubTab = (tab: TrainingSubTab) => { currentSubTab = tab; };
+      const ControlledTrainingView = () => {
+        const [subTab, setSubTab] = React.useState<TrainingSubTab>('history');
+        return <TrainingView subTab={subTab} setSubTab={setSubTab} />;
+      };
 
       renderWithProviders(
-        <TrainingView subTab={currentSubTab} setSubTab={setSubTab} />,
+        <ControlledTrainingView />,
         {
           localWorkout: null,
           userData: { ...emptyUserData, activeWorkout: null, history: mockHistory } as any
@@ -234,7 +236,10 @@ describe('Workout Improvements & History Edit Suite', () => {
         fireEvent.click(editBtn);
       });
 
-      expect(currentSubTab).toBe('session');
+      expect(screen.getByRole('tab', { name: 'Sessione' }).getAttribute('aria-selected')).toBe('true');
+      expect(screen.getByRole('tabpanel', { name: 'Sessione' })).toBeDefined();
+      expect(screen.getByText('Modifica allenamento dello storico')).toBeDefined();
+      expect(screen.getByText(/Salva modifiche/i)).toBeDefined();
     });
   });
 

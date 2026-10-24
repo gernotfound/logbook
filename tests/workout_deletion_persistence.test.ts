@@ -20,11 +20,17 @@ describe('Workout Deletion & Subcollection Persistence (V3)', () => {
       exercises: []
     };
 
+    const otherMonthWorkout: WorkoutSession = {
+      ...workout2,
+      id: 'w-aug-1',
+      date: '2026-08-03'
+    };
+
     const initialUserData: UserData = {
       profile: {},
       library: [],
       routines: [],
-      history: [workout1, workout2],
+      history: [workout1, workout2, otherMonthWorkout],
       nutrition: {},
       customFoods: [],
       activeWorkout: null,
@@ -41,7 +47,7 @@ describe('Workout Deletion & Subcollection Persistence (V3)', () => {
 
     const updatedUserData: UserData = {
       ...initialUserData,
-      history: [workout2]
+      history: [workout2, otherMonthWorkout]
     };
 
     const catalog = { exercises: [], foods: [] } as any;
@@ -54,6 +60,8 @@ describe('Workout Deletion & Subcollection Persistence (V3)', () => {
     expect(monthDoc?.['w-jul-2']).toBeDefined();
     expect(monthDoc?.['w-jul-1']).toBeUndefined();
     expect(syncMetas['history_months/2026-07'].fields['w-jul-1']?.deleted).toBe(true);
+    expect(documents.get('history_months/2026-08')).toEqual(baseDocs.get('history_months/2026-08'));
+    expect(syncMetas['history_months/2026-08']?.fields?.['w-aug-1']).toBeUndefined();
   });
 
   it('keeps a tombstone-only month after deleting the last workout', () => {

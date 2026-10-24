@@ -66,16 +66,14 @@ describe('Training Session UI Improvements Suite (R1, R2, R3)', () => {
                 }
             });
 
-            // Heading of routine exists
-            const routineHeading = screen.getByText('Scheda Petto');
-            expect(routineHeading).toBeDefined();
-
-            // The parent of the exercise list should NOT have the .card class
-            const exerciseContainer = routineHeading.parentElement;
-            expect(exerciseContainer?.classList.contains('card')).toBe(false);
+            expect(screen.getByText('Scheda Petto')).toBeDefined();
+            const exerciseList = document.querySelector('.session-exercise-list');
+            expect(exerciseList).not.toBeNull();
+            expect(exerciseList?.classList.contains('card')).toBe(false);
+            expect(exerciseList?.querySelector('.session-exercise-shell')).not.toBeNull();
         });
 
-        it('R1.2: SessionSetRow has border styled with fluo blue variable (var(--primary-color))', () => {
+        it('R1.2: SessionSetRow exposes the semantic primary border token (jsdom structural check)', () => {
             const setObj = { id: 's1', kg: '80', reps: '10' };
 
             const { container } = render(
@@ -97,9 +95,7 @@ describe('Training Session UI Improvements Suite (R1, R2, R3)', () => {
 
             const row = container.querySelector('.set-row');
             expect(row).not.toBeNull();
-            // Style contains border with var(--primary-color)
-            const styleAttr = row?.getAttribute('style') || '';
-            expect(styleAttr).toContain('var(--primary-color)');
+            expect((row as HTMLElement).style.border).toContain('var(--primary-color)');
         });
 
     });
@@ -534,6 +530,66 @@ describe('Training Session UI Improvements Suite (R1, R2, R3)', () => {
 
             expect(showConfirmSpy).toHaveBeenCalledTimes(1);
             expect(onRemoveSetSpy).toHaveBeenCalledWith(0, 0);
+        });
+
+        it('R3.5: protects isometry-only and RIR-zero sets before deleting the last series', async () => {
+            const showConfirm = vi.spyOn(useDialogStore.getState(), 'showConfirm').mockResolvedValue(false);
+            const onRemoveSet = vi.fn();
+            const isoExercise = {
+                id: 'item_isometry',
+                exId: 'ex_bench',
+                sessionNote: '',
+                sets: [{
+                    id: 's_iso', kg: '', reps: '',
+                    isometrics: [{ id: 'iso_1', kg: '', time: '20' }]
+                }]
+            };
+            const props = {
+                exIndex: 0,
+                libDef: { id: 'ex_bench', name: 'Panca Piana', trackingType: 'weight_reps' as const },
+                pastWorkouts: [],
+                isHistoryOpen: false,
+                isSetupOpen: false,
+                openSpecialMenuId: null,
+                onToggleHistory: vi.fn(),
+                onToggleSetup: vi.fn(),
+                onRemoveExercise: vi.fn(),
+                onUpdateSetupNote: vi.fn(),
+                onUpdateSessionNote: vi.fn(),
+                onAddSet: vi.fn(),
+                onRemoveSet,
+                onUpdateSet: vi.fn(),
+                onAddSpecialSet: vi.fn(),
+                onUpdateSpecialSet: vi.fn(),
+                onRemoveSpecialSet: vi.fn(),
+                onToggleSpecialMenu: vi.fn(),
+                onUpdateSetTarget: vi.fn(),
+                onUpdateTechnicalStandard: vi.fn()
+            };
+            const view = render(<SessionExerciseCard {...props} exItem={isoExercise} />);
+            await act(async () => {
+                fireEvent.click(screen.getByText('- Rimuovi serie'));
+            });
+            expect(showConfirm).toHaveBeenCalledTimes(1);
+            expect(onRemoveSet).not.toHaveBeenCalled();
+
+            showConfirm.mockResolvedValue(true);
+            await act(async () => {
+                fireEvent.click(screen.getByText('- Rimuovi serie'));
+            });
+            expect(onRemoveSet).toHaveBeenCalledWith(0, 0);
+
+            showConfirm.mockClear();
+            onRemoveSet.mockClear();
+            view.rerender(<SessionExerciseCard {...props} exItem={{
+                ...isoExercise,
+                sets: [{ id: 's_rir', kg: '', reps: '', rir: 0 }]
+            }} />);
+            await act(async () => {
+                fireEvent.click(screen.getByText('- Rimuovi serie'));
+            });
+            expect(showConfirm).toHaveBeenCalledTimes(1);
+            expect(onRemoveSet).toHaveBeenCalledWith(0, 0);
         });
     });
 
