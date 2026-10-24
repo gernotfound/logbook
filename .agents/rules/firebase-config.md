@@ -75,7 +75,7 @@ La private key supporta newline escaped (`\\n`) e viene normalizzata server-side
 
 ### Servizio opzionale di cifratura cloud (PR #621 — NON ATTIVO)
 
-Il branch della PR #621 implementa `api/cloud-key.ts`, `server/cloudKeys/` e la cache client, ma **non collega ancora il codec ai documenti Firestore e non autorizza l'attivazione Production**. L'unica nuova variabile server-only è `CLOUD_KMS_KEY_NAME`, nome risorsa `projects/.../locations/.../keyRings/.../cryptoKeys/...`, **non** un segreto e non una versione di chiave.
+Il branch della PR #621 implementa `api/cloud-key.ts`, `server/cloudKeys/` e un recupero della ADK **solo online e per singola operazione**, senza una seconda copia persistente nel browser. Il vault locale resta l'unico archivio necessario al lavoro offline. Il codec cifrato non è ancora attivato da tutti i percorsi Firestore, quindi **la cifratura cloud non autorizza l'attivazione Production**. L'unica nuova variabile server-only è `CLOUD_KMS_KEY_NAME`, nome risorsa `projects/.../locations/.../keyRings/.../cryptoKeys/...`, **non** un segreto e non una versione di chiave.
 
 Il backend usa il token OAuth cloud-platform delle credenziali Firebase Admin esistenti per le API REST KMS; `CLOUD_KMS_KEY_NAME` non configurata o il permesso KMS assente causano **fail-closed** dell'endpoint, senza impedire l'uso locale offline. Prima dell'attivazione, verificare nel provider che l'identità Vercel possieda **soltanto** `cloudkms.cryptoKeyVersions.useToEncrypt` e `cloudkms.cryptoKeyVersions.useToDecrypt` sulla specifica CryptoKey, senza permessi amministrativi o di distruzione; verificare versioni KMS, quote e recovery. L'attuale autenticazione Firebase Admin con private key resta invariata; non dichiarare WIF/OIDC live senza prova provider.
 
