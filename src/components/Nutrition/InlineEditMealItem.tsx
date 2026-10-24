@@ -23,10 +23,10 @@ export default function EditMealItemModal({ item, onClose, onSave, onDelete }: E
     const numQty = validQty ? parsedQty : 0;
     const ratio = base > 0 ? numQty / base : 1;
 
-    const currentKcal = Math.round((parseFloat(item.kcal) || 0) * ratio);
-    const currentCarbs = Math.round((parseFloat(item.carbs) || 0) * ratio * 10) / 10;
-    const currentPro = Math.round((parseFloat(item.pro) || 0) * ratio * 10) / 10;
-    const currentFat = Math.round((parseFloat(item.fat) || 0) * ratio * 10) / 10;
+    const currentKcal = Math.round((Number(item.kcal) || 0) * ratio);
+    const currentCarbs = Math.round((Number(item.carbs) || 0) * ratio * 10) / 10;
+    const currentPro = Math.round((Number(item.pro) || 0) * ratio * 10) / 10;
+    const currentFat = Math.round((Number(item.fat) || 0) * ratio * 10) / 10;
 
     const submit = async (operation: () => Promise<boolean>) => {
         if (submitting.current) return;
