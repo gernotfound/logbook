@@ -224,4 +224,50 @@ describe('NutritionMeals decomposition parity', () => {
         expect(onSave).toHaveBeenCalledTimes(1);
     });
 
+    it('retains the portion draft when an optimistic category move is rolled back', async () => {
+        const original: LoggedMealItem = {
+            id: 'moving-meal', name: 'Latte', meal: 'Colazione',
+            quantity: 100, baseQty: 100, kcal: 80, pro: 4, carbs: 4, fat: 5,
+        };
+        let settle!: (saved: boolean) => void;
+        const saveSpy = vi.fn();
+        function Harness() {
+            const [meals, setMeals] = useState<LoggedMealItem[]>([original]);
+            const onSave = (changes: Pick<LoggedMealItem, 'id' | 'quantity' | 'meal'>) => {
+                saveSpy(changes);
+                setMeals([{ ...original, ...changes }]);
+                return new Promise<boolean>(resolve => {
+                    settle = saved => {
+                        if (!saved) setMeals([original]);
+                        resolve(saved);
+                    };
+                });
+            };
+            const hook: any = {
+                targetDateStr: '2026-09-14',
+                todayNutrition: { date: '2026-09-14', kcal: 80, pro: 4, carbs: 4, fat: 5, meals },
+                dailyTarget: { kcal: 2200, pro: 100, carbs: 200, fat: 50 },
+                isDayOn: undefined, setDayType: vi.fn(), searchQuery: '', handleSearch: vi.fn(),
+                searchResults: [], clearSearch: vi.fn(), showCustomModal: false,
+                setShowCustomModal: vi.fn(), editingFoodId: null, cancelCustomFood: vi.fn(),
+                cfData: {}, setCfData: vi.fn(), saveCustomFood: vi.fn(),
+                meals, addFood: vi.fn(), removeFood: vi.fn().mockResolvedValue(true),
+                updateMealItem: onSave,
+            };
+            return <NutritionMeals mealsHook={hook} selectedDate="2026-09-14" />;
+        }
+        renderWithProviders(<Harness />);
+        fireEvent.click(screen.getByRole('button', { name: 'Modifica porzione di Latte' }));
+        fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '70' } });
+        fireEvent.change(screen.getByRole('combobox'), { target: { value: 'Pranzo' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Salva' }));
+        expect(saveSpy).toHaveBeenCalledWith({ id: 'moving-meal', quantity: 70, meal: 'Pranzo' });
+        expect(screen.getByRole('heading', { name: 'Modifica porzione' })).toBeDefined();
+        expect((screen.getByRole('spinbutton') as HTMLInputElement).value).toBe('70');
+        expect(screen.queryByRole('button', { name: 'Modifica porzione di Latte' })).toBeNull();
+        await act(async () => settle(false));
+        expect(screen.getByRole('heading', { name: 'Modifica porzione' })).toBeDefined();
+        expect((screen.getByRole('spinbutton') as HTMLInputElement).value).toBe('70');
+    });
+
 });
