@@ -469,7 +469,7 @@ describe('TelemetryHub Vitest Integration Suite — Tier 1 Core', () => {
         expect(mockSentryTransport.mock.calls).toHaveLength(1);
         expect(errorCalls).toHaveLength(1);
         expect(errorCalls[0][1].message).toContain('UserProfileSchema [age]: invalid_type');
-        expect(errorCalls[0][1].message).toContain('expected number');
+        expect(errorCalls[0][1].type).toBe('ZodSchemaFallbackError');
         expect(mockSentryTransport.mock.calls.some((call: any) => call[0] === 'event')).toBe(false);
         expect(JSON.stringify(mockSentryTransport.mock.calls)).not.toContain('private-value');
       });
