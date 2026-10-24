@@ -3,7 +3,7 @@ import { afterAll, beforeAll, beforeEach, expect, it } from 'vitest';
 import { initializeTestEnvironment, assertFails, assertSucceeds, type RulesTestEnvironment } from '@firebase/rules-unit-testing';
 import { doc, setDoc, getDoc, deleteDoc, updateDoc, writeBatch } from 'firebase/firestore';
 import { CURRENT_SYNC_PROTOCOL } from '../../src/lib/schemaEvolution';
-import { sealCloudDocument, openCloudDocument } from '../../src/lib/sync/cloudDocumentCipher';
+import { sealCloudDocument, openCloudDocument, CloudCiphertextError } from '../../src/lib/sync/cloudDocumentCipher';
 import type { SyncMeta } from '../../src/lib/sync/semanticProjection/contracts';
 import { seedTrustedConsent, registerReplica, asModularFirestore } from './replicaHarness';
 
@@ -381,7 +381,7 @@ it('accepts only ciphertext envelopes and refuses malformed document paths', asy
     await assertFails(setDoc(root, { profile: { height: 'private' }, _schemaVersion: 1,
         _sync: ciphertext._sync }));
     for (const name of ['history_months', 'nutrition_months']) {
-        await assertFails(fencedWrite(db, `users/a/${name}/2026-13`, {}, replica));
+        await expect(fencedWrite(db, `users/a/${name}/2026-13`, {}, replica)).rejects.toThrow(CloudCiphertextError);
         await fencedWrite(db, `users/a/${name}/2026-09`, {}, replica);
     }
 });
