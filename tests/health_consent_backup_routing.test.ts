@@ -56,6 +56,7 @@ vi.mock('../src/lib/db/withdrawnBackupTransport', () => ({
 }));
 vi.mock('../src/lib/sync/cloudAccountKeyAccess', () => ({
   requireRightsExportAccountDataKey: vi.fn(async () => new Uint8Array(32).fill(17)),
+  requireCloudAccountDataKey: vi.fn(async () => new Uint8Array(32).fill(17)),
 }));
 vi.mock('firebase/firestore', () => ({
   doc: (_db: unknown, ...parts: string[]) => ({ path: parts.join('/') }),
@@ -80,6 +81,14 @@ beforeEach(() => {
   boundary.offlineReaccept = false;
   boundary.serverStatus = 'withdrawn';
   boundary.serverRead.mockImplementation(async () => boundary.serverStatus);
+  boundary.directRootRead.mockImplementation(async () => ({
+    exists: () => true,
+    data: () => sealCloudDocument(new Uint8Array(32).fill(17), 'consent-export-user', '',
+      { profile: { height: '178' } }, {
+        protocolVersion: 3, clock: {}, fields: {},
+        writer: { slot: 's00', replicaId: 'consent-backup-device', generation: 1, seq: 0, consentRevision: 2 },
+      }),
+  }));
   boundary.trustedExport.mockResolvedValue(new Map([['', sealCloudDocument(
     new Uint8Array(32).fill(17), 'consent-export-user', '',
     { profile: { height: '178' } },

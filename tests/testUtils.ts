@@ -1,5 +1,6 @@
 import { DB as RealDB } from '../src/lib/db';
 import { auth as __testAuth } from '../src/lib/firebase';
+import { openCloudDocument } from '../src/lib/sync/cloudDocumentCipher';
 import {
     adoptReplicaCheckpoint as __testAdoptReplicaCheckpoint,
     commitLocal as __testCommitLocal,
@@ -58,3 +59,14 @@ export const ConsentedTestDB = {
             },
     }, revision),
 };
+
+/** Inspect an authenticated production-format AEAD envelope, never a plaintext proxy. */
+export function openTestCloudDocument(document: unknown, path = '') {
+    const uid = __testAuth.currentUser?.uid;
+    if (!uid) throw new Error('Test cloud owner assente');
+    return openCloudDocument(new Uint8Array(32).fill(18), uid, path, document);
+}
+
+export function openTestCloudBusiness(document: unknown, path = ''): Record<string, any> {
+    return openTestCloudDocument(document, path).business;
+}

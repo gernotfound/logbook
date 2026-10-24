@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { getDocFromServer, writeBatch } from 'firebase/firestore';
 
 vi.unmock('../src/lib/db');
-import { ConsentedTestDB as DB } from './testUtils';
+import { ConsentedTestDB as DB, openTestCloudBusiness } from './testUtils';
 import {
     getSeedCatalog,
     clearCatalogCache,
@@ -35,9 +35,9 @@ describe('M3: Storage & Persistence Delta Isolation Suite', () => {
         capturedUserDocData = null;
 
         mockBatch = {
-            set: vi.fn((_ref: any, data: any) => {
-                if (data && (data.library !== undefined || data.customFoods !== undefined || data.catalogOverrides !== undefined)) {
-                    capturedUserDocData = data;
+            set: vi.fn((ref: any, data: any) => {
+                if (ref?.path === 'users/test-user-id' && data?._sealed) {
+                    capturedUserDocData = openTestCloudBusiness(data);
                 }
             }),
             delete: vi.fn(),
