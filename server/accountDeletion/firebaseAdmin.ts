@@ -34,12 +34,3 @@ export function adminDb() {
 export function adminAppCheck() {
   return getAppCheck(getAdminApp());
 }
-
-/** OAuth cloud-platform token from the SAME trusted Admin credential; never expose to clients. */
-export async function adminGoogleCloudAccessToken(): Promise<string> {
-  const credential = getAdminApp().options.credential;
-  if (!credential) throw new Error('Credenziale server Google Cloud non configurata.');
-  const token = await credential.getAccessToken();
-  if (!token.access_token) throw new Error('Token Google Cloud non disponibile.');
-  return token.access_token;
-}
