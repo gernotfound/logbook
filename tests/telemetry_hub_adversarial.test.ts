@@ -179,21 +179,20 @@ describe('Adversarial Stress & Edge-Case Suite: TelemetryHub', () => {
       telemetryHub.init();
       telemetryHub.setUserId('user_hanging_sentry');
 
-      // Track 20 distinct errors and 20 events synchronously.
+      // Track 20 distinct errors synchronously.
       // The transport promises never settle; tracking must still return.
       for (let i = 0; i < 20; i++) {
         telemetryHub.trackError(new Error(`Hanging error ${i}`));
-        telemetryHub.trackEvent(`hanging_event_${i}`);
       }
 
       // Date.now() is frozen under fake timers and cannot measure elapsed
       // execution time; assert observable progress instead.
       expect(telemetryHub.getActiveRateLimiterCount()).toBe(20);
 
-      // Before the timeout all 40 dispatches must have reached transport,
+      // Before the timeout all 20 dispatches must have reached transport,
       // otherwise the test could pass because of an owner/offline guard.
       await vi.advanceTimersByTimeAsync(TELEMETRY_DISPATCH_TIMEOUT_MS - 1);
-      expect(mockSentryTransport).toHaveBeenCalledTimes(40);
+      expect(mockSentryTransport).toHaveBeenCalledTimes(20);
 
       await vi.advanceTimersByTimeAsync(100);
       expect(telemetryHub.getActiveRateLimiterCount()).toBe(20);
@@ -247,7 +246,7 @@ describe('Adversarial Stress & Edge-Case Suite: TelemetryHub', () => {
         if (i % 2 === 0) {
           telemetryHub.trackError(new Error(`Offline error ${i}`));
         } else {
-          telemetryHub.trackEvent(`offline_event_${i}`);
+          // The unused standalone event path has been retired.
         }
       }
 
@@ -271,11 +270,11 @@ describe('Adversarial Stress & Edge-Case Suite: TelemetryHub', () => {
 
       // Seed the current encrypted owner-scoped queue with 5 items
       const items = [
-        { id: 'item_1', timestamp: Date.now() + 1, itemType: 'event' as const, payload: { timestamp: Date.now() + 1, type: 'evt1', context: {} as any, userId: 'user_flapping', sessionId: 's1' } },
-        { id: 'item_2', timestamp: Date.now() + 2, itemType: 'event' as const, payload: { timestamp: Date.now() + 2, type: 'evt2', context: {} as any, userId: 'user_flapping', sessionId: 's1' } },
-        { id: 'item_3', timestamp: Date.now() + 3, itemType: 'event' as const, payload: { timestamp: Date.now() + 3, type: 'evt3', context: {} as any, userId: 'user_flapping', sessionId: 's1' } },
-        { id: 'item_4', timestamp: Date.now() + 4, itemType: 'event' as const, payload: { timestamp: Date.now() + 4, type: 'evt4', context: {} as any, userId: 'user_flapping', sessionId: 's1' } },
-        { id: 'item_5', timestamp: Date.now() + 5, itemType: 'event' as const, payload: { timestamp: Date.now() + 5, type: 'evt5', context: {} as any, userId: 'user_flapping', sessionId: 's1' } },
+        { id: 'item_1', timestamp: Date.now() + 1, itemType: 'error' as const, payload: { timestamp: Date.now() + 1, type: 'Error', message: 'failure 1', source: 'custom' as const, context: {} as any, userId: 'user_flapping', sessionId: 's1', count: 1, firstSeen: Date.now(), lastSeen: Date.now() } },
+        { id: 'item_2', timestamp: Date.now() + 2, itemType: 'error' as const, payload: { timestamp: Date.now() + 2, type: 'Error', message: 'failure 2', source: 'custom' as const, context: {} as any, userId: 'user_flapping', sessionId: 's1', count: 1, firstSeen: Date.now(), lastSeen: Date.now() } },
+        { id: 'item_3', timestamp: Date.now() + 3, itemType: 'error' as const, payload: { timestamp: Date.now() + 3, type: 'Error', message: 'failure 3', source: 'custom' as const, context: {} as any, userId: 'user_flapping', sessionId: 's1', count: 1, firstSeen: Date.now(), lastSeen: Date.now() } },
+        { id: 'item_4', timestamp: Date.now() + 4, itemType: 'error' as const, payload: { timestamp: Date.now() + 4, type: 'Error', message: 'failure 4', source: 'custom' as const, context: {} as any, userId: 'user_flapping', sessionId: 's1', count: 1, firstSeen: Date.now(), lastSeen: Date.now() } },
+        { id: 'item_5', timestamp: Date.now() + 5, itemType: 'error' as const, payload: { timestamp: Date.now() + 5, type: 'Error', message: 'failure 5', source: 'custom' as const, context: {} as any, userId: 'user_flapping', sessionId: 's1', count: 1, firstSeen: Date.now(), lastSeen: Date.now() } },
       ];
       await seedCurrentTelemetryQueue('user_flapping', items);
 

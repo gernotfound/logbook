@@ -40,13 +40,12 @@ describe('Empirical Challenger 2: Telemetry Offline Queueing, Capacity & Online 
   // =========================================================================
   describe('1. Offline Queueing, Capacity Limits & FIFO Eviction', () => {
 
-    it('1.3: preserves the latest 50 errors when 60 events compete for queue capacity', () => {
+    it('1.3: preserves the latest 50 errors when 60 errors overflow queue capacity', () => {
       Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
       telemetryHub.init();
 
       for (let i = 1; i <= 60; i++) {
         telemetryHub.trackError(new Error(`Custom distinct error ${i}`));
-        telemetryHub.trackEvent(`custom_event_${i}`, { num: i });
       }
 
       const queue = telemetryHub.getQueuedEvents();
@@ -60,7 +59,7 @@ describe('Empirical Challenger 2: Telemetry Offline Queueing, Capacity & Online 
       queue.forEach((item) => {
         expect(item.id).toBeDefined();
         expect(item.timestamp).toBeGreaterThan(0);
-        expect(['error', 'event']).toContain(item.itemType);
+        expect(item.itemType).toBe('error');
         expect(item.payload).toBeDefined();
       });
     });
@@ -218,11 +217,10 @@ describe('Empirical Challenger 2: Telemetry Offline Queueing, Capacity & Online 
       telemetryHub.init();
       telemetryHub.setUserId('anonymous');
 
-      telemetryHub.trackEvent('anon_event_1');
       telemetryHub.trackError(new Error('Anon error 1'));
 
       const queue = telemetryHub.getQueuedEvents();
-      expect(queue.length).toBe(2);
+      expect(queue.length).toBe(1);
       expect(queue[0].payload.userId).toBe('anonymous');
       const anonymousQueueKey = telemetryHub.getQueueStorageKey();
 
