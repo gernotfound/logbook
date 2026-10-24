@@ -195,7 +195,9 @@ describe('Training Planning & Volume Calculations', () => {
             fireEvent.click(screen.getByRole('button', { name: 'Dettagli ciclo' }));
 
             // Muscle model present
-            expect(document.querySelector('.muscle-map-container') || document.querySelector('svg')).toBeDefined();
+            const muscleModel = document.querySelector('.planning-active-details .cycle-muscle-map-model svg');
+            expect(muscleModel).not.toBeNull();
+            expect(muscleModel?.querySelectorAll('path').length).toBeGreaterThan(0);
 
             // Volume section: bottone accordion deve essere presente
             const volumeBtn = screen.getByRole('button', { name: /Volume settimanale per muscolo/i });

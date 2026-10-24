@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import React from 'react';
 import { TrainingCycleSchema, DomainParsers } from '../src/lib/schema';
 import { calculateCycleTimeline, calculateCycleSchedule } from '../src/lib/calc/planning';
@@ -293,6 +293,70 @@ describe('Training Cycle End Date & Two-Way Binding (Milestone 2 - Requirement R
             fireEvent.blur(endInput);
             fireEvent.submit(form);
             expect(onSave).not.toHaveBeenCalled();
+        });
+
+        it.each([
+            ['0', 1, '2026-09-07'],
+            ['-2', 1, '2026-09-07'],
+            ['', 4, '2026-09-28'],
+        ])('keeps duration and end date consistent when saving a %s week input', (entered, expectedWeeks, expectedEndDate) => {
+            const onSave = vi.fn();
+            render(
+                <CycleEditor
+                    initialCycle={{
+                        id: 'cycle-duration-fallback',
+                        name: 'Ciclo',
+                        durationWeeks: 6,
+                        startDate: '2026-09-01',
+                        endDate: '2026-10-12',
+                        routines: [{ routineId: 'r_push', frequencyPerWeek: 1 }],
+                    }}
+                    routines={mockRoutines}
+                    onSave={onSave}
+                    onCancel={vi.fn()}
+                />
+            );
+            fireEvent.change(screen.getByLabelText('Durata (settimane)'), {
+                target: { value: entered },
+            });
+            // Exercise the form's submit handler even for input values that the
+            // native number-input min/required attributes prevent users from submitting.
+            fireEvent.submit(document.querySelector('#cycle-editor-form') as HTMLFormElement);
+
+            expect(onSave).toHaveBeenCalledTimes(1);
+            const saved: TrainingCycle = onSave.mock.calls[0][0];
+            expect(saved.durationWeeks).toBe(expectedWeeks);
+            expect(saved.endDate).toBe(expectedEndDate);
+            const timeline = calculateCycleTimeline(saved, '2026-09-01');
+            expect(timeline.totalWeeks).toBe(expectedWeeks);
+            expect(timeline.endDate).toBe(expectedEndDate);
+        });
+
+        it('submits a cycle once while a save is pending and allows a retry afterwards', async () => {
+            let settleFirst!: () => void;
+            const firstSave = new Promise<void>(resolve => { settleFirst = resolve; });
+            const onSave = vi.fn().mockReturnValueOnce(firstSave).mockResolvedValue(undefined);
+            render(
+                <CycleEditor
+                    initialCycle={{
+                        id: 'single-submit',
+                        name: 'Ciclo',
+                        durationWeeks: 4,
+                        startDate: '2026-09-01',
+                        routines: [{ routineId: 'r_push', frequencyPerWeek: 1 }],
+                    }}
+                    routines={mockRoutines}
+                    onSave={onSave}
+                    onCancel={vi.fn()}
+                />
+            );
+            const form = document.querySelector('#cycle-editor-form') as HTMLFormElement;
+            fireEvent.submit(form);
+            fireEvent.submit(form);
+            expect(onSave).toHaveBeenCalledTimes(1);
+            await act(async () => { settleFirst(); await firstSave; });
+            fireEvent.submit(form);
+            expect(onSave).toHaveBeenCalledTimes(2);
         });
 
         it('submits cycle with both startDate and endDate on save', () => {

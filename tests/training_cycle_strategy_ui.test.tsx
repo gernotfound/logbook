@@ -189,7 +189,7 @@ describe('training cycle strategy UI', () => {
         await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
         expect(onSave.mock.calls[0][0].strategy).toBeUndefined();
     });
-    it('explains historical behavior and applies a semantic change only to future session snapshots', async () => {
+    it('shows the historical-session notice and submits the updated strategy without mutating the input cycle', async () => {
         const onSave = vi.fn();
         const usedCycle: TrainingCycle = {
             id: 'used-cycle',
@@ -214,6 +214,7 @@ describe('training cycle strategy UI', () => {
 
         await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
         expect(onSave.mock.calls[0][0].strategy?.progressionFocus).toBe('volume');
+        expect(usedCycle.strategy?.progressionFocus).toBe('performance');
     });
 
     it('renders structured strategy context in a concise summary', () => {

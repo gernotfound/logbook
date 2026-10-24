@@ -1,32 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { parseISO, format, addDays, startOfDay, differenceInCalendarDays } from 'date-fns';
+import { parseISO, differenceInCalendarDays } from 'date-fns';
+import { computeEndDate, computeWeeksFromDates } from '../src/components/Training/planning/useCycleForm';
 import { calculateCycleTimeline } from '../src/lib/calc/planning';
 import { TrainingCycleSchema, DomainParsers } from '../src/lib/schema';
 import type { TrainingCycle } from '../src/types';
-
-// Helper mirror functions representing the two-way binding logic contracts
-function computeEndDate(startIso: string, weeks: number): string {
-    try {
-        const parsed = typeof startIso === 'string' && !startIso.includes('T') ? parseISO(startIso) : new Date(startIso);
-        const totalWeeks = Math.max(1, weeks);
-        const end = addDays(startOfDay(parsed), totalWeeks * 7 - 1);
-        return format(end, 'yyyy-MM-dd');
-    } catch {
-        return startIso;
-    }
-}
-
-function computeWeeksFromDates(startIso: string, endIso: string): number {
-    try {
-        const start = typeof startIso === 'string' && !startIso.includes('T') ? parseISO(startIso) : new Date(startIso);
-        const end = typeof endIso === 'string' && !endIso.includes('T') ? parseISO(endIso) : new Date(endIso);
-        const diffDays = differenceInCalendarDays(startOfDay(end), startOfDay(start));
-        if (diffDays < 0) return 1;
-        return Math.max(1, Math.round((diffDays + 1) / 7));
-    } catch {
-        return 1;
-    }
-}
 
 describe('Challenger 1 Empirical Verification: Cycle Planning Mathematics & Edge Cases (Milestone 2 - Requirement R5)', () => {
     // -------------------------------------------------------------------------
