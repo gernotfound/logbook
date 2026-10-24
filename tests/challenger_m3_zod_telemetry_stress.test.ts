@@ -134,7 +134,7 @@ describe('Empirical Challenger: Milestone 3 (R1: Zod Integration) Adversarial St
     // 2. Deeply Nested Corrupted Objects & Recursion Safety
     // =========================================================================
     describe('2. Deeply Nested Corrupted Objects & Recursion Safety', () => {
-        it('handles 50-level nested corrupted objects in DomainParsers without stack overflow', () => {
+        it('handles 50-level nested corrupted objects without throwing', () => {
             let deeplyNested: any = { leaf: 'poison' };
             for (let i = 0; i < 50; i++) {
                 deeplyNested = { level: i, nested: deeplyNested, badField: NaN };
@@ -285,7 +285,7 @@ describe('Empirical Challenger: Milestone 3 (R1: Zod Integration) Adversarial St
             expect((parsed as any).height).toBe('180');
         });
 
-        it('handles sparse arrays with massive empty slots safely without high memory allocation', () => {
+        it('retains exactly two populated entries from a 5000-slot sparse array', () => {
             const sparse = new Array(5000);
             sparse[0] = { id: 'ex_1', name: 'Bench Press', setsCount: 3 };
             sparse[2500] = { id: 'ex_2', name: 'Squat', setsCount: 5 };
@@ -456,7 +456,7 @@ describe('Empirical Challenger: Milestone 3 (R1: Zod Integration) Adversarial St
     // 7. Pluggable Fallback Listener Resilience
     // =========================================================================
     describe('7. Schema Fallback Listener Isolation', () => {
-        it('survives throwing, async-failing, and mutating listeners without interrupting parsing pipeline', () => {
+        it('isolates throwing and mutating synchronous listeners from parsing', () => {
             let listenerInvoked = false;
             setSchemaFallbackListener((ctx) => {
                 listenerInvoked = true;
@@ -464,13 +464,21 @@ describe('Empirical Challenger: Milestone 3 (R1: Zod Integration) Adversarial St
                 throw new Error('Hostile listener failure');
             });
 
-            expect(() => {
-                const parsed = DomainParsers.parseWorkoutSession('invalid_session_string');
-                expect(parsed).toBeDefined();
-                expect(Array.isArray(parsed.exercises)).toBe(true);
-            }).not.toThrow();
-
+            const parsed = DomainParsers.parseWorkoutSession('invalid_session_string');
+            expect(parsed.exercises).toEqual([]);
             expect(listenerInvoked).toBe(true);
+        });
+
+        it('consumes asynchronous listener rejections without interrupting the schema fallback', async () => {
+            const listener = vi.fn(async () => { throw new Error('Async observer rejected'); });
+            setSchemaFallbackListener(listener);
+            const parsed = DomainParsers.parseProfile('corrupted_async_profile');
+            expect(parsed).toEqual({});
+            expect(listener).toHaveBeenCalledTimes(1);
+            // Allow the rejected observer microtask to settle before the test exits.
+            await Promise.resolve();
+            await Promise.resolve();
+            expect(telemetryHub.getActiveRateLimiterCount()).toBe(1);
         });
     });
 });

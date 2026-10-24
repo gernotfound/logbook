@@ -101,7 +101,7 @@ describe('Challenger 2: DomainParsers Adversarial Stress Testing', () => {
             });
         });
 
-        it('handles extreme volume session (500 sets) without memory issues or failures', () => {
+        it('retains 500 parsed sets and nested segments without truncation', () => {
             const hugeExercises = Array.from({ length: 50 }, (_, exIdx) => ({
                 exId: `ex_${exIdx}`,
                 sessionNote: `Note ${exIdx}`,
@@ -124,6 +124,8 @@ describe('Challenger 2: DomainParsers Adversarial Stress Testing', () => {
             const parsed = DomainParsers.parseWorkoutSession(largeSession);
             expect(parsed.exercises).toHaveLength(50);
             expect(parsed.exercises[0].sets).toHaveLength(10);
+            expect(parsed.exercises.flatMap(exercise => exercise.sets)).toHaveLength(500);
+            expect(parsed.exercises[49].sets[9].id).toBe('s_49_9');
             expect(parsed.exercises[0].sets[0].dropsets).toHaveLength(1);
         });
     });

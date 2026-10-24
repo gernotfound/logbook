@@ -238,6 +238,21 @@ describe('Empirical Challenger Suite: Edge Cases & Stress Verification', () => {
       expect(datesSet.has('2026-07-28')).toBe(true);
       expect(datesSet.has('2026-07-29')).toBe(true);
     });
+
+    test('Logic.getWorkoutDatesSet rejects impossible calendar days without losing valid leap days', () => {
+      const history = [
+        { date: '2026-02-30' },
+        { date: '2026-02-29' },
+        { dateStr: '2026-13-01' },
+        { date: '2026-04-31T12:00:00Z' },
+        { date: '2028-02-29' },
+        { dateStr: '2026-04-30' },
+        { date: new Date('not-a-date') },
+      ];
+      const originalDates = history.map(record => record.date ?? record.dateStr);
+      expect([...Logic.getWorkoutDatesSet(history)].sort()).toEqual(['2026-04-30', '2028-02-29']);
+      expect(history.map(record => record.date ?? record.dateStr)).toEqual(originalDates);
+    });
   });
 
   describe('4. WorkoutTimer & Ticking Behavior', () => {
@@ -299,15 +314,22 @@ describe('Empirical Challenger Suite: Edge Cases & Stress Verification', () => {
   });
 
   describe('5. Component Boundary States & Stress Inputs', () => {
-    test('NutritionMeals handles special regex characters in search query', () => {
-      const { container } = renderWithProviders(<NutritionMeals />);
+    test('NutritionMeals handles literal regex metacharacters and still finds a known food', () => {
+      renderWithProviders(<NutritionMeals />, { userData: {
+        ...emptyUserData,
+        customFoods: [{ id: 'food-pollo', name: 'Pollo Test', kcal: 105, pro: 23, carbs: 0, fat: 1 }],
+      } });
       const searchInput = screen.getByPlaceholderText(/Cerca alimento/i) as HTMLInputElement;
+      const metacharacters = '[.*+?^$()|[\\]\\\\]';
 
-      act(() => {
-        fireEvent.change(searchInput, { target: { value: '[.*+?^${}()|[\\]\\\\]' } });
-      });
+      fireEvent.change(searchInput, { target: { value: metacharacters } });
+      expect(searchInput.value).toBe(metacharacters);
+      expect(screen.getByRole('status').textContent).toContain('Nessun alimento trovato');
 
-      expect(container).toBeDefined();
+      fireEvent.change(searchInput, { target: { value: 'Pollo' } });
+      expect(searchInput.value).toBe('Pollo');
+      expect(screen.getByText('Pollo Test')).toBeDefined();
+      expect(screen.queryByRole('status')).toBeNull();
     });
 
     test('TrainingSession handles active workout with empty sets and non-numeric inputs', () => {

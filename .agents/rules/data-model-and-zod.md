@@ -74,7 +74,7 @@ Ogni boundary di projection deve produrre una rappresentazione coerente:
 - chiave omessa dove il contratto lo prevede;
 - mai affidarsi a `undefined` perché Firebase SDK lo rifiuta.
 
-`documentProjection.ts` applica `removeUndefinedValues()` prima delle write.
+`documentProjection.ts` applica `removeUndefinedValuesForFirestore()` prima delle write; anche `transactionWriter.ts` lo usa prima di inviare i documenti normalizzati. Il boundary rifiuta riferimenti circolari, mentre `removeUndefinedValues()` resta un helper generico tollerante e non costituisce da solo una prova di serializzabilità Firestore.
 
 ## Invariante di modifica — nuova chiave cloud-root
 

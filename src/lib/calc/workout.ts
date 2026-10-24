@@ -284,7 +284,8 @@ export function getWorkoutDatesSet(history: any[]): Set<string> {
                 const pad = (n: number) => String(n).padStart(2, '0');
                 dStr = `${dStr.getFullYear()}-${pad(dStr.getMonth() + 1)}-${pad(dStr.getDate())}`;
             }
-            if (/^\d{4}-\d{2}-\d{2}$/.test(dStr)) {
+            // Format alone cannot establish calendar validity (e.g. 2026-02-30).
+            if (/^\d{4}-\d{2}-\d{2}$/.test(dStr) && parseDateInput(dStr) === dStr) {
                 datesSet.add(dStr);
             }
         }

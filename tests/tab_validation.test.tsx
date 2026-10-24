@@ -142,12 +142,19 @@ describe('R4: Tab Zod Schema & LocalStorage Fallback Resilience (ARCH-05)', () =
             expect(homeBtn.classList.contains('active')).toBe(true);
         });
 
-        it('falls back to "home" tab when localStorage has an empty string or invalid JSON', async () => {
+        it('falls back to "home" tab when localStorage has an empty tab name', async () => {
             window.localStorage.setItem(accountTabKey, JSON.stringify(''));
             
             renderWithProviders(<App />);
 
             const homeBtn = await screen.findByRole('button', { name: /home/i });
+            expect(homeBtn.classList.contains('active')).toBe(true);
+        });
+
+        it('falls back to Home when owner-scoped tab contains malformed JSON', async () => {
+            window.localStorage.setItem(accountTabKey, '{broken-json');
+            renderWithProviders(<App />);
+            const homeBtn = await screen.findByRole('button', { name: /^home$/i });
             expect(homeBtn.classList.contains('active')).toBe(true);
         });
 
