@@ -81,10 +81,19 @@ describe('Integration Suite: Guest Mode & Global Catalog Resolution', () => {
         it('T2.3: Zero custom items returns 100% standard items with deterministic default flags', () => {
             const seed = getSeedCatalog();
 
-            const exercises = resolveEffectiveExercises(seed.exercises, []);
+            expect(seed.exercises).toEqual([]);
+            expect(seed.foods).toEqual([]);
+            const exercises = resolveEffectiveExercises([
+                { id: 'ex-1', name: 'Squat', trackingType: 'weight_reps' },
+                { id: 'ex-2', name: 'Rematore', trackingType: 'weight_reps' },
+            ], []);
+            expect(exercises.map(e => e.id)).toEqual(['ex-1', 'ex-2']);
             expect(exercises.every(e => e.isDefault === true)).toBe(true);
 
-            const foods = resolveEffectiveFoods(seed.foods, []);
+            const foods = resolveEffectiveFoods([
+                { id: 'food-1', name: 'Riso', kcal: 100, pro: 2, carbs: 20, fat: 1 },
+            ], []);
+            expect(foods.map(f => f.id)).toEqual(['food-1']);
             expect(foods.every(f => f.isCustom === false)).toBe(true);
         });
 

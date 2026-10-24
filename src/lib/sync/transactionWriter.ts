@@ -2,7 +2,7 @@ import { doc, runTransaction, type Firestore } from 'firebase/firestore';
 import { generateId } from '../utils/date';
 import { UserDataSchema } from '../schema';
 import { checkDocSize } from '../checkDocSize';
-import { removeUndefinedValues } from '../utils/object';
+import { removeUndefinedValuesForFirestore } from '../utils/object';
 import { normalizeCloudDocument, withCurrentDataSchema } from '../schemaEvolution';
 import { rootDocument, type DocumentData } from './documentProjection';
 import type { UserData } from '../../types';
@@ -95,7 +95,7 @@ export async function applyDocumentChanges(
             const normalized = normalizeCloudDocument(snapshot.data(), `Firestore ${path || 'root'} data schema`);
             remoteSyncMetas[path] = parseSyncMeta(normalized.sync);
 
-            const remote = removeUndefinedValues(normalizeRemote(path, normalized.business));
+            const remote = removeUndefinedValuesForFirestore(normalizeRemote(path, normalized.business));
             assertCloudBusinessPreserved(path, normalized.business, remote);
             baseDocs.set(path, remote);
         });
@@ -110,10 +110,10 @@ export async function applyDocumentChanges(
         );
 
         for (const [path, docData] of newDocs.entries()) {
-            let business = removeUndefinedValues(docData) as DocumentData;
+            let business = removeUndefinedValuesForFirestore(docData) as DocumentData;
 
             // Migration/normalization always happens before semantic merge; Zod validates the current business schema afterwards.
-            business = removeUndefinedValues(normalizeRemote(path, business)) as DocumentData;
+            business = removeUndefinedValuesForFirestore(normalizeRemote(path, business)) as DocumentData;
 
             const meta = newSyncMetas[path];
             const finalData = withCurrentDataSchema(business, meta) as DocumentData;

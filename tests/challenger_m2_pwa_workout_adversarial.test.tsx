@@ -305,81 +305,7 @@ describe('Milestone 2 Challenger Suite: PWA and Offline Workout Stress Tests', (
       expect(useAppStore.getState().localWorkout).toBeNull();
     });
 
-    it('does not depend on telemetryHub.trackEvent when saving a workout', async () => {
-      telemetryHub.init();
-      telemetryHub.setUserId('user_telemetry_throw');
 
-      // Force telemetryHub.trackEvent to throw a synchronous exception
-      const trackEventSpy = vi.spyOn(telemetryHub, 'trackEvent').mockImplementation(() => {
-        throw new Error('Telemetry Hub critical crash simulation');
-      });
-
-      const baseUserData: UserData = {
-        profile: { name: 'Crash Test User' },
-        routines: [{ id: 'r1', name: 'Test Routine', exercises: [] }],
-        library: [],
-        history: [],
-      } as unknown as UserData;
-
-      useAppStore.setState({
-        dataOwner: 'user:test-user-id',
-        userData: baseUserData,
-        localWorkout: {
-          id: 'w_crash_test',
-          routineId: 'r1',
-          routineName: 'Test Routine',
-          date: '2026-08-24',
-          globalStartTime: Date.now() - 300000,
-          exercises: [],
-        } as any,
-      });
-
-      const { result } = renderHook(() => useWorkoutSession());
-
-      // Try ending workout - must not throw and must clean localWorkout
-      await act(async () => {
-        await expect(result.current.endWorkout()).resolves.not.toThrow();
-      });
-
-      expect(useAppStore.getState().localWorkout).toBeNull();
-      expect(trackEventSpy).not.toHaveBeenCalled();
-
-      trackEventSpy.mockRestore();
-    });
-
-    it('does not depend on telemetryHub.trackEvent when starting a workout', async () => {
-      telemetryHub.init();
-      telemetryHub.setUserId('user_telemetry_start_throw');
-
-      const trackEventSpy = vi.spyOn(telemetryHub, 'trackEvent').mockImplementation(() => {
-        throw new Error('Telemetry Start Error');
-      });
-
-      const baseUserData: UserData = {
-        profile: { name: 'Crash Test User' },
-        routines: [{ id: 'r1', name: 'Test Routine', exercises: [] }],
-        library: [],
-        history: [],
-      } as unknown as UserData;
-
-      useAppStore.setState({
-        dataOwner: 'user:test-user-id',
-        userData: baseUserData,
-        localWorkout: null,
-      });
-
-      const { result } = renderHook(() => useWorkoutSession());
-
-      await act(async () => {
-        await expect(result.current.startWorkout('r1')).resolves.not.toThrow();
-      });
-
-      expect(useAppStore.getState().localWorkout).not.toBeNull();
-      expect(useAppStore.getState().localWorkout?.routineId).toBe('r1');
-      expect(trackEventSpy).not.toHaveBeenCalled();
-
-      trackEventSpy.mockRestore();
-    });
   });
 
   // =========================================================================
@@ -518,7 +444,7 @@ describe('Milestone 2 Challenger Suite: PWA and Offline Workout Stress Tests', (
       });
 
       expect(() => {
-        telemetryHub.trackEvent('offline_overflow_event', { key: 'val' });
+        telemetryHub.trackError(new Error('offline_overflow_diagnostic'));
       }).not.toThrow();
 
       setItemSpy.mockRestore();

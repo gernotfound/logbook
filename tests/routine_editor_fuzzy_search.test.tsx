@@ -82,6 +82,7 @@ describe('Intelligent Exercise Search & Dropdown Suite (M3: R4 & R6)', () => {
         vi.clearAllMocks();
 
         useAppStore.setState({
+            dataOwner: captureSession().owner,
             userData: {
                 profile: {} as any,
                 library: mockLibrary as any,
@@ -589,7 +590,7 @@ describe('Intelligent Exercise Search & Dropdown Suite (M3: R4 & R6)', () => {
             expect(blueprint?.exercises[0].exId).toBe('ex_bench');
         });
 
-        it('4.2: Completing workout saves ad-hoc exercises to history and clears localWorkout', async () => {
+        it('4.2: Store snapshot-save preserves ad-hoc exercise IDs in history after flush', async () => {
             const activeWorkout: WorkoutSession = {
                 id: 'w_test_2',
                 routineId: 'rot_push',
