@@ -10,6 +10,7 @@ vi.mock('../../src/lib/healthConsent', async () => ({
 vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackEvent: vi.fn(), trackError: vi.fn() } }));
 
 import { applyDocumentChanges, CloudDataIntegrityError } from '../../src/lib/sync/transactionWriter';
+import { sealCloudDocument, openCloudDocument } from '../../src/lib/sync/cloudDocumentCipher';
 import type { SemanticOperation } from '../../src/lib/sync/semanticProjection';
 import { registerReplica, seedTrustedConsent, asModularFirestore } from './replicaHarness';
 
@@ -39,12 +40,11 @@ const profileHeightOp = (seq = 1): SemanticOperation => ({
 
 
 it('blocks an unrelated root write instead of replacing malformed existing cloud data with a Zod fallback', async () => {
-    const original = {
+    const original = sealCloudDocument(new Uint8Array(32).fill(18), 'a', '', {
         profile: { name: 'Baseline' },
         nutritionPlanning: { weight: 'not-a-number' },
-        _schemaVersion: 1,
-        _sync: { protocolVersion: 3, clock: {}, fields: {}, writer: { slot: 's01', replicaId: 'remote-seed', generation: 1, seq: 0 } },
-    };
+    }, { protocolVersion: 3, clock: {}, fields: {},
+        writer: { slot: 's01', replicaId: 'remote-seed', generation: 1, seq: 0 } });
 
     await env.withSecurityRulesDisabled(async context => {
         await setDoc(doc(asModularFirestore(context.firestore()), 'users/a'), original);
@@ -52,7 +52,7 @@ it('blocks an unrelated root write instead of replacing malformed existing cloud
 
     const db = asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore());
     const replica = await registerReplica(db, 'a');
-    await expect(applyDocumentChanges(db, 'a', [profileHeightOp()], () => true, replica))
+    await expect(applyDocumentChanges(db, 'a', [profileHeightOp()], () => true, replica, new Uint8Array(32).fill(18)))
         .rejects.toBeInstanceOf(CloudDataIntegrityError);
 
     await env.withSecurityRulesDisabled(async context => {
@@ -62,16 +62,12 @@ it('blocks an unrelated root write instead of replacing malformed existing cloud
 });
 
 it('blocks a monthly write when another entity in the same shard would be destructively sanitized', async () => {
-    const original = {
+    const original = sealCloudDocument(new Uint8Array(32).fill(18), 'a', 'nutrition_months/2026-09', {
         '2026-09-13': {
-            date: '2026-09-13',
-            weight: 'not-a-number',
-            meals: [],
-            supplementsIntake: [],
+            date: '2026-09-13', weight: 'not-a-number', meals: [], supplementsIntake: [],
         },
-        _schemaVersion: 1,
-        _sync: { protocolVersion: 3, clock: {}, fields: {}, writer: { slot: 's01', replicaId: 'remote-seed', generation: 1, seq: 0 } },
-    };
+    }, { protocolVersion: 3, clock: {}, fields: {},
+        writer: { slot: 's01', replicaId: 'remote-seed', generation: 1, seq: 0 } });
 
     await env.withSecurityRulesDisabled(async context => {
         await setDoc(doc(asModularFirestore(context.firestore()), 'users/a/nutrition_months/2026-09'), original);
@@ -89,7 +85,7 @@ it('blocks a monthly write when another entity in the same shard would be destru
 
     const db = asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore());
     const replica = await registerReplica(db, 'a');
-    await expect(applyDocumentChanges(db, 'a', [op], () => true, replica))
+    await expect(applyDocumentChanges(db, 'a', [op], () => true, replica, new Uint8Array(32).fill(18)))
         .rejects.toBeInstanceOf(CloudDataIntegrityError);
 
     await env.withSecurityRulesDisabled(async context => {
@@ -99,16 +95,12 @@ it('blocks a monthly write when another entity in the same shard would be destru
 });
 
 it('allows an explicitly lossless scalar normalization while applying the semantic operation', async () => {
-    const original = {
+    const original = sealCloudDocument(new Uint8Array(32).fill(18), 'a', 'nutrition_months/2026-09', {
         '2026-09-13': {
-            date: '2026-09-13',
-            weight: '80.5',
-            meals: [],
-            supplementsIntake: [],
+            date: '2026-09-13', weight: '80.5', meals: [], supplementsIntake: [],
         },
-        _schemaVersion: 1,
-        _sync: { protocolVersion: 3, clock: {}, fields: {}, writer: { slot: 's01', replicaId: 'remote-seed', generation: 1, seq: 0 } },
-    };
+    }, { protocolVersion: 3, clock: {}, fields: {},
+        writer: { slot: 's01', replicaId: 'remote-seed', generation: 1, seq: 0 } });
 
     await env.withSecurityRulesDisabled(async context => {
         await setDoc(doc(asModularFirestore(context.firestore()), 'users/a/nutrition_months/2026-09'), original);
@@ -126,9 +118,10 @@ it('allows an explicitly lossless scalar normalization while applying the semant
 
     const db = asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore());
     const replica = await registerReplica(db, 'a');
-    await applyDocumentChanges(db, 'a', [op], () => true, replica);
+    await applyDocumentChanges(db, 'a', [op], () => true, replica, new Uint8Array(32).fill(18));
 
     const saved = (await getDoc(doc(db, 'users/a/nutrition_months/2026-09'))).data()!;
-    expect(saved['2026-09-13'].weight).toBe(80.5);
-    expect(saved['2026-09-14'].weight).toBe(81);
+    const opened = openCloudDocument(new Uint8Array(32).fill(18), 'a', 'nutrition_months/2026-09', saved).business;
+    expect((opened['2026-09-13'] as Record<string, unknown>).weight).toBe(80.5);
+    expect((opened['2026-09-14'] as Record<string, unknown>).weight).toBe(81);
 });
