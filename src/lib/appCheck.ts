@@ -100,10 +100,13 @@ function appCheckErrorText(error: unknown): string {
 }
 
 function isRetryableTokenError(error: unknown): boolean {
-    if (typeof navigator !== 'undefined' && navigator.onLine === false) return true;
-
     const { code, status } = appCheckErrorDetails(error);
     const normalizedCode = code?.toLowerCase() ?? '';
+    // Provider/setup and rejected assessments are terminal even when offline.
+    // Otherwise the consent recovery path could treat absent provisioning as a network outage.
+    if (['appcheck/provider-unavailable', 'appcheck/empty-token',
+        'appcheck/recaptcha-error', 'appcheck/invalid-token'].includes(normalizedCode)) return false;
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return true;
     if ([
         'appcheck/fetch-network-error',
         'appcheck/throttled',

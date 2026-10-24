@@ -429,7 +429,8 @@ describe('Service Worker Update Lifecycle (ReloadPrompt) Suite', () => {
       updateServiceWorker: mockUpdateServiceWorker,
     });
 
-    renderWithProviders(<><ReloadPrompt /><App /></>, { localWorkout: mockActiveWorkout });
+    const bufferedChange = vi.fn();
+    renderWithProviders(<><ReloadPrompt /><App /><BufferedInput value="" onChange={bufferedChange} aria-label="Serie attiva" /></>, { localWorkout: mockActiveWorkout });
 
     // Verify workout is still preserved in store and active in memory
     const state = useAppStore.getState();
@@ -439,6 +440,11 @@ describe('Service Worker Update Lifecycle (ReloadPrompt) Suite', () => {
     // Both ReloadPrompt banner and workout UI exist concurrently
     expect(screen.getByText('Nuova versione disponibile')).toBeDefined();
     expect(screen.getByRole('button', { name: /Aggiorna/i })).toBeDefined();
+    const field = screen.getByRole('textbox', { name: 'Serie attiva' }) as HTMLInputElement;
+    fireEvent.change(field, { target: { value: '82,5' } });
+    expect(field.value).toBe('82,5');
+    expect(useAppStore.getState().localWorkout).toEqual(mockActiveWorkout);
+    expect(mockUpdateServiceWorker).not.toHaveBeenCalled();
   });
 
   test('Edge Case: Handles updateServiceWorker rejection gracefully without crashing', async () => {

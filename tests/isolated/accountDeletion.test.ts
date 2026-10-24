@@ -435,6 +435,18 @@ it('persists a recovery receipt before POST and purges only after server complet
     expect(boundary.reset).toHaveBeenCalledTimes(1);
 });
 
+it('preserves local owner data when the server reports another UID as complete', async () => {
+    boundary.fetch.mockImplementation(async (_input, init?: RequestInit) => init?.method === 'POST'
+      ? response(202, { uid: 'a', status: 'requested' })
+      : response(200, { uid: 'b', status: 'complete' }));
+    await expect(deleteAccount(context)).rejects.toThrow('non coerente con l’account richiesto');
+    expect(await get('logbook:v2:user:a')).toEqual({ original: 'recoverable' });
+    expect(await get('logbook:v2:user:b')).toEqual({ original: 'other owner' });
+    expect(isAccountDeletionPending('user:a')).toBe(true);
+    expect(boundary.auth.signOut).not.toHaveBeenCalled();
+    expect(boundary.reset).not.toHaveBeenCalled();
+  });
+
 it('keeps a server-accepted receipt if the subsequent status check is unavailable', async () => {
     boundary.fetch.mockResolvedValueOnce(response(202, { uid: 'a', status: 'requested' }));
     boundary.fetch.mockResolvedValueOnce(response(503, { error: 'Stato cancellazione non disponibile.' }));

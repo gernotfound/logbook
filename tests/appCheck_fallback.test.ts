@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   ensureAppCheckProvider,
   initAppCheck,
@@ -19,6 +19,10 @@ describe('AppCheck Initialization & Fallback Behavior', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     resetAppCheckStateForTesting();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it('returns disabled fallback when site key is missing', async () => {
@@ -260,6 +264,45 @@ describe('AppCheck Initialization & Fallback Behavior', () => {
     expect(isAppCheckFallbackOffline()).toBe(true);
     setAppCheckFallbackOffline(false);
     expect(isAppCheckFallbackOffline()).toBe(false);
+  });
+
+  it('treats a missing limited-use provider as terminal, including while offline', async () => {
+    const previousOnline = Object.getOwnPropertyDescriptor(navigator, 'onLine');
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: false });
+    try {
+      await expect(getLimitedUseAppCheckToken()).rejects.toMatchObject({
+        code: 'app-check-limited-use-unavailable',
+        firebaseCode: 'appcheck/provider-unavailable',
+        retryable: false,
+      });
+    } finally {
+      if (previousOnline) Object.defineProperty(navigator, 'onLine', previousOnline);
+      else Reflect.deleteProperty(navigator, 'onLine');
+    }
+  });
+
+  it('distinguishes limited-use transport outages from rejected assessments and empty tokens', async () => {
+    vi.spyOn(appCheckSdk, 'initializeAppCheck').mockReturnValue({ app: dummyApp } as any);
+    vi.spyOn(appCheckSdk, 'getToken').mockResolvedValue({ token: 'standard-token' });
+    const limitedUse = vi.spyOn(appCheckSdk, 'getLimitedUseToken');
+    await initAppCheck(dummyApp, { siteKey: 'enterprise-site-key' });
+
+    for (const [sdkError, retryable] of [
+      [Object.assign(new Error('network issue'), { code: 'appCheck/fetch-network-error' }), true],
+      [Object.assign(new Error('rate limited'), { status: 429 }), true],
+      [Object.assign(new Error('server unavailable'), { status: 503 }), true],
+      [Object.assign(new Error('assessment rejected'), { code: 'appCheck/recaptcha-error', status: 403 }), false],
+      [Object.assign(new Error('empty token'), { code: 'appcheck/empty-token' }), false],
+    ] as const) {
+      limitedUse.mockRejectedValueOnce(sdkError);
+      await expect(getLimitedUseAppCheckToken()).rejects.toMatchObject({
+        code: 'app-check-limited-use-unavailable',
+        retryable,
+        cause: sdkError,
+      });
+    }
+    expect(limitedUse).toHaveBeenCalledTimes(5);
+    expect(getAppCheckStatus().phase).toBe('token-ready');
   });
 
   it('getAppCheckToken returns null when App Check is not initialized', async () => {
