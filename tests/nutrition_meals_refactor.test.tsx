@@ -2,10 +2,12 @@ import React, { useState } from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import NutritionMeals from '../src/components/Nutrition/NutritionMeals';
+import NutritionView from '../src/components/Nutrition/NutritionView';
+import { useAppStore } from '../src/store/useAppStore';
 import { NutritionMealSection } from '../src/components/Nutrition/meals/NutritionMealSection';
 import type { LoggedMealItem } from '../src/types';
 import { Logic } from '../src/lib/logic';
-import { renderWithProviders } from './setup';
+import { emptyUserData, renderWithProviders } from './setup';
 
 describe('NutritionMeals decomposition parity', () => {
     it('preserves date navigation, search add, meal editing, and removal callbacks', () => {
@@ -268,6 +270,43 @@ describe('NutritionMeals decomposition parity', () => {
         await act(async () => settle(false));
         expect(screen.getByRole('heading', { name: 'Modifica porzione' })).toBeDefined();
         expect((screen.getByRole('spinbutton') as HTMLInputElement).value).toBe('70');
+    });
+
+    it('keeps custom-food editing on the meals tab until a durable save succeeds', async () => {
+        const originalDispatch = useAppStore.getState().dispatchDomainOperation;
+        const dispatch = vi.fn()
+            .mockResolvedValueOnce({ ok: false, status: 'failed', error: new Error('write rejected') })
+            .mockResolvedValueOnce({ ok: true, status: 'synced' });
+        useAppStore.setState({ dispatchDomainOperation: dispatch });
+        function Harness() {
+            const [subTab, setSubTab] = useState<'archive' | 'meals'>('archive');
+            return <>
+                <output data-testid="nutrition-tab">{subTab}</output>
+                <NutritionView subTab={subTab} setSubTab={setSubTab} />
+            </>;
+        }
+        try {
+            renderWithProviders(<Harness />, {
+                userData: { ...emptyUserData, nutrition: {}, customFoods: [{
+                    id: 'meal-edit-food', name: 'Pollo test', brand: 'Produttore',
+                    unit: 'g', baseQty: 100, kcal: 200, carbs: 10, pro: 40, fat: 1,
+                    isCustom: true,
+                }] },
+            });
+            fireEvent.click(screen.getByRole('button', { name: 'Opzioni' }));
+            fireEvent.click(screen.getByRole('menuitem', { name: 'Modifica' }));
+            expect(screen.getByTestId('nutrition-tab').textContent).toBe('meals');
+            expect(screen.getByRole('heading', { name: 'Modifica alimento' })).toBeDefined();
+            fireEvent.click(screen.getByRole('button', { name: 'Salva modifiche' }));
+            await waitFor(() => expect(dispatch).toHaveBeenCalledTimes(1));
+            expect(screen.getByTestId('nutrition-tab').textContent).toBe('meals');
+            expect(screen.getByRole('heading', { name: 'Modifica alimento' })).toBeDefined();
+            fireEvent.click(screen.getByRole('button', { name: 'Salva modifiche' }));
+            await waitFor(() => expect(screen.getByTestId('nutrition-tab').textContent).toBe('archive'));
+            expect(dispatch).toHaveBeenCalledTimes(2);
+        } finally {
+            useAppStore.setState({ dispatchDomainOperation: originalDispatch });
+        }
     });
 
 });
