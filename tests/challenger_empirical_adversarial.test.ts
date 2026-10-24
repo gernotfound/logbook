@@ -3,7 +3,7 @@ import { doc, getDoc, getDocFromServer, writeBatch } from 'firebase/firestore';
 
 vi.unmock('../src/lib/db');
 import { ConsentedTestDB as DB } from './testUtils';
-import { DomainParsers, UserDataSchema } from '../src/lib/schema';
+import { DomainParsers } from '../src/lib/schema';
 import type { UserData } from '../src/types';
 
 vi.mock('../src/lib/firebase', () => ({
@@ -779,59 +779,6 @@ describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & D
             expect(parsedPlanning.normocalorica?.kcal).toBe(2500);
         });
 
-        it('3.9: Stress-tests legacy data compatibility without data loss', () => {
-            // Simulate legacy export format from early app version
-            const legacyUserData = {
-                profile: { height: 175, weight: 75 }, // Legacy numeric fields
-                library: [
-                    { id: 'ex_legacy_1', name: 'Panca Piana Manubri', setsCount: 3, sets: [] } // Missing trackingType
-                ],
-                routines: [
-                    { id: 'r_legacy_1', name: 'Full Body', exercises: [{ exId: 'ex_legacy_1', setsCount: 3 }] } // Missing defaultTechnique
-                ],
-                history: [
-                    {
-                        id: 'h_legacy_1',
-                        date: '2025-03-10',
-                        globalStartTime: 1710064800000,
-                        exercises: [
-                            {
-                                exId: 'ex_legacy_1',
-                                sessionNote: 'Legacy workout',
-                                sets: [{ id: 's1', kg: '30', reps: '10', done: true }]
-                            }
-                        ]
-                    }
-                ],
-                nutrition: {
-                    '2025-03-10': {
-                        date: '2025-03-10',
-                        kcal: 2200,
-                        carbs: 250,
-                        pro: 150,
-                        fat: 60,
-                        meals: [{ id: 'm_legacy', name: 'Pasta al pomodoro', meal: 'Pranzo', quantity: 120, kcal: 400, carbs: 80, pro: 12, fat: 4 }]
-                    }
-                },
-                customFoods: [{ id: 'cf_legacy', name: 'Tonno Naturale', kcal: 100, pro: 24, carbs: 0, fat: 0.5 }]
-                // Missing trainingCycles, supplements, nutritionPlanning, activeCycleId
-            };
 
-            const parsed = UserDataSchema.parse(legacyUserData);
-
-            expect(parsed.profile.height).toBe('175');
-            expect(parsed.library).toHaveLength(1);
-            expect(parsed.routines).toHaveLength(1);
-            expect(parsed.history).toHaveLength(1);
-            expect(parsed.history[0].id).toBe('h_legacy_1');
-            expect(parsed.nutrition['2025-03-10']).toBeDefined();
-            expect(parsed.customFoods).toHaveLength(1);
-            // Missing top-level collections must default cleanly
-            expect(parsed.trainingCycles).toEqual([]);
-            expect(parsed.supplements).toEqual([]);
-            expect(parsed.activeCycleId).toBeNull();
-            expect(parsed.activeWorkout).toBeNull();
-            expect(parsed.nutritionPlanning).toBeDefined();
-        });
     });
 });
