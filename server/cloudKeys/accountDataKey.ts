@@ -38,15 +38,20 @@ export async function releaseAccountDataKey(uid: string): Promise<Buffer> {
   const erasureRef = db.collection('health_data_erasures').doc(uid);
   const root = db.collection('users').doc(uid);
 
-  // The wrapped candidate is outside the retryable Firestore transaction:
-  // callbacks must never issue KMS side effects on every transaction retry.
-  // A race loser discards this candidate and uses the persisted winner.
-  const candidate = randomBytes(32);
-  let wrappedCandidate: Awaited<ReturnType<typeof wrapAccountDataKey>>;
-  try {
-    wrappedCandidate = await wrapAccountDataKey(uid, candidate);
-  } finally {
-    candidate.fill(0);
+  // Normal unlock needs only KMS DECRYPT. Do not require the encryption
+  // service or primary key version to be healthy just to recover an
+  // already-persisted account ADK.
+  const wasPresent = (await keyRef.get()).exists;
+  let wrappedCandidate: Awaited<ReturnType<typeof wrapAccountDataKey>> | null = null;
+  if (!wasPresent) {
+    // KMS side effects MUST stay outside the Firestore retry callback.
+    // A race loser discards its candidate and uses the persisted winner.
+    const candidate = randomBytes(32);
+    try {
+      wrappedCandidate = await wrapAccountDataKey(uid, candidate);
+    } finally {
+      candidate.fill(0);
+    }
   }
 
   const selected = await db.runTransaction(async transaction => {
@@ -76,6 +81,7 @@ export async function releaseAccountDataKey(uid: string): Promise<Buffer> {
     if (rootSnap.exists || controlSnap.exists || !history.empty || !nutrition.empty) {
       throw new CloudKeyProvisioningConflictError();
     }
+    if (!wrappedCandidate) throw new AccountKeyUnavailableError();
     transaction.create(keyRef, wrappedCandidate);
     return wrappedCandidate;
   });
