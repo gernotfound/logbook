@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
-import type { UserData } from '../src/types';
+import { sealCloudDocument } from '../src/lib/sync/cloudDocumentCipher';
 import { CURRENT_DATA_SCHEMA, CURRENT_SYNC_PROTOCOL } from '../src/lib/schemaEvolution';
 
 describe('Firestore Security Rules Whitelist & Parity Verification', () => {
@@ -76,7 +76,7 @@ describe('Firestore Security Rules Whitelist & Parity Verification', () => {
   });
 
   it('users/{userId} whitelist contains all root UserData payload keys plus sync/schema metadata', () => {
-    const hasOnlyMatch = rulesContent.match(/incomingData\(\)\.keys\(\)\.hasOnly\(\[\s*([\s\S]*?)\s*\]\)/);
+    const hasOnlyMatch = rulesContent.match(/function isSealedCloudDocument\(data\)[\s\S]*?data\.keys\(\)\.hasOnly\(\[\s*([\s\S]*?)\s*\]\)/);
     expect(hasOnlyMatch).not.toBeNull();
 
     const extractedKeys = hasOnlyMatch![1]
@@ -84,18 +84,14 @@ describe('Firestore Security Rules Whitelist & Parity Verification', () => {
       .map(k => k.replace(/['"\s]/g, ''))
       .filter(Boolean);
 
-    const expectedRootKeys: Array<keyof Omit<UserData, 'history' | 'nutrition'> | '_schemaVersion' | '_sync'> = [
-      'profile', 'library', 'routines', 'customFoods', 'activeWorkout', 'trainingCycles', 'activeCycleId',
-      'nutritionPlanning', 'supplements', 'activePains', 'catalogOverrides', 'legalConsent',
-      'nutritionPlanningOrigin', '_schemaVersion', '_sync'
-    ];
+    const expectedRootKeys = ['_schemaVersion', '_sync', '_sealed'];
 
     expect(extractedKeys).toEqual(expect.arrayContaining(expectedRootKeys));
     expect(extractedKeys.length).toBe(expectedRootKeys.length);
   });
 
   it('checks sample root payload keys against the static Rules whitelist (not authorization)', () => {
-    const hasOnlyMatch = rulesContent.match(/incomingData\(\)\.keys\(\)\.hasOnly\(\[\s*([\s\S]*?)\s*\]\)/);
+    const hasOnlyMatch = rulesContent.match(/function isSealedCloudDocument\(data\)[\s\S]*?data\.keys\(\)\.hasOnly\(\[\s*([\s\S]*?)\s*\]\)/);
     const allowedKeys = new Set(
       hasOnlyMatch![1]
         .split(',')
@@ -103,7 +99,7 @@ describe('Firestore Security Rules Whitelist & Parity Verification', () => {
         .filter(Boolean)
     );
 
-    const sampleUserDocData = {
+    const sampleBusiness = {
       profile: { name: 'Test User' },
       library: [{ id: 'ex1', name: 'Panca Piana' }],
       routines: [{ id: 'r1', name: 'Upper' }],
@@ -115,10 +111,14 @@ describe('Firestore Security Rules Whitelist & Parity Verification', () => {
       supplements: [],
       activePains: [],
       catalogOverrides: { exercises: {}, hiddenExerciseIds: ['ex_old'], foods: {}, hiddenFoodIds: [] },
-      _schemaVersion: CURRENT_DATA_SCHEMA,
     };
-
+    const sampleUserDocData = sealCloudDocument(new Uint8Array(32).fill(18), 'test-user-id', '', sampleBusiness, {
+      protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {},
+      writer: { slot: 's00', replicaId: 'rules-static-fixture', generation: 1, seq: 0 },
+    });
     const payloadKeys = Object.keys(sampleUserDocData);
+    expect(payloadKeys).not.toContain('profile');
+    expect(payloadKeys).not.toContain('library');
     expect(payloadKeys.every(k => allowedKeys.has(k))).toBe(true);
     expect([...payloadKeys, 'unauthorizedField'].every(k => allowedKeys.has(k))).toBe(false);
   });
