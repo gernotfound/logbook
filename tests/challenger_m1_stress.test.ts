@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { removeUndefinedValues, isPlainObject } from '../src/lib/utils/object';
+import { projectDocuments } from '../src/lib/sync/documentProjection';
+import { getSeedCatalog } from '../src/lib/catalog/catalogService';
 
 /**
  * Adversarial validator that recursively traverses a data structure
@@ -433,7 +435,7 @@ describe('Empirical Challenger: removeUndefinedValues & Firestore Serialization 
     // 8. Full UserData and Firestore Payloads Simulation
     // =========================================================================
     describe('8. Full UserData & Firestore Payloads Serialization Invariants', () => {
-        it('guarantees ZERO undefined values in simulated userDocData, history_months, and nutrition_months', () => {
+        it('sanitizes manually assembled root and monthly document fixtures without undefined values', () => {
             // Construct a complete realistic UserData payload with pervasive undefined values in every collection
             // Deliberately legacy/malformed Firestore payload: this exercises undefined cleanup,
             // not the validated application UserData contract.
@@ -658,7 +660,35 @@ describe('Empirical Challenger: removeUndefinedValues & Firestore Serialization 
     // 9. Performance Benchmark vs JSON.parse(JSON.stringify(...))
     // =========================================================================
     describe('9. Performance & GC Benchmark', () => {
-        it('executes 1,000 iterations of UserData sanitization significantly faster than JSON serialization and preserves non-JSON types', () => {
+        it('projects validated current user data to actual root and monthly documents without undefined fields', () => {
+            const input = {
+                profile: { height: '175' },
+                routines: [{ id: 'routine-current', name: 'Workout attuale', exercises: [] }],
+                history: [{ id: 'workout-current', date: '2026-10-18', exercises: [] }],
+                nutrition: {
+                    '2026-10-18': {
+                        date: '2026-10-18', kcal: 2100, carbs: 210, pro: 150, fat: 70,
+                        meals: [], supplementsIntake: [],
+                    },
+                },
+            };
+            const documents = projectDocuments(input, getSeedCatalog());
+            expect([...documents.keys()].sort()).toEqual([
+                '', 'history_months/2026-10', 'nutrition_months/2026-10',
+            ]);
+            for (const [path, document] of documents) {
+                expect(() => assertNoUndefined(document, path || 'root')).not.toThrow();
+            }
+            expect(documents.get('')?.routines).toEqual(expect.arrayContaining([
+                expect.objectContaining({ id: 'routine-current' }),
+            ]));
+            expect(documents.get('history_months/2026-10')?.['workout-current'])
+                .toMatchObject({ id: 'workout-current' });
+            expect(documents.get('nutrition_months/2026-10')?.['2026-10-18'])
+                .toMatchObject({ kcal: 2100 });
+        });
+
+        it('sanitizes 500 iterations within 1000ms and preserves non-JSON types', () => {
             const sampleData = {
                 profile: { name: 'User 1', age: 30, notes: undefined },
                 items: Array.from({ length: 50 }, (_, i) => ({
@@ -682,12 +712,6 @@ describe('Empirical Challenger: removeUndefinedValues & Firestore Serialization 
                 removeUndefinedValues(sampleData);
             }
             const durationCustom = performance.now() - startCustom;
-
-            const startJson = performance.now();
-            for (let i = 0; i < ITERATIONS; i++) {
-                JSON.parse(JSON.stringify(sampleData));
-            }
-const _elapsed = performance.now() - startJson;
 
             // Assert custom is fast (< 500ms for 500 comprehensive structures under parallel load)
             expect(durationCustom).toBeLessThan(1000);

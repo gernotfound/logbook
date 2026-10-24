@@ -5,6 +5,7 @@ type Entry = Record<string, unknown>;
 const fixture = vi.hoisted(() => ({
   records: new Map<string, Entry>(),
   failQueryOnce: '' as string,
+  pauseQuery: null as null | { path: string; entered: () => void; resume: Promise<void> },
 }));
 
 vi.mock('../server/accountDeletion/firebaseAdmin', () => {
@@ -24,6 +25,12 @@ vi.mock('../server/accountDeletion/firebaseAdmin', () => {
       select: () => query(path, constraints, max),
       orderBy: () => query(path, constraints, max),
       get: async () => {
+        if (fixture.pauseQuery?.path === path) {
+          const pause = fixture.pauseQuery;
+          fixture.pauseQuery = null;
+          pause.entered();
+          await pause.resume;
+        }
         if (fixture.failQueryOnce === path) {
           fixture.failQueryOnce = '';
           throw new Error('Injected Firestore outage');
@@ -99,6 +106,7 @@ const markerPath = (uid: string) => 'health_data_erasures/' + uid;
 beforeEach(() => {
   fixture.records.clear();
   fixture.failQueryOnce = '';
+  fixture.pauseQuery = null;
   fixture.records.set(consentPath('a'), { uid: 'a', revision: 3, status: 'withdrawn' });
   fixture.records.set(consentPath('b'), { uid: 'b', revision: 3, status: 'withdrawn' });
   fixture.records.set('users/a', { profile: { height: 170 } });
@@ -197,6 +205,47 @@ describe('trusted data-only erasure worker', () => {
     expect(fixture.records.get(consentPath('a'))?.revision).toBe(3);
     expect(await processHealthDataErasure('a', Date.now() + 30000)).toBe('complete');
     expect(fixture.records.has('users/a/history_months/2026-09')).toBe(false);
+  });
+
+  it('permits only one destructive worker to hold the lease while page reads are in flight', async () => {
+    await createHealthDataErasureJob('a');
+    let onEntered!: () => void;
+    let allowResume!: () => void;
+    const entered = new Promise<void>(resolve => { onEntered = resolve; });
+    const resume = new Promise<void>(resolve => { allowResume = resolve; });
+    fixture.pauseQuery = { path: 'users/a/history_months', entered: onEntered, resume };
+    const first = processHealthDataErasure('a', Date.now() + 30000);
+    await entered;
+    expect(await processHealthDataErasure('a', Date.now() + 30000)).toBe('busy');
+    expect(fixture.records.has('users/a/history_months/2026-09')).toBe(true);
+    expect((await readHealthDataErasureStatus('a'))?.complete).toBe(false);
+    allowResume();
+    expect(await first).toBe('complete');
+    expect((await readHealthDataErasureStatus('a'))?.complete).toBe(true);
+  });
+
+  it('does not delete anything when the worker deadline is already exhausted', async () => {
+    await createHealthDataErasureJob('a');
+    expect(await processHealthDataErasure('a', Date.now() + 500)).toBe('pending');
+    expect(fixture.records.has('users/a/history_months/2026-09')).toBe(true);
+    expect(fixture.records.get(markerPath('a'))).toMatchObject({ status: 'requested' });
+    expect(fixture.records.get(consentPath('a'))?.revision).toBe(3);
+  });
+
+  it('never completes or deletes a page after losing its worker lease', async () => {
+    await createHealthDataErasureJob('a');
+    let onEntered!: () => void;
+    let allowResume!: () => void;
+    const entered = new Promise<void>(resolve => { onEntered = resolve; });
+    const resume = new Promise<void>(resolve => { allowResume = resolve; });
+    fixture.pauseQuery = { path: 'users/a/history_months', entered: onEntered, resume };
+    const first = processHealthDataErasure('a', Date.now() + 30000);
+    await entered;
+    fixture.records.get(markerPath('a'))!.leaseOwner = 'another-worker';
+    allowResume();
+    expect(await first).toBe('busy');
+    expect(fixture.records.has('users/a/history_months/2026-09')).toBe(true);
+    expect(fixture.records.get(consentPath('a'))?.revision).toBe(3);
   });
 
   it('never claims success when an unknown private collection still exists', async () => {

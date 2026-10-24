@@ -44,7 +44,7 @@ afterEach(() => {
 });
 
 describe('account deletion before guest-to-account migration', () => {
-    it('uses the authenticated UID and leaves guest storage intact after trusted server completion', async () => {
+    it('uses the authenticated UID and never invokes guest purge after server acceptance', async () => {
         const fetchMock = vi.fn(async (_url: RequestInfo | URL, options: RequestInit) =>
             Response.json(options.method === 'POST'
                 ? { uid: 'pre-consent-account', status: 'requested' }
@@ -63,13 +63,14 @@ describe('account deletion before guest-to-account migration', () => {
         expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toHaveProperty('receiptToken');
         expect(context.purgeAllLocalUserData).not.toHaveBeenCalled();
         expect(context.cancelPendingSyncs).not.toHaveBeenCalled();
+        expect(context.resetStore).not.toHaveBeenCalled();
         expect(idbStore['logbook:v2:guest']).toEqual({ sentinel: 'guest-archive-must-survive' });
         expect(localStorage.getItem('logbook_is_guest')).toBe('true');
         expect(localStorage.getItem('logbook:v2:user:pre-consent-account:account-deletion')).not.toBeNull();
         expect(vi.mocked(signOut)).toHaveBeenCalledTimes(1);
     });
 
-    it('keeps the deletion receipt and guest archive when Firebase sign-out fails after server acceptance', async () => {
+    it('keeps the deletion receipt and untouched guest storage stub when Firebase sign-out fails', async () => {
         const fetchMock = vi.fn(async (_url: RequestInfo | URL, options: RequestInit) =>
             Response.json({ uid: 'pre-consent-account', status: options.method === 'POST' ? 'requested' : 'complete' },
                 { status: options.method === 'POST' ? 202 : 200 }));

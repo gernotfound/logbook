@@ -1,5 +1,30 @@
 import { expect, test, type Page } from './fixtures';
 
+async function inspectPersistedGuestArchive(page: Page): Promise<string> {
+  return page.evaluate(async () => {
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('keyval-store');
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    try {
+      const raw = await new Promise<unknown>((resolve, reject) => {
+        const tx = db.transaction('keyval', 'readonly');
+        const request = tx.objectStore('keyval').get('logbook:v2:guest');
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+      if (typeof raw !== 'string' || !raw.startsWith('tlb-sealed:v1:')) {
+        throw new Error('Guest business envelope is not durable ciphertext');
+      }
+      if (raw.includes('"height":"183"')) throw new Error('Health profile leaked as plaintext');
+      return raw;
+    } finally {
+      db.close();
+    }
+  });
+}
+
 async function inspectPersistedGuestKey(page: Page) {
   return page.evaluate(async () => {
     const db = await new Promise<IDBDatabase>((resolve, reject) => {
@@ -66,6 +91,15 @@ test('real browser retains non-exportable guest device key across a new document
   await page.getByRole('button', { name: 'Accetta e Continua' }).click();
   await expect(page.locator('.guest-banner')).toBeVisible();
 
+  await page.getByRole('button', { name: 'Dati e statistiche', exact: true }).click();
+  await page.getByRole('tab', { name: 'Biometria', exact: true }).click();
+  const initialArchive = await inspectPersistedGuestArchive(page);
+  await page.locator('#biometry-height').fill('183');
+  await page.getByRole('button', { name: 'Salva profilo biometrico' }).click();
+  await expect.poll(() => inspectPersistedGuestArchive(page)).not.toBe(initialArchive);
+  const committedArchive = await inspectPersistedGuestArchive(page);
+  expect(committedArchive).not.toContain('"height":"183"');
+
   const before = await inspectPersistedGuestKey(page);
   expect(before).toEqual({
     nonExtractable: true,
@@ -78,6 +112,10 @@ test('real browser retains non-exportable guest device key across a new document
   await page.reload();
   await expect(page.locator('.guest-banner')).toBeVisible();
   expect(await inspectPersistedGuestKey(page)).toEqual(before);
+  await page.getByRole('button', { name: 'Dati e statistiche', exact: true }).click();
+  await page.getByRole('tab', { name: 'Biometria', exact: true }).click();
+  await expect(page.locator('#biometry-height')).toHaveValue('183');
+  expect(await inspectPersistedGuestArchive(page)).toBe(committedArchive);
 
   // Deliberately lose ONLY the synchronous control. A new JS realm must
   // reconstruct precisely the same wrapped DEK from IndexedDB, not provision
@@ -93,4 +131,8 @@ test('real browser retains non-exportable guest device key across a new document
   await expect(page.locator('.guest-banner')).toBeVisible();
   expect(await page.evaluate(() => localStorage.getItem('logbook:v2:guest:secure-vault-control'))).toBe(originalControl);
   expect(await inspectPersistedGuestKey(page)).toEqual(before);
+  await page.getByRole('button', { name: 'Dati e statistiche', exact: true }).click();
+  await page.getByRole('tab', { name: 'Biometria', exact: true }).click();
+  await expect(page.locator('#biometry-height')).toHaveValue('183');
+  expect(await inspectPersistedGuestArchive(page)).toBe(committedArchive);
 });

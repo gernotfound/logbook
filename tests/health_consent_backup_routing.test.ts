@@ -89,7 +89,7 @@ beforeEach(() => {
 const exportSnapshot = () => collectBackupSnapshot(UserDataSchema.parse({}), true);
 
 describe('health consent rights export transport routing', () => {
-  it('uses trusted authenticated export while reacceptance is still withdrawn remotely', async () => {
+  it('routes withdrawn server consent through the privileged export adapter without direct Firestore reads', async () => {
     const snapshot = await exportSnapshot();
     expect(snapshot.coverage.scope).toBe('cloud-and-device');
     expect(boundary.serverRead).toHaveBeenCalledTimes(1);
@@ -136,7 +136,7 @@ describe('health consent rights export transport routing', () => {
     expect(boundary.directRootRead).toHaveBeenCalledTimes(1);
   });
 
-  it('keeps verified active sessions on the ordinary least-privileged read path', async () => {
+  it('uses the direct Firestore read path for locally active consent; Rules authorization is tested separately', async () => {
     boundary.localStatus = 'active';
     await exportSnapshot();
     expect(boundary.serverRead).not.toHaveBeenCalled();
