@@ -3,6 +3,7 @@ import { SyncTimeoutError } from '../../src/lib/db/db_core';
 import { loadHistoryMonths } from '../../src/lib/db/db_training';
 import { loadNutritionMonths } from '../../src/lib/db/db_nutrition';
 import { sealCloudDocument, CloudCiphertextError } from '../../src/lib/sync/cloudDocumentCipher';
+import type { SyncMeta } from '../../src/lib/sync/semanticProjection/contracts';
 
 const firestore = vi.hoisted(() => ({ getDoc: vi.fn(), getDocFromServer: vi.fn() }));
 
@@ -13,7 +14,7 @@ vi.mock('firebase/firestore', () => ({
     getDocFromServer: firestore.getDocFromServer,
 }));
 
-const syncMeta = {
+const syncMeta: SyncMeta = {
     protocolVersion: 3,
     clock: {},
     fields: {},
