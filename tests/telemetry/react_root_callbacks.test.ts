@@ -35,7 +35,7 @@ describe('React 19 real root telemetry integration', () => {
         root.render(createElement(DiagnosticBoundary, null, createElement(FailingChild)));
       });
       await expect.poll(() => mockSentryTransport.mock.calls.length).toBeGreaterThan(0);
-      const payloads = mockSentryTransport.mock.calls
+      const payloads: TelemetryErrorPayload[] = mockSentryTransport.mock.calls
         .filter((call: any) => call[0] === 'error')
         .map((call: any) => call[1] as TelemetryErrorPayload);
       expect(payloads.some(payload =>
@@ -58,7 +58,7 @@ describe('React 19 real root telemetry integration', () => {
     try {
       await act(async () => { root.render(createElement(FailingChild)); });
       await expect.poll(() => mockSentryTransport.mock.calls.length).toBeGreaterThan(0);
-      const payloads = mockSentryTransport.mock.calls
+      const payloads: TelemetryErrorPayload[] = mockSentryTransport.mock.calls
         .filter((call: any) => call[0] === 'error')
         .map((call: any) => call[1] as TelemetryErrorPayload);
       expect(payloads.some(payload =>
