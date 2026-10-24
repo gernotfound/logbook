@@ -5,7 +5,7 @@ import NutritionMeals from '../src/components/Nutrition/NutritionMeals';
 import NutritionView from '../src/components/Nutrition/NutritionView';
 import { useAppStore } from '../src/store/useAppStore';
 import { NutritionMealSection } from '../src/components/Nutrition/meals/NutritionMealSection';
-import type { LoggedMealItem } from '../src/types';
+import type { LoggedMealItem, NutritionSubTab } from '../src/types';
 import { Logic } from '../src/lib/logic';
 import { emptyUserData, renderWithProviders } from './setup';
 
@@ -279,7 +279,7 @@ describe('NutritionMeals decomposition parity', () => {
             .mockResolvedValueOnce({ ok: true, status: 'synced' });
         useAppStore.setState({ dispatchDomainOperation: dispatch });
         function Harness() {
-            const [subTab, setSubTab] = useState<'archive' | 'meals'>('archive');
+            const [subTab, setSubTab] = useState<NutritionSubTab>('archive');
             return <>
                 <output data-testid="nutrition-tab">{subTab}</output>
                 <NutritionView subTab={subTab} setSubTab={setSubTab} />
