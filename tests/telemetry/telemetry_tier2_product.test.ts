@@ -53,7 +53,7 @@ describe('Technical telemetry queue and dispatch — Tier 2', () => {
         localStorage.setItem(key, tampered);
         const storage = new TelemetryQueueStorage(() => uid);
         const timestamp = Date.now();
-        storage.enqueueItem('error', {
+        storage.enqueueItem({
           id: 'recovery-error', timestamp, type: 'Error', message: 'Transient error',
           source: 'custom', context: getTelemetryContext(), userId: uid,
           sessionId: 'sess_1', count: 1, firstSeen: timestamp, lastSeen: timestamp,
