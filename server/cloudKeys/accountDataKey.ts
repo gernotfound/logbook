@@ -41,9 +41,19 @@ export async function releaseAccountDataKey(uid: string, purpose: 'sync' | 'righ
   // Normal unlock needs only KMS DECRYPT. Do not require the encryption
   // service or primary key version to be healthy just to recover an
   // already-persisted account ADK.
-  const wasPresent = (await keyRef.get()).exists;
+  const [existingKey, preflightConsent, preflightDeletion, preflightErasure] = await Promise.all([
+    keyRef.get(), consentRef.get(), deletionRef.get(), erasureRef.get(),
+  ]);
+  // Avoid spending a KMS ENCRYPT operation for withdrawn, unregistered or
+  // deleting accounts. The transaction below MUST still recheck these same
+  // documents to fence any concurrent revocation/erasure after preflight.
+  if (!trustedConsent(preflightConsent.data(), uid, purpose)
+      || preflightDeletion.exists
+      || (preflightErasure.exists && preflightErasure.data()?.status !== 'complete')) {
+    throw new AccountKeyUnavailableError();
+  }
   let wrappedCandidate: Awaited<ReturnType<typeof wrapAccountDataKey>> | null = null;
-  if (!wasPresent && purpose === 'sync') {
+  if (!existingKey.exists && purpose === 'sync') {
     // KMS side effects MUST stay outside the Firestore retry callback.
     // A race loser discards its candidate and uses the persisted winner.
     const candidate = randomBytes(32);
