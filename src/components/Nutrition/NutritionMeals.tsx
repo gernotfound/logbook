@@ -150,6 +150,16 @@ function NutritionMealsContent({
                     onRemoveFood={removeFood}
                 />
             ))}
+            {meals.some(meal => meal.meal === 'quick') && (
+                <NutritionMealSection
+                    mealType="Aggiunte rapide"
+                    mealItems={meals.filter(meal => meal.meal === 'quick')}
+                    editingMealItem={editingMealItem}
+                    onEditingMealItemChange={setEditingMealItem}
+                    onUpdateMealItem={updateMealItem}
+                    onRemoveFood={removeFood}
+                />
+            )}
 
             <NutritionSupplementIntakes
                 intakes={todayNutrition.supplementsIntake || []}
