@@ -1,159 +1,137 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const harness = vi.hoisted(() => ({
+const h = vi.hoisted(() => ({
   user: { uid: 'owner-a', getIdToken: vi.fn(async () => 'id-token') },
-  cached: null as Uint8Array | null,
-  read: vi.fn(async () => harness.cached),
-  store: vi.fn(async (_owner: string, data: Uint8Array) => { harness.cached = Uint8Array.from(data); }),
-  appCheck: vi.fn(async () => 'one-use-appcheck'),
+  check: vi.fn(async () => 'one-use-appcheck'),
   init: vi.fn(async () => {}),
   revision: 1,
   writable: true,
+  epoch: 'epoch-1',
 }));
 vi.mock('../src/lib/firebase', () => ({
-  auth: { currentUser: harness.user }, ensureAppCheck: harness.init,
+  auth: { currentUser: h.user }, ensureAppCheck: h.init,
 }));
-vi.mock('../src/lib/appCheck', () => ({ getLimitedUseAppCheckToken: harness.appCheck }));
+vi.mock('../src/lib/appCheck', () => ({ getLimitedUseAppCheckToken: h.check }));
 vi.mock('../src/lib/healthConsent', () => ({
-  getVerifiedHealthConsentRevision: () => harness.revision,
-  isHealthConsentCloudWritable: () => harness.writable,
+  getVerifiedHealthConsentRevision: () => h.revision,
+  isHealthConsentCloudWritable: () => h.writable,
 }));
-vi.mock('../src/lib/sync/cloudAccountKeyCache', () => ({
-  readCachedAccountDataKey: harness.read,
-  rememberAccountDataKey: harness.store,
+vi.mock('../src/lib/sync/session', () => ({
+  userOwner: (uid: string) => 'user:' + uid,
+  captureSessionForOwner: (owner: string) => ({ owner, epoch: h.epoch }),
+  isCurrentSession: (session: { epoch: string; owner: string }) =>
+    session.epoch === h.epoch && session.owner === 'user:' + h.user.uid,
 }));
-import { requireCloudAccountDataKey, requireRightsExportAccountDataKey, CloudKeyAccessUnavailableError } from '../src/lib/sync/cloudAccountKeyAccess';
 
-const accountKey = Uint8Array.from({ length: 32 }, (_, index) => index + 1);
-const payload = () => ({
+import {
+  requireCloudAccountDataKey, requireRightsExportAccountDataKey,
+  CloudKeyAccessUnavailableError,
+} from '../src/lib/sync/cloudAccountKeyAccess';
+
+const originalKey = Uint8Array.from({ length: 32 }, (_, index) => index + 1);
+const payload = (key = originalKey) => ({
   format: 'thelogbook-account-data-key', version: 1,
-  key: btoa(String.fromCharCode(...accountKey)),
+  key: btoa(String.fromCharCode(...key)),
 });
 
 beforeEach(() => {
   vi.clearAllMocks();
-  harness.cached = null;
-  harness.revision = 1;
-  harness.writable = true;
-  harness.user.uid = 'owner-a';
-  harness.user.getIdToken.mockResolvedValue('id-token');
-  harness.appCheck.mockResolvedValue('one-use-appcheck');
-  harness.init.mockResolvedValue(undefined);
+  h.user.uid = 'owner-a';
+  h.user.getIdToken.mockResolvedValue('id-token');
+  h.check.mockResolvedValue('one-use-appcheck');
+  h.revision = 1;
+  h.writable = true;
+  h.epoch = 'epoch-1';
 });
 
-describe('lazy cloud account key acquisition', () => {
-  it('unlocks an existing key fully offline and never contacts KMS or Vercel', async () => {
-    harness.cached = Uint8Array.from(accountKey);
-    const fetch = vi.fn();
-    vi.stubGlobal('fetch', fetch);
-    try {
-      expect(await requireCloudAccountDataKey('owner-a', () => {})).toEqual(accountKey);
-      expect(fetch).not.toHaveBeenCalled();
-      expect(harness.appCheck).not.toHaveBeenCalled();
-    } finally { vi.unstubAllGlobals(); }
-  });
+afterEach(() => vi.unstubAllGlobals());
 
-  it('acquires key from trusted endpoint with disposable App Check and stores only in owner vault', async () => {
+describe('online account-key access without a second device-persisted key', () => {
+  it('fetches a fresh authenticated key for each online operation, with no persistent cache', async () => {
     const fetch = vi.fn(async () => Response.json(payload()));
     vi.stubGlobal('fetch', fetch);
-    try {
-      const result = await requireCloudAccountDataKey('owner-a', () => {});
-      expect(result).toEqual(accountKey);
-      expect(harness.store).toHaveBeenCalledWith('user:owner-a', accountKey);
-      expect(fetch).toHaveBeenCalledOnce();
-      const [url, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
-      expect(url).toMatch(/\/api\/cloud-key$/);
-      expect(init.method).toBe('POST');
-      expect(new Headers(init.headers).get('authorization')).toBe('Bearer id-token');
-      expect(new Headers(init.headers).get('x-firebase-appcheck')).toBe('one-use-appcheck');
-      expect(await requireCloudAccountDataKey('owner-a', () => {})).toEqual(accountKey);
-      expect(fetch).toHaveBeenCalledOnce();
-    } finally { vi.unstubAllGlobals(); }
+    expect(await requireCloudAccountDataKey('owner-a', () => {})).toEqual(originalKey);
+    expect(await requireCloudAccountDataKey('owner-a', () => {})).toEqual(originalKey);
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(h.check).toHaveBeenCalledTimes(2);
+    const [url, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toMatch(/\/api\/cloud-key$/);
+    expect(init.method).toBe('POST');
+    expect(init.cache).toBe('no-store');
+    expect(new Headers(init.headers).get('authorization')).toBe('Bearer id-token');
+    expect(new Headers(init.headers).get('x-firebase-appcheck')).toBe('one-use-appcheck');
   });
 
-  it('requests a rights-only key after consent withdrawal on a fresh device', async () => {
+  it('recovers a rotated ADK after completed health-data erasure and a new consent generation', async () => {
+    const rotated = Uint8Array.from({ length: 32 }, (_, i) => (i + 41) % 256);
+    const fetch = vi.fn()
+      .mockResolvedValueOnce(Response.json(payload()))
+      .mockResolvedValueOnce(Response.json(payload(rotated)));
+    vi.stubGlobal('fetch', fetch);
+    const first = await requireCloudAccountDataKey('owner-a', () => {});
+    h.revision = 3;
+    const second = await requireCloudAccountDataKey('owner-a', () => {});
+    expect(first).toEqual(originalKey);
+    expect(second).toEqual(rotated);
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(first).toEqual(originalKey);
+  });
+
+  it('gets an existing key for explicit rights export after withdrawal without normal sync privileges', async () => {
+    h.writable = false;
     const fetch = vi.fn(async () => Response.json(payload()));
     vi.stubGlobal('fetch', fetch);
-    try {
-      const returned = await requireRightsExportAccountDataKey('owner-a', () => {});
-      expect(returned).toEqual(accountKey);
-      expect(fetch).toHaveBeenCalledOnce();
-      const [url] = fetch.mock.calls[0] as unknown as [string];
-      expect(url).toContain('/api/cloud-key?purpose=rights-export');
-      expect(harness.store).toHaveBeenCalledWith('user:owner-a', accountKey);
-    } finally { vi.unstubAllGlobals(); }
+    await expect(requireCloudAccountDataKey('owner-a', () => {}))
+      .rejects.toBeInstanceOf(CloudKeyAccessUnavailableError);
+    expect(await requireRightsExportAccountDataKey('owner-a', () => {})).toEqual(originalKey);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect((fetch.mock.calls[0] as unknown as [string])[0]).toContain('?purpose=rights-export');
   });
 
-  it('refuses foreign owner, malformed response and lost session without persisting keys', async () => {
-    const fetch = vi.fn(async () => Response.json({ ...payload(), key: 'too-short' }));
+  it('blocks foreign accounts, unverified consent and HTTP denial before releasing an ADK', async () => {
+    const fetch = vi.fn(async () => Response.json({ error: 'not available' }, { status: 503 }));
     vi.stubGlobal('fetch', fetch);
-    try {
-      await expect(requireCloudAccountDataKey('owner-b', () => {}))
-        .rejects.toBeInstanceOf(CloudKeyAccessUnavailableError);
-      expect(fetch).not.toHaveBeenCalled();
-      await expect(requireCloudAccountDataKey('owner-a', () => {}))
-        .rejects.toBeInstanceOf(CloudKeyAccessUnavailableError);
-      expect(harness.store).not.toHaveBeenCalled();
-    } finally { vi.unstubAllGlobals(); }
+    await expect(requireCloudAccountDataKey('owner-b', () => {}))
+      .rejects.toBeInstanceOf(CloudKeyAccessUnavailableError);
+    h.writable = false;
+    await expect(requireCloudAccountDataKey('owner-a', () => {}))
+      .rejects.toBeInstanceOf(CloudKeyAccessUnavailableError);
+    expect(fetch).not.toHaveBeenCalled();
+    h.writable = true;
+    await expect(requireCloudAccountDataKey('owner-a', () => {}))
+      .rejects.toBeInstanceOf(CloudKeyAccessUnavailableError);
   });
 
-  it('requires new backend proof after reacceptance before trusting a previously cached key', async () => {
-    harness.revision = 42;
-    harness.cached = Uint8Array.from(accountKey);
-    const fetch = vi.fn(async () => Response.json(payload()));
+  it('rejects malformed and attacker-controlled server key material', async () => {
+    const fetch = vi.fn(async () => Response.json({ ...payload(), key: 'not-base64' }));
     vi.stubGlobal('fetch', fetch);
-    try {
-      expect(await requireCloudAccountDataKey('owner-a', () => {})).toEqual(accountKey);
-      expect(fetch).toHaveBeenCalledOnce();
-      // A matched key can be used for repeated sync within the same verified
-      // session+consent revision; no extra KMS request on every journal drain.
-      expect(await requireCloudAccountDataKey('owner-a', () => {})).toEqual(accountKey);
-      expect(fetch).toHaveBeenCalledOnce();
-    } finally { vi.unstubAllGlobals(); }
+    await expect(requireCloudAccountDataKey('owner-a', () => {}))
+      .rejects.toBeInstanceOf(CloudKeyAccessUnavailableError);
+    fetch.mockResolvedValueOnce(Response.json({ ...payload(), uid: 'owner-a' }));
+    await expect(requireCloudAccountDataKey('owner-a', () => {}))
+      .rejects.toBeInstanceOf(CloudKeyAccessUnavailableError);
   });
 
-  it('never uses an old cached key after an erasure/reacceptance when the server returns a different ADK', async () => {
-    harness.revision = 99;
-    harness.cached = Uint8Array.from(accountKey);
-    harness.store.mockImplementationOnce(async (_owner: string, updated: Uint8Array) => {
-      if (Buffer.from(updated).equals(Buffer.from(harness.cached!))) return;
-      throw new Error('cloud-account-key-mismatch');
+  it('rejects late responses after a session switch, even when the UID changes back', async () => {
+    const fetch = vi.fn(async () => {
+      h.epoch = 'epoch-2';
+      return Response.json(payload());
     });
-    const newKey = Uint8Array.from({ length: 32 }, (_, index) => (index + 7) % 256);
-    const fetch = vi.fn(async () => Response.json({
-      ...payload(), key: btoa(String.fromCharCode(...newKey)),
-    }));
     vi.stubGlobal('fetch', fetch);
-    try {
-      await expect(requireCloudAccountDataKey('owner-a', () => {}))
-        .rejects.toThrow('cloud-account-key-mismatch');
-      expect(fetch).toHaveBeenCalledOnce();
-      expect(harness.cached).toEqual(accountKey);
-    } finally { vi.unstubAllGlobals(); }
+    await expect(requireCloudAccountDataKey('owner-a', () => {}))
+      .rejects.toBeInstanceOf(CloudKeyAccessUnavailableError);
+    expect(fetch).toHaveBeenCalledOnce();
   });
 
-  it('refuses cached account keys if current verified consent is missing', async () => {
-    harness.writable = false;
-    harness.cached = Uint8Array.from(accountKey);
+  it('rejects a consent revision change while an App Check request is in flight', async () => {
+    h.check.mockImplementationOnce(async () => {
+      h.revision = 3;
+      return 'one-use-appcheck';
+    });
     const fetch = vi.fn();
     vi.stubGlobal('fetch', fetch);
-    try {
-      await expect(requireCloudAccountDataKey('owner-a', () => {}))
-        .rejects.toBeInstanceOf(CloudKeyAccessUnavailableError);
-      expect(fetch).not.toHaveBeenCalled();
-    } finally { vi.unstubAllGlobals(); }
-  });
-
-  it('rejects stale request after a session epoch change before the key can be cached', async () => {
-    const fetch = vi.fn(async () => Response.json(payload()));
-    vi.stubGlobal('fetch', fetch);
-    try {
-      let checks = 0;
-      await expect(requireCloudAccountDataKey('owner-a', () => {
-        checks++;
-        if (checks >= 5) throw new Error('Sessione cambiata');
-      })).rejects.toThrow('Sessione cambiata');
-      expect(harness.store).not.toHaveBeenCalled();
-    } finally { vi.unstubAllGlobals(); }
+    await expect(requireCloudAccountDataKey('owner-a', () => {}))
+      .rejects.toBeInstanceOf(CloudKeyAccessUnavailableError);
+    expect(fetch).not.toHaveBeenCalled();
   });
 });
