@@ -52,9 +52,18 @@ export async function POST(request: Request): Promise<Response> {
     if (request.headers.has('content-length') && Number(request.headers.get('content-length')) > 0) {
       return json({ error: 'Questa operazione non accetta dati da inviare.' }, 400, origin);
     }
+    const params = new URL(request.url).searchParams;
+    if ([...params.keys()].some(key => key !== 'purpose')
+        || params.getAll('purpose').length > 1
+        || (params.has('purpose') && params.get('purpose') !== 'rights-export')) {
+      return json({ error: 'Operazione chiave non valida.' }, 400, origin);
+    }
+    const purpose = params.has('purpose') ? 'rights-export' : 'sync';
     const identity = await verifyHealthConsentRequester(request);
-    requireVerifiedHealthConsentWrite(identity);
-    const key = await releaseAccountDataKey(identity.uid);
+    if (purpose === 'sync') requireVerifiedHealthConsentWrite(identity);
+    // A withdrawn owner retains access to the existing key for an explicit
+    // rights export. This cannot provision a new account key or permit sync.
+    const key = await releaseAccountDataKey(identity.uid, purpose);
     try {
       return json({ format: 'thelogbook-account-data-key', version: 1, key: key.toString('base64') }, 200, origin);
     } finally {
