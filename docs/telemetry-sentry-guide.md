@@ -10,7 +10,7 @@ Vengono inviati soltanto:
 
 - errori JavaScript/React intercettati dal Telemetry Hub;
 - promise rejection non gestite;
-- fallback Zod rappresentati come errore tecnico deduplicato;
+- fallback Zod rappresentati come un unico errore tecnico deduplicato, senza generare eventi locali aggiuntivi;
 - anomalie critiche di recovery della persistenza.
 
 Non vengono abilitati Sentry Session Replay, tracing, logging o Application Metrics. I flussi ordinari di utilizzo (workout, installazione PWA, navigazione) non diventano eventi Sentry.
