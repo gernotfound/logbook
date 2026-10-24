@@ -124,8 +124,8 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
       expect(mockSentryTransport).toHaveBeenCalled();
       
       const transportCalls = mockSentryTransport.mock.calls;
-      const dispatches = transportCalls.map(([kind, payload]) => ({
-        kind, message: payload.message, owner: payload.userId,
+      const dispatches = transportCalls.map((call: [string, TelemetryErrorPayload]) => ({
+        kind: call[0], message: call[1].message, owner: call[1].userId,
       }));
       expect(dispatches).toEqual([
         { kind: 'error', message: 'valid_event_error', owner: 'u1' },
