@@ -19,6 +19,8 @@ import { UserDataSchema } from '../../src/lib/schema';
 import { CURRENT_DATA_SCHEMA, CURRENT_SYNC_PROTOCOL, FutureVersionError } from '../../src/lib/schemaEvolution';
 import { invalidateSession } from '../../src/lib/sync/session';
 import type { UserData } from '../../src/types';
+import { sealCloudDocument, CloudCiphertextError } from '../../src/lib/sync/cloudDocumentCipher';
+import type { SyncMeta } from '../../src/lib/sync/semanticProjection/contracts';
 const parse = (value: unknown) => UserDataSchema.parse(value) as unknown as UserData;
 const emptySync = { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {}, writer: { slot: 's00', replicaId: 'backup-seed', generation: 1, seq: 0 } };
 const currentCloudDoc = (business: Record<string, unknown>, sync: unknown = emptySync) => ({ ...business, _schemaVersion: CURRENT_DATA_SCHEMA, _sync: sync });
@@ -76,6 +78,33 @@ it('makes a malformed optional device draft visible without blocking valid busin
     expect(decoded.data).toMatchObject({ profile: { height: '175' } });
     expect(decoded.deviceDrafts).toEqual([]);
     expect(decoded.deviceDraftRecoveryWarning).toContain('non JSON');
+});
+
+it('exports a complete authenticated cloud snapshot without leaking ciphertext or accepting plaintext under an ADK', async () => {
+    const key = crypto.getRandomValues(new Uint8Array(32));
+    const sync: SyncMeta = {
+        protocolVersion: 3, clock: {}, fields: {},
+        writer: { slot: 's00', replicaId: 'backup-seed', generation: 1, seq: 0 },
+    };
+    const base = parse({ profile: { height: '175' } });
+    await initializeLocal('user:a', base);
+    const root = sealCloudDocument(key, 'a', '', { profile: { height: '174', gender: 'M' } }, sync);
+    const month = sealCloudDocument(key, 'a', 'history_months/2026-05',
+        { w1: { id: 'w1', date: '2026-05-11', exercises: [] } }, sync);
+    sdk.root.mockResolvedValue({ exists: () => true, data: () => root });
+    sdk.page.mockImplementation(async ({ path }) => path.endsWith('/history_months')
+        ? { size: 1, docs: [{ id: '2026-05', data: () => month }] }
+        : { size: 0, docs: [] });
+    const backup = await collectBackupSnapshot(base, true, 0, key);
+    expect(backup.coverage.scope).toBe('cloud-and-device');
+    expect(backup.data.profile?.height).toBe('174');
+    expect(backup.data.history?.map(w => w.id)).toEqual(['w1']);
+    expect((backup.recovery.cloudDocuments as Record<string, any>)['']).not.toHaveProperty('_sealed');
+    expect((backup.recovery.cloudDocuments as Record<string, any>)['history_months/2026-05']).not.toHaveProperty('_sealed');
+
+    sdk.root.mockResolvedValue({ exists: () => true, data: () =>
+        currentCloudDoc({ profile: { height: 'plaintext' } }) });
+    await expect(collectBackupSnapshot(base, true, 0, key)).rejects.toBeInstanceOf(CloudCiphertextError);
 });
 
 it('collects every page of historical documents beyond the 3-month view and retains a concurrent local edit', async () => {
