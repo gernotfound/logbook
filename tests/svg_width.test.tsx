@@ -1,5 +1,5 @@
 import React from 'react';
-import { describe, test, expect, beforeEach, vi } from 'vitest';
+import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest';
 import { renderWithProviders } from './setup';
 import { screen, fireEvent } from '@testing-library/react';
 import MuscleModel from '../src/components/Training/MuscleModel';
@@ -8,14 +8,16 @@ import fs from 'fs';
 import path from 'path';
 
 describe('SVG Muscle Model Layout Width Verification', () => {
+  let injectedStyle: HTMLStyleElement;
   beforeEach(() => {
     // Read and inject global.css into JSDOM document head
     const globalCssPath = path.resolve(__dirname, '../src/styles/global.css');
     const cssContent = fs.readFileSync(globalCssPath, 'utf8');
-    const styleEl = document.createElement('style');
-    styleEl.textContent = cssContent;
-    document.head.appendChild(styleEl);
+    injectedStyle = document.createElement('style');
+    injectedStyle.textContent = cssContent;
+    document.head.appendChild(injectedStyle);
   });
+  afterEach(() => injectedStyle.remove());
 
   test('verifies max-height constraint is removed from CSS', () => {
     const globalCssPath = path.resolve(__dirname, '../src/styles/global.css');
@@ -154,13 +156,18 @@ describe('SVG Muscle Model Layout Width Verification', () => {
 
     test('verifies interactive vs non-interactive mode behavior and DOM styling', () => {
       // Non-interactive mode
+      const ignoredToggle = vi.fn();
       const { container: containerNonInteractive } = renderWithProviders(
         <div style={{ width: '350px' }}>
-          <MuscleModel selectedMuscles={['petto']} interactive={false} />
+          <MuscleModel selectedMuscles={['petto']} interactive={false} onToggleMuscle={ignoredToggle} />
         </div>
       );
       const muscleMapContainerNonInt = containerNonInteractive.querySelector('.muscle-map-container') as HTMLElement;
       expect(muscleMapContainerNonInt.classList.contains('interactive')).toBe(false);
+      const inactiveChest = muscleMapContainerNonInt.querySelector('path[data-muscle-path="chest-lower-left"]');
+      expect(inactiveChest).not.toBeNull();
+      fireEvent.click(inactiveChest!);
+      expect(ignoredToggle).not.toHaveBeenCalled();
 
       // Interactive mode
       const handleToggle = vi.fn();
@@ -182,7 +189,7 @@ describe('SVG Muscle Model Layout Width Verification', () => {
       expect(chestPath).not.toBeNull();
       fireEvent.click(chestPath!);
       expect(handleToggle).toHaveBeenCalledTimes(1);
-      expect(handleToggle).toHaveBeenCalledWith(expect.any(String));
+      expect(handleToggle).toHaveBeenCalledWith('chest_lower_left');
     });
 
     test('verifies no CSS property collisions between index.css and global.css', () => {
