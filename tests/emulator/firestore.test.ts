@@ -370,11 +370,16 @@ it.each([
     await assertFails(deleteDoc(existingRef));
 });
 
-it('rejects unknown root fields, invalid origin and malformed month paths inside fenced writes', async () => {
+it('accepts only ciphertext envelopes and refuses malformed document paths', async () => {
     const db = asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore());
     const replica = await registerReplica(db, 'a');
-    await assertFails(fencedWrite(db, 'users/a', { unknown: true }, replica));
-    await assertFails(fencedWrite(db, 'users/a', { nutritionPlanningOrigin: 'injected' }, replica));
+    await assertSucceeds(fencedWrite(db, 'users/a', { profile: { height: '175' } }, replica));
+    const root = doc(db, 'users/a');
+    const ciphertext = (await getDoc(root)).data()!;
+    expect(ciphertext).not.toHaveProperty('profile');
+    expect(ciphertext._sync.fields).toEqual({});
+    await assertFails(setDoc(root, { profile: { height: 'private' }, _schemaVersion: 1,
+        _sync: ciphertext._sync }));
     for (const name of ['history_months', 'nutrition_months']) {
         await assertFails(fencedWrite(db, `users/a/${name}/2026-13`, {}, replica));
         await fencedWrite(db, `users/a/${name}/2026-09`, {}, replica);
@@ -403,7 +408,9 @@ it('rejects malformed sync envelopes while allowing the current structural contr
             },
             mutation: { slot: 's00', action: 'advance', batchId: `test-${crypto.randomUUID()}` },
         });
-        batch.set(root, { profile: { name }, _schemaVersion: 1, _sync: sync });
+        const validEnvelope = sealCloudDocument(new Uint8Array(32).fill(5), 'a', '',
+            { profile: { name } }, validSync);
+        batch.set(root, { ...validEnvelope, _sync: sync });
         await batch.commit();
     };
 
@@ -442,19 +449,16 @@ it('rejects unknown causal clock actors on fenced root and monthly writes withou
             replicas: { ...control.replicas, [replica.slot]: { ...entry, lastSeq: seq } },
             mutation: { slot: replica.slot, action: 'advance', batchId: `test-${crypto.randomUUID()}` },
         });
-        batch.set(doc(db, path), {
-            ...business,
-            _schemaVersion: 1,
-            _sync: {
-                protocolVersion: CURRENT_SYNC_PROTOCOL,
-                // A retired replica slot is a valid causal actor; a client-defined
-                // alias is not, even when the active writer is properly fenced.
-                clock: { [replica.slot]: seq, [unexpectedActor ? 'unregistered-client' : 's15']: 1 },
-                fields: {},
-                writer: { slot: replica.slot, replicaId: replica.replicaId,
-                    generation: replica.generation, seq, consentRevision: 1 },
-            },
-        });
+        const target = path.slice('users/a'.length).replace(/^\//, '');
+        const writer = { slot: replica.slot, replicaId: replica.replicaId,
+            generation: replica.generation, seq, consentRevision: 1 };
+        const validSync = { protocolVersion: CURRENT_SYNC_PROTOCOL,
+            clock: { [replica.slot]: seq, s15: 1 }, fields: {}, writer };
+        const sealed = sealCloudDocument(new Uint8Array(32).fill(5), 'a', target, business, validSync);
+        // Forge only the externally visible causal actor to test Rules,
+        // without trying to encrypt an invalid client-side metadata payload.
+        batch.set(doc(db, path), { ...sealed, _sync: { ...sealed._sync, clock:
+            { [replica.slot]: seq, [unexpectedActor ? 'unregistered-client' : 's15']: 1 } } });
         await batch.commit();
     };
 
@@ -483,17 +487,15 @@ it('rejects unsafe Protocol 3 clock coordinates in otherwise fenced business wri
             replicas: { ...control.replicas, [replica.slot]: { ...entry, lastSeq: seq } },
             mutation: { slot: replica.slot, action: 'advance', batchId: `test-${crypto.randomUUID()}` },
         });
-        batch.set(doc(db, 'users/a'), {
-            profile: { height: '175' },
-            _schemaVersion: 1,
-            _sync: {
+        const valid = sealCloudDocument(new Uint8Array(32).fill(5), 'a', '',
+            { profile: { height: '175' } }, {
                 protocolVersion: CURRENT_SYNC_PROTOCOL,
-                clock: { [replica.slot]: invalid },
-                fields: {},
+                clock: { [replica.slot]: seq }, fields: {},
                 writer: { slot: replica.slot, replicaId: replica.replicaId,
                     generation: replica.generation, seq, consentRevision: 1 },
-            },
-        });
+            });
+        batch.set(doc(db, 'users/a'), { ...valid,
+            _sync: { ...valid._sync, clock: { [replica.slot]: invalid } } });
         await assertFails(batch.commit());
         expect((await getDoc(doc(db, 'users/a'))).exists()).toBe(false);
     }
@@ -510,10 +512,14 @@ it('permits public catalog reads but denies client writes', async () => {
     }
 });
 
-it('rejects untyped root fields inside a valid fenced write', async () => {
+it('rejects plaintext root documents even with otherwise valid replica headers', async () => {
     const db = asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore());
     const replica = await registerReplica(db, 'a');
-    await assertFails(fencedWrite(db, 'users/a', { profile: 'invalid-profile' }, replica));
+    await assertSucceeds(fencedWrite(db, 'users/a', { profile: { height: '175' } }, replica));
+    const saved = (await getDoc(doc(db, 'users/a'))).data()!;
+    await assertFails(setDoc(doc(db, 'users/a'), { ...saved, profile: 'injected-private-value' }));
+    await assertFails(setDoc(doc(db, 'users/a'), { ...saved, _sealed: null }));
+    expect(saved).not.toHaveProperty('profile');
 });
 
 it('accepts bounded owner telemetry and rejects malformed payloads', async () => {
@@ -677,21 +683,20 @@ it('makes telemetry events/anomalies immutable and error aggregation monotonic',
     await assertFails(setDoc(errorRef, { ...error, count: 3, lastSeen: 1200, message: 'tampered' }));
 });
 
-it('bounds monthly dynamic entry counts while preserving normal calendar and workout shards', async () => {
+it('stores monthly contents only in the sealed envelope regardless of business entry count', async () => {
     const db = asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore());
+    const replica = await registerReplica(db, 'a');
     const days = Object.fromEntries(Array.from({ length: 31 }, (_, i) => {
         const date = '2026-10-' + String(i + 1).padStart(2, '0');
         return [date, { date, kcal: 2000 }];
     }));
-    const replica = await registerReplica(db, 'a');
     await assertSucceeds(fencedWrite(db, 'users/a/nutrition_months/2026-10', days, replica));
-    await assertFails(fencedWrite(db, 'users/a/nutrition_months/2026-10', {
-        ...days, unexpected: { privatePayload: true },
-    }, replica));
-    const workouts = Object.fromEntries(Array.from({ length: 256 }, (_, i) =>
-        ['workout-' + i, { id: 'workout-' + i, date: '2026-10-13', exercises: [] }]));
-    await assertSucceeds(fencedWrite(db, 'users/a/history_months/2026-10', workouts, replica));
-    await assertFails(fencedWrite(db, 'users/a/history_months/2026-10', {
-        ...workouts, extraWorkout: { id: 'extraWorkout', date: '2026-10-13', exercises: [] },
-    }, replica));
+    const saved = (await getDoc(doc(db, 'users/a/nutrition_months/2026-10'))).data()!;
+    expect(saved).not.toHaveProperty('2026-10-01');
+    expect(saved._sync.fields).toEqual({});
+    expect(openCloudDocument(new Uint8Array(32).fill(5), 'a', 'nutrition_months/2026-10', saved).business)
+        .toMatchObject(days);
+});
+
+
 });
