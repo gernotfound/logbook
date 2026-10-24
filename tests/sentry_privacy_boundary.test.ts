@@ -74,18 +74,46 @@ describe('Sentry technical error privacy boundary', () => {
     expect(sdkCalls).not.toContain('Synthetic');
 
     const config = sentry.init.mock.calls[0][0] as {
-      beforeSend: (event: { message?: string; extra?: unknown; exception?: {
+      beforeSend: (event: { message?: string; extra?: unknown; tags?: Record<string, string>; fingerprint?: string[]; exception?: {
         values: Array<{ type?: string; value?: string; stacktrace?: unknown }>;
       } }) => unknown;
     };
     const received = config.beforeSend({
       message: privateNote,
       extra: { note: privateNote },
+      tags: { source: privateNote, arbitrary: privateNote, online: privateNote },
+      fingerprint: ['technical-diagnostic', privateNote, privateNote],
       exception: { values: [{ type: privateNote, value: privateNote,
         stacktrace: { frames: [{ filename: privateNote }] } }] },
     });
     expect(JSON.stringify(received)).not.toContain(privateNote);
     expect(JSON.stringify(received)).toContain('Technical diagnostic');
+    expect(received).toMatchObject({
+      tags: { source: 'custom', online: 'unknown' },
+      fingerprint: ['technical-diagnostic', 'Error', 'custom'],
+    });
+    expect(Object.keys((received as { tags: Record<string, unknown> }).tags))
+      .not.toContain('arbitrary');
+  });
+
+  it('preserves valid technical SDK classifications but drops arbitrary tags', async () => {
+    const { initSentry } = await import('../src/lib/sentryClient');
+    expect(initSentry()).toBe(true);
+    const config = sentry.init.mock.calls[0][0] as {
+      beforeSend: (event: { tags: Record<string, string>; fingerprint: string[] }) => {
+        tags: Record<string, string>; fingerprint: string[];
+      };
+    };
+    const result = config.beforeSend({
+      tags: { source: 'react_caught', app_version: '1.192.0', build_sha: 'abcdef0123456789',
+        platform: 'ios', display_mode: 'standalone', online: 'false', arbitrary: 'private-note' },
+      fingerprint: ['technical-diagnostic', 'TypeError', 'react_caught'],
+    });
+    expect(result.tags).toEqual({
+      source: 'react_caught', app_version: '1.192.0', build_sha: 'abcdef0123456789',
+      platform: 'ios', display_mode: 'standalone', online: 'false',
+    });
+    expect(result.fingerprint).toEqual(['technical-diagnostic', 'TypeError', 'react_caught']);
   });
 
   it('retains technical classifications without reporting arbitrary anomaly reasons', async () => {

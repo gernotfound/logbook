@@ -71,6 +71,30 @@ export function initSentry(): boolean {
       delete event.transaction;
       delete event.extra;
 
+      // SDK integrations can inject arbitrary tags and fingerprints even when
+      // LogBook captures only minimized diagnostics. Rebuild the known fields.
+      if (event.tags) {
+        const tags = event.tags;
+        event.tags = {
+          source: tags.source === 'storage_recovery' ? 'storage_recovery' : technicalSource(tags.source),
+          app_version: safeAppVersion(tags.app_version),
+          build_sha: typeof tags.build_sha === 'string' && /^(?:[a-f0-9]{7,40}|dev)$/.test(tags.build_sha)
+            ? tags.build_sha : 'dev',
+          platform: tags.platform === 'ios' || tags.platform === 'ipados' ? tags.platform : 'other',
+          display_mode: tags.display_mode === 'standalone' ? 'standalone' : 'browser',
+          online: tags.online === 'true' || tags.online === 'false' ? tags.online : 'unknown',
+        };
+      }
+      if (event.fingerprint) {
+        const fingerprint = event.fingerprint;
+        event.fingerprint = fingerprint.length === 3 && fingerprint[0] === 'technical-diagnostic'
+          ? ['technical-diagnostic', technicalType(fingerprint[1]), technicalSource(fingerprint[2])]
+          : fingerprint.length === 2 && fingerprint[0] === 'storage-recovery-anomaly'
+            ? ['storage-recovery-anomaly', fingerprint[1] === 'indexeddb_cache_missing_with_valid_marker'
+              ? fingerprint[1] : 'other_storage_recovery_anomaly']
+            : undefined;
+      }
+
       const logbookContext = event.contexts?.logbook;
       event.contexts = logbookContext ? { logbook: logbookContext } : undefined;
 
