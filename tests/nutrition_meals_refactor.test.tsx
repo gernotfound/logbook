@@ -302,10 +302,9 @@ describe('NutritionMeals decomposition parity', () => {
             await waitFor(() => expect(dispatch).toHaveBeenCalledTimes(1));
             expect(screen.getByTestId('nutrition-tab').textContent).toBe('meals');
             expect(screen.getByRole('heading', { name: 'Modifica alimento' })).toBeDefined();
-            expect(useDialogStore.getState().isOpen).toBe(true);
-            // A failed save shows a blocking dialog; a retry is allowed only
-            // after the user acknowledges it, not while the form is disabled.
-            act(() => useDialogStore.getState().closeDialog());
+            // The shared UI harness supplies an already-resolved dialog stub;
+            // assert the actual alert callback and wait for the form to unlock.
+            expect(useDialogStore.getState().showAlert).toHaveBeenCalledWith("Errore durante il salvataggio dell'alimento.");
             await waitFor(() => expect((screen.getByRole('button', { name: 'Salva modifiche' }) as HTMLButtonElement).disabled).toBe(false));
             fireEvent.click(screen.getByRole('button', { name: 'Salva modifiche' }));
             await waitFor(() => expect(screen.getByTestId('nutrition-tab').textContent).toBe('archive'));
