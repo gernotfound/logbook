@@ -81,6 +81,33 @@ it.each(['fulfilled', 'rejected'] as const)('a stale %s IndexedDB read cannot un
     expect(storageFault.setCalls).toBe(1);
 });
 
+it.each(['not-a-number', -1, Infinity])('rejects a cached food whose kcal value is %s rather than silently replacing it with zero', async kcal => {
+    const malformed = {
+        ...getSeedCatalog(),
+        manifest: { ...getSeedCatalog().manifest, version: 'broken-v1', itemCounts: { exercises: 1, foods: 1 } },
+        exercises: [exercise],
+        foods: [{ ...food, kcal }],
+    };
+    await (await import('idb-keyval')).set('logbook_cached_global_catalog', malformed);
+    const cached = await getCachedCatalog();
+    expect(cached.manifest.version).toBe(getSeedCatalog().manifest.version);
+    expect(cached.foods).toEqual([]);
+    // The invalid raw cache is not overwritten with a guessed version.
+    expect((await (await import('idb-keyval')).get<Record<string, unknown>>('logbook_cached_global_catalog'))?.manifest)
+        .toEqual(malformed.manifest);
+});
+
+it.each(['not-a-number', -1, Infinity])('rejects remote %s kcal values and retains the last complete catalog', async kcal => {
+    const before = getSeedCatalog();
+    await saveCatalogToCache(before);
+    arrange([exercise], [{ ...food, kcal }], 'invalid-remote-v1');
+    const failed = await syncGlobalCatalog({} as never);
+    expect(failed.updated).toBe(false);
+    expect((await getCachedCatalog()).manifest.version).toBe(before.manifest.version);
+    arrange([exercise], [food], 'valid-remote-v2');
+    expect((await syncGlobalCatalog({} as never)).catalog.manifest.version).toBe('valid-remote-v2');
+});
+
 it('downloads a populated manifest even when the empty seed shares its version', async () => {
     arrange(); const result = await syncGlobalCatalog({} as never);
     expect(result.updated).toBe(true); expect(result.catalog.exercises.map(item => item.id)).toEqual(['a']);
