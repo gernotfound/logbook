@@ -1,4 +1,4 @@
-import { Timestamp } from 'firebase-admin/firestore';
+import { Timestamp, type Transaction } from 'firebase-admin/firestore';
 import { adminDb } from '../accountDeletion/firebaseAdmin.js';
 import { LEGAL_VERSIONS } from '../../src/lib/legalVersions.js';
 
@@ -27,17 +27,22 @@ function consentRef(uid: string) {
   return adminDb().collection(CONSENT_COLLECTION).doc(uid);
 }
 
-export async function readHealthConsentState(uid: string, requireRegistration = false): Promise<HealthConsentState> {
+export async function readHealthConsentState(uid: string): Promise<HealthConsentState> {
   validUid(uid);
   const snap = await consentRef(uid).get();
-  // Older deployed clients still read the legacy revision-0 state during
-  // phase one. Versioned clients explicitly request the authoritative state;
-  // Rules enforcement is activated only after this backend is Production-ready.
-  if (!snap.exists) return { status: requireRegistration ? 'unregistered' : 'active', revision: 0 };
+  // Missing trusted registration is never an active consent, including for unversioned requests.
+  if (!snap.exists) return { status: 'unregistered', revision: 0 };
   const data = snap.data();
   if (!data || (data.status !== 'active' && data.status !== 'withdrawn')
     || !Number.isSafeInteger(data.revision) || data.revision < 1) {
     throw new Error('Stato consenso server non valido.');
+  }
+  if (data.uid !== uid || (data.status === 'active' && (
+    typeof data.acceptedAt !== 'string' || !Number.isFinite(Date.parse(data.acceptedAt))
+    || typeof data.privacyVersion !== 'string' || data.privacyVersion.length === 0
+    || typeof data.termsVersion !== 'string' || data.termsVersion.length === 0
+  ))) {
+    throw new Error('Prova del consenso server incompleta o appartenente a un altro account.');
   }
   // Server-owned floor: a journal written in a deleted consent epoch may
   // be exported for portability, but must not be replayed as a current edit.
@@ -164,10 +169,9 @@ export async function recordHealthConsentReacceptance(
   return db.runTransaction(async tx => {
     const deletion = db.collection('account_deletions').doc(uid);
     const state = consentRef(uid);
-    const root = db.collection('users').doc(uid);
     const erasure = db.collection('health_data_erasures').doc(uid);
-    const [job, previousSnap, userRoot, erasureJob] = await Promise.all([
-      tx.get(deletion), tx.get(state), tx.get(root), tx.get(erasure),
+    const [job, previousSnap, erasureJob] = await Promise.all([
+      tx.get(deletion), tx.get(state), tx.get(erasure),
     ]);
     if (job.exists) throw new Error('Cancellazione account in corso.');
     if (erasureJob.exists && erasureJob.data()?.status !== 'complete') {
@@ -190,13 +194,8 @@ export async function recordHealthConsentReacceptance(
     if (!Number.isSafeInteger(revision)) throw new Error('Revision consenso non valida.');
     const now = Timestamp.now();
     const acceptedAt = now.toDate().toISOString();
-    if (userRoot.exists) {
-      tx.update(root, { legalConsent: {
-        hasAcceptedTerms: true, hasAcceptedHealthData: true, acceptedAt,
-        privacyVersion: acceptance.privacyVersion,
-        termsVersion: acceptance.termsVersion,
-      } });
-    }
+    // The trusted consent record is the authority. Updating the business root here
+    // would bypass its causal _sync writer and invalidate full-backup consistency checks.
     tx.update(state, {
       status: 'active', revision, acceptedAt, updatedAt: now,
       privacyVersion: acceptance.privacyVersion,
@@ -207,7 +206,16 @@ export async function recordHealthConsentReacceptance(
 }
 
 /** Called by the existing deletion worker; never used by user-side revocation. */
-export async function removeHealthConsentStateForDeletedAccount(uid: string): Promise<void> {
+export async function removeHealthConsentStateForDeletedAccount(
+  uid: string,
+  transaction?: Pick<Transaction, 'delete'>,
+): Promise<void> {
   validUid(uid);
+  // The account deletion worker passes its lease-fenced transaction to remove
+  // the server-owned consent record atomically with the account root.
+  if (transaction) {
+    transaction.delete(consentRef(uid));
+    return;
+  }
   await consentRef(uid).delete();
 }

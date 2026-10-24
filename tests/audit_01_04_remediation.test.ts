@@ -153,7 +153,7 @@ describe('AUDIT 01-04 remediation invariants', () => {
         expect(classifySyncFailure(structural).status).toBe('failed');
     });
 
-    it('recovers the device workout synchronously from the durable envelope shadow when device storage is missing', () => {
+    it('restores the device workout from a supplied validated fallback when device storage is missing', () => {
         const owner = 'user:recovery';
         const durable = workout('w-recovered', [['se-1', 'bench']]);
 

@@ -91,10 +91,6 @@ export function initSentry(): boolean {
   return true;
 }
 
-export function isSentryInitialized(): boolean {
-  return sentryInitialized;
-}
-
 function captureError(payload: TelemetryErrorPayload): boolean {
   if (!sentryInitialized) return false;
 

@@ -1,20 +1,10 @@
-import { describe, it, expect, vi } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 import { Exporter, MAX_JSON_IMPORT_BYTES } from '../src/lib/export';
 import { createBackup } from '../src/lib/backup';
 import { useDialogStore } from '../src/store/useDialogStore';
 import { CURRENT_BACKUP_SCHEMA, CURRENT_DATA_SCHEMA, CURRENT_SYNC_PROTOCOL } from '../src/lib/schemaEvolution';
 
-const originalCreateElement = document.createElement.bind(document);
-vi.spyOn(document, 'createElement').mockImplementation((tagName) => {
-    if (tagName === 'a') {
-        return {
-            setAttribute: vi.fn(),
-            click: vi.fn(),
-            style: {},
-        } as any;
-    }
-    return originalCreateElement(tagName);
-});
+afterEach(() => vi.restoreAllMocks());
 
 describe('JSON Export/Import Logic', () => {
     it('exportShareJson uses the current versioned envelope and contains only shared fields', async () => {
@@ -63,7 +53,6 @@ describe('JSON Export/Import Logic', () => {
         const mockUser = { uid: 'user123' };
 
         const downloadSpy = vi.spyOn(Exporter, 'downloadFile').mockResolvedValue(true);
-        downloadSpy.mockClear();
         await Exporter.exportBackupJson(mockUserData, mockUser);
 
         const [, content] = downloadSpy.mock.calls[0];
@@ -81,11 +70,8 @@ describe('JSON Export/Import Logic', () => {
 
     it('prepares a full JSON backup as a blob URL without launching a file picker or download', () => {
         const blobUrl = 'blob:https://example.test/backup';
-        const previousCreate = URL.createObjectURL;
-        const create = vi.fn((_blob: Blob | MediaSource) => blobUrl);
-        URL.createObjectURL = create;
+        const create = vi.spyOn(URL, 'createObjectURL').mockReturnValue(blobUrl);
         const downloadSpy = vi.spyOn(Exporter, 'downloadFile');
-        downloadSpy.mockClear(); // Earlier export tests leave this spy active.
         const data: any = { profile: { dob: '2000-01-01' }, history: [] };
         const url = Exporter.prepareBackupJsonUrl(data, { uid: 'user123' },
             { scope: 'cloud-and-device', months: ['2026-09'] }, { envelope: { revision: 2 } });
@@ -96,8 +82,7 @@ describe('JSON Export/Import Logic', () => {
         expect(blob.type).toBe('application/json');
         expect(blob.size).toBeGreaterThan(0);
         expect(downloadSpy).not.toHaveBeenCalled();
-        URL.createObjectURL = previousCreate;
-        downloadSpy.mockRestore();
+
     });
 
     it('importFromJson blocks importing a current backup from a different user', async () => {
@@ -128,7 +113,6 @@ describe('JSON Export/Import Logic', () => {
         };
 
         const downloadSpy = vi.spyOn(Exporter, 'downloadFile').mockResolvedValue(true);
-        downloadSpy.mockClear();
         await Exporter.exportShareJson(mockUserData, {
             exportTrainingCycles: ['c1'],
             exportRoutines: [],
@@ -155,7 +139,6 @@ describe('JSON Export/Import Logic', () => {
         };
 
         const downloadSpy = vi.spyOn(Exporter, 'downloadFile').mockResolvedValue(true);
-        downloadSpy.mockClear();
         await Exporter.exportShareJson(mockUserData, {
             exportTrainingCycles: ['broken_c'],
             exportRoutines: ['empty_r'],
@@ -188,28 +171,24 @@ describe('JSON Export/Import Logic', () => {
         expect(payload.owner).toBeNull();
     });
 
-    it('streams a backup over 64 MiB without excluding a valid archive or committing another owner data', async () => {
+    it('streams a real >64 MiB file through native slices and blocks a foreign owner without saving', async () => {
+        // The large prefix contains actual bytes, not a forged File.size. Keep the
+        // meaningful owner record at the end so a truncated read cannot pass.
         const payload = JSON.stringify(createBackup({ history: [] } as any, 'user:other'));
-        const file = new File([payload], 'huge.json', { type: 'application/json' });
-        // Simulate the large archive without allocating 64 MiB in the test.
-        Object.defineProperty(file, 'size', { value: MAX_JSON_IMPORT_BYTES + 1 });
-        const slices = vi.spyOn(file, 'slice').mockImplementation((start?: number) =>
-            new Blob([!start ? payload : ' '], { type: 'application/json' }));
-        const save = vi.fn();
+        const padding = ' '.repeat(1024 * 1024);
+        const file = new File([...Array<string>(65).fill(padding), payload], 'huge.json', { type: 'application/json' });
+        expect(file.size).toBeGreaterThan(MAX_JSON_IMPORT_BYTES);
+        const slices = vi.spyOn(file, 'slice');
         const readText = vi.spyOn(FileReader.prototype, 'readAsText');
         const readChunk = vi.spyOn(FileReader.prototype, 'readAsArrayBuffer');
-        try {
-            await expect(Exporter.importFromJson(file, null, save)).rejects.toThrow('Non puoi importare il backup di un altro utente');
-            expect(slices).toHaveBeenCalled();
-            expect(readChunk).toHaveBeenCalled();
-            expect(readText).not.toHaveBeenCalled();
-            expect(save).not.toHaveBeenCalled();
-        } finally {
-            slices.mockRestore();
-            readText.mockRestore();
-            readChunk.mockRestore();
-        }
-    });
+        const save = vi.fn();
+        await expect(Exporter.importFromJson(file, null, save))
+            .rejects.toThrow('Non puoi importare il backup di un altro utente');
+        expect(slices.mock.calls.length).toBeGreaterThan(1);
+        expect(readChunk).toHaveBeenCalled();
+        expect(readText).not.toHaveBeenCalled();
+        expect(save).not.toHaveBeenCalled();
+    }, 30_000);
 
     it('rejects malformed small JSON without invoking the durable save', async () => {
         const file = new File(['{"broken":'], 'invalid.json', { type: 'application/json' });
