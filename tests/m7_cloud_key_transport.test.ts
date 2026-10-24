@@ -7,11 +7,17 @@ const harness = vi.hoisted(() => ({
   store: vi.fn(async (_owner: string, data: Uint8Array) => { harness.cached = Uint8Array.from(data); }),
   appCheck: vi.fn(async () => 'one-use-appcheck'),
   init: vi.fn(async () => {}),
+  revision: 1,
+  writable: true,
 }));
 vi.mock('../src/lib/firebase', () => ({
   auth: { currentUser: harness.user }, ensureAppCheck: harness.init,
 }));
 vi.mock('../src/lib/appCheck', () => ({ getLimitedUseAppCheckToken: harness.appCheck }));
+vi.mock('../src/lib/healthConsent', () => ({
+  getVerifiedHealthConsentRevision: () => harness.revision,
+  isHealthConsentCloudWritable: () => harness.writable,
+}));
 vi.mock('../src/lib/sync/cloudAccountKeyCache', () => ({
   readCachedAccountDataKey: harness.read,
   rememberAccountDataKey: harness.store,
@@ -27,6 +33,8 @@ const payload = () => ({
 beforeEach(() => {
   vi.clearAllMocks();
   harness.cached = null;
+  harness.revision = 1;
+  harness.writable = true;
   harness.user.uid = 'owner-a';
   harness.user.getIdToken.mockResolvedValue('id-token');
   harness.appCheck.mockResolvedValue('one-use-appcheck');
@@ -86,6 +94,53 @@ describe('lazy cloud account key acquisition', () => {
       await expect(requireCloudAccountDataKey('owner-a', () => {}))
         .rejects.toBeInstanceOf(CloudKeyAccessUnavailableError);
       expect(harness.store).not.toHaveBeenCalled();
+    } finally { vi.unstubAllGlobals(); }
+  });
+
+  it('requires new backend proof after reacceptance before trusting a previously cached key', async () => {
+    harness.revision = 42;
+    harness.cached = Uint8Array.from(accountKey);
+    const fetch = vi.fn(async () => Response.json(payload()));
+    vi.stubGlobal('fetch', fetch);
+    try {
+      expect(await requireCloudAccountDataKey('owner-a', () => {})).toEqual(accountKey);
+      expect(fetch).toHaveBeenCalledOnce();
+      // A matched key can be used for repeated sync within the same verified
+      // session+consent revision; no extra KMS request on every journal drain.
+      expect(await requireCloudAccountDataKey('owner-a', () => {})).toEqual(accountKey);
+      expect(fetch).toHaveBeenCalledOnce();
+    } finally { vi.unstubAllGlobals(); }
+  });
+
+  it('never uses an old cached key after an erasure/reacceptance when the server returns a different ADK', async () => {
+    harness.revision = 99;
+    harness.cached = Uint8Array.from(accountKey);
+    harness.store.mockImplementationOnce(async (_owner: string, updated: Uint8Array) => {
+      if (Buffer.from(updated).equals(Buffer.from(harness.cached!))) return;
+      throw new Error('cloud-account-key-mismatch');
+    });
+    const newKey = Uint8Array.from({ length: 32 }, (_, index) => (index + 7) % 256);
+    const fetch = vi.fn(async () => Response.json({
+      ...payload(), key: btoa(String.fromCharCode(...newKey)),
+    }));
+    vi.stubGlobal('fetch', fetch);
+    try {
+      await expect(requireCloudAccountDataKey('owner-a', () => {}))
+        .rejects.toThrow('cloud-account-key-mismatch');
+      expect(fetch).toHaveBeenCalledOnce();
+      expect(harness.cached).toEqual(accountKey);
+    } finally { vi.unstubAllGlobals(); }
+  });
+
+  it('refuses cached account keys if current verified consent is missing', async () => {
+    harness.writable = false;
+    harness.cached = Uint8Array.from(accountKey);
+    const fetch = vi.fn();
+    vi.stubGlobal('fetch', fetch);
+    try {
+      await expect(requireCloudAccountDataKey('owner-a', () => {}))
+        .rejects.toBeInstanceOf(CloudKeyAccessUnavailableError);
+      expect(fetch).not.toHaveBeenCalled();
     } finally { vi.unstubAllGlobals(); }
   });
 
