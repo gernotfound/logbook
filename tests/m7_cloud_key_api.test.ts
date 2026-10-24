@@ -9,7 +9,8 @@ const harness = vi.hoisted(() => {
     verify: vi.fn(async () => ({ uid: 'owner-a', emailVerified: true })),
     wrap: vi.fn(async (uid: string, secret: Buffer) => ({
       format: 'thelogbook-wrapped-account-key' as const, version: 1 as const,
-      uid, kmsKeyName: 'test-key', ciphertext: secret.toString('base64'),
+      uid, keyVersion: 1 as const, iv: Buffer.alloc(12, 1).toString('base64'),
+      tag: Buffer.alloc(16, 2).toString('base64'), ciphertext: secret.toString('base64'),
     })),
     unwrap: vi.fn(async (_uid: string, wrapped: { ciphertext: string }) => Buffer.from(wrapped.ciphertext, 'base64')),
     RequestAuthError,
@@ -47,7 +48,7 @@ const db = {
   }),
 };
 vi.mock('../server/accountDeletion/firebaseAdmin', () => ({ adminDb: () => db }));
-vi.mock('../server/cloudKeys/kmsEnvelope', () => ({
+vi.mock('../server/cloudKeys/accountKeyEnvelope', () => ({
   AccountKeyUnavailableError: class AccountKeyUnavailableError extends Error {},
   wrapAccountDataKey: harness.wrap,
   unwrapAccountDataKey: harness.unwrap,
@@ -88,7 +89,8 @@ beforeEach(() => {
   harness.verify.mockResolvedValue({ uid: 'owner-a', emailVerified: true });
   harness.wrap.mockImplementation(async (uid, secret) => ({
     format: 'thelogbook-wrapped-account-key', version: 1, uid,
-    kmsKeyName: 'test-key', ciphertext: secret.toString('base64'),
+    keyVersion: 1 as const, iv: Buffer.alloc(12, 1).toString('base64'),
+      tag: Buffer.alloc(16, 2).toString('base64'), ciphertext: secret.toString('base64'),
   }));
   harness.unwrap.mockImplementation(async (_uid, wrapped) => Buffer.from(wrapped.ciphertext, 'base64'));
 });
@@ -148,20 +150,20 @@ describe('authenticated cloud account key API', () => {
     harness.documents.set('health_data_erasures/owner-a', { status: 'deleting' });
     expect((await POST(request())).status).toBe(503);
     expect(harness.documents.has('user_data_keys/owner-a')).toBe(false);
-    // Neither invalid consent nor an in-progress deletion spends a KMS
-    // encrypt call; the transaction rechecks those fences after preflight.
+    // Neither invalid consent nor an in-progress deletion spends a secret-dependent
+    // wrapping call; the transaction rechecks those fences after preflight.
     expect(harness.wrap).not.toHaveBeenCalled();
   });
 
-  it('does not regenerate an existing malformed envelope or expose key material after KMS failure', async () => {
+  it('does not regenerate malformed envelopes or expose backend key errors', async () => {
     harness.documents.set('user_data_keys/owner-a', { uid: 'owner-a', version: 999, ciphertext: 'invalid' });
     expect((await POST(request())).status).toBe(503);
     expect(harness.wrap).not.toHaveBeenCalled();
     harness.documents.delete('user_data_keys/owner-a');
-    harness.wrap.mockRejectedValueOnce(new Error('KMS credentials unavailable'));
+    harness.wrap.mockRejectedValueOnce(new Error('missing protected server secret'));
     const result = await POST(request());
     expect(result.status).toBe(503);
-    expect(await result.text()).not.toContain('KMS credentials');
+    expect(await result.text()).not.toContain('protected server secret');
     expect(harness.documents.has('user_data_keys/owner-a')).toBe(false);
   });
 
