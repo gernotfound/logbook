@@ -12,6 +12,7 @@ vi.mock('../../src/lib/healthConsent', async () => ({
     getVerifiedHealthConsentRevision: () => 1,
 }));
 import { claimReplicaCheckpoint, retireExpiredReplicas } from '../../src/lib/sync/replicaProtocol';
+import { sealCloudDocument, openCloudDocument } from '../../src/lib/sync/cloudDocumentCipher';
 import { seedTrustedConsent, asModularFirestore } from './replicaHarness';
 
 let env: RulesTestEnvironment;
@@ -100,16 +101,11 @@ it('fences an old replica generation after an expired slot is reused', async () 
             },
             mutation: { slot: 's00', action: 'advance', batchId: `test-${crypto.randomUUID()}` },
         });
-        batch.set(rootRef, {
-            profile: { height: '180' },
-            _schemaVersion: 1,
-            _sync: {
-                protocolVersion: 3,
-                clock: { s00: seq },
-                fields: {},
+        batch.set(rootRef, sealCloudDocument(new Uint8Array(32).fill(18), uid, '',
+            { profile: { height: '180' } }, {
+                protocolVersion: 3, clock: { s00: seq }, fields: {},
                 writer: { slot: 's00', replicaId, generation, seq, consentRevision: 1 },
-            },
-        });
+            }));
         return batch.commit();
     };
 
@@ -167,16 +163,11 @@ it('rejects Protocol 1/2 writers both before and after the account creates its r
         },
         mutation: { slot: 's00', action: 'advance', batchId: `test-${crypto.randomUUID()}` },
     });
-    baselineBatch.set(rootRef, {
-        profile: { height: '170' },
-        _schemaVersion: 1,
-        _sync: {
-            protocolVersion: 3,
-            clock: { s00: 1 },
-            fields: {},
+    baselineBatch.set(rootRef, sealCloudDocument(new Uint8Array(32).fill(18), uid, '',
+        { profile: { height: '170' } }, {
+            protocolVersion: 3, clock: { s00: 1 }, fields: {},
             writer: { slot: 's00', replicaId: 'current-replica', generation: 1, consentRevision: 1, seq: 1 },
-        },
-    });
+        }));
     await assertSucceeds(baselineBatch.commit());
 
     for (const protocolVersion of [1, 2]) {
@@ -203,7 +194,8 @@ it('rejects Protocol 1/2 writers both before and after the account creates its r
         await assertFails(legacyBatch.commit());
     }
 
-    expect((await getDoc(rootRef)).data()?.profile.height).toBe('170');
+    expect(openCloudDocument(new Uint8Array(32).fill(18), uid, '', (await getDoc(rootRef)).data()).business.profile)
+        .toMatchObject({ height: '170' });
 });
 
 
