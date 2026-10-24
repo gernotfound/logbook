@@ -199,7 +199,7 @@ describe('authenticated hydration session fencing', () => {
         expect(result).toBe('blocked');
         expect(preserved?.data.profile?.height).toBe('170');
         expect(preserved?.cloudIntegrityFence).toEqual(expect.any(String));
-        expect(storeState.current.cloudIntegrityBlocked).toBe(true);
+        expect('cloudIntegrityBlocked' in storeState.current && storeState.current.cloudIntegrityBlocked).toBe(true);
         expect(setSaveError).toHaveBeenCalledWith(expect.stringContaining('sincronizzazione sospesa'));
         await clear();
     });
