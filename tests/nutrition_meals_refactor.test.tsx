@@ -171,4 +171,57 @@ describe('NutritionMeals decomposition parity', () => {
         expect(onUpdate).toHaveBeenLastCalledWith(expect.objectContaining({ id: 'meal-1', quantity: 75 }));
     });
 
+    it('shows quick-add entries with ID-based edit and deletion instead of hiding their calories', async () => {
+        const quick: LoggedMealItem = {
+            id: 'quick-1', name: 'Pasto veloce', meal: 'quick', quantity: 1,
+            baseQty: 1, unit: 'porzione', kcal: 410, carbs: 40, pro: 30, fat: 14,
+        };
+        const onRemove = vi.fn().mockResolvedValue(true);
+        const hook: any = {
+            targetDateStr: '2026-09-14',
+            todayNutrition: { date: '2026-09-14', kcal: 410, carbs: 40, pro: 30, fat: 14, meals: [quick] },
+            dailyTarget: { kcal: 2100, carbs: 200, pro: 150, fat: 60 },
+            isDayOn: undefined, setDayType: vi.fn(), searchQuery: '', handleSearch: vi.fn(),
+            searchResults: [], clearSearch: vi.fn(), showCustomModal: false,
+            setShowCustomModal: vi.fn(), editingFoodId: null, cancelCustomFood: vi.fn(),
+            cfData: {}, setCfData: vi.fn(), saveCustomFood: vi.fn(),
+            meals: [quick], addFood: vi.fn(), removeFood: onRemove,
+            updateMealItem: vi.fn().mockResolvedValue(true),
+        };
+        renderWithProviders(<NutritionMeals mealsHook={hook} selectedDate="2026-09-14" />);
+        expect(screen.getByRole('heading', { name: 'Aggiunte rapide' })).toBeDefined();
+        fireEvent.click(screen.getByRole('button', { name: 'Modifica porzione di Pasto veloce' }));
+        expect((screen.getByRole('combobox') as HTMLSelectElement).value).toBe('quick');
+        fireEvent.click(screen.getByRole('button', { name: 'Rimuovi' }));
+        await waitFor(() => expect(onRemove).toHaveBeenCalledWith('quick-1'));
+    });
+
+    it('blocks negative portions and locks edits while the previous commit remains unsettled', async () => {
+        const meal: LoggedMealItem = { id: 'safe-portion', name: 'Latte', meal: 'Colazione',
+            quantity: 100, baseQty: 100, kcal: 90, carbs: 5, pro: 5, fat: 5 };
+        let release!: (saved: boolean) => void;
+        const onSave = vi.fn(() => new Promise<boolean>(resolve => { release = resolve; }));
+        function Harness() {
+            const [editing, setEditing] = useState<LoggedMealItem | null>(meal);
+            return <NutritionMealSection mealType="Colazione" mealItems={[meal]}
+                editingMealItem={editing} onEditingMealItemChange={setEditing}
+                onUpdateMealItem={onSave} onRemoveFood={vi.fn().mockResolvedValue(true)} />;
+        }
+        render(<Harness />);
+        const input = screen.getByRole('spinbutton') as HTMLInputElement;
+        fireEvent.change(input, { target: { value: '-5' } });
+        expect(input.getAttribute('aria-invalid')).toBe('true');
+        expect(screen.getByRole('button', { name: 'Salva' }).hasAttribute('disabled')).toBe(true);
+        expect(onSave).not.toHaveBeenCalled();
+        fireEvent.change(input, { target: { value: '60' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Salva' }));
+        expect(screen.getByRole('button', { name: 'Chiudi modifica porzione' }).hasAttribute('disabled')).toBe(true);
+        expect(input.disabled).toBe(true);
+        expect(screen.getByRole('button', { name: 'Rimuovi' }).hasAttribute('disabled')).toBe(true);
+        await act(async () => release(false));
+        expect(input.disabled).toBe(false);
+        expect(input.value).toBe('60');
+        expect(onSave).toHaveBeenCalledTimes(1);
+    });
+
 });
