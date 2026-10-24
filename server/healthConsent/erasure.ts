@@ -69,9 +69,14 @@ export async function readHealthDataErasureStatus(uid: string): Promise<PublicEr
   if (job.status === 'complete' && isPositiveRevision(job.completedRevision)) {
     // A stale completed receipt from an EARLIER consent cycle cannot authorize
     // erasing data written after the person reaccepted on another device.
-    const consentSnap = await consentRef(uid).get();
+    const [consentSnap, accountKeySnap] = await Promise.all([
+      consentRef(uid).get(),
+      adminDb().collection('user_data_keys').doc(uid).get(),
+    ]);
     const consent = consentSnap.data();
-    localPurgeAuthorized = consent?.status === 'withdrawn'
+    // A 'complete' job cannot authorize irreversible local purge while the
+    // server still retains the corresponding wrapped ADK.
+    localPurgeAuthorized = !accountKeySnap.exists && consent?.status === 'withdrawn'
       && consent.revision === job.completedRevision
       && consent.erasedBeforeRevision === job.consentRevision;
   }
