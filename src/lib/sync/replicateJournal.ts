@@ -7,6 +7,7 @@ import { readLocal, acknowledgeThrough, ensureBoundedPendingSequences, markRepli
 import { captureSession, isCurrentSession } from './session';
 import { applyRemoteDocuments } from './documentProjection';
 import { applyDocumentChanges } from './transactionWriter';
+import { requireCloudAccountDataKey } from './cloudAccountKeyAccess';
 import { getCachedCatalog } from '../catalog/catalogService';
 import { SyncTimeoutError, withTimeout } from '../db/db_core';
 import { isAccountDeletionPending } from './accountGate';
@@ -97,6 +98,13 @@ async function drain(session: ReturnType<typeof captureSession>, deliveryState: 
     deliveryState.delivered = null;
     if (!current()) throw new Error('Sessione cambiata');
     await ensureAppCheck();
+    // No Firestore business read or write may occur without a verified account
+    // ADK. If KMS/App Check is unavailable, the durable local journal remains
+    // untouched for a later retry. Never fallback to plaintext Firestore.
+    const cloudKey = await requireCloudAccountDataKey(session.owner.slice(5), () => {
+        if (!current()) throw new Error('Sessione cambiata prima della cifratura cloud.');
+    });
+    if (!current()) throw new Error('Sessione cambiata');
     await waitForPendingWrites(getDb());
     const catalog = await getCachedCatalog();
     while (current()) {
@@ -136,7 +144,7 @@ async function drain(session: ReturnType<typeof captureSession>, deliveryState: 
 
         let outcome: Awaited<ReturnType<typeof applyDocumentChanges>>;
         try {
-            outcome = await applyDocumentChanges(getDb(), session.owner.slice(5), delivered, current, envelope.replica);
+            outcome = await applyDocumentChanges(getDb(), session.owner.slice(5), delivered, current, envelope.replica, cloudKey);
         } catch (error) {
             const failure = classifySyncFailure(error);
             if (failure.status === 'local-pending') {
