@@ -56,8 +56,9 @@ describe('React 19 real root telemetry integration', () => {
     document.body.appendChild(host);
     const root = createRoot(host, createReactRootTelemetryOptions());
     try {
-      await expect(act(async () => { root.render(createElement(FailingChild)); }))
-        .rejects.toThrow('React root diagnostic crash');
+      // Render outside act(): act() surfaces uncaught root errors directly to
+      // the test runner before React completes its normal root error reporting.
+      root.render(createElement(FailingChild));
       await expect.poll(() => mockSentryTransport.mock.calls.length).toBeGreaterThan(0);
       const payloads: TelemetryErrorPayload[] = mockSentryTransport.mock.calls
         .filter((call: any) => call[0] === 'error')
