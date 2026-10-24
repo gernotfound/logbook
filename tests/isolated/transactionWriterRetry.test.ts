@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const harness = vi.hoisted(() => ({
     attempts: [] as Array<Array<{ path: string, data?: any, deleted?: boolean }>>,
@@ -68,7 +68,13 @@ import type { SemanticOperation } from '../../src/lib/sync/semanticProjection';
 import { openCloudDocument, sealCloudDocument, CloudCiphertextError } from '../../src/lib/sync/cloudDocumentCipher';
 
 describe('transaction writer retry safety', () => {
-    it('produces byte-equivalent writes when Firestore re-runs the transaction callback', async () => {
+    afterEach(() => { harness.remoteDocument = null; });
+    it('keeps authenticated causal semantics and one batch identity across transaction retries', async () => {
+        const key = new Uint8Array(32).fill(18);
+        harness.remoteDocument = sealCloudDocument(key, 'user-a', '', { profile: { height: '170' } }, {
+            protocolVersion: 3, clock: {}, fields: {},
+            writer: { slot: 's00', replicaId: 'replica-a', generation: 1, seq: 0 },
+        });
         harness.attempts.length = 0;
         harness.checkDocSize.mockClear();
         const ops: SemanticOperation[] = [{
@@ -88,30 +94,39 @@ describe('transaction writer retry safety', () => {
             generation: 1,
             checkpointAtMs: now,
             leaseUntilMs: now + 360 * 24 * 60 * 60 * 1000,
-        });
+        }, key);
 
         expect(harness.attempts).toHaveLength(2);
-        expect(harness.attempts[1]).toEqual(harness.attempts[0]);
         expect(harness.attempts[0]).toHaveLength(2);
+        const openAttempt = (index: number) => {
+            const writes = harness.attempts[index];
+            const sealed = writes.find(write => write.path === 'users/user-a')?.data;
+            const control = writes.find(write => write.path.endsWith('/sync_control/state'))?.data;
+            return { opened: openCloudDocument(key, 'user-a', '', sealed), control };
+        };
+        expect(openAttempt(1)).toEqual(openAttempt(0));
         const businessWrite = harness.attempts[0].find(write => write.path === 'users/user-a');
         const controlWrite = harness.attempts[0].find(write => write.path.endsWith('/sync_control/state'));
-        expect(businessWrite?.data.profile.height).toBe('171');
+        expect(businessWrite?.data).not.toHaveProperty('profile');
+        expect(openCloudDocument(key, 'user-a', '', businessWrite?.data).business.profile.height).toBe('171');
         expect(controlWrite?.data.replicas.s00.lastSeq).toBe(1);
         expect(controlWrite?.data.mutation.batchId).toMatch(/^sync-advance_/);
         expect(businessWrite?.data._sync.writer).toMatchObject({
             slot: 's00', replicaId: 'replica-a', generation: 1, seq: 1,
         });
-        expect(businessWrite?.data._sync.fields['profile/height']).toMatchObject({
+        expect(openCloudDocument(key, 'user-a', '', businessWrite?.data).sync.fields['profile/height']).toMatchObject({
             actorId: 's00',
             seq: 1,
             clock: { s00: 1 }
         });
         expect(outcome.syncMeta[''].fields['profile/height'].seq).toBe(1);
 
-        // Size checks happen once per callback attempt, after _sync has been attached.
+        // Each encrypted attempt is checked for final encoded Firestore size.
         expect(harness.checkDocSize).toHaveBeenCalledTimes(2);
         for (const [payload] of harness.checkDocSize.mock.calls) {
-            expect(payload._sync.fields['profile/height']).toMatchObject({ actorId: 's00', seq: 1 });
+            expect(payload._sealed.ciphertext).toBeTruthy();
+            expect(payload._sync.fields).toEqual({});
+            expect(payload).not.toHaveProperty('profile');
         }
     });
     it('encrypts business and causal fields on BOTH Firestore transaction retries without leaking plaintext', async () => {

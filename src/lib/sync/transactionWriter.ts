@@ -1,9 +1,7 @@
 import { doc, runTransaction, type Firestore } from 'firebase/firestore';
 import { generateId } from '../utils/date';
 import { UserDataSchema } from '../schema';
-import { checkDocSize } from '../checkDocSize';
 import { removeUndefinedValuesForFirestore } from '../utils/object';
-import { withCurrentDataSchema } from '../schemaEvolution';
 import { rootDocument, type DocumentData } from './documentProjection';
 import type { UserData } from '../../types';
 import { assertHistoryMonthDocument, assertNutritionMonthDocument } from './monthlyIntegrity';
@@ -20,7 +18,7 @@ import {
 } from './replicaProtocol';
 import { distinctDocumentCount, MAX_SYNC_DOCUMENTS_PER_TRANSACTION } from './syncBatching';
 import { assertCloudBusinessPreserved } from './cloudBusinessIntegrity';
-import { sealCloudDocument } from './cloudDocumentCipher';
+import { CloudCiphertextError, sealCloudDocument } from './cloudDocumentCipher';
 import { readAccountCloudDocument } from './cloudDocumentRead';
 export { CloudDataIntegrityError } from './cloudBusinessIntegrity';
 
@@ -46,8 +44,9 @@ export async function applyDocumentChanges(
     ops: SemanticOperation[],
     isCurrent: () => boolean,
     replica: ReplicaIdentity,
-    cloudKey?: Uint8Array,
+    cloudKey: Uint8Array,
 ): Promise<TransactionOutcome> {
+    if (!(cloudKey instanceof Uint8Array) || cloudKey.length !== 32) throw new CloudCiphertextError();
     if (!uid || uid.includes('/')) throw new Error('Identità non valida');
     if (!isCurrent()) throw new Error('Sessione cambiata');
     if (!ops.length) return { documents: new Map(), syncMeta: {} };
@@ -123,13 +122,9 @@ export async function applyDocumentChanges(
             business = removeUndefinedValuesForFirestore(normalizeRemote(path, business)) as DocumentData;
 
             const meta = newSyncMetas[path];
-            const finalData = cloudKey
-                ? sealCloudDocument(cloudKey, uid, path, business, meta)
-                : withCurrentDataSchema(business, meta) as DocumentData;
-
-            // AEAD validates final encoded envelope size; the existing
-            // plaintext branch retains its established size contract.
-            if (!cloudKey) checkDocSize(finalData, path || 'User Profile');
+            // No plaintext fallback: a missing ADK must fail before any write,
+            // even if a ruleset is accidentally deployed out of order.
+            const finalData = sealCloudDocument(cloudKey, uid, path, business, meta);
 
             const refIndex = pathsToRead.indexOf(path);
 
