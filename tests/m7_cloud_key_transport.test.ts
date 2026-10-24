@@ -16,7 +16,7 @@ vi.mock('../src/lib/sync/cloudAccountKeyCache', () => ({
   readCachedAccountDataKey: harness.read,
   rememberAccountDataKey: harness.store,
 }));
-import { requireCloudAccountDataKey, CloudKeyAccessUnavailableError } from '../src/lib/sync/cloudAccountKeyAccess';
+import { requireCloudAccountDataKey, requireRightsExportAccountDataKey, CloudKeyAccessUnavailableError } from '../src/lib/sync/cloudAccountKeyAccess';
 
 const accountKey = Uint8Array.from({ length: 32 }, (_, index) => index + 1);
 const payload = () => ({
@@ -60,6 +60,19 @@ describe('lazy cloud account key acquisition', () => {
       expect(new Headers(init.headers).get('x-firebase-appcheck')).toBe('one-use-appcheck');
       expect(await requireCloudAccountDataKey('owner-a', () => {})).toEqual(accountKey);
       expect(fetch).toHaveBeenCalledOnce();
+    } finally { vi.unstubAllGlobals(); }
+  });
+
+  it('requests a rights-only key after consent withdrawal on a fresh device', async () => {
+    const fetch = vi.fn(async () => Response.json(payload()));
+    vi.stubGlobal('fetch', fetch);
+    try {
+      const returned = await requireRightsExportAccountDataKey('owner-a', () => {});
+      expect(returned).toEqual(accountKey);
+      expect(fetch).toHaveBeenCalledOnce();
+      const [url] = fetch.mock.calls[0] as unknown as [string];
+      expect(url).toContain('/api/cloud-key?purpose=rights-export');
+      expect(harness.store).toHaveBeenCalledWith('user:owner-a', accountKey);
     } finally { vi.unstubAllGlobals(); }
   });
 
