@@ -73,6 +73,16 @@ La private key supporta newline escaped (`\\n`) e viene normalizzata server-side
 
 **VERIFY:** il repository prova i nomi richiesti dal codice, non che i valori siano effettivamente provisionati in ogni environment Vercel né quali ruoli IAM siano assegnati al service account. In particolare, la replay protection App Check del backend richiede il permesso `firebaseappcheck.appCheckTokens.verify` sull'identità Admin usata da Vercel; `roles/firebaseappcheck.tokenVerifier` è il ruolo minimo da preferire se quel permesso deve essere aggiunto, ma un ruolo già assegnato che lo includa è sufficiente. Verificarlo direttamente in Google Cloud/Firebase.
 
+### Servizio opzionale di cifratura cloud (PR #621 — NON ATTIVO)
+
+Il branch della PR #621 implementa `api/cloud-key.ts`, `server/cloudKeys/` e la cache client, ma **non collega ancora il codec ai documenti Firestore e non autorizza l'attivazione Production**. L'unica nuova variabile server-only è `CLOUD_KMS_KEY_NAME`, nome risorsa `projects/.../locations/.../keyRings/.../cryptoKeys/...`, **non** un segreto e non una versione di chiave.
+
+Il backend usa il token OAuth cloud-platform delle credenziali Firebase Admin esistenti per le API REST KMS; `CLOUD_KMS_KEY_NAME` non configurata o il permesso KMS assente causano **fail-closed** dell'endpoint, senza impedire l'uso locale offline. Prima dell'attivazione, verificare nel provider che l'identità Vercel possieda **soltanto** `cloudkms.cryptoKeyVersions.useToEncrypt` e `cloudkms.cryptoKeyVersions.useToDecrypt` sulla specifica CryptoKey, senza permessi amministrativi o di distruzione; verificare versioni KMS, quote e recovery. L'attuale autenticazione Firebase Admin con private key resta invariata; non dichiarare WIF/OIDC live senza prova provider.
+
+La richiesta `POST /api/cloud-key` richiede Firebase ID token verificato e non revocato, claim email verificata, App Check limited-use consumabile, origin HTTPS allowlisted, consenso trusted `active` e assenza di deletion/erasure in corso. L'identità arriva **esclusivamente** dal token Firebase; le chiavi sono server-only in `user_data_keys/{uid}` e non accessibili alle Security Rules client; il vecchio formato cloud non deve essere convertito o sovrascritto dalla sola presenza di una nuova chiave. La cancellazione account ora cancella e verifica il record della chiave nel job trusted.
+
+**MUST prima del merge/cutover:** collegare lettura/scrittura di tutti i documenti cifrati, backup/esportazione diritti dopo revoca, Firestore Rules restrittive e recovery PWA, verificare `verify:m8`, review, deploy e smoke live. Non dichiarare l'obiettivo di riservatezza soddisfatto mentre root/shard cloud sono ancora plaintext.
+
 ## Contratto `.env.example`
 
 `.env.example` documenta entrambi i boundary usando **solo placeholder non sensibili**:
