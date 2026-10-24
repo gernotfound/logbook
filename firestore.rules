@@ -568,6 +568,13 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // The wrapped Account Data Key belongs only to the trusted Vercel Admin
+    // boundary. An authenticated Firestore client must never read or replace
+    // it, even when it owns users/{userId} and has active health consent.
+    match /user_data_keys/{userId} {
+      allow read, write: if false;
+    }
+
     match /users/{userId} {
       // Root deletion is server-only. Client-side account deletion must always use
       // the trusted account-deletion job so subcollections and Firebase Auth cannot
