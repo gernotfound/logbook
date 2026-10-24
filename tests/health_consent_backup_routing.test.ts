@@ -18,7 +18,7 @@ const boundary = vi.hoisted(() => ({
     exists: () => true,
     data: () => ({ protocolVersion: 3, replicas: { s00: { lastSeq: 1 } } }),
   })),
-  directRootRead: vi.fn(async () => ({
+  directRootRead: vi.fn(async (): Promise<{ exists: () => boolean; data: () => unknown }> => ({
     exists: () => true,
     data: () => ({
     _schemaVersion: 1,
