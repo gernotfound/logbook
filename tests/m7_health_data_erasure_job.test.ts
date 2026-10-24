@@ -141,6 +141,17 @@ describe('trusted data-only erasure worker', () => {
     expect(fixture.records.get(consentPath('a'))?.revision).toBe(4);
   });
 
+  it('keeps local purge blocked when a completed erasure still has an unexpected ADK residue', async () => {
+    await createHealthDataErasureJob('a');
+    expect(await processHealthDataErasure('a', Date.now() + 30000)).toBe('complete');
+    expect((await readHealthDataErasureStatus('a'))?.localPurgeAuthorized).toBe(true);
+    fixture.records.set('user_data_keys/a', { uid: 'a', ciphertext: 'unexpected' });
+    expect(await readHealthDataErasureStatus('a')).toMatchObject({
+      complete: true, localPurgeAuthorized: false,
+    });
+    expect(fixture.records.has('user_data_keys/b')).toBe(true);
+  });
+
   it('fences stale reacceptance and supports a later independently withdrawn data generation', async () => {
     await createHealthDataErasureJob('a');
     expect(await processHealthDataErasure('a', Date.now() + 30000)).toBe('complete');
