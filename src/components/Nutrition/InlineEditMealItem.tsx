@@ -17,7 +17,9 @@ export default function EditMealItemModal({ item, onClose, onSave, onDelete }: E
     const submitting = useRef(false);
 
     const base = item.baseQty ?? 100;
-    const numQty = parseFloat(quantity as string) || 0;
+    const parsedQty = Number(quantity);
+    const validQty = quantity !== '' && Number.isFinite(parsedQty) && parsedQty >= 0;
+    const numQty = validQty ? parsedQty : 0;
     const ratio = base > 0 ? numQty / base : 1;
 
     const currentKcal = Math.round((parseFloat(item.kcal) || 0) * ratio);
@@ -71,6 +73,8 @@ export default function EditMealItemModal({ item, onClose, onSave, onDelete }: E
                     type="button" 
                     className="btn-icon" 
                     onClick={onClose}
+                    disabled={saving}
+                    aria-label="Chiudi modifica porzione"
                     style={{ color: 'var(--text-muted)', fontSize: 'var(--font-size-section)' }}
                 >
                     ✕
@@ -93,11 +97,13 @@ export default function EditMealItemModal({ item, onClose, onSave, onDelete }: E
                 <select 
                     value={meal} 
                     onChange={e => setMeal(e.target.value)}
+                    disabled={saving}
                     style={{ marginBottom: 0 }}
                 >
                     {MEAL_TYPES.map(mt => (
                         <option key={mt} value={mt}>{mt}</option>
                     ))}
+                    <option value="quick">Aggiunta rapida</option>
                 </select>
             </div>
 
@@ -112,6 +118,8 @@ export default function EditMealItemModal({ item, onClose, onSave, onDelete }: E
                     value={quantity} 
                     onChange={e => setQuantity(e.target.value)}
                     onFocus={e => e.target.select()}
+                    disabled={saving}
+                    aria-invalid={!validQty}
                     style={{ marginBottom: 0, fontSize: 'var(--font-size-section)', fontWeight: 'bold' }}
                     autoFocus
                 />
@@ -164,7 +172,7 @@ export default function EditMealItemModal({ item, onClose, onSave, onDelete }: E
                     className="btn btn-primary" 
                     style={{ flex: 2, marginBottom: 0 }}
                     onClick={() => { void handleSave(); }}
-                    disabled={saving}
+                    disabled={saving || !validQty}
                 >
                     <Save size={16} aria-hidden="true" style={{marginRight: '6px'}} /> Salva
                 </button>
