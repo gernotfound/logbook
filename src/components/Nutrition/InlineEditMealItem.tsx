@@ -1,10 +1,11 @@
 import { useRef, useState } from 'react';
 import { Pencil, Trash2, Save } from 'lucide-react';
+import type { LoggedMealItem } from '../../types';
 
 interface EditMealItemModalProps {
-    item: any;
+    item: LoggedMealItem;
     onClose: () => void;
-    onSave: (updatedItem: any) => Promise<boolean>;
+    onSave: (changes: Pick<LoggedMealItem, 'id' | 'quantity' | 'meal'>) => Promise<boolean>;
     onDelete: (itemId: string) => Promise<boolean>;
 }
 
@@ -43,7 +44,7 @@ export default function EditMealItemModal({ item, onClose, onSave, onDelete }: E
     };
 
     const handleSave = () => submit(() => onSave({
-        ...item,
+        id: item.id,
         quantity: numQty,
         meal
     }));
