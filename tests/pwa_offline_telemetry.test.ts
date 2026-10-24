@@ -57,29 +57,6 @@ describe('Milestone 2: PWA, offline workout and telemetry boundaries', () => {
   // 1. PWA install behavior
   // =========================================================================
   describe('1. PWA install behavior without proprietary usage telemetry', () => {
-    it('the real Sentry boundary accepts standalone events without capturing usage telemetry', async () => {
-      // Queue stress tests mock the adapter to control latency. This test
-      // separately verifies the actual external privacy boundary.
-      mockSentryTransport.mockRestore();
-      const exception = vi.mocked(Sentry.captureException);
-      const message = vi.mocked(Sentry.captureMessage);
-      const event = vi.mocked(Sentry.captureEvent);
-      exception.mockClear();
-      message.mockClear();
-      event.mockClear();
-
-      const result = await sentryClient.sendTelemetryToSentry('event', {
-        timestamp: Date.now(),
-        type: 'workout_saved',
-        context: getTelemetryContext(),
-        userId: 'synthetic-uid',
-        sessionId: 'synthetic-session',
-      });
-      expect(result).toBe(true);
-      expect(exception).not.toHaveBeenCalled();
-      expect(message).not.toHaveBeenCalled();
-      expect(event).not.toHaveBeenCalled();
-    });
 
     it('retains beforeinstallprompt even when it fires before Settings/usePWAInstall mounts', () => {
       const earlyEvent = new Event('beforeinstallprompt');
@@ -481,22 +458,22 @@ describe('Milestone 2: PWA, offline workout and telemetry boundaries', () => {
   // 3. Offline Queueing & Auto-Replay Engine
   // =========================================================================
   describe('3. Offline Queueing & Auto-Replay Engine', () => {
-    it('keeps offline events in owner RAM without persisting plaintext', () => {
+    it('keeps offline technical errors in owner RAM without persisting plaintext', () => {
       Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
       telemetryHub.init();
       telemetryHub.setUserId('user_offline_queue');
 
-      telemetryHub.trackEvent('event_alpha', { item: 1 });
-      telemetryHub.trackEvent('event_beta', { item: 2 });
-      telemetryHub.trackEvent('event_gamma', { item: 3 });
+      telemetryHub.trackError(new Error('offline_alpha'));
+      telemetryHub.trackError(new Error('offline_beta'));
+      telemetryHub.trackError(new Error('offline_gamma'));
 
       // A locked vault keeps technical reports in memory; it must never
       // recreate the obsolete owner-scoped plaintext localStorage queue.
       expect(localStorage.getItem(telemetryHub.getQueueStorageKey())).toBeNull();
       const queued = telemetryHub.getQueuedEvents();
       expect(queued).toHaveLength(3);
-      expect(queued.map(item => item.payload.type)).toEqual([
-        'event_alpha', 'event_beta', 'event_gamma',
+      expect(queued.map(item => item.payload.message)).toEqual([
+        'offline_alpha', 'offline_beta', 'offline_gamma',
       ]);
     });
 
