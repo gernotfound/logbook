@@ -511,7 +511,7 @@ it('rejects business save when a later witness update fails but a previous witne
     hook.unmount();
 });
 
-it('recovers several sequential dated edits after crashes without confusing lineage with concurrency', async () => {
+it('recovers several sequential dated edits across React remounts without confusing lineage with concurrency', async () => {
     const owner = storageOwner();
     const name = 'draft:measurement:2026-09-11';
     const original = renderHook(() => useNutritionMeasurements('2026-09-11'));
@@ -860,12 +860,28 @@ it('keeps the in-memory draft and blocks strict reload when storage writes fail'
 it('rejects invalid and nonfinite numbers without saving or deleting the draft', async () => {
     const dispatch = vi.spyOn(useAppStore.getState(), 'dispatchDomainOperation');
     const hook = renderHook(() => useNutritionMeasurements('2026-09-11'));
+    const owner = storageOwner();
+    const name = 'draft:measurement:2026-09-11';
+    const key = deviceKey(name, owner);
     for (const value of ['Infinity', '75kg', '-1']) {
         act(() => hook.result.current.setWeight(value));
+        const before = readFencedDatedDraftImage(name, owner);
+        const evidence = readDatedWriterEvidence(owner, name);
+        expect(before.values?.weight).toBe(value);
+        expect(evidence.some(writer => writer.values.weight === value)).toBe(true);
+
         await act(async () => { await hook.result.current.calculateAndSave(); });
         expect(hook.result.current.weight).toBe(value);
+        expect(readFencedDatedDraftImage(name, owner)).toEqual(before);
+        expect(readDatedWriterEvidence(owner, name)).toEqual(evidence);
+        expect(localStorage.getItem(key)).toBe(before.raw);
     }
     expect(dispatch).not.toHaveBeenCalled();
+    hook.unmount();
+    const reopened = renderHook(() => useNutritionMeasurements('2026-09-11'));
+    expect(reopened.result.current.weight).toBe('-1');
+    expect(readFencedDatedDraft(name, owner)?.weight).toBe('-1');
+    reopened.unmount();
 });
 it('clears the matching measurement draft after deletion without touching the rest of the day', async () => {
     useAppStore.setState({
