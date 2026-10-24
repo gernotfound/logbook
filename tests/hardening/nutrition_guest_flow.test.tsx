@@ -230,4 +230,60 @@ describe('M5 nutrition account flow through useNutritionMeals', () => {
         expect(useAppStore.getState().syncHealth).toBe('failed');
         expect(useAppStore.getState().saveError).toBe('persist failure');
     });
+    it('reflects a newer durable day-type value after an earlier user selection', async () => {
+        const { result } = renderHook(() => useNutritionMeals(DATE));
+        await runMutation(() => result.current.setDayType(false));
+        expect(result.current.isDayOn).toBe(false);
+        const current = useAppStore.getState().userData!;
+        const day = current.nutrition?.[DATE]!;
+        act(() => useAppStore.setState({
+            userData: { ...current, nutrition: { ...current.nutrition,
+                [DATE]: { ...day, isDayOn: true },
+            } },
+        }));
+        expect(result.current.isDayOn).toBe(true);
+        const replaced = useAppStore.getState().userData!;
+        act(() => useAppStore.setState({
+            userData: { ...replaced, nutrition: { ...replaced.nutrition,
+                [DATE]: { ...replaced.nutrition![DATE], isDayOn: undefined },
+            } },
+        }));
+        expect(result.current.isDayOn).toBeUndefined();
+    });
+
+    it('keeps the custom-food edit draft after both validation and durable dispatch failure', async () => {
+        const originalDispatch = useAppStore.getState().dispatchDomainOperation;
+        const dispatch = vi.fn().mockResolvedValueOnce({
+            ok: false, status: 'failed', error: new Error('IDB write rejected'),
+        }).mockResolvedValueOnce({ ok: true, status: 'synced' });
+        useAppStore.setState({ dispatchDomainOperation: dispatch });
+        try {
+            const { result } = renderHook(() => useNutritionMeals(DATE));
+            act(() => {
+                result.current.setEditingFoodId('food-chicken');
+                result.current.setShowCustomModal(true);
+                result.current.setCfData({
+                    name: 'Petto di pollo modificato', brand: 'Fixture', unit: 'g', pieceWeight: '',
+                    kcal: '107', carbs: '10', pro: '10', fat: '3',
+                });
+            });
+            let saved = false;
+            await act(async () => { saved = await result.current.saveCustomFood(); });
+            expect(saved).toBe(false);
+            expect(result.current.showCustomModal).toBe(true);
+            expect(result.current.editingFoodId).toBe('food-chicken');
+            expect(result.current.cfData.name).toBe('Petto di pollo modificato');
+            expect(dispatch).toHaveBeenCalledTimes(1);
+            await act(async () => { saved = await result.current.saveCustomFood(); });
+            expect(saved).toBe(true);
+            expect(result.current.showCustomModal).toBe(false);
+            expect(dispatch).toHaveBeenCalledTimes(2);
+            expect(dispatch).toHaveBeenLastCalledWith(expect.objectContaining({
+                type: 'food.upsert', food: expect.objectContaining({ id: 'food-chicken' }),
+            }));
+        } finally {
+            useAppStore.setState({ dispatchDomainOperation: originalDispatch });
+        }
+    });
+
 });
