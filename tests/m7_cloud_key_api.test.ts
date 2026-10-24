@@ -148,6 +148,9 @@ describe('authenticated cloud account key API', () => {
     harness.documents.set('health_data_erasures/owner-a', { status: 'deleting' });
     expect((await POST(request())).status).toBe(503);
     expect(harness.documents.has('user_data_keys/owner-a')).toBe(false);
+    // Neither invalid consent nor an in-progress deletion spends a KMS
+    // encrypt call; the transaction rechecks those fences after preflight.
+    expect(harness.wrap).not.toHaveBeenCalled();
   });
 
   it('does not regenerate an existing malformed envelope or expose key material after KMS failure', async () => {
