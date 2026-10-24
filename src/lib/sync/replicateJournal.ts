@@ -7,6 +7,7 @@ import { readLocal, acknowledgeThrough, ensureBoundedPendingSequences, markRepli
 import { captureSession, isCurrentSession } from './session';
 import { applyRemoteDocuments } from './documentProjection';
 import { applyDocumentChanges } from './transactionWriter';
+import { requireCloudAccountDataKey } from './cloudAccountKeyAccess';
 import { getCachedCatalog } from '../catalog/catalogService';
 import { SyncTimeoutError, withTimeout } from '../db/db_core';
 import { isAccountDeletionPending } from './accountGate';
@@ -97,6 +98,12 @@ async function drain(session: ReturnType<typeof captureSession>, deliveryState: 
     deliveryState.delivered = null;
     if (!current()) throw new Error('Sessione cambiata');
     await ensureAppCheck();
+    // Cloud ADK is an online capability. Without it the journal remains
+    // durable and no plaintext data can be written to Firestore.
+    const cloudKey = await requireCloudAccountDataKey(session.owner.slice(5), () => {
+        if (!current()) throw new Error('Sessione cambiata prima della sincronizzazione cifrata.');
+    });
+    if (!current()) throw new Error('Sessione cambiata');
     await waitForPendingWrites(getDb());
     const catalog = await getCachedCatalog();
     while (current()) {
@@ -136,7 +143,7 @@ async function drain(session: ReturnType<typeof captureSession>, deliveryState: 
 
         let outcome: Awaited<ReturnType<typeof applyDocumentChanges>>;
         try {
-            outcome = await applyDocumentChanges(getDb(), session.owner.slice(5), delivered, current, envelope.replica);
+            outcome = await applyDocumentChanges(getDb(), session.owner.slice(5), delivered, current, envelope.replica, cloudKey);
         } catch (error) {
             const failure = classifySyncFailure(error);
             if (failure.status === 'local-pending') {
