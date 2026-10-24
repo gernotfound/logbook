@@ -3,6 +3,8 @@ import { afterAll, beforeAll, beforeEach, expect, it } from 'vitest';
 import { initializeTestEnvironment, assertFails, assertSucceeds, type RulesTestEnvironment } from '@firebase/rules-unit-testing';
 import { doc, setDoc, getDoc, deleteDoc, updateDoc, writeBatch } from 'firebase/firestore';
 import { CURRENT_SYNC_PROTOCOL } from '../../src/lib/schemaEvolution';
+import { sealCloudDocument, openCloudDocument } from '../../src/lib/sync/cloudDocumentCipher';
+import type { SyncMeta } from '../../src/lib/sync/semanticProjection/contracts';
 import { seedTrustedConsent, registerReplica, asModularFirestore } from './replicaHarness';
 
 let env: RulesTestEnvironment;
@@ -103,16 +105,14 @@ async function fencedWrite(db: any, path: string, business: Record<string, unkno
         },
         mutation: { slot: activeReplica.slot, action: 'advance', batchId: `test-${crypto.randomUUID()}` },
     });
-    batch.set(doc(db, path), {
-        ...business,
-        _schemaVersion: 1,
-        _sync: {
-            protocolVersion: CURRENT_SYNC_PROTOCOL,
-            clock: { [activeReplica.slot]: seq },
-            fields: {},
-            writer,
-        },
-    });
+    const sync: SyncMeta = {
+        protocolVersion: CURRENT_SYNC_PROTOCOL,
+        clock: { [activeReplica.slot]: seq },
+        fields: {},
+        writer,
+    };
+    batch.set(doc(db, path), sealCloudDocument(new Uint8Array(32).fill(5),
+        'a', path.slice('users/a'.length).replace(/^\//, ''), business, sync));
     await batch.commit();
     return activeReplica;
 }
@@ -121,9 +121,9 @@ it('allows only Protocol 3 fenced owner writes and denies direct root deletion',
     const db = asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore());
     const ref = doc(db, 'users/a');
     const replica = await fencedWrite(db, 'users/a', { profile: { height: '175' }, nutritionPlanningOrigin: 'user-edited' });
-    expect((await assertSucceeds(getDoc(ref))).data()?.profile.height).toBe('175');
+    expect(openCloudDocument(new Uint8Array(32).fill(5), 'a', '', (await assertSucceeds(getDoc(ref))).data()).business.profile.height).toBe('175');
     await fencedWrite(db, 'users/a', { profile: { height: '176' }, nutritionPlanningOrigin: 'user-edited' }, replica);
-    expect((await assertSucceeds(getDoc(ref))).data()?.profile.height).toBe('176');
+    expect(openCloudDocument(new Uint8Array(32).fill(5), 'a', '', (await assertSucceeds(getDoc(ref))).data()).business.profile.height).toBe('176');
     await assertFails(deleteDoc(ref));
 });
 
@@ -158,7 +158,7 @@ it('requires a fresh in-transaction control advance on every business write, inc
     replay.set(root, rootData);
     await assertSucceeds(replay.commit());
     await assertFails(setDoc(root, { ...rootData, profile: { height: '999' } }));
-    expect((await getDoc(root)).data()?.profile.height).toBe('175');
+    expect(openCloudDocument(new Uint8Array(32).fill(5), 'a', '', (await getDoc(root)).data()).business.profile.height).toBe('175');
 });
 
 it('rejects markerless or unfenced business writes while allowing the current first-account baseline', async () => {
@@ -168,7 +168,7 @@ it('rejects markerless or unfenced business writes while allowing the current fi
     await assertFails(setDoc(root, { profile: { name: 'schema-only' }, _schemaVersion: 1 }));
 
     const replica = await fencedWrite(db, 'users/a', { profile: { name: 'current' } });
-    expect((await getDoc(root)).data()?.profile.name).toBe('current');
+    expect(openCloudDocument(new Uint8Array(32).fill(5), 'a', '', (await getDoc(root)).data()).business.profile.name).toBe('current');
 
     for (const collection of ['history_months', 'nutrition_months']) {
         const ref = doc(db, `users/a/${collection}/2026-09`);
