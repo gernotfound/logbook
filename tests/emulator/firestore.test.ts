@@ -274,6 +274,20 @@ it.each(['anonymous', 'b'])('denies %s all operations on another user and their 
     }
 });
 
+it.each([
+    ['anonymous', null],
+    ['owner', 'a'],
+    ['other account', 'b'],
+])('keeps wrapped cloud account keys server-only for %s', async (_label, uid) => {
+    const db = uid === null
+        ? asModularFirestore(env.unauthenticatedContext().firestore())
+        : asModularFirestore(env.authenticatedContext(uid, { email_verified: true }).firestore());
+    const ref = doc(db, 'user_data_keys/a');
+    await assertFails(getDoc(ref));
+    await assertFails(setDoc(ref, { uid: 'a', ciphertext: 'attacker' }));
+    await assertFails(deleteDoc(ref));
+});
+
 it('makes account_deletions server-only and immediately blocks the owner on every private path', async () => {
     const ownerDb = asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore());
     const privatePaths = [
