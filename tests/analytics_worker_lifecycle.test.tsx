@@ -125,7 +125,7 @@ it('does not post another task to an analytics worker after it crashes', async (
     hook.unmount();
 });
 
-it('uses cooperative fallback for a large archive after worker failure and preserves UI responsiveness', async () => {
+it('selects cooperative fallback for a large archive after worker failure', async () => {
     const largeHistory = Array.from({ length: 12_000 }, (_, i) => ({ id: `archive_${i}`, date: '2026-08-20', exercises: [] }));
     const hook = renderHook(() => useAnalyticsWorker());
     const result = hook.result.current.calculateVolumeStats(largeHistory, [], 80, 52);

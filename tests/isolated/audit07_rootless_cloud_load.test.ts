@@ -25,7 +25,7 @@ vi.mock('../../src/lib/catalog/catalogService', () => ({
 vi.mock('../../src/lib/db/db_training', () => ({ loadHistoryMonths: harness.historyWindow }));
 vi.mock('../../src/lib/db/db_nutrition', () => ({ loadNutritionMonths: harness.nutritionWindow }));
 vi.mock('../../src/lib/telemetryHub', () => ({
-    telemetryHub: { trackEvent: vi.fn(), trackError: vi.fn() },
+    telemetryHub: { trackError: vi.fn() },
 }));
 vi.mock('firebase/firestore', () => ({
     doc: (_db: unknown, ...path: string[]) => path.join('/'),

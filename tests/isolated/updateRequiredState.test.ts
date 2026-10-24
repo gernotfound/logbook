@@ -15,7 +15,7 @@ describe('update-required application state', () => {
         });
     });
 
-    it('becomes persistent and blocks subsequent local/store writes', async () => {
+    it('remains active in the store and blocks subsequent local/store writes', async () => {
         const original = { profile: { name: 'before' } } as any;
         const owner = captureSession().owner;
         useAppStore.setState({ userData: original, dataOwner: owner });

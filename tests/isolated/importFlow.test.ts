@@ -12,7 +12,7 @@ vi.mock('../../src/lib/sync/session', () => ({ captureSession: () => ({ owner: '
 vi.mock('../../src/lib/sync/localRepository', () => ({
     readLocal: vi.fn(async () => ({ data: structuredClone(ui.durable.data), revision: ui.durable.revision })),
 }));
-vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackEvent: vi.fn(), trackError: vi.fn() } }));
+vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackError: vi.fn() } }));
 import { Exporter } from '../../src/lib/export';
 import { createBackup } from '../../src/lib/backup';
 import { UserDataSchema } from '../../src/lib/schema';

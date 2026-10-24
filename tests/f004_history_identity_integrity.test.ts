@@ -3,7 +3,7 @@ import { clear, get, set } from 'idb-keyval';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../src/lib/telemetryHub', () => ({
-    telemetryHub: { trackEvent: vi.fn(), trackError: vi.fn() },
+    telemetryHub: { trackError: vi.fn() },
 }));
 
 import type { CachedGlobalCatalog, UserData, WorkoutSession } from '../src/types';

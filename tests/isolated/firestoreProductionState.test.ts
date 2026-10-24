@@ -8,12 +8,32 @@ import {
   normalizeFieldIndexModes,
   normalizeLiveFieldIndexModes,
   parseFieldResource,
+  unexpectedRetiredTelemetryOverrides,
 } from '../../scripts/firestore-production-state.mjs';
 
 const desired = { collectionGroup: 'history_months', fieldPath: '*' };
 const fieldName = 'projects/p/databases/(default)/collectionGroups/history_months/fields/*';
 
 describe('Firestore Production field exemption convergence', () => {
+  it('rejects obsolete telemetry expireAt overrides only after they leave the desired manifest', () => {
+    const groups = ['telemetry_errors', 'telemetry_events', 'telemetry_anomalies'];
+    const live = groups.map(collectionGroup => ({
+      name: `projects/p/databases/(default)/collectionGroups/${collectionGroup}/fields/expireAt`,
+      indexConfig: { indexes: [{ state: 'READY' }] },
+    }));
+    const desired = groups.map(collectionGroup => ({ collectionGroup, fieldPath: 'expireAt' }));
+    expect(unexpectedRetiredTelemetryOverrides(desired, live)).toEqual([]);
+    expect(unexpectedRetiredTelemetryOverrides([], live)).toEqual(groups.map(collectionGroup => ({
+      collectionGroup, fieldPath: 'expireAt',
+    })));
+    const inherited = live.map(field => ({ ...field, indexConfig: { usesAncestorConfig: true } }));
+    expect(unexpectedRetiredTelemetryOverrides([], inherited)).toEqual([]);
+    expect(unexpectedRetiredTelemetryOverrides([], [{
+      name: 'projects/p/databases/(default)/collectionGroups/other/fields/expireAt',
+      indexConfig: { indexes: [] },
+    }])).toEqual([]);
+  });
+
   it('uses the database-wide explicit-override list scope used by firebase-tools', () => {
     expect(fieldOverrideListParent('p')).toBe('projects/p/databases/(default)/collectionGroups/-');
     expect(FIELD_OVERRIDE_LIST_FILTER).toBe('indexConfig.usesAncestorConfig=false OR ttlConfig:*');

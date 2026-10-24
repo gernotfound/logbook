@@ -25,7 +25,7 @@ vi.mock('../../src/lib/healthConsent', async () => {
         getVerifiedHealthConsentRevision: () => 0,
     };
 });
-vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackEvent: vi.fn(), trackError: vi.fn() } }));
+vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackError: vi.fn() } }));
 import { isReloadSessionCurrent, prepareForReload, UnverifiedTabSnapshotError } from '../../src/lib/sync/reloadBarrier';
 import { requiredUpdateHardReload, safeHardReload } from '../../src/lib/sync/safeReload';
 import { commitLocal, initializeLocal, readLocal } from '../../src/lib/sync/localRepository';

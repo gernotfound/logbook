@@ -17,7 +17,6 @@ const accountDeletionBudget = readFileSync('server/accountDeletion/budget.ts', '
 const accountDeletionRunner = readFileSync('server/accountDeletion/runner.ts', 'utf8');
 const accountClient = readFileSync('src/lib/db/db_account.ts', 'utf8');
 const cronApi = readFileSync('api/account-deletion-cron.ts', 'utf8');
-const legacyServiceWorkerApi = readFileSync('api/legacy-service-worker.ts', 'utf8');
 const vercelBackendBuild = readFileSync('scripts/prepare-vercel-backend-static.mjs', 'utf8');
 
 const allDeps = { ...packageJson.dependencies, ...packageJson.devDependencies };
@@ -41,8 +40,8 @@ for (const path of ['api/account-deletion.ts', 'api/account-deletion-cron.ts']) 
 }
 if (!existsSync('api/account-deletion-device.ts')) failures.push('missing native Vercel Function: api/account-deletion-device.ts');
 if (vercel.functions?.['api/account-deletion-device.ts']?.maxDuration !== 30) failures.push('api/account-deletion-device.ts must have maxDuration 30');
-if (!existsSync('api/legacy-service-worker.ts')) failures.push('missing legacy Vercel service-worker retirement endpoint');
-if (vercel.functions?.['api/legacy-service-worker.ts']?.maxDuration !== 10) failures.push('api/legacy-service-worker.ts must use the minimal 10s function ceiling');
+if (existsSync('api/legacy-service-worker.ts')) failures.push('retired Vercel frontend worker endpoint must not remain in the fresh-start backend');
+if (Object.keys(vercel.functions ?? {}).some(path => path.includes('legacy-service-worker'))) failures.push('retired Vercel worker must not remain registered as a Function');
 if (vercel.git?.deploymentEnabled?.main !== true || vercel.git?.deploymentEnabled?.['**'] !== false) failures.push('Vercel Git deployments must remain enabled only for main');
 if (vercel.ignoreCommand !== 'node scripts/vercel-ignore-build.mjs') failures.push('Vercel must skip Git deployments that do not change the backend contract');
 if (!existsSync('scripts/vercel-ignore-build.mjs')) failures.push('missing Vercel selective deployment guard');
@@ -78,24 +77,14 @@ else {
   if ('permanent' in legacyFrontendRedirect) failures.push('retired Vercel frontend root redirect must use explicit statusCode 301 instead of permanent 307/308 mode');
 }
 
-const legacySwRewrite = vercel.rewrites?.find(item => item.source === '/sw.js');
-if (legacySwRewrite?.destination !== '/api/legacy-service-worker') {
-  failures.push('retired Vercel origin must replace the old PWA worker at /sw.js with the retirement endpoint');
+// No prelaunch Vercel PWA installation is supported by the product baseline.
+// Keep the 301 canonical redirect, but never expose a retired frontend SW again.
+if ((vercel.rewrites ?? []).some(item => item.source === '/sw.js' || item.destination === '/api/legacy-service-worker')) {
+  failures.push('retired Vercel /sw.js rewrite must not be reintroduced');
 }
-const legacySwHeaders = vercel.headers?.find(item => item.source === '/sw.js')?.headers ?? [];
-const legacySwCacheControl = legacySwHeaders.find(item => item.key === 'Cache-Control')?.value ?? '';
-if (!legacySwCacheControl.includes('no-store') || !legacySwCacheControl.includes('must-revalidate')) {
-  failures.push('retired Vercel /sw.js must never be served from a stale browser/CDN cache');
+if ((vercel.headers ?? []).some(item => item.source === '/sw.js')) {
+  failures.push('retired Vercel /sw.js headers must not be reintroduced');
 }
-if (!legacySwHeaders.some(item => item.key === 'Service-Worker-Allowed' && item.value === '/')) {
-  failures.push('retired Vercel /sw.js must preserve root scope while replacing the legacy worker');
-}
-for (const marker of ['caches.keys()', 'self.clients.claim()', 'self.registration.unregister()', 'self.skipWaiting()']) {
-  if (!legacyServiceWorkerApi.includes(marker)) failures.push(`legacy service-worker retirement endpoint missing cleanup marker: ${marker}`);
-}
-if (!legacyServiceWorkerApi.includes("cacheName.startsWith('workbox-')")) failures.push('legacy service-worker retirement must limit cache cleanup to Workbox caches');
-if (legacyServiceWorkerApi.includes('client.navigate(')) failures.push('legacy service-worker retirement must not force-navigate an already open client');
-if (legacyServiceWorkerApi.includes('indexedDB') || legacyServiceWorkerApi.includes('localStorage')) failures.push('legacy service-worker retirement must not touch user-data storage');
 
 const deletionCron = vercel.crons?.find(item => item.path === '/api/account-deletion-cron');
 if (!deletionCron) failures.push('missing daily account deletion recovery cron');

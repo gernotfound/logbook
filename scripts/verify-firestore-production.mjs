@@ -5,6 +5,7 @@ import {
   fieldOverrideListParent,
   normalizeFieldIndexModes,
   progressSummary,
+  unexpectedRetiredTelemetryOverrides,
 } from './firestore-production-state.mjs';
 
 const mode = process.argv[2] ?? 'verify';
@@ -177,9 +178,10 @@ for (const [collectionGroup, desiredIndexes] of desiredByGroup) {
 const activeOperations = desiredFieldOverrides.length > 0
   ? await loadActiveFirestoreOperations()
   : [];
-const liveFieldOverrides = desiredFieldOverrides.length > 0
-  ? await loadLiveFieldOverrides()
-  : [];
+// Also inspect retired legacy telemetry fields when no desired override remains.
+// Otherwise removing expireAt from the manifest can silently leave live indexes.
+const liveFieldOverrides = await loadLiveFieldOverrides();
+const unexpectedLegacyOverrides = unexpectedRetiredTelemetryOverrides(desiredFieldOverrides, liveFieldOverrides);
 const fieldOverrideStatuses = desiredFieldOverrides.map(desired =>
   classifyFieldOverride(desired, liveFieldOverrides, activeOperations)
 );
@@ -198,6 +200,9 @@ if (mode === 'preflight') {
   for (const status of indexStatuses) {
     console.log(`- ${status.collectionGroup}: ${status.found ? status.state : 'MISSING'}`);
   }
+  for (const item of unexpectedLegacyOverrides) {
+    console.log(`- retired legacy field ${item.collectionGroup}/${item.fieldPath}: STILL EXPLICIT`);
+  }
   for (const status of fieldOverrideStatuses) {
     const state = status.matchesDesired
       ? (status.indexesDisabled ? 'EXEMPT' : 'READY')
@@ -210,13 +215,16 @@ if (mode === 'preflight') {
 }
 
 if (mode === 'status') {
-  if (!rulesMatch || missingIndexes.length || mismatchedFieldOverrides.length) {
+  if (!rulesMatch || missingIndexes.length || mismatchedFieldOverrides.length || unexpectedLegacyOverrides.length) {
     if (!rulesMatch) console.log('Firestore reconciliation required: live Rules differ from firestore.rules.');
     for (const status of missingIndexes) {
       console.log(`Firestore reconciliation required: missing desired index ${status.collectionGroup}.`);
     }
     for (const status of mismatchedFieldOverrides) {
       console.log(`Firestore reconciliation required: field index override ${status.collectionGroup}/${status.fieldPath} differs from source.`);
+    }
+    for (const item of unexpectedLegacyOverrides) {
+      console.log(`Firestore reconciliation required: obsolete telemetry field override ${item.collectionGroup}/${item.fieldPath} remains explicit.`);
     }
     process.exit(10);
   }
@@ -238,6 +246,9 @@ if (mode === 'status') {
 
 if (!rulesMatch) {
   throw new Error('Live Cloud Firestore rules do not match firestore.rules from the deployed SHA');
+}
+if (unexpectedLegacyOverrides.length) {
+  throw new Error(`Obsolete telemetry field overrides remain explicit in Firestore: ${unexpectedLegacyOverrides.map(item => item.collectionGroup + '/' + item.fieldPath).join(', ')}`);
 }
 if (mismatchedFieldOverrides.length) {
   throw new Error(

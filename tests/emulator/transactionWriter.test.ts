@@ -6,7 +6,7 @@ vi.mock('../../src/lib/healthConsent', async () => ({
     ...(await vi.importActual<typeof import('../../src/lib/healthConsent')>('../../src/lib/healthConsent')),
     getVerifiedHealthConsentRevision: () => 1,
 }));
-vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackEvent: vi.fn(), trackError: vi.fn() } }));
+vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackError: vi.fn() } }));
 vi.mock('../../src/lib/checkDocSize', async importOriginal => {
     const actual = await importOriginal<typeof import('../../src/lib/checkDocSize')>();
     return { ...actual, checkDocSize: vi.fn(actual.checkDocSize) };

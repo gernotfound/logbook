@@ -13,7 +13,7 @@ import TrainingSession from '../src/components/Training/TrainingSession';
 import type { UserData, WorkoutSession } from '../src/types';
 import { initializeLocal, readLocal } from '../src/lib/sync/localRepository';
 
-vi.mock('../src/lib/telemetryHub', () => ({ telemetryHub: { trackEvent: vi.fn(), trackError: vi.fn() } }));
+vi.mock('../src/lib/telemetryHub', () => ({ telemetryHub: { trackError: vi.fn() } }));
 
 const parseUserData = (value: unknown) => UserDataSchema.parse(value) as unknown as UserData;
 

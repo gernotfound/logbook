@@ -58,7 +58,7 @@ describe('TelemetryHub Vitest Integration Suite — Tier 4', () => {
       expect(payload.message).toContain('[REDACTED_PATH]');
     });
 
-    it('T4-5: guest telemetry keeps its original identity and is not uploaded after Google login', async () => {
+    it('T4-5: guest diagnostics are discarded rather than reassigned after a telemetry owner change', async () => {
       // 1. Collect a guest technical report offline
       Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
       telemetryHub.init();
@@ -73,7 +73,7 @@ describe('TelemetryHub Vitest Integration Suite — Tier 4', () => {
       const guestQueueKey = telemetryHub.getQueueStorageKey();
       expect(localStorage.getItem(guestQueueKey)).toBeNull();
 
-      // 2. User signs in with Google account
+      // 2. Simulate an owner transition at the TelemetryHub boundary; Firebase Auth is not involved
       Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
       telemetryHub.setUserId('google_auth_uid_999');
 

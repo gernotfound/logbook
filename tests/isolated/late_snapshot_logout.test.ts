@@ -6,7 +6,7 @@ const sdk = vi.hoisted(() => ({
     auth: { currentUser: null as { uid: string } | null },
 }));
 vi.mock('../../src/lib/firebase', () => ({ auth: sdk.auth }));
-vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackError: vi.fn(), trackEvent: vi.fn() } }));
+vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackError: vi.fn() } }));
 
 import { saveUserDataToCache } from '../../src/store/slices/createDataSlice';
 import { UserDataSchema } from '../../src/lib/schema';

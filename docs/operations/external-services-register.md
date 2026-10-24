@@ -59,6 +59,12 @@ Verifica live post-merge 2026-10-03 sullo SHA `6db65e721dda4a3eb545c03f2ad8d2516
 
 Hardening successivo verificato live il 2026-10-03 sullo SHA `549ab6eaf41c79d649af4b412ceea3f8016faf76`: il deployment Vercel Production `dpl_6V7NzsktWgPZccFLDUey2JbwHWKP` è `READY`; `/sw.js` risponde HTTP 200 con `Cache-Control: no-store, no-cache, must-revalidate, max-age=0`, prende controllo, elimina soltanto le cache `workbox-*`, si deregistra e non contiene navigazione forzata né accessi a IndexedDB/localStorage. Il root legacy resta HTTP 301 verso Firebase Hosting, `/api/account-deletion-device` resta raggiungibile e rifiuta correttamente una sonda senza origin autorizzata con HTTP 403, e non risultano runtime error Vercel nella finestra osservata. Sullo stesso SHA, `Milestone Verification`, `Firebase Hosting Production` e `Firebase Firestore Production` sono conclusi con successo.
 
+### Candidato di rimozione del worker Vercel — PR #622 (solo branch)
+
+Alla baseline di prodotto senza installazioni pre-lancio dichiarata dal product owner, il branch `alternativo-branch-update` elimina il solo endpoint di ritiro `/sw.js` e la Function `api/legacy-service-worker.ts`, con il suo test e i relativi vincoli M7. I riferimenti sopra descrivono verifiche **storiche** del 2026-10-03: non attestano che l'endpoint continui a essere distribuito dopo un merge futuro. Il redirect root HTTP 301 verso Firebase rimane invariato per Search Console; il Service Worker corrente di Firebase Hosting non è coinvolto.
+
+**Stato:** proposta applicata al branch, non a Production. Dopo l'eventuale merge controllare Vercel Production sul nuovo SHA: nessun frontend/SW Vercel pubblicato, route `/sw.js` non più servita come worker di ritiro, root HTTP 301 invariato e API trusted ancora operative. Non cancellare cache/IndexedDB o alterare allowlist live. L'assenza di installazioni precedenti è una dichiarazione del product owner, non una scansione dei browser.
+
 Preparazione live verificata il 2026-10-01:
 
 - è stato creato e scelto come hostname target `thelogbook.web.app`;
@@ -192,7 +198,7 @@ Le quattro variabili Firebase Web core sono presenti su Vercel per Production **
 1. Ricontrollare inventario e `main` correnti, output e build command effettivi del deployment Vercel Production e disponibilità delle configurazioni del workflow Firebase Hosting; non basarsi soltanto sui file o su vecchie build. Confermare che non sia in corso una migrazione/rollback che richieda una ricostruzione storica del frontend su Vercel.
 2. Preservare un meccanismo di ripristino **fuori dal repository** per eventuali valori critici senza stamparli nei log o nei report; l'eliminazione delle env dal provider non viene annullata da un revert Git e potrebbe influire sui prossimi deploy.
 3. Solo con autorizzazione esplicita per le impostazioni live, rimuovere da Vercel prima le 4 env legacy, quindi le 9 copie frontend, rispettandone gli scope Production/Preview. **Non** toccare le 5 env runtime backend, le repository variables/secrets di GitHub, il provider Firebase o l'autenticazione App Check.
-4. Dopo la modifica e al successivo deploy backend legittimo da `main`, controllare gli endpoint consenso, sessioni, cancellazione/recovery e cron con richieste sicure, oltre a redirect HTTP 301 e Service Worker di ritiro. Verificare separatamente il successivo workflow Firebase Hosting e Sentry source map; la sola CI verde non prova questo comportamento live.
+4. Dopo la modifica e al successivo deploy backend legittimo da `main`, controllare gli endpoint consenso, sessioni, cancellazione/recovery e cron con richieste sicure, oltre al redirect HTTP 301 e alla conferma che il Service Worker di ritiro Vercel non sia più pubblicato (dopo il merge della PR che lo elimina). Verificare separatamente il successivo workflow Firebase Hosting e Sentry source map; la sola CI verde non prova questo comportamento live.
 
 **Stato dell'inventario:** prima di seguire questa procedura, verificare lo stato attuale del provider. La cancellazione live delle env non è rappresentabile da un commit Git.
 

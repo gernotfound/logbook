@@ -7,16 +7,24 @@ import type { SessionExerciseSet, ExerciseLibraryItem } from '../src/types';
 
 describe('Empirical Challenger Focus & Scroll Suite', () => {
     let originalScrollTo: typeof window.scrollTo;
+    let originalElementScrollIntoView: PropertyDescriptor | undefined;
+    let originalHtmlScrollIntoView: PropertyDescriptor | undefined;
     let scrollToSpy: ReturnType<typeof vi.fn>;
 
     beforeEach(() => {
         originalScrollTo = window.scrollTo;
+        originalElementScrollIntoView = Object.getOwnPropertyDescriptor(Element.prototype, 'scrollIntoView');
+        originalHtmlScrollIntoView = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollIntoView');
         scrollToSpy = vi.fn();
         Object.defineProperty(window, 'scrollTo', { configurable: true, writable: true, value: scrollToSpy });
     });
 
     afterEach(() => {
         window.scrollTo = originalScrollTo;
+        if (originalElementScrollIntoView) Object.defineProperty(Element.prototype, 'scrollIntoView', originalElementScrollIntoView);
+        else delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+        if (originalHtmlScrollIntoView) Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', originalHtmlScrollIntoView);
+        else delete (HTMLElement.prototype as { scrollIntoView?: unknown }).scrollIntoView;
         vi.restoreAllMocks();
     });
 

@@ -1,5 +1,20 @@
 export const FIELD_OVERRIDE_LIST_FILTER = 'indexConfig.usesAncestorConfig=false OR ttlConfig:*';
 
+// The three obsolete Firestore telemetry collection-group overrides must be
+// absent from live explicit field configuration once withdrawn from the manifest.
+const RETIRED_TELEMETRY_GROUPS = new Set(['telemetry_errors', 'telemetry_events', 'telemetry_anomalies']);
+
+export function unexpectedRetiredTelemetryOverrides(desiredOverrides, liveFields) {
+  const desired = new Set(desiredOverrides.map(item => item.collectionGroup + '/' + item.fieldPath));
+  return liveFields.filter(field => {
+    const parsed = parseFieldResource(field?.name);
+    if (!parsed || !RETIRED_TELEMETRY_GROUPS.has(parsed.collectionGroup) || parsed.fieldPath !== 'expireAt') return false;
+    if (desired.has(parsed.collectionGroup + '/expireAt')) return false;
+    // An inherited field configuration is not an obsolete explicit override.
+    return field.indexConfig && field.indexConfig.usesAncestorConfig !== true;
+  }).map(field => parseFieldResource(field.name));
+}
+
 export function fieldOverrideListParent(projectId) {
   if (!projectId) throw new Error('Firestore project id is required');
   return `projects/${projectId}/databases/(default)/collectionGroups/-`;

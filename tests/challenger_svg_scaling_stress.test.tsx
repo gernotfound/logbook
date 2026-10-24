@@ -1,5 +1,5 @@
 import React from 'react';
-import { describe, test, expect, beforeEach } from 'vitest';
+import { describe, test, expect, beforeEach, afterEach } from 'vitest';
 import { fireEvent } from '@testing-library/react';
 import { renderWithProviders } from './setup';
 import MuscleModel from '../src/components/Training/MuscleModel';
@@ -9,13 +9,17 @@ import fs from 'fs';
 import path from 'path';
 
 describe('Empirical Challenger: SVG Width Scaling & Horizontal Overflow Stress Suite', () => {
+  let injectedStyle: HTMLStyleElement;
   beforeEach(() => {
     // Read and inject global.css into JSDOM document head
     const globalCssPath = path.resolve(__dirname, '../src/styles/global.css');
     const cssContent = fs.readFileSync(globalCssPath, 'utf8');
-    const styleEl = document.createElement('style');
-    styleEl.textContent = cssContent;
-    document.head.appendChild(styleEl);
+    injectedStyle = document.createElement('style');
+    injectedStyle.textContent = cssContent;
+    document.head.appendChild(injectedStyle);
+  });
+  afterEach(() => {
+    injectedStyle.remove();
   });
 
   // Comprehensive viewport & container width range (280px to 1200px)
