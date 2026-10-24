@@ -47,7 +47,7 @@ function NutritionMealsContent({
     const [editContext, setEditContext] = useState<{
         owner: string | null; date: string; item: LoggedMealItem;
     } | null>(null);
-    const editingMealItem = editContext?.owner === dataOwner && editContext.date === targetDateStr
+    const editingMealItem = editContext !== null && editContext.owner === dataOwner && editContext.date === targetDateStr
         ? editContext.item : null;
     const setEditingMealItem = (item: LoggedMealItem | null) => {
         setEditContext(item ? { owner: dataOwner, date: targetDateStr, item } : null);
