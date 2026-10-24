@@ -20,6 +20,16 @@ L'app utilizza quattro livelli di storage con ruoli distinti:
 
 **MUST:** la cache locale del client Firestore resta **memory-only**. La durabilità offline dei dati utente appartiene all'envelope IndexedDB owner-scoped di TheLogBook; non introdurre `persistentLocalCache()` come seconda copia persistente non gestita dal lifecycle di logout/cancellazione account.
 
+## Cifratura cloud 2.0.0 (candidato PR #621, non ancora in Production)
+
+**MUST:** il frontend acquista una ADK casuale per-account soltanto online, da un endpoint Vercel che richiede Firebase Auth, email verificata, App Check limited-use e consenso trusted attivo. L'ADK viene wrappata dal server con AES-256-GCM usando `CLOUD_ACCOUNT_KEK_V1` in env protetto, mai derivata dall'identità utente o dalla DEK locale. Il record `user_data_keys/{uid}` è server-only; la browser ADK non è persistita. Il vault IndexedDB e il journal offline restano cifrati con la DEK device indipendente, utilizzabili senza Vercel.
+
+**MUST:** i documenti `users/{uid}`, `history_months/{monthId}` e `nutrition_months/{monthId}` sul branch 2.0.0 contengono soltanto `_schemaVersion`, `_sync` pubblico (Protocol 3 / clock / writer, con `fields: {}`) e `_sealed` con nonce e payload XChaCha20-Poly1305. Sono cifrati **insieme** business e `_sync.fields` privato, autenticati anche UID, percorso, schema e coordinate causali esterne; qualunque versione ignota, ciphertext invalido, ADK sbagliata o tentativo di leggere plaintext è fail-closed senza alterare il journal. Firestore Rules **possono verificare struttura, controllo replica, owner/consenso ma non il contenuto cifrato**: Zod/integrità e merge semantico devono avvenire dopo la decifratura autentica sul client.
+
+**MUST:** ottenere ADK prima del primissimo `sync_control/state`; il backend rifiuta nuove chiavi sopra root/shard/control preesistenti. Replica cloud, backup normale e rights-only richiedono la ADK. Assenza rete, Vercel non disponibile, quota o secret perduto non autorizzano downgrade plaintext né ack: la PWA conserva l'ultima copia e operazioni pendenti nel vault locale. La cancellazione sanitaria può distruggere la ADK solo nella transazione terminale verificata, mai prima dei dati cifrati; il segreto globale v1 richiede copia di sicurezza esterna indipendente e restore testato prima della release.
+
+**Stato live separato:** il solo branch/CI non prova deploy Firestore Rules, endpoint/secret Vercel, hosting, accesso cross-device, perdita/recupero KEK o costo €0 sotto ogni volume. Nessun merge fino a loro verifica.
+
 ## Archivio locale cifrato senza password aggiuntiva
 
 **MUST:** il vault `logbook:v2:${owner}:secure-vault-control` esiste in tre stati distinti: assente, `migrating`, `active`. Controlli corrotti/versioni future, una chiave IndexedDB persa o un record non autenticato **non sono** assenza dati. Nessun nuovo provisioning sopra ciphertext preesistente.
