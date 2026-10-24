@@ -661,7 +661,7 @@ describe('EMPIRICAL CHALLENGER 2 (Milestone M1): deltaResolver Migration & Overr
 
     describe('5. High-Volume Performance & Stress Benchmarking', () => {
 
-        it('5.1 Migrates 1,000 legacy items with high volume in < 50ms without memory leaks or mutation', () => {
+        it('5.1 extracts 500 custom exercises and 250 overrides within 100ms without mutating inputs', () => {
             const largeLegacy: Exercise[] = [];
 
             // 500 custom items
@@ -703,6 +703,8 @@ describe('EMPIRICAL CHALLENGER 2 (Milestone M1): deltaResolver Migration & Overr
                 // i % 2 !== 0 is missing -> should be hidden
             }
 
+            const originalLegacy = structuredClone(largeLegacy);
+            const originalGlobals = structuredClone(largeGlobals);
             const startTime = performance.now();
             const result = extractCustomExercisesAndOverrides(largeLegacy, largeGlobals);
             const duration = performance.now() - startTime;
@@ -720,12 +722,14 @@ describe('EMPIRICAL CHALLENGER 2 (Milestone M1): deltaResolver Migration & Overr
             expect(resolveDuration).toBeLessThan(50);
             // Total = 500 custom + 250 visible globals = 750
             expect(effective).toHaveLength(750);
+            expect(largeLegacy).toEqual(originalLegacy);
+            expect(largeGlobals).toEqual(originalGlobals);
             expect(effective[0].isDefault).toBe(false);
             expect(effective[499].isDefault).toBe(false);
             expect(effective[500].isDefault).toBe(true);
         });
 
-        it('5.2 Migrates 1,000 legacy foods with high volume in < 50ms', () => {
+        it('5.2 extracts 500 custom foods and 300 overrides within 100ms', () => {
             const largeLegacyFoods: Food[] = [];
             const largeGlobalFoods: CatalogFood[] = [];
 

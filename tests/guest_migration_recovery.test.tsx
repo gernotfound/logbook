@@ -139,6 +139,27 @@ describe('guest migration crash recovery boundary', () => {
         expect(screen.getByTestId('guest-state').textContent).toBe('account');
     });
 
+    it('retains the guest archive and migration intent when the initial cloud read fails', async () => {
+        const { guest } = fixtures();
+        const before = await localRepository.readLocal('guest');
+        localStorage.setItem('logbook_is_guest', 'true');
+        await beginGuestMigrationIntent('merge', 'recovery', { uid: user.uid });
+        useAppStore.getState().setUserData(guest);
+        vi.mocked(DB.loadCloudPayload).mockRejectedValueOnce(new Error('Cloud unavailable before hydration'));
+
+        render(<AuthProvider><MigrationProbe /></AuthProvider>);
+
+        await waitFor(() => expect(screen.getByTestId('migration-status').textContent).toBe('failed'));
+        expect(DB.loadCloudPayload).toHaveBeenCalledTimes(1);
+        expect(await localRepository.readLocal(user.uid)).toBeUndefined();
+        expect(await localRepository.readLocal('guest')).toEqual(before);
+        expect(localStorage.getItem('logbook_is_guest')).toBe('true');
+        expect(localStorage.getItem('guest_migration_intent_v1')).not.toBeNull();
+        expect(storageOwner()).toBe('guest');
+        expect(screen.getByTestId('guest-state').textContent).toBe('guest');
+        expect(useAppStore.getState().userData?.routines?.map(routine => routine.id)).toContain('guest-routine');
+    });
+
     it('creates a durable authenticated base when a new account has no cloud payload yet', async () => {
         const { guest } = fixtures();
         localStorage.setItem('logbook_is_guest', 'true');
