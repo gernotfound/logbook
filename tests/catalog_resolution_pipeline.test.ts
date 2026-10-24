@@ -75,7 +75,7 @@ describe('Catalog Resolution Pipeline & Service Unit Tests (M1)', () => {
             expect(seed.foods).not.toBe(seed2.foods);
         });
 
-        it('getCachedCatalog() returns in-memory cache if populated and saves seed to cache if empty', async () => {
+        it('getCachedCatalog() returns the seed in memory without writing a stale fallback to IndexedDB', async () => {
             // getCachedCatalog() must always return a defined, non-null catalog (even with empty seed)
             const catalog = await getCachedCatalog();
             expect(catalog).toBeDefined();
@@ -85,9 +85,8 @@ describe('Catalog Resolution Pipeline & Service Unit Tests (M1)', () => {
             expect(Array.isArray(catalog.foods)).toBe(true);
             // Must mark the catalog as loaded into in-memory cache
             expect(isCatalogInMemory()).toBe(true);
-            // Read the mocked persistence boundary, not merely the same in-memory singleton.
-            const stored = await idbGet(CATALOG_CACHE_KEY);
-            expect(stored).toMatchObject({ manifest: { version: catalog.manifest.version } });
+            // Empty bundled seeds are reproducible; no asynchronous fallback write may race a remote refresh.
+            expect(await idbGet(CATALOG_CACHE_KEY)).toBeUndefined();
             const catalog2 = await getCachedCatalog();
             expect(catalog2.manifest.version).toBe(catalog.manifest.version);
         });
