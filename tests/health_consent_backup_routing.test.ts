@@ -5,7 +5,7 @@ const boundary = vi.hoisted(() => ({
   offlineReaccept: false,
   serverStatus: 'withdrawn' as string,
   serverRead: vi.fn(async () => 'withdrawn' as string),
-  trustedExport: vi.fn(async () => new Map([['', {
+  trustedExport: vi.fn(async (): Promise<Map<string, unknown>> => new Map([['', {
     _schemaVersion: 1,
     _sync: {
       protocolVersion: 3, clock: {}, fields: {},
@@ -121,7 +121,7 @@ describe('health consent rights export transport routing', () => {
     const snapshot = await exportSnapshot();
     expect(snapshot.coverage.scope).toBe('cloud-and-device');
     expect(snapshot.coverage.months).toEqual(['2026-10']);
-    expect(snapshot.data.nutrition['2026-10-24'].weight).toBe(80);
+    expect(snapshot.data.nutrition?.['2026-10-24']?.weight).toBe(80);
     expect((snapshot.recovery.cloudDocuments as Record<string, any>)['nutrition_months/2026-10']._sealed)
       .toBeUndefined();
 
