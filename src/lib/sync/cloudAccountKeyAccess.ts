@@ -1,18 +1,18 @@
 import { BACKEND_API_ORIGIN as API } from '../backendApi';
 import { auth, ensureAppCheck } from '../firebase';
 import { getLimitedUseAppCheckToken } from '../appCheck';
-import { userOwner } from './owner';
 import { getVerifiedHealthConsentRevision, isHealthConsentCloudWritable } from '../healthConsent';
-import { captureSessionForOwner } from './session';
-import { readCachedAccountDataKey, rememberAccountDataKey } from './cloudAccountKeyCache';
+import { captureSessionForOwner, isCurrentSession, userOwner } from './session';
 
 /**
- * Lazy account-key acquisition. The caller MUST first establish the current
- * authenticated/consented cloud session; this is NOT a separate consent gate.
+ * Account Data Keys are ONLINE capabilities, not a second local archive key.
+ * IndexedDB and the offline journal remain protected by their independent
+ * device vault; retaining an ADK there serves no offline use case and would
+ * create a stale-key/rotation hazard after health-data erasure.
  *
- * Offline reopening uses the same device vault as local archive; on a fresh
- * device missing keys are acquired only over the authenticated backend.
- * Not wired to Firestore yet: activating this before the cutover is forbidden.
+ * A fresh authenticated backend request is required for each cloud operation.
+ * The caller may reuse the returned bytes only within that single operation,
+ * after checking its captured Auth/session/consent fence.
  */
 export class CloudKeyAccessUnavailableError extends Error {
     readonly code = 'cloud-key-unavailable';
@@ -21,11 +21,6 @@ export class CloudKeyAccessUnavailableError extends Error {
         this.name = 'CloudKeyAccessUnavailableError';
     }
 }
-
-// An ADK cached before a completed health-data erasure may belong to an
-// earlier consent generation. For generation >1, require a fresh server
-// release once per browser/session epoch and revision before trusting cache.
-const verifiedServerKeys = new Map<string, { revision: number; sessionEpoch: string }>();
 
 function decodeKey(value: unknown): Uint8Array {
     if (typeof value !== 'string' || !/^[A-Za-z0-9+/]{43}=$/.test(value)) {
@@ -45,71 +40,74 @@ function decodeKey(value: unknown): Uint8Array {
 async function acquireAccountDataKey(
     uid: string, assertCurrent: () => void, purpose: 'sync' | 'rights-export',
 ): Promise<Uint8Array> {
-    const user = auth.currentUser;
-    if (!uid || uid.includes('/') || !user || user.uid !== uid) {
+    if (!uid || uid.includes('/') || auth.currentUser?.uid !== uid) {
         throw new CloudKeyAccessUnavailableError();
     }
     const owner = userOwner(uid);
-    assertCurrent();
-    const revision = purpose === 'sync' ? getVerifiedHealthConsentRevision(uid) : null;
-    if (purpose === 'sync' && (!isHealthConsentCloudWritable(owner) || revision === null || revision < 1)) {
-        throw new CloudKeyAccessUnavailableError();
-    }
-    const sessionEpoch = String(captureSessionForOwner(owner).epoch);
-    const cached = await readCachedAccountDataKey(owner);
-    assertCurrent();
-    const previouslyVerified = verifiedServerKeys.get(owner);
-    const mustReverify = purpose === 'rights-export'
-        || (revision !== null && revision > 1
-            && (previouslyVerified?.revision !== revision || previouslyVerified.sessionEpoch !== sessionEpoch));
-    if (cached && !mustReverify) return cached;
+    const session = captureSessionForOwner(owner);
+    const consentRevision = purpose === 'sync' ? getVerifiedHealthConsentRevision(uid) : null;
+    const checkCurrent = () => {
+        assertCurrent();
+        if (!isCurrentSession(session) || auth.currentUser?.uid !== uid) {
+            throw new CloudKeyAccessUnavailableError();
+        }
+        if (purpose === 'sync' && (!isHealthConsentCloudWritable(owner)
+            || getVerifiedHealthConsentRevision(uid) !== consentRevision)) {
+            throw new CloudKeyAccessUnavailableError();
+        }
+    };
 
+    checkCurrent();
     await ensureAppCheck();
-    assertCurrent();
+    checkCurrent();
     const token = await getLimitedUseAppCheckToken();
-    assertCurrent();
-    const idToken = await user.getIdToken();
-    assertCurrent();
+    checkCurrent();
+    const idToken = await auth.currentUser!.getIdToken();
+    checkCurrent();
 
     let response: Response;
     try {
         response = await fetch(API + '/api/cloud-key' + (purpose === 'rights-export' ? '?purpose=rights-export' : ''), {
-            method: 'POST', cache: 'no-store', signal: AbortSignal.timeout(12_000),
+            method: 'POST',
+            cache: 'no-store',
+            signal: AbortSignal.timeout(12_000),
             headers: { authorization: 'Bearer ' + idToken, 'x-firebase-appcheck': token },
         });
     } catch {
         throw new CloudKeyAccessUnavailableError();
     }
-    assertCurrent();
+    checkCurrent();
     if (!response.ok) throw new CloudKeyAccessUnavailableError();
 
     let payload: unknown;
     try { payload = await response.json(); } catch { throw new CloudKeyAccessUnavailableError(); }
-    assertCurrent();
-    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) throw new CloudKeyAccessUnavailableError();
+    checkCurrent();
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+        throw new CloudKeyAccessUnavailableError();
+    }
     const parsed = payload as Record<string, unknown>;
     if (Object.keys(parsed).sort().join(',') !== 'format,key,version'
         || parsed.format !== 'thelogbook-account-data-key' || parsed.version !== 1) {
         throw new CloudKeyAccessUnavailableError();
     }
-    const fresh = decodeKey(parsed.key);
+    // Never persist a cloud key on the device; only the independent device
+    // vault supports offline use. A failed post-decode fence wipes the bytes.
+    const key = decodeKey(parsed.key);
     try {
-        await rememberAccountDataKey(owner, fresh);
-        assertCurrent();
-        if (revision !== null) verifiedServerKeys.set(owner, { revision, sessionEpoch });
-        return fresh;
+        checkCurrent();
+        return key;
     } catch (error) {
-        fresh.fill(0);
+        key.fill(0);
         throw error;
     }
 }
 
-/** Normal cloud operations require fresh authorized health consent. */
+/** Normal sync requires an online server-confirmed consent revision. */
 export function requireCloudAccountDataKey(uid: string, assertCurrent: () => void): Promise<Uint8Array> {
     return acquireAccountDataKey(uid, assertCurrent, 'sync');
 }
 
-/** Read-only capability for an explicit data export after consent withdrawal. */
+/** Rights-only recovery after withdrawal never provisions keys or authorizes sync. */
 export function requireRightsExportAccountDataKey(uid: string, assertCurrent: () => void): Promise<Uint8Array> {
     return acquireAccountDataKey(uid, assertCurrent, 'rights-export');
 }
