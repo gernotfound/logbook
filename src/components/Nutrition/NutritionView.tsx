@@ -112,8 +112,8 @@ const NutritionView = ({ subTab = 'meals', setSubTab }: NutritionViewProps) => {
                             ...mealsHook,
                             saveCustomFood: async () => {
                                 const wasEditing = !!mealsHook.editingFoodId;
-                                await mealsHook.saveCustomFood();
-                                if (wasEditing && setSubTab) setSubTab('archive');
+                                const saved = await mealsHook.saveCustomFood();
+                                if (wasEditing && saved && setSubTab) setSubTab('archive');
                             },
                             cancelCustomFood: () => {
                                 const wasEditing = !!mealsHook.editingFoodId;
