@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SyncTimeoutError } from '../../src/lib/db/db_core';
 import { loadHistoryMonths } from '../../src/lib/db/db_training';
 import { loadNutritionMonths } from '../../src/lib/db/db_nutrition';
+import { sealCloudDocument, CloudCiphertextError } from '../../src/lib/sync/cloudDocumentCipher';
 
 const firestore = vi.hoisted(() => ({ getDoc: vi.fn(), getDocFromServer: vi.fn() }));
 
@@ -46,6 +47,44 @@ afterEach(() => {
 });
 
 describe('monthly Firestore read boundaries', () => {
+
+    it('authenticates encrypted monthly shards before publishing either business data or causal metadata', async () => {
+        const key = crypto.getRandomValues(new Uint8Array(32));
+        const meta = { ...syncMeta, fields: {} };
+        const hist = sealCloudDocument(key, owner.uid, 'history_months/2026-05',
+            { workout: { id: 'workout', date: '2026-05-11', exercises: [] } }, meta);
+        const nut = sealCloudDocument(key, owner.uid, 'nutrition_months/2026-05',
+            { '2026-05-11': { date: '2026-05-11', weight: 74 } }, meta);
+        const state = draft();
+        const docs = cloudDocuments();
+        firestore.getDocFromServer.mockImplementation(async (path: string) => ({
+            exists: () => true, data: () => path.includes('history_months') ? hist : nut,
+        }));
+        await Promise.all([
+            loadHistoryMonths(owner, ['2026-05'], state, docs, key),
+            loadNutritionMonths(owner, ['2026-05'], state, docs, key),
+        ]);
+        expect(state.history).toHaveLength(1);
+        expect(state.nutrition['2026-05-11']).toMatchObject({ weight: 74 });
+        expect(docs.get('history_months/2026-05')).not.toHaveProperty('_sealed');
+        expect(docs.get('nutrition_months/2026-05')).not.toHaveProperty('_sealed');
+        expect(docs.get('history_months/2026-05')?._sync).toEqual(meta);
+    });
+
+    it('rejects a wrong key or a sealed shard without its ADK, preserving empty hydration state', async () => {
+        const key = crypto.getRandomValues(new Uint8Array(32));
+        const nut = sealCloudDocument(key, owner.uid, 'nutrition_months/2026-05',
+            { '2026-05-11': { date: '2026-05-11', weight: 74 } }, syncMeta);
+        firestore.getDocFromServer.mockResolvedValue({ exists: () => true, data: () => nut });
+        const state = draft();
+        const docs = cloudDocuments();
+        await expect(loadNutritionMonths(owner, ['2026-05'], state, docs, crypto.getRandomValues(new Uint8Array(32))))
+            .rejects.toBeInstanceOf(CloudCiphertextError);
+        await expect(loadNutritionMonths(owner, ['2026-05'], state, docs))
+            .rejects.toBeInstanceOf(CloudCiphertextError);
+        expect(state.nutrition).toEqual({});
+        expect(docs.size).toBe(0);
+    });
 
     it('ignores stale cached misses and loads both month types from the server', async () => {
         firestore.getDoc.mockResolvedValue({ exists: () => false }); // Cache lacks known cloud shards.
