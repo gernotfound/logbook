@@ -12,8 +12,8 @@ import type { DocumentData } from './documentProjection';
  * It MUST NOT be wired to live cloud reads/writes before authenticated account
  * key provisioning, Rules, backup/erasure and cutover gates are ready together.
  */
-export const CLOUD_CIPHER_FORMAT = 'thelogbook-cloud-document' as const;
-export const CLOUD_CIPHER_VERSION = 1 as const;
+const CLOUD_CIPHER_FORMAT = 'thelogbook-cloud-document' as const;
+const CLOUD_CIPHER_VERSION = 1 as const;
 
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder('utf-8', { fatal: true });
@@ -32,7 +32,7 @@ export class CloudCiphertextError extends Error {
     }
 }
 
-export type PublicCloudSync = Omit<SyncMeta, 'fields'> & { fields: Record<string, never> };
+type PublicCloudSync = Omit<SyncMeta, 'fields'> & { fields: Record<string, never> };
 
 export type SealedCloudDocument = {
     _schemaVersion: typeof CURRENT_DATA_SCHEMA;
