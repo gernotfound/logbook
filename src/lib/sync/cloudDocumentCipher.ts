@@ -1,5 +1,6 @@
 import { xchacha20poly1305 } from '@noble/ciphers/chacha.js';
 import { CURRENT_DATA_SCHEMA, CURRENT_SYNC_PROTOCOL } from '../schemaEvolution';
+import { checkDocSize } from '../checkDocSize';
 import { parseSyncMeta } from './semanticProjection/metadata';
 import type { SyncMeta } from './semanticProjection/contracts';
 import type { DocumentData } from './documentProjection';
@@ -133,11 +134,14 @@ export function sealCloudDocument(
         },
     };
     let payload: Uint8Array;
-    try { payload = textEncoder.encode(JSON.stringify({ business, fields: sync.fields })); }
+    try { payload = textEncoder.encode(canonical({ business, fields: sync.fields })); }
     catch { throw new CloudCiphertextError(); }
     if (payload.length + AUTH_TAG_SIZE > MAX_CIPHERTEXT_SIZE) throw new CloudCiphertextError();
     const nonce = unbase64url(outer._sealed.nonce, NONCE_SIZE);
     outer._sealed.ciphertext = base64url(xchacha20poly1305(key, nonce, associatedData(uid, path, outer)).encrypt(payload));
+    // The actual Firestore envelope is larger than the plaintext after base64.
+    // Reuse the existing conservative 950 KB limit, not the plaintext estimate.
+    checkDocSize(outer, path || 'User Profile');
     return outer;
 }
 
