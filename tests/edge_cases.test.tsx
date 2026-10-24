@@ -238,6 +238,21 @@ describe('Empirical Challenger Suite: Edge Cases & Stress Verification', () => {
       expect(datesSet.has('2026-07-28')).toBe(true);
       expect(datesSet.has('2026-07-29')).toBe(true);
     });
+
+    test('Logic.getWorkoutDatesSet rejects impossible calendar days without losing valid leap days', () => {
+      const history = [
+        { date: '2026-02-30' },
+        { date: '2026-02-29' },
+        { dateStr: '2026-13-01' },
+        { date: '2026-04-31T12:00:00Z' },
+        { date: '2028-02-29' },
+        { dateStr: '2026-04-30' },
+        { date: new Date('not-a-date') },
+      ];
+      const originalDates = history.map(record => record.date ?? record.dateStr);
+      expect([...Logic.getWorkoutDatesSet(history)].sort()).toEqual(['2026-04-30', '2028-02-29']);
+      expect(history.map(record => record.date ?? record.dateStr)).toEqual(originalDates);
+    });
   });
 
   describe('4. WorkoutTimer & Ticking Behavior', () => {
