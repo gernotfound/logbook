@@ -13,18 +13,18 @@ describe('Technical telemetry queue and dispatch — Tier 1', () => {
 
   describe('Technical diagnostics: queue, transport, non-blocking behavior', () => {
     describe('F9: Offline Queue & Replay Engine', () => {
-      it('F9-1: buffers errors and events in RAM without plaintext before vault unlock', () => {
+      it('F9-1: buffers technical errors in RAM without plaintext before vault unlock', () => {
         Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
         telemetryHub.init();
         telemetryHub.setUserId('user_queue');
 
         telemetryHub.trackError(new Error('Offline error 1'));
-        telemetryHub.trackEvent('offline_event_1', { data: 123 });
+        telemetryHub.trackError(new Error('Offline error 2'));
 
         expect(localStorage.getItem(telemetryHub.getQueueStorageKey())).toBeNull();
         const parsed = telemetryHub.getQueuedEvents();
         expect(parsed).toHaveLength(2);
-        expect(parsed.map(item => item.itemType)).toEqual(['error', 'event']);
+        expect(parsed.map(item => item.itemType)).toEqual(['error', 'error']);
         expect(parsed[0].payload.userId).toBe('user_queue');
 
         Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
@@ -34,7 +34,7 @@ describe('Technical telemetry queue and dispatch — Tier 1', () => {
         Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
         telemetryHub.init();
         telemetryHub.setUserId('user_owner_scope');
-        telemetryHub.trackEvent('owner_scoped_event');
+        telemetryHub.trackError(new Error('Owner scoped technical error'));
 
         expect(telemetryHub.getQueuedEvents()).toHaveLength(1);
         expect(localStorage.getItem(telemetryHub.getQueueStorageKey())).toBeNull();
@@ -48,14 +48,14 @@ describe('Technical telemetry queue and dispatch — Tier 1', () => {
         telemetryHub.setUserId('user_queue_cap');
 
         for (let i = 1; i <= 60; i++) {
-          telemetryHub.trackEvent(`event_${i}`, { index: i });
+          telemetryHub.trackError(new Error(`offline_error_${i}`));
         }
 
         const queued = telemetryHub.getQueuedEvents();
         expect(queued.length).toBe(TELEMETRY_QUEUE_CAPACITY);
         expect(queued.length).toBeLessThanOrEqual(50);
-        expect(queued[0].payload.type).toBe('event_11');
-        expect(queued[queued.length - 1].payload.type).toBe('event_60');
+        expect(queued[0].payload.message).toBe('offline_error_11');
+        expect(queued[queued.length - 1].payload.message).toBe('offline_error_60');
 
         Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
       });
@@ -117,13 +117,11 @@ describe('Technical telemetry queue and dispatch — Tier 1', () => {
     });
 
     describe('F11: Async Fire-and-Forget & Non-blocking', () => {
-      it('F11-1: trackError and trackEvent return immediately (void return type)', () => {
+      it('F11-1: trackError returns immediately (void return type)', () => {
         telemetryHub.init();
         const retError = telemetryHub.trackError(new Error('Void test'));
-        const retEvent = telemetryHub.trackEvent('test_event');
 
         expect(retError).toBeUndefined();
-        expect(retEvent).toBeUndefined();
       });
 
       it('F11-2: hanging Sentry dispatch times out and queues its error', async () => {
@@ -151,32 +149,18 @@ describe('Technical telemetry queue and dispatch — Tier 1', () => {
 
         expect(() => {
           telemetryHub.trackError(new Error('Permission denied error'));
-          telemetryHub.trackEvent('diagnostic_event');
+          telemetryHub.trackError(new Error('Second rejected diagnostic'));
         }).not.toThrow();
         await vi.advanceTimersByTimeAsync(100);
 
         expect(mockSentryTransport).toHaveBeenCalledTimes(2);
-        expect(mockSentryTransport.mock.calls.map((call: any) => call[0]).sort()).toEqual(['error', 'event']);
+        expect(mockSentryTransport.mock.calls.map((call: any) => call[0])).toEqual(['error', 'error']);
         const queued = telemetryHub.getQueuedEvents();
         expect(queued).toHaveLength(2);
         expect(queued.map(item => item.itemType).sort()).toEqual(['error', 'event']);
         expect(queued.every(item => item.payload.userId === 'user_perm_denied')).toBe(true);
       });
 
-      it('F11-5: concurrent diagnostic events reach the accepted-and-dropped transport boundary', async () => {
-        vi.useFakeTimers();
-        telemetryHub.init();
-        telemetryHub.setUserId('user_concurrent');
-
-        for (let i = 0; i < 20; i++) {
-          telemetryHub.trackEvent(`concurrent_event_${i}`);
-        }
-
-        await vi.advanceTimersByTimeAsync(100);
-        expect(mockSentryTransport).toHaveBeenCalledTimes(20);
-        expect(mockSentryTransport.mock.calls.every((call: any) => call[0] === 'event')).toBe(true);
-        expect(telemetryHub.getQueuedEvents()).toHaveLength(0);
-      });
     });
   });
 });
