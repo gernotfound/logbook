@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { writeBatch } from 'firebase/firestore';
 
 vi.unmock('../src/lib/db');
-import { ConsentedTestDB as DB } from './testUtils';
+import { ConsentedTestDB as DB, openTestCloudBusiness } from './testUtils';
 import { getSeedCatalog, saveCatalogToCache, clearCatalogCache } from '../src/lib/catalog/catalogService';
 import {
     resolveEffectiveExercises,
@@ -162,8 +162,8 @@ describe('Integration Suite: Guest Mode & Global Catalog Resolution', () => {
             let capturedUserDocWrite: any = null;
             const mockBatch = {
                 set: vi.fn((ref: any, data: any) => {
-                    if (data.library !== undefined || data.customFoods !== undefined) {
-                        capturedUserDocWrite = data;
+                    if (ref?.path === 'users/test-user-id' && data?._sealed) {
+                        capturedUserDocWrite = openTestCloudBusiness(data);
                     }
                 }),
                 delete: vi.fn(),
@@ -247,8 +247,8 @@ describe('Integration Suite: Guest Mode & Global Catalog Resolution', () => {
             let capturedUserDocWrite: any = null;
             const mockBatch = {
                 set: vi.fn((ref: any, data: any) => {
-                    if (data.library !== undefined) {
-                        capturedUserDocWrite = data;
+                    if (ref?.path === 'users/test-user-id' && data?._sealed) {
+                        capturedUserDocWrite = openTestCloudBusiness(data);
                     }
                 }),
                 delete: vi.fn(),

@@ -193,12 +193,16 @@ describe('M7 native deletion job store', () => {
   it('removes the server-only session marker under the deletion lease', async () => {
     state.docs.add('account_deletions/u');
     state.docs.add('session_revocations/u');
+    state.docs.add('user_data_keys/u');
+    state.docs.add('user_data_keys/another-owner');
     state.docs.add('health_consent_withdrawals/u');
     state.docs.add('health_consent_withdrawals/another-owner');
     state.docs.add('users/u');
     await acquireDeletionLease('u', 'worker-root', Date.now() + 60_000);
     await deleteUserRoot('u', 'worker-root');
     expect(state.docs.has('session_revocations/u')).toBe(false);
+    expect(state.docs.has('user_data_keys/u')).toBe(false);
+    expect(state.docs.has('user_data_keys/another-owner')).toBe(true);
     expect(state.docs.has('health_consent_withdrawals/u')).toBe(false);
     expect(state.docs.has('health_consent_withdrawals/another-owner')).toBe(true);
     expect(state.docs.has('users/u')).toBe(false);
@@ -209,6 +213,13 @@ describe('M7 native deletion job store', () => {
     state.docs.add('session_revocations/u');
     await expect(verifyNoAccountResidue('u')).rejects.toThrow(
       'Session revocation marker still exists after deletion.',
+    );
+  });
+
+  it('refuses complete deletion while a top-level wrapped account data key remains', async () => {
+    state.docs.add('user_data_keys/u');
+    await expect(verifyNoAccountResidue('u')).rejects.toThrow(
+      'Wrapped account data key remains after deletion.',
     );
   });
 

@@ -69,14 +69,23 @@ service cloud.firestore {
       return monthId.matches('^[0-9]{4}-(0[1-9]|1[0-2])$');
     }
 
-    // Dynamic monthly entries cannot be traversed by Firestore Rules.
-    // Bound shard cardinality and continue validating individual entries in Zod.
-    function boundedHistoryMonth(docData) {
-      return docData.keys().size() >= 2 && docData.keys().size() <= 258;
-    }
-
-    function boundedNutritionMonth(docData) {
-      return docData.keys().size() >= 2 && docData.keys().size() <= 33;
+    // No plaintext business values or causal candidates may leave the browser.
+    function isSealedCloudDocument(data) {
+      return data is map
+        && data.keys().hasOnly(['_schemaVersion', '_sync', '_sealed'])
+        && data.keys().hasAll(['_schemaVersion', '_sync', '_sealed'])
+        && data._sealed is map
+        && data._sealed.keys().hasOnly(['format', 'version', 'nonce', 'ciphertext'])
+        && data._sealed.keys().hasAll(['format', 'version', 'nonce', 'ciphertext'])
+        && data._sealed.format == 'thelogbook-cloud-document'
+        && data._sealed.version == 1
+        && data._sealed.nonce is string
+        && data._sealed.nonce.matches('^[A-Za-z0-9_-]{32}$')
+        && data._sealed.ciphertext is string
+        && data._sealed.ciphertext.size() >= 22
+        && data._sync is map
+        && data._sync.fields is map
+        && data._sync.fields.keys().size() == 0;
     }
 
     function incomingData() {
@@ -568,6 +577,13 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // The wrapped Account Data Key belongs only to the trusted Vercel Admin
+    // boundary. An authenticated Firestore client must never read or replace
+    // it, even when it owns users/{userId} and has active health consent.
+    match /user_data_keys/{userId} {
+      allow read, write: if false;
+    }
+
     match /users/{userId} {
       // Root deletion is server-only. Client-side account deletion must always use
       // the trusted account-deletion job so subcollections and Firebase Auth cannot
@@ -575,39 +591,7 @@ service cloud.firestore {
       allow read: if isWritableOwner(userId);
 
       allow create, update: if isWritableOwner(userId)
-        && incomingData().keys().hasOnly([
-          'profile',
-          'library',
-          'routines',
-          'customFoods',
-          'activeWorkout',
-          'trainingCycles',
-          'activeCycleId',
-          'nutritionPlanning',
-          'supplements',
-          'activePains',
-          'catalogOverrides',
-          'legalConsent',
-          'nutritionPlanningOrigin',
-          '_schemaVersion',
-          '_sync'
-        ])
-        && (!('profile' in incomingData()) || incomingData().profile == null || incomingData().profile is map)
-        && (!('library' in incomingData()) || incomingData().library is list)
-        && (!('routines' in incomingData()) || incomingData().routines is list)
-        && (!('customFoods' in incomingData()) || incomingData().customFoods is list)
-        && (!('activeWorkout' in incomingData()) || incomingData().activeWorkout == null || incomingData().activeWorkout is map)
-        && (!('trainingCycles' in incomingData()) || incomingData().trainingCycles is list)
-        && (!('activeCycleId' in incomingData()) || incomingData().activeCycleId == null || (incomingData().activeCycleId is string && incomingData().activeCycleId.size() <= 128))
-        && (!('nutritionPlanning' in incomingData()) || incomingData().nutritionPlanning == null || incomingData().nutritionPlanning is map)
-        && (!('supplements' in incomingData()) || incomingData().supplements is list)
-        && (!('activePains' in incomingData()) || incomingData().activePains is list)
-        && (!('catalogOverrides' in incomingData()) || incomingData().catalogOverrides == null || incomingData().catalogOverrides is map)
-        && (!('legalConsent' in incomingData()) || incomingData().legalConsent == null || incomingData().legalConsent is map)
-        && (!('nutritionPlanningOrigin' in incomingData())
-            || incomingData().nutritionPlanningOrigin == null
-            || incomingData().nutritionPlanningOrigin == 'generated-default'
-            || incomingData().nutritionPlanningOrigin == 'user-edited')
+        && isSealedCloudDocument(incomingData())
         && isValidDataSchema(incomingData())
         && preservesDataSchema()
         && isValidSync(incomingData())
@@ -620,7 +604,7 @@ service cloud.firestore {
         allow create, update: if isWritableOwner(userId)
           && isValidMonthId(monthId)
           && incomingData() is map
-          && boundedHistoryMonth(incomingData())
+          && isSealedCloudDocument(incomingData())
           && isValidDataSchema(incomingData())
           && preservesDataSchema()
           && isValidSync(incomingData())
@@ -634,7 +618,7 @@ service cloud.firestore {
         allow create, update: if isWritableOwner(userId)
           && isValidMonthId(monthId)
           && incomingData() is map
-          && boundedNutritionMonth(incomingData())
+          && isSealedCloudDocument(incomingData())
           && isValidDataSchema(incomingData())
           && preservesDataSchema()
           && isValidSync(incomingData())

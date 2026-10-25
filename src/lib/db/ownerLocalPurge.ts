@@ -99,6 +99,7 @@ export async function purgeOwnerLocalData(owner: string, resumeOnly = false, gat
             throw new AggregateError(failures, 'Pulizia locale incompleta (IndexedDB). Chiave cifrata e copie residue conservate per il recupero.');
         }
         gate?.assertStillSafe?.();
+        gate?.assertStillSafe?.();
 
     let remaining = new Set<string>();
     try {

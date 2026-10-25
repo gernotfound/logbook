@@ -178,6 +178,32 @@ describe('authenticated hydration session fencing', () => {
         await clear();
     });
 
+    it('persists a cloud-integrity fence when a sealed document fails authenticated decryption', async () => {
+        await clear();
+        const { loadAuthenticatedData, readLocal, initializeLocal, invalidateSession } = await loadModules();
+        const { CloudCiphertextError } = await import('../src/lib/sync/cloudDocumentCipher');
+        invalidateSession();
+        await initializeLocal('user:user-a', data('170'));
+        dbState.loadCloudPayload.mockRejectedValueOnce(new CloudCiphertextError());
+        const setSaveError = vi.fn();
+
+        const result = await loadAuthenticatedData({
+            user: { uid: 'user-a' } as any,
+            isGuestActive: () => false,
+            setUserData: vi.fn(),
+            setSyncing: vi.fn(),
+            setSaveError,
+        });
+
+        const preserved = await readLocal('user:user-a');
+        expect(result).toBe('blocked');
+        expect(preserved?.data.profile?.height).toBe('170');
+        expect(preserved?.cloudIntegrityFence).toEqual(expect.any(String));
+        expect('cloudIntegrityBlocked' in storeState.current && storeState.current.cloudIntegrityBlocked).toBe(true);
+        expect(setSaveError).toHaveBeenCalledWith(expect.stringContaining('sincronizzazione sospesa'));
+        await clear();
+    });
+
     it('does not create an empty account journal when a cloud read fails without a local envelope', async () => {
         await clear();
         const { loadAuthenticatedData, readLocal, invalidateSession } = await loadModules();

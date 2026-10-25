@@ -114,6 +114,10 @@ beforeEach(() => {
   fixture.records.set('users/a/nutrition_months/2026-09', { nutrition: [2] });
   fixture.records.set('users/a/sync_control/state', { replicas: {} });
   fixture.records.set('users/a/telemetry_errors/error-1', { reason: 'private' });
+  // KMS only wraps a per-owner key. The envelope is server-owned and must
+  // survive partial page failures, then be destroyed on completed erasure.
+  fixture.records.set('user_data_keys/a', { uid: 'a', format: 'thelogbook-wrapped-account-key', version: 1, ciphertext: 'wrapped-a' });
+  fixture.records.set('user_data_keys/b', { uid: 'b', format: 'thelogbook-wrapped-account-key', version: 1, ciphertext: 'wrapped-b' });
   fixture.records.set('users/b', { profile: { height: 180 } });
   fixture.records.set('users/b/history_months/2026-09', { history: [5] });
 });
@@ -127,12 +131,25 @@ describe('trusted data-only erasure worker', () => {
     expect([...fixture.records.keys()].some(key => key.startsWith('users/a/'))).toBe(false);
     expect(fixture.records.has('users/b')).toBe(true);
     expect(fixture.records.has('users/b/history_months/2026-09')).toBe(true);
+    expect(fixture.records.has('user_data_keys/a')).toBe(false);
+    expect(fixture.records.get('user_data_keys/b')?.ciphertext).toBe('wrapped-b');
     expect(fixture.records.get(consentPath('a'))).toMatchObject({
       status: 'withdrawn', revision: 4, erasedBeforeRevision: 3,
     });
     await createHealthDataErasureJob('a');
     expect(await readHealthDataErasureStatus('a')).toMatchObject({ complete: true });
     expect(fixture.records.get(consentPath('a'))?.revision).toBe(4);
+  });
+
+  it('keeps local purge blocked when a completed erasure still has an unexpected ADK residue', async () => {
+    await createHealthDataErasureJob('a');
+    expect(await processHealthDataErasure('a', Date.now() + 30000)).toBe('complete');
+    expect((await readHealthDataErasureStatus('a'))?.localPurgeAuthorized).toBe(true);
+    fixture.records.set('user_data_keys/a', { uid: 'a', ciphertext: 'unexpected' });
+    expect(await readHealthDataErasureStatus('a')).toMatchObject({
+      complete: true, localPurgeAuthorized: false,
+    });
+    expect(fixture.records.has('user_data_keys/b')).toBe(true);
   });
 
   it('fences stale reacceptance and supports a later independently withdrawn data generation', async () => {
@@ -202,6 +219,7 @@ describe('trusted data-only erasure worker', () => {
     expect(await processHealthDataErasure('a', Date.now() + 30000)).toBe('failed');
     expect(await readHealthDataErasureStatus('a')).toMatchObject({ status: 'failed', retryable: true });
     expect(fixture.records.has('users/a/history_months/2026-09')).toBe(true);
+    expect(fixture.records.has('user_data_keys/a')).toBe(true);
     expect(fixture.records.get(consentPath('a'))?.revision).toBe(3);
     expect(await processHealthDataErasure('a', Date.now() + 30000)).toBe('complete');
     expect(fixture.records.has('users/a/history_months/2026-09')).toBe(false);
@@ -256,6 +274,7 @@ describe('trusted data-only erasure worker', () => {
       status: 'failed', complete: false, retryable: false,
     });
     expect(fixture.records.has('users/a/unexpected_private/secret')).toBe(true);
+    expect(fixture.records.get('user_data_keys/a')?.ciphertext).toBe('wrapped-a');
     expect(fixture.records.get(consentPath('a'))?.revision).toBe(3);
   });
 });

@@ -1,9 +1,7 @@
 import { doc, runTransaction, type Firestore } from 'firebase/firestore';
 import { generateId } from '../utils/date';
 import { UserDataSchema } from '../schema';
-import { checkDocSize } from '../checkDocSize';
 import { removeUndefinedValuesForFirestore } from '../utils/object';
-import { normalizeCloudDocument, withCurrentDataSchema } from '../schemaEvolution';
 import { rootDocument, type DocumentData } from './documentProjection';
 import type { UserData } from '../../types';
 import { assertHistoryMonthDocument, assertNutritionMonthDocument } from './monthlyIntegrity';
@@ -20,6 +18,8 @@ import {
 } from './replicaProtocol';
 import { distinctDocumentCount, MAX_SYNC_DOCUMENTS_PER_TRANSACTION } from './syncBatching';
 import { assertCloudBusinessPreserved } from './cloudBusinessIntegrity';
+import { CloudCiphertextError, sealCloudDocument } from './cloudDocumentCipher';
+import { readAccountCloudDocument } from './cloudDocumentRead';
 export { CloudDataIntegrityError } from './cloudBusinessIntegrity';
 
 function normalizeRemote(path: string, raw: DocumentData): DocumentData {
@@ -44,7 +44,9 @@ export async function applyDocumentChanges(
     ops: SemanticOperation[],
     isCurrent: () => boolean,
     replica: ReplicaIdentity,
+    cloudKey: Uint8Array,
 ): Promise<TransactionOutcome> {
+    if (!(cloudKey instanceof Uint8Array) || cloudKey.length !== 32) throw new CloudCiphertextError();
     if (!uid || uid.includes('/')) throw new Error('Identità non valida');
     if (!isCurrent()) throw new Error('Sessione cambiata');
     if (!ops.length) return { documents: new Map(), syncMeta: {} };
@@ -53,8 +55,8 @@ export async function applyDocumentChanges(
         throw new Error(`Transazione sync troppo grande: ${documentCount} documenti, massimo ${MAX_SYNC_DOCUMENTS_PER_TRANSACTION}.`);
     }
 
-    // The Firestore SDK may retry this callback within one invocation. Preserve
-    // byte-identical writes across retries while using a new ID for a new drain.
+    // Firestore may retry this callback. Preserve the batch identity and causal
+    // semantics; discarded retries may use fresh AEAD nonces without affecting ACKs.
     const batchId = generateId('sync-advance');
     return runTransaction(db, async transaction => {
         if (!isCurrent()) throw new Error('Sessione cambiata');
@@ -92,7 +94,11 @@ export async function applyDocumentChanges(
                 return;
             }
 
-            const normalized = normalizeCloudDocument(snapshot.data(), `Firestore ${path || 'root'} data schema`);
+            // The encrypted format preserves Protocol 3 semantics but stores
+            // sensitive field candidates and business entirely inside AEAD.
+            // Decode before the existing integrity and causal validation;
+            // never interpret an authenticated public clock as sufficient.
+            const normalized = readAccountCloudDocument(snapshot.data(), `Firestore ${path || 'root'} data schema`, uid, path, cloudKey);
             remoteSyncMetas[path] = parseSyncMeta(normalized.sync);
 
             const remote = removeUndefinedValuesForFirestore(normalizeRemote(path, normalized.business));
@@ -116,9 +122,9 @@ export async function applyDocumentChanges(
             business = removeUndefinedValuesForFirestore(normalizeRemote(path, business)) as DocumentData;
 
             const meta = newSyncMetas[path];
-            const finalData = withCurrentDataSchema(business, meta) as DocumentData;
-
-            checkDocSize(finalData, path || 'User Profile');
+            // No plaintext fallback: a missing ADK must fail before any write,
+            // even if a ruleset is accidentally deployed out of order.
+            const finalData = sealCloudDocument(cloudKey, uid, path, business, meta);
 
             const refIndex = pathsToRead.indexOf(path);
 

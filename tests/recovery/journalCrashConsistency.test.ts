@@ -44,6 +44,11 @@ vi.mock('../../src/lib/healthConsent', async () => {
 vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackEvent: vi.fn(), trackError: vi.fn() } }));
 vi.mock('../../src/lib/catalog/catalogService', () => ({ getCachedCatalog: async () => catalog }));
 vi.mock('../../src/lib/sync/transactionWriter', () => ({ applyDocumentChanges: remote.apply }));
+// Real local journal and crash-recovery remain under test; the independent
+// online cloud-key transport is supplied as a verified synthetic capability.
+vi.mock('../../src/lib/sync/cloudAccountKeyAccess', () => ({
+    requireCloudAccountDataKey: vi.fn(async () => new Uint8Array(32).fill(18)),
+}));
 
 import type { UserData } from '../../src/types';
 import { UserDataSchema } from '../../src/lib/schema';

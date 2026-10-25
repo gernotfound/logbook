@@ -3,6 +3,8 @@ import { afterAll, beforeAll, beforeEach, expect, it } from 'vitest';
 import { initializeTestEnvironment, assertFails, assertSucceeds, type RulesTestEnvironment } from '@firebase/rules-unit-testing';
 import { doc, setDoc, getDoc, deleteDoc, updateDoc, writeBatch } from 'firebase/firestore';
 import { CURRENT_SYNC_PROTOCOL } from '../../src/lib/schemaEvolution';
+import { sealCloudDocument, openCloudDocument, CloudCiphertextError } from '../../src/lib/sync/cloudDocumentCipher';
+import type { SyncMeta } from '../../src/lib/sync/semanticProjection/contracts';
 import { seedTrustedConsent, registerReplica, asModularFirestore } from './replicaHarness';
 
 let env: RulesTestEnvironment;
@@ -103,16 +105,14 @@ async function fencedWrite(db: any, path: string, business: Record<string, unkno
         },
         mutation: { slot: activeReplica.slot, action: 'advance', batchId: `test-${crypto.randomUUID()}` },
     });
-    batch.set(doc(db, path), {
-        ...business,
-        _schemaVersion: 1,
-        _sync: {
-            protocolVersion: CURRENT_SYNC_PROTOCOL,
-            clock: { [activeReplica.slot]: seq },
-            fields: {},
-            writer,
-        },
-    });
+    const sync: SyncMeta = {
+        protocolVersion: CURRENT_SYNC_PROTOCOL,
+        clock: { [activeReplica.slot]: seq },
+        fields: {},
+        writer,
+    };
+    batch.set(doc(db, path), sealCloudDocument(new Uint8Array(32).fill(5),
+        'a', path.slice('users/a'.length).replace(/^\//, ''), business, sync));
     await batch.commit();
     return activeReplica;
 }
@@ -121,9 +121,9 @@ it('allows only Protocol 3 fenced owner writes and denies direct root deletion',
     const db = asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore());
     const ref = doc(db, 'users/a');
     const replica = await fencedWrite(db, 'users/a', { profile: { height: '175' }, nutritionPlanningOrigin: 'user-edited' });
-    expect((await assertSucceeds(getDoc(ref))).data()?.profile.height).toBe('175');
+    expect((openCloudDocument(new Uint8Array(32).fill(5), 'a', '', (await assertSucceeds(getDoc(ref))).data()).business.profile as Record<string, string>).height).toBe('175');
     await fencedWrite(db, 'users/a', { profile: { height: '176' }, nutritionPlanningOrigin: 'user-edited' }, replica);
-    expect((await assertSucceeds(getDoc(ref))).data()?.profile.height).toBe('176');
+    expect((openCloudDocument(new Uint8Array(32).fill(5), 'a', '', (await assertSucceeds(getDoc(ref))).data()).business.profile as Record<string, string>).height).toBe('176');
     await assertFails(deleteDoc(ref));
 });
 
@@ -158,7 +158,7 @@ it('requires a fresh in-transaction control advance on every business write, inc
     replay.set(root, rootData);
     await assertSucceeds(replay.commit());
     await assertFails(setDoc(root, { ...rootData, profile: { height: '999' } }));
-    expect((await getDoc(root)).data()?.profile.height).toBe('175');
+    expect((openCloudDocument(new Uint8Array(32).fill(5), 'a', '', (await getDoc(root)).data()).business.profile as Record<string, string>).height).toBe('175');
 });
 
 it('rejects markerless or unfenced business writes while allowing the current first-account baseline', async () => {
@@ -168,7 +168,7 @@ it('rejects markerless or unfenced business writes while allowing the current fi
     await assertFails(setDoc(root, { profile: { name: 'schema-only' }, _schemaVersion: 1 }));
 
     const replica = await fencedWrite(db, 'users/a', { profile: { name: 'current' } });
-    expect((await getDoc(root)).data()?.profile.name).toBe('current');
+    expect((openCloudDocument(new Uint8Array(32).fill(5), 'a', '', (await getDoc(root)).data()).business.profile as Record<string, string>).name).toBe('current');
 
     for (const collection of ['history_months', 'nutrition_months']) {
         const ref = doc(db, `users/a/${collection}/2026-09`);
@@ -274,6 +274,20 @@ it.each(['anonymous', 'b'])('denies %s all operations on another user and their 
     }
 });
 
+it.each([
+    ['anonymous', null],
+    ['owner', 'a'],
+    ['other account', 'b'],
+])('keeps wrapped cloud account keys server-only for %s', async (_label, uid) => {
+    const db = uid === null
+        ? asModularFirestore(env.unauthenticatedContext().firestore())
+        : asModularFirestore(env.authenticatedContext(uid, { email_verified: true }).firestore());
+    const ref = doc(db, 'user_data_keys/a');
+    await assertFails(getDoc(ref));
+    await assertFails(setDoc(ref, { uid: 'a', ciphertext: 'attacker' }));
+    await assertFails(deleteDoc(ref));
+});
+
 it('makes account_deletions server-only and immediately blocks the owner on every private path', async () => {
     const ownerDb = asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore());
     const privatePaths = [
@@ -356,13 +370,18 @@ it.each([
     await assertFails(deleteDoc(existingRef));
 });
 
-it('rejects unknown root fields, invalid origin and malformed month paths inside fenced writes', async () => {
+it('accepts only ciphertext envelopes and refuses malformed document paths', async () => {
     const db = asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore());
     const replica = await registerReplica(db, 'a');
-    await assertFails(fencedWrite(db, 'users/a', { unknown: true }, replica));
-    await assertFails(fencedWrite(db, 'users/a', { nutritionPlanningOrigin: 'injected' }, replica));
+    await assertSucceeds(fencedWrite(db, 'users/a', { profile: { height: '175' } }, replica));
+    const root = doc(db, 'users/a');
+    const ciphertext = (await getDoc(root)).data()!;
+    expect(ciphertext).not.toHaveProperty('profile');
+    expect(ciphertext._sync.fields).toEqual({});
+    await assertFails(setDoc(root, { profile: { height: 'private' }, _schemaVersion: 1,
+        _sync: ciphertext._sync }));
     for (const name of ['history_months', 'nutrition_months']) {
-        await assertFails(fencedWrite(db, `users/a/${name}/2026-13`, {}, replica));
+        await expect(fencedWrite(db, `users/a/${name}/2026-13`, {}, replica)).rejects.toThrow(CloudCiphertextError);
         await fencedWrite(db, `users/a/${name}/2026-09`, {}, replica);
     }
 });
@@ -389,7 +408,9 @@ it('rejects malformed sync envelopes while allowing the current structural contr
             },
             mutation: { slot: 's00', action: 'advance', batchId: `test-${crypto.randomUUID()}` },
         });
-        batch.set(root, { profile: { name }, _schemaVersion: 1, _sync: sync });
+        const validEnvelope = sealCloudDocument(new Uint8Array(32).fill(5), 'a', '',
+            { profile: { name } }, validSync);
+        batch.set(root, { ...validEnvelope, _sync: sync });
         await batch.commit();
     };
 
@@ -428,19 +449,16 @@ it('rejects unknown causal clock actors on fenced root and monthly writes withou
             replicas: { ...control.replicas, [replica.slot]: { ...entry, lastSeq: seq } },
             mutation: { slot: replica.slot, action: 'advance', batchId: `test-${crypto.randomUUID()}` },
         });
-        batch.set(doc(db, path), {
-            ...business,
-            _schemaVersion: 1,
-            _sync: {
-                protocolVersion: CURRENT_SYNC_PROTOCOL,
-                // A retired replica slot is a valid causal actor; a client-defined
-                // alias is not, even when the active writer is properly fenced.
-                clock: { [replica.slot]: seq, [unexpectedActor ? 'unregistered-client' : 's15']: 1 },
-                fields: {},
-                writer: { slot: replica.slot, replicaId: replica.replicaId,
-                    generation: replica.generation, seq, consentRevision: 1 },
-            },
-        });
+        const target = path.slice('users/a'.length).replace(/^\//, '');
+        const writer = { slot: replica.slot, replicaId: replica.replicaId,
+            generation: replica.generation, seq, consentRevision: 1 };
+        const validSync = { protocolVersion: CURRENT_SYNC_PROTOCOL,
+            clock: { [replica.slot]: seq, s15: 1 }, fields: {}, writer };
+        const sealed = sealCloudDocument(new Uint8Array(32).fill(5), 'a', target, business, validSync);
+        // Forge only the externally visible causal actor to test Rules,
+        // without trying to encrypt an invalid client-side metadata payload.
+        batch.set(doc(db, path), { ...sealed, _sync: { ...sealed._sync, clock:
+            { [replica.slot]: seq, [unexpectedActor ? 'unregistered-client' : 's15']: 1 } } });
         await batch.commit();
     };
 
@@ -469,17 +487,15 @@ it('rejects unsafe Protocol 3 clock coordinates in otherwise fenced business wri
             replicas: { ...control.replicas, [replica.slot]: { ...entry, lastSeq: seq } },
             mutation: { slot: replica.slot, action: 'advance', batchId: `test-${crypto.randomUUID()}` },
         });
-        batch.set(doc(db, 'users/a'), {
-            profile: { height: '175' },
-            _schemaVersion: 1,
-            _sync: {
+        const valid = sealCloudDocument(new Uint8Array(32).fill(5), 'a', '',
+            { profile: { height: '175' } }, {
                 protocolVersion: CURRENT_SYNC_PROTOCOL,
-                clock: { [replica.slot]: invalid },
-                fields: {},
+                clock: { [replica.slot]: seq }, fields: {},
                 writer: { slot: replica.slot, replicaId: replica.replicaId,
                     generation: replica.generation, seq, consentRevision: 1 },
-            },
-        });
+            });
+        batch.set(doc(db, 'users/a'), { ...valid,
+            _sync: { ...valid._sync, clock: { [replica.slot]: invalid } } });
         await assertFails(batch.commit());
         expect((await getDoc(doc(db, 'users/a'))).exists()).toBe(false);
     }
@@ -496,10 +512,14 @@ it('permits public catalog reads but denies client writes', async () => {
     }
 });
 
-it('rejects untyped root fields inside a valid fenced write', async () => {
+it('rejects plaintext root documents even with otherwise valid replica headers', async () => {
     const db = asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore());
     const replica = await registerReplica(db, 'a');
-    await assertFails(fencedWrite(db, 'users/a', { profile: 'invalid-profile' }, replica));
+    await assertSucceeds(fencedWrite(db, 'users/a', { profile: { height: '175' } }, replica));
+    const saved = (await getDoc(doc(db, 'users/a'))).data()!;
+    await assertFails(setDoc(doc(db, 'users/a'), { ...saved, profile: 'injected-private-value' }));
+    await assertFails(setDoc(doc(db, 'users/a'), { ...saved, _sealed: null }));
+    expect(saved).not.toHaveProperty('profile');
 });
 
 it('accepts bounded owner telemetry and rejects malformed payloads', async () => {
@@ -663,21 +683,17 @@ it('makes telemetry events/anomalies immutable and error aggregation monotonic',
     await assertFails(setDoc(errorRef, { ...error, count: 3, lastSeen: 1200, message: 'tampered' }));
 });
 
-it('bounds monthly dynamic entry counts while preserving normal calendar and workout shards', async () => {
+it('stores monthly contents only in the sealed envelope regardless of business entry count', async () => {
     const db = asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore());
+    const replica = await registerReplica(db, 'a');
     const days = Object.fromEntries(Array.from({ length: 31 }, (_, i) => {
         const date = '2026-10-' + String(i + 1).padStart(2, '0');
         return [date, { date, kcal: 2000 }];
     }));
-    const replica = await registerReplica(db, 'a');
     await assertSucceeds(fencedWrite(db, 'users/a/nutrition_months/2026-10', days, replica));
-    await assertFails(fencedWrite(db, 'users/a/nutrition_months/2026-10', {
-        ...days, unexpected: { privatePayload: true },
-    }, replica));
-    const workouts = Object.fromEntries(Array.from({ length: 256 }, (_, i) =>
-        ['workout-' + i, { id: 'workout-' + i, date: '2026-10-13', exercises: [] }]));
-    await assertSucceeds(fencedWrite(db, 'users/a/history_months/2026-10', workouts, replica));
-    await assertFails(fencedWrite(db, 'users/a/history_months/2026-10', {
-        ...workouts, extraWorkout: { id: 'extraWorkout', date: '2026-10-13', exercises: [] },
-    }, replica));
+    const saved = (await getDoc(doc(db, 'users/a/nutrition_months/2026-10'))).data()!;
+    expect(saved).not.toHaveProperty('2026-10-01');
+    expect(saved._sync.fields).toEqual({});
+    expect(openCloudDocument(new Uint8Array(32).fill(5), 'a', 'nutrition_months/2026-10', saved).business)
+        .toMatchObject(days);
 });

@@ -69,9 +69,14 @@ export async function readHealthDataErasureStatus(uid: string): Promise<PublicEr
   if (job.status === 'complete' && isPositiveRevision(job.completedRevision)) {
     // A stale completed receipt from an EARLIER consent cycle cannot authorize
     // erasing data written after the person reaccepted on another device.
-    const consentSnap = await consentRef(uid).get();
+    const [consentSnap, accountKeySnap] = await Promise.all([
+      consentRef(uid).get(),
+      adminDb().collection('user_data_keys').doc(uid).get(),
+    ]);
     const consent = consentSnap.data();
-    localPurgeAuthorized = consent?.status === 'withdrawn'
+    // A 'complete' job cannot authorize irreversible local purge while the
+    // server still retains the corresponding wrapped ADK.
+    localPurgeAuthorized = !accountKeySnap.exists && consent?.status === 'withdrawn'
       && consent.revision === job.completedRevision
       && consent.erasedBeforeRevision === job.consentRevision;
   }
@@ -199,6 +204,11 @@ async function completeErasure(uid: string, leaseOwner: string): Promise<void> {
     const nextRevision = job.consentRevision + 1;
     if (!Number.isSafeInteger(nextRevision)) throw new Error('Revisione consenso non rappresentabile.');
     const now = Timestamp.now();
+    // Finalize data erasure and destroy the *wrapped* account key in the
+    // SAME leased transaction. Deleting it during the paginated data purge
+    // would irreversibly strand any remaining encrypted shards after a
+    // timeout, retry or unknown-collection failure.
+    tx.delete(db.collection('user_data_keys').doc(uid));
     tx.update(consentRef(uid), {
       revision: nextRevision, status: 'withdrawn', updatedAt: now,
       erasedBeforeRevision: job.consentRevision,

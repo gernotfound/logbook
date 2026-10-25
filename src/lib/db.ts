@@ -19,7 +19,7 @@ import { rootDocument } from './sync/documentProjection';
 import { assertCloudBusinessPreserved, CloudDataIntegrityError } from './sync/cloudBusinessIntegrity';
 import { syncGlobalCatalog, getCachedCatalog } from './catalog/catalogService';
 import { resolveEffectiveExercises, resolveEffectiveFoods } from './catalog/deltaResolver';
-import { normalizeCloudDocument } from './schemaEvolution';
+import { readAccountCloudDocument } from './sync/cloudDocumentRead';
 import { withTimeout } from './db/db_core';
 import { loadHistoryMonths } from './db/db_training';
 import { loadNutritionMonths } from './db/db_nutrition';
@@ -48,7 +48,7 @@ class ConcurrentCloudReadError extends Error {
     }
 }
 
-async function loadCloudPayload(options?: { allMonths?: boolean }, consistencyAttempt = 0): Promise<{
+async function loadCloudPayload(options?: { allMonths?: boolean; cloudKey?: Uint8Array }, consistencyAttempt = 0): Promise<{
     data: UserData;
     cloudDocuments: Map<string, Record<string, unknown>>;
     completeMonths: string[];
@@ -107,7 +107,7 @@ async function loadCloudPayload(options?: { allMonths?: boolean }, consistencyAt
         const catalog = freshCatalog ?? await getCachedCatalog();
 
         if (root && typeof root.exists === 'function' && root.exists()) {
-            const normalizedRoot = normalizeCloudDocument(root.data(), 'Firestore root data schema');
+            const normalizedRoot = readAccountCloudDocument(root.data(), 'Firestore root data schema', user.uid, '', options?.cloudKey);
             const data = normalizedRoot.business as Record<string, any>;
             // Reject lossy Zod normalization before declaring the cloud root authoritative.
             // The transaction writer already enforces this invariant on remote writes.
@@ -152,7 +152,7 @@ async function loadCloudPayload(options?: { allMonths?: boolean }, consistencyAt
                         `Timeout recupero ${colName} completo`,
                     );
                     for (const item of page.docs) {
-                        const normalized = normalizeCloudDocument(item.data(), `${colName}/${item.id} data schema`);
+                        const normalized = readAccountCloudDocument(item.data(), `${colName}/${item.id} data schema`, user.uid, `${colName}/${item.id}`, options?.cloudKey);
                         const rawMonthData = normalized.business;
                         const monthData = colName === 'history_months'
                             ? requireCompleteHistoryMonthDocument(item.id, rawMonthData)
@@ -180,8 +180,8 @@ async function loadCloudPayload(options?: { allMonths?: boolean }, consistencyAt
             });
             // Independent collections populate disjoint sections of the payload.
             await Promise.all([
-                loadHistoryMonths(user, targetMonths, state, cloudDocuments),
-                loadNutritionMonths(user, targetMonths, state, cloudDocuments),
+                loadHistoryMonths(user, targetMonths, state, cloudDocuments, options?.cloudKey),
+                loadNutritionMonths(user, targetMonths, state, cloudDocuments, options?.cloudKey),
             ]);
             completeMonths = targetMonths;
         }
