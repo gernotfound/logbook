@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useRegisterSW } from 'virtual:pwa-register/react';
 import { isReloadSessionCurrent, prepareForReload } from '../../lib/sync/reloadBarrier';
 import { safeHardReload } from '../../lib/sync/safeReload';
-import { checkForWaitingServiceWorker } from '../../lib/pwaUpdate';
+import { applyPWAUpdate, checkForWaitingServiceWorker } from '../../lib/pwaUpdate';
 
 const ReloadPrompt: React.FC = () => {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -13,7 +13,6 @@ const ReloadPrompt: React.FC = () => {
 
   const {
     needRefresh: [needRefresh, setNeedRefresh],
-    updateServiceWorker,
   } = useRegisterSW({
     onRegistered(r) {
       if (r && typeof r.update === 'function') {
@@ -117,7 +116,17 @@ const ReloadPrompt: React.FC = () => {
       } else {
         const session = await prepareForReload();
         if (!isReloadSessionCurrent(session)) throw new Error('Sessione cambiata.');
-        await updateServiceWorker(true);
+        // useRegisterSW's helper can silently do nothing if the prompt was
+        // raised by our own foreground check rather than Workbox's waiting event.
+        // Activate the observed worker and explicitly reload only after the
+        // durable owner/session barrier has been completed.
+        await applyPWAUpdate(
+          typeof navigator === 'undefined' ? undefined : navigator.serviceWorker,
+          () => {
+            if (!isReloadSessionCurrent(session)) throw new Error('Sessione cambiata. Ripeti l’aggiornamento.');
+            window.location.reload();
+          },
+        );
       }
     } catch (err) {
       setUpdateError(err instanceof Error ? err.message : 'Aggiornamento non riuscito. Riprova.');
