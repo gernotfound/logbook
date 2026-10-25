@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { auth } from '../src/lib/firebase';
+import { getLimitedUseAppCheckToken } from '../src/lib/appCheck';
 import { UserDataSchema } from '../src/lib/schema';
 import { initializeLocal, readLocal } from '../src/lib/sync/localRepository';
 import { invalidateSession } from '../src/lib/sync/session';
@@ -37,6 +38,33 @@ const trustedConsentResponse = (payload: Record<string, unknown>, init?: Respons
 };
 
 beforeEach(() => { localStorage.clear(); vi.unstubAllGlobals(); (auth as { currentUser: unknown }).currentUser = null; });
+
+describe('bounded cold-start consent verification', () => {
+  it('fails closed after a stalled token and permits a fresh retry', async () => {
+    const uid = 'consent-stalled-' + crypto.randomUUID();
+    const actor = user(uid);
+    (auth as { currentUser: unknown }).currentUser = actor;
+    const fetchMock = vi.fn(async () => trustedConsentResponse({ status: 'active', revision: 1 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const limitedUse = vi.mocked(getLimitedUseAppCheckToken);
+    limitedUse.mockImplementationOnce(() => new Promise<string>(() => {}));
+    beginHealthConsentVerification(uid);
+    vi.useFakeTimers();
+    try {
+      const check = refreshHealthConsent(actor);
+      await vi.advanceTimersByTimeAsync(15_000);
+      expect(await check).toBe('error');
+      expect(isHealthConsentCloudWritable('user:' + uid)).toBe(false);
+      expect(fetchMock).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+      limitedUse.mockResolvedValue('fresh-limited-use');
+    }
+    expect(localStorage.getItem(key(uid))).toBeNull();
+    expect(await refreshHealthConsent(actor)).toBe('active');
+    expect(isHealthConsentCloudWritable('user:' + uid)).toBe(true);
+  });
+});
 
 describe('first trusted consent registration', () => {
   it('denies cloud and offline data access before first server acceptance', async () => {

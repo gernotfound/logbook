@@ -376,6 +376,23 @@ export function reacceptHealthConsentLocally(user: User, acceptance: {
   setStatus(user.uid, 'active');
 }
 
+// Bound only read-only checks: a consent-changing POST must never be raced
+// against a client-side timeout because the server might have committed.
+const CONSENT_READ_TIMEOUT_MS = 15_000;
+async function boundedConsentRead(user: User): Promise<ServerStatus> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      serverRequest(user, 'GET'),
+      new Promise<never>((_, reject) => {
+        timeout = setTimeout(() => reject(new ConsentTransportUnavailableError()), CONSENT_READ_TIMEOUT_MS);
+      }),
+    ]);
+  } finally {
+    if (timeout !== undefined) clearTimeout(timeout);
+  }
+}
+
 export async function refreshHealthConsent(user: User): Promise<HealthConsentStatus> {
   const uid = user.uid;
   const startingAuthUid = auth.currentUser?.uid ?? null;
@@ -437,7 +454,7 @@ export async function refreshHealthConsent(user: User): Promise<HealthConsentSta
       }
       return currentHealthConsentStatus(uid);
     }
-    let state = await serverRequest(user, 'GET');
+    let state = await boundedConsentRead(user);
     if (!isSameDecision()) return currentHealthConsentStatus(uid);
     if (offlineReaccept !== null) {
       if (!offlineReacceptValid && !offlineRecoveryEpoch) {

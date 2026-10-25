@@ -55,6 +55,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     // Dati da migrare da guest a Google al momento del link
     const migrationDataRef = useRef<UserData | null>(null);
     const authRunRef = useRef(0);
+    const authBootstrapInFlightRef = useRef(false);
     const authUidRef = useRef(auth.currentUser?.uid ?? null);
     const redirectLaunchFailedRef = useRef(false);
 
@@ -201,15 +202,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 && (expectedUid ? auth.currentUser?.uid === expectedUid : auth.currentUser === null);
 
             if (user) {
-                await bootstrapAuthenticatedSession(user, isCurrentRun, {
-                    guestKey: GUEST_KEY, isGuestActiveStrict,
-                    readGuestMigrationRecoveryStrict, isGuestRef, migrationDataRef,
-                    setIsGuest, setCurrentUser, setEmailVerificationRequired,
-                    setGuestMigrationStatus, setLoading, setUserData, setSyncing,
-                    setSaveError, markGuestMigrationSyncRecovery,
-                    clearGuestMigrationSyncRecovery, loadData,
-                });
+                authBootstrapInFlightRef.current = true;
+                try {
+                    await bootstrapAuthenticatedSession(user, isCurrentRun, {
+                        guestKey: GUEST_KEY, isGuestActiveStrict,
+                        readGuestMigrationRecoveryStrict, isGuestRef, migrationDataRef,
+                        setIsGuest, setCurrentUser, setEmailVerificationRequired,
+                        setGuestMigrationStatus, setLoading, setUserData, setSyncing,
+                        setSaveError, markGuestMigrationSyncRecovery,
+                        clearGuestMigrationSyncRecovery, loadData,
+                    });
+                } finally {
+                    if (authRunRef.current === authRun) authBootstrapInFlightRef.current = false;
+                }
             } else {
+                authBootstrapInFlightRef.current = false;
                 setCurrentUser(null);
                 setEmailVerificationRequired(false);
                 setGuestMigrationStatus('idle');
@@ -237,11 +244,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
         const { handleConsentReactivated, handleVisibilityChange, handleOffline } = createAuthConsentLifecycleHandlers({
             isMounted: () => isMounted,
-            isGuestActiveStrict, loadData, setLoading, setSaveError,
+            isGuestActiveStrict, isBootstrapInFlight: () => authBootstrapInFlightRef.current,
+            loadData, setLoading, setSaveError,
         });
         document.addEventListener('visibilitychange', handleVisibilityChange);
         window.addEventListener('online', handleVisibilityChange);
         window.addEventListener('focus', handleVisibilityChange);
+        window.addEventListener('logbook:retry-health-consent', handleVisibilityChange);
         window.addEventListener('offline', handleOffline);
 
         return () => {
@@ -258,6 +267,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             document.removeEventListener('visibilitychange', handleVisibilityChange);
             window.removeEventListener('online', handleVisibilityChange);
             window.removeEventListener('focus', handleVisibilityChange);
+            window.removeEventListener('logbook:retry-health-consent', handleVisibilityChange);
             window.removeEventListener('offline', handleOffline);
             window.removeEventListener('logbook:health-consent-reactivated', handleConsentReactivated);
         };

@@ -33,7 +33,12 @@ const HomeView = ({ onNavigate, onOpenSettings, isActive = true }: any) => {
   const activeWorkout = useAppStore(state => state.localWorkout);
   
   if (homeState.loading) {
-      return <div className="view-section active">{CHART_LOADING}</div>;
+      return <div className="view-section active">
+        <div className="home-chart-loading" role="status">
+          <div className="spinner" />
+          <span className="text-sm home-muted">Recupero dei dati in corso...</span>
+        </div>
+      </div>;
   }
 
   const {
