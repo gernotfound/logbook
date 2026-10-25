@@ -10,6 +10,8 @@ import { useAppStore } from '../src/store/useAppStore';
 import { BufferedInput } from '../src/components/UI/BufferedInput';
 import { invalidateSession } from '../src/lib/sync/session';
 import * as safeReloadModule from '../src/lib/sync/safeReload';
+import * as pwaUpdateModule from '../src/lib/pwaUpdate';
+import * as reloadBarrierModule from '../src/lib/sync/reloadBarrier';
 
 describe('Service Worker Update Lifecycle (ReloadPrompt) Suite', () => {
   let mockSetNeedRefresh = vi.fn<(value: React.SetStateAction<boolean>) => void>();
@@ -23,6 +25,7 @@ describe('Service Worker Update Lifecycle (ReloadPrompt) Suite', () => {
     mockSetNeedRefresh = vi.fn<(value: React.SetStateAction<boolean>) => void>();
     mockUpdateServiceWorker = vi.fn<(reloadPage?: boolean) => Promise<void>>().mockResolvedValue(undefined);
     vi.clearAllMocks();
+    vi.spyOn(pwaUpdateModule, 'applyPWAUpdate').mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -148,7 +151,7 @@ describe('Service Worker Update Lifecycle (ReloadPrompt) Suite', () => {
     expect(closeBtn).toBeDefined();
   });
 
-  test('R2: Clicking "Aggiorna" button triggers updateServiceWorker(true)', async () => {
+  test('R2: Clicking "Aggiorna" uses the explicit SW activation and durable reload path', async () => {
     vi.mocked(useRegisterSW).mockReturnValue({
       needRefresh: [true, mockSetNeedRefresh],
       offlineReady: [false, vi.fn()],
@@ -162,8 +165,8 @@ describe('Service Worker Update Lifecycle (ReloadPrompt) Suite', () => {
       fireEvent.click(updateBtn);
     });
 
-    expect(mockUpdateServiceWorker).toHaveBeenCalledTimes(1);
-    expect(mockUpdateServiceWorker).toHaveBeenCalledWith(true);
+    expect(pwaUpdateModule.applyPWAUpdate).toHaveBeenCalledTimes(1);
+    expect(mockUpdateServiceWorker).not.toHaveBeenCalled();
   });
 
   test('updates from the login screen without reporting a changed guest session', async () => {
@@ -180,8 +183,21 @@ describe('Service Worker Update Lifecycle (ReloadPrompt) Suite', () => {
       fireEvent.click(screen.getByRole('button', { name: /Aggiorna/i }));
     });
 
-    expect(mockUpdateServiceWorker).toHaveBeenCalledExactlyOnceWith(true);
+    expect(pwaUpdateModule.applyPWAUpdate).toHaveBeenCalledOnce();
     expect(screen.queryByText(/Sessione cambiata/i)).toBeNull();
+  });
+
+  test('a failed durable reload barrier never attempts worker activation', async () => {
+    vi.spyOn(reloadBarrierModule, 'prepareForReload').mockRejectedValueOnce(new Error('Bozza non salvata'));
+    vi.mocked(useRegisterSW).mockReturnValue({
+      needRefresh: [true, mockSetNeedRefresh],
+      offlineReady: [false, vi.fn()],
+      updateServiceWorker: mockUpdateServiceWorker,
+    });
+    render(<ReloadPrompt />);
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /Aggiorna/i })); });
+    expect(screen.getByText('Bozza non salvata')).toBeDefined();
+    expect(pwaUpdateModule.applyPWAUpdate).not.toHaveBeenCalled();
   });
 
   test('R2: Clicking "Chiudi" button dismisses prompt via setNeedRefresh(false)', () => {
@@ -447,15 +463,15 @@ describe('Service Worker Update Lifecycle (ReloadPrompt) Suite', () => {
     expect(mockUpdateServiceWorker).not.toHaveBeenCalled();
   });
 
-  test('Edge Case: Handles updateServiceWorker rejection gracefully without crashing', async () => {
+  test('Edge Case: shows an activation rejection without reloading or hiding the prompt', async () => {
     const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-    const rejectingUpdate = vi.fn<(reloadPage?: boolean) => Promise<void>>()
+    const rejectingUpdate = vi.spyOn(pwaUpdateModule, 'applyPWAUpdate')
       .mockRejectedValue(new Error('Failed to postMessage to SW'));
 
     vi.mocked(useRegisterSW).mockReturnValue({
       needRefresh: [true, mockSetNeedRefresh],
       offlineReady: [false, vi.fn()],
-      updateServiceWorker: rejectingUpdate,
+      updateServiceWorker: mockUpdateServiceWorker,
     });
 
     render(<ReloadPrompt />);
@@ -465,7 +481,7 @@ describe('Service Worker Update Lifecycle (ReloadPrompt) Suite', () => {
       fireEvent.click(updateBtn);
     });
 
-    expect(rejectingUpdate).toHaveBeenCalledWith(true);
+    expect(rejectingUpdate).toHaveBeenCalledOnce();
     expect(screen.getByText('Failed to postMessage to SW')).toBeDefined();
     consoleSpy.mockRestore();
   });
@@ -639,16 +655,16 @@ describe('Service Worker Update Lifecycle (ReloadPrompt) Suite', () => {
     consoleSpy.mockRestore();
   });
 
-  test('Edge Case: Handles synchronous exception in updateServiceWorker invocation on click', async () => {
+  test('Edge Case: Handles synchronous exception in manual worker activation on click', async () => {
     const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-    const throwingUpdate = vi.fn<(reloadPage?: boolean) => Promise<void>>().mockImplementation(() => {
+    const throwingUpdate = vi.spyOn(pwaUpdateModule, 'applyPWAUpdate').mockImplementation(() => {
       throw new Error('Immediate sync throw');
     });
 
     vi.mocked(useRegisterSW).mockReturnValue({
       needRefresh: [true, mockSetNeedRefresh],
       offlineReady: [false, vi.fn()],
-      updateServiceWorker: throwingUpdate,
+      updateServiceWorker: mockUpdateServiceWorker,
     });
 
     render(<ReloadPrompt />);
@@ -658,7 +674,7 @@ describe('Service Worker Update Lifecycle (ReloadPrompt) Suite', () => {
       fireEvent.click(updateBtn);
     });
 
-    expect(throwingUpdate).toHaveBeenCalledWith(true);
+    expect(throwingUpdate).toHaveBeenCalledOnce();
     expect(screen.getByText('Immediate sync throw')).toBeDefined();
     consoleSpy.mockRestore();
   });
