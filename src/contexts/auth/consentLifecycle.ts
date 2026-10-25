@@ -9,6 +9,7 @@ import { captureSession, isCurrentSession, userOwner } from '../../lib/sync/sess
 type ConsentLifecycleDependencies = {
     isMounted: () => boolean;
     isGuestActiveStrict: () => boolean;
+    isBootstrapInFlight?: () => boolean;
     loadData: (user: User) => Promise<void>;
     setLoading: (loading: boolean) => void;
     setSaveError: ReturnType<typeof useAppStore.getState>['setSaveError'];
@@ -17,7 +18,7 @@ type ConsentLifecycleDependencies = {
 // Event handlers are scoped to one AuthProvider effect lifecycle. The provider
 // still owns listener registration/cleanup and authenticated bootstrap.
 export function createAuthConsentLifecycleHandlers({
-    isMounted, isGuestActiveStrict, loadData, setLoading, setSaveError,
+    isMounted, isGuestActiveStrict, isBootstrapInFlight = () => false, loadData, setLoading, setSaveError,
 }: ConsentLifecycleDependencies) {
         // Track the owner generation rather than one global boolean: a stale
         // request must not block a new login's own reconnect verification.
@@ -45,7 +46,8 @@ export function createAuthConsentLifecycleHandlers({
         window.addEventListener('logbook:health-consent-reactivated', handleConsentReactivated);
 
         const handleVisibilityChange = async (event?: Event) => {
-            if (isGuestActiveStrict()) return;
+            // Popup focus must not supersede the authoritative bootstrap GET.
+            if (isGuestActiveStrict() || isBootstrapInFlight()) return;
             // The "online" event must check consent even if this tab is hidden.
             if (event?.type !== 'online' && document.visibilityState !== 'visible') return;
             const user = auth.currentUser;

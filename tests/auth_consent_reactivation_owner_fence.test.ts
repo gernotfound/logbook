@@ -6,12 +6,13 @@ import { createAuthConsentLifecycleHandlers } from '../src/contexts/auth/consent
 
 const registered: Array<(event: Event) => void> = [];
 
-function start(loadData: (user: User) => Promise<void>) {
+function start(loadData: (user: User) => Promise<void>, isBootstrapInFlight = () => false) {
   const setLoading = vi.fn();
   const setSaveError = vi.fn();
   const handlers = createAuthConsentLifecycleHandlers({
     isMounted: () => true,
     isGuestActiveStrict: () => false,
+    isBootstrapInFlight,
     loadData,
     setLoading,
     setSaveError,
@@ -31,6 +32,15 @@ afterEach(() => {
 });
 
 describe('consent reactivation lifecycle owner fencing', () => {
+  it('does not supersede a bootstrap verification on focus', async () => {
+    const loadData = vi.fn(async () => {});
+    const isBootstrapInFlight = vi.fn(() => true);
+    const { handlers } = start(loadData, isBootstrapInFlight);
+    await handlers.handleVisibilityChange(new Event('focus'));
+    expect(isBootstrapInFlight).toHaveBeenCalledOnce();
+    expect(loadData).not.toHaveBeenCalled();
+  });
+
   it('does not change the next login loading/error state when an old hydration rejects', async () => {
     const first = auth.currentUser!;
     let rejectLoad!: (error: Error) => void;

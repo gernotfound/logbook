@@ -137,6 +137,20 @@ describe('suspended health-consent screen', () => {
     expect(screen.queryByText(/Non è stato possibile completare il nuovo consenso/)).toBeNull();
   });
 
+  it('offers retry on verification failure without reacceptance', () => {
+    const onRetry = vi.fn();
+    window.addEventListener('logbook:retry-health-consent', onRetry);
+    try {
+      render(<HealthConsentSuspended status="error" user={account} />);
+      expect(screen.queryByRole('checkbox')).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: 'Riprova la verifica' }));
+      expect(onRetry).toHaveBeenCalledOnce();
+      expect(reacceptHealthConsent).not.toHaveBeenCalled();
+    } finally {
+      window.removeEventListener('logbook:retry-health-consent', onRetry);
+    }
+  });
+
   it('does not offer premature reacceptance for unverified, failed, stale or recovery states', () => {
     const { rerender } = render(<HealthConsentSuspended status="checking" user={account} />);
     for (const status of ['checking', 'error', 'stale-request', 'recovery-required', 'erasure-required'] as const) {
