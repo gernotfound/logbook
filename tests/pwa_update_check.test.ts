@@ -110,7 +110,7 @@ describe('PWA update activation and navigation', () => {
     const container = fakeContainer(registration);
     const reload = vi.fn();
     const update = applyPWAUpdate(container, reload, 1000);
-    expect(worker.postMessage).toHaveBeenCalledWith({ type: 'SKIP_WAITING' });
+    await vi.waitFor(() => expect(worker.postMessage).toHaveBeenCalledWith({ type: 'SKIP_WAITING' }));
     expect(reload).not.toHaveBeenCalled();
     worker.state = 'activated';
     worker.dispatchEvent(new Event('statechange'));
@@ -159,8 +159,9 @@ describe('PWA update activation and navigation', () => {
       const registration = { waiting: worker, installing: null } as unknown as ServiceWorkerRegistration;
       const reload = vi.fn();
       const result = applyPWAUpdate(fakeContainer(registration), reload, 80);
+      const rejection = expect(result).rejects.toThrow('non confermata');
       await vi.advanceTimersByTimeAsync(80);
-      await expect(result).rejects.toThrow('non confermata');
+      await rejection;
       expect(reload).not.toHaveBeenCalled();
     } finally {
       vi.useRealTimers();
@@ -176,8 +177,9 @@ describe('PWA update activation and navigation', () => {
       });
       const reload = vi.fn();
       const result = applyPWAUpdate(container, reload, 80);
+      const rejection = expect(result).rejects.toThrow('Verifica aggiornamento');
       await vi.advanceTimersByTimeAsync(80);
-      await expect(result).rejects.toThrow('Verifica aggiornamento');
+      await rejection;
       expect(reload).not.toHaveBeenCalled();
     } finally {
       vi.useRealTimers();
