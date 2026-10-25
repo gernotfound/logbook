@@ -150,6 +150,40 @@ describe('PWA update activation and navigation', () => {
     expect(reload).toHaveBeenCalledOnce();
   });
 
+  it('does not mistake an unrelated controllerchange for target worker activation', async () => {
+    const worker = new FakeServiceWorker() as FakeServiceWorker & { postMessage: ReturnType<typeof vi.fn> };
+    worker.state = 'installed';
+    worker.postMessage = vi.fn();
+    const anotherWorker = new FakeServiceWorker();
+    const registration = { waiting: worker, installing: null } as unknown as ServiceWorkerRegistration;
+    const container = fakeContainer(registration);
+    Object.defineProperty(container, 'controller', { value: anotherWorker, configurable: true });
+    const reload = vi.fn();
+    const result = applyPWAUpdate(container, reload, 1000);
+    await vi.waitFor(() => expect(worker.postMessage).toHaveBeenCalledWith({ type: 'SKIP_WAITING' }));
+    container.dispatchEvent(new Event('controllerchange'));
+    expect(reload).not.toHaveBeenCalled();
+    Object.defineProperty(container, 'controller', { value: worker, configurable: true });
+    container.dispatchEvent(new Event('controllerchange'));
+    await result;
+    expect(reload).toHaveBeenCalledOnce();
+  });
+
+  it('preserves offline tab when a stale update notice has no waiting worker', async () => {
+    const registration = { waiting: null, installing: null, update: vi.fn(async () => registration) } as unknown as ServiceWorkerRegistration;
+    const container = fakeContainer(registration);
+    const reload = vi.fn();
+    const online = Object.getOwnPropertyDescriptor(navigator, 'onLine');
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: false });
+    try {
+      await expect(applyPWAUpdate(container, reload)).rejects.toThrow('Sei offline');
+      expect(reload).not.toHaveBeenCalled();
+    } finally {
+      if (online) Object.defineProperty(navigator, 'onLine', online);
+      else Reflect.deleteProperty(navigator, 'onLine');
+    }
+  });
+
   it('does not navigate if worker activation cannot be confirmed', async () => {
     vi.useFakeTimers();
     try {

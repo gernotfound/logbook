@@ -1,13 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useRegisterSW } from 'virtual:pwa-register/react';
 import { isReloadSessionCurrent, prepareForReload } from '../../lib/sync/reloadBarrier';
-import { safeHardReload } from '../../lib/sync/safeReload';
 import { applyPWAUpdate, checkForWaitingServiceWorker } from '../../lib/pwaUpdate';
 
 const ReloadPrompt: React.FC = () => {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const updateInFlight = useRef(false);
   const [updating, setUpdating] = useState(false);
+  const [updatePhase, setUpdatePhase] = useState<'saving' | 'activating'>('saving');
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [chunkFailed, setChunkFailed] = useState(false);
 
@@ -107,27 +107,22 @@ const ReloadPrompt: React.FC = () => {
     if (updateInFlight.current) return;
     updateInFlight.current = true;
     setUpdating(true);
+    setUpdatePhase('saving');
     setUpdateError(null);
     try {
-      if (chunkFailed) {
-        // The chunk-failure path needs the same durable reload barrier as all
-        // other hard navigations; keep the reload itself behind that boundary.
-        await safeHardReload();
-      } else {
-        const session = await prepareForReload();
-        if (!isReloadSessionCurrent(session)) throw new Error('Sessione cambiata.');
-        // useRegisterSW's helper can silently do nothing if the prompt was
-        // raised by our own foreground check rather than Workbox's waiting event.
-        // Activate the observed worker and explicitly reload only after the
-        // durable owner/session barrier has been completed.
-        await applyPWAUpdate(
-          typeof navigator === 'undefined' ? undefined : navigator.serviceWorker,
-          () => {
-            if (!isReloadSessionCurrent(session)) throw new Error('Sessione cambiata. Ripeti l’aggiornamento.');
-            window.location.reload();
-          },
-        );
-      }
+      // A missing hashed module can leave the old app shell active just like
+      // a waiting update. Both cases must use the same SW activation path.
+      // Never activate or reload until the durable owner-scoped barrier passed.
+      const session = await prepareForReload();
+      if (!isReloadSessionCurrent(session)) throw new Error('Sessione cambiata.');
+      setUpdatePhase('activating');
+      await applyPWAUpdate(
+        typeof navigator === 'undefined' ? undefined : navigator.serviceWorker,
+        () => {
+          if (!isReloadSessionCurrent(session)) throw new Error('Sessione cambiata. Ripeti l’aggiornamento.');
+          window.location.reload();
+        },
+      );
     } catch (err) {
       setUpdateError(err instanceof Error ? err.message : 'Aggiornamento non riuscito. Riprova.');
     } finally {
@@ -165,7 +160,7 @@ const ReloadPrompt: React.FC = () => {
           disabled={updating}
           style={{ flex: 1, padding: "0.625rem", margin: 0, minHeight: "2.75rem", cursor: "pointer" }}
         >
-          {updating ? 'Salvataggio…' : 'Aggiorna'}
+          {updating ? (updatePhase === 'saving' ? 'Salvataggio…' : 'Aggiornamento…') : 'Aggiorna'}
         </button>
         <button
           type="button"

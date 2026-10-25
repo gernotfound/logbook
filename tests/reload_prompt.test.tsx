@@ -9,7 +9,6 @@ import { localStorageMock, mockFirebaseAuth, renderWithProviders } from './setup
 import { useAppStore } from '../src/store/useAppStore';
 import { BufferedInput } from '../src/components/UI/BufferedInput';
 import { invalidateSession } from '../src/lib/sync/session';
-import * as safeReloadModule from '../src/lib/sync/safeReload';
 import * as pwaUpdateModule from '../src/lib/pwaUpdate';
 import * as reloadBarrierModule from '../src/lib/sync/reloadBarrier';
 
@@ -61,8 +60,8 @@ describe('Service Worker Update Lifecycle (ReloadPrompt) Suite', () => {
     expect(screen.queryByText('Aggiornamento richiesto per caricare questa schermata')).toBeNull();
   });
 
-  test('a chunk failure requests the protected hard reload instead of updating the worker', async () => {
-    const reload = vi.spyOn(safeReloadModule, 'safeHardReload').mockResolvedValue(undefined);
+  test('a chunk failure verifies local data and activates the new worker via the same update path', async () => {
+    const barrier = vi.spyOn(reloadBarrierModule, 'prepareForReload');
     vi.mocked(useRegisterSW).mockReturnValue({
       needRefresh: [false, mockSetNeedRefresh],
       offlineReady: [false, vi.fn()],
@@ -71,12 +70,13 @@ describe('Service Worker Update Lifecycle (ReloadPrompt) Suite', () => {
     render(<ReloadPrompt />);
     act(() => { window.dispatchEvent(new Event('vite:preloadError', { cancelable: true })); });
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: /Aggiorna/i })); });
-    expect(reload).toHaveBeenCalledOnce();
+    expect(barrier).toHaveBeenCalledOnce();
+    expect(pwaUpdateModule.applyPWAUpdate).toHaveBeenCalledOnce();
     expect(mockUpdateServiceWorker).not.toHaveBeenCalled();
   });
 
   test('a rejected chunk-failure reload barrier keeps the update prompt visible', async () => {
-    vi.spyOn(safeReloadModule, 'safeHardReload').mockRejectedValue(new Error('Ultime modifiche non salvate'));
+    vi.spyOn(reloadBarrierModule, 'prepareForReload').mockRejectedValueOnce(new Error('Ultime modifiche non salvate'));
     vi.mocked(useRegisterSW).mockReturnValue({
       needRefresh: [false, mockSetNeedRefresh],
       offlineReady: [false, vi.fn()],
@@ -87,6 +87,7 @@ describe('Service Worker Update Lifecycle (ReloadPrompt) Suite', () => {
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: /Aggiorna/i })); });
     expect(screen.getByText('Ultime modifiche non salvate')).toBeDefined();
     expect(screen.getByText('Aggiornamento richiesto per caricare questa schermata')).toBeDefined();
+    expect(pwaUpdateModule.applyPWAUpdate).not.toHaveBeenCalled();
     expect(mockUpdateServiceWorker).not.toHaveBeenCalled();
   });
 
