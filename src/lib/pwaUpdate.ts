@@ -87,7 +87,11 @@ function activateWaitingWorker(
         finish(new Error('Il nuovo service worker è stato sostituito. Riprova.'));
       }
     };
-    const onControllerChange = () => finish();
+    // Other tabs and registrations may produce controllerchange while this
+    // update is pending. Only the worker we explicitly activated is proof.
+    const onControllerChange = () => {
+      if (container.controller === worker || worker.state === 'activated') finish();
+    };
     const timeout = setTimeout(
       () => finish(new Error('Attivazione della nuova versione non confermata. Riprova.')),
       timeoutMs,
@@ -126,6 +130,11 @@ export async function applyPWAUpdate(
       }
       if (registration.waiting) {
         await activateWaitingWorker(registration.waiting, container, timeoutMs);
+      } else if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+        // A stale prompt with no installed replacement is not a reason to
+        // reload an offline tab: the existing cached shell may be its only
+        // working copy. Keep data in place and allow a later retry.
+        throw new Error('Sei offline e la nuova versione non è ancora installata. Riprova quando torni online.');
       }
     }
   }
