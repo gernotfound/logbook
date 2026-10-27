@@ -81,7 +81,7 @@ async function inspectPersistedGuestKey(page: Page) {
   });
 }
 
-test('real browser retains non-exportable guest device key across a new document', async ({ page }) => {
+test('real browser retains non-exportable guest device key across a new document', async ({ page, context }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'Continua senza account' }).click();
   await expect(page.getByText('Aggiornamento Termini e Privacy')).toBeVisible();
@@ -127,8 +127,14 @@ test('real browser retains non-exportable guest device key across a new document
     localStorage.removeItem(key);
     return value;
   });
-  await page.reload();
+  // Two real document realms recover the missing synchronous control at once.
+  // Web Locks must reuse the same IndexedDB mirror and non-exportable key.
+  const peer = await context.newPage();
+  await Promise.all([page.reload(), peer.goto('/')]);
   await expect(page.locator('.guest-banner')).toBeVisible();
+  await expect(peer.locator('.guest-banner')).toBeVisible();
+  expect(await inspectPersistedGuestKey(peer)).toEqual(before);
+  expect(await inspectPersistedGuestArchive(peer)).toBe(committedArchive);
   expect(await page.evaluate(() => localStorage.getItem('logbook:v2:guest:secure-vault-control'))).toBe(originalControl);
   expect(await inspectPersistedGuestKey(page)).toEqual(before);
   await page.getByRole('button', { name: 'Dati e statistiche', exact: true }).click();

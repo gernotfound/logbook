@@ -198,13 +198,13 @@ describe('Empirical Challenger Suite: Edge Cases & Stress Verification', () => {
 
   describe('3. Midnight Date Boundary Cases', () => {
     test('Logic.getLocalDateString correctly formats midnight boundaries', () => {
-      const midnight1 = new Date('2026-07-26T00:00:00.000Z');
+      const midnight1 = new Date(2026, 6, 26, 0, 0, 0);
       const dateStr1 = Logic.getLocalDateString(midnight1);
-      expect(dateStr1).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      expect(dateStr1).toBe('2026-07-26');
 
-      const endOfDay = new Date('2026-07-26T23:59:59.999Z');
+      const endOfDay = new Date(2026, 6, 26, 23, 59, 59, 999);
       const dateStr2 = Logic.getLocalDateString(endOfDay);
-      expect(dateStr2).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      expect(dateStr2).toBe('2026-07-26');
 
       const dec31 = new Date(2026, 11, 31, 23, 59, 59);
       expect(Logic.getLocalDateString(dec31)).toBe('2026-12-31');

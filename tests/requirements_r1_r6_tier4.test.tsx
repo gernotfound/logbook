@@ -25,7 +25,7 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
     /* =========================================================================
      * TIER 4: MULTI-STEP PURE CALCULATION SCENARIOS (not E2E workflows)
      * ========================================================================= */
-    describe('Tier 4: Real-World Workflows', () => {
+    describe('Tier 4: In-memory domain helper scenarios (not end-to-end workflows)', () => {
 
         it('T4.1: Scenario 1 — "The Calisthenics & Weighted Street Workout Progression"', () => {
             // User starts session with weighted pull-ups and dips

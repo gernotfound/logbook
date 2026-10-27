@@ -13,7 +13,7 @@ describe('meal history incremental rendering', () => {
         fat: 0,
     }));
 
-    it('renders bounded pages without dropping days or changing the selected date', () => {
+    it('renders bounded pages without dropping days and emits selected day callbacks', () => {
         const onDayClick = vi.fn();
         const { container } = render(<NutritionHistory nutritionHistory={days} onDayClick={onDayClick} />);
         const cards = () => container.querySelectorAll('.clickable-card');

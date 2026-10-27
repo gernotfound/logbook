@@ -54,6 +54,9 @@ describe('routine technique help', () => {
     });
 
     it('routes form edits through typed callbacks without transforming the stored routine fields', () => {
+        const updateSetsCount = vi.fn();
+        const updateSetPlanField = vi.fn();
+        const updateExerciseMetadata = vi.fn();
         render(
             <RoutineExerciseItem
                 exercise={{
@@ -66,11 +69,11 @@ describe('routine technique help', () => {
                 totalExercises={4}
                 onMove={noop}
                 onRemove={noop}
-                onUpdateSetsCount={noop}
+                onUpdateSetsCount={updateSetsCount}
                 onUpdateReps={noop}
                 onUpdateSetPlan={noop}
-                onUpdateSetPlanField={noop}
-                onUpdateExerciseMetadata={noop}
+                onUpdateSetPlanField={updateSetPlanField}
+                onUpdateExerciseMetadata={updateExerciseMetadata}
             />,
         );
 
@@ -78,15 +81,18 @@ describe('routine technique help', () => {
         expect((screen.getByLabelText('Ripetizioni minime') as HTMLInputElement).value).toBe('6');
         expect((screen.getByLabelText('Ripetizioni massime') as HTMLInputElement).value).toBe('10');
         fireEvent.change(screen.getByLabelText('Serie:'), { target: { value: '5' } });
-        expect(noop).toHaveBeenCalledWith(2, '5');
+        expect(updateSetsCount).toHaveBeenCalledWith(2, '5');
+        expect(updateSetPlanField).not.toHaveBeenCalled();
+        expect(updateExerciseMetadata).not.toHaveBeenCalled();
 
         fireEvent.click(screen.getByText('Tecnica e progressione'));
         expect((screen.getByLabelText('Tecnica serie 1') as HTMLSelectElement).value).toBe('cluster');
         expect((screen.getByLabelText('Segmenti serie 1') as HTMLInputElement).value).toBe('3');
         fireEvent.change(screen.getByLabelText('Segmenti serie 1'), { target: { value: '4' } });
-        expect(noop).toHaveBeenCalledWith(2, 0, 'segmentCount', '4');
+        expect(updateSetPlanField).toHaveBeenCalledWith(2, 0, 'segmentCount', '4');
+        expect(updateExerciseMetadata).not.toHaveBeenCalled();
         fireEvent.change(screen.getByLabelText('Esecuzione da mantenere'), { target: { value: 'ROM pieno' } });
-        expect(noop).toHaveBeenCalledWith(2, 'technicalStandard', 'ROM pieno');
+        expect(updateExerciseMetadata).toHaveBeenCalledWith(2, 'technicalStandard', 'ROM pieno');
     });
 
     it('keeps per-set techniques inside the Tecnica panel and lays multiple techniques out as ordered cards', () => {

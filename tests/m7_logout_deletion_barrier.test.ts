@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { auth } from '../src/lib/firebase';
 import { isAccountDeletionPending, markAccountDeletion } from '../src/lib/sync/accountGate';
@@ -25,24 +23,4 @@ describe('M7 logout isolation with stale deletion receipts', () => {
     expect(isAccountDeletionPending('user:stale-account')).toBe(true);
   });
 
-  it('uses force reset only after explicit guest/authenticated logout cleanup', () => {
-    const authContext = readFileSync(resolve(process.cwd(), 'src/contexts/AuthContext.tsx'), 'utf8');
-    const guestLogin = readFileSync(resolve(process.cwd(), 'src/contexts/auth/useGuestLogin.ts'), 'utf8');
-    const unverifiedLocal = readFileSync(resolve(process.cwd(), 'src/contexts/auth/useUnverifiedLocalContinuation.ts'), 'utf8');
-    // Check the guarded paths rather than a brittle global occurrence count.
-    // Behavioral owner protection is asserted by the companion lifecycle suites.
-    expect(authContext).toMatch(/const reconcileGuestSession[\s\S]*?resetStore\(\{ force: true \}\)/);
-    expect(authContext).toContain('const loginAsGuest = useGuestLogin({');
-    expect(guestLogin).toMatch(/if \(readBrowserValueStrict\(GUEST_REVOCATION_KEY\) !== null\)[\s\S]{0,350}await DB\.purgeAllLocalUserData\('guest'\);[\s\S]{0,350}resetStore\(\{ force: true \}\)/);
-    expect(guestLogin).toMatch(/if \(\(previous\.userData !== null \|\| previous\.localWorkout !== null\) && previous\.dataOwner !== 'guest'\)[\s\S]{0,90}previous\.resetStore\(\{ force: true \}\)/);
-    expect(authContext).toMatch(/if \(isGuestRef\.current && !isActiveGuestSession\(\)\)[\s\S]{0,300}resetStore\(\{ force: true \}\)/);
-    expect(authContext).toMatch(/await DB\.purgeAllLocalUserData\('guest'\);[\s\S]{0,650}setIsGuest\(false\);[\s\S]{0,250}resetStore\(\{ force: true \}\)/);
-    expect(authContext).toContain('const continueUnverifiedLocally = useUnverifiedLocalContinuation({');
-    expect(unverifiedLocal).toMatch(/const continueUnverifiedLocally[\s\S]*?await prepareForReload\(\);[\s\S]*?await signOut\(auth\);[\s\S]{0,350}resetStore\(\{ force: true \}\)/);
-    expect(unverifiedLocal).not.toContain('DB.purgeAllLocalUserData');
-    expect(authContext).toContain('await DB.secureLogOut({ discardUnsynced,');
-    expect(authContext).toMatch(/await DB\.secureLogOut\(\{ discardUnsynced,[\s\S]{0,180}verifyCurrentDrafts:[\s\S]{0,150}\}\);[\s\S]{0,200}resetStore\(\{ force: true \}\)/);
-    expect(authContext).toMatch(/setIsGuest\(false\);[\s\S]{0,200}resetStore\(\{ force: true \}\)/);
-    expect(authContext).toMatch(/if \(!isGuestActive\) \{[\s\S]{0,500}clearAuthenticatedOwnerHint\(\);[\s\S]{0,300}resetStore\(\);/);
-  });
 });

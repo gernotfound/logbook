@@ -81,7 +81,6 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
 
             const hostileOverrides: any = {
                 exercises: {
-                    '__proto__': { admin: true },
                     'constructor': { name: 'Constructor Hijack' },
                     'panca-piana-bilanciere': {
                         name: 'Overridden Bench',
@@ -101,6 +100,12 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
                 hiddenExerciseIds: ['squat-bilanciere', null, undefined, '', 'squat-bilanciere', '__proto__'],
                 hiddenFoodIds: ['petto-di-tacchino-crudo', 123, null, 'petto-di-tacchino-crudo']
             };
+
+            // JSON-decoded __proto__ is an enumerable own data property, not an object-literal prototype setter.
+            Object.defineProperty(hostileOverrides.exercises, '__proto__', {
+                value: { admin: true }, enumerable: true, configurable: true, writable: true,
+            });
+            expect(Object.hasOwn(hostileOverrides.exercises, '__proto__')).toBe(true);
 
             // Resolution must not throw
             expect(() => resolveEffectiveExercises(globalExFixture, [], hostileOverrides)).not.toThrow();

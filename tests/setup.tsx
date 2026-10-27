@@ -288,7 +288,7 @@ beforeEach(() => {
   sessionStorageMock.clear();
 });
 vi.mock('idb-keyval', () => ({
-  get: vi.fn(async (key: string) => idbStore[key] ?? undefined),
+  get: vi.fn(async (key: string) => Object.prototype.hasOwnProperty.call(idbStore, key) ? idbStore[key] : undefined),
   set: vi.fn(async (key: string, value: any) => {
     idbStore[key] = value;
   }),
