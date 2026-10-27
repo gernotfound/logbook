@@ -32,6 +32,24 @@ export async function getArchiveRecord<T>(owner: string): Promise<T | undefined>
     return stored as T | undefined;
 }
 
+/**
+ * This callback runs inside an IndexedDB transaction: non-native thenables
+ * must not become persisted data when a caller accidentally returns async work.
+ */
+function transformSynchronously<T>(
+    current: T | undefined, exists: boolean, transform: (current: T | undefined) => T | undefined,
+): T | undefined {
+    const next = transform(current);
+    if (next !== null && (typeof next === 'object' || typeof next === 'function')
+        && typeof (next as { then?: unknown }).then === 'function') {
+        throw new Error('Operazione locale asincrona vietata nel commit atomico');
+    }
+    if (exists && next === undefined) {
+        throw new Error('Una transizione locale non può eliminare tacitamente l’archivio');
+    }
+    return next;
+}
+
 /** The change callback remains *synchronous* inside idb-keyval.update. */
 export async function updateArchiveRecord<T>(
     owner: string, transform: (current: T | undefined) => T | undefined,
@@ -48,15 +66,10 @@ export async function updateArchiveRecord<T>(
                 throw new LocalCiphertextError();
             }
             const current = raw === undefined ? undefined : openLocalJson(sessionKey, owner, storageKey, raw) as T;
-            const next = transform(current);
-            if (next instanceof Promise) throw new Error('Operazione locale asincrona vietata nel commit atomico');
+            const next = transformSynchronously(current, raw !== undefined, transform);
             if (requireUnlockedLocalKey(owner) !== sessionKey) throw new LocalVaultLockedError();
             if (next === current) return raw;
-            if (next === undefined) {
-                if (raw !== undefined) throw new Error('Una transizione cifrata non può eliminare tacitamente l’archivio');
-                return undefined;
-            }
-            return sealLocalJson(sessionKey, owner, storageKey, next);
+            return next === undefined ? undefined : sealLocalJson(sessionKey, owner, storageKey, next);
         });
         return;
     }
@@ -69,13 +82,9 @@ export async function updateArchiveRecord<T>(
         if (typeof raw === 'string' && raw.startsWith(SEALED_LOCAL_PREFIX)) {
             throw new LocalCiphertextError();
         }
-        const next = transform(raw as T | undefined);
-        if (next instanceof Promise) throw new Error('Operazione locale asincrona vietata nel commit atomico');
+        const next = transformSynchronously(raw as T | undefined, raw !== undefined, transform);
         assertNoLocalPurge(owner);
         if (readVaultControl(owner)) throw new LocalVaultLockedError();
-        if (next === undefined && raw !== undefined) {
-            throw new Error('Una transizione locale non può eliminare tacitamente l’archivio');
-        }
         return next;
     });
 }

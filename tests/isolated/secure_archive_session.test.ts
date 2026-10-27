@@ -1,8 +1,9 @@
 import 'fake-indexeddb/auto';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { clear } from 'idb-keyval';
 import { createLocalKeyVault } from '../../src/lib/sync/secureArchiveKeys';
 import { activateGuestSession, revokeGuestSession, GUEST_SESSION_KEY, GUEST_REVOCATION_KEY } from '../../src/lib/sync/session';
+import { beginLocalPurge } from '../../src/lib/sync/localPurgeFence';
 import {
     isVaultUnlocked, LocalVaultLockedError, lockAllVaults, lockVault,
     readVaultControl, requireUnlockedLocalKey, unlockVaultForOwner,
@@ -12,6 +13,8 @@ import {
 const owner = 'user:secure-session';
 let metadata: PersistedVaultControl;
 let originalKey: Uint8Array;
+
+afterEach(() => vi.restoreAllMocks());
 
 beforeEach(async () => {
     lockAllVaults();
@@ -26,6 +29,24 @@ beforeEach(async () => {
     };
     localStorage.setItem(vaultControlKey(owner), JSON.stringify(metadata));
 });
+
+async function beginPausedUnlock(requestedOwner: string): Promise<{
+    pending: Promise<void>; resume: () => void;
+}> {
+    const decrypt = crypto.subtle.decrypt.bind(crypto.subtle);
+    let resume!: () => void;
+    let started!: () => void;
+    const gate = new Promise<void>(resolve => { resume = resolve; });
+    const began = new Promise<void>(resolve => { started = resolve; });
+    vi.spyOn(crypto.subtle, 'decrypt').mockImplementation(async (algorithm, key, data) => {
+        started();
+        await gate;
+        return decrypt(algorithm, key, data);
+    });
+    const pending = unlockVaultForOwner(requestedOwner);
+    await began;
+    return { pending, resume };
+}
 
 describe('automatic owner-fenced vault capability', () => {
     it('requires initialization before access, then restores DEK without any user password or network', async () => {
@@ -75,6 +96,35 @@ describe('automatic owner-fenced vault capability', () => {
         revokeGuestSession();
         expect(() => requireUnlockedLocalKey('guest')).toThrow(LocalVaultLockedError);
         expect(isVaultUnlocked('guest')).toBe(false);
+    });
+
+    it('rejects an unlock completing after a guest session was replaced', async () => {
+        const guest = await createLocalKeyVault('guest');
+        localStorage.setItem('logbook_is_guest', 'true');
+        localStorage.setItem(GUEST_SESSION_KEY, 'session-before');
+        localStorage.removeItem(GUEST_REVOCATION_KEY);
+        activateGuestSession('session-before');
+        localStorage.setItem(vaultControlKey('guest'), JSON.stringify({
+            format: 'thelogbook-local-vault-control', version: 2, owner: 'guest',
+            phase: 'active', epoch: 'c'.repeat(32), wrappedKey: guest.vault,
+        }));
+
+        const { pending, resume } = await beginPausedUnlock('guest');
+        localStorage.setItem(GUEST_SESSION_KEY, 'session-after');
+        activateGuestSession('session-after');
+        resume();
+
+        await expect(pending).rejects.toBeInstanceOf(LocalVaultLockedError);
+        expect(isVaultUnlocked('guest')).toBe(false);
+    });
+
+    it('rejects an unlock completing after a local purge fence was installed', async () => {
+        const { pending, resume } = await beginPausedUnlock(owner);
+        beginLocalPurge(owner);
+        resume();
+
+        await expect(pending).rejects.toThrow();
+        expect(isVaultUnlocked(owner)).toBe(false);
     });
 
     it('does not expose ordinary writes during a partial migration', async () => {

@@ -94,16 +94,30 @@ export async function unlockVaultForOwner(owner: string): Promise<void> {
     assertNoLocalPurge(normalized);
     const control = readVaultControl(normalized);
     if (!control || control.phase !== 'active') throw new LocalVaultLockedError();
+    // A guest session may change while Web Crypto unwraps the DEK.
+    const guestSessionId = normalized === 'guest' && isActiveGuestSession()
+        ? captureSessionForOwner('guest').guestSessionId
+        : null;
+    if (normalized === 'guest' && !guestSessionId) throw new LocalVaultLockedError();
+
     const unwrapped = await unlockLocalKeyVault(control.wrappedKey, normalized);
-    const current = readVaultControl(normalized);
-    if (!current || current.epoch !== control.epoch || current.phase !== 'active') {
+    try {
+        assertNoLocalPurge(normalized);
+        const current = readVaultControl(normalized);
+        if (!current || current.epoch !== control.epoch || current.phase !== 'active'
+            || (normalized === 'guest' && (!isActiveGuestSession()
+                || captureSessionForOwner('guest').guestSessionId !== guestSessionId))) {
+            throw new LocalVaultLockedError();
+        }
+        lockVault(normalized);
+        capabilities.set(normalized, { key: unwrapped, epoch: control.epoch,
+            ...(normalized === 'guest' ? { guestSessionId } : {}),
+        });
+    } catch (error) {
+        // Never retain decrypted key material after a failed post-await check.
         unwrapped.fill(0);
-        throw new LocalVaultLockedError();
+        throw error;
     }
-    lockVault(normalized);
-    capabilities.set(normalized, { key: unwrapped, epoch: control.epoch,
-        ...(normalized === 'guest' ? { guestSessionId: captureSessionForOwner('guest').guestSessionId } : {}),
-    });
 }
 
 /** For provisioning/migration ONLY: it never authorizes normal app writes. */

@@ -105,6 +105,23 @@ describe('pre-vault archive gateway', () => {
         expect(await get(archive)).toEqual(original);
     });
 
+    it.each(['plaintext', 'encrypted'] as const)(
+        'rejects thenable transformations without mutating the %s archive', async mode => {
+            if (mode === 'encrypted') await createAndMigrateVault(owner);
+            const original = { marker: 'intact', pending: [1] };
+            await updateArchiveRecord(owner, () => original);
+            const stored = await get(archive);
+            const thenable = { then: (_resolve: unknown) => undefined };
+
+            await expect(updateArchiveRecord<typeof original>(
+                owner, () => thenable as unknown as typeof original,
+            )).rejects.toThrow('asincrona vietata');
+
+            expect(await get(archive)).toEqual(stored);
+            expect(await getArchiveRecord(owner)).toEqual(original);
+        },
+    );
+
     it('still accepts a missing-archive no-op', async () => {
         expect(await get(archive)).toBeUndefined();
         await updateArchiveRecord(owner, () => undefined);
