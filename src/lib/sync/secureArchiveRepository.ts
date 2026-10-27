@@ -4,7 +4,7 @@ import { readVaultControl, requireUnlockedLocalKey, LocalVaultLockedError } from
 import { assertNoLocalPurge } from './localPurgeFence';
 
 /**
- * The ONE LocalEnvelope IndexedDB gateway, used by localRepository.
+ * The ONE LocalEnvelope IndexedDB gateway, used by local repository modules.
  * A vault that exists but is not unlocked never falls back to plaintext.
  *
  * Legacy plaintext is supported ONLY while no vault has been provisioned.

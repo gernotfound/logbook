@@ -38,10 +38,7 @@ import {
     CURRENT_LOCAL_ENVELOPE,
     CURRENT_SYNC_PROTOCOL,
 } from '../schemaEvolution';
-import {
-    resequencePendingOperationsForBoundedTransactions,
-    sequenceOperationsForBoundedTransactions,
-} from './syncBatching';
+import { sequenceOperationsForBoundedTransactions } from './syncBatching';
 
 import { validateLocalEnvelope, type LocalEnvelope } from './localEnvelopeValidation';
 export type { LocalEnvelope } from './localEnvelopeValidation';
@@ -120,49 +117,7 @@ export async function readLocal(owner: string): Promise<LocalEnvelope | undefine
     return validateLocalEnvelope(await getArchiveRecord<any>(owner), owner);
 }
 
-export async function ensureBoundedPendingSequences(owner: string, expectedActorId: string): Promise<LocalEnvelope | undefined> {
-    owner = normalizeStorageOwner(owner);
-    const observed = await readLocal(owner);
-    if (!observed || observed.actorId !== expectedActorId) return observed;
-
-    const initial = resequencePendingOperationsForBoundedTransactions(
-        observed.pending,
-        expectedActorId,
-        observed.actorSeq,
-        observed.clock,
-    );
-    if (!initial.changed) return observed;
-
-    let saved: LocalEnvelope | undefined;
-    await updateArchiveRecord<any>(owner, raw => {
-        const current = validateLocalEnvelope(raw, owner);
-        if (!current || current.actorId !== expectedActorId) {
-            saved = current;
-            return current;
-        }
-
-        const bounded = resequencePendingOperationsForBoundedTransactions(
-            current.pending,
-            expectedActorId,
-            current.actorSeq,
-            current.clock,
-        );
-        if (!bounded.changed) {
-            saved = current;
-            return current;
-        }
-
-        saved = {
-            ...current,
-            pending: bounded.operations,
-            actorSeq: bounded.actorSeq,
-            clock: bounded.clock,
-            revision: current.revision + 1,
-        };
-        return saved;
-    });
-    return saved;
-}
+export { ensureBoundedPendingSequences } from './localPendingSequences';
 
 export async function commitLocal(owner: string, data: UserData, initialBase: UserData, guard?: LocalWriteGuard, expectedRevision?: number): Promise<SemanticOperation[]> {
     owner = normalizeStorageOwner(owner);
