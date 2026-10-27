@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { getDocFromServer } from 'firebase/firestore';
 
 vi.mock('../src/lib/telemetryHub', () => ({
-    telemetryHub: { trackEvent: vi.fn(), trackError: vi.fn() },
+    telemetryHub: { trackError: vi.fn() },
 }));
 
 import type { CachedGlobalCatalog, UserData } from '../src/types';

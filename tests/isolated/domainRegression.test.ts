@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackEvent: vi.fn(), trackError: vi.fn() } }));
+vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackError: vi.fn() } }));
 import { DomainParsers, UserDataSchema, safeNumber, safeOptionalNumber, safeOptionalNullableNumber, NutritionDaySchema } from '../../src/lib/schema';
 import { calculateCycleTimeline } from '../../src/lib/calc/planning';
 import { formatSleepTime } from '../../src/lib/utils/date';

@@ -274,7 +274,6 @@ describe('Empirical Challenger: Sleep Format HH:MM Adversarial Stress Test Suite
             try {
                 // Legacy values deliberately violate the current NutritionDay type: exercise runtime CSV compatibility.
                 await Exporter.exportToCSV([], sampleNutrition as unknown as Record<string, NutritionDay>, []);
-                await new Promise(resolve => setTimeout(resolve, 600));
 
                 expect(capturedFilename).toBe('misurazioni.csv');
                 

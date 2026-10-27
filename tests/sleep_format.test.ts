@@ -72,7 +72,6 @@ describe('Milestone 1: Sleep Format in HH:MM & Backward Compatibility Tests', ()
             const sampleNutrition = { '2026-08-20': { date: '2026-08-20', weight: 75.5, kcal: 2300, carbs: 280, pro: 160, fat: 65, sleepHours: '07:45', sleepDeep: '01:30', sleepLight: '04:30', sleepRem: '01:15', sleepAwake: '00:30', notes: 'Buona notte' } };
             try {
                 await Exporter.exportToCSV([], sampleNutrition, []);
-                await new Promise(resolve => setTimeout(resolve, 600));
                 expect(capturedFilename).toBe('misurazioni.csv');
                 expect(capturedContent).toContain('07:45');
                 expect(capturedContent).toContain('01:30');
