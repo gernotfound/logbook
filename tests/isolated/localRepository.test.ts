@@ -455,6 +455,28 @@ describe('durable owner-scoped journal', () => {
         expect(hydrated.completeMonths).toEqual(['2026-09']);
     });
 
+    it('rejects malformed cloud containers without changing business data or the pending journal', async () => {
+        const base = data(170);
+        await initializeLocal('a', base);
+        await commitLocal('a', data(171), base);
+        const before = await get('logbook:v2:user:a');
+        expect((await readLocal('a'))?.pending.length).toBeGreaterThan(0);
+
+        for (const malformed of [null, false, []]) {
+            await expect(hydrateLocal('a', malformed as unknown as UserData, [], undefined, 'all'))
+                .rejects.toThrow('Snapshot cloud non valido');
+            expect(await get('logbook:v2:user:a')).toEqual(before);
+        }
+    });
+
+    it('does not create an account archive from a malformed cloud response', async () => {
+        for (const malformed of [null, false, []]) {
+            await expect(hydrateLocal('missing', malformed as unknown as UserData, [], undefined, 'all'))
+                .rejects.toThrow('Snapshot cloud non valido');
+            expect(await get('logbook:v2:user:missing')).toBeUndefined();
+        }
+    });
+
     it('never certifies empty window months as cloud documents', async () => {
         const root = data(171);
         const remote = new Map<string, any>([['', {
