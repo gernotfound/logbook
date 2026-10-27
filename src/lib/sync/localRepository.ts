@@ -5,15 +5,15 @@ import { equivalentWorkoutSnapshot } from './workoutSnapshotEquality';
 import type { UserData } from '../../types';
 import { generateId } from '../utils/date';
 import { getNutritionConflictFingerprint } from '../utils/object';
-import { checkpointFromCloudDocuments, parseReplicaIdentity, ReplicaFencedError, type CloudCheckpoint, type ReplicaCheckpoint, type ReplicaIdentity } from './replicaProtocol';
+import { checkpointFromCloudDocuments, ReplicaFencedError, type CloudCheckpoint, type ReplicaCheckpoint, type ReplicaIdentity } from './replicaProtocol';
 import equal from 'fast-deep-equal';
-import { type SemanticOperation, type VectorClock, type SyncMeta, diffDocuments, applySemanticOperations, coversVectorClock, mergeVectors, parseSemanticOperation, parseSyncMeta, parseVectorClock } from './semanticProjection';
+import { type SemanticOperation, type VectorClock, type SyncMeta, diffDocuments, applySemanticOperations, coversVectorClock, mergeVectors, parseSyncMeta } from './semanticProjection';
 import { projectDocuments, applyRemoteDocuments, type DocumentData } from './documentProjection';
 import { getCachedCatalog } from '../catalog/catalogService';
 import { normalizeStorageOwner } from './owner';
 import { readBrowserValueStrict } from './browserStorage';
 import { readDeviceValueStrict } from './deviceStorage';
-import { normalizeBusinessId, requireBusinessId } from '../businessIdentity';
+import { requireBusinessId } from '../businessIdentity';
 import {
     applyDomainOperations,
     compileDomainOperations,
@@ -24,51 +24,15 @@ import {
     CURRENT_DATA_SCHEMA,
     CURRENT_LOCAL_ENVELOPE,
     CURRENT_SYNC_PROTOCOL,
-    normalizeLocalEnvelopeRecord,
 } from '../schemaEvolution';
 import {
     resequencePendingOperationsForBoundedTransactions,
     sequenceOperationsForBoundedTransactions,
 } from './syncBatching';
 
-interface LocalEnvelopeV5 {
-    version: typeof CURRENT_LOCAL_ENVELOPE;
-    dataSchemaVersion: typeof CURRENT_DATA_SCHEMA;
-    syncProtocolVersion: typeof CURRENT_SYNC_PROTOCOL;
-    owner: string;
-    actorId: string;
-    actorSeq: number;
-    clock: VectorClock;
-    data: UserData;
-    baseline: UserData;
-    completeMonths: string[];
-    pending: SemanticOperation[];
-    syncMetaByDocument: Record<string, SyncMeta>;
-    replica: ReplicaIdentity | null;
-    revision: number;
-    // Persistent owner-scoped barrier for unverified cloud snapshots.
-    cloudIntegrityFence?: string;
-    // An older journal must never be replayed under a newly accepted consent.
-    consentRevision?: number;
-    // Original local state is retained after an explicit, non-silent replay.
-    // The entire original journal is included in JSON backup/recovery.
-    archivedConsentJournals?: Array<{
-        sourceConsentRevision: number;
-        capturedAt: string;
-        data: UserData;
-        baseline: UserData;
-        pending: SemanticOperation[];
-    }>;
-    // Owner-scoped closure evidence committed with the business mutation.
-    // Older V5 envelopes legitimately omit this field.
-    lastClosedWorkoutId?: string;
-    // Owner-local closure ledger fences snapshots from suspended old tabs.
-    closedWorkoutIds?: string[];
-    // Synchronous device-workout write-ahead intent, journaled atomically with its business edit.
-    lastWorkoutDeviceIntent?: { generation: string; sequence: number; intentId?: string; parentIntentId?: string; ancestorIds?: string[] };
-}
+import { validateLocalEnvelope, type LocalEnvelope } from './localEnvelopeValidation';
+export type { LocalEnvelope } from './localEnvelopeValidation';
 
-export type LocalEnvelope = LocalEnvelopeV5;
 export type CloudCoverageMode = 'window' | 'all';
 export type LocalWriteGuard = () => boolean;
 
@@ -146,121 +110,6 @@ function parseCloudSyncMeta(documentPath: string, raw: unknown): SyncMeta {
     }
 }
 
-function validate(value: unknown, owner: string): LocalEnvelope | undefined {
-    // Only a missing IndexedDB key means no archive. Invalid stored values
-    // must fail closed so bootstrap cannot replace them with fresh data.
-    if (value === undefined) return undefined;
-
-    const canonicalOwner = normalizeStorageOwner(owner);
-    // Dispatch on the container version before assuming the current envelope shape.
-    // A future envelope may legitimately rename/move current-version fields such as owner.
-    const migrated = normalizeLocalEnvelopeRecord(value);
-    const record = migrated as Record<string, unknown>;
-    if (record.owner !== canonicalOwner) throw new Error('Archivio locale non riconosciuto: conservato per il recupero');
-    if (typeof record.actorId !== 'string' || !record.actorId.trim()) throw new Error('Archivio locale causale non valido');
-    if (typeof record.actorSeq !== 'number' || !Number.isSafeInteger(record.actorSeq) || record.actorSeq < 0) {
-        throw new Error('Archivio locale causale non valido');
-    }
-
-    const clock = parseVectorClock(record.clock, 'local envelope clock');
-    if ((clock[record.actorId] ?? 0) !== record.actorSeq) throw new Error('Archivio locale causale non valido');
-
-    if (!Array.isArray(record.pending)) throw new Error('Journal locale non valido');
-    const pending = record.pending.map(parseSemanticOperation);
-    for (const operation of pending) {
-        if (operation.actorId !== record.actorId || operation.seq > record.actorSeq || !coversVectorClock(clock, operation.clock)) {
-            throw new Error('Journal locale causale non valido');
-        }
-    }
-
-    if (!record.syncMetaByDocument || typeof record.syncMetaByDocument !== 'object' || Array.isArray(record.syncMetaByDocument)) {
-        throw new Error('Metadati sync locali non validi');
-    }
-    const syncMetaByDocument: Record<string, SyncMeta> = {};
-    for (const [path, rawMeta] of Object.entries(record.syncMetaByDocument as Record<string, unknown>)) {
-        const meta = parseSyncMeta(rawMeta);
-        if (!coversVectorClock(clock, meta.clock)) throw new Error('Metadati sync locali fuori dal frontier');
-        syncMetaByDocument[path] = meta;
-    }
-
-    if (!Array.isArray(record.completeMonths) || record.completeMonths.some(month => typeof month !== 'string' || !/^\d{4}-(0[1-9]|1[0-2])$/.test(month))) {
-        throw new Error('Copertura mensile locale non valida');
-    }
-    if (typeof record.revision !== 'number' || !Number.isSafeInteger(record.revision) || record.revision < 0) {
-        throw new Error('Revisione locale non valida');
-    }
-
-    if (record.cloudIntegrityFence !== undefined && (typeof record.cloudIntegrityFence !== 'string' || !record.cloudIntegrityFence.trim())) {
-        throw new Error('Barriera integrità cloud locale non valida');
-    }
-
-    if (record.lastClosedWorkoutId !== undefined && (
-        typeof record.lastClosedWorkoutId !== 'string'
-        || normalizeBusinessId(record.lastClosedWorkoutId) !== record.lastClosedWorkoutId
-    )) throw new Error('Identificativo workout chiuso non valido');
-
-    if (record.closedWorkoutIds !== undefined && (
-        !Array.isArray(record.closedWorkoutIds)
-        || record.closedWorkoutIds.some(id => typeof id !== 'string' || normalizeBusinessId(id) !== id)
-        || new Set(record.closedWorkoutIds).size !== record.closedWorkoutIds.length
-    )) throw new Error('Registro workout chiusi non valido');
-
-    if (record.lastWorkoutDeviceIntent !== undefined && (
-        !record.lastWorkoutDeviceIntent || typeof record.lastWorkoutDeviceIntent !== 'object'
-        || Array.isArray(record.lastWorkoutDeviceIntent)
-        || typeof (record.lastWorkoutDeviceIntent as { generation?: unknown }).generation !== 'string'
-        || !/^[a-f0-9]{32}$/.test((record.lastWorkoutDeviceIntent as { generation: string }).generation)
-        || !Number.isSafeInteger((record.lastWorkoutDeviceIntent as { sequence?: unknown }).sequence)
-        || Number((record.lastWorkoutDeviceIntent as { sequence: number }).sequence) < 1
-        || ((record.lastWorkoutDeviceIntent as { intentId?: unknown }).intentId !== undefined
-            && (typeof (record.lastWorkoutDeviceIntent as { intentId: unknown }).intentId !== 'string'
-                || !/^[a-f0-9]{32}$/.test((record.lastWorkoutDeviceIntent as { intentId: string }).intentId)))
-        || ((record.lastWorkoutDeviceIntent as { parentIntentId?: unknown }).parentIntentId !== undefined
-            && (typeof (record.lastWorkoutDeviceIntent as { parentIntentId: unknown }).parentIntentId !== 'string'
-                || !/^[a-f0-9]{32}$/.test((record.lastWorkoutDeviceIntent as { parentIntentId: string }).parentIntentId)))
-        || ((record.lastWorkoutDeviceIntent as { ancestorIds?: unknown }).ancestorIds !== undefined
-            && (!Array.isArray((record.lastWorkoutDeviceIntent as { ancestorIds: unknown }).ancestorIds)
-                || (record.lastWorkoutDeviceIntent as { ancestorIds: string[] }).ancestorIds.length > 64
-                || (record.lastWorkoutDeviceIntent as { ancestorIds: string[] }).ancestorIds.some(id => typeof id !== 'string' || !/^[a-f0-9]{32}$/.test(id))
-                || new Set((record.lastWorkoutDeviceIntent as { ancestorIds: string[] }).ancestorIds).size
-                    !== (record.lastWorkoutDeviceIntent as { ancestorIds: string[] }).ancestorIds.length))
-    )) throw new Error('Controllo journal workout locale non valido');
-
-    if (record.consentRevision !== undefined && (
-        typeof record.consentRevision !== 'number' || !Number.isSafeInteger(record.consentRevision) || record.consentRevision < 0
-    )) throw new Error('Generazione consenso dell’archivio locale non valida');
-
-    if (record.archivedConsentJournals !== undefined) {
-        if (!Array.isArray(record.archivedConsentJournals) || record.archivedConsentJournals.length > 32) {
-            throw new Error('Archivio storico dei consensi non valido');
-        }
-        for (const entry of record.archivedConsentJournals) {
-            if (!entry || typeof entry !== 'object'
-                || !Number.isSafeInteger(entry.sourceConsentRevision) || entry.sourceConsentRevision < 0
-                || typeof entry.capturedAt !== 'string' || !Number.isFinite(Date.parse(entry.capturedAt))
-                || !Array.isArray(entry.pending)) throw new Error('Storico di recupero non valido');
-            parse(entry.data); parse(entry.baseline);
-            entry.pending.forEach(parseSemanticOperation);
-        }
-    }
-
-    const replica = parseReplicaIdentity(record.replica);
-
-    return {
-        ...(record as unknown as LocalEnvelopeV5),
-        actorId: record.actorId,
-        actorSeq: record.actorSeq,
-        clock,
-        data: parse(record.data),
-        baseline: parse(record.baseline),
-        completeMonths: [...record.completeMonths] as string[],
-        pending,
-        syncMetaByDocument,
-        replica,
-        revision: record.revision,
-    };
-}
-
 function assertWorkoutNotClosed(id: string, envelope: LocalEnvelope | undefined): void {
     if (envelope && (envelope.lastClosedWorkoutId === id || envelope.closedWorkoutIds?.includes(id))) {
         throw new Error('Allenamento già terminato o eliminato: ricarica la sessione aggiornata.');
@@ -293,7 +142,7 @@ export async function rebaseConsentRecoveryWithExplicitChoice(
         .map(path => path.split('/')[1]))].sort();
     await updateArchiveRecord<any>(owner, raw => {
         if (!guard()) throw new Error('Sessione cambiata: recupero annullato');
-        const current = validate(raw, owner);
+        const current = validateLocalEnvelope(raw, owner);
         if (!current || current.revision !== expectedLocalRevision || !current.pending.length) {
             throw new StaleLocalRevisionError(expectedLocalRevision, current?.revision ?? null);
         }
@@ -345,7 +194,7 @@ export async function advanceLocalConsentRevisionIfClean(
     let ready: boolean | 'erased' = false;
     await updateArchiveRecord<any>(owner, raw => {
         if (guard && !guard()) throw new Error('Sessione cambiata durante la riconciliazione del consenso.');
-        const current = validate(raw, owner);
+        const current = validateLocalEnvelope(raw, owner);
         if (!current) { ready = true; return raw; }
         const previous = current.consentRevision ?? 0;
         if (previous > revision) throw new Error('Generazione locale più recente del server');
@@ -366,14 +215,14 @@ export async function advanceLocalConsentRevisionIfClean(
 /** Migration-only read verifier. Enforces the full existing causal/schema contract. */
 export function assertLegacyEnvelopeValidForSecureMigration(raw: unknown, owner: string): void {
     if (raw === undefined) return;
-    if (!validate(raw, normalizeStorageOwner(owner))) {
+    if (!validateLocalEnvelope(raw, normalizeStorageOwner(owner))) {
         throw new Error('Archivio legacy non valido: migrazione sospesa senza modificare il dato.');
     }
 }
 
 export async function readLocal(owner: string): Promise<LocalEnvelope | undefined> {
     owner = normalizeStorageOwner(owner);
-    return validate(await getArchiveRecord<any>(owner), owner);
+    return validateLocalEnvelope(await getArchiveRecord<any>(owner), owner);
 }
 
 export async function ensureBoundedPendingSequences(owner: string, expectedActorId: string): Promise<LocalEnvelope | undefined> {
@@ -391,7 +240,7 @@ export async function ensureBoundedPendingSequences(owner: string, expectedActor
 
     let saved: LocalEnvelope | undefined;
     await updateArchiveRecord<any>(owner, raw => {
-        const current = validate(raw, owner);
+        const current = validateLocalEnvelope(raw, owner);
         if (!current || current.actorId !== expectedActorId) {
             saved = current;
             return current;
@@ -428,7 +277,7 @@ export async function commitLocal(owner: string, data: UserData, initialBase: Us
     const catalog = await getCachedCatalog();
     await updateArchiveRecord<any>(owner, raw => {
         if (guard && !guard()) throw new Error('Commit locale invalidato dal cambio sessione');
-        const current = validate(raw, owner);
+        const current = validateLocalEnvelope(raw, owner);
         if (expectedRevision !== undefined && (
             current?.revision !== expectedRevision
             || !current
@@ -525,7 +374,7 @@ export async function commitDomainOperations(owner: string, batch: DomainOperati
     let savedData = fallback;
     await updateArchiveRecord<any>(owner, raw => {
         if (guard && !guard()) throw new Error('Commit locale invalidato dal cambio sessione');
-        const current = validate(raw, owner);
+        const current = validateLocalEnvelope(raw, owner);
         if (workoutIntent) {
             // Revalidate the source epoch IN the same IndexedDB commit which
             // would make this unacknowledged device snapshot a new cloud journal.
@@ -674,7 +523,7 @@ function fenceCloudIntegrity(current: LocalEnvelope): LocalEnvelope {
 export async function markCloudIntegrityBlocked(owner: string): Promise<void> {
     owner = normalizeStorageOwner(owner);
     await updateArchiveRecord<any>(owner, raw => {
-        const current = validate(raw, owner);
+        const current = validateLocalEnvelope(raw, owner);
         if (!current) throw new Error('Archivio locale non disponibile per la protezione cloud');
         return fenceCloudIntegrity(current);
     });
@@ -687,7 +536,7 @@ export async function completeCloudIntegrityRecovery(
     let saved: LocalEnvelope | undefined;
     await updateArchiveRecord<any>(owner, raw => {
         if (guard && !guard()) return raw;
-        const current = validate(raw, owner);
+        const current = validateLocalEnvelope(raw, owner);
         if (!current) throw new Error('Archivio locale non disponibile durante il recupero cloud');
         if ((current.cloudIntegrityFence ?? null) !== expectedFence) {
             throw new ReplicaFencedError('La verifica cloud è stata invalidata da una nuova divergenza; copia locale preservata.');
@@ -708,7 +557,7 @@ export async function markReplicaCheckpointRequired(
 ): Promise<void> {
     owner = normalizeStorageOwner(owner);
     await updateArchiveRecord<any>(owner, raw => {
-        const current = validate(raw, owner);
+        const current = validateLocalEnvelope(raw, owner);
         if (!current?.replica) return current;
         if (expectedReplica && (
             current.replica.slot !== expectedReplica.slot
@@ -740,7 +589,7 @@ export async function adoptReplicaCheckpoint(
 
     await updateArchiveRecord<any>(owner, raw => {
         if (guard && !guard()) return raw;
-        const current = validate(raw, owner);
+        const current = validateLocalEnvelope(raw, owner);
         if (!current) throw new Error('Archivio locale non trovato durante il checkpoint replica');
 
         const sameReplica = current.replica
@@ -819,7 +668,7 @@ export async function acknowledgeThrough(
     const parsed = parse(remote);
     const catalog = await getCachedCatalog();
     await updateArchiveRecord<any>(owner, raw => {
-        const current = validate(raw, owner);
+        const current = validateLocalEnvelope(raw, owner);
         if (!current) throw new Error('Archivio locale non trovato');
         if (delivery) {
             const replica = current.replica;
@@ -884,7 +733,7 @@ export async function initializeLocal(owner: string, data: UserData, completeMon
     const parsed = structuredClone(parse(data));
     await updateArchiveRecord<any>(owner, raw => {
         if (guard && !guard()) throw new Error('Inizializzazione locale invalidata dal cambio sessione');
-        const current = validate(raw, owner);
+        const current = validateLocalEnvelope(raw, owner);
         // Bootstrap is create-if-absent, not a replacement write: the journal
         // can be empty (especially for guest or an acknowledged account) while
         // a concurrent tab has already committed durable business edits.
@@ -901,7 +750,7 @@ export async function hydrateLocal(owner: string, cloudData: UserData, months: s
     const catalog = await getCachedCatalog();
     await updateArchiveRecord<any>(owner, raw => {
         if (guard && !guard()) return raw;
-        const current = validate(raw, owner);
+        const current = validateLocalEnvelope(raw, owner);
         if (!current) {
             const syncMetaByDocument: Record<string, SyncMeta> = {};
             const clock: Record<string, number> = {};
@@ -1002,7 +851,7 @@ export async function clearNutritionConflict(owner: string, fingerprint: string,
         return Object.keys(remaining).length ? { ...rest, pendingConflicts: remaining } : rest;
     };
     await updateArchiveRecord<any>(owner, raw => {
-        const current = validate(raw, owner);
+        const current = validateLocalEnvelope(raw, owner);
         const data = current?.data ?? fallback;
         if (getNutritionConflictFingerprint(data.pendingConflicts?.nutritionPlanning) !== fingerprint) throw new Error('Conflitto cambiato durante la risoluzione');
         saved = parse(clear(data));
@@ -1014,7 +863,7 @@ export async function clearNutritionConflict(owner: string, fingerprint: string,
 export async function revertRejectedConsent(owner: string, expected: UserData['legalConsent'], previous: UserData['legalConsent']): Promise<void> {
     owner = normalizeStorageOwner(owner);
     await updateArchiveRecord<any>(owner, raw => {
-        const current = validate(raw, owner);
+        const current = validateLocalEnvelope(raw, owner);
         if (!current || !equal(current.data.legalConsent, expected)) return raw!;
 
         const legalConsentOps = current.pending.filter(op =>
