@@ -113,16 +113,19 @@ describe('acknowledgeThrough reconciliation', () => {
         expect(await readLocal(owner)).toEqual(before);
     });
 
-    it('rejects an invalid cloud snapshot before retiring a durable journal', async () => {
-        await commitLocal(owner, data(171), data(170));
-        const before = await readLocal(owner);
-        expect(before?.pending.length).toBeGreaterThan(0);
+    it.each([null, false, []] as const)(
+        'rejects a non-object cloud snapshot (%s) without retiring a durable journal',
+        async invalidRemote => {
+            await commitLocal(owner, data(171), data(170));
+            const before = await readLocal(owner);
+            expect(before?.pending.length).toBeGreaterThan(0);
 
-        await expect(acknowledgeThrough(owner, 1, null as unknown as UserData))
-            .rejects.toThrow();
+            await expect(acknowledgeThrough(owner, 1, invalidRemote as unknown as UserData))
+                .rejects.toThrow('Snapshot cloud non valido');
 
-        expect(await readLocal(owner)).toEqual(before);
-    });
+            expect(await readLocal(owner)).toEqual(before);
+        },
+    );
 
     it('retains the compatibility reconciliation path when no delivery proof is supplied', async () => {
         const incoming = data(173, '39');
