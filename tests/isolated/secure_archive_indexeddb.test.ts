@@ -9,6 +9,7 @@ import { deviceVaultKeyId } from '../../src/lib/sync/secureArchiveKeys';
 import { lockAllVaults, lockVault, unlockVaultForOwner, vaultControlKey, LocalVaultLockedError } from '../../src/lib/sync/secureArchiveSession';
 import { LocalCiphertextError, SEALED_LOCAL_PREFIX } from '../../src/lib/sync/secureArchiveCipher';
 import { readSealedArchive, sealedArchiveKey, updateSealedArchive } from '../../src/lib/sync/secureArchiveIndexedDb';
+import { getArchiveRecord, updateArchiveRecord } from '../../src/lib/sync/secureArchiveRepository';
 
 const owner = 'user:secure-idb';
 const key = () => crypto.getRandomValues(new Uint8Array(32));
@@ -74,6 +75,43 @@ describe('atomic encrypted IndexedDB primitive', () => {
     });
 });
 
+describe('pre-vault archive gateway', () => {
+    const archive = sealedArchiveKey(owner);
+
+    beforeEach(async () => {
+        await clear();
+        lockAllVaults();
+        localStorage.clear();
+    });
+    afterEach(() => lockAllVaults());
+
+    it('rejects an undefined transformation without losing an existing plaintext archive', async () => {
+        const original = { marker: 'durable-local-data' };
+        await set(archive, original);
+
+        await expect(updateArchiveRecord<typeof original>(owner, () => undefined))
+            .rejects.toThrow('non può eliminare tacitamente');
+        expect(await get(archive)).toEqual(original);
+        expect(await getArchiveRecord(owner)).toEqual(original);
+    });
+
+    it('rejects asynchronous transformations before writing the plaintext archive', async () => {
+        const original = { marker: 'durable-local-data' };
+        await set(archive, original);
+
+        await expect(updateArchiveRecord<typeof original>(
+            owner, () => Promise.resolve({ marker: 'not-committed' }) as unknown as typeof original,
+        )).rejects.toThrow('asincrona vietata');
+        expect(await get(archive)).toEqual(original);
+    });
+
+    it('still accepts a missing-archive no-op', async () => {
+        expect(await get(archive)).toBeUndefined();
+        await updateArchiveRecord(owner, () => undefined);
+        expect(await getArchiveRecord(owner)).toBeUndefined();
+    });
+});
+
 // Unlike the low-level primitive above, localRepository uses secureArchiveRepository.
 // These regressions exercise the production owner/epoch gate and the actual journal.
 describe('production encrypted localRepository gateway', () => {
@@ -136,6 +174,17 @@ describe('production encrypted localRepository gateway', () => {
         expect(state?.data.profile).toMatchObject({ height: '171', gender: 'M' });
         expect(state?.pending.length).toBeGreaterThanOrEqual(2);
         expect(await get<string>(archive)).toMatch(/^tlb-sealed:v1:/);
+    });
+
+    it('refuses to erase an existing ciphertext through an undefined transformation', async () => {
+        await createAndMigrateVault(owner);
+        await initializeLocal(owner, profile('170'));
+        const original = await get(archive);
+
+        await expect(updateArchiveRecord(owner, () => undefined))
+            .rejects.toThrow('non può eliminare tacitamente');
+        expect(await get(archive)).toBe(original);
+        expect((await readLocal(owner))?.data.profile?.height).toBe('170');
     });
 
     it('retains the exact encrypted business/journal bytes when an IDB write fails', async () => {
