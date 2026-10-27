@@ -1,4 +1,10 @@
 import { getArchiveRecord, updateArchiveRecord } from './secureArchiveRepository';
+import { fenceCloudIntegrity } from './localCloudIntegrity';
+export {
+    markCloudIntegrityBlocked,
+    completeCloudIntegrityRecovery,
+    markReplicaCheckpointRequired,
+} from './localCloudIntegrity';
 import { enforceMonthlyEntityTombstones } from './monthlyEntityTombstones';
 import { UserDataSchema } from '../schema';
 import { equivalentWorkoutSnapshot } from './workoutSnapshotEquality';
@@ -507,74 +513,6 @@ export async function commitDomainOperations(owner: string, batch: DomainOperati
         return { ...(current ?? { completeMonths: [], replica: null }), ...currentEnvelopeVersions(), ...closure, ...intentPatch, owner, actorId, actorSeq: sequenced.actorSeq, clock: sequenced.clock, data: desired, baseline: current?.baseline ?? fallback, completeMonths: current?.completeMonths ?? [], pending: owner === 'guest' ? [] : [...(current?.pending ?? []), ...operations], syncMetaByDocument: current?.syncMetaByDocument ?? {}, replica: current?.replica ?? null, revision: (current?.revision ?? 0) + 1 };
     });
     return { operations, data: savedData };
-}
-
-function fenceCloudIntegrity(current: LocalEnvelope): LocalEnvelope {
-    // A newly detected divergence must invalidate a recovery based on any
-    // earlier observation, even when another tab is attempting a checkpoint.
-    return {
-        ...current,
-        cloudIntegrityFence: generateId('cloud-fence'),
-        replica: current.replica ? { ...current.replica, checkpointAtMs: 1, leaseUntilMs: 1 } : null,
-        revision: current.revision + 1,
-    };
-}
-
-export async function markCloudIntegrityBlocked(owner: string): Promise<void> {
-    owner = normalizeStorageOwner(owner);
-    await updateArchiveRecord<any>(owner, raw => {
-        const current = validateLocalEnvelope(raw, owner);
-        if (!current) throw new Error('Archivio locale non disponibile per la protezione cloud');
-        return fenceCloudIntegrity(current);
-    });
-}
-
-export async function completeCloudIntegrityRecovery(
-    owner: string, expectedFence: string | null, fullCheckpointCompleted: boolean, guard?: LocalWriteGuard,
-): Promise<LocalEnvelope> {
-    owner = normalizeStorageOwner(owner);
-    let saved: LocalEnvelope | undefined;
-    await updateArchiveRecord<any>(owner, raw => {
-        if (guard && !guard()) return raw;
-        const current = validateLocalEnvelope(raw, owner);
-        if (!current) throw new Error('Archivio locale non disponibile durante il recupero cloud');
-        if ((current.cloudIntegrityFence ?? null) !== expectedFence) {
-            throw new ReplicaFencedError('La verifica cloud è stata invalidata da una nuova divergenza; copia locale preservata.');
-        }
-        if (expectedFence && (!fullCheckpointCompleted || !current.replica || current.replica.leaseUntilMs <= Date.now())) {
-            throw new ReplicaFencedError('La divergenza cloud richiede un checkpoint completo prima dello sblocco.');
-        }
-        saved = expectedFence ? { ...current, cloudIntegrityFence: undefined, revision: current.revision + 1 } : current;
-        return saved;
-    });
-    if (!saved) throw new Error('Recupero cloud invalidato dal cambio di sessione');
-    return saved;
-}
-
-export async function markReplicaCheckpointRequired(
-    owner: string,
-    expectedReplica?: ReplicaIdentity,
-): Promise<void> {
-    owner = normalizeStorageOwner(owner);
-    await updateArchiveRecord<any>(owner, raw => {
-        const current = validateLocalEnvelope(raw, owner);
-        if (!current?.replica) return current;
-        if (expectedReplica && (
-            current.replica.slot !== expectedReplica.slot
-            || current.replica.replicaId !== expectedReplica.replicaId
-            || current.replica.generation !== expectedReplica.generation
-        )) return current;
-
-        return {
-            ...current,
-            replica: {
-                ...current.replica,
-                checkpointAtMs: 1,
-                leaseUntilMs: 1,
-            },
-            revision: current.revision + 1,
-        };
-    });
 }
 
 export async function adoptReplicaCheckpoint(

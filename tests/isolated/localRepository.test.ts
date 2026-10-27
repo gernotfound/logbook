@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackError: vi.fn() } }));
 import { UserDataSchema } from '../../src/lib/schema';
 import { validateLocalEnvelope } from '../../src/lib/sync/localEnvelopeValidation';
+import { fenceCloudIntegrity } from '../../src/lib/sync/localCloudIntegrity';
 import type { UserData } from '../../src/types';
 import { adoptReplicaCheckpoint, markReplicaCheckpointRequired, markCloudIntegrityBlocked, completeCloudIntegrityRecovery, hydrateLocal, commitLocal, commitDomainOperations, initializeLocal, readLocal, acknowledgeThrough, StaleLocalRevisionError } from '../../src/lib/sync/localRepository';
 import {
@@ -291,6 +292,23 @@ describe('durable owner-scoped journal', () => {
 
         await expect(readLocal('a')).rejects.toThrow(LegacyVersionError);
         expect(await get('logbook:v2:user:a')).toEqual(legacy);
+    });
+
+    it('builds a cloud-integrity fence without mutating the source envelope or its journal', async () => {
+        const base = data(170);
+        await initializeLocal('a', base);
+        await commitLocal('a', data(171), base);
+        const original = (await readLocal('a'))!;
+        const snapshot = structuredClone(original);
+        const fenced = fenceCloudIntegrity(original);
+
+        expect(fenced).not.toBe(original);
+        expect(fenced.cloudIntegrityFence).toEqual(expect.any(String));
+        expect(fenced.revision).toBe(original.revision + 1);
+        expect(fenced.data).toEqual(original.data);
+        expect(fenced.pending).toEqual(original.pending);
+        expect(original).toEqual(snapshot);
+        expect(await readLocal('a')).toEqual(snapshot);
     });
 
     it('persists cloud-integrity fencing until a verified full checkpoint, retaining pending edits', async () => {
