@@ -101,4 +101,43 @@ describe('acknowledgeThrough reconciliation', () => {
             expect(await readLocal(owner)).toEqual(before);
         },
     );
+    it('fails closed on an unknown owner instead of creating a fresh envelope', async () => {
+        const before = await readLocal(owner);
+        const unknownOwner = 'user:missing-ack-reconcile';
+        expect(await readLocal(unknownOwner)).toBeUndefined();
+
+        await expect(acknowledgeThrough(unknownOwner, 0, data(171)))
+            .rejects.toThrow('Archivio locale non trovato');
+
+        expect(await readLocal(unknownOwner)).toBeUndefined();
+        expect(await readLocal(owner)).toEqual(before);
+    });
+
+    it.each([null, false, []] as const)(
+        'rejects a non-object cloud snapshot (%s) without retiring a durable journal',
+        async invalidRemote => {
+            await commitLocal(owner, data(171), data(170));
+            const before = await readLocal(owner);
+            expect(before?.pending.length).toBeGreaterThan(0);
+
+            await expect(acknowledgeThrough(owner, 1, invalidRemote as unknown as UserData))
+                .rejects.toThrow('Snapshot cloud non valido');
+
+            expect(await readLocal(owner)).toEqual(before);
+        },
+    );
+
+    it('retains the compatibility reconciliation path when no delivery proof is supplied', async () => {
+        const incoming = data(173, '39');
+        const before = await readLocal(owner);
+        expect(before?.pending).toEqual([]);
+
+        await acknowledgeThrough(owner, 0, incoming);
+        const after = await readLocal(owner);
+        expect(after?.baseline.profile).toEqual(incoming.profile);
+        expect(after?.data.profile).toEqual(incoming.profile);
+        expect(after?.pending).toEqual([]);
+        expect(after?.replica).toEqual(before?.replica);
+    });
+
 });
