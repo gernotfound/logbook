@@ -6,7 +6,7 @@ import { UserDataSchema } from '../../src/lib/schema';
 import { validateLocalEnvelope } from '../../src/lib/sync/localEnvelopeValidation';
 import { fenceCloudIntegrity } from '../../src/lib/sync/localCloudIntegrity';
 import type { UserData } from '../../src/types';
-import { adoptReplicaCheckpoint, markReplicaCheckpointRequired, markCloudIntegrityBlocked, completeCloudIntegrityRecovery, hydrateLocal, commitLocal, commitDomainOperations, initializeLocal, readLocal, acknowledgeThrough, StaleLocalRevisionError } from '../../src/lib/sync/localRepository';
+import { adoptReplicaCheckpoint, markReplicaCheckpointRequired, markCloudIntegrityBlocked, completeCloudIntegrityRecovery, hydrateLocal, commitLocal, commitDomainOperations, initializeLocal, readLocal, acknowledgeThrough, advanceLocalConsentRevisionIfClean, StaleLocalRevisionError } from '../../src/lib/sync/localRepository';
 import {
     CURRENT_DATA_SCHEMA,
     CURRENT_LOCAL_ENVELOPE,
@@ -309,6 +309,34 @@ describe('durable owner-scoped journal', () => {
         expect(fenced.pending).toEqual(original.pending);
         expect(original).toEqual(snapshot);
         expect(await readLocal('a')).toEqual(snapshot);
+    });
+
+    it('preserves a pending journal and rejects stale session during consent revision adoption', async () => {
+        const original = data(170);
+        await initializeLocal('a', original);
+        await commitLocal('a', data(171), original);
+        const before = (await readLocal('a'))!;
+
+        expect(await advanceLocalConsentRevisionIfClean('a', 2)).toBe(false);
+        expect(await readLocal('a')).toEqual(before);
+
+        await expect(advanceLocalConsentRevisionIfClean('a', 2, () => false))
+            .rejects.toThrow('Sessione cambiata');
+        expect(await readLocal('a')).toEqual(before);
+    });
+
+    it('adopts a consent revision exactly once when the journal is clean', async () => {
+        await initializeLocal('a', data(170));
+        const before = (await readLocal('a'))!;
+
+        expect(await advanceLocalConsentRevisionIfClean('a', 2)).toBe(true);
+        const after = (await readLocal('a'))!;
+        expect(after.consentRevision).toBe(2);
+        expect(after.revision).toBe(before.revision + 1);
+        expect(after.data).toEqual(before.data);
+        expect(after.pending).toEqual([]);
+        expect(await advanceLocalConsentRevisionIfClean('a', 2)).toBe(true);
+        expect(await readLocal('a')).toEqual(after);
     });
 
     it('persists cloud-integrity fencing until a verified full checkpoint, retaining pending edits', async () => {
