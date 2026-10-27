@@ -1,4 +1,7 @@
 import { getArchiveRecord, updateArchiveRecord } from './secureArchiveRepository';
+import { StaleLocalRevisionError } from './localRevisionError';
+export { StaleLocalRevisionError } from './localRevisionError';
+export { rebaseConsentRecoveryWithExplicitChoice } from './localConsentJournalRecovery';
 import { ownerConsentRevision } from './localConsentReconciliation';
 export {
     advanceLocalConsentRevisionIfClean,
@@ -16,7 +19,7 @@ import { equivalentWorkoutSnapshot } from './workoutSnapshotEquality';
 import type { UserData } from '../../types';
 import { generateId } from '../utils/date';
 import { getNutritionConflictFingerprint } from '../utils/object';
-import { checkpointFromCloudDocuments, ReplicaFencedError, type CloudCheckpoint, type ReplicaCheckpoint, type ReplicaIdentity } from './replicaProtocol';
+import { ReplicaFencedError, type CloudCheckpoint, type ReplicaCheckpoint, type ReplicaIdentity } from './replicaProtocol';
 import equal from 'fast-deep-equal';
 import { type SemanticOperation, type VectorClock, type SyncMeta, diffDocuments, applySemanticOperations, coversVectorClock, mergeVectors, parseSyncMeta } from './semanticProjection';
 import { projectDocuments, applyRemoteDocuments, type DocumentData } from './documentProjection';
@@ -82,15 +85,6 @@ export class WorkoutIntentConflictError extends Error {
     }
 }
 
-export class StaleLocalRevisionError extends Error {
-    readonly code = 'stale-local-revision';
-
-    constructor(readonly expectedRevision: number, readonly actualRevision: number | null) {
-        super('I dati locali sono cambiati durante l’operazione. Ripeti l’anteprima.');
-        this.name = 'StaleLocalRevisionError';
-    }
-}
-
 const currentEnvelopeVersions = () => ({
     version: CURRENT_LOCAL_ENVELOPE,
     dataSchemaVersion: CURRENT_DATA_SCHEMA,
@@ -111,72 +105,6 @@ function assertWorkoutNotClosed(id: string, envelope: LocalEnvelope | undefined)
     if (envelope && (envelope.lastClosedWorkoutId === id || envelope.closedWorkoutIds?.includes(id))) {
         throw new Error('Allenamento già terminato o eliminato: ricarica la sessione aggiornata.');
     }
-}
-
-/**
- * Reauthorizes PREVIOUSLY unsent changes only after a new explicit acceptance
- * and a separate user-confirmed recovery action. The old journal is never sent.
- * This is one atomic IndexedDB transition; a failed/quota-limited update leaves
- * the original envelope untouched. An exact full-cloud scan is required.
- */
-export async function rebaseConsentRecoveryWithExplicitChoice(
-    owner: string, revision: number, expectedLocalRevision: number,
-    cloudData: UserData, chosenData: UserData,
-    cloudDocuments: Map<string, DocumentData>, guard: LocalWriteGuard,
-): Promise<void> {
-    owner = normalizeStorageOwner(owner);
-    if (!owner.startsWith('user:') || !Number.isSafeInteger(revision) || revision < 1) {
-        throw new Error('Nuovo consenso non valido');
-    }
-    const catalog = await getCachedCatalog();
-    const remote = structuredClone(parse(cloudData));
-    const desired = structuredClone(parse({ ...chosenData, legalConsent: remote.legalConsent }));
-    const checkpoint = checkpointFromCloudDocuments(cloudDocuments);
-    const baseDocs = projectDocuments(remote, catalog);
-    const desiredDocs = projectDocuments(desired, catalog);
-    const months = [...new Set([...cloudDocuments.keys()]
-        .filter(path => path.startsWith('history_months/') || path.startsWith('nutrition_months/'))
-        .map(path => path.split('/')[1]))].sort();
-    await updateArchiveRecord<any>(owner, raw => {
-        if (!guard()) throw new Error('Sessione cambiata: recupero annullato');
-        const current = validateLocalEnvelope(raw, owner);
-        if (!current || current.revision !== expectedLocalRevision || !current.pending.length) {
-            throw new StaleLocalRevisionError(expectedLocalRevision, current?.revision ?? null);
-        }
-        if ((current.consentRevision ?? 0) >= revision) {
-            throw new Error('Journal non appartenente alla precedente generazione di consenso');
-        }
-        const originals = current.archivedConsentJournals ?? [];
-        if (originals.length >= 32) throw new Error('Archivio recupero pieno: esporta i dati prima di ripetere');
-        const actorId = generateId('actor');
-        const baseClock: VectorClock = { ...checkpoint.clock, [actorId]: 0 };
-        const provisionalClock: VectorClock = { ...baseClock, [actorId]: 1 };
-        let operations = diffDocuments(baseDocs, desiredDocs, actorId, 1, provisionalClock);
-        operations = enforceMonthlyEntityTombstones(baseDocs, desiredDocs, operations, actorId, 1, provisionalClock);
-        const sequenced = sequenceOperationsForBoundedTransactions(operations, actorId, 0, baseClock);
-        return {
-            ...current,
-            consentRevision: revision,
-            actorId, actorSeq: sequenced.actorSeq,
-            clock: sequenced.clock,
-            data: desired, baseline: remote,
-            completeMonths: months,
-            pending: sequenced.operations,
-            syncMetaByDocument: checkpoint.syncMetaByDocument,
-            replica: null,
-            archivedConsentJournals: [
-                ...originals,
-                {
-                    sourceConsentRevision: current.consentRevision ?? 0,
-                    capturedAt: new Date().toISOString(),
-                    data: structuredClone(current.data),
-                    baseline: structuredClone(current.baseline),
-                    pending: structuredClone(current.pending),
-                },
-            ],
-            revision: current.revision + 1,
-        };
-    });
 }
 
 /** Migration-only read verifier. Enforces the full existing causal/schema contract. */
