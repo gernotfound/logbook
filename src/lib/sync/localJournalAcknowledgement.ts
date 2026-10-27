@@ -25,6 +25,11 @@ export async function acknowledgeThrough(
     delivery?: { operations: SemanticOperation[]; replica: ReplicaIdentity },
 ): Promise<void> {
     owner = normalizeStorageOwner(owner);
+    // The general UserData schema uses a catch-all default. Reject malformed
+    // transport envelopes before it can turn an invalid ACK into empty data.
+    if (remote === null || typeof remote !== 'object' || Array.isArray(remote)) {
+        throw new Error('Snapshot cloud non valido: acknowledgement sospeso per preservare il journal.');
+    }
     const parsed = parse(remote);
     const catalog = await getCachedCatalog();
     await updateArchiveRecord<unknown>(owner, raw => {
