@@ -1,5 +1,5 @@
 import 'fake-indexeddb/auto';
-import { clear } from 'idb-keyval';
+import { clear, get, set } from 'idb-keyval';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../src/lib/catalog/catalogService', () => ({
@@ -10,7 +10,7 @@ import { UserDataSchema } from '../../src/lib/schema';
 import type { UserData } from '../../src/types';
 import {
   commitLocal, initializeLocal, readLocal,
-  rebaseConsentRecoveryWithExplicitChoice,
+  rebaseConsentRecoveryWithExplicitChoice, StaleLocalRevisionError,
 } from '../../src/lib/sync/localRepository';
 import { purgeAllLocalUserData } from '../../src/lib/db/db_account';
 
@@ -71,6 +71,41 @@ describe('explicit consent-epoch journal recovery', () => {
     expect(result.archivedConsentJournals?.[0].baseline).toEqual(original.baseline);
   });
 
+  it('rejects cross-owner guest recovery while preserving the guest journal', async () => {
+    await initializeLocal('guest', state('170'));
+    await commitLocal('guest', state('180'), state('170'));
+    const before = await readLocal('guest');
+
+    await expect(rebaseConsentRecoveryWithExplicitChoice(
+      'guest', 2, before!.revision, state('175'), state('180'), new Map(), () => true,
+    )).rejects.toThrow('Nuovo consenso non valido');
+    expect(await readLocal('guest')).toEqual(before);
+  });
+
+  it('does not overwrite an archive with 32 preserved consent journals', async () => {
+    await commitLocal(owner, state('180'), state('170'));
+    const current = (await readLocal(owner))!;
+    const original = {
+      sourceConsentRevision: current.consentRevision ?? 0,
+      capturedAt: '2026-10-27T00:00:00.000Z',
+      data: structuredClone(current.data),
+      baseline: structuredClone(current.baseline),
+      pending: structuredClone(current.pending),
+    };
+    const key = `logbook:v2:${owner}`;
+    await set(key, {
+      ...current, archivedConsentJournals: Array.from({ length: 32 }, () => structuredClone(original)),
+    });
+    const fullArchive = await readLocal(owner);
+    expect(fullArchive?.archivedConsentJournals).toHaveLength(32);
+
+    await expect(rebaseConsentRecoveryWithExplicitChoice(
+      owner, 2, fullArchive!.revision, state('175'), state('180'), new Map(), () => true,
+    )).rejects.toThrow('Archivio recupero pieno');
+    expect(await get(key)).toEqual(fullArchive);
+    expect(await readLocal(owner)).toEqual(fullArchive);
+  });
+
   it('does not touch durable data on a concurrent session invalidation', async () => {
     await commitLocal(owner, state('180'), state('170'));
     const original = (await readLocal(owner))!;
@@ -87,7 +122,7 @@ describe('explicit consent-epoch journal recovery', () => {
     const concurrent = (await readLocal(owner))!;
     await expect(rebaseConsentRecoveryWithExplicitChoice(
       owner, 2, original.revision, state('175'), state('180'), new Map(), () => true,
-    )).rejects.toThrow('I dati locali sono cambiati');
+    )).rejects.toBeInstanceOf(StaleLocalRevisionError);
     expect(await readLocal(owner)).toEqual(concurrent);
   });
 
