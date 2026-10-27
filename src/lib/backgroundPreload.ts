@@ -47,6 +47,7 @@ export function scheduleSequentialIdlePreload(
 
   let cancelled = false;
   let running = false;
+  let initialDelayPending = true;
   let timeoutHandle: number | null = null;
   let idleHandle: number | null = null;
 
@@ -68,7 +69,7 @@ export function scheduleSequentialIdlePreload(
   );
 
   const scheduleNext = () => {
-    if (!canRun() || running || queue.length === 0 || timeoutHandle !== null || idleHandle !== null) return;
+    if (initialDelayPending || !canRun() || running || queue.length === 0 || timeoutHandle !== null || idleHandle !== null) return;
 
     if (typeof window.requestIdleCallback === 'function') {
       idleHandle = window.requestIdleCallback(() => {
@@ -101,21 +102,31 @@ export function scheduleSequentialIdlePreload(
     if (canRun()) scheduleNext();
   };
 
+  const scheduleInitialDelay = () => {
+    if (!initialDelayPending || !canRun() || timeoutHandle !== null) return;
+    timeoutHandle = window.setTimeout(() => {
+      timeoutHandle = null;
+      initialDelayPending = false;
+      scheduleNext();
+    }, initialDelayMs);
+  };
+
   const handleVisibilityChange = () => {
     if (cancelled) return;
     if (document.visibilityState !== 'visible') {
       clearScheduled();
       return;
     }
-    scheduleNext();
+    if (initialDelayPending) {
+      scheduleInitialDelay();
+    } else {
+      scheduleNext();
+    }
   };
 
   document.addEventListener('visibilitychange', handleVisibilityChange);
 
-  timeoutHandle = window.setTimeout(() => {
-    timeoutHandle = null;
-    scheduleNext();
-  }, initialDelayMs);
+  scheduleInitialDelay();
 
   return () => {
     cancelled = true;

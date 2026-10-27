@@ -67,7 +67,7 @@ describe('scheduleSequentialIdlePreload', () => {
     setVisibility('visible');
     const task = vi.fn().mockResolvedValue(undefined);
 
-    scheduleSequentialIdlePreload(
+    const cancel = scheduleSequentialIdlePreload(
       [task],
       {
         initialDelayMs: 10,
@@ -86,6 +86,50 @@ describe('scheduleSequentialIdlePreload', () => {
     document.dispatchEvent(new Event('visibilitychange'));
     await vi.advanceTimersByTimeAsync(5);
     expect(task).toHaveBeenCalledTimes(1);
+    cancel();
+  });
+
+  it('restarts the startup delay when a tab returns to the foreground', async () => {
+    vi.useFakeTimers();
+    setVisibility('visible');
+    const task = vi.fn().mockResolvedValue(undefined);
+    const cancel = scheduleSequentialIdlePreload(
+      [task],
+      { initialDelayMs: 10, fallbackIdleDelayMs: 5, isConstrainedNetwork: () => false },
+    );
+
+    await vi.advanceTimersByTimeAsync(4);
+    setVisibility('hidden');
+    document.dispatchEvent(new Event('visibilitychange'));
+    await vi.advanceTimersByTimeAsync(100);
+
+    setVisibility('visible');
+    document.dispatchEvent(new Event('visibilitychange'));
+    await vi.advanceTimersByTimeAsync(14);
+    expect(task).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(task).toHaveBeenCalledTimes(1);
+    cancel();
+  });
+
+  it('does not count hidden time toward the startup delay', async () => {
+    vi.useFakeTimers();
+    setVisibility('hidden');
+    const task = vi.fn().mockResolvedValue(undefined);
+    const cancel = scheduleSequentialIdlePreload(
+      [task],
+      { initialDelayMs: 10, fallbackIdleDelayMs: 5, isConstrainedNetwork: () => false },
+    );
+
+    await vi.advanceTimersByTimeAsync(100);
+    setVisibility('visible');
+    document.dispatchEvent(new Event('visibilitychange'));
+
+    await vi.advanceTimersByTimeAsync(14);
+    expect(task).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(task).toHaveBeenCalledTimes(1);
+    cancel();
   });
 
   it('does no speculative loading on constrained connections', async () => {
