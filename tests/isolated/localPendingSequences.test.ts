@@ -93,7 +93,7 @@ describe('bounded pending journal compaction', () => {
         };
         await set(storageKey('a'), corrupt);
 
-        await expect(ensureBoundedPendingSequences('a', 's00')).rejects.toThrow('causale');
+        await expect(ensureBoundedPendingSequences('a', 's00')).rejects.toThrow('Invalid causal dot');
         expect(await get(storageKey('a'))).toEqual(corrupt);
     });
 
