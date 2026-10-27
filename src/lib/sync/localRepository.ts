@@ -19,9 +19,9 @@ import { equivalentWorkoutSnapshot } from './workoutSnapshotEquality';
 import type { UserData } from '../../types';
 import { generateId } from '../utils/date';
 import { getNutritionConflictFingerprint } from '../utils/object';
-import { ReplicaFencedError, type CloudCheckpoint, type ReplicaCheckpoint } from './replicaProtocol';
+import { ReplicaFencedError } from './replicaProtocol';
 import equal from 'fast-deep-equal';
-import { type SemanticOperation, type VectorClock, type SyncMeta, diffDocuments, applySemanticOperations, coversVectorClock, mergeVectors, parseSyncMeta } from './semanticProjection';
+import { type SemanticOperation, type SyncMeta, diffDocuments, applySemanticOperations, coversVectorClock, parseSyncMeta } from './semanticProjection';
 import { projectDocuments, applyRemoteDocuments, type DocumentData } from './documentProjection';
 import { getCachedCatalog } from '../catalog/catalogService';
 import { normalizeStorageOwner } from './owner';
@@ -359,79 +359,7 @@ export async function commitDomainOperations(owner: string, batch: DomainOperati
     return { operations, data: savedData };
 }
 
-export async function adoptReplicaCheckpoint(
-    owner: string,
-    claim: ReplicaCheckpoint,
-    checkpoint: CloudCheckpoint,
-    guard?: LocalWriteGuard,
-): Promise<LocalEnvelope> {
-    owner = normalizeStorageOwner(owner);
-    const catalog = await getCachedCatalog();
-    let saved: LocalEnvelope | undefined;
-
-    await updateArchiveRecord<any>(owner, raw => {
-        if (guard && !guard()) return raw;
-        const current = validateLocalEnvelope(raw, owner);
-        if (!current) throw new Error('Archivio locale non trovato durante il checkpoint replica');
-
-        const sameReplica = current.replica
-            && current.replica.slot === claim.identity.slot
-            && current.replica.replicaId === claim.identity.replicaId
-            && current.replica.generation === claim.identity.generation;
-
-        if (sameReplica) {
-            saved = {
-                ...current,
-                ...currentEnvelopeVersions(),
-                clock: mergeVectors(current.clock, checkpoint.clock),
-                replica: claim.identity,
-                revision: current.revision + 1,
-            };
-            return saved;
-        }
-
-        const baseline = structuredClone(parse(current.baseline));
-        const desired = structuredClone(parse(current.data));
-        const baseDocs = projectDocuments(baseline, catalog);
-        const desiredDocs = projectDocuments(desired, catalog);
-        const actorId = claim.identity.slot;
-        const provisionalSeq = claim.baseSeq + 1;
-        const provisionalClock: VectorClock = { ...checkpoint.clock, [actorId]: provisionalSeq };
-
-        let operations = diffDocuments(baseDocs, desiredDocs, actorId, provisionalSeq, provisionalClock);
-        operations = enforceMonthlyEntityTombstones(baseDocs, desiredDocs, operations, actorId, provisionalSeq, provisionalClock);
-        const sequenced = sequenceOperationsForBoundedTransactions(
-            operations,
-            actorId,
-            claim.baseSeq,
-            checkpoint.clock,
-        );
-        operations = sequenced.operations;
-
-        const actorSeq = operations.length ? sequenced.actorSeq : claim.baseSeq;
-        const clock: VectorClock = operations.length
-            ? sequenced.clock
-            : { ...checkpoint.clock };
-
-        saved = {
-            ...current,
-            ...currentEnvelopeVersions(),
-            actorId,
-            actorSeq,
-            clock,
-            data: desired,
-            baseline,
-            pending: operations,
-            syncMetaByDocument: structuredClone(checkpoint.syncMetaByDocument),
-            replica: claim.identity,
-            revision: current.revision + 1,
-        };
-        return saved;
-    });
-
-    if (!saved) throw new Error('Checkpoint replica invalidato o non riuscito');
-    return saved;
-}
+export { adoptReplicaCheckpoint } from './localReplicaCheckpoint';
 
 export { acknowledgeThrough } from './localJournalAcknowledgement';
 
