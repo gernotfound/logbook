@@ -3,6 +3,7 @@ import { clear, get, set } from 'idb-keyval';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackError: vi.fn() } }));
 import { UserDataSchema } from '../../src/lib/schema';
+import { validateLocalEnvelope } from '../../src/lib/sync/localEnvelopeValidation';
 import type { UserData } from '../../src/types';
 import { adoptReplicaCheckpoint, markReplicaCheckpointRequired, markCloudIntegrityBlocked, completeCloudIntegrityRecovery, hydrateLocal, commitLocal, commitDomainOperations, initializeLocal, readLocal, acknowledgeThrough, StaleLocalRevisionError } from '../../src/lib/sync/localRepository';
 import {
@@ -166,6 +167,19 @@ describe('durable owner-scoped journal', () => {
         await set(key, { ...raw, closedWorkoutIds: ['duplicate', 'duplicate'] });
         await expect(readLocal('user:a')).rejects.toThrow('Registro workout chiusi non valido');
         expect((await get(key) as Record<string, unknown>).closedWorkoutIds).toEqual(['duplicate', 'duplicate']);
+    });
+
+    it('keeps envelope validation pure and fails closed for another owner', async () => {
+        await initializeLocal('user:a', data(170));
+        const key = 'logbook:v2:user:a';
+        const stored = await get<Record<string, unknown>>(key);
+        expect(stored).toBeDefined();
+
+        const validated = validateLocalEnvelope(stored, 'user:a');
+        expect(validated).toEqual(await readLocal('user:a'));
+        expect(() => validateLocalEnvelope({ ...stored, owner: 'user:b' }, 'user:a'))
+            .toThrow('Archivio locale non riconosciuto');
+        expect(await get(key)).toEqual(stored);
     });
 
     it('writes independent current envelope/data/sync versions', async () => {
