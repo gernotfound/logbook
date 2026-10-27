@@ -146,8 +146,10 @@ function parseCloudSyncMeta(documentPath: string, raw: unknown): SyncMeta {
     }
 }
 
-function validate(value: any, owner: string): LocalEnvelope | undefined {
-    if (!value) return undefined;
+function validate(value: unknown, owner: string): LocalEnvelope | undefined {
+    // Only a missing IndexedDB key means no archive. Invalid stored values
+    // must fail closed so bootstrap cannot replace them with fresh data.
+    if (value === undefined) return undefined;
 
     const canonicalOwner = normalizeStorageOwner(owner);
     // Dispatch on the container version before assuming the current envelope shape.
