@@ -69,6 +69,13 @@ export async function updateArchiveRecord<T>(
         if (typeof raw === 'string' && raw.startsWith(SEALED_LOCAL_PREFIX)) {
             throw new LocalCiphertextError();
         }
-        return transform(raw as T | undefined);
+        const next = transform(raw as T | undefined);
+        if (next instanceof Promise) throw new Error('Operazione locale asincrona vietata nel commit atomico');
+        assertNoLocalPurge(owner);
+        if (readVaultControl(owner)) throw new LocalVaultLockedError();
+        if (next === undefined && raw !== undefined) {
+            throw new Error('Una transizione locale non può eliminare tacitamente l’archivio');
+        }
+        return next;
     });
 }
