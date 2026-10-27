@@ -229,6 +229,21 @@ describe('durable owner-scoped journal', () => {
         expect(await readLocal('user:a')).toEqual(before);
     });
 
+    it.each([null, false, 0, ''])(
+        'rejects a stored invalid archive (%j) instead of treating it as absent',
+        async stored => {
+            const key = 'logbook:v2:user:a';
+            await set(key, stored);
+
+            await expect(readLocal('a')).rejects.toThrow('Archivio locale non valido');
+            await expect(initializeLocal('a', data(170))).rejects.toThrow('Archivio locale non valido');
+            await expect(commitLocal('a', data(180), data(170))).rejects.toThrow('Archivio locale non valido');
+
+            // Failed reads and updates must not silently replace the original record.
+            expect(await get(key)).toEqual(stored);
+        },
+    );
+
     it('rejects pre-M1 and future local envelopes without rewriting their bytes', async () => {
         const legacy = { owner: 'user:a', version: 3 };
         await set('logbook:v2:user:a', legacy);
