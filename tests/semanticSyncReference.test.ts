@@ -191,6 +191,27 @@ describe('Semantic sync reference invariants', () => {
         expect(desired.get('')!.routines).toEqual([{ id: 'routine-1', name: 'Before', exercises: [] }]);
     });
 
+    it('does not alias nested payloads when an existing keyed record is updated', () => {
+        const base = new Map<string, DocumentData>([['', {
+            routines: [{ id: 'routine-1', name: 'Before', options: { sessions: 1 } }],
+        }]]);
+        const replacement = { id: 'routine-1', name: 'After', options: { sessions: 2 } };
+        const op = {
+            docPath: '', path: ['routines', 'routine-1'], value: replacement,
+            isDelete: false, actorId: 's00', seq: 1, clock: { s00: 1 },
+        };
+
+        const result = applySemanticOperations(base, [op]);
+        const routine = (result.documents.get('')!.routines as Array<{
+            options: { sessions: number };
+        }>)[0];
+        expect(routine.options.sessions).toBe(2);
+        routine.options.sessions = 3;
+
+        expect(op.value.options.sessions).toBe(2);
+        expect((base.get('')!.routines as Array<{ options: { sessions: number } }>)[0].options.sessions).toBe(1);
+    });
+
     it('preserves parent operation values when a later child winner is applied', () => {
         const parent = {
             docPath: '', path: ['profile'], value: { height: '170' },
