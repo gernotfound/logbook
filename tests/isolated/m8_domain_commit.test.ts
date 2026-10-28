@@ -28,6 +28,23 @@ describe('M8 domain commit durability', () => {
         await clear();
     });
 
+    it('keeps the public facade bindings identical to the extracted transactional domain module', async () => {
+        const facade = await import('../../src/lib/sync/localRepository');
+        const domain = await import('../../src/lib/sync/localDomainCommit');
+        expect(facade.commitDomainOperations).toBe(domain.commitDomainOperations);
+        expect(facade.WorkoutIntentConflictError).toBe(domain.WorkoutIntentConflictError);
+    });
+
+    it('rejects a session-invalidated no-op domain patch without changing durable journal', async () => {
+        const { initializeLocal, commitDomainOperations, readLocal } = await import('../../src/lib/sync/localRepository');
+        const initial = base();
+        await initializeLocal('user:a', initial);
+        const before = await readLocal('user:a');
+        await expect(commitDomainOperations('user:a', { type: 'profile.patch', patch: { height: '170' } }, initial, () => false))
+            .rejects.toThrow('Commit locale invalidato dal cambio sessione');
+        expect(await readLocal('user:a')).toEqual(before);
+    });
+
     it('persists business state and semantic journal under the same envelope revision', async () => {
         const { initializeLocal, commitDomainOperations, readLocal } = await import('../../src/lib/sync/localRepository');
         await initializeLocal('user:a', base());
