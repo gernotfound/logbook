@@ -193,6 +193,20 @@ describe('production encrypted localRepository gateway', () => {
         expect(await readLocal(owner)).toEqual(durableBefore);
     });
 
+    it('keeps the exact encrypted journal bytes on a snapshot with no semantic changes', async () => {
+        await createAndMigrateVault(owner);
+        const initial = profile('170');
+        await initializeLocal(owner, initial);
+        await commitLocal(owner, profile('171'), initial);
+        const ciphertext = await get<string>(archive);
+        const durable = await readLocal(owner);
+        expect(durable?.pending.length).toBeGreaterThan(0);
+
+        expect(await commitLocal(owner, durable!.data, durable!.data)).toEqual([]);
+        expect(await get<string>(archive)).toBe(ciphertext);
+        expect(await readLocal(owner)).toEqual(durable);
+    });
+
     it('serializes concurrent production commits without dropping independent fields or pending operations', async () => {
         await createAndMigrateVault(owner);
         const initial = profile('170');

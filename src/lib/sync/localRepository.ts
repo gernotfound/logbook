@@ -1,8 +1,9 @@
 import { updateArchiveRecord } from './secureArchiveRepository';
-import { StaleLocalRevisionError } from './localRevisionError';
 export { StaleLocalRevisionError } from './localRevisionError';
 export { rebaseConsentRecoveryWithExplicitChoice } from './localConsentJournalRecovery';
 export { assertLegacyEnvelopeValidForSecureMigration, readLocal, initializeLocal } from './localArchiveBootstrap';
+export { commitLocal } from './localSnapshotCommit';
+import { assertWorkoutNotClosed } from './localSnapshotCommit';
 export {
     advanceLocalConsentRevisionIfClean,
     revertRejectedConsent,
@@ -12,15 +13,12 @@ export {
     completeCloudIntegrityRecovery,
     markReplicaCheckpointRequired,
 } from './localCloudIntegrity';
-import { enforceMonthlyEntityTombstones } from './monthlyEntityTombstones';
 import { UserDataSchema } from '../schema';
 import { equivalentWorkoutSnapshot } from './workoutSnapshotEquality';
 import type { UserData } from '../../types';
 import { generateId } from '../utils/date';
 import { getNutritionConflictFingerprint } from '../utils/object';
-import equal from 'fast-deep-equal';
-import { type SemanticOperation, diffDocuments, applySemanticOperations } from './semanticProjection';
-import { projectDocuments, applyRemoteDocuments } from './documentProjection';
+import { type SemanticOperation } from './semanticProjection';
 import { getCachedCatalog } from '../catalog/catalogService';
 import { normalizeStorageOwner } from './owner';
 import { readDeviceValueStrict } from './deviceStorage';
@@ -38,7 +36,7 @@ import {
 } from '../schemaEvolution';
 import { sequenceOperationsForBoundedTransactions } from './syncBatching';
 
-import { validateLocalEnvelope, type LocalEnvelope } from './localEnvelopeValidation';
+import { validateLocalEnvelope } from './localEnvelopeValidation';
 export type { LocalEnvelope } from './localEnvelopeValidation';
 export { hydrateLocal, IncompleteCloudSnapshotError } from './localCloudHydration';
 
@@ -62,69 +60,7 @@ const currentEnvelopeVersions = () => ({
 
 const parse = (value: unknown) => UserDataSchema.parse(value) as unknown as UserData;
 
-function assertWorkoutNotClosed(id: string, envelope: LocalEnvelope | undefined): void {
-    if (envelope && (envelope.lastClosedWorkoutId === id || envelope.closedWorkoutIds?.includes(id))) {
-        throw new Error('Allenamento già terminato o eliminato: ricarica la sessione aggiornata.');
-    }
-}
-
 export { ensureBoundedPendingSequences } from './localPendingSequences';
-
-export async function commitLocal(owner: string, data: UserData, initialBase: UserData, guard?: LocalWriteGuard, expectedRevision?: number): Promise<SemanticOperation[]> {
-    owner = normalizeStorageOwner(owner);
-    const desired = structuredClone(parse(data));
-    const callerBase = structuredClone(parse(initialBase));
-    let operations: SemanticOperation[] = [];
-    const catalog = await getCachedCatalog();
-    await updateArchiveRecord<any>(owner, raw => {
-        if (guard && !guard()) throw new Error('Commit locale invalidato dal cambio sessione');
-        const current = validateLocalEnvelope(raw, owner);
-        if (expectedRevision !== undefined && (
-            current?.revision !== expectedRevision
-            || !current
-            || !equal(parse(current.data), callerBase)
-        )) {
-            throw new StaleLocalRevisionError(expectedRevision, current?.revision ?? null);
-        }
-        const currentData = structuredClone(parse(current?.data ?? callerBase));
-        const baseDocs = projectDocuments(callerBase, catalog);
-        const desiredDocs = projectDocuments(desired, catalog);
-        const actorId = current?.replica?.slot ?? current?.actorId ?? generateId('actor');
-        const baseSeq = current?.actorSeq ?? 0;
-        const provisionalSeq = baseSeq + 1;
-        const provisionalClock = { ...(current?.clock ?? {}), [actorId]: provisionalSeq };
-        operations = diffDocuments(baseDocs, desiredDocs, actorId, provisionalSeq, provisionalClock);
-        operations = enforceMonthlyEntityTombstones(baseDocs, desiredDocs, operations, actorId, provisionalSeq, provisionalClock);
-
-        if (operations.length === 0) {
-            const stableData = current?.data ?? desired;
-            return { ...(current ?? { completeMonths: [], replica: null }), ...currentEnvelopeVersions(), owner, actorId, actorSeq: current?.actorSeq ?? 0, clock: current?.clock ?? {}, data: stableData, baseline: current?.baseline ?? callerBase, completeMonths: current?.completeMonths ?? [], pending: current?.pending ?? [], syncMetaByDocument: current?.syncMetaByDocument ?? {}, replica: current?.replica ?? null, revision: current?.revision ?? 0 };
-        }
-
-        const sequenced = sequenceOperationsForBoundedTransactions(
-            operations,
-            actorId,
-            baseSeq,
-            current?.clock ?? {},
-        );
-        operations = sequenced.operations;
-        const nextSeq = sequenced.actorSeq;
-        const testClock = sequenced.clock;
-
-        // Snapshot boundaries express intent relative to the caller's observed base.
-        // Replay only that delta over the latest durable envelope so concurrent changes
-        // unknown to this tab cannot be converted into deletions/tombstones.
-        const currentDocs = projectDocuments(currentData, catalog);
-        const { documents: reconciledDocs } = applySemanticOperations(currentDocs, operations);
-        const reconciled = applyRemoteDocuments(currentData, reconciledDocs, catalog);
-        reconciled.pendingConflicts = currentData.pendingConflicts;
-        const savedData = parse(reconciled);
-        if (savedData.activeWorkout?.id) assertWorkoutNotClosed(String(savedData.activeWorkout.id), current);
-
-        return { ...(current ?? { completeMonths: [], replica: null }), ...currentEnvelopeVersions(), owner, actorId, actorSeq: nextSeq, clock: testClock, data: savedData, baseline: current?.baseline ?? callerBase, completeMonths: current?.completeMonths ?? [], pending: owner === 'guest' ? [] : [...(current?.pending ?? []), ...operations], syncMetaByDocument: current?.syncMetaByDocument ?? {}, replica: current?.replica ?? null, revision: (current?.revision ?? 0) + 1 };
-    });
-    return operations;
-}
 
 /**
  * IndexedDB writes are serialized but the synchronous Web Storage snapshot is
