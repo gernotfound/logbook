@@ -960,7 +960,7 @@ describe('durable owner-scoped journal', () => {
         expect(await readLocal('user:initial')).toBeUndefined();
         expect(await commitLocal('user:initial', initial, initial)).toEqual([]);
         const durable = await readLocal('user:initial');
-        expect(durable?.data).toEqual(initial);
+        expect(durable?.data).toEqual(UserDataSchema.parse(initial));
         expect(durable?.actorSeq).toBe(0);
         expect(durable?.pending).toEqual([]);
     });
