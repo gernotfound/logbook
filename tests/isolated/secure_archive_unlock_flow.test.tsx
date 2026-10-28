@@ -56,6 +56,15 @@ describe('cancelled secure archive readiness', () => {
         expect(vault.unlocked).toBe(true);
     });
 
+    it('revokes a capability published immediately before cancellation', async () => {
+        const pending = ensureLocalVaultReady(owner);
+        attempts[0].finish();
+        expect(vault.unlocked).toBe(true);
+        cancelLocalVaultReadiness(owner);
+        await pending;
+        expect(vault.unlocked).toBe(false);
+    });
+
     it('does not publish a capability from a cancelled request without a successor', async () => {
         const pending = ensureLocalVaultReady(owner);
         cancelLocalVaultReadiness(owner);
