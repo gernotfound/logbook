@@ -1,8 +1,8 @@
-import { getArchiveRecord, updateArchiveRecord } from './secureArchiveRepository';
+import { updateArchiveRecord } from './secureArchiveRepository';
 import { StaleLocalRevisionError } from './localRevisionError';
 export { StaleLocalRevisionError } from './localRevisionError';
 export { rebaseConsentRecoveryWithExplicitChoice } from './localConsentJournalRecovery';
-import { ownerConsentRevision } from './localConsentReconciliation';
+export { assertLegacyEnvelopeValidForSecureMigration, readLocal, initializeLocal } from './localArchiveBootstrap';
 export {
     advanceLocalConsentRevisionIfClean,
     revertRejectedConsent,
@@ -66,19 +66,6 @@ function assertWorkoutNotClosed(id: string, envelope: LocalEnvelope | undefined)
     if (envelope && (envelope.lastClosedWorkoutId === id || envelope.closedWorkoutIds?.includes(id))) {
         throw new Error('Allenamento già terminato o eliminato: ricarica la sessione aggiornata.');
     }
-}
-
-/** Migration-only read verifier. Enforces the full existing causal/schema contract. */
-export function assertLegacyEnvelopeValidForSecureMigration(raw: unknown, owner: string): void {
-    if (raw === undefined) return;
-    if (!validateLocalEnvelope(raw, normalizeStorageOwner(owner))) {
-        throw new Error('Archivio legacy non valido: migrazione sospesa senza modificare il dato.');
-    }
-}
-
-export async function readLocal(owner: string): Promise<LocalEnvelope | undefined> {
-    owner = normalizeStorageOwner(owner);
-    return validateLocalEnvelope(await getArchiveRecord<any>(owner), owner);
 }
 
 export { ensureBoundedPendingSequences } from './localPendingSequences';
@@ -326,20 +313,6 @@ export async function commitDomainOperations(owner: string, batch: DomainOperati
 export { adoptReplicaCheckpoint } from './localReplicaCheckpoint';
 
 export { acknowledgeThrough } from './localJournalAcknowledgement';
-
-export async function initializeLocal(owner: string, data: UserData, completeMonths?: string[], guard?: LocalWriteGuard): Promise<void> {
-    owner = normalizeStorageOwner(owner);
-    const parsed = structuredClone(parse(data));
-    await updateArchiveRecord<any>(owner, raw => {
-        if (guard && !guard()) throw new Error('Inizializzazione locale invalidata dal cambio sessione');
-        const current = validateLocalEnvelope(raw, owner);
-        // Bootstrap is create-if-absent, not a replacement write: the journal
-        // can be empty (especially for guest or an acknowledged account) while
-        // a concurrent tab has already committed durable business edits.
-        if (current) return current;
-        return { ...currentEnvelopeVersions(), ...ownerConsentRevision(owner), owner, actorId: generateId('actor'), actorSeq: 0, clock: {}, data: parsed, baseline: parsed, completeMonths: completeMonths ?? [], pending: [], syncMetaByDocument: {}, replica: null, revision: 0 };
-    });
-}
 
 export async function clearNutritionConflict(owner: string, fingerprint: string, guard?: LocalWriteGuard): Promise<UserData> {
     owner = normalizeStorageOwner(owner);
