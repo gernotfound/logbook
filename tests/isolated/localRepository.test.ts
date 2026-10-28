@@ -955,6 +955,28 @@ describe('durable owner-scoped journal', () => {
         expect(await readLocal('a')).toEqual(before);
     });
 
+    it('creates a valid first owner envelope when a snapshot has no semantic delta', async () => {
+        const initial = data(170);
+        expect(await readLocal('user:initial')).toBeUndefined();
+        expect(await commitLocal('user:initial', initial, initial)).toEqual([]);
+        const durable = await readLocal('user:initial');
+        expect(durable?.data).toEqual(UserDataSchema.parse(initial));
+        expect(durable?.actorSeq).toBe(0);
+        expect(durable?.pending).toEqual([]);
+    });
+
+    it('rejects an invalidated session for a no-op without changing the durable journal', async () => {
+        const initial = data(170);
+        await initializeLocal('user:a', initial);
+        await commitLocal('user:a', data(171), initial);
+        const before = await readLocal('user:a');
+        expect(before?.pending.length).toBeGreaterThan(0);
+
+        await expect(commitLocal('user:a', before!.data, before!.data, () => false))
+            .rejects.toThrow('Commit locale invalidato dal cambio sessione');
+        expect(await readLocal('user:a')).toEqual(before);
+    });
+
     it('does not advance actorSeq for a semantic no-op', async () => {
         const initial = data(170);
         await initializeLocal('a', initial);
