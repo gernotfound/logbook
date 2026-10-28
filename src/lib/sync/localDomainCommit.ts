@@ -1,3 +1,4 @@
+import equal from 'fast-deep-equal';
 import { updateArchiveRecord } from './secureArchiveRepository';
 import { assertWorkoutNotClosed } from './localSnapshotCommit';
 import { equivalentWorkoutSnapshot } from './workoutSnapshotEquality';
@@ -218,6 +219,13 @@ export async function commitDomainOperations(owner: string, batch: DomainOperati
         const provisionalClock = { ...(current?.clock ?? {}), [actorId]: provisionalSeq };
         operations = compileDomainOperations(base, desired, effectiveDomainOperations, catalog, actorId, provisionalSeq, provisionalClock);
         savedData = desired;
+        // The validated envelope is a newly parsed object. For a genuine
+        // no-op return the ORIGINAL record, not the validated copy, so the
+        // encrypted IndexedDB gateway can retain the exact ciphertext bytes.
+        // Closure evidence and device intent are durable even with no journal
+        // operations, and unprojected business changes still require a write.
+        if (operations.length === 0 && current && !closureChanged && !workoutIntent
+            && equal(current.data, desired)) return raw;
         if (operations.length === 0) return { ...(current ?? { completeMonths: [], replica: null }), ...currentEnvelopeVersions(), ...closure, ...intentPatch, owner, actorId, actorSeq: current?.actorSeq ?? 0, clock: current?.clock ?? {}, data: desired, baseline: current?.baseline ?? fallback, completeMonths: current?.completeMonths ?? [], pending: current?.pending ?? [], syncMetaByDocument: current?.syncMetaByDocument ?? {}, replica: current?.replica ?? null, revision: (current?.revision ?? 0) + (closureChanged || workoutIntent ? 1 : 0) };
         const sequenced = sequenceOperationsForBoundedTransactions(operations, actorId, baseSeq, current?.clock ?? {});
         operations = sequenced.operations;

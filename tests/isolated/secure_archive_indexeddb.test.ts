@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { clear, get, set } from 'idb-keyval';
 import { UserDataSchema } from '../../src/lib/schema';
 import type { UserData } from '../../src/types';
-import { clearNutritionConflict, commitLocal, initializeLocal, readLocal } from '../../src/lib/sync/localRepository';
+import { clearNutritionConflict, commitDomainOperations, commitLocal, initializeLocal, readLocal } from '../../src/lib/sync/localRepository';
 import { getNutritionConflictFingerprint } from '../../src/lib/utils/object';
 import { createAndMigrateVault } from '../../src/lib/sync/secureArchiveMigration';
 import { deviceVaultKeyId } from '../../src/lib/sync/secureArchiveKeys';
@@ -205,6 +205,59 @@ describe('production encrypted localRepository gateway', () => {
 
         expect(await commitLocal(owner, durable!.data, durable!.data)).toEqual([]);
         expect(await get<string>(archive)).toBe(ciphertext);
+        expect(await readLocal(owner)).toEqual(durable);
+    });
+
+    it('does not reseal or alter the pending journal for a domain edit with no business change', async () => {
+        await createAndMigrateVault(owner);
+        const initial = profile('170');
+        await initializeLocal(owner, initial);
+        await commitDomainOperations(owner, { type: 'profile.patch', patch: { height: '171' } }, initial);
+        const before = await readLocal(owner);
+        const sealedBefore = await get<string>(archive);
+        expect(before?.pending.length).toBeGreaterThan(0);
+
+        const result = await commitDomainOperations(owner, { type: 'profile.patch', patch: { height: '171' } }, initial);
+        expect(result.operations).toEqual([]);
+        expect(result.data).toEqual(before?.data);
+        expect(await get<string>(archive)).toBe(sealedBefore);
+        expect(await readLocal(owner)).toEqual(before);
+    });
+
+    it('keeps ciphertext unchanged when a domain no-op is rejected by its session guard', async () => {
+        await createAndMigrateVault(owner);
+        const initial = profile('170');
+        await initializeLocal(owner, initial);
+        await commitDomainOperations(owner, { type: 'profile.patch', patch: { height: '171' } }, initial);
+        const before = await readLocal(owner);
+        const sealedBefore = await get<string>(archive);
+
+        await expect(commitDomainOperations(
+            owner, { type: 'profile.patch', patch: { height: '171' } }, initial, () => false,
+        )).rejects.toThrow('Commit locale invalidato dal cambio sessione');
+        expect(await get<string>(archive)).toBe(sealedBefore);
+        expect(await readLocal(owner)).toEqual(before);
+    });
+
+    it('still seals workout closure evidence without business operations, but does not reseal its retry', async () => {
+        await createAndMigrateVault(owner);
+        const initial = profile('170');
+        await initializeLocal(owner, initial);
+        const before = await readLocal(owner);
+        const sealedBefore = await get<string>(archive);
+        const closure = { type: 'active-workout.set' as const, workout: null, deletedWorkoutId: 'closed-on-device' };
+
+        const result = await commitDomainOperations(owner, closure, initial);
+        const durable = await readLocal(owner);
+        const sealedClosure = await get<string>(archive);
+        expect(result.operations).toEqual([]);
+        expect(sealedClosure).not.toBe(sealedBefore);
+        expect(durable?.lastClosedWorkoutId).toBe('closed-on-device');
+        expect(durable?.closedWorkoutIds).toEqual(['closed-on-device']);
+        expect(durable?.revision).toBe((before?.revision ?? 0) + 1);
+
+        expect((await commitDomainOperations(owner, closure, initial)).operations).toEqual([]);
+        expect(await get<string>(archive)).toBe(sealedClosure);
         expect(await readLocal(owner)).toEqual(durable);
     });
 
