@@ -161,21 +161,19 @@ export async function purgeOwnerLocalData(owner: string, resumeOnly = false, gat
         gate?.assertStillSafe?.();
 
         purgeOwnerStorageKeys(owner, initialGuestIntent, failures, gate);
-
-    gate?.assertStillSafe?.();
-
+        gate?.assertStillSafe?.();
         await purgeOwnerVaultCredentials(owner, gate);
 
-    // Drop the resident DEK only once all encrypted and device records have
-    // been verified removed. An incomplete deletion remains recoverable.
-    lockVault(owner);
-    // The owner fence is completed only after ciphertext and its device key
-    // were verified deleted. New versions recover an interrupted owner purge.
-    gate?.assertStillSafe?.();
-    markLocalPurgeComplete(owner);
-    // Keep the non-secret fence after removal. If the last suspended tab sees
-    // no vault control, it must not fall back to plaintext legacy storage.
-    // The next verified owner will release it only AFTER installing a new vault.
+        // Drop the resident DEK only once all encrypted and device records have
+        // been verified removed. An incomplete deletion remains recoverable.
+        lockVault(owner);
+        // The owner fence is completed only after ciphertext and its device key
+        // were verified deleted. New versions recover an interrupted owner purge.
+        gate?.assertStillSafe?.();
+        markLocalPurgeComplete(owner);
+        // Keep the non-secret fence after removal. If the last suspended tab sees
+        // no vault control, it must not fall back to plaintext legacy storage.
+        // The next verified owner will release it only AFTER installing a new vault.
     });
 }
 
