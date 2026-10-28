@@ -341,7 +341,7 @@ export async function initializeLocal(owner: string, data: UserData, completeMon
     });
 }
 
-export async function clearNutritionConflict(owner: string, fingerprint: string, fallback: UserData): Promise<UserData> {
+export async function clearNutritionConflict(owner: string, fingerprint: string, guard?: LocalWriteGuard): Promise<UserData> {
     owner = normalizeStorageOwner(owner);
     let saved!: UserData;
     const clear = (data: UserData): UserData => {
@@ -351,11 +351,15 @@ export async function clearNutritionConflict(owner: string, fingerprint: string,
         return Object.keys(remaining).length ? { ...rest, pendingConflicts: remaining } : rest;
     };
     await updateArchiveRecord<any>(owner, raw => {
+        if (guard && !guard()) throw new Error('Risoluzione conflitto invalidata dal cambio sessione');
         const current = validateLocalEnvelope(raw, owner);
-        const data = current?.data ?? fallback;
-        if (getNutritionConflictFingerprint(data.pendingConflicts?.nutritionPlanning) !== fingerprint) throw new Error('Conflitto cambiato durante la risoluzione');
-        saved = parse(clear(data));
-        return { ...(current ?? { ...currentEnvelopeVersions(), owner, actorId: generateId('actor'), actorSeq: 0, clock: {}, completeMonths: [], pending: [], syncMetaByDocument: {}, replica: null, revision: 0 }), data: saved, baseline: clear(current?.baseline ?? data) };
+        // A stale memory snapshot must never recreate a deleted owner archive.
+        if (!current) throw new Error('Archivio locale assente durante la risoluzione del conflitto');
+        if (!fingerprint || getNutritionConflictFingerprint(current.data.pendingConflicts?.nutritionPlanning) !== fingerprint) {
+            throw new Error('Conflitto cambiato durante la risoluzione');
+        }
+        saved = parse(clear(current.data));
+        return { ...current, data: saved, baseline: clear(current.baseline) };
     });
     return saved;
 }
