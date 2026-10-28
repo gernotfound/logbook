@@ -171,4 +171,84 @@ describe('Semantic sync reference invariants', () => {
         expect(ops[0].path).toEqual(['2026-09-13', 'meals', 'meal-1', 'kcal']);
         expect(ops[0].value).toBe(120);
     });
+    it('does not alias journal values into newly inserted keyed records', () => {
+        const base = new Map<string, DocumentData>([['', { routines: [] }]]);
+        const desired = new Map<string, DocumentData>([['', {
+            routines: [{ id: 'routine-1', name: 'Before', exercises: [] }],
+        }]]);
+        const ops = diffDocuments(base, desired, 's00', 1, { s00: 1 });
+        const originalJournal = structuredClone(ops);
+
+        const result = applySemanticOperations(base, ops);
+        const routine = (result.documents.get('')!.routines as Array<{
+            id: string; name: string; exercises: unknown[];
+        }>)[0];
+        expect(routine.name).toBe('Before');
+        routine.name = 'After';
+        routine.exercises.push({ id: 'exercise-1' });
+
+        expect(ops).toEqual(originalJournal);
+        expect(desired.get('')!.routines).toEqual([{ id: 'routine-1', name: 'Before', exercises: [] }]);
+    });
+
+    it('does not alias nested payloads when an existing keyed record is updated', () => {
+        const base = new Map<string, DocumentData>([['', {
+            routines: [{ id: 'routine-1', name: 'Before', options: { sessions: 1 } }],
+        }]]);
+        const replacement = { id: 'routine-1', name: 'After', options: { sessions: 2 } };
+        const op = {
+            docPath: '', path: ['routines', 'routine-1'], value: replacement,
+            isDelete: false, actorId: 's00', seq: 1, clock: { s00: 1 },
+        };
+
+        const result = applySemanticOperations(base, [op]);
+        const routine = (result.documents.get('')!.routines as Array<{
+            options: { sessions: number };
+        }>)[0];
+        expect(routine.options.sessions).toBe(2);
+        routine.options.sessions = 3;
+
+        expect(op.value.options.sessions).toBe(2);
+        expect((base.get('')!.routines as Array<{ options: { sessions: number } }>)[0].options.sessions).toBe(1);
+    });
+
+    it('preserves parent operation values when a later child winner is applied', () => {
+        const parent = {
+            docPath: '', path: ['profile'], value: { height: '170' },
+            isDelete: false, actorId: 's00', seq: 1, clock: { s00: 1 },
+        };
+        const child = {
+            docPath: '', path: ['profile', 'height'], value: '180',
+            isDelete: false, actorId: 's00', seq: 2, clock: { s00: 2 },
+        };
+        const operations = [parent, child];
+        const originalJournal = structuredClone(operations);
+
+        const result = applySemanticOperations(new Map([['', {}]]), operations);
+        expect((result.documents.get('')!.profile as { height: string }).height).toBe('180');
+        expect(operations).toEqual(originalJournal);
+    });
+
+    it('recalculates nutrition totals without modifying the durable semantic payload', () => {
+        const day = {
+            date: '2026-09-13',
+            meals: [{ id: 'meal-1', name: 'Meal', quantity: 100, baseQty: 100, kcal: 50, carbs: 12, pro: 2, fat: 1 }],
+        };
+        const originalDay = structuredClone(day);
+        const op = {
+            docPath: 'nutrition_months/2026-09', path: ['2026-09-13'],
+            value: day, isDelete: false, actorId: 's00', seq: 1, clock: { s00: 1 },
+        };
+
+        const result = applySemanticOperations(new Map([[op.docPath, {}]]), [op]);
+        const mergedDay = result.documents.get(op.docPath)!['2026-09-13'] as {
+            kcal: number; carbs: number; meals: typeof day.meals;
+        };
+        expect(mergedDay.kcal).toBe(50);
+        expect(mergedDay.carbs).toBe(12);
+        expect(op.value).toEqual(originalDay);
+        mergedDay.meals[0].kcal = 999;
+        expect(op.value).toEqual(originalDay);
+    });
+
 });
