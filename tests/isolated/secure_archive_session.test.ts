@@ -6,7 +6,7 @@ import { activateGuestSession, revokeGuestSession, GUEST_SESSION_KEY, GUEST_REVO
 import { beginLocalPurge } from '../../src/lib/sync/localPurgeFence';
 import {
     isVaultUnlocked, LocalVaultLockedError, lockAllVaults, lockVault,
-    readVaultControl, requireUnlockedLocalKey, unlockVaultForOwner,
+    readVaultControl, requireUnlockedLocalKey, unlockVaultForOwner, verifyMigrationCapability,
     vaultControlKey, type PersistedVaultControl,
 } from '../../src/lib/sync/secureArchiveSession';
 
@@ -65,6 +65,32 @@ describe('automatic owner-fenced vault capability', () => {
         localStorage.setItem(vaultControlKey(owner), JSON.stringify({ ...metadata, epoch: 'b'.repeat(32) }));
         expect(() => requireUnlockedLocalKey(owner)).toThrow(LocalVaultLockedError);
         expect(isVaultUnlocked(owner)).toBe(false);
+    });
+
+    it('rejects a wrapped DEK replacement even when the control epoch is unchanged', async () => {
+        await unlockVaultForOwner(owner);
+        const replacement = await createLocalKeyVault(owner);
+        localStorage.setItem(vaultControlKey(owner), JSON.stringify({ ...metadata, wrappedKey: replacement.vault }));
+        expect(() => requireUnlockedLocalKey(owner)).toThrow(LocalVaultLockedError);
+        expect(isVaultUnlocked(owner)).toBe(false);
+    });
+
+    it('rejects a wrapped DEK replacement during an asynchronous unlock', async () => {
+        const replacement = await createLocalKeyVault(owner);
+        const { pending, resume } = await beginPausedUnlock(owner);
+        localStorage.setItem(vaultControlKey(owner), JSON.stringify({ ...metadata, wrappedKey: replacement.vault }));
+        resume();
+        await expect(pending).rejects.toBeInstanceOf(LocalVaultLockedError);
+        expect(isVaultUnlocked(owner)).toBe(false);
+    });
+
+    it('refuses a changed wrapped DEK during migration, even with the original epoch', async () => {
+        const migrating = { ...metadata, phase: 'migrating' as const };
+        localStorage.setItem(vaultControlKey(owner), JSON.stringify(migrating));
+        expect(() => verifyMigrationCapability(owner, migrating, originalKey)).not.toThrow();
+        const replacement = await createLocalKeyVault(owner);
+        localStorage.setItem(vaultControlKey(owner), JSON.stringify({ ...migrating, wrappedKey: replacement.vault }));
+        expect(() => verifyMigrationCapability(owner, migrating, originalKey)).toThrow(LocalVaultLockedError);
     });
 
     it('rejects malformed, future or other-owner metadata', () => {
