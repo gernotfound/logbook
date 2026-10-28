@@ -30,7 +30,7 @@ beforeEach(async () => {
     localStorage.setItem(vaultControlKey(owner), JSON.stringify(metadata));
 });
 
-async function beginPausedUnlock(requestedOwner: string): Promise<{
+async function beginPausedUnlock(requestedOwner: string, isCurrent?: () => boolean): Promise<{
     pending: Promise<void>; resume: () => void;
 }> {
     const decrypt = crypto.subtle.decrypt.bind(crypto.subtle);
@@ -43,7 +43,7 @@ async function beginPausedUnlock(requestedOwner: string): Promise<{
         await gate;
         return decrypt(algorithm, key, data);
     });
-    const pending = unlockVaultForOwner(requestedOwner);
+    const pending = unlockVaultForOwner(requestedOwner, isCurrent);
     await began;
     return { pending, resume };
 }
@@ -122,6 +122,16 @@ describe('automatic owner-fenced vault capability', () => {
         revokeGuestSession();
         expect(() => requireUnlockedLocalKey('guest')).toThrow(LocalVaultLockedError);
         expect(isVaultUnlocked('guest')).toBe(false);
+    });
+
+    it('never installs a DEK after its readiness was cancelled during Web Crypto', async () => {
+        let current = true;
+        const { pending, resume } = await beginPausedUnlock(owner, () => current);
+        current = false;
+        resume();
+        await expect(pending).rejects.toBeInstanceOf(LocalVaultLockedError);
+        expect(isVaultUnlocked(owner)).toBe(false);
+        expect(() => requireUnlockedLocalKey(owner)).toThrow(LocalVaultLockedError);
     });
 
     it('rejects an unlock completing after a guest session was replaced', async () => {

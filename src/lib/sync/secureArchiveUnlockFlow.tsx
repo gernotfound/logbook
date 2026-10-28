@@ -7,7 +7,6 @@ import { isLocalPurgePending } from './localPurgeFence';
 
 type PendingReadiness = { promise: Promise<void>; cancel: () => void };
 const active = new Map<string, PendingReadiness>();
-
 /**
  * Called only after the guest generation or Firebase UID has been established.
  * No extra user credential is required. The DEK is unwrapped with the local
@@ -24,12 +23,14 @@ export function ensureLocalVaultReady(requestedOwner: string): Promise<void> {
     let finished = false;
     let resolve!: () => void;
     const promise = new Promise<void>(r => { resolve = r; });
-    const complete = () => {
+    const complete = (cancelled = false) => {
         if (finished) return;
         finished = true;
+        active.delete(owner);
+        // Revoke before unmount cleanup can re-enter readiness for this owner.
+        if (cancelled) lockVault(owner);
         root?.unmount();
         container?.remove();
-        active.delete(owner);
         resolve();
     };
     const showFailure = (cause: unknown) => {
@@ -54,15 +55,15 @@ export function ensureLocalVaultReady(requestedOwner: string): Promise<void> {
             }
             // Always reconcile the mirrored control under the vault Web Lock
             // before considering a missing primary to be an empty archive.
-            await createAndMigrateVault(owner);
-            if (finished) { lockVault(owner); return; }
+            await createAndMigrateVault(owner, () => !finished);
+            if (finished) return;
             if (!isVaultUnlocked(owner)) throw new Error('La sessione locale non è più valida.');
             complete();
         } catch (cause) {
             showFailure(cause);
         } finally { busy = false; }
     };
-    active.set(owner, { promise, cancel: complete });
+    active.set(owner, { promise, cancel: () => complete(true) });
     void attempt();
     return promise;
 }

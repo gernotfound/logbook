@@ -93,7 +93,7 @@ export function isVaultUnlocked(owner: string): boolean {
 }
 
 /** Automatic same-device unlock after the caller verifies current owner identity. */
-export async function unlockVaultForOwner(owner: string): Promise<void> {
+export async function unlockVaultForOwner(owner: string, isCurrent: () => boolean = () => true): Promise<void> {
     const normalized = normalizeStorageOwner(owner);
     assertNoLocalPurge(normalized);
     const control = readVaultControl(normalized);
@@ -106,6 +106,9 @@ export async function unlockVaultForOwner(owner: string): Promise<void> {
 
     const unwrapped = await unlockLocalKeyVault(control.wrappedKey, normalized);
     try {
+        // A cancelled bootstrap may finish its Web Crypto work after a newer
+        // session has started. Never publish that obsolete DEK to the tab.
+        if (!isCurrent()) throw new LocalVaultLockedError();
         assertNoLocalPurge(normalized);
         const current = readVaultControl(normalized);
         if (!current || current.epoch !== control.epoch || current.phase !== 'active'
