@@ -54,8 +54,9 @@ type PurgeGate = {
 };
 
 function purgeOwnerStorageKeys(
-    owner: string, initialGuestIntent: string | null, failures: unknown[], gate?: PurgeGate,
+    owner: string, initialGuestIntent: string | null, gate?: PurgeGate,
 ): void {
+    const failures: unknown[] = [];
     let remaining = new Set<string>();
     try {
         for (let pass = 0; pass < LOCAL_PURGE_MAX_PASSES; pass++) {
@@ -160,7 +161,7 @@ export async function purgeOwnerLocalData(owner: string, resumeOnly = false, gat
         }
         gate?.assertStillSafe?.();
 
-        purgeOwnerStorageKeys(owner, initialGuestIntent, failures, gate);
+        purgeOwnerStorageKeys(owner, initialGuestIntent, gate);
         gate?.assertStillSafe?.();
         await purgeOwnerVaultCredentials(owner, gate);
 
