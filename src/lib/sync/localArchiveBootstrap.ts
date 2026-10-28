@@ -37,7 +37,7 @@ export async function initializeLocal(owner: string, data: UserData, completeMon
         // Bootstrap is create-if-absent, not a replacement write: the journal
         // can be empty (especially for guest or an acknowledged account) while
         // a concurrent tab has already committed durable business edits.
-        if (current) return current;
+        if (current) return raw;
         return { ...currentEnvelopeVersions(), ...ownerConsentRevision(owner), owner, actorId: generateId('actor'), actorSeq: 0, clock: {}, data: parsed, baseline: parsed, completeMonths: completeMonths ?? [], pending: [], syncMetaByDocument: {}, replica: null, revision: 0 };
     });
 }

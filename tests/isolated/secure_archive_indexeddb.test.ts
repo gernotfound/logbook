@@ -179,6 +179,20 @@ describe('production encrypted localRepository gateway', () => {
         expect(await get(deviceVaultKeyId(owner))).toEqual(deviceKey);
     });
 
+    it('preserves exact encrypted journal bytes on redundant owner bootstrap', async () => {
+        await createAndMigrateVault(owner);
+        const initial = profile('170');
+        await initializeLocal(owner, initial, ['2026-09']);
+        await commitLocal(owner, profile('171'), initial);
+        const sealedBefore = await get<string>(archive);
+        const durableBefore = await readLocal(owner);
+        expect(durableBefore?.pending.length).toBeGreaterThan(0);
+
+        await initializeLocal(owner, profile('199'), ['2026-10']);
+        expect(await get<string>(archive)).toBe(sealedBefore);
+        expect(await readLocal(owner)).toEqual(durableBefore);
+    });
+
     it('serializes concurrent production commits without dropping independent fields or pending operations', async () => {
         await createAndMigrateVault(owner);
         const initial = profile('170');
