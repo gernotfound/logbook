@@ -12,7 +12,7 @@ vi.mock('../../src/lib/healthConsent', () => ({
 
 import { commitDomainOperations, initializeLocal, readLocal } from '../../src/lib/sync/localRepository';
 import { deviceKey, protectedDeviceKey, readDeviceValue, readDeviceValueStrict, writeDeviceValue } from '../../src/lib/sync/deviceStorage';
-import { createAndMigrateVault, resumeVaultMigration } from '../../src/lib/sync/secureArchiveMigration';
+import { createAndMigrateVault } from '../../src/lib/sync/secureArchiveMigration';
 import { purgeCompletedAccountLocalData } from '../../src/lib/db/db_account';
 import { isLocalPurgePending } from '../../src/lib/sync/localPurgeFence';
 import { vaultControlMirrorId } from '../../src/lib/sync/secureArchiveControlRecovery';
@@ -246,11 +246,13 @@ describe('durable secure archive migration', () => {
         spy.mockRestore();
         expect(shifted).toBe(true);
         expect(readVaultControl(owner)?.phase).toBe('migrating');
+        const migratingEpoch = readVaultControl(owner)!.epoch;
         expect(localStorage.getItem(legacyKey)).toBe(raw);
         expect(localStorage.getItem(protectedDeviceKey('draft:measurement:' + day, owner))).toBeNull();
 
-        await resumeVaultMigration(owner);
+        await createAndMigrateVault(owner);
         expect(readVaultControl(owner)?.phase).toBe('active');
+        expect(readVaultControl(owner)?.epoch).toBe(migratingEpoch);
         expect(localStorage.getItem(legacyKey)).toBeNull();
         expect(readDeviceValueStrict('draft:measurement:' + day, owner)).toBe(raw);
     });
@@ -422,10 +424,12 @@ describe('durable secure archive migration', () => {
         expect(readVaultControl(owner)?.phase).toBe('migrating');
         expect(localStorage.getItem(deviceKey('draft:measurement:' + day, owner))).toBe('{"weight":"77"}');
         expect((await get<string>('logbook:v2:' + owner))?.startsWith(SEALED_LOCAL_PREFIX)).toBe(true);
+        const migratingEpoch = readVaultControl(owner)!.epoch;
         intercepted.mockRestore();
 
-        await resumeVaultMigration(owner);
+        await createAndMigrateVault(owner);
         expect(readVaultControl(owner)?.phase).toBe('active');
+        expect(readVaultControl(owner)?.epoch).toBe(migratingEpoch);
         expect(localStorage.getItem(deviceKey('draft:measurement:' + day, owner))).toBeNull();
         expect(readDeviceValueStrict('draft:measurement:' + day, owner)).toBe('{"weight":"77"}');
     });
