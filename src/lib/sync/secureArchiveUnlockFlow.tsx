@@ -23,12 +23,14 @@ export function ensureLocalVaultReady(requestedOwner: string): Promise<void> {
     let finished = false;
     let resolve!: () => void;
     const promise = new Promise<void>(r => { resolve = r; });
-    const complete = () => {
+    const complete = (cancelled = false) => {
         if (finished) return;
         finished = true;
+        active.delete(owner);
+        // Revoke before unmount cleanup can re-enter readiness for this owner.
+        if (cancelled) lockVault(owner);
         root?.unmount();
         container?.remove();
-        active.delete(owner);
         resolve();
     };
     const showFailure = (cause: unknown) => {
@@ -61,11 +63,7 @@ export function ensureLocalVaultReady(requestedOwner: string): Promise<void> {
             showFailure(cause);
         } finally { busy = false; }
     };
-    active.set(owner, { promise, cancel: () => {
-        complete();
-        // An unwrap that published just before cancellation must not remain usable.
-        lockVault(owner);
-    } });
+    active.set(owner, { promise, cancel: () => complete(true) });
     void attempt();
     return promise;
 }
