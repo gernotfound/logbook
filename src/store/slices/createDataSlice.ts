@@ -212,7 +212,7 @@ export const createDataSlice: StateCreator<AppState, [], [], DataSlice> = (set, 
         if (!isCurrentSession(session)) throw new Error('Sessione cambiata durante la risoluzione');
         const currentData = get().userData;
         if (!currentData) throw new Error('Dati utente non disponibili');
-        await clearNutritionConflict(session.owner, expectedConflictFingerprint, currentData);
+        await clearNutritionConflict(session.owner, expectedConflictFingerprint, () => isCurrentSession(session));
         if (!isCurrentSession(session)) throw new Error('Sessione cambiata durante la risoluzione');
         set(draft => {
             if (!draft.userData || getNutritionConflictFingerprint(draft.userData.pendingConflicts?.nutritionPlanning) !== expectedConflictFingerprint) return draft;

@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { clear } from 'idb-keyval';
+import { clear, del } from 'idb-keyval';
 import { UserDataSchema } from '../../src/lib/schema';
 import type { CachedGlobalCatalog, UserData } from '../../src/types';
 
@@ -113,12 +113,45 @@ describe('M8 domain commit durability', () => {
         expect(result.data.nutritionPlanning?.totalKcal).toBe(2500);
         expect(getNutritionConflictFingerprint(committed?.data.pendingConflicts?.nutritionPlanning)).toBe(fingerprint);
 
-        await clearNutritionConflict('user:a', fingerprint, result.data);
+        await clearNutritionConflict('user:a', fingerprint);
         const cleared = await readLocal('user:a');
 
         expect(cleared?.data.profile?.height).toBe('171');
         expect(cleared?.data.nutritionPlanning?.totalKcal).toBe(2500);
         expect(cleared?.data.pendingConflicts?.nutritionPlanning).toBeUndefined();
+    });
+
+    it('fences stale-session conflict clearing inside the IndexedDB transaction and preserves the journal', async () => {
+        const { initializeLocal, commitDomainOperations, clearNutritionConflict, readLocal } = await import('../../src/lib/sync/localRepository');
+        const { getNutritionConflictFingerprint } = await import('../../src/lib/utils/object');
+        const initial = UserDataSchema.parse({
+            pendingConflicts: { nutritionPlanning: { totalKcal: 3000, onDaysCount: 4 } },
+        }) as unknown as UserData;
+        const fingerprint = getNutritionConflictFingerprint(initial.pendingConflicts?.nutritionPlanning);
+        await initializeLocal('user:a', initial);
+        await commitDomainOperations('user:a', { type: 'profile.patch', patch: { height: '171' } }, initial);
+        const before = await readLocal('user:a');
+
+        let sessionActive = true;
+        const clearing = clearNutritionConflict('user:a', fingerprint, () => sessionActive);
+        sessionActive = false;
+        await expect(clearing).rejects.toThrow(/invalidata dal cambio sessione/i);
+        expect(await readLocal('user:a')).toEqual(before);
+    });
+
+    it('does not recreate a missing owner archive from an obsolete nutrition conflict', async () => {
+        const { initializeLocal, clearNutritionConflict, readLocal } = await import('../../src/lib/sync/localRepository');
+        const { getNutritionConflictFingerprint } = await import('../../src/lib/utils/object');
+        const initial = UserDataSchema.parse({
+            pendingConflicts: { nutritionPlanning: { totalKcal: 3000, onDaysCount: 4 } },
+        }) as unknown as UserData;
+        const fingerprint = getNutritionConflictFingerprint(initial.pendingConflicts?.nutritionPlanning);
+        await initializeLocal('user:a', initial);
+        await del('logbook:v2:user:a');
+
+        await expect(clearNutritionConflict('user:a', fingerprint, () => true))
+            .rejects.toThrow(/archivio locale assente/i);
+        expect(await readLocal('user:a')).toBeUndefined();
     });
 
     it('keeps offline activity durable with semantic operations ready for later synchronization', async () => {
