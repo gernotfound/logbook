@@ -202,17 +202,3 @@ export async function createAndMigrateVault(requestedOwner: string): Promise<voi
         } finally { dataKey.fill(0); }
     });
 }
-
-export async function resumeVaultMigration(requestedOwner: string): Promise<void> {
-    const owner = normalizeStorageOwner(requestedOwner);
-    await withSecureMigrationLock(owner, async () => {
-        await reconcileVaultControl(owner);
-        const control = readVaultControl(owner);
-        if (!control || control.phase !== 'migrating') throw new Error('Nessuna migrazione riprendibile.');
-        const dataKey = await unlockLocalKeyVault(control.wrappedKey, owner);
-        try {
-            await migrateAndFinalize(owner, control, dataKey);
-            await unlockVaultForOwner(owner);
-        } finally { dataKey.fill(0); }
-    });
-}
