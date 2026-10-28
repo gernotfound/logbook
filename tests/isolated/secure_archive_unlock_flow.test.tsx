@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const vault = vi.hoisted(() => ({ unlocked: false }));
+const vault = vi.hoisted(() => {
+    // The shared jsdom setup can import the readiness module before file mocks.
+    // Reload its module graph so this suite controls the actual dependencies.
+    vi.resetModules();
+    return { unlocked: false };
+});
 vi.mock('../../src/lib/sync/secureArchiveSession', () => ({
     isVaultUnlocked: () => vault.unlocked,
     lockVault: () => { vault.unlocked = false; },
