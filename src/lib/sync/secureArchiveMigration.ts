@@ -49,7 +49,7 @@ function assertKnownDeviceNames(owner: string): string[] {
 
 function assertMigrationAvailable(owner: string, control: PersistedVaultControl, key: Uint8Array): void {
     assertNoLocalPurge(owner);
-    verifyMigrationCapability(owner, control.epoch, key);
+    verifyMigrationCapability(owner, control, key);
     if (owner.startsWith('user:') && isAccountDeletionPending(owner)) {
         throw new Error('Cancellazione account in corso: migrazione archivio sospesa.');
     }
