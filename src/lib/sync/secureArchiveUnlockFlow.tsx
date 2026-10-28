@@ -7,6 +7,9 @@ import { isLocalPurgePending } from './localPurgeFence';
 
 type PendingReadiness = { promise: Promise<void>; cancel: () => void };
 const active = new Map<string, PendingReadiness>();
+// Keep the latest request identity after completion: an older cancelled unlock
+// must not lock a newer capability that finished before it did.
+const latestRequest = new Map<string, symbol>();
 
 /**
  * Called only after the guest generation or Firebase UID has been established.
@@ -15,9 +18,14 @@ const active = new Map<string, PendingReadiness>();
  */
 export function ensureLocalVaultReady(requestedOwner: string): Promise<void> {
     const owner = normalizeStorageOwner(requestedOwner);
-    if (isVaultUnlocked(owner)) return Promise.resolve();
+    if (isVaultUnlocked(owner)) {
+        latestRequest.set(owner, Symbol());
+        return Promise.resolve();
+    }
     const existing = active.get(owner);
     if (existing) return existing.promise;
+    const requestId = Symbol();
+    latestRequest.set(owner, requestId);
 
     let root: Root | null = null;
     let container: HTMLElement | null = null;
@@ -55,7 +63,10 @@ export function ensureLocalVaultReady(requestedOwner: string): Promise<void> {
             // Always reconcile the mirrored control under the vault Web Lock
             // before considering a missing primary to be an empty archive.
             await createAndMigrateVault(owner);
-            if (finished) { lockVault(owner); return; }
+            if (finished) {
+                if (latestRequest.get(owner) === requestId) lockVault(owner);
+                return;
+            }
             if (!isVaultUnlocked(owner)) throw new Error('La sessione locale non è più valida.');
             complete();
         } catch (cause) {
