@@ -345,6 +345,7 @@ export async function clearNutritionConflict(owner: string, fingerprint: string,
     owner = normalizeStorageOwner(owner);
     let saved!: UserData;
     const clear = (data: UserData): UserData => {
+        if (getNutritionConflictFingerprint(data.pendingConflicts?.nutritionPlanning) !== fingerprint) return data;
         const { nutritionPlanning: _resolved, ...remaining } = data.pendingConflicts ?? {};
         const { pendingConflicts: _old, ...rest } = data;
         return Object.keys(remaining).length ? { ...rest, pendingConflicts: remaining } : rest;
