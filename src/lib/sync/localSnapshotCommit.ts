@@ -56,8 +56,7 @@ export async function commitLocal(owner: string, data: UserData, initialBase: Us
         if (operations.length === 0) {
             // A no-op must not reseal or rewrite a validated durable journal.
             if (current) return raw;
-            const stableData = desired;
-            return { ...(current ?? { completeMonths: [], replica: null }), ...currentEnvelopeVersions(), owner, actorId, actorSeq: current?.actorSeq ?? 0, clock: current?.clock ?? {}, data: stableData, baseline: current?.baseline ?? callerBase, completeMonths: current?.completeMonths ?? [], pending: current?.pending ?? [], syncMetaByDocument: current?.syncMetaByDocument ?? {}, replica: current?.replica ?? null, revision: current?.revision ?? 0 };
+            return { ...currentEnvelopeVersions(), owner, actorId, actorSeq: 0, clock: {}, data: desired, baseline: callerBase, completeMonths: [], pending: [], syncMetaByDocument: {}, replica: null, revision: 0 };
         }
 
         const sequenced = sequenceOperationsForBoundedTransactions(
