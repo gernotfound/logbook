@@ -53,6 +53,67 @@ type PurgeGate = {
     assertStillSafe?: () => void;
 };
 
+function purgeOwnerStorageKeys(
+    owner: string, initialGuestIntent: string | null, gate?: PurgeGate,
+): void {
+    const failures: unknown[] = [];
+    let remaining = new Set<string>();
+    try {
+        for (let pass = 0; pass < LOCAL_PURGE_MAX_PASSES; pass++) {
+            gate?.assertStillSafe?.();
+            const keys = collectLocalPurgeKeys(owner);
+            for (const storageKey of keys) {
+                gate?.assertStillSafe?.();
+
+                if (storageKey === GUEST_AUTH_INTENT
+                    && readBrowserValueStrict(GUEST_AUTH_INTENT) !== initialGuestIntent) {
+                    throw new Error('Intento Auth guest cambiato durante la pulizia.');
+                }
+                try {
+                    localStorage.removeItem(storageKey);
+                } catch (error) {
+                    failures.push(error);
+                }
+            }
+            remaining = remainingLocalPurgeKeys(owner);
+            if (remaining.size === 0) break;
+        }
+
+        remaining = remainingLocalPurgeKeys(owner);
+        if (remaining.size > 0) {
+            failures.push(new Error(`Pulizia locale incompleta: restano ${remaining.size} chiavi del proprietario.`));
+        }
+    } catch (error) {
+        failures.push(error);
+    }
+
+    if (failures.length) {
+        throw new AggregateError(failures, 'Pulizia locale incompleta. Alcuni dati sono ancora presenti su questo dispositivo.');
+    }
+}
+
+async function purgeOwnerVaultCredentials(owner: string, gate?: PurgeGate): Promise<void> {
+    // Both the non-extractable device key and the wrapping metadata are owner
+    // scoped. NEVER remove the device key until the encrypted business envelope
+    // and every localStorage snapshot were verifiably removed.
+    const controlKey = 'logbook:v2:' + owner + ':secure-vault-control';
+    const keyId = deviceVaultKeyId(owner);
+    const mirrorId = vaultControlMirrorId(owner);
+    try {
+        gate?.assertStillSafe?.();
+        await del(mirrorId);
+        if ((await get(mirrorId)) !== undefined) throw new Error('La copia di recupero del controllo locale non è stata eliminata.');
+        gate?.assertStillSafe?.();
+        await del(keyId);
+        if ((await get(keyId)) !== undefined) throw new Error('La chiave locale del dispositivo non è stata eliminata.');
+        gate?.assertStillSafe?.();
+        localStorage.removeItem(controlKey);
+        if (localStorage.getItem(controlKey) !== null) throw new Error('I metadati crittografici locali non sono stati eliminati.');
+    } catch (error) {
+        throw new AggregateError([error], 'Pulizia archivio protetto non completata.');
+    }
+}
+
 export async function purgeOwnerLocalData(owner: string, resumeOnly = false, gate?: PurgeGate) {
     if (typeof navigator === 'undefined' || !navigator.locks?.request) {
         throw new Error('Coordinamento sicuro multi-scheda non disponibile: pulizia locale sospesa.');
@@ -99,73 +160,21 @@ export async function purgeOwnerLocalData(owner: string, resumeOnly = false, gat
             throw new AggregateError(failures, 'Pulizia locale incompleta (IndexedDB). Chiave cifrata e copie residue conservate per il recupero.');
         }
         gate?.assertStillSafe?.();
+
+        purgeOwnerStorageKeys(owner, initialGuestIntent, gate);
         gate?.assertStillSafe?.();
+        await purgeOwnerVaultCredentials(owner, gate);
 
-    let remaining = new Set<string>();
-    try {
-        for (let pass = 0; pass < LOCAL_PURGE_MAX_PASSES; pass++) {
-            gate?.assertStillSafe?.();
-            const keys = collectLocalPurgeKeys(owner);
-            for (const storageKey of keys) {
-                gate?.assertStillSafe?.();
-
-                if (storageKey === GUEST_AUTH_INTENT
-                    && readBrowserValueStrict(GUEST_AUTH_INTENT) !== initialGuestIntent) {
-                    throw new Error('Intento Auth guest cambiato durante la pulizia.');
-                }
-                try {
-                    localStorage.removeItem(storageKey);
-                } catch (error) {
-                    failures.push(error);
-                }
-            }
-            remaining = remainingLocalPurgeKeys(owner);
-            if (remaining.size === 0) break;
-        }
-
-        remaining = remainingLocalPurgeKeys(owner);
-        if (remaining.size > 0) {
-            failures.push(new Error(`Pulizia locale incompleta: restano ${remaining.size} chiavi del proprietario.`));
-        }
-    } catch (error) {
-        failures.push(error);
-    }
-
-    if (failures.length) {
-        throw new AggregateError(failures, 'Pulizia locale incompleta. Alcuni dati sono ancora presenti su questo dispositivo.');
-    }
-
-    gate?.assertStillSafe?.();
-
-    // Both the non-extractable device key and the wrapping metadata are owner
-    // scoped. NEVER remove the device key until the encrypted business envelope
-    // and every localStorage snapshot were verifiably removed.
-    const controlKey = 'logbook:v2:' + owner + ':secure-vault-control';
-    const keyId = deviceVaultKeyId(owner);
-    const mirrorId = vaultControlMirrorId(owner);
-    try {
+        // Drop the resident DEK only once all encrypted and device records have
+        // been verified removed. An incomplete deletion remains recoverable.
+        lockVault(owner);
+        // The owner fence is completed only after ciphertext and its device key
+        // were verified deleted. New versions recover an interrupted owner purge.
         gate?.assertStillSafe?.();
-        await del(mirrorId);
-        if ((await get(mirrorId)) !== undefined) throw new Error('La copia di recupero del controllo locale non è stata eliminata.');
-        gate?.assertStillSafe?.();
-        await del(keyId);
-        if ((await get(keyId)) !== undefined) throw new Error('La chiave locale del dispositivo non è stata eliminata.');
-        gate?.assertStillSafe?.();
-        localStorage.removeItem(controlKey);
-        if (localStorage.getItem(controlKey) !== null) throw new Error('I metadati crittografici locali non sono stati eliminati.');
-    } catch (error) {
-        throw new AggregateError([error], 'Pulizia archivio protetto non completata.');
-    }
-    // Drop the resident DEK only once all encrypted and device records have
-    // been verified removed. An incomplete deletion remains recoverable.
-    lockVault(owner);
-    // The owner fence is completed only after ciphertext and its device key
-    // were verified deleted. New versions recover an interrupted owner purge.
-    gate?.assertStillSafe?.();
-    markLocalPurgeComplete(owner);
-    // Keep the non-secret fence after removal. If the last suspended tab sees
-    // no vault control, it must not fall back to plaintext legacy storage.
-    // The next verified owner will release it only AFTER installing a new vault.
+        markLocalPurgeComplete(owner);
+        // Keep the non-secret fence after removal. If the last suspended tab sees
+        // no vault control, it must not fall back to plaintext legacy storage.
+        // The next verified owner will release it only AFTER installing a new vault.
     });
 }
 
