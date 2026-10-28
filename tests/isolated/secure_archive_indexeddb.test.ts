@@ -3,7 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { clear, get, set } from 'idb-keyval';
 import { UserDataSchema } from '../../src/lib/schema';
 import type { UserData } from '../../src/types';
-import { commitLocal, initializeLocal, readLocal } from '../../src/lib/sync/localRepository';
+import { clearNutritionConflict, commitLocal, initializeLocal, readLocal } from '../../src/lib/sync/localRepository';
+import { getNutritionConflictFingerprint } from '../../src/lib/utils/object';
 import { createAndMigrateVault } from '../../src/lib/sync/secureArchiveMigration';
 import { deviceVaultKeyId } from '../../src/lib/sync/secureArchiveKeys';
 import { lockAllVaults, lockVault, unlockVaultForOwner, vaultControlKey, LocalVaultLockedError } from '../../src/lib/sync/secureArchiveSession';
@@ -205,6 +206,53 @@ describe('production encrypted localRepository gateway', () => {
         expect(await commitLocal(owner, durable!.data, durable!.data)).toEqual([]);
         expect(await get<string>(archive)).toBe(ciphertext);
         expect(await readLocal(owner)).toEqual(durable);
+    });
+
+    it('resolves a matching nutrition conflict in the encrypted owner archive without losing its pending journal', async () => {
+        await createAndMigrateVault(owner);
+        const conflict = { totalKcal: 3000, onDaysCount: 4 };
+        const initial = UserDataSchema.parse({
+            profile: { height: '170' },
+            pendingConflicts: { nutritionPlanning: conflict },
+        }) as unknown as UserData;
+        await initializeLocal(owner, initial);
+        const changed = UserDataSchema.parse({
+            profile: { height: '171' },
+            pendingConflicts: { nutritionPlanning: conflict },
+        }) as unknown as UserData;
+        await commitLocal(owner, changed, initial);
+        const before = await readLocal(owner);
+        const ciphertext = await get<string>(archive);
+        const fingerprint = getNutritionConflictFingerprint(before?.data.pendingConflicts?.nutritionPlanning);
+        expect(before?.pending.length).toBeGreaterThan(0);
+
+        const saved = await clearNutritionConflict(owner, fingerprint);
+        const after = await readLocal(owner);
+        expect(saved).toEqual(after?.data);
+        expect(after?.data.pendingConflicts?.nutritionPlanning).toBeUndefined();
+        expect(after?.baseline.pendingConflicts?.nutritionPlanning).toBeUndefined();
+        expect(after?.pending).toEqual(before?.pending);
+        expect(after?.actorSeq).toBe(before?.actorSeq);
+        expect(await get<string>(archive)).not.toBe(ciphertext);
+    });
+
+    it('rejects a stale conflict fingerprint without changing encrypted data or journal bytes', async () => {
+        await createAndMigrateVault(owner);
+        const initial = UserDataSchema.parse({
+            pendingConflicts: { nutritionPlanning: { totalKcal: 3000, onDaysCount: 4 } },
+        }) as unknown as UserData;
+        await initializeLocal(owner, initial);
+        await commitLocal(owner, UserDataSchema.parse({
+            profile: { height: '171' },
+            pendingConflicts: initial.pendingConflicts,
+        }) as unknown as UserData, initial);
+        const before = await readLocal(owner);
+        const ciphertext = await get<string>(archive);
+
+        await expect(clearNutritionConflict(owner, 'obsolete-fingerprint', () => true))
+            .rejects.toThrow('Conflitto cambiato durante la risoluzione');
+        expect(await get<string>(archive)).toBe(ciphertext);
+        expect(await readLocal(owner)).toEqual(before);
     });
 
     it('serializes concurrent production commits without dropping independent fields or pending operations', async () => {

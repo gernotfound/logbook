@@ -45,6 +45,12 @@ describe('M8 domain commit durability', () => {
         expect(await readLocal('user:a')).toEqual(before);
     });
 
+    it('preserves the public identity of the extracted nutrition conflict resolver', async () => {
+        const facade = await import('../../src/lib/sync/localRepository');
+        const extracted = await import('../../src/lib/sync/localNutritionConflict');
+        expect(facade.clearNutritionConflict).toBe(extracted.clearNutritionConflict);
+    });
+
     it('persists business state and semantic journal under the same envelope revision', async () => {
         const { initializeLocal, commitDomainOperations, readLocal } = await import('../../src/lib/sync/localRepository');
         await initializeLocal('user:a', base());
