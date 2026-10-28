@@ -206,6 +206,30 @@ describe('durable owner-scoped journal', () => {
         expect((await readLocal('guest'))?.revision).toBe(durable?.revision);
     });
 
+    it('keeps an existing pending journal and owner metadata unchanged during competing bootstrap', async () => {
+        const initial = data(170);
+        await initializeLocal('user:a', initial, ['2026-09']);
+        await commitLocal('user:a', data(171), initial);
+        const durable = await readLocal('user:a');
+        expect(durable?.pending.length).toBeGreaterThan(0);
+
+        await initializeLocal('user:a', data(199), ['2026-10']);
+        expect(await readLocal('user:a')).toEqual(durable);
+    });
+
+    it('rejects a stale bootstrap guard even when the owner envelope already exists', async () => {
+        await initializeLocal('user:a', data(170));
+        const before = await readLocal('user:a');
+        let checks = 0;
+
+        await expect(initializeLocal('user:a', data(190), undefined, () => {
+            checks++;
+            return false;
+        })).rejects.toThrow('Inizializzazione locale invalidata dal cambio sessione');
+        expect(checks).toBe(1);
+        expect(await readLocal('user:a')).toEqual(before);
+    });
+
     it('preserves an already-acknowledged authenticated envelope during bootstrap', async () => {
         await initializeLocal('user:a', data(170));
         await initializeLocal('user:a', data(190));
