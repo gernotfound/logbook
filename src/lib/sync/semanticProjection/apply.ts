@@ -117,6 +117,10 @@ function applyWinnerToDocument(
 ): void {
     const p = operation.path;
     const isOrderPayload = p[p.length - 1] === '$order';
+    // The replay result must not share mutable references with a durable
+    // journal operation. Subsequent field winners and derived normalization
+    // may modify the document after this value has been installed.
+    const value = operation.isDelete ? undefined : structuredClone(operation.value);
 
     let current: any = doc;
     let parentIsArray = false;
@@ -134,7 +138,7 @@ function applyWinnerToDocument(
 
             if (i + 1 === p.length - 1) {
                 if (isOrderPayload) {
-                    ordersToApply.set(arr, { path: currentPath, orderIds: operation.value as string[] });
+                    ordersToApply.set(arr, { path: currentPath, orderIds: value as string[] });
                     parentIsArray = false;
                     break;
                 }
@@ -167,15 +171,15 @@ function applyWinnerToDocument(
         if (operation.isDelete) {
             if (itemIndex >= 0) arrRef.splice(itemIndex, 1);
         } else if (itemIndex >= 0) {
-            if (typeof operation.value === 'object' && operation.value !== null) arrRef[itemIndex] = { ...arrRef[itemIndex], ...operation.value };
-            else arrRef[itemIndex] = operation.value;
+            if (typeof value === 'object' && value !== null) arrRef[itemIndex] = { ...arrRef[itemIndex], ...value };
+            else arrRef[itemIndex] = value;
         } else {
-            arrRef.push(operation.value);
+            arrRef.push(value);
         }
         return;
     }
     if (operation.isDelete) delete current[lastSeg];
-    else setOwnDataProperty(current, lastSeg, operation.value);
+    else setOwnDataProperty(current, lastSeg, value);
 }
 
 type UpdateCandidate = {
