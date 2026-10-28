@@ -17,8 +17,11 @@ export interface PersistedVaultControl {
 }
 
 /** In-memory secret capability for the CURRENT tab, never persisted. */
-type LocalKeyCapability = { key: Uint8Array; epoch: string; guestSessionId?: string | null };
+type LocalKeyCapability = { key: Uint8Array; epoch: string; wrappedKeyIdentity: string; guestSessionId?: string | null };
 const capabilities = new Map<string, LocalKeyCapability>();
+
+// An epoch alone cannot authenticate a changed wrapped DEK in another tab.
+const wrappedKeyIdentity = (control: PersistedVaultControl): string => JSON.stringify(control.wrappedKey);
 
 export class LocalVaultLockedError extends Error {
     readonly code = 'local-vault-locked';
@@ -76,6 +79,7 @@ export function requireUnlockedLocalKey(owner: string): Uint8Array {
     // Guest revocation is a separate durable session fence; retaining valid
     // wrapped metadata must not grant access after that generation is revoked.
     if (!control || control.phase !== 'active' || !capability || control.epoch !== capability.epoch
+        || wrappedKeyIdentity(control) !== capability.wrappedKeyIdentity
         || (normalized === 'guest' && (!isActiveGuestSession()
             || capability.guestSessionId !== captureSessionForOwner('guest').guestSessionId))) {
         if (capability) lockVault(normalized);
@@ -105,12 +109,14 @@ export async function unlockVaultForOwner(owner: string): Promise<void> {
         assertNoLocalPurge(normalized);
         const current = readVaultControl(normalized);
         if (!current || current.epoch !== control.epoch || current.phase !== 'active'
+            || wrappedKeyIdentity(current) !== wrappedKeyIdentity(control)
             || (normalized === 'guest' && (!isActiveGuestSession()
                 || captureSessionForOwner('guest').guestSessionId !== guestSessionId))) {
             throw new LocalVaultLockedError();
         }
         lockVault(normalized);
         capabilities.set(normalized, { key: unwrapped, epoch: control.epoch,
+            wrappedKeyIdentity: wrappedKeyIdentity(control),
             ...(normalized === 'guest' ? { guestSessionId } : {}),
         });
     } catch (error) {
@@ -121,9 +127,10 @@ export async function unlockVaultForOwner(owner: string): Promise<void> {
 }
 
 /** For provisioning/migration ONLY: it never authorizes normal app writes. */
-export function verifyMigrationCapability(owner: string, expectedEpoch: string, key: Uint8Array): void {
+export function verifyMigrationCapability(owner: string, expectedControl: PersistedVaultControl, key: Uint8Array): void {
     const control = readVaultControl(owner);
-    if (!control || control.phase !== 'migrating' || control.epoch !== expectedEpoch || key.length !== 32) {
+    if (!control || control.phase !== 'migrating' || control.epoch !== expectedControl.epoch
+        || wrappedKeyIdentity(control) !== wrappedKeyIdentity(expectedControl) || key.length !== 32) {
         throw new LocalVaultLockedError();
     }
 }
