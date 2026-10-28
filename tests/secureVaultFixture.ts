@@ -1,8 +1,8 @@
 import { del, get } from 'idb-keyval';
-import { createAndMigrateVault, resumeVaultMigration } from '../src/lib/sync/secureArchiveMigration';
+import { createAndMigrateVault } from '../src/lib/sync/secureArchiveMigration';
 import { deviceVaultKeyId } from '../src/lib/sync/secureArchiveKeys';
 import { vaultControlMirrorId } from '../src/lib/sync/secureArchiveControlRecovery';
-import { isVaultUnlocked, lockAllVaults, readVaultControl, unlockVaultForOwner, vaultControlKey } from '../src/lib/sync/secureArchiveSession';
+import { isVaultUnlocked, lockAllVaults, readVaultControl, vaultControlKey } from '../src/lib/sync/secureArchiveSession';
 import { removeBrowserValue } from '../src/lib/sync/browserStorage';
 
 /**
@@ -41,10 +41,8 @@ export async function prepareUnlockedTestArchive(owner = 'user:test-user-id'): P
     // fixture attempt. Retry only after the same zero-ciphertext safety check.
     for (let attempt = 0; attempt < 2; attempt++) {
         try {
-            const control = readVaultControl(owner);
-            if (!control) await createAndMigrateVault(owner);
-            else if (control.phase === 'migrating') await resumeVaultMigration(owner);
-            else await unlockVaultForOwner(owner);
+            // The production entrypoint handles absent, migrating and active controls.
+            await createAndMigrateVault(owner);
             if (!isVaultUnlocked(owner)) throw new Error('Owner vault was not durably unlocked');
             return;
         } catch (error) {
