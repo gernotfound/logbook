@@ -140,7 +140,7 @@ function withSecureMigrationLock<T>(owner: string, operation: () => Promise<T>):
  * A failed step leaves original data and a durable MIGRATING marker; the
  * next start reopens the same non-extractable device key and resumes safely.
  */
-export async function createAndMigrateVault(requestedOwner: string): Promise<void> {
+export async function createAndMigrateVault(requestedOwner: string, isCurrent: () => boolean = () => true): Promise<void> {
     const owner = normalizeStorageOwner(requestedOwner);
     return withSecureMigrationLock(owner, async () => {
         // Another tab may have provisioned this owner after the caller checked
@@ -170,7 +170,7 @@ export async function createAndMigrateVault(requestedOwner: string): Promise<voi
             }
         }
         if (existing?.phase === 'active') {
-            await unlockVaultForOwner(owner);
+            await unlockVaultForOwner(owner, isCurrent);
             return;
         }
         if (existing?.phase === 'migrating') {
@@ -180,7 +180,7 @@ export async function createAndMigrateVault(requestedOwner: string): Promise<voi
             const dataKey = await unlockLocalKeyVault(existing.wrappedKey, owner);
             try {
                 await migrateAndFinalize(owner, existing, dataKey);
-                await unlockVaultForOwner(owner);
+                await unlockVaultForOwner(owner, isCurrent);
             } finally { dataKey.fill(0); }
             return;
         }
@@ -198,7 +198,7 @@ export async function createAndMigrateVault(requestedOwner: string): Promise<voi
             // control can exclude a stale tab from the no-control legacy path.
             if (finishingPriorPurge) releaseLocalPurgeFence(owner);
             await migrateAndFinalize(owner, control, dataKey);
-            await unlockVaultForOwner(owner);
+            await unlockVaultForOwner(owner, isCurrent);
         } finally { dataKey.fill(0); }
     });
 }
