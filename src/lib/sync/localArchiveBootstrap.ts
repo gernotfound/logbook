@@ -28,7 +28,7 @@ export async function readLocal(owner: string): Promise<LocalEnvelope | undefine
     return validateLocalEnvelope(await getArchiveRecord<any>(owner), owner);
 }
 
-export async function initializeLocal(owner: string, data: UserData, completeMonths?: string[], guard?: LocalWriteGuard): Promise<void> {
+export async function initializeLocal(owner: string, data: UserData, completeMonths?: string[], guard?: () => boolean): Promise<void> {
     owner = normalizeStorageOwner(owner);
     const parsed = structuredClone(parse(data));
     await updateArchiveRecord<any>(owner, raw => {
