@@ -24,10 +24,13 @@ export function markTabSnapshotClean(session: SessionSnapshot, data: UserData): 
 }
 
 export function markTabSnapshotDirty(session: SessionSnapshot, base: UserData): void {
-    if (snapshotState && !sameSession(snapshotState.session, session)) {
-        // A stale in-memory snapshot cannot acquire the provenance of a new
-        // consent or guest generation merely because an edit was attempted.
-        // Hydration must first establish a verified clean baseline.
+    if (snapshotState
+        && snapshotState.session.owner === session.owner
+        && snapshotState.session.epoch === session.epoch
+        && !sameSession(snapshotState.session, session)) {
+        // Consent/guest identity changed without an explicit session transition.
+        // Never re-label the previous base as an edit of the new generation.
+        // A genuine login/logout activates a different realm epoch.
         throw new Error('Snapshot della scheda appartenente a una sessione precedente. Ricarica TheLogBook.');
     }
     if (snapshotState?.dirty) return;
