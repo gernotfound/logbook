@@ -184,7 +184,7 @@ describe('PWA update activation and navigation', () => {
     }
   });
 
-  it('does not navigate if worker activation cannot be confirmed', async () => {
+  it('keeps waiting after the slow-activation notice and reloads only when that worker activates', async () => {
     vi.useFakeTimers();
     try {
       const worker = new FakeServiceWorker() as FakeServiceWorker & { postMessage: ReturnType<typeof vi.fn> };
@@ -192,14 +192,77 @@ describe('PWA update activation and navigation', () => {
       worker.postMessage = vi.fn();
       const registration = { waiting: worker, installing: null } as unknown as ServiceWorkerRegistration;
       const reload = vi.fn();
-      const result = applyPWAUpdate(fakeContainer(registration), reload, 80);
-      const rejection = expect(result).rejects.toThrow('non confermata');
+      const onActivationDelayed = vi.fn();
+      const result = applyPWAUpdate(fakeContainer(registration), reload, 80, { onActivationDelayed });
       await vi.advanceTimersByTimeAsync(80);
-      await rejection;
+      expect(onActivationDelayed).toHaveBeenCalledOnce();
+      expect(reload).not.toHaveBeenCalled();
+      worker.state = 'activated';
+      worker.dispatchEvent(new Event('statechange'));
+      await result;
+      expect(reload).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('cancels an unconfirmed activation without reloading if the worker activates later', async () => {
+    vi.useFakeTimers();
+    try {
+      const worker = new FakeServiceWorker() as FakeServiceWorker & { postMessage: ReturnType<typeof vi.fn> };
+      worker.state = 'installed';
+      worker.postMessage = vi.fn();
+      const registration = { waiting: worker } as unknown as ServiceWorkerRegistration;
+      const reload = vi.fn();
+      const abort = new AbortController();
+      const onActivationDelayed = vi.fn();
+      const result = applyPWAUpdate(fakeContainer(registration), reload, 80, {
+        signal: abort.signal, onActivationDelayed,
+      });
+      const rejected = expect(result).rejects.toMatchObject({ name: 'AbortError' });
+      await vi.advanceTimersByTimeAsync(80);
+      expect(onActivationDelayed).toHaveBeenCalledOnce();
+      abort.abort();
+      await rejected;
+      worker.state = 'activated';
+      worker.dispatchEvent(new Event('statechange'));
+      await vi.advanceTimersByTimeAsync(100);
       expect(reload).not.toHaveBeenCalled();
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('rejects worker replacement and failed skipWaiting without navigating', async () => {
+    const worker = new FakeServiceWorker() as FakeServiceWorker & { postMessage: ReturnType<typeof vi.fn> };
+    worker.state = 'installed';
+    worker.postMessage = vi.fn();
+    const registration = { waiting: worker } as unknown as ServiceWorkerRegistration;
+    const reload = vi.fn();
+    const result = applyPWAUpdate(fakeContainer(registration), reload, 100);
+    await vi.waitFor(() => expect(worker.postMessage).toHaveBeenCalledOnce());
+    worker.state = 'redundant';
+    worker.dispatchEvent(new Event('statechange'));
+    await expect(result).rejects.toThrow('sostituito');
+    expect(reload).not.toHaveBeenCalled();
+
+    const failingWorker = new FakeServiceWorker() as FakeServiceWorker & { postMessage: ReturnType<typeof vi.fn> };
+    failingWorker.state = 'installed';
+    failingWorker.postMessage = vi.fn(() => { throw new Error('postMessage blocked'); });
+    const failingRegistration = { waiting: failingWorker } as unknown as ServiceWorkerRegistration;
+    await expect(applyPWAUpdate(fakeContainer(failingRegistration), reload, 100))
+      .rejects.toThrow('postMessage blocked');
+    expect(reload).not.toHaveBeenCalled();
+  });
+
+  it('awaits the final reload barrier and propagates its failure', async () => {
+    const worker = new FakeServiceWorker() as FakeServiceWorker & { postMessage: ReturnType<typeof vi.fn> };
+    worker.state = 'activated';
+    worker.postMessage = vi.fn();
+    const registration = { waiting: worker } as unknown as ServiceWorkerRegistration;
+    const reload = vi.fn(async () => { throw new Error('data changed during activation'); });
+    await expect(applyPWAUpdate(fakeContainer(registration), reload)).rejects.toThrow('data changed');
+    expect(reload).toHaveBeenCalledOnce();
   });
 
   it('fails visibly when the browser cannot resolve its registration', async () => {
