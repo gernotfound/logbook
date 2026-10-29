@@ -3,10 +3,23 @@ import { SyncTimeoutError } from '../db/db_core';
 
 export type SyncFailureResult = Exclude<SyncResult, { ok: true }>;
 
-function getSyncErrorCode(error: unknown): string | undefined {
-    if (!error || typeof error !== 'object' || !('code' in error)) return undefined;
-    const code = (error as { code?: unknown }).code;
-    return typeof code === 'string' ? code : undefined;
+type SyncErrorDetail = { code?: string; retryable: boolean };
+
+function getSyncErrorChain(error: unknown): SyncErrorDetail[] {
+    const chain: SyncErrorDetail[] = [];
+    const seen = new Set<object>();
+    let current = error;
+    for (let depth = 0; depth < 6 && current && typeof current === 'object' && !seen.has(current); depth++) {
+        seen.add(current);
+        const item = current as { code?: unknown; retryable?: unknown; cause?: unknown };
+        const code = Object.hasOwn(item, 'code') ? item.code : undefined;
+        chain.push({
+            code: typeof code === 'string' ? code : undefined,
+            retryable: Object.hasOwn(item, 'retryable') && item.retryable === true,
+        });
+        current = Object.hasOwn(item, 'cause') ? item.cause : undefined;
+    }
+    return chain;
 }
 
 /**
@@ -15,22 +28,27 @@ function getSyncErrorCode(error: unknown): string | undefined {
  * `local-pending`; unknown bootstrap/import/runtime failures are fail-closed.
  */
 export function classifySyncFailure(error: unknown, options?: { retryable?: boolean }): SyncFailureResult {
-    const code = getSyncErrorCode(error);
-    if (code === 'permission-denied') return { ok: false, status: 'rejected', error };
-    if (code === 'app-check-unavailable') {
-        const retryable = Boolean(
-            error
-            && typeof error === 'object'
-            && 'retryable' in error
-            && (error as { retryable?: unknown }).retryable === true
-        );
-        return { ok: false, status: retryable ? 'local-pending' : 'failed', error };
+    const chain = getSyncErrorChain(error);
+    const direct = chain[0];
+    // Only a caller with independent proof of a retained journal may force a retry:
+    // a confirmed remote commit with a lost local ACK can wrap a provider error.
+    const provenPending = options?.retryable === true;
+    if (direct?.code === 'permission-denied' || (!provenPending && chain.some(item => item.code === 'permission-denied'))) {
+        return { ok: false, status: 'rejected', error };
+    }
+    if (direct?.code === 'app-check-unavailable') {
+        return { ok: false, status: direct.retryable ? 'local-pending' : 'failed', error };
+    }
+    // A wrapper may mean the remote result is unsafe even if its cause is transient.
+    // Only a direct transport error or an independently proven journal can be pending.
+    if (!provenPending && chain.some(item => item.code === 'app-check-unavailable')) {
+        return { ok: false, status: 'failed', error };
     }
     if (
-        options?.retryable
+        provenPending
         || error instanceof SyncTimeoutError
-        || code === 'unavailable'
-        || code === 'deadline-exceeded'
+        || direct?.code === 'unavailable'
+        || direct?.code === 'deadline-exceeded'
     ) {
         return { ok: false, status: 'local-pending', error };
     }
