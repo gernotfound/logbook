@@ -743,3 +743,33 @@ it('reconciles a valid owner without discarding or suppressing a corrupt marker 
     expect(isAccountDeletionPending('user:b')).toBe(true);
     expect(await get('logbook:v2:user:b')).toEqual({ original: 'other owner' });
 });
+
+it('recovers a valid owner even when a different owner receipt is unreadable, keeping the failing copy', async () => {
+    boundary.auth.currentUser = null;
+    const ownerA = 'user:a';
+    const ownerB = 'user:b';
+    markAccountDeletion(ownerA, { receiptToken: 'A'.repeat(43) });
+    markAccountDeletion(ownerB, { receiptToken: 'B'.repeat(43) });
+    const bKey = 'logbook:v2:' + ownerB + ':account-deletion';
+    const untouchedB = disk.get(bKey);
+    const storage = localStorage;
+    const originalRead = storage.getItem.bind(storage);
+    vi.stubGlobal('localStorage', {
+        get length() { return disk.size; },
+        key: (index: number) => [...disk.keys()][index] ?? null,
+        getItem: (storageKey: string) => {
+            if (storageKey === bKey) throw new DOMException('Read blocked', 'SecurityError');
+            return originalRead(storageKey);
+        },
+        setItem: storage.setItem.bind(storage),
+        removeItem: storage.removeItem.bind(storage),
+    });
+    boundary.fetch.mockResolvedValue(response(200, { uid: 'a', status: 'complete' }));
+
+    await expect(resumeAccountDeletion(context)).rejects.toThrow('Marker di cancellazione account');
+    expect(boundary.fetch).toHaveBeenCalledTimes(1);
+    expect(await get('logbook:v2:user:a')).toBeUndefined();
+    expect(await get('logbook:v2:user:b')).toEqual({ original: 'other owner' });
+    expect(disk.has('logbook:v2:user:a:account-deletion')).toBe(false);
+    expect(disk.get(bKey)).toBe(untouchedB);
+});
