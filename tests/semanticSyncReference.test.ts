@@ -61,6 +61,47 @@ describe('Semantic sync reference invariants', () => {
         expect(Object.getPrototypeOf(document)).toBe(Object.prototype);
     });
 
+    it('treats $order as an ordinary property outside ordered-keyed arrays', () => {
+        const path = ['catalogOverrides', '$order'];
+        const base = new Map<string, DocumentData>([['', { catalogOverrides: {} }]]);
+        const first = {
+            docPath: '', path, value: 'first', isDelete: false,
+            actorId: 'A', seq: 1, clock: { A: 1 },
+        };
+        const second = {
+            ...first, value: 'second', actorId: 'B', clock: { B: 1 },
+        };
+        const appliedFirst = applySemanticOperations(base, [first]);
+        expect(appliedFirst.documents.get('')?.catalogOverrides).toEqual({ $order: 'first' });
+
+        const merged = applySemanticOperations(appliedFirst.documents, [second], appliedFirst.syncMetas);
+        expect(merged.documents.get('')?.catalogOverrides).toEqual({ $order: 'second' });
+        expect(merged.syncMetas[''].fields['catalogOverrides/%24order'].candidates).toEqual([
+            { actorId: 'A', seq: 1, clock: { A: 1 }, value: 'first' },
+        ]);
+    });
+
+    it('refuses to synthesize an invalid keyed entity from a semantic child path', () => {
+        const base = new Map<string, DocumentData>([['', { routines: [] }]]);
+        const invalid = {
+            docPath: '', path: ['routines', '$order', 'name'],
+            value: 'Not a routine', isDelete: false,
+            actorId: 'A', seq: 1, clock: { A: 1 },
+        };
+        expect(() => applySemanticOperations(base, [invalid])).toThrow('identificativo non valido');
+        expect(base.get('')?.routines).toEqual([]);
+    });
+
+    it('preserves bulk snapshot data rather than merging a reserved ID as an ordering payload', () => {
+        const routine = { id: '$order', name: 'Reserved', exercises: [] };
+        const base = new Map<string, DocumentData>([['', { routines: [] }]]);
+        const desired = new Map<string, DocumentData>([['', { routines: [routine] }]]);
+        const ops = diffDocuments(base, desired, 'A', 1, { A: 1 });
+        expect(ops).toHaveLength(1);
+        expect(ops[0]).toMatchObject({ path: ['routines'], value: [routine], isDelete: false });
+        expect(applySemanticOperations(base, ops).documents.get('')?.routines).toEqual([routine]);
+    });
+
     it('diffs profile at property level instead of replacing the whole profile', () => {
         const base = new Map<string, DocumentData>([
             ['', { profile: { height: '170', gender: 'M' } }],
