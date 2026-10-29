@@ -59,7 +59,7 @@ function run({ cwd, env }, mode = 'ok') {
   return result;
 }
 
-test('success checks the same HTTP responses without touching pre-existing paths', t => {
+await test('success checks the same HTTP responses without touching pre-existing paths', t => {
   const fixture = prepare(t);
   const legacyDist = join(fixture.cwd, '.smoke-test-dist');
   mkdirSync(legacyDist);
@@ -73,7 +73,7 @@ test('success checks the same HTTP responses without touching pre-existing paths
   assert.deepEqual(artifacts(fixture.cwd), []);
 });
 
-test('partial compiler output is removed and failure stays nonzero', t => {
+await test('partial compiler output is removed and failure stays nonzero', t => {
   const fixture = prepare(t);
   const result = run(fixture, 'compile-error');
   assert.notEqual(result.status, 0);
@@ -81,7 +81,7 @@ test('partial compiler output is removed and failure stays nonzero', t => {
   assert.deepEqual(artifacts(fixture.cwd), []);
 });
 
-test('runtime failure removes compiled files and fails', t => {
+await test('runtime failure removes compiled files and fails', t => {
   const fixture = prepare(t);
   const result = run(fixture, 'runtime-error');
   assert.notEqual(result.status, 0);
@@ -89,7 +89,7 @@ test('runtime failure removes compiled files and fails', t => {
   assert.deepEqual(artifacts(fixture.cwd), []);
 });
 
-test('concurrent smoke invocations use different compilation directories', async t => {
+await test('concurrent smoke invocations use different compilation directories', async t => {
   const fixture = prepare(t);
   const execute = () => new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [smokeScript], { cwd: fixture.cwd, env: fixture.env });
