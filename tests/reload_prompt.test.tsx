@@ -241,7 +241,8 @@ describe('Service Worker Update Lifecycle (ReloadPrompt) Suite', () => {
     expect(close.disabled).toBe(false);
     await act(async () => { fireEvent.click(close); });
     expect(wasAborted).toBe(true);
-    expect(screen.queryByText('Nuova versione disponibile')).toBeNull();
+    // This hook is mocked with a spy, not a stateful React setter.
+    expect(mockSetNeedRefresh).toHaveBeenCalledWith(false);
     expect(mockUpdateServiceWorker).not.toHaveBeenCalled();
   });
 
