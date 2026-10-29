@@ -890,6 +890,39 @@ describe.each(['input', 'textarea'] as const)('independent same-workout %s write
         expect(localStorage.getItem(deviceKey(previous, owner))).toBe(before);
     });
 
+    it('rejects malformed independent witness identities without selecting or deleting the copy', () => {
+        const owner = captureSession().owner;
+        const invalidName = 'draft:buffered-intent:not-a-random-id';
+        const key = deviceKey(invalidName, owner);
+        const raw = JSON.stringify({
+            __logbookBufferedWriterIntent: 1, owner, draftName,
+            value: 'Unconfirmed health data', consentRevision: 3,
+        });
+        localStorage.setItem(key, raw);
+        expect(() => readBufferedWriterEvidence(owner, draftName))
+            .toThrow('Metadati intenzione bozza non validi');
+        expect(() => inspectBufferedRecoveryEvidence(owner))
+            .toThrow('Metadati intenzione bozza non validi');
+        expect(localStorage.getItem(key)).toBe(raw);
+    });
+
+    it('rejects write and cleanup of a malformed witness key without changing its contents', () => {
+        const owner = captureSession().owner;
+        const invalidName = 'draft:buffered-intent:not-a-random-id';
+        const key = deviceKey(invalidName, owner);
+        const raw = JSON.stringify({
+            __logbookBufferedWriterIntent: 1, owner, draftName,
+            value: 'Private original', consentRevision: 3,
+        });
+        localStorage.setItem(key, raw);
+        expect(() => writeBufferedWriterIntent(
+            invalidName, owner, draftName, 'New value', raw, '3',
+        )).toThrow('Identità intenzione bozza non valida');
+        expect(() => clearBufferedWriterIntent(invalidName, owner, raw, '3'))
+            .toThrow('Identità intenzione bozza non valida');
+        expect(localStorage.getItem(key)).toBe(raw);
+    });
+
     it('fails closed on corrupted evidence and keeps every original intact', () => {
         const owner = captureSession().owner;
         const valid = createBufferedWriterIntentName();

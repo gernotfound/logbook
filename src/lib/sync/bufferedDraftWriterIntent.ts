@@ -4,6 +4,11 @@ import { stableStorageKeyInventory } from './stableStorageKeyInventory';
 import { newWriterRevisionId, type WriterLineageReference } from './writerLineage';
 
 const INTENT_PREFIX = 'draft:buffered-intent:';
+const INTENT_ID_PATTERN = /^[a-f0-9]{32}$/;
+
+function validIntentName(name: string): boolean {
+    return name.startsWith(INTENT_PREFIX) && INTENT_ID_PATTERN.test(name.slice(INTENT_PREFIX.length));
+}
 
 type BufferedWriterIntent = {
     __logbookBufferedWriterIntent: 1;
@@ -39,7 +44,7 @@ function parseWriterEvidence(
         throw new Error('Intenzione bozza senza provenienza: originale conservato.');
     }
     const record = value as Partial<BufferedWriterIntent>;
-    if (record.__logbookBufferedWriterIntent !== 1 || record.owner !== owner
+    if (!validIntentName(name) || record.__logbookBufferedWriterIntent !== 1 || record.owner !== owner
         || typeof record.draftName !== 'string' || !record.draftName.startsWith('draft:buffered:')
         || typeof record.value !== 'string'
         || (record.revisionId !== undefined
@@ -47,10 +52,10 @@ function parseWriterEvidence(
         || (record.parent !== undefined
             && (!record.parent || typeof record.parent !== 'object'
                 || typeof record.parent.name !== 'string'
-                || !/^draft:buffered-intent:[a-f0-9]{32}$/.test(record.parent.name)
+                || !validIntentName(record.parent.name)
                 || record.parent.name === name
                 || !((typeof record.parent.revisionId === 'string'
-                    && /^[a-f0-9]{32}$/.test(record.parent.revisionId)
+                    && INTENT_ID_PATTERN.test(record.parent.revisionId)
                     && record.parent.raw === undefined)
                     || (typeof record.parent.raw === 'string'
                         && record.parent.revisionId === undefined))))
@@ -187,7 +192,7 @@ export function writeBufferedWriterIntent(
     expectedRaw: string | null, expectedConsentGeneration?: string | null,
     parent?: WriterLineageReference,
 ): string {
-    if (!name.startsWith(INTENT_PREFIX) || !draftName.startsWith('draft:buffered:')) {
+    if (!validIntentName(name) || !draftName.startsWith('draft:buffered:')) {
         throw new Error('Identità intenzione bozza non valida.');
     }
     const current = readDeviceValueStrict(name, owner);
@@ -215,7 +220,7 @@ export function writeBufferedWriterIntent(
 export function clearBufferedWriterIntent(
     name: string, owner: string, expectedRaw: string, expectedConsentGeneration?: string | null,
 ): void {
-    if (!name.startsWith(INTENT_PREFIX)) throw new Error('Identità intenzione bozza non valida.');
+    if (!validIntentName(name)) throw new Error('Identità intenzione bozza non valida.');
     const current = readDeviceValueStrict(name, owner);
     if (current !== expectedRaw) throw new Error('Intenzione bozza diversa: originale conservato.');
     parseWriterEvidence(name, owner, current);
