@@ -13,6 +13,7 @@ import type { UserData } from '../src/types';
 import { beginGuestMigrationIntent } from '../src/lib/auth/guestMigrationIntent';
 import { createAndMigrateVault } from '../src/lib/sync/secureArchiveMigration';
 import { lockAllVaults } from '../src/lib/sync/secureArchiveSession';
+import { activateGuestSession, GUEST_SESSION_KEY } from '../src/lib/sync/session';
 
 vi.mock('../src/lib/sync/cloudAccountKeyAccess', () => ({
     requireCloudAccountDataKey: vi.fn(async () => new Uint8Array(32).fill(18)),
@@ -59,6 +60,8 @@ describe('guest -> account V3 migration', () => {
     it('stages SemanticOperations, drains the authenticated journal, and keeps cloud + guest data', async () => {
         const { cloud, guest, merged } = fixtures();
         localStorage.setItem('logbook_is_guest', 'true');
+        localStorage.setItem(GUEST_SESSION_KEY, 'guest-migration-v3-generation');
+        activateGuestSession('guest-migration-v3-generation');
         await beginGuestMigrationIntent('merge', 'recovery', { uid: user.uid });
         useAppStore.getState().setUserData(guest);
 
@@ -109,6 +112,8 @@ describe('guest -> account V3 migration', () => {
         const { CloudCiphertextError } = await import('../src/lib/sync/cloudDocumentCipher');
         await initializeLocal('user:a', cloud);
         localStorage.setItem('logbook_is_guest', 'true');
+        localStorage.setItem(GUEST_SESSION_KEY, 'guest-migration-v3-generation');
+        activateGuestSession('guest-migration-v3-generation');
         await beginGuestMigrationIntent('merge', 'recovery', { uid: user.uid });
         useAppStore.getState().setUserData(guest);
         vi.mocked(DB.loadCloudPayload).mockRejectedValueOnce(new CloudCiphertextError());
@@ -131,6 +136,8 @@ describe('guest -> account V3 migration', () => {
         });
         const freshAccount = parse({ profile: { gender: 'M' } });
         localStorage.setItem('logbook_is_guest', 'true');
+        localStorage.setItem(GUEST_SESSION_KEY, 'guest-migration-v3-generation');
+        activateGuestSession('guest-migration-v3-generation');
         await beginGuestMigrationIntent('merge', 'recovery', { uid: user.uid });
         useAppStore.getState().setUserData(guest);
         vi.mocked(DB.loadCloudPayload).mockResolvedValueOnce({
@@ -155,6 +162,8 @@ describe('guest -> account V3 migration', () => {
     it('keeps the merged authenticated envelope and pending journal if connectivity drops after hydration', async () => {
         const { cloud, guest } = fixtures();
         localStorage.setItem('logbook_is_guest', 'true');
+        localStorage.setItem(GUEST_SESSION_KEY, 'guest-migration-v3-generation');
+        activateGuestSession('guest-migration-v3-generation');
         await beginGuestMigrationIntent('merge', 'recovery', { uid: user.uid });
         useAppStore.getState().setUserData(guest);
         onlineSpy = vi.spyOn(window.navigator, 'onLine', 'get').mockReturnValue(false);

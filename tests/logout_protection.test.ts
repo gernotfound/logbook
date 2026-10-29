@@ -13,7 +13,7 @@ import { BrowserStorageError } from '../src/lib/sync/browserStorage';
 import { createAndMigrateVault } from '../src/lib/sync/secureArchiveMigration';
 import { initializeLocal, commitLocal } from '../src/lib/sync/localRepository';
 import { lockAllVaults } from '../src/lib/sync/secureArchiveSession';
-import { invalidateSession } from '../src/lib/sync/session';
+import { activateGuestSession, GUEST_SESSION_KEY, invalidateSession } from '../src/lib/sync/session';
 import type { UserData } from '../src/types';
 
 const exporter = vi.hoisted(() => ({
@@ -82,6 +82,8 @@ beforeEach(async () => {
 describe('M5 logout protection through AuthProvider', () => {
     it('keeps guest data when the destructive logout confirmation is cancelled, then purges it when confirmed', async () => {
         localStorage.setItem('logbook_is_guest', 'true');
+        localStorage.setItem(GUEST_SESSION_KEY, 'logout-guest-generation');
+        activateGuestSession('logout-guest-generation');
         (auth as any).currentUser = null;
         vi.mocked(onAuthStateChanged).mockImplementation((_auth, callback: any) => {
             callback(null);
