@@ -18,7 +18,7 @@ const ReloadPrompt: React.FC = () => {
   } = useRegisterSW({
     // Workbox otherwise reloads on "controlling" independently of this UI,
     // bypassing the owner-scoped reload barrier (including on another tab).
-    onNeedReload() {},
+    onNeedReload: () => undefined,
     onRegistered(r) {
       if (r && typeof r.update === 'function') {
         const requestUpdate = () => {
