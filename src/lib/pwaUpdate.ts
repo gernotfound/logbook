@@ -60,10 +60,20 @@ function boundedUpdateStep<T>(operation: Promise<T>, timeoutMs: number): Promise
   });
 }
 
+type ActivationOptions = {
+  signal?: AbortSignal;
+  onActivationDelayed?: () => void;
+};
+
+function throwIfCancelled(signal?: AbortSignal): void {
+  if (signal?.aborted) throw new DOMException('Aggiornamento annullato.', 'AbortError');
+}
+
 function activateWaitingWorker(
   worker: ServiceWorker,
   container: ServiceWorkerContainer,
   timeoutMs: number,
+  options: ActivationOptions,
 ): Promise<void> {
   if (worker.state === 'redundant') {
     return Promise.reject(new Error('Aggiornamento PWA non più disponibile. Riprova.'));
@@ -75,9 +85,10 @@ function activateWaitingWorker(
     const finish = (error?: Error) => {
       if (settled) return;
       settled = true;
-      clearTimeout(timeout);
+      clearTimeout(slowTimer);
       worker.removeEventListener('statechange', onWorkerStateChange);
       container.removeEventListener('controllerchange', onControllerChange);
+      options.signal?.removeEventListener('abort', onAbort);
       if (error) reject(error);
       else resolve();
     };
@@ -87,20 +98,32 @@ function activateWaitingWorker(
         finish(new Error('Il nuovo service worker è stato sostituito. Riprova.'));
       }
     };
-    // Other tabs and registrations may produce controllerchange while this
-    // update is pending. Only the worker we explicitly activated is proof.
+    // A different registration can emit controllerchange. Only the targeted
+    // worker becoming active or taking control authorizes the eventual reload.
     const onControllerChange = () => {
       if (container.controller === worker || worker.state === 'activated') finish();
     };
-    const timeout = setTimeout(
-      () => finish(new Error('Attivazione della nuova versione non confermata. Riprova.')),
-      timeoutMs,
-    );
+    const onAbort = () => finish(new DOMException('Aggiornamento annullato.', 'AbortError'));
+    // Five seconds is a UX threshold, not proof of failed activation. Some
+    // browsers activate later; retain listeners until success, replacement or
+    // explicit cancellation rather than reporting failure before a real reload.
+    const slowTimer = setTimeout(() => {
+      if (!settled) options.onActivationDelayed?.();
+    }, timeoutMs);
     worker.addEventListener('statechange', onWorkerStateChange);
     container.addEventListener('controllerchange', onControllerChange);
+    options.signal?.addEventListener('abort', onAbort, { once: true });
+    if (options.signal?.aborted) {
+      onAbort();
+      return;
+    }
+    onWorkerStateChange();
+    onControllerChange();
+    if (settled) return;
     try {
       worker.postMessage({ type: 'SKIP_WAITING' });
       onWorkerStateChange();
+      onControllerChange();
     } catch (error) {
       finish(error instanceof Error ? error : new Error('Attivazione PWA non disponibile.'));
     }
@@ -119,17 +142,20 @@ function activateWaitingWorker(
  */
 export async function applyPWAUpdate(
   container: ServiceWorkerContainer | undefined,
-  reload: () => void,
+  reload: () => void | Promise<void>,
   timeoutMs = DEFAULT_ACTIVATION_TIMEOUT_MS,
+  options: ActivationOptions = {},
 ): Promise<void> {
+  throwIfCancelled(options.signal);
   if (container && typeof container.getRegistration === 'function') {
     const registration = await boundedUpdateStep(container.getRegistration(), timeoutMs);
     if (registration) {
       if (!registration.waiting) {
         await boundedUpdateStep(checkForWaitingServiceWorker(registration, timeoutMs), timeoutMs);
       }
+      throwIfCancelled(options.signal);
       if (registration.waiting) {
-        await activateWaitingWorker(registration.waiting, container, timeoutMs);
+        await activateWaitingWorker(registration.waiting, container, timeoutMs, options);
       } else if (typeof navigator !== 'undefined' && navigator.onLine === false) {
         // A stale prompt with no installed replacement is not a reason to
         // reload an offline tab: the existing cached shell may be its only
@@ -138,5 +164,6 @@ export async function applyPWAUpdate(
       }
     }
   }
-  reload();
+  throwIfCancelled(options.signal);
+  await reload();
 }

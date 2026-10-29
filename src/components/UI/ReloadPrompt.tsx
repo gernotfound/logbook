@@ -6,14 +6,19 @@ import { applyPWAUpdate, checkForWaitingServiceWorker } from '../../lib/pwaUpdat
 const ReloadPrompt: React.FC = () => {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const updateInFlight = useRef(false);
+  const activationAbortRef = useRef<AbortController | null>(null);
   const [updating, setUpdating] = useState(false);
   const [updatePhase, setUpdatePhase] = useState<'saving' | 'activating'>('saving');
   const [updateError, setUpdateError] = useState<string | null>(null);
+  const [activationDelayed, setActivationDelayed] = useState(false);
   const [chunkFailed, setChunkFailed] = useState(false);
 
   const {
     needRefresh: [needRefresh, setNeedRefresh],
   } = useRegisterSW({
+    // Workbox otherwise reloads on "controlling" independently of this UI,
+    // bypassing the owner-scoped reload barrier (including on another tab).
+    onNeedReload: () => undefined,
     onRegistered(r) {
       if (r && typeof r.update === 'function') {
         const requestUpdate = () => {
@@ -51,6 +56,7 @@ const ReloadPrompt: React.FC = () => {
 
   useEffect(() => {
     return () => {
+      activationAbortRef.current?.abort();
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
         intervalRef.current = null;
@@ -105,10 +111,13 @@ const ReloadPrompt: React.FC = () => {
 
   const handleUpdate = async () => {
     if (updateInFlight.current) return;
+    const activation = new AbortController();
+    activationAbortRef.current = activation;
     updateInFlight.current = true;
     setUpdating(true);
     setUpdatePhase('saving');
     setUpdateError(null);
+    setActivationDelayed(false);
     try {
       // A missing hashed module can leave the old app shell active just like
       // a waiting update. Both cases must use the same SW activation path.
@@ -118,20 +127,40 @@ const ReloadPrompt: React.FC = () => {
       setUpdatePhase('activating');
       await applyPWAUpdate(
         typeof navigator === 'undefined' ? undefined : navigator.serviceWorker,
-        () => {
+        async () => {
+          if (activation.signal.aborted) throw new DOMException('Aggiornamento annullato.', 'AbortError');
           if (!isReloadSessionCurrent(session)) throw new Error('Sessione cambiata. Ripeti l’aggiornamento.');
+          // The user can keep editing while the browser activates its worker.
+          // Recheck durable data immediately before the actual navigation.
+          const finalSession = await prepareForReload();
+          if (activation.signal.aborted) throw new DOMException('Aggiornamento annullato.', 'AbortError');
+          if (!isReloadSessionCurrent(session) || !isReloadSessionCurrent(finalSession)) {
+            throw new Error('Sessione cambiata. Ripeti l’aggiornamento.');
+          }
           window.location.reload();
+        },
+        undefined,
+        {
+          signal: activation.signal,
+          onActivationDelayed: () => {
+            if (!activation.signal.aborted) setActivationDelayed(true);
+          },
         },
       );
     } catch (err) {
-      setUpdateError(err instanceof Error ? err.message : 'Aggiornamento non riuscito. Riprova.');
+      if (!(err instanceof Error && err.name === 'AbortError')) {
+        setUpdateError(err instanceof Error ? err.message : 'Aggiornamento non riuscito. Riprova.');
+      }
     } finally {
+      if (activationAbortRef.current === activation) activationAbortRef.current = null;
       updateInFlight.current = false;
       setUpdating(false);
+      setActivationDelayed(false);
     }
   };
 
   const handleClose = () => {
+    activationAbortRef.current?.abort();
     setNeedRefresh(false);
     setChunkFailed(false);
   };
@@ -150,6 +179,9 @@ const ReloadPrompt: React.FC = () => {
         {chunkFailed ? 'Aggiornamento richiesto per caricare questa schermata' : 'Nuova versione disponibile'}
       </div>
       {updateError && <p role="alert" className="ui-reload-prompt-2" style={{ margin: 0 }}>{updateError}</p>}
+      {activationDelayed && <p role="status" className="ui-reload-prompt-2" style={{ margin: 0 }}>
+        Il browser sta impiegando più tempo per attivare la nuova versione. Puoi attendere oppure chiudere l’avviso e riprovare.
+      </p>}
 
       <div className="reload-prompt-actions" style={{ display: "flex", gap: "0.625rem", width: "100%", justifyContent: "center" }}>
         <button
@@ -167,7 +199,7 @@ const ReloadPrompt: React.FC = () => {
           aria-label="Chiudi notifica"
           className="btn btn-secondary btn-small ui-reload-prompt-4"
           onClick={handleClose}
-          disabled={updating}
+          disabled={updating && !activationDelayed}
           style={{ flex: 1, padding: "0.625rem", margin: 0, minHeight: "2.75rem", cursor: "pointer" }}
         >
           Chiudi
