@@ -12,6 +12,8 @@ export function normalizeBusinessId(value: unknown): string | null {
         || id.length > MAX_BUSINESS_ID_LENGTH
         || id === 'undefined'
         || id === 'null'
+        // $order is a reserved semantic operation segment, never an entity ID.
+        || id === '$order'
         || id.includes('/')
     ) return null;
     return id;
