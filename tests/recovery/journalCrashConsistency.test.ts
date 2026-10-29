@@ -144,6 +144,35 @@ afterEach(async () => {
 });
 
 describe('M3 journal crash consistency', () => {
+    it.each([
+        { key: '%70rofile/height', deleteClock: { s01: 2 } },
+        { key: 'profile/height', deleteClock: {} },
+    ])('preserves pending data on invalid cloud field metadata: %j', async ({ key, deleteClock }) => {
+        await commitLocal(owner, data(171), data(170));
+        const before = await readLocal(owner);
+        expect(before?.pending.length).toBeGreaterThan(0);
+        const storedBefore = await get('logbook:v2:' + owner);
+        const malformed = cloudDocumentsWithSync();
+        malformed.set('', {
+            ...(malformed.get('') ?? {}),
+            _sync: {
+                protocolVersion: 3, clock: { s01: 2 },
+                fields: { [key]: {
+                    actorId: 's01', seq: 2, clock: { s01: 2 }, deleted: true, deleteClock,
+                } },
+            },
+        });
+        await expect(hydrateLocal(owner, data(170), [], malformed)).rejects.toMatchObject({
+            code: 'invalid-cloud-sync-metadata', documentPath: '',
+        });
+        expect(await get('logbook:v2:' + owner)).toEqual(storedBefore);
+        expect(await readLocal(owner)).toEqual(before);
+        installReplaySafeRemote();
+        expect(await replicateJournal()).toMatchObject({ ok: true, status: 'synced' });
+        expect((await readLocal(owner))?.pending).toEqual([]);
+        expect(currentCloudData().profile?.height).toBe('171');
+    });
+
     it('classifies malformed cloud sync metadata and preserves the durable local envelope', async () => {
         const before = await readLocal(owner);
         const malformedCloudDocuments = cloudDocumentsWithSync();

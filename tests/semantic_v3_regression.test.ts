@@ -6,6 +6,8 @@ import {
     type SemanticOperation
 } from '../src/lib/sync/semanticProjection';
 import type { DocumentData } from '../src/lib/sync/documentProjection';
+import type { StampLike } from '../src/lib/sync/semanticProjection/contracts';
+import { compareStamps, fieldKey, parseSemanticOperation } from '../src/lib/sync/semanticProjection/metadata';
 import { CURRENT_SYNC_PROTOCOL } from '../src/lib/schemaEvolution';
 
 const nutritionPath = 'nutrition_months/2026-09';
@@ -16,6 +18,130 @@ function nutritionDocs(day?: Record<string, unknown>) {
 }
 
 describe('Semantic Merge V3 regressions', () => {
+    it.each(['__proto__', 'constructor', 'prototype', 'toString', 'hasOwnProperty'])(
+        'keeps %s actor coordinates independent of inherited properties',
+        actor => {
+            const ordinary: SemanticOperation = {
+                docPath: '', path: ['profile', 'name'], value: 'ordinary',
+                actorId: 's00', seq: 2, clock: { s00: 2 }, isDelete: false,
+            };
+            const special: SemanticOperation = {
+                ...ordinary, value: 'special', actorId: actor, seq: 3, clock: { [actor]: 3 },
+            };
+            expect(compareStamps(ordinary, special)).toBe(-1);
+            expect(compareStamps(special, ordinary)).toBe(1);
+            const zero = { ...ordinary, clock: { s00: 2, [actor]: 0 } };
+            expect(compareStamps(zero, ordinary)).toBe(0);
+            expect(compareStamps(ordinary, zero)).toBe(0);
+
+            const base = new Map<string, DocumentData>([['', { profile: { name: 'base' } }]]);
+            const together = applySemanticOperations(base, [ordinary, special]);
+            const first = applySemanticOperations(base, [special]);
+            const split = applySemanticOperations(first.documents, [ordinary, special], first.syncMetas);
+            expect(together.documents.get('')?.profile).toEqual({ name: 'special' });
+            expect(split).toEqual(together);
+            expect(parseSyncMeta(together.syncMetas[''])).toEqual(together.syncMetas['']);
+            expect(together.syncMetas[''].fields['profile/name'].candidates).toEqual([
+                { actorId: 's00', seq: 2, clock: { s00: 2 }, value: 'ordinary' },
+            ]);
+        },
+    );
+
+    it('orders safe vector coordinates beyond the safe aggregate number range transitively', () => {
+        const max = Number.MAX_SAFE_INTEGER;
+        const stamps: StampLike[] = [
+            { actorId: 's15', seq: max, clock: { s15: max, s14: 1 } },
+            { actorId: 's13', seq: max, clock: { s13: max, s12: 2 } },
+            { actorId: 's11', seq: max, clock: { s11: max, s10: 3 } },
+        ];
+        expect(compareStamps(stamps[0], stamps[1])).toBe(-1);
+        expect(compareStamps(stamps[1], stamps[2])).toBe(-1);
+        expect(compareStamps(stamps[0], stamps[2])).toBe(-1);
+    });
+
+    it.each(['', '/', 'profile/', 'profile//name', '%70rofile/name', 'profile/%6Eame', 'profile/%', 'profile/%2f'])(
+        'rejects ambiguous or invalid field key %s before replay',
+        key => {
+            const raw = {
+                protocolVersion: CURRENT_SYNC_PROTOCOL, clock: { s00: 2 },
+                fields: { [key]: { actorId: 's00', seq: 2, clock: { s00: 2 }, deleted: true } },
+            };
+            const before = structuredClone(raw);
+            expect(() => parseSyncMeta(raw)).toThrow();
+            expect(raw).toEqual(before);
+        },
+    );
+
+    it('preserves canonical escaped and prototype-named paths without aliasing metadata', () => {
+        const key = fieldKey(['__proto__', 'constructor', 'prototype', 'a/b', 'è %']);
+        const raw = {
+            protocolVersion: CURRENT_SYNC_PROTOCOL, clock: { s00: 2, s01: 1 },
+            fields: { [key]: {
+                actorId: 's00', seq: 2, clock: { s00: 2 },
+                guard: { path: ['activeWorkout', 'id'], equals: 'current' },
+                candidates: [{
+                    actorId: 's01', seq: 1, clock: { s01: 1 },
+                    value: { nested: ['original'] },
+                    guard: { path: ['activeWorkout', 'id'], equals: 'current' },
+                }],
+            } },
+        };
+        const before = structuredClone(raw);
+        const parsed = parseSyncMeta(raw);
+        parsed.clock.s00 = 9;
+        parsed.fields[key].clock.s00 = 9;
+        parsed.fields[key].guard!.path[0] = 'changed';
+        parsed.fields[key].candidates![0].clock.s01 = 9;
+        (parsed.fields[key].candidates![0].value as { nested: string[] }).nested.push('changed');
+        parsed.fields[key].candidates![0].guard!.path[0] = 'changed';
+        expect(raw).toEqual(before);
+        expect(Object.keys(parsed.fields)).toEqual([key]);
+        expect(Object.getPrototypeOf(parsed.fields)).toBe(Object.prototype);
+    });
+
+    it.each([{}, { s00: 1 }, { s01: 1 }])('rejects a terminal barrier missing its delete dot: %j', deleteClock => {
+        expect(() => parseSyncMeta({
+            protocolVersion: CURRENT_SYNC_PROTOCOL, clock: { s00: 2, s01: 1 },
+            fields: { 'profile/name': {
+                actorId: 's00', seq: 2, clock: { s00: 2, s01: 1 }, deleted: true, deleteClock,
+            } },
+        })).toThrow('causal dot');
+    });
+
+    it('accepts a delete-dot barrier without requiring the full event context and blocks stale recreation', () => {
+        const raw = {
+            protocolVersion: CURRENT_SYNC_PROTOCOL, clock: { s00: 2, s01: 1 },
+            fields: { 'profile/name': {
+                actorId: 's00', seq: 2, clock: { s00: 2, s01: 1 }, deleted: true,
+            } },
+        };
+        const meta = parseSyncMeta(raw);
+        expect(meta.fields['profile/name'].deleteClock).toEqual({ s00: 2 });
+        expect(parseSyncMeta(meta)).toEqual(meta);
+        const result = applySemanticOperations(new Map([['', {}]]), [{
+            docPath: '', path: ['profile', 'name'], value: 'stale', isDelete: false,
+            actorId: 's02', seq: 1, clock: { s02: 1 },
+        }], { '': meta });
+        expect(result.documents.get('')).toEqual({});
+        expect(result.syncMetas[''].fields['profile/name']).toEqual(meta.fields['profile/name']);
+    });
+
+    it('isolates parsed operation paths, guards, values and causal clocks', () => {
+        const raw = {
+            docPath: '', path: ['profile', 'name'], value: { nested: ['original'] }, isDelete: false,
+            actorId: 's00', seq: 1, clock: { s00: 1 },
+            guard: { path: ['activeWorkout', 'id'], equals: { nested: ['guard'] } },
+        };
+        const before = structuredClone(raw);
+        const parsed = parseSemanticOperation(raw);
+        parsed.path.push('changed');
+        parsed.clock.s00 = 9;
+        (parsed.value as { nested: string[] }).nested.push('changed');
+        parsed.guard!.path.push('changed');
+        (parsed.guard!.equals as { nested: string[] }).nested.push('changed');
+        expect(raw).toEqual(before);
+    });
+
     it('merges concurrent creation of different properties on the same new NutritionDay', () => {
         const base = nutritionDocs();
         const desiredA = nutritionDocs({ date, weight: 80 });

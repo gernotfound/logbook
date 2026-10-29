@@ -27,7 +27,9 @@ Una vector clock `cover` copre `covered` solo se, per ogni actor presente in `co
 cover[actor] >= covered[actor]
 ```
 
-Le coordinate assenti equivalgono a zero.
+Le coordinate assenti equivalgono a zero, anche quando l'actor coincide con una proprietà ereditata JavaScript. Lettura, confronto e copia dei clock devono usare soltanto proprietà proprie senza invocare setter ereditati.
+
+**MUST:** il parser dei metadata rifiuta chiavi field non canoniche (segmenti vuoti, URI encoding invalido o diverso da `fieldKey(path)`) e tombstone la cui `deleteClock` esplicita non copre il dot della delete vincente. Non normalizzare silenziosamente una chiave ambigua né ricostruire una barriera esplicita corrotta: i boundary persistiti devono fallire conservando gli originali.
 
 Solo questa copertura componente-per-componente può giustificare la rimozione di metadata discendente sotto una tombstone antenata.
 

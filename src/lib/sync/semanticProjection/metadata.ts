@@ -82,7 +82,10 @@ export function parseSyncMeta(raw: unknown): SyncMeta {
 
     const fields: Record<string, FieldStamp> = {};
     for (const [path, stampRaw] of Object.entries(raw.fields)) {
-        if (!path) throw new Error('Invalid field path');
+        const decodedPath = pathFromFieldKey(path);
+        if (!decodedPath.length || decodedPath.some(segment => !segment) || fieldKey(decodedPath) !== path) {
+            throw new Error('Invalid field path');
+        }
         if (!isRecord(stampRaw)) throw new Error('Invalid FieldStamp');
         if (typeof stampRaw.actorId !== 'string' || !stampRaw.actorId.trim()) throw new Error('Invalid actorId in FieldStamp');
         const seq = parseSafeSeq(stampRaw.seq, 'FieldStamp');
@@ -109,6 +112,12 @@ export function parseSyncMeta(raw: unknown): SyncMeta {
             fieldStamp.deleteClock = deleteClock;
         } else if (fieldStamp.deleted) {
             fieldStamp.deleteClock = { [fieldStamp.actorId]: fieldStamp.seq };
+        }
+
+        // A terminal barrier must retain its own delete event, otherwise a
+        // concurrent update could recreate a field without observing that delete.
+        if (fieldStamp.deleted && fieldStamp.deleteClock) {
+            assertDotCovered(fieldStamp.deleteClock, fieldStamp.actorId, fieldStamp.seq, 'delete barrier');
         }
 
         const guard = parseGuard(stampRaw.guard, 'FieldStamp');
@@ -206,17 +215,7 @@ export function mergeVectors(...clocks: VectorClock[]): VectorClock {
 }
 
 function dominates(clockA: VectorClock, clockB: VectorClock): boolean {
-    let hasStrictlyGreater = false;
-    for (const actor of Object.keys(clockB)) {
-        const aVal = clockA[actor] || 0;
-        const bVal = clockB[actor] || 0;
-        if (aVal < bVal) return false;
-        if (aVal > bVal) hasStrictlyGreater = true;
-    }
-    for (const actor of Object.keys(clockA)) {
-        if ((clockA[actor] || 0) > (clockB[actor] || 0)) hasStrictlyGreater = true;
-    }
-    return hasStrictlyGreater;
+    return coversVectorClock(clockA, clockB) && !coversVectorClock(clockB, clockA);
 }
 
 function clockWeight(clock: VectorClock): bigint {
@@ -228,8 +227,8 @@ function clockWeight(clock: VectorClock): bigint {
 function compareCanonicalClock(left: VectorClock, right: VectorClock): number {
     const actors = [...new Set([...Object.keys(left), ...Object.keys(right)])].sort();
     for (const actor of actors) {
-        const l = left[actor] ?? 0;
-        const r = right[actor] ?? 0;
+        const l = Object.hasOwn(left, actor) ? left[actor] : 0;
+        const r = Object.hasOwn(right, actor) ? right[actor] : 0;
         if (l !== r) return l > r ? 1 : -1;
     }
     return 0;

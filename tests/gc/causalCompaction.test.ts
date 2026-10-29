@@ -37,6 +37,30 @@ function compactedOutcome(meta: SyncMeta, operation: SemanticOperation) {
 }
 
 describe('M4 causal metadata compaction', () => {
+    it.each(['__proto__', 'constructor', 'prototype', 'toString', 'hasOwnProperty'])(
+        'requires own causal evidence before collecting the %s actor',
+        actor => {
+            const clock = { [actor]: 2 };
+            const meta: SyncMeta = {
+                protocolVersion: 3, clock,
+                fields: {
+                    profile: { actorId: 's00', seq: 1, clock: { s00: 1 }, deleted: true, deleteClock: { s00: 1 } },
+                    'profile/name': { actorId: actor, seq: 2, clock, deleted: true, deleteClock: clock },
+                },
+            };
+            meta.clock = { ...clock, s00: 1 };
+            const before = structuredClone(meta);
+            expect(coversVector({}, clock)).toBe(false);
+            const preserved = compactSyncMeta(meta, {});
+            expect(preserved).toEqual(meta);
+            expect(Object.hasOwn(preserved.clock, actor)).toBe(true);
+            expect(Object.getPrototypeOf(preserved.clock)).toBe(Object.prototype);
+            expect(compactSyncMeta(preserved, {})).toEqual(preserved);
+            expect(compactSyncMeta(meta, { ...clock, s00: 1 }).fields).toEqual({});
+            expect(meta).toEqual(before);
+        },
+    );
+
     it('uses componentwise causal coverage rather than age or tie-break order', () => {
         expect(coversVector({ A: 4, B: 2 }, { A: 3, B: 2 })).toBe(true);
         expect(coversVector({ A: 4 }, { A: 3, B: 1 })).toBe(false);
