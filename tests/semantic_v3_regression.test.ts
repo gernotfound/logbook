@@ -6,6 +6,7 @@ import {
     type SemanticOperation
 } from '../src/lib/sync/semanticProjection';
 import type { DocumentData } from '../src/lib/sync/documentProjection';
+import type { StampLike } from '../src/lib/sync/semanticProjection/contracts';
 import { compareStamps, fieldKey, parseSemanticOperation } from '../src/lib/sync/semanticProjection/metadata';
 import { CURRENT_SYNC_PROTOCOL } from '../src/lib/schemaEvolution';
 
@@ -48,10 +49,10 @@ describe('Semantic Merge V3 regressions', () => {
 
     it('orders safe vector coordinates beyond the safe aggregate number range transitively', () => {
         const max = Number.MAX_SAFE_INTEGER;
-        const stamps = [
-            { actorId: 's00', seq: max, clock: { s00: max } },
-            { actorId: 's01', seq: max, clock: { s00: max, s01: max } },
-            { actorId: 's02', seq: 1, clock: { s00: max, s01: max, s02: 1 } },
+        const stamps: StampLike[] = [
+            { actorId: 's15', seq: max, clock: { s15: max, s14: 1 } },
+            { actorId: 's13', seq: max, clock: { s13: max, s12: 2 } },
+            { actorId: 's11', seq: max, clock: { s11: max, s10: 3 } },
         ];
         expect(compareStamps(stamps[0], stamps[1])).toBe(-1);
         expect(compareStamps(stamps[1], stamps[2])).toBe(-1);
