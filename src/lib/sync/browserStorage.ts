@@ -52,7 +52,11 @@ export function writeBrowserValue(key: string, value: string): void {
 export function writeBrowserJson(key: string, value: unknown): void {
     let serialized: string;
     try {
-        serialized = JSON.stringify(value);
+        const result = JSON.stringify(value);
+        if (typeof result !== 'string') {
+            throw new TypeError('JSON serialization did not produce a string');
+        }
+        serialized = result;
     } catch (error) {
         throw new BrowserStorageError('write', key, error);
     }
