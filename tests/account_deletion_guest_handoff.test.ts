@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { auth, signOut } from '../src/lib/firebase';
-import { activateGuestSession } from '../src/lib/sync/session';
+import { activateGuestSession, GUEST_SESSION_KEY } from '../src/lib/sync/session';
 import { deleteAccount } from '../src/lib/db/db_account';
 import { idbStore } from './setup';
 
@@ -33,7 +33,7 @@ beforeEach(() => {
     priorUser = auth.currentUser;
     mutableAuth.currentUser = makeUser('pre-consent-account') as unknown as typeof auth.currentUser;
     localStorage.setItem('logbook_is_guest', 'true');
-    localStorage.setItem('logbook_guest_session_id_v1', 'guest-pre-consent-session');
+    localStorage.setItem(GUEST_SESSION_KEY, 'guest-pre-consent-session');
     activateGuestSession('guest-pre-consent-session');
     idbStore['logbook:v2:guest'] = { sentinel: 'guest-archive-must-survive' };
 });
@@ -66,6 +66,7 @@ describe('account deletion before guest-to-account migration', () => {
         expect(context.resetStore).not.toHaveBeenCalled();
         expect(idbStore['logbook:v2:guest']).toEqual({ sentinel: 'guest-archive-must-survive' });
         expect(localStorage.getItem('logbook_is_guest')).toBe('true');
+        expect(localStorage.getItem(GUEST_SESSION_KEY)).toBe('guest-pre-consent-session');
         expect(localStorage.getItem('logbook:v2:user:pre-consent-account:account-deletion')).not.toBeNull();
         expect(vi.mocked(signOut)).toHaveBeenCalledTimes(1);
     });

@@ -8,6 +8,7 @@ import { deviceVaultKeyId } from '../sync/secureArchiveKeys';
 import { vaultControlMirrorId } from '../sync/secureArchiveControlRecovery';
 import { stableStorageKeyInventory } from '../sync/stableStorageKeyInventory';
 import { readBrowserValueStrict } from '../sync/browserStorage';
+import { GUEST_SESSION_KEY } from '../sync/sessionKeys';
 
 // This boundary owns the write fence and the physical device purge only.
 // Account/consent authorization and server-complete evidence stay with db_account.
@@ -23,7 +24,7 @@ function collectLocalPurgeKeys(owner: string): Set<string> {
     // Redirects belong to Auth and are never deleted by owner archive purge.
     if (owner === 'guest') {
         keys.add('logbook_is_guest');
-        keys.add('logbook_guest_session_id_v1');
+        keys.add(GUEST_SESSION_KEY);
         keys.add(GUEST_AUTH_INTENT);
     }
 
