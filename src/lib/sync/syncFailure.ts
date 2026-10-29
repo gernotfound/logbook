@@ -12,11 +12,12 @@ function getSyncErrorChain(error: unknown): SyncErrorDetail[] {
     for (let depth = 0; depth < 6 && current && typeof current === 'object' && !seen.has(current); depth++) {
         seen.add(current);
         const item = current as { code?: unknown; retryable?: unknown; cause?: unknown };
+        const code = Object.hasOwn(item, 'code') ? item.code : undefined;
         chain.push({
-            code: typeof item.code === 'string' ? item.code : undefined,
-            retryable: item.retryable === true,
+            code: typeof code === 'string' ? code : undefined,
+            retryable: Object.hasOwn(item, 'retryable') && item.retryable === true,
         });
-        current = item.cause;
+        current = Object.hasOwn(item, 'cause') ? item.cause : undefined;
     }
     return chain;
 }
