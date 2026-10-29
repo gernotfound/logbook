@@ -8,7 +8,7 @@ import { AuthProvider } from '../src/contexts/AuthContext';
 import { useAuth } from '../src/hooks/useAuth';
 import { UserDataSchema } from '../src/lib/schema';
 import * as localRepository from '../src/lib/sync/localRepository';
-import { storageOwner } from '../src/lib/sync/session';
+import { activateGuestSession, GUEST_SESSION_KEY, storageOwner } from '../src/lib/sync/session';
 import { useAppStore } from '../src/store/useAppStore';
 import type { UserData } from '../src/types';
 import { beginGuestMigrationIntent } from '../src/lib/auth/guestMigrationIntent';
@@ -71,6 +71,8 @@ describe('guest migration crash recovery boundary', () => {
     it('keeps the guest marker, policy and guest mode when the authenticated local commit fails', async () => {
         const { cloud, guest } = fixtures();
         localStorage.setItem('logbook_is_guest', 'true');
+        localStorage.setItem(GUEST_SESSION_KEY, 'guest-crash-recovery-generation');
+        activateGuestSession('guest-crash-recovery-generation');
         await beginGuestMigrationIntent('merge', 'recovery', { uid: user.uid });
         useAppStore.getState().setUserData(guest);
 
@@ -104,6 +106,8 @@ describe('guest migration crash recovery boundary', () => {
     it('retires the guest marker only after the authenticated envelope is durable and before replication', async () => {
         const { cloud, guest } = fixtures();
         localStorage.setItem('logbook_is_guest', 'true');
+        localStorage.setItem(GUEST_SESSION_KEY, 'guest-crash-recovery-generation');
+        activateGuestSession('guest-crash-recovery-generation');
         await beginGuestMigrationIntent('merge', 'recovery', { uid: user.uid });
         useAppStore.getState().setUserData(guest);
         onlineSpy = vi.spyOn(window.navigator, 'onLine', 'get').mockReturnValue(false);
@@ -143,6 +147,8 @@ describe('guest migration crash recovery boundary', () => {
         const { guest } = fixtures();
         const before = await localRepository.readLocal('guest');
         localStorage.setItem('logbook_is_guest', 'true');
+        localStorage.setItem(GUEST_SESSION_KEY, 'guest-crash-recovery-generation');
+        activateGuestSession('guest-crash-recovery-generation');
         await beginGuestMigrationIntent('merge', 'recovery', { uid: user.uid });
         useAppStore.getState().setUserData(guest);
         vi.mocked(DB.loadCloudPayload).mockRejectedValueOnce(new Error('Cloud unavailable before hydration'));
@@ -163,6 +169,8 @@ describe('guest migration crash recovery boundary', () => {
     it('creates a durable authenticated base when a new account has no cloud payload yet', async () => {
         const { guest } = fixtures();
         localStorage.setItem('logbook_is_guest', 'true');
+        localStorage.setItem(GUEST_SESSION_KEY, 'guest-crash-recovery-generation');
+        activateGuestSession('guest-crash-recovery-generation');
         await beginGuestMigrationIntent('merge', 'recovery', { uid: user.uid });
         useAppStore.getState().setUserData(guest);
         onlineSpy = vi.spyOn(window.navigator, 'onLine', 'get').mockReturnValue(false);
