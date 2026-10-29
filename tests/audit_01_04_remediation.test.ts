@@ -171,6 +171,41 @@ describe('AUDIT 01-04 remediation invariants', () => {
         expect(readAuthenticatedOwnerHint()).toBeNull();
     });
 
+    it.each(['', 'user:', 'guest', 'user:invalid/uid'])(
+        'fails closed on a persisted malformed owner hint %j instead of falling back to guest',
+        stored => {
+            const previous = (auth as any).currentUser;
+            try {
+                (auth as any).currentUser = null;
+                localStorage.setItem('logbook_authenticated_owner', stored);
+                expect(() => readAuthenticatedOwnerHint()).toThrow('Owner autenticato locale non valido');
+                expect(() => storageOwner()).toThrow('Owner autenticato locale non valido');
+                // Corrupt evidence must never be silently cleared or rewritten.
+                expect(localStorage.getItem('logbook_authenticated_owner')).toBe(stored);
+            } finally {
+                (auth as any).currentUser = previous;
+            }
+        },
+    );
+
+    it('refuses to persist an owner identity that its own reader would reject', () => {
+        rememberAuthenticatedOwner('valid-account');
+        expect(() => rememberAuthenticatedOwner('invalid/uid')).toThrow('Owner autenticato locale non valido');
+        expect(readAuthenticatedOwnerHint()).toBe('user:valid-account');
+        expect(localStorage.getItem('logbook_authenticated_owner')).toBe('user:valid-account');
+    });
+
+    it('preserves a new owner hint when a stale logout clears another owner', () => {
+        rememberAuthenticatedOwner('new-account');
+        clearAuthenticatedOwnerHint('user:previous-account');
+        expect(readAuthenticatedOwnerHint()).toBe('user:new-account');
+
+        expect(() => clearAuthenticatedOwnerHint('')).toThrow('Owner autenticato locale non valido');
+        expect(readAuthenticatedOwnerHint()).toBe('user:new-account');
+        clearAuthenticatedOwnerHint('user:new-account');
+        expect(readAuthenticatedOwnerHint()).toBeNull();
+    });
+
     it('keeps the hinted authenticated owner authoritative while Firebase Auth is still unresolved', () => {
         const previous = (auth as any).currentUser;
         try {
