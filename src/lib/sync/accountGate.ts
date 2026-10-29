@@ -1,5 +1,6 @@
 import { stableStorageKeyInventory } from './stableStorageKeyInventory';
 import {
+    BrowserStorageError,
     readBrowserValueStrict,
     removeBrowserValue,
     writeBrowserJson,
@@ -29,18 +30,23 @@ export class AccountDeletionMarkerCorruptError extends Error {
 
 function parse(owner: string, raw: string | null): AccountDeletionMarker | null {
     if (raw === null) return null;
-    if (!owner.startsWith('user:')) throw new AccountDeletionMarkerCorruptError(owner);
+    if (!owner.startsWith('user:') || owner.length <= 'user:'.length) throw new AccountDeletionMarkerCorruptError(owner);
 
     try {
-        const value = JSON.parse(raw) as Partial<AccountDeletionMarker>;
+        const parsed: unknown = JSON.parse(raw);
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+            throw new AccountDeletionMarkerCorruptError(owner);
+        }
+        const value = parsed as Partial<AccountDeletionMarker>;
         const expectedUid = owner.slice(5);
-        const startedAt = Number(value.startedAt);
-        if (!Number.isFinite(startedAt) || startedAt <= 0) {
+        const startedAt = value.startedAt;
+        if (typeof startedAt !== 'number' || !Number.isSafeInteger(startedAt) || startedAt <= 0) {
             throw new AccountDeletionMarkerCorruptError(owner);
         }
 
-        const uid = typeof value.uid === 'string' && value.uid ? value.uid : expectedUid;
-        if (uid !== expectedUid) throw new AccountDeletionMarkerCorruptError(owner);
+        if (value.owner !== owner || value.uid !== expectedUid) {
+            throw new AccountDeletionMarkerCorruptError(owner);
+        }
 
         const receiptToken = value.receiptToken;
         if (receiptToken !== undefined && (typeof receiptToken !== 'string' || receiptToken.length === 0)) {
@@ -50,13 +56,13 @@ function parse(owner: string, raw: string | null): AccountDeletionMarker | null 
         const rawServerAcceptedAt = value.serverAcceptedAt;
         let serverAcceptedAt: number | undefined;
         if (rawServerAcceptedAt !== undefined) {
-            serverAcceptedAt = Number(rawServerAcceptedAt);
-            if (!Number.isFinite(serverAcceptedAt) || serverAcceptedAt <= 0) {
+            if (typeof rawServerAcceptedAt !== 'number' || !Number.isSafeInteger(rawServerAcceptedAt) || rawServerAcceptedAt <= 0) {
                 throw new AccountDeletionMarkerCorruptError(owner);
             }
+            serverAcceptedAt = rawServerAcceptedAt;
         }
 
-        return { owner, uid, startedAt, receiptToken, serverAcceptedAt };
+        return { owner, uid: expectedUid, startedAt, receiptToken, serverAcceptedAt };
     } catch (error) {
         if (error instanceof AccountDeletionMarkerCorruptError) throw error;
         throw new AccountDeletionMarkerCorruptError(owner, error);
@@ -64,12 +70,10 @@ function parse(owner: string, raw: string | null): AccountDeletionMarker | null 
 }
 
 export function readAccountDeletionMarker(owner: string): AccountDeletionMarker | null {
-    if (typeof localStorage === 'undefined') return null;
     return parse(owner, readBrowserValueStrict(key(owner)));
 }
 
 export function isAccountDeletionPending(owner: string): boolean {
-    if (typeof localStorage === 'undefined') return false;
     try {
         // An unreadable marker remains a hard gate: storage failure cannot be
         // interpreted as proof that account deletion is not in progress.
@@ -94,7 +98,6 @@ export function markAccountDeletion(owner: string, values?: Partial<Pick<Account
 }
 
 export function clearAccountDeletion(owner: string): void {
-    if (typeof localStorage === 'undefined') return;
     removeBrowserValue(key(owner));
 }
 
@@ -104,17 +107,22 @@ export function listPendingAccountDeletions(): {
 } {
     const markers: AccountDeletionMarker[] = [];
     const corrupt: AccountDeletionMarkerCorruptError[] = [];
-    if (typeof localStorage === 'undefined') return { markers, corrupt };
+    if (typeof localStorage === 'undefined') {
+        throw new BrowserStorageError('read', 'account-deletion-inventory', new Error('localStorage unavailable'));
+    }
     const inventory = stableStorageKeyInventory('Inventario marker cancellazione account modificato durante il recupero: copie preservate.');
     for (const storageKey of inventory) {
         if (!storageKey.startsWith('logbook:v2:user:') || !storageKey.endsWith(suffix)) continue;
         const owner = storageKey.slice('logbook:v2:'.length, -suffix.length);
         try {
             const marker = parse(owner, readBrowserValueStrict(storageKey));
-            if (marker) markers.push(marker);
+            // A key present in the inventory but missing at read time is not
+            // proof that its durable receipt was safely removed.
+            if (!marker) throw new AccountDeletionMarkerCorruptError(owner);
+            markers.push(marker);
         } catch (error) {
-            if (!(error instanceof AccountDeletionMarkerCorruptError)) throw error;
-            corrupt.push(error);
+            corrupt.push(error instanceof AccountDeletionMarkerCorruptError
+                ? error : new AccountDeletionMarkerCorruptError(owner, error));
         }
     }
     markers.sort((a, b) => a.startedAt - b.startedAt);
