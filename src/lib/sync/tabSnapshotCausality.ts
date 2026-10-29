@@ -24,13 +24,13 @@ export function markTabSnapshotClean(session: SessionSnapshot, data: UserData): 
 }
 
 export function markTabSnapshotDirty(session: SessionSnapshot, base: UserData): void {
-    if (snapshotState
+    if (snapshotState?.dirty
         && snapshotState.session.owner === session.owner
         && snapshotState.session.epoch === session.epoch
         && !sameSession(snapshotState.session, session)) {
-        // Consent/guest identity changed without an explicit session transition.
-        // Never re-label the previous base as an edit of the new generation.
-        // A genuine login/logout activates a different realm epoch.
+        // Never re-label unsaved intent from an earlier consent/guest generation.
+        // A clean tab may re-establish a base after explicit consent acceptance;
+        // a genuine login/logout also activates a different realm epoch.
         throw new Error('Snapshot della scheda appartenente a una sessione precedente. Ricarica TheLogBook.');
     }
     if (snapshotState?.dirty) return;
