@@ -55,6 +55,14 @@ describe('Audit 21 App Check and rejected-sync semantics', () => {
         expect(classifySyncFailure(confirmedRemote, { retryable: true }).status).toBe('local-pending');
     });
 
+    it('does not trust inherited provider codes or causes on arbitrary errors', () => {
+        const denial = Object.assign(new Error('Denied'), { code: 'permission-denied' });
+        const inheritedCode = Object.create({ code: 'permission-denied' }) as object;
+        const inheritedCause = Object.create({ cause: denial }) as object;
+        expect(classifySyncFailure(inheritedCode).status).toBe('failed');
+        expect(classifySyncFailure(inheritedCause).status).toBe('failed');
+    });
+
     it('bounds cyclic error causes and fails closed on unknown failures', () => {
         const cyclic: { cause?: unknown } = {};
         cyclic.cause = cyclic;
