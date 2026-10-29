@@ -78,8 +78,9 @@ export function resolveIdentity(path: string[], item: any): string {
 
 export function identitySeed(path: string[], itemId: string): Record<string, string> {
     const collection = path[path.length - 1];
-    if (collection === 'exercises' && path[0] === 'routines') return { exId: itemId };
-    if (collection === 'exercises') return { id: itemId };
-    if (path[0] === 'trainingCycles' && collection === 'routines') return { routineId: itemId };
-    return { id: itemId };
+    const id = requireBusinessId(itemId, `Invalid identity in ${collection}`);
+    if (collection === 'exercises' && path[0] === 'routines') return { exId: id };
+    if (collection === 'exercises') return { id };
+    if (path[0] === 'trainingCycles' && collection === 'routines') return { routineId: id };
+    return { id };
 }
