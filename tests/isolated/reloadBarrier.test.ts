@@ -133,6 +133,8 @@ it('rejects a stale dirty baseline after consent generation changes in another t
     expect(newSession.epoch).toBe(originalSession.epoch);
     expect(isCurrentSession(originalSession)).toBe(false);
     expect(readTabSnapshotState(newSession)).toBeUndefined();
+    expect(() => markTabSnapshotDirty(newSession, app.state.userData)).toThrow('sessione precedente');
+    expect(readTabSnapshotState(originalSession)?.base.profile?.height).toBe('170');
     app.flush.mockRejectedValue(new Error('offline'));
     await expect(prepareForReload()).rejects.toBeInstanceOf(UnverifiedTabSnapshotError);
     expect((await readLocal('user:a'))?.data.profile?.height).toBe('170');
@@ -152,6 +154,7 @@ it('does not confuse two guest generations sharing an owner and epoch', () => {
     const session = captureSession();
     const guestA = { ...session, owner: 'guest', guestSessionId: 'guest-a' };
     const guestB = { ...guestA, guestSessionId: 'guest-b' };
+    markTabSnapshotClean(guestA, parse(170));
     markTabSnapshotDirty(guestA, parse(170));
     expect(readTabSnapshotState(guestA)?.dirty).toBe(true);
     expect(readTabSnapshotState(guestB)).toBeUndefined();
