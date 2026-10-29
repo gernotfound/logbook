@@ -1,18 +1,17 @@
 import type { FieldStamp, SyncMeta, VectorClock } from './semanticProjection';
+import { coversVectorClock } from './semanticProjection/metadata';
+import { setOwnDataProperty } from '../utils/object';
 
 function compactVector(clock: VectorClock): VectorClock {
     const compacted: VectorClock = {};
     for (const [actorId, seq] of Object.entries(clock)) {
-        if (seq > 0) compacted[actorId] = seq;
+        if (seq > 0) setOwnDataProperty(compacted, actorId, seq);
     }
     return compacted;
 }
 
 export function coversVector(cover: VectorClock, covered: VectorClock): boolean {
-    for (const [actorId, seq] of Object.entries(covered)) {
-        if ((cover[actorId] ?? 0) < seq) return false;
-    }
-    return true;
+    return coversVectorClock(cover, covered);
 }
 
 function cloneStamp(stamp: FieldStamp): FieldStamp {
@@ -42,8 +41,8 @@ function pathDepth(fieldKey: string): number {
  * A remove-wins delete barrier is durable for every descendant path, including after
  * recreation. A descendant stamp is redundant only when that delete barrier already
  * covers the descendant's complete causal clock. Concurrent/unobserved descendants
- * are retained. Terminal barriers and document-level actor coordinates are never
- * retired here because the protocol has no replica-membership/stable-frontier proof.
+ * are retained. Terminal barriers require a stable-frontier proof; positive
+ * document-level actor coordinates remain persisted even after terminal GC.
  */
 function stampClocks(stamp: FieldStamp): VectorClock[] {
     return [
