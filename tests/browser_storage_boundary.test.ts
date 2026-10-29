@@ -9,6 +9,8 @@ import {
 import {
     AccountDeletionMarkerCorruptError,
     findPendingAccountDeletion,
+    listPendingAccountDeletions,
+    clearAccountDeletion,
     isAccountDeletionPending,
     markAccountDeletion,
     readAccountDeletionMarker,
@@ -105,6 +107,98 @@ describe('browser storage boundary', () => {
         }));
 
         expect(() => readAccountDeletionMarker(OWNER)).toThrow(AccountDeletionMarkerCorruptError);
+    });
+
+    it.each([
+        { label: 'missing owner', value: { uid: 'test-user', startedAt: 1 } },
+        { label: 'another owner', value: { owner: 'user:another', uid: 'test-user', startedAt: 1 } },
+        { label: 'missing uid', value: { owner: OWNER, startedAt: 1 } },
+        { label: 'coercible timestamp', value: { owner: OWNER, uid: 'test-user', startedAt: '42' } },
+        { label: 'boolean timestamp', value: { owner: OWNER, uid: 'test-user', startedAt: true } },
+        { label: 'fractional timestamp', value: { owner: OWNER, uid: 'test-user', startedAt: 1.5 } },
+        { label: 'coercible acceptance time', value: { owner: OWNER, uid: 'test-user', startedAt: 1, serverAcceptedAt: '2' } },
+        { label: 'null receipt', value: { owner: OWNER, uid: 'test-user', startedAt: 1, receiptToken: null } },
+        { label: 'null object', value: null },
+        { label: 'array object', value: [{ owner: OWNER, uid: 'test-user', startedAt: 1 }] },
+    ])('keeps a $label deletion marker fenced without overwriting its bytes', ({ value }) => {
+        const storageKey = 'logbook:v2:' + OWNER + ':account-deletion';
+        const raw = JSON.stringify(value);
+        localStorage.setItem(storageKey, raw);
+
+        expect(isAccountDeletionPending(OWNER)).toBe(true);
+        expect(() => readAccountDeletionMarker(OWNER)).toThrow(AccountDeletionMarkerCorruptError);
+        expect(() => markAccountDeletion(OWNER, { receiptToken: 'safe-retry' })).toThrow(AccountDeletionMarkerCorruptError);
+        const result = listPendingAccountDeletions();
+        expect(result.markers).toHaveLength(0);
+        expect(result.corrupt).toHaveLength(1);
+        expect(() => findPendingAccountDeletion()).toThrow(AccountDeletionMarkerCorruptError);
+        expect(localStorage.getItem(storageKey)).toBe(raw);
+    });
+
+    it('accepts complete typed markers and optional receipts without weakening identity checks', () => {
+        const marker = markAccountDeletion(OWNER);
+        expect(readAccountDeletionMarker(OWNER)).toMatchObject({
+            owner: OWNER, uid: 'test-user', startedAt: marker.startedAt,
+        });
+        expect(readAccountDeletionMarker(OWNER)?.receiptToken).toBeUndefined();
+        markAccountDeletion(OWNER, { receiptToken: 'receipt-A', serverAcceptedAt: 23 });
+        expect(readAccountDeletionMarker(OWNER)).toMatchObject({
+            owner: OWNER, uid: 'test-user', startedAt: marker.startedAt,
+            receiptToken: 'receipt-A', serverAcceptedAt: 23,
+        });
+    });
+
+    it('keeps valid receipts recoverable when reading another owner marker fails', () => {
+        const otherOwner = 'user:other';
+        markAccountDeletion(OWNER, { receiptToken: 'receipt-A' });
+        markAccountDeletion(otherOwner, { receiptToken: 'receipt-B' });
+        const originalRead = localStorageMock.getItem.getMockImplementation();
+        if (!originalRead) throw new Error('Missing localStorage mock read implementation');
+        localStorageMock.getItem.mockImplementation((storageKey: string) => {
+            if (storageKey === 'logbook:v2:' + otherOwner + ':account-deletion') return storageFailure();
+            return originalRead(storageKey);
+        });
+        try {
+            const result = listPendingAccountDeletions();
+            expect(result.markers.map(x => x.uid)).toEqual(['test-user']);
+            expect(result.corrupt).toHaveLength(1);
+            expect(result.corrupt[0]).toMatchObject({ owner: otherOwner });
+            expect(() => findPendingAccountDeletion()).toThrow(AccountDeletionMarkerCorruptError);
+            expect(isAccountDeletionPending(otherOwner)).toBe(true);
+        } finally {
+            localStorageMock.getItem.mockImplementation(originalRead);
+        }
+        expect(readAccountDeletionMarker(otherOwner)?.receiptToken).toBe('receipt-B');
+    });
+
+    it('preserves a disappearing indexed marker as corrupt, not silently absent', () => {
+        markAccountDeletion(OWNER, { receiptToken: 'receipt-A' });
+        const originalRead = localStorageMock.getItem.getMockImplementation();
+        if (!originalRead) throw new Error('Missing localStorage mock read implementation');
+        localStorageMock.getItem.mockImplementation((storageKey: string) =>
+            storageKey === 'logbook:v2:' + OWNER + ':account-deletion' ? null : originalRead(storageKey));
+        try {
+            const result = listPendingAccountDeletions();
+            expect(result.markers).toHaveLength(0);
+            expect(result.corrupt).toHaveLength(1);
+            expect(() => findPendingAccountDeletion()).toThrow(AccountDeletionMarkerCorruptError);
+        } finally {
+            localStorageMock.getItem.mockImplementation(originalRead);
+        }
+        expect(readAccountDeletionMarker(OWNER)?.receiptToken).toBe('receipt-A');
+    });
+
+    it('never treats missing localStorage as a recovered deletion or successful cleanup', () => {
+        vi.stubGlobal('localStorage', undefined);
+        try {
+            expect(isAccountDeletionPending(OWNER)).toBe(true);
+            expect(() => readAccountDeletionMarker(OWNER)).toThrow(BrowserStorageError);
+            expect(() => listPendingAccountDeletions()).toThrow(BrowserStorageError);
+            expect(() => findPendingAccountDeletion()).toThrow(BrowserStorageError);
+            expect(() => clearAccountDeletion(OWNER)).toThrow(BrowserStorageError);
+        } finally {
+            vi.unstubAllGlobals();
+        }
     });
 
     it('refuses to start account deletion when the durable local marker cannot be written', () => {
