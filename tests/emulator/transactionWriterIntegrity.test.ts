@@ -61,38 +61,41 @@ it('blocks an unrelated root write instead of replacing malformed existing cloud
     });
 });
 
-it('blocks a monthly write when another entity in the same shard would be destructively sanitized', async () => {
-    const original = sealCloudDocument(new Uint8Array(32).fill(18), 'a', 'nutrition_months/2026-09', {
-        '2026-09-13': {
-            date: '2026-09-13', weight: 'not-a-number', meals: [], supplementsIntake: [],
-        },
-    }, { protocolVersion: 3, clock: {}, fields: {},
-        writer: { slot: 's01', replicaId: 'remote-seed', generation: 1, seq: 0 } });
+it.each(['not-a-number', '9007199254740993'])(
+    'blocks a monthly write when a cloud value %s would be destructively normalized',
+    async (weight) => {
+        const original = sealCloudDocument(new Uint8Array(32).fill(18), 'a', 'nutrition_months/2026-09', {
+            '2026-09-13': {
+                date: '2026-09-13', weight, meals: [], supplementsIntake: [],
+            },
+        }, { protocolVersion: 3, clock: {}, fields: {},
+            writer: { slot: 's01', replicaId: 'remote-seed', generation: 1, seq: 0 } });
 
-    await env.withSecurityRulesDisabled(async context => {
-        await setDoc(doc(asModularFirestore(context.firestore()), 'users/a/nutrition_months/2026-09'), original);
-    });
+        await env.withSecurityRulesDisabled(async context => {
+            await setDoc(doc(asModularFirestore(context.firestore()), 'users/a/nutrition_months/2026-09'), original);
+        });
 
-    const op: SemanticOperation = {
-        docPath: 'nutrition_months/2026-09',
-        path: ['2026-09-14'],
-        value: { date: '2026-09-14', weight: 81, meals: [], supplementsIntake: [] },
-        isDelete: false,
-        actorId: 's00',
-        seq: 1,
-        clock: { s00: 1 },
-    };
+        const op: SemanticOperation = {
+            docPath: 'nutrition_months/2026-09',
+            path: ['2026-09-14'],
+            value: { date: '2026-09-14', weight: 81, meals: [], supplementsIntake: [] },
+            isDelete: false,
+            actorId: 's00',
+            seq: 1,
+            clock: { s00: 1 },
+        };
 
-    const db = asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore());
-    const replica = await registerReplica(db, 'a');
-    await expect(applyDocumentChanges(db, 'a', [op], () => true, replica, new Uint8Array(32).fill(18)))
-        .rejects.toBeInstanceOf(CloudDataIntegrityError);
+        const db = asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore());
+        const replica = await registerReplica(db, 'a');
+        await expect(applyDocumentChanges(db, 'a', [op], () => true, replica, new Uint8Array(32).fill(18)))
+            .rejects.toBeInstanceOf(CloudDataIntegrityError);
 
-    await env.withSecurityRulesDisabled(async context => {
-        const saved = (await getDoc(doc(asModularFirestore(context.firestore()), 'users/a/nutrition_months/2026-09'))).data();
-        expect(saved).toEqual(original);
-    });
-});
+        await env.withSecurityRulesDisabled(async context => {
+            const saved = (await getDoc(doc(asModularFirestore(context.firestore()), 'users/a/nutrition_months/2026-09'))).data();
+            expect(saved).toEqual(original);
+        });
+    },
+);
 
 it('allows an explicitly lossless scalar normalization while applying the semantic operation', async () => {
     const original = sealCloudDocument(new Uint8Array(32).fill(18), 'a', 'nutrition_months/2026-09', {
