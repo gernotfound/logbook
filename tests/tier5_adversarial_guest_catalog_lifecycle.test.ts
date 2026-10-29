@@ -10,6 +10,7 @@ import { useAppStore } from '../src/store/useAppStore';
 import { clearSyncTimers } from '../src/store/slices/createSyncSlice';
 import type { UserData, Exercise, Food } from '../src/types';
 import { idbStore } from './setup';
+import { activateGuestSession, GUEST_SESSION_KEY } from '../src/lib/sync/session';
 
 vi.mock('../src/lib/firebase', () => ({
     auth: {
@@ -69,6 +70,9 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
             for (let i = 0; i < 25; i++) {
                 // This is a direct store-transition stress test, not an AuthProvider login.
                 localStorage.setItem(GUEST_KEY, 'true');
+                const guestId = `guest-stress-${i}`;
+                localStorage.setItem(GUEST_SESSION_KEY, guestId);
+                activateGuestSession(guestId);
                 const catalog = await getCachedCatalog();
                 
                 // Inject a custom item to verify no duplications or leaks across cycles
@@ -114,6 +118,8 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
         it('T5.1.2: Store reset preserves data until explicitly requested and clean fixture has no stale data', async () => {
             const GUEST_KEY = 'logbook_is_guest';
             localStorage.setItem(GUEST_KEY, 'true');
+            localStorage.setItem(GUEST_SESSION_KEY, 'guest-dirty-generation');
+            activateGuestSession('guest-dirty-generation');
 
             const catalog = await getCachedCatalog();
             const customEx: Exercise = { id: 'dirty_custom_ex_1', name: 'Dirty Bench', setsCount: 4, sets: [], isDefault: false };
@@ -151,6 +157,8 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
 
             // Step 3: Subsequent fresh guest login
             localStorage.setItem(GUEST_KEY, 'true');
+            localStorage.setItem(GUEST_SESSION_KEY, 'guest-clean-generation');
+            activateGuestSession('guest-clean-generation');
             const cleanCatalog = await getCachedCatalog();
             const freshGuestData: UserData = {
                 profile: {},

@@ -11,6 +11,7 @@ import type { UserData } from '../src/types';
 import { beginGuestMigrationIntent } from '../src/lib/auth/guestMigrationIntent';
 import { createAndMigrateVault } from '../src/lib/sync/secureArchiveMigration';
 import { lockAllVaults } from '../src/lib/sync/secureArchiveSession';
+import { activateGuestSession, GUEST_SESSION_KEY } from '../src/lib/sync/session';
 import { migrateGuestAccount } from '../src/contexts/auth/migrateGuestAccount';
 
 const parse = (value: unknown) => UserDataSchema.parse(value) as unknown as UserData;
@@ -47,6 +48,8 @@ describe('guest -> account skip policy', () => {
         expect((await readLocal(user.uid))?.pending.length).toBeGreaterThan(0);
         await initializeLocal('guest', guest);
         localStorage.setItem('logbook_is_guest', 'true');
+        localStorage.setItem(GUEST_SESSION_KEY, 'guest-skip-generation');
+        activateGuestSession('guest-skip-generation');
         await beginGuestMigrationIntent('skip', 'recovery', { uid: user.uid });
         useAppStore.getState().setUserData(guest);
         const offline = vi.spyOn(window.navigator, 'onLine', 'get').mockReturnValue(false);
@@ -117,6 +120,8 @@ describe('guest -> account skip policy', () => {
 
         await initializeLocal('guest', guest);
         localStorage.setItem('logbook_is_guest', 'true');
+        localStorage.setItem(GUEST_SESSION_KEY, 'guest-skip-generation');
+        activateGuestSession('guest-skip-generation');
         useAppStore.getState().setUserData(guest);
 
         render(<AuthProvider><div>app</div></AuthProvider>);
@@ -143,6 +148,8 @@ describe('guest -> account skip policy', () => {
 
         await initializeLocal('guest', guest);
         localStorage.setItem('logbook_is_guest', 'true');
+        localStorage.setItem(GUEST_SESSION_KEY, 'guest-skip-generation');
+        activateGuestSession('guest-skip-generation');
         await beginGuestMigrationIntent('skip', 'recovery', { uid: user.uid });
         useAppStore.getState().setUserData(guest);
 

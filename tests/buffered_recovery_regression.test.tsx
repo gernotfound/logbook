@@ -13,7 +13,7 @@ import {
     clearBufferedWriterIntent, createBufferedWriterIntentName,
     inspectBufferedRecoveryEvidence, readBufferedWriterEvidence, writeBufferedWriterIntent,
 } from '../src/lib/sync/bufferedDraftWriterIntent';
-import { captureSession, invalidateSession } from '../src/lib/sync/session';
+import { activateGuestSession, captureSession, GUEST_SESSION_KEY, invalidateSession } from '../src/lib/sync/session';
 import { requiredUpdateRecoveryRegistry } from '../src/lib/sync/requiredUpdateRecovery';
 import { useAppStore } from '../src/store/useAppStore';
 import { localStorageMock } from './setup';
@@ -248,6 +248,8 @@ describe.each(['input', 'textarea'] as const)('owner-scoped buffered %s recovery
     it('never moves a mounted guest draft to a newly authenticated owner', () => {
         // An input event may arrive before an old editor unmounts during login.
         localStorage.setItem('logbook_is_guest', 'true');
+        localStorage.setItem(GUEST_SESSION_KEY, 'buffered-draft-guest-generation');
+        activateGuestSession('buffered-draft-guest-generation');
         expect(captureSession().owner).toBe('guest');
         const guestKey = recoveryKey(kind);
         const onChange = vi.fn();

@@ -29,7 +29,7 @@ import { createAndMigrateVault } from '../src/lib/sync/secureArchiveMigration';
 import { lockAllVaults } from '../src/lib/sync/secureArchiveSession';
 import { saveWorkoutDeviceIntent } from '../src/lib/sync/workoutDeviceIntent';
 import { markGuestMigrationSyncRecovery } from '../src/lib/auth/guestMigrationSyncRecovery';
-import { GUEST_SESSION_KEY } from '../src/lib/sync/sessionKeys';
+import { activateGuestSession, GUEST_SESSION_KEY } from '../src/lib/sync/session';
 import { resumePersistedGuestMigration } from '../src/contexts/auth/resumePersistedGuestMigration';
 
 const defaultRunTransaction = vi.mocked(runTransaction).getMockImplementation();
@@ -73,6 +73,8 @@ describe('guest migration restart recovery', () => {
     it('mounts only the blocking migration UI during automatic guest recovery without a session overlay marker', async () => {
         const { cloud, guest } = fixtures();
         localStorage.setItem(GUEST_KEY, 'true');
+        localStorage.setItem(GUEST_SESSION_KEY, 'guest-restart-generation');
+        activateGuestSession('guest-restart-generation');
         await beginGuestMigrationIntent('merge', 'recovery', { uid: user.uid });
         useAppStore.getState().setUserData(guest);
         let resolveCloud!: (value: any) => void;
@@ -94,6 +96,8 @@ describe('guest migration restart recovery', () => {
     it('ends authenticated bootstrap in a recoverable failed state when another tab retires guest ownership while waiting', async () => {
         const { guest } = fixtures();
         localStorage.setItem(GUEST_KEY, 'true');
+        localStorage.setItem(GUEST_SESSION_KEY, 'guest-restart-generation');
+        activateGuestSession('guest-restart-generation');
         await beginGuestMigrationIntent('merge', 'recovery', { uid: user.uid });
         useAppStore.getState().setUserData(guest);
         const before = await localRepository.readLocal('guest');
@@ -150,6 +154,8 @@ describe('guest migration restart recovery', () => {
     it('does not consume guest data without an explicit migration intent', async () => {
         const { guest } = fixtures();
         localStorage.setItem(GUEST_KEY, 'true');
+        localStorage.setItem(GUEST_SESSION_KEY, 'guest-restart-generation');
+        activateGuestSession('guest-restart-generation');
         useAppStore.getState().setUserData(guest);
         const purge = vi.spyOn(DB, 'purgeAllLocalUserData');
 
@@ -173,6 +179,8 @@ describe('guest migration restart recovery', () => {
         // After a crash the guest snapshot can remain in memory, while the
         // recovery marker already makes storageOwner() resolve to the account.
         localStorage.setItem(GUEST_KEY, 'true');
+        localStorage.setItem(GUEST_SESSION_KEY, 'guest-restart-generation');
+        activateGuestSession('guest-restart-generation');
         useAppStore.setState({ userData: guest, dataOwner: 'guest', localWorkout: null });
         markGuestMigrationSyncRecovery(user.uid);
 
@@ -205,6 +213,8 @@ describe('guest migration restart recovery', () => {
         };
         saveWorkoutDeviceIntent('user:' + user.uid, initial.activeWorkout!, updatedWorkout, initial.activeWorkout!);
         localStorage.setItem(GUEST_KEY, 'true');
+        localStorage.setItem(GUEST_SESSION_KEY, 'guest-restart-generation');
+        activateGuestSession('guest-restart-generation');
         useAppStore.setState({ userData: guest, dataOwner: 'guest', localWorkout: null });
         markGuestMigrationSyncRecovery(user.uid);
 
@@ -243,6 +253,7 @@ describe('guest migration restart recovery', () => {
         const witness = localStorage.getItem(SYNC_RECOVERY_KEY);
         localStorage.setItem(GUEST_KEY, 'true');
         localStorage.setItem(GUEST_SESSION_KEY, 'guest-new-generation');
+        activateGuestSession('guest-new-generation');
         const before = await localRepository.readLocal(user.uid);
         const setGuestMigrationStatus = vi.fn();
         const setSaveError = vi.fn();
@@ -325,6 +336,8 @@ describe('guest migration restart recovery', () => {
         const userA = { uid: 'account-a', email: 'a@example.com', displayName: 'A' } as any;
         const userB = { uid: 'account-b', email: 'b@example.com', displayName: 'B' } as any;
         localStorage.setItem(GUEST_KEY, 'true');
+        localStorage.setItem(GUEST_SESSION_KEY, 'guest-restart-generation');
+        activateGuestSession('guest-restart-generation');
         await beginGuestMigrationIntent('merge', 'recovery', { uid: userA.uid });
         useAppStore.getState().setUserData(guest);
         let authCallback!: (nextUser: any) => Promise<void>;
