@@ -24,7 +24,13 @@ export function markTabSnapshotClean(session: SessionSnapshot, data: UserData): 
 }
 
 export function markTabSnapshotDirty(session: SessionSnapshot, base: UserData): void {
-    if (snapshotState && sameSession(snapshotState.session, session) && snapshotState.dirty) return;
+    if (snapshotState && !sameSession(snapshotState.session, session)) {
+        // A stale in-memory snapshot cannot acquire the provenance of a new
+        // consent or guest generation merely because an edit was attempted.
+        // Hydration must first establish a verified clean baseline.
+        throw new Error('Snapshot della scheda appartenente a una sessione precedente. Ricarica TheLogBook.');
+    }
+    if (snapshotState?.dirty) return;
     snapshotState = { session: { ...session }, base: clone(base), dirty: true };
 }
 
