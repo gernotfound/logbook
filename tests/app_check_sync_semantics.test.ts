@@ -44,9 +44,18 @@ describe('Audit 21 App Check and rejected-sync semantics', () => {
         const permanent = Object.assign(new Error('Provider unsupported'), { code: 'app-check-unavailable', retryable: false });
         const transient = Object.assign(new Error('Provider network error'), { code: 'app-check-unavailable', retryable: true });
         expect(classifySyncFailure(new Error('Wrapper', { cause: permanent })).status).toBe('failed');
-        expect(classifySyncFailure(new Error('Wrapper', { cause: transient })).status).toBe('local-pending');
+        // A wrapper can represent a failed durability proof: its transient cause alone cannot authorize pending.
+        expect(classifySyncFailure(new Error('Wrapper', { cause: transient })).status).toBe('failed');
+        expect(classifySyncFailure(transient).status).toBe('local-pending');
         const misleading = Object.assign(new Error('Network wrapper', { cause: permanent }), { code: 'unavailable' });
         expect(classifySyncFailure(misleading).status).toBe('failed');
+    });
+
+    it('never converts an unsafe lost-response wrapper into pending from a nested transport error', () => {
+        const transport = Object.assign(new Error('Response lost'), { code: 'unavailable' });
+        const noDurableBatch = new Error('Delivered batch was not retained', { cause: transport });
+        expect(classifySyncFailure(transport).status).toBe('local-pending');
+        expect(classifySyncFailure(noDurableBatch).status).toBe('failed');
     });
 
     it('keeps an independently verified lost-ACK batch pending even if the wrapped cause is denied', () => {
