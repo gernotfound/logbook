@@ -33,6 +33,34 @@ describe('Audit 21 App Check and rejected-sync semantics', () => {
         expect(formatted.canRetry).toBe(false);
     });
 
+    it('classifies permission denial inside a transport wrapper as rejected, never pending', () => {
+        const denial = Object.assign(new Error('Firestore denied'), { code: 'permission-denied' });
+        const wrapped = Object.assign(new Error('Transport wrapper', { cause: denial }), { code: 'unavailable' });
+        expect(classifySyncFailure(wrapped)).toEqual({ ok: false, status: 'rejected', error: wrapped });
+        expect(classifySyncFailure(denial, { retryable: true }).status).toBe('rejected');
+    });
+
+    it('preserves App Check retryability through error causes without trusting a network wrapper', () => {
+        const permanent = Object.assign(new Error('Provider unsupported'), { code: 'app-check-unavailable', retryable: false });
+        const transient = Object.assign(new Error('Provider network error'), { code: 'app-check-unavailable', retryable: true });
+        expect(classifySyncFailure(new Error('Wrapper', { cause: permanent })).status).toBe('failed');
+        expect(classifySyncFailure(new Error('Wrapper', { cause: transient })).status).toBe('local-pending');
+        const misleading = Object.assign(new Error('Network wrapper', { cause: permanent }), { code: 'unavailable' });
+        expect(classifySyncFailure(misleading).status).toBe('failed');
+    });
+
+    it('keeps an independently verified lost-ACK batch pending even if the wrapped cause is denied', () => {
+        const denial = Object.assign(new Error('Provider denied'), { code: 'permission-denied' });
+        const confirmedRemote = new Error('Remote commit confirmed but local ACK failed', { cause: denial });
+        expect(classifySyncFailure(confirmedRemote, { retryable: true }).status).toBe('local-pending');
+    });
+
+    it('bounds cyclic error causes and fails closed on unknown failures', () => {
+        const cyclic: { cause?: unknown } = {};
+        cyclic.cause = cyclic;
+        expect(classifySyncFailure(new Error('Unknown', { cause: cyclic })).status).toBe('failed');
+    });
+
     it('does not turn structural App Check failures into offline success messaging', () => {
         const unsupported = Object.assign(new Error('Verifica di sicurezza non supportata'), {
             code: 'app-check-unavailable',
