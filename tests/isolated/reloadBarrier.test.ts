@@ -30,8 +30,8 @@ import { isReloadSessionCurrent, prepareForReload, UnverifiedTabSnapshotError } 
 import { requiredUpdateHardReload, safeHardReload } from '../../src/lib/sync/safeReload';
 import { commitLocal, initializeLocal, readLocal } from '../../src/lib/sync/localRepository';
 import { UserDataSchema } from '../../src/lib/schema';
-import { activateGuestSession, captureSession, GUEST_SESSION_KEY, invalidateSession } from '../../src/lib/sync/session';
-import { markTabSnapshotClean, markTabSnapshotDirty } from '../../src/lib/sync/tabSnapshotCausality';
+import { activateGuestSession, captureSession, GUEST_SESSION_KEY, invalidateSession, isCurrentSession } from '../../src/lib/sync/session';
+import { markTabSnapshotClean, markTabSnapshotDirty, readTabSnapshotState } from '../../src/lib/sync/tabSnapshotCausality';
 import { draftRegistry } from '../../src/lib/utils/draftRegistry';
 import { BrowserStorageError } from '../../src/lib/sync/browserStorage';
 import { createAndMigrateVault } from '../../src/lib/sync/secureArchiveMigration';
@@ -107,6 +107,57 @@ it('blocks stale plaintext reappearing alongside owner ciphertext instead of ove
     expect(reload).not.toHaveBeenCalled();
     expect(disk.get(sealedKey)).toBe(sealed);
     expect(disk.get(plainKey)).toBe(stale);
+});
+
+it('preserves the first dirty baseline and returns defensive copies', () => {
+    const session = captureSession();
+    const base = parse(170);
+    markTabSnapshotClean(session, base);
+    markTabSnapshotDirty(session, base);
+    markTabSnapshotDirty(session, parse(172));
+    base.profile!.height = '190';
+    const firstRead = readTabSnapshotState(session);
+    expect(firstRead?.dirty).toBe(true);
+    expect(firstRead?.base.profile?.height).toBe('170');
+    if (firstRead?.base.profile) firstRead.base.profile.height = '199';
+    expect(readTabSnapshotState(session)?.base.profile?.height).toBe('170');
+});
+
+it('rejects a stale dirty baseline after consent generation changes in another tab', async () => {
+    const originalSession = captureSession();
+    markTabSnapshotDirty(originalSession, app.state.userData);
+    app.state.userData = parse(171);
+    disk.set('logbook:v2:user:a:health-consent-generation', '2');
+    const newSession = captureSession();
+    expect(newSession.owner).toBe(originalSession.owner);
+    expect(newSession.epoch).toBe(originalSession.epoch);
+    expect(isCurrentSession(originalSession)).toBe(false);
+    expect(readTabSnapshotState(newSession)).toBeUndefined();
+    app.flush.mockRejectedValue(new Error('offline'));
+    await expect(prepareForReload()).rejects.toBeInstanceOf(UnverifiedTabSnapshotError);
+    expect((await readLocal('user:a'))?.data.profile?.height).toBe('170');
+});
+
+it('invalidates a clean baseline when the consent withdrawal marker changes', () => {
+    const before = captureSession();
+    expect(readTabSnapshotState(before)?.dirty).toBe(false);
+    disk.set('logbook:v2:user:a:health-consent-withdrawal', 'withdrawn');
+    const after = captureSession();
+    expect(after.epoch).toBe(before.epoch);
+    expect(isCurrentSession(before)).toBe(false);
+    expect(readTabSnapshotState(after)).toBeUndefined();
+});
+
+it('does not confuse two guest generations sharing an owner and epoch', () => {
+    const session = captureSession();
+    const guestA = { ...session, owner: 'guest', guestSessionId: 'guest-a' };
+    const guestB = { ...guestA, guestSessionId: 'guest-b' };
+    markTabSnapshotDirty(guestA, parse(170));
+    expect(readTabSnapshotState(guestA)?.dirty).toBe(true);
+    expect(readTabSnapshotState(guestB)).toBeUndefined();
+    markTabSnapshotClean(guestB, parse(171));
+    expect(readTabSnapshotState(guestB)?.base.profile?.height).toBe('171');
+    expect(readTabSnapshotState(guestA)).toBeUndefined();
 });
 
 it('repairs a lagging durable snapshot before reload', async () => {
