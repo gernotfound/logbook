@@ -22,21 +22,21 @@ it('locks focus to the only safe recovery action and restores background state o
         const dialog = screen.getByRole('alertdialog');
         const button = screen.getByRole('button', { name: 'Riprova' });
 
-        expect(dialog).toHaveAttribute('aria-modal', 'true');
-        expect(dialog).toHaveAccessibleName('Archivio locale temporaneamente non disponibile');
-        expect(dialog).toHaveAccessibleDescription(/Non cancellare i dati/);
-        expect(button).toHaveFocus();
+        expect(dialog.getAttribute('aria-modal')).toBe('true');
+        expect(document.getElementById(dialog.getAttribute('aria-labelledby') ?? '')?.textContent).toBe('Archivio locale temporaneamente non disponibile');
+        expect(document.getElementById(dialog.getAttribute('aria-describedby') ?? '')?.textContent).toContain('Non cancellare i dati');
+        expect(document.activeElement).toBe(button);
         expect(previous.inert).toBe(true);
         expect(alreadyInert.inert).toBe(true);
         expect(document.body.style.overflow).toBe('hidden');
 
         previous.focus();
         fireEvent.keyDown(document, { key: 'Tab', shiftKey: true });
-        expect(button).toHaveFocus();
+        expect(document.activeElement).toBe(button);
         fireEvent.keyDown(document, { key: 'Tab' });
-        expect(button).toHaveFocus();
+        expect(document.activeElement).toBe(button);
         fireEvent.keyDown(document, { key: 'Escape' });
-        expect(dialog).toBeInTheDocument();
+        expect(document.body.contains(dialog)).toBe(true);
 
         fireEvent.click(button);
         expect(retry).toHaveBeenCalledTimes(1);
@@ -45,7 +45,7 @@ it('locks focus to the only safe recovery action and restores background state o
         expect(previous.inert).toBe(false);
         expect(alreadyInert.inert).toBe(true);
         expect(document.body.style.overflow).toBe('auto');
-        expect(previous).toHaveFocus();
+        expect(document.activeElement).toBe(previous);
     } finally {
         previous.remove();
         alreadyInert.remove();
@@ -56,8 +56,9 @@ it('keeps long recovery guidance scrollable inside a short viewport', () => {
     const view = render(<SecureVaultPrompt error="Storage unavailable" retry={() => {}} />);
     const panel = screen.getByRole('alertdialog').querySelector('.auth-panel');
     expect(panel).not.toBeNull();
-    expect(panel).toHaveStyle({ overflowY: 'auto', boxSizing: 'border-box' });
-    expect(panel).toHaveStyle({ maxHeight: 'calc(100dvh - 36px)' });
-    expect(screen.getByText('Storage unavailable')).toHaveAttribute('role', 'alert');
+    expect(panel instanceof HTMLElement && panel.style.overflowY).toBe('auto');
+    expect(panel instanceof HTMLElement && panel.style.boxSizing).toBe('border-box');
+    expect(panel instanceof HTMLElement && panel.style.maxHeight).toBe('calc(100dvh - 36px)');
+    expect(screen.getByText('Storage unavailable').getAttribute('role')).toBe('alert');
     view.unmount();
 });
