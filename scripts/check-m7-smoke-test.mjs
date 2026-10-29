@@ -1,10 +1,11 @@
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 
 const npxCommand = process.platform === 'win32' ? 'npx.cmd' : 'npx';
 const workDirectory = mkdtempSync(join(process.cwd(), '.smoke-test-'));
-const compiledDirectory = join(workDirectory, 'dist');
+// Keep the compiler argument relative so Windows shell invocation supports workspace paths with spaces.
+const compiledDirectory = join(basename(workDirectory), 'dist');
 const runnerPath = join(workDirectory, 'runner.mjs');
 
 const runnerScript = [
