@@ -150,6 +150,17 @@ it('invalidates a clean baseline when the consent withdrawal marker changes', ()
     expect(readTabSnapshotState(after)).toBeUndefined();
 });
 
+it('allows a clean guest snapshot to establish a new baseline after explicit reacceptance', () => {
+    const original = { ...captureSession(), owner: 'guest', guestSessionId: 'guest-reaccept', consentMarker: 'withdrawn' };
+    markTabSnapshotClean(original, parse(170));
+    const reaccepted = { ...original, consentMarker: null };
+    expect(readTabSnapshotState(reaccepted)).toBeUndefined();
+    expect(() => markTabSnapshotDirty(reaccepted, parse(170))).not.toThrow();
+    expect(readTabSnapshotState(reaccepted)?.base.profile?.height).toBe('170');
+    expect(readTabSnapshotState(reaccepted)?.dirty).toBe(true);
+    expect(readTabSnapshotState(original)).toBeUndefined();
+});
+
 it('does not confuse two guest generations sharing an owner and epoch', () => {
     const session = captureSession();
     const guestA = { ...session, owner: 'guest', guestSessionId: 'guest-a' };
