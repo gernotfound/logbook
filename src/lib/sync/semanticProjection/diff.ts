@@ -43,7 +43,13 @@ export function diffDocuments(
         if (awId) op.guard = { path: ['activeWorkout', 'id'], equals: awId };
     }
 
-    return ops;
+    // Semantic operations become durable journal entries. A later edit to the
+    // source projection or caller clock must not rewrite their causal payload.
+    return ops.map(operation => ({
+        ...operation,
+        clock: { ...operation.clock },
+        ...(Object.hasOwn(operation, 'value') ? { value: structuredClone(operation.value) } : {}),
+    }));
 }
 
 function traverseAndDiff(
