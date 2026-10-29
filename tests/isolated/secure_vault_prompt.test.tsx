@@ -24,7 +24,7 @@ it('locks focus to the only safe recovery action and restores background state o
 
         expect(dialog).toHaveAttribute('aria-modal', 'true');
         expect(dialog).toHaveAccessibleName('Archivio locale temporaneamente non disponibile');
-        expect(dialog).toHaveAccessibleDescription(expect.stringContaining('Non cancellare i dati'));
+        expect(dialog).toHaveAccessibleDescription(/Non cancellare i dati/);
         expect(button).toHaveFocus();
         expect(previous.inert).toBe(true);
         expect(alreadyInert.inert).toBe(true);
