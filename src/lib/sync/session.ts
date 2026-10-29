@@ -33,9 +33,11 @@ export function revokeGuestSession(): void {
 
 export function isActiveGuestSession(): boolean {
     try {
-        return readBrowserValueStrict('logbook_is_guest') === 'true'
-            && readBrowserValueStrict(GUEST_REVOCATION_KEY) === null
-            && currentRealmGuestId() === readBrowserValueStrict(GUEST_SESSION_KEY);
+        if (readBrowserValueStrict('logbook_is_guest') !== 'true'
+            || readBrowserValueStrict(GUEST_REVOCATION_KEY) !== null) return false;
+        // Neither an absent nor an empty generation proves guest ownership.
+        const realmId = currentRealmGuestId();
+        return Boolean(realmId) && realmId === readBrowserValueStrict(GUEST_SESSION_KEY);
     } catch {
         // A security boundary never interprets unreadable storage as permission.
         return false;

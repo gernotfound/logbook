@@ -73,4 +73,24 @@ describe('guest vault readiness: exact owner and session fences', () => {
         expect(isGuestVaultReadinessCurrent(session, ready)).toBe(false);
         expect(ready).not.toHaveBeenCalled();
     });
+
+    it.each([null, ''])('rejects a guest marker with an absent or empty generation (%s)', async storedId => {
+        localStorage.setItem('logbook_is_guest', 'true');
+        if (storedId !== null) localStorage.setItem(GUEST_SESSION_KEY, storedId);
+        // A new browser realm starts without an explicitly activated guest ID.
+        vi.resetModules();
+        const session = await import('../src/lib/sync/session');
+        expect(session.isActiveGuestSession()).toBe(false);
+        const snapshot = session.captureSession();
+        expect(snapshot.owner).toBe('guest');
+        expect(snapshot.guestSessionId).toBe(storedId);
+        expect(session.isCurrentSession(snapshot)).toBe(false);
+    });
+
+    it('rejects a previously active guest when its durable generation disappears', () => {
+        const snapshot = beginGuest('guest-generation-lost');
+        localStorage.removeItem(GUEST_SESSION_KEY);
+        expect(isGuestVaultReadinessCurrent(snapshot, ready)).toBe(false);
+        expect(ready).not.toHaveBeenCalled();
+    });
 });
