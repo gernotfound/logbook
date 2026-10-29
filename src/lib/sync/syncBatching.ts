@@ -8,19 +8,28 @@ function assertDocumentLimit(maxDocuments: number): void {
     }
 }
 
+function nextSafeSequence(previous: number): number {
+    if (!Number.isSafeInteger(previous) || previous < 0 || previous === Number.MAX_SAFE_INTEGER) {
+        throw new Error('Sequenza sync esaurita o non valida');
+    }
+    return previous + 1;
+}
+
 function chunkByDocument(operations: SemanticOperation[], maxDocuments: number): SemanticOperation[][] {
     assertDocumentLimit(maxDocuments);
-    const grouped = new Map<string, SemanticOperation[]>();
+    // Keep each document within one chunk, without reordering operations
+    // between documents that belong to that same chunk.
+    const documentChunk = new Map<string, number>();
     for (const operation of operations) {
-        const items = grouped.get(operation.docPath);
-        if (items) items.push(operation);
-        else grouped.set(operation.docPath, [operation]);
+        if (!documentChunk.has(operation.docPath)) {
+            documentChunk.set(operation.docPath, Math.floor(documentChunk.size / maxDocuments));
+        }
     }
-
-    const entries = [...grouped.values()];
-    const chunks: SemanticOperation[][] = [];
-    for (let index = 0; index < entries.length; index += maxDocuments) {
-        chunks.push(entries.slice(index, index + maxDocuments).flat());
+    const chunks: SemanticOperation[][] = Array.from(
+        { length: Math.ceil(documentChunk.size / maxDocuments) }, () => [],
+    );
+    for (const operation of operations) {
+        chunks[documentChunk.get(operation.docPath)!].push(operation);
     }
     return chunks;
 }
@@ -40,10 +49,10 @@ export function sequenceOperationsForBoundedTransactions(
         return { operations: [], actorSeq: baseSeq, clock: { ...baseClock } };
     }
 
-    let actorSeq = Math.max(baseSeq, baseClock[actorId] ?? 0);
+    let actorSeq = Math.max(baseSeq, Object.hasOwn(baseClock, actorId) ? baseClock[actorId] : 0);
     const sequenced: SemanticOperation[] = [];
     for (const chunk of chunkByDocument(operations, maxDocuments)) {
-        actorSeq += 1;
+        actorSeq = nextSafeSequence(actorSeq);
         const chunkClock: VectorClock = { ...baseClock, [actorId]: actorSeq };
         for (const operation of chunk) {
             sequenced.push({
@@ -92,13 +101,13 @@ export function resequencePendingOperationsForBoundedTransactions(
         const chunks = chunkByDocument(originalGroup, maxDocuments);
         if (chunks.length > 1) changed = true;
 
-        let assignedSeq = Math.max(originalSeq, previousAssignedSeq + 1);
+        let assignedSeq = Math.max(originalSeq, nextSafeSequence(previousAssignedSeq));
         for (const [chunkIndex, chunk] of chunks.entries()) {
-            if (chunkIndex > 0) assignedSeq = previousAssignedSeq + 1;
+            if (chunkIndex > 0) assignedSeq = nextSafeSequence(previousAssignedSeq);
             if (assignedSeq !== originalSeq) changed = true;
 
             for (const operation of chunk) {
-                const operationClock = operation.clock[actorId] === assignedSeq
+                const operationClock = Object.hasOwn(operation.clock, actorId) && operation.clock[actorId] === assignedSeq
                     ? operation.clock
                     : { ...operation.clock, [actorId]: assignedSeq };
                 resequenced.push({
@@ -119,7 +128,7 @@ export function resequencePendingOperationsForBoundedTransactions(
     return {
         operations: resequenced,
         actorSeq: nextActorSeq,
-        clock: { ...clock, [actorId]: Math.max(clock[actorId] ?? 0, nextActorSeq) },
+        clock: { ...clock, [actorId]: Math.max(Object.hasOwn(clock, actorId) ? clock[actorId] : 0, nextActorSeq) },
         changed: true,
     };
 }

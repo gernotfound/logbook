@@ -19,6 +19,54 @@ const operation = (docPath: string, seq: number, actorId = 's00'): SemanticOpera
 });
 
 describe('bounded causal sync batching', () => {
+    it('preserves interleaved original operation order inside one bounded group', () => {
+        const input = [
+            { ...operation('A', 1), value: 'A1' },
+            { ...operation('B', 1), value: 'B1' },
+            { ...operation('A', 1), value: 'A2' },
+        ];
+        const sequenced = sequenceOperationsForBoundedTransactions(input, 's00', 0, {});
+        expect(sequenced.operations.map(op => op.value)).toEqual(['A1', 'B1', 'A2']);
+        expect(sequenced.operations.every(op => op.seq === 1)).toBe(true);
+    });
+
+    it('preserves relative order inside each split group and keeps document operations atomic', () => {
+        const paths = Array.from({ length: MAX_SYNC_DOCUMENTS_PER_TRANSACTION + 1 }, (_, i) => String(i));
+        const input = [
+            { ...operation(paths[0], 1), value: 'first' },
+            { ...operation(paths[1], 1), value: 'second' },
+            { ...operation(paths[0], 1), value: 'third' },
+            ...paths.slice(2).map(path => operation(path, 1)),
+        ];
+        const { operations } = sequenceOperationsForBoundedTransactions(input, 's00', 0, {});
+        expect(operations.filter(op => op.seq === 1).map(op => op.value))
+            .toEqual(input.slice(0, -1).map(op => op.value));
+        expect(distinctDocumentCount(operations.filter(op => op.seq === 1))).toBe(MAX_SYNC_DOCUMENTS_PER_TRANSACTION);
+        expect(distinctDocumentCount(operations.filter(op => op.seq === 2))).toBe(1);
+    });
+
+    it('rejects unsafe sequence increments before producing a journal', () => {
+        const limit = Number.MAX_SAFE_INTEGER;
+        expect(() => sequenceOperationsForBoundedTransactions(
+            [operation('a', 1)], 's00', limit, { s00: limit },
+        )).toThrow('Sequenza sync esaurita');
+        const pending = Array.from({ length: MAX_SYNC_DOCUMENTS_PER_TRANSACTION + 1 },
+            (_, i) => operation(String(i), limit));
+        expect(() => resequencePendingOperationsForBoundedTransactions(
+            pending, 's00', limit, { s00: limit },
+        )).toThrow('Sequenza sync esaurita');
+        expect(pending.every(op => op.seq === limit)).toBe(true);
+    });
+
+    it('treats inherited actor coordinates as missing', () => {
+        const result = sequenceOperationsForBoundedTransactions(
+            [operation('a', 1, 'toString')], 'toString', 0, {},
+        );
+        expect(result.actorSeq).toBe(1);
+        expect(Object.hasOwn(result.clock, 'toString')).toBe(true);
+        expect(result.clock.toString).toBe(1);
+    });
+
     it('splits a new multi-document change into complete causal groups below the transaction ceiling', () => {
         const input = Array.from({ length: MAX_SYNC_DOCUMENTS_PER_TRANSACTION + 2 }, (_, index) =>
             operation(`history_months/2026-${String(index + 1).padStart(2, '0')}`, 1),
