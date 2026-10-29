@@ -12,6 +12,7 @@ import { useRegisterSW } from 'virtual:pwa-register/react';
 import { useDialogStore } from '../src/store/useDialogStore';
 import { onAuthStateChanged } from 'firebase/auth';
 import { commitDomainOperations, initializeLocal } from '../src/lib/sync/localRepository';
+import { activateGuestSession, GUEST_SESSION_KEY } from '../src/lib/sync/session';
 
 const reloadMocks = vi.hoisted(() => ({
   requiredUpdateHardReload: vi.fn(),
@@ -772,6 +773,8 @@ describe('LogBook Background Sync & Error Toast 4-Tier Test Suite', () => {
         return () => {};
       });
       localStorage.setItem('logbook_is_guest', 'true');
+      localStorage.setItem(GUEST_SESSION_KEY, 'sync-indicator-guest-generation');
+      activateGuestSession('sync-indicator-guest-generation');
 
       const { container } = await renderSettledApp();
 
