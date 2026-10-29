@@ -93,6 +93,7 @@ describe('Milestone M2: Guest Bootstrap & Cold Start Lifecycle', () => {
         const fenceKey = 'logbook:local-purge-fence:v1:guest';
         expect(result.current.isGuest).toBe(false);
         expect(localStorage.getItem('logbook_is_guest')).toBeNull();
+        expect(localStorage.getItem(GUEST_SESSION_KEY)).toBeNull();
         expect(localStorage.getItem(fenceKey)).toBe('purge-complete:v1');
 
         // The storage fence still rejects direct archive access; only unsolicited
