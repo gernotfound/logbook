@@ -201,6 +201,73 @@ describe('Service Worker Update Lifecycle (ReloadPrompt) Suite', () => {
     expect(pwaUpdateModule.applyPWAUpdate).not.toHaveBeenCalled();
   });
 
+  test('Workbox controlling events cannot bypass the explicit safe reload path', () => {
+    vi.mocked(useRegisterSW).mockReturnValue({
+      needRefresh: [true, mockSetNeedRefresh],
+      offlineReady: [false, vi.fn()],
+      updateServiceWorker: mockUpdateServiceWorker,
+    });
+    render(<ReloadPrompt />);
+    const options = vi.mocked(useRegisterSW).mock.calls.at(-1)?.[0];
+    expect(options?.onNeedReload).toBeTypeOf('function');
+    options?.onNeedReload?.();
+    expect(pwaUpdateModule.applyPWAUpdate).not.toHaveBeenCalled();
+    expect(mockUpdateServiceWorker).not.toHaveBeenCalled();
+  });
+
+  test('slow worker activation offers cancellation without a false failure', async () => {
+    vi.mocked(useRegisterSW).mockReturnValue({
+      needRefresh: [true, mockSetNeedRefresh],
+      offlineReady: [false, vi.fn()],
+      updateServiceWorker: mockUpdateServiceWorker,
+    });
+    let wasAborted = false;
+    vi.spyOn(pwaUpdateModule, 'applyPWAUpdate').mockImplementation((_container, _reload, _timeout, options) =>
+      new Promise<void>((_resolve, reject) => {
+        options?.onActivationDelayed?.();
+        options?.signal?.addEventListener('abort', () => {
+          wasAborted = true;
+          reject(new DOMException('Aggiornamento annullato.', 'AbortError'));
+        }, { once: true });
+      }),
+    );
+    render(<ReloadPrompt />);
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Aggiorna applicazione/i }));
+    });
+    expect(screen.getByText(/Il browser sta impiegando più tempo/i)).toBeDefined();
+    expect(screen.queryByText(/non confermata/i)).toBeNull();
+    const close = screen.getByRole('button', { name: /Chiudi notifica/i }) as HTMLButtonElement;
+    expect(close.disabled).toBe(false);
+    await act(async () => { fireEvent.click(close); });
+    expect(wasAborted).toBe(true);
+    expect(screen.queryByText('Nuova versione disponibile')).toBeNull();
+    expect(mockUpdateServiceWorker).not.toHaveBeenCalled();
+  });
+
+  test('revalidates local data immediately before navigating after activation', async () => {
+    mockFirebaseAuth.currentUser = null;
+    useAppStore.setState({ userData: null, dataOwner: null, localWorkout: null, syncing: false, localPersistenceBlocked: false });
+    vi.mocked(useRegisterSW).mockReturnValue({
+      needRefresh: [true, mockSetNeedRefresh],
+      offlineReady: [false, vi.fn()],
+      updateServiceWorker: mockUpdateServiceWorker,
+    });
+    const originalPrepare = reloadBarrierModule.prepareForReload;
+    const barrier = vi.spyOn(reloadBarrierModule, 'prepareForReload')
+      .mockImplementationOnce(() => originalPrepare())
+      .mockRejectedValueOnce(new Error('Bozza modificata durante l’attivazione'));
+    vi.spyOn(pwaUpdateModule, 'applyPWAUpdate').mockImplementation(async (_container, reload) => {
+      await reload();
+    });
+    render(<ReloadPrompt />);
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Aggiorna applicazione/i }));
+    });
+    expect(barrier).toHaveBeenCalledTimes(2);
+    expect(screen.getByText('Bozza modificata durante l’attivazione')).toBeDefined();
+  });
+
   test('R2: Clicking "Chiudi" button dismisses prompt via setNeedRefresh(false)', () => {
     vi.mocked(useRegisterSW).mockReturnValue({
       needRefresh: [true, mockSetNeedRefresh],
