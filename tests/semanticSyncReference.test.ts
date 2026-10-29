@@ -251,4 +251,73 @@ describe('Semantic sync reference invariants', () => {
         expect(op.value).toEqual(originalDay);
     });
 
+    it('snapshots keyed inserts and causal clocks independently from source projections', () => {
+        const routine = {
+            id: 'routine-1', name: 'Original',
+            exercises: [{ exId: 'bench-1', sets: [] }],
+        };
+        const desired = new Map<string, DocumentData>([['', { routines: [routine] }]]);
+        const clock = { s00: 1 };
+        const ops = diffDocuments(new Map([['', { routines: [] }]]), desired, 's00', 1, clock);
+        const insertion = ops.find(op => op.path.join('/') === 'routines/routine-1');
+        expect(insertion?.value).toEqual(routine);
+        expect(ops.some(op => op.path.includes('$order'))).toBe(true);
+
+        routine.name = 'Later change';
+        routine.exercises[0].exId = 'later-exercise';
+        clock.s00 = 99;
+
+        expect(insertion?.value).toEqual({
+            id: 'routine-1', name: 'Original',
+            exercises: [{ exId: 'bench-1', sets: [] }],
+        });
+        expect(ops.every(op => op.clock.s00 === 1)).toBe(true);
+
+        const replay = applySemanticOperations(new Map([['', { routines: [] }]]), ops);
+        expect(replay.documents.get('')!.routines).toEqual([{
+            id: 'routine-1', name: 'Original',
+            exercises: [{ exId: 'bench-1', sets: [] }],
+        }]);
+
+        ((insertion!.value as typeof routine).exercises[0]).exId = 'journal-change';
+        expect(routine.exercises[0].exId).toBe('later-exercise');
+    });
+
+    it('snapshots the atomic active-session payload before the source changes', () => {
+        const workout = {
+            id: 'workout-1', date: '2026-09-13',
+            exercises: [{ id: 'exercise-1', name: 'Original' }],
+        };
+        const desired = new Map<string, DocumentData>([['', { activeWorkout: workout }]]);
+        const ops = diffDocuments(new Map([['', { activeWorkout: null }]]), desired, 's00', 1, { s00: 1 });
+        expect(ops).toHaveLength(1);
+        expect(ops[0].path).toEqual(['activeWorkout']);
+
+        workout.exercises[0].name = 'Later change';
+        expect(ops[0].value).toEqual({
+            id: 'workout-1', date: '2026-09-13',
+            exercises: [{ id: 'exercise-1', name: 'Original' }],
+        });
+        (ops[0].value as typeof workout).exercises[0].name = 'Journal change';
+        expect(workout.exercises[0].name).toBe('Later change');
+    });
+
+    it('snapshots the explicit atomic fallback for an invalid keyed collection', () => {
+        const routines = [
+            { id: 'routine-1', name: 'First' },
+            { id: 'routine-1', name: 'Duplicate' },
+        ];
+        const desired = new Map<string, DocumentData>([['', { routines }]]);
+        const ops = diffDocuments(new Map([['', { routines: [] }]]), desired, 's00', 1, { s00: 1 });
+        expect(ops).toHaveLength(1);
+        expect(ops[0].path).toEqual(['routines']);
+        expect(ops[0].value).toEqual(routines);
+
+        routines[0].name = 'Later change';
+        expect(ops[0].value).toEqual([
+            { id: 'routine-1', name: 'First' },
+            { id: 'routine-1', name: 'Duplicate' },
+        ]);
+    });
+
 });
