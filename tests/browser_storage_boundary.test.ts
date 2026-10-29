@@ -59,6 +59,22 @@ describe('browser storage boundary', () => {
         expect(() => writeBrowserJson('cyclic', cyclic)).toThrow(BrowserStorageError);
     });
 
+    it.each([
+        { label: 'undefined', value: undefined },
+        { label: 'function', value: () => 'not JSON' },
+        { label: 'symbol', value: Symbol('not JSON') },
+        { label: 'custom toJSON returning undefined', value: { toJSON: () => undefined } },
+    ])('preserves the stored value when $label has no JSON representation', ({ value }) => {
+        const key = 'json-value';
+        const original = '{"preserved":true}';
+        localStorage.setItem(key, original);
+        const writesBefore = localStorageMock.setItem.mock.calls.length;
+
+        expect(() => writeBrowserJson(key, value)).toThrow(BrowserStorageError);
+        expect(localStorageMock.setItem).toHaveBeenCalledTimes(writesBefore);
+        expect(localStorage.getItem(key)).toBe(original);
+    });
+
     it('keeps account deletion fail-closed when its marker cannot be read', () => {
         localStorageMock.getItem.mockImplementationOnce(storageFailure);
 
