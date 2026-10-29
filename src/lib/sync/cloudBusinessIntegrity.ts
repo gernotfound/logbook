@@ -9,7 +9,10 @@ function isLosslessScalarNormalization(raw: unknown, normalized: unknown): boole
         const trimmed = raw.trim();
         if (!trimmed) return false;
         const numeric = Number(trimmed);
-        return Number.isFinite(numeric) && numeric === normalized;
+        // A parsed integer outside the safe range may already have lost digits.
+        return Number.isFinite(numeric)
+            && (!Number.isInteger(numeric) || Number.isSafeInteger(numeric))
+            && numeric === normalized;
     }
     if (typeof raw === 'number' && typeof normalized === 'string') {
         return Number.isFinite(raw) && String(raw) === normalized;

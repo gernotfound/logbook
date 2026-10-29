@@ -61,10 +61,12 @@ it('blocks an unrelated root write instead of replacing malformed existing cloud
     });
 });
 
-it('blocks a monthly write when another entity in the same shard would be destructively sanitized', async () => {
+it.each(['not-a-number', '9007199254740993'])(
+    'blocks a monthly write when a cloud value %s would be destructively normalized',
+    async (weight) => {
     const original = sealCloudDocument(new Uint8Array(32).fill(18), 'a', 'nutrition_months/2026-09', {
         '2026-09-13': {
-            date: '2026-09-13', weight: 'not-a-number', meals: [], supplementsIntake: [],
+            date: '2026-09-13', weight, meals: [], supplementsIntake: [],
         },
     }, { protocolVersion: 3, clock: {}, fields: {},
         writer: { slot: 's01', replicaId: 'remote-seed', generation: 1, seq: 0 } });
