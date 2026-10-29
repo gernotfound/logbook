@@ -4,6 +4,7 @@ import type { DocumentData } from '../documentProjection';
 import { calculateLoggedMealTotals } from '../../nutrition/calculateLoggedMealTotals';
 import type { FieldStamp, SemanticOperation, StampLike, SyncMeta, VectorClock } from './contracts';
 import { compareStamps, coversVectorClock, fieldKey, mergeVectors, pathFromFieldKey } from './metadata';
+import { requireBusinessId } from '../../businessIdentity';
 import { getMergePolicy, identitySeed, resolveIdentity } from './policy';
 
 function normalizeDomainData(docs: Map<string, DocumentData>) {
@@ -79,7 +80,7 @@ function blockedByAncestor(meta: SyncMeta, operation: SemanticOperation): boolea
 
 function readSemanticValue(doc: DocumentData, docPath: string, path: string[]): unknown {
     if (!path.length) return undefined;
-    if (path[path.length - 1] === '$order') {
+    if (path[path.length - 1] === '$order' && getMergePolicy(docPath, path.slice(0, -1)) === 'ordered-keyed') {
         const collection = readSemanticValue(doc, docPath, path.slice(0, -1));
         if (!Array.isArray(collection)) return [];
         return collection.map(item => resolveIdentity(path.slice(0, -1), item));
@@ -116,7 +117,8 @@ function applyWinnerToDocument(
     ordersToApply: Map<any[], { path: string[], orderIds: string[] }>,
 ): void {
     const p = operation.path;
-    const isOrderPayload = p[p.length - 1] === '$order';
+    const isOrderPayload = p[p.length - 1] === '$order'
+        && getMergePolicy(operation.docPath, p.slice(0, -1)) === 'ordered-keyed';
     // The replay result must not share mutable references with a durable
     // journal operation. Subsequent field winners and derived normalization
     // may modify the document after this value has been installed.
@@ -134,7 +136,9 @@ function applyWinnerToDocument(
         if (pol === 'keyed' || pol === 'ordered-keyed') {
             if (!Object.hasOwn(current, p[i]) || !Array.isArray(current[p[i]])) setOwnDataProperty(current, p[i], []);
             const arr = current[p[i]] as any[];
-            const itemId = p[i + 1];
+            const itemId = isOrderPayload && i + 1 === p.length - 1
+                ? p[i + 1]
+                : requireBusinessId(p[i + 1], `Invalid identity in ${p[i]}`);
 
             if (i + 1 === p.length - 1) {
                 if (isOrderPayload) {
