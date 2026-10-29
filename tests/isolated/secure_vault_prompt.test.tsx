@@ -15,6 +15,7 @@ it('locks focus to the only safe recovery action and restores background state o
     document.body.appendChild(alreadyInert);
     document.body.style.overflow = 'auto';
     previous.focus();
+    const previousInert = previous.inert;
 
     const retry = vi.fn();
     try {
@@ -42,7 +43,7 @@ it('locks focus to the only safe recovery action and restores background state o
         expect(retry).toHaveBeenCalledTimes(1);
         view.unmount();
 
-        expect(previous.inert).toBe(false);
+        expect(previous.inert).toBe(previousInert);
         expect(alreadyInert.inert).toBe(true);
         expect(document.body.style.overflow).toBe('auto');
         expect(document.activeElement).toBe(previous);
