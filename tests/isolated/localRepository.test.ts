@@ -7,6 +7,8 @@ import { validateLocalEnvelope } from '../../src/lib/sync/localEnvelopeValidatio
 import { fenceCloudIntegrity } from '../../src/lib/sync/localCloudIntegrity';
 import { createAndMigrateVault } from '../../src/lib/sync/secureArchiveMigration';
 import { lockAllVaults } from '../../src/lib/sync/secureArchiveSession';
+import { getArchiveRecord, updateArchiveRecord } from '../../src/lib/sync/secureArchiveRepository';
+import { LocalCiphertextError } from '../../src/lib/sync/secureArchiveCipher';
 import type { UserData } from '../../src/types';
 import { adoptReplicaCheckpoint, markReplicaCheckpointRequired, markCloudIntegrityBlocked, completeCloudIntegrityRecovery, hydrateLocal, commitLocal, commitDomainOperations, initializeLocal, readLocal, acknowledgeThrough, advanceLocalConsentRevisionIfClean, StaleLocalRevisionError } from '../../src/lib/sync/localRepository';
 import {
@@ -87,13 +89,16 @@ describe('durable owner-scoped journal', () => {
     });
 
 
-    it('retains a pre-ledger V5 closure when a later deletion replaces its legacy marker', async () => {
+    it('retains a single-marker closure alongside a newer deletion in the encrypted ledger', async () => {
+        await prepareOwnerVault('user:a');
         const initial = UserDataSchema.parse({ activeWorkout: null }) as unknown as UserData;
         await initializeLocal('user:a', initial);
-        const key = 'logbook:v2:user:a';
-        const legacy = await get(key) as Record<string, unknown>;
-        // A real previous release recorded only lastClosedWorkoutId.
-        await set(key, { ...legacy, lastClosedWorkoutId: 'previously-deleted', closedWorkoutIds: undefined });
+        // Preserve a valid single-marker closure when the ledger array has
+        // not yet been populated, without ever writing plaintext.
+        await updateArchiveRecord<any>('user:a', raw => ({
+            ...raw, lastClosedWorkoutId: 'previously-deleted', closedWorkoutIds: undefined,
+        }));
+        expect(await get('logbook:v2:user:a')).toMatch(/^tlb-sealed:v1:/);
 
         await commitDomainOperations('user:a', {
             type: 'active-workout.set', workout: null, deletedWorkoutId: 'newly-deleted',
@@ -185,28 +190,40 @@ describe('durable owner-scoped journal', () => {
     });
 
     it('rejects malformed closure evidence without overwriting the owner envelope', async () => {
+        await prepareOwnerVault('user:a');
         await initializeLocal('user:a', data(170));
         const key = 'logbook:v2:user:a';
-        const raw = await get(key) as Record<string, unknown>;
-        await set(key, { ...raw, lastClosedWorkoutId: 42 });
+        const valid = (await readLocal('user:a'))!;
+
+        await updateArchiveRecord<any>('user:a', () => ({ ...valid, lastClosedWorkoutId: 42 }));
+        const invalidMarker = await get<string>(key);
+        expect(invalidMarker).toMatch(/^tlb-sealed:v1:/);
         await expect(readLocal('user:a')).rejects.toThrow('Identificativo workout chiuso non valido');
-        expect((await get(key) as Record<string, unknown>).lastClosedWorkoutId).toBe(42);
-        await set(key, { ...raw, closedWorkoutIds: ['duplicate', 'duplicate'] });
+        expect(await get(key)).toBe(invalidMarker);
+
+        await updateArchiveRecord<any>('user:a', () => ({
+            ...valid, closedWorkoutIds: ['duplicate', 'duplicate'],
+        }));
+        const invalidLedger = await get<string>(key);
         await expect(readLocal('user:a')).rejects.toThrow('Registro workout chiusi non valido');
-        expect((await get(key) as Record<string, unknown>).closedWorkoutIds).toEqual(['duplicate', 'duplicate']);
+        expect(await get(key)).toBe(invalidLedger);
+        expect((await getArchiveRecord<any>('user:a'))?.closedWorkoutIds).toEqual(['duplicate', 'duplicate']);
     });
 
     it('keeps envelope validation pure and fails closed for another owner', async () => {
+        await prepareOwnerVault('user:a');
         await initializeLocal('user:a', data(170));
         const key = 'logbook:v2:user:a';
-        const stored = await get<Record<string, unknown>>(key);
+        const sealed = await get<string>(key);
+        const stored = await getArchiveRecord<Record<string, unknown>>('user:a');
+        expect(sealed).toMatch(/^tlb-sealed:v1:/);
         expect(stored).toBeDefined();
 
         const validated = validateLocalEnvelope(stored, 'user:a');
         expect(validated).toEqual(await readLocal('user:a'));
         expect(() => validateLocalEnvelope({ ...stored, owner: 'user:b' }, 'user:a'))
             .toThrow('Archivio locale non riconosciuto');
-        expect(await get(key)).toEqual(stored);
+        expect(await get(key)).toBe(sealed);
     });
 
     it('writes independent current envelope/data/sync versions', async () => {
@@ -283,6 +300,7 @@ describe('durable owner-scoped journal', () => {
     });
 
     it('rejects a stale snapshot commit atomically without changing an existing pending journal', async () => {
+        await prepareOwnerVault('user:a');
         const original = data(170);
         await initializeLocal('user:a', original);
         await commitLocal('user:a', data(171), original);
@@ -314,18 +332,23 @@ describe('durable owner-scoped journal', () => {
     );
 
     it('rejects pre-M1 and future local envelopes without rewriting their bytes', async () => {
-        const legacy = { owner: 'user:a', version: 3 };
-        await set('logbook:v2:user:a', legacy);
+        await prepareOwnerVault('user:a');
+        const key = 'logbook:v2:user:a';
+        await updateArchiveRecord<any>('user:a', () => ({ owner: 'user:a', version: 3 }));
+        const legacyCiphertext = await get<string>(key);
         await expect(readLocal('a')).rejects.toThrow(LegacyVersionError);
-        expect(await get('logbook:v2:user:a')).toEqual(legacy);
+        expect(await get(key)).toBe(legacyCiphertext);
 
-        const future = { ownerV2: 'user:a', version: CURRENT_LOCAL_ENVELOPE + 1 };
-        await set('logbook:v2:user:a', future);
+        await updateArchiveRecord<any>('user:a', () => ({
+            owner: 'user:a', version: CURRENT_LOCAL_ENVELOPE + 1,
+        }));
+        const futureCiphertext = await get<string>(key);
         await expect(readLocal('a')).rejects.toThrow(FutureVersionError);
-        expect(await get('logbook:v2:user:a')).toEqual(future);
+        expect(await get(key)).toBe(futureCiphertext);
     });
 
     it('rejects a pre-launch protocol local envelope without rewriting its bytes', async () => {
+        await prepareOwnerVault('user:a');
         const payload = data(170);
         const legacy = {
             version: CURRENT_LOCAL_ENVELOPE,
@@ -342,10 +365,10 @@ describe('durable owner-scoped journal', () => {
             syncMetaByDocument: {},
             revision: 1,
         };
-        await set('logbook:v2:user:a', legacy);
-
+        await updateArchiveRecord<any>('user:a', () => legacy);
+        const sealed = await get<string>('logbook:v2:user:a');
         await expect(readLocal('a')).rejects.toThrow(LegacyVersionError);
-        expect(await get('logbook:v2:user:a')).toEqual(legacy);
+        expect(await get('logbook:v2:user:a')).toBe(sealed);
     });
 
     it('builds a cloud-integrity fence without mutating the source envelope or its journal', async () => {
@@ -462,18 +485,22 @@ describe('durable owner-scoped journal', () => {
     });
 
     it('rejects a pending operation whose causal dot is not covered by its operation clock', async () => {
+        await prepareOwnerVault('user:a');
         await commitLocal('a', data(171), data(170));
-        const raw = await get('logbook:v2:user:a') as any;
-        raw.pending[0] = { ...raw.pending[0], clock: {} };
-        await set('logbook:v2:user:a', raw);
-
+        await updateArchiveRecord<any>('user:a', raw => ({
+            ...raw,
+            pending: raw.pending.map((op: any, index: number) => index === 0 ? { ...op, clock: {} } : op),
+        }));
+        const sealed = await get<string>('logbook:v2:user:a');
         await expect(readLocal('a')).rejects.toThrow();
-        expect(((await get('logbook:v2:user:a')) as any).pending[0].clock).toEqual({});
+        expect(await get('logbook:v2:user:a')).toBe(sealed);
+        expect((await getArchiveRecord<any>('user:a'))?.pending[0].clock).toEqual({});
     });
 
     it('rejects local sync metadata whose document frontier does not cover a FieldStamp', async () => {
+        await prepareOwnerVault('user:a');
         const payload = data(170);
-        await set('logbook:v2:user:a', {
+        await updateArchiveRecord<any>('user:a', () => ({
             version: CURRENT_LOCAL_ENVELOPE,
             dataSchemaVersion: CURRENT_DATA_SCHEMA,
             syncProtocolVersion: CURRENT_SYNC_PROTOCOL,
@@ -495,9 +522,10 @@ describe('durable owner-scoped journal', () => {
                 },
             },
             revision: 1,
-        });
-
+        }));
+        const sealed = await get<string>('logbook:v2:user:a');
         await expect(readLocal('a')).rejects.toThrow();
+        expect(await get('logbook:v2:user:a')).toBe(sealed);
     });
 
     it('does not resurrect a remote deletion in a complete window and preserves unloaded history', async () => {
@@ -609,15 +637,18 @@ describe('durable owner-scoped journal', () => {
     });
 
     it('keeps the integrity fence when local business data exists on a missing month', async () => {
+        await prepareOwnerVault('user:a');
         const business = UserDataSchema.parse({
             nutrition: { '2026-08-01': { date: '2026-08-01', weight: 75 } },
         }) as unknown as UserData;
         await initializeLocal('a', business);
-        const key = 'logbook:v2:user:a';
-        const raw = await get(key) as Record<string, any>;
-        await set(key, { ...raw, syncMetaByDocument: {
-            'nutrition_months/2026-08': { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {} },
-        } });
+        await updateArchiveRecord<any>('user:a', raw => ({
+            ...raw,
+            syncMetaByDocument: {
+                'nutrition_months/2026-08': { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {} },
+            },
+        }));
+        expect(await get('logbook:v2:user:a')).toMatch(/^tlb-sealed:v1:/);
         const remote = new Map<string, any>([['', {
             _sync: { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {} },
         }]]);
@@ -728,6 +759,7 @@ describe('durable owner-scoped journal', () => {
     });
 
     it('refuses to acknowledge a same-sequence batch whose durable payload changed', async () => {
+        await prepareOwnerVault('user:a');
         const base = data(170);
         await initializeLocal('a', base);
         const now = Date.now();
@@ -739,13 +771,16 @@ describe('durable owner-scoped journal', () => {
         const before = (await readLocal('a'))!;
         expect(before.pending.length).toBeGreaterThan(0);
         const key = 'logbook:v2:user:a';
-        const raw = await get(key) as Record<string, any>;
-        const corrupted = { ...raw, pending: raw.pending.map((op: any) => ({ ...op, value: 'unexpected-payload' })) };
-        await set(key, corrupted);
+        await updateArchiveRecord<any>('user:a', raw => ({
+            ...raw,
+            pending: raw.pending.map((op: any) => ({ ...op, value: 'unexpected-payload' })),
+        }));
+        const changedCiphertext = await get<string>(key);
+        const corrupted = await getArchiveRecord<any>('user:a');
 
         await expect(acknowledgeThrough('a', before.pending.at(-1)!.seq, data(171), [], undefined,
             { operations: before.pending, replica: identity })).rejects.toThrow('Acknowledgement invalidato');
-        expect(await get(key)).toEqual(corrupted);
+        expect(await get(key)).toBe(changedCiphertext);
         expect((await readLocal('a'))?.pending).toEqual(corrupted.pending);
     });
 
@@ -1069,11 +1104,15 @@ describe('durable owner-scoped journal', () => {
     });
 
     it('rejects corrupt current-envelope ownership and preserves the original bytes', async () => {
+        await prepareOwnerVault('user:b');
+        await prepareOwnerVault('user:a');
         await initializeLocal('b', data(170));
-        const corrupt = await get('logbook:v2:user:b');
-        await set('logbook:v2:user:a', corrupt);
-        await expect(commitLocal('a', data(171), data(170))).rejects.toThrow('recupero');
-        expect(await get('logbook:v2:user:a')).toEqual(corrupt);
+        const foreignCiphertext = await get<string>('logbook:v2:user:b');
+        expect(foreignCiphertext).toMatch(/^tlb-sealed:v1:/);
+        await set('logbook:v2:user:a', foreignCiphertext);
+        await expect(readLocal('a')).rejects.toBeInstanceOf(LocalCiphertextError);
+        await expect(commitLocal('a', data(171), data(170))).rejects.toThrow();
+        expect(await get('logbook:v2:user:a')).toBe(foreignCiphertext);
     });
 
     it('rejects a changed durable baseline even when actor revision did not advance', async () => {
