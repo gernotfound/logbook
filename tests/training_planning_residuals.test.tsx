@@ -132,7 +132,7 @@ describe('training planning residual regressions', () => {
         expect(screen.queryByText('Settimana 1')).toBeNull();
         fireEvent.click(screen.getByRole('button', { name: /Ciclo storico/ }));
         expect(screen.queryByText('Settimana 1')).toBeNull();
-        fireEvent.click(screen.getByRole('button', { name: /Rotazione flessibile/ }));
+        fireEvent.click(screen.getByRole('button', { name: /Anteprima della rotazione flessibile.*chiusa/i }));
         expect(screen.getByText('Settimana 1')).toBeDefined();
     });
 
@@ -147,7 +147,7 @@ describe('training planning residual regressions', () => {
         expect(screen.getByText(/— settimane · — sedute/)).toBeDefined();
         fireEvent.click(screen.getByRole('button', { name: /Ciclo storico/ }));
         expect(screen.getByText('Parametri del ciclo da correggere.')).toBeDefined();
-        expect(screen.getByRole('button', { name: /Rotazione flessibile, parametri da correggere/ })).toBeDefined();
+        expect(screen.getByRole('button', { name: /Anteprima della rotazione flessibile, parametri da correggere, chiusa/i })).toBeDefined();
     });
 
     it('surfaces a persistent clock anomaly only once across timer ticks and resume', () => {
