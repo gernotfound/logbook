@@ -1,5 +1,5 @@
 import 'fake-indexeddb/auto';
-import { clear, get, set } from 'idb-keyval';
+import { clear, del, get, set } from 'idb-keyval';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackError: vi.fn() } }));
 import { UserDataSchema } from '../../src/lib/schema';
@@ -9,6 +9,7 @@ import { createAndMigrateVault } from '../../src/lib/sync/secureArchiveMigration
 import { lockAllVaults } from '../../src/lib/sync/secureArchiveSession';
 import { getArchiveRecord, updateArchiveRecord } from '../../src/lib/sync/secureArchiveRepository';
 import { LocalCiphertextError } from '../../src/lib/sync/secureArchiveCipher';
+import { activateGuestSession, GUEST_SESSION_KEY } from '../../src/lib/sync/session';
 import type { UserData } from '../../src/types';
 import { adoptReplicaCheckpoint, markReplicaCheckpointRequired, markCloudIntegrityBlocked, completeCloudIntegrityRecovery, hydrateLocal, commitLocal, commitDomainOperations, initializeLocal, readLocal, acknowledgeThrough, advanceLocalConsentRevisionIfClean, StaleLocalRevisionError } from '../../src/lib/sync/localRepository';
 import {
@@ -37,6 +38,13 @@ afterEach(() => {
 // Current-release journal fixtures use the real owner vault; the adversarial
 // corrupt/legacy envelopes and guest lifecycle cases remain explicit.
 const prepareOwnerVault = (owner = 'user:a') => createAndMigrateVault(owner);
+const prepareGuestVault = async () => {
+    const guestSessionId = 'current-guest-fixture';
+    localStorage.setItem('logbook_is_guest', 'true');
+    localStorage.setItem(GUEST_SESSION_KEY, guestSessionId);
+    activateGuestSession(guestSessionId);
+    await prepareOwnerVault('guest');
+};
 
 describe('durable owner-scoped journal', () => {
 
@@ -238,6 +246,7 @@ describe('durable owner-scoped journal', () => {
     });
 
     it('does not overwrite a guest envelope that appeared after a stale bootstrap read', async () => {
+        await prepareGuestVault();
         const initial = data(170);
         // Tab A observed absence, but tab B initialized and committed first.
         expect(await readLocal('guest')).toBeUndefined();
@@ -284,16 +293,18 @@ describe('durable owner-scoped journal', () => {
     });
 
     it('rejects a stale initialization after logout rather than recreating its envelope', async () => {
+        await prepareGuestVault();
         await initializeLocal('guest', data(170), undefined, () => true);
-        await clear();
+        await del('logbook:v2:guest');
         await expect(initializeLocal('guest', data(190), undefined, () => false))
             .rejects.toThrow('invalidata');
         expect(await readLocal('guest')).toBeUndefined();
     });
 
     it('rejects a stale snapshot commit after deletion without recreating the envelope', async () => {
+        await prepareOwnerVault('user:a');
         await initializeLocal('user:a', data(170));
-        await clear();
+        await del('logbook:v2:user:a');
         await expect(commitLocal('user:a', data(180), data(170), () => false))
             .rejects.toThrow('Commit locale invalidato dal cambio sessione');
         expect(await readLocal('user:a')).toBeUndefined();
@@ -317,16 +328,17 @@ describe('durable owner-scoped journal', () => {
     });
 
     it.each([null, false, 0, ''])(
-        'rejects a stored invalid archive (%j) instead of treating it as absent',
+        'rejects an unsealed invalid archive (%j) without replacing its bytes',
         async stored => {
+            await prepareOwnerVault('user:a');
             const key = 'logbook:v2:user:a';
             await set(key, stored);
 
-            await expect(readLocal('a')).rejects.toThrow('Archivio locale non valido');
-            await expect(initializeLocal('a', data(170))).rejects.toThrow('Archivio locale non valido');
-            await expect(commitLocal('a', data(180), data(170))).rejects.toThrow('Archivio locale non valido');
+            await expect(readLocal('a')).rejects.toBeInstanceOf(LocalCiphertextError);
+            await expect(initializeLocal('a', data(170))).rejects.toBeInstanceOf(LocalCiphertextError);
+            await expect(commitLocal('a', data(180), data(170))).rejects.toBeInstanceOf(LocalCiphertextError);
 
-            // Failed reads and updates must not silently replace the original record.
+            // An active vault must never silently adopt or overwrite unsealed bytes.
             expect(await get(key)).toEqual(stored);
         },
     );
@@ -560,6 +572,7 @@ describe('durable owner-scoped journal', () => {
     });
 
     it('does not create an account archive from a malformed cloud response', async () => {
+        await prepareOwnerVault('user:missing');
         for (const malformed of [null, false, []]) {
             await expect(hydrateLocal('missing', malformed as unknown as UserData, [], undefined, 'all'))
                 .rejects.toThrow('Snapshot cloud non valido');
@@ -1094,6 +1107,9 @@ describe('durable owner-scoped journal', () => {
     });
 
     it('isolates accounts and guest, and protects pending changes from hydration', async () => {
+        await prepareOwnerVault('user:a');
+        await prepareOwnerVault('user:b');
+        await prepareGuestVault();
         await commitLocal('a', data(171), data(170));
         await commitLocal('b', data(180), data(179));
         await commitLocal('guest', data(160), data(159));
@@ -1177,6 +1193,7 @@ describe('durable owner-scoped journal', () => {
     });
 
     it('keeps concurrent guest entities when a stale guest snapshot is committed', async () => {
+        await prepareGuestVault();
         const base = UserDataSchema.parse({
             profile: { height: '170' },
             routines: [],
