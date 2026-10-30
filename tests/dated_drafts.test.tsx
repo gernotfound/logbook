@@ -748,7 +748,9 @@ it('merges a partial stored draft with the latest remote source fields', () => {
         userData: data({ '2026-09-10': day('2026-09-10', { weight: 90, waist: 80 }) }),
         dataOwner: owner,
     });
-    localStorage.setItem(deviceKey('draft:measurement:2026-09-10', owner), JSON.stringify({ weight: '75' }));
+    localStorage.setItem(deviceKey('draft:measurement:2026-09-10', owner), JSON.stringify({
+        __logbookDatedDraft: 2, owner, revisionId: 'd'.repeat(32), values: { weight: '75' },
+    }));
 
     const hook = renderHook(() => useNutritionMeasurements('2026-09-10'));
     expect(hook.result.current.weight).toBe('75');
