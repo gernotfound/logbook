@@ -79,7 +79,7 @@ it('quarantines an old measurement draft after reacceptance instead of restaging
     const owner = 'user:' + mockFirebaseAuth.currentUser!.uid;
     const key = deviceKey('draft:measurement:2026-09-11', owner);
     localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '1');
-    const original = JSON.stringify({ weight: '75', waist: '80' });
+    const original = JSON.stringify({ __logbookDatedDraft: 2, owner, revisionId: 'a'.repeat(32), consentRevision: 1, values: { weight: '75', waist: '80' } });
     localStorage.setItem(key, original);
     localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '3');
     useAppStore.setState({ userData: data(), dataOwner: owner, localPersistenceBlocked: false });
@@ -108,7 +108,7 @@ it('prevents a mounted old form from publishing stale health data after a cross-
     const key = deviceKey(name, owner);
     const marker = `logbook:v2:${owner}:health-consent-generation`;
     localStorage.setItem(marker, '1');
-    const original = JSON.stringify({ weight: '75' });
+    const original = JSON.stringify({ __logbookDatedDraft: 2, owner, revisionId: 'b'.repeat(32), consentRevision: 1, values: { weight: '75' } });
     localStorage.setItem(key, original);
     useAppStore.setState({ userData: data(), dataOwner: owner, localPersistenceBlocked: false });
     const beforeData = useAppStore.getState().userData;
@@ -155,7 +155,7 @@ it('rejects altered owner and revision in a stamped draft without replacing it',
     const key = deviceKey('draft:measurement:2026-09-11', owner);
     localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '3');
     const original = JSON.stringify({
-        __logbookDatedDraft: 1, owner: 'user:foreign', consentRevision: 3,
+        __logbookDatedDraft: 2, owner: 'user:foreign', revisionId: 'c'.repeat(32), consentRevision: 3,
         values: { weight: '80' },
     });
     localStorage.setItem(key, original);
@@ -164,6 +164,22 @@ it('rejects altered owner and revision in a stamped draft without replacing it',
     expect(() => writeFencedDatedDraft('draft:measurement:2026-09-11', owner, { weight: '81' }))
         .toThrow('Provenienza della bozza locale non valida');
     expect(localStorage.getItem(key)).toBe(original);
+});
+
+it('preserves unsupported pre-launch V1 and unwrapped drafts without reading or replacing them', () => {
+    const owner = storageOwner();
+    const name = 'draft:measurement:2026-09-11';
+    const key = deviceKey(name, owner);
+    for (const original of [
+        JSON.stringify({ __logbookDatedDraft: 1, owner, consentRevision: 1, values: { weight: '70' } }),
+        JSON.stringify({ weight: '70' }),
+    ]) {
+        localStorage.setItem(key, original);
+        expect(() => readFencedDatedDraft(name, owner)).toThrow('Provenienza della bozza locale non valida');
+        expect(() => writeFencedDatedDraft(name, owner, { weight: '71' }))
+            .toThrow('Provenienza della bozza locale non valida');
+        expect(localStorage.getItem(key)).toBe(original);
+    }
 });
 
 it('rejects stale replacement and cleanup of a dated draft in the same consent generation', () => {
@@ -732,7 +748,9 @@ it('merges a partial stored draft with the latest remote source fields', () => {
         userData: data({ '2026-09-10': day('2026-09-10', { weight: 90, waist: 80 }) }),
         dataOwner: owner,
     });
-    localStorage.setItem(deviceKey('draft:measurement:2026-09-10', owner), JSON.stringify({ weight: '75' }));
+    localStorage.setItem(deviceKey('draft:measurement:2026-09-10', owner), JSON.stringify({
+        __logbookDatedDraft: 2, owner, revisionId: 'd'.repeat(32), values: { weight: '75' },
+    }));
 
     const hook = renderHook(() => useNutritionMeasurements('2026-09-10'));
     expect(hook.result.current.weight).toBe('75');
