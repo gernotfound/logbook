@@ -3,7 +3,7 @@ import { readBrowserValueStrict, removeBrowserValue, writeBrowserValue } from '.
 import { LocalCiphertextError, openLocalText, sealLocalText, SEALED_LOCAL_PREFIX } from './secureArchiveCipher';
 import { LocalVaultLockedError, readVaultControl, requireUnlockedLocalKey } from './secureArchiveSession';
 import { isActiveGuestSession, storageOwner } from './session';
-import { assertNoLocalPurge, LocalPurgePendingError } from './localPurgeFence';
+import { assertNoLocalPurge } from './localPurgeFence';
 
 export const deviceKey = (name: string, owner = storageOwner()) => `logbook:v2:${owner}:${name}`;
 
@@ -12,22 +12,6 @@ export const protectedDeviceKey = (name: string, owner = storageOwner()) => {
     if (!name || name.startsWith('sealed:')) throw new Error('Chiave dispositivo protetta non valida.');
     return deviceKey('sealed:' + name, owner);
 };
-
-export function readDeviceValue(name: string, owner?: string): string | null {
-    try {
-        return readDeviceValueStrict(name, owner);
-    } catch (error) {
-        // An unavailable or tampered ENCRYPTED record must not look like an
-        // empty draft/workout: that could silently erase the only local copy.
-        if (error instanceof LocalVaultLockedError || error instanceof LocalCiphertextError
-            || error instanceof LocalPurgePendingError) throw error;
-        // Legacy best-effort draft reads may still treat transient storage
-        // failures as absent, but a provisioned sealed vault must NEVER do so:
-        // a follow-up write could overwrite a newer encrypted draft.
-        if (readVaultControl(owner ?? storageOwner()) !== null) throw error;
-        return null;
-    }
-}
 
 export function readDeviceValueStrict(name: string, owner?: string): string | null {
     const resolvedOwner = owner ?? storageOwner();
