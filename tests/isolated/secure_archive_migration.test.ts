@@ -41,14 +41,13 @@ beforeEach(async () => {
 });
 
 describe('durable secure archive migration', () => {
-    it('migrates existing business journal and device-critical records without retaining plaintext', async () => {
+    it('seals an existing current journal and stores all new device snapshots encrypted', async () => {
         const initial = base();
         await initializeLocal(owner, initial);
         const workout = JSON.stringify({ id: 'workout-test', notes: 'private health note' });
-        localStorage.setItem(deviceKey('workout', owner), workout);
-        localStorage.setItem(deviceKey('draft:measurement:' + day, owner), JSON.stringify({ weight: '76' }));
-
         await createAndMigrateVault(owner);
+        writeDeviceValue('workout', workout, owner);
+        writeDeviceValue('draft:measurement:' + day, JSON.stringify({ weight: '76' }), owner);
         expect(readVaultControl(owner)?.phase).toBe('active');
         const raw = await get('logbook:v2:' + owner);
         expect(typeof raw).toBe('string');
@@ -74,12 +73,12 @@ describe('durable secure archive migration', () => {
         expect(readDeviceValueStrict('workout', owner)).toBe(workout);
     });
 
-    it('migrates and seals immutable workout-intent copies with owner-bound authenticated ciphertext', async () => {
+    it('seals immutable workout-intent copies with owner-bound authenticated ciphertext', async () => {
         await initializeLocal(owner, base());
         const oldName = 'workout-intent:' + 'a'.repeat(32);
         const oldValue = '{"notes":"private recovery record"}';
-        localStorage.setItem(deviceKey(oldName, owner), oldValue);
         await createAndMigrateVault(owner);
+        writeDeviceValue(oldName, oldValue, owner);
         expect(localStorage.getItem(deviceKey(oldName, owner))).toBeNull();
         expect(localStorage.getItem(protectedDeviceKey(oldName, owner))).toMatch(/^tlb-sealed:v1:/);
         expect(localStorage.getItem(protectedDeviceKey(oldName, owner))).not.toContain('private recovery record');
@@ -224,13 +223,13 @@ describe('durable secure archive migration', () => {
         expect(localStorage.getItem(ciphertextKey)).toBe(ciphertext);
     });
 
-    it('does not activate migration while a second tab compacts legacy key indexes', async () => {
+    it('does not activate provisioning while a second tab compacts owner metadata indexes', async () => {
         await initializeLocal(owner, base());
-        const legacyKey = deviceKey('draft:measurement:' + day, owner);
-        const raw = '{"weight":"78"}';
+        const safeKey = ownerUiPreferenceKey(owner, OWNER_UI_PREFERENCES[0]);
+        const raw = '"session"';
         const decoy = 'logbook:other-tab';
         localStorage.setItem(decoy, 'other-tab');
-        localStorage.setItem(legacyKey, raw);
+        localStorage.setItem(safeKey, raw);
         const nativeKey = localStorage.key.bind(localStorage);
         let shifted = false;
         const spy = vi.spyOn(localStorage, 'key').mockImplementation(index => {
@@ -247,14 +246,13 @@ describe('durable secure archive migration', () => {
         expect(shifted).toBe(true);
         expect(readVaultControl(owner)?.phase).toBe('migrating');
         const migratingEpoch = readVaultControl(owner)!.epoch;
-        expect(localStorage.getItem(legacyKey)).toBe(raw);
-        expect(localStorage.getItem(protectedDeviceKey('draft:measurement:' + day, owner))).toBeNull();
+        expect(localStorage.getItem(safeKey)).toBe(raw);
 
         await createAndMigrateVault(owner);
         expect(readVaultControl(owner)?.phase).toBe('active');
         expect(readVaultControl(owner)?.epoch).toBe(migratingEpoch);
-        expect(localStorage.getItem(legacyKey)).toBeNull();
-        expect(readDeviceValueStrict('draft:measurement:' + day, owner)).toBe(raw);
+        expect(localStorage.getItem(safeKey)).toBe(raw);
+        expect((await readLocal(owner))?.data.nutrition?.[day]?.weight).toBe(75);
     });
 
     it('rejects different control epochs instead of selecting a conflicting key', async () => {
@@ -373,7 +371,9 @@ describe('durable secure archive migration', () => {
         localStorage.setItem(unknown, 'true');
         await expect(createAndMigrateVault(owner)).rejects.toThrow('chiavi sconosciute');
         expect(localStorage.getItem(unknown)).toBe('true');
-        expect(readVaultControl(owner)?.phase).toBe('migrating');
+        // Fresh-start preflight fails before persisting a new key or control.
+        expect(readVaultControl(owner)).toBeNull();
+        expect(await get(vaultControlMirrorId(owner))).toBeUndefined();
     });
 
     it('serializes simultaneous provisioning attempts without replacing a durable key', async () => {
@@ -412,26 +412,18 @@ describe('durable secure archive migration', () => {
         expect((await readLocal(owner))?.data.nutrition?.[day]?.weight).toBe(75);
     });
 
-    it('preserves the old snapshot and resumes an interrupted migration idempotently', async () => {
+    it('rejects old device plaintext before provisioning and preserves every original byte', async () => {
         await initializeLocal(owner, base());
-        localStorage.setItem(deviceKey('draft:measurement:' + day, owner), '{"weight":"77"}');
-        const originalSet = localStorage.setItem.bind(localStorage);
-        const intercepted = vi.spyOn(localStorage, 'setItem').mockImplementation((name, value) => {
-            if (name === protectedDeviceKey('draft:measurement:' + day, owner)) throw new Error('device quota');
-            originalSet(name, value);
-        });
-        await expect(createAndMigrateVault(owner)).rejects.toBeInstanceOf(BrowserStorageError);
-        expect(readVaultControl(owner)?.phase).toBe('migrating');
-        expect(localStorage.getItem(deviceKey('draft:measurement:' + day, owner))).toBe('{"weight":"77"}');
-        expect((await get<string>('logbook:v2:' + owner))?.startsWith(SEALED_LOCAL_PREFIX)).toBe(true);
-        const migratingEpoch = readVaultControl(owner)!.epoch;
-        intercepted.mockRestore();
-
-        await createAndMigrateVault(owner);
-        expect(readVaultControl(owner)?.phase).toBe('active');
-        expect(readVaultControl(owner)?.epoch).toBe(migratingEpoch);
-        expect(localStorage.getItem(deviceKey('draft:measurement:' + day, owner))).toBeNull();
-        expect(readDeviceValueStrict('draft:measurement:' + day, owner)).toBe('{"weight":"77"}');
+        const legacyKey = deviceKey('draft:measurement:' + day, owner);
+        const original = '{"weight":"77"}';
+        const originalIdb = await get('logbook:v2:' + owner);
+        localStorage.setItem(legacyKey, original);
+        await expect(createAndMigrateVault(owner)).rejects.toBeInstanceOf(LocalCiphertextError);
+        expect(readVaultControl(owner)).toBeNull();
+        expect(await get(vaultControlMirrorId(owner))).toBeUndefined();
+        expect(localStorage.getItem(legacyKey)).toBe(original);
+        expect(localStorage.getItem(protectedDeviceKey('draft:measurement:' + day, owner))).toBeNull();
+        expect(await get('logbook:v2:' + owner)).toEqual(originalIdb);
     });
 
     it('preserves corrupted encrypted drafts against replacements and deletions', async () => {
@@ -453,8 +445,8 @@ describe('durable secure archive migration', () => {
     it('preserves an unreadable sealed draft instead of treating it as absent', async () => {
         await initializeLocal(owner, base());
         const name = 'draft:measurement:' + day;
-        localStorage.setItem(deviceKey(name, owner), '{"weight":"81"}');
         await createAndMigrateVault(owner);
+        writeDeviceValue(name, '{"weight":"81"}', owner);
         const protectedKey = protectedDeviceKey(name, owner);
         const ciphertext = localStorage.getItem(protectedKey);
         expect(ciphertext).toMatch(/^tlb-sealed:v1:/);
@@ -470,12 +462,13 @@ describe('durable secure archive migration', () => {
     });
 
     it('refuses stale legacy-tab writes instead of hiding or deleting conflicting device data', async () => {
-        localStorage.setItem(deviceKey('workout', owner), '{"id":"before"}');
         await createAndMigrateVault(owner);
+        writeDeviceValue('workout', '{"id":"before"}', owner);
+        const sealedBefore = localStorage.getItem(protectedDeviceKey('workout', owner));
         localStorage.setItem(deviceKey('workout', owner), '{"id":"newer-old-tab"}');
         expect(() => readDeviceValueStrict('workout', owner)).toThrow(LocalCiphertextError);
         expect(localStorage.getItem(deviceKey('workout', owner))).toContain('newer-old-tab');
-        expect(localStorage.getItem(protectedDeviceKey('workout', owner))).not.toContain('newer-old-tab');
+        expect(localStorage.getItem(protectedDeviceKey('workout', owner))).toBe(sealedBefore);
     });
 
     it('exports decrypted device snapshots in an explicit guest JSON backup without exposing plaintext in storage', async () => {
@@ -487,10 +480,9 @@ describe('durable secure archive migration', () => {
         await initializeLocal('guest', data);
         const notes = '{"notes":"sensitive offline workout"}';
         const draft = '{"weight":"77"}';
-        localStorage.setItem(deviceKey('workout', 'guest'), notes);
-        localStorage.setItem(deviceKey('draft:measurement:' + day, 'guest'), draft);
-
         await createAndMigrateVault('guest');
+        writeDeviceValue('workout', notes, 'guest');
+        writeDeviceValue('draft:measurement:' + day, draft, 'guest');
         const snapshot = await collectBackupSnapshot(data, false);
         expect(snapshot.owner).toBe('guest');
         expect(snapshot.recovery.device).toMatchObject({

@@ -47,23 +47,17 @@ describe('Workout lifecycle durable recovery regressions', () => {
     });
     afterEach(() => vi.restoreAllMocks());
 
-    it('keeps unreadable timer storage intact and blocks controls after authenticated owner hydration', async () => {
+    it('blocks pre-launch plaintext timer at vault readiness without deleting its only copy', async () => {
         const key = deviceKey('timer', owner);
-        localStorage.setItem(key, '{bad-json');
+        const original = '{bad-json';
+        localStorage.setItem(key, original);
         renderWithProviders(<React.StrictMode><WorkoutTimer /></React.StrictMode>);
-        // AuthContext resolves the real Firebase UID asynchronously. Wait for
-        // the correct owner-mounted timer rather than asserting guest at mount.
-        await waitFor(() => expect(useAppStore.getState().localPersistenceBlocked).toBe(true));
-        // The plaintext legacy key may be removed by a successful encrypted
-        // migration. The invalid snapshot must still exist *byte-for-byte*
-        // behind the authenticated device-storage boundary, and controls block.
-        expect(readDeviceValueStrict('timer', owner)).toBe('{bad-json');
-        if (localStorage.getItem(key) === null) {
-            expect(localStorage.getItem(protectedDeviceKey('timer', owner))).toMatch(/^tlb-sealed:v1:/);
-        } else {
-            expect(localStorage.getItem(key)).toBe('{bad-json');
-        }
-        expect(screen.getByRole('button', { name: 'Avvia recupero' }).hasAttribute('disabled')).toBe(true);
+        // Unsupported plaintext is refused during authenticated vault readiness,
+        // before React can hydrate it or treat it as a current timer snapshot.
+        const dialog = await screen.findByRole('alertdialog', { name: 'Archivio locale temporaneamente non disponibile' });
+        expect(dialog.textContent).toContain('I dati originali sono conservati');
+        expect(localStorage.getItem(key)).toBe(original);
+        expect(localStorage.getItem(protectedDeviceKey('timer', owner))).toBeNull();
     });
 
     it('quarantines legacy readiness of an erased consent epoch without beginning a new workout', async () => {
