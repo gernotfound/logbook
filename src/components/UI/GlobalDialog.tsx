@@ -41,6 +41,8 @@ export const GlobalDialog: React.FC = () => {
         if (type === 'password-prompt') setPromptValue('');
         onCancel();
       } else if (event.key === 'Tab') {
+        // This capture-phase trap takes precedence over focus traps in underlying modals.
+        event.stopPropagation();
         const elements = focusable();
         const first = elements[0] ?? box;
         const last = elements[elements.length - 1] ?? box;
@@ -62,7 +64,7 @@ export const GlobalDialog: React.FC = () => {
   if (!isOpen) return null;
 
   return createPortal(
-    <div ref={overlayRef} className="dialog-overlay ui-global-dialog-1" style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, display: "flex", justifyContent: "center", alignItems: "center", zIndex: 99999 }}>
+    <div ref={overlayRef} className="dialog-overlay ui-global-dialog-1" style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, display: "flex", justifyContent: "center", alignItems: "center", zIndex: 100001 }}>
       <div
         ref={boxRef}
         tabIndex={-1}
