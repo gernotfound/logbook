@@ -11,7 +11,6 @@ vi.mock('../src/lib/appCheck', async importOriginal => ({
 
 const context = {
     purgeAllLocalUserData: vi.fn(async (_owner: string) => undefined),
-    resetCache: vi.fn(),
     resetStore: vi.fn(),
     cancelPendingSyncs: vi.fn(),
 };

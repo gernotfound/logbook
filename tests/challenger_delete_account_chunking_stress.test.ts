@@ -52,7 +52,6 @@ function response(status: number, body: unknown): Response {
 function context() {
     return {
         purgeAllLocalUserData: vi.fn().mockResolvedValue(undefined),
-        resetCache: vi.fn(),
         cancelPendingSyncs: boundary.cancelPendingSyncs,
         resetStore: boundary.resetStore,
     };
@@ -101,7 +100,6 @@ describe('M7 client boundary: durable server-coordinated account deletion', () =
         expect(boundary.cancelPendingSyncs).toHaveBeenCalledTimes(1);
         expect(boundary.signOut).toHaveBeenCalledTimes(1);
         expect(ctx.purgeAllLocalUserData).toHaveBeenCalledWith('user:test-user-id');
-        expect(ctx.resetCache).toHaveBeenCalledTimes(1);
         expect(boundary.resetStore).toHaveBeenCalledTimes(1);
         expect(isAccountDeletionPending('user:test-user-id')).toBe(false);
     });

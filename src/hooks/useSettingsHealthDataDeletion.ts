@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
-import { DB } from '../lib/db';
 import { captureSession, isCurrentSession } from '../lib/sync/session';
 import { currentHealthConsentStatus } from '../lib/healthConsent';
 import { auth, signOut } from '../lib/firebase';
@@ -82,7 +81,6 @@ export function useSettingsHealthDataDeletion(beginDeletion: () => boolean, endD
             if (auth.currentUser?.uid !== user.uid) {
                 throw new Error('Account cambiato dopo la pulizia locale.');
             }
-            DB.resetCache();
             useAppStore.getState().resetStore({ force: true });
             await signOut(auth);
             await showAlert('Dati del database operativo e di questo dispositivo eliminati. Il tuo account non è stato cancellato: puoi accedere di nuovo. Copie su dispositivi offline, backup già esportati e backup tecnici del fornitore non sono eliminabili da questo comando.', 'Cancellazione completata');

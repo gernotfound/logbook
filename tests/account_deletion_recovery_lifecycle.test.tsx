@@ -10,14 +10,12 @@ const boundary = vi.hoisted(() => ({
     reportError: vi.fn(),
     showAlert: vi.fn(),
     purge: vi.fn(),
-    resetCache: vi.fn(),
     resetStore: vi.fn(),
 }));
 
 vi.mock('../src/lib/db', () => ({
     DB: {
         purgeCompletedAccountLocalData: boundary.purge,
-        resetCache: boundary.resetCache,
     },
 }));
 

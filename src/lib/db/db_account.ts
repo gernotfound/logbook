@@ -35,7 +35,6 @@ export type AccountDeletionOutcome =
 
 export type AccountDeletionCompletionContext = {
     purgeAllLocalUserData: (owner: string) => Promise<void>;
-    resetCache: () => void;
     resetStore: () => void;
 };
 
@@ -299,7 +298,6 @@ export async function finalizeCompletedDeletionForUid(uid: string, context: Acco
         removeDeletionRecoveryCredential(uid);
         clearAccountDeletion('user:' + uid);
         if (!anotherLocalIdentityIsActive(uid)) {
-            context.resetCache();
             context.resetStore();
         }
         return { status: 'complete' };

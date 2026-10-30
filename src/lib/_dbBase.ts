@@ -8,11 +8,6 @@ import { replicateJournal } from './sync/replicateJournal';
 import { removeDeletionRecoveryCredential } from './deletionDeviceRecovery';
 
 export const DB = {
-    // Kept as a compatibility hook for account lifecycle and legacy callers;
-    // cloud sync no longer stores a redundant serialized user-state snapshot.
-    resetCache() {
-        return;
-    },
     async saveUserData(_state: Record<string, any>, _revision?: any): Promise<SyncResult> {
         const user = auth.currentUser;
         if (!user) return { ok: true, status: 'synced' };
@@ -50,12 +45,10 @@ export const DB = {
             await auth.signOut();
         }, options?.discardUnsynced === true, options?.verifyCurrentDrafts);
         if (uid) removeDeletionRecoveryCredential(uid);
-        this.resetCache();
     },
     async deleteAccount(lifecycle: Pick<AccountDeletionContext, 'cancelPendingSyncs' | 'resetStore'>) {
         return deleteAccount({
             purgeAllLocalUserData: owner => purgeCompletedAccountLocalData(owner),
-            resetCache: () => this.resetCache(),
             ...lifecycle,
         });
     }
