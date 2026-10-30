@@ -1,8 +1,11 @@
 import 'fake-indexeddb/auto';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { clear, del } from 'idb-keyval';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { clear, del, get } from 'idb-keyval';
 import { UserDataSchema } from '../../src/lib/schema';
 import type { CachedGlobalCatalog, UserData } from '../../src/types';
+import { createAndMigrateVault } from '../../src/lib/sync/secureArchiveMigration';
+import { lockAllVaults } from '../../src/lib/sync/secureArchiveSession';
+import { activateGuestSession, GUEST_SESSION_KEY } from '../../src/lib/sync/session';
 
 const catalog: CachedGlobalCatalog = {
     manifest: {
@@ -25,7 +28,17 @@ const base = (): UserData => UserDataSchema.parse({ profile: { height: '170', ge
 
 describe('M8 domain commit durability', () => {
     beforeEach(async () => {
+        lockAllVaults();
+        localStorage.clear();
         await clear();
+        vi.stubGlobal('navigator', { locks: {
+            request: async (_name: string, _options: unknown, run: () => Promise<unknown>) => run(),
+        } });
+        await createAndMigrateVault('user:a');
+    });
+    afterEach(() => {
+        lockAllVaults();
+        vi.unstubAllGlobals();
     });
 
     it('keeps the public facade bindings identical to the extracted transactional domain module', async () => {
@@ -57,6 +70,7 @@ describe('M8 domain commit durability', () => {
 
         const result = await commitDomainOperations('user:a', { type: 'profile.patch', patch: { height: '171' } }, base());
         const stored = await readLocal('user:a');
+        expect(await get('logbook:v2:user:a')).toMatch(/^tlb-sealed:v1:/);
 
         expect(result.data.profile?.height).toBe('171');
         expect(result.operations).toHaveLength(1);
@@ -287,6 +301,11 @@ describe('M8 domain commit durability', () => {
     it('does not enqueue cloud journal operations for guest ownership', async () => {
         const { initializeLocal, commitDomainOperations, readLocal } = await import('../../src/lib/sync/localRepository');
         const initial = base();
+        const guestSessionId = 'm8-current-guest-session';
+        localStorage.setItem('logbook_is_guest', 'true');
+        localStorage.setItem(GUEST_SESSION_KEY, guestSessionId);
+        activateGuestSession(guestSessionId);
+        await createAndMigrateVault('guest');
         await initializeLocal('guest', initial);
         await commitDomainOperations('guest', { type: 'profile.patch', patch: { height: '172' } }, initial);
         const stored = await readLocal('guest');
