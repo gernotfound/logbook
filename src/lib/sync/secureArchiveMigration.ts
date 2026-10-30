@@ -1,8 +1,8 @@
 import { get, update } from 'idb-keyval';
-import { readBrowserValueStrict, removeBrowserValue, writeBrowserValue } from './browserStorage';
+import { readBrowserValueStrict } from './browserStorage';
 import { normalizeStorageOwner } from './owner';
 import { deviceKey, protectedDeviceKey } from './deviceStorage';
-import { openLocalJson, openLocalText, sealLocalJson, sealLocalText, SEALED_LOCAL_PREFIX, LocalCiphertextError } from './secureArchiveCipher';
+import { openLocalJson, openLocalText, sealLocalJson, SEALED_LOCAL_PREFIX, LocalCiphertextError } from './secureArchiveCipher';
 import { createLocalKeyVault, unlockLocalKeyVault } from './secureArchiveKeys';
 import { publishVaultControl, reconcileVaultControl } from './secureArchiveControlRecovery';
 import {
@@ -76,37 +76,26 @@ async function migrateIndexedDb(owner: string, control: PersistedVaultControl, k
     }
 }
 
-/** Convert one legacy snapshot, then verify it, then delete its plaintext copy. */
-function migrateDevice(owner: string, control: PersistedVaultControl, key: Uint8Array, name: string): void {
+/**
+ * A pre-launch plaintext device record must not be promoted into the current
+ * vault. Keep the original bytes intact and block activation until the owner
+ * has a clean baseline; current encrypted records are authenticated in place.
+ */
+function validateSealedDevice(owner: string, control: PersistedVaultControl, key: Uint8Array, name: string): void {
     assertMigrationAvailable(owner, control, key);
-    const legacyName = deviceKey(name, owner);
-    const secureName = protectedDeviceKey(name, owner);
-    const original = readBrowserValueStrict(legacyName);
-    const sealed = readBrowserValueStrict(secureName);
-    if (sealed !== null) {
-        const restored = openLocalText(key, owner, secureName, sealed);
-        if (original !== null && restored !== original) {
-            throw new Error('Conflitto tra una bozza precedente e quella già cifrata. Nessun dato eliminato.');
-        }
-        if (original !== null) removeBrowserValue(legacyName);
-        return;
-    }
-    if (original === null) return;
-    writeBrowserValue(secureName, sealLocalText(key, owner, secureName, original));
-    // Detect quota/storage trouble without deleting the only original copy.
-    const confirmed = readBrowserValueStrict(secureName);
-    if (!confirmed || openLocalText(key, owner, secureName, confirmed) !== original) {
+    if (readBrowserValueStrict(deviceKey(name, owner)) !== null) {
         throw new LocalCiphertextError();
     }
-    assertMigrationAvailable(owner, control, key);
-    removeBrowserValue(legacyName);
+    const secureName = protectedDeviceKey(name, owner);
+    const sealed = readBrowserValueStrict(secureName);
+    if (sealed !== null) openLocalText(key, owner, secureName, sealed);
 }
 
 async function migrateAndFinalize(owner: string, control: PersistedVaultControl, dataKey: Uint8Array): Promise<void> {
     assertMigrationAvailable(owner, control, dataKey);
     assertKnownDeviceNames(owner);
     await migrateIndexedDb(owner, control, dataKey);
-    for (const name of assertKnownDeviceNames(owner)) migrateDevice(owner, control, dataKey, name);
+    for (const name of assertKnownDeviceNames(owner)) validateSealedDevice(owner, control, dataKey, name);
     assertMigrationAvailable(owner, control, dataKey);
     for (const name of assertKnownDeviceNames(owner)) {
         if (readBrowserValueStrict(deviceKey(name, owner)) !== null) {
