@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { CycleEditor } from '../src/components/Training/planning/CycleEditor';
+import { CycleCard } from '../src/components/Training/planning/CycleCard';
 import { calculateCycleMacroVolume } from '../src/components/Training/planning/cycleMacroVolume';
 import { applyDomainOperations } from '../src/lib/sync/domainOperations';
 import { UserDataSchema } from '../src/lib/schema';
@@ -47,7 +48,7 @@ describe('Pianificazione redesign', () => {
         expect(screen.queryByText('Squat', { selector: '.planning-sequence-name strong' })).toBeNull();
     });
 
-    it('espone chiaramente lo stato ON/OFF della rotazione flessibile', () => {
+    it('mostra e nasconde solo l’anteprima della rotazione flessibile, senza suggerire un toggle ON/OFF', () => {
         render(
             <CycleEditor
                 routines={routines}
@@ -60,10 +61,51 @@ describe('Pianificazione redesign', () => {
         const search = screen.getByRole('combobox', { name: 'Aggiungi scheda alla sequenza' });
         fireEvent.change(search, { target: { value: 'upper' } });
 
-        const toggle = screen.getByRole('button', { name: /Rotazione flessibile.*OFF/i });
+        const toggle = screen.getByRole('button', { name: /Anteprima della rotazione flessibile.*chiusa/i });
         expect(toggle.getAttribute('aria-expanded')).toBe('false');
+        expect(toggle.querySelector('.planning-state-badge')?.textContent).toBe('Chiusa');
+        expect(screen.queryByText(/Anteprima indicativa: puoi svolgere anche una sola seduta/i)).toBeNull();
+
         fireEvent.click(toggle);
-        expect(screen.getByRole('button', { name: /Rotazione flessibile.*ON/i }).getAttribute('aria-expanded')).toBe('true');
+        expect(screen.getByRole('button', { name: /Anteprima della rotazione flessibile.*aperta/i }))
+            .toBe(toggle);
+        expect(toggle.getAttribute('aria-expanded')).toBe('true');
+        expect(toggle.querySelector('.planning-state-badge')?.textContent).toBe('Aperta');
+        expect(screen.getByText(/Anteprima indicativa: puoi svolgere anche una sola seduta/i)).toBeDefined();
+        expect(screen.getByText('Settimana 1')).toBeDefined();
+
+        fireEvent.click(toggle);
+        expect(toggle.getAttribute('aria-expanded')).toBe('false');
+        expect(toggle.querySelector('.planning-state-badge')?.textContent).toBe('Chiusa');
+        expect(screen.queryByText(/Anteprima indicativa: puoi svolgere anche una sola seduta/i)).toBeNull();
+    });
+
+    it('mantiene la stessa semantica dell’anteprima nella scheda ciclo salvata', () => {
+        render(
+            <CycleCard
+                cycle={{
+                    id: 'cycle-preview',
+                    name: 'Ciclo preview',
+                    durationWeeks: 4,
+                    sessionsPerWeek: 1,
+                    routines: [{ routineId: 'upper', frequencyPerWeek: 1 }],
+                }}
+                isActive={false}
+                routines={routines}
+                onSetActive={vi.fn()}
+                onDeactivate={vi.fn()}
+                onEdit={vi.fn()}
+                onDuplicate={vi.fn()}
+                onDelete={vi.fn()}
+            />
+        );
+
+        fireEvent.click(screen.getByRole('button', { name: /Ciclo preview/i }));
+        const toggle = screen.getByRole('button', { name: /Anteprima della rotazione flessibile.*chiusa/i });
+        fireEvent.click(toggle);
+        expect(toggle.getAttribute('aria-expanded')).toBe('true');
+        expect(toggle.querySelector('.planning-state-badge')?.textContent).toBe('Aperta');
+        expect(screen.getByText(/Anteprima indicativa: puoi svolgere anche una sola seduta/i)).toBeDefined();
     });
 
     it('does not let the same routine be added twice to a training cycle', () => {

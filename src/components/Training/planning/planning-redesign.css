@@ -294,7 +294,7 @@
   font-size: var(--font-size-micro);
   font-weight: 700;
 }
-.planning-state-badge.is-on { background: var(--primary-color); color: var(--on-primary); }
+.planning-state-badge.is-open { background: var(--primary-color); color: var(--on-primary); }
 .planning-accordion-panel { display: grid; gap: .75rem; padding: .75rem .25rem 0; }
 
 .planning-schedule-week { padding: .625rem; border-radius: .75rem; background: var(--surface-light); }
