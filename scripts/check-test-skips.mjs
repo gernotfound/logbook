@@ -1,5 +1,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { findDisabledTests } from './test-declaration-check.mjs';
+
+const regression = spawnSync(process.execPath, ['--test', 'scripts/test-declaration-check-regressions.mjs'], { stdio: 'inherit' });
+if (regression.error) throw regression.error;
+if (regression.status !== 0) process.exit(regression.status ?? 1);
 
 const roots = ['src', 'tests', 'e2e'];
 const mockFileExtensions = ['', '.ts', '.tsx', '.js', '.jsx', '.mjs', '.mts', '.cjs', '.cts', '.json', '.css', '.scss', '.svg'];
@@ -26,9 +32,6 @@ function checkMockTargets(filePath, source) {
 const violations = [];
 const testFilePattern = /\.(?:test|spec)\.[cm]?[jt]sx?$/;
 const forbiddenPatterns = [
-    { label: 'skip', pattern: /\b(?:it|test|describe)\.skip\s*\(/g },
-    { label: 'todo', pattern: /\b(?:it|test|describe)\.todo\s*\(/g },
-    { label: 'only', pattern: /\b(?:it|test|describe)\.only\s*\(/g },
     { label: 'tautology', pattern: /expect\s*\(\s*true\s*\)\s*\.\s*toBe\s*\(\s*true\s*\)|expect\s*\(\s*false\s*\)\s*\.\s*toBe\s*\(\s*false\s*\)/g },
 ];
 
@@ -44,6 +47,9 @@ function walk(directory) {
 
         const content = fs.readFileSync(fullPath, 'utf8');
         checkMockTargets(fullPath, content);
+        for (const finding of findDisabledTests(content, fullPath)) {
+            violations.push(`${fullPath}:${finding.line} [${finding.label}]: ${finding.expression}`);
+        }
         const lines = content.split(/\r?\n/);
         lines.forEach((line, index) => {
             for (const { label, pattern } of forbiddenPatterns) {

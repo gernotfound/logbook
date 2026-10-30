@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { findDisabledTests } from './test-declaration-check.mjs';
 
 const fixedFiles = [
   'tests/logout_protection.test.ts',
@@ -23,8 +24,6 @@ function collectTests(directory) {
 
 const files = [...new Set([...fixedFiles, ...collectTests('tests/hardening')])].sort();
 const forbidden = [
-  { label: 'skipped/todo test', pattern: /\b(?:it|test|describe)\.(?:skip|todo)\s*\(/g },
-  { label: 'focused test', pattern: /\b(?:it|test|describe)\.only\s*\(/g },
   { label: 'tautology expect(true).toBe(true)', pattern: /expect\s*\(\s*true\s*\)\s*\.\s*toBe\s*\(\s*true\s*\)/g },
   { label: 'tautology expect(false).toBe(false)', pattern: /expect\s*\(\s*false\s*\)\s*\.\s*toBe\s*\(\s*false\s*\)/g },
   { label: 'placeholder marker', pattern: /\b(?:TODO|FIXME|placeholder)\b/gi },
@@ -39,6 +38,9 @@ for (const file of files) {
   }
 
   const content = fs.readFileSync(file, 'utf8');
+  for (const finding of findDisabledTests(content, file)) {
+    failures.push(`${file}:${finding.line}: ${finding.label}: ${finding.expression}`);
+  }
   const lines = content.split(/\r?\n/);
 
   for (const { label, pattern } of forbidden) {
