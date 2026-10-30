@@ -76,56 +76,58 @@ describe('atomic encrypted IndexedDB primitive', () => {
     });
 });
 
-describe('pre-vault archive gateway', () => {
+describe('encrypted archive gateway transaction invariants', () => {
     const archive = sealedArchiveKey(owner);
+    const original = { marker: 'durable-local-data', pending: [1] };
 
     beforeEach(async () => {
         await clear();
         lockAllVaults();
         localStorage.clear();
+        await createAndMigrateVault(owner);
     });
     afterEach(() => lockAllVaults());
 
-    it('rejects an undefined transformation without losing an existing plaintext archive', async () => {
-        const original = { marker: 'durable-local-data' };
-        await set(archive, original);
+    it('rejects an undefined transformation without losing ciphertext or business data', async () => {
+        await updateArchiveRecord(owner, () => original);
+        const sealedBefore = await get<string>(archive);
+        expect(sealedBefore).toMatch(/^tlb-sealed:v1:/);
+        expect(sealedBefore).not.toContain(original.marker);
 
         await expect(updateArchiveRecord<typeof original>(owner, () => undefined))
             .rejects.toThrow('non può eliminare tacitamente');
-        expect(await get(archive)).toEqual(original);
+        expect(await get(archive)).toBe(sealedBefore);
         expect(await getArchiveRecord(owner)).toEqual(original);
     });
 
-    it('rejects asynchronous transformations before writing the plaintext archive', async () => {
-        const original = { marker: 'durable-local-data' };
-        await set(archive, original);
+    it('rejects asynchronous transformations without rewriting ciphertext', async () => {
+        await updateArchiveRecord(owner, () => original);
+        const sealedBefore = await get<string>(archive);
 
         await expect(updateArchiveRecord<typeof original>(
-            owner, () => Promise.resolve({ marker: 'not-committed' }) as unknown as typeof original,
+            owner, () => Promise.resolve({ marker: 'not-committed', pending: [] }) as unknown as typeof original,
         )).rejects.toThrow('asincrona vietata');
-        expect(await get(archive)).toEqual(original);
+        expect(await get(archive)).toBe(sealedBefore);
+        expect(await getArchiveRecord(owner)).toEqual(original);
     });
 
-    it.each(['plaintext', 'encrypted'] as const)(
-        'rejects thenable transformations without mutating the %s archive', async mode => {
-            if (mode === 'encrypted') await createAndMigrateVault(owner);
-            const original = { marker: 'intact', pending: [1] };
-            await updateArchiveRecord(owner, () => original);
-            const stored = await get(archive);
-            const thenable = { then: (_resolve: unknown) => undefined };
+    it('rejects thenable transformations without mutating the encrypted archive', async () => {
+        await updateArchiveRecord(owner, () => original);
+        const sealedBefore = await get<string>(archive);
+        const thenable = { then: (_resolve: unknown) => undefined };
 
-            await expect(updateArchiveRecord<typeof original>(
-                owner, () => thenable as unknown as typeof original,
-            )).rejects.toThrow('asincrona vietata');
+        await expect(updateArchiveRecord<typeof original>(
+            owner, () => thenable as unknown as typeof original,
+        )).rejects.toThrow('asincrona vietata');
 
-            expect(await get(archive)).toEqual(stored);
-            expect(await getArchiveRecord(owner)).toEqual(original);
-        },
-    );
+        expect(await get(archive)).toBe(sealedBefore);
+        expect(await getArchiveRecord(owner)).toEqual(original);
+    });
 
-    it('still accepts a missing-archive no-op', async () => {
+    it('accepts a missing-archive no-op without persisting an empty envelope', async () => {
         expect(await get(archive)).toBeUndefined();
         await updateArchiveRecord(owner, () => undefined);
+        expect(await get(archive)).toBeUndefined();
         expect(await getArchiveRecord(owner)).toBeUndefined();
     });
 });
