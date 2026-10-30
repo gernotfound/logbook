@@ -1,6 +1,6 @@
 export { StaleLocalRevisionError } from './localRevisionError';
 export { rebaseConsentRecoveryWithExplicitChoice } from './localConsentJournalRecovery';
-export { assertLegacyEnvelopeValidForSecureMigration, readLocal, initializeLocal } from './localArchiveBootstrap';
+export { readLocal, initializeLocal } from './localArchiveBootstrap';
 export { commitLocal } from './localSnapshotCommit';
 export { commitDomainOperations, WorkoutIntentConflictError } from './localDomainCommit';
 export type { DomainCommitResult } from './localDomainCommit';
