@@ -75,6 +75,45 @@ describe('rejected legal-consent durable compensation', () => {
         expect(after?.pending.some(op => op.path.join('/') === 'profile/height')).toBe(true);
     });
 
+    it('keeps already-acknowledged consent after a late rejection', async () => {
+        const { initializeLocal, commitDomainOperations, acknowledgeThrough, revertRejectedConsent, readLocal } =
+            await import('../../src/lib/sync/localRepository');
+        const initial = parse({});
+        const accepted = consent('2026-10-03T12:00:00.000Z');
+        await initializeLocal('user:a', initial);
+        await commitDomainOperations('user:a', { type: 'legal-consent.set', consent: accepted }, initial);
+
+        const sent = await readLocal('user:a');
+        expect(sent?.pending.some(op => op.path[0] === 'legalConsent')).toBe(true);
+        await acknowledgeThrough('user:a', sent!.actorSeq, sent!.data);
+        const confirmed = await readLocal('user:a');
+        expect(confirmed?.data.legalConsent).toEqual(accepted);
+        expect(confirmed?.pending.some(op => op.path[0] === 'legalConsent')).toBe(false);
+
+        await revertRejectedConsent('user:a', accepted, undefined);
+        expect(await readLocal('user:a')).toEqual(confirmed);
+    });
+
+    it('preserves unrelated pending edits when a late consent rejection finds no consent intent', async () => {
+        const { initializeLocal, commitDomainOperations, acknowledgeThrough, revertRejectedConsent, readLocal } =
+            await import('../../src/lib/sync/localRepository');
+        const initial = parse({});
+        const accepted = consent('2026-10-03T12:00:00.000Z');
+        await initializeLocal('user:a', initial);
+        await commitDomainOperations('user:a', { type: 'legal-consent.set', consent: accepted }, initial);
+        const sent = await readLocal('user:a');
+        await acknowledgeThrough('user:a', sent!.actorSeq, sent!.data);
+        const confirmed = await readLocal('user:a');
+
+        await commitDomainOperations('user:a', { type: 'profile.patch', patch: { height: '180' } }, confirmed!.data);
+        const before = await readLocal('user:a');
+        expect(before?.pending.some(op => op.path.join('/') === 'profile/height')).toBe(true);
+        expect(before?.pending.some(op => op.path[0] === 'legalConsent')).toBe(false);
+
+        await revertRejectedConsent('user:a', accepted, undefined);
+        expect(await readLocal('user:a')).toEqual(before);
+    });
+
     it('does not roll back a newer consent that replaced the rejected value', async () => {
         const { initializeLocal, commitDomainOperations, revertRejectedConsent, readLocal } =
             await import('../../src/lib/sync/localRepository');

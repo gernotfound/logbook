@@ -63,14 +63,14 @@ export async function revertRejectedConsent(owner: string, expected: UserData['l
             && op.actorId === current.actorId
         );
         const rejectedSeq = legalConsentOps.reduce((max, op) => Math.max(max, op.seq), -1);
-        const pending = rejectedSeq < 0
-            ? current.pending
-            : current.pending.filter(op => !(
-                op.docPath === ''
-                && op.path[0] === 'legalConsent'
-                && op.actorId === current.actorId
-                && op.seq === rejectedSeq
-            ));
+        // An old rejection must not undo a consent already acknowledged by a concurrent flush.
+        if (rejectedSeq < 0) return raw!;
+        const pending = current.pending.filter(op => !(
+            op.docPath === ''
+            && op.path[0] === 'legalConsent'
+            && op.actorId === current.actorId
+            && op.seq === rejectedSeq
+        ));
         const data = parse({ ...current.data, legalConsent: previous });
         return { ...current, data, pending };
     });
