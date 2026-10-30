@@ -1,5 +1,5 @@
 import 'fake-indexeddb/auto';
-import { clear } from 'idb-keyval';
+import { clear, del, get } from 'idb-keyval';
 import { create } from 'zustand';
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 const sdk = vi.hoisted(() => ({ auth: { currentUser: { uid: 'A' } as { uid: string } | null }, save: vi.fn() }));
@@ -31,18 +31,17 @@ import { readLocal, initializeLocal, acknowledgeThrough, adoptReplicaCheckpoint,
 import { UserDataSchema } from '../../src/lib/schema';
 import type { UserData } from '../../src/types';
 import { getNutritionConflictFingerprint } from '../../src/lib/utils/object';
+import { createAndMigrateVault } from '../../src/lib/sync/secureArchiveMigration';
+import { lockAllVaults } from '../../src/lib/sync/secureArchiveSession';
 const data = (height: number) => UserDataSchema.parse({ profile: { height } }) as unknown as UserData;
 const store = create<AppState>()((...args) => ({ ...createDataSlice(...args), ...createWorkoutSlice(...args), ...createSyncSlice(...args) }));
 const deferred = <T>() => { let resolve!: (value: T) => void; const promise = new Promise<T>(done => { resolve = done; }); return { promise, resolve }; };
 beforeEach(async () => {
-    vi.stubGlobal('localStorage', {
-        getItem: vi.fn(() => null),
-        setItem: vi.fn(),
-        removeItem: vi.fn(),
-        clear: vi.fn(),
-        key: vi.fn(() => null),
-        length: 0,
-    });
+    lockAllVaults();
+    localStorage.clear();
+    vi.stubGlobal('navigator', { onLine: true, locks: {
+        request: async (_name: string, _options: unknown, run: () => Promise<unknown>) => run(),
+    } });
     store.getState().resetStore();
     await clear();
     sdk.auth.currentUser = { uid: 'A' };
@@ -67,16 +66,18 @@ beforeEach(async () => {
         return { ok: true, status: 'synced' };
     });
     store.setState({ userData: data(170), dataOwner: 'user:A' });
+    await createAndMigrateVault('user:A');
     await initializeLocal('user:A', data(170));
+    expect(await get('logbook:v2:user:A')).toMatch(/^tlb-sealed:v1:/);
 });
-afterEach(() => { store.getState().cancelPendingSyncs(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+afterEach(() => { store.getState().cancelPendingSyncs(); lockAllVaults(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 describe('store with real IndexedDB commits', () => {
     it('preserves the nutrition alternative in memory and IndexedDB when resolution is rejected', async () => {
         const conflicted = UserDataSchema.parse({ ...data(170), nutritionPlanning: { onDaysCount: 3 }, pendingConflicts: { nutritionPlanning: { onDaysCount: 0 } } }) as unknown as UserData;
         store.setState({ userData: conflicted });
         // Bootstrap is now create-if-absent; reset this test fixture rather than
         // relying on a production initializer to overwrite durable state.
-        await clear();
+        await del('logbook:v2:user:A');
         await initializeLocal('user:A', conflicted);
         sdk.save.mockResolvedValue({ ok: false, status: 'rejected', error: { code: 'permission-denied' } });
         const result = store.getState().resolveNutritionConflict({ resolution: 'local', expectedUid: 'A', expectedConflictFingerprint: getNutritionConflictFingerprint(conflicted.pendingConflicts?.nutritionPlanning) });
@@ -120,7 +121,7 @@ describe('store with real IndexedDB commits', () => {
     it('blocks further edits after a same-sequence workout collision instead of clearing the unsaved draft', async () => {
         const workout = { id: 'w-collision', date: '2026-10-14', routineName: 'Base', exercises: [] };
         const base = UserDataSchema.parse({ activeWorkout: workout }) as unknown as UserData;
-        await clear();
+        await del('logbook:v2:user:A');
         await initializeLocal('user:A', base);
         store.setState({ userData: base, dataOwner: 'user:A', localWorkout: workout });
         const intent = { generation: 'a'.repeat(32), sequence: 1, intentId: 'b'.repeat(32), baseline: workout };
@@ -146,20 +147,11 @@ describe('store with real IndexedDB commits', () => {
     });
 
     it('commits a newly edited workout after consent reacceptance with its proven source revision', async () => {
-        const physical = new Map<string, string>();
-        vi.stubGlobal('localStorage', {
-            getItem: (key: string) => physical.get(key) ?? null,
-            setItem: (key: string, value: string) => { physical.set(key, String(value)); },
-            removeItem: (key: string) => { physical.delete(key); },
-            clear: () => physical.clear(),
-            key: (index: number) => [...physical.keys()][index] ?? null,
-            get length() { return physical.size; },
-        });
-        physical.set('logbook:v2:user:A:health-consent-generation', '3');
+        localStorage.setItem('logbook:v2:user:A:health-consent-generation', '3');
 
         const previous = { id: 'epoch-3-workout', date: '2026-10-14', routineName: 'Before', exercises: [] };
         const baseline = UserDataSchema.parse({ activeWorkout: previous }) as unknown as UserData;
-        await clear();
+        await del('logbook:v2:user:A');
         await initializeLocal('user:A', baseline);
         expect(await advanceLocalConsentRevisionIfClean('user:A', 3)).toBe(true);
         store.setState({
@@ -217,6 +209,7 @@ describe('store with real IndexedDB commits', () => {
         }) as unknown as UserData;
 
         store.setState({ userData: base, localWorkout: workout });
+        await del('logbook:v2:user:A');
         await initializeLocal('user:A', base);
 
         sdk.save.mockResolvedValueOnce({
