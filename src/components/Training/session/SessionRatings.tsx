@@ -13,7 +13,6 @@ interface SessionRatingsProps {
     setPump: (val: string) => void;
     fatigue: string | number;
     setFatigue: (val: string) => void;
-    ratingScale?: 5 | 10;
     pains?: string[];
     onTogglePain?: (muscleId: string) => void;
     onSetPains?: (pains: string[]) => void;
@@ -28,7 +27,6 @@ export const SessionRatings: React.FC<SessionRatingsProps> = ({
     setPump,
     fatigue,
     setFatigue,
-    ratingScale = 5,
     pains = [],
     onTogglePain,
     onSetPains
@@ -99,9 +97,9 @@ export const SessionRatings: React.FC<SessionRatingsProps> = ({
                 ].map(metric => (
                     <fieldset className="readiness-metric" key={metric.label}>
                         <legend>{metric.label}</legend>
-                        <div className="readiness-scale" role="group" aria-label={`${metric.label}, scala da 1 a ${ratingScale}`}>
-                            {Array.from({ length: ratingScale }, (_, index) => index + 1).map(value => (
-                                <button key={value} type="button" className="readiness-value" aria-pressed={String(metric.value) === String(value)} aria-label={`${metric.label}: ${value} su ${ratingScale}`} onClick={() => metric.setter(String(value))}>{value}</button>
+                        <div className="readiness-scale" role="group" aria-label={`${metric.label}, scala da 1 a 5`}>
+                            {Array.from({ length: 5 }, (_, index) => index + 1).map(value => (
+                                <button key={value} type="button" className="readiness-value" aria-pressed={String(metric.value) === String(value)} aria-label={`${metric.label}: ${value} su 5`} onClick={() => metric.setter(String(value))}>{value}</button>
                             ))}
                         </div>
                     </fieldset>

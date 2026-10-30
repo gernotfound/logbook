@@ -59,7 +59,15 @@ describe('Workout Improvements & History Edit Suite', () => {
       expect(res.errors.fatigue).not.toBeNull();
     });
 
-    test('validateWorkoutRatings parses valid strings from 1 to 5', () => {
+    test('validateWorkoutRatings accepts only integer values from 1 to 5', () => {
+      const outOfScale = Logic.validateWorkoutRatings('8', '5.5', 6);
+      expect(outOfScale.isValid).toBe(false);
+      expect(outOfScale.mood).toBeNull();
+      expect(outOfScale.pump).toBeNull();
+      expect(outOfScale.fatigue).toBeNull();
+      expect(outOfScale.errors.mood).toContain('1 a 5');
+
+
       const res = Logic.validateWorkoutRatings('1', '5', '3');
       expect(res.isValid).toBe(true);
       expect(res.mood).toBe(1);
