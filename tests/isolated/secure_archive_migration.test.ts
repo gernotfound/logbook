@@ -434,6 +434,33 @@ describe('durable secure archive migration', () => {
         expect(readDeviceValueStrict('draft:measurement:' + day, owner)).toBe('{"weight":"77"}');
     });
 
+    it('propagates quota and removal errors after vault activation without destroying ciphertext', async () => {
+        await createAndMigrateVault(owner);
+        const name = 'draft:measurement:' + day;
+        const sealedName = protectedDeviceKey(name, owner);
+        writeDeviceValue(name, '{"weight":"75"}', owner);
+        const original = localStorage.getItem(sealedName)!;
+
+        const save = localStorage.setItem.bind(localStorage);
+        const writeFailure = vi.spyOn(localStorage, 'setItem').mockImplementation((key, value) => {
+            if (key === sealedName) throw new DOMException('quota', 'QuotaExceededError');
+            save(key, value);
+        });
+        expect(() => writeDeviceValue(name, '{"weight":"76"}', owner)).toThrow(BrowserStorageError);
+        writeFailure.mockRestore();
+        expect(localStorage.getItem(sealedName)).toBe(original);
+
+        const remove = localStorage.removeItem.bind(localStorage);
+        const removeFailure = vi.spyOn(localStorage, 'removeItem').mockImplementation(key => {
+            if (key === sealedName) throw new DOMException('storage denied', 'SecurityError');
+            remove(key);
+        });
+        expect(() => writeDeviceValue(name, null, owner)).toThrow(BrowserStorageError);
+        removeFailure.mockRestore();
+        expect(localStorage.getItem(sealedName)).toBe(original);
+        expect(readDeviceValueStrict(name, owner)).toBe('{"weight":"75"}');
+    });
+
     it('preserves corrupted encrypted drafts against replacements and deletions', async () => {
         await createAndMigrateVault(owner);
         const name = 'draft:measurement:' + day;
