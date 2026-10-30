@@ -1,13 +1,7 @@
 import { readBrowserValueStrict, removeBrowserValue, writeBrowserValue } from './browserStorage';
-import { userOwner } from './owner';
+import { assertAuthenticatedOwner, userOwner } from './owner';
 
 const AUTH_OWNER_HINT_KEY = 'logbook_authenticated_owner';
-
-function assertAuthenticatedOwner(owner: string): void {
-    if (!owner.startsWith('user:') || owner.length <= 5 || owner.includes('/')) {
-        throw new Error('Owner autenticato locale non valido');
-    }
-}
 
 export function readAuthenticatedOwnerHint(): string | null {
     const value = readBrowserValueStrict(AUTH_OWNER_HINT_KEY);
