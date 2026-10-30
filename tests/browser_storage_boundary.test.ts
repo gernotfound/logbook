@@ -15,8 +15,7 @@ import {
     markAccountDeletion,
     readAccountDeletionMarker,
 } from '../src/lib/sync/accountGate';
-import { deviceKey, protectedDeviceKey, readDeviceValueStrict, writeDeviceValue } from '../src/lib/sync/deviceStorage';
-import { LocalVaultLockedError } from '../src/lib/sync/secureArchiveSession';
+import { readDeviceValueStrict, writeDeviceValue } from '../src/lib/sync/deviceStorage';
 import {
     DeletionRecoveryCredentialCorruptError,
     removeDeletionRecoveryCredential,
@@ -238,39 +237,46 @@ describe('browser storage boundary', () => {
         expect(() => readDeviceValueStrict('workout')).toThrow(BrowserStorageError);
     });
 
-    it('never reads, writes or deletes device-critical plaintext without an active vault', () => {
-        const name = 'workout';
-        const key = deviceKey(name, OWNER);
-        const original = '{"id":"only-local-copy"}';
-        localStorage.setItem(key, original);
-        const setCount = localStorageMock.setItem.mock.calls.length;
-        const removeCount = localStorageMock.removeItem.mock.calls.length;
+    it('wraps device-storage write and remove failures in BrowserStorageError', () => {
+        localStorageMock.setItem.mockImplementationOnce(() => {
+            throw new DOMException('full', 'QuotaExceededError');
+        });
+        expect(() => writeDeviceValue('workout', '{}', OWNER)).toThrow(BrowserStorageError);
 
-        expect(() => readDeviceValueStrict(name, OWNER)).toThrow(LocalVaultLockedError);
-        expect(() => writeDeviceValue(name, '{"id":"replacement"}', OWNER)).toThrow(LocalVaultLockedError);
-        expect(() => writeDeviceValue(name, null, OWNER)).toThrow(LocalVaultLockedError);
-        expect(localStorage.getItem(key)).toBe(original);
-        expect(localStorageMock.setItem).toHaveBeenCalledTimes(setCount);
-        expect(localStorageMock.removeItem).toHaveBeenCalledTimes(removeCount);
+        localStorageMock.removeItem.mockImplementationOnce(storageFailure);
+        expect(() => writeDeviceValue('workout', null, OWNER)).toThrow(BrowserStorageError);
     });
 
-    it('does not create plaintext when a new owner has no vault or prior data', () => {
+    it.each([
+        { kind: 'plaintext legacy draft', original: '{"weight":"75"}' },
+        { kind: 'orphaned sealed legacy draft', original: 'tlb-sealed:v1:unreadable-original' },
+    ])('preserves a $kind when the pre-vault target read temporarily fails', ({ original }) => {
         const name = 'draft:measurement:2026-10-20';
-        expect(() => readDeviceValueStrict(name, OWNER)).toThrow(LocalVaultLockedError);
-        expect(() => writeDeviceValue(name, '{"weight":"76"}', OWNER)).toThrow(LocalVaultLockedError);
-        expect(() => writeDeviceValue(name, null, OWNER)).toThrow(LocalVaultLockedError);
-        expect(localStorage.getItem(deviceKey(name, OWNER))).toBeNull();
-        expect(localStorage.getItem(protectedDeviceKey(name, OWNER))).toBeNull();
-    });
-
-    it('does not erase an orphaned encrypted snapshot after losing its vault metadata', () => {
-        const name = 'draft:measurement:2026-10-20';
-        const key = protectedDeviceKey(name, OWNER);
-        const original = 'tlb-sealed:v1:orphaned-ciphertext';
-        localStorage.setItem(key, original);
-        expect(() => readDeviceValueStrict(name, OWNER)).toThrow(LocalVaultLockedError);
-        expect(() => writeDeviceValue(name, null, OWNER)).toThrow(LocalVaultLockedError);
-        expect(localStorage.getItem(key)).toBe(original);
+        const key = 'logbook:v2:' + OWNER + ':' + name;
+        for (const next of ['{"weight":"76"}', null]) {
+            localStorage.setItem(key, original);
+            const priorSetCalls = localStorageMock.setItem.mock.calls.length;
+            const priorRemoveCalls = localStorageMock.removeItem.mock.calls.length;
+            const originalGet = localStorageMock.getItem.getMockImplementation();
+            if (!originalGet) throw new Error('Missing localStorage mock implementation');
+            let failed = false;
+            localStorageMock.getItem.mockImplementation((readKey: string) => {
+                if (!failed && readKey === key) {
+                    failed = true;
+                    throw new DOMException('read unavailable', 'SecurityError');
+                }
+                return originalGet(readKey);
+            });
+            try {
+                expect(() => writeDeviceValue(name, next, OWNER)).toThrow(BrowserStorageError);
+                expect(failed).toBe(true);
+                expect(localStorageMock.setItem).toHaveBeenCalledTimes(priorSetCalls);
+                expect(localStorageMock.removeItem).toHaveBeenCalledTimes(priorRemoveCalls);
+            } finally {
+                localStorageMock.getItem.mockImplementation(originalGet);
+            }
+            expect(localStorage.getItem(key)).toBe(original);
+        }
     });
 
     it('keeps deletion-recovery credential reads on the strict browser-storage boundary', () => {

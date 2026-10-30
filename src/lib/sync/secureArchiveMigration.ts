@@ -1,8 +1,8 @@
 import { get, update } from 'idb-keyval';
-import { readBrowserValueStrict, removeBrowserValue, writeBrowserValue } from './browserStorage';
+import { readBrowserValueStrict } from './browserStorage';
 import { normalizeStorageOwner } from './owner';
 import { deviceKey, protectedDeviceKey } from './deviceStorage';
-import { openLocalJson, openLocalText, sealLocalJson, sealLocalText, SEALED_LOCAL_PREFIX, LocalCiphertextError } from './secureArchiveCipher';
+import { openLocalJson, openLocalText, sealLocalJson, SEALED_LOCAL_PREFIX, LocalCiphertextError } from './secureArchiveCipher';
 import { createLocalKeyVault, unlockLocalKeyVault } from './secureArchiveKeys';
 import { publishVaultControl, reconcileVaultControl } from './secureArchiveControlRecovery';
 import {
@@ -23,7 +23,7 @@ const SAFE_PLAINTEXT_NAMES = new Set([
     ...OWNER_UI_PREFERENCES.map(preference => 'ui:' + preference),
 ]);
 
-/** Explicitly inventory all current device-critical writers. Unknown keys halt migration. */
+/** Reject pre-launch unsealed device copies without adopting or deleting their bytes. */
 function isSensitiveDeviceName(name: string): boolean {
     return name === 'telemetry_queue' || name === 'workout' || /^workout-intent:[a-f0-9]{32}$/.test(name)
         || name === 'timer' || name === 'draft_exercise'
@@ -40,11 +40,12 @@ function ownerStorageNames(owner: string): string[] {
 function assertKnownDeviceNames(owner: string): string[] {
     const names = ownerStorageNames(owner);
     for (const name of names) {
-        if (SAFE_PLAINTEXT_NAMES.has(name) || isSensitiveDeviceName(name)) continue;
+        if (SAFE_PLAINTEXT_NAMES.has(name)) continue;
+        if (isSensitiveDeviceName(name)) throw new LocalCiphertextError();
         if (name.startsWith('sealed:') && isSensitiveDeviceName(name.slice('sealed:'.length))) continue;
         throw new Error('Archivio locale contiene chiavi sconosciute. Migrazione sospesa senza cancellare dati.');
     }
-    return [...new Set(names.flatMap(name => name.startsWith('sealed:') ? [name.slice(7)] : isSensitiveDeviceName(name) ? [name] : []))].sort();
+    return [...new Set(names.filter(name => name.startsWith('sealed:')).map(name => name.slice(7)))].sort();
 }
 
 function assertMigrationAvailable(owner: string, control: PersistedVaultControl, key: Uint8Array): void {
@@ -76,37 +77,22 @@ async function migrateIndexedDb(owner: string, control: PersistedVaultControl, k
     }
 }
 
-/** Convert one legacy snapshot, then verify it, then delete its plaintext copy. */
-function migrateDevice(owner: string, control: PersistedVaultControl, key: Uint8Array, name: string): void {
+/** Validate existing current-format ciphertext during crash-resumable activation. */
+function verifyDevice(owner: string, control: PersistedVaultControl, key: Uint8Array, name: string): void {
     assertMigrationAvailable(owner, control, key);
-    const legacyName = deviceKey(name, owner);
+    // A plaintext record from a pre-launch build must never be converted or
+    // deleted. A new owner vault is provisioned only for clean current data.
+    if (readBrowserValueStrict(deviceKey(name, owner)) !== null) throw new LocalCiphertextError();
     const secureName = protectedDeviceKey(name, owner);
-    const original = readBrowserValueStrict(legacyName);
     const sealed = readBrowserValueStrict(secureName);
-    if (sealed !== null) {
-        const restored = openLocalText(key, owner, secureName, sealed);
-        if (original !== null && restored !== original) {
-            throw new Error('Conflitto tra una bozza precedente e quella già cifrata. Nessun dato eliminato.');
-        }
-        if (original !== null) removeBrowserValue(legacyName);
-        return;
-    }
-    if (original === null) return;
-    writeBrowserValue(secureName, sealLocalText(key, owner, secureName, original));
-    // Detect quota/storage trouble without deleting the only original copy.
-    const confirmed = readBrowserValueStrict(secureName);
-    if (!confirmed || openLocalText(key, owner, secureName, confirmed) !== original) {
-        throw new LocalCiphertextError();
-    }
-    assertMigrationAvailable(owner, control, key);
-    removeBrowserValue(legacyName);
+    if (sealed !== null) openLocalText(key, owner, secureName, sealed);
 }
 
 async function migrateAndFinalize(owner: string, control: PersistedVaultControl, dataKey: Uint8Array): Promise<void> {
     assertMigrationAvailable(owner, control, dataKey);
     assertKnownDeviceNames(owner);
     await migrateIndexedDb(owner, control, dataKey);
-    for (const name of assertKnownDeviceNames(owner)) migrateDevice(owner, control, dataKey, name);
+    for (const name of assertKnownDeviceNames(owner)) verifyDevice(owner, control, dataKey, name);
     assertMigrationAvailable(owner, control, dataKey);
     for (const name of assertKnownDeviceNames(owner)) {
         if (readBrowserValueStrict(deviceKey(name, owner)) !== null) {
@@ -168,6 +154,9 @@ export async function createAndMigrateVault(requestedOwner: string, isCurrent: (
                 || ownerStorageNames(owner).some(name => name.startsWith('sealed:'))) {
                 throw new LocalVaultLockedError();
             }
+            // Reject device plaintext BEFORE persisting a new device key/control.
+            // Unknown metadata is also not a clean fresh-start owner namespace.
+            assertKnownDeviceNames(owner);
         }
         if (existing?.phase === 'active') {
             await unlockVaultForOwner(owner, isCurrent);
@@ -195,7 +184,7 @@ export async function createAndMigrateVault(requestedOwner: string, isCurrent: (
         try {
             await publishVaultControl(owner, control, finishingPriorPurge);
             // Retain the fence during provisioning. Only a durable new migrating
-            // control can exclude a stale tab from the no-control legacy path.
+            // control can exclude concurrent writers during the handover.
             if (finishingPriorPurge) releaseLocalPurgeFence(owner);
             await migrateAndFinalize(owner, control, dataKey);
             await unlockVaultForOwner(owner, isCurrent);
