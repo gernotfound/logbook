@@ -5,6 +5,8 @@ vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackError: vi.fn
 import { UserDataSchema } from '../../src/lib/schema';
 import { validateLocalEnvelope } from '../../src/lib/sync/localEnvelopeValidation';
 import { fenceCloudIntegrity } from '../../src/lib/sync/localCloudIntegrity';
+import { createAndMigrateVault } from '../../src/lib/sync/secureArchiveMigration';
+import { lockAllVaults } from '../../src/lib/sync/secureArchiveSession';
 import type { UserData } from '../../src/types';
 import { adoptReplicaCheckpoint, markReplicaCheckpointRequired, markCloudIntegrityBlocked, completeCloudIntegrityRecovery, hydrateLocal, commitLocal, commitDomainOperations, initializeLocal, readLocal, acknowledgeThrough, advanceLocalConsentRevisionIfClean, StaleLocalRevisionError } from '../../src/lib/sync/localRepository';
 import {
@@ -16,14 +18,33 @@ import {
 } from '../../src/lib/schemaEvolution';
 
 const data = (height: number) => UserDataSchema.parse({ profile: { height: String(height) } }) as unknown as UserData;
-beforeEach(() => clear());
-afterEach(() => vi.restoreAllMocks());
+beforeEach(async () => {
+    await clear();
+    lockAllVaults();
+    localStorage.clear();
+    vi.stubGlobal('navigator', { locks: {
+        request: async (_name: string, _options: unknown, run: () => Promise<unknown>) => run(),
+    } });
+});
+afterEach(() => {
+    lockAllVaults();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+});
+
+// Current-release journal fixtures use the real owner vault; the adversarial
+// corrupt/legacy envelopes and guest lifecycle cases remain explicit.
+const prepareOwnerVault = (owner = 'user:a') => createAndMigrateVault(owner);
 
 describe('durable owner-scoped journal', () => {
 
     it('commits closure evidence even for a no-op cloud clear, and keeps it through hydration', async () => {
+        await prepareOwnerVault('user:a');
         const initial = UserDataSchema.parse({ activeWorkout: null }) as unknown as UserData;
         await initializeLocal('user:a', initial);
+        const raw = await get('logbook:v2:user:a');
+        expect(typeof raw).toBe('string');
+        expect(raw).toMatch(/^tlb-sealed:v1:/);
         const before = await readLocal('user:a');
 
         await commitDomainOperations('user:a', {
@@ -46,6 +67,7 @@ describe('durable owner-scoped journal', () => {
 
 
     it('preserves multiple deletion tombstones, including metadata-only commits', async () => {
+        await prepareOwnerVault('user:a');
         const initial = UserDataSchema.parse({}) as unknown as UserData;
         await initializeLocal('user:a', initial);
         await commitDomainOperations('user:a', {
@@ -92,6 +114,7 @@ describe('durable owner-scoped journal', () => {
     });
 
     it('records completion in the same durable write as history and cloud-active clear', async () => {
+        await prepareOwnerVault('user:a');
         const finished = { id: 'session-finished', date: '2026-10-09', exercises: [] };
         const initial = UserDataSchema.parse({ activeWorkout: finished }) as unknown as UserData;
         await initializeLocal('user:a', initial);
@@ -106,6 +129,7 @@ describe('durable owner-scoped journal', () => {
 
 
     it('keeps closure evidence and business state unchanged when the transaction is invalidated', async () => {
+        await prepareOwnerVault('user:a');
         const initial = UserDataSchema.parse({}) as unknown as UserData;
         await initializeLocal('user:a', initial);
         const before = await readLocal('user:a');
@@ -121,6 +145,7 @@ describe('durable owner-scoped journal', () => {
 
 
     it('retries a locally completed workout without modifying durable history or its journal', async () => {
+        await prepareOwnerVault('user:a');
         const finished = { id: 'completion-retry', date: '2026-10-09', routineName: 'Original', exercises: [] };
         const initial = UserDataSchema.parse({ activeWorkout: finished }) as unknown as UserData;
         await initializeLocal('user:a', initial);
@@ -140,6 +165,7 @@ describe('durable owner-scoped journal', () => {
     });
 
     it('rejects a stale tab write after deletion across domain and snapshot writers', async () => {
+        await prepareOwnerVault('user:a');
         const closed = { id: 'closed-tab-session', date: '2026-10-09', exercises: [] };
         const initial = UserDataSchema.parse({ activeWorkout: closed }) as unknown as UserData;
         await initializeLocal('user:a', initial);
@@ -184,6 +210,7 @@ describe('durable owner-scoped journal', () => {
     });
 
     it('writes independent current envelope/data/sync versions', async () => {
+        await prepareOwnerVault('user:a');
         await initializeLocal('a', data(170));
         expect(await readLocal('a')).toMatchObject({
             version: CURRENT_LOCAL_ENVELOPE,
@@ -207,6 +234,7 @@ describe('durable owner-scoped journal', () => {
     });
 
     it('keeps an existing pending journal and owner metadata unchanged during competing bootstrap', async () => {
+        await prepareOwnerVault('user:a');
         const initial = data(170);
         await initializeLocal('user:a', initial, ['2026-09']);
         await commitLocal('user:a', data(171), initial);
@@ -218,6 +246,7 @@ describe('durable owner-scoped journal', () => {
     });
 
     it('rejects a stale bootstrap guard even when the owner envelope already exists', async () => {
+        await prepareOwnerVault('user:a');
         await initializeLocal('user:a', data(170));
         const before = await readLocal('user:a');
         let checks = 0;
@@ -231,6 +260,7 @@ describe('durable owner-scoped journal', () => {
     });
 
     it('preserves an already-acknowledged authenticated envelope during bootstrap', async () => {
+        await prepareOwnerVault('user:a');
         await initializeLocal('user:a', data(170));
         await initializeLocal('user:a', data(190));
         expect((await readLocal('user:a'))?.data.profile?.height).toBe('170');
@@ -319,6 +349,7 @@ describe('durable owner-scoped journal', () => {
     });
 
     it('builds a cloud-integrity fence without mutating the source envelope or its journal', async () => {
+        await prepareOwnerVault('user:a');
         const base = data(170);
         await initializeLocal('a', base);
         await commitLocal('a', data(171), base);
@@ -336,6 +367,7 @@ describe('durable owner-scoped journal', () => {
     });
 
     it('preserves a pending journal and rejects stale session during consent revision adoption', async () => {
+        await prepareOwnerVault('user:a');
         const original = data(170);
         await initializeLocal('a', original);
         await commitLocal('a', data(171), original);
@@ -350,6 +382,7 @@ describe('durable owner-scoped journal', () => {
     });
 
     it('adopts a consent revision exactly once when the journal is clean', async () => {
+        await prepareOwnerVault('user:a');
         await initializeLocal('a', data(170));
         const before = (await readLocal('a'))!;
 
@@ -364,6 +397,7 @@ describe('durable owner-scoped journal', () => {
     });
 
     it('persists cloud-integrity fencing until a verified full checkpoint, retaining pending edits', async () => {
+        await prepareOwnerVault('user:a');
         const base = data(170);
         await initializeLocal('a', base);
         await commitLocal('a', data(171), base);
@@ -387,6 +421,7 @@ describe('durable owner-scoped journal', () => {
     });
 
     it('marks only the matching fenced replica as checkpoint-required without dropping its journal', async () => {
+        await prepareOwnerVault('user:a');
         await initializeLocal('a', data(170));
         const now = Date.now();
         const identity = {
@@ -410,6 +445,7 @@ describe('durable owner-scoped journal', () => {
     });
 
     it('keeps pending sequence numbers when renewing the same replica', async () => {
+        await prepareOwnerVault('user:a');
         await initializeLocal('a', data(170));
         const now = Date.now();
         const identity = { slot: 's00', replicaId: 'replica-a', generation: 1, checkpointAtMs: now, leaseUntilMs: now + 31_104_000_000 };
@@ -465,6 +501,7 @@ describe('durable owner-scoped journal', () => {
     });
 
     it('does not resurrect a remote deletion in a complete window and preserves unloaded history', async () => {
+        await prepareOwnerVault('user:a');
         const base = UserDataSchema.parse({ nutrition: {
             '2026-09-01': { date: '2026-09-01', weight: 80 },
             '2025-01-01': { date: '2025-01-01', weight: 70 }
@@ -480,6 +517,7 @@ describe('durable owner-scoped journal', () => {
     });
 
     it('rejects malformed cloud containers without changing business data or the pending journal', async () => {
+        await prepareOwnerVault('user:a');
         const base = data(170);
         await initializeLocal('a', base);
         await commitLocal('a', data(171), base);
@@ -502,6 +540,7 @@ describe('durable owner-scoped journal', () => {
     });
 
     it('never certifies empty window months as cloud documents', async () => {
+        await prepareOwnerVault('user:a');
         const root = data(171);
         const remote = new Map<string, any>([['', {
             profile: root.profile,
@@ -522,6 +561,7 @@ describe('durable owner-scoped journal', () => {
     });
 
     it('does not promote pending-only metadata to acknowledged remote evidence', async () => {
+        await prepareOwnerVault('user:a');
         const base = data(170);
         const desired = UserDataSchema.parse({
             ...base,
@@ -541,6 +581,7 @@ describe('durable owner-scoped journal', () => {
     });
 
     it('fences a missing server-confirmed document even with empty writerless metadata', async () => {
+        await prepareOwnerVault('user:a');
         const root = data(170);
         await initializeLocal('a', root);
         // This record is obtained from a real-format server snapshot, not
@@ -589,6 +630,7 @@ describe('durable owner-scoped journal', () => {
     });
 
     it('fences a full checkpoint missing a previously acknowledged monthly shard', async () => {
+        await prepareOwnerVault('user:a');
         const local = UserDataSchema.parse({ nutrition: {
             '2025-01-01': { date: '2025-01-01', weight: 70 },
             '2026-09-01': { date: '2026-09-01', weight: 80 },
@@ -620,6 +662,7 @@ describe('durable owner-scoped journal', () => {
     });
 
     it('fences a covered window whose previously acknowledged root loses sync evidence', async () => {
+        await prepareOwnerVault('user:a');
         const local = data(171);
         await initializeLocal('a', local);
         const knownMeta = { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: { s01: 1 }, fields: {} };
@@ -644,6 +687,7 @@ describe('durable owner-scoped journal', () => {
     });
 
     it('still accepts a normal window omitting older, non-authoritative synced shards', async () => {
+        await prepareOwnerVault('user:a');
         const local = UserDataSchema.parse({ nutrition: {
             '2025-01-01': { date: '2025-01-01', weight: 70 },
             '2026-09-01': { date: '2026-09-01', weight: 80 },
@@ -666,6 +710,7 @@ describe('durable owner-scoped journal', () => {
     });
 
     it('treats exhaustive hydration as authoritative for every monthly shard', async () => {
+        await prepareOwnerVault('user:a');
         const base = UserDataSchema.parse({ nutrition: {
             '2025-01-01': { date: '2025-01-01', weight: 70 },
             '2026-09-01': { date: '2026-09-01', weight: 80 }
@@ -705,6 +750,7 @@ describe('durable owner-scoped journal', () => {
     });
 
     it('refuses to retire a new replica journal using the old replica acknowledgement', async () => {
+        await prepareOwnerVault('user:a');
         const base = data(170);
         await initializeLocal('a', base);
         const now = Date.now();
@@ -727,6 +773,7 @@ describe('durable owner-scoped journal', () => {
     });
 
     it('keeps a newly hydrated month and its baseline when an older root-only delivery is acknowledged', async () => {
+        await prepareOwnerVault('user:a');
         const base = UserDataSchema.parse({
             profile: { height: '170' },
             nutrition: { '2026-09-01': { date: '2026-09-01', weight: 70 } },
@@ -765,6 +812,7 @@ describe('durable owner-scoped journal', () => {
     });
 
     it('keeps a newly hydrated root when an older month-only delivery is acknowledged', async () => {
+        await prepareOwnerVault('user:a');
         const base = UserDataSchema.parse({
             profile: { height: '170' },
             nutrition: { '2026-09-01': { date: '2026-09-01', weight: 70 } },
@@ -797,6 +845,7 @@ describe('durable owner-scoped journal', () => {
     });
 
     it('acknowledges only the delivered prefix while preserving a newer local edit', async () => {
+        await prepareOwnerVault('user:a');
         const base = data(170);
         await initializeLocal('a', base);
         const now = Date.now();
@@ -818,6 +867,7 @@ describe('durable owner-scoped journal', () => {
     });
 
     it('does not let a delayed older acknowledgement roll back a newer durable acknowledgement', async () => {
+        await prepareOwnerVault('user:a');
         const base = data(170);
         await initializeLocal('a', base);
         const first = data(171);
@@ -847,6 +897,7 @@ describe('durable owner-scoped journal', () => {
     });
 
     it('does not let an older hydration snapshot replace a causally newer durable state', async () => {
+        await prepareOwnerVault('user:a');
         const base = data(170);
         await initializeLocal('a', base);
         const newer = data(172);
@@ -879,6 +930,7 @@ describe('durable owner-scoped journal', () => {
     });
 
     it('rejects a full checkpoint with present but causally older or incomparable monthly metadata', async () => {
+        await prepareOwnerVault('user:a');
         const local = UserDataSchema.parse({ nutrition: {
             '2025-01-01': { date: '2025-01-01', weight: 70 },
         } }) as unknown as UserData;
@@ -908,6 +960,7 @@ describe('durable owner-scoped journal', () => {
     });
 
     it('accepts a covered cloud frontier for a previously acknowledged document', async () => {
+        await prepareOwnerVault('user:a');
         const local = data(170);
         await initializeLocal('a', local);
         await acknowledgeThrough('a', 0, local, [], { '': {
@@ -924,6 +977,7 @@ describe('durable owner-scoped journal', () => {
     });
 
     it('emits parent tombstones when a workout or nutrition day is deleted', async () => {
+        await prepareOwnerVault('user:a');
         const base = UserDataSchema.parse({
             history: [{ id: 'w1', date: '2026-09-10', routineName: 'A', duration: '20m', exercises: [] }],
             nutrition: { '2026-09-10': { date: '2026-09-10', weight: 80 } }
@@ -940,6 +994,7 @@ describe('durable owner-scoped journal', () => {
     });
 
     it('keeps business state and journal atomic when a monthly deletion write is rejected', async () => {
+        await prepareOwnerVault('user:a');
         const base = UserDataSchema.parse({
             history: [{ id: 'w1', date: '2026-09-10', routineName: 'A', duration: '20m', exercises: [] }],
             nutrition: { '2026-09-10': { date: '2026-09-10', weight: 80 } },
@@ -956,6 +1011,7 @@ describe('durable owner-scoped journal', () => {
     });
 
     it('creates a valid first owner envelope when a snapshot has no semantic delta', async () => {
+        await prepareOwnerVault('user:initial');
         const initial = data(170);
         expect(await readLocal('user:initial')).toBeUndefined();
         expect(await commitLocal('user:initial', initial, initial)).toEqual([]);
@@ -966,6 +1022,7 @@ describe('durable owner-scoped journal', () => {
     });
 
     it('rejects an invalidated session for a no-op without changing the durable journal', async () => {
+        await prepareOwnerVault('user:a');
         const initial = data(170);
         await initializeLocal('user:a', initial);
         await commitLocal('user:a', data(171), initial);
@@ -978,6 +1035,7 @@ describe('durable owner-scoped journal', () => {
     });
 
     it('does not advance actorSeq for a semantic no-op', async () => {
+        await prepareOwnerVault('user:a');
         const initial = data(170);
         await initializeLocal('a', initial);
         const before = await readLocal('a');
@@ -992,6 +1050,7 @@ describe('durable owner-scoped journal', () => {
     });
 
     it('rejects a quota failure without changing the previous data or journal', async () => {
+        await prepareOwnerVault('user:a');
         await initializeLocal('a', data(170));
         const before = await readLocal('a');
         vi.spyOn(IDBObjectStore.prototype, 'put').mockImplementationOnce(() => { throw new DOMException('Quota exceeded', 'QuotaExceededError'); });
@@ -1018,6 +1077,7 @@ describe('durable owner-scoped journal', () => {
     });
 
     it('rejects a changed durable baseline even when actor revision did not advance', async () => {
+        await prepareOwnerVault('user:a');
         const base = data(170);
         await initializeLocal('a', base);
         const preview = await readLocal('a');
@@ -1036,6 +1096,7 @@ describe('durable owner-scoped journal', () => {
     });
 
     it('rejects a stale bulk-write revision atomically without changing durable state', async () => {
+        await prepareOwnerVault('user:a');
         const base = data(170);
         await initializeLocal('a', base);
         const preview = await readLocal('a');
@@ -1051,6 +1112,7 @@ describe('durable owner-scoped journal', () => {
         expect(await readLocal('a')).toEqual(concurrent);
     });
     it('replays a stale snapshot delta over the latest envelope without deleting concurrent entities', async () => {
+        await prepareOwnerVault('user:a');
         const base = UserDataSchema.parse({
             profile: { height: '170' },
             routines: [],
@@ -1101,6 +1163,7 @@ describe('durable owner-scoped journal', () => {
     });
 
     it('restore-style snapshot deletes only entities known to its base and preserves concurrent additions', async () => {
+        await prepareOwnerVault('user:a');
         const base = UserDataSchema.parse({
             routines: [{ id: 'routine-old', name: 'Old', exercises: [] }],
         }) as unknown as UserData;
