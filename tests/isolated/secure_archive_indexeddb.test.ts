@@ -88,6 +88,27 @@ describe('encrypted archive gateway transaction invariants', () => {
     });
     afterEach(() => lockAllVaults());
 
+    it('refuses read/write before vault provisioning without creating any plaintext record', async () => {
+        lockAllVaults();
+        localStorage.clear();
+        await clear();
+        expect(await get(archive)).toBeUndefined();
+        await expect(getArchiveRecord(owner)).rejects.toBeInstanceOf(LocalVaultLockedError);
+        await expect(updateArchiveRecord(owner, () => original)).rejects.toBeInstanceOf(LocalVaultLockedError);
+        expect(await get(archive)).toBeUndefined();
+    });
+
+    it('preserves unsealed bytes rather than accepting them with a missing vault control', async () => {
+        lockAllVaults();
+        localStorage.clear();
+        await set(archive, structuredClone(original));
+        await expect(getArchiveRecord(owner)).rejects.toBeInstanceOf(LocalVaultLockedError);
+        await expect(updateArchiveRecord(owner, () => ({ marker: 'replacement', pending: [] }))).rejects.toBeInstanceOf(LocalVaultLockedError);
+        await expect(createAndMigrateVault(owner)).rejects.toBeInstanceOf(LocalVaultLockedError);
+        expect(await get(archive)).toEqual(original);
+        expect(await get(deviceVaultKeyId(owner))).toBeUndefined();
+    });
+
     it('rejects an undefined transformation without losing ciphertext or business data', async () => {
         await updateArchiveRecord(owner, () => original);
         const sealedBefore = await get<string>(archive);
