@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto';
-import { clear, get, set } from 'idb-keyval';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { clear, get } from 'idb-keyval';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { UserDataSchema } from '../../src/lib/schema';
 import type { UserData } from '../../src/types';
 import {
@@ -10,6 +10,9 @@ import {
 } from '../../src/lib/sync/localRepository';
 import type { LocalEnvelope } from '../../src/lib/sync/localEnvelopeValidation';
 import type { SemanticOperation } from '../../src/lib/sync/semanticProjection';
+import { createAndMigrateVault } from '../../src/lib/sync/secureArchiveMigration';
+import { lockAllVaults } from '../../src/lib/sync/secureArchiveSession';
+import { updateArchiveRecord } from '../../src/lib/sync/secureArchiveRepository';
 import { MAX_SYNC_DOCUMENTS_PER_TRANSACTION } from '../../src/lib/sync/syncBatching';
 
 const data = UserDataSchema.parse({ profile: { height: '170' } }) as unknown as UserData;
@@ -23,6 +26,7 @@ function operation(docPath: string, seq: number, actorId = 's00'): SemanticOpera
 }
 
 async function installOversizedJournal(owner: string): Promise<LocalEnvelope> {
+    await createAndMigrateVault('user:' + owner);
     await initializeLocal(owner, data);
     const initial = await readLocal(owner);
     if (!initial) throw new Error('Expected a durable local envelope');
@@ -39,11 +43,23 @@ async function installOversizedJournal(owner: string): Promise<LocalEnvelope> {
         pending,
         revision: initial.revision + 1,
     };
-    await set(storageKey(owner), stored);
+    await updateArchiveRecord<LocalEnvelope>('user:' + owner, () => stored);
+    expect(await get(storageKey(owner))).toMatch(/^tlb-sealed:v1:/);
     return stored;
 }
 
-beforeEach(() => clear());
+beforeEach(async () => {
+    lockAllVaults();
+    localStorage.clear();
+    await clear();
+    vi.stubGlobal('navigator', { locks: {
+        request: async (_name: string, _options: unknown, run: () => Promise<unknown>) => run(),
+    } });
+});
+afterEach(() => {
+    lockAllVaults();
+    vi.unstubAllGlobals();
+});
 
 describe('bounded pending journal compaction', () => {
     it('rechecks and atomically splits a large causal sequence without dropping later work', async () => {
@@ -70,6 +86,7 @@ describe('bounded pending journal compaction', () => {
         await installOversizedJournal('a');
         const first = await ensureBoundedPendingSequences('a', 's00');
         const persisted = await get(storageKey('a'));
+        expect(persisted).toMatch(/^tlb-sealed:v1:/);
 
         expect(await ensureBoundedPendingSequences('a', 's00')).toEqual(first);
         expect(await get(storageKey('a'))).toEqual(persisted);
@@ -77,11 +94,16 @@ describe('bounded pending journal compaction', () => {
 
     it('does not mutate a journal from another actor or owner', async () => {
         const beforeA = await installOversizedJournal('a');
+        await createAndMigrateVault('user:b');
         await initializeLocal('b', data);
         const beforeB = await get(storageKey('b'));
+        const ciphertextA = await get(storageKey('a'));
+        expect(ciphertextA).toMatch(/^tlb-sealed:v1:/);
+        expect(beforeB).toMatch(/^tlb-sealed:v1:/);
 
         expect(await ensureBoundedPendingSequences('a', 's01')).toEqual(beforeA);
-        expect(await get(storageKey('a'))).toEqual(beforeA);
+        expect(await get(storageKey('a'))).toEqual(ciphertextA);
+        expect(await readLocal('a')).toEqual(beforeA);
         expect(await get(storageKey('b'))).toEqual(beforeB);
     });
 
@@ -91,13 +113,16 @@ describe('bounded pending journal compaction', () => {
             ...valid,
             pending: [{ ...valid.pending[0], actorId: 'another-actor' }],
         };
-        await set(storageKey('a'), corrupt);
+        await updateArchiveRecord<LocalEnvelope>('user:a', () => corrupt);
+        const encrypted = await get(storageKey('a'));
+        expect(encrypted).toMatch(/^tlb-sealed:v1:/);
 
         await expect(ensureBoundedPendingSequences('a', 's00')).rejects.toThrow('Invalid causal dot');
-        expect(await get(storageKey('a'))).toEqual(corrupt);
+        expect(await get(storageKey('a'))).toEqual(encrypted);
     });
 
     it('does not create a missing archive', async () => {
+        await createAndMigrateVault('user:missing');
         expect(await ensureBoundedPendingSequences('missing', 's00')).toBeUndefined();
         expect(await get(storageKey('missing'))).toBeUndefined();
     });
