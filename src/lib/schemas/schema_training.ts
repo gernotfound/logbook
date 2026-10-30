@@ -228,7 +228,7 @@ export const WorkoutSessionSchema = z.object({
     globalEndTime: safeOptionalNumber(),
     globalDurationStr: safeOptionalString(),
     manualDurationStr: safeOptionalString(),
-    ratingScale: z.union([z.literal(5), z.literal(10)]).optional().catch(undefined),
+    ratingScale: z.literal(5).optional().catch(undefined),
     moodRating: safeOptionalNullableNumber(),
     pumpRating: safeOptionalNullableNumber(),
     fatigueRating: safeOptionalNullableNumber(),
