@@ -5,31 +5,22 @@ import { assertNoLocalPurge } from './localPurgeFence';
 
 /**
  * The ONE LocalEnvelope IndexedDB gateway, used by local repository modules.
- * A vault that exists but is not unlocked never falls back to plaintext.
- *
- * Legacy plaintext is supported ONLY while no vault has been provisioned.
- * The bootstrap onboarding must provision/migrate that owner BEFORE allowing
- * new ordinary domain writes. A partially migrated vault blocks all reads/writes.
+ * Every read and write requires the active, unlocked owner vault.
+ * The bootstrap provisions it before ordinary domain operations; absent,
+ * migrating or invalid controls cannot authorize unsealed storage access.
  */
 export async function getArchiveRecord<T>(owner: string): Promise<T | undefined> {
     const storageKey = 'logbook:v2:' + owner;
     assertNoLocalPurge(owner);
     const control = readVaultControl(owner);
-    if (control) {
-        if (control.phase !== 'active') throw new LocalVaultLockedError();
-        const sessionKey = requireUnlockedLocalKey(owner);
-        const stored = await get<unknown>(storageKey);
-        // A cross-tab change during the asynchronous IndexedDB read invalidates it.
-        if (requireUnlockedLocalKey(owner) !== sessionKey) throw new LocalVaultLockedError();
-        if (stored === undefined) return undefined;
-        if (typeof stored !== 'string' || !stored.startsWith(SEALED_LOCAL_PREFIX)) throw new LocalCiphertextError();
-        return openLocalJson(sessionKey, owner, storageKey, stored) as T;
-    }
+    if (control?.phase !== 'active') throw new LocalVaultLockedError();
+    const sessionKey = requireUnlockedLocalKey(owner);
     const stored = await get<unknown>(storageKey);
-    assertNoLocalPurge(owner);
-    if (readVaultControl(owner)) throw new LocalVaultLockedError();
-    if (typeof stored === 'string' && stored.startsWith(SEALED_LOCAL_PREFIX)) throw new LocalCiphertextError();
-    return stored as T | undefined;
+    // A cross-tab change during the asynchronous IndexedDB read invalidates it.
+    if (requireUnlockedLocalKey(owner) !== sessionKey) throw new LocalVaultLockedError();
+    if (stored === undefined) return undefined;
+    if (typeof stored !== 'string' || !stored.startsWith(SEALED_LOCAL_PREFIX)) throw new LocalCiphertextError();
+    return openLocalJson(sessionKey, owner, storageKey, stored) as T;
 }
 
 /**
@@ -57,34 +48,17 @@ export async function updateArchiveRecord<T>(
     const storageKey = 'logbook:v2:' + owner;
     assertNoLocalPurge(owner);
     const control = readVaultControl(owner);
-    if (control) {
-        if (control.phase !== 'active') throw new LocalVaultLockedError();
-        const sessionKey = requireUnlockedLocalKey(owner);
-        await update<unknown>(storageKey, raw => {
-            if (requireUnlockedLocalKey(owner) !== sessionKey) throw new LocalVaultLockedError();
-            if (raw !== undefined && (typeof raw !== 'string' || !raw.startsWith(SEALED_LOCAL_PREFIX))) {
-                throw new LocalCiphertextError();
-            }
-            const current = raw === undefined ? undefined : openLocalJson(sessionKey, owner, storageKey, raw) as T;
-            const next = transformSynchronously(current, raw !== undefined, transform);
-            if (requireUnlockedLocalKey(owner) !== sessionKey) throw new LocalVaultLockedError();
-            if (next === current) return raw;
-            return next === undefined ? undefined : sealLocalJson(sessionKey, owner, storageKey, next);
-        });
-        return;
-    }
-
-    // Existing pre-migration behavior for a legacy account. Fail on any late
-    // vault setup or already-sealed record instead of writing plaintext.
+    if (control?.phase !== 'active') throw new LocalVaultLockedError();
+    const sessionKey = requireUnlockedLocalKey(owner);
     await update<unknown>(storageKey, raw => {
-        assertNoLocalPurge(owner);
-        if (readVaultControl(owner)) throw new LocalVaultLockedError();
-        if (typeof raw === 'string' && raw.startsWith(SEALED_LOCAL_PREFIX)) {
+        if (requireUnlockedLocalKey(owner) !== sessionKey) throw new LocalVaultLockedError();
+        if (raw !== undefined && (typeof raw !== 'string' || !raw.startsWith(SEALED_LOCAL_PREFIX))) {
             throw new LocalCiphertextError();
         }
-        const next = transformSynchronously(raw as T | undefined, raw !== undefined, transform);
-        assertNoLocalPurge(owner);
-        if (readVaultControl(owner)) throw new LocalVaultLockedError();
-        return next;
+        const current = raw === undefined ? undefined : openLocalJson(sessionKey, owner, storageKey, raw) as T;
+        const next = transformSynchronously(current, raw !== undefined, transform);
+        if (requireUnlockedLocalKey(owner) !== sessionKey) throw new LocalVaultLockedError();
+        if (next === current) return raw;
+        return next === undefined ? undefined : sealLocalJson(sessionKey, owner, storageKey, next);
     });
 }
