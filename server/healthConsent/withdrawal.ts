@@ -1,4 +1,4 @@
-import { Timestamp, type Transaction } from 'firebase-admin/firestore';
+import { Timestamp, type DocumentData, type Transaction } from 'firebase-admin/firestore';
 import { adminDb } from '../accountDeletion/firebaseAdmin.js';
 import { LEGAL_VERSIONS } from '../../src/lib/legalVersions.js';
 
@@ -27,12 +27,8 @@ function consentRef(uid: string) {
   return adminDb().collection(CONSENT_COLLECTION).doc(uid);
 }
 
-export async function readHealthConsentState(uid: string): Promise<HealthConsentState> {
-  validUid(uid);
-  const snap = await consentRef(uid).get();
-  // Missing trusted registration is never an active consent, including for unversioned requests.
-  if (!snap.exists) return { status: 'unregistered', revision: 0 };
-  const data = snap.data();
+/** The same trusted proof is required for GET and every consent transition/retry. */
+function assertTrustedConsentRecord(uid: string, data: DocumentData | undefined): asserts data is DocumentData {
   if (!data || (data.status !== 'active' && data.status !== 'withdrawn')
     || !Number.isSafeInteger(data.revision) || data.revision < 1) {
     throw new Error('Stato consenso server non valido.');
@@ -44,13 +40,22 @@ export async function readHealthConsentState(uid: string): Promise<HealthConsent
   ))) {
     throw new Error('Prova del consenso server incompleta o appartenente a un altro account.');
   }
-  // Server-owned floor: a journal written in a deleted consent epoch may
-  // be exported for portability, but must not be replayed as a current edit.
+  // Server-owned floor: an erased consent epoch must not be replayed.
   const erasedBefore = data.erasedBeforeRevision;
   if (erasedBefore !== undefined && (!Number.isSafeInteger(erasedBefore)
     || erasedBefore < 1 || erasedBefore >= data.revision)) {
     throw new Error('Generazione cancellazione server non valida.');
   }
+}
+
+export async function readHealthConsentState(uid: string): Promise<HealthConsentState> {
+  validUid(uid);
+  const snap = await consentRef(uid).get();
+  // Missing trusted registration is never an active consent, including for unversioned requests.
+  if (!snap.exists) return { status: 'unregistered', revision: 0 };
+  const data = snap.data();
+  assertTrustedConsentRecord(uid, data);
+  const erasedBefore = data.erasedBeforeRevision;
   return {
     status: data.status,
     revision: data.revision,
@@ -74,6 +79,7 @@ export async function recordHealthConsentWithdrawal(uid: string, expectedRevisio
     const [job, existing] = await Promise.all([tx.get(deletion), tx.get(state)]);
     if (job.exists) throw new Error('Cancellazione account in corso.');
     const previous = existing.data();
+    if (existing.exists) assertTrustedConsentRecord(uid, previous);
     if (existing.exists && previous?.status === 'withdrawn') {
       // A retry is idempotent only for its own transition. Older requests
       // cannot acknowledge a different withdrawal after reacceptance.
@@ -136,6 +142,7 @@ export async function recordInitialHealthConsentAcceptance(
     if (job.exists) throw new Error('Cancellazione account in corso.');
     const previous = previousSnap.data();
     if (previousSnap.exists) {
+      assertTrustedConsentRecord(uid, previous);
       // Retry only the same first acceptance. A later withdrawal must not be
       // silently overturned by a delayed registration POST.
       if (previous?.status === 'active'
@@ -178,6 +185,7 @@ export async function recordHealthConsentReacceptance(
       throw new HealthConsentRevisionConflictError();
     }
     const previous = previousSnap.data();
+    if (previousSnap.exists) assertTrustedConsentRecord(uid, previous);
     // Idempotent retry must prove it belongs to THIS transition and uses
     // the same legal versions; it must not resurrect a superseded acceptance.
     if (previousSnap.exists && previous?.status === 'active'
