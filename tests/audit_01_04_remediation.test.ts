@@ -11,6 +11,8 @@ import { getInitialLocalWorkout } from '../src/store/slices/createWorkoutSlice';
 import { deviceKey } from '../src/lib/sync/deviceStorage';
 import { clearAuthenticatedOwnerHint, readAuthenticatedOwnerHint, rememberAuthenticatedOwner } from '../src/lib/sync/authOwnerHint';
 import { storageOwner } from '../src/lib/sync/session';
+import { normalizeStorageOwner, userOwner } from '../src/lib/sync/owner';
+import { assertNoLocalPurge } from '../src/lib/sync/localPurgeFence';
 import { auth } from '../src/lib/firebase';
 
 const parse = (value: unknown): UserData => UserDataSchema.parse(value) as unknown as UserData;
@@ -162,6 +164,32 @@ describe('AUDIT 01-04 remediation invariants', () => {
         expect(recovered?.id).toBe('w-recovered');
         expect(JSON.parse(localStorage.getItem(deviceKey('workout', owner))!)).toMatchObject({ id: 'w-recovered' });
     });
+
+    it('normalizes only a guest or a valid authenticated storage owner', () => {
+        expect(normalizeStorageOwner('guest')).toBe('guest');
+        expect(normalizeStorageOwner('valid-uid')).toBe('user:valid-uid');
+        expect(normalizeStorageOwner('user:valid-uid')).toBe('user:valid-uid');
+        expect(userOwner('valid-uid')).toBe('user:valid-uid');
+        expect(assertNoLocalPurge('user:valid-uid')).toBeUndefined();
+    });
+
+    it.each(['user:', 'user:/bad', 'user:invalid/uid', 'invalid/uid', 'guest/other'])(
+        'rejects a malformed storage owner %j before any purge fence or archive access',
+        malformed => {
+            expect(() => normalizeStorageOwner(malformed)).toThrow();
+            expect(() => assertNoLocalPurge(malformed)).toThrow();
+            expect(localStorage.length).toBe(0);
+        },
+    );
+
+    it.each(['', 'invalid/uid', '/uid'])(
+        'rejects an invalid authenticated UID %j before creating an owner namespace',
+        uid => {
+            expect(() => userOwner(uid)).toThrow();
+            expect(() => rememberAuthenticatedOwner(uid)).toThrow();
+            expect(localStorage.getItem('logbook_authenticated_owner')).toBeNull();
+        },
+    );
 
     it('persists and clears a strict authenticated owner hint without consulting Firebase Auth', () => {
         expect(readAuthenticatedOwnerHint()).toBeNull();
