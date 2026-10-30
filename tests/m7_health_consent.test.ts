@@ -89,6 +89,35 @@ describe('trusted health consent boundary', () => {
     storage.documents.clear();
   });
 
+  it.each(['accept-initial', 'reaccept'] as const)(
+    'rejects %s retries on a foreign or malformed trusted active record without writing',
+    async action => {
+      const key = 'health_consent_withdrawals/account-1';
+      const revision = action === 'accept-initial' ? 1 : 2;
+      const expectedRevision = revision - 1;
+      const valid = {
+        uid: 'account-1', status: 'active', revision,
+        acceptedAt: '2026-10-13T10:00:00.000Z',
+        privacyVersion: acceptance.privacyVersion,
+        termsVersion: acceptance.termsVersion,
+      };
+      for (const malformed of [
+        { ...valid, uid: 'another-account' },
+        { ...valid, acceptedAt: 'not-a-date' },
+        { ...valid, erasedBeforeRevision: revision },
+      ]) {
+        storage.documents.set(key, malformed);
+        const original = structuredClone(malformed);
+        expect((await GET(req('GET'))).status).toBe(503);
+        const retry = await POST(req('POST', { action, expectedRevision, acceptance }));
+        expect(retry.status).toBe(503);
+        expect(await retry.json()).toHaveProperty('error');
+        expect(storage.documents.get(key)).toEqual(original);
+        expect(storage.documents.size).toBe(1);
+      }
+    },
+  );
+
   it('keeps consent-status and withdrawal rights but forbids acceptance without verified email', async () => {
     auth.verifyHealthConsentRequester.mockResolvedValueOnce({ uid: 'account-1', emailVerified: false });
     const status = await GET(req('GET'));
@@ -140,6 +169,9 @@ describe('trusted health consent boundary', () => {
     expect(storage.documents.get('users/account-1')).toEqual(originalRoot);
     expect(accepted).toMatchObject({ status: 'active', revision: 2, acceptedAt: expect.any(String) });
     expect(await recordHealthConsentReacceptance('account-1', acceptance, 1)).toEqual(accepted);
+    const retry = await POST(req('POST', { action: 'reaccept', expectedRevision: 1, acceptance }));
+    expect(retry.status).toBe(200);
+    expect(await retry.json()).toEqual(accepted);
     expect(await recordHealthConsentWithdrawal('account-1', 2)).toEqual({ status: 'withdrawn', revision: 3 });
     const staleSecondCycle = await POST(req('POST', { action: 'withdraw', expectedRevision: 0 }));
     expect(staleSecondCycle.status).toBe(409);
@@ -233,6 +265,9 @@ describe('trusted initial account health consent registration', () => {
       privacyVersion: acceptance.privacyVersion, termsVersion: acceptance.termsVersion,
       acceptedAt: value.acceptedAt });
     expect(await recordInitialHealthConsentAcceptance('account-1', acceptance)).toEqual(value);
+    const retry = await POST(req('POST', { action: 'accept-initial', expectedRevision: 0, acceptance }));
+    expect(retry.status).toBe(200);
+    expect(await retry.json()).toEqual(value);
     expect(await readHealthConsentState('account-1')).toMatchObject({ status: 'active', revision: 1,
       acceptedAt: value.acceptedAt, privacyVersion: acceptance.privacyVersion, termsVersion: acceptance.termsVersion });
     expect(storage.documents.size).toBe(1);
