@@ -11,7 +11,7 @@ vi.mock('../../src/lib/healthConsent', () => ({
 }));
 
 import { commitDomainOperations, initializeLocal, readLocal } from '../../src/lib/sync/localRepository';
-import { deviceKey, protectedDeviceKey, readDeviceValue, readDeviceValueStrict, writeDeviceValue } from '../../src/lib/sync/deviceStorage';
+import { deviceKey, protectedDeviceKey, readDeviceValueStrict, writeDeviceValue } from '../../src/lib/sync/deviceStorage';
 import { createAndMigrateVault } from '../../src/lib/sync/secureArchiveMigration';
 import { purgeCompletedAccountLocalData } from '../../src/lib/db/db_account';
 import { isLocalPurgePending } from '../../src/lib/sync/localPurgeFence';
@@ -450,7 +450,7 @@ describe('durable secure archive migration', () => {
         expect(localStorage.getItem(deviceKey(name, owner))).toBeNull();
     });
 
-    it('never converts an unreadable sealed draft into an empty best-effort value', async () => {
+    it('preserves an unreadable sealed draft instead of treating it as absent', async () => {
         await initializeLocal(owner, base());
         const name = 'draft:measurement:' + day;
         localStorage.setItem(deviceKey(name, owner), '{"weight":"81"}');
@@ -463,10 +463,10 @@ describe('durable secure archive migration', () => {
             if (key === protectedKey) throw new Error('transient storage denied');
             return getOriginal(key);
         });
-        expect(() => readDeviceValue(name, owner)).toThrow(BrowserStorageError);
+        expect(() => readDeviceValueStrict(name, owner)).toThrow(BrowserStorageError);
         deniedRead.mockRestore();
         expect(localStorage.getItem(protectedKey)).toBe(ciphertext);
-        expect(readDeviceValue(name, owner)).toBe('{"weight":"81"}');
+        expect(readDeviceValueStrict(name, owner)).toBe('{"weight":"81"}');
     });
 
     it('refuses stale legacy-tab writes instead of hiding or deleting conflicting device data', async () => {

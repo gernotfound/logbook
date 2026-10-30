@@ -15,7 +15,7 @@ import {
     markAccountDeletion,
     readAccountDeletionMarker,
 } from '../src/lib/sync/accountGate';
-import { readDeviceValue, writeDeviceValue } from '../src/lib/sync/deviceStorage';
+import { readDeviceValueStrict, writeDeviceValue } from '../src/lib/sync/deviceStorage';
 import {
     DeletionRecoveryCredentialCorruptError,
     removeDeletionRecoveryCredential,
@@ -231,10 +231,10 @@ describe('browser storage boundary', () => {
         expect(() => storageOwner()).toThrow(BrowserStorageError);
     });
 
-    it('keeps best-effort device reads non-throwing while owner resolution is unavailable', () => {
+    it('fails closed when the owner cannot be resolved for a device-critical read', () => {
         localStorageMock.getItem.mockImplementationOnce(storageFailure);
 
-        expect(readDeviceValue('workout')).toBeNull();
+        expect(() => readDeviceValueStrict('workout')).toThrow(BrowserStorageError);
     });
 
     it('wraps device-storage write and remove failures in BrowserStorageError', () => {
