@@ -23,12 +23,12 @@ export const CycleSchedulePreview = memo(function CycleSchedulePreview({
                 className="planning-accordion planning-stateful"
                 onClick={onTogglePreview}
                 aria-expanded={showPreview}
-                aria-label={`Rotazione flessibile, ${isInvalidSchedule ? 'parametri da correggere' : `${schedule.totalSessions} sedute indicative`}, ${showPreview ? 'ON' : 'OFF'}`}
+                aria-label={`Anteprima della rotazione flessibile, ${isInvalidSchedule ? 'parametri da correggere' : `${schedule.totalSessions} sedute indicative`}, ${showPreview ? 'aperta' : 'chiusa'}`}
             >
-                <span>Rotazione flessibile · {isInvalidSchedule ? 'parametri da correggere' : `${schedule.totalSessions} sedute indicative`}</span>
+                <span>Anteprima della rotazione flessibile · {isInvalidSchedule ? 'parametri da correggere' : `${schedule.totalSessions} sedute indicative`}</span>
                 <span className="planning-accordion-meta">
-                    <span className={showPreview ? 'planning-state-badge is-on' : 'planning-state-badge'}>
-                        {showPreview ? 'ON' : 'OFF'}
+                    <span className={showPreview ? 'planning-state-badge is-open' : 'planning-state-badge'}>
+                        {showPreview ? 'Aperta' : 'Chiusa'}
                     </span>
                     <ChevronDown className={showPreview ? 'is-open' : ''} size={20} aria-hidden="true" />
                 </span>
