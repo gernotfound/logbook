@@ -1,5 +1,5 @@
 import 'fake-indexeddb/auto';
-import { clear, get, set } from 'idb-keyval';
+import { clear, del, get } from 'idb-keyval';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const remote = vi.hoisted(() => ({
@@ -62,6 +62,10 @@ import {
 } from '../../src/lib/sync/localRepository';
 import { replicateJournal, waitForJournalIdle } from '../../src/lib/sync/replicateJournal';
 import { invalidateSession } from '../../src/lib/sync/session';
+import { createAndMigrateVault } from '../../src/lib/sync/secureArchiveMigration';
+import { lockAllVaults } from '../../src/lib/sync/secureArchiveSession';
+import { updateArchiveRecord } from '../../src/lib/sync/secureArchiveRepository';
+import type { LocalEnvelope } from '../../src/lib/sync/localEnvelopeValidation';
 import {
     applyRemoteDocuments,
     projectDocuments,
@@ -111,20 +115,18 @@ function cloudSnapshot(): string {
 }
 
 beforeEach(async () => {
-    vi.stubGlobal('localStorage', {
-        getItem: vi.fn(() => null),
-        setItem: vi.fn(),
-        removeItem: vi.fn(),
-        clear: vi.fn(),
-        key: vi.fn(() => null),
-        length: 0,
-    });
+    lockAllVaults();
+    localStorage.clear();
     await clear();
     invalidateSession();
-    vi.stubGlobal('navigator', { onLine: true });
+    vi.stubGlobal('navigator', { onLine: true, locks: {
+        request: async (_name: string, _options: unknown, run: () => Promise<unknown>) => run(),
+    } });
     remote.auth.currentUser = { uid: 'a' };
     remote.apply.mockReset();
+    await createAndMigrateVault(owner);
     await initializeLocal(owner, data(170));
+    expect(await get('logbook:v2:' + owner)).toMatch(/^tlb-sealed:v1:/);
     const now = Date.now();
     await adoptReplicaCheckpoint(owner, {
         identity: {
@@ -139,6 +141,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
     await waitForJournalIdle(owner);
+    lockAllVaults();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
 });
@@ -273,7 +276,7 @@ describe('M3 journal crash consistency', () => {
     it('keeps a post-commit acknowledgement error hard-failed when the local journal is no longer durable', async () => {
         await commitLocal(owner, data(171), data(170));
         installReplaySafeRemote(async () => {
-            await clear();
+            await del('logbook:v2:' + owner);
         });
 
         const result = await replicateJournal();
@@ -313,7 +316,7 @@ describe('M3 journal crash consistency', () => {
             const outcome = applySemanticOperations(cloudDocuments, ops, cloudSyncMeta);
             cloudDocuments = outcome.documents;
             cloudSyncMeta = outcome.syncMetas;
-            await clear();
+            await del('logbook:v2:' + owner);
             throw Object.assign(new Error('Injected lost remote response'), { code: 'unavailable' });
         });
 
@@ -326,22 +329,30 @@ describe('M3 journal crash consistency', () => {
 
     it('fails closed when a current-version envelope loses its journal field', async () => {
         await commitLocal(owner, data(171), data(170));
-        const raw = await get<any>('logbook:v2:user:a');
-        delete raw.pending;
-        await set('logbook:v2:user:a', raw);
+        const before = (await readLocal(owner))!;
+        await updateArchiveRecord<LocalEnvelope>(owner, () => {
+            const invalid = structuredClone(before);
+            delete (invalid as Partial<LocalEnvelope>).pending;
+            return invalid;
+        });
+        const encrypted = await get('logbook:v2:' + owner);
+        expect(encrypted).toMatch(/^tlb-sealed:v1:/);
 
         const result = await replicateJournal();
 
         expect(result.status).toBe('failed');
-        expect((await get<any>('logbook:v2:user:a')).pending).toBeUndefined();
+        expect(await get('logbook:v2:' + owner)).toEqual(encrypted);
     });
 
     it('hard-fails a lost acknowledgement when the retained operation payload changed', async () => {
         await commitLocal(owner, data(171), data(170));
         installReplaySafeRemote(async () => {
-            const raw = await get<any>('logbook:v2:user:a');
-            raw.pending[0] = { ...raw.pending[0], value: 'corrupted-after-delivery' };
-            await set('logbook:v2:user:a', raw);
+            await updateArchiveRecord<LocalEnvelope>(owner, current => {
+                if (!current) throw new Error('Expected durable journal');
+                const changed = structuredClone(current);
+                changed.pending[0] = { ...changed.pending[0], value: 'corrupted-after-delivery' };
+                return changed;
+            });
         });
 
         const originalPut = IDBObjectStore.prototype.put;
