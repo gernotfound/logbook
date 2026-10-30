@@ -1,7 +1,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import ts from 'typescript';
+import { spawnSync } from 'node:child_process';
 import { findDisabledTests } from './test-declaration-check.mjs';
+
+const regression = spawnSync(process.execPath, ['--test', 'scripts/test-declaration-check-regressions.mjs'], { stdio: 'inherit' });
+if (regression.error) throw regression.error;
+if (regression.status !== 0) process.exit(regression.status ?? 1);
 
 const roots = ['src', 'tests', 'e2e'];
 const mockFileExtensions = ['', '.ts', '.tsx', '.js', '.jsx', '.mjs', '.mts', '.cjs', '.cts', '.json', '.css', '.scss', '.svg'];
