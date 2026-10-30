@@ -371,7 +371,9 @@ describe('durable secure archive migration', () => {
         localStorage.setItem(unknown, 'true');
         await expect(createAndMigrateVault(owner)).rejects.toThrow('chiavi sconosciute');
         expect(localStorage.getItem(unknown)).toBe('true');
-        expect(readVaultControl(owner)?.phase).toBe('migrating');
+        // Fresh-start preflight fails before persisting a new key or control.
+        expect(readVaultControl(owner)).toBeNull();
+        expect(await get(vaultControlMirrorId(owner))).toBeUndefined();
     });
 
     it('serializes simultaneous provisioning attempts without replacing a durable key', async () => {
