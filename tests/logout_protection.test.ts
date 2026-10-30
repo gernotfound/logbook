@@ -150,7 +150,6 @@ describe('M5 logout protection through AuthProvider', () => {
         });
 
         expect(DB.secureLogOut).toHaveBeenCalledTimes(1);
-        expect(DB.resetCache).toHaveBeenCalledTimes(1);
         expect(useAppStore.getState().userData).toBeNull();
         expect(useAppStore.getState().syncing).toBe(false);
         expect(dialogs.showUnsyncedDataLogout).not.toHaveBeenCalled();

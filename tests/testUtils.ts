@@ -14,7 +14,6 @@ export const TestDB = {
     ...RealDB,
     resetCache: () => {
         lastSavedTestStateStr = null;
-        RealDB.resetCache();
     },
     saveUserData: async (state: any, _rev?: any) => {
         const uid = __testAuth.currentUser?.uid;

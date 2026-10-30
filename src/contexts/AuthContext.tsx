@@ -76,7 +76,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             setIsGuest(false);
             setGuestMigrationStatus('idle');
             useAppStore.getState().resetStore({ force: true });
-            DB.resetCache();
         };
         const onStorage = (event: StorageEvent) => {
             if (event.key === GUEST_REVOCATION_KEY || event.key === GUEST_SESSION_KEY || event.key === GUEST_KEY) {
@@ -231,7 +230,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                     } catch (error) {
                         console.warn('Impossibile pulire l’owner autenticato locale:', error);
                     }
-                    DB.resetCache();
                     useAppStore.getState().resetStore();
                 }
                 if (isCurrentRun()) setLoading(false);
@@ -404,7 +402,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                     expectedUid: initialUid ?? undefined,
                     verifyCurrentDrafts: discardUnsynced ? undefined : async () => { await prepareForReload(); },
                 });
-                DB.resetCache();
                 useAppStore.getState().resetStore({ force: true });
                 if (initialUid) {
                     clearAuthenticatedOwnerHint(userOwner(initialUid));

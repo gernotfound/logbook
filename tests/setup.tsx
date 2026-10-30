@@ -498,7 +498,6 @@ vi.mock('firebase/firestore', () => {
 // Mock DB module
 vi.mock('../src/lib/db', () => ({
   DB: {
-    resetCache: vi.fn(),
     loadCloudPayload: vi.fn().mockImplementation(() => {
       const state = useAppStore.getState();
       return state.userData ? { data: state.userData, completeMonths: [], cloudDocuments: new Map() } : null;

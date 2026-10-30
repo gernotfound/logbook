@@ -34,7 +34,7 @@ import {
     readAccountDeletionMarker,
 } from '../../src/lib/sync/accountGate';
 
-const context = { purgeAllLocalUserData: purgeCompletedAccountLocalData, resetCache: vi.fn(), cancelPendingSyncs: boundary.cancel, resetStore: boundary.reset };
+const context = { purgeAllLocalUserData: purgeCompletedAccountLocalData, cancelPendingSyncs: boundary.cancel, resetStore: boundary.reset };
 let disk: Map<string, string>;
 
 function response(status: number, body: Record<string, unknown>): Response {

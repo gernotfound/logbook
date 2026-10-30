@@ -37,7 +37,6 @@ export function AccountDeletionRecovery() {
 
         const completionContext: AccountDeletionCompletionContext = {
             purgeAllLocalUserData: owner => DB.purgeCompletedAccountLocalData(owner),
-            resetCache: () => DB.resetCache(),
             resetStore: () => useAppStore.getState().resetStore(),
         };
 

@@ -46,7 +46,7 @@ beforeAll(async () => {
     vi.stubGlobal('navigator', { onLine: true });
     env = await initializeTestEnvironment({ projectId: 'demo-logbook-audit', firestore: { host: '127.0.0.1', port: 8080, rules: readFileSync('firestore.rules', 'utf8') } });
 });
-beforeEach(async () => { await env.clearFirestore(); await seedTrustedConsent(env); await clear(); DB.resetCache(); sdk.db = env.authenticatedContext('a', { email_verified: true }).firestore(); sdk.auth.currentUser = { uid: 'a' }; });
+beforeEach(async () => { await env.clearFirestore(); await seedTrustedConsent(env); await clear(); sdk.db = env.authenticatedContext('a', { email_verified: true }).firestore(); sdk.auth.currentUser = { uid: 'a' }; });
 afterAll(async () => { await env?.cleanup(); vi.unstubAllGlobals(); });
 async function prepareReplica() {
     if (!await advanceLocalConsentRevisionIfClean('user:a', 1)) throw new Error('Consent fixture is not clean');

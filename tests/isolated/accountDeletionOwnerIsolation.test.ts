@@ -7,7 +7,6 @@ const boundary = vi.hoisted(() => ({
     reset: vi.fn(),
     cancel: vi.fn(),
     purge: vi.fn(),
-    resetCache: vi.fn(),
     fetch: vi.fn(),
 }));
 
@@ -27,7 +26,6 @@ let disk: Map<string, string>;
 const receipt = 'A'.repeat(43);
 const context = {
     purgeAllLocalUserData: boundary.purge,
-    resetCache: boundary.resetCache,
     resetStore: boundary.reset,
 };
 
@@ -66,7 +64,6 @@ it('classifies a missing receipt status as device-recovery eligible without purg
     await expect(resumeAccountDeletion(context)).rejects.toBeInstanceOf(AccountDeletionReceiptNotFoundError);
 
     expect(boundary.purge).not.toHaveBeenCalled();
-    expect(boundary.resetCache).not.toHaveBeenCalled();
     expect(boundary.reset).not.toHaveBeenCalled();
     expect(isAccountDeletionPending('user:a')).toBe(true);
 });
@@ -82,7 +79,6 @@ it('retains the receipt and local archive when the trusted status endpoint is un
 
     expect(boundary.purge).not.toHaveBeenCalled();
     expect(boundary.auth.signOut).not.toHaveBeenCalled();
-    expect(boundary.resetCache).not.toHaveBeenCalled();
     expect(isAccountDeletionPending('user:a')).toBe(true);
 });
 
@@ -93,7 +89,6 @@ it('does not sign out or purge account B when account A completes in background'
 
     expect(boundary.auth.signOut).not.toHaveBeenCalled();
     expect(boundary.purge).not.toHaveBeenCalled();
-    expect(boundary.resetCache).not.toHaveBeenCalled();
     expect(boundary.reset).not.toHaveBeenCalled();
     expect(isAccountDeletionPending('user:a')).toBe(true);
 });
@@ -106,7 +101,6 @@ it('does not purge shared local drafts while explicit guest mode is active', asy
 
     expect(boundary.auth.signOut).not.toHaveBeenCalled();
     expect(boundary.purge).not.toHaveBeenCalled();
-    expect(boundary.resetCache).not.toHaveBeenCalled();
     expect(boundary.reset).not.toHaveBeenCalled();
     expect(isAccountDeletionPending('user:a')).toBe(true);
 });
@@ -119,7 +113,6 @@ it('uses the same guest barrier for a completed device-recovery proof', async ()
     await expect(finalizeCompletedDeletionForUid('a', context)).resolves.toMatchObject({ status: 'pending' });
 
     expect(boundary.purge).not.toHaveBeenCalled();
-    expect(boundary.resetCache).not.toHaveBeenCalled();
     expect(boundary.reset).not.toHaveBeenCalled();
     expect(isAccountDeletionPending('user:a')).toBe(true);
 });
@@ -153,7 +146,6 @@ it('finalizes a completed device-recovery proof when no other identity is active
     await expect(finalizeCompletedDeletionForUid('a', context)).resolves.toEqual({ status: 'complete' });
 
     expect(boundary.purge).toHaveBeenCalledWith('user:a');
-    expect(boundary.resetCache).toHaveBeenCalledTimes(1);
     expect(boundary.reset).toHaveBeenCalledTimes(1);
     expect(isAccountDeletionPending('user:a')).toBe(false);
 });
@@ -176,7 +168,6 @@ it('fails closed and preserves local data when guest ownership cannot be read', 
 
     expect(boundary.auth.signOut).not.toHaveBeenCalled();
     expect(boundary.purge).not.toHaveBeenCalled();
-    expect(boundary.resetCache).not.toHaveBeenCalled();
     expect(boundary.reset).not.toHaveBeenCalled();
     expect(disk.size).toBeGreaterThan(0);
 });
