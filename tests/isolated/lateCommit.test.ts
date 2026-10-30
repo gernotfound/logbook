@@ -1,5 +1,5 @@
 import 'fake-indexeddb/auto';
-import { clear } from 'idb-keyval';
+import { clear, del, get } from 'idb-keyval';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 const remote = vi.hoisted(() => ({ apply: vi.fn(), auth: { currentUser: { uid: 'a' } } }));
@@ -33,23 +33,23 @@ import { replicateJournal, waitForJournalIdle } from '../../src/lib/sync/replica
 import { adoptReplicaCheckpoint, initializeLocal, commitLocal, readLocal } from '../../src/lib/sync/localRepository';
 import { UserDataSchema } from '../../src/lib/schema';
 import { invalidateSession } from '../../src/lib/sync/session';
+import { createAndMigrateVault } from '../../src/lib/sync/secureArchiveMigration';
+import { lockAllVaults } from '../../src/lib/sync/secureArchiveSession';
 import type { UserData } from '../../src/types';
 
 const data = (height: number) => UserDataSchema.parse({ profile: { height: String(height) }, legalConsent: { hasAcceptedTerms: true, hasAcceptedHealthData: true, acceptedAt: '2026-10-11T10:00:00.000Z', privacyVersion: '1.3.4', termsVersion: '1.2.1' } }) as unknown as UserData;
 const deferred = <T>() => { let resolve!: (value: T) => void; let reject!: (err: any) => void; const promise = new Promise<T>((res, rej) => { resolve = res; reject = rej; }); return { promise, resolve, reject }; };
 
 beforeEach(async () => {
-    vi.stubGlobal('navigator', { onLine: true });
-    vi.stubGlobal('localStorage', {
-        getItem: vi.fn(() => null),
-        setItem: vi.fn(),
-        removeItem: vi.fn(),
-        clear: vi.fn(),
-        key: vi.fn(() => null),
-        length: 0,
-    });
-    invalidateSession(); await clear();
+    lockAllVaults();
+    localStorage.clear();
+    vi.stubGlobal('navigator', { onLine: true, locks: {
+        request: async (_name: string, _options: unknown, run: () => Promise<unknown>) => run(),
+    } });
+    invalidateSession();
+    await clear();
     remote.auth.currentUser = { uid: 'a' }; remote.apply.mockReset();
+    await createAndMigrateVault('user:a');
     await initializeLocal('user:a', data(170));
     const now = Date.now();
     await adoptReplicaCheckpoint('user:a', {
@@ -63,9 +63,10 @@ beforeEach(async () => {
         baseSeq: 0,
     }, { clock: {}, syncMetaByDocument: {} });
     await commitLocal('user:a', data(171), data(170));
+    expect(await get('logbook:v2:user:a')).toMatch(/^tlb-sealed:v1:/);
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
 });
-afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
+afterEach(() => { vi.useRealTimers(); lockAllVaults(); vi.unstubAllGlobals(); });
 
 it('keeps the account journal pending when consent is missing, without starting a remote write', async () => {
     await commitLocal('user:a', { ...data(171), legalConsent: undefined }, data(171));
@@ -114,7 +115,8 @@ it('hard-fails a timeout when the in-flight delivered batch is no longer durable
     const first = replicateJournal();
 
     await vi.waitFor(() => expect(remote.apply).toHaveBeenCalledTimes(1));
-    await clear();
+    // Lose only the owner envelope while retaining the current vault and its control mirror.
+    await del('logbook:v2:user:a');
 
     await vi.advanceTimersByTimeAsync(7001);
     expect((await first).status).toBe('failed');
