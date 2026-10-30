@@ -99,7 +99,7 @@ Il guest conserva la semplice persistenza locale preesistente.
 
 **MUST:** gate CRITICAL (ownership, lifecycle, logout, account deletion, reload/persistenza) non devono trasformare uno storage illeggibile in “chiave assente” se questa distinzione può cambiare una decisione distruttiva o di sicurezza.
 
-**MUST (CRITICAL, scritture device pre-vault):** senza controllo vault attivo, anche la verifica del record legacy di destinazione deve essere una **lettura rigorosa** prima di sovrascrittura o cancellazione. Se il browser nega o interrompe la lettura, non interpretare il dato come assente e non autorizzare modifiche alla chiave. Una copia legacy cifrata rimasta senza controllo va conservata e bloccata. Le letture best-effort restano riservate a preferenze e suggerimenti non distruttivi; il controllo di integrità della destinazione non è uno di questi.
+**MUST (CRITICAL, device senza vault):** `readDeviceValueStrict` e `writeDeviceValue` richiedono sempre un controllo vault `active` e una capability DEK sbloccata: nessuna lettura, scrittura o cancellazione business plaintext è ammessa senza vault, neanche al primo accesso. Un record non cifrato inatteso e un ciphertext orfano non vengono eliminati o sovrascritti; il tentativo fallisce chiuso. Le letture della destinazione protetta e della chiave non cifrata sono rigorose, mai best-effort; solo le preferenze non critiche possono degradare a `null`. La rimozione del fallback device non elimina ancora i convertitori pre-lancio dell'envelope IndexedDB, che restano oggetto di una PR distinta.
 
 **MAY:** preferenze, hint e code telemetriche possono restare best-effort quando il loro contratto non influenza l'integrità dei dati business.
 
