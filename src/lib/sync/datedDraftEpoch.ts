@@ -1,7 +1,6 @@
 import { readDeviceValueStrict, writeDeviceValue } from './deviceStorage';
 import { assertWorkoutSnapshotEpoch, readDeviceConsentRevision } from './workoutDeviceIntent';
 
-const LEGACY_SNAPSHOT_VERSION = 1;
 const SNAPSHOT_VERSION = 2;
 const TAG = '__logbookDatedDraft';
 const REVISION_PATTERN = /^[a-f0-9]{32}$/;
@@ -32,26 +31,20 @@ function parseDraft(raw: string, owner: string): Record<string, string> | null {
         throw new Error('Bozza locale non valida: originale preservato.');
     }
     const record = parsed as Record<string, unknown>;
-    let data: unknown = parsed;
-    let sourceRevision: number | undefined;
-    let tombstone = false;
-    if (Object.hasOwn(record, TAG)) {
-        const version = record[TAG];
-        if ((version !== LEGACY_SNAPSHOT_VERSION && version !== SNAPSHOT_VERSION)
-            || record.owner !== owner
-            || (record.consentRevision !== undefined
-                && (!Number.isSafeInteger(record.consentRevision)
-                    || (record.consentRevision as number) < 1))
-            || (version === LEGACY_SNAPSHOT_VERSION && record.consentRevision === undefined)
-            || (version === SNAPSHOT_VERSION
-                && (typeof record.revisionId !== 'string'
-                    || !REVISION_PATTERN.test(record.revisionId)))) {
-            throw new Error('Provenienza della bozza locale non valida: originale preservato.');
-        }
-        sourceRevision = record.consentRevision as number | undefined;
-        data = record.values;
-        tombstone = version === SNAPSHOT_VERSION && data === null;
+    // Only the first supported pre-launch clean-cut format is readable. Unknown
+    // records stay untouched rather than being adopted as current health drafts.
+    if (record[TAG] !== SNAPSHOT_VERSION
+        || record.owner !== owner
+        || (record.consentRevision !== undefined
+            && (!Number.isSafeInteger(record.consentRevision)
+                || (record.consentRevision as number) < 1))
+        || typeof record.revisionId !== 'string'
+        || !REVISION_PATTERN.test(record.revisionId)) {
+        throw new Error('Provenienza della bozza locale non valida: originale preservato.');
     }
+    const sourceRevision = record.consentRevision as number | undefined;
+    const data: unknown = record.values;
+    const tombstone = data === null;
     try {
         // A current or previous consent's confirmed deletion carries no health
         // values. Its random revision still fences stale editors after clear.

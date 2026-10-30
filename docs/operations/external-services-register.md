@@ -47,6 +47,9 @@ Firebase Hosting è il provider del frontend/PWA Production di TheLogBook dal cu
 
 ### Ritiro del Service Worker Vercel legacy — 2026-10-03
 
+**Decisione successiva (30/10/2026, fresh start pre-lancio):** in assenza di installazioni utenti pre-lancio da supportare, la funzione `api/legacy-service-worker.ts`, la relativa rewrite Vercel e il test di ritiro vengono eliminati dalla configurazione proposta. Il vecchio root mantiene il redirect verso Firebase; la PWA e il suo Service Worker correnti restano su Firebase Hosting. I paragrafi seguenti documentano esclusivamente le verifiche storiche dell'origin ritirato, non lo stato runtime dopo questo cambiamento. Il deploy Vercel Production e l'eventuale comportamento del vecchio `/sw.js` devono essere verificati separatamente dopo il merge.
+
+
 Durante lo smoke offline post-cutover è emerso un caso reale su un browser desktop già usato prima della migrazione: la pagina appariva ancora sotto `logbook-gnf.vercel.app` e Firebase Auth/App Check rifiutava correttamente il login perché il vecchio origin era stato rimosso dalle allowlist. La sequenza di errori browser-extension `runtime.lastError/background.js` osservata nello stesso momento è separata dal problema applicativo.
 
 Verifica live del provider prima della correzione: il root Vercel continuava a reindirizzare verso Firebase, ma `https://logbook-gnf.vercel.app/sw.js` rispondeva ancora HTTP 200 con il precedente Workbox Service Worker completo, incluso precache dell'app shell e navigation fallback. Un Service Worker già installato poteva quindi servire la vecchia PWA dalla cache prima che il browser raggiungesse il redirect HTTP.
