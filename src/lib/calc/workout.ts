@@ -229,7 +229,7 @@ export function filterItems<T extends object>(items: T[], query: string, searchF
     return result;
 }
 
-export function validateWorkoutRatings(mood: any, pump?: any, fatigue?: any, maxRating: 5 | 10 = 10) {
+export function validateWorkoutRatings(mood: any, pump?: any, fatigue?: any) {
     // Also support object param if passed as single object
     if (typeof mood === 'object' && mood !== null && !Array.isArray(mood) && pump === undefined) {
         fatigue = mood.fatigue || mood.fatigueRating;
@@ -239,7 +239,7 @@ export function validateWorkoutRatings(mood: any, pump?: any, fatigue?: any, max
     const checkRating = (val: any) => {
         if (val === null || val === undefined || val === '') return { val: null, invalid: false };
         if (typeof val === 'number') {
-            const ok = !isNaN(val) && val >= 1 && val <= maxRating && (maxRating === 10 || Number.isInteger(val));
+            const ok = Number.isInteger(val) && val >= 1 && val <= 5;
             return { val: ok ? val : null, invalid: !ok };
         }
         if (typeof val === 'string') {
@@ -247,7 +247,7 @@ export function validateWorkoutRatings(mood: any, pump?: any, fatigue?: any, max
             if (trimmed === '') return { val: null, invalid: false };
             if (/^\d+(\.\d+)?$/.test(trimmed)) {
                 const num = parseFloat(trimmed);
-                const ok = num >= 1 && num <= maxRating && (maxRating === 10 || Number.isInteger(num));
+                const ok = Number.isInteger(num) && num >= 1 && num <= 5;
                 return { val: ok ? num : null, invalid: !ok };
             }
             return { val: null, invalid: true };
@@ -264,9 +264,9 @@ export function validateWorkoutRatings(mood: any, pump?: any, fatigue?: any, max
         pump: p.val,
         fatigue: f.val,
         errors: {
-            mood: m.invalid ? `Voto umore deve essere un valore valido da 1 a ${maxRating}` : null,
-            pump: p.invalid ? `Voto pump deve essere un valore valido da 1 a ${maxRating}` : null,
-            fatigue: f.invalid ? `Voto stanchezza deve essere un valore valido da 1 a ${maxRating}` : null
+            mood: m.invalid ? `Voto umore deve essere un valore valido da 1 a 5` : null,
+            pump: p.invalid ? `Voto pump deve essere un valore valido da 1 a 5` : null,
+            fatigue: f.invalid ? `Voto stanchezza deve essere un valore valido da 1 a 5` : null
         }
     };
 }

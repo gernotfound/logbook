@@ -305,7 +305,6 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
                         setPump={pump => updatePostSessionDraft({ pump })}
                         fatigue={postSessionDraft.fatigue}
                         setFatigue={fatigue => updatePostSessionDraft({ fatigue })}
-                        ratingScale={5}
                         pains={postSessionDraft.pains}
                         onTogglePain={togglePostSessionPain}
                         onSetPains={pains => updatePostSessionDraft({ pains })}

@@ -318,7 +318,6 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory, onRequestEnd }: Acti
                     setPump={setPump}
                     fatigue={fatigue}
                     setFatigue={setFatigue}
-                    ratingScale={activeWorkout.ratingScale ?? 10}
                     pains={pains}
                     onTogglePain={togglePain}
                     onSetPains={setPains}

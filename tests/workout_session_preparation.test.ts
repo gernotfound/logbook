@@ -357,55 +357,34 @@ describe('workout session preparation', () => {
         expect(saved.waterLiters).toBeUndefined();
     });
 
-    it('marks new sessions as 1-5 while preserving legacy 1-10 historical ratings', () => {
+    it('uses the current 1–5 scale when a workout lacks a ratingScale marker', () => {
         const runtime = createRuntime();
         expect(buildFreeWorkout(runtime).ratingScale).toBe(5);
 
-        const legacy = {
-            id: 'legacy-rating',
+        const unmarked = {
+            id: 'history-unmarked',
             date: '2026-09-01',
             exercises: [],
             isEditingHistory: true,
-            originalHistoryId: 'legacy-rating',
-            moodRating: 8,
-            pumpRating: 7,
-            fatigueRating: 6,
+            originalHistoryId: 'history-unmarked',
+            moodRating: 4,
         } as WorkoutSession;
-        const savedLegacy = prepareHistoricalWorkoutForSave(
-            legacy,
-            'legacy-rating',
-            { mood: '8', pump: '7', fatigue: '6' },
-            '',
-            '00:45:00',
-            runtime,
-        );
-        expect(savedLegacy.moodRating).toBe(8);
-        expect(savedLegacy.pumpRating).toBe(7);
-        expect(savedLegacy.fatigueRating).toBe(6);
-        expect(savedLegacy.ratingScale).toBeUndefined();
 
-        const savedLegacyDecimal = prepareHistoricalWorkoutForSave(
-            { ...legacy, moodRating: 7.5 },
-            'legacy-rating',
-            { mood: '7.5', pump: '', fatigue: '' },
-            '',
-            '00:45:00',
-            runtime,
+        const saved = prepareHistoricalWorkoutForSave(
+            unmarked, 'history-unmarked',
+            { mood: '8', pump: '5', fatigue: '5.5' }, '', '00:45:00', runtime,
         );
-        expect(savedLegacyDecimal.moodRating).toBe(7.5);
+        expect(saved.moodRating).toBeNull();
+        expect(saved.pumpRating).toBe(5);
+        expect(saved.fatigueRating).toBeNull();
+        expect(saved.ratingScale).toBeUndefined();
 
-        const invalidNew = { ...legacy, id: 'new-rating', originalHistoryId: 'new-rating', ratingScale: 5 as const };
-        const savedNew = prepareHistoricalWorkoutForSave(
-            invalidNew,
-            'new-rating',
-            { mood: '8', pump: '5', fatigue: '4' },
-            '',
-            '00:45:00',
-            runtime,
-        );
-        expect(savedNew.moodRating).toBeNull();
-        expect(savedNew.pumpRating).toBe(5);
-        expect(savedNew.fatigueRating).toBe(4);
+        const completed = applyWorkoutCompletionDraft(unmarked, {
+            mood: '7.5', pump: '4', fatigue: '3', water: '', pains: [],
+        });
+        expect(completed.moodRating).toBeNull();
+        expect(completed.pumpRating).toBe(4);
+        expect(completed.fatigueRating).toBe(3);
     });
 
     it('snapshots technical standards and retained progression metadata so later routine edits do not rewrite history', () => {

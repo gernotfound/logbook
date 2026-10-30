@@ -218,8 +218,7 @@ export function prepareHistoricalWorkoutForSave(
     manualDuration: string,
     runtime: WorkoutPreparationRuntime = defaultRuntime,
 ): WorkoutSession {
-    const ratingScale = currentWorkout.ratingScale ?? 10;
-    const valRes = Logic.validateWorkoutRatings(ratings.mood, ratings.pump, ratings.fatigue, ratingScale);
+    const valRes = Logic.validateWorkoutRatings(ratings.mood, ratings.pump, ratings.fatigue);
     const durationStr = Logic.normalizeDuration(
         manualDuration?.trim() || currentWorkout.manualDurationStr || currentWorkout.globalDurationStr || '00:00:00',
     );
@@ -247,8 +246,7 @@ export function applyWorkoutCompletionDraft(
     currentWorkout: WorkoutSession,
     draft: WorkoutCompletionDraft,
 ): WorkoutSession {
-    const ratingScale = currentWorkout.ratingScale ?? 10;
-    const valRes = Logic.validateWorkoutRatings(draft.mood, draft.pump, draft.fatigue, ratingScale);
+    const valRes = Logic.validateWorkoutRatings(draft.mood, draft.pump, draft.fatigue);
     const waterValue = draft.water.trim()
         ? parseFloat(draft.water.replace(',', '.'))
         : undefined;
@@ -281,12 +279,10 @@ export function prepareCompletedWorkout(
     sessionPains: string[];
 } {
     const normalizedWorkout = repairWorkoutInstanceIdentities(currentWorkout, runtime);
-    const ratingScale = normalizedWorkout.ratingScale ?? 10;
     const valRes = Logic.validateWorkoutRatings(
         String(normalizedWorkout.moodRating ?? ''),
         String(normalizedWorkout.pumpRating ?? ''),
         String(normalizedWorkout.fatigueRating ?? ''),
-        ratingScale,
     );
     const startTime = normalizedWorkout.globalStartTime || endTime;
     if (normalizedWorkout.globalStartTime && normalizedWorkout.id) {
