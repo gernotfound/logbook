@@ -41,11 +41,11 @@ beforeEach(async () => {
 });
 
 describe('durable secure archive migration', () => {
-    it('seals an existing current journal and stores all new device snapshots encrypted', async () => {
+    it('creates the current owner journal and device snapshots only inside the active vault', async () => {
         const initial = base();
+        await createAndMigrateVault(owner);
         await initializeLocal(owner, initial);
         const workout = JSON.stringify({ id: 'workout-test', notes: 'private health note' });
-        await createAndMigrateVault(owner);
         writeDeviceValue('workout', workout, owner);
         writeDeviceValue('draft:measurement:' + day, JSON.stringify({ weight: '76' }), owner);
         expect(readVaultControl(owner)?.phase).toBe('active');
@@ -74,10 +74,10 @@ describe('durable secure archive migration', () => {
     });
 
     it('seals immutable workout-intent copies with owner-bound authenticated ciphertext', async () => {
+        await createAndMigrateVault(owner);
         await initializeLocal(owner, base());
         const oldName = 'workout-intent:' + 'a'.repeat(32);
         const oldValue = '{"notes":"private recovery record"}';
-        await createAndMigrateVault(owner);
         writeDeviceValue(oldName, oldValue, owner);
         expect(localStorage.getItem(deviceKey(oldName, owner))).toBeNull();
         expect(localStorage.getItem(protectedDeviceKey(oldName, owner))).toMatch(/^tlb-sealed:v1:/);
