@@ -111,7 +111,7 @@ describe('Empirical Challenger: Layout Geometry, Accessibility, Z-Index & Online
   // 2. Z-INDEX STACKING HIERARCHY
   // ============================================================================
   describe('Z-Index Stacking Hierarchy: sync-indicator < sync-error-toast < BottomNav < GlobalDialog', () => {
-    it('verifies exact z-index values in CSS and component definitions', () => {
+    it('verifies the stacking hierarchy including legal modal overlays', () => {
       const cssContent = readGlobalStyles();
 
       // 1. .sync-indicator z-index (9990)
@@ -132,13 +132,18 @@ describe('Empirical Challenger: Layout Geometry, Accessibility, Z-Index & Online
       const zBottomNav = parseInt(navMatch![1], 10);
       expect(zBottomNav).toBe(10000);
 
-      // 4. GlobalDialog z-index (99999)
+      // GlobalDialog must visually cover legal modals as well as the navigation.
       const dialogPath = path.resolve(__dirname, '../src/components/UI/GlobalDialog.tsx');
       const dialogContent = fs.readFileSync(dialogPath, 'utf-8');
       const dialogMatch = dialogContent.match(/zIndex:\s*(\d+)/);
       expect(dialogMatch).not.toBeNull();
       const zGlobalDialog = parseInt(dialogMatch![1], 10);
-      expect(zGlobalDialog).toBe(99999);
+      for (const file of ['PrivacyPolicy.tsx', 'TermsAndConditions.tsx']) {
+        const legalContent = fs.readFileSync(path.resolve(__dirname, '../src/pages', file), 'utf-8');
+        const legalMatch = legalContent.match(/zIndex:\s*(\d+)/);
+        expect(legalMatch).not.toBeNull();
+        expect(zGlobalDialog).toBeGreaterThan(parseInt(legalMatch![1], 10));
+      }
 
       // Hierarchy assertion
       expect(zSyncIndicator).toBeLessThan(zErrorToast);
