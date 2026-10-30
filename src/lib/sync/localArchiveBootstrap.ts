@@ -15,14 +15,6 @@ const currentEnvelopeVersions = () => ({
     syncProtocolVersion: CURRENT_SYNC_PROTOCOL,
 });
 
-/** Migration-only read verifier. Enforces the full existing causal/schema contract. */
-export function assertLegacyEnvelopeValidForSecureMigration(raw: unknown, owner: string): void {
-    if (raw === undefined) return;
-    if (!validateLocalEnvelope(raw, normalizeStorageOwner(owner))) {
-        throw new Error('Archivio legacy non valido: migrazione sospesa senza modificare il dato.');
-    }
-}
-
 export async function readLocal(owner: string): Promise<LocalEnvelope | undefined> {
     owner = normalizeStorageOwner(owner);
     return validateLocalEnvelope(await getArchiveRecord<any>(owner), owner);
