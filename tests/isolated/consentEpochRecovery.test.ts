@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto';
-import { clear, get, set } from 'idb-keyval';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { clear, get } from 'idb-keyval';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../src/lib/catalog/catalogService', () => ({
   getCachedCatalog: async () => ({ exercises: [], foods: [] }),
@@ -13,6 +13,11 @@ import {
   rebaseConsentRecoveryWithExplicitChoice, StaleLocalRevisionError,
 } from '../../src/lib/sync/localRepository';
 import { purgeAllLocalUserData } from '../../src/lib/db/db_account';
+import { createAndMigrateVault } from '../../src/lib/sync/secureArchiveMigration';
+import { lockAllVaults } from '../../src/lib/sync/secureArchiveSession';
+import { updateArchiveRecord } from '../../src/lib/sync/secureArchiveRepository';
+import type { LocalEnvelope } from '../../src/lib/sync/localEnvelopeValidation';
+import { activateGuestSession, GUEST_SESSION_KEY } from '../../src/lib/sync/session';
 
 const owner = 'user:consent-recovery-user';
 function state(height: string, acceptedAt?: string): UserData {
@@ -25,9 +30,18 @@ function state(height: string, acceptedAt?: string): UserData {
   }) as unknown as UserData;
 }
 beforeEach(async () => {
-  await clear();
+  lockAllVaults();
   localStorage.clear();
+  await clear();
+  vi.stubGlobal('navigator', { locks: {
+    request: async (_name: string, _options: unknown, run: () => Promise<unknown>) => run(),
+  } });
+  await createAndMigrateVault(owner);
   await initializeLocal(owner, state('170'));
+});
+afterEach(() => {
+  lockAllVaults();
+  vi.unstubAllGlobals();
 });
 
 describe('explicit consent-epoch journal recovery', () => {
@@ -72,6 +86,11 @@ describe('explicit consent-epoch journal recovery', () => {
   });
 
   it('rejects cross-owner guest recovery while preserving the guest journal', async () => {
+    const guestSessionId = 'consent-recovery-guest-session';
+    localStorage.setItem('logbook_is_guest', 'true');
+    localStorage.setItem(GUEST_SESSION_KEY, guestSessionId);
+    activateGuestSession(guestSessionId);
+    await createAndMigrateVault('guest');
     await initializeLocal('guest', state('170'));
     await commitLocal('guest', state('180'), state('170'));
     const before = await readLocal('guest');
@@ -93,16 +112,18 @@ describe('explicit consent-epoch journal recovery', () => {
       pending: structuredClone(current.pending),
     };
     const key = `logbook:v2:${owner}`;
-    await set(key, {
+    await updateArchiveRecord<LocalEnvelope>(owner, () => ({
       ...current, archivedConsentJournals: Array.from({ length: 32 }, () => structuredClone(original)),
-    });
+    }));
+    const encrypted = await get(key);
+    expect(encrypted).toMatch(/^tlb-sealed:v1:/);
     const fullArchive = await readLocal(owner);
     expect(fullArchive?.archivedConsentJournals).toHaveLength(32);
 
     await expect(rebaseConsentRecoveryWithExplicitChoice(
       owner, 2, fullArchive!.revision, state('175'), state('180'), new Map(), () => true,
     )).rejects.toThrow('Archivio recupero pieno');
-    expect(await get(key)).toEqual(fullArchive);
+    expect(await get(key)).toEqual(encrypted);
     expect(await readLocal(owner)).toEqual(fullArchive);
   });
 
