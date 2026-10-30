@@ -1,52 +1,75 @@
-import ts from 'typescript';
-const roots = new Set(['it', 'test', 'describe']);
-const aliases = new Map([['fit', 'only'], ['fdescribe', 'only'], ['xit', 'skip'], ['xtest', 'skip'], ['xdescribe', 'skip']]);
-const denied = new Set(['skip', 'todo', 'only']);
+import { parse } from '@babel/parser';
 
-function testChain(ts, value) {
-  let node = value;
+const testNames = new Set(['test', 'it', 'describe']);
+const aliases = new Map([['fit', 'only'], ['fdescribe', 'only'], ['xit', 'skip'], ['xtest', 'skip'], ['xdescribe', 'skip']]);
+const forbidden = new Set(['skip', 'todo', 'only']);
+
+function declarationModifiers(expression) {
   const modifiers = [];
-  for (;;) {
-    while (ts.isParenthesizedExpression(node) || ts.isAsExpression(node) || ts.isNonNullExpression(node)) {
-      node = node.expression;
+  let current = expression;
+  while (current) {
+    switch (current.type) {
+      case 'Identifier':
+        if (testNames.has(current.name)) return modifiers;
+        return aliases.has(current.name) ? [...modifiers, aliases.get(current.name)] : null;
+      case 'CallExpression':
+      case 'OptionalCallExpression':
+        current = current.callee;
+        break;
+      case 'MemberExpression':
+      case 'OptionalMemberExpression': {
+        const property = current.property;
+        const name = current.computed
+          ? property.type === 'StringLiteral' ? property.value : null
+          : property.type === 'Identifier' ? property.name : null;
+        if (name === null) return null;
+        modifiers.push(name);
+        current = current.object;
+        break;
+      }
+      case 'TSAsExpression':
+      case 'TSTypeAssertion':
+      case 'TSNonNullExpression':
+      case 'ParenthesizedExpression':
+        current = current.expression;
+        break;
+      default:
+        return null;
     }
-    if (ts.isIdentifier(node)) {
-      if (roots.has(node.text)) return modifiers;
-      if (aliases.has(node.text)) return [...modifiers, aliases.get(node.text)];
-      return null;
-    }
-    if (ts.isCallExpression(node)) {
-      node = node.expression;
-      continue;
-    }
-    if (ts.isPropertyAccessExpression(node)) {
-      modifiers.push(node.name.text);
-      node = node.expression;
-      continue;
-    }
-    if (ts.isElementAccessExpression(node) && ts.isStringLiteral(node.argumentExpression)) {
-      modifiers.push(node.argumentExpression.text);
-      node = node.expression;
-      continue;
-    }
-    return null;
   }
+  return null;
 }
 
 export function findDisabledTests(source, name = 'fixture.test.ts') {
-  const file = ts.createSourceFile(name, source, 99, true, /\.tsx$/.test(name) ? 4 : 3);
+  const ast = parse(source, {
+    sourceType: 'unambiguous',
+    sourceFilename: name,
+    plugins: ['typescript', 'jsx', 'decorators-legacy'],
+    errorRecovery: false,
+  });
   const findings = [];
-  function walk(node) {
-    if (ts.isCallExpression(node)) {
-      const chain = testChain(ts, node.expression);
-      const label = chain?.find(part => denied.has(part));
+  const visit = node => {
+    if (!node || typeof node !== 'object') return;
+    if (node.type === 'CallExpression' || node.type === 'OptionalCallExpression') {
+      const modifiers = declarationModifiers(node.callee);
+      const label = modifiers?.find(modifier => forbidden.has(modifier));
       if (label) {
-        const { line } = file.getLineAndCharacterOfPosition(node.getStart(file));
-        findings.push({ line: line + 1, label, expression: node.expression.getText(file) });
+        findings.push({
+          line: node.loc.start.line,
+          label,
+          expression: source.slice(node.callee.start, node.callee.end),
+        });
       }
     }
-    ts.forEachChild(node, walk);
-  }
-  walk(file);
+    for (const [key, child] of Object.entries(node)) {
+      if (key === 'loc' || key === 'tokens' || key === 'comments' || key === 'extra') continue;
+      if (Array.isArray(child)) {
+        for (const nested of child) if (nested?.type) visit(nested);
+      } else if (child?.type) {
+        visit(child);
+      }
+    }
+  };
+  visit(ast.program);
   return findings;
 }
