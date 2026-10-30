@@ -1,3 +1,4 @@
+import * as ts from 'typescript';
 const roots = new Set(['it', 'test', 'describe']);
 const aliases = new Map([['fit', 'only'], ['fdescribe', 'only'], ['xit', 'skip'], ['xtest', 'skip'], ['xdescribe', 'skip']]);
 const denied = new Set(['skip', 'todo', 'only']);
@@ -32,7 +33,7 @@ function testChain(ts, value) {
   }
 }
 
-export function findDisabledTests(ts, source, name = 'fixture.test.ts') {
+export function findDisabledTests(source, name = 'fixture.test.ts') {
   const file = ts.createSourceFile(name, source, ts.ScriptTarget.Latest, true, /\.tsx$/.test(name) ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
   const findings = [];
   function walk(node) {

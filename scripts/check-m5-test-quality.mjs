@@ -1,6 +1,5 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import ts from 'typescript';
 import { findDisabledTests } from './test-declaration-check.mjs';
 
 const fixedFiles = [
@@ -39,7 +38,7 @@ for (const file of files) {
   }
 
   const content = fs.readFileSync(file, 'utf8');
-  for (const finding of findDisabledTests(ts, content, file)) {
+  for (const finding of findDisabledTests(content, file)) {
     failures.push(`${file}:${finding.line}: ${finding.label}: ${finding.expression}`);
   }
   const lines = content.split(/\r?\n/);

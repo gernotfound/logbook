@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import ts from 'typescript';
 import { findDisabledTests } from './test-declaration-check.mjs';
 
 for (const [source, reason] of [
@@ -18,7 +17,7 @@ for (const [source, reason] of [
   ["test.concurrent\n  .skip('x', () => {})", 'skip'],
 ]) {
   await test('detects disabled declaration: ' + source, () => {
-    const findings = findDisabledTests(ts, source);
+    const findings = findDisabledTests(source);
     assert.ok(findings.some(f => f.label === reason), JSON.stringify(findings));
   });
 }
@@ -32,6 +31,6 @@ for (const source of [
   "describe('suite', () => { it('works', () => {}) })",
 ]) {
   await test('allows ordinary source: ' + source, () => {
-    assert.deepEqual(findDisabledTests(ts, source), []);
+    assert.deepEqual(findDisabledTests(source), []);
   });
 }

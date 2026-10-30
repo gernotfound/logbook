@@ -1,6 +1,5 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import ts from 'typescript';
 import { spawnSync } from 'node:child_process';
 import { findDisabledTests } from './test-declaration-check.mjs';
 
@@ -48,7 +47,7 @@ function walk(directory) {
 
         const content = fs.readFileSync(fullPath, 'utf8');
         checkMockTargets(fullPath, content);
-        for (const finding of findDisabledTests(ts, content, fullPath)) {
+        for (const finding of findDisabledTests(content, fullPath)) {
             violations.push(`${fullPath}:${finding.line} [${finding.label}]: ${finding.expression}`);
         }
         const lines = content.split(/\r?\n/);
