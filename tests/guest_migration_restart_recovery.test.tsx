@@ -1,6 +1,7 @@
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { get } from 'idb-keyval';
 
 vi.mock('../src/components/UI/ErrorBoundary', () => ({ default: ({ children }: { children: React.ReactNode }) => <>{children}</> }));
 vi.mock('../src/components/UI/BottomNav', () => ({ default: () => <nav data-testid="bottom-nav" /> }));
@@ -35,6 +36,7 @@ import { resumePersistedGuestMigration } from '../src/contexts/auth/resumePersis
 const defaultRunTransaction = vi.mocked(runTransaction).getMockImplementation();
 
 const GUEST_KEY = 'logbook_is_guest';
+const GUEST_ARCHIVE_KEY = 'logbook:v2:guest';
 const OVERLAY_SESSION_KEY = 'logbook_guest_login_overlay';
 const parse = (value: unknown) => UserDataSchema.parse(value) as unknown as UserData;
 const user = { uid: 'guest-restart-user', email: 'restart@example.com', displayName: 'Guest Restart' } as any;
@@ -57,8 +59,17 @@ beforeEach(async () => {
     useAppStore.getState().resetStore({ force: true });
     (auth as any).currentUser = user;
     vi.mocked(onAuthStateChanged).mockImplementation((_auth, callback: any) => { callback(user); return () => {}; });
+    // The fixture is a current-format guest archive, not a pre-vault plaintext envelope.
+    // Restore the guest flag only in scenarios that actually exercise a guest session.
+    localStorage.setItem(GUEST_KEY, 'true');
+    localStorage.setItem(GUEST_SESSION_KEY, 'guest-restart-generation');
+    activateGuestSession('guest-restart-generation');
+    await createAndMigrateVault('guest');
     const { guest } = fixtures();
     await localRepository.initializeLocal('guest', guest, []);
+    expect(await get(GUEST_ARCHIVE_KEY)).toMatch(/^tlb-sealed:v1:/);
+    localStorage.removeItem(GUEST_KEY);
+    localStorage.removeItem(GUEST_SESSION_KEY);
     await createAndMigrateVault('user:guest-restart-user');
     onlineSpy = vi.spyOn(window.navigator, 'onLine', 'get').mockReturnValue(false) as any;
 });
@@ -101,6 +112,7 @@ describe('guest migration restart recovery', () => {
         await beginGuestMigrationIntent('merge', 'recovery', { uid: user.uid });
         useAppStore.getState().setUserData(guest);
         const before = await localRepository.readLocal('guest');
+        const ciphertextBefore = await get(GUEST_ARCHIVE_KEY);
 
         // The auth gate observes the original guest. Between the last
         // wasGuest observation and lock acquisition a different tab removes
@@ -147,7 +159,9 @@ describe('guest migration restart recovery', () => {
         expect(markRecovery).not.toHaveBeenCalled();
         expect(loadData).not.toHaveBeenCalled();
         expect(DB.loadCloudPayload).not.toHaveBeenCalled();
-        expect(await localRepository.readLocal('guest')).toEqual(before);
+        expect(before?.data.routines?.map(routine => routine.id)).toContain('guest-routine');
+        expect(await get(GUEST_ARCHIVE_KEY)).toBe(ciphertextBefore);
+        await expect(localRepository.readLocal('guest')).rejects.toMatchObject({ code: 'local-vault-locked' });
         expect(localStorage.getItem('guest_migration_intent_v1')).not.toBeNull();
     });
 
@@ -174,7 +188,8 @@ describe('guest migration restart recovery', () => {
     it('restores an already-durable authenticated archive without rewriting a stale guest view', async () => {
         const { cloud, guest } = fixtures();
         await localRepository.initializeLocal(user.uid, cloud, []);
-        const guestBefore = await localRepository.readLocal('guest');
+        const guestCiphertextBefore = await get(GUEST_ARCHIVE_KEY);
+        expect(guestCiphertextBefore).toMatch(/^tlb-sealed:v1:/);
         const accountBefore = await localRepository.readLocal(user.uid);
         // After a crash the guest snapshot can remain in memory, while the
         // recovery marker already makes storageOwner() resolve to the account.
@@ -193,12 +208,15 @@ describe('guest migration restart recovery', () => {
         expect(useAppStore.getState().userData?.routines?.map(item => item.id)).toEqual(['cloud-routine']);
         expect((await localRepository.readLocal(user.uid))?.pending).toEqual(accountBefore?.pending);
         expect((await localRepository.readLocal(user.uid))?.data).toEqual(accountBefore?.data);
-        expect((await localRepository.readLocal('guest'))?.data).toEqual(guestBefore?.data);
+        expect(await get(GUEST_ARCHIVE_KEY)).toBe(guestCiphertextBefore);
+        await expect(localRepository.readLocal('guest')).rejects.toMatchObject({ code: 'local-vault-locked' });
         expect(screen.getByTestId('bottom-nav')).toBeTruthy();
     });
 
     it('reconciles a newer authenticated workout device intent before publishing recovered account data', async () => {
         const { cloud, guest } = fixtures();
+        const guestCiphertextBefore = await get(GUEST_ARCHIVE_KEY);
+        expect(guestCiphertextBefore).toMatch(/^tlb-sealed:v1:/);
         const originalWorkout = {
             id: 'recovery-workout', date: '2026-10-14', routineName: 'Recupero',
             exercises: [{ id: 'exercise-1', exId: 'bench', sets: [{ id: 'set-1', kg: '50', reps: '8' }] }],
@@ -228,7 +246,8 @@ describe('guest migration restart recovery', () => {
         });
         await waitFor(() => expect(localStorage.getItem(SYNC_RECOVERY_KEY)).toBeNull());
         expect(useAppStore.getState().localPersistenceBlocked).toBe(false);
-        expect((await localRepository.readLocal('guest'))?.data.routines?.map(item => item.id)).toContain('guest-routine');
+        expect(await get(GUEST_ARCHIVE_KEY)).toBe(guestCiphertextBefore);
+        await expect(localRepository.readLocal('guest')).rejects.toMatchObject({ code: 'local-vault-locked' });
     });
 
     it('retains the recovery marker and blocks account data if the authenticated envelope is missing', async () => {
