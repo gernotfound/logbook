@@ -2,14 +2,18 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { useTrainingExercises } from '../src/hooks/useTrainingExercises';
 import { useTrainingRoutines } from '../src/hooks/useTrainingRoutines';
-import { deviceKey, readDeviceValueStrict } from '../src/lib/sync/deviceStorage';
+import { deviceKey, protectedDeviceKey, readDeviceValueStrict, writeDeviceValue } from '../src/lib/sync/deviceStorage';
+import { writeWorkoutRecoveryDraft } from '../src/lib/sync/workoutRecoveryDraft';
+import { prepareUnlockedTestArchive } from './secureVaultFixture';
+import { localStorageMock } from './setup';
 import { useAppStore } from '../src/store/useAppStore';
 import { useDialogStore } from '../src/store/useDialogStore';
 import { storageOwner } from '../src/lib/sync/session';
 
 describe('restored owner-scoped drafts', () => {
-    beforeEach(() => {
+    beforeEach(async () => {
         localStorage.clear();
+        await prepareUnlockedTestArchive(storageOwner());
         useAppStore.setState({ localPersistenceBlocked: false, syncHealth: 'synced', saveError: null });
     });
     afterEach(() => vi.restoreAllMocks());
@@ -21,13 +25,15 @@ describe('restored owner-scoped drafts', () => {
             trackingType: 'weight_reps', selectedMuscles: [], secondaryMuscles: [],
             isBodyweight: false, equipmentWeight: '20',
         });
-        localStorage.setItem(key, draft);
-        const remove = vi.spyOn(Storage.prototype, 'removeItem');
+        writeWorkoutRecoveryDraft('draft_exercise', storageOwner(), JSON.parse(draft));
+        const remove = vi.spyOn(localStorageMock, 'removeItem');
         try {
             const { result, unmount } = renderHook(() => useTrainingExercises());
             expect(result.current.exName).toBe('Draft exercise');
-            expect(localStorage.getItem(key)).not.toBeNull();
-            expect(remove).not.toHaveBeenCalledWith(key);
+            expect(localStorage.getItem(key)).toBeNull();
+            expect(localStorage.getItem(protectedDeviceKey('draft_exercise', storageOwner()))).toMatch(/^tlb-sealed:v1:/);
+            expect(readDeviceValueStrict('draft_exercise', storageOwner())).toBe(draft);
+            expect(remove).not.toHaveBeenCalledWith(protectedDeviceKey('draft_exercise', storageOwner()));
             unmount();
         } finally {
             remove.mockRestore();
@@ -37,13 +43,15 @@ describe('restored owner-scoped drafts', () => {
     it('does not clear the routine draft before hydration is reflected in React state', () => {
         const key = deviceKey('draft_routine', storageOwner());
         const draft = JSON.stringify({ name: 'Draft routine', exercises: [] });
-        localStorage.setItem(key, draft);
-        const remove = vi.spyOn(Storage.prototype, 'removeItem');
+        writeWorkoutRecoveryDraft('draft_routine', storageOwner(), JSON.parse(draft));
+        const remove = vi.spyOn(localStorageMock, 'removeItem');
         try {
             const { result, unmount } = renderHook(() => useTrainingRoutines());
             expect(result.current.routineName).toBe('Draft routine');
-            expect(localStorage.getItem(key)).not.toBeNull();
-            expect(remove).not.toHaveBeenCalledWith(key);
+            expect(localStorage.getItem(key)).toBeNull();
+            expect(localStorage.getItem(protectedDeviceKey('draft_routine', storageOwner()))).toMatch(/^tlb-sealed:v1:/);
+            expect(readDeviceValueStrict('draft_routine', storageOwner())).toBe(draft);
+            expect(remove).not.toHaveBeenCalledWith(protectedDeviceKey('draft_routine', storageOwner()));
             unmount();
         } finally {
             remove.mockRestore();
@@ -54,8 +62,12 @@ describe('restored owner-scoped drafts', () => {
         const marker = `logbook:v2:${owner}:health-consent-generation`;
         const exercise = JSON.stringify({ name: 'Deleted old exercise', notes: 'Old notes' });
         const routine = JSON.stringify({ name: 'Deleted old routine', exercises: [] });
-        localStorage.setItem(deviceKey('draft_exercise', owner), exercise);
-        localStorage.setItem(deviceKey('draft_routine', owner), routine);
+        // An authentic sealed record with no known source revision remains
+        // quarantined after a consent-epoch change, without losing its bytes.
+        writeDeviceValue('draft_exercise', exercise, owner);
+        writeDeviceValue('draft_routine', routine, owner);
+        const exerciseCiphertext = localStorage.getItem(protectedDeviceKey('draft_exercise', owner));
+        const routineCiphertext = localStorage.getItem(protectedDeviceKey('draft_routine', owner));
         localStorage.setItem(marker, '3');
 
         const ex = renderHook(() => useTrainingExercises());
@@ -65,6 +77,10 @@ describe('restored owner-scoped drafts', () => {
         await waitFor(() => expect(useAppStore.getState().localPersistenceBlocked).toBe(true));
         expect(readDeviceValueStrict('draft_exercise', owner)).toBe(exercise);
         expect(readDeviceValueStrict('draft_routine', owner)).toBe(routine);
+        expect(localStorage.getItem(protectedDeviceKey('draft_exercise', owner))).toBe(exerciseCiphertext);
+        expect(localStorage.getItem(protectedDeviceKey('draft_routine', owner))).toBe(routineCiphertext);
+        expect(localStorage.getItem(deviceKey('draft_exercise', owner))).toBeNull();
+        expect(localStorage.getItem(deviceKey('draft_routine', owner))).toBeNull();
         ex.unmount();
         rt.unmount();
     });
@@ -92,6 +108,8 @@ describe('restored owner-scoped drafts', () => {
             });
             expect(dispatch).not.toHaveBeenCalled();
             expect(readDeviceValueStrict('draft_routine', owner)).toBe(raw);
+            expect(localStorage.getItem(deviceKey('draft_routine', owner))).toBeNull();
+            expect(localStorage.getItem(protectedDeviceKey('draft_routine', owner))).toMatch(/^tlb-sealed:v1:/);
             unmount();
         } finally {
             useAppStore.setState({ dispatchDomainOperation: originalDispatch });
@@ -122,6 +140,8 @@ describe('restored owner-scoped drafts', () => {
             });
             expect(dispatch).not.toHaveBeenCalled();
             expect(readDeviceValueStrict('draft_exercise', owner)).toBe(raw);
+            expect(localStorage.getItem(deviceKey('draft_exercise', owner))).toBeNull();
+            expect(localStorage.getItem(protectedDeviceKey('draft_exercise', owner))).toMatch(/^tlb-sealed:v1:/);
             unmount();
         } finally {
             useAppStore.setState({ dispatchDomainOperation: originalDispatch });

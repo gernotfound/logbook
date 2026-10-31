@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { localStorageMock } from './setup';
-import { deviceKey } from '../src/lib/sync/deviceStorage';
+import { deviceKey, protectedDeviceKey, readDeviceValueStrict, writeDeviceValue } from '../src/lib/sync/deviceStorage';
+import { prepareUnlockedTestArchive } from './secureVaultFixture';
 import {
     readWorkoutTimerSnapshot,
     resetGlobalWorkoutTimer,
@@ -11,8 +12,9 @@ import {
 const OWNER = 'user:timer-test';
 
 describe('atomic workout timer storage', () => {
-    beforeEach(() => {
+    beforeEach(async () => {
         localStorage.clear();
+        await prepareUnlockedTestArchive(OWNER);
         localStorageMock.setItem.mockClear();
         localStorageMock.removeItem.mockClear();
     });
@@ -24,6 +26,7 @@ describe('atomic workout timer storage', () => {
     it('returns stopped without writing when the canonical snapshot is absent', () => {
         expect(readWorkoutTimerSnapshot(OWNER)).toEqual(stoppedWorkoutTimer());
         expect(localStorage.getItem(deviceKey('timer', OWNER))).toBeNull();
+        expect(localStorage.getItem(protectedDeviceKey('timer', OWNER))).toBeNull();
         expect(localStorageMock.setItem).not.toHaveBeenCalled();
         expect(localStorageMock.removeItem).not.toHaveBeenCalled();
     });
@@ -33,17 +36,21 @@ describe('atomic workout timer storage', () => {
         ['unsupported snapshot version', JSON.stringify({ version: 2, state: 'stopped', startTime: 0, accumulated: 0 })],
         ['invalid running timestamp', JSON.stringify({ version: 1, state: 'running', startTime: 0, accumulated: 250 })],
     ])('fails closed for %s rather than silently resetting a damaged timer', (_description, value) => {
-        localStorage.setItem(deviceKey('timer', OWNER), value);
+        writeDeviceValue('timer', value, OWNER);
+        const sealed = localStorage.getItem(protectedDeviceKey('timer', OWNER));
+        expect(sealed).toMatch(/^tlb-sealed:v1:/);
         localStorageMock.setItem.mockClear();
         localStorageMock.removeItem.mockClear();
 
         expect(() => readWorkoutTimerSnapshot(OWNER)).toThrow();
-        expect(localStorage.getItem(deviceKey('timer', OWNER))).toBe(value);
+        expect(localStorage.getItem(protectedDeviceKey('timer', OWNER))).toBe(sealed);
+        expect(readDeviceValueStrict('timer', OWNER)).toBe(value);
+        expect(localStorage.getItem(deviceKey('timer', OWNER))).toBeNull();
         expect(localStorageMock.setItem).not.toHaveBeenCalled();
         expect(localStorageMock.removeItem).not.toHaveBeenCalled();
     });
 
-    it('persists a complete running state with one canonical setItem call', () => {
+    it('persists a complete running state with one authenticated sealed setItem call', () => {
         writeWorkoutTimerSnapshot({
             version: 1,
             state: 'running',
@@ -51,9 +58,13 @@ describe('atomic workout timer storage', () => {
             accumulated: 9000,
         }, OWNER);
 
-        const canonicalWrites = localStorageMock.setItem.mock.calls.filter(([key]) => key === deviceKey('timer', OWNER));
+        const sealedKey = protectedDeviceKey('timer', OWNER);
+        const canonicalWrites = localStorageMock.setItem.mock.calls.filter(([key]) => key === sealedKey);
         expect(canonicalWrites).toHaveLength(1);
-        expect(JSON.parse(localStorage.getItem(deviceKey('timer', OWNER))!)).toEqual({
+        expect(canonicalWrites[0][1]).toMatch(/^tlb-sealed:v1:/);
+        expect(localStorage.getItem(sealedKey)).toBe(canonicalWrites[0][1]);
+        expect(localStorage.getItem(deviceKey('timer', OWNER))).toBeNull();
+        expect(readWorkoutTimerSnapshot(OWNER)).toEqual({
             version: 1,
             state: 'running',
             startTime: 123456,
@@ -62,7 +73,7 @@ describe('atomic workout timer storage', () => {
     });
 
     it('does not publish a reset event when the canonical storage write fails', () => {
-        const canonicalKey = deviceKey('timer', OWNER);
+        const canonicalKey = protectedDeviceKey('timer', OWNER);
         vi.spyOn(console, 'error').mockImplementation(() => {});
         localStorageMock.setItem.mockImplementationOnce((key: string) => {
             if (key === canonicalKey) throw new DOMException('blocked', 'SecurityError');
@@ -76,5 +87,18 @@ describe('atomic workout timer storage', () => {
         } finally {
             window.removeEventListener('logbook_reset_timer', listener);
         }
+        expect(localStorage.getItem(canonicalKey)).toBeNull();
+        expect(localStorage.getItem(deviceKey('timer', OWNER))).toBeNull();
+    });
+
+    it('preserves a forged plaintext timer and refuses to treat it as a valid sealed snapshot', () => {
+        const legacyKey = deviceKey('timer', OWNER);
+        const stale = JSON.stringify({ version: 1, state: 'running', startTime: 1000, accumulated: 250 });
+        localStorage.setItem(legacyKey, stale);
+        localStorageMock.setItem.mockClear();
+        expect(() => readWorkoutTimerSnapshot(OWNER)).toThrow();
+        expect(localStorage.getItem(legacyKey)).toBe(stale);
+        expect(localStorage.getItem(protectedDeviceKey('timer', OWNER))).toBeNull();
+        expect(localStorageMock.setItem).not.toHaveBeenCalled();
     });
 });
