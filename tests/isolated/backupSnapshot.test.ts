@@ -309,6 +309,18 @@ it('keeps schema/sync metadata out of history and nutrition business data while 
     expect(rawHistory._sync).toEqual(emptySync);
 });
 
+it('accepts an explicitly absent nutrition plan without misclassifying a valid cloud root', async () => {
+    const base = parse({});
+    await initializeSealedLocal(base);
+    sdk.root.mockResolvedValue({ exists: () => true, data: () => currentCloudDoc({
+        profile: { height: '174' }, nutritionPlanning: null,
+    }) });
+
+    const backup = await collectBackupSnapshot(base, true);
+    expect(backup.coverage.scope).toBe('cloud-and-device');
+    expect(backup.data.profile?.height).toBe('174');
+});
+
 it('rejects a complete cloud backup if an authenticated root contains business fields lost by Zod', async () => {
     const base = parse({});
     await initializeSealedLocal(base);
