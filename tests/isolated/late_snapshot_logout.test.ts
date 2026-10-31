@@ -14,7 +14,7 @@ import { activateGuestSession, GUEST_SESSION_KEY, invalidateSession, revokeGuest
 import { initializeLocal, readLocal } from '../../src/lib/sync/localRepository';
 import { writeDeviceValue } from '../../src/lib/sync/deviceStorage';
 import { createAndMigrateVault } from '../../src/lib/sync/secureArchiveMigration';
-import { lockAllVaults } from '../../src/lib/sync/secureArchiveSession';
+import { LocalVaultLockedError, lockAllVaults } from '../../src/lib/sync/secureArchiveSession';
 import type { UserData } from '../../src/types';
 
 const data = (height: number) => UserDataSchema.parse({ profile: { height: String(height) } }) as unknown as UserData;
@@ -48,7 +48,7 @@ it('refuses an in-flight guest snapshot that would recreate an archive after log
     const inFlight = saveUserDataToCache(data(170));
     revokeGuestSession();
     expect(() => writeDeviceValue('workout', 'obsolete-session', 'guest')).toThrow('revocata');
-    await expect(inFlight).rejects.toThrow('Sessione cambiata');
+    await expect(inFlight).rejects.toBeInstanceOf(LocalVaultLockedError);
     expect(await get('logbook:v2:guest')).toBeUndefined();
 });
 
