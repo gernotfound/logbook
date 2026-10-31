@@ -2,10 +2,9 @@ import { CURRENT_DATA_SCHEMA, normalizeCloudDocument, type NormalizedCloudDocume
 import { CloudCiphertextError, openCloudDocument } from './cloudDocumentCipher';
 
 /**
- * Read-only boundary for both the existing parsing contracts and the v2.0
- * encrypted-cloud candidate. The caller must opt in with a VERIFIED account
- * key acquired outside of Firestore transaction callbacks. Never fallback
- * from a failing AEAD open to plaintext or an empty document.
+ * Encrypted account reads require a verified key acquired outside Firestore
+ * transaction callbacks. The unkeyed schema-normalization path must reject
+ * sealed documents: a failed AEAD open never falls back to plaintext/empty.
  */
 export function readAccountCloudDocument(
     raw: unknown, context: string, uid: string, path: string,

@@ -9,8 +9,8 @@ import type { DocumentData } from './documentProjection';
  * Versioned, self-authenticating cloud DOCUMENT envelope.
  *
  * This module has no Firestore, Auth, KMS, IndexedDB or PWA lifecycle effects.
- * It MUST NOT be wired to live cloud reads/writes before authenticated account
- * key provisioning, Rules, backup/erasure and cutover gates are ready together.
+ * Live callers must separately enforce authenticated account-key access,
+ * Rules, backup/erasure and session fencing; this codec alone authorizes no I/O.
  */
 const CLOUD_CIPHER_FORMAT = 'thelogbook-cloud-document' as const;
 const CLOUD_CIPHER_VERSION = 1 as const;
