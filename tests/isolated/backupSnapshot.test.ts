@@ -31,7 +31,7 @@ import { acknowledgeThrough, initializeLocal, commitLocal, readLocal } from '../
 import { createAndMigrateVault } from '../../src/lib/sync/secureArchiveMigration';
 import { LocalVaultLockedError, lockAllVaults } from '../../src/lib/sync/secureArchiveSession';
 import { SEALED_LOCAL_PREFIX } from '../../src/lib/sync/secureArchiveCipher';
-import { writeDeviceValue } from '../../src/lib/sync/deviceStorage';
+import { readDeviceValueStrict, writeDeviceValue } from '../../src/lib/sync/deviceStorage';
 import { UserDataSchema } from '../../src/lib/schema';
 import { CURRENT_DATA_SCHEMA, CURRENT_SYNC_PROTOCOL } from '../../src/lib/schemaEvolution';
 import { invalidateSession } from '../../src/lib/sync/session';
@@ -48,6 +48,32 @@ const initializeSealedLocal = async (data: UserData) => {
     await createAndMigrateVault('user:a');
     await initializeLocal('user:a', data);
 };
+
+// Carry the real vault control and sealed records into a controllable storage
+// snapshot; race injections must not accidentally simulate a missing DEK.
+function copyDeviceStorage(): Map<string, string> {
+    const values = new Map<string, string>();
+    for (let index = 0; index < localStorage.length; index++) {
+        const key = localStorage.key(index);
+        if (key === null) throw new Error('Incomplete device fixture inventory');
+        const value = localStorage.getItem(key);
+        if (value === null) throw new Error('Missing device fixture value');
+        values.set(key, value);
+    }
+    return values;
+}
+
+function stubConcurrentStorage(values: Map<string, string>, overrides: Partial<Pick<Storage, 'key' | 'getItem'>> = {}): void {
+    vi.stubGlobal('localStorage', {
+        get length() { return values.size; },
+        key: (index: number) => [...values.keys()][index] ?? null,
+        getItem: (key: string) => values.get(key) ?? null,
+        setItem: (key: string, value: string) => { values.set(key, String(value)); },
+        removeItem: (key: string) => { values.delete(key); },
+        clear: () => { values.clear(); },
+        ...overrides,
+    });
+}
 
 beforeEach(async () => {
     lockAllVaults();
@@ -365,19 +391,21 @@ it('exports only allowlisted recovery device data and excludes account-deletion 
     expect(backup.recovery.device).not.toHaveProperty('storage_marker');
 });
 
+
 it('aborts instead of exporting a stale value if another tab changes a witness during backup', async () => {
     const name = 'draft:dated-intent:' + 'a'.repeat(32);
-    const key = 'logbook:v2:user:a:' + name;
-    const values = new Map([[key, '{"weight":"75"}']]);
+    const key = 'logbook:v2:user:a:sealed:' + name;
+    await initializeSealedLocal(parse({}));
+    writeDeviceValue(name, '{"weight":"75"}', 'user:a');
+    const values = copyDeviceStorage();
     let changed = false;
-    vi.stubGlobal('localStorage', {
-        get length() { return values.size; },
-        key: (index: number) => [...values.keys()][index] ?? null,
+    stubConcurrentStorage(values, {
         getItem: (readKey: string) => {
             const value = values.get(readKey) ?? null;
             if (readKey === key && !changed) {
                 changed = true;
-                values.set(key, '{"weight":"76"}');
+                // Simulate another tab's valid AEAD update between the two reads.
+                writeDeviceValue(name, '{"weight":"76"}', 'user:a');
             }
             return value;
         },
@@ -385,22 +413,26 @@ it('aborts instead of exporting a stale value if another tab changes a witness d
     await expect(collectBackupSnapshot(parse({}), false))
         .rejects.toThrow('I valori di recupero sono cambiati');
     expect(changed).toBe(true);
-    expect(values.get(key)).toBe('{"weight":"76"}');
+    expect(values.get(key)?.startsWith(SEALED_LOCAL_PREFIX)).toBe(true);
+    expect(readDeviceValueStrict(name, 'user:a')).toBe('{"weight":"76"}');
 });
 
+
 it('aborts instead of omitting a newly added independent witness mid-export', async () => {
-    const first = 'logbook:v2:user:a:draft:buffered-intent:' + 'a'.repeat(32);
-    const second = 'logbook:v2:user:a:draft:buffered-intent:' + 'b'.repeat(32);
-    const values = new Map([[first, '{"value":"editor A"}']]);
+    const firstName = 'draft:buffered-intent:' + 'a'.repeat(32);
+    const secondName = 'draft:buffered-intent:' + 'b'.repeat(32);
+    const first = 'logbook:v2:user:a:sealed:' + firstName;
+    const second = 'logbook:v2:user:a:sealed:' + secondName;
+    await initializeSealedLocal(parse({}));
+    writeDeviceValue(firstName, '{"value":"editor A"}', 'user:a');
+    const values = copyDeviceStorage();
     let added = false;
-    vi.stubGlobal('localStorage', {
-        get length() { return values.size; },
-        key: (index: number) => [...values.keys()][index] ?? null,
+    stubConcurrentStorage(values, {
         getItem: (readKey: string) => {
             const value = values.get(readKey) ?? null;
             if (readKey === first && !added) {
                 added = true;
-                values.set(second, '{"value":"editor B"}');
+                writeDeviceValue(secondName, '{"value":"editor B"}', 'user:a');
             }
             return value;
         },
@@ -408,16 +440,20 @@ it('aborts instead of omitting a newly added independent witness mid-export', as
     await expect(collectBackupSnapshot(parse({}), false))
         .rejects.toThrow('Le copie di recupero sono cambiate');
     expect(added).toBe(true);
-    expect(values.size).toBe(2);
+    expect(values.get(first)?.startsWith(SEALED_LOCAL_PREFIX)).toBe(true);
+    expect(values.get(second)?.startsWith(SEALED_LOCAL_PREFIX)).toBe(true);
+    expect(readDeviceValueStrict(secondName, 'user:a')).toBe('{"value":"editor B"}');
 });
 
+
 it('aborts if a witness disappears during collection instead of reporting a complete device backup', async () => {
-    const key = 'logbook:v2:user:a:workout-intent:' + 'e'.repeat(32);
-    const values = new Map([[key, '{"sequence":1}']]);
+    const name = 'workout-intent:' + 'e'.repeat(32);
+    const key = 'logbook:v2:user:a:sealed:' + name;
+    await initializeSealedLocal(parse({}));
+    writeDeviceValue(name, '{"sequence":1}', 'user:a');
+    const values = copyDeviceStorage();
     let removed = false;
-    vi.stubGlobal('localStorage', {
-        get length() { return values.size; },
-        key: (index: number) => [...values.keys()][index] ?? null,
+    stubConcurrentStorage(values, {
         getItem: (readKey: string) => {
             const value = values.get(readKey) ?? null;
             if (readKey === key && !removed) {
@@ -430,16 +466,22 @@ it('aborts if a witness disappears during collection instead of reporting a comp
     await expect(collectBackupSnapshot(parse({}), false))
         .rejects.toThrow('Le copie di recupero sono cambiate');
     expect(removed).toBe(true);
+    expect(values.has(key)).toBe(false);
 });
 
-it('refuses a false no-source result when a concurrent tab shifts the localStorage key indexes', () => {
+
+it('refuses a false no-source result when a concurrent tab shifts the localStorage key indexes', async () => {
     const unrelated = 'logbook:v2:user:a:telemetry_queue';
-    const witness = 'logbook:v2:user:a:workout-intent:' + 'f'.repeat(32);
+    const name = 'workout-intent:' + 'f'.repeat(32);
+    const witness = 'logbook:v2:user:a:sealed:' + name;
     const original = '{"__logbookWorkoutIntent":1,"sequence":1}';
-    const values = new Map([[unrelated, '[]'], [witness, original]]);
+    await createAndMigrateVault('user:a');
+    writeDeviceValue(name, original, 'user:a');
+    const values = new Map<string, string>([[unrelated, '[]'], ...copyDeviceStorage()]);
+    const ciphertext = values.get(witness);
+    expect(ciphertext?.startsWith(SEALED_LOCAL_PREFIX)).toBe(true);
     let shifted = false;
-    vi.stubGlobal('localStorage', {
-        get length() { return values.size; },
+    stubConcurrentStorage(values, {
         key: (index: number) => {
             const key = [...values.keys()][index] ?? null;
             if (index === 0 && !shifted) {
@@ -448,7 +490,6 @@ it('refuses a false no-source result when a concurrent tab shifts the localStora
             }
             return key;
         },
-        getItem: (key: string) => values.get(key) ?? null,
     });
 
     // A one-pass index scan would miss the witness and falsely deny export.
@@ -456,59 +497,58 @@ it('refuses a false no-source result when a concurrent tab shifts the localStora
     expect(() => hasDeviceRecoveryBackupSource('user:a'))
         .toThrow('Le copie di recupero sono cambiate durante il backup');
     expect(shifted).toBe(true);
-    expect(values.get(witness)).toBe(original);
+    expect(values.get(witness)).toBe(ciphertext);
     expect(hasDeviceRecoveryBackupSource('user:a')).toBe(true);
 
     values.delete(witness);
     expect(hasDeviceRecoveryBackupSource('user:a')).toBe(false);
 });
 
+
 it('rejects duplicate index observations rather than exporting only one of two physical witnesses', async () => {
-    const a = 'logbook:v2:user:a:workout-intent:' + 'a'.repeat(32);
-    const b = 'logbook:v2:user:a:workout-intent:' + 'b'.repeat(32);
-    const values = new Map([[a, '{"__logbookWorkoutIntent":1,"sequence":1}'],
-        [b, '{"__logbookWorkoutIntent":1,"sequence":2}']]);
+    const firstName = 'workout-intent:' + 'a'.repeat(32);
+    const secondName = 'workout-intent:' + 'b'.repeat(32);
+    const a = 'logbook:v2:user:a:sealed:' + firstName;
+    await createAndMigrateVault('user:a');
+    writeDeviceValue(firstName, '{"__logbookWorkoutIntent":1,"sequence":1}', 'user:a');
+    writeDeviceValue(secondName, '{"__logbookWorkoutIntent":1,"sequence":2}', 'user:a');
+    const values = copyDeviceStorage();
     let shifting = true;
-    vi.stubGlobal('localStorage', {
-        get length() { return values.size; },
+    stubConcurrentStorage(values, {
         // A key shifting between index observations may be returned twice,
         // even though two distinct physical recovery records still exist.
         key: (index: number) => shifting ? a : [...values.keys()][index] ?? null,
-        getItem: (key: string) => values.get(key) ?? null,
     });
 
     expect(() => hasDeviceRecoveryBackupSource('user:a'))
         .toThrow('Le copie di recupero sono cambiate durante il backup');
-    expect(values.size).toBe(2);
+    expect(values.size).toBeGreaterThanOrEqual(3);
 
     shifting = false;
     const backup = await collectBackupSnapshot(parse({}), false);
-    expect(Object.keys(backup.recovery.device)).toEqual([
-        'workout-intent:' + 'a'.repeat(32),
-        'workout-intent:' + 'b'.repeat(32),
-    ]);
+    expect(Object.keys(backup.recovery.device)).toEqual([firstName, secondName]);
 });
+
 
 it('retains a crash-only private workout witness in an explicit partial backup without replaying it on import', async () => {
     const source = '{"__logbookWorkoutIntent":1,"sequence":1}';
     const key = 'workout-intent:' + 'f'.repeat(32);
-    const values = new Map<string, string>([
-        ['logbook:v2:user:a:' + key, source],
-        ['logbook:v2:user:b:workout', '{"id":"foreign"}'],
-        ['logbook:v2:user:a:account-deletion', '{"secret":"do-not-export"}'],
-    ]);
-    vi.stubGlobal('localStorage', {
-        get length() { return values.size; },
-        key: (index: number) => [...values.keys()][index] ?? null,
-        getItem: (name: string) => values.get(name) ?? null,
-    });
+    await createAndMigrateVault('user:a');
+    writeDeviceValue(key, source, 'user:a');
+    const witness = 'logbook:v2:user:a:sealed:' + key;
+    const values = copyDeviceStorage();
+    const ciphertext = values.get(witness);
+    expect(ciphertext?.startsWith(SEALED_LOCAL_PREFIX)).toBe(true);
+    values.set('logbook:v2:user:b:workout', '{"id":"foreign"}');
+    values.set('logbook:v2:user:a:account-deletion', '{"secret":"do-not-export"}');
+    stubConcurrentStorage(values);
     expect(hasDeviceRecoveryBackupSource('user:a')).toBe(true);
 
     const backup = await collectBackupSnapshot(parse({}), false);
     expect(backup.coverage.scope).toBe('device');
     expect(backup.recovery.envelope).toBeUndefined();
     expect(backup.recovery.device).toEqual({ [key]: source });
-    expect(values.get('logbook:v2:user:a:' + key)).toBe(source);
+    expect(values.get(witness)).toBe(ciphertext);
     const exported = createBackup(backup.data, 'user:a', backup.coverage, backup.recovery);
     const decoded = decodeImport(exported, 'user:a');
     expect((exported.recovery as { device: Record<string, string> }).device[key]).toBe(source);
@@ -539,6 +579,7 @@ it('never labels a failed cloud scan complete; explicit device export still work
 });
 
 it('aborts if the account changes between pages', async () => {
+    await initializeSealedLocal(parse({}));
     sdk.page.mockImplementation(async () => { sdk.auth.currentUser = { uid: 'b' }; invalidateSession(); return { size: 0, docs: [] }; });
     await expect(collectBackupSnapshot(parse({}), true)).rejects.toThrow('Sessione cambiata');
 });
