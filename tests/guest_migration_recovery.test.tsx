@@ -1,6 +1,7 @@
 import React from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { get } from 'idb-keyval';
 
 import { auth, onAuthStateChanged } from '../src/lib/firebase';
 import { DB } from '../src/lib/db';
@@ -55,8 +56,14 @@ beforeEach(async () => {
         return () => {};
     });
 
+    // Provision the guest archive under its real generation, then the account.
+    localStorage.setItem('logbook_is_guest', 'true');
+    localStorage.setItem(GUEST_SESSION_KEY, 'guest-crash-recovery-generation');
+    activateGuestSession('guest-crash-recovery-generation');
     const { guest } = fixtures();
+    await createAndMigrateVault('guest');
     await localRepository.initializeLocal('guest', guest, []);
+    expect(await get('logbook:v2:guest')).toMatch(/^tlb-sealed:v1:/);
     await createAndMigrateVault('user:guest-recovery-user');
 });
 
@@ -65,6 +72,7 @@ afterEach(() => {
     commitSpy = undefined;
     onlineSpy?.mockRestore();
     onlineSpy = undefined;
+    lockAllVaults();
 });
 
 describe('guest migration crash recovery boundary', () => {
@@ -105,6 +113,8 @@ describe('guest migration crash recovery boundary', () => {
 
     it('retires the guest marker only after the authenticated envelope is durable and before replication', async () => {
         const { cloud, guest } = fixtures();
+        const guestCiphertextBefore = await get('logbook:v2:guest');
+        expect(guestCiphertextBefore).toMatch(/^tlb-sealed:v1:/);
         localStorage.setItem('logbook_is_guest', 'true');
         localStorage.setItem(GUEST_SESSION_KEY, 'guest-crash-recovery-generation');
         activateGuestSession('guest-crash-recovery-generation');
@@ -133,9 +143,11 @@ describe('guest migration crash recovery boundary', () => {
         expect(localStorage.getItem('guest_migration_intent_v1')).toBeNull();
         expect(storageOwner()).toBe(`user:${user.uid}`);
 
-        const guestEnvelope = await localRepository.readLocal('guest');
+        // The retired guest generation must no longer decrypt its archive.
+        // Preserve its original ciphertext instead of testing a stale unlock.
+        const guestCiphertextAfter = await get('logbook:v2:guest');
         const authenticatedEnvelope = await localRepository.readLocal(user.uid);
-        expect(guestEnvelope?.data.routines?.map(routine => routine.id)).toContain('guest-routine');
+        expect(guestCiphertextAfter).toBe(guestCiphertextBefore);
         expect(authenticatedEnvelope?.data.profile).toMatchObject({ height: '175', gender: 'M' });
         expect(authenticatedEnvelope?.data.routines?.map(routine => routine.id))
             .toEqual(expect.arrayContaining(['cloud-routine', 'guest-routine']));
@@ -168,6 +180,8 @@ describe('guest migration crash recovery boundary', () => {
 
     it('creates a durable authenticated base when a new account has no cloud payload yet', async () => {
         const { guest } = fixtures();
+        const guestCiphertextBefore = await get('logbook:v2:guest');
+        expect(guestCiphertextBefore).toMatch(/^tlb-sealed:v1:/);
         localStorage.setItem('logbook_is_guest', 'true');
         localStorage.setItem(GUEST_SESSION_KEY, 'guest-crash-recovery-generation');
         activateGuestSession('guest-crash-recovery-generation');
@@ -187,13 +201,13 @@ describe('guest migration crash recovery boundary', () => {
         await waitFor(() => expect(screen.getByTestId('migration-status').textContent).toBe('idle'));
 
         const authenticatedEnvelope = await localRepository.readLocal(user.uid);
-        const guestEnvelope = await localRepository.readLocal('guest');
+        const guestCiphertextAfter = await get('logbook:v2:guest');
 
         expect(authenticatedEnvelope).toBeDefined();
         expect(authenticatedEnvelope?.data.profile).toMatchObject({ height: '175' });
         expect(authenticatedEnvelope?.data.routines?.map(routine => routine.id)).toContain('guest-routine');
         expect(authenticatedEnvelope?.pending.length).toBeGreaterThan(0);
-        expect(guestEnvelope?.data.routines?.map(routine => routine.id)).toContain('guest-routine');
+        expect(guestCiphertextAfter).toBe(guestCiphertextBefore);
         expect(localStorage.getItem('logbook_is_guest')).toBeNull();
         expect(localStorage.getItem('guest_migration_intent_v1')).toBeNull();
         expect(storageOwner()).toBe(`user:${user.uid}`);

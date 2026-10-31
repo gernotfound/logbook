@@ -1,9 +1,12 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { get } from 'idb-keyval';
 import { auth } from '../src/lib/firebase';
 import { getLimitedUseAppCheckToken } from '../src/lib/appCheck';
 import { UserDataSchema } from '../src/lib/schema';
 import { initializeLocal, readLocal } from '../src/lib/sync/localRepository';
 import { invalidateSession } from '../src/lib/sync/session';
+import { createAndMigrateVault } from '../src/lib/sync/secureArchiveMigration';
+import { lockAllVaults } from '../src/lib/sync/secureArchiveSession';
 // Unlike the rest of the UI fixture, this suite exercises the real policy module.
 vi.unmock('../src/lib/healthConsent');
 
@@ -37,7 +40,8 @@ const trustedConsentResponse = (payload: Record<string, unknown>, init?: Respons
   }, init);
 };
 
-beforeEach(() => { localStorage.clear(); vi.unstubAllGlobals(); (auth as { currentUser: unknown }).currentUser = null; });
+beforeEach(() => { lockAllVaults(); localStorage.clear(); vi.unstubAllGlobals(); (auth as { currentUser: unknown }).currentUser = null; });
+afterEach(() => lockAllVaults());
 
 describe('bounded cold-start consent verification', () => {
   it('fails closed after a stalled token and permits a fresh retry', async () => {
@@ -182,7 +186,9 @@ describe('erased acknowledged local consent generation', () => {
     const owner = 'user:' + uid;
     const actor = user(uid);
     (auth as { currentUser: unknown }).currentUser = actor;
+    await createAndMigrateVault(owner);
     await initializeLocal(owner, UserDataSchema.parse({ profile: { height: '180' } }) as any);
+    expect(await get('logbook:v2:' + owner)).toMatch(/^tlb-sealed:v1:/);
     const original = await readLocal(owner);
     expect(original?.pending).toEqual([]);
 
@@ -209,7 +215,9 @@ describe('erased acknowledged local consent generation', () => {
     const owner = 'user:' + uid;
     const actor = user(uid);
     (auth as { currentUser: unknown }).currentUser = actor;
+    await createAndMigrateVault(owner);
     await initializeLocal(owner, UserDataSchema.parse({ profile: { height: '180' } }) as any);
+    expect(await get('logbook:v2:' + owner)).toMatch(/^tlb-sealed:v1:/);
     const original = await readLocal(owner);
     localStorage.setItem(key(uid), 'withdrawn');
     vi.stubGlobal('fetch', vi.fn(async () => trustedConsentResponse({
