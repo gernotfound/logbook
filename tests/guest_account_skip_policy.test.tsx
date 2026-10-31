@@ -1,5 +1,6 @@
 import React from 'react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { get } from 'idb-keyval';
 import { render, waitFor } from '@testing-library/react';
 import { auth, onAuthStateChanged } from '../src/lib/firebase';
 import { DB } from '../src/lib/db';
@@ -10,12 +11,24 @@ import { useAppStore } from '../src/store/useAppStore';
 import type { UserData } from '../src/types';
 import { beginGuestMigrationIntent } from '../src/lib/auth/guestMigrationIntent';
 import { createAndMigrateVault } from '../src/lib/sync/secureArchiveMigration';
-import { lockAllVaults } from '../src/lib/sync/secureArchiveSession';
+import { lockAllVaults, LocalVaultLockedError } from '../src/lib/sync/secureArchiveSession';
 import { activateGuestSession, GUEST_SESSION_KEY } from '../src/lib/sync/session';
 import { migrateGuestAccount } from '../src/contexts/auth/migrateGuestAccount';
 
 const parse = (value: unknown) => UserDataSchema.parse(value) as unknown as UserData;
 const user = { uid: 'skip-user', email: 'skip@example.com', displayName: 'Skip User' } as any;
+const guestArchiveKey = 'logbook:v2:guest';
+
+async function seedGuestArchive(guest: UserData): Promise<string> {
+    localStorage.setItem('logbook_is_guest', 'true');
+    localStorage.setItem(GUEST_SESSION_KEY, 'guest-skip-generation');
+    activateGuestSession('guest-skip-generation');
+    await createAndMigrateVault('guest');
+    await initializeLocal('guest', guest);
+    const ciphertext = await get<string>(guestArchiveKey);
+    expect(ciphertext).toMatch(/^tlb-sealed:v1:/);
+    return ciphertext!;
+}
 
 describe('guest -> account skip policy', () => {
     beforeEach(async () => {
@@ -30,6 +43,7 @@ describe('guest -> account skip policy', () => {
         });
         await createAndMigrateVault('user:skip-user');
     });
+    afterEach(() => lockAllVaults());
 
 
     it('preserves account pending while the user explicitly skips guest transfer', async () => {
@@ -46,10 +60,7 @@ describe('guest -> account skip policy', () => {
         await initializeLocal(user.uid, cloud);
         await commitLocal(user.uid, accountEdit, cloud);
         expect((await readLocal(user.uid))?.pending.length).toBeGreaterThan(0);
-        await initializeLocal('guest', guest);
-        localStorage.setItem('logbook_is_guest', 'true');
-        localStorage.setItem(GUEST_SESSION_KEY, 'guest-skip-generation');
-        activateGuestSession('guest-skip-generation');
+        const guestCiphertext = await seedGuestArchive(guest);
         await beginGuestMigrationIntent('skip', 'recovery', { uid: user.uid });
         useAppStore.getState().setUserData(guest);
         const offline = vi.spyOn(window.navigator, 'onLine', 'get').mockReturnValue(false);
@@ -68,9 +79,8 @@ describe('guest -> account skip policy', () => {
             expect(account?.pending.length).toBeGreaterThan(0);
             expect(account?.data.profile?.height).toBe('183');
             expect(account?.data.routines?.map(item => item.id)).toEqual(['cloud-routine']);
-            const stillGuest = await readLocal('guest');
-            expect(stillGuest?.data.profile?.height).toBe('151');
-            expect(stillGuest?.data.routines?.map(item => item.id)).toEqual(['guest-routine']);
+            expect(await get<string>(guestArchiveKey)).toBe(guestCiphertext);
+            await expect(readLocal('guest')).rejects.toBeInstanceOf(LocalVaultLockedError);
             expect(useAppStore.getState().dataOwner).toBe('user:' + user.uid);
             expect(DB.loadCloudPayload).toHaveBeenCalledTimes(1);
         } finally {
@@ -118,10 +128,7 @@ describe('guest -> account skip policy', () => {
             routines: [{ id: 'guest-routine', name: 'Guest', exercises: [] }],
         });
 
-        await initializeLocal('guest', guest);
-        localStorage.setItem('logbook_is_guest', 'true');
-        localStorage.setItem(GUEST_SESSION_KEY, 'guest-skip-generation');
-        activateGuestSession('guest-skip-generation');
+        const guestCiphertext = await seedGuestArchive(guest);
         useAppStore.getState().setUserData(guest);
 
         render(<AuthProvider><div>app</div></AuthProvider>);
@@ -133,6 +140,7 @@ describe('guest -> account skip policy', () => {
         expect(DB.loadCloudPayload).not.toHaveBeenCalled();
         expect(await readLocal('user:skip-user')).toBeUndefined();
         expect((await readLocal('guest'))?.data.routines?.map(routine => routine.id)).toContain('guest-routine');
+        expect(await get<string>(guestArchiveKey)).toBe(guestCiphertext);
         expect(localStorage.getItem('logbook_is_guest')).toBe('true');
     });
 
@@ -146,10 +154,7 @@ describe('guest -> account skip policy', () => {
             routines: [{ id: 'guest-routine', name: 'Guest', exercises: [] }],
         });
 
-        await initializeLocal('guest', guest);
-        localStorage.setItem('logbook_is_guest', 'true');
-        localStorage.setItem(GUEST_SESSION_KEY, 'guest-skip-generation');
-        activateGuestSession('guest-skip-generation');
+        const guestCiphertext = await seedGuestArchive(guest);
         await beginGuestMigrationIntent('skip', 'recovery', { uid: user.uid });
         useAppStore.getState().setUserData(guest);
 
@@ -168,8 +173,8 @@ describe('guest -> account skip policy', () => {
             expect(useAppStore.getState().userData?.routines?.map(routine => routine.id)).toEqual(['cloud-routine']);
         });
 
-        const guestEnvelope = await readLocal('guest');
-        expect(guestEnvelope?.data.routines?.map(routine => routine.id)).toEqual(['guest-routine']);
+        expect(await get<string>(guestArchiveKey)).toBe(guestCiphertext);
+        await expect(readLocal('guest')).rejects.toBeInstanceOf(LocalVaultLockedError);
         expect(localStorage.getItem('logbook_is_guest')).toBeNull();
         expect(localStorage.getItem('guest_migration_intent_v1')).toBeNull();
         expect(DB.loadCloudPayload).toHaveBeenCalledTimes(1);
