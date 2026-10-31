@@ -57,7 +57,8 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
     it('starts with a working storage enumeration and deletion mock', () => {
         const key = 'logbook:v2:user:test-user-id:draft:baseline';
         localStorage.setItem(key, 'ciphertext');
-        expect(localStorage.key(0)).toBe(key);
+        expect(Array.from({ length: localStorage.length }, (_, index) => localStorage.key(index)))
+            .toContain(key);
         localStorage.removeItem(key);
         expect(localStorage.getItem(key)).toBeNull();
     });
