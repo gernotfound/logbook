@@ -19,6 +19,7 @@ import WorkoutTimer from '../src/components/Training/WorkoutTimer';
 import { useWorkoutSession } from '../src/hooks/useWorkoutSession';
 import { commitDomainOperations, initializeLocal, readLocal } from '../src/lib/sync/localRepository';
 import { localStorageMock, renderWithProviders } from './setup';
+import { prepareUnlockedTestArchive } from './secureVaultFixture';
 
 function workout(id: string, started = false): WorkoutSession & { id: string } {
     return {
@@ -72,10 +73,12 @@ describe('Workout lifecycle durable recovery regressions', () => {
         expect(screen.getByRole('button', { name: 'Energia: 4 su 5' }).getAttribute('aria-pressed')).toBe('false');
         fireEvent.click(screen.getByRole('button', { name: 'Salta check-in e inizia' }));
         await waitFor(() => expect(onStart).not.toHaveBeenCalled());
-        expect(readDeviceValueStrict('draft:pre-session:old-checkin', owner)).toBe(original);
+        expect(localStorage.getItem(key)).toBe(original);
+        expect(localStorage.getItem(protectedDeviceKey('draft:pre-session:old-checkin', owner))).toBeNull();
     });
 
     it('stamps current readiness and refuses a stale mounted form after another tab advances consent', async () => {
+        await prepareUnlockedTestArchive(owner);
         const marker = `logbook:v2:${owner}:health-consent-generation`;
         const name = 'draft:pre-session:live-checkin';
         localStorage.setItem(marker, '3');
@@ -94,6 +97,7 @@ describe('Workout lifecycle durable recovery regressions', () => {
     });
 
     it('does not resurrect a legacy final workout rating after consent revocation and reacceptance', async () => {
+        await prepareUnlockedTestArchive(owner);
         const current = workout('old-final-rating', true);
         const name = 'draft:post-session:' + current.id;
         const original = JSON.stringify({ pendingEndTime: 1500, draft: {
@@ -110,6 +114,7 @@ describe('Workout lifecycle durable recovery regressions', () => {
     });
 
     it('preserves the source consent epoch of the current final rating against stale mounted edits', async () => {
+        await prepareUnlockedTestArchive(owner);
         const current = workout('fresh-final-rating', true);
         const name = 'draft:post-session:' + current.id;
         const marker = `logbook:v2:${owner}:health-consent-generation`;
@@ -128,25 +133,27 @@ describe('Workout lifecycle durable recovery regressions', () => {
         expect(readDeviceValueStrict(name, owner)).toBe(raw);
     });
 
-    it('keeps corrupted owner metadata in an old workout draft rather than overwriting it', () => {
+    it('keeps corrupted owner metadata in an old workout draft rather than overwriting it', async () => {
+        await prepareUnlockedTestArchive(owner);
         const name = 'draft:pre-session:tampered';
         const raw = JSON.stringify({
             __logbookWorkoutRecoveryDraft: 1, owner: 'user:other',
             name, consentRevision: 3, data: { energy: 2 },
         });
-        localStorage.setItem(deviceKey(name, owner), raw);
+        writeDeviceValue(name, raw, owner);
         localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '3');
         expect(() => readWorkoutRecoveryDraft(name, owner)).toThrow('Metadati');
         expect(() => writeWorkoutRecoveryDraft(name, owner, { energy: 5 })).toThrow('Metadati');
         expect(readDeviceValueStrict(name, owner)).toBe(raw);
     });
 
-    it('keeps readiness UI and durable draft unchanged when a write fails', () => {
+    it('keeps readiness UI and durable draft unchanged when a write fails', async () => {
+        await prepareUnlockedTestArchive(owner);
         render(<PreSessionCheckIn workoutId="readiness-1" onStart={vi.fn(async () => true)}
             onCancel={vi.fn(async () => true)} />);
         fireEvent.click(screen.getByRole('button', { name: 'Energia: 4 su 5' }));
         expect(screen.getByRole('button', { name: 'Energia: 4 su 5' }).getAttribute('aria-pressed')).toBe('true');
-        const key = deviceKey('draft:pre-session:readiness-1', owner);
+        const key = protectedDeviceKey('draft:pre-session:readiness-1', owner);
         const previous = localStorage.getItem(key);
         localStorageMock.setItem.mockImplementationOnce((written: string) => {
             if (written === key) throw new DOMException('full', 'QuotaExceededError');
@@ -157,10 +164,11 @@ describe('Workout lifecycle durable recovery regressions', () => {
     });
 
     it('preserves readiness draft if deletion is declined', async () => {
+        await prepareUnlockedTestArchive(owner);
         const cancel = vi.fn(async () => false);
         render(<PreSessionCheckIn workoutId="readiness-2" onStart={vi.fn(async () => true)} onCancel={cancel} />);
         fireEvent.click(screen.getByRole('button', { name: 'Voglia di allenarti: 3 su 5' }));
-        const key = deviceKey('draft:pre-session:readiness-2', owner);
+        const key = protectedDeviceKey('draft:pre-session:readiness-2', owner);
         const saved = localStorage.getItem(key);
         fireEvent.click(screen.getByRole('button', { name: 'Annulla allenamento' }));
         await waitFor(() => expect(cancel).toHaveBeenCalledOnce());
@@ -198,6 +206,7 @@ describe('Workout lifecycle durable recovery regressions', () => {
     });
 
     it('verifies the owner-scoped IndexedDB snapshot after starting a planned workout', async () => {
+        await prepareUnlockedTestArchive(owner);
         const initial = userData({
             routines: [{ id: 'routine-durable', name: 'Durable routine', exercises: [] }],
             activeWorkout: null,
@@ -216,10 +225,12 @@ describe('Workout lifecycle durable recovery regressions', () => {
         expect(visible?.routineId).toBe('routine-durable');
         expect(durable?.data.activeWorkout?.id).toBe(visible?.id);
         expect(durable?.data.activeWorkout?.routineId).toBe('routine-durable');
-        expect(localStorage.getItem(deviceKey('workout', owner))).not.toBeNull();
+        expect(localStorage.getItem(protectedDeviceKey('workout', owner))).not.toBeNull();
+        expect(localStorage.getItem(deviceKey('workout', owner))).toBeNull();
     });
 
     it('never deletes a replacement workout when confirmation belongs to another session', async () => {
+        await prepareUnlockedTestArchive(owner);
         const original = workout('original-confirmation', true);
         const replacement = workout('replacement-confirmation', true);
         const durable = userData({ activeWorkout: replacement });
@@ -238,11 +249,12 @@ describe('Workout lifecycle durable recovery regressions', () => {
     });
 
     it('suspends and restores an active workout without clearing its timer or cloud shadow', async () => {
+        await prepareUnlockedTestArchive(owner);
         const active = workout('active', true);
         const old = workout('historical', true);
         const initialTimer = { version: 1, state: 'running', startTime: 1000, accumulated: 0 };
-        localStorage.setItem(deviceKey('timer', owner), JSON.stringify(initialTimer));
-        localStorage.setItem(deviceKey('workout', owner), JSON.stringify(active));
+        writeDeviceValue('timer', JSON.stringify(initialTimer), owner);
+        writeDeviceValue('workout', JSON.stringify(active), owner);
         useAppStore.setState({ userData: userData({ activeWorkout: active, history: [old] }), localWorkout: active });
         const { result } = renderHook(() => useWorkoutSession());
 
@@ -267,6 +279,7 @@ describe('Workout lifecycle durable recovery regressions', () => {
     });
 
     it('restores a durable active shadow when the transient device state was absent', async () => {
+        await prepareUnlockedTestArchive(owner);
         const active = workout('shadow', true);
         const old = workout('old-shadow', true);
         useAppStore.setState({ userData: userData({ activeWorkout: active, history: [old] }), localWorkout: null });
@@ -277,12 +290,12 @@ describe('Workout lifecycle durable recovery regressions', () => {
     });
 
     it('does not stop an active timer if switching to the historical editor fails', async () => {
+        await prepareUnlockedTestArchive(owner);
         const active = workout('original', true);
         const old = workout('old', true);
-        localStorage.setItem(deviceKey('timer', owner),
-            JSON.stringify({ version: 1, state: 'running', startTime: 1000, accumulated: 0 }));
+        writeDeviceValue('timer', JSON.stringify({ version: 1, state: 'running', startTime: 1000, accumulated: 0 }), owner);
         useAppStore.setState({ userData: userData({ activeWorkout: active, history: [old] }), localWorkout: active });
-        const key = deviceKey('workout', owner);
+        const key = protectedDeviceKey('workout', owner);
         // Context and workout are separate owner-scoped writes. Fail only the
         // second write so no persistent mock leaks into subsequent cases.
         localStorageMock.setItem.mockImplementationOnce(() => undefined);
@@ -299,21 +312,24 @@ describe('Workout lifecycle durable recovery regressions', () => {
         expect(readDeviceValueStrict('history-editor-context', owner)).toBeNull();
     });
 
-    it('does not resurrect a completed session from a stale device snapshot', () => {
+    it('does not resurrect a completed session from a stale device snapshot', async () => {
+        await prepareUnlockedTestArchive(owner);
         const finished = workout('completed', true);
-        localStorage.setItem(deviceKey('workout', owner), JSON.stringify(finished));
+        writeDeviceValue('workout', JSON.stringify(finished), owner);
         expect(getInitialLocalWorkout(owner, null, [finished])).toBeNull();
-        expect(localStorage.getItem(deviceKey('workout', owner))).toBeNull();
+        expect(localStorage.getItem(protectedDeviceKey('workout', owner))).toBeNull();
     });
 
-    it('does not discard an unfinished device-only workout while history is unrelated', () => {
+    it('does not discard an unfinished device-only workout while history is unrelated', async () => {
+        await prepareUnlockedTestArchive(owner);
         const prepared = workout('prepared');
-        localStorage.setItem(deviceKey('workout', owner), JSON.stringify(prepared));
+        writeDeviceValue('workout', JSON.stringify(prepared), owner);
         expect(getInitialLocalWorkout(owner, null, [workout('other', true)])?.id).toBe('prepared');
     });
 
 
     it('never completes a workout replaced while the finish confirmation is open', async () => {
+        await prepareUnlockedTestArchive(owner);
         const original = workout('finish-confirm-original', true);
         const replacement = workout('finish-confirm-replacement', true);
         const initial = userData({ activeWorkout: original });
@@ -339,11 +355,12 @@ describe('Workout lifecycle durable recovery regressions', () => {
     });
 
     it('retains a live workout, timer and final draft when completion commit is rejected', async () => {
+        await prepareUnlockedTestArchive(owner);
         const pending = workout('finish-rejected', true);
         const initial = userData({ activeWorkout: pending });
         await initializeLocal(owner, initial);
         const snapshot = { version: 1, state: 'running', startTime: 1000, accumulated: 125 };
-        localStorage.setItem(deviceKey('timer', owner), JSON.stringify(snapshot));
+        writeDeviceValue('timer', JSON.stringify(snapshot), owner);
         const draftName = 'draft:post-session:' + pending.id;
         writeDeviceValue(draftName, JSON.stringify({ draft: { workoutId: pending.id } }), owner);
         useAppStore.setState({ userData: initial, dataOwner: owner, localWorkout: pending });
@@ -365,11 +382,12 @@ describe('Workout lifecycle durable recovery regressions', () => {
     });
 
     it('recovers a durable deletion when the post-commit device cleanup fails', async () => {
+        await prepareUnlockedTestArchive(owner);
         const deleted = workout('deleted-on-device', true);
         const initial = userData({ activeWorkout: deleted });
         await initializeLocal(owner, initial);
-        const key = deviceKey('workout', owner);
-        localStorage.setItem(key, JSON.stringify(deleted));
+        const key = protectedDeviceKey('workout', owner);
+        writeDeviceValue('workout', JSON.stringify(deleted), owner);
         useAppStore.setState({ userData: initial, localWorkout: deleted });
         vi.mocked(useDialogStore.getState().showConfirm).mockResolvedValueOnce(true);
         vi.mocked(useDialogStore.getState().showAlert).mockResolvedValue();
@@ -391,11 +409,12 @@ describe('Workout lifecycle durable recovery regressions', () => {
     });
 
     it('recovers a completed workout after a successful commit but failed device cleanup', async () => {
+        await prepareUnlockedTestArchive(owner);
         const finished = workout('completed-on-device', true);
         const initial = userData({ activeWorkout: finished });
         await initializeLocal(owner, initial);
-        const key = deviceKey('workout', owner);
-        localStorage.setItem(key, JSON.stringify(finished));
+        const key = protectedDeviceKey('workout', owner);
+        writeDeviceValue('workout', JSON.stringify(finished), owner);
         useAppStore.setState({ userData: initial, localWorkout: finished });
         vi.mocked(useDialogStore.getState().showAlert).mockResolvedValue();
         localStorageMock.removeItem.mockImplementationOnce(() => { throw new DOMException('blocked', 'SecurityError'); });
@@ -415,6 +434,7 @@ describe('Workout lifecycle durable recovery regressions', () => {
 
 
     it('rejects an older tab snapshot even after a different workout closes later', async () => {
+        await prepareUnlockedTestArchive(owner);
         const abandoned = workout('deleted-from-another-tab', true);
         const later = workout('subsequent-completion', true);
         const initial = userData({ activeWorkout: abandoned });
@@ -434,20 +454,21 @@ describe('Workout lifecycle durable recovery regressions', () => {
         expect(durable.closedWorkoutIds).toContain(abandoned.id);
         expect((durable.data.history ?? []).some(item => item.id === abandoned.id)).toBe(false);
 
-        const key = deviceKey('workout', owner);
-        // A suspended old tab can re-write the original device snapshot after B.
-        localStorage.setItem(key, JSON.stringify(abandoned));
+        const key = protectedDeviceKey('workout', owner);
+        // A concurrent tab can republish a stale device snapshot after B.
+        writeDeviceValue('workout', JSON.stringify(abandoned), owner);
         expect(getInitialLocalWorkout(owner, durable.data.activeWorkout,
             durable.data.history, durable.lastClosedWorkoutId, durable.closedWorkoutIds)).toBeNull();
         expect(localStorage.getItem(key)).toBeNull();
     });
 
 
-    it('keeps a completed session retired when the historical month was not loaded', () => {
+    it('keeps a completed session retired when the historical month was not loaded', async () => {
+        await prepareUnlockedTestArchive(owner);
         const previous = workout('older-completed', true);
         const stale = workout('newer-completed', true);
-        const key = deviceKey('workout', owner);
-        localStorage.setItem(key, JSON.stringify(previous));
+        const key = protectedDeviceKey('workout', owner);
+        writeDeviceValue('workout', JSON.stringify(previous), owner);
         expect(getInitialLocalWorkout(owner, null, [], stale.id, [previous.id, stale.id])).toBeNull();
         expect(localStorage.getItem(key)).toBeNull();
 
@@ -456,17 +477,19 @@ describe('Workout lifecycle durable recovery regressions', () => {
         expect(localStorage.getItem(key)).toBeNull();
     });
 
-    it('recovers the same pending post-session answers after the screen is destroyed and remounted', () => {
+    it('recovers the same pending post-session answers after the screen is destroyed and remounted', async () => {
+        await prepareUnlockedTestArchive(owner);
         const active = workout('post-reopen', true);
         useAppStore.setState({ userData: userData({ activeWorkout: active }), localWorkout: active });
-        const key = deviceKey('draft:post-session:post-reopen', owner);
+        const key = protectedDeviceKey('draft:post-session:post-reopen', owner);
 
         const first = render(<TrainingSession />);
         fireEvent.click(screen.getByRole('button', { name: 'Termina allenamento' }));
         fireEvent.click(screen.getByRole('button', { name: 'Umore: 5 su 5' }));
         const saved = localStorage.getItem(key);
         expect(saved).not.toBeNull();
-        expect(JSON.parse(saved!).draft.mood).toBe('5');
+        expect(localStorage.getItem(deviceKey('draft:post-session:post-reopen', owner))).toBeNull();
+        expect(JSON.parse(readDeviceValueStrict('draft:post-session:post-reopen', owner)!).draft.mood).toBe('5');
 
         first.unmount();
         render(<TrainingSession />);
@@ -476,23 +499,27 @@ describe('Workout lifecycle durable recovery regressions', () => {
         expect(useAppStore.getState().localWorkout?.id).toBe(active.id);
     });
 
-    it('blocks an unreadable post-session recovery without discarding its bytes', () => {
+    it('blocks an unreadable post-session recovery without discarding its bytes', async () => {
+        await prepareUnlockedTestArchive(owner);
         const active = workout('post-broken', true);
-        const key = deviceKey('draft:post-session:post-broken', owner);
-        localStorage.setItem(key, '{broken');
+        const key = protectedDeviceKey('draft:post-session:post-broken', owner);
+        writeDeviceValue('draft:post-session:post-broken', '{broken', owner);
+        const sealed = localStorage.getItem(key);
         useAppStore.setState({ userData: userData({ activeWorkout: active }), localWorkout: active });
         render(<TrainingSession />);
         expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
         expect(useAppStore.getState().syncHealth).toBe('failed');
-        expect(localStorage.getItem(key)).toBe('{broken');
+        expect(readDeviceValueStrict('draft:post-session:post-broken', owner)).toBe('{broken');
+        expect(localStorage.getItem(key)).toBe(sealed);
     });
 
-    it('keeps post-session rating unchanged if its synchronous persistence fails', () => {
+    it('keeps post-session rating unchanged if its synchronous persistence fails', async () => {
+        await prepareUnlockedTestArchive(owner);
         const active = workout('post-write', true);
         useAppStore.setState({ userData: userData({ activeWorkout: active }), localWorkout: active });
         render(<TrainingSession />);
         fireEvent.click(screen.getByRole('button', { name: 'Termina allenamento' }));
-        const key = deviceKey('draft:post-session:post-write', owner);
+        const key = protectedDeviceKey('draft:post-session:post-write', owner);
         const previous = localStorage.getItem(key);
         localStorageMock.setItem.mockImplementationOnce((written: string) => {
             if (written === key) throw new DOMException('full', 'QuotaExceededError');
@@ -585,6 +612,7 @@ describe('Workout lifecycle durable recovery regressions', () => {
     });
 
     it('deleting a history item closes the editor and restores its suspended live workout', async () => {
+        await prepareUnlockedTestArchive(owner);
         const historical = workout('history-to-delete', true);
         const suspended = workout('still-live', true);
         const editor: WorkoutSession & { id: string } = { ...historical, isEditingHistory: true, originalHistoryId: historical.id };
@@ -603,13 +631,14 @@ describe('Workout lifecycle durable recovery regressions', () => {
             const { result } = renderHook(() => useTrainingHistory());
             await act(async () => { await result.current.deleteWorkout(historical.id); });
             expect(useAppStore.getState().localWorkout?.id).toBe(suspended.id);
-            expect(localStorage.getItem(deviceKey('history-editor-context', owner))).toBeNull();
+            expect(localStorage.getItem(protectedDeviceKey('history-editor-context', owner))).toBeNull();
         } finally {
             useAppStore.setState({ dispatchDomainOperation: originalDispatch });
         }
     });
 
     it('distinguishes a committed history deletion from a later recovery failure', async () => {
+        await prepareUnlockedTestArchive(owner);
         const historical = workout('history-delete-then-recovery-fails', true);
         const editor: WorkoutSession & { id: string } = { ...historical, isEditingHistory: true, originalHistoryId: historical.id };
         const initial = userData({ history: [historical] });
@@ -646,6 +675,7 @@ describe('Workout lifecycle durable recovery regressions', () => {
     });
 
     it('drops an obsolete post-session draft when the displayed session identity changes', async () => {
+        await prepareUnlockedTestArchive(owner);
         const first = workout('post-first', true);
         const next = workout('post-next', true);
         useAppStore.setState({ userData: userData({ activeWorkout: first }), localWorkout: first });
@@ -656,17 +686,17 @@ describe('Workout lifecycle durable recovery regressions', () => {
         await waitFor(() => expect(screen.queryByText('Com’è andato l’allenamento?')).toBeNull());
         fireEvent.click(screen.getByRole('button', { name: 'Termina allenamento' }));
         await waitFor(() => expect(screen.getByText('Com’è andato l’allenamento?')).toBeDefined());
-        expect(localStorage.getItem(deviceKey('draft:post-session:post-next', owner))).not.toBeNull();
+        expect(localStorage.getItem(protectedDeviceKey('draft:post-session:post-next', owner))).not.toBeNull();
     });
 
     it('does not reset the timer if the workout start never reaches IndexedDB', async () => {
+        await prepareUnlockedTestArchive(owner);
         const pending = workout('start-should-fail');
         const initial = userData({ activeWorkout: pending });
         await initializeLocal(owner, initial);
         useAppStore.setState({ userData: initial, localWorkout: pending });
-        const timerKey = deviceKey('timer', owner);
         const snapshot = { version: 1, state: 'running', startTime: 1000, accumulated: 250 };
-        localStorage.setItem(timerKey, JSON.stringify(snapshot));
+        writeDeviceValue('timer', JSON.stringify(snapshot), owner);
         const originalSetter = useAppStore.getState().setSyncedLocalWorkout;
         useAppStore.setState({ setSyncedLocalWorkout: vi.fn(async () => { throw new Error('IndexedDB unavailable'); }) });
         vi.mocked(useDialogStore.getState().showAlert).mockResolvedValue();
@@ -683,6 +713,7 @@ describe('Workout lifecycle durable recovery regressions', () => {
     });
 
     it('does not resurrect a suspended workout durably deleted in another tab', async () => {
+        await prepareUnlockedTestArchive(owner);
         const previous = workout('closed-in-other-tab', true);
         const editor: WorkoutSession & { id: string } = { ...workout('history-being-edited', true), isEditingHistory: true };
         const initial = userData({ activeWorkout: previous });
@@ -696,10 +727,11 @@ describe('Workout lifecycle durable recovery regressions', () => {
         useAppStore.setState({ userData: userData({}), localWorkout: editor });
         await act(async () => { await restoreSessionAfterHistoryEdit(editor.id); });
         expect(useAppStore.getState().localWorkout).toBeNull();
-        expect(localStorage.getItem(deviceKey('history-editor-context', owner))).toBeNull();
+        expect(localStorage.getItem(protectedDeviceKey('history-editor-context', owner))).toBeNull();
     });
 
     it('preserves a suspended device workout with unsynced data over an unrelated durable active snapshot', async () => {
+        await prepareUnlockedTestArchive(owner);
         const staleCloud = workout('old-cloud-snapshot', true);
         const suspended = workout('authoritative-device-session', true);
         const editor: WorkoutSession & { id: string } = { ...workout('edit-context', true), isEditingHistory: true };
@@ -734,6 +766,7 @@ describe('Workout lifecycle durable recovery regressions', () => {
 
 
     it('starts offline through the real workout setter and preserves the owner-scoped pending journal', async () => {
+        await prepareUnlockedTestArchive(owner);
         const prepared = workout('offline-real-adapter');
         const initial = userData({ activeWorkout: prepared });
         await initializeLocal(owner, initial);
@@ -760,6 +793,7 @@ describe('Workout lifecycle durable recovery regressions', () => {
     });
 
     it('accepts a cloud-pending start only when the exact workout was durably committed', async () => {
+        await prepareUnlockedTestArchive(owner);
         const prepared = workout('offline-start');
         const initial = userData({ activeWorkout: prepared });
         await initializeLocal(owner, initial);
@@ -782,6 +816,7 @@ describe('Workout lifecycle durable recovery regressions', () => {
     });
 
     it('rejects a cloud-pending start if the matching IndexedDB write never happened', async () => {
+        await prepareUnlockedTestArchive(owner);
         const prepared = workout('unproven-start');
         const initial = userData({ activeWorkout: prepared });
         await initializeLocal(owner, initial);
@@ -797,13 +832,14 @@ describe('Workout lifecycle durable recovery regressions', () => {
     });
 
     it('never starts or resets the timer when the prepared IndexedDB workout has a different identity', async () => {
+        await prepareUnlockedTestArchive(owner);
         const visible = workout('prepared-visible');
         const durable = workout('prepared-different');
         const initial = userData({ activeWorkout: durable });
         await initializeLocal(owner, initial);
         useAppStore.setState({ userData: initial, dataOwner: owner, localWorkout: visible });
         const snapshot = { version: 1, state: 'running', startTime: 1000, accumulated: 250 };
-        localStorage.setItem(deviceKey('timer', owner), JSON.stringify(snapshot));
+        writeDeviceValue('timer', JSON.stringify(snapshot), owner);
         const originalSetter = useAppStore.getState().setSyncedLocalWorkout;
         const forbiddenSetter = vi.fn(originalSetter);
         useAppStore.setState({ setSyncedLocalWorkout: forbiddenSetter });
@@ -820,6 +856,7 @@ describe('Workout lifecycle durable recovery regressions', () => {
     });
 
     it('cleans up the deleted workout final rating draft after confirming local deletion', async () => {
+        await prepareUnlockedTestArchive(owner);
         const target = workout('delete-final-rating', true);
         const initial = userData({ activeWorkout: target });
         await initializeLocal(owner, initial);
@@ -834,6 +871,7 @@ describe('Workout lifecycle durable recovery regressions', () => {
 
 
     it('serializes a rapid start after its preparation without requiring an explicit UI flush', async () => {
+        await prepareUnlockedTestArchive(owner);
         const initial = userData({ activeWorkout: null });
         await initializeLocal(owner, initial);
         useAppStore.setState({ userData: initial, dataOwner: owner, localWorkout: null });
