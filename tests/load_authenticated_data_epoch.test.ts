@@ -1,6 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { emptyUserData } from './setup';
-import { clear } from 'idb-keyval';
+import { clear, get } from 'idb-keyval';
 import type { UserData } from '../src/types';
 
 const authState = vi.hoisted(() => ({
@@ -65,11 +65,15 @@ function payload(height: string) {
 
 async function loadModules() {
     vi.resetModules();
-    const [{ loadAuthenticatedData }, { readLocal, initializeLocal, commitDomainOperations }, { invalidateSession }] = await Promise.all([
+    const [{ loadAuthenticatedData }, { readLocal, initializeLocal, commitDomainOperations }, { invalidateSession }, { createAndMigrateVault }] = await Promise.all([
         import('../src/contexts/auth/loadAuthenticatedData'),
         import('../src/lib/sync/localRepository'),
         import('../src/lib/sync/session'),
+        import('../src/lib/sync/secureArchiveMigration'),
     ]);
+    // Each resetModules() starts a new authenticated realm. Seed only its
+    // current owner's real AEAD vault; an empty envelope is still allowed.
+    await createAndMigrateVault('user:user-a');
     return { loadAuthenticatedData, readLocal, initializeLocal, commitDomainOperations, invalidateSession };
 }
 
@@ -83,6 +87,10 @@ describe('authenticated hydration session fencing', () => {
             localPersistenceBlocked: false,
         };
         dbState.loadCloudPayload.mockReset();
+    });
+    afterEach(async () => {
+        const { lockAllVaults } = await import('../src/lib/sync/secureArchiveSession');
+        lockAllVaults();
     });
 
     it('reports an authenticated missing local envelope without creating a replacement journal', async () => {
@@ -111,6 +119,7 @@ describe('authenticated hydration session fencing', () => {
         ));
         await vi.waitFor(() => expect(storageTelemetry.isAnomalyAlreadyReported(marker, undefined, 'user:user-a')).toBe(true));
         expect(await readLocal('user:user-a')).toBeUndefined();
+        expect(await get('logbook:v2:user:user-a')).toBeUndefined();
         expect(storeState.current.userData).toBeNull();
         await clear();
     });
@@ -121,8 +130,11 @@ describe('authenticated hydration session fencing', () => {
         invalidateSession();
         storeState.current = { userData: null, localWorkout: null, localPersistenceBlocked: false };
         const oldWorkout = { id: 'closed-during-cloud-load', date: '2026-10-09', exercises: [] };
-        const deviceKey = 'logbook:v2:user:user-a:workout';
-        localStorage.setItem(deviceKey, JSON.stringify(oldWorkout));
+        const { writeDeviceValue, protectedDeviceKey, deviceKey } = await import('../src/lib/sync/deviceStorage');
+        writeDeviceValue('workout', JSON.stringify(oldWorkout), 'user:user-a');
+        const sealedWorkoutKey = protectedDeviceKey('workout', 'user:user-a');
+        expect(localStorage.getItem(sealedWorkoutKey)).toMatch(/^tlb-sealed:v1:/);
+        expect(localStorage.getItem(deviceKey('workout', 'user:user-a'))).toBeNull();
 
         const initial = data('170');
         dbState.loadCloudPayload.mockImplementationOnce(async () => {
@@ -142,7 +154,7 @@ describe('authenticated hydration session fencing', () => {
         });
         expect((await readLocal('user:user-a'))?.closedWorkoutIds).toContain(oldWorkout.id);
         expect(storeState.current.localWorkout).toBeNull();
-        expect(localStorage.getItem(deviceKey)).toBeNull();
+        expect(localStorage.getItem(sealedWorkoutKey)).toBeNull();
         await clear();
     });
 
@@ -154,6 +166,7 @@ describe('authenticated hydration session fencing', () => {
         invalidateSession();
         const local = data('170');
         await initializeLocal('user:user-a', local);
+        expect(await get('logbook:v2:user:user-a')).toMatch(/^tlb-sealed:v1:/);
         let invalidMonthError: unknown;
         try { requireCompleteHistoryMonthDocument('2026-09', { malformed: {} }); }
         catch (error) { invalidMonthError = error; }
@@ -184,6 +197,7 @@ describe('authenticated hydration session fencing', () => {
         const { CloudCiphertextError } = await import('../src/lib/sync/cloudDocumentCipher');
         invalidateSession();
         await initializeLocal('user:user-a', data('170'));
+        expect(await get('logbook:v2:user:user-a')).toMatch(/^tlb-sealed:v1:/);
         dbState.loadCloudPayload.mockRejectedValueOnce(new CloudCiphertextError());
         const setSaveError = vi.fn();
 
@@ -223,6 +237,7 @@ describe('authenticated hydration session fencing', () => {
         expect(await loadAuthenticatedData(options)).toBe('blocked');
         expect(setUserData).not.toHaveBeenCalled();
         expect((await readLocal('user:user-a'))).toBeUndefined();
+        expect(await get('logbook:v2:user:user-a')).toBeUndefined();
         expect(storeState.current.userData).toBeNull();
         expect(setSaveError).toHaveBeenCalledWith(expect.stringContaining('nessun archivio locale'));
 
