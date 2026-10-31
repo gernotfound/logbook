@@ -1,11 +1,15 @@
 import React from 'react';
-import type { WorkoutSession } from '../src/types';
+import type { UserData, WorkoutSession } from '../src/types';
 import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act, within } from '@testing-library/react';
 import ReloadPrompt from '../src/components/UI/ReloadPrompt';
 import { useRegisterSW } from 'virtual:pwa-register/react';
 import App from '../src/App';
-import { localStorageMock, mockFirebaseAuth, renderWithProviders } from './setup';
+import { idbStore, localStorageMock, mockFirebaseAuth, renderWithProviders } from './setup';
+import { prepareUnlockedTestArchive } from './secureVaultFixture';
+import { initializeLocal } from '../src/lib/sync/localRepository';
+import { vaultControlKey } from '../src/lib/sync/secureArchiveSession';
+import { UserDataSchema } from '../src/lib/schema';
 import { useAppStore } from '../src/store/useAppStore';
 import { BufferedInput } from '../src/components/UI/BufferedInput';
 import { invalidateSession } from '../src/lib/sync/session';
@@ -61,6 +65,7 @@ describe('Service Worker Update Lifecycle (ReloadPrompt) Suite', () => {
   });
 
   test('a chunk failure verifies local data and activates the new worker via the same update path', async () => {
+    await prepareUnlockedTestArchive('user:test-user-id');
     const barrier = vi.spyOn(reloadBarrierModule, 'prepareForReload');
     vi.mocked(useRegisterSW).mockReturnValue({
       needRefresh: [false, mockSetNeedRefresh],
@@ -73,6 +78,37 @@ describe('Service Worker Update Lifecycle (ReloadPrompt) Suite', () => {
     expect(barrier).toHaveBeenCalledOnce();
     expect(pwaUpdateModule.applyPWAUpdate).toHaveBeenCalledOnce();
     expect(mockUpdateServiceWorker).not.toHaveBeenCalled();
+  });
+
+  test('never activates an update when an existing encrypted archive loses its vault control', async () => {
+    const owner = 'user:test-user-id';
+    await prepareUnlockedTestArchive(owner);
+    const userData = UserDataSchema.parse({ profile: { height: '181' } }) as unknown as UserData;
+    await initializeLocal(owner, userData);
+    const storageKey = 'logbook:v2:' + owner;
+    const preservedCiphertext = idbStore[storageKey] as string;
+    expect(preservedCiphertext).toMatch(/^tlb-sealed:v1:/);
+
+    // Simulate a lost control record without removing the owner's ciphertext.
+    localStorage.removeItem(vaultControlKey(owner));
+    useAppStore.setState({
+      userData, dataOwner: owner, localWorkout: null,
+      syncing: false, localPersistenceBlocked: false,
+    });
+    vi.mocked(useRegisterSW).mockReturnValue({
+      needRefresh: [true, mockSetNeedRefresh],
+      offlineReady: [false, vi.fn()],
+      updateServiceWorker: mockUpdateServiceWorker,
+    });
+    render(<ReloadPrompt />);
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Aggiorna applicazione/i }));
+    });
+
+    expect(screen.getByText(/Archivio locale cifrato non valido.*dati originali sono conservati/i)).toBeDefined();
+    expect(pwaUpdateModule.applyPWAUpdate).not.toHaveBeenCalled();
+    expect(mockUpdateServiceWorker).not.toHaveBeenCalled();
+    expect(idbStore[storageKey]).toBe(preservedCiphertext);
   });
 
   test('a rejected chunk-failure reload barrier keeps the update prompt visible', async () => {
@@ -153,6 +189,7 @@ describe('Service Worker Update Lifecycle (ReloadPrompt) Suite', () => {
   });
 
   test('R2: Clicking "Aggiorna" uses the explicit SW activation and durable reload path', async () => {
+    await prepareUnlockedTestArchive('user:test-user-id');
     vi.mocked(useRegisterSW).mockReturnValue({
       needRefresh: [true, mockSetNeedRefresh],
       offlineReady: [false, vi.fn()],
@@ -216,6 +253,7 @@ describe('Service Worker Update Lifecycle (ReloadPrompt) Suite', () => {
   });
 
   test('slow worker activation offers cancellation without a false failure', async () => {
+    await prepareUnlockedTestArchive('user:test-user-id');
     vi.mocked(useRegisterSW).mockReturnValue({
       needRefresh: [true, mockSetNeedRefresh],
       offlineReady: [false, vi.fn()],
@@ -533,6 +571,7 @@ describe('Service Worker Update Lifecycle (ReloadPrompt) Suite', () => {
   });
 
   test('Edge Case: shows an activation rejection without reloading or hiding the prompt', async () => {
+    await prepareUnlockedTestArchive('user:test-user-id');
     const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     const rejectingUpdate = vi.spyOn(pwaUpdateModule, 'applyPWAUpdate')
       .mockRejectedValue(new Error('Failed to postMessage to SW'));
@@ -725,6 +764,7 @@ describe('Service Worker Update Lifecycle (ReloadPrompt) Suite', () => {
   });
 
   test('Edge Case: Handles synchronous exception in manual worker activation on click', async () => {
+    await prepareUnlockedTestArchive('user:test-user-id');
     const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     const throwingUpdate = vi.spyOn(pwaUpdateModule, 'applyPWAUpdate').mockImplementation(() => {
       throw new Error('Immediate sync throw');
