@@ -6,15 +6,13 @@ import { useAppStore } from '../src/store/useAppStore';
 import { storageOwner } from '../src/lib/sync/session';
 import { isLocalPurgeIncomplete, isLocalPurgePending } from '../src/lib/sync/localPurgeFence';
 import * as localRepository from '../src/lib/sync/localRepository';
-import { localStorageMock, mockFirebaseAuth } from './setup';
+import { idbStore, localStorageMock, mockFirebaseAuth } from './setup';
+import { prepareUnlockedTestArchive } from './secureVaultFixture';
+import { initializeLocal } from '../src/lib/sync/localRepository';
+import { UserDataSchema } from '../src/lib/schema';
+import type { UserData } from '../src/types';
 import { markAccountDeletion, isAccountDeletionPending } from '../src/lib/sync/accountGate';
 import { beginGuestMigrationIntent } from '../src/lib/auth/guestMigrationIntent';
-
-vi.mock('idb-keyval', () => ({
-    get: vi.fn(),
-    set: vi.fn(),
-    del: vi.fn()
-}));
 
 // Mock firebase auth
 vi.mock('../src/lib/firebase', async () => {
@@ -33,19 +31,22 @@ vi.mock('../src/lib/firebase', async () => {
 // concurrency tests so their instrumentation cannot leak across test cases.
 const originalStorageKey = localStorageMock.key.getMockImplementation()!;
 const originalStorageRemove = localStorageMock.removeItem.getMockImplementation()!;
+// The common fixture models real owner-scoped IndexedDB keys, including atomic update.
+const originalIdbGet = vi.mocked(idb.get).getMockImplementation()!;
+const originalIdbDel = vi.mocked(idb.del).getMockImplementation()!;
 
 describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
-    beforeEach(() => {
+    beforeEach(async () => {
         vi.clearAllMocks();
         localStorageMock.key.mockImplementation(originalStorageKey);
         localStorageMock.removeItem.mockImplementation(originalStorageRemove);
         localStorage.removeItem = localStorageMock.removeItem;
-        // Later regression cases replace the IDB implementation; prevent
-        // their mock storage from becoming the next test's initial state.
-        vi.mocked(idb.get).mockReset();
-        vi.mocked(idb.del).mockReset();
+        vi.mocked(idb.get).mockImplementation(originalIdbGet);
+        vi.mocked(idb.del).mockImplementation(originalIdbDel);
         Object.defineProperty(navigator, 'locks', { configurable: true, value: { request: async (_key: string, _options: unknown, action: () => Promise<unknown>) => action() } });
         localStorage.clear();
+        await prepareUnlockedTestArchive('user:test-user-id');
+        vi.clearAllMocks();
     });
     afterEach(() => {
         localStorageMock.key.mockImplementation(originalStorageKey);
@@ -65,7 +66,8 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
         const unsupported = ['logbook_local_workout', 'logbook_timer_state', 'logbook_timer_start',
             'logbook_timer_accumulated', 'draft_measurement', 'draft_exercise', 'draft_routine'];
         for (const key of unsupported) localStorage.setItem(key, 'prelaunch');
-        vi.mocked(idb.get).mockImplementation(async key => key === 'pending_sync_payload' ? { old: true } : undefined);
+        vi.mocked(idb.get).mockImplementation(async key =>
+            key === 'pending_sync_payload' ? { old: true } : originalIdbGet(key));
         localStorage.setItem('logbook:v2:user:test-user-id:draft:current', 'owner');
 
         await DB.purgeAllLocalUserData('user:test-user-id');
@@ -178,6 +180,7 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
             expect(key).toBe('logbook:v2:user:test-user-id');
             entered();
             await pendingDelete;
+            await originalIdbDel(key);
         });
 
         const operation = DB.purgeAllLocalUserData();
@@ -197,9 +200,10 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
         let release!: () => void;
         const requested = new Promise<void>(resolve => { entered = resolve; });
         const pendingDelete = new Promise<void>(resolve => { release = resolve; });
-        vi.mocked(idb.del).mockImplementationOnce(async () => {
+        vi.mocked(idb.del).mockImplementationOnce(async key => {
             entered();
             await pendingDelete;
+            await originalIdbDel(key);
         });
 
         const operation = DB.purgeAllLocalUserData();
@@ -221,9 +225,10 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
         let finish!: () => void;
         const entered = new Promise<void>(resolve => { started = resolve; });
         const blocked = new Promise<void>(resolve => { finish = resolve; });
-        vi.mocked(idb.del).mockImplementationOnce(async () => {
+        vi.mocked(idb.del).mockImplementationOnce(async key => {
             started();
             await blocked;
+            await originalIdbDel(key);
         });
         const operation = DB.purgeAllLocalUserData();
         await entered;
@@ -358,7 +363,7 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
         let compacted = false;
         localStorageMock.key.mockImplementation((index: number) => {
             const storageKey = originalKey(index);
-            if (!compacted && index === 0 && storageKey === first) {
+            if (!compacted && storageKey === first) {
                 compacted = true;
                 localStorage.removeItem(first);
             }
@@ -563,11 +568,16 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
 
     it('secureLogOut preserves the local archive and rejects when auth.signOut fails', async () => {
         const { auth } = await import('../src/lib/firebase');
+        const owner = storageOwner();
+        await initializeLocal(owner, UserDataSchema.parse({ profile: { height: '175' } }) as unknown as UserData);
+        const ciphertext = idbStore['logbook:v2:' + owner];
+        expect(ciphertext).toMatch(/^tlb-sealed:v1:/);
         vi.mocked(auth.signOut).mockRejectedValueOnce(new Error('Network offline'));
-        
+
         await expect(DB.secureLogOut()).rejects.toThrow('Network offline');
         expect(idb.del).not.toHaveBeenCalled();
-        expect(isLocalPurgePending(storageOwner())).toBe(false);
+        expect(isLocalPurgePending(owner)).toBe(false);
+        expect(idbStore['logbook:v2:' + owner]).toBe(ciphertext);
     });
 
     it('cancelPendingSyncs stops debouncer and sets syncing to false to prevent race conditions during logout', () => {
