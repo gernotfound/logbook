@@ -3,7 +3,7 @@ import { update as idbUpdate } from 'idb-keyval';
 import { DomainParsers, UserDataSchema } from '../src/lib/schema';
 import { equivalentWorkoutSnapshot } from '../src/lib/sync/workoutSnapshotEquality';
 import { captureSession, captureSessionForOwner } from '../src/lib/sync/session';
-import { deviceKey, readDeviceValueStrict, writeDeviceValue } from '../src/lib/sync/deviceStorage';
+import { deviceKey, protectedDeviceKey, readDeviceValueStrict, writeDeviceValue } from '../src/lib/sync/deviceStorage';
 import { BrowserStorageError } from '../src/lib/sync/browserStorage';
 import { localStorageMock } from './setup';
 import { prepareUnlockedTestArchive } from './secureVaultFixture';
@@ -522,7 +522,7 @@ describe('authenticated device-intent replay into semantic journal', () => {
         await initializeLocal(testOwner, initial);
         const write = localStorageMock.setItem.getMockImplementation();
         if (!write) throw new Error('Expected storage implementation');
-        const sharedKey = deviceKey('workout', testOwner);
+        const sharedKey = protectedDeviceKey('workout', testOwner);
         localStorageMock.setItem.mockImplementation((key: string, value: string) => {
             if (key === sharedKey) throw new DOMException('Storage full', 'QuotaExceededError');
             return write(key, value);
