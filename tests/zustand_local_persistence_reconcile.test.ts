@@ -6,6 +6,8 @@ import { captureSession } from '../src/lib/sync/session';
 import { useAppStore } from '../src/store/useAppStore';
 import type { UserData } from '../src/types';
 import { emptyUserData, idbStore } from './setup';
+import { prepareUnlockedTestArchive } from './secureVaultFixture';
+import { lockAllVaults } from '../src/lib/sync/secureArchiveSession';
 
 const baseData = (): UserData => structuredClone({
     ...emptyUserData,
@@ -14,7 +16,9 @@ const baseData = (): UserData => structuredClone({
 
 async function seedDurableState(data: UserData): Promise<string> {
     const owner = captureSession().owner;
+    await prepareUnlockedTestArchive(owner);
     await initializeLocal(owner, data);
+    expect(idbStore['logbook:v2:' + owner]).toMatch(/^tlb-sealed:v1:/);
     useAppStore.setState({
         userData: data,
         dataOwner: owner,
@@ -39,6 +43,7 @@ describe('optimistic Zustand state vs local IndexedDB durability', () => {
 
     afterEach(() => {
         useAppStore.getState().resetStore({ force: true });
+        lockAllVaults();
         vi.useRealTimers();
     });
 
