@@ -3,6 +3,8 @@ import { useAppStore } from '../src/store/useAppStore';
 import { UserDataSchema } from '../src/lib/schema';
 import { applyDomainOperations, type DomainOperationBatch } from '../src/lib/sync/domainOperations';
 import * as repo from '../src/lib/sync/localRepository';
+import { prepareUnlockedTestArchive } from './secureVaultFixture';
+import { lockAllVaults } from '../src/lib/sync/secureArchiveSession';
 import { getNutritionConflictFingerprint } from '../src/lib/utils/object';
 import type { UserData } from '../src/types';
 
@@ -23,6 +25,7 @@ describe('PR 4: Nutrition Conflict Resolution (Store Unit Tests)', () => {
         vi.clearAllMocks();
         const initial = initialConflictData();
         useAppStore.setState({ userData: initial, dispatchDomainOperation: originalDispatchDomainOperation });
+        await prepareUnlockedTestArchive(OWNER);
         await repo.initializeLocal(OWNER, initial);
 
         vi.spyOn(useAppStore.getState(), 'dispatchDomainOperation').mockImplementation(async (operation: DomainOperationBatch) => {
@@ -39,6 +42,7 @@ describe('PR 4: Nutrition Conflict Resolution (Store Unit Tests)', () => {
     });
 
     afterEach(() => {
+        lockAllVaults();
         vi.restoreAllMocks();
         useAppStore.setState({ dispatchDomainOperation: originalDispatchDomainOperation });
     });
