@@ -1,4 +1,6 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createAndMigrateVault } from '../src/lib/sync/secureArchiveMigration';
+import { lockAllVaults } from '../src/lib/sync/secureArchiveSession';
 import { UserDataSchema } from '../src/lib/schema';
 import { captureSessionForOwner, isCurrentSession } from '../src/lib/sync/session';
 import { advanceLocalConsentRevisionIfClean, initializeLocal, commitLocal, readLocal } from '../src/lib/sync/localRepository';
@@ -7,7 +9,17 @@ import type { UserData } from '../src/types';
 const initialData = () => UserDataSchema.parse({ profile: { height: '175' } }) as unknown as UserData;
 const owner = 'user:test-user-id';
 
-beforeEach(() => { localStorage.clear(); });
+beforeEach(() => {
+  lockAllVaults();
+  localStorage.clear();
+  vi.stubGlobal('navigator', { locks: {
+    request: async (_name: string, _options: unknown, run: () => Promise<unknown>) => run(),
+  } });
+});
+afterEach(() => {
+  lockAllVaults();
+  vi.unstubAllGlobals();
+});
 
 describe('consent generation is a durable local and cross-tab write fence', () => {
   it('invalidates an in-flight session when another tab records withdrawal', () => {
@@ -25,6 +37,7 @@ describe('consent generation is a durable local and cross-tab write fence', () =
   });
 
   it('does not reclassify a previous-generation pending journal or erase progress', async () => {
+    await createAndMigrateVault(owner);
     const base = initialData();
     await initializeLocal(owner, base);
     const desired = { ...base, profile: { ...base.profile, height: '180' } };
@@ -39,6 +52,7 @@ describe('consent generation is a durable local and cross-tab write fence', () =
   });
 
   it('aborts consent epoch adoption inside IndexedDB if the session guard fails', async () => {
+    await createAndMigrateVault(owner);
     const base = initialData();
     await initializeLocal(owner, base);
     const before = await readLocal(owner);
@@ -49,6 +63,7 @@ describe('consent generation is a durable local and cross-tab write fence', () =
 
   it('does not restamp an ACKed local archive belonging to an erased consent epoch', async () => {
     const older = 'user:erased-' + crypto.randomUUID();
+    await createAndMigrateVault(older);
     await initializeLocal(older, initialData());
     const original = await readLocal(older);
     expect(original?.pending).toEqual([]);
@@ -64,11 +79,13 @@ describe('consent generation is a durable local and cross-tab write fence', () =
 
   it('does not create a replacement envelope for a fresh device after erasure', async () => {
     const fresh = 'user:erased-fresh-' + crypto.randomUUID();
+    await createAndMigrateVault(fresh);
     expect(await advanceLocalConsentRevisionIfClean(fresh, 4, undefined, 2)).toBe(true);
     expect(await readLocal(fresh)).toBeUndefined();
   });
 
   it('can adopt the new epoch atomically when no old pending operations exist', async () => {
+    await createAndMigrateVault(owner);
     const base = initialData();
     await initializeLocal(owner, base);
     expect(await advanceLocalConsentRevisionIfClean(owner, 2)).toBe(true);
