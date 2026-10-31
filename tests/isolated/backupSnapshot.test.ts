@@ -9,6 +9,7 @@ vi.mock('../../src/lib/catalog/catalogService', () => ({ getCachedCatalog: async
 vi.mock('../../src/lib/healthConsent', async () => ({
     ...await vi.importActual<typeof import('../../src/lib/healthConsent')>('../../src/lib/healthConsent'),
     currentHealthConsentStatus: () => 'active',
+    requireHealthConsentWritable: () => undefined,
     hasUnreconciledOfflineReaccept: () => false,
     getVerifiedHealthConsentRevision: () => 0,
 }));
