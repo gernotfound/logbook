@@ -13,11 +13,14 @@ import { UserDataSchema } from '../../src/lib/schema';
 import { activateGuestSession, GUEST_SESSION_KEY, invalidateSession, revokeGuestSession } from '../../src/lib/sync/session';
 import { initializeLocal, readLocal } from '../../src/lib/sync/localRepository';
 import { writeDeviceValue } from '../../src/lib/sync/deviceStorage';
+import { createAndMigrateVault } from '../../src/lib/sync/secureArchiveMigration';
+import { LocalVaultLockedError, lockAllVaults } from '../../src/lib/sync/secureArchiveSession';
 import type { UserData } from '../../src/types';
 
 const data = (height: number) => UserDataSchema.parse({ profile: { height: String(height) } }) as unknown as UserData;
 
 beforeEach(async () => {
+    lockAllVaults();
     const disk = new Map<string, string>();
     vi.stubGlobal('localStorage', {
         get length() { return disk.size; },
@@ -27,26 +30,31 @@ beforeEach(async () => {
         removeItem: (key: string) => { disk.delete(key); },
         clear: () => disk.clear(),
     });
+    vi.stubGlobal('navigator', {
+        locks: { request: async (_name: string, _options: unknown, run: () => Promise<unknown>) => run() },
+    });
     await clear();
     sdk.auth.currentUser = null;
     invalidateSession();
 });
-afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+afterEach(() => { lockAllVaults(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 it('refuses an in-flight guest snapshot that would recreate an archive after logout', async () => {
     localStorage.setItem(GUEST_SESSION_KEY, 'guest-before-logout');
     localStorage.setItem('logbook_is_guest', 'true');
     activateGuestSession('guest-before-logout');
+    await createAndMigrateVault('guest');
 
     const inFlight = saveUserDataToCache(data(170));
     revokeGuestSession();
     expect(() => writeDeviceValue('workout', 'obsolete-session', 'guest')).toThrow('revocata');
-    await expect(inFlight).rejects.toThrow('Sessione cambiata');
+    await expect(inFlight).rejects.toBeInstanceOf(LocalVaultLockedError);
     expect(await get('logbook:v2:guest')).toBeUndefined();
 });
 
 it('fences an in-flight authenticated snapshot when logout invalidates its epoch', async () => {
     sdk.auth.currentUser = { uid: 'account-a' };
+    await createAndMigrateVault('user:account-a');
     await initializeLocal('user:account-a', data(170));
 
     const inFlight = saveUserDataToCache(data(180), data(170));
@@ -57,6 +65,7 @@ it('fences an in-flight authenticated snapshot when logout invalidates its epoch
 
 it('does not turn bootstrap into an overwrite if another tab initialized first', async () => {
     sdk.auth.currentUser = { uid: 'account-a' };
+    await createAndMigrateVault('user:account-a');
     await initializeLocal('user:account-a', data(180));
     await saveUserDataToCache(data(160)); // stale bootstrap has no observed base
     expect((await readLocal('user:account-a'))?.data.profile?.height).toBe('180');
