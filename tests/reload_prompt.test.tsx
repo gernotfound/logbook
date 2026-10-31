@@ -105,7 +105,7 @@ describe('Service Worker Update Lifecycle (ReloadPrompt) Suite', () => {
       fireEvent.click(screen.getByRole('button', { name: /Aggiorna applicazione/i }));
     });
 
-    expect(screen.getByText(/Archivio protetto non pronto/i)).toBeDefined();
+    expect(screen.getByText(/Archivio locale cifrato non valido.*dati originali sono conservati/i)).toBeDefined();
     expect(pwaUpdateModule.applyPWAUpdate).not.toHaveBeenCalled();
     expect(mockUpdateServiceWorker).not.toHaveBeenCalled();
     expect(idbStore[storageKey]).toBe(preservedCiphertext);
