@@ -5,7 +5,8 @@ import { readLocal } from '../sync/localRepository';
 import { readDeviceValueStrict } from '../sync/deviceStorage';
 import { stableStorageKeyInventory } from '../sync/stableStorageKeyInventory';
 import { getCachedCatalog } from '../catalog/catalogService';
-import { applyRemoteDocuments, projectDocuments, type DocumentData } from '../sync/documentProjection';
+import { applyRemoteDocuments, projectDocuments, rootDocument, type DocumentData } from '../sync/documentProjection';
+import { assertCloudBusinessPreserved } from '../sync/cloudBusinessIntegrity';
 import { applySemanticOperations, coversVectorClock, parseSyncMeta, type SyncMeta } from '../sync/semanticProjection';
 import { readAccountCloudDocument } from '../sync/cloudDocumentRead';
 import { requireCloudAccountDataKey, requireRightsExportAccountDataKey } from '../sync/cloudAccountKeyAccess';
@@ -95,14 +96,22 @@ export async function collectBackupSnapshot(fallback: UserData, includeCloud: bo
 
     const addRawDoc = (path: string, raw: unknown) => {
         const normalized = readAccountCloudDocument(raw ?? {}, `Backup ${path || 'root'} data schema`, session.owner.slice(5), path, effectiveCloudKey);
-        // Explicit exported recovery remains readable JSON by user choice;
-        // no encrypted envelope is stored in the human-readable backup.
-        documents.set(path, structuredClone({ ...normalized.business, _schemaVersion: normalized.dataSchemaVersion, _sync: normalized.sync }));
         const business = path.startsWith('history_months/')
             ? requireCompleteHistoryMonthDocument(path.slice('history_months/'.length), normalized.business)
             : path.startsWith('nutrition_months/')
                 ? requireCompleteNutritionMonthDocument(path.slice('nutrition_months/'.length), normalized.business)
                 : normalized.business;
+        // A complete export must reject lossy business normalization just as
+        // authoritative hydration does. An authenticated AEAD is not a proof
+        // that every business field survives the current Zod projection.
+        const checked = path === ''
+            ? rootDocument(UserDataSchema.parse(normalized.business) as unknown as UserData)
+            : business;
+        if (path === '' && normalized.business.nutritionPlanning === null) checked.nutritionPlanning = null;
+        assertCloudBusinessPreserved(path, normalized.business, checked);
+        // Only stage the recoverable raw snapshot after its business content
+        // has passed the losslessness check; never publish a partial export.
+        documents.set(path, structuredClone({ ...normalized.business, _schemaVersion: normalized.dataSchemaVersion, _sync: normalized.sync }));
         businessDocuments.set(path, business);
         try {
             syncMetaByDocument[path] = parseSyncMeta(normalized.sync);
