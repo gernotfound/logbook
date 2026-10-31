@@ -492,9 +492,13 @@ describe('durable secure archive migration', () => {
     });
 
     it('never adopts a valid pre-launch plaintext envelope or replaces its original bytes', async () => {
+        await createAndMigrateVault(owner);
         await initializeLocal(owner, base());
-        const plaintext = await get('logbook:v2:' + owner);
-        expect(typeof plaintext).toBe('object');
+        const plaintext = structuredClone((await readLocal(owner))!);
+        lockAllVaults();
+        localStorage.clear();
+        await clear();
+        await set('logbook:v2:' + owner, plaintext);
         await expect(createAndMigrateVault(owner)).rejects.toBeInstanceOf(LocalVaultLockedError);
         expect(readVaultControl(owner)).toBeNull();
         expect(await get(vaultControlMirrorId(owner))).toBeUndefined();
