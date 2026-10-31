@@ -108,7 +108,7 @@ describe('PWA IndexedDB Cache & Sync Lock Refactor Suite', () => {
       await new Promise(r => setTimeout(r, 0));
       const ciphertext = idbStore['logbook:v2:user:test-user-id'];
       expect(ciphertext).toMatch(/^tlb-sealed:v1:/);
-      expect((await readLocal('user:test-user-id'))?.data.profile.height).toBe('170');
+      expect((await readLocal('user:test-user-id'))?.data.profile?.height).toBe('170');
 
       useAppStore.getState().setUserData(null);
       await new Promise(r => setTimeout(r, 0));
