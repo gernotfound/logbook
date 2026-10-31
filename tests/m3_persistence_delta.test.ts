@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { getDocFromServer, writeBatch } from 'firebase/firestore';
 
 vi.unmock('../src/lib/db');
@@ -18,6 +18,9 @@ import {
 } from '../src/lib/catalog/deltaResolver';
 import { saveUserDataToCache, getInitialUserData } from '../src/store/slices/createDataSlice';
 import { idbStore } from './setup';
+import { readLocal } from '../src/lib/sync/localRepository';
+import { prepareUnlockedTestArchive } from './secureVaultFixture';
+import { lockAllVaults } from '../src/lib/sync/secureArchiveSession';
 import type { UserData, Exercise, Food, CatalogOverrides } from '../src/types';
 
 
@@ -31,6 +34,7 @@ describe('M3: Storage & Persistence Delta Isolation Suite', () => {
         localStorage.clear();
         for (const k in idbStore) delete idbStore[k];
         await clearCatalogCache();
+        await prepareUnlockedTestArchive('user:test-user-id');
         DB.resetCache();
         capturedUserDocData = null;
 
@@ -45,6 +49,8 @@ describe('M3: Storage & Persistence Delta Isolation Suite', () => {
         };
         vi.mocked(writeBatch).mockReturnValue(mockBatch);
     });
+
+    afterEach(() => lockAllVaults());
 
     describe('DB.saveUserData Delta Isolation', () => {
         it('persists only custom exercises and foods even with a populated global catalog', async () => {
@@ -347,7 +353,7 @@ describe('M3: Storage & Persistence Delta Isolation Suite', () => {
     });
 
     describe('createDataSlice Cache Tiering', () => {
-        it('saveUserDataToCache stores and removes an owner-scoped envelope in the unsealed in-memory IDB mock', async () => {
+        it('stores an encrypted owner envelope and refuses incidental cache deletion', async () => {
             const testData: UserData = {
                 profile: { height: '176' },
                 library: [],
@@ -358,13 +364,18 @@ describe('M3: Storage & Persistence Delta Isolation Suite', () => {
                 activeWorkout: null,
                             };
 
-            // This isolated shape check does not establish encrypted bytes-at-rest or crash durability.
             await saveUserDataToCache(testData);
-            expect(idbStore['logbook:v2:user:test-user-id']).toBeDefined();
-            expect(idbStore['logbook:v2:user:test-user-id'].data.profile.height).toBe('176');
+            const owner = 'user:test-user-id';
+            const storageKey = 'logbook:v2:' + owner;
+            const ciphertext = idbStore[storageKey];
+            expect(ciphertext).toMatch(/^tlb-sealed:v1:/);
+            expect(ciphertext).not.toContain('176');
+            expect((await readLocal(owner))?.data.profile.height).toBe('176');
 
-            await saveUserDataToCache(null);
-            expect(idbStore['logbook:v2:user:test-user-id']).toBeUndefined();
+            // A null cache update is not verified account deletion: keep ciphertext.
+            await expect(saveUserDataToCache(null)).rejects.toThrow('percorso verificato di cancellazione');
+            expect(idbStore[storageKey]).toBe(ciphertext);
+            expect((await readLocal(owner))?.data.profile.height).toBe('176');
         });
 
         it('getInitialUserData safely returns validated UserData from window.__INITIAL_USER_DATA__', () => {
