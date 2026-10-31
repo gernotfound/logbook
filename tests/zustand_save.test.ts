@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { useAppStore } from '../src/store/useAppStore';
 import { DB } from '../src/lib/db';
 import type { UserData } from '../src/types';
+import { prepareUnlockedTestArchive } from './secureVaultFixture';
+import { lockAllVaults } from '../src/lib/sync/secureArchiveSession';
 
 describe('R3: Zustand saveUserData Error Rejection & Debouncing Suite', () => {
     const mockUserData1: UserData = {
@@ -27,15 +29,17 @@ describe('R3: Zustand saveUserData Error Rejection & Debouncing Suite', () => {
         profile: { height: '185' }
     };
 
-    beforeEach(() => {
-        vi.useFakeTimers();
+    beforeEach(async () => {
         useAppStore.getState().resetStore();
+        await prepareUnlockedTestArchive('user:test-user-id');
+        vi.useFakeTimers();
         vi.clearAllMocks();
     });
 
     afterEach(() => {
         useAppStore.getState().resetStore();
         vi.useRealTimers();
+        lockAllVaults();
     });
 
     describe('Single Save Flow', () => {
