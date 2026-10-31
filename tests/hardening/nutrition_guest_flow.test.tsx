@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { get } from 'idb-keyval';
 import { act, renderHook } from '@testing-library/react';
 import { auth } from '../../src/lib/firebase';
 import { DB } from '../../src/lib/db';
@@ -8,6 +9,7 @@ import { calculateLoggedMealTotals } from '../../src/lib/nutrition/calculateLogg
 import { activateGuestSession, captureSession, GUEST_SESSION_KEY, invalidateSession } from '../../src/lib/sync/session';
 import { initializeLocal, readLocal } from '../../src/lib/sync/localRepository';
 import { prepareUnlockedTestArchive } from '../secureVaultFixture';
+import { lockAllVaults } from '../../src/lib/sync/secureArchiveSession';
 import { useNutritionMeals } from '../../src/hooks/useNutritionMeals';
 import { useDialogStore } from '../../src/store/useDialogStore';
 import { useAppStore } from '../../src/store/useAppStore';
@@ -38,7 +40,7 @@ async function runMutation(action: () => Promise<unknown>) {
     });
 }
 
-beforeEach(() => {
+beforeEach(async () => {
     useAppStore.getState().resetStore();
     vi.clearAllMocks();
     (auth as any).currentUser = { uid: 'nutrition-hardening-user' };
@@ -53,8 +55,11 @@ beforeEach(() => {
         compatibilityStatus: 'ok',
         compatibilityError: null,
     });
-
+    const owner = 'user:nutrition-hardening-user';
+    await prepareUnlockedTestArchive(owner);
+    await initializeLocal(owner, useAppStore.getState().userData!);
 });
+afterEach(() => lockAllVaults());
 
 describe('M5 nutrition account flow through useNutritionMeals', () => {
     it('writes current nutrition only to the active guest archive, not the previous account owner', async () => {
@@ -66,6 +71,8 @@ describe('M5 nutrition account flow through useNutritionMeals', () => {
             localStorage.setItem(GUEST_SESSION_KEY, guestSessionId);
             activateGuestSession(guestSessionId);
             const guestData = fixture();
+            const previousArchiveBytes = await get('logbook:v2:user:nutrition-hardening-user');
+            expect(previousArchiveBytes).toMatch(/^tlb-sealed:v1:/);
             await prepareUnlockedTestArchive('guest');
             await initializeLocal('guest', guestData);
             useAppStore.setState({ userData: guestData, dataOwner: 'guest' });
@@ -77,8 +84,9 @@ describe('M5 nutrition account flow through useNutritionMeals', () => {
             }));
             const guestArchive = await readLocal('guest');
             expect(guestArchive?.data.nutrition?.[DATE]?.meals?.[0]?.name).toBe('Guest rice');
-            const previousOwnerArchive = await readLocal('user:nutrition-hardening-user');
-            expect(previousOwnerArchive?.data.nutrition?.[DATE]?.meals?.some(meal => meal.name === 'Guest rice')).not.toBe(true);
+            // The guest session cannot unlock the former account. Compare
+            // authenticated storage bytes instead of reading without authorization.
+            expect(await get('logbook:v2:user:nutrition-hardening-user')).toBe(previousArchiveBytes);
         } finally {
             (auth as any).currentUser = previousUser;
             localStorage.removeItem('logbook_is_guest');

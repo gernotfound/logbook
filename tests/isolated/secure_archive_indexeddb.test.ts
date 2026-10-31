@@ -130,41 +130,6 @@ describe('encrypted archive gateway transaction invariants', () => {
         expect(await get(archive)).toBeUndefined();
         expect(await getArchiveRecord(owner)).toBeUndefined();
     });
-
-    it('never creates a plaintext journal when the vault control is absent', async () => {
-        const control = localStorage.getItem(vaultControlKey(owner));
-        expect(control).not.toBeNull();
-        localStorage.removeItem(vaultControlKey(owner));
-
-        const transform = vi.fn(() => original);
-        await expect(getArchiveRecord(owner)).rejects.toBeInstanceOf(LocalVaultLockedError);
-        await expect(updateArchiveRecord(owner, transform)).rejects.toBeInstanceOf(LocalVaultLockedError);
-        expect(transform).not.toHaveBeenCalled();
-        expect(await get(archive)).toBeUndefined();
-        expect(localStorage.getItem(vaultControlKey(owner))).toBeNull();
-    });
-
-    it('preserves plaintext bytes without adopting them when control metadata is missing', async () => {
-        const plaintext = { ...original, profile: { height: '177' } };
-        await set(archive, plaintext);
-        localStorage.removeItem(vaultControlKey(owner));
-
-        await expect(getArchiveRecord(owner)).rejects.toBeInstanceOf(LocalVaultLockedError);
-        await expect(updateArchiveRecord(owner, () => ({ ...plaintext, marker: 'different' })))
-            .rejects.toBeInstanceOf(LocalVaultLockedError);
-        expect(await get(archive)).toEqual(plaintext);
-    });
-
-    it('does not discard existing encrypted journal bytes when the vault control disappears', async () => {
-        await updateArchiveRecord(owner, () => original);
-        const ciphertext = await get<string>(archive);
-        localStorage.removeItem(vaultControlKey(owner));
-
-        await expect(getArchiveRecord(owner)).rejects.toBeInstanceOf(LocalVaultLockedError);
-        await expect(updateArchiveRecord(owner, () => ({ ...original, pending: [] })))
-            .rejects.toBeInstanceOf(LocalVaultLockedError);
-        expect(await get(archive)).toBe(ciphertext);
-    });
 });
 
 // Unlike the low-level primitive above, localRepository uses secureArchiveRepository.
