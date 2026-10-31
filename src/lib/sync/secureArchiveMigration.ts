@@ -1,15 +1,15 @@
-import { get, update } from 'idb-keyval';
+import { get } from 'idb-keyval';
 import { readBrowserValueStrict } from './browserStorage';
 import { normalizeStorageOwner } from './owner';
 import { deviceKey, protectedDeviceKey } from './deviceStorage';
-import { openLocalJson, openLocalText, sealLocalJson, SEALED_LOCAL_PREFIX, LocalCiphertextError } from './secureArchiveCipher';
+import { openLocalJson, openLocalText, SEALED_LOCAL_PREFIX, LocalCiphertextError } from './secureArchiveCipher';
 import { createLocalKeyVault, unlockLocalKeyVault } from './secureArchiveKeys';
 import { publishVaultControl, reconcileVaultControl } from './secureArchiveControlRecovery';
 import {
     readVaultControl, unlockVaultForOwner, LocalVaultLockedError,
     verifyMigrationCapability, type PersistedVaultControl,
 } from './secureArchiveSession';
-import { assertLegacyEnvelopeValidForSecureMigration } from './localRepository';
+import { validateLocalEnvelope } from './localEnvelopeValidation';
 import { withGuestLifecycleLock } from './guestLifecycleLock';
 import { isAccountDeletionPending } from './accountGate';
 import { OWNER_UI_PREFERENCES } from '../uiPreferenceKeys';
@@ -59,21 +59,11 @@ function assertMigrationAvailable(owner: string, control: PersistedVaultControl,
 async function migrateIndexedDb(owner: string, control: PersistedVaultControl, key: Uint8Array): Promise<void> {
     const storageKey = 'logbook:v2:' + owner;
     assertMigrationAvailable(owner, control, key);
-    await update<unknown>(storageKey, raw => {
-        assertMigrationAvailable(owner, control, key);
-        if (raw === undefined) return undefined;
-        if (typeof raw === 'string' && raw.startsWith(SEALED_LOCAL_PREFIX)) {
-            assertLegacyEnvelopeValidForSecureMigration(openLocalJson(key, owner, storageKey, raw), owner);
-            return raw;
-        }
-        assertLegacyEnvelopeValidForSecureMigration(raw, owner);
-        return sealLocalJson(key, owner, storageKey, raw);
-    });
-    assertMigrationAvailable(owner, control, key);
     const current = await get<unknown>(storageKey);
+    assertMigrationAvailable(owner, control, key);
     if (current !== undefined) {
         if (typeof current !== 'string' || !current.startsWith(SEALED_LOCAL_PREFIX)) throw new LocalCiphertextError();
-        assertLegacyEnvelopeValidForSecureMigration(openLocalJson(key, owner, storageKey, current), owner);
+        validateLocalEnvelope(openLocalJson(key, owner, storageKey, current), owner);
     }
 }
 
@@ -104,7 +94,7 @@ async function migrateAndFinalize(owner: string, control: PersistedVaultControl,
     const stored = await get<unknown>('logbook:v2:' + owner);
     if (stored !== undefined) {
         if (typeof stored !== 'string') throw new LocalCiphertextError();
-        assertLegacyEnvelopeValidForSecureMigration(openLocalJson(dataKey, owner, 'logbook:v2:' + owner, stored), owner);
+        validateLocalEnvelope(openLocalJson(dataKey, owner, 'logbook:v2:' + owner, stored), owner);
     }
     assertMigrationAvailable(owner, control, dataKey);
     await publishVaultControl(owner, { ...control, phase: 'active' });
@@ -123,8 +113,8 @@ function withSecureMigrationLock<T>(owner: string, operation: () => Promise<T>):
 
 /**
  * Called automatically after current account/guest ownership is established.
- * A failed step leaves original data and a durable MIGRATING marker; the
- * next start reopens the same non-extractable device key and resumes safely.
+ * A failed step leaves existing ciphertext untouched and a durable MIGRATING
+ * marker; the next start resumes with the same non-extractable device key.
  */
 export async function createAndMigrateVault(requestedOwner: string, isCurrent: () => boolean = () => true): Promise<void> {
     const owner = normalizeStorageOwner(requestedOwner);
@@ -150,8 +140,7 @@ export async function createAndMigrateVault(requestedOwner: string, isCurrent: (
             // A lost localStorage control is not permission to install a new
             // DEK over an existing authenticated ciphertext. Preserve bytes.
             const raw = await get<unknown>('logbook:v2:' + owner);
-            if ((typeof raw === 'string' && raw.startsWith(SEALED_LOCAL_PREFIX))
-                || ownerStorageNames(owner).some(name => name.startsWith('sealed:'))) {
+            if (raw !== undefined || ownerStorageNames(owner).some(name => name.startsWith('sealed:'))) {
                 throw new LocalVaultLockedError();
             }
             // Reject device plaintext BEFORE persisting a new device key/control.

@@ -30,6 +30,8 @@ vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackEvent: vi.fn
 import { DB as RealDB } from '../../src/lib/db';
 import { adoptReplicaCheckpoint, advanceLocalConsentRevisionIfClean, readLocal, initializeLocal, commitLocal } from '../../src/lib/sync/localRepository';
 import { seedTrustedConsent, registerReplica } from './replicaHarness';
+import { createAndMigrateVault } from '../../src/lib/sync/secureArchiveMigration';
+import { lockAllVaults } from '../../src/lib/sync/secureArchiveSession';
 import { CURRENT_SYNC_PROTOCOL } from '../../src/lib/schemaEvolution';
 import { sealCloudDocument, openCloudDocument } from '../../src/lib/sync/cloudDocumentCipher';
 const DB = {
@@ -43,10 +45,10 @@ const data = (input: Partial<UserData> = {}) => UserDataSchema.parse({ legalCons
 let env: RulesTestEnvironment;
 beforeAll(async () => {
     if (process.env.FIRESTORE_EMULATOR_HOST !== '127.0.0.1:8080') throw new Error('Only the local emulator is allowed');
-    vi.stubGlobal('navigator', { onLine: true });
+    vi.stubGlobal('navigator', { onLine: true, locks: { request: async (_name: string, _options: unknown, run: () => Promise<unknown>) => run() } });
     env = await initializeTestEnvironment({ projectId: 'demo-logbook-audit', firestore: { host: '127.0.0.1', port: 8080, rules: readFileSync('firestore.rules', 'utf8') } });
 });
-beforeEach(async () => { await env.clearFirestore(); await seedTrustedConsent(env); await clear(); sdk.db = env.authenticatedContext('a', { email_verified: true }).firestore(); sdk.auth.currentUser = { uid: 'a' }; });
+beforeEach(async () => { await env.clearFirestore(); await seedTrustedConsent(env); lockAllVaults(); localStorage.clear(); await clear(); sdk.db = env.authenticatedContext('a', { email_verified: true }).firestore(); sdk.auth.currentUser = { uid: 'a' }; await createAndMigrateVault('user:a'); });
 afterAll(async () => { await env?.cleanup(); vi.unstubAllGlobals(); });
 async function prepareReplica() {
     if (!await advanceLocalConsentRevisionIfClean('user:a', 1)) throw new Error('Consent fixture is not clean');
@@ -71,13 +73,13 @@ it('keeps offline data durable and replays after reconnect without another edit'
     const base = data({});
     await initializeLocal('user:a', base);
     await prepareReplica();
-    vi.stubGlobal('navigator', { onLine: false });
+    vi.stubGlobal('navigator', { onLine: false, locks: { request: async (_name: string, _options: unknown, run: () => Promise<unknown>) => run() } });
     const desired = data({ profile: { height: '171' } });
     await commitLocal('user:a', desired, base);
     expect((await DB.saveUserData(desired)).status).toBe('local-pending');
     expect((await readLocal('user:a'))?.pending).toHaveLength(1);
     expect((await getDoc(doc(sdk.db, 'users/a'))).exists()).toBe(false);
-    vi.stubGlobal('navigator', { onLine: true });
+    vi.stubGlobal('navigator', { onLine: true, locks: { request: async (_name: string, _options: unknown, run: () => Promise<unknown>) => run() } });
     expect((await DB.saveUserData((await readLocal('user:a'))!.data)).status).toBe('synced');
     expect((await readLocal('user:a'))?.pending).toEqual([]);
 });

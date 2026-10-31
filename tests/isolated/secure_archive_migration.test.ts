@@ -93,8 +93,8 @@ describe('durable secure archive migration', () => {
     });
 
     it('fences stale encrypted and legacy writers and provisions a new vault only after purge', async () => {
-        await initializeLocal(owner, base());
         await createAndMigrateVault(owner);
+        await initializeLocal(owner, base());
         writeDeviceValue('draft_exercise', '{"name":"private"}', owner);
         await purgeCompletedAccountLocalData(owner);
         expect(isLocalPurgePending(owner)).toBe(true);
@@ -108,8 +108,8 @@ describe('durable secure archive migration', () => {
     });
 
     it('does not provision a competing key after control metadata disappears', async () => {
-        await initializeLocal(owner, base());
         await createAndMigrateVault(owner);
+        await initializeLocal(owner, base());
         writeDeviceValue('draft_exercise', '{"name":"recoverable"}', owner);
         const pendingResult = await commitDomainOperations(owner, { type: 'profile.patch', patch: { height: '173' } }, base());
         expect(pendingResult.operations).toHaveLength(1);
@@ -132,7 +132,6 @@ describe('durable secure archive migration', () => {
     });
 
     it('recovers an interruption after writing the first-ever mirror but before localStorage control', async () => {
-        await initializeLocal(owner, base());
         const originalEnvelope = await get('logbook:v2:' + owner);
         const originalSet = localStorage.setItem.bind(localStorage);
         const failure = vi.spyOn(localStorage, 'setItem').mockImplementation((key, value) => {
@@ -146,12 +145,14 @@ describe('durable secure archive migration', () => {
         failure.mockRestore();
         await createAndMigrateVault(owner);
         expect(readVaultControl(owner)?.phase).toBe('active');
+        expect(await readLocal(owner)).toBeUndefined();
+        await initializeLocal(owner, base());
         expect((await readLocal(owner))?.data.nutrition?.[day]?.weight).toBe(75);
     });
 
     it('rebuilds an absent mirror only after authenticating the primary control', async () => {
-        await initializeLocal(owner, base());
         await createAndMigrateVault(owner);
+        await initializeLocal(owner, base());
         const original = readVaultControl(owner);
         await del(vaultControlMirrorId(owner));
         lockVault(owner);
@@ -161,8 +162,8 @@ describe('durable secure archive migration', () => {
     });
 
     it('preserves ciphertext and fails closed when BOTH controls disappear', async () => {
-        await initializeLocal(owner, base());
         await createAndMigrateVault(owner);
+        await initializeLocal(owner, base());
         const ciphertext = await get('logbook:v2:' + owner);
         await del(vaultControlMirrorId(owner));
         localStorage.removeItem(vaultControlKey(owner));
@@ -224,7 +225,6 @@ describe('durable secure archive migration', () => {
     });
 
     it('does not activate provisioning while a second tab compacts owner metadata indexes', async () => {
-        await initializeLocal(owner, base());
         const safeKey = ownerUiPreferenceKey(owner, OWNER_UI_PREFERENCES[0]);
         const raw = '"session"';
         const decoy = 'logbook:other-tab';
@@ -252,12 +252,13 @@ describe('durable secure archive migration', () => {
         expect(readVaultControl(owner)?.phase).toBe('active');
         expect(readVaultControl(owner)?.epoch).toBe(migratingEpoch);
         expect(localStorage.getItem(safeKey)).toBe(raw);
+        await initializeLocal(owner, base());
         expect((await readLocal(owner))?.data.nutrition?.[day]?.weight).toBe(75);
     });
 
     it('rejects different control epochs instead of selecting a conflicting key', async () => {
-        await initializeLocal(owner, base());
         await createAndMigrateVault(owner);
+        await initializeLocal(owner, base());
         const primary = readVaultControl(owner)!;
         const ciphertext = await get('logbook:v2:' + owner);
         await set(vaultControlMirrorId(owner), { ...primary, epoch: 'b'.repeat(32) });
@@ -268,8 +269,8 @@ describe('durable secure archive migration', () => {
     });
 
     it('does not misclassify a missing device key as an empty archive', async () => {
-        await initializeLocal(owner, base());
         await createAndMigrateVault(owner);
+        await initializeLocal(owner, base());
         const before = await get('logbook:v2:' + owner);
         await del(deviceVaultKeyId(owner));
         lockVault(owner);
@@ -278,7 +279,6 @@ describe('durable secure archive migration', () => {
     });
 
     it('resumes activation if the mirror is active but synchronous control is still migrating', async () => {
-        await initializeLocal(owner, base());
         const nativeSet = localStorage.setItem.bind(localStorage);
         const stop = vi.spyOn(localStorage, 'setItem').mockImplementation((key, value) => {
             if (key === vaultControlKey(owner) && value.includes('"phase":"active"')) throw new Error('interrupted activation');
@@ -290,12 +290,13 @@ describe('durable secure archive migration', () => {
         stop.mockRestore();
         await createAndMigrateVault(owner);
         expect(readVaultControl(owner)?.phase).toBe('active');
+        await initializeLocal(owner, base());
         expect((await readLocal(owner))?.data.nutrition?.[day]?.weight).toBe(75);
     });
 
     it('refuses to overwrite malformed primary control even with a good mirror', async () => {
-        await initializeLocal(owner, base());
         await createAndMigrateVault(owner);
+        await initializeLocal(owner, base());
         localStorage.setItem(vaultControlKey(owner), '{broken');
         lockVault(owner);
         await expect(createAndMigrateVault(owner)).rejects.toBeInstanceOf(LocalVaultLockedError);
@@ -342,15 +343,14 @@ describe('durable secure archive migration', () => {
     it('treats last confirmed consent revision as a safe lifecycle marker, not private plaintext', async () => {
         const consentCacheKey = 'logbook:v2:' + owner + ':health-consent-last-active';
         localStorage.setItem(consentCacheKey, '2');
-        await initializeLocal(owner, base());
         await createAndMigrateVault(owner);
+        await initializeLocal(owner, base());
         expect(readVaultControl(owner)?.phase).toBe('active');
         expect(localStorage.getItem(consentCacheKey)).toBe('2');
         expect((await readLocal(owner))?.data.nutrition?.[day]?.weight).toBe(75);
     });
 
     it('recognizes only the registered owner-scoped UI flags without blocking vault activation', async () => {
-        await initializeLocal(owner, base());
         const preferences = new Map(OWNER_UI_PREFERENCES.map(preference => [
             ownerUiPreferenceKey(owner, preference),
             JSON.stringify(preference.startsWith('creating-') ? false : 'session'),
@@ -358,6 +358,7 @@ describe('durable secure archive migration', () => {
         for (const [key, value] of preferences) localStorage.setItem(key, value);
 
         await createAndMigrateVault(owner);
+        await initializeLocal(owner, base());
         expect(readVaultControl(owner)?.phase).toBe('active');
         expect((await readLocal(owner))?.data.profile?.height).toBe('170');
         for (const [key, value] of preferences) {
@@ -366,7 +367,6 @@ describe('durable secure archive migration', () => {
     });
 
     it('continues to reject unknown owner UI keys before transforming an archive', async () => {
-        await initializeLocal(owner, base());
         const unknown = 'logbook:v2:' + owner + ':ui:unknown-field';
         localStorage.setItem(unknown, 'true');
         await expect(createAndMigrateVault(owner)).rejects.toThrow('chiavi sconosciute');
@@ -378,9 +378,7 @@ describe('durable secure archive migration', () => {
 
     it('serializes simultaneous provisioning attempts without replacing a durable key', async () => {
         const data = base();
-        await initializeLocal(owner, data);
-        const original = await get('logbook:v2:' + owner);
-        expect(original).toBeDefined();
+        expect(await get('logbook:v2:' + owner)).toBeUndefined();
 
         // Match actual Web Locks serialization; both callers checked for no
         // control before their exclusive callbacks were permitted to run.
@@ -399,6 +397,7 @@ describe('durable secure archive migration', () => {
 
         await Promise.all([createAndMigrateVault(owner), createAndMigrateVault(owner)]);
         const control = readVaultControl(owner);
+        await initializeLocal(owner, data);
         expect(control?.phase).toBe('active');
         const ciphertext = await get<string>('logbook:v2:' + owner);
         expect(ciphertext).toMatch(/^tlb-sealed:v1:/);
@@ -413,7 +412,6 @@ describe('durable secure archive migration', () => {
     });
 
     it('rejects old device plaintext before provisioning and preserves every original byte', async () => {
-        await initializeLocal(owner, base());
         const legacyKey = deviceKey('draft:measurement:' + day, owner);
         const original = '{"weight":"77"}';
         const originalIdb = await get('logbook:v2:' + owner);
@@ -443,9 +441,9 @@ describe('durable secure archive migration', () => {
     });
 
     it('preserves an unreadable sealed draft instead of treating it as absent', async () => {
+        await createAndMigrateVault(owner);
         await initializeLocal(owner, base());
         const name = 'draft:measurement:' + day;
-        await createAndMigrateVault(owner);
         writeDeviceValue(name, '{"weight":"81"}', owner);
         const protectedKey = protectedDeviceKey(name, owner);
         const ciphertext = localStorage.getItem(protectedKey);
@@ -477,10 +475,10 @@ describe('durable secure archive migration', () => {
         localStorage.removeItem(GUEST_REVOCATION_KEY);
         activateGuestSession('secure-backup-fixture');
         const data = base();
+        await createAndMigrateVault('guest');
         await initializeLocal('guest', data);
         const notes = '{"notes":"sensitive offline workout"}';
         const draft = '{"weight":"77"}';
-        await createAndMigrateVault('guest');
         writeDeviceValue('workout', notes, 'guest');
         writeDeviceValue('draft:measurement:' + day, draft, 'guest');
         const snapshot = await collectBackupSnapshot(data, false);
@@ -493,10 +491,48 @@ describe('durable secure archive migration', () => {
         expect(localStorage.getItem(deviceKey('workout', 'guest'))).toBeNull();
     });
 
+    it('never adopts a valid pre-launch plaintext envelope or replaces its original bytes', async () => {
+        await createAndMigrateVault(owner);
+        await initializeLocal(owner, base());
+        const plaintext = structuredClone((await readLocal(owner))!);
+        lockAllVaults();
+        localStorage.clear();
+        await clear();
+        await set('logbook:v2:' + owner, plaintext);
+        await expect(createAndMigrateVault(owner)).rejects.toBeInstanceOf(LocalVaultLockedError);
+        expect(readVaultControl(owner)).toBeNull();
+        expect(await get(vaultControlMirrorId(owner))).toBeUndefined();
+        expect(await get(deviceVaultKeyId(owner))).toBeUndefined();
+        expect(await get('logbook:v2:' + owner)).toEqual(plaintext);
+    });
+
+    it('rejects plaintext injected after an interrupted vault publication without replacing the key', async () => {
+        const originalSet = localStorage.setItem.bind(localStorage);
+        const failure = vi.spyOn(localStorage, 'setItem').mockImplementation((key, value) => {
+            if (key === vaultControlKey(owner)) throw new Error('interrupted first publication');
+            originalSet(key, value);
+        });
+        await expect(createAndMigrateVault(owner)).rejects.toBeInstanceOf(BrowserStorageError);
+        failure.mockRestore();
+
+        const mirror = await get<{ phase: string; epoch: string }>(vaultControlMirrorId(owner));
+        expect(mirror?.phase).toBe('migrating');
+        const plaintext = { incompatible: 'old-unsealed-writer' };
+        await set('logbook:v2:' + owner, plaintext);
+
+        await expect(createAndMigrateVault(owner)).rejects.toBeInstanceOf(LocalCiphertextError);
+        expect(readVaultControl(owner)?.phase).toBe('migrating');
+        expect((await get<{ epoch: string }>(vaultControlMirrorId(owner)))?.epoch).toBe(mirror?.epoch);
+        expect(await get(deviceVaultKeyId(owner))).toBeDefined();
+        expect(await get('logbook:v2:' + owner)).toEqual(plaintext);
+    });
+
     it('never activates a corrupt legacy archive or silently seeds empty data', async () => {
         await set('logbook:v2:' + owner, { incompatible: 'legacy-bad' });
-        await expect(createAndMigrateVault(owner)).rejects.toThrow();
-        expect(readVaultControl(owner)?.phase).toBe('migrating');
+        await expect(createAndMigrateVault(owner)).rejects.toBeInstanceOf(LocalVaultLockedError);
+        expect(readVaultControl(owner)).toBeNull();
+        expect(await get(vaultControlMirrorId(owner))).toBeUndefined();
+        expect(await get(deviceVaultKeyId(owner))).toBeUndefined();
         expect(await get('logbook:v2:' + owner)).toEqual({ incompatible: 'legacy-bad' });
     });
 });
