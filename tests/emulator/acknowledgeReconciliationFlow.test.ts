@@ -84,6 +84,8 @@ import { diffDocuments } from '../../src/lib/sync/semanticProjection';
 import { applyDocumentChanges } from '../../src/lib/sync/transactionWriter';
 import { sealCloudDocument, openCloudDocument } from '../../src/lib/sync/cloudDocumentCipher';
 import { seedTrustedConsent, registerReplica, asModularFirestore } from './replicaHarness';
+import { createAndMigrateVault } from '../../src/lib/sync/secureArchiveMigration';
+import { lockAllVaults } from '../../src/lib/sync/secureArchiveSession';
 
 const owner = 'user:a';
 const remoteActor = 's01';
@@ -102,7 +104,7 @@ let env: RulesTestEnvironment;
 
 beforeAll(async () => {
     if (process.env.FIRESTORE_EMULATOR_HOST !== '127.0.0.1:8080') throw new Error('Only the isolated local emulator is allowed');
-    vi.stubGlobal('navigator', { onLine: true });
+    vi.stubGlobal('navigator', { onLine: true, locks: { request: async (_name: string, _options: unknown, run: () => Promise<unknown>) => run() } });
     env = await initializeTestEnvironment({
         projectId: 'demo-logbook-audit',
         firestore: { host: '127.0.0.1', port: 8080, rules: readFileSync('firestore.rules', 'utf8') },
@@ -110,6 +112,8 @@ beforeAll(async () => {
 });
 
 beforeEach(async () => {
+    lockAllVaults();
+    localStorage.clear();
     await clear();
     await env.clearFirestore();
     await seedTrustedConsent(env);
@@ -118,6 +122,7 @@ beforeEach(async () => {
     firebaseHarness.db = asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore());
     acknowledgeHarness.before = undefined;
     acknowledgeHarness.after = undefined;
+    await createAndMigrateVault(owner);
     await initializeLocal(owner, data(170));
     if (!await advanceLocalConsentRevisionIfClean(owner, 1)) throw new Error('Consent fixture is not clean');
 });
@@ -142,7 +147,7 @@ describe('remote commit to local acknowledgement reconciliation', () => {
             clock: {}, syncMetaByDocument: {},
         });
 
-        vi.stubGlobal('navigator', { onLine: false });
+        vi.stubGlobal('navigator', { onLine: false, locks: { request: async (_name: string, _options: unknown, run: () => Promise<unknown>) => run() } });
         await commitLocal(owner, data(173), data(170));
         const staged = await readLocal(owner);
         expect(staged?.pending.length).toBeGreaterThan(0);
