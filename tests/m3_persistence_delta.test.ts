@@ -370,12 +370,12 @@ describe('M3: Storage & Persistence Delta Isolation Suite', () => {
             const ciphertext = idbStore[storageKey];
             expect(ciphertext).toMatch(/^tlb-sealed:v1:/);
             expect(ciphertext).not.toContain('176');
-            expect((await readLocal(owner))?.data.profile.height).toBe('176');
+            expect((await readLocal(owner))?.data.profile?.height).toBe('176');
 
             // A null cache update is not verified account deletion: keep ciphertext.
             await expect(saveUserDataToCache(null)).rejects.toThrow('percorso verificato di cancellazione');
             expect(idbStore[storageKey]).toBe(ciphertext);
-            expect((await readLocal(owner))?.data.profile.height).toBe('176');
+            expect((await readLocal(owner))?.data.profile?.height).toBe('176');
         });
 
         it('getInitialUserData safely returns validated UserData from window.__INITIAL_USER_DATA__', () => {
