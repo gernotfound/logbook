@@ -502,6 +502,27 @@ describe('durable secure archive migration', () => {
         expect(await get('logbook:v2:' + owner)).toEqual(plaintext);
     });
 
+    it('rejects plaintext injected after an interrupted vault publication without replacing the key', async () => {
+        const originalSet = localStorage.setItem.bind(localStorage);
+        const failure = vi.spyOn(localStorage, 'setItem').mockImplementation((key, value) => {
+            if (key === vaultControlKey(owner)) throw new Error('interrupted first publication');
+            originalSet(key, value);
+        });
+        await expect(createAndMigrateVault(owner)).rejects.toBeInstanceOf(BrowserStorageError);
+        failure.mockRestore();
+
+        const mirror = await get<{ phase: string; epoch: string }>(vaultControlMirrorId(owner));
+        expect(mirror?.phase).toBe('migrating');
+        const plaintext = { incompatible: 'old-unsealed-writer' };
+        await set('logbook:v2:' + owner, plaintext);
+
+        await expect(createAndMigrateVault(owner)).rejects.toBeInstanceOf(LocalCiphertextError);
+        expect(readVaultControl(owner)?.phase).toBe('migrating');
+        expect((await get<{ epoch: string }>(vaultControlMirrorId(owner)))?.epoch).toBe(mirror?.epoch);
+        expect(await get(deviceVaultKeyId(owner))).toBeDefined();
+        expect(await get('logbook:v2:' + owner)).toEqual(plaintext);
+    });
+
     it('never activates a corrupt legacy archive or silently seeds empty data', async () => {
         await set('logbook:v2:' + owner, { incompatible: 'legacy-bad' });
         await expect(createAndMigrateVault(owner)).rejects.toBeInstanceOf(LocalVaultLockedError);
