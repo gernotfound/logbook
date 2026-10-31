@@ -49,6 +49,9 @@ export function classifySyncFailure(error: unknown, options?: { retryable?: bool
         || error instanceof SyncTimeoutError
         || direct?.code === 'unavailable'
         || direct?.code === 'deadline-exceeded'
+        || direct?.code === 'resource-exhausted'
+        || direct?.code === 'firestore/resource-exhausted'
+        || direct?.code === 'quota-exceeded'
     ) {
         return { ok: false, status: 'local-pending', error };
     }

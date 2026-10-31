@@ -59,6 +59,19 @@ describe('DB.saveUserData cloud transaction failure semantics', () => {
         expect(acknowledged?.data.profile?.height).toBe('180');
     });
 
+    it.each(['resource-exhausted', 'firestore/resource-exhausted', 'quota-exceeded'])(
+        'preserves the durable journal on cloud quota %s and can sync after recovery',
+        async code => {
+            const result = await saveWithTransactionFailure({ code });
+            expect(result).toMatchObject({ ok: false, status: 'local-pending' });
+            const replay = await RealDB.saveUserData(state);
+            expect(replay).toMatchObject({ ok: true, status: 'synced' });
+            const acknowledged = await readLocal(OWNER);
+            expect(acknowledged?.pending).toEqual([]);
+            expect(acknowledged?.data.profile?.height).toBe('180');
+        },
+    );
+
     it('does not serialize the caller snapshot when the journal is already durable', async () => {
         await DB.saveUserData(state);
         const circular: Record<string, unknown> = {};
