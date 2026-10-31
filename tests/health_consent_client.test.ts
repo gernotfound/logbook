@@ -46,6 +46,7 @@ afterEach(() => lockAllVaults());
 describe('bounded cold-start consent verification', () => {
   it('fails closed after a stalled token and permits a fresh retry', async () => {
     const uid = 'consent-stalled-' + crypto.randomUUID();
+    await createAndMigrateVault('user:' + uid);
     const actor = user(uid);
     (auth as { currentUser: unknown }).currentUser = actor;
     const fetchMock = vi.fn(async () => trustedConsentResponse({ status: 'active', revision: 1 }));
@@ -87,6 +88,7 @@ describe('first trusted consent registration', () => {
 
   it('requires a deliberate POST then a fresh server GET before enabling cloud access', async () => {
     const uid = 'initial-' + crypto.randomUUID();
+    await createAndMigrateVault('user:' + uid);
     const actor = user(uid);
     (auth as { currentUser: unknown }).currentUser = actor;
     const fetchMock = vi.fn(async (_url: string, init: RequestInit) => init.method === 'POST'
@@ -269,6 +271,9 @@ describe('durable health-consent client barrier', () => {
 
   it('keeps revocation durable across uncertain server failures', async () => {
     const uid = 'offline-' + crypto.randomUUID();
+    await createAndMigrateVault('user:' + uid);
+    await initializeLocal('user:' + uid, UserDataSchema.parse({ profile: { height: '180' } }) as any);
+    expect(await get('logbook:v2:user:' + uid)).toMatch(/^tlb-sealed:v1:/);
     vi.stubGlobal('fetch', vi.fn(async (_url: string, request: RequestInit) => {
       if (request.method === 'GET') return trustedConsentResponse({ status: 'active', revision: 1 });
       throw new Error('offline');
@@ -277,10 +282,13 @@ describe('durable health-consent client barrier', () => {
     await expect(withdrawHealthConsent(user(uid))).rejects.toThrow('offline');
     expect(localStorage.getItem(key(uid))).toBe('pending:1');
     expect(isHealthConsentWritable('user:' + uid)).toBe(false);
+    expect((await readLocal('user:' + uid))?.consentRevision).toBe(1);
+    expect(await get('logbook:v2:user:' + uid)).toMatch(/^tlb-sealed:v1:/);
   });
 
   it('requires a server-confirmed explicit reacceptance before unlocking', async () => {
     const uid = 'reactivate-' + crypto.randomUUID();
+    await createAndMigrateVault('user:' + uid);
     localStorage.setItem(key(uid), 'reaccepting:1');
     vi.stubGlobal('fetch', vi.fn(async () =>
       trustedConsentResponse({ status: 'active', revision: 2, acceptedAt: '2026-10-12T00:00:00.000Z' })));
@@ -310,6 +318,7 @@ describe('durable health-consent client barrier', () => {
 describe('out-of-order consent checks', () => {
   it('does not replace explicit reacceptance with an older withdrawn response', async () => {
     const uid = 'delayed-' + crypto.randomUUID();
+    await createAndMigrateVault('user:' + uid);
     localStorage.setItem(key(uid), 'withdrawn');
     let resolveOld!: (response: Response) => void;
     let reads = 0;
@@ -336,6 +345,7 @@ describe('out-of-order consent checks', () => {
 describe('overlapping consent verification', () => {
   it('ignores an older withdrawn response after a newer active response', async () => {
     const uid = 'overlap-' + crypto.randomUUID();
+    await createAndMigrateVault('user:' + uid);
     let resolveOlder!: (response: Response) => void;
     let requests = 0;
     vi.stubGlobal('fetch', vi.fn(async () => {
@@ -399,6 +409,7 @@ describe('stale withdrawal explicit reconfirmation', () => {
 describe('later reacceptance on another device', () => {
   it('offers a choice when the durable withdrawn marker is older than the active server consent', async () => {
     const uid = 'remote-accept-' + crypto.randomUUID();
+    await createAndMigrateVault('user:' + uid);
     localStorage.setItem(key(uid), 'withdrawn');
     vi.stubGlobal('fetch', vi.fn(async () => trustedConsentResponse({
       status: 'active', revision: 2, acceptedAt: '2026-10-12T05:00:00.000Z',
@@ -414,6 +425,7 @@ describe('later reacceptance on another device', () => {
 describe('withdrawal acknowledgement racing with a newer consent', () => {
   it('offers an explicit stale-request decision instead of trapping the device in withdrawn state', async () => {
     const uid = 'late-ack-' + crypto.randomUUID();
+    await createAndMigrateVault('user:' + uid);
     let latestRevision = 0;
     vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
       if (init.method === 'POST') {
@@ -493,6 +505,7 @@ describe('stale withdrawal race', () => {
 describe('explicit acknowledgement of newer consent from another device', () => {
   it('retains the newer server acceptance without retrying a stale withdrawal', async () => {
     const uid = 'keep-' + crypto.randomUUID();
+    await createAndMigrateVault('user:' + uid);
     localStorage.setItem(key(uid), 'pending:1');
     const methods: string[] = [];
     vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
@@ -510,6 +523,7 @@ describe('explicit acknowledgement of newer consent from another device', () => 
 describe('offline consent cache and reconnect privacy boundary', () => {
   it('keeps a previously verified local session visible during recheck while fencing cloud writes', async () => {
     const uid = 'recheck-' + crypto.randomUUID();
+    await createAndMigrateVault('user:' + uid);
     const actor = user(uid);
     (auth as { currentUser: unknown }).currentUser = actor;
     let resolveRecheck!: (response: Response) => void;
@@ -539,6 +553,7 @@ describe('offline consent cache and reconnect privacy boundary', () => {
 
   it('permits local editing only after a positive server check and never grants cloud writes offline', async () => {
     const uid = 'cached-' + crypto.randomUUID();
+    await createAndMigrateVault('user:' + uid);
     const actor = user(uid);
     (auth as { currentUser: unknown }).currentUser = actor;
     const fetchMock = vi.fn(async () => trustedConsentResponse({ status: 'active', revision: 1 }));
@@ -577,6 +592,7 @@ describe('offline consent cache and reconnect privacy boundary', () => {
 
   it('never activates an unverified account or a mismatched consent generation offline', async () => {
     const uid = 'first-' + crypto.randomUUID();
+    await createAndMigrateVault('user:' + uid);
     const actor = user(uid);
     (auth as { currentUser: unknown }).currentUser = actor;
     const fetchMock = vi.fn(async () => trustedConsentResponse({ status: 'active', revision: 2 }));
@@ -606,6 +622,7 @@ describe('offline consent cache and reconnect privacy boundary', () => {
 
   it('keeps local-only access on a transport failure even when navigator incorrectly reports online', async () => {
     const uid = 'transport-' + crypto.randomUUID();
+    await createAndMigrateVault('user:' + uid);
     const actor = user(uid);
     (auth as { currentUser: unknown }).currentUser = actor;
     vi.stubGlobal('fetch', vi.fn()
@@ -625,6 +642,7 @@ describe('offline consent cache and reconnect privacy boundary', () => {
 
   it('does not treat an online server failure as proof of active consent', async () => {
     const uid = 'no-reply-' + crypto.randomUUID();
+    await createAndMigrateVault('user:' + uid);
     const actor = user(uid);
     (auth as { currentUser: unknown }).currentUser = actor;
     const fetchMock = vi.fn()
@@ -650,6 +668,7 @@ describe('offline consent cache and reconnect privacy boundary', () => {
 describe('account offline withdrawal and explicit local-only reacceptance', () => {
   it('blocks offline account writes durably without requesting App Check or calling the network', async () => {
     const uid = 'no-offline-network-' + crypto.randomUUID();
+    await createAndMigrateVault('user:' + uid);
     const actor = user(uid);
     (auth as { currentUser: unknown }).currentUser = actor;
     const online = vi.spyOn(navigator, 'onLine', 'get');
@@ -677,6 +696,7 @@ describe('account offline withdrawal and explicit local-only reacceptance', () =
 
   it('accepts a server-confirmed online withdrawal locally offline without replaying the withdrawal', async () => {
     const uid = 'server-withdrawn-local-' + crypto.randomUUID();
+    await createAndMigrateVault('user:' + uid);
     const actor = user(uid);
     (auth as { currentUser: unknown }).currentUser = actor;
     const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
@@ -721,6 +741,7 @@ describe('account offline withdrawal and explicit local-only reacceptance', () =
 
   it('restores device editing after a pending offline revocation, never cloud, and survives cold boot', async () => {
     const uid = 'local-consent-' + crypto.randomUUID();
+    await createAndMigrateVault('user:' + uid);
     const actor = user(uid);
     (auth as { currentUser: unknown }).currentUser = actor;
     const online = vi.spyOn(navigator, 'onLine', 'get');
@@ -776,6 +797,7 @@ describe('account offline withdrawal and explicit local-only reacceptance', () =
 
   it('finishes a server-confirmed reacceptance after reload without sending another withdrawal', async () => {
     const uid = 'resumed-offline-consent-' + crypto.randomUUID();
+    await createAndMigrateVault('user:' + uid);
     const actor = user(uid);
     (auth as { currentUser: unknown }).currentUser = actor;
     localStorage.setItem(key(uid), 'offline-reaccepted:1:1.3.4:1.2.1');
@@ -796,6 +818,7 @@ describe('account offline withdrawal and explicit local-only reacceptance', () =
 
   it('asks before keeping an acceptance newer than an offline device decision', async () => {
     const uid = 'newer-online-consent-' + crypto.randomUUID();
+    await createAndMigrateVault('user:' + uid);
     const actor = user(uid);
     (auth as { currentUser: unknown }).currentUser = actor;
     const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
@@ -824,6 +847,7 @@ describe('account offline withdrawal and explicit local-only reacceptance', () =
 
   it('preserves local-only use across retryable App Check token outages without allowing cloud', async () => {
     const uid = 'offline-appcheck-' + crypto.randomUUID();
+    await createAndMigrateVault('user:' + uid);
     const actor = user(uid);
     (auth as { currentUser: unknown }).currentUser = actor;
     const online = vi.spyOn(navigator, 'onLine', 'get');
@@ -852,6 +876,7 @@ describe('account offline withdrawal and explicit local-only reacceptance', () =
 
   it('persists a server CAS conflict as a safe withdrawal barrier across reload', async () => {
     const uid = 'conflict-reconnect-' + crypto.randomUUID();
+    await createAndMigrateVault('user:' + uid);
     const actor = user(uid);
     (auth as { currentUser: unknown }).currentUser = actor;
     const online = vi.spyOn(navigator, 'onLine', 'get');
@@ -901,6 +926,7 @@ describe('account offline withdrawal and explicit local-only reacceptance', () =
 
   it('preserves a locally reaccepted withdrawal when another device advanced the cloud epoch', async () => {
     const uid = 'stale-local-reaccept-' + crypto.randomUUID();
+    await createAndMigrateVault('user:' + uid);
     const actor = user(uid);
     (auth as { currentUser: unknown }).currentUser = actor;
     const onLine = vi.spyOn(navigator, 'onLine', 'get');
@@ -986,6 +1012,7 @@ describe('no trusted consent POST after an authenticated owner switch', () => {
 
   it('does not send an old withdrawal after Firebase token acquisition races with login B', async () => {
     const uid = 'withdraw-token-switch-' + crypto.randomUUID();
+    await createAndMigrateVault('user:' + uid);
     let releaseToken!: (token: string) => void;
     const actor = user(uid);
     const normalGetIdToken = actor.getIdToken;
