@@ -12,6 +12,8 @@ import PreSessionCheckIn from '../src/components/Training/PreSessionCheckIn';
 import TrainingSession from '../src/components/Training/TrainingSession';
 import type { UserData, WorkoutSession } from '../src/types';
 import { initializeLocal, readLocal } from '../src/lib/sync/localRepository';
+import { deviceKey, protectedDeviceKey, readDeviceValueStrict } from '../src/lib/sync/deviceStorage';
+import { prepareUnlockedTestArchive } from './secureVaultFixture';
 
 vi.mock('../src/lib/telemetryHub', () => ({ telemetryHub: { trackError: vi.fn() } }));
 
@@ -60,6 +62,7 @@ describe('pre-session readiness contract', () => {
     });
 
     it('renders large 1-5 controls, canonical sleep and active pains without starting automatically', async () => {
+        await prepareUnlockedTestArchive(captureSession().owner);
         const onStart = vi.fn(async () => true);
         render(<PreSessionCheckIn workoutId="w-readiness" routineName="Push" date="2026-09-24" onStart={onStart} onCancel={vi.fn(async () => true)} />);
 
@@ -70,11 +73,18 @@ describe('pre-session readiness contract', () => {
 
         fireEvent.click(screen.getByRole('button', { name: 'Energia: 4 su 5' }));
         fireEvent.click(screen.getByRole('button', { name: 'Stress: 2 su 5' }));
+        const owner = captureSession().owner;
+        const name = 'draft:pre-session:w-readiness';
+        const sealed = localStorage.getItem(protectedDeviceKey(name, owner));
+        expect(sealed).toMatch(/^tlb-sealed:v1:/);
+        expect(localStorage.getItem(deviceKey(name, owner))).toBeNull();
+        expect(JSON.parse(readDeviceValueStrict(name, owner)!)).toMatchObject({ energy: 4, stress: 2 });
         fireEvent.click(screen.getByRole('button', { name: 'Inizia allenamento' }));
         await waitFor(() => expect(onStart).toHaveBeenCalledWith({ energy: 4, stress: 2 }));
     });
 
-    it('keeps a prepared workout in check-in state until the explicit start command', () => {
+    it('keeps a prepared workout in check-in state until the explicit start command', async () => {
+        await prepareUnlockedTestArchive(captureSession().owner);
         useAppStore.setState({
             localWorkout: { id: 'pending', date: '2026-09-24', routineName: 'Push', exercises: [] },
         });
@@ -84,6 +94,7 @@ describe('pre-session readiness contract', () => {
     });
 
     it('scrolls to the top after confirming the pre-session check-in', async () => {
+        await prepareUnlockedTestArchive(captureSession().owner);
         const scrollToSpy = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
         const prepared: WorkoutSession = { id: 'pending-scroll', date: '2026-09-24', routineName: 'Push', exercises: [] };
         const data = parseUserData({ activeWorkout: prepared });
@@ -108,6 +119,7 @@ describe('pre-session readiness contract', () => {
     });
 
     it('anchors the workout date to the actual local start time when check-in crosses midnight', async () => {
+        await prepareUnlockedTestArchive(captureSession().owner);
         const startedAt = new Date(2026, 8, 25, 0, 0, 5).getTime();
         const prepared: WorkoutSession = { id: 'pending-midnight', date: '2026-09-24', routineName: 'Push', ratingScale: 5, exercises: [] };
         const data = parseUserData({ activeWorkout: prepared });
@@ -137,6 +149,7 @@ describe('pre-session readiness contract', () => {
     });
 
     it('skips the check-in without inventing values', async () => {
+        await prepareUnlockedTestArchive(captureSession().owner);
         const onStart = vi.fn(async () => true);
         render(<PreSessionCheckIn workoutId="w-readiness" date="2026-09-24" onStart={onStart} onCancel={vi.fn(async () => true)} />);
         fireEvent.click(screen.getByRole('button', { name: 'Salta check-in e inizia' }));
@@ -144,6 +157,7 @@ describe('pre-session readiness contract', () => {
     });
 
     it('keeps post-session answers as a local draft until Salva e termina', async () => {
+        await prepareUnlockedTestArchive(captureSession().owner);
         const originalDispatch = useAppStore.getState().dispatchDomainOperation;
         const dispatchDomainOperation = vi.fn(async (operation: unknown) => {
             void operation;
@@ -216,6 +230,7 @@ describe('pre-session readiness contract', () => {
     });
 
     it('does not expose a started workout if the optimistic device update outlives a failed IndexedDB commit', async () => {
+        await prepareUnlockedTestArchive(captureSession().owner);
         const prepared: WorkoutSession = { id: 'failed-start', date: '2026-09-24', routineName: 'Push', exercises: [] };
         const data = parseUserData({ activeWorkout: prepared });
         const owner = captureSession().owner;
