@@ -15,10 +15,15 @@ describe('Transaction Contention & ActorSeq Invatiants', () => {
         vi.resetModules();
         const { clear } = await import('idb-keyval');
         await clear();
+        localStorage.clear();
+        const { lockAllVaults } = await import('../src/lib/sync/secureArchiveSession');
+        lockAllVaults();
     });
 
     it('correctly increments actorSeq and maintains clock invariants under concurrent commits', async () => {
         const { commitLocal, initializeLocal, readLocal } = await import('../src/lib/sync/localRepository');
+        const { createAndMigrateVault } = await import('../src/lib/sync/secureArchiveMigration');
+        await createAndMigrateVault('user:a');
         const base = UserDataSchema.parse({}) as unknown as UserData;
         await initializeLocal('user:a', base);
 
