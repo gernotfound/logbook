@@ -1,5 +1,5 @@
 import 'fake-indexeddb/auto';
-import { clear } from 'idb-keyval';
+import { clear, get } from 'idb-keyval';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 const sdk = vi.hoisted(() => ({ auth: { currentUser: { uid: 'a' } }, root: vi.fn(), control: vi.fn(), page: vi.fn() }));
 vi.mock('../../src/lib/firebase', () => ({ auth: sdk.auth, getDb: () => ({}), ensureAppCheck: async () => {} }));
@@ -27,6 +27,10 @@ vi.mock('firebase/firestore', () => ({
 import { collectBackupSnapshot, hasDeviceRecoveryBackupSource } from '../../src/lib/db/backupSnapshot';
 import { createBackup, decodeImport } from '../../src/lib/backup';
 import { acknowledgeThrough, initializeLocal, commitLocal, readLocal } from '../../src/lib/sync/localRepository';
+import { createAndMigrateVault } from '../../src/lib/sync/secureArchiveMigration';
+import { LocalVaultLockedError, lockAllVaults } from '../../src/lib/sync/secureArchiveSession';
+import { SEALED_LOCAL_PREFIX } from '../../src/lib/sync/secureArchiveCipher';
+import { writeDeviceValue } from '../../src/lib/sync/deviceStorage';
 import { UserDataSchema } from '../../src/lib/schema';
 import { CURRENT_DATA_SCHEMA, CURRENT_SYNC_PROTOCOL } from '../../src/lib/schemaEvolution';
 import { invalidateSession } from '../../src/lib/sync/session';
@@ -39,15 +43,43 @@ const testKey = new Uint8Array(32).fill(18);
 const currentCloudDoc = (business: Record<string, unknown>, sync: SyncMeta = emptySync, path = '') =>
     sealCloudDocument(testKey, 'a', path, business, sync);
 
+const initializeSealedLocal = async (data: UserData) => {
+    await createAndMigrateVault('user:a');
+    await initializeLocal('user:a', data);
+};
+
 beforeEach(async () => {
+    lockAllVaults();
     await clear(); vi.resetAllMocks(); invalidateSession(); sdk.auth.currentUser = { uid: 'a' };
-    vi.stubGlobal('localStorage', { length: 0, getItem: () => null });
+    const storage = new Map<string, string>();
+    vi.stubGlobal('localStorage', {
+        get length() { return storage.size; },
+        key: (index: number) => [...storage.keys()][index] ?? null,
+        getItem: (key: string) => storage.get(key) ?? null,
+        setItem: (key: string, value: string) => { storage.set(key, String(value)); },
+        removeItem: (key: string) => { storage.delete(key); },
+        clear: () => { storage.clear(); },
+    });
+    vi.stubGlobal('navigator', {
+        locks: { request: async (_name: string, _options: unknown, run: () => Promise<unknown>) => run() },
+    });
     sdk.root.mockResolvedValue({ exists: () => true, data: () => currentCloudDoc({ profile: { height: '170', gender: 'M' } }) });
     sdk.control.mockResolvedValue({ exists: () => true, data: () => ({ protocolVersion: 3, replicas: { s00: { lastSeq: 1 } } }) });
     sdk.page.mockResolvedValue({ size: 0, docs: [] });
 });
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => { lockAllVaults(); vi.unstubAllGlobals(); });
 
+
+it('persists a backup fixture as AEAD ciphertext and rejects access after vault lock', async () => {
+    const data = parse({ profile: { height: '171' } });
+    await initializeSealedLocal(data);
+    const raw = await get<unknown>('logbook:v2:user:a');
+    expect(typeof raw).toBe('string');
+    expect((raw as string).startsWith(SEALED_LOCAL_PREFIX)).toBe(true);
+    expect((await readLocal('user:a'))?.data.profile?.height).toBe('171');
+    lockAllVaults();
+    await expect(readLocal('user:a')).rejects.toBeInstanceOf(LocalVaultLockedError);
+});
 
 it('preserves business import when optional device recovery exceeds its bounded limit', () => {
     const device = Object.fromEntries(Array.from({ length: 1025 }, (_, index) => [
@@ -101,7 +133,7 @@ it('exports a complete authenticated cloud snapshot without leaking ciphertext o
         writer: { slot: 's00', replicaId: 'backup-seed', generation: 1, seq: 0 },
     };
     const base = parse({ profile: { height: '175' } });
-    await initializeLocal('user:a', base);
+    await initializeSealedLocal(base);
     const root = sealCloudDocument(key, 'a', '', { profile: { height: '174', gender: 'M' } }, sync);
     const month = sealCloudDocument(key, 'a', 'history_months/2026-05',
         { w1: { id: 'w1', date: '2026-05-11', exercises: [] } }, sync);
@@ -123,7 +155,7 @@ it('exports a complete authenticated cloud snapshot without leaking ciphertext o
 
 it('collects every page of historical documents beyond the 3-month view and retains a concurrent local edit', async () => {
     const base = parse({ profile: { height: '170', gender: 'M' } });
-    await initializeLocal('user:a', base);
+    await initializeSealedLocal(base);
     const months = Array.from({ length: 105 }, (_, index) => (2017 + Math.floor(index / 12)) + '-' + String(index % 12 + 1).padStart(2, '0'));
     let mutated = false;
     sdk.page.mockImplementation(async ({ path, after, count }) => {
@@ -146,7 +178,7 @@ it('collects every page of historical documents beyond the 3-month view and reta
 it('retries when an edit is acknowledged while the cloud scan is in flight', async () => {
     const base = parse({ profile: { height: '170', gender: 'M' } });
     const updated = parse({ profile: { height: '175', gender: 'M' } });
-    await initializeLocal('user:a', base);
+    await initializeSealedLocal(base);
     let advanced = false;
 
     sdk.page.mockImplementation(async ({ path }) => {
@@ -169,7 +201,7 @@ it('retries when an edit is acknowledged while the cloud scan is in flight', asy
 
 it('retries when another device updates the replica control during the cloud scan', async () => {
     const data = parse({ profile: { height: '170' } });
-    await initializeLocal('user:a', data);
+    await initializeSealedLocal(data);
     let reads = 0;
     sdk.control.mockImplementation(async () => {
         reads += 1;
@@ -185,7 +217,7 @@ it('retries when another device updates the replica control during the cloud sca
 
 it('fails closed after repeated concurrent remote changes instead of exporting mixed data', async () => {
     const data = parse({});
-    await initializeLocal('user:a', data);
+    await initializeSealedLocal(data);
     let revision = 0;
     sdk.control.mockImplementation(async () => ({
         exists: () => true,
@@ -198,7 +230,7 @@ it('fails closed after repeated concurrent remote changes instead of exporting m
 it('uses root _sync metadata when replaying pending local operations', async () => {
     const base = parse({ profile: { height: '170', gender: 'M' } });
     const local = parse({ profile: { height: '175', gender: 'M' } });
-    await initializeLocal('user:a', base);
+    await initializeSealedLocal(base);
     await commitLocal('user:a', local, base);
     const envelope = await readLocal('user:a');
     expect(envelope?.pending.length).toBeGreaterThan(0);
@@ -223,7 +255,7 @@ it('uses root _sync metadata when replaying pending local operations', async () 
 
 it('keeps schema/sync metadata out of history and nutrition business data while preserving raw recovery docs', async () => {
     const base = parse({});
-    await initializeLocal('user:a', base);
+    await initializeSealedLocal(base);
     sdk.page.mockImplementation(async ({ path }) => {
         if (path.endsWith('history_months')) {
             return {
@@ -252,7 +284,7 @@ it('keeps schema/sync metadata out of history and nutrition business data while 
 
 it('refuses to label a cloud backup complete if any monthly record would be silently omitted', async () => {
     const data = parse({});
-    await initializeLocal('user:a', data);
+    await initializeSealedLocal(data);
     sdk.page.mockImplementation(async ({ path }) => path.endsWith('history_months')
         ? { size: 1, docs: [{ id: '2026-09', data: () => currentCloudDoc({
             good: { id: 'good', date: '2026-09-10', exercises: [] },
@@ -265,7 +297,7 @@ it('refuses to label a cloud backup complete if any monthly record would be sile
 
 it('fails safe when cloud causal metadata is malformed', async () => {
     const base = parse({ profile: { height: '170' } });
-    await initializeLocal('user:a', base);
+    await initializeSealedLocal(base);
     sdk.root.mockResolvedValue({
         exists: () => true,
         data: () => ({
@@ -279,7 +311,7 @@ it('fails safe when cloud causal metadata is malformed', async () => {
 
 it('refuses future data or sync versions before producing a backup snapshot', async () => {
     const base = parse({ profile: { height: '170' } });
-    await initializeLocal('user:a', base);
+    await initializeSealedLocal(base);
 
     sdk.root.mockResolvedValue({
         exists: () => true,
@@ -302,23 +334,22 @@ it('refuses future data or sync versions before producing a backup snapshot', as
 
 it('exports only allowlisted recovery device data and excludes account-deletion receipts', async () => {
     const data = parse({ profile: { height: '171' } });
-    await initializeLocal('user:a', data);
-    const values = new Map<string, string>([
-        ['logbook:v2:user:a:workout', '{"id":"w1"}'],
-        ['logbook:v2:user:a:draft:measurement:2026-10-04', '{"weight":"80"}'],
-        ['logbook:v2:user:a:history-editor-context', '{"version":1,"editorId":"e1"}'],
-        ['logbook:v2:user:a:workout-intent:' + 'a'.repeat(32), '{"__logbookWorkoutIntent":1}'],
-        ['logbook:v2:user:a:workout-intent:not-valid', '{"bad":true}'],
-        ['logbook:v2:user:b:workout', '{"id":"foreign"}'],
-        ['logbook:v2:user:a:account-deletion', '{"receiptToken":"super-secret-receipt"}'],
-        ['logbook:v2:user:a:telemetry_queue', '[{"event":"x"}]'],
-        ['logbook:v2:user:a:storage_marker', '{"timestamp":1}'],
-    ]);
-    vi.stubGlobal('localStorage', {
-        get length() { return values.size; },
-        key: (index: number) => [...values.keys()][index] ?? null,
-        getItem: (key: string) => values.get(key) ?? null,
-    });
+    await initializeSealedLocal(data);
+    const deviceRecords = [
+        ['workout', '{"id":"w1"}'],
+        ['draft:measurement:2026-10-04', '{"weight":"80"}'],
+        ['history-editor-context', '{"version":1,"editorId":"e1"}'],
+        ['workout-intent:' + 'a'.repeat(32), '{"__logbookWorkoutIntent":1}'],
+        ['telemetry_queue', '[{"event":"x"}]'],
+    ];
+    for (const [name, value] of deviceRecords) writeDeviceValue(name, value, 'user:a');
+    expect(localStorage.getItem('logbook:v2:user:a:workout')).toBeNull();
+    expect(localStorage.getItem('logbook:v2:user:a:sealed:workout')?.startsWith(SEALED_LOCAL_PREFIX)).toBe(true);
+
+    localStorage.setItem('logbook:v2:user:a:workout-intent:not-valid', '{"bad":true}');
+    localStorage.setItem('logbook:v2:user:b:workout', '{"id":"foreign"}');
+    localStorage.setItem('logbook:v2:user:a:account-deletion', '{"receiptToken":"super-secret-receipt"}');
+    localStorage.setItem('logbook:v2:user:a:storage_marker', '{"timestamp":1}');
 
     const backup = await collectBackupSnapshot(data, false);
     expect(backup.recovery.device).toEqual({
@@ -488,7 +519,7 @@ it('retains a crash-only private workout witness in an explicit partial backup w
 
 it('refuses a full backup when a locally acknowledged month is absent on server', async () => {
     const data = parse({ nutrition: { '2025-01-01': { date: '2025-01-01', weight: 70 } } });
-    await initializeLocal('user:a', data);
+    await initializeSealedLocal(data);
     await acknowledgeThrough('user:a', 0, data, [], {
         'nutrition_months/2025-01': { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {} },
     });
@@ -500,7 +531,7 @@ it('refuses a full backup when a locally acknowledged month is absent on server'
 
 it('never labels a failed cloud scan complete; explicit device export still works', async () => {
     const data = parse({ profile: { height: '171' } });
-    await initializeLocal('user:a', data);
+    await initializeSealedLocal(data);
     sdk.page.mockRejectedValue(new Error('offline'));
     await expect(collectBackupSnapshot(data, true)).rejects.toThrow('offline');
     expect((await collectBackupSnapshot(data, false)).coverage.scope).toBe('device');
