@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 vi.unmock('../src/lib/db');
 import { ConsentedTestDB as DB } from './testUtils';
+import { prepareUnlockedTestArchive } from './secureVaultFixture';
 
 
 
@@ -8,9 +9,10 @@ let mockBatch: any;
 import { writeBatch } from 'firebase/firestore';
 
 describe('ARCH-02: DB.saveUserData', () => {
-    beforeEach(() => {
+    beforeEach(async () => {
         vi.clearAllMocks();
         DB.resetCache();
+        await prepareUnlockedTestArchive('user:test-user-id');
         
         mockBatch = {
             set: vi.fn(),

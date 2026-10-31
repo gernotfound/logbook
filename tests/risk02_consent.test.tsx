@@ -4,11 +4,13 @@ import { DB } from '../src/lib/db';
 import { LEGAL_VERSIONS, needsLegalUpdate } from '../src/lib/legalVersions';
 import { defaultUserDataFallback } from '../src/lib/schema';
 import type { SyncResult } from '../src/types';
+import { prepareUnlockedTestArchive } from './secureVaultFixture';
 
 describe('RISK-02: Legal Consent Lifecycle', () => {
-    beforeEach(() => {
+    beforeEach(async () => {
         vi.clearAllMocks();
         vi.restoreAllMocks();
+        await prepareUnlockedTestArchive('user:test-user-id');
         // Reset store con dati fittizi
         useAppStore.setState({
             dataOwner: 'user:test-user-id',
@@ -16,7 +18,8 @@ describe('RISK-02: Legal Consent Lifecycle', () => {
             localWorkout: null,
             saveError: null,
             syncHealth: 'synced',
-            syncing: false
+            syncing: false,
+            localPersistenceBlocked: false
         });
     });
 
@@ -98,9 +101,10 @@ vi.mock('../src/hooks/useScrollLock', () => ({
 }));
 
 describe('RISK-02: ConsentOverlay UI Behavior', () => {
-    beforeEach(() => {
+    beforeEach(async () => {
         vi.clearAllMocks();
         vi.restoreAllMocks();
+        await prepareUnlockedTestArchive('user:test-user-id');
         useDialogStore.setState({ isOpen: false, message: '' });
         useAppStore.setState({
             dataOwner: 'user:test-user-id',
@@ -108,7 +112,8 @@ describe('RISK-02: ConsentOverlay UI Behavior', () => {
             localWorkout: null,
             saveError: null,
             syncHealth: 'synced',
-            syncing: false
+            syncing: false,
+            localPersistenceBlocked: false
         });
     });
 

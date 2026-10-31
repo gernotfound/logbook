@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { useAppStore } from '../src/store/useAppStore';
 import { DB } from '../src/lib/db';
+import { prepareUnlockedTestArchive } from './secureVaultFixture';
 
 vi.mock('firebase/firestore', async (importOriginal) => {
     const actual = await importOriginal();
@@ -11,8 +12,10 @@ vi.mock('firebase/firestore', async (importOriginal) => {
 });
 
 describe('ARCH-02: createSyncSlice', () => {
-    beforeEach(() => {
+    beforeEach(async () => {
         vi.clearAllMocks();
+        // AEAD provisioning uses real asynchronous Web Crypto before timer virtualization.
+        await prepareUnlockedTestArchive('user:test-user-id');
         vi.useFakeTimers();
         
         useAppStore.setState({
@@ -32,7 +35,8 @@ describe('ARCH-02: createSyncSlice', () => {
                 catalogOverrides: {}
             },
             syncing: false,
-            saveError: null
+            saveError: null,
+            localPersistenceBlocked: false
         });
     });
 
