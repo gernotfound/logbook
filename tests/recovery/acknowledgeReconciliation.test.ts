@@ -1,6 +1,8 @@
 import 'fake-indexeddb/auto';
 import { clear } from 'idb-keyval';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createAndMigrateVault } from '../../src/lib/sync/secureArchiveMigration';
+import { lockAllVaults } from '../../src/lib/sync/secureArchiveSession';
 
 const catalog = vi.hoisted(() => ({ exercises: [], foods: [] }));
 vi.mock('../../src/lib/catalog/catalogService', () => ({ getCachedCatalog: async () => catalog }));
@@ -31,12 +33,21 @@ function data(height: number, neck?: string): UserData {
 }
 
 beforeEach(async () => {
+    lockAllVaults();
+    localStorage.clear();
     await clear();
+    vi.stubGlobal('navigator', { locks: {
+        request: async (_name: string, _options: unknown, run: () => Promise<unknown>) => run(),
+    } });
+    await createAndMigrateVault(owner);
     await initializeLocal(owner, data(170));
     await adoptReplicaCheckpoint(owner, { identity: replica, baseSeq: 0 }, {
         clock: {}, syncMetaByDocument: {},
     });
-
+});
+afterEach(() => {
+    lockAllVaults();
+    vi.unstubAllGlobals();
 });
 
 describe('acknowledgeThrough reconciliation', () => {
@@ -104,6 +115,7 @@ describe('acknowledgeThrough reconciliation', () => {
     it('fails closed on an unknown owner instead of creating a fresh envelope', async () => {
         const before = await readLocal(owner);
         const unknownOwner = 'user:missing-ack-reconcile';
+        await createAndMigrateVault(unknownOwner);
         expect(await readLocal(unknownOwner)).toBeUndefined();
 
         await expect(acknowledgeThrough(unknownOwner, 0, data(171)))
