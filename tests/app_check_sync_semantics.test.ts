@@ -51,6 +51,16 @@ describe('Audit 21 App Check and rejected-sync semantics', () => {
         expect(classifySyncFailure(misleading).status).toBe('failed');
     });
 
+    it('classifies direct cloud quota exhaustion as pending without trusting wrapper or local storage quota', () => {
+        const quota = Object.assign(new Error('Free-tier quota reached'), { code: 'resource-exhausted' });
+        expect(classifySyncFailure(quota).status).toBe('local-pending');
+        expect(classifySyncFailure({ code: 'firestore/resource-exhausted' }).status).toBe('local-pending');
+        expect(classifySyncFailure({ code: 'quota-exceeded' }).status).toBe('local-pending');
+        expect(classifySyncFailure(new Error('Unsafe wrapper', { cause: quota })).status).toBe('failed');
+        expect(classifySyncFailure(new DOMException('Local quota', 'QuotaExceededError')).status).toBe('failed');
+        expect(mapFirebaseErrorCode(quota)).toMatchObject({ code: 'ERR_FIRESTORE_QUOTA', isOfflineSafe: true });
+    });
+
     it('never converts an unsafe lost-response wrapper into pending from a nested transport error', () => {
         const transport = Object.assign(new Error('Response lost'), { code: 'unavailable' });
         const noDurableBatch = new Error('Delivered batch was not retained', { cause: transport });
