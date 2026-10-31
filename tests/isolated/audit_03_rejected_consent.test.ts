@@ -1,6 +1,8 @@
 import 'fake-indexeddb/auto';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { clear } from 'idb-keyval';
+import { createAndMigrateVault } from '../../src/lib/sync/secureArchiveMigration';
+import { lockAllVaults } from '../../src/lib/sync/secureArchiveSession';
 import { UserDataSchema } from '../../src/lib/schema';
 import type { CachedGlobalCatalog, LegalConsent, UserData } from '../../src/types';
 
@@ -32,7 +34,17 @@ const consent = (acceptedAt: string): LegalConsent => ({
 
 describe('rejected legal-consent durable compensation', () => {
     beforeEach(async () => {
+        lockAllVaults();
+        localStorage.clear();
         await clear();
+        vi.stubGlobal('navigator', {
+            locks: { request: async (_name: string, _options: unknown, run: () => Promise<unknown>) => run() },
+        });
+        await createAndMigrateVault('user:a');
+    });
+    afterEach(() => {
+        lockAllVaults();
+        vi.unstubAllGlobals();
     });
 
     it('retires the rejected legal-consent journal intent in the same durable envelope', async () => {
