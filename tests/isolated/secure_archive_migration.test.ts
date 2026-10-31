@@ -491,10 +491,23 @@ describe('durable secure archive migration', () => {
         expect(localStorage.getItem(deviceKey('workout', 'guest'))).toBeNull();
     });
 
+    it('never adopts a valid pre-launch plaintext envelope or replaces its original bytes', async () => {
+        await initializeLocal(owner, base());
+        const plaintext = await get('logbook:v2:' + owner);
+        expect(typeof plaintext).toBe('object');
+        await expect(createAndMigrateVault(owner)).rejects.toBeInstanceOf(LocalVaultLockedError);
+        expect(readVaultControl(owner)).toBeNull();
+        expect(await get(vaultControlMirrorId(owner))).toBeUndefined();
+        expect(await get(deviceVaultKeyId(owner))).toBeUndefined();
+        expect(await get('logbook:v2:' + owner)).toEqual(plaintext);
+    });
+
     it('never activates a corrupt legacy archive or silently seeds empty data', async () => {
         await set('logbook:v2:' + owner, { incompatible: 'legacy-bad' });
-        await expect(createAndMigrateVault(owner)).rejects.toThrow();
-        expect(readVaultControl(owner)?.phase).toBe('migrating');
+        await expect(createAndMigrateVault(owner)).rejects.toBeInstanceOf(LocalVaultLockedError);
+        expect(readVaultControl(owner)).toBeNull();
+        expect(await get(vaultControlMirrorId(owner))).toBeUndefined();
+        expect(await get(deviceVaultKeyId(owner))).toBeUndefined();
         expect(await get('logbook:v2:' + owner)).toEqual({ incompatible: 'legacy-bad' });
     });
 });
