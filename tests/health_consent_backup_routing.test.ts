@@ -143,6 +143,18 @@ describe('health consent rights export transport routing', () => {
     expect(boundary.directRootRead).not.toHaveBeenCalled();
   });
 
+  it('rejects lossy authenticated root fields in rights-only backup without falling back to normal Firestore', async () => {
+    const key = new Uint8Array(32).fill(17);
+    boundary.trustedExport.mockResolvedValue(new Map([['', sealCloudDocument(key, 'consent-export-user', '',
+      { profile: { height: '178' }, unmodeledBusinessField: { value: 'must-preserve' } }, {
+        protocolVersion: 3, clock: {}, fields: {},
+        writer: { slot: 's00', replicaId: 'consent-backup-device', generation: 1, seq: 0, consentRevision: 2 },
+      })]]));
+
+    await expect(exportSnapshot()).rejects.toThrow('Dati cloud non validi');
+    expect(boundary.directRootRead).not.toHaveBeenCalled();
+  });
+
   it('uses ordinary Firestore reads once a reacceptance is already active remotely', async () => {
     boundary.serverStatus = 'active';
     const snapshot = await exportSnapshot();
