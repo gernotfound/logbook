@@ -695,7 +695,6 @@ describe('Workout lifecycle durable recovery regressions', () => {
         const initial = userData({ activeWorkout: pending });
         await initializeLocal(owner, initial);
         useAppStore.setState({ userData: initial, localWorkout: pending });
-        const timerKey = protectedDeviceKey('timer', owner);
         const snapshot = { version: 1, state: 'running', startTime: 1000, accumulated: 250 };
         writeDeviceValue('timer', JSON.stringify(snapshot), owner);
         const originalSetter = useAppStore.getState().setSyncedLocalWorkout;
