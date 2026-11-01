@@ -7,7 +7,8 @@ import SessionSetRow from '../src/components/Training/session/SessionSetRow';
 import SessionExerciseCard from '../src/components/Training/session/SessionExerciseCard';
 import { useWorkoutSetMutations } from '../src/hooks/workout/useWorkoutSetMutations';
 import type { WorkoutSession } from '../src/types';
-import { deviceKey } from '../src/lib/sync/deviceStorage';
+import { deviceKey, protectedDeviceKey, readDeviceValueStrict } from '../src/lib/sync/deviceStorage';
+import { prepareUnlockedTestArchive } from './secureVaultFixture';
 import { readBufferedDraftSnapshot, writeBufferedDraft } from '../src/lib/sync/bufferedDraftEpoch';
 import {
     clearBufferedWriterIntent, createBufferedWriterIntentName,
@@ -202,24 +203,34 @@ describe.each(['input', 'textarea'] as const)('owner-scoped buffered %s recovery
         }
     });
 
-    it('restores a durable draft, then removes it only after the owner confirms the value', () => {
-        const key = recoveryKey(kind);
+    it('restores a durable draft, then removes it only after the owner confirms the value', async () => {
+        const owner = captureSession().owner;
+        await prepareUnlockedTestArchive(owner);
+        const name = `draft:buffered:${kind}:stable-draft`;
+        const legacyKey = deviceKey(name, owner);
+        const sealedKey = protectedDeviceKey(name, owner);
         const stored = kind === 'input' ? '7,5' : 'Nota recuperata dopo riavvio';
         const committed = kind === 'input' ? '7.5' : stored;
-        localStorage.setItem(key, stored);
+        writeBufferedDraft(name, owner, stored);
+        const ciphertext = localStorage.getItem(sealedKey);
+        expect(ciphertext).toMatch(/^tlb-sealed:v1:/);
+        expect(localStorage.getItem(legacyKey)).toBeNull();
         const onChange = vi.fn();
         const view = render(field(kind, onChange));
 
         expect(editor().value).toBe(stored);
         expect(onChange).not.toHaveBeenCalled();
-        expect(localStorage.getItem(key)).toBe(stored);
+        expect(localStorage.getItem(sealedKey)).toBe(ciphertext);
+        expect(readBufferedDraftSnapshot(name, owner).value).toBe(stored);
 
         fireEvent.blur(editor());
         expect(onChange).toHaveBeenCalledExactlyOnceWith(committed);
-        expect(localStorage.getItem(key)).toBe(stored);
+        expect(localStorage.getItem(sealedKey)).toBe(ciphertext);
 
         view.rerender(field(kind, onChange, committed));
-        expect(localStorage.getItem(key)).toBeNull();
+        expect(localStorage.getItem(sealedKey)).toBeNull();
+        expect(readDeviceValueStrict(name, owner)).toBeNull();
+        expect(localStorage.getItem(legacyKey)).toBeNull();
         expect(useAppStore.getState().localPersistenceBlocked).toBe(false);
         view.unmount();
     });

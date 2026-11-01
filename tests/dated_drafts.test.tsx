@@ -7,7 +7,8 @@ import { useSleepMeasurements } from '../src/hooks/useSleepMeasurements';
 import { useAppStore } from '../src/store/useAppStore';
 import { useDialogStore } from '../src/store/useDialogStore';
 import { activateGuestSession, GUEST_SESSION_KEY, GUEST_REVOCATION_KEY, invalidateSession, storageOwner } from '../src/lib/sync/session';
-import { deviceKey } from '../src/lib/sync/deviceStorage';
+import { deviceKey, protectedDeviceKey } from '../src/lib/sync/deviceStorage';
+import { prepareUnlockedTestArchive } from './secureVaultFixture';
 import { DatedDraftConflictError, readFencedDatedDraft, readFencedDatedDraftImage, writeFencedDatedDraft, UnverifiedDatedDraftEpochError } from '../src/lib/sync/datedDraftEpoch';
 import {
     createDatedWriterIntentName, inspectDatedRecoveryEvidence, readDatedWriterEvidence,
@@ -182,13 +183,21 @@ it('preserves unsupported pre-launch V1 and unwrapped drafts without reading or 
     }
 });
 
-it('rejects stale replacement and cleanup of a dated draft in the same consent generation', () => {
+it('rejects stale replacement and cleanup of a dated draft in the same consent generation', async () => {
     const owner = storageOwner();
     const name = 'draft:sleep:2026-09-11';
+    await prepareUnlockedTestArchive(owner);
+    const sealedKey = protectedDeviceKey(name, owner);
     const first = writeFencedDatedDraft(name, owner, { sleepHours: '08:00', sleepDeep: '02:00' }, null);
+    const firstCiphertext = localStorage.getItem(sealedKey);
+    expect(firstCiphertext).toMatch(/^tlb-sealed:v1:/);
+    expect(localStorage.getItem(deviceKey(name, owner))).toBeNull();
     expect(readFencedDatedDraftImage(name, owner).raw).toBe(first);
     const second = writeFencedDatedDraft(name, owner, { sleepHours: '07:30', sleepDeep: '01:45' }, first);
     expect(second).not.toBe(first);
+    const secondCiphertext = localStorage.getItem(sealedKey);
+    expect(secondCiphertext).toMatch(/^tlb-sealed:v1:/);
+    expect(secondCiphertext).not.toBe(firstCiphertext);
 
     expect(() => writeFencedDatedDraft(name, owner, { sleepHours: '06:00' }, first))
         .toThrow(DatedDraftConflictError);
@@ -197,11 +206,15 @@ it('rejects stale replacement and cleanup of a dated draft in the same consent g
     expect(readFencedDatedDraftImage(name, owner)).toEqual({
         values: { sleepHours: '07:30', sleepDeep: '01:45' }, raw: second,
     });
+    expect(localStorage.getItem(sealedKey)).toBe(secondCiphertext);
+    expect(localStorage.getItem(deviceKey(name, owner))).toBeNull();
 });
 
-it('prevents an absent → written → cleared ABA cycle from authorizing a stale form', () => {
+it('prevents an absent → written → cleared ABA cycle from authorizing a stale form', async () => {
     const owner = storageOwner();
     const name = 'draft:sleep:2026-09-11';
+    await prepareUnlockedTestArchive(owner);
+    const sealedKey = protectedDeviceKey(name, owner);
     const staleRaw = readFencedDatedDraftImage(name, owner).raw;
     expect(staleRaw).toBeNull();
     const saved = writeFencedDatedDraft(name, owner, { sleepHours: '08:00' }, staleRaw);
@@ -215,28 +228,38 @@ it('prevents an absent → written → cleared ABA cycle from authorizing a stal
     expect(() => writeFencedDatedDraft(name, owner, null, staleRaw))
         .toThrow(DatedDraftConflictError);
     expect(readFencedDatedDraftImage(name, owner)).toEqual(after);
+    expect(localStorage.getItem(sealedKey)).toMatch(/^tlb-sealed:v1:/);
+    expect(localStorage.getItem(deviceKey(name, owner))).toBeNull();
 });
 
-it('uses a new revision even when identical values are written again', () => {
+it('uses a new revision even when identical values are written again', async () => {
     const owner = storageOwner();
     const name = 'draft:measurement:2026-09-11';
+    await prepareUnlockedTestArchive(owner);
+    const sealedKey = protectedDeviceKey(name, owner);
     const first = writeFencedDatedDraft(name, owner, { weight: '75' }, null);
     const second = writeFencedDatedDraft(name, owner, { weight: '75' }, first);
     expect(second).not.toBe(first);
     expect(() => writeFencedDatedDraft(name, owner, { weight: '76' }, first))
         .toThrow(DatedDraftConflictError);
     expect(readFencedDatedDraft(name, owner)).toEqual({ weight: '75' });
+    expect(localStorage.getItem(sealedKey)).toMatch(/^tlb-sealed:v1:/);
+    expect(localStorage.getItem(deviceKey(name, owner))).toBeNull();
 });
 
-it('permits a new consent generation to replace a previous-generation deletion marker, not old data', () => {
+it('permits a new consent generation to replace a previous-generation deletion marker, not old data', async () => {
     localStorage.removeItem('logbook_is_guest');
     invalidateSession();
     const owner = 'user:' + mockFirebaseAuth.currentUser!.uid;
     const marker = `logbook:v2:${owner}:health-consent-generation`;
     const name = 'draft:measurement:2026-09-11';
     localStorage.setItem(marker, '3');
+    await prepareUnlockedTestArchive(owner);
+    const sealedKey = protectedDeviceKey(name, owner);
     const initial = writeFencedDatedDraft(name, owner, { weight: '76' }, null);
     const tombstone = writeFencedDatedDraft(name, owner, null, initial);
+    const tombstoneCiphertext = localStorage.getItem(sealedKey);
+    expect(tombstoneCiphertext).toMatch(/^tlb-sealed:v1:/);
     localStorage.setItem(marker, '5');
     expect(readFencedDatedDraftImage(name, owner)).toEqual({ values: null, raw: tombstone });
     const next = writeFencedDatedDraft(name, owner, { weight: '77' }, tombstone);
@@ -244,6 +267,9 @@ it('permits a new consent generation to replace a previous-generation deletion m
         __logbookDatedDraft: 2, owner, consentRevision: 5, values: { weight: '77' },
     });
     expect(readFencedDatedDraft(name, owner)).toEqual({ weight: '77' });
+    expect(localStorage.getItem(sealedKey)).toMatch(/^tlb-sealed:v1:/);
+    expect(localStorage.getItem(sealedKey)).not.toBe(tombstoneCiphertext);
+    expect(localStorage.getItem(deviceKey(name, owner))).toBeNull();
 });
 
 it('refuses malformed deletion-marker revisions without rewriting the original bytes', () => {
@@ -742,15 +768,18 @@ it('reads a new localStorage key before any write can copy the previous value ov
     hook.rerender({ key: 'view-b' }); expect(hook.result.current[0]).toBe('home');
     expect(localStorage.getItem('view-b')).toBe('"home"');
 });
-it('merges a partial stored draft with the latest remote source fields', () => {
+it('merges a partial stored draft with the latest remote source fields', async () => {
     const owner = storageOwner();
     useAppStore.setState({
         userData: data({ '2026-09-10': day('2026-09-10', { weight: 90, waist: 80 }) }),
         dataOwner: owner,
     });
-    localStorage.setItem(deviceKey('draft:measurement:2026-09-10', owner), JSON.stringify({
-        __logbookDatedDraft: 2, owner, revisionId: 'd'.repeat(32), values: { weight: '75' },
-    }));
+    await prepareUnlockedTestArchive(owner);
+    const name = 'draft:measurement:2026-09-10';
+    const draftImage = writeFencedDatedDraft(name, owner, { weight: '75' });
+    const ciphertext = localStorage.getItem(protectedDeviceKey(name, owner));
+    expect(ciphertext).toMatch(/^tlb-sealed:v1:/);
+    expect(localStorage.getItem(deviceKey(name, owner))).toBeNull();
 
     const hook = renderHook(() => useNutritionMeasurements('2026-09-10'));
     expect(hook.result.current.weight).toBe('75');
@@ -763,6 +792,8 @@ it('merges a partial stored draft with the latest remote source fields', () => {
 
     expect(hook.result.current.weight).toBe('75');
     expect(hook.result.current.waist).toBe('81');
+    expect(readFencedDatedDraftImage(name, owner).raw).toBe(draftImage);
+    expect(localStorage.getItem(protectedDeviceKey(name, owner))).toBe(ciphertext);
 });
 
 it('keeps the default measurement time stable across unrelated rerenders', () => {
