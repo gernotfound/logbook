@@ -810,18 +810,32 @@ it('keeps the default measurement time stable across unrelated rerenders', () =>
     expect(hook.result.current.measureTime).toBe('10:15');
 });
 
-it('keeps edited measurements across remote hydration, remount and date navigation', () => {
+it('keeps edited measurements across remote hydration, remount and date navigation', async () => {
+    const owner = storageOwner();
+    await prepareUnlockedTestArchive(owner);
+    const firstName = 'draft:measurement:2026-09-10';
+    const secondName = 'draft:measurement:2026-09-11';
     const hook = renderHook(({ date }) => useNutritionMeasurements(date), { initialProps: { date: '2026-09-10' } });
     act(() => { hook.result.current.setWeight('75'); hook.result.current.setWaist('80'); });
     expect(hook.result.current.weight).toBe('75'); expect(hook.result.current.waist).toBe('80');
+    const firstSealed = localStorage.getItem(protectedDeviceKey(firstName, owner));
+    expect(firstSealed).toMatch(/^tlb-sealed:v1:/);
+    expect(localStorage.getItem(deviceKey(firstName, owner))).toBeNull();
     act(() => useAppStore.setState({ userData: data({ '2026-09-10': day('2026-09-10', { weight: 90 }) }) }));
     expect(hook.result.current.weight).toBe('75');
     hook.rerender({ date: '2026-09-11' }); expect(hook.result.current.weight).toBe('');
     act(() => hook.result.current.setWeight('76'));
     hook.rerender({ date: '2026-09-10' }); expect(hook.result.current.weight).toBe('75');
     hook.unmount();
+    const secondSealed = localStorage.getItem(protectedDeviceKey(secondName, owner));
+    expect(secondSealed).toMatch(/^tlb-sealed:v1:/);
+    expect(localStorage.getItem(deviceKey(secondName, owner))).toBeNull();
     const reopened = renderHook(() => useNutritionMeasurements('2026-09-11'));
     expect(reopened.result.current.weight).toBe('76');
+    expect(readFencedDatedDraft(secondName, owner)?.weight).toBe('76');
+    expect(localStorage.getItem(protectedDeviceKey(firstName, owner))).toBe(firstSealed);
+    expect(localStorage.getItem(protectedDeviceKey(secondName, owner))).toBe(secondSealed);
+    reopened.unmount();
 });
 it('does not attach legacy drafts or another owner draft to a new session', () => {
     // Start from a distinct owner; the shared suite normally uses an active guest.
@@ -844,6 +858,8 @@ it('does not attach legacy drafts or another owner draft to a new session', () =
     expect(localStorage.getItem('draft_measurement')).toContain('99');
 });
 it('rolls the implicit day at local midnight while preserving yesterday drafts', async () => {
+    const owner = storageOwner();
+    await prepareUnlockedTestArchive(owner);
     vi.useFakeTimers(); vi.setSystemTime(new Date(2026, 8, 11, 23, 59, 59));
     const measurements = renderHook(() => useNutritionMeasurements());
     const sleep = renderHook(() => useSleepMeasurements());
@@ -853,7 +869,12 @@ it('rolls the implicit day at local midnight while preserving yesterday drafts',
     expect(measurements.result.current.weight).toBe('');
     expect(sleep.result.current.selectedDate).toBe('2026-09-12');
     expect(sleep.result.current.sleepHours).toBe('');
-    expect(localStorage.getItem(deviceKey('draft:sleep:2026-09-11'))).toContain('07:30');
+    const name = 'draft:sleep:2026-09-11';
+    const ciphertext = localStorage.getItem(protectedDeviceKey(name, owner));
+    expect(ciphertext).toMatch(/^tlb-sealed:v1:/);
+    expect(localStorage.getItem(deviceKey(name, owner))).toBeNull();
+    expect(readFencedDatedDraft(name, owner)?.sleepHours).toBe('07:30');
+    expect(localStorage.getItem(protectedDeviceKey(name, owner))).toBe(ciphertext);
 });
 it('preserves a dirty sleep form when an unrelated meal is received', () => {
     const hook = renderHook(() => useSleepMeasurements());
@@ -861,11 +882,12 @@ it('preserves a dirty sleep form when an unrelated meal is received', () => {
     act(() => useAppStore.setState({ userData: data({ [hook.result.current.selectedDate]: day(hook.result.current.selectedDate, { sleepHours: '08:00', kcal: 2000 }) }) }));
     expect(hook.result.current.sleepHours).toBe('07:30');
 });
-it('stays in the measurement editor when draft cancellation fails and navigates only after retry', () => {
+it('stays in the measurement editor when draft cancellation fails and navigates only after retry', async () => {
+    const owner = storageOwner();
+    await prepareUnlockedTestArchive(owner);
     vi.useFakeTimers();
     vi.setSystemTime(new Date(2026, 9, 5, 12, 0, 0));
     const date = '2026-10-05';
-    const owner = storageOwner();
     const name = 'draft:measurement:' + date;
     useAppStore.setState({ userData: data({ [date]: day(date, { weight: 80 }) }), dataOwner: owner });
 
@@ -880,21 +902,30 @@ it('stays in the measurement editor when draft cancellation fails and navigates 
     const weight = view.container.querySelector('#measure-weight') as HTMLInputElement;
     fireEvent.change(weight, { target: { value: '79' } });
     expect(readFencedDatedDraft(name, owner)?.weight).toBe('79');
+    const before = localStorage.getItem(protectedDeviceKey(name, owner));
+    expect(before).toMatch(/^tlb-sealed:v1:/);
+    expect(localStorage.getItem(deviceKey(name, owner))).toBeNull();
 
     const originalSetItem = vi.mocked(localStorage.setItem).getMockImplementation()!;
     vi.mocked(localStorage.setItem).mockImplementation((key, value) => {
-        if (key === deviceKey(name, owner)) throw new Error('quota');
+        if (key === protectedDeviceKey(name, owner)) throw new Error('quota');
         originalSetItem(key, value);
     });
     fireEvent.click(screen.getByRole('button', { name: 'Annulla' }));
     expect(view.container.querySelector('#data-panel-measurements')).not.toBeNull();
     expect(view.container.querySelector('#data-panel-history')).toBeNull();
     expect(readFencedDatedDraft(name, owner)?.weight).toBe('79');
+    expect(localStorage.getItem(protectedDeviceKey(name, owner))).toBe(before);
 
     vi.mocked(localStorage.setItem).mockImplementation(originalSetItem);
     fireEvent.click(screen.getByRole('button', { name: 'Annulla' }));
     expect(view.container.querySelector('#data-panel-history')).not.toBeNull();
     expect(readFencedDatedDraft(name, owner)).toBeNull();
+    const cleared = localStorage.getItem(protectedDeviceKey(name, owner));
+    expect(cleared).toMatch(/^tlb-sealed:v1:/);
+    expect(cleared).not.toBe(before);
+    expect(readFencedDatedDraftImage(name, owner).raw).toContain('"values":null');
+    expect(localStorage.getItem(deviceKey(name, owner))).toBeNull();
     view.unmount();
 });
 
@@ -907,15 +938,20 @@ it('keeps the in-memory draft and blocks strict reload when storage writes fail'
     expect(() => draftRegistry.flushAll({ strict: true })).toThrow('bozze');
 });
 it('rejects invalid and nonfinite numbers without saving or deleting the draft', async () => {
+    const owner = storageOwner();
+    await prepareUnlockedTestArchive(owner);
     const dispatch = vi.spyOn(useAppStore.getState(), 'dispatchDomainOperation');
     const hook = renderHook(() => useNutritionMeasurements('2026-09-11'));
-    const owner = storageOwner();
     const name = 'draft:measurement:2026-09-11';
     const key = deviceKey(name, owner);
+    const sealedKey = protectedDeviceKey(name, owner);
     for (const value of ['Infinity', '75kg', '-1']) {
         act(() => hook.result.current.setWeight(value));
         const before = readFencedDatedDraftImage(name, owner);
         const evidence = readDatedWriterEvidence(owner, name);
+        const ciphertext = localStorage.getItem(sealedKey);
+        expect(ciphertext).toMatch(/^tlb-sealed:v1:/);
+        expect(localStorage.getItem(key)).toBeNull();
         expect(before.values?.weight).toBe(value);
         expect(evidence.some(writer => writer.values.weight === value)).toBe(true);
 
@@ -923,7 +959,8 @@ it('rejects invalid and nonfinite numbers without saving or deleting the draft',
         expect(hook.result.current.weight).toBe(value);
         expect(readFencedDatedDraftImage(name, owner)).toEqual(before);
         expect(readDatedWriterEvidence(owner, name)).toEqual(evidence);
-        expect(localStorage.getItem(key)).toBe(before.raw);
+        expect(localStorage.getItem(sealedKey)).toBe(ciphertext);
+        expect(localStorage.getItem(key)).toBeNull();
     }
     expect(dispatch).not.toHaveBeenCalled();
     hook.unmount();
@@ -933,6 +970,9 @@ it('rejects invalid and nonfinite numbers without saving or deleting the draft',
     reopened.unmount();
 });
 it('clears the matching measurement draft after deletion without touching the rest of the day', async () => {
+    const owner = storageOwner();
+    await prepareUnlockedTestArchive(owner);
+    const name = 'draft:measurement:2026-09-11';
     useAppStore.setState({
         userData: data({
             '2026-09-11': day('2026-09-11', { weight: 80, waist: 85, sleepHours: '07:30', kcal: 2100 }),
@@ -941,13 +981,20 @@ it('clears the matching measurement draft after deletion without touching the re
     vi.spyOn(useDialogStore.getState(), 'showConfirm').mockResolvedValue(true);
     const hook = renderHook(() => useNutritionMeasurements('2026-09-11'));
     act(() => hook.result.current.setWaist('84'));
-    expect(localStorage.getItem(deviceKey('draft:measurement:2026-09-11', storageOwner()))).toContain('84');
+    const before = localStorage.getItem(protectedDeviceKey(name, owner));
+    expect(before).toMatch(/^tlb-sealed:v1:/);
+    expect(readFencedDatedDraft(name, owner)?.waist).toBe('84');
+    expect(localStorage.getItem(deviceKey(name, owner))).toBeNull();
 
     await act(async () => { await hook.result.current.handleDeleteMeasurement('2026-09-11'); });
 
-    const deletedDraft = readFencedDatedDraftImage('draft:measurement:2026-09-11', storageOwner());
+    const deletedDraft = readFencedDatedDraftImage(name, owner);
     expect(deletedDraft.values).toBeNull();
     expect(deletedDraft.raw).toContain('"values":null');
+    const tombstone = localStorage.getItem(protectedDeviceKey(name, owner));
+    expect(tombstone).toMatch(/^tlb-sealed:v1:/);
+    expect(tombstone).not.toBe(before);
+    expect(localStorage.getItem(deviceKey(name, owner))).toBeNull();
     const persisted = useAppStore.getState().userData?.nutrition?.['2026-09-11'];
     expect(persisted?.weight).toBeUndefined();
     expect(persisted?.waist).toBeUndefined();
@@ -965,6 +1012,9 @@ it('does not execute deletion after the account changes while confirmation is op
     expect(dispatch).not.toHaveBeenCalled();
 });
 it('retains a newer edit and rejects double submission while a save is pending', async () => {
+    const owner = storageOwner();
+    await prepareUnlockedTestArchive(owner);
+    const name = 'draft:measurement:2026-09-11';
     let finish!: () => void;
     const pending = new Promise<SyncResult>(resolve => { finish = () => resolve({ ok: true, status: 'synced' }); });
     const dispatch = vi.spyOn(useAppStore.getState(), 'dispatchDomainOperation').mockReturnValue(pending);
@@ -975,7 +1025,9 @@ it('retains a newer edit and rejects double submission while a save is pending',
     act(() => hook.result.current.setWeight('76'));
     await act(async () => { finish(); await first; });
     expect(dispatch).toHaveBeenCalledTimes(1); expect(hook.result.current.weight).toBe('76');
-    expect(localStorage.getItem(deviceKey('draft:measurement:2026-09-11', storageOwner()))).toContain('76');
+    expect(readFencedDatedDraft(name, owner)?.weight).toBe('76');
+    expect(localStorage.getItem(protectedDeviceKey(name, owner))).toMatch(/^tlb-sealed:v1:/);
+    expect(localStorage.getItem(deviceKey(name, owner))).toBeNull();
 });
 it('records body-fat provenance for manual and derived measurements', async () => {
     const dispatch = vi.spyOn(useAppStore.getState(), 'dispatchDomainOperation')
