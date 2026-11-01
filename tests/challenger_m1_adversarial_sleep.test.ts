@@ -10,7 +10,12 @@ import { useSleepMeasurements } from '../src/hooks/useSleepMeasurements';
 import { useAppStore } from '../src/store/useAppStore';
 import { useDialogStore } from '../src/store/useDialogStore';
 import { storageOwner } from '../src/lib/sync/session';
+import { emptyUserData, idbStore } from './setup';
+import { prepareUnlockedTestArchive } from './secureVaultFixture';
+import { initializeLocal, readLocal } from '../src/lib/sync/localRepository';
 import type { NutritionDay } from '../src/types';
+
+const realDispatchDomainOperation = useAppStore.getState().dispatchDomainOperation;
 
 describe('Empirical Challenger: Sleep Format HH:MM Adversarial Stress Test Suite', () => {
 
@@ -373,30 +378,13 @@ describe('Empirical Challenger: Sleep Format HH:MM Adversarial Stress Test Suite
             const showAlertSpy = useDialogStore.getState().showAlert as any;
             showAlertSpy.mockClear();
 
-            const dispatchDomainOperation = vi.fn(async (operation: any) => {
-                if (operation.type !== 'nutrition-day.patch') throw new Error('Unexpected domain operation');
-                const current = useAppStore.getState().userData;
-                useAppStore.setState({
-                    userData: {
-                        ...current,
-                        nutrition: {
-                            ...(current?.nutrition || {}),
-                            [operation.date]: {
-                                ...(current?.nutrition?.[operation.date] || {}),
-                                ...operation.patch,
-                            },
-                        },
-                    } as any,
-                });
-                return { ok: true, status: 'synced' } as const;
-            });
-
-            useAppStore.setState({
-                userData: {
-                    nutrition: {}
-                } as any,
-                dispatchDomainOperation
-            });
+            const owner = storageOwner();
+            const initialData = { ...emptyUserData, nutrition: {} };
+            await prepareUnlockedTestArchive(owner);
+            await initializeLocal(owner, initialData);
+            // Observe the real domain writer, not a fake success response.
+            const dispatchDomainOperation = vi.fn(realDispatchDomainOperation);
+            useAppStore.setState({ userData: initialData, dataOwner: owner, dispatchDomainOperation });
 
             const { result } = renderHook(() => useSleepMeasurements());
 
@@ -432,6 +420,12 @@ describe('Empirical Challenger: Sleep Format HH:MM Adversarial Stress Test Suite
             expect(savedDay?.sleepLight).toBe('04:15');
             expect(savedDay?.sleepRem).toBe('01:15');
             expect(savedDay?.sleepAwake).toBe('00:45');
+            const durable = (await readLocal(owner))?.data.nutrition?.[today];
+            expect(durable).toMatchObject({
+                sleepHours: '07:45', sleepDeep: '01:30', sleepLight: '04:15',
+                sleepRem: '01:15', sleepAwake: '00:45',
+            });
+            expect(idbStore['logbook:v2:' + owner]).toMatch(/^tlb-sealed:v1:/);
         });
     });
 

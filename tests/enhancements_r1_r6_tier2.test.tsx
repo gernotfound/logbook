@@ -1,9 +1,12 @@
 import React from 'react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { act, fireEvent, renderHook } from '@testing-library/react';
-import { renderWithProviders, emptyUserData } from './setup';
+import { renderWithProviders, emptyUserData, idbStore } from './setup';
 import { useAppStore } from '../src/store/useAppStore';
 import { captureSession } from '../src/lib/sync/session';
+import { prepareUnlockedTestArchive } from './secureVaultFixture';
+import { initializeLocal, readLocal } from '../src/lib/sync/localRepository';
+import { protectedDeviceKey, readDeviceValueStrict } from '../src/lib/sync/deviceStorage';
 import { useDialogStore } from '../src/store/useDialogStore';
 import { Logic } from '../src/lib/logic';
 import { Exporter } from '../src/lib/export';
@@ -40,7 +43,11 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
         // ---------------------------------------------------------------------
         describe('R1 Boundaries (Sleep Formats & Edge Values)', () => {
             it('T2.1.1: Zero and empty sleep strings handle cleanly without throwing NaN', async () => {
-                useAppStore.setState({ userData: { ...emptyUserData, nutrition: {} } });
+                const owner = captureSession().owner;
+                const initialData = { ...emptyUserData, nutrition: {} };
+                await prepareUnlockedTestArchive(owner);
+                await initializeLocal(owner, initialData);
+                useAppStore.setState({ userData: initialData, dataOwner: owner });
                 const { result } = renderHook(() => useSleepMeasurements());
 
                 act(() => {
@@ -51,15 +58,21 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
                     await result.current.saveSleep();
                 });
 
-                // Fails validation with empty hours, does not crash
+                // Validation failure leaves the durable owner archive untouched.
                 expect(useAppStore.getState().userData?.nutrition).toEqual({});
+                expect((await readLocal(owner))?.data.nutrition).toEqual({});
+                expect(idbStore['logbook:v2:' + owner]).toMatch(/^tlb-sealed:v1:/);
             });
 
 
 
             it('T2.1.4: Incomplete sleep phase inputs (only total sleep provided, phases empty) save cleanly', async () => {
                 const today = Logic.getLocalDateString();
-                useAppStore.setState({ userData: { ...emptyUserData, nutrition: {} } });
+                const owner = captureSession().owner;
+                const initialData = { ...emptyUserData, nutrition: {} };
+                await prepareUnlockedTestArchive(owner);
+                await initializeLocal(owner, initialData);
+                useAppStore.setState({ userData: initialData, dataOwner: owner });
                 const { result } = renderHook(() => useSleepMeasurements());
 
                 act(() => {
@@ -78,6 +91,11 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
                 expect(saved?.sleepHours).toBe('08:00');
                 expect(saved?.sleepDeep).toBeUndefined();
                 expect(saved?.sleepLight).toBeUndefined();
+                const durable = (await readLocal(owner))?.data.nutrition?.[today];
+                expect(durable?.sleepHours).toBe('08:00');
+                expect(durable?.sleepDeep).toBeUndefined();
+                expect(durable?.sleepLight).toBeUndefined();
+                expect(idbStore['logbook:v2:' + owner]).toMatch(/^tlb-sealed:v1:/);
             });
 
             it('T2.1.5: Exporter.exportToCSV outputs sleep values in CSV without throwing on empty days', async () => {
@@ -727,32 +745,45 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
                     }
                 ];
 
-                useAppStore.setState({
-                    userData: {
-                        ...emptyUserData,
-                        history: originalHistory
-                    } as any,
-                    localWorkout: {
-                        id: 'w_editing',
-                        originalHistoryId: 'w_saved',
-                        isEditingHistory: true,
-                        exercises: [
-                            { exId: 'ex1', sessionNote: 'Original', sets: [] },
-                            { exId: 'ex_adhoc_added', sessionNote: 'Added', sets: [] }
-                        ]
-                    }
-                });
+                const owner = captureSession().owner;
+                const initialData = { ...emptyUserData, history: originalHistory, activeWorkout: null };
+                await prepareUnlockedTestArchive(owner);
+                await initializeLocal(owner, initialData);
+                const persistedHistoryBefore = (await readLocal(owner))?.data.history;
+                useAppStore.setState({ userData: initialData, dataOwner: owner, localWorkout: null });
 
                 const { result } = renderHook(() => useWorkoutSession());
-
                 await act(async () => {
-                    await result.current.cancelHistoryEdit();
+                    expect(await result.current.startEditHistoricalWorkout(originalHistory[0])).toBe(true);
+                });
+                const editing = useAppStore.getState().localWorkout;
+                expect(editing?.isEditingHistory).toBe(true);
+                expect(readDeviceValueStrict('history-editor-context', owner)).not.toBeNull();
+                expect(localStorage.getItem(protectedDeviceKey('history-editor-context', owner)))
+                    .toMatch(/^tlb-sealed:v1:/);
+
+                // Ad-hoc changes are not a history save until explicitly confirmed.
+                act(() => {
+                    useAppStore.getState().setLocalWorkout({
+                        ...editing!,
+                        exercises: [
+                            ...editing!.exercises,
+                            { exId: 'ex_adhoc_added', sessionNote: 'Added', sets: [] },
+                        ],
+                    });
+                });
+                await act(async () => {
+                    expect(await result.current.cancelHistoryEdit()).toBe(true);
                 });
 
                 const state = useAppStore.getState();
                 expect(state.localWorkout).toBeNull();
                 expect(state.userData?.history?.[0].exercises.length).toBe(1);
                 expect(state.userData?.history?.[0].exercises[0].exId).toBe('ex1');
+                expect((await readLocal(owner))?.data.history).toEqual(persistedHistoryBefore);
+                expect(readDeviceValueStrict('history-editor-context', owner)).toBeNull();
+                expect(localStorage.getItem(protectedDeviceKey('history-editor-context', owner))).toBeNull();
+                expect(idbStore['logbook:v2:' + owner]).toMatch(/^tlb-sealed:v1:/);
             });
         });
     });
