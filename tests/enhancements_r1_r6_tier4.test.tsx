@@ -50,15 +50,16 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
                 }
             ];
 
-            useAppStore.setState({
-                dataOwner: captureSession().owner,
-                userData: {
+            const owner = captureSession().owner;
+            const initialData = {
                     ...emptyUserData,
                     library,
                     routines,
                     history: []
-                }
-            });
+                };
+            await prepareUnlockedTestArchive(owner);
+            await initializeLocal(owner, initialData);
+            useAppStore.setState({ dataOwner: owner, userData: initialData });
 
             const { result: sessionHook } = renderHook(() => useWorkoutSession());
 
@@ -101,6 +102,7 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
             expect(saved?.exercises[0].sets[0].kg).toBe('50');
             expect(saved?.exercises[1].exId).toBe('ex_bench');
             expect(saved?.exercises[1].sets[0].kg).toBe('85');
+            expect((await readLocal(owner))?.data.history?.[0]?.exercises[0]?.exId).toBe('ex_ohp');
         });
 
         it('T4.2: Scenario: "Ad-Hoc Arm Blast Finisher" (Bodybuilder extends session with high volume dropsets)', async () => {
@@ -113,15 +115,16 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
                 { id: 'r_pull', name: 'Pull Day', exercises: [{ exId: 'ex_lat', setsCount: 3 }] }
             ];
 
-            useAppStore.setState({
-                dataOwner: captureSession().owner,
-                userData: {
+            const owner = captureSession().owner;
+            const initialData = {
                     ...emptyUserData,
                     library,
                     routines,
                     history: []
-                }
-            });
+                };
+            await prepareUnlockedTestArchive(owner);
+            await initializeLocal(owner, initialData);
+            useAppStore.setState({ dataOwner: owner, userData: initialData });
 
             const { result: sessionHook } = renderHook(() => useWorkoutSession());
 
