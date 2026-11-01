@@ -77,31 +77,30 @@ describe('F-006 active workout persisted business identity', () => {
 
     it('quarantines malformed active workouts from IndexedDB and device-local recovery without losing valid sessions', async () => {
         const base = UserDataSchema.parse({}) as unknown as UserData;
-        await prepareUnlockedTestArchive('guest');
-        await initializeLocal('guest', base);
+        const owner = captureSession().owner;
+        await prepareUnlockedTestArchive(owner);
+        await initializeLocal(owner, base);
 
-        const key = 'logbook:v2:guest';
-        await updateArchiveRecord<any>('guest', raw => ({
+        const key = 'logbook:v2:' + owner;
+        await updateArchiveRecord<any>(owner, raw => ({
             ...raw,
             data: { ...raw.data, activeWorkout: { date: '2026-09-29', exercises: [] } },
             baseline: { ...raw.baseline, activeWorkout: { ...validWorkout, id: 'bad/id' } },
         }));
         expect(await get<string>(key)).toMatch(/^tlb-sealed:v1:/);
 
-        const envelope = await readLocal('guest');
+        const envelope = await readLocal(owner);
         expect(envelope?.data.activeWorkout).toBeNull();
         expect(envelope?.baseline.activeWorkout).toBeNull();
 
         // A new bootstrap cannot replace an existing durable envelope.
         // Reset the test fixture explicitly before seeding its next lifecycle.
         await clear();
-        await prepareUnlockedTestArchive('guest');
-        await initializeLocal('guest', UserDataSchema.parse({ activeWorkout: validWorkout }) as unknown as UserData);
-        expect(await get<string>(key)).toMatch(/^tlb-sealed:v1:/);
-        expect((await readLocal('guest'))?.data.activeWorkout).toMatchObject(validWorkout);
-
-        const owner = captureSession().owner;
         await prepareUnlockedTestArchive(owner);
+        await initializeLocal(owner, UserDataSchema.parse({ activeWorkout: validWorkout }) as unknown as UserData);
+        expect(await get<string>(key)).toMatch(/^tlb-sealed:v1:/);
+        expect((await readLocal(owner))?.data.activeWorkout).toMatchObject(validWorkout);
+
         const sealedKey = protectedDeviceKey('workout', owner);
         writeDeviceValue('workout', JSON.stringify({ date: '2026-09-29', exercises: [] }), owner);
         const invalidCiphertext = localStorage.getItem(sealedKey);
