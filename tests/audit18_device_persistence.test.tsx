@@ -4,7 +4,10 @@ import { act, fireEvent, render, renderHook, screen } from '@testing-library/rea
 import { useAppStore } from '../src/store/useAppStore';
 import { UserDataSchema } from '../src/lib/schema';
 import type { UserData, WorkoutSession } from '../src/types';
-import { deviceKey } from '../src/lib/sync/deviceStorage';
+import { deviceKey, protectedDeviceKey, readDeviceValueStrict } from '../src/lib/sync/deviceStorage';
+import { persistPlainWorkoutSnapshot, unwrapWorkoutDeviceSnapshot } from '../src/lib/sync/workoutDeviceIntent';
+import { prepareUnlockedTestArchive } from './secureVaultFixture';
+import { writeWorkoutTimerSnapshot } from '../src/lib/utils/timer';
 import { getInitialLocalWorkout } from '../src/store/slices/createWorkoutSlice';
 import { readWorkoutTimerSnapshot } from '../src/lib/utils/timer';
 import { BrowserStorageError } from '../src/lib/sync/browserStorage';
@@ -33,10 +36,11 @@ function workout(id: string, reps = '8'): WorkoutSession {
 }
 
 describe('Audit 18 device-critical persistence', () => {
-    beforeEach(() => {
+    beforeEach(async () => {
         localStorage.clear();
-        vi.clearAllMocks();
         owner = captureSession().owner;
+        await prepareUnlockedTestArchive(owner);
+        vi.clearAllMocks();
         useAppStore.setState({
             userData: parseUserData({ activeWorkout: workout('w-current') }),
             dataOwner: owner,
@@ -74,11 +78,16 @@ describe('Audit 18 device-critical persistence', () => {
         expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
         expect(useAppStore.getState().syncHealth).toBe('failed');
         expect(useAppStore.getState().saveError).toContain('Impossibile salvare l’allenamento');
+        expect(localStorage.getItem(protectedDeviceKey('workout', owner))).toBeNull();
+        expect(localStorage.getItem(deviceKey('workout', owner))).toBeNull();
     });
 
     it('does not let a one-shot read failure replace a newer device workout with an older IndexedDB fallback', () => {
         const key = deviceKey('workout', owner);
-        localStorage.setItem(key, JSON.stringify(workout('device-new', '10')));
+        const sealedKey = protectedDeviceKey('workout', owner);
+        persistPlainWorkoutSnapshot(workout('device-new', '10'), owner);
+        const originalCiphertext = localStorage.getItem(sealedKey);
+        expect(originalCiphertext).toMatch(/^tlb-sealed:v1:/);
         localStorageMock.setItem.mockClear();
         const fallback = workout('envelope-old', '6');
 
@@ -89,17 +98,19 @@ describe('Audit 18 device-critical persistence', () => {
 
         expect(() => getInitialLocalWorkout(owner, fallback)).toThrow(BrowserStorageError);
         expect(localStorageMock.setItem).not.toHaveBeenCalled();
-
+        expect(localStorage.getItem(sealedKey)).toBe(originalCiphertext);
+        expect(localStorage.getItem(key)).toBeNull();
+        expect(unwrapWorkoutDeviceSnapshot(JSON.parse(readDeviceValueStrict('workout', owner)!), owner).workout)
+            .toEqual(workout('device-new', '10'));
     });
 
     it('does not reinterpret an unreadable running timer as stopped', () => {
         const key = deviceKey('timer', owner);
-        localStorage.setItem(key, JSON.stringify({
-            version: 1,
-            state: 'running',
-            startTime: 1000,
-            accumulated: 250,
-        }));
+        const sealedKey = protectedDeviceKey('timer', owner);
+        const running = { version: 1 as const, state: 'running' as const, startTime: 1000, accumulated: 250 };
+        writeWorkoutTimerSnapshot(running, owner);
+        const originalCiphertext = localStorage.getItem(sealedKey);
+        expect(originalCiphertext).toMatch(/^tlb-sealed:v1:/);
         localStorageMock.setItem.mockClear();
         localStorageMock.removeItem.mockClear();
         localStorageMock.getItem.mockImplementationOnce((readKey: string) => {
@@ -110,6 +121,9 @@ describe('Audit 18 device-critical persistence', () => {
         expect(() => readWorkoutTimerSnapshot(owner)).toThrow(BrowserStorageError);
         expect(localStorageMock.setItem).not.toHaveBeenCalled();
         expect(localStorageMock.removeItem).not.toHaveBeenCalled();
+        expect(localStorage.getItem(sealedKey)).toBe(originalCiphertext);
+        expect(localStorage.getItem(key)).toBeNull();
+        expect(readWorkoutTimerSnapshot(owner)).toEqual(running);
     });
 
     it('refuses to start a workout when the canonical timer snapshot cannot be written', async () => {
@@ -125,7 +139,11 @@ describe('Audit 18 device-critical persistence', () => {
         // Start validation now requires a real durable prepared workout. The
         // timer failure must be tested after that prerequisite is satisfied.
         await initializeLocal(owner, parseUserData({ activeWorkout: pending }));
-        const timerKey = deviceKey('timer', owner);
+        const timerKey = protectedDeviceKey('timer', owner);
+        const running = { version: 1 as const, state: 'running' as const, startTime: 1000, accumulated: 250 };
+        writeWorkoutTimerSnapshot(running, owner);
+        const originalCiphertext = localStorage.getItem(timerKey);
+        localStorageMock.setItem.mockClear();
         localStorageMock.setItem.mockImplementationOnce((writtenKey: string) => {
             if (writtenKey === timerKey) throw new DOMException('full', 'QuotaExceededError');
         });
@@ -140,6 +158,8 @@ describe('Audit 18 device-critical persistence', () => {
         expect(useAppStore.getState().localWorkout?.globalStartTime).toBeUndefined();
         expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
         expect(useAppStore.getState().saveError).toContain('timer');
+        expect(localStorage.getItem(timerKey)).toBe(originalCiphertext);
+        expect(localStorage.getItem(deviceKey('timer', owner))).toBeNull();
     });
 
     it('contains an initial pre-session owner read failure and blocks device-critical persistence', () => {
@@ -171,7 +191,8 @@ describe('Audit 18 device-critical persistence', () => {
             />,
         );
 
-        const key = deviceKey('draft:pre-session:w-current', owner);
+        const name = 'draft:pre-session:w-current';
+        const key = protectedDeviceKey(name, owner);
         const writes = () => localStorageMock.setItem.mock.calls
             .filter(([writtenKey]) => writtenKey === key)
             .map(([, raw]) => raw as string);
@@ -179,20 +200,27 @@ describe('Audit 18 device-critical persistence', () => {
 
         fireEvent.click(screen.getByRole('button', { name: 'Energia: 4 su 5' }));
         expect(writes()).toHaveLength(1);
-        expect(JSON.parse(writes()[0])).toMatchObject({ energy: 4 });
+        expect(writes()[0]).toMatch(/^tlb-sealed:v1:/);
+        expect(JSON.parse(readDeviceValueStrict(name, owner)!)).toMatchObject({ energy: 4 });
 
         fireEvent.click(screen.getByRole('button', { name: 'Stress: 3 su 5' }));
         expect(writes()).toHaveLength(2);
-        expect(JSON.parse(writes()[1])).toMatchObject({ energy: 4, stress: 3 });
+        expect(writes()[1]).toMatch(/^tlb-sealed:v1:/);
+        expect(writes()[1]).not.toBe(writes()[0]);
+        expect(JSON.parse(readDeviceValueStrict(name, owner)!)).toMatchObject({ energy: 4, stress: 3 });
 
         fireEvent.click(screen.getByRole('button', { name: 'Energia: 5 su 5' }));
         expect(writes()).toHaveLength(3);
-        expect(JSON.parse(writes()[2])).toMatchObject({ energy: 5, stress: 3 });
+        expect(writes()[2]).toMatch(/^tlb-sealed:v1:/);
+        expect(writes()[2]).not.toBe(writes()[1]);
+        expect(JSON.parse(readDeviceValueStrict(name, owner)!)).toMatchObject({ energy: 5, stress: 3 });
         expect(localStorage.getItem(key)).toBe(writes()[2]);
+        expect(localStorage.getItem(deviceKey(name, owner))).toBeNull();
     });
 
     it('surfaces a pre-session draft write failure instead of waiting for a lifecycle event', () => {
-        const key = deviceKey('draft:pre-session:w-current', owner);
+        const name = 'draft:pre-session:w-current';
+        const key = protectedDeviceKey(name, owner);
         render(
             <PreSessionCheckIn
                 workoutId="w-current"
@@ -209,6 +237,8 @@ describe('Audit 18 device-critical persistence', () => {
 
         expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
         expect(useAppStore.getState().saveError).toContain('Bozza del check-in non salvata');
+        expect(localStorage.getItem(key)).toBeNull();
+        expect(localStorage.getItem(deviceKey(name, owner))).toBeNull();
     });
 
     it('makes visibilitychange flush failures fail closed', () => {
@@ -283,15 +313,19 @@ describe('Audit 18 device-critical persistence', () => {
 
     it('persists the workout produced by a synchronous draft flush, not its previous snapshot', () => {
         const updated = workout('w-current', '12');
-        localStorage.setItem(deviceKey('workout', owner), JSON.stringify(workout('w-current')));
+        persistPlainWorkoutSnapshot(workout('w-current'), owner);
         const flushDraft = () => { useAppStore.setState({ localWorkout: updated }); };
         draftRegistry.register(flushDraft);
         try {
             Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });
             document.dispatchEvent(new Event('visibilitychange'));
-            const raw = localStorage.getItem(deviceKey('workout', owner));
+            const sealed = localStorage.getItem(protectedDeviceKey('workout', owner));
+            expect(sealed).toMatch(/^tlb-sealed:v1:/);
+            const raw = readDeviceValueStrict('workout', owner);
             expect(raw).not.toBeNull();
-            expect(JSON.parse(raw!).exercises[0].sets[0].reps).toBe('12');
+            expect((unwrapWorkoutDeviceSnapshot(JSON.parse(raw!), owner).workout as WorkoutSession)
+                .exercises[0].sets[0].reps).toBe('12');
+            expect(localStorage.getItem(deviceKey('workout', owner))).toBeNull();
             expect(useAppStore.getState().localPersistenceBlocked).toBe(false);
         } finally {
             draftRegistry.unregister(flushDraft);
@@ -301,14 +335,19 @@ describe('Audit 18 device-critical persistence', () => {
     it.each([false, true])('preserves a newer tab workout when a stale tab backgrounds (draft=%s)', flushesDraft => {
         const latest = workout('w-current', '14');
         // This tab still has reps=8 while another tab published reps=14.
-        const key = deviceKey('workout', owner);
-        localStorage.setItem(key, JSON.stringify(latest));
+        const key = protectedDeviceKey('workout', owner);
+        persistPlainWorkoutSnapshot(latest, owner);
+        const originalCiphertext = localStorage.getItem(key);
+        expect(originalCiphertext).toMatch(/^tlb-sealed:v1:/);
         const staleDraft = () => useAppStore.setState({ localWorkout: workout('w-current', '12') });
         if (flushesDraft) draftRegistry.register(staleDraft);
         try {
             Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });
             document.dispatchEvent(new Event('visibilitychange'));
-            expect(JSON.parse(localStorage.getItem(key)!)).toEqual(latest);
+            expect(localStorage.getItem(key)).toBe(originalCiphertext);
+            expect(unwrapWorkoutDeviceSnapshot(JSON.parse(readDeviceValueStrict('workout', owner)!), owner).workout)
+                .toEqual(latest);
+            expect(localStorage.getItem(deviceKey('workout', owner))).toBeNull();
             expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
             expect(useAppStore.getState().saveError).toContain('mettere al sicuro');
         } finally {
