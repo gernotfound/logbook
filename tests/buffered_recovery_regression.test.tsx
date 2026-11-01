@@ -996,9 +996,11 @@ describe('advanced workout segment identity across removal and draft recovery', 
         vi.restoreAllMocks();
     });
 
-    it('keeps the later segment DOM and durable recovery key when the earlier dirty segment unmounts', () => {
+    it('keeps the later segment DOM and durable recovery key when the earlier dirty segment unmounts', async () => {
         const owner = captureSession().owner;
-        const keyB = deviceKey(`draft:buffered:input:${workoutId}:seg-kg-set-identity-seg-b`, owner);
+        await prepareUnlockedTestArchive(owner);
+        const nameB = `draft:buffered:input:${workoutId}:seg-kg-set-identity-seg-b`;
+        const keyB = protectedDeviceKey(nameB, owner);
         const view = render(row(initialSet));
         const inputA = view.container.querySelector('#seg-kg-set-identity-seg-a') as HTMLInputElement;
         const inputB = view.container.querySelector('#seg-kg-set-identity-seg-b') as HTMLInputElement;
@@ -1008,8 +1010,9 @@ describe('advanced workout segment identity across removal and draft recovery', 
         fireEvent.change(inputA, { target: { value: '91' } });
         fireEvent.change(inputB, { target: { value: '77' } });
         const bRaw = localStorage.getItem(keyB);
-        expect(bRaw).not.toBeNull();
-        expect(JSON.parse(bRaw!)).toMatchObject({ value: '77', name: `draft:buffered:input:${workoutId}:seg-kg-set-identity-seg-b` });
+        expect(bRaw).toMatch(/^tlb-sealed:v1:/);
+        expect(localStorage.getItem(deviceKey(nameB, owner))).toBeNull();
+        expect(JSON.parse(readDeviceValueStrict(nameB, owner)!)).toMatchObject({ value: '77', name: nameB });
 
         view.rerender(row({ ...initialSet, segments: [segmentB] }));
         const surviving = view.container.querySelector('#seg-kg-set-identity-seg-b') as HTMLInputElement;
@@ -1096,10 +1099,10 @@ describe('F-001 — stable exercise instance recovery with shared catalog editor
         expect(field).not.toBeNull();
         return field!;
     };
-    const draft = (id: string) => {
-        const key = deviceKey(`draft:buffered:input:${workoutId}:${id}`, captureSession().owner);
-        return localStorage.getItem(key);
-    };
+    const draftName = (id: string) => `draft:buffered:input:${workoutId}:${id}`;
+    const draft = (id: string) => readDeviceValueStrict(draftName(id), captureSession().owner);
+    const sealedDraft = (id: string) =>
+        localStorage.getItem(protectedDeviceKey(draftName(id), captureSession().owner));
 
     beforeEach(() => {
         localStorageMock.getItem.mockImplementation(initialGetItem);
@@ -1120,7 +1123,8 @@ describe('F-001 — stable exercise instance recovery with shared catalog editor
         vi.restoreAllMocks();
     });
 
-    it('saves and recovers two different standards and equal set IDs without collision', () => {
+    it('saves and recovers two different standards and equal set IDs without collision', async () => {
+        await prepareUnlockedTestArchive(captureSession().owner);
         const view = render(cards());
         const values = [
             ['technical-standard-se-first', 'Prima: fermo 2 s'],
@@ -1131,9 +1135,12 @@ describe('F-001 — stable exercise instance recovery with shared catalog editor
         for (const [id, value] of values) fireEvent.change(input(view.container, id), { target: { value } });
         for (const [id, value] of values) {
             expect(JSON.parse(draft(id)!)).toMatchObject({
-                name: `draft:buffered:input:${workoutId}:${id}`, value,
+                name: draftName(id), value,
             });
+            expect(sealedDraft(id)).toMatch(/^tlb-sealed:v1:/);
+            expect(localStorage.getItem(deviceKey(draftName(id), captureSession().owner))).toBeNull();
         }
+        const sealedBeforeRemount = values.map(([id]) => sealedDraft(id));
         // Setup UI is per-instance, but both editors write one catalog item.
         expect(input(view.container, 'setup-se-first')).not.toBe(input(view.container, 'setup-se-second'));
         expect(input(view.container, 'setup-se-first').value).toBe('Setup condiviso');
@@ -1143,15 +1150,17 @@ describe('F-001 — stable exercise instance recovery with shared catalog editor
         // intentionally withheld, modeling a reload before commit confirmation.
         view.unmount();
         const reopened = render(cards());
-        for (const [id, value] of values) {
+        for (const [index, [id, value]] of values.entries()) {
             expect(input(reopened.container, id).value).toBe(value);
             expect(JSON.parse(draft(id)!)).toMatchObject({ value });
+            expect(sealedDraft(id)).toBe(sealedBeforeRemount[index]);
         }
         expect(useAppStore.getState().localPersistenceBlocked).toBe(false);
         reopened.unmount();
     });
 
-    it('preserves one shared catalog recovery target and rejects a conflicting second editor', () => {
+    it('preserves one shared catalog recovery target and rejects a conflicting second editor', async () => {
+        await prepareUnlockedTestArchive(captureSession().owner);
         const view = render(cards());
         const firstSetup = input(view.container, 'setup-se-first');
         const secondSetup = input(view.container, 'setup-se-second');
@@ -1159,13 +1168,17 @@ describe('F-001 — stable exercise instance recovery with shared catalog editor
         fireEvent.change(firstSetup, { target: { value: 'Catalog change 1' } });
         fireEvent.blur(firstSetup);
         const sharedRaw = draft('setup-bench');
+        const sharedCiphertext = sealedDraft('setup-bench');
         expect(JSON.parse(sharedRaw!)).toMatchObject({ value: 'Catalog change 1' });
+        expect(sharedCiphertext).toMatch(/^tlb-sealed:v1:/);
+        expect(localStorage.getItem(deviceKey(draftName('setup-bench'), captureSession().owner))).toBeNull();
         expect(onUpdateSetupNote).toHaveBeenCalledExactlyOnceWith('bench', 'Catalog change 1');
         // A second concurrently mounted editor cannot publish a stale
         // alternative under the same catalog field without reconciliation.
         fireEvent.change(secondSetup, { target: { value: 'Catalog change 2' } });
         fireEvent.blur(secondSetup);
         expect(draft('setup-bench')).toBe(sharedRaw);
+        expect(sealedDraft('setup-bench')).toBe(sharedCiphertext);
         expect(onUpdateSetupNote).toHaveBeenCalledTimes(1);
         expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
         expect(consoleError).toHaveBeenCalled();
