@@ -447,22 +447,35 @@ describe.each(['input', 'textarea'] as const)('concurrent same-workout %s drafts
         vi.restoreAllMocks();
     });
 
-    it('rejects a second stale editor before overwriting a newer draft in the same consent revision', () => {
+    it('rejects a second stale editor before overwriting a newer draft in the same consent revision', async () => {
         const owner = captureSession().owner;
+        await prepareUnlockedTestArchive(owner);
         const key = deviceKey(draftName, owner);
+        const sealedKey = protectedDeviceKey(draftName, owner);
         const firstCallback = vi.fn();
         const secondCallback = vi.fn();
         const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
         const first = mount(firstCallback);
         const second = mount(secondCallback);
         fireEvent.change(edited(first), { target: { value: 'First author private value' } });
-        const original = localStorage.getItem(key);
+        const original = readBufferedDraftSnapshot(draftName, owner).raw;
+        const ciphertext = localStorage.getItem(sealedKey);
+        expect(ciphertext).toMatch(/^tlb-sealed:v1:/);
+        expect(localStorage.getItem(key)).toBeNull();
         expect(JSON.parse(original!)).toMatchObject({
             __logbookBufferedDraft: 1, owner, name: draftName,
             consentRevision: 3, value: 'First author private value',
         });
         fireEvent.change(edited(second), { target: { value: 'Stale author conflicting value' } });
-        expect(localStorage.getItem(key)).toBe(original);
+        expect(readBufferedDraftSnapshot(draftName, owner).raw).toBe(original);
+        expect(localStorage.getItem(sealedKey)).toBe(ciphertext);
+        expect(localStorage.getItem(key)).toBeNull();
+        const witnesses = readBufferedWriterEvidence(owner, draftName);
+        expect(witnesses.map(witness => witness.value).sort()).toEqual([
+            'First author private value', 'Stale author conflicting value',
+        ]);
+        expect(witnesses.every(witness => localStorage.getItem(protectedDeviceKey(witness.name, owner))?.startsWith('tlb-sealed:v1:'))).toBe(true);
+        expect(witnesses.every(witness => localStorage.getItem(deviceKey(witness.name, owner)) === null)).toBe(true);
         expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
         fireEvent.blur(edited(second));
         expect(secondCallback).not.toHaveBeenCalled();
@@ -472,9 +485,11 @@ describe.each(['input', 'textarea'] as const)('concurrent same-workout %s drafts
         second.unmount();
     });
 
-    it('preserves the newer copy when an old parent acknowledges a previously flushed value', () => {
+    it('preserves the newer copy when an old parent acknowledges a previously flushed value', async () => {
         const owner = captureSession().owner;
+        await prepareUnlockedTestArchive(owner);
         const key = deviceKey(draftName, owner);
+        const sealedKey = protectedDeviceKey(draftName, owner);
         const olderCallback = vi.fn();
         const newerCallback = vi.fn();
         const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -487,14 +502,19 @@ describe.each(['input', 'textarea'] as const)('concurrent same-workout %s drafts
         // then the first tab receives a delayed acknowledgement for OLD data.
         const newView = mount(newerCallback);
         fireEvent.change(edited(newView), { target: { value: 'Newer value' } });
-        const newerRaw = localStorage.getItem(key);
+        const newerRaw = readBufferedDraftSnapshot(draftName, owner).raw;
+        const newerCiphertext = localStorage.getItem(sealedKey);
+        expect(newerCiphertext).toMatch(/^tlb-sealed:v1:/);
+        expect(localStorage.getItem(key)).toBeNull();
         expect(JSON.parse(newerRaw!)).toMatchObject({ value: 'Newer value' });
         oldView.rerender(
             <BufferedWorkoutScope.Provider value={workoutId}>
                 {field(kind, olderCallback, 'Old value')}
             </BufferedWorkoutScope.Provider>,
         );
-        expect(localStorage.getItem(key)).toBe(newerRaw);
+        expect(readBufferedDraftSnapshot(draftName, owner).raw).toBe(newerRaw);
+        expect(localStorage.getItem(sealedKey)).toBe(newerCiphertext);
+        expect(localStorage.getItem(key)).toBeNull();
         expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
         expect(consoleError).toHaveBeenCalled();
         expect(newerCallback).not.toHaveBeenCalled();
@@ -502,14 +522,22 @@ describe.each(['input', 'textarea'] as const)('concurrent same-workout %s drafts
         newView.unmount();
     });
 
-    it('allows one editor to revise its own saved draft repeatedly and clear only on acknowledgement', () => {
+    it('allows one editor to revise its own saved draft repeatedly and clear only on acknowledgement', async () => {
         const owner = captureSession().owner;
+        await prepareUnlockedTestArchive(owner);
         const key = deviceKey(draftName, owner);
+        const sealedKey = protectedDeviceKey(draftName, owner);
         const update = vi.fn();
         const view = mount(update);
         fireEvent.change(edited(view), { target: { value: 'A' } });
+        const firstCiphertext = localStorage.getItem(sealedKey);
+        expect(firstCiphertext).toMatch(/^tlb-sealed:v1:/);
         fireEvent.change(edited(view), { target: { value: 'B' } });
-        const raw = localStorage.getItem(key);
+        const raw = readBufferedDraftSnapshot(draftName, owner).raw;
+        const secondCiphertext = localStorage.getItem(sealedKey);
+        expect(secondCiphertext).toMatch(/^tlb-sealed:v1:/);
+        expect(secondCiphertext).not.toBe(firstCiphertext);
+        expect(localStorage.getItem(key)).toBeNull();
         expect(JSON.parse(raw!)).toMatchObject({ value: 'B' });
         fireEvent.blur(edited(view));
         expect(update).toHaveBeenCalledExactlyOnceWith('B');
@@ -518,7 +546,9 @@ describe.each(['input', 'textarea'] as const)('concurrent same-workout %s drafts
                 {field(kind, update, 'B')}
             </BufferedWorkoutScope.Provider>,
         );
+        expect(localStorage.getItem(sealedKey)).toBeNull();
         expect(localStorage.getItem(key)).toBeNull();
+        expect(readBufferedWriterEvidence(owner, draftName)).toHaveLength(0);
         expect(useAppStore.getState().localPersistenceBlocked).toBe(false);
         view.unmount();
     });
@@ -692,17 +722,28 @@ describe.each(['input', 'textarea'] as const)('independent same-workout %s write
         expect(report).toHaveBeenCalled();
     });
 
-    it('restores one matching witness after a simulated reload and clears it only on parent acknowledgement', () => {
+    it('restores one matching witness after a simulated reload and clears it only on parent acknowledgement', async () => {
         const owner = captureSession().owner;
+        await prepareUnlockedTestArchive(owner);
+        const sealedKey = protectedDeviceKey(draftName, owner);
         const value = 'Unsaved verified draft';
         const first = mount(vi.fn());
         fireEvent.change(edited(first), { target: { value } });
-        expect(readBufferedWriterEvidence(owner, draftName)).toHaveLength(1);
+        const [witness] = readBufferedWriterEvidence(owner, draftName);
+        expect(witness.value).toBe(value);
+        const witnessCiphertext = localStorage.getItem(protectedDeviceKey(witness.name, owner));
+        const sharedCiphertext = localStorage.getItem(sealedKey);
+        expect(witnessCiphertext).toMatch(/^tlb-sealed:v1:/);
+        expect(sharedCiphertext).toMatch(/^tlb-sealed:v1:/);
+        expect(localStorage.getItem(deviceKey(witness.name, owner))).toBeNull();
+        expect(localStorage.getItem(deviceKey(draftName, owner))).toBeNull();
         first.unmount();
 
         const update = vi.fn();
         const second = mount(update);
         expect(edited(second).value).toBe(value);
+        expect(localStorage.getItem(protectedDeviceKey(witness.name, owner))).toBe(witnessCiphertext);
+        expect(localStorage.getItem(sealedKey)).toBe(sharedCiphertext);
         expect(useAppStore.getState().localPersistenceBlocked).toBe(false);
         fireEvent.blur(edited(second));
         expect(update).toHaveBeenCalledExactlyOnceWith(value);
@@ -713,19 +754,35 @@ describe.each(['input', 'textarea'] as const)('independent same-workout %s write
         );
         expect(readBufferedDraftSnapshot(draftName, owner).raw).toBeNull();
         expect(readBufferedWriterEvidence(owner, draftName)).toHaveLength(0);
+        expect(localStorage.getItem(sealedKey)).toBeNull();
+        expect(localStorage.getItem(protectedDeviceKey(witness.name, owner))).toBeNull();
+        expect(localStorage.getItem(deviceKey(draftName, owner))).toBeNull();
         second.unmount();
     });
 
-    it('recovers a verified successor across successive React remounts and confirms its lineage', () => {
+    it('recovers a verified successor across successive React remounts and confirms its lineage', async () => {
         const owner = captureSession().owner;
+        await prepareUnlockedTestArchive(owner);
+        const sealedKey = protectedDeviceKey(draftName, owner);
         const first = mount(vi.fn());
         fireEvent.change(edited(first), { target: { value: '75' } });
+        const [initialWitness] = readBufferedWriterEvidence(owner, draftName);
+        expect(initialWitness.value).toBe('75');
+        const initialCiphertext = localStorage.getItem(protectedDeviceKey(initialWitness.name, owner));
+        expect(initialCiphertext).toMatch(/^tlb-sealed:v1:/);
+        expect(localStorage.getItem(sealedKey)).toMatch(/^tlb-sealed:v1:/);
         first.unmount();
 
         const successor = mount(vi.fn());
         expect(edited(successor).value).toBe('75');
         fireEvent.change(edited(successor), { target: { value: '76' } });
-        expect(readBufferedWriterEvidence(owner, draftName)).toHaveLength(2);
+        const lineage = readBufferedWriterEvidence(owner, draftName);
+        expect(lineage).toHaveLength(2);
+        const successorWitness = lineage.find(witness => witness.name !== initialWitness.name);
+        expect(successorWitness?.value).toBe('76');
+        expect(localStorage.getItem(protectedDeviceKey(successorWitness!.name, owner))).toMatch(/^tlb-sealed:v1:/);
+        expect(localStorage.getItem(protectedDeviceKey(initialWitness.name, owner))).toBe(initialCiphertext);
+        expect(localStorage.getItem(deviceKey(draftName, owner))).toBeNull();
         successor.unmount();
 
         const confirmed = vi.fn();
@@ -740,6 +797,10 @@ describe.each(['input', 'textarea'] as const)('independent same-workout %s write
         );
         expect(readBufferedDraftSnapshot(draftName, owner).raw).toBeNull();
         expect(readBufferedWriterEvidence(owner, draftName)).toHaveLength(0);
+        expect(localStorage.getItem(sealedKey)).toBeNull();
+        expect(localStorage.getItem(protectedDeviceKey(initialWitness.name, owner))).toBeNull();
+        expect(localStorage.getItem(protectedDeviceKey(successorWitness!.name, owner))).toBeNull();
+        expect(localStorage.getItem(deviceKey(draftName, owner))).toBeNull();
         recovered.unmount();
     });
 
@@ -782,12 +843,16 @@ describe.each(['input', 'textarea'] as const)('independent same-workout %s write
         reopened.unmount();
     });
 
-    it('reseals the live source editor when another acknowledged editor consumed its former witness', () => {
+    it('reseals the live source editor when another acknowledged editor consumed its former witness', async () => {
         const owner = captureSession().owner;
+        await prepareUnlockedTestArchive(owner);
+        const sealedKey = protectedDeviceKey(draftName, owner);
         const source = mount(vi.fn());
         fireEvent.change(edited(source), { target: { value: '75' } });
         const [initial] = readBufferedWriterEvidence(owner, draftName);
         expect(initial.value).toBe('75');
+        expect(localStorage.getItem(protectedDeviceKey(initial.name, owner))).toMatch(/^tlb-sealed:v1:/);
+        expect(localStorage.getItem(deviceKey(initial.name, owner))).toBeNull();
 
         const confirm = vi.fn();
         const second = mount(confirm);
@@ -802,6 +867,8 @@ describe.each(['input', 'textarea'] as const)('independent same-workout %s write
         );
         expect(readBufferedDraftSnapshot(draftName, owner).raw).toBeNull();
         expect(readBufferedWriterEvidence(owner, draftName)).toHaveLength(0);
+        expect(localStorage.getItem(sealedKey)).toBeNull();
+        expect(localStorage.getItem(protectedDeviceKey(initial.name, owner))).toBeNull();
 
         // The old field is still mounted. Its next keystroke cannot reuse
         // the consumed slot, and cannot overwrite the acknowledged canonical.
@@ -810,7 +877,10 @@ describe.each(['input', 'textarea'] as const)('independent same-workout %s write
         const [next] = readBufferedWriterEvidence(owner, draftName);
         expect(next.name).not.toBe(initial.name);
         expect(next.value).toBe('77');
+        expect(localStorage.getItem(protectedDeviceKey(next.name, owner))).toMatch(/^tlb-sealed:v1:/);
+        expect(localStorage.getItem(deviceKey(next.name, owner))).toBeNull();
         expect(readBufferedDraftSnapshot(draftName, owner).raw).toBeNull();
+        expect(localStorage.getItem(sealedKey)).toBeNull();
         expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
         expect(report).toHaveBeenCalled();
         second.unmount();
