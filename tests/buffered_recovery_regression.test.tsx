@@ -749,7 +749,7 @@ describe.each(['input', 'textarea'] as const)('independent same-workout %s write
     it.each(['writer read', 'recovery inspector'] as const)(
         'rejects a consent change during the final buffered witness read (%s)', async mode => {
             const owner = captureSession().owner;
-        await prepareUnlockedTestArchive(owner);
+            await prepareUnlockedTestArchive(owner);
             expect(owner).toMatch(/^user:/);
             const marker = deviceKey('health-consent-generation', owner);
             const name = createBufferedWriterIntentName();
