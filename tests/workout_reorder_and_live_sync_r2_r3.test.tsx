@@ -1,5 +1,7 @@
 import { captureSession } from '../src/lib/sync/session';
-import { deviceKey } from '../src/lib/sync/deviceStorage';
+import { deviceKey, protectedDeviceKey, readDeviceValueStrict } from '../src/lib/sync/deviceStorage';
+import { persistPlainWorkoutSnapshot, unwrapWorkoutDeviceSnapshot } from '../src/lib/sync/workoutDeviceIntent';
+import { prepareUnlockedTestArchive } from './secureVaultFixture';
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, renderHook, act } from '@testing-library/react';
@@ -175,7 +177,9 @@ describe('Workout Reorder (R2) and Live Sync & Badges (R3) Suite', () => {
             expect(active?.exercises[0].id).toMatch(/^se_/);
         });
 
-        it('1.6: getInitialLocalWorkout repairs device-only missing identities once and persists them', () => {
+        it('1.6: getInitialLocalWorkout repairs device-only missing identities once and persists them', async () => {
+            const owner = captureSession().owner;
+            await prepareUnlockedTestArchive(owner);
             const malformedWorkout = {
                 id: 'w_malformed',
                 routineName: 'Malformed',
@@ -184,16 +188,26 @@ describe('Workout Reorder (R2) and Live Sync & Badges (R3) Suite', () => {
                     { id: 'se_preserved', exId: 'ex_squat', sessionNote: '', sets: [] }
                 ]
             };
-            localStorage.setItem(deviceKey('workout'), JSON.stringify(malformedWorkout));
+            persistPlainWorkoutSnapshot(malformedWorkout as WorkoutSession, owner);
+            const sealedKey = protectedDeviceKey('workout', owner);
+            const originalCiphertext = localStorage.getItem(sealedKey);
+            expect(originalCiphertext).toMatch(/^tlb-sealed:v1:/);
+            expect(localStorage.getItem(deviceKey('workout', owner))).toBeNull();
 
-            const initial = getInitialLocalWorkout();
+            const initial = getInitialLocalWorkout(owner);
             expect(initial).not.toBeNull();
             expect(initial?.exercises).toHaveLength(2);
             expect(initial?.exercises[0].id).toMatch(/^se_/);
             expect(initial?.exercises[0].sets[0].id).toMatch(/^s_/);
             expect(initial?.exercises[0].sets[0].rir).toBe(0);
             expect(initial?.exercises[1].id).toBe('se_preserved');
-            expect(JSON.parse(localStorage.getItem(deviceKey('workout'))!).exercises[0].id).toBe(initial?.exercises[0].id);
+            const saved = unwrapWorkoutDeviceSnapshot(JSON.parse(readDeviceValueStrict('workout', owner)!), owner).workout as WorkoutSession;
+            expect(saved.exercises[0].id).toBe(initial?.exercises[0].id);
+            expect(saved.exercises[0].sets[0].id).toBe(initial?.exercises[0].sets[0].id);
+            expect(localStorage.getItem(sealedKey)).toMatch(/^tlb-sealed:v1:/);
+            expect(localStorage.getItem(sealedKey)).not.toBe(originalCiphertext);
+            expect(localStorage.getItem(deviceKey('workout', owner))).toBeNull();
+            expect(getInitialLocalWorkout(owner)).toMatchObject(initial as WorkoutSession);
         });
     });
 
