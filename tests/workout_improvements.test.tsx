@@ -1,4 +1,6 @@
-import { deviceKey } from '../src/lib/sync/deviceStorage';
+import { deviceKey, protectedDeviceKey } from '../src/lib/sync/deviceStorage';
+import { captureSession } from '../src/lib/sync/session';
+import { prepareUnlockedTestArchive } from './secureVaultFixture';
 import React from 'react';
 import { describe, test, expect, beforeEach } from 'vitest';
 import { screen, act, fireEvent } from '@testing-library/react';
@@ -11,7 +13,7 @@ import TrainingExercises from '../src/components/Training/TrainingExercises';
 import { FoodItemRow } from '../src/components/Nutrition/archive/FoodItemRow';
 import TrainingView from '../src/components/Training/TrainingView';
 import WorkoutTimer from '../src/components/Training/WorkoutTimer';
-import { resetGlobalWorkoutTimer } from '../src/lib/utils/timer';
+import { readWorkoutTimerSnapshot, resetGlobalWorkoutTimer, writeWorkoutTimerSnapshot } from '../src/lib/utils/timer';
 import SettingsView from '../src/components/SettingsView';
 import MuscleModel from '../src/components/Training/MuscleModel';
 import { useHomeView } from '../src/hooks/useHomeView';
@@ -77,20 +79,29 @@ describe('Workout Improvements & History Edit Suite', () => {
   });
 
   describe('2. Top Timer Reset on Session Actions', () => {
-    test('resetGlobalWorkoutTimer persists stopped snapshot and updates displayed timer', () => {
-      localStorage.setItem(deviceKey('timer'), JSON.stringify({
-        version: 1, state: 'running', startTime: Date.now() - 5000, accumulated: 0,
-      }));
+    test('resetGlobalWorkoutTimer persists stopped snapshot and updates displayed timer', async () => {
+      const owner = captureSession().owner;
+      await prepareUnlockedTestArchive(owner);
+      const running = { version: 1 as const, state: 'running' as const, startTime: Date.now() - 5000, accumulated: 0 };
+      writeWorkoutTimerSnapshot(running, owner);
+      const sealedKey = protectedDeviceKey('timer', owner);
+      const before = localStorage.getItem(sealedKey);
+      expect(before).toMatch(/^tlb-sealed:v1:/);
+      expect(localStorage.getItem(deviceKey('timer', owner))).toBeNull();
 
       const { container } = renderWithProviders(<WorkoutTimer />);
+      expect(readWorkoutTimerSnapshot(owner)).toEqual(running);
 
       act(() => {
-        expect(resetGlobalWorkoutTimer()).toBe(true);
+        expect(resetGlobalWorkoutTimer(owner)).toBe(true);
       });
 
-      expect(JSON.parse(localStorage.getItem(deviceKey('timer'))!)).toEqual({
+      expect(readWorkoutTimerSnapshot(owner)).toEqual({
         version: 1, state: 'stopped', startTime: 0, accumulated: 0,
       });
+      expect(localStorage.getItem(sealedKey)).toMatch(/^tlb-sealed:v1:/);
+      expect(localStorage.getItem(sealedKey)).not.toBe(before);
+      expect(localStorage.getItem(deviceKey('timer', owner))).toBeNull();
       expect(container.textContent).toContain('00:00');
     });
   });
