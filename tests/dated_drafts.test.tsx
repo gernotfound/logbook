@@ -129,26 +129,33 @@ it('prevents a mounted old form from publishing stale health data after a cross-
     expect(localStorage.getItem(key)).toBe(original);
 });
 
-it('stamps a new measurement draft and fences it after the generation changes', () => {
+it('stamps a new measurement draft and fences it after the generation changes', async () => {
     localStorage.removeItem('logbook_is_guest');
     invalidateSession();
     const owner = 'user:' + mockFirebaseAuth.currentUser!.uid;
-    const key = deviceKey('draft:measurement:2026-09-11', owner);
+    const name = 'draft:measurement:2026-09-11';
+    const key = deviceKey(name, owner);
+    const sealedKey = protectedDeviceKey(name, owner);
     const marker = `logbook:v2:${owner}:health-consent-generation`;
     localStorage.setItem(marker, '3');
+    await prepareUnlockedTestArchive(owner);
     useAppStore.setState({ userData: data(), dataOwner: owner, localPersistenceBlocked: false });
     const hook = renderHook(() => useNutritionMeasurements('2026-09-11'));
     act(() => hook.result.current.setWeight('77'));
-    const raw = localStorage.getItem(key);
+    const raw = readFencedDatedDraftImage(name, owner).raw;
+    const ciphertext = localStorage.getItem(sealedKey);
+    expect(ciphertext).toMatch(/^tlb-sealed:v1:/);
+    expect(localStorage.getItem(key)).toBeNull();
     expect(JSON.parse(raw!)).toMatchObject({
         __logbookDatedDraft: 2, owner, consentRevision: 3, values: { weight: '77' },
     });
-    expect(readFencedDatedDraft('draft:measurement:2026-09-11', owner)?.weight).toBe('77');
+    expect(readFencedDatedDraft(name, owner)?.weight).toBe('77');
     hook.unmount();
     localStorage.setItem(marker, '5');
-    expect(() => readFencedDatedDraft('draft:measurement:2026-09-11', owner))
+    expect(() => readFencedDatedDraft(name, owner))
         .toThrow(UnverifiedDatedDraftEpochError);
-    expect(localStorage.getItem(key)).toBe(raw);
+    expect(localStorage.getItem(sealedKey)).toBe(ciphertext);
+    expect(localStorage.getItem(key)).toBeNull();
 });
 
 it('rejects altered owner and revision in a stamped draft without replacing it', () => {
@@ -628,27 +635,35 @@ it('fails closed when a dated successor references a missing predecessor', () =>
     recovery.unmount();
 });
 
-it('does not create a new writer when an untouched recovered draft is flushed', () => {
+it('does not create a new writer when an untouched recovered draft is flushed', async () => {
     const owner = storageOwner();
+    await prepareUnlockedTestArchive(owner);
     const name = 'draft:measurement:2026-09-11';
+    const sealedKey = protectedDeviceKey(name, owner);
     const initial = renderHook(() => useNutritionMeasurements('2026-09-11'));
     act(() => initial.result.current.setWeight('75'));
     initial.unmount();
     const before = readDatedWriterEvidence(owner, name);
     expect(before).toHaveLength(1);
     const canonical = readFencedDatedDraftImage(name, owner).raw;
+    const ciphertext = localStorage.getItem(sealedKey);
+    expect(ciphertext).toMatch(/^tlb-sealed:v1:/);
+    expect(localStorage.getItem(deviceKey(name, owner))).toBeNull();
 
     const recovered = renderHook(() => useNutritionMeasurements('2026-09-11'));
     expect(recovered.result.current.weight).toBe('75');
     act(() => draftRegistry.flushAll({ strict: true }));
     expect(readDatedWriterEvidence(owner, name)).toEqual(before);
     expect(readFencedDatedDraftImage(name, owner).raw).toBe(canonical);
+    expect(localStorage.getItem(sealedKey)).toBe(ciphertext);
+    expect(localStorage.getItem(deviceKey(name, owner))).toBeNull();
     expect(useAppStore.getState().localPersistenceBlocked).toBe(false);
     recovered.unmount();
 });
 
 it('preserves a mounted old editor\'s next edit when a second confirmed form consumed its witness', async () => {
     const owner = storageOwner();
+    await prepareUnlockedTestArchive(owner);
     const name = 'draft:measurement:2026-09-11';
     const dispatch = vi.fn().mockResolvedValue({ ok: true, status: 'synced' } as SyncResult);
     useAppStore.setState({ dispatchDomainOperation: dispatch });
@@ -656,6 +671,9 @@ it('preserves a mounted old editor\'s next edit when a second confirmed form con
     act(() => original.result.current.setWeight('75'));
     const [originalWitness] = readDatedWriterEvidence(owner, name);
     expect(originalWitness.values.weight).toBe('75');
+    const originalCiphertext = localStorage.getItem(protectedDeviceKey(originalWitness.name, owner));
+    expect(originalCiphertext).toMatch(/^tlb-sealed:v1:/);
+    expect(localStorage.getItem(deviceKey(originalWitness.name, owner))).toBeNull();
 
     const confirmer = renderHook(() => useNutritionMeasurements('2026-09-11'));
     expect(confirmer.result.current.weight).toBe('75');
@@ -664,6 +682,9 @@ it('preserves a mounted old editor\'s next edit when a second confirmed form con
     expect(dispatch).toHaveBeenCalledTimes(1);
     expect(readFencedDatedDraft(name, owner)).toBeNull();
     expect(readDatedWriterEvidence(owner, name)).toHaveLength(0);
+    const tombstone = localStorage.getItem(protectedDeviceKey(name, owner));
+    expect(tombstone).toMatch(/^tlb-sealed:v1:/);
+    expect(localStorage.getItem(protectedDeviceKey(originalWitness.name, owner))).toBeNull();
 
     // The first mounted form's slot has been consumed by a different
     // acknowledged editor. Its NEW keystroke must be resealed under a new
@@ -672,7 +693,11 @@ it('preserves a mounted old editor\'s next edit when a second confirmed form con
     const [newWitness] = readDatedWriterEvidence(owner, name);
     expect(newWitness.name).not.toBe(originalWitness.name);
     expect(newWitness.values.weight).toBe('77');
+    expect(localStorage.getItem(protectedDeviceKey(newWitness.name, owner))).toMatch(/^tlb-sealed:v1:/);
+    expect(localStorage.getItem(deviceKey(newWitness.name, owner))).toBeNull();
     expect(readFencedDatedDraft(name, owner)).toBeNull();
+    expect(localStorage.getItem(protectedDeviceKey(name, owner))).toBe(tombstone);
+    expect(localStorage.getItem(deviceKey(name, owner))).toBeNull();
     expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
     expect(dispatch).toHaveBeenCalledTimes(1);
     original.unmount();
@@ -681,16 +706,23 @@ it('preserves a mounted old editor\'s next edit when a second confirmed form con
 
 it('removes only committed editor evidence after durable business save', async () => {
     const owner = storageOwner();
+    await prepareUnlockedTestArchive(owner);
     const name = 'draft:measurement:2026-09-11';
     const dispatch = vi.fn().mockResolvedValue({ ok: true, status: 'synced' } as SyncResult);
     useAppStore.setState({ dispatchDomainOperation: dispatch });
     const hook = renderHook(() => useNutritionMeasurements('2026-09-11'));
     act(() => hook.result.current.setWeight('75'));
-    expect(readDatedWriterEvidence(owner, name)).toHaveLength(1);
+    const [witness] = readDatedWriterEvidence(owner, name);
+    expect(witness.values.weight).toBe('75');
+    expect(localStorage.getItem(protectedDeviceKey(witness.name, owner))).toMatch(/^tlb-sealed:v1:/);
+    expect(localStorage.getItem(deviceKey(witness.name, owner))).toBeNull();
     await act(async () => { await hook.result.current.calculateAndSave(); });
     expect(dispatch).toHaveBeenCalledTimes(1);
     expect(readDatedWriterEvidence(owner, name)).toHaveLength(0);
     expect(readFencedDatedDraftImage(name, owner).values).toBeNull();
+    expect(localStorage.getItem(protectedDeviceKey(witness.name, owner))).toBeNull();
+    expect(localStorage.getItem(protectedDeviceKey(name, owner))).toMatch(/^tlb-sealed:v1:/);
+    expect(localStorage.getItem(deviceKey(name, owner))).toBeNull();
     hook.unmount();
 });
 
@@ -725,26 +757,40 @@ it('blocks malformed dated writer witness rather than treating recovery storage 
 
 it('advances the observed image after consecutive edits and clears only its own committed draft', async () => {
     const owner = storageOwner();
+    await prepareUnlockedTestArchive(owner);
     const name = 'draft:measurement:2026-09-11';
+    const sealedKey = protectedDeviceKey(name, owner);
     const dispatch = vi.fn().mockResolvedValue({ ok: true, status: 'synced' } as SyncResult);
     useAppStore.setState({ dispatchDomainOperation: dispatch });
     const hook = renderHook(() => useNutritionMeasurements('2026-09-11'));
     act(() => hook.result.current.setWeight('75'));
     const first = readFencedDatedDraftImage(name, owner).raw;
+    const firstCiphertext = localStorage.getItem(sealedKey);
+    expect(firstCiphertext).toMatch(/^tlb-sealed:v1:/);
     act(() => hook.result.current.setWeight('76'));
     const second = readFencedDatedDraftImage(name, owner).raw;
+    const secondCiphertext = localStorage.getItem(sealedKey);
     expect(second).not.toBe(first);
+    expect(secondCiphertext).toMatch(/^tlb-sealed:v1:/);
+    expect(secondCiphertext).not.toBe(firstCiphertext);
+    expect(localStorage.getItem(deviceKey(name, owner))).toBeNull();
     expect(useAppStore.getState().localPersistenceBlocked).toBe(false);
 
     await act(async () => { await hook.result.current.calculateAndSave(); });
     expect(dispatch).toHaveBeenCalledTimes(1);
     expect(readFencedDatedDraft(name, owner)).toBeNull();
+    expect(readFencedDatedDraftImage(name, owner).raw).toContain('"values":null');
+    expect(localStorage.getItem(sealedKey)).toMatch(/^tlb-sealed:v1:/);
+    expect(localStorage.getItem(sealedKey)).not.toBe(secondCiphertext);
+    expect(localStorage.getItem(deviceKey(name, owner))).toBeNull();
     expect(useAppStore.getState().localPersistenceBlocked).toBe(false);
 });
 
 it('allows the same mounted form to edit again after a confirmed save and retained tombstone', async () => {
     const owner = storageOwner();
+    await prepareUnlockedTestArchive(owner);
     const name = 'draft:measurement:2026-09-11';
+    const sealedKey = protectedDeviceKey(name, owner);
     const dispatch = vi.fn().mockResolvedValue({ ok: true, status: 'synced' } as SyncResult);
     useAppStore.setState({ dispatchDomainOperation: dispatch });
     const hook = renderHook(() => useNutritionMeasurements('2026-09-11'));
@@ -753,10 +799,15 @@ it('allows the same mounted form to edit again after a confirmed save and retain
     const deleted = readFencedDatedDraftImage(name, owner);
     expect(deleted.values).toBeNull();
     expect(deleted.raw).not.toBeNull();
+    const deletedCiphertext = localStorage.getItem(sealedKey);
+    expect(deletedCiphertext).toMatch(/^tlb-sealed:v1:/);
 
     act(() => hook.result.current.setWeight('76'));
     expect(readFencedDatedDraft(name, owner)?.weight).toBe('76');
     expect(readFencedDatedDraftImage(name, owner).raw).not.toBe(deleted.raw);
+    expect(localStorage.getItem(sealedKey)).toMatch(/^tlb-sealed:v1:/);
+    expect(localStorage.getItem(sealedKey)).not.toBe(deletedCiphertext);
+    expect(localStorage.getItem(deviceKey(name, owner))).toBeNull();
     expect(useAppStore.getState().localPersistenceBlocked).toBe(false);
     hook.unmount();
 });
@@ -876,11 +927,18 @@ it('rolls the implicit day at local midnight while preserving yesterday drafts',
     expect(readFencedDatedDraft(name, owner)?.sleepHours).toBe('07:30');
     expect(localStorage.getItem(protectedDeviceKey(name, owner))).toBe(ciphertext);
 });
-it('preserves a dirty sleep form when an unrelated meal is received', () => {
+it('preserves a dirty sleep form when an unrelated meal is received', async () => {
+    const owner = storageOwner();
+    await prepareUnlockedTestArchive(owner);
     const hook = renderHook(() => useSleepMeasurements());
+    const name = 'draft:sleep:' + hook.result.current.selectedDate;
     act(() => hook.result.current.setSleepHours('07:30'));
     act(() => useAppStore.setState({ userData: data({ [hook.result.current.selectedDate]: day(hook.result.current.selectedDate, { sleepHours: '08:00', kcal: 2000 }) }) }));
     expect(hook.result.current.sleepHours).toBe('07:30');
+    expect(readFencedDatedDraft(name, owner)?.sleepHours).toBe('07:30');
+    expect(localStorage.getItem(protectedDeviceKey(name, owner))).toMatch(/^tlb-sealed:v1:/);
+    expect(localStorage.getItem(deviceKey(name, owner))).toBeNull();
+    hook.unmount();
 });
 it('stays in the measurement editor when draft cancellation fails and navigates only after retry', async () => {
     const owner = storageOwner();
@@ -1030,6 +1088,10 @@ it('retains a newer edit and rejects double submission while a save is pending',
     expect(localStorage.getItem(deviceKey(name, owner))).toBeNull();
 });
 it('records body-fat provenance for manual and derived measurements', async () => {
+    const owner = storageOwner();
+    await prepareUnlockedTestArchive(owner);
+    const manualName = 'draft:measurement:2026-09-11';
+    const derivedName = 'draft:measurement:2026-09-12';
     const dispatch = vi.spyOn(useAppStore.getState(), 'dispatchDomainOperation')
         .mockResolvedValue({ ok: true, status: 'synced' } as SyncResult);
 
@@ -1047,6 +1109,9 @@ it('records body-fat provenance for manual and derived measurements', async () =
             bfProvenance: { method: 'manual' },
         }),
     }));
+    expect(readFencedDatedDraftImage(manualName, owner).raw).toContain('"values":null');
+    expect(localStorage.getItem(protectedDeviceKey(manualName, owner))).toMatch(/^tlb-sealed:v1:/);
+    expect(localStorage.getItem(deviceKey(manualName, owner))).toBeNull();
     manual.unmount();
 
     dispatch.mockClear();
@@ -1068,5 +1133,9 @@ it('records body-fat provenance for manual and derived measurements', async () =
             }),
         }),
     }));
+    expect(readFencedDatedDraftImage(derivedName, owner).raw).toContain('"values":null');
+    expect(localStorage.getItem(protectedDeviceKey(derivedName, owner))).toMatch(/^tlb-sealed:v1:/);
+    expect(localStorage.getItem(deviceKey(derivedName, owner))).toBeNull();
+    derived.unmount();
 });
 
