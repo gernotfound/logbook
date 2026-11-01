@@ -77,15 +77,21 @@ describe.each(['input', 'textarea'] as const)('owner-scoped buffered %s recovery
         view.unmount();
     });
 
-    it('writes a stamped epoch-bound record and never flushes a mounted stale editor', () => {
+    it('writes a stamped epoch-bound record and never flushes a mounted stale editor', async () => {
         const key = recoveryKey(kind);
         const owner = captureSession().owner;
+        await prepareUnlockedTestArchive(owner);
         const marker = `logbook:v2:${owner}:health-consent-generation`;
         localStorage.setItem(marker, '3');
         const onChange = vi.fn();
         const view = render(field(kind, onChange));
         fireEvent.change(editor(), { target: { value: 'private current edit' } });
-        const raw = localStorage.getItem(key);
+        const name = `draft:buffered:${kind}:stable-draft`;
+        const raw = readBufferedDraftSnapshot(name, owner).raw;
+        const sealedKey = protectedDeviceKey(name, owner);
+        const ciphertext = localStorage.getItem(sealedKey);
+        expect(ciphertext).toMatch(/^tlb-sealed:v1:/);
+        expect(localStorage.getItem(key)).toBeNull();
         expect(JSON.parse(raw!)).toMatchObject({
             __logbookBufferedDraft: 1, owner,
             name: `draft:buffered:${kind}:stable-draft`,
@@ -96,26 +102,35 @@ describe.each(['input', 'textarea'] as const)('owner-scoped buffered %s recovery
         expect(() => requiredUpdateRecoveryRegistry.captureAll()).toThrow(AggregateError);
         fireEvent.blur(editor());
         expect(onChange).not.toHaveBeenCalled();
-        expect(localStorage.getItem(key)).toBe(raw);
+        expect(localStorage.getItem(sealedKey)).toBe(ciphertext);
+        expect(localStorage.getItem(key)).toBeNull();
         expect(useAppStore.getState().saveError).toMatch(/bozza/i);
         view.unmount();
     });
 
-    it('refuses automatic cleanup of a buffered record from a previous revision', () => {
+    it('refuses automatic cleanup of a buffered record from a previous revision', async () => {
         const key = recoveryKey(kind);
         const owner = captureSession().owner;
+        await prepareUnlockedTestArchive(owner);
         const marker = `logbook:v2:${owner}:health-consent-generation`;
         localStorage.setItem(marker, '3');
         const onChange = vi.fn();
         const view = render(field(kind, onChange));
         fireEvent.change(editor(), { target: { value: '30' } });
-        const raw = localStorage.getItem(key);
+        const name = `draft:buffered:${kind}:stable-draft`;
+        const sealedKey = protectedDeviceKey(name, owner);
+        const raw = readBufferedDraftSnapshot(name, owner).raw;
+        const ciphertext = localStorage.getItem(sealedKey);
+        expect(ciphertext).toMatch(/^tlb-sealed:v1:/);
+        expect(localStorage.getItem(key)).toBeNull();
         fireEvent.blur(editor());
         expect(onChange).toHaveBeenCalledTimes(1);
         localStorage.setItem(marker, '5');
         const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
         view.rerender(field(kind, onChange, kind === 'input' ? '30' : '30'));
-        expect(localStorage.getItem(key)).toBe(raw);
+        expect(localStorage.getItem(sealedKey)).toBe(ciphertext);
+        expect(localStorage.getItem(key)).toBeNull();
+        expect(JSON.parse(raw!)).toMatchObject({ consentRevision: 3, value: '30' });
         expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
         expect(consoleError).toHaveBeenCalled();
         view.unmount();
@@ -143,13 +158,17 @@ describe.each(['input', 'textarea'] as const)('owner-scoped buffered %s recovery
         view.unmount();
     });
 
-    it('reads the recovery key at mount, not on unrelated rerenders', () => {
+    it('reads the recovery key at mount, not on unrelated rerenders', async () => {
         const onChange = vi.fn();
-        const key = recoveryKey(kind);
+        const owner = captureSession().owner;
+        await prepareUnlockedTestArchive(owner);
+        const name = `draft:buffered:${kind}:stable-draft`;
+        const key = protectedDeviceKey(name, owner);
         const previousReads = localStorageMock.getItem.mock.calls.filter(([readKey]) => readKey === key).length;
         const view = render(field(kind, onChange));
         const initialReads = localStorageMock.getItem.mock.calls.filter(([readKey]) => readKey === key).length;
         expect(initialReads - previousReads).toBe(1);
+        expect(localStorage.getItem(deviceKey(name, owner))).toBeNull();
 
         // A transient failure *after* mount must not turn an unrelated React
         // rerender into another strict device-storage read or a global block.
@@ -165,8 +184,11 @@ describe.each(['input', 'textarea'] as const)('owner-scoped buffered %s recovery
         view.unmount();
     });
 
-    it('fails closed after commit when the initial owner-scoped read throws', () => {
-        const key = recoveryKey(kind);
+    it('fails closed after commit when the initial owner-scoped read throws', async () => {
+        const owner = captureSession().owner;
+        await prepareUnlockedTestArchive(owner);
+        const name = `draft:buffered:${kind}:stable-draft`;
+        const key = protectedDeviceKey(name, owner);
         const onChange = vi.fn();
         const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
         localStorageMock.getItem.mockImplementation((readKey: string) => {
@@ -197,6 +219,7 @@ describe.each(['input', 'textarea'] as const)('owner-scoped buffered %s recovery
             const reads = localStorageMock.getItem.mock.calls.filter(([readKey]) => readKey === key).length;
             view.rerender(<CommitBoundary />);
             expect(localStorageMock.getItem.mock.calls.filter(([readKey]) => readKey === key)).toHaveLength(reads);
+            expect(localStorage.getItem(deviceKey(name, owner))).toBeNull();
             view.unmount();
         } finally {
             unsubscribe();
@@ -235,8 +258,11 @@ describe.each(['input', 'textarea'] as const)('owner-scoped buffered %s recovery
         view.unmount();
     });
 
-    it('blocks persistence on a device write failure and refuses unsafe update recovery', () => {
-        const key = recoveryKey(kind);
+    it('blocks persistence on a device write failure and refuses unsafe update recovery', async () => {
+        const owner = captureSession().owner;
+        await prepareUnlockedTestArchive(owner);
+        const name = `draft:buffered:${kind}:stable-draft`;
+        const key = protectedDeviceKey(name, owner);
         const onChange = vi.fn();
         const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
         localStorageMock.setItem.mockImplementation((writtenKey: string, value: string) => {
@@ -250,6 +276,11 @@ describe.each(['input', 'textarea'] as const)('owner-scoped buffered %s recovery
         expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
         expect(useAppStore.getState().syncHealth).toBe('failed');
         expect(localStorage.getItem(key)).toBeNull();
+        expect(localStorage.getItem(deviceKey(name, owner))).toBeNull();
+        const [witness] = readBufferedWriterEvidence(owner, name);
+        expect(witness.value).toBe('Bozza nuova');
+        expect(localStorage.getItem(protectedDeviceKey(witness.name, owner))).toMatch(/^tlb-sealed:v1:/);
+        expect(localStorage.getItem(deviceKey(witness.name, owner))).toBeNull();
         expect(onChange).not.toHaveBeenCalled();
         expect(() => requiredUpdateRecoveryRegistry.captureAll()).toThrow(AggregateError);
         expect(consoleError).toHaveBeenCalled();
@@ -284,19 +315,26 @@ describe.each(['input', 'textarea'] as const)('owner-scoped buffered %s recovery
         expect(onChange).not.toHaveBeenCalled();
     });
 
-    it('keeps the original owner draft and never flushes it after session invalidation', () => {
-        const key = recoveryKey(kind);
+    it('keeps the original owner draft and never flushes it after session invalidation', async () => {
+        const owner = captureSession().owner;
+        await prepareUnlockedTestArchive(owner);
+        const name = `draft:buffered:${kind}:stable-draft`;
+        const key = protectedDeviceKey(name, owner);
         const onChange = vi.fn();
         const view = render(field(kind, onChange));
         fireEvent.change(editor(), { target: { value: 'solo per questa sessione' } });
 
-        expect(localStorage.getItem(key)).toBe('solo per questa sessione');
+        const ciphertext = localStorage.getItem(key);
+        expect(ciphertext).toMatch(/^tlb-sealed:v1:/);
+        expect(localStorage.getItem(deviceKey(name, owner))).toBeNull();
+        expect(readBufferedDraftSnapshot(name, owner).value).toBe('solo per questa sessione');
         expect(onChange).not.toHaveBeenCalled();
         invalidateSession();
         view.unmount();
 
         expect(onChange).not.toHaveBeenCalled();
-        expect(localStorage.getItem(key)).toBe('solo per questa sessione');
+        expect(localStorage.getItem(key)).toBe(ciphertext);
+        expect(localStorage.getItem(deviceKey(name, owner))).toBeNull();
     });
 });
 
@@ -350,10 +388,11 @@ describe.each(['input', 'textarea'] as const)('workout-scoped buffered %s recove
         view.unmount();
     });
 
-    it('does not replay a prior workout and does not flush its mounted input into the next workout', () => {
+    it('does not replay a prior workout and does not flush its mounted input into the next workout', async () => {
         const owner = captureSession().owner;
-        const firstKey = deviceKey(name(firstId), owner);
-        const secondKey = deviceKey(name(secondId), owner);
+        await prepareUnlockedTestArchive(owner);
+        const firstKey = protectedDeviceKey(name(firstId), owner);
+        const secondKey = protectedDeviceKey(name(secondId), owner);
         localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '3');
         activate(firstId);
         const firstChange = vi.fn();
@@ -361,7 +400,9 @@ describe.each(['input', 'textarea'] as const)('workout-scoped buffered %s recove
         const view = render(scoped(firstId, firstChange));
         fireEvent.change(editor(), { target: { value: 'first workout secret' } });
         const firstRaw = localStorage.getItem(firstKey);
-        expect(JSON.parse(firstRaw!)).toMatchObject({
+        expect(firstRaw).toMatch(/^tlb-sealed:v1:/);
+        expect(localStorage.getItem(deviceKey(name(firstId), owner))).toBeNull();
+        expect(JSON.parse(readDeviceValueStrict(name(firstId), owner)!)).toMatchObject({
             __logbookBufferedDraft: 1, owner,
             name: name(firstId), consentRevision: 3, value: 'first workout secret',
         });
@@ -378,7 +419,9 @@ describe.each(['input', 'textarea'] as const)('workout-scoped buffered %s recove
 
         fireEvent.change(editor(), { target: { value: 'second workout value' } });
         const secondRaw = localStorage.getItem(secondKey);
-        expect(JSON.parse(secondRaw!)).toMatchObject({
+        expect(secondRaw).toMatch(/^tlb-sealed:v1:/);
+        expect(localStorage.getItem(deviceKey(name(secondId), owner))).toBeNull();
+        expect(JSON.parse(readDeviceValueStrict(name(secondId), owner)!)).toMatchObject({
             name: name(secondId), value: 'second workout value',
         });
         expect(localStorage.getItem(firstKey)).toBe(firstRaw);
@@ -389,29 +432,36 @@ describe.each(['input', 'textarea'] as const)('workout-scoped buffered %s recove
         expect(editor().value).toBe('first workout secret');
         expect(localStorage.getItem(firstKey)).toBe(firstRaw);
         expect(localStorage.getItem(secondKey)).toBe(secondRaw);
+        expect(localStorage.getItem(deviceKey(name(firstId), owner))).toBeNull();
+        expect(localStorage.getItem(deviceKey(name(secondId), owner))).toBeNull();
         reopening.unmount();
     });
 
-    it('removes only the matching workout draft after parent confirms the same value', () => {
+    it('removes only the matching workout draft after parent confirms the same value', async () => {
         const owner = captureSession().owner;
-        const firstKey = deviceKey(name(firstId), owner);
-        const secondKey = deviceKey(name(secondId), owner);
+        await prepareUnlockedTestArchive(owner);
+        const firstKey = protectedDeviceKey(name(firstId), owner);
+        const secondKey = protectedDeviceKey(name(secondId), owner);
         localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '3');
         activate(firstId);
         const onChange = vi.fn();
         const view = render(scoped(firstId, onChange));
         fireEvent.change(editor(), { target: { value: '6,5' } });
         const firstRaw = localStorage.getItem(firstKey);
-        const otherValue = JSON.stringify({
-            __logbookBufferedDraft: 1, owner, name: name(secondId),
-            consentRevision: 3, value: 'different workout',
-        });
-        localStorage.setItem(secondKey, otherValue);
+        expect(firstRaw).toMatch(/^tlb-sealed:v1:/);
+        expect(localStorage.getItem(deviceKey(name(firstId), owner))).toBeNull();
+        writeBufferedDraft(name(secondId), owner, 'different workout', '3');
+        const otherValue = localStorage.getItem(secondKey);
+        expect(otherValue).toMatch(/^tlb-sealed:v1:/);
+        expect(localStorage.getItem(deviceKey(name(secondId), owner))).toBeNull();
         fireEvent.blur(editor());
         expect(onChange).toHaveBeenCalledExactlyOnceWith(kind === 'input' ? '6.5' : '6,5');
         view.rerender(scoped(firstId, onChange, kind === 'input' ? '6.5' : '6,5'));
         expect(localStorage.getItem(firstKey)).toBeNull();
         expect(localStorage.getItem(secondKey)).toBe(otherValue);
+        expect(readBufferedDraftSnapshot(name(secondId), owner).value).toBe('different workout');
+        expect(localStorage.getItem(deviceKey(name(firstId), owner))).toBeNull();
+        expect(localStorage.getItem(deviceKey(name(secondId), owner))).toBeNull();
         expect(firstRaw).not.toBeNull();
         view.unmount();
     });
@@ -704,9 +754,10 @@ describe.each(['input', 'textarea'] as const)('independent same-workout %s write
         },
     );
 
-    it('keeps a successfully written independent draft when canonical storage fails', () => {
+    it('keeps a successfully written independent draft when canonical storage fails', async () => {
         const owner = captureSession().owner;
-        const canonicalKey = deviceKey(draftName, owner);
+        await prepareUnlockedTestArchive(owner);
+        const canonicalKey = protectedDeviceKey(draftName, owner);
         const report = vi.spyOn(console, 'error').mockImplementation(() => {});
         localStorageMock.setItem.mockImplementation((key: string, value: string) => {
             if (key === canonicalKey) throw new DOMException('quota exceeded', 'QuotaExceededError');
@@ -715,8 +766,12 @@ describe.each(['input', 'textarea'] as const)('independent same-workout %s write
         const view = mount(vi.fn());
         fireEvent.change(edited(view), { target: { value: 'Retained private edit' } });
         expect(localStorage.getItem(canonicalKey)).toBeNull();
-        expect(readBufferedWriterEvidence(owner, draftName).map(x => x.value))
-            .toEqual(['Retained private edit']);
+        expect(localStorage.getItem(deviceKey(draftName, owner))).toBeNull();
+        const [witness] = readBufferedWriterEvidence(owner, draftName);
+        expect(witness.value).toBe('Retained private edit');
+        const ciphertext = localStorage.getItem(protectedDeviceKey(witness.name, owner));
+        expect(ciphertext).toMatch(/^tlb-sealed:v1:/);
+        expect(localStorage.getItem(deviceKey(witness.name, owner))).toBeNull();
         expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
         view.unmount();
         expect(report).toHaveBeenCalled();
