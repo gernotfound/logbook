@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, renderHook, act } from '@testing-library/react';
-import { renderWithProviders, emptyUserData } from './setup';
+import { renderWithProviders, emptyUserData, idbStore } from './setup';
 import { useAppStore } from '../src/store/useAppStore';
 import { useDialogStore } from '../src/store/useDialogStore';
 import { useTrainingExercises } from '../src/hooks/useTrainingExercises';
@@ -122,13 +122,14 @@ describe('Worker M2: Exercise Library UI & Food Form Real-Time Calorie Calculati
         });
 
         it('handleSaveExercise creates new exercise with isBodyweight and equipmentWeight', async () => {
-            useAppStore.setState({
-                dataOwner: 'user:test-user-id',
-                userData: {
+            const owner = captureSession().owner;
+            const initialData = {
                     ...emptyUserData,
                     library: []
-                }
-            });
+                };
+            await prepareUnlockedTestArchive(owner);
+            await initializeLocal(owner, initialData);
+            useAppStore.setState({ dataOwner: owner, userData: initialData });
 
             const { result } = renderHook(() => useTrainingExercises());
 
@@ -147,6 +148,8 @@ describe('Worker M2: Exercise Library UI & Food Form Real-Time Calorie Calculati
             expect(updatedLib[0].name).toBe('Pull-up corpo libero');
             expect(updatedLib[0].isBodyweight).toBe(true);
             expect(updatedLib[0].equipmentWeight).toBe(2.5);
+            expect((await readLocal(owner))?.data.library?.[0]?.equipmentWeight).toBe(2.5);
+            expect(idbStore['logbook:v2:' + owner]).toMatch(/^tlb-sealed:v1:/);
         });
 
         it('handleSaveExercise updates existing exercise and preserves isBodyweight & equipmentWeight', async () => {
@@ -158,13 +161,14 @@ describe('Worker M2: Exercise Library UI & Food Form Real-Time Calorie Calculati
                 trackingType: 'weight_reps'
             };
 
-            useAppStore.setState({
-                dataOwner: 'user:test-user-id',
-                userData: {
+            const owner = captureSession().owner;
+            const initialData = {
                     ...emptyUserData,
                     library: [existingEx]
-                }
-            });
+                };
+            await prepareUnlockedTestArchive(owner);
+            await initializeLocal(owner, initialData);
+            useAppStore.setState({ dataOwner: owner, userData: initialData });
 
             const { result } = renderHook(() => useTrainingExercises());
 
@@ -185,6 +189,8 @@ describe('Worker M2: Exercise Library UI & Food Form Real-Time Calorie Calculati
             expect(updatedLib.length).toBe(1);
             expect(updatedLib[0].id).toBe('ex-squat');
             expect(updatedLib[0].equipmentWeight).toBe(20);
+            expect((await readLocal(owner))?.data.library?.[0]?.equipmentWeight).toBe(20);
+            expect(idbStore['logbook:v2:' + owner]).toMatch(/^tlb-sealed:v1:/);
         });
 
 
@@ -220,13 +226,14 @@ describe('Worker M2: Exercise Library UI & Food Form Real-Time Calorie Calculati
                 isDefault: true
             };
 
-            useAppStore.setState({
-                dataOwner: 'user:test-user-id',
-                userData: {
+            const owner = captureSession().owner;
+            const initialData = {
                     ...emptyUserData,
                     library: [original]
-                }
-            });
+                };
+            await prepareUnlockedTestArchive(owner);
+            await initializeLocal(owner, initialData);
+            useAppStore.setState({ dataOwner: owner, userData: initialData });
 
             const { result } = renderHook(() => useTrainingExercises());
 
@@ -240,6 +247,8 @@ describe('Worker M2: Exercise Library UI & Food Form Real-Time Calorie Calculati
             expect(duplicate).toBeDefined();
             expect(duplicate?.name).not.toBe(original.name);
             expect(duplicate?.isDefault).toBe(false);
+            expect((await readLocal(owner))?.data.library?.some(ex => ex.id === duplicate?.id)).toBe(true);
+            expect(idbStore['logbook:v2:' + owner]).toMatch(/^tlb-sealed:v1:/);
         });
 
         it('handleDelete blocks catalog exercises and deletes personal exercises after confirmation', async () => {
@@ -262,9 +271,8 @@ describe('Worker M2: Exercise Library UI & Food Form Real-Time Calorie Calculati
             const showAlert = vi.fn().mockResolvedValue(undefined);
             const showConfirm = vi.fn().mockResolvedValue(true);
             useDialogStore.setState({ showAlert, showConfirm });
-            useAppStore.setState({
-                dataOwner: 'user:test-user-id',
-                userData: {
+            const owner = captureSession().owner;
+            const initialData = {
                     ...emptyUserData,
                     library: [catalogExercise, customExercise],
                     routines: [
@@ -282,8 +290,10 @@ describe('Worker M2: Exercise Library UI & Food Form Real-Time Calorie Calculati
                             exercises: [{ exId: customExercise.id, setsCount: 4 }]
                         }
                     ]
-                }
-            });
+                };
+            await prepareUnlockedTestArchive(owner);
+            await initializeLocal(owner, initialData);
+            useAppStore.setState({ dataOwner: owner, userData: initialData });
 
             const { result } = renderHook(() => useTrainingExercises());
             const stopPropagation = vi.fn();
@@ -304,6 +314,8 @@ describe('Worker M2: Exercise Library UI & Food Form Real-Time Calorie Calculati
             expect(
                 useAppStore.getState().userData?.routines?.map(routine => routine.exercises.map(exercise => exercise.exId))
             ).toEqual([[catalogExercise.id], []]);
+            expect((await readLocal(owner))?.data.library?.map(ex => ex.id)).toEqual([catalogExercise.id]);
+            expect(idbStore['logbook:v2:' + owner]).toMatch(/^tlb-sealed:v1:/);
         });
 
         it('handleRestoreExercise restores the in-memory catalog version after confirmation', async () => {
@@ -343,13 +355,14 @@ describe('Worker M2: Exercise Library UI & Food Form Real-Time Calorie Calculati
                 showConfirm,
                 showAlert: vi.fn().mockResolvedValue(undefined)
             });
-            useAppStore.setState({
-                dataOwner: 'user:test-user-id',
-                userData: {
+            const owner = captureSession().owner;
+            const initialData = {
                     ...emptyUserData,
                     library: [modified]
-                }
-            });
+                };
+            await prepareUnlockedTestArchive(owner);
+            await initializeLocal(owner, initialData);
+            useAppStore.setState({ dataOwner: owner, userData: initialData });
 
             const { result } = renderHook(() => useTrainingExercises());
 
@@ -364,6 +377,8 @@ describe('Worker M2: Exercise Library UI & Food Form Real-Time Calorie Calculati
             expect(restored?.muscles).toEqual(original.muscles);
             expect(restored?.secondaryMuscles).toEqual(original.secondaryMuscles);
             expect(restored?.sets).toEqual([]);
+            expect((await readLocal(owner))?.data.library?.find(ex => ex.id === original.id)?.notes).toBe(original.notes);
+            expect(idbStore['logbook:v2:' + owner]).toMatch(/^tlb-sealed:v1:/);
 
             await clearCatalogCache();
         });

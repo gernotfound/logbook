@@ -11,7 +11,8 @@ import { useWorkoutSetMutations } from '../src/hooks/workout/useWorkoutSetMutati
 import { useWorkoutSession } from '../src/hooks/useWorkoutSession';
 import { SessionExerciseCard } from '../src/components/Training/session/SessionExerciseCard';
 import TrainingSession from '../src/components/Training/TrainingSession';
-import { SessionExerciseSchema } from '../src/lib/schema';
+import { SessionExerciseSchema, UserDataSchema } from '../src/lib/schema';
+import { initializeLocal, readLocal } from '../src/lib/sync/localRepository';
 import { getInitialLocalWorkout } from '../src/store/slices/createWorkoutSlice';
 import type { WorkoutSession, ExerciseLibraryItem } from '../src/types';
 
@@ -51,6 +52,7 @@ const mockLibrary: ExerciseLibraryItem[] = [
 describe('Workout Reorder (R2) and Live Sync & Badges (R3) Suite', () => {
     beforeEach(() => {
         localStorage.clear();
+        useAppStore.getState().resetStore();
         useAppStore.setState({
             dataOwner: captureSession().owner,
             userData: {
@@ -109,6 +111,8 @@ describe('Workout Reorder (R2) and Live Sync & Badges (R3) Suite', () => {
         });
 
         it('1.3: startWorkout automatically generates stable id (se_...) for each exercise', async () => {
+            const owner = captureSession().owner;
+            await prepareUnlockedTestArchive(owner);
             const { result } = renderHook(() => useWorkoutSession());
 
             await act(async () => {
@@ -123,9 +127,13 @@ describe('Workout Reorder (R2) and Live Sync & Badges (R3) Suite', () => {
             expect(active?.exercises[1].id).toBeDefined();
             expect(active?.exercises[1].id).toMatch(/^se_/);
             expect(active?.exercises[0].id).not.toBe(active?.exercises[1].id);
+            expect(localStorage.getItem(protectedDeviceKey('workout', owner))).toMatch(/^tlb-sealed:v1:/);
+            expect(localStorage.getItem(deviceKey('workout', owner))).toBeNull();
         });
 
-        it('1.4: addExtraExercise assigns new unique id (se_...)', () => {
+        it('1.4: addExtraExercise assigns new unique id (se_...)', async () => {
+            const owner = captureSession().owner;
+            await prepareUnlockedTestArchive(owner);
             const initialWorkout: WorkoutSession = {
                 id: 'ws_1',
                 routineId: 'rot_1',
@@ -149,9 +157,13 @@ describe('Workout Reorder (R2) and Live Sync & Badges (R3) Suite', () => {
             expect(updated?.exercises[1].id).toBeDefined();
             expect(updated?.exercises[1].id).toMatch(/^se_/);
             expect(updated?.exercises[1].id).not.toBe('se_existing_1');
+            expect(localStorage.getItem(protectedDeviceKey('workout', owner))).toMatch(/^tlb-sealed:v1:/);
+            expect(localStorage.getItem(deviceKey('workout', owner))).toBeNull();
         });
 
         it('1.5: startEditHistoricalWorkout ensures all exercises have id', async () => {
+            const owner = captureSession().owner;
+            await prepareUnlockedTestArchive(owner);
             const historicalWorkout: WorkoutSession = {
                 id: 'w_hist_1',
                 date: '2026-08-10',
@@ -348,7 +360,9 @@ describe('Workout Reorder (R2) and Live Sync & Badges (R3) Suite', () => {
             expect(setLocalWorkout).toHaveBeenCalledTimes(3);
         });
 
-        it('2.6: moveExercise works via useWorkoutSession hook', () => {
+        it('2.6: moveExercise works via useWorkoutSession hook', async () => {
+            const owner = captureSession().owner;
+            await prepareUnlockedTestArchive(owner);
             const initialWorkout: WorkoutSession = {
                 id: 'w1',
                 exercises: [
@@ -367,6 +381,8 @@ describe('Workout Reorder (R2) and Live Sync & Badges (R3) Suite', () => {
             const active = useAppStore.getState().localWorkout;
             expect(active?.exercises[0].id).toBe('se_2');
             expect(active?.exercises[1].id).toBe('se_1');
+            expect(localStorage.getItem(protectedDeviceKey('workout', owner))).toMatch(/^tlb-sealed:v1:/);
+            expect(localStorage.getItem(deviceKey('workout', owner))).toBeNull();
         });
     });
 
@@ -521,6 +537,8 @@ describe('Workout Reorder (R2) and Live Sync & Badges (R3) Suite', () => {
     // =========================================================================
     describe('4. TrainingSession View Integration & Accordion Synchronization', () => {
         it('4.1: Moving an exercise updates its position in TrainingSession UI', async () => {
+            const owner = captureSession().owner;
+            await prepareUnlockedTestArchive(owner);
             const activeWorkout: WorkoutSession = {
                 id: 'ws_active_1',
                 routineId: 'rot_1',
@@ -533,12 +551,17 @@ describe('Workout Reorder (R2) and Live Sync & Badges (R3) Suite', () => {
                 ]
             };
 
+            const initialData = UserDataSchema.parse({
+                ...useAppStore.getState().userData!,
+                library: mockLibrary,
+                activeWorkout,
+            });
+            await initializeLocal(owner, initialData);
+            expect((await readLocal(owner))?.data.activeWorkout?.id).toBe(activeWorkout.id);
             const { container } = renderWithProviders(<TrainingSession />, {
                 localWorkout: activeWorkout,
-                userData: {
-                    ...useAppStore.getState().userData!,
-                    library: mockLibrary as any
-                }
+                userData: initialData,
+                dataOwner: owner,
             });
 
             // Exercise headings in order
@@ -560,6 +583,8 @@ describe('Workout Reorder (R2) and Live Sync & Badges (R3) Suite', () => {
         });
 
         it('4.2: Accordion panel (Storico/Setup) index synchronizes when exercise is moved', async () => {
+            const owner = captureSession().owner;
+            await prepareUnlockedTestArchive(owner);
             const activeWorkout: WorkoutSession = {
                 id: 'ws_active_1',
                 routineId: 'rot_1',
@@ -572,12 +597,17 @@ describe('Workout Reorder (R2) and Live Sync & Badges (R3) Suite', () => {
                 ]
             };
 
+            const initialData = UserDataSchema.parse({
+                ...useAppStore.getState().userData!,
+                library: mockLibrary,
+                activeWorkout,
+            });
+            await initializeLocal(owner, initialData);
+            expect((await readLocal(owner))?.data.activeWorkout?.id).toBe(activeWorkout.id);
             const { container } = renderWithProviders(<TrainingSession />, {
                 localWorkout: activeWorkout,
-                userData: {
-                    ...useAppStore.getState().userData!,
-                    library: mockLibrary as any
-                }
+                userData: initialData,
+                dataOwner: owner,
             });
 
             // Expand first exercise, then open Setup on Bench at index 0.
