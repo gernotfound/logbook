@@ -15,6 +15,8 @@ import { prepareUnlockedTestArchive } from './secureVaultFixture';
 import { initializeLocal, readLocal } from '../src/lib/sync/localRepository';
 import type { NutritionDay } from '../src/types';
 
+const realDispatchDomainOperation = useAppStore.getState().dispatchDomainOperation;
+
 describe('Empirical Challenger: Sleep Format HH:MM Adversarial Stress Test Suite', () => {
 
 
@@ -381,7 +383,7 @@ describe('Empirical Challenger: Sleep Format HH:MM Adversarial Stress Test Suite
             await prepareUnlockedTestArchive(owner);
             await initializeLocal(owner, initialData);
             // Observe the real domain writer, not a fake success response.
-            const dispatchDomainOperation = vi.fn(useAppStore.getState().dispatchDomainOperation);
+            const dispatchDomainOperation = vi.fn(realDispatchDomainOperation);
             useAppStore.setState({ userData: initialData, dataOwner: owner, dispatchDomainOperation });
 
             const { result } = renderHook(() => useSleepMeasurements());

@@ -749,6 +749,7 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
                 const initialData = { ...emptyUserData, history: originalHistory, activeWorkout: null };
                 await prepareUnlockedTestArchive(owner);
                 await initializeLocal(owner, initialData);
+                const persistedHistoryBefore = (await readLocal(owner))?.data.history;
                 useAppStore.setState({ userData: initialData, dataOwner: owner, localWorkout: null });
 
                 const { result } = renderHook(() => useWorkoutSession());
@@ -779,7 +780,7 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
                 expect(state.localWorkout).toBeNull();
                 expect(state.userData?.history?.[0].exercises.length).toBe(1);
                 expect(state.userData?.history?.[0].exercises[0].exId).toBe('ex1');
-                expect((await readLocal(owner))?.data.history).toEqual(originalHistory);
+                expect((await readLocal(owner))?.data.history).toEqual(persistedHistoryBefore);
                 expect(readDeviceValueStrict('history-editor-context', owner)).toBeNull();
                 expect(localStorage.getItem(protectedDeviceKey('history-editor-context', owner))).toBeNull();
                 expect(idbStore['logbook:v2:' + owner]).toMatch(/^tlb-sealed:v1:/);
