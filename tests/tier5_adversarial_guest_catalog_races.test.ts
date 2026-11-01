@@ -101,6 +101,8 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
         });
 
         it('T5.5.2: 10 rapid concurrent saveUserData() calls coalesce into a single batched DB.saveUserData call and all Promises resolve', async () => {
+            const owner = storageOwner();
+            await prepareUnlockedTestArchive(owner);
             vi.useFakeTimers();
 
             const createMockData = (i: number): UserData => ({
@@ -142,6 +144,8 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
 
             expect(useAppStore.getState().syncing).toBe(false);
             expect(useAppStore.getState().userData?.profile?.height).toBe('180');
+            // The 10 coalesced writes must be durable in the real owner vault.
+            expect(idbStore['logbook:v2:' + owner]).toMatch(/^tlb-sealed:v1:/);
 
             vi.useRealTimers();
         });

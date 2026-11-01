@@ -168,8 +168,12 @@ describe('EMPIRICAL CHALLENGER: Adversarial Stress & Robustness Suite (R2, R3, R
         let DB: any;
 
         beforeEach(async () => {
-            vi.useFakeTimers();
             for (const k in idbStore) delete idbStore[k];
+            // After the Firebase config tests reset module state, provision
+            // through the same module instance the store will use.
+            const { prepareUnlockedTestArchive } = await import('./secureVaultFixture');
+            await prepareUnlockedTestArchive('user:test-user-id');
+            vi.useFakeTimers();
             const storeMod = await import('../src/store/useAppStore');
             const dbMod = await import('../src/lib/db');
             useAppStore = storeMod.useAppStore;
@@ -217,6 +221,9 @@ describe('EMPIRICAL CHALLENGER: Adversarial Stress & Robustness Suite (R2, R3, R
             expect(saveSpy).toHaveBeenCalledWith(expect.objectContaining({
                 profile: expect.objectContaining({ height: '220' })
             }), expect.any(Number));
+
+            // These account writes cross the encrypted local journal boundary.
+            expect(idbStore['logbook:v2:user:test-user-id']).toMatch(/^tlb-sealed:v1:/);
 
             // Final store state must be clean
             expect(useAppStore.getState().syncing).toBe(false);

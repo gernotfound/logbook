@@ -14,7 +14,9 @@ import {
 } from '../src/lib/calc/workout';
 import { useAppStore } from '../src/store/useAppStore';
 import { DB } from '../src/lib/db';
-import { deviceKey } from '../src/lib/sync/deviceStorage';
+import { deviceKey, protectedDeviceKey, readDeviceValueStrict } from '../src/lib/sync/deviceStorage';
+import { unwrapWorkoutDeviceSnapshot } from '../src/lib/sync/workoutDeviceIntent';
+import { prepareUnlockedTestArchive } from './secureVaultFixture';
 import { draftRegistry } from '../src/lib/utils/draftRegistry';
 import { renderWithProviders, defaultMockUserData } from './setup';
 import CustomFoodForm from '../src/components/Nutrition/CustomFoodForm';
@@ -366,6 +368,11 @@ describe('Challenger 2: Adversarial State Management, Schemas, Guest Merge & UI 
     });
 
     describe('4. Zustand Store Persistence, Error Rejection & Storage Tiering Stress', () => {
+        beforeEach(async () => {
+            // An authenticated workout cannot persist before the device vault
+            // has been provisioned, including visibilitychange crash recovery.
+            await prepareUnlockedTestArchive('user:test-user-id');
+        });
         it('4.1 saveUserData rejects Promise and sets saveError if DB.saveUserData throws', async () => {
             const store = useAppStore.getState();
             (DB.saveUserData as any).mockRejectedValueOnce(new Error('Firestore Network Quota Exceeded'));
@@ -400,7 +407,7 @@ describe('Challenger 2: Adversarial State Management, Schemas, Guest Merge & UI 
             expect(useAppStore.getState().localWorkout).toEqual(mockLocalWorkout);
         });
 
-        it('4.3 visibilitychange to hidden immediately flushes localWorkout to localStorage synchronously', () => {
+        it('4.3 visibilitychange to hidden seals localWorkout synchronously for recovery', () => {
             const mockWorkout = {
                 id: 'sync_test_workout',
                 routineName: 'Emergency Background Sync',
@@ -413,9 +420,13 @@ describe('Challenger 2: Adversarial State Management, Schemas, Guest Merge & UI 
             try {
                 Object.defineProperty(document, 'visibilityState', { value: 'hidden', writable: true, configurable: true });
                 document.dispatchEvent(new Event('visibilitychange'));
-                const stored = localStorage.getItem(deviceKey('workout'));
-                expect(stored).toBeDefined();
-                expect(JSON.parse(stored!)).toEqual(mockWorkout);
+                const owner = 'user:test-user-id';
+                const ciphertext = localStorage.getItem(protectedDeviceKey('workout', owner));
+                expect(ciphertext).toMatch(/^tlb-sealed:v1:/);
+                expect(localStorage.getItem(deviceKey('workout', owner))).toBeNull();
+                const raw = readDeviceValueStrict('workout', owner);
+                expect(raw).not.toBeNull();
+                expect(unwrapWorkoutDeviceSnapshot(JSON.parse(raw!), owner).workout).toEqual(mockWorkout);
             } finally { draftRegistry.unregister(flush); }
         });
     });
