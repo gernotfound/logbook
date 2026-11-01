@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { prepareUnlockedTestArchive } from './secureVaultFixture';
 import { getDoc, getDocFromServer, writeBatch } from 'firebase/firestore';
 import fs from 'fs';
 import path from 'path';
@@ -40,7 +41,7 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
     let mockBatch: any;
     let mockDocs: Record<string, any> = {};
 
-    beforeEach(() => {
+    beforeEach(async () => {
         vi.clearAllMocks();
         DB.resetCache();
         useAppStore.getState().resetStore();
@@ -80,6 +81,7 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
             pendingWrites = [];
             return mockBatch;
         });
+        await prepareUnlockedTestArchive('user:test-user-id');
     });
 
     describe('Scope 1: Save Amnesia & Offline Diffing Resilience', () => {
