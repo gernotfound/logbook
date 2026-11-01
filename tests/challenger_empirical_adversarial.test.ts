@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { prepareUnlockedTestArchive } from './secureVaultFixture';
 import { doc, getDoc, getDocFromServer, writeBatch } from 'firebase/firestore';
 
 vi.unmock('../src/lib/db');
@@ -33,7 +34,7 @@ describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & D
     let mockBatch: any;
     let mockDocs: Record<string, any> = {};
 
-    beforeEach(() => {
+    beforeEach(async () => {
         vi.clearAllMocks();
         DB.resetCache();
         mockDocs = {};
@@ -79,6 +80,8 @@ describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & D
         // Both APIs model the same simulated remote store, but retain separate
         // spies so cache-based reads cannot satisfy the authoritative-read oracle.
         vi.mocked(getDocFromServer).mockImplementation(async ref => vi.mocked(getDoc)(ref));
+        // Exercise authenticated persistence only after the real device-vault bootstrap.
+        await prepareUnlockedTestArchive('user:test-user-id');
     });
 
     describe('1. Persistence and Save Amnesia Adversarial Tests', () => {

@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { prepareUnlockedTestArchive } from './secureVaultFixture';
 import { doc, writeBatch } from 'firebase/firestore';
 
 vi.unmock('../src/lib/db');
@@ -60,6 +61,7 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
         await clearCatalogCache();
         DB.resetCache();
         useAppStore.getState().resetStore();
+        await prepareUnlockedTestArchive('user:test-user-id');
     });
 
     afterEach(() => {
