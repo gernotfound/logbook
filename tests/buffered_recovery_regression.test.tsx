@@ -634,8 +634,10 @@ describe.each(['input', 'textarea'] as const)('independent same-workout %s write
         vi.restoreAllMocks();
     });
 
-    it('retains both contenders even if a simultaneous shared overwrite loses one copy', () => {
+    it('retains both contenders even if a simultaneous shared overwrite loses one copy', async () => {
         const owner = captureSession().owner;
+        await prepareUnlockedTestArchive(owner);
+        const canonicalKey = protectedDeviceKey(draftName, owner);
         const a = createBufferedWriterIntentName();
         const b = createBufferedWriterIntentName();
         expect(a).not.toBe(b);
@@ -647,6 +649,10 @@ describe.each(['input', 'textarea'] as const)('independent same-workout %s write
         writeBufferedDraft(draftName, owner, 'Writer A private value', '3');
         writeBufferedDraft(draftName, owner, 'Writer B private value', '3');
         expect(readBufferedDraftSnapshot(draftName, owner).value).toBe('Writer B private value');
+        const names = [draftName, a, b];
+        const ciphertexts = names.map(name => localStorage.getItem(protectedDeviceKey(name, owner)));
+        expect(ciphertexts.every(raw => raw?.startsWith('tlb-sealed:v1:'))).toBe(true);
+        names.forEach(name => expect(localStorage.getItem(deviceKey(name, owner))).toBeNull());
         expect(readBufferedWriterEvidence(owner, draftName).map(x => x.value).sort()).toEqual([
             'Writer A private value', 'Writer B private value',
         ]);
@@ -657,17 +663,24 @@ describe.each(['input', 'textarea'] as const)('independent same-workout %s write
         expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
         expect(report).toHaveBeenCalled();
         expect(readBufferedWriterEvidence(owner, draftName)).toHaveLength(2);
+        names.forEach((name, i) => expect(localStorage.getItem(protectedDeviceKey(name, owner))).toBe(ciphertexts[i]));
+        expect(localStorage.getItem(canonicalKey)).toBe(ciphertexts[0]);
         restore.unmount();
     });
 
-    it('never treats a private competing writer as absent when another tab compacts indexes', () => {
+    it('never treats a private competing writer as absent when another tab compacts indexes', async () => {
         const owner = captureSession().owner;
+        await prepareUnlockedTestArchive(owner);
         const unrelated = 'cross-tab:temporary-' + crypto.randomUUID();
         localStorage.setItem(unrelated, 'present');
         const a = createBufferedWriterIntentName();
         const b = createBufferedWriterIntentName();
         writeBufferedWriterIntent(a, owner, draftName, 'Writer A', null, '3');
         writeBufferedWriterIntent(b, owner, draftName, 'Writer B', null, '3');
+        const aCipher = localStorage.getItem(protectedDeviceKey(a, owner));
+        const bCipher = localStorage.getItem(protectedDeviceKey(b, owner));
+        expect(aCipher).toMatch(/^tlb-sealed:v1:/);
+        expect(bCipher).toMatch(/^tlb-sealed:v1:/);
 
         const originalKey = localStorageMock.key.getMockImplementation();
         if (!originalKey) throw new Error('Missing localStorage mock implementation');
@@ -690,19 +703,26 @@ describe.each(['input', 'textarea'] as const)('independent same-workout %s write
         expect(compacted).toBe(true);
         expect(readBufferedWriterEvidence(owner, draftName).map(x => x.value).sort())
             .toEqual(['Writer A', 'Writer B']);
+        expect(localStorage.getItem(protectedDeviceKey(a, owner))).toBe(aCipher);
+        expect(localStorage.getItem(protectedDeviceKey(b, owner))).toBe(bCipher);
+        expect(localStorage.getItem(deviceKey(a, owner))).toBeNull();
+        expect(localStorage.getItem(deviceKey(b, owner))).toBeNull();
     });
 
-    it('detects a competing writer added while authenticating the first witness', () => {
+    it('detects a competing writer added while authenticating the first witness', async () => {
         const owner = captureSession().owner;
+        await prepareUnlockedTestArchive(owner);
         const first = createBufferedWriterIntentName();
         const second = createBufferedWriterIntentName();
         const original = writeBufferedWriterIntent(first, owner, draftName, 'Writer A', null, '3');
+        const ciphertext = localStorage.getItem(protectedDeviceKey(first, owner));
+        expect(ciphertext).toMatch(/^tlb-sealed:v1:/);
         const originalGet = localStorageMock.getItem.getMockImplementation();
         if (!originalGet) throw new Error('Missing browser storage mock implementation');
         let inserted = false;
         localStorageMock.getItem.mockImplementation((key: string) => {
             const value = originalGet(key);
-            if (!inserted && key === deviceKey(first, owner)) {
+            if (!inserted && key === protectedDeviceKey(first, owner)) {
                 inserted = true;
                 writeBufferedWriterIntent(second, owner, draftName, 'Writer B', null, '3');
             }
@@ -716,20 +736,27 @@ describe.each(['input', 'textarea'] as const)('independent same-workout %s write
         }
 
         expect(inserted).toBe(true);
-        expect(localStorage.getItem(deviceKey(first, owner))).toBe(original);
+        expect(localStorage.getItem(protectedDeviceKey(first, owner))).toBe(ciphertext);
+        expect(localStorage.getItem(protectedDeviceKey(second, owner))).toMatch(/^tlb-sealed:v1:/);
+        expect(localStorage.getItem(deviceKey(first, owner))).toBeNull();
+        expect(localStorage.getItem(deviceKey(second, owner))).toBeNull();
+        expect(JSON.parse(original)).toMatchObject({ value: 'Writer A' });
         expect(readBufferedWriterEvidence(owner, draftName).map(x => x.value).sort())
             .toEqual(['Writer A', 'Writer B']);
         // Neither witness is removed or promoted into the business state.
     });
 
     it.each(['writer read', 'recovery inspector'] as const)(
-        'rejects a consent change during the final buffered witness read (%s)', mode => {
+        'rejects a consent change during the final buffered witness read (%s)', async mode => {
             const owner = captureSession().owner;
+            await prepareUnlockedTestArchive(owner);
             expect(owner).toMatch(/^user:/);
             const marker = deviceKey('health-consent-generation', owner);
             const name = createBufferedWriterIntentName();
             const raw = writeBufferedWriterIntent(name, owner, draftName, 'Keep this private value', null, '3');
-            const key = deviceKey(name, owner);
+            const key = protectedDeviceKey(name, owner);
+            const ciphertext = localStorage.getItem(key);
+            expect(ciphertext).toMatch(/^tlb-sealed:v1:/);
 
             const originalGet = localStorageMock.getItem.getMockImplementation();
             if (!originalGet) throw new Error('Missing localStorage mock implementation');
@@ -749,7 +776,9 @@ describe.each(['input', 'textarea'] as const)('independent same-workout %s write
                 localStorageMock.getItem.mockImplementation(originalGet);
             }
             expect(reads).toBe(2);
-            expect(localStorage.getItem(key)).toBe(raw);
+            expect(localStorage.getItem(key)).toBe(ciphertext);
+            expect(localStorage.getItem(deviceKey(name, owner))).toBeNull();
+            expect(JSON.parse(raw)).toMatchObject({ value: 'Keep this private value' });
             expect(inspectBufferedRecoveryEvidence(owner)[0].provenance).toBe('previous');
         },
     );
@@ -859,8 +888,9 @@ describe.each(['input', 'textarea'] as const)('independent same-workout %s write
         recovered.unmount();
     });
 
-    it('refuses sibling successors rather than declaring two editors one causal sequence', () => {
+    it('refuses sibling successors rather than declaring two editors one causal sequence', async () => {
         const owner = captureSession().owner;
+        await prepareUnlockedTestArchive(owner);
         const root = createBufferedWriterIntentName();
         const first = writeBufferedWriterIntent(root, owner, draftName, 'original', null, '3');
         const nextA = createBufferedWriterIntentName();
@@ -869,17 +899,25 @@ describe.each(['input', 'textarea'] as const)('independent same-workout %s write
         writeBufferedWriterIntent(nextA, owner, draftName, 'A', null, '3', parent);
         writeBufferedWriterIntent(nextB, owner, draftName, 'B', null, '3', parent);
         writeBufferedDraft(draftName, owner, 'B', '3');
+        const names = [root, nextA, nextB, draftName];
+        const ciphertexts = names.map(name => localStorage.getItem(protectedDeviceKey(name, owner)));
+        expect(ciphertexts.every(raw => raw?.startsWith('tlb-sealed:v1:'))).toBe(true);
         const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
         const view = mount(vi.fn());
         expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
         expect(readBufferedWriterEvidence(owner, draftName)).toHaveLength(3);
         expect(readBufferedDraftSnapshot(draftName, owner).value).toBe('B');
         expect(spy).toHaveBeenCalled();
+        names.forEach((name, i) => {
+            expect(localStorage.getItem(protectedDeviceKey(name, owner))).toBe(ciphertexts[i]);
+            expect(localStorage.getItem(deviceKey(name, owner))).toBeNull();
+        });
         view.unmount();
     });
 
-    it('rejects a successor whose predecessor was edited after the cited revision', () => {
+    it('rejects a successor whose predecessor was edited after the cited revision', async () => {
         const owner = captureSession().owner;
+        await prepareUnlockedTestArchive(owner);
         const root = createBufferedWriterIntentName();
         const rootRaw = writeBufferedWriterIntent(root, owner, draftName, '75', null, '3');
         const parent = { name: root, revisionId: (JSON.parse(rootRaw) as { revisionId: string }).revisionId };
@@ -889,12 +927,19 @@ describe.each(['input', 'textarea'] as const)('independent same-workout %s write
 
         // The still-live original writer changed the same independent key.
         writeBufferedWriterIntent(root, owner, draftName, '77', rootRaw, '3');
+        const names = [root, successor, draftName];
+        const ciphertexts = names.map(name => localStorage.getItem(protectedDeviceKey(name, owner)));
+        expect(ciphertexts.every(raw => raw?.startsWith('tlb-sealed:v1:'))).toBe(true);
         const report = vi.spyOn(console, 'error').mockImplementation(() => {});
         const reopened = mount(vi.fn());
         expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
         expect(readBufferedWriterEvidence(owner, draftName)).toHaveLength(2);
         expect(readBufferedDraftSnapshot(draftName, owner).value).toBe('76');
         expect(report).toHaveBeenCalled();
+        names.forEach((name, i) => {
+            expect(localStorage.getItem(protectedDeviceKey(name, owner))).toBe(ciphertexts[i]);
+            expect(localStorage.getItem(deviceKey(name, owner))).toBeNull();
+        });
         reopened.unmount();
     });
 
@@ -942,8 +987,9 @@ describe.each(['input', 'textarea'] as const)('independent same-workout %s write
         source.unmount();
     });
 
-    it('does not block an unrelated field because an older-consent witness still exists', () => {
+    it('does not block an unrelated field because an older-consent witness still exists', async () => {
         const owner = captureSession().owner;
+        await prepareUnlockedTestArchive(owner);
         const marker = `logbook:v2:${owner}:health-consent-generation`;
         const oldField = `draft:buffered:${kind}:${workoutId}:historical-field`;
         const historicalName = createBufferedWriterIntentName();
@@ -951,6 +997,8 @@ describe.each(['input', 'textarea'] as const)('independent same-workout %s write
         const historicalRaw = writeBufferedWriterIntent(
             historicalName, owner, oldField, 'private historical value', null, '2',
         );
+        const oldCiphertext = localStorage.getItem(protectedDeviceKey(historicalName, owner));
+        expect(oldCiphertext).toMatch(/^tlb-sealed:v1:/);
         localStorage.setItem(marker, '3');
 
         expect(readBufferedWriterEvidence(owner, draftName)).toEqual([]);
@@ -961,24 +1009,40 @@ describe.each(['input', 'textarea'] as const)('independent same-workout %s write
         fireEvent.blur(edited(view));
         expect(update).toHaveBeenCalledWith('Current field');
         expect(useAppStore.getState().localPersistenceBlocked).toBe(false);
-        expect(localStorage.getItem(deviceKey(historicalName, owner))).toBe(historicalRaw);
+        expect(localStorage.getItem(protectedDeviceKey(historicalName, owner))).toBe(oldCiphertext);
+        expect(localStorage.getItem(deviceKey(historicalName, owner))).toBeNull();
+        expect(JSON.parse(historicalRaw)).toMatchObject({ value: 'private historical value', consentRevision: 2 });
+        expect(localStorage.getItem(protectedDeviceKey(draftName, owner))).toMatch(/^tlb-sealed:v1:/);
+        expect(localStorage.getItem(deviceKey(draftName, owner))).toBeNull();
         view.unmount();
     });
 
-    it('counts the 64-witness guard per field, not across unrelated fields', () => {
+    it('counts the 64-witness guard per field, not across unrelated fields', async () => {
         const owner = captureSession().owner;
+        await prepareUnlockedTestArchive(owner);
+        const unrelated: string[] = [];
         for (let index = 0; index < 65; index++) {
+            const name = createBufferedWriterIntentName();
+            unrelated.push(name);
             writeBufferedWriterIntent(
-                createBufferedWriterIntentName(), owner,
+                name, owner,
                 `draft:buffered:${kind}:${workoutId}:other-${index}`,
                 `Historical note ${index}`, null, '3',
             );
         }
         expect(readBufferedWriterEvidence(owner, draftName)).toEqual([]);
+        expect(unrelated).toHaveLength(65);
+        for (const name of unrelated) {
+            expect(localStorage.getItem(protectedDeviceKey(name, owner))).toMatch(/^tlb-sealed:v1:/);
+            expect(localStorage.getItem(deviceKey(name, owner))).toBeNull();
+        }
         const view = mount(vi.fn());
         expect(useAppStore.getState().localPersistenceBlocked).toBe(false);
         fireEvent.change(edited(view), { target: { value: 'New private value' } });
         expect(useAppStore.getState().localPersistenceBlocked).toBe(false);
+        expect(readBufferedDraftSnapshot(draftName, owner).value).toBe('New private value');
+        expect(localStorage.getItem(protectedDeviceKey(draftName, owner))).toMatch(/^tlb-sealed:v1:/);
+        expect(localStorage.getItem(deviceKey(draftName, owner))).toBeNull();
         view.unmount();
     });
 
@@ -992,27 +1056,40 @@ describe.each(['input', 'textarea'] as const)('independent same-workout %s write
         expect(() => readBufferedWriterEvidence(owner, draftName)).toThrow();
     });
 
-    it('lists multiple independent copies without replaying, clearing or replacing any bytes', () => {
+    it('lists multiple independent copies without replaying, clearing or replacing any bytes', async () => {
         const owner = captureSession().owner;
+        await prepareUnlockedTestArchive(owner);
         const nameA = createBufferedWriterIntentName();
         const nameB = createBufferedWriterIntentName();
         const a = writeBufferedWriterIntent(nameA, owner, draftName, 'Private value A', null, '3');
         const b = writeBufferedWriterIntent(nameB, owner, draftName, 'Private value B', null, '3');
+        const cipherA = localStorage.getItem(protectedDeviceKey(nameA, owner));
+        const cipherB = localStorage.getItem(protectedDeviceKey(nameB, owner));
+        expect(cipherA).toMatch(/^tlb-sealed:v1:/);
+        expect(cipherB).toMatch(/^tlb-sealed:v1:/);
         const result = inspectBufferedRecoveryEvidence(owner);
         expect(result.map(x => x.value).sort()).toEqual(['Private value A', 'Private value B']);
         expect(result.every(x => x.draftName === draftName)).toBe(true);
-        expect(localStorage.getItem(deviceKey(nameA, owner))).toBe(a);
-        expect(localStorage.getItem(deviceKey(nameB, owner))).toBe(b);
+        expect(localStorage.getItem(protectedDeviceKey(nameA, owner))).toBe(cipherA);
+        expect(localStorage.getItem(protectedDeviceKey(nameB, owner))).toBe(cipherB);
+        expect(localStorage.getItem(deviceKey(nameA, owner))).toBeNull();
+        expect(localStorage.getItem(deviceKey(nameB, owner))).toBeNull();
+        expect(JSON.parse(a)).toMatchObject({ value: 'Private value A' });
+        expect(JSON.parse(b)).toMatchObject({ value: 'Private value B' });
+        expect(localStorage.getItem(protectedDeviceKey(draftName, owner))).toBeNull();
         expect(readBufferedWriterEvidence(owner, draftName)).toHaveLength(2);
     });
 
-    it('keeps historical revisions visible but never re-labels them as current', () => {
+    it('keeps historical revisions visible but never re-labels them as current', async () => {
         const owner = captureSession().owner;
+        await prepareUnlockedTestArchive(owner);
         const marker = `logbook:v2:${owner}:health-consent-generation`;
         const previous = createBufferedWriterIntentName();
         localStorage.setItem(marker, '2');
         const before = writeBufferedWriterIntent(previous, owner, draftName, 'Historical note', null, '2');
         localStorage.setItem(marker, '3');
+        const previousCiphertext = localStorage.getItem(protectedDeviceKey(previous, owner));
+        expect(previousCiphertext).toMatch(/^tlb-sealed:v1:/);
         const current = createBufferedWriterIntentName();
         writeBufferedWriterIntent(current, owner, draftName, 'Current note', null, '3');
         const result = inspectBufferedRecoveryEvidence(owner);
@@ -1023,7 +1100,11 @@ describe.each(['input', 'textarea'] as const)('independent same-workout %s write
             expect(result.map(x => x.provenance)).toEqual(['guest', 'guest']);
         }
         expect(result.find(x => x.name === previous)?.value).toBe('Historical note');
-        expect(localStorage.getItem(deviceKey(previous, owner))).toBe(before);
+        expect(localStorage.getItem(protectedDeviceKey(previous, owner))).toBe(previousCiphertext);
+        expect(localStorage.getItem(protectedDeviceKey(current, owner))).toMatch(/^tlb-sealed:v1:/);
+        expect(localStorage.getItem(deviceKey(previous, owner))).toBeNull();
+        expect(localStorage.getItem(deviceKey(current, owner))).toBeNull();
+        expect(JSON.parse(before)).toMatchObject({ value: 'Historical note', consentRevision: 2 });
     });
 
     it('rejects malformed independent witness identities without selecting or deleting the copy', () => {
