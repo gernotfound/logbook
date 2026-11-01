@@ -1,4 +1,6 @@
-import { deviceKey } from '../src/lib/sync/deviceStorage';
+import { deviceKey, protectedDeviceKey, readDeviceValueStrict } from '../src/lib/sync/deviceStorage';
+import { persistPlainWorkoutSnapshot } from '../src/lib/sync/workoutDeviceIntent';
+import { prepareUnlockedTestArchive } from './secureVaultFixture';
 import { BrowserStorageError } from '../src/lib/sync/browserStorage';
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -19,9 +21,10 @@ import { captureSession } from '../src/lib/sync/session';
 vi.unmock('../src/store/useDialogStore');
 const workout = { id: 'w-audit', date: '2026-09-10', routineName: 'Test', exercises: [], globalStartTime: 1000 };
 
-beforeEach(() => {
-    vi.useFakeTimers();
+beforeEach(async () => {
     localStorage.clear();
+    await prepareUnlockedTestArchive(captureSession().owner);
+    vi.useFakeTimers();
     useAppStore.setState({
         userData: { ...emptyUserData, history: [], activeWorkout: workout },
         dataOwner: captureSession().owner,
@@ -74,17 +77,33 @@ describe('audit interaction regressions', () => {
     });
 
     it('removes a completed local workout immediately, before a timer or background event', async () => {
-        localStorage.setItem(deviceKey('workout'), JSON.stringify(workout));
+        const owner = captureSession().owner;
+        persistPlainWorkoutSnapshot(workout, owner);
+        expect(localStorage.getItem(protectedDeviceKey('workout', owner))).toMatch(/^tlb-sealed:v1:/);
+        expect(localStorage.getItem(deviceKey('workout', owner))).toBeNull();
+
         act(() => useAppStore.getState().setLocalWorkout(null));
-        expect(localStorage.getItem(deviceKey('workout'))).toBeNull();
+        expect(readDeviceValueStrict('workout', owner)).toBeNull();
+        expect(localStorage.getItem(protectedDeviceKey('workout', owner))).toBeNull();
         await act(async () => { vi.advanceTimersByTime(1000); });
-        expect(localStorage.getItem(deviceKey('workout'))).toBeNull();
+        expect(readDeviceValueStrict('workout', owner)).toBeNull();
+        expect(localStorage.getItem(deviceKey('workout', owner))).toBeNull();
     });
 
     it('does not confirm completion when synchronous storage removal fails', () => {
+        const owner = captureSession().owner;
+        persistPlainWorkoutSnapshot(workout, owner);
+        const sealedKey = protectedDeviceKey('workout', owner);
+        const originalCiphertext = localStorage.getItem(sealedKey);
+        expect(originalCiphertext).toMatch(/^tlb-sealed:v1:/);
         vi.spyOn(localStorage, 'removeItem').mockImplementationOnce(() => { throw new Error('Storage unavailable'); });
+
         expect(() => useAppStore.getState().setLocalWorkout(null)).toThrow(BrowserStorageError);
         expect(useAppStore.getState().localWorkout?.id).toBe(workout.id);
+        expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
+        expect(localStorage.getItem(sealedKey)).toBe(originalCiphertext);
+        expect(localStorage.getItem(deviceKey('workout', owner))).toBeNull();
+        expect(JSON.parse(readDeviceValueStrict('workout', owner)!)).toMatchObject(workout);
     });
 
     it('ends a workout once even after double submission and a rejected first save', async () => {
