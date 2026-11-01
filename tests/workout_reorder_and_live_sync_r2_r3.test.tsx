@@ -11,7 +11,8 @@ import { useWorkoutSetMutations } from '../src/hooks/workout/useWorkoutSetMutati
 import { useWorkoutSession } from '../src/hooks/useWorkoutSession';
 import { SessionExerciseCard } from '../src/components/Training/session/SessionExerciseCard';
 import TrainingSession from '../src/components/Training/TrainingSession';
-import { SessionExerciseSchema } from '../src/lib/schema';
+import { SessionExerciseSchema, UserDataSchema } from '../src/lib/schema';
+import { initializeLocal, readLocal } from '../src/lib/sync/localRepository';
 import { getInitialLocalWorkout } from '../src/store/slices/createWorkoutSlice';
 import type { WorkoutSession, ExerciseLibraryItem } from '../src/types';
 
@@ -51,6 +52,7 @@ const mockLibrary: ExerciseLibraryItem[] = [
 describe('Workout Reorder (R2) and Live Sync & Badges (R3) Suite', () => {
     beforeEach(() => {
         localStorage.clear();
+        useAppStore.getState().resetStore();
         useAppStore.setState({
             dataOwner: captureSession().owner,
             userData: {
@@ -549,12 +551,17 @@ describe('Workout Reorder (R2) and Live Sync & Badges (R3) Suite', () => {
                 ]
             };
 
+            const initialData = UserDataSchema.parse({
+                ...useAppStore.getState().userData!,
+                library: mockLibrary,
+                activeWorkout,
+            });
+            await initializeLocal(owner, initialData);
+            expect((await readLocal(owner))?.data.activeWorkout?.id).toBe(activeWorkout.id);
             const { container } = renderWithProviders(<TrainingSession />, {
                 localWorkout: activeWorkout,
-                userData: {
-                    ...useAppStore.getState().userData!,
-                    library: mockLibrary as any
-                }
+                userData: initialData,
+                dataOwner: owner,
             });
 
             // Exercise headings in order
@@ -590,12 +597,17 @@ describe('Workout Reorder (R2) and Live Sync & Badges (R3) Suite', () => {
                 ]
             };
 
+            const initialData = UserDataSchema.parse({
+                ...useAppStore.getState().userData!,
+                library: mockLibrary,
+                activeWorkout,
+            });
+            await initializeLocal(owner, initialData);
+            expect((await readLocal(owner))?.data.activeWorkout?.id).toBe(activeWorkout.id);
             const { container } = renderWithProviders(<TrainingSession />, {
                 localWorkout: activeWorkout,
-                userData: {
-                    ...useAppStore.getState().userData!,
-                    library: mockLibrary as any
-                }
+                userData: initialData,
+                dataOwner: owner,
             });
 
             // Expand first exercise, then open Setup on Bench at index 0.
