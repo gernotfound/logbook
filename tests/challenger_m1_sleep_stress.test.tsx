@@ -9,8 +9,8 @@ import { shiftDateString } from '../src/lib/utils/date';
 import { UserDataSchema } from '../src/lib/schema';
 import { useSleepMeasurements } from '../src/hooks/useSleepMeasurements';
 import { storageOwner } from '../src/lib/sync/session';
-import { ensureLocalVaultReady } from '../src/lib/sync/secureArchiveUnlockFlow';
-import { readLocal } from '../src/lib/sync/localRepository';
+import { prepareUnlockedTestArchive } from './secureVaultFixture';
+import { readLocal, initializeLocal } from '../src/lib/sync/localRepository';
 import { readDatedWriterEvidence } from '../src/lib/sync/datedDraftWriterIntent';
 import DataSleep from '../src/components/Data/DataSleep';
 import DataHistory from '../src/components/Data/DataHistory';
@@ -45,8 +45,10 @@ const SleepIntegratedView: React.FC = () => {
 // The sleep-save integration tests need a stable owner and real local commit.
 // AuthProvider starts an unrelated asynchronous hydration that can replace the fixture.
 async function renderOwnedSleepView(userData: UserData) {
-    await ensureLocalVaultReady(storageOwner());
-    useAppStore.setState({ userData, dataOwner: storageOwner(), syncing: false, saveError: null });
+    const owner = storageOwner();
+    await prepareUnlockedTestArchive(owner);
+    await initializeLocal(owner, userData);
+    useAppStore.setState({ userData, dataOwner: owner, syncing: false, saveError: null });
     return render(<SleepIntegratedView />);
 }
 
@@ -424,7 +426,10 @@ describe('Empirical Challenger: Sleep Format in HH:MM & State Integration Stress
 
         it('successfully saves only total sleep when optional phases are left blank', async () => {
             const today = Logic.getLocalDateString();
-            useAppStore.setState({ userData: emptyUserData });
+            const owner = storageOwner();
+            await prepareUnlockedTestArchive(owner);
+            await initializeLocal(owner, emptyUserData);
+            useAppStore.setState({ userData: emptyUserData, dataOwner: owner });
             const showAlertSpy = vi.spyOn(useDialogStore.getState(), 'showAlert');
             const { result } = renderHook(() => useSleepMeasurements());
 
@@ -442,6 +447,7 @@ describe('Empirical Challenger: Sleep Format in HH:MM & State Integration Stress
             expect(day?.sleepHours).toBe('07:30');
             expect(day?.sleepDeep).toBeUndefined();
             expect(day?.sleepLight).toBeUndefined();
+            expect((await readLocal(owner))?.data.nutrition?.[today]?.sleepHours).toBe('07:30');
         });
     });
 

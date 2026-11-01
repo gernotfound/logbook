@@ -9,6 +9,10 @@ import { useAppStore } from '../src/store/useAppStore';
 import { useDialogStore } from '../src/store/useDialogStore';
 import SettingsView from '../src/components/SettingsView';
 import type { UserData, WorkoutSession } from '../src/types';
+import { captureSession } from '../src/lib/sync/session';
+import { initializeLocal, readLocal } from '../src/lib/sync/localRepository';
+import { prepareUnlockedTestArchive } from './secureVaultFixture';
+import { emptyUserData, idbStore } from './setup';
 
 describe('Milestone 2 Challenger Suite: PWA and Offline Workout Stress Tests', () => {
   let mockSetDoc: any;
@@ -18,6 +22,7 @@ describe('Milestone 2 Challenger Suite: PWA and Offline Workout Stress Tests', (
     sessionStorage.clear();
     vi.clearAllMocks();
     vi.useRealTimers();
+    useAppStore.getState().resetStore();
 
     mockSetDoc = vi.spyOn(sentryClient, 'sendTelemetryToSentry').mockResolvedValue(true);
 
@@ -186,6 +191,7 @@ describe('Milestone 2 Challenger Suite: PWA and Offline Workout Stress Tests', (
       telemetryHub.setUserId('user_empty_workout');
 
       const emptyRoutineUserData: UserData = {
+        ...emptyUserData,
         profile: { name: 'Empty Routine User' },
         routines: [
           {
@@ -198,11 +204,15 @@ describe('Milestone 2 Challenger Suite: PWA and Offline Workout Stress Tests', (
         history: [],
       } as unknown as UserData;
 
+      const owner = captureSession().owner;
+      await prepareUnlockedTestArchive(owner);
+      await initializeLocal(owner, emptyRoutineUserData);
       useAppStore.setState({
-        dataOwner: 'user:test-user-id',
+        dataOwner: owner,
         userData: emptyRoutineUserData,
         localWorkout: null,
       });
+      expect(idbStore['logbook:v2:' + owner]).toMatch(/^tlb-sealed:v1:/);
 
       const { result } = renderHook(() => useWorkoutSession());
 
@@ -222,6 +232,8 @@ describe('Milestone 2 Challenger Suite: PWA and Offline Workout Stress Tests', (
 
       expect(useAppStore.getState().localWorkout).toBeNull();
       expect(useAppStore.getState().userData?.activePains).toEqual([]);
+      expect((await readLocal(owner))?.data.activeWorkout).toBeNull();
+      expect(idbStore['logbook:v2:' + owner]).toMatch(/^tlb-sealed:v1:/);
 
       await new Promise(resolve => setTimeout(resolve, 0));
       expect(mockSetDoc.mock.calls.some((c: any) => c[1].type === 'workout_saved')).toBe(false);
