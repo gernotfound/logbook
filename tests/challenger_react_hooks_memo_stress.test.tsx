@@ -14,6 +14,8 @@ import type { UserData, WorkoutSession } from '../src/types';
 import { captureSession } from '../src/lib/sync/session';
 import { initializeLocal, readLocal } from '../src/lib/sync/localRepository';
 import { UserDataSchema } from '../src/lib/schema';
+import { idbStore } from './setup';
+import { prepareUnlockedTestArchive } from './secureVaultFixture';
 
 describe('Empirical Challenger: React Hooks, Memoization & Re-render Loop Stress Suite', () => {
     const baseUserData: UserData = {
@@ -402,8 +404,13 @@ describe('Empirical Challenger: React Hooks, Memoization & Re-render Loop Stress
             // Prepared and started sessions must be proven durable in the same
             // owner-scoped IndexedDB repository that production uses.
             const owner = captureSession().owner;
+            await prepareUnlockedTestArchive(owner);
             const initial = UserDataSchema.parse(baseUserData) as UserData;
             await initializeLocal(owner, initial);
+            const archiveKey = 'logbook:v2:' + owner;
+            const initialCiphertext = idbStore[archiveKey];
+            expect(initialCiphertext).toEqual(expect.stringMatching(/^tlb-sealed:v1:/));
+            expect(initialCiphertext).not.toContain('Push Day');
             useAppStore.setState({ userData: initial, dataOwner: owner, localPersistenceBlocked: false });
             // Keep the real owner-scoped IndexedDB commit. Only the cloud
             // transport is offline; undefined is not a valid SyncResult.
@@ -480,6 +487,10 @@ describe('Empirical Challenger: React Hooks, Memoization & Re-render Loop Stress
             expect(savedHistory?.[0]?.routineName).toBe('Push Day');
             expect(savedHistory?.[0]?.exercises[0].sets).toHaveLength(4);
             expect((await readLocal(owner))?.data.history?.[0]?.exercises[0].sets).toHaveLength(4);
+            const finishedCiphertext = idbStore[archiveKey];
+            expect(finishedCiphertext).toEqual(expect.stringMatching(/^tlb-sealed:v1:/));
+            expect(finishedCiphertext).not.toBe(initialCiphertext);
+            expect(finishedCiphertext).not.toContain('Push Day');
         });
     });
 });
