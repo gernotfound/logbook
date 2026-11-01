@@ -4,6 +4,9 @@ import { act, renderHook } from '@testing-library/react';
 import { renderWithProviders, emptyUserData } from './setup';
 import { useAppStore } from '../src/store/useAppStore';
 import { captureSession } from '../src/lib/sync/session';
+import { prepareUnlockedTestArchive } from './secureVaultFixture';
+import { initializeLocal, readLocal } from '../src/lib/sync/localRepository';
+import { idbStore } from './setup';
 import { Logic } from '../src/lib/logic';
 import { Exporter } from '../src/lib/export';
 import { useSleepMeasurements } from '../src/hooks/useSleepMeasurements';
@@ -189,14 +192,16 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
             ];
 
             // 1. Launch workout from routine
-            useAppStore.setState({
-                userData: {
+            const owner = captureSession().owner;
+            const initialData = {
                     ...emptyUserData,
                     library,
                     routines,
                     history: []
-                }
-            });
+                };
+            await prepareUnlockedTestArchive(owner);
+            await initializeLocal(owner, initialData);
+            useAppStore.setState({ dataOwner: owner, userData: initialData });
 
             const { result: sessionHook } = renderHook(() => useWorkoutSession());
 
@@ -225,6 +230,8 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
             expect(state.userData?.history?.length).toBe(1);
             expect(state.userData?.history?.[0].exercises.length).toBe(2);
             expect(state.userData?.routines?.[0].exercises.length).toBe(1);
+            expect((await readLocal(owner))?.data.history?.[0]?.exercises).toHaveLength(2);
+            expect(idbStore['logbook:v2:' + owner]).toMatch(/^tlb-sealed:v1:/);
         });
 
         it('T3.5: Special Sets (Dropsets/Isometrics) + Live Reordering + Setup Note Updates', () => {
@@ -306,8 +313,8 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
                 routines: [{ routineId: 'r_quads', frequencyPerWeek: 1 }]
             };
 
-            useAppStore.setState({
-                userData: {
+            const owner = captureSession().owner;
+            const initialData = {
                     ...emptyUserData,
                     library,
                     routines,
@@ -315,8 +322,10 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
                     activeCycleId: 'c_mass',
                     history: [],
                     nutrition: {}
-                }
-            });
+                };
+            await prepareUnlockedTestArchive(owner);
+            await initializeLocal(owner, initialData);
+            useAppStore.setState({ dataOwner: owner, userData: initialData });
 
             // 2. Start workout
             const { result: sessionHook } = renderHook(() => useWorkoutSession());
@@ -349,6 +358,9 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
 
             const today = Logic.getLocalDateString();
             expect(useAppStore.getState().userData?.nutrition?.[today]?.sleepHours).toBe('08:00');
+            expect((await readLocal(owner))?.data.nutrition?.[today]?.sleepHours).toBe('08:00');
+            expect((await readLocal(owner))?.data.history).toHaveLength(1);
+            expect(idbStore['logbook:v2:' + owner]).toMatch(/^tlb-sealed:v1:/);
 
             // 6. Export all data to CSV
             const state = useAppStore.getState().userData;

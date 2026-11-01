@@ -45,12 +45,11 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
         describe('R1: Formato Sonno in HH:MM', () => {
             it('T1.1.1: useSleepMeasurements sets and persists sleep duration into userData.nutrition[date] in canonical HH:MM format', async () => {
                 const today = Logic.getLocalDateString();
-                useAppStore.setState({
-                    userData: {
-                        ...emptyUserData,
-                        nutrition: {}
-                    }
-                });
+                const owner = captureSession().owner;
+                const initialData = { ...emptyUserData, nutrition: {} };
+                await prepareUnlockedTestArchive(owner);
+                await initializeLocal(owner, initialData);
+                useAppStore.setState({ userData: initialData, dataOwner: owner });
 
                 const { result } = renderHook(() => useSleepMeasurements());
 
@@ -68,6 +67,7 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
                 expect(dayData).toBeDefined();
                 expect(dayData?.sleepHours).toBe('08:00');
                 expect(dayData?.sleepDeep).toBe('02:00');
+                expect((await readLocal(owner))?.data.nutrition?.[today]?.sleepHours).toBe('08:00');
             });
 
             it('T1.1.2: DataSleep renders inputs for total sleep, deep, light, rem, and awake phases', () => {
