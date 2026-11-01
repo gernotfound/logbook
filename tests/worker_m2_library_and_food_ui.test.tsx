@@ -9,7 +9,8 @@ import { clearCatalogCache, saveCatalogToCache } from '../src/lib/catalog/catalo
 import TrainingExercises from '../src/components/Training/TrainingExercises';
 import CustomFoodForm from '../src/components/Nutrition/CustomFoodForm';
 import type { Exercise } from '../src/types';
-import { deviceKey } from '../src/lib/sync/deviceStorage';
+import { deviceKey, protectedDeviceKey, readDeviceValueStrict } from '../src/lib/sync/deviceStorage';
+import { readWorkoutRecoveryDraft, writeWorkoutRecoveryDraft } from '../src/lib/sync/workoutRecoveryDraft';
 import { captureSession } from '../src/lib/sync/session';
 import { initializeLocal, readLocal } from '../src/lib/sync/localRepository';
 import { prepareUnlockedTestArchive } from './secureVaultFixture';
@@ -38,7 +39,9 @@ describe('Worker M2: Exercise Library UI & Food Form Real-Time Calorie Calculati
             expect(result.current.equipmentWeight).toBe('');
         });
 
-        it('restores isBodyweight and equipmentWeight from localStorage draft', () => {
+        it('restores isBodyweight and equipmentWeight from an authenticated device draft', async () => {
+            const owner = captureSession().owner;
+            await prepareUnlockedTestArchive(owner);
             const draft = {
                 name: 'Trazioni zavorrate',
                 notes: 'Cintura da sovraccarico',
@@ -48,12 +51,19 @@ describe('Worker M2: Exercise Library UI & Food Form Real-Time Calorie Calculati
                 isBodyweight: true,
                 equipmentWeight: 5
             };
-            window.localStorage.setItem(deviceKey('draft_exercise'), JSON.stringify(draft));
+            writeWorkoutRecoveryDraft('draft_exercise', owner, draft);
+            const sealedKey = protectedDeviceKey('draft_exercise', owner);
+            const ciphertext = localStorage.getItem(sealedKey);
+            expect(ciphertext).toMatch(/^tlb-sealed:v1:/);
+            expect(readWorkoutRecoveryDraft('draft_exercise', owner)).toMatchObject(draft);
+            expect(localStorage.getItem(deviceKey('draft_exercise', owner))).toBeNull();
 
             const { result } = renderHook(() => useTrainingExercises());
             expect(result.current.exName).toBe('Trazioni zavorrate');
             expect(result.current.isBodyweight).toBe(true);
             expect(result.current.equipmentWeight).toBe('5');
+            expect(localStorage.getItem(deviceKey('draft_exercise', owner))).toBeNull();
+            expect(localStorage.getItem(sealedKey)).toMatch(/^tlb-sealed:v1:/);
         });
 
         it('handleEditClick populates isBodyweight and equipmentWeight from exercise object', () => {
@@ -79,7 +89,9 @@ describe('Worker M2: Exercise Library UI & Food Form Real-Time Calorie Calculati
             expect(result.current.equipmentWeight).toBe('20');
         });
 
-        it('handleCancelEdit resets isBodyweight and equipmentWeight and clears draft', () => {
+        it('handleCancelEdit resets isBodyweight and equipmentWeight and clears the sealed draft', async () => {
+            const owner = captureSession().owner;
+            await prepareUnlockedTestArchive(owner);
             const exercise: Exercise = {
                 id: 'ex-dips',
                 name: 'Dip parallele',
@@ -104,7 +116,9 @@ describe('Worker M2: Exercise Library UI & Food Form Real-Time Calorie Calculati
             expect(result.current.editingExId).toBeNull();
             expect(result.current.isBodyweight).toBe(false);
             expect(result.current.equipmentWeight).toBe('');
-            expect(window.localStorage.getItem(deviceKey('draft_exercise'))).toBeNull();
+            expect(window.localStorage.getItem(protectedDeviceKey('draft_exercise', owner))).toBeNull();
+            expect(readDeviceValueStrict('draft_exercise', owner)).toBeNull();
+            expect(window.localStorage.getItem(deviceKey('draft_exercise', owner))).toBeNull();
         });
 
         it('handleSaveExercise creates new exercise with isBodyweight and equipmentWeight', async () => {

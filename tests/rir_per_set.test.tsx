@@ -25,7 +25,9 @@ import SessionExerciseCard from '../src/components/Training/session/SessionExerc
 import TrainingHistory from '../src/components/Training/TrainingHistory';
 import { getInitialLocalWorkout } from '../src/store/slices/createWorkoutSlice';
 import { useAppStore } from '../src/store/useAppStore';
-import { deviceKey } from '../src/lib/sync/deviceStorage';
+import { deviceKey, protectedDeviceKey, readDeviceValueStrict } from '../src/lib/sync/deviceStorage';
+import { unwrapWorkoutDeviceSnapshot } from '../src/lib/sync/workoutDeviceIntent';
+import { prepareUnlockedTestArchive } from './secureVaultFixture';
 import { applyDomainOperations, compileDomainOperations } from '../src/lib/sync/domainOperations';
 import { projectDocuments } from '../src/lib/sync/documentProjection';
 import { applySemanticOperations } from '../src/lib/sync/semanticProjection';
@@ -166,13 +168,21 @@ describe('RIR reale per singola serie', () => {
         expect(screen.getAllByRole('button', { name: /Imposta RIR serie/ })).toHaveLength(1);
     });
 
-    it('persiste RIR nel draft locale e lo recupera senza convertire 0 in assenza', async () => {
+    it('persiste RIR nel draft locale cifrato e lo recupera senza convertire 0 in assenza', async () => {
+        const owner = captureSession().owner;
+        await prepareUnlockedTestArchive(owner);
         vi.useFakeTimers();
         useAppStore.getState().setLocalWorkout(session(0));
         await act(async () => { vi.runAllTimers(); });
 
-        expect(JSON.parse(localStorage.getItem(deviceKey('workout')) || '{}').exercises[0].sets[0].rir).toBe(0);
-        expect(getInitialLocalWorkout()?.exercises[0].sets[0].rir).toBe(0);
+        const sealedKey = protectedDeviceKey('workout', owner);
+        expect(localStorage.getItem(sealedKey)).toMatch(/^tlb-sealed:v1:/);
+        expect(localStorage.getItem(deviceKey('workout', owner))).toBeNull();
+        const deviceRecord = JSON.parse(readDeviceValueStrict('workout', owner)!);
+        const saved = unwrapWorkoutDeviceSnapshot(deviceRecord, owner).workout as WorkoutSession;
+        expect(saved.exercises[0].sets[0].rir).toBe(0);
+        expect(getInitialLocalWorkout(owner)?.exercises[0].sets[0].rir).toBe(0);
+        expect(localStorage.getItem(deviceKey('workout', owner))).toBeNull();
     });
 
     it('sincronizza activeWorkout, cancella RIR senza undefined e completa nello shard storico', () => {

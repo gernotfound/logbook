@@ -8,7 +8,9 @@ import { assertHistoryMonthDocument, assertNutritionMonthDocument, requireCanoni
 import { classifySyncFailure } from '../src/lib/sync/syncFailure';
 import { useAppStore } from '../src/store/useAppStore';
 import { getInitialLocalWorkout } from '../src/store/slices/createWorkoutSlice';
-import { deviceKey } from '../src/lib/sync/deviceStorage';
+import { deviceKey, protectedDeviceKey, readDeviceValueStrict } from '../src/lib/sync/deviceStorage';
+import { unwrapWorkoutDeviceSnapshot } from '../src/lib/sync/workoutDeviceIntent';
+import { prepareUnlockedTestArchive } from './secureVaultFixture';
 import { clearAuthenticatedOwnerHint, readAuthenticatedOwnerHint, rememberAuthenticatedOwner } from '../src/lib/sync/authOwnerHint';
 import { storageOwner } from '../src/lib/sync/session';
 import { normalizeStorageOwner, userOwner } from '../src/lib/sync/owner';
@@ -155,14 +157,21 @@ describe('AUDIT 01-04 remediation invariants', () => {
         expect(classifySyncFailure(structural).status).toBe('failed');
     });
 
-    it('restores the device workout from a supplied validated fallback when device storage is missing', () => {
+    it('restores the device workout from a validated fallback into sealed storage when the device copy is missing', async () => {
         const owner = 'user:recovery';
+        await prepareUnlockedTestArchive(owner);
         const durable = workout('w-recovered', [['se-1', 'bench']]);
+        const sealedKey = protectedDeviceKey('workout', owner);
+        expect(readDeviceValueStrict('workout', owner)).toBeNull();
 
         const recovered = getInitialLocalWorkout(owner, durable);
 
         expect(recovered?.id).toBe('w-recovered');
-        expect(JSON.parse(localStorage.getItem(deviceKey('workout', owner))!)).toMatchObject({ id: 'w-recovered' });
+        expect(localStorage.getItem(sealedKey)).toMatch(/^tlb-sealed:v1:/);
+        expect(localStorage.getItem(deviceKey('workout', owner))).toBeNull();
+        const saved = unwrapWorkoutDeviceSnapshot(JSON.parse(readDeviceValueStrict('workout', owner)!), owner).workout;
+        expect(saved).toMatchObject({ id: 'w-recovered' });
+        expect(getInitialLocalWorkout(owner)?.id).toBe('w-recovered');
     });
 
     it('normalizes only a guest or a valid authenticated storage owner', () => {
