@@ -147,7 +147,12 @@ describe('PR 3: FNC-MERGE-01 Nutrition Planning Merge Policy', () => {
         const merged = mergeUserData(cloudData, guestData);
         expect(merged.nutritionPlanningOrigin).toBe('user-edited');
         expect(merged.nutritionPlanning?.weight).toBe(92);
-        expect(merged.pendingConflicts?.nutritionPlanning).toEqual(guestPlan);
+        expect(merged.pendingConflicts?.nutritionPlanning?.weight).toBe(guestPlan.weight);
+        expect(merged.pendingConflicts?.nutritionPlanning?.avgMacros).toEqual(guestPlan.avgMacros);
+        expect(merged.pendingConflicts?.nutritionPlanning?.onBoost).toEqual(guestPlan.onBoost);
+        expect(merged.pendingConflicts?.nutritionPlanning?.normocalorica).toEqual(guestPlan.normocalorica);
+        // The parser may add the current schema's normalized nested macro defaults.
+        expect(merged.pendingConflicts?.nutritionPlanning?.offMacros).toBeDefined();
     });
 
     // 7. Guest user-edited + cloud differente
