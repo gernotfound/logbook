@@ -35,6 +35,15 @@ export function createBufferedWriterIntentName(): string {
     return INTENT_PREFIX + Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
 }
 
+function assertCurrentBufferedWitnessEpoch(owner: string, revision?: number): void {
+    // A sealed account witness without an epoch cannot prove its consent origin.
+    // Preserve it for explicit inspection, never for automatic recovery or cleanup.
+    if (owner.startsWith('user:') && revision === undefined) {
+        throw new Error('Testimonianza bufferizzata account senza revisione consenso: originale conservato.');
+    }
+    assertWorkoutSnapshotEpoch(owner, revision);
+}
+
 function parseWriterEvidence(
     name: string, owner: string, raw: string, validateEpoch = true,
 ): BufferedWriterEvidence & { revision?: number } {
@@ -63,7 +72,7 @@ function parseWriterEvidence(
             && (!Number.isSafeInteger(record.consentRevision) || record.consentRevision < 1))) {
         throw new Error('Metadati intenzione bozza non validi: originale conservato.');
     }
-    if (validateEpoch) assertWorkoutSnapshotEpoch(owner, record.consentRevision);
+    if (validateEpoch) assertCurrentBufferedWitnessEpoch(owner, record.consentRevision);
     return { name, raw, value: record.value, revision: record.consentRevision, revisionId: record.revisionId, parent: record.parent };
 }
 
@@ -140,7 +149,7 @@ export function readBufferedWriterEvidence(owner: string, draftName: string): Bu
         scanned.push(evidence);
         const record = JSON.parse(raw) as BufferedWriterIntent;
         if (record.draftName === draftName) {
-            assertWorkoutSnapshotEpoch(owner, evidence.revision);
+            assertCurrentBufferedWitnessEpoch(owner, evidence.revision);
             matches.push(evidence);
             if (matches.length > 64) throw new Error('Troppe bozze concorrenti: esportazione di recupero necessaria.');
         }
@@ -168,6 +177,9 @@ export function readBufferedWriterEvidence(owner: string, draftName: string): Bu
 
 function checkConsent(owner: string, expectedConsentGeneration?: string | null): number | undefined {
     const revision = readDeviceConsentRevision(owner);
+    if (owner.startsWith('user:') && revision === undefined) {
+        throw new Error('Generazione consenso testimonianza bufferizzata non verificabile: originale conservato.');
+    }
     if (owner.startsWith('user:') && expectedConsentGeneration !== undefined
         && expectedConsentGeneration !== (revision === undefined ? null : String(revision))) {
         throw new Error('Generazione di consenso cambiata: intenzione bozza conservata.');

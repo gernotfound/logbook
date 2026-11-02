@@ -285,6 +285,7 @@ describe.each(['input', 'textarea'] as const)('owner-scoped buffered %s recovery
 
     it('blocks persistence on a device write failure and refuses unsafe update recovery', async () => {
         const owner = captureSession().owner;
+        localStorage.setItem(deviceKey('health-consent-generation', owner), '1');
         await prepareUnlockedTestArchive(owner);
         const name = `draft:buffered:${kind}:stable-draft`;
         const key = protectedDeviceKey(name, owner);
@@ -662,6 +663,77 @@ describe.each(['input', 'textarea'] as const)('independent same-workout %s write
         localStorageMock.getItem.mockImplementation(initialGetItem);
         localStorageMock.setItem.mockImplementation(initialSetItem);
         vi.restoreAllMocks();
+    });
+
+    it('quarantines unmarked encrypted account writer evidence even in consent epoch 1', async () => {
+        const owner = captureSession().owner;
+        expect(owner).toMatch(/^user:/);
+        localStorage.setItem(deviceKey('health-consent-generation', owner), '1');
+        await prepareUnlockedTestArchive(owner);
+        const witness = createBufferedWriterIntentName();
+        const raw = JSON.stringify({
+            __logbookBufferedWriterIntent: 1, owner, draftName,
+            value: 'Unverified previous input', revisionId: 'a'.repeat(32),
+        });
+        writeDeviceValue(witness, raw, owner);
+        const sealedKey = protectedDeviceKey(witness, owner);
+        const ciphertext = localStorage.getItem(sealedKey);
+        expect(ciphertext).toMatch(/^tlb-sealed:v1:/);
+        expect(localStorage.getItem(deviceKey(witness, owner))).toBeNull();
+
+        expect(() => readBufferedWriterEvidence(owner, draftName))
+            .toThrow('Testimonianza bufferizzata account senza revisione consenso');
+        expect(() => writeBufferedWriterIntent(
+            witness, owner, draftName, 'Unverified overwrite', raw, '1',
+        )).toThrow('Testimonianza bufferizzata account senza revisione consenso');
+        expect(() => clearBufferedWriterIntent(witness, owner, raw, '1'))
+            .toThrow('Testimonianza bufferizzata account senza revisione consenso');
+
+        // Field-specific recovery must not discard a valid unrelated witness.
+        const unrelatedField = 'draft:buffered:' + kind + ':' + workoutId + ':different-field';
+        const unrelatedWitness = createBufferedWriterIntentName();
+        const written = writeBufferedWriterIntent(
+            unrelatedWitness, owner, unrelatedField, 'Known valid input', null, '1',
+        );
+        expect(JSON.parse(written).consentRevision).toBe(1);
+        expect(readBufferedWriterEvidence(owner, unrelatedField)).toHaveLength(1);
+        const preview = inspectBufferedRecoveryEvidence(owner);
+        expect(preview.find(entry => entry.name === witness)).toMatchObject({
+            consentRevision: null, provenance: 'unknown', value: 'Unverified previous input',
+        });
+        expect(preview.find(entry => entry.name === unrelatedWitness)?.provenance).toBe('current');
+
+        const report = vi.spyOn(console, 'error').mockImplementation(() => {});
+        const view = mount(vi.fn(), 'Live input');
+        expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
+        expect(report).toHaveBeenCalled();
+        expect(localStorage.getItem(sealedKey)).toBe(ciphertext);
+        expect(readDeviceValueStrict(witness, owner)).toBe(raw);
+        expect(localStorage.getItem(protectedDeviceKey(draftName, owner))).toBeNull();
+        view.unmount();
+    });
+
+    it('requires the account consent marker for fresh writer evidence and preserves valid epoch 1 writes', async () => {
+        const owner = captureSession().owner;
+        expect(owner).toMatch(/^user:/);
+        await prepareUnlockedTestArchive(owner);
+        const marker = deviceKey('health-consent-generation', owner);
+        localStorage.removeItem(marker);
+        const witness = createBufferedWriterIntentName();
+        expect(() => writeBufferedWriterIntent(witness, owner, draftName, 'Unsafe edit', null))
+            .toThrow('Generazione consenso testimonianza bufferizzata non verificabile');
+        expect(localStorage.getItem(protectedDeviceKey(witness, owner))).toBeNull();
+        expect(localStorage.getItem(deviceKey(witness, owner))).toBeNull();
+
+        localStorage.setItem(marker, '1');
+        const raw = writeBufferedWriterIntent(witness, owner, draftName, 'Verified edit', null, '1');
+        expect(JSON.parse(raw)).toMatchObject({
+            __logbookBufferedWriterIntent: 1, owner, draftName,
+            consentRevision: 1, value: 'Verified edit',
+        });
+        expect(readBufferedWriterEvidence(owner, draftName).map(x => x.value)).toEqual(['Verified edit']);
+        clearBufferedWriterIntent(witness, owner, raw, '1');
+        expect(readBufferedWriterEvidence(owner, draftName)).toEqual([]);
     });
 
     it('retains both contenders even if a simultaneous shared overwrite loses one copy', async () => {
