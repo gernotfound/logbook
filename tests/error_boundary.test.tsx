@@ -7,6 +7,7 @@ import { useDialogStore } from '../src/store/useDialogStore';
 import { idbStore, localStorageMock } from './setup';
 import { activateGuestSession, GUEST_REVOCATION_KEY, GUEST_SESSION_KEY, storageOwner, isActiveGuestSession, invalidateSession } from '../src/lib/sync/session';
 import { markAccountDeletion } from '../src/lib/sync/accountGate';
+import { prepareUnlockedTestArchive } from './secureVaultFixture';
 
 const ProblemChild = ({ shouldThrow, message = 'Test error boundary explosion' }: { shouldThrow: boolean; message?: string }) => {
     if (shouldThrow) {
@@ -66,6 +67,7 @@ describe('R2: ErrorBoundary & Dialog Hardening Suite', () => {
     });
 
     it('reloads page safely when "Ricarica pagina" button is clicked', async () => {
+        await prepareUnlockedTestArchive(storageOwner());
         const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
         render(

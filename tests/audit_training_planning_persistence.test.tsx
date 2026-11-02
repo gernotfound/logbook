@@ -6,6 +6,7 @@ import { useAppStore } from '../src/store/useAppStore';
 import { useDialogStore } from '../src/store/useDialogStore';
 import { update as updateIndexedDb } from 'idb-keyval';
 import { DB } from '../src/lib/db';
+import { prepareUnlockedTestArchive } from './secureVaultFixture';
 import type { UserData } from '../src/types';
 
 const originalDispatch = useAppStore.getState().dispatchDomainOperation;
@@ -93,6 +94,7 @@ describe('audit regression: TrainingPlanning persistence failures', () => {
     });
 
     it('fails closed after the actual local archive update rejects before cloud sync', async () => {
+        await prepareUnlockedTestArchive('user:test-user-id');
         const update = vi.mocked(updateIndexedDb);
         update.mockClear();
         update.mockRejectedValueOnce(new Error('IndexedDB quota exceeded'));

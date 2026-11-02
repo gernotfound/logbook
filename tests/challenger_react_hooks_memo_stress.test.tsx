@@ -217,6 +217,7 @@ describe('Empirical Challenger: React Hooks, Memoization & Re-render Loop Stress
         });
 
         it('1.5 handleSave Sanitization and Error Rejection Handling', async () => {
+            await prepareUnlockedTestArchive(captureSession().owner);
             // Mock DB.saveUserData to resolve immediately (bypasses the 1000ms global debouncer)
             const dbSaveMock = vi.spyOn(DB, 'saveUserData').mockResolvedValue({ ok: true, status: 'synced' } as any);
             const showAlertSpy = vi.spyOn(useDialogStore.getState(), 'showAlert').mockResolvedValue();
@@ -281,7 +282,8 @@ describe('Empirical Challenger: React Hooks, Memoization & Re-render Loop Stress
     // SECTION 2: TrainingSession & Memoization Stress Testing
     // =========================================================================
     describe('2. TrainingSession & React.memo Render Isolation Stress', () => {
-        it('2.1 TrainingSession remains usable after visibility change during a workout', () => {
+        it('2.1 TrainingSession remains usable after visibility change during a workout', async () => {
+            await prepareUnlockedTestArchive(captureSession().owner);
             const activeWorkout: WorkoutSession = {
                 id: 'sess_1',
                 routineId: 'routine_push',
@@ -372,7 +374,8 @@ describe('Empirical Challenger: React Hooks, Memoization & Re-render Loop Stress
             expect(readSecondWeight).toHaveBeenCalledTimes(stableSecondReads);
         });
 
-        it('2.4 Session without prior history preserves user-entered notes', () => {
+        it('2.4 Session without prior history preserves user-entered notes', async () => {
+            await prepareUnlockedTestArchive(captureSession().owner);
             const activeWorkout: WorkoutSession = {
                 id: 'sess_new_ex',
                 routineId: 'routine_push',

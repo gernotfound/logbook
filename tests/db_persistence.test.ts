@@ -4,14 +4,16 @@ import { getDocFromServer, getDocs, writeBatch } from 'firebase/firestore';
 vi.unmock('../src/lib/db');
 
 import { ConsentedTestDB as DB, openTestCloudBusiness } from './testUtils';
+import { prepareUnlockedTestArchive } from './secureVaultFixture';
 
 
 describe('DB Persistence for Training Cycles and Planning', () => {
     let mockBatch: any;
 
-    beforeEach(() => {
+    beforeEach(async () => {
         vi.clearAllMocks();
         DB.resetCache();
+        await prepareUnlockedTestArchive('user:test-user-id');
 
         mockBatch = {
             set: vi.fn(),

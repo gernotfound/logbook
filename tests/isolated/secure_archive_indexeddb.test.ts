@@ -76,6 +76,43 @@ describe('atomic encrypted IndexedDB primitive', () => {
     });
 });
 
+describe('IndexedDB gateway requires an active owner vault', () => {
+    const archive = sealedArchiveKey(owner);
+    beforeEach(async () => {
+        await clear();
+        lockAllVaults();
+        localStorage.clear();
+    });
+    afterEach(() => lockAllVaults());
+
+    it('refuses account plaintext reads and writes without changing the original bytes', async () => {
+        const plaintext = { marker: 'unsealed-prelaunch-record' };
+        await set(archive, plaintext);
+        const transform = vi.fn(() => ({ marker: 'not-committed' }));
+        await expect(getArchiveRecord(owner)).rejects.toBeInstanceOf(LocalVaultLockedError);
+        await expect(updateArchiveRecord(owner, transform)).rejects.toBeInstanceOf(LocalVaultLockedError);
+        expect(transform).not.toHaveBeenCalled();
+        expect(await get(archive)).toEqual(plaintext);
+    });
+
+    it('refuses to seed plaintext before the current vault has been provisioned', async () => {
+        const transform = vi.fn(() => ({ marker: 'new-account' }));
+        await expect(getArchiveRecord(owner)).rejects.toBeInstanceOf(LocalVaultLockedError);
+        await expect(updateArchiveRecord(owner, transform)).rejects.toBeInstanceOf(LocalVaultLockedError);
+        expect(transform).not.toHaveBeenCalled();
+        expect(await get(archive)).toBeUndefined();
+    });
+
+    it('retains orphaned ciphertext when vault controls are absent', async () => {
+        const ciphertext = 'tlb-sealed:v1:orphaned-by-lost-control';
+        await set(archive, ciphertext);
+        await expect(getArchiveRecord(owner)).rejects.toBeInstanceOf(LocalVaultLockedError);
+        await expect(updateArchiveRecord(owner, () => ({ marker: 'wrong' })))
+            .rejects.toBeInstanceOf(LocalVaultLockedError);
+        expect(await get(archive)).toBe(ciphertext);
+    });
+});
+
 describe('encrypted archive gateway transaction invariants', () => {
     const archive = sealedArchiveKey(owner);
     const original = { marker: 'durable-local-data', pending: [1] };

@@ -20,6 +20,7 @@ import type {
     CatalogOverrides
 } from '../src/types';
 import { idbStore } from './setup';
+import { prepareUnlockedTestArchive } from './secureVaultFixture';
 
 describe('Integration Suite: Guest Mode & Global Catalog Resolution', () => {
     beforeEach(async () => {
@@ -31,6 +32,7 @@ describe('Integration Suite: Guest Mode & Global Catalog Resolution', () => {
         await clearCatalogCache();
         DB.resetCache();
         useAppStore.getState().resetStore();
+        await prepareUnlockedTestArchive('user:test-user-id');
     });
 
     // =========================================================================
