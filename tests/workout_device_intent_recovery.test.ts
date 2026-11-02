@@ -130,7 +130,7 @@ describe('authenticated device-intent replay into semantic journal', () => {
         const before = await readLocal(account);
 
         expect(() => assertHistoryEditorContextEpoch(source, account, before?.consentRevision))
-            .toThrow('generazione di consenso non verificabile');
+            .toThrow('consenso editor storico non verificabile');
         expect(readDeviceValueStrict(HISTORY_EDITOR_CONTEXT, account)).toBe(source);
         expect(await readLocal(account)).toEqual(before);
         const stamped = JSON.stringify({
