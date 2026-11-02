@@ -56,18 +56,18 @@ function repairWorkoutInstanceIdentities(
                     return {
                         ...set,
                         id: unique(set.id, 's', setIds),
-                        segments: set.segments?.map(segment => ({
+                        ...(set.segments !== undefined ? { segments: set.segments?.map(segment => ({
                             ...segment,
                             id: unique(segment.id, 'seg', segmentIds),
-                        })),
-                        dropsets: set.dropsets?.map(drop => ({
+                        })) } : {}),
+                        ...(set.dropsets !== undefined ? { dropsets: set.dropsets?.map(drop => ({
                             ...drop,
                             id: unique(drop.id, 'ds', dropIds),
-                        })),
-                        isometrics: set.isometrics?.map(item => ({
+                        })) } : {}),
+                        ...(set.isometrics !== undefined ? { isometrics: set.isometrics?.map(item => ({
                             ...item,
                             id: unique(item.id, 'iso', isometricIds),
-                        })),
+                        })) } : {}),
                     };
                 }),
             };
@@ -179,18 +179,18 @@ export function prepareHistoricalWorkoutForEditing(
             kg: s.kg !== undefined && s.kg !== null ? String(s.kg) : '',
             reps: s.reps !== undefined && s.reps !== null ? String(s.reps) : '',
             time: s.time !== undefined && s.time !== null ? String(s.time) : '',
-            dropsets: (s.dropsets || []).map((ds: any) => ({
+            ...(Array.isArray(s.dropsets) ? { dropsets: s.dropsets.map((ds: any) => ({
                 ...ds,
                 id: ds.id || runtime.generateId('ds'),
                 kg: ds.kg !== undefined && ds.kg !== null ? String(ds.kg) : '',
                 reps: ds.reps !== undefined && ds.reps !== null ? String(ds.reps) : '',
-            })),
-            isometrics: (s.isometrics || []).map((iso: any) => ({
+            })) } : {}),
+            ...(Array.isArray(s.isometrics) ? { isometrics: s.isometrics.map((iso: any) => ({
                 ...iso,
                 id: iso.id || runtime.generateId('iso'),
                 kg: iso.kg !== undefined && iso.kg !== null ? String(iso.kg) : '',
                 time: iso.time !== undefined && iso.time !== null ? String(iso.time) : '',
-            })),
+            })) } : {}),
             segments: Array.isArray(s.segments) ? s.segments.map((segment: any) => ({
                 ...segment,
                 id: segment.id || runtime.generateId('seg'),
