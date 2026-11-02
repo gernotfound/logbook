@@ -1,7 +1,7 @@
 import { captureSession } from '../src/lib/sync/session';
 import { prepareUnlockedTestArchive } from './secureVaultFixture';
 import { initializeLocal, readLocal } from '../src/lib/sync/localRepository';
-import { idbStore } from './setup';
+import { emptyUserData, idbStore } from './setup';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as sentryClient from '../src/lib/sentryClient';
 
@@ -380,43 +380,43 @@ describe('Milestone 2: PWA, offline workout and telemetry boundaries', () => {
     });
 
     it('saves an online workout without emitting workout usage telemetry', async () => {
+      useAppStore.getState().resetStore();
       const owner = captureSession().owner;
-      await prepareUnlockedTestArchive(owner);
-      await initializeLocal(owner, mockUserData);
-      expect(idbStore['logbook:v2:' + owner]).toMatch(/^tlb-sealed:v1:/);
+      const initialUserData: UserData = { ...emptyUserData, ...mockUserData };
       telemetryHub.init();
       telemetryHub.setUserId('user_athlete_online');
+      await prepareUnlockedTestArchive(owner);
+      await initializeLocal(owner, initialUserData);
+      expect(idbStore['logbook:v2:' + owner]).toMatch(/^tlb-sealed:v1:/);
 
-      // Auto-confirm end workout
       useDialogStore.setState({
         showConfirm: vi.fn().mockResolvedValue(true),
         showAlert: vi.fn().mockResolvedValue(undefined),
       });
-
       useAppStore.setState({
         dataOwner: owner,
-        userData: mockUserData,
-        localWorkout: {
-          id: 'w_test_1',
-          routineId: 'routine_push_1',
-          routineName: 'Push Day A',
-          date: '2026-08-24',
-          globalStartTime: Date.now() - 3600000, // 1 hour ago
-          exercises: [
-            { id: 'se1', exId: 'bench_press', sets: [{ id: 's1', kg: '100', reps: '8' }] },
-            { id: 'se2', exId: 'incline_db', sets: [{ id: 's2', kg: '32', reps: '10' }] },
-          ],
-        } as any,
+        userData: initialUserData,
+        localWorkout: null,
+        localPersistenceBlocked: false,
       });
 
       const { result } = renderHook(() => useWorkoutSession());
+      // Start through the production domain boundary, not by injecting an
+      // unjournalled workout into Zustand.
+      await act(async () => {
+        await result.current.startWorkout('routine_push_1');
+        await useAppStore.getState().flushPendingSyncs();
+      });
+      const activeId = useAppStore.getState().localWorkout?.id;
+      expect(activeId).toBeTruthy();
+      expect((await readLocal(owner))?.data.activeWorkout?.id).toBe(activeId);
 
       await act(async () => {
         await result.current.endWorkout();
       });
 
       expect(useAppStore.getState().localWorkout).toBeNull();
-      expect((await readLocal(owner))?.data.history?.some(workout => workout.id === 'w_test_1')).toBe(true);
+      expect((await readLocal(owner))?.data.history?.some(workout => workout.id === activeId)).toBe(true);
       expect(idbStore['logbook:v2:' + owner]).toMatch(/^tlb-sealed:v1:/);
 
       await new Promise(resolve => setTimeout(resolve, 0));
