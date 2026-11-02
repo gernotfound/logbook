@@ -154,17 +154,17 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
                 <div className="auth-form-field">
                     <label className="auth-form-label" htmlFor={emailId}>Email</label>
                     <input
-                    id={emailId}
-                    ref={emailInputRef}
-                    type="email"
-                    aria-label="Email"
-                    placeholder="La tua email"
-                    value={email}
-                    onChange={e => { setEmail(e.target.value); setFormError(null); }}
-                    required
-                    autoComplete="username"
-                    name="username"
-                    className="ui-login-box-8" style={{ padding: "0.75rem" }}
+                        id={emailId}
+                        ref={emailInputRef}
+                        type="email"
+                        aria-label="Email"
+                        placeholder="La tua email"
+                        value={email}
+                        onChange={e => { setEmail(e.target.value); setFormError(null); }}
+                        required
+                        autoComplete="username"
+                        name="username"
+                        className="ui-login-box-8" style={{ padding: "0.75rem" }}
                     />
                 </div>
 
@@ -172,27 +172,27 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
                     <div className="auth-form-field">
                         <label className="auth-form-label" htmlFor={passwordId}>Password</label>
                         <div className="auth-password-control">
-                        <input
-                            id={passwordId}
-                            type={showPassword ? "text" : "password"}
-                            aria-label="Password"
-                            placeholder={mode === 'register' ? 'Scegli una password sicura' : 'Password'}
-                            value={password}
-                            onChange={e => { setPassword(e.target.value); setFormError(null); }}
-                            aria-invalid={passwordMissing}
-                            aria-describedby={mode === 'register' ? requirementsId : undefined}
-                            required
-                            autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
-                            className="ui-login-box-9" style={{ padding: "0.75rem", paddingRight: "3.5rem", width: "100%", boxSizing: "border-box" }}
-                        />
-                        <button
-                            type="button"
-                            aria-label={showPassword ? 'Nascondi password' : 'Mostra password'}
-                            onClick={() => setShowPassword(!showPassword)}
-                            className="ui-login-box-10" style={{ position: "absolute", right: "0.625rem", top: "50%", transform: "translateY(-50%)", cursor: "pointer", display: "flex", alignItems: "center" }}
-                        >
-                            {showPassword ? <EyeOff size={18} aria-hidden="true" /> : <Eye size={18} aria-hidden="true" />}
-                        </button>
+                            <input
+                                id={passwordId}
+                                type={showPassword ? "text" : "password"}
+                                aria-label="Password"
+                                placeholder={mode === 'register' ? 'Scegli una password sicura' : 'Password'}
+                                value={password}
+                                onChange={e => { setPassword(e.target.value); setFormError(null); }}
+                                aria-invalid={passwordMissing}
+                                aria-describedby={mode === 'register' ? requirementsId : undefined}
+                                required
+                                autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
+                                className="ui-login-box-9" style={{ padding: "0.75rem", paddingRight: "3.5rem", width: "100%", boxSizing: "border-box" }}
+                            />
+                            <button
+                                type="button"
+                                aria-label={showPassword ? 'Nascondi password' : 'Mostra password'}
+                                onClick={() => setShowPassword(!showPassword)}
+                                className="ui-login-box-10" style={{ position: "absolute", right: "0.625rem", top: "50%", transform: "translateY(-50%)", cursor: "pointer", display: "flex", alignItems: "center" }}
+                            >
+                                {showPassword ? <EyeOff size={18} aria-hidden="true" /> : <Eye size={18} aria-hidden="true" />}
+                            </button>
                         </div>
                     </div>
                 )}
