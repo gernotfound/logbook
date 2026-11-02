@@ -1,7 +1,8 @@
 import React from 'react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, renderHook, act } from '@testing-library/react';
-import { emptyUserData } from './setup';
+import { emptyUserData, idbStore } from './setup';
+import { prepareUnlockedTestArchive } from './secureVaultFixture';
 import { captureSession } from '../src/lib/sync/session';
 import { initializeLocal, readLocal } from '../src/lib/sync/localRepository';
 import { useNutritionMeasurements } from '../src/hooks/useNutritionMeasurements';
@@ -172,7 +173,10 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                         }
                     }
                 });
+                await prepareUnlockedTestArchive(owner);
                 await initializeLocal(owner, initial);
+                const sealedBefore = idbStore['logbook:v2:' + owner];
+                expect(sealedBefore).toMatch(/^tlb-sealed:v1:/);
                 const originalDispatch = useAppStore.getState().dispatchDomainOperation;
                 useAppStore.setState({
                     userData: initial, dataOwner: owner, localPersistenceBlocked: false,
@@ -190,6 +194,7 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                     expect(useAppStore.getState().userData?.nutrition?.[date]?.weight).toBe(75);
                     expect((await readLocal(owner))?.data.nutrition?.[date]?.meals?.[0]?.id).toBe('m1');
                     expect((await readLocal(owner))?.data.nutrition?.[date]?.weight).toBe(75);
+                    expect(idbStore['logbook:v2:' + owner]).toBe(sealedBefore);
                 } finally {
                     useAppStore.setState({ dispatchDomainOperation: originalDispatch });
                 }
