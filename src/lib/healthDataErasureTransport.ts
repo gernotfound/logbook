@@ -1,4 +1,4 @@
-import { BACKEND_API_ORIGIN as API } from './backendApi';
+import { trustedBackendUrl } from './backendApi';
 
 // HTTP response handling only: the caller verifies the owner, current session,
 // server-complete proof and consent revision before any local purge.
@@ -6,7 +6,7 @@ export async function sendHealthDataErasure(
   method: 'POST' | 'GET',
   headers: { authorization: string; 'x-firebase-appcheck': string },
 ): Promise<unknown> {
-  const response = await fetch(API + '/api/health-data-erasure', {
+  const response = await fetch(trustedBackendUrl('/api/health-data-erasure'), {
     method, cache: 'no-store', signal: AbortSignal.timeout(12000), headers,
   });
   if (method === 'GET' && !response.ok) {

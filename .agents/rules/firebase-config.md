@@ -22,7 +22,7 @@ Non trattare tutte le variabili Firebase/App Check/Admin come un unico blocco ob
 
 Realtime Database, Firebase Storage e Cloud Messaging non sono importati dal runtime: `VITE_FIREBASE_DATABASE_URL`, `VITE_FIREBASE_STORAGE_BUCKET` e `VITE_FIREBASE_MESSAGING_SENDER_ID` sono ritirati dal contratto client.
 
-`VITE_ACCOUNT_DELETION_API_ORIGIN` è configurazione pubblica per raggiungere il backend trusted Vercel; non è una credenziale Firebase.
+`VITE_ACCOUNT_DELETION_API_ORIGIN` è configurazione pubblica per raggiungere il backend trusted Vercel; non è una credenziale Firebase. Il build Firebase Hosting Production la richiede e ne controlla l'origin atteso. Il client **MUST NOT** ripiegare su un host hardcoded quando è assente: i chiamanti HTTP falliscono prima del fetch se la variabile non è configurata; i flussi che controllano la disponibilità del backend restano inerti.
 
 **MUST:** l'accesso Vite alle env client resta statico (`import.meta.env.VITE_FIREBASE_API_KEY` ecc.). Non sostituirlo con `import.meta.env[key]`.
 

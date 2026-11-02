@@ -1,4 +1,4 @@
-import { BACKEND_API_ORIGIN as API } from './backendApi';
+import { trustedBackendUrl } from './backendApi';
 import type { User } from 'firebase/auth';
 import type { UserData } from '../types';
 import { LEGAL_VERSIONS } from './legalVersions';
@@ -260,7 +260,7 @@ async function serverRequest(user: User, method: 'GET' | 'POST', body?: unknown)
   if (!sameSession()) throw new Error('Sessione cambiata.');
   let response: Response;
   try {
-    response = await fetch(API + '/api/health-consent', {
+    response = await fetch(trustedBackendUrl('/api/health-consent'), {
       method,
       cache: 'no-store',
       headers: {

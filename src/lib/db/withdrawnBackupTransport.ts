@@ -1,4 +1,4 @@
-import { BACKEND_API_ORIGIN as API } from '../backendApi';
+import { trustedBackendUrl } from '../backendApi';
 import { auth, ensureAppCheck } from '../firebase';
 import { getLimitedUseAppCheckToken } from '../appCheck';
 import type { DocumentData } from '../sync/documentProjection';
@@ -24,7 +24,7 @@ export async function fetchWithdrawnCloudBackup(uid: string, assertCurrent: () =
       assertCurrent();
       const params = new URLSearchParams({ collection: section });
       if (after !== null) params.set('after', after);
-      const response = await fetch(API + '/api/health-consent-export?' + params.toString(), {
+      const response = await fetch(trustedBackendUrl('/api/health-consent-export') + '?' + params.toString(), {
         method: 'GET', cache: 'no-store', signal: AbortSignal.timeout(12_000),
         headers: { authorization: 'Bearer ' + await user.getIdToken(), 'x-firebase-appcheck': token },
       });
@@ -60,7 +60,7 @@ export async function fetchWithdrawnCloudBackup(uid: string, assertCurrent: () =
   assertCurrent();
   const idToken = await user.getIdToken();
   assertCurrent();
-  const checkpoint = await fetch(API + '/api/health-consent-export?collection=checkpoint', {
+  const checkpoint = await fetch(trustedBackendUrl('/api/health-consent-export?collection=checkpoint'), {
     method: 'GET', cache: 'no-store', signal: AbortSignal.timeout(12_000),
     headers: { authorization: 'Bearer ' + idToken, 'x-firebase-appcheck': appCheckToken },
   });
