@@ -56,12 +56,16 @@ export const NutritionPlanningSchema = z.object({
     onMacros: MacroRatioSchema.optional().catch(undefined),
     offMacros: MacroRatioSchema.optional().catch(undefined),
     notes: safeOptionalString(),
-    carbsPerKg: optionalNonNegativeNumber(),
-    proPerKg: optionalNonNegativeNumber(),
-    fatPerKg: optionalNonNegativeNumber(),
     normocalorica: PartialMacroTargetSchema.optional().catch(undefined),
     totalKcal: optionalNonNegativeNumber(),
-}).passthrough().transform(({ lockedMacro: _retiredLockedMacro, chartPeriod: _retiredChartPeriod, ...planning }) => planning).catch((ctx) => {
+}).passthrough().transform(({
+    lockedMacro: _retiredLockedMacro,
+    chartPeriod: _retiredChartPeriod,
+    carbsPerKg: _retiredCarbsPerKg,
+    proPerKg: _retiredProPerKg,
+    fatPerKg: _retiredFatPerKg,
+    ...planning
+}) => planning).catch((ctx) => {
     reportZodSchemaFallback({
         schema: 'NutritionPlanningSchema',
         fallbackUsed: 'default_empty_planning',

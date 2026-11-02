@@ -234,9 +234,9 @@ export const emptyUserData: UserData = {
   activeWorkout: null,
   nutritionPlanning: {
     weight: 80,
-    carbsPerKg: 3.5,
-    proPerKg: 2.0,
-    fatPerKg: 1.0,
+    onDaysCount: 4,
+    avgMacros: { carbsPerKg: 3.5, proPerKg: 2.0, fatPerKg: 1.0 },
+    onBoost: { carbsPercent: 20, proPercent: 0, fatPercent: 0 },
     normocalorica: { kcal: 2500, carbs: 300, pro: 160, fat: 70 }
   },
   trainingCycles: [],
@@ -564,9 +564,9 @@ export const defaultMockUserData: UserData = {
   activeWorkout: null,
   nutritionPlanning: {
     weight: 75,
-    carbsPerKg: 3.5,
-    proPerKg: 2.0,
-    fatPerKg: 1.0,
+    onDaysCount: 4,
+    avgMacros: { carbsPerKg: 3.5, proPerKg: 2.0, fatPerKg: 1.0 },
+    onBoost: { carbsPercent: 20, proPercent: 0, fatPercent: 0 },
     normocalorica: { kcal: 2500, carbs: 300, pro: 160, fat: 70 }
   },
   trainingCycles: [],

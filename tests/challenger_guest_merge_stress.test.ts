@@ -480,7 +480,7 @@ describe('Empirical Challenger: Deterministic Guest Merge (R5) Stress & Adversar
                 nutrition: { '2026-08-01': { date: '2026-08-01', kcal: 2000, carbs: 200, pro: 150, fat: 60, meals: [], supplementsIntake: [] } },
                 activeWorkout: { id: 'w1', exercises: [] },
                 activeCycleId: 'tc1',
-                nutritionPlanning: { weight: 75, carbsPerKg: 3.0, proPerKg: 2.0, fatPerKg: 1.0 }
+                nutritionPlanning: { weight: 75, avgMacros: { carbsPerKg: 3.0, proPerKg: 2.0, fatPerKg: 1.0 } }
             };
 
             const guestData: UserData = {
@@ -494,7 +494,7 @@ describe('Empirical Challenger: Deterministic Guest Merge (R5) Stress & Adversar
                 nutrition: { '2026-08-02': { date: '2026-08-02', kcal: 2200, carbs: 220, pro: 160, fat: 65, meals: [], supplementsIntake: [] } },
                 activeWorkout: { id: 'w2', exercises: [] },
                 activeCycleId: 'tc2',
-                nutritionPlanning: { weight: 78, carbsPerKg: 3.5, normocalorica: { kcal: 2600, carbs: 300, pro: 170, fat: 70 } }
+                nutritionPlanning: { weight: 78, avgMacros: { carbsPerKg: 3.5, proPerKg: 2, fatPerKg: 1 }, normocalorica: { kcal: 2600, carbs: 300, pro: 170, fat: 70 } }
             };
 
             const merged1 = mergeUserData(cloudData, guestData);
@@ -508,9 +508,6 @@ describe('Empirical Challenger: Deterministic Guest Merge (R5) Stress & Adversar
         it('deeply merges nutritionPlanning partials (normocalorica, avgMacros, onBoost, offMacros)', () => {
             const cloudPlan = {
                 weight: 70,
-                carbsPerKg: 3.0,
-                proPerKg: 2.0,
-                fatPerKg: 1.0,
                 avgMacros: { carbsPerKg: 3.0, proPerKg: 2.0, fatPerKg: 1.0 },
                 onBoost: { carbsPercent: 10, proPercent: 0, fatPercent: 0 },
                 onMacros: { carbsPerKg: 3.5, proPerKg: 2.0, fatPerKg: 1.0 },
@@ -520,7 +517,6 @@ describe('Empirical Challenger: Deterministic Guest Merge (R5) Stress & Adversar
 
             const guestPlan = {
                 weight: 75,
-                carbsPerKg: 3.5,
                 avgMacros: { carbsPerKg: 3.5, proPerKg: 2.2, fatPerKg: 0.9 },
                 onBoost: { carbsPercent: 15, proPercent: 5, fatPercent: -5 },
                 normocalorica: { kcal: 2500, carbs: 300 }
@@ -528,9 +524,8 @@ describe('Empirical Challenger: Deterministic Guest Merge (R5) Stress & Adversar
 
             const merged = mergeNutritionPlanning(cloudPlan, guestPlan);
             expect(merged?.weight).toBe(75);
-            expect(merged?.carbsPerKg).toBe(3.5);
-            expect(merged?.proPerKg).toBe(2.0); // cloud preserved
             expect(merged?.avgMacros?.carbsPerKg).toBe(3.5); // guest
+            expect(merged?.avgMacros?.fatPerKg).toBe(0.9); // guest
             expect(merged?.avgMacros?.proPerKg).toBe(2.2); // guest
             expect(merged?.onBoost?.carbsPercent).toBe(15); // guest
             expect(merged?.onMacros?.carbsPerKg).toBe(3.5); // cloud preserved

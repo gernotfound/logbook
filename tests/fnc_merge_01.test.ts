@@ -29,21 +29,23 @@ function buildUserData(
 
 describe('Nutrition planning provenance and metadata integrity', () => {
     it('classifies modern and additional fields as edited when origin is missing', () => {
-        const legacy = createDefaultNutritionPlanning();
-        expect(isDefaultNutritionPlanning(legacy)).toBe(true);
-        expect(legacy).not.toHaveProperty('lockedMacro');
-        expect(legacy).not.toHaveProperty('chartPeriod');
-        const modern = { ...legacy, avgMacros: { carbsPerKg: 3.5, proPerKg: 2, fatPerKg: 1 } };
-        expect(isDefaultNutritionPlanning(modern)).toBe(false);
-        expect(isDefaultNutritionPlanning({ ...legacy, normocalorica: { ...legacy.normocalorica, carbs: 345 } })).toBe(false);
-        expect(isDefaultNutritionPlanning({ ...legacy, onDaysCount: 4 })).toBe(false);
-        expect(isDefaultNutritionPlanning({ ...legacy, futureSetting: 'preserve' } as NutritionPlanning)).toBe(false);
+        const defaults = createDefaultNutritionPlanning();
+        expect(isDefaultNutritionPlanning(defaults)).toBe(true);
+        for (const field of ['carbsPerKg', 'proPerKg', 'fatPerKg', 'lockedMacro', 'chartPeriod']) {
+            expect(defaults).not.toHaveProperty(field);
+        }
+        const edited = { ...defaults, avgMacros: { carbsPerKg: 3.8, proPerKg: 2, fatPerKg: 1 } };
+        expect(isDefaultNutritionPlanning(edited)).toBe(false);
+        expect(isDefaultNutritionPlanning({ ...defaults, normocalorica: { ...defaults.normocalorica, carbs: 345 } })).toBe(false);
+        expect(isDefaultNutritionPlanning({ ...defaults, onDaysCount: 3 })).toBe(false);
+        expect(isDefaultNutritionPlanning({ ...defaults, onBoost: { carbsPercent: 21, proPercent: 0, fatPercent: 0 } })).toBe(false);
+        expect(isDefaultNutritionPlanning({ ...defaults, futureSetting: 'preserve' } as NutritionPlanning)).toBe(false);
 
-        const cloud = buildUserData({ ...legacy, weight: 90 }, 'user-edited');
-        const guest = buildUserData(modern);
+        const cloud = buildUserData({ ...defaults, weight: 90 }, 'user-edited');
+        const guest = buildUserData(edited);
         const merged = mergeUserData(cloud, guest);
         expect(merged.nutritionPlanning?.weight).toBe(90);
-        expect(merged.pendingConflicts?.nutritionPlanning?.avgMacros?.carbsPerKg).toBe(3.5);
+        expect(merged.pendingConflicts?.nutritionPlanning?.avgMacros?.carbsPerKg).toBe(3.8);
     });
 
     it('does not let forward-compatible nutrition keys overwrite merge metadata', () => {
@@ -68,13 +70,17 @@ describe('Nutrition planning provenance and metadata integrity', () => {
 describe('PR 3: FNC-MERGE-01 Nutrition Planning Merge Policy', () => {
     it('does not carry retired pre-launch planning fields into cloud/guest merge or conflict recovery', () => {
         const base = createDefaultNutritionPlanning();
-        const cloud = buildUserData({ ...base, weight: 90, lockedMacro: 'fat' } as NutritionPlanning, 'user-edited');
-        const guest = buildUserData({ ...base, weight: 75, chartPeriod: 14 } as NutritionPlanning, 'user-edited');
+        const cloud = buildUserData({ ...base, weight: 90, lockedMacro: 'fat', carbsPerKg: 7, proPerKg: 9 } as NutritionPlanning, 'user-edited');
+        const guest = buildUserData({ ...base, weight: 75, chartPeriod: 14, fatPerKg: 11 } as NutritionPlanning, 'user-edited');
         const merged = mergeUserData(cloud, guest);
         expect(merged.nutritionPlanning?.weight).toBe(90);
         expect(merged.pendingConflicts?.nutritionPlanning?.weight).toBe(75);
         expect(merged.nutritionPlanning).not.toHaveProperty('lockedMacro');
         expect(merged.pendingConflicts?.nutritionPlanning).not.toHaveProperty('chartPeriod');
+        for (const field of ['carbsPerKg', 'proPerKg', 'fatPerKg']) {
+            expect(merged.nutritionPlanning).not.toHaveProperty(field);
+            expect(merged.pendingConflicts?.nutritionPlanning).not.toHaveProperty(field);
+        }
     });
 
 

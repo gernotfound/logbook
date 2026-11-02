@@ -165,9 +165,9 @@ export function calculateTDEEAndMacros(state: Partial<UserData> | null) {
     }
     const macros = calculateMacrosFromKg(
         weight,
-        planning?.avgMacros?.carbsPerKg ?? planning?.carbsPerKg ?? 3.5,
-        planning?.avgMacros?.proPerKg ?? planning?.proPerKg ?? 2.0,
-        planning?.avgMacros?.fatPerKg ?? planning?.fatPerKg ?? 1.0
+        planning?.avgMacros?.carbsPerKg ?? 3.5,
+        planning?.avgMacros?.proPerKg ?? 2.0,
+        planning?.avgMacros?.fatPerKg ?? 1.0
     );
     return {
         tdee: tdeeVal,

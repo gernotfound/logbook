@@ -28,10 +28,6 @@ export interface NutritionPlanning {
     onMacros?: { carbsPerKg: number; proPerKg: number; fatPerKg: number };
     offMacros?: { carbsPerKg: number; proPerKg: number; fatPerKg: number };
     notes?: string;
-    // Legacy fields
-    carbsPerKg?: number;
-    proPerKg?: number;
-    fatPerKg?: number;
     normocalorica?: Partial<MacroTarget>;
     totalKcal?: number;
 }
