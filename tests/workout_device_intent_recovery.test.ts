@@ -141,6 +141,28 @@ describe('authenticated device-intent replay into semantic journal', () => {
             .toThrow('Generazione consenso locale incoerente');
     });
 
+    it('does not adopt a consent-unmarked history editor context for an account at epoch one', async () => {
+        const account = 'user:history-unknown-origin-' + crypto.randomUUID();
+        localStorage.setItem(`logbook:v2:${account}:health-consent-generation`, '1');
+        await prepareUnlockedTestArchive(account);
+        await initializeLocal(account, data(workout('50')));
+        const original = JSON.stringify({
+            version: 1, editorId: 'historical-edit', suspended: workout('70'),
+        });
+        writeDeviceValue(HISTORY_EDITOR_CONTEXT, original, account);
+        const before = await readLocal(account);
+        expect(() => assertHistoryEditorContextEpoch(original, account, 1))
+            .toThrow('consenso editor storico non verificabile');
+        expect(readDeviceValueStrict(HISTORY_EDITOR_CONTEXT, account)).toBe(original);
+        expect(await readLocal(account)).toEqual(before);
+
+        const stamped = JSON.stringify({
+            version: 1, editorId: 'historical-edit', consentRevision: 1, suspended: workout('70'),
+        });
+        expect(() => assertHistoryEditorContextEpoch(stamped, account, 1)).not.toThrow();
+        expect(() => assertHistoryEditorContextEpoch(original, 'guest')).not.toThrow();
+    });
+
     it('never turns a pre-revocation device-only edit into a new-consent cloud journal', async () => {
         const account = 'user:old-device-epoch-' + crypto.randomUUID();
         const key = `logbook:v2:${account}:health-consent-generation`;

@@ -22,6 +22,11 @@ export function assertHistoryEditorContextEpoch(raw: string | null, owner: strin
             || (saved.consentRevision as number) < 1))) {
         throw new Error('Metadati editor storico non validi: copia preservata.');
     }
+    // An owner-scoped encrypted record is not evidence that it was created
+    // under the current account consent, even for the first consent epoch.
+    if (owner.startsWith('user:') && saved.consentRevision === undefined) {
+        throw new Error('Generazione consenso editor storico non verificabile: copia preservata.');
+    }
     assertWorkoutSnapshotEpoch(owner, saved.consentRevision as number | undefined, envelopeRevision);
 }
 

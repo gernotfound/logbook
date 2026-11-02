@@ -68,6 +68,9 @@ export function useWorkoutHistoryEditor({
             // Never replace an unproven suspended session with a current-epoch one.
             assertHistoryEditorContextEpoch(previousContext, session.owner);
             const sourceRevision = readDeviceConsentRevision(session.owner);
+            if (session.owner.startsWith('user:') && sourceRevision === undefined) {
+                throw new Error('Generazione consenso editor storico non verificabile: nessun contesto creato.');
+            }
             const nextContext = JSON.stringify({
                 version: 1,
                 editorId: editingWorkout.id,
