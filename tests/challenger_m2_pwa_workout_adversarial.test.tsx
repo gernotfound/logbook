@@ -187,6 +187,8 @@ describe('Milestone 2 Challenger Suite: PWA and Offline Workout Stress Tests', (
   // =========================================================================
   describe('2. Offline Workout Lifecycle with 0 Exercises & Corrupted Structures', () => {
     it('handles starting and saving a workout with 0 exercises without throwing or crashing', async () => {
+      const ownerForConsent = captureSession().owner;
+      if (ownerForConsent.startsWith('user:')) localStorage.setItem(`logbook:v2:${ownerForConsent}:health-consent-generation`, '1');
       telemetryHub.init();
       telemetryHub.setUserId('user_empty_workout');
 
@@ -278,6 +280,8 @@ describe('Milestone 2 Challenger Suite: PWA and Offline Workout Stress Tests', (
     });
 
     it('handles workout with invalid ratings and non-numeric water values safely', async () => {
+      const ownerForConsent = captureSession().owner;
+      if (ownerForConsent.startsWith('user:')) localStorage.setItem(`logbook:v2:${ownerForConsent}:health-consent-generation`, '1');
       await prepareUnlockedTestArchive(captureSession().owner);
       telemetryHub.init();
       telemetryHub.setUserId('user_bad_ratings');

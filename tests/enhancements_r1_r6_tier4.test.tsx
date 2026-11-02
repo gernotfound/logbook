@@ -16,6 +16,8 @@ import type { WorkoutRoutine, TrainingCycle, Exercise } from '../src/types';
 describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', () => {
     beforeEach(() => {
         window.localStorage.clear();
+        const owner = captureSession().owner;
+        if (owner.startsWith('user:')) localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '1');
         useAppStore.getState().resetStore();
         vi.clearAllMocks();
     });

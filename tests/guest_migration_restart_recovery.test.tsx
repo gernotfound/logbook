@@ -222,6 +222,7 @@ describe('guest migration restart recovery', () => {
             exercises: [{ id: 'exercise-1', exId: 'bench', sets: [{ id: 'set-1', kg: '50', reps: '8' }] }],
         };
         const initial = parse({ ...cloud, activeWorkout: originalWorkout });
+        localStorage.setItem(`logbook:v2:user:${user.uid}:health-consent-generation`, '1');
         await localRepository.initializeLocal(user.uid, initial, []);
         const updatedWorkout = {
             ...initial.activeWorkout!,

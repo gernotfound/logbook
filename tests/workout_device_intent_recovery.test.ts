@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { update as idbUpdate } from 'idb-keyval';
 import { DomainParsers, UserDataSchema } from '../src/lib/schema';
 import { equivalentWorkoutSnapshot } from '../src/lib/sync/workoutSnapshotEquality';
-import { captureSession, captureSessionForOwner } from '../src/lib/sync/session';
+import { activateGuestSession, captureSession, captureSessionForOwner, GUEST_SESSION_KEY, revokeGuestSession } from '../src/lib/sync/session';
 import { deviceKey, protectedDeviceKey, readDeviceValueStrict, writeDeviceValue } from '../src/lib/sync/deviceStorage';
 import { BrowserStorageError } from '../src/lib/sync/browserStorage';
 import { localStorageMock } from './setup';
@@ -23,6 +23,13 @@ const workout = (kg: string): WorkoutSession => ({
 const data = (activeWorkout: WorkoutSession | null) => UserDataSchema.parse({ activeWorkout }) as unknown as UserData;
 const owner = 'user:test-user-id';
 
+async function prepareAccountWorkoutArchive(account: string): Promise<void> {
+    if (account.startsWith('user:') && localStorage.getItem(`logbook:v2:${account}:health-consent-generation`) === null) {
+        localStorage.setItem(`logbook:v2:${account}:health-consent-generation`, '1');
+    }
+    await prepareUnlockedTestArchive(account);
+}
+
 describe('authenticated device-intent replay into semantic journal', () => {
     beforeEach(() => { vi.clearAllMocks(); });
 
@@ -31,7 +38,7 @@ describe('authenticated device-intent replay into semantic journal', () => {
         const epochKey = `logbook:v2:${account}:health-consent-generation`;
         localStorage.setItem(epochKey, '1');
         const baseline = data(workout('50'));
-        await prepareUnlockedTestArchive(account);
+        await prepareAccountWorkoutArchive(account);
         await initializeLocal(account, baseline);
         const original = JSON.stringify(workout('65'));
         writeDeviceValue('workout', original, account);
@@ -63,7 +70,7 @@ describe('authenticated device-intent replay into semantic journal', () => {
         const epochKey = `logbook:v2:${account}:health-consent-generation`;
         localStorage.setItem(epochKey, '1');
         const initial = data(workout('50'));
-        await prepareUnlockedTestArchive(account);
+        await prepareAccountWorkoutArchive(account);
         await initializeLocal(account, initial);
         persistPlainWorkoutSnapshot(workout('55'), account);
         const stamped = readDeviceValueStrict('workout', account);
@@ -83,7 +90,7 @@ describe('authenticated device-intent replay into semantic journal', () => {
         const account = 'user:fresh-plain-' + crypto.randomUUID();
         localStorage.setItem(`logbook:v2:${account}:health-consent-generation`, '3');
         const initial = data(workout('50'));
-        await prepareUnlockedTestArchive(account);
+        await prepareAccountWorkoutArchive(account);
         await initializeLocal(account, initial);
         persistPlainWorkoutSnapshot(workout('55'), account);
         const raw = readDeviceValueStrict('workout', account);
@@ -105,7 +112,7 @@ describe('authenticated device-intent replay into semantic journal', () => {
             __logbookWorkoutSnapshot: 1, owner: 'user:someone-else',
             consentRevision: 3, workout: workout('80'),
         });
-        await prepareUnlockedTestArchive(account);
+        await prepareAccountWorkoutArchive(account);
         writeDeviceValue('workout', original, account);
         expect(() => getInitialLocalWorkout(account, null, [], undefined, undefined, 3))
             .toThrow('Metadati dello snapshot workout non validi');
@@ -119,7 +126,7 @@ describe('authenticated device-intent replay into semantic journal', () => {
         const epochKey = `logbook:v2:${account}:health-consent-generation`;
         localStorage.setItem(epochKey, '1');
         const initial = data(workout('50'));
-        await prepareUnlockedTestArchive(account);
+        await prepareAccountWorkoutArchive(account);
         await initializeLocal(account, initial);
         const source = JSON.stringify({
             version: 1, editorId: 'historical-edit', suspended: workout('75'),
@@ -144,7 +151,7 @@ describe('authenticated device-intent replay into semantic journal', () => {
     it('does not adopt a consent-unmarked history editor context for an account at epoch one', async () => {
         const account = 'user:history-unknown-origin-' + crypto.randomUUID();
         localStorage.setItem(`logbook:v2:${account}:health-consent-generation`, '1');
-        await prepareUnlockedTestArchive(account);
+        await prepareAccountWorkoutArchive(account);
         await initializeLocal(account, data(workout('50')));
         const original = JSON.stringify({
             version: 1, editorId: 'historical-edit', suspended: workout('70'),
@@ -168,7 +175,7 @@ describe('authenticated device-intent replay into semantic journal', () => {
         const key = `logbook:v2:${account}:health-consent-generation`;
         localStorage.setItem(key, '1');
         const original = data(workout('50'));
-        await prepareUnlockedTestArchive(account);
+        await prepareAccountWorkoutArchive(account);
         await initializeLocal(account, original);
         const intent = saveWorkoutDeviceIntent(account, (original.activeWorkout ?? null), workout('55'), (original.activeWorkout ?? null));
         expect(intent.consentRevision).toBe(1);
@@ -194,7 +201,7 @@ describe('authenticated device-intent replay into semantic journal', () => {
         const key = `logbook:v2:${account}:health-consent-generation`;
         localStorage.setItem(key, '1');
         const original = data(workout('50'));
-        await prepareUnlockedTestArchive(account);
+        await prepareAccountWorkoutArchive(account);
         await initializeLocal(account, original);
         const stamped = saveWorkoutDeviceIntent(account, original.activeWorkout ?? null, workout('55'), original.activeWorkout ?? null);
         const unmarked = { ...stamped, consentRevision: undefined };
@@ -232,18 +239,22 @@ describe('authenticated device-intent replay into semantic journal', () => {
 
     it('retains guest device intent support without account consent metadata', async () => {
         const guest = 'guest';
+        localStorage.setItem('logbook_is_guest', 'true');
+        localStorage.setItem(GUEST_SESSION_KEY, 'workout-intent-guest-session');
+        activateGuestSession('workout-intent-guest-session');
         await prepareUnlockedTestArchive(guest);
         const current = saveWorkoutDeviceIntent(guest, null, workout('50'), null);
         expect(current.consentRevision).toBeUndefined();
         expect(readWorkoutDeviceIntent(guest)?.intentId).toBe(current.intentId);
         expect(readDeviceValueStrict('workout-intent:' + current.intentId, guest)).not.toBeNull();
+        revokeGuestSession();
     });
 
     it('allows a fresh synchronous workout intent created under the current reaccepted epoch', async () => {
         const account = 'user:fresh-device-epoch-' + crypto.randomUUID();
         localStorage.setItem(`logbook:v2:${account}:health-consent-generation`, '3');
         const initial = data(workout('50'));
-        await prepareUnlockedTestArchive(account);
+        await prepareAccountWorkoutArchive(account);
         await initializeLocal(account, initial);
         const newer = saveWorkoutDeviceIntent(account, (initial.activeWorkout ?? null), workout('55'), (initial.activeWorkout ?? null));
         expect(newer.consentRevision).toBe(3);
@@ -260,7 +271,7 @@ describe('authenticated device-intent replay into semantic journal', () => {
         const key = `logbook:v2:${account}:health-consent-generation`;
         localStorage.setItem(key, '1');
         const original = data(workout('50'));
-        await prepareUnlockedTestArchive(account);
+        await prepareAccountWorkoutArchive(account);
         await initializeLocal(account, original);
         const intent = saveWorkoutDeviceIntent(account, (original.activeWorkout ?? null), workout('55'), (original.activeWorkout ?? null));
         localStorage.setItem(key, '3');
@@ -280,7 +291,7 @@ describe('authenticated device-intent replay into semantic journal', () => {
     it('preserves a losing tab draft in immutable copies when two tabs overwrite their shared snapshot', async () => {
         const parallelOwner = 'user:slot-overwrite-test';
         const original = data(workout('50'));
-        await prepareUnlockedTestArchive(parallelOwner);
+        await prepareAccountWorkoutArchive(parallelOwner);
         await initializeLocal(parallelOwner, original);
         const first = saveWorkoutDeviceIntent(parallelOwner, original.activeWorkout ?? null, workout('55'), original.activeWorkout ?? null);
         const firstCopy = JSON.stringify(first);
@@ -302,7 +313,7 @@ describe('authenticated device-intent replay into semantic journal', () => {
     it('blocks replay when cross-tab compaction hides a competing independent workout witness', async () => {
         const scopedOwner = 'user:slot-index-compaction-' + crypto.randomUUID();
         const initial = data(workout('50'));
-        await prepareUnlockedTestArchive(scopedOwner);
+        await prepareAccountWorkoutArchive(scopedOwner);
         await initializeLocal(scopedOwner, initial);
         const unrelated = 'cross-tab:temporary-' + crypto.randomUUID();
         localStorage.setItem(unrelated, 'present');
@@ -344,7 +355,7 @@ describe('authenticated device-intent replay into semantic journal', () => {
     it('refuses a late competing workout witness inserted while reading the final inventory', async () => {
         const scopedOwner = 'user:late-slot-' + crypto.randomUUID();
         const initial = data(workout('50'));
-        await prepareUnlockedTestArchive(scopedOwner);
+        await prepareAccountWorkoutArchive(scopedOwner);
         await initializeLocal(scopedOwner, initial);
         const first = saveWorkoutDeviceIntent(scopedOwner, initial.activeWorkout ?? null,
             workout('55'), initial.activeWorkout ?? null);
@@ -388,7 +399,7 @@ describe('authenticated device-intent replay into semantic journal', () => {
     it('refuses a new sibling inserted after the last scan but inside the IndexedDB commit guard', async () => {
         const scopedOwner = 'user:commit-time-sibling-' + crypto.randomUUID();
         const initial = data(workout('50'));
-        await prepareUnlockedTestArchive(scopedOwner);
+        await prepareAccountWorkoutArchive(scopedOwner);
         await initializeLocal(scopedOwner, initial);
         const original = saveWorkoutDeviceIntent(scopedOwner, initial.activeWorkout ?? null,
             workout('55'), initial.activeWorkout ?? null);
@@ -422,7 +433,7 @@ describe('authenticated device-intent replay into semantic journal', () => {
     it('refuses a shared workout changed during the IndexedDB commit preflight', async () => {
         const scopedOwner = 'user:commit-time-shared-' + crypto.randomUUID();
         const initial = data(workout('50'));
-        await prepareUnlockedTestArchive(scopedOwner);
+        await prepareAccountWorkoutArchive(scopedOwner);
         await initializeLocal(scopedOwner, initial);
         const original = saveWorkoutDeviceIntent(scopedOwner, initial.activeWorkout ?? null,
             workout('55'), initial.activeWorkout ?? null);
@@ -446,7 +457,7 @@ describe('authenticated device-intent replay into semantic journal', () => {
     it('preserves a concurrent plain workout written after the journal commit', async () => {
         const account = 'user:post-commit-plain-' + crypto.randomUUID();
         const initial = data(workout('50'));
-        await prepareUnlockedTestArchive(account);
+        await prepareAccountWorkoutArchive(account);
         await initializeLocal(account, initial);
         const candidate = saveWorkoutDeviceIntent(account, initial.activeWorkout ?? null,
             workout('55'), initial.activeWorkout ?? null);
@@ -477,7 +488,7 @@ describe('authenticated device-intent replay into semantic journal', () => {
     it('never overwrites an unbacked legacy intent after a newer journal commit', async () => {
         const account = 'user:post-commit-legacy-' + crypto.randomUUID();
         const initial = data(workout('50'));
-        await prepareUnlockedTestArchive(account);
+        await prepareAccountWorkoutArchive(account);
         await initializeLocal(account, initial);
         const first = saveWorkoutDeviceIntent(account, initial.activeWorkout ?? null,
             workout('55'), initial.activeWorkout ?? null);
@@ -499,7 +510,7 @@ describe('authenticated device-intent replay into semantic journal', () => {
     it('repairs an actually missing shared key for a legacy ID-less intent', async () => {
         const account = 'user:legacy-unbacked-missing-' + crypto.randomUUID();
         const initial = data(workout('50'));
-        await prepareUnlockedTestArchive(account);
+        await prepareAccountWorkoutArchive(account);
         await initializeLocal(account, initial);
         const modern = saveWorkoutDeviceIntent(account, initial.activeWorkout ?? null,
             workout('55'), initial.activeWorkout ?? null);
@@ -520,7 +531,7 @@ describe('authenticated device-intent replay into semantic journal', () => {
     it('repairs an unchanged older shared snapshot only when its private ancestor is authentic', async () => {
         const account = 'user:backed-ancestor-' + crypto.randomUUID();
         const initial = data(workout('50'));
-        await prepareUnlockedTestArchive(account);
+        await prepareAccountWorkoutArchive(account);
         await initializeLocal(account, initial);
         const first = saveWorkoutDeviceIntent(account, initial.activeWorkout ?? null,
             workout('55'), initial.activeWorkout ?? null);
@@ -534,7 +545,7 @@ describe('authenticated device-intent replay into semantic journal', () => {
     it('recovers a private draft when the shared snapshot write was interrupted', async () => {
         const testOwner = 'user:slot-before-shared';
         const initial = data(workout('50'));
-        await prepareUnlockedTestArchive(testOwner);
+        await prepareAccountWorkoutArchive(testOwner);
         await initializeLocal(testOwner, initial);
         const intent = saveWorkoutDeviceIntent(testOwner, initial.activeWorkout ?? null,
             workout('57'), initial.activeWorkout ?? null);
@@ -551,7 +562,7 @@ describe('authenticated device-intent replay into semantic journal', () => {
     it('retains a linked immutable chain until the latest edit is journalled', async () => {
         const testOwner = 'user:slot-rapid-edits';
         const initial = data(workout('50'));
-        await prepareUnlockedTestArchive(testOwner);
+        await prepareAccountWorkoutArchive(testOwner);
         await initializeLocal(testOwner, initial);
         let previous = initial.activeWorkout ?? null;
         for (let i = 1; i <= 24; i++) {
@@ -572,7 +583,7 @@ describe('authenticated device-intent replay into semantic journal', () => {
     it('retains its immutable witness if the shared snapshot write is denied after the first write', async () => {
         const testOwner = 'user:shared-write-denied';
         const initial = data(workout('50'));
-        await prepareUnlockedTestArchive(testOwner);
+        await prepareAccountWorkoutArchive(testOwner);
         await initializeLocal(testOwner, initial);
         const write = localStorageMock.setItem.getMockImplementation();
         if (!write) throw new Error('Expected storage implementation');
@@ -600,7 +611,7 @@ describe('authenticated device-intent replay into semantic journal', () => {
 
     it('replays a persisted device intent into the journal idempotently in the same test realm', async () => {
         const before = data(workout('50'));
-        await prepareUnlockedTestArchive(owner);
+        await prepareAccountWorkoutArchive(owner);
         await initializeLocal(owner, before);
         const changed = workout('55');
         const intent = saveWorkoutDeviceIntent(owner, before.activeWorkout ?? null, changed, before.activeWorkout ?? null);
@@ -623,7 +634,7 @@ describe('authenticated device-intent replay into semantic journal', () => {
 
     it('applies the latest rapid edit and refuses a delayed older IndexedDB commit', async () => {
         const initial = data(workout('50'));
-        await prepareUnlockedTestArchive(owner);
+        await prepareAccountWorkoutArchive(owner);
         await initializeLocal(owner, initial);
         const first = saveWorkoutDeviceIntent(owner, initial.activeWorkout ?? null, workout('52'), initial.activeWorkout ?? null);
         const latest = saveWorkoutDeviceIntent(owner, workout('52'), workout('57'), initial.activeWorkout ?? null);
@@ -645,7 +656,7 @@ describe('authenticated device-intent replay into semantic journal', () => {
         for (const [committedKg, competingKg] of [['55', '60'], ['60', '55']]) {
             const parallelOwner = 'user:device-intent-collision-' + committedKg;
             const original = data(workout('50'));
-            await prepareUnlockedTestArchive(parallelOwner);
+            await prepareAccountWorkoutArchive(parallelOwner);
             await initializeLocal(parallelOwner, original);
             const first = saveWorkoutDeviceIntent(parallelOwner, original.activeWorkout ?? null, workout(committedKg), original.activeWorkout ?? null);
             const competing = { ...first, intentId: 'b'.repeat(32), workout: workout(competingKg) };
@@ -669,7 +680,7 @@ describe('authenticated device-intent replay into semantic journal', () => {
     it('rejects a newer sequence from a divergent tab branch before changing IndexedDB', async () => {
         const testOwner = 'user:divergent-ancestry';
         const initial = data(workout('50'));
-        await prepareUnlockedTestArchive(testOwner);
+        await prepareAccountWorkoutArchive(testOwner);
         await initializeLocal(testOwner, initial);
         const first = saveWorkoutDeviceIntent(testOwner, initial.activeWorkout ?? null, workout('55'), initial.activeWorkout ?? null);
         await commitDomainOperations(testOwner, { type: 'active-workout.set', workout: first.workout },
@@ -694,7 +705,7 @@ describe('authenticated device-intent replay into semantic journal', () => {
     it('accepts a newer snapshot whose intervening intent is still uncommitted', async () => {
         const testOwner = 'user:linear-ancestry';
         const initial = data(workout('50'));
-        await prepareUnlockedTestArchive(testOwner);
+        await prepareAccountWorkoutArchive(testOwner);
         await initializeLocal(testOwner, initial);
         const first = saveWorkoutDeviceIntent(testOwner, initial.activeWorkout ?? null, workout('52'), initial.activeWorkout ?? null);
         const middle = saveWorkoutDeviceIntent(testOwner, first.workout, workout('55'), first.baseline);
@@ -711,7 +722,7 @@ describe('authenticated device-intent replay into semantic journal', () => {
 
     it('allows an equivalent retry at the same generation/sequence without duplicate journal entries', async () => {
         const initial = data(workout('50'));
-        await prepareUnlockedTestArchive(owner);
+        await prepareAccountWorkoutArchive(owner);
         await initializeLocal(owner, initial);
         const intent = saveWorkoutDeviceIntent(owner, initial.activeWorkout ?? null, workout('55'), initial.activeWorkout ?? null);
         await recoverWorkoutDeviceIntent(owner, () => true);
@@ -727,7 +738,7 @@ describe('authenticated device-intent replay into semantic journal', () => {
 
     it('accepts semantically identical serialized and Zod-expanded snapshots without masking competing edits', async () => {
         const initial = data(workout('50'));
-        await prepareUnlockedTestArchive(owner);
+        await prepareAccountWorkoutArchive(owner);
         await initializeLocal(owner, initial);
         const first = saveWorkoutDeviceIntent(owner, initial.activeWorkout ?? null, workout('55'), initial.activeWorkout ?? null);
         const expanded = DomainParsers.parseActiveWorkout(first.workout);
@@ -759,7 +770,7 @@ describe('authenticated device-intent replay into semantic journal', () => {
 
     it('accepts a durable baseline with Zod-expanded optional fields without losing its session identity', async () => {
         const rawBaseline: WorkoutSession = { ...workout('50'), pains: undefined };
-        await prepareUnlockedTestArchive(owner);
+        await prepareAccountWorkoutArchive(owner);
         await initializeLocal(owner, data(rawBaseline));
         saveWorkoutDeviceIntent(owner, rawBaseline, workout('55'), rawBaseline);
         await recoverWorkoutDeviceIntent(owner, () => true);
@@ -767,7 +778,7 @@ describe('authenticated device-intent replay into semantic journal', () => {
     });
 
     it('preserves an intentionally null first baseline through subsequent synchronous edits', async () => {
-        await prepareUnlockedTestArchive(owner);
+        await prepareAccountWorkoutArchive(owner);
         await initializeLocal(owner, data(null));
         const first = saveWorkoutDeviceIntent(owner, null, workout('50'), null);
         const second = saveWorkoutDeviceIntent(owner, first.workout, workout('55'), workout('50'));
@@ -782,7 +793,7 @@ describe('authenticated device-intent replay into semantic journal', () => {
 
     it('rejects an unrelated durable workout without deleting the saved device intent', async () => {
         const before = data(workout('50'));
-        await prepareUnlockedTestArchive(owner);
+        await prepareAccountWorkoutArchive(owner);
         await initializeLocal(owner, before);
         saveWorkoutDeviceIntent(owner, before.activeWorkout ?? null, workout('55'), before.activeWorkout ?? null);
         await commitDomainOperations(owner, { type: 'active-workout.set', workout: { ...workout('60'), id: 'other-workout' } }, before);
@@ -794,7 +805,7 @@ describe('authenticated device-intent replay into semantic journal', () => {
 
     it('rejects a corrupt preexisting snapshot instead of overwriting it', async () => {
         const initial = data(workout('50'));
-        await prepareUnlockedTestArchive(owner);
+        await prepareAccountWorkoutArchive(owner);
         await initializeLocal(owner, initial);
         writeDeviceValue('workout', '{broken-json', owner);
         expect(() => saveWorkoutDeviceIntent(owner, initial.activeWorkout ?? null, workout('55'), initial.activeWorkout ?? null))
@@ -804,7 +815,7 @@ describe('authenticated device-intent replay into semantic journal', () => {
 
     it('keeps the device intent intact when IndexedDB rejects its transaction', async () => {
         const initial = data(workout('50'));
-        await prepareUnlockedTestArchive(owner);
+        await prepareAccountWorkoutArchive(owner);
         await initializeLocal(owner, initial);
         const intent = saveWorkoutDeviceIntent(owner, initial.activeWorkout ?? null, workout('66'), initial.activeWorkout ?? null);
         vi.mocked(idbUpdate).mockRejectedValueOnce(new Error('disk failure'));

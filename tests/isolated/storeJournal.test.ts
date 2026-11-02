@@ -121,10 +121,11 @@ describe('store with real IndexedDB commits', () => {
     it('blocks further edits after a same-sequence workout collision instead of clearing the unsaved draft', async () => {
         const workout = { id: 'w-collision', date: '2026-10-14', routineName: 'Base', exercises: [] };
         const base = UserDataSchema.parse({ activeWorkout: workout }) as unknown as UserData;
+        localStorage.setItem('logbook:v2:user:A:health-consent-generation', '1');
         await del('logbook:v2:user:A');
         await initializeLocal('user:A', base);
         store.setState({ userData: base, dataOwner: 'user:A', localWorkout: workout });
-        const intent = { generation: 'a'.repeat(32), sequence: 1, intentId: 'b'.repeat(32), baseline: workout };
+        const intent = { generation: 'a'.repeat(32), sequence: 1, consentRevision: 1, intentId: 'b'.repeat(32), baseline: workout };
         await commitDomainOperations('user:A', {
             type: 'active-workout.set', workout: { ...workout, routineName: 'Scheda A' },
         }, base, undefined, intent);

@@ -407,6 +407,7 @@ describe('Training Planning & Volume Calculations', () => {
         });
 
         it('renders the optional suggested routine in TrainingSession and starts it', async () => {
+            localStorage.setItem('logbook:v2:user:test-user-id:health-consent-generation', '1');
             await prepareUnlockedTestArchive('user:test-user-id');
             render(<TrainingSession />);
 
@@ -426,6 +427,7 @@ describe('Training Planning & Volume Calculations', () => {
         });
 
         it('allows selecting another routine from the rotation dropdown and starting it', async () => {
+            localStorage.setItem('logbook:v2:user:test-user-id:health-consent-generation', '1');
             await prepareUnlockedTestArchive('user:test-user-id');
             render(<TrainingSession />);
 

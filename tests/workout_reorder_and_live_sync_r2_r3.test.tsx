@@ -53,7 +53,9 @@ describe('Workout Reorder (R2) and Live Sync & Badges (R3) Suite', () => {
     beforeEach(async () => {
         localStorage.clear();
         useAppStore.getState().resetStore();
-        await prepareUnlockedTestArchive(captureSession().owner);
+        const owner = captureSession().owner;
+        if (owner.startsWith('user:')) localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '1');
+        await prepareUnlockedTestArchive(owner);
         useAppStore.setState({
             dataOwner: captureSession().owner,
             userData: {
