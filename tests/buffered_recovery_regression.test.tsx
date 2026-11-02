@@ -77,6 +77,30 @@ describe.each(['input', 'textarea'] as const)('owner-scoped buffered %s recovery
         view.unmount();
     });
 
+    it('rejects encrypted but unversioned account drafts even on the first consent revision', async () => {
+        const owner = captureSession().owner;
+        await prepareUnlockedTestArchive(owner);
+        const name = `draft:buffered:${kind}:stable-draft`;
+        const sealedKey = protectedDeviceKey(name, owner);
+        localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '1');
+        writeDeviceValue(name, 'old pre-launch draft', owner);
+        const original = localStorage.getItem(sealedKey);
+        expect(original).toMatch(/^tlb-sealed:v1:/);
+
+        expect(() => readBufferedDraftSnapshot(name, owner)).toThrow(/senza provenienza/);
+        expect(() => writeBufferedDraft(name, owner, 'replacement')).toThrow(/senza provenienza/);
+        expect(() => writeBufferedDraft(name, owner, null)).toThrow(/senza provenienza/);
+        expect(localStorage.getItem(sealedKey)).toBe(original);
+    });
+
+    it('does not create an unstamped account draft if the consent-generation marker is missing', async () => {
+        const owner = captureSession().owner;
+        await prepareUnlockedTestArchive(owner);
+        const name = `draft:buffered:${kind}:stable-draft`;
+        expect(() => writeBufferedDraft(name, owner, 'unsafe draft')).toThrow(/Generazione consenso/);
+        expect(readDeviceValueStrict(name, owner)).toBeNull();
+    });
+
     it('writes a stamped epoch-bound record and never flushes a mounted stale editor', async () => {
         const key = recoveryKey(kind);
         const owner = captureSession().owner;
@@ -234,6 +258,7 @@ describe.each(['input', 'textarea'] as const)('owner-scoped buffered %s recovery
         const sealedKey = protectedDeviceKey(name, owner);
         const stored = kind === 'input' ? '7,5' : 'Nota recuperata dopo riavvio';
         const committed = kind === 'input' ? '7.5' : stored;
+        localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '3');
         writeBufferedDraft(name, owner, stored);
         const ciphertext = localStorage.getItem(sealedKey);
         expect(ciphertext).toMatch(/^tlb-sealed:v1:/);

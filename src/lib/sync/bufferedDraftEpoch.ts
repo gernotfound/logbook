@@ -30,27 +30,24 @@ class BufferedDraftConflictError extends Error {
 export function readBufferedDraftSnapshot(name: string, owner: string): BufferedDraftSnapshot {
     const raw = readDeviceValueStrict(name, owner);
     if (raw === null) return { value: null, raw: null };
-    let revision: number | undefined;
-    let value = raw;
-    if (raw.startsWith('{')) {
-        let parsed: unknown;
-        try { parsed = JSON.parse(raw); }
-        catch { parsed = null; }
-        if (parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)
-            && Object.hasOwn(parsed, '__logbookBufferedDraft')) {
-            const record = parsed as Partial<BufferedDraftRecord>;
-            if (record.__logbookBufferedDraft !== 1 || record.owner !== owner || record.name !== name
-                || !Number.isSafeInteger(record.consentRevision)
-                || (record.consentRevision ?? 0) < 1 || typeof record.value !== 'string') {
-                throw new Error('Provenienza della bozza bufferizzata non valida: copia conservata.');
-            }
-            revision = record.consentRevision;
-            value = record.value;
-        }
+    // Guest drafts are deliberately unversioned in the current local-only flow.
+    // Authenticated drafts must carry an owner/name/consent witness, including
+    // after the first acceptance: old raw copies are never promoted as current.
+    if (!owner.startsWith('user:')) return { value: raw, raw };
+    let parsed: unknown;
+    try { parsed = JSON.parse(raw); }
+    catch { throw new Error('Bozza bufferizzata senza provenienza verificabile: copia conservata.'); }
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        throw new Error('Bozza bufferizzata senza provenienza verificabile: copia conservata.');
     }
-    // Legacy raw text has no epoch. It is safe to auto-recover only in epoch 1.
-    assertWorkoutSnapshotEpoch(owner, revision);
-    return { value, raw };
+    const record = parsed as Partial<BufferedDraftRecord>;
+    if (record.__logbookBufferedDraft !== 1 || record.owner !== owner || record.name !== name
+        || !Number.isSafeInteger(record.consentRevision)
+        || (record.consentRevision ?? 0) < 1 || typeof record.value !== 'string') {
+        throw new Error('Provenienza della bozza bufferizzata non valida: copia conservata.');
+    }
+    assertWorkoutSnapshotEpoch(owner, record.consentRevision);
+    return { value: record.value, raw };
 }
 
 export function assertBufferedDraftUnchanged(name: string, owner: string, expectedRaw: string | null): void {
@@ -88,6 +85,9 @@ export function writeBufferedDraft(
     }
     const sourceRevision = expectedConsentGeneration === undefined ? revision
         : expectedConsentGeneration === null ? undefined : Number(expectedConsentGeneration);
+    if (owner.startsWith('user:') && sourceRevision === undefined) {
+        throw new Error('Generazione consenso bozza bufferizzata non verificabile: copia conservata.');
+    }
     const next = owner.startsWith('user:') && sourceRevision !== undefined
         ? JSON.stringify({
             __logbookBufferedDraft: 1, owner, name, consentRevision: sourceRevision, value,
