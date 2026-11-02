@@ -107,7 +107,9 @@ describe('audit interaction regressions', () => {
         expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
         expect(localStorage.getItem(sealedKey)).toBe(originalCiphertext);
         expect(localStorage.getItem(deviceKey('workout', owner))).toBeNull();
-        expect(JSON.parse(readDeviceValueStrict('workout', owner)!)).toMatchObject(workout);
+        expect(JSON.parse(readDeviceValueStrict('workout', owner)!)).toMatchObject({
+            __logbookWorkoutSnapshot: 1, owner, consentRevision: 1, workout,
+        });
     });
 
     it('ends a workout once even after double submission and a rejected first save', async () => {
