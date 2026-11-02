@@ -120,6 +120,7 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
             localStorage.setItem(GUEST_KEY, 'true');
             localStorage.setItem(GUEST_SESSION_KEY, 'guest-dirty-generation');
             activateGuestSession('guest-dirty-generation');
+            await prepareUnlockedTestArchive('guest');
 
             const catalog = await getCachedCatalog();
             const customEx: Exercise = { id: 'dirty_custom_ex_1', name: 'Dirty Bench', setsCount: 4, sets: [], isDefault: false };
