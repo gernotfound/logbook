@@ -286,12 +286,18 @@ describe('Milestone 2 Challenger Suite: PWA and Offline Workout Stress Tests', (
       telemetryHub.init();
       telemetryHub.setUserId('user_bad_ratings');
 
+      const currentSession = {
+        id: 'w_bad_ratings',
+        routineId: 'r1',
+        date: '2026-08-24',
+        globalStartTime: Date.now() - 900000,
+        exercises: [{ id: 'se1', exId: 'ex1', sets: [] }],
+      };
       const baseUserData: UserData = {
-        profile: { name: 'User' },
-        routines: [],
-        library: [],
-        history: [],
-      } as unknown as UserData;
+        ...emptyUserData, profile: { name: 'User' },
+        routines: [], library: [], history: [], activeWorkout: currentSession,
+      } as UserData;
+      await initializeLocal(ownerForConsent, baseUserData);
 
       useAppStore.setState({
         dataOwner: 'user:test-user-id',

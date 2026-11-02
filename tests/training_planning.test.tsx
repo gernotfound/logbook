@@ -7,6 +7,7 @@ import { CycleCard } from '../src/components/Training/planning/CycleCard';
 import { RoutineCard } from '../src/components/Training/routines/RoutineCard';
 import TrainingSession from '../src/components/Training/TrainingSession';
 import { prepareUnlockedTestArchive } from './secureVaultFixture';
+import { initializeLocal } from '../src/lib/sync/localRepository';
 import TrainingView from '../src/components/Training/TrainingView';
 import { useAppStore } from '../src/store/useAppStore';
 import type { TrainingCycle, WorkoutRoutine, Exercise, UserData } from '../src/types';
@@ -409,6 +410,7 @@ describe('Training Planning & Volume Calculations', () => {
         it('renders the optional suggested routine in TrainingSession and starts it', async () => {
             localStorage.setItem('logbook:v2:user:test-user-id:health-consent-generation', '1');
             await prepareUnlockedTestArchive('user:test-user-id');
+            await initializeLocal('user:test-user-id', useAppStore.getState().userData!);
             render(<TrainingSession />);
 
             expect(screen.getByText(/Scheda suggerita · Rotazione flessibile/i)).toBeDefined();
@@ -429,6 +431,7 @@ describe('Training Planning & Volume Calculations', () => {
         it('allows selecting another routine from the rotation dropdown and starting it', async () => {
             localStorage.setItem('logbook:v2:user:test-user-id:health-consent-generation', '1');
             await prepareUnlockedTestArchive('user:test-user-id');
+            await initializeLocal('user:test-user-id', useAppStore.getState().userData!);
             render(<TrainingSession />);
 
             const select = screen.getByRole('combobox', { name: /Seleziona scheda della rotazione/i });

@@ -640,11 +640,11 @@ describe('authenticated device-intent replay into semantic journal', () => {
         const latest = saveWorkoutDeviceIntent(owner, workout('52'), workout('57'), initial.activeWorkout ?? null);
         expect(latest.intentId).not.toBe(first.intentId);
         await commitDomainOperations(owner, { type: 'active-workout.set', workout: latest.workout }, initial, undefined,
-            { generation: latest.generation, sequence: latest.sequence, intentId: latest.intentId, parentIntentId: latest.parentIntentId,
+            { generation: latest.generation, sequence: latest.sequence, consentRevision: latest.consentRevision, intentId: latest.intentId, parentIntentId: latest.parentIntentId,
                 ancestorIds: latest.ancestorIds, baseline: latest.baseline });
         const afterLatest = (await readLocal(owner))!;
         await commitDomainOperations(owner, { type: 'active-workout.set', workout: first.workout }, initial, undefined,
-            { generation: first.generation, sequence: first.sequence, intentId: first.intentId, baseline: first.baseline });
+            { generation: first.generation, sequence: first.sequence, consentRevision: first.consentRevision, intentId: first.intentId, baseline: first.baseline });
         const final = (await readLocal(owner))!;
         expect(final.data.activeWorkout?.exercises[0].sets[0].kg).toBe('57');
         expect(final.pending).toEqual(afterLatest.pending);
@@ -662,13 +662,13 @@ describe('authenticated device-intent replay into semantic journal', () => {
             const competing = { ...first, intentId: 'b'.repeat(32), workout: workout(competingKg) };
 
             await commitDomainOperations(parallelOwner, { type: 'active-workout.set', workout: first.workout },
-                original, undefined, { generation: first.generation, sequence: first.sequence, intentId: first.intentId, baseline: first.baseline });
+                original, undefined, { generation: first.generation, sequence: first.sequence, consentRevision: first.consentRevision, intentId: first.intentId, baseline: first.baseline });
             const committed = await readLocal(parallelOwner);
             // A second tab wrote after reading the same prior sequence.
             writeDeviceValue('workout', JSON.stringify(competing), parallelOwner);
             const deviceCopy = readDeviceValueStrict('workout', parallelOwner);
             await expect(commitDomainOperations(parallelOwner, { type: 'active-workout.set', workout: competing.workout },
-                original, undefined, { generation: competing.generation, sequence: competing.sequence, intentId: competing.intentId, baseline: competing.baseline }))
+                original, undefined, { generation: competing.generation, sequence: competing.sequence, consentRevision: competing.consentRevision, intentId: competing.intentId, baseline: competing.baseline }))
                 .rejects.toThrow('Conflitto tra modifiche concorrenti');
             await expect(recoverWorkoutDeviceIntent(parallelOwner, () => true))
                 .rejects.toThrow('Conflitto tra modifiche concorrenti');
@@ -684,7 +684,7 @@ describe('authenticated device-intent replay into semantic journal', () => {
         await initializeLocal(testOwner, initial);
         const first = saveWorkoutDeviceIntent(testOwner, initial.activeWorkout ?? null, workout('55'), initial.activeWorkout ?? null);
         await commitDomainOperations(testOwner, { type: 'active-workout.set', workout: first.workout },
-            initial, undefined, { generation: first.generation, sequence: first.sequence,
+            initial, undefined, { generation: first.generation, sequence: first.sequence, consentRevision: first.consentRevision,
                 intentId: first.intentId, baseline: first.baseline });
         const alreadyCommitted = await readLocal(testOwner);
         const competingParent = { ...first, intentId: 'b'.repeat(32), workout: workout('60') };
@@ -694,7 +694,7 @@ describe('authenticated device-intent replay into semantic journal', () => {
         writeDeviceValue('workout-intent:' + divergent.intentId, JSON.stringify(divergent), testOwner);
 
         await expect(commitDomainOperations(testOwner, { type: 'active-workout.set', workout: divergent.workout },
-            initial, undefined, { generation: divergent.generation, sequence: divergent.sequence,
+            initial, undefined, { generation: divergent.generation, sequence: divergent.sequence, consentRevision: divergent.consentRevision,
                 intentId: divergent.intentId, parentIntentId: divergent.parentIntentId, baseline: divergent.baseline }))
             .rejects.toThrow('non discendente');
         expect(await readLocal(testOwner)).toEqual(alreadyCommitted);
@@ -711,10 +711,10 @@ describe('authenticated device-intent replay into semantic journal', () => {
         const middle = saveWorkoutDeviceIntent(testOwner, first.workout, workout('55'), first.baseline);
         const latest = saveWorkoutDeviceIntent(testOwner, middle.workout, workout('60'), middle.baseline);
         await commitDomainOperations(testOwner, { type: 'active-workout.set', workout: first.workout },
-            initial, undefined, { generation: first.generation, sequence: first.sequence,
+            initial, undefined, { generation: first.generation, sequence: first.sequence, consentRevision: first.consentRevision,
                 intentId: first.intentId, baseline: first.baseline });
         await commitDomainOperations(testOwner, { type: 'active-workout.set', workout: latest.workout },
-            initial, undefined, { generation: latest.generation, sequence: latest.sequence,
+            initial, undefined, { generation: latest.generation, sequence: latest.sequence, consentRevision: latest.consentRevision,
                 intentId: latest.intentId, parentIntentId: latest.parentIntentId,
                 ancestorIds: latest.ancestorIds, baseline: latest.baseline });
         expect((await readLocal(testOwner))?.data.activeWorkout?.exercises[0].sets[0].kg).toBe('60');
@@ -730,7 +730,7 @@ describe('authenticated device-intent replay into semantic journal', () => {
         const expanded = DomainParsers.parseActiveWorkout(intent.workout);
         if (!expanded) throw new Error('Expected valid workout');
         await commitDomainOperations(owner, { type: 'active-workout.set', workout: expanded }, initial, undefined,
-            { generation: intent.generation, sequence: intent.sequence, intentId: intent.intentId, baseline: intent.baseline });
+            { generation: intent.generation, sequence: intent.sequence, consentRevision: intent.consentRevision, intentId: intent.intentId, baseline: intent.baseline });
         await recoverWorkoutDeviceIntent(owner, () => true);
         expect((await readLocal(owner))?.pending).toEqual(before.pending);
         expect((await readLocal(owner))?.revision).toBe(before.revision);
