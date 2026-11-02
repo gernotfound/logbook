@@ -1,7 +1,7 @@
 import React from 'react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { screen, act, fireEvent, renderHook } from '@testing-library/react';
-import { renderWithProviders, emptyUserData } from './setup';
+import { renderWithAuthenticatedTestOwner, renderWithProviders, emptyUserData } from './setup';
 import { useAppStore } from '../src/store/useAppStore';
 import { captureSession } from '../src/lib/sync/session';
 
@@ -21,8 +21,9 @@ import SessionExerciseCard from '../src/components/Training/session/SessionExerc
 import type { WorkoutSession, WorkoutRoutine, Exercise } from '../src/types';
 
 describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', () => {
-    beforeEach(() => {
+    beforeEach(async () => {
         window.localStorage.clear();
+        await prepareUnlockedTestArchive('user:test-user-id');
         useAppStore.getState().resetStore();
         useAppStore.setState({ dataOwner: captureSession().owner });
         vi.clearAllMocks();
@@ -340,7 +341,7 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
                     exercises: [{ exId: 'ex_bench', sessionNote: '', sets: [{ id: 's1', kg: '80', reps: '8' }] }]
                 };
 
-                const { container } = renderWithProviders(<TrainingSession />, {
+                const { container } = renderWithAuthenticatedTestOwner(<TrainingSession />, {
                     userData: { ...emptyUserData, library: mockLibrary } as any,
                     localWorkout: activeSession
                 });
@@ -359,7 +360,7 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
                     exercises: [{ exId: 'ex_squat', sessionNote: '', sets: [{ id: 's1', kg: '100', reps: '5' }] }]
                 };
 
-                const { container } = renderWithProviders(<TrainingSession />, {
+                const { container } = renderWithAuthenticatedTestOwner(<TrainingSession />, {
                     userData: { ...emptyUserData, library: initialLibrary } as any,
                     localWorkout: activeSession
                 });
@@ -465,7 +466,7 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
                     ]
                 };
 
-                const { container } = renderWithProviders(<TrainingSession />, {
+                const { container } = renderWithAuthenticatedTestOwner(<TrainingSession />, {
                     userData: { ...emptyUserData, library: mockLibrary } as any,
                     localWorkout: activeSession
                 });

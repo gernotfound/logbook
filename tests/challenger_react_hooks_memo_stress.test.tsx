@@ -16,6 +16,16 @@ import { initializeLocal, readLocal } from '../src/lib/sync/localRepository';
 import { UserDataSchema } from '../src/lib/schema';
 import { idbStore } from './setup';
 import { prepareUnlockedTestArchive } from './secureVaultFixture';
+import { AuthContext, defaultAuthContext } from '../src/contexts/AuthContextDef';
+import { auth } from '../src/lib/firebase';
+
+// Mounted sessions in production always have a current-owner AuthProvider.
+// This small account context avoids triggering an unrelated auth hydration in memoization tests.
+const renderOwnedSession = () => render(
+    <AuthContext.Provider value={{ ...defaultAuthContext, currentUser: auth.currentUser, isGuest: false }}>
+        <TrainingSession />
+    </AuthContext.Provider>,
+);
 
 describe('Empirical Challenger: React Hooks, Memoization & Re-render Loop Stress Suite', () => {
     const baseUserData: UserData = {
@@ -106,7 +116,10 @@ describe('Empirical Challenger: React Hooks, Memoization & Re-render Loop Stress
             dataOwner: 'user:test-user-id',
             localWorkout: null,
             syncing: false,
-            saveError: null
+            saveError: null,
+            localPersistenceBlocked: false,
+            compatibilityStatus: 'ok',
+            syncHealth: 'synced'
         });
     });
 
@@ -298,7 +311,7 @@ describe('Empirical Challenger: React Hooks, Memoization & Re-render Loop Stress
 
             useAppStore.setState({ localWorkout: activeWorkout });
 
-            render(<TrainingSession />);
+            renderOwnedSession();
             expect(screen.getByRole('heading', { name: 'Push Day' })).toBeDefined();
 
             // Simulate timer advancement / visibility change
@@ -390,7 +403,7 @@ describe('Empirical Challenger: React Hooks, Memoization & Re-render Loop Stress
             // Notice ex_treadmill has NO previous history in history[]
             useAppStore.setState({ localWorkout: activeWorkout });
 
-            render(<TrainingSession />);
+            renderOwnedSession();
 
             expect(screen.getByRole('heading', { name: 'Tapis Roulant' })).toBeDefined();
 
@@ -420,7 +433,7 @@ describe('Empirical Challenger: React Hooks, Memoization & Re-render Loop Stress
             const cloudSave = vi.spyOn(DB, 'saveUserData').mockResolvedValue({
                 ok: false, status: 'local-pending', error: new Error('Cloud offline'),
             } as any);
-            render(<TrainingSession />);
+            renderOwnedSession();
 
             // 1. Start workout from planned routine (first Avvia button)
             const startBtn = screen.getByText(/Avvia Push Day \(Seduta/i);

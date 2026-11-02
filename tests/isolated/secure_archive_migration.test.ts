@@ -411,6 +411,58 @@ describe('durable secure archive migration', () => {
         expect((await readLocal(owner))?.data.nutrition?.[day]?.weight).toBe(75);
     });
 
+    it('never reads, creates or deletes device snapshots before the owner vault is active', () => {
+        const name = 'draft:measurement:' + day;
+        const legacy = deviceKey(name, owner);
+        const sealed = protectedDeviceKey(name, owner);
+        expect(() => readDeviceValueStrict(name, owner)).toThrow(LocalVaultLockedError);
+        expect(() => writeDeviceValue(name, '{"weight":"76"}', owner)).toThrow(LocalVaultLockedError);
+        expect(() => writeDeviceValue(name, null, owner)).toThrow(LocalVaultLockedError);
+        expect(localStorage.getItem(legacy)).toBeNull();
+        expect(localStorage.getItem(sealed)).toBeNull();
+        expect(readVaultControl(owner)).toBeNull();
+    });
+
+    it('preserves a plaintext device copy but refuses reading, rewriting or deleting it without a vault', () => {
+        const name = 'workout';
+        const original = '{"id":"prelaunch-unsealed"}';
+        const legacy = deviceKey(name, owner);
+        localStorage.setItem(legacy, original);
+        expect(() => readDeviceValueStrict(name, owner)).toThrow(LocalCiphertextError);
+        expect(() => writeDeviceValue(name, '{"id":"new"}', owner)).toThrow(LocalCiphertextError);
+        expect(() => writeDeviceValue(name, null, owner)).toThrow(LocalCiphertextError);
+        expect(localStorage.getItem(legacy)).toBe(original);
+        expect(localStorage.getItem(protectedDeviceKey(name, owner))).toBeNull();
+        expect(readVaultControl(owner)).toBeNull();
+    });
+
+    it('preserves a sealed device copy with missing vault controls without treating it as empty', async () => {
+        const name = 'draft:measurement:' + day;
+        await createAndMigrateVault(owner);
+        writeDeviceValue(name, '{"weight":"76"}', owner);
+        const sealedKey = protectedDeviceKey(name, owner);
+        const original = localStorage.getItem(sealedKey);
+        await del(vaultControlMirrorId(owner));
+        localStorage.removeItem(vaultControlKey(owner));
+        lockVault(owner);
+        expect(() => readDeviceValueStrict(name, owner)).toThrow(LocalCiphertextError);
+        expect(() => writeDeviceValue(name, '{"weight":"78"}', owner)).toThrow(LocalCiphertextError);
+        expect(() => writeDeviceValue(name, null, owner)).toThrow(LocalCiphertextError);
+        expect(localStorage.getItem(sealedKey)).toBe(original);
+        expect(localStorage.getItem(deviceKey(name, owner))).toBeNull();
+    });
+
+    it('refuses device writes for a guest generation before its vault exists', () => {
+        localStorage.setItem(GUEST_SESSION_KEY, 'guest-device-epoch');
+        localStorage.setItem('logbook_is_guest', 'true');
+        activateGuestSession('guest-device-epoch');
+        expect(() => readDeviceValueStrict('timer', 'guest')).toThrow(LocalVaultLockedError);
+        expect(() => writeDeviceValue('timer', '{"state":"running"}', 'guest')).toThrow(LocalVaultLockedError);
+        expect(() => writeDeviceValue('timer', null, 'guest')).toThrow(LocalVaultLockedError);
+        expect(localStorage.getItem(deviceKey('timer', 'guest'))).toBeNull();
+        expect(localStorage.getItem(protectedDeviceKey('timer', 'guest'))).toBeNull();
+    });
+
     it('rejects old device plaintext before provisioning and preserves every original byte', async () => {
         const legacyKey = deviceKey('draft:measurement:' + day, owner);
         const original = '{"weight":"77"}';

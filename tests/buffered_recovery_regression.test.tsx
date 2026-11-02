@@ -7,7 +7,7 @@ import SessionSetRow from '../src/components/Training/session/SessionSetRow';
 import SessionExerciseCard from '../src/components/Training/session/SessionExerciseCard';
 import { useWorkoutSetMutations } from '../src/hooks/workout/useWorkoutSetMutations';
 import type { WorkoutSession } from '../src/types';
-import { deviceKey, protectedDeviceKey, readDeviceValueStrict } from '../src/lib/sync/deviceStorage';
+import { deviceKey, protectedDeviceKey, readDeviceValueStrict, writeDeviceValue } from '../src/lib/sync/deviceStorage';
 import { prepareUnlockedTestArchive } from './secureVaultFixture';
 import { readBufferedDraftSnapshot, writeBufferedDraft } from '../src/lib/sync/bufferedDraftEpoch';
 import {
@@ -287,18 +287,22 @@ describe.each(['input', 'textarea'] as const)('owner-scoped buffered %s recovery
         view.unmount();
     });
 
-    it('never moves a mounted guest draft to a newly authenticated owner', () => {
+    it('never moves a mounted guest draft to a newly authenticated owner', async () => {
         // An input event may arrive before an old editor unmounts during login.
         localStorage.setItem('logbook_is_guest', 'true');
         localStorage.setItem(GUEST_SESSION_KEY, 'buffered-draft-guest-generation');
         activateGuestSession('buffered-draft-guest-generation');
+        await prepareUnlockedTestArchive('guest');
         expect(captureSession().owner).toBe('guest');
-        const guestKey = recoveryKey(kind);
         const onChange = vi.fn();
         const view = render(field(kind, onChange));
 
         fireEvent.change(editor(), { target: { value: 'guest note' } });
-        expect(localStorage.getItem(guestKey)).toBe('guest note');
+        const guestName = `draft:buffered:${kind}:stable-draft`;
+        const sealedGuestKey = protectedDeviceKey(guestName, 'guest');
+        const sealedOriginal = localStorage.getItem(sealedGuestKey);
+        expect(sealedOriginal).toMatch(/^tlb-sealed:v1:/);
+        expect(readBufferedDraftSnapshot(guestName, 'guest').value).toBe('guest note');
 
         localStorage.removeItem('logbook_is_guest');
         invalidateSession();
@@ -307,7 +311,7 @@ describe.each(['input', 'textarea'] as const)('owner-scoped buffered %s recovery
         const otherKey = deviceKey(`draft:buffered:${kind}:stable-draft`, newOwner);
 
         fireEvent.change(editor(), { target: { value: 'late edit' } });
-        expect(localStorage.getItem(guestKey)).toBe('guest note');
+        expect(localStorage.getItem(sealedGuestKey)).toBe(sealedOriginal);
         expect(localStorage.getItem(otherKey)).toBeNull();
         expect(onChange).not.toHaveBeenCalled();
         expect(useAppStore.getState().saveError).toMatch(/bozza non ancora protetta/i);
@@ -384,7 +388,7 @@ describe.each(['input', 'textarea'] as const)('workout-scoped buffered %s recove
         expect(editor().value).toBe('new workout value');
         expect(onChange).not.toHaveBeenCalled();
         expect(localStorage.getItem(oldKey)).toBe(oldRecord);
-        expect(useAppStore.getState().localPersistenceBlocked).toBe(false);
+        expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
         view.unmount();
     });
 
@@ -1107,20 +1111,22 @@ describe.each(['input', 'textarea'] as const)('independent same-workout %s write
         expect(JSON.parse(before)).toMatchObject({ value: 'Historical note', consentRevision: 2 });
     });
 
-    it('rejects malformed independent witness identities without selecting or deleting the copy', () => {
+    it('rejects malformed independent witness identities without selecting or deleting the copy', async () => {
+        await prepareUnlockedTestArchive(captureSession().owner);
         const owner = captureSession().owner;
         const invalidName = 'draft:buffered-intent:not-a-random-id';
-        const key = deviceKey(invalidName, owner);
+        const key = protectedDeviceKey(invalidName, owner);
         const raw = JSON.stringify({
             __logbookBufferedWriterIntent: 1, owner, draftName,
             value: 'Unconfirmed health data', consentRevision: 3,
         });
-        localStorage.setItem(key, raw);
+        writeDeviceValue(invalidName, raw, owner);
+        const originalCiphertext = localStorage.getItem(key);
         expect(() => readBufferedWriterEvidence(owner, draftName))
             .toThrow('Metadati intenzione bozza non validi');
         expect(() => inspectBufferedRecoveryEvidence(owner))
             .toThrow('Metadati intenzione bozza non validi');
-        expect(localStorage.getItem(key)).toBe(raw);
+        expect(localStorage.getItem(key)).toBe(originalCiphertext);
     });
 
     it('rejects write and cleanup of a malformed witness key without changing its contents', () => {
@@ -1140,19 +1146,24 @@ describe.each(['input', 'textarea'] as const)('independent same-workout %s write
         expect(localStorage.getItem(key)).toBe(raw);
     });
 
-    it('fails closed on corrupted evidence and keeps every original intact', () => {
+    it('fails closed on corrupted evidence and keeps every original intact', async () => {
+        await prepareUnlockedTestArchive(captureSession().owner);
         const owner = captureSession().owner;
         const valid = createBufferedWriterIntentName();
         const broken = createBufferedWriterIntentName();
         const raw = writeBufferedWriterIntent(valid, owner, draftName, 'Kept intact', null, '3');
-        const brokenKey = deviceKey(broken, owner);
-        localStorage.setItem(brokenKey, 'not-json');
+        writeDeviceValue(broken, 'not-json', owner);
+        const brokenKey = protectedDeviceKey(broken, owner);
+        const brokenCiphertext = localStorage.getItem(brokenKey);
+        const originalCiphertext = localStorage.getItem(protectedDeviceKey(valid, owner));
         expect(() => inspectBufferedRecoveryEvidence(owner)).toThrow();
-        expect(localStorage.getItem(deviceKey(valid, owner))).toBe(raw);
-        expect(localStorage.getItem(brokenKey)).toBe('not-json');
+        expect(readDeviceValueStrict(valid, owner)).toBe(raw);
+        expect(localStorage.getItem(protectedDeviceKey(valid, owner))).toBe(originalCiphertext);
+        expect(localStorage.getItem(brokenKey)).toBe(brokenCiphertext);
     });
 
-    it('never clears a changed writer slot with a stale acknowledgement', () => {
+    it('never clears a changed writer slot with a stale acknowledgement', async () => {
+        await prepareUnlockedTestArchive(captureSession().owner);
         const owner = captureSession().owner;
         const name = createBufferedWriterIntentName();
         const raw = writeBufferedWriterIntent(name, owner, draftName, 'version 1', null, '3');

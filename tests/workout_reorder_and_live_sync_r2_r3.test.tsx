@@ -5,7 +5,7 @@ import { prepareUnlockedTestArchive } from './secureVaultFixture';
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, renderHook, act } from '@testing-library/react';
-import { renderWithProviders } from './setup';
+import { renderWithAuthenticatedTestOwner } from './setup';
 import { useAppStore } from '../src/store/useAppStore';
 import { useWorkoutSetMutations } from '../src/hooks/workout/useWorkoutSetMutations';
 import { useWorkoutSession } from '../src/hooks/useWorkoutSession';
@@ -50,9 +50,10 @@ const mockLibrary: ExerciseLibraryItem[] = [
 ];
 
 describe('Workout Reorder (R2) and Live Sync & Badges (R3) Suite', () => {
-    beforeEach(() => {
+    beforeEach(async () => {
         localStorage.clear();
         useAppStore.getState().resetStore();
+        await prepareUnlockedTestArchive(captureSession().owner);
         useAppStore.setState({
             dataOwner: captureSession().owner,
             userData: {
@@ -558,7 +559,7 @@ describe('Workout Reorder (R2) and Live Sync & Badges (R3) Suite', () => {
             });
             await initializeLocal(owner, initialData);
             expect((await readLocal(owner))?.data.activeWorkout?.id).toBe(activeWorkout.id);
-            const { container } = renderWithProviders(<TrainingSession />, {
+            const { container } = renderWithAuthenticatedTestOwner(<TrainingSession />, {
                 localWorkout: activeWorkout,
                 userData: initialData,
                 dataOwner: owner,
@@ -604,7 +605,7 @@ describe('Workout Reorder (R2) and Live Sync & Badges (R3) Suite', () => {
             });
             await initializeLocal(owner, initialData);
             expect((await readLocal(owner))?.data.activeWorkout?.id).toBe(activeWorkout.id);
-            const { container } = renderWithProviders(<TrainingSession />, {
+            const { container } = renderWithAuthenticatedTestOwner(<TrainingSession />, {
                 localWorkout: activeWorkout,
                 userData: initialData,
                 dataOwner: owner,

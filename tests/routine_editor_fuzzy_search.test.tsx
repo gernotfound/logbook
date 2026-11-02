@@ -1,7 +1,7 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { renderWithProviders, emptyUserData } from './setup';
+import { renderWithAuthenticatedTestOwner, renderWithProviders, emptyUserData } from './setup';
 import { prepareUnlockedTestArchive } from './secureVaultFixture';
 import { captureSession } from '../src/lib/sync/session';
 import { initializeLocal } from '../src/lib/sync/localRepository';
@@ -76,8 +76,9 @@ const mockLibrary: ExerciseLibraryItem[] = [
 ];
 
 describe('Intelligent Exercise Search & Dropdown Suite (M3: R4 & R6)', () => {
-    beforeEach(() => {
+    beforeEach(async () => {
         window.localStorage.clear();
+        await prepareUnlockedTestArchive('user:test-user-id');
         useAppStore.getState().resetStore();
         vi.clearAllMocks();
 
@@ -559,7 +560,7 @@ describe('Intelligent Exercise Search & Dropdown Suite (M3: R4 & R6)', () => {
                 activeCycleId: null
             };
 
-            const { container } = renderWithProviders(<TrainingSession />, {
+            const { container } = renderWithAuthenticatedTestOwner(<TrainingSession />, {
                 localWorkout: activeWorkout,
                 userData: initialUserData
             });

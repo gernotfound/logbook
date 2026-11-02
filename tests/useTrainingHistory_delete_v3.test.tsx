@@ -1,4 +1,5 @@
 import { captureSession } from '../src/lib/sync/session';
+import { prepareUnlockedTestArchive } from './secureVaultFixture';
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useTrainingHistory } from '../src/hooks/useTrainingHistory';
@@ -12,7 +13,8 @@ const parse = (value: unknown) => UserDataSchema.parse(value) as unknown as User
 const originalDispatchDomainOperation = useAppStore.getState().dispatchDomainOperation;
 
 describe('useTrainingHistory deleteWorkout', () => {
-    beforeEach(() => {
+    beforeEach(async () => {
+        await prepareUnlockedTestArchive(captureSession().owner);
         vi.clearAllMocks();
         const initial = parse({
             history: [{

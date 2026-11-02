@@ -7,6 +7,7 @@ import { useRegisterSW } from 'virtual:pwa-register/react';
 import App from '../src/App';
 import { idbStore, localStorageMock, mockFirebaseAuth, renderWithProviders } from './setup';
 import { prepareUnlockedTestArchive } from './secureVaultFixture';
+import { protectedDeviceKey, readDeviceValueStrict } from '../src/lib/sync/deviceStorage';
 import { initializeLocal } from '../src/lib/sync/localRepository';
 import { vaultControlKey } from '../src/lib/sync/secureArchiveSession';
 import { UserDataSchema } from '../src/lib/schema';
@@ -153,14 +154,19 @@ describe('Service Worker Update Lifecycle (ReloadPrompt) Suite', () => {
     view.unmount();
   });
 
-  test('a dirty buffered field leaves an owner-scoped recovery copy before session invalidation', () => {
+  test('a dirty buffered field leaves a sealed owner-scoped recovery copy before session invalidation', async () => {
+    const owner = 'user:test-user-id';
+    await prepareUnlockedTestArchive(owner);
     const update = vi.fn();
     const { unmount } = render(<BufferedInput id="recoverable-draft" value="" onChange={update} aria-label="Recoverable" />);
     fireEvent.change(screen.getByLabelText('Recoverable'), { target: { value: '82,5' } });
-    expect([...Array(localStorage.length)].map((_, index) => localStorage.key(index))
-      .some(key => key?.endsWith(':draft:buffered:input:recoverable-draft'))).toBe(true);
+    const name = 'draft:buffered:input:recoverable-draft';
+    const ciphertext = localStorage.getItem(protectedDeviceKey(name, owner));
+    expect(ciphertext).toMatch(/^tlb-sealed:v1:/);
+    expect(readDeviceValueStrict(name, owner)).toBe('82,5');
     invalidateSession();
     unmount();
+    expect(localStorage.getItem(protectedDeviceKey(name, owner))).toBe(ciphertext);
     expect(update).not.toHaveBeenCalled();
   });
 

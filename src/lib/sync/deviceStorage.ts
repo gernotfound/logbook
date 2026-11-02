@@ -1,6 +1,6 @@
 import { requireHealthConsentWritable } from '../healthConsent';
 import { readBrowserValueStrict, removeBrowserValue, writeBrowserValue } from './browserStorage';
-import { LocalCiphertextError, openLocalText, sealLocalText, SEALED_LOCAL_PREFIX } from './secureArchiveCipher';
+import { LocalCiphertextError, openLocalText, sealLocalText } from './secureArchiveCipher';
 import { LocalVaultLockedError, readVaultControl, requireUnlockedLocalKey } from './secureArchiveSession';
 import { isActiveGuestSession, storageOwner } from './session';
 import { assertNoLocalPurge } from './localPurgeFence';
@@ -22,11 +22,12 @@ export function readDeviceValueStrict(name: string, owner?: string): string | nu
     assertNoLocalPurge(resolvedOwner);
     const control = readVaultControl(resolvedOwner);
     if (!control) {
-        if (legacy?.startsWith(SEALED_LOCAL_PREFIX)
-            || readBrowserValueStrict(protectedDeviceKey(name, resolvedOwner)) !== null) {
+        // Missing vault metadata cannot authorize a plaintext read, even when
+        // no device snapshot currently exists. Preserve any orphaned bytes.
+        if (legacy !== null || readBrowserValueStrict(protectedDeviceKey(name, resolvedOwner)) !== null) {
             throw new LocalCiphertextError();
         }
-        return legacy;
+        throw new LocalVaultLockedError();
     }
     if (control.phase !== 'active') throw new LocalVaultLockedError();
     const key = requireUnlockedLocalKey(resolvedOwner);
@@ -50,33 +51,27 @@ export function writeDeviceValue(name: string, value: string | null, owner?: str
     if (value !== null) requireHealthConsentWritable(resolvedOwner);
     const storageKey = deviceKey(name, resolvedOwner);
     const control = readVaultControl(resolvedOwner);
-    if (control) {
-        if (control.phase !== 'active') throw new LocalVaultLockedError();
-        const key = requireUnlockedLocalKey(resolvedOwner);
-        // Legacy keys can reappear from pre-migration tabs. Block rather than
-        // overwrite a newer draft or lose unacknowledged legacy edits.
-        if (readBrowserValueStrict(storageKey) !== null) throw new LocalCiphertextError();
-        const sealedKey = protectedDeviceKey(name, resolvedOwner);
-        const previous = readBrowserValueStrict(sealedKey);
-        // A failed draft read must not make an unreadable ciphertext overwriteable.
-        // Authenticate the existing bytes before *either* replacement or deletion.
-        if (previous !== null) openLocalText(key, resolvedOwner, sealedKey, previous);
-        if (requireUnlockedLocalKey(resolvedOwner) !== key) throw new LocalVaultLockedError();
-        if (value === null) removeBrowserValue(sealedKey);
-        else writeBrowserValue(sealedKey, sealLocalText(key, resolvedOwner, sealedKey, value));
-        if (requireUnlockedLocalKey(resolvedOwner) !== key) throw new LocalVaultLockedError();
-        return;
+    if (!control) {
+        // Strictly inspect both destinations before reporting a missing vault.
+        // A failed read or surviving ciphertext/plaintext must never be
+        // interpreted as permission to replace or delete the only device copy.
+        if (readBrowserValueStrict(storageKey) !== null
+            || readBrowserValueStrict(protectedDeviceKey(name, resolvedOwner)) !== null) {
+            throw new LocalCiphertextError();
+        }
+        throw new LocalVaultLockedError();
     }
-
-    // A disappeared control cannot authorize replacing a surviving sealed draft
-    // with plaintext, even if the legacy key is absent.
-    if (readBrowserValueStrict(protectedDeviceKey(name, resolvedOwner)) !== null) throw new LocalCiphertextError();
-    // Pre-provisioning legacy path, to be retired after every device has passed
-    // the secure vault setup. A ciphertext without control metadata is invalid.
-    // This is a data-integrity gate, not an optional hint. A transient failed
-    // read must not be interpreted as "absent" and then authorize overwriting
-    // or deleting the only legacy copy (possibly sealed without its control).
-    if (readBrowserValueStrict(storageKey)?.startsWith(SEALED_LOCAL_PREFIX)) throw new LocalCiphertextError();
-    if (value === null) removeBrowserValue(storageKey);
-    else writeBrowserValue(storageKey, value);
+    if (control.phase !== 'active') throw new LocalVaultLockedError();
+    const key = requireUnlockedLocalKey(resolvedOwner);
+    // Stale PWA tabs can still create plaintext keys: preserve the conflicting
+    // bytes rather than hiding them behind a new encrypted snapshot.
+    if (readBrowserValueStrict(storageKey) !== null) throw new LocalCiphertextError();
+    const sealedKey = protectedDeviceKey(name, resolvedOwner);
+    const previous = readBrowserValueStrict(sealedKey);
+    // An unreadable/tampered draft may not be overwritten or deleted.
+    if (previous !== null) openLocalText(key, resolvedOwner, sealedKey, previous);
+    if (requireUnlockedLocalKey(resolvedOwner) !== key) throw new LocalVaultLockedError();
+    if (value === null) removeBrowserValue(sealedKey);
+    else writeBrowserValue(sealedKey, sealLocalText(key, resolvedOwner, sealedKey, value));
+    if (requireUnlockedLocalKey(resolvedOwner) !== key) throw new LocalVaultLockedError();
 }

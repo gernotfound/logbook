@@ -9,7 +9,7 @@ import SessionSetRow from '../src/components/Training/session/SessionSetRow';
 import TrainingSession from '../src/components/Training/TrainingSession';
 import { useDialogStore } from '../src/store/useDialogStore';
 import { useAppStore } from '../src/store/useAppStore';
-import { renderWithProviders, emptyUserData } from './setup';
+import { renderWithAuthenticatedTestOwner, emptyUserData } from './setup';
 import type { WorkoutSession, Exercise } from '../src/types';
 
 describe('Training Session UI Improvements Suite (R1, R2, R3)', () => {
@@ -19,9 +19,10 @@ describe('Training Session UI Improvements Suite (R1, R2, R3)', () => {
         { id: 'ex_treadmill', name: 'Tapis Roulant', setsCount: 1, sets: [], trackingType: 'cardio' }
     ];
 
-    beforeEach(() => {
+    beforeEach(async () => {
         vi.clearAllMocks();
         localStorage.clear();
+        await prepareUnlockedTestArchive(captureSession().owner);
         useAppStore.setState({
             userData: {
                 ...emptyUserData,
@@ -57,7 +58,7 @@ describe('Training Session UI Improvements Suite (R1, R2, R3)', () => {
                 ]
             };
 
-            renderWithProviders(<TrainingSession />, {
+            renderWithAuthenticatedTestOwner(<TrainingSession />, {
                 localWorkout: activeWorkout,
                 userData: {
                     ...emptyUserData,
@@ -622,7 +623,7 @@ describe('Training Session UI Improvements Suite (R1, R2, R3)', () => {
             };
             await prepareUnlockedTestArchive(owner);
             await initializeLocal(owner, initialData);
-            renderWithProviders(<TrainingSession />, {
+            renderWithAuthenticatedTestOwner(<TrainingSession />, {
                 localWorkout: activeWorkout,
                 userData: initialData,
             });

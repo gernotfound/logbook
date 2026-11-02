@@ -157,6 +157,8 @@ import { storageOwner } from '../src/lib/sync/session';
 import React from 'react';
 import { render, act } from '@testing-library/react';
 import { AuthProvider } from '../src/contexts/AuthContext';
+import { AuthContext, defaultAuthContext } from '../src/contexts/AuthContextDef';
+import { auth } from '../src/lib/firebase';
 import { useAppStore } from '../src/store/useAppStore';
 import type { UserData } from '../src/types';
 
@@ -605,6 +607,34 @@ export interface RenderOptions {
   userData?: any;
   localWorkout?: any;
   dataOwner?: string;
+}
+
+/**
+ * Nominal authenticated UI suites mount components after the account is ready,
+ * as production App does. Unlike AuthProvider integration tests, these tests
+ * must not transiently present the guest timer while an account vault is active.
+ */
+export function renderWithAuthenticatedTestOwner(ui: React.ReactElement, options: RenderOptions = {}) {
+  const initialUserData = options.userData !== undefined ? options.userData : defaultMockUserData;
+  const initialLocalWorkout = options.localWorkout !== undefined ? options.localWorkout : null;
+  setOwnerBoundUserData(initialUserData, options.dataOwner ?? storageOwner());
+  useAppStore.setState({
+    localWorkout: initialLocalWorkout,
+    syncing: false,
+    saveError: null,
+    localPersistenceBlocked: false,
+    compatibilityStatus: 'ok',
+  });
+  return render(
+    <AuthContext.Provider value={{
+      ...defaultAuthContext,
+      currentUser: auth.currentUser,
+      loading: false,
+      isGuest: false,
+    }}>
+      {ui}
+    </AuthContext.Provider>,
+  );
 }
 
 export function renderWithProviders(ui: React.ReactElement, options: RenderOptions = {}) {

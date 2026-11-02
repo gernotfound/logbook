@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import React from 'react';
+import { prepareUnlockedTestArchive } from './secureVaultFixture';
 import { render, screen, fireEvent } from '@testing-library/react';
 import {
     getLatestUserWeight,
@@ -394,7 +395,8 @@ describe('EMPIRICAL CHALLENGER: Adversarial Stress Test Suite (Requirements R1 -
             expect(mockAdd).toHaveBeenCalledWith(0, 'isometry', 'set_1');
         });
 
-        it('renders nested dropsets and isometrics rows with proper change callbacks', () => {
+        it('renders nested dropsets and isometrics rows with proper change callbacks', async () => {
+            await prepareUnlockedTestArchive('user:test-user-id');
             const mockUpdateSpecial = vi.fn();
             const mockRemoveSpecial = vi.fn();
 

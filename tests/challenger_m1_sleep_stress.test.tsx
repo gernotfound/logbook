@@ -69,7 +69,7 @@ describe('Empirical Challenger: Sleep Format in HH:MM & State Integration Stress
 
     describe('1. UI Component Re-renders & Form State Synchronization', () => {
         it('renders DataSleep and synchronizes inputs via fireEvent across all 5 fields', async () => {
-            const { container } = renderWithProviders(<SleepIntegratedView />);
+            const { container } = await renderOwnedSleepView(emptyUserData);
 
             const hoursInput = container.querySelector('#sleep-hours') as HTMLInputElement;
             const deepInput = container.querySelector('#sleep-deep') as HTMLInputElement;
@@ -406,6 +406,7 @@ describe('Empirical Challenger: Sleep Format in HH:MM & State Integration Stress
         });
 
         it('blocks save and shows specific alert when an optional phase format is invalid', async () => {
+            await prepareUnlockedTestArchive(storageOwner());
             useAppStore.setState({ userData: emptyUserData });
             const showAlertSpy = vi.spyOn(useDialogStore.getState(), 'showAlert');
             const { result } = renderHook(() => useSleepMeasurements());

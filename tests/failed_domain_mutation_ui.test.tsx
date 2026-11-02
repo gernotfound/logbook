@@ -3,7 +3,8 @@ import { act, fireEvent, render, renderHook, screen } from '@testing-library/rea
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { UserDataSchema } from '../src/lib/schema';
 import { storageOwner } from '../src/lib/sync/session';
-import { deviceKey } from '../src/lib/sync/deviceStorage';
+import { protectedDeviceKey, readDeviceValueStrict } from '../src/lib/sync/deviceStorage';
+import { prepareUnlockedTestArchive } from './secureVaultFixture';
 import { useAppStore } from '../src/store/useAppStore';
 import { useDialogStore } from '../src/store/useDialogStore';
 import { useNutritionMeasurements } from '../src/hooks/useNutritionMeasurements';
@@ -16,8 +17,9 @@ const DAY = '2026-09-24';
 
 describe('failed domain result preserves user edits', () => {
     let originalDispatch: ReturnType<typeof useAppStore.getState>['dispatchDomainOperation'];
-    beforeEach(() => {
+    beforeEach(async () => {
         localStorage.clear();
+        await prepareUnlockedTestArchive(storageOwner());
         vi.clearAllMocks();
         originalDispatch = useAppStore.getState().dispatchDomainOperation;
         useAppStore.setState({
@@ -49,13 +51,15 @@ describe('failed domain result preserves user edits', () => {
     it('keeps a measurement draft when the dispatcher resolves to failure', async () => {
         const hook = renderHook(() => useNutritionMeasurements(DAY));
         act(() => hook.result.current.setWeight('75'));
-        const key = deviceKey('draft:measurement:' + DAY, storageOwner());
-        expect(localStorage.getItem(key)).toContain('75');
+        const key = protectedDeviceKey('draft:measurement:' + DAY, storageOwner());
+        expect(localStorage.getItem(key)).toMatch(/^tlb-sealed:v1:/);
+        expect(readDeviceValueStrict('draft:measurement:' + DAY, storageOwner())).toContain('75');
         let saved: unknown;
         await act(async () => { saved = await hook.result.current.calculateAndSave(); });
         expect(saved).toBe(false);
         expect(hook.result.current.weight).toBe('75');
-        expect(localStorage.getItem(key)).toContain('75');
+        expect(readDeviceValueStrict('draft:measurement:' + DAY, storageOwner())).toContain('75');
+        expect(localStorage.getItem(key)).toMatch(/^tlb-sealed:v1:/);
         expect(useDialogStore.getState().showAlert).toHaveBeenCalled();
     });
 

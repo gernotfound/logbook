@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { deviceKey, protectedDeviceKey, readDeviceValueStrict } from '../../lib/sync/deviceStorage';
+import { deviceKey, protectedDeviceKey, readDeviceValueStrict, writeDeviceValue } from '../../lib/sync/deviceStorage';
 import { createAndMigrateVault } from '../../lib/sync/secureArchiveMigration';
 import { prepareUnlockedTestArchive } from '../../../tests/secureVaultFixture';
 import {
@@ -52,9 +52,9 @@ describe('exercise draft owner isolation', () => {
     const raw = JSON.stringify(draft);
     localStorage.setItem(key, raw);
     localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '3');
-    expect(() => readExerciseDraft(owner)).toThrow('generazione di consenso');
-    expect(() => persistExerciseDraft({ ...draft, notes: 'Changed' }, owner)).toThrow('generazione di consenso');
-    expect(() => clearExerciseDraft(owner)).toThrow('generazione di consenso');
+    expect(() => readExerciseDraft(owner)).toThrow('Archivio locale cifrato non valido');
+    expect(() => persistExerciseDraft({ ...draft, notes: 'Changed' }, owner)).toThrow('Archivio locale cifrato non valido');
+    expect(() => clearExerciseDraft(owner)).toThrow('Archivio locale cifrato non valido');
     expect(localStorage.getItem(key)).toBe(raw);
   });
 
@@ -99,7 +99,8 @@ describe('exercise draft owner isolation', () => {
     expect(localStorage.getItem(deviceKey('draft_exercise', owner))).toBeNull();
   });
 
-  it('blocks invalid provenance metadata without clearing the original', () => {
+  it('blocks invalid provenance metadata without clearing the original', async () => {
+    await prepareUnlockedTestArchive('user:a');
     const owner = 'user:a';
     const name = 'draft_exercise';
     const key = deviceKey(name, owner);
@@ -108,10 +109,13 @@ describe('exercise draft owner isolation', () => {
       name, consentRevision: 3, data: draft,
     });
     localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '3');
-    localStorage.setItem(key, raw);
+    const ciphertextKey = protectedDeviceKey(name, owner);
+    writeDeviceValue(name, raw, owner);
+    const originalCiphertext = localStorage.getItem(ciphertextKey);
     expect(() => readExerciseDraft(owner)).toThrow('Metadati');
     expect(() => persistExerciseDraft(draft, owner)).toThrow('Metadati');
-    expect(localStorage.getItem(key)).toBe(raw);
+    expect(localStorage.getItem(key)).toBeNull();
+    expect(localStorage.getItem(ciphertextKey)).toBe(originalCiphertext);
   });
 
 });

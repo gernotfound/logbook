@@ -10,6 +10,7 @@ import { useAppStore } from '../src/store/useAppStore';
 import { clearSyncTimers } from '../src/store/slices/createSyncSlice';
 import type { UserData, Exercise, Food } from '../src/types';
 import { idbStore } from './setup';
+import { prepareUnlockedTestArchive } from './secureVaultFixture';
 import { activateGuestSession, GUEST_SESSION_KEY } from '../src/lib/sync/session';
 
 vi.mock('../src/lib/firebase', () => ({
@@ -120,6 +121,7 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
             localStorage.setItem(GUEST_KEY, 'true');
             localStorage.setItem(GUEST_SESSION_KEY, 'guest-dirty-generation');
             activateGuestSession('guest-dirty-generation');
+            await prepareUnlockedTestArchive('guest');
 
             const catalog = await getCachedCatalog();
             const customEx: Exercise = { id: 'dirty_custom_ex_1', name: 'Dirty Bench', setsCount: 4, sets: [], isDefault: false };
