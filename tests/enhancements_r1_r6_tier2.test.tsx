@@ -121,6 +121,33 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
         // R2 Boundaries
         // ---------------------------------------------------------------------
         describe('R2 Boundaries (Workout Reordering Edge Cases)', () => {
+            it('T2.2: Adding an isometry set writes the current segment shape', () => {
+                let localWorkout: WorkoutSession | null = {
+                    id: 'w-isometry',
+                    exercises: [{
+                        id: 'se-hold',
+                        exId: 'hold',
+                        sessionNote: '',
+                        sets: [],
+                        defaultTechnique: 'isometrics',
+                    } as WorkoutSession['exercises'][number]],
+                };
+                const setLocalWorkout = (updater: any) => {
+                    localWorkout = typeof updater === 'function' ? updater(localWorkout) : updater;
+                };
+                const { result } = renderHook(() =>
+                    useWorkoutSetMutations({ setLocalWorkout, showConfirm: vi.fn().mockResolvedValue(true) })
+                );
+                act(() => result.current.addSet(0));
+
+                const set = localWorkout?.exercises[0].sets[0];
+                expect(set?.segments).toEqual([
+                    expect.objectContaining({ id: expect.any(String), kg: '', reps: '', time: '', technique: 'isometry' }),
+                ]);
+                expect(set).not.toHaveProperty('isometrics');
+                expect(set).not.toHaveProperty('dropsets');
+            });
+
             it('T2.2.1: Single-exercise session reorder is a safe no-op', () => {
                 let localWorkout: WorkoutSession | null = {
                     id: 'w1',

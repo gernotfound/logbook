@@ -117,6 +117,23 @@ describe('workout session preparation', () => {
         expect(workout.exercises[1]).toMatchObject({ minReps: 6, maxReps: 8 });
     });
 
+    it('creates current isometry segments for routine sessions without legacy arrays', () => {
+        const routine: WorkoutRoutine = {
+            id: 'isometric-routine',
+            name: 'Isometrie',
+            exercises: [{ exId: 'hold', setsCount: 2, defaultTechnique: 'isometrics' }],
+        };
+        const workout = buildRoutineWorkout({}, routine, undefined, createRuntime());
+        expect(workout.exercises[0].sets).toHaveLength(2);
+        for (const set of workout.exercises[0].sets) {
+            expect(set.segments).toEqual([
+                expect.objectContaining({ id: expect.stringMatching(/^seg_/), kg: '', reps: '', time: '', technique: 'isometry' }),
+            ]);
+            expect(set).not.toHaveProperty('isometrics');
+            expect(set).not.toHaveProperty('dropsets');
+        }
+    });
+
     it('snapshots cycle strategy so later edits do not rewrite historical session meaning', () => {
         const routine = { id: 'routine-a', name: 'Routine A', exercises: [] } as WorkoutRoutine;
         const userData: UserData = {
