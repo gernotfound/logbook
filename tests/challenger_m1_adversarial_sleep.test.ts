@@ -330,6 +330,7 @@ describe('Empirical Challenger: Sleep Format HH:MM Adversarial Stress Test Suite
         });
 
         it('blocks invalid inputs with alert without corrupting state', async () => {
+            await prepareUnlockedTestArchive(storageOwner());
             const showAlertSpy = useDialogStore.getState().showAlert as any;
             showAlertSpy.mockClear();
             const dispatchDomainOperation = vi.fn();
