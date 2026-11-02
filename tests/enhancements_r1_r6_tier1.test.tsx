@@ -23,6 +23,7 @@ import type { WorkoutSession, WorkoutRoutine, Exercise } from '../src/types';
 describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', () => {
     beforeEach(async () => {
         window.localStorage.clear();
+        localStorage.setItem(`logbook:v2:${captureSession().owner}:health-consent-generation`, '1');
         await prepareUnlockedTestArchive('user:test-user-id');
         useAppStore.getState().resetStore();
         useAppStore.setState({ dataOwner: captureSession().owner });

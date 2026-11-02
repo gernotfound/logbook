@@ -14,6 +14,7 @@ import { prepareUnlockedTestArchive } from './secureVaultFixture';
 describe('UI Alignments - R3 & R4', () => {
     beforeEach(async () => {
         localStorage.clear();
+        localStorage.setItem(`logbook:v2:${storageOwner()}:health-consent-generation`, '1');
         await prepareUnlockedTestArchive(storageOwner());
         useAppStore.setState({
             dataOwner: storageOwner(),
