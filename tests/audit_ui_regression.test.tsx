@@ -23,7 +23,11 @@ const workout = { id: 'w-audit', date: '2026-09-10', routineName: 'Test', exerci
 
 beforeEach(async () => {
     localStorage.clear();
-    await prepareUnlockedTestArchive(captureSession().owner);
+    const owner = captureSession().owner;
+    if (owner.startsWith('user:')) {
+        localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '1');
+    }
+    await prepareUnlockedTestArchive(owner);
     vi.useFakeTimers();
     useAppStore.setState({
         userData: { ...emptyUserData, history: [], activeWorkout: workout },
@@ -103,7 +107,9 @@ describe('audit interaction regressions', () => {
         expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
         expect(localStorage.getItem(sealedKey)).toBe(originalCiphertext);
         expect(localStorage.getItem(deviceKey('workout', owner))).toBeNull();
-        expect(JSON.parse(readDeviceValueStrict('workout', owner)!)).toMatchObject(workout);
+        expect(JSON.parse(readDeviceValueStrict('workout', owner)!)).toMatchObject({
+            __logbookWorkoutSnapshot: 1, owner, consentRevision: 1, workout,
+        });
     });
 
     it('ends a workout once even after double submission and a rejected first save', async () => {

@@ -131,7 +131,11 @@ describe('authenticated hydration session fencing', () => {
         storeState.current = { userData: null, localWorkout: null, localPersistenceBlocked: false };
         const oldWorkout = { id: 'closed-during-cloud-load', date: '2026-10-09', exercises: [] };
         const { writeDeviceValue, protectedDeviceKey, deviceKey } = await import('../src/lib/sync/deviceStorage');
-        writeDeviceValue('workout', JSON.stringify(oldWorkout), 'user:user-a');
+        // This test models a current-epoch stale tab, not a pre-launch unmarked copy.
+        localStorage.setItem('logbook:v2:user:user-a:health-consent-generation', '1');
+        writeDeviceValue('workout', JSON.stringify({
+            __logbookWorkoutSnapshot: 1, owner: 'user:user-a', consentRevision: 1, workout: oldWorkout,
+        }), 'user:user-a');
         const sealedWorkoutKey = protectedDeviceKey('workout', 'user:user-a');
         expect(localStorage.getItem(sealedWorkoutKey)).toMatch(/^tlb-sealed:v1:/);
         expect(localStorage.getItem(deviceKey('workout', 'user:user-a'))).toBeNull();

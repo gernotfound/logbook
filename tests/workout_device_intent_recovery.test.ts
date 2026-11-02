@@ -65,6 +65,67 @@ describe('authenticated device-intent replay into semantic journal', () => {
         expect((await readLocal(account))?.pending).toEqual([]);
     });
 
+    it('does not adopt or overwrite an account plain workout without consent provenance at epoch one', async () => {
+        const account = 'user:unmarked-plain-epoch-one-' + crypto.randomUUID();
+        const epochKey = `logbook:v2:${account}:health-consent-generation`;
+        localStorage.setItem(epochKey, '1');
+        await prepareAccountWorkoutArchive(account);
+        const initial = data(workout('50'));
+        await initializeLocal(account, initial);
+        const original = JSON.stringify(workout('60'));
+        writeDeviceValue('workout', original, account);
+        const before = await readLocal(account);
+
+        expect(() => getInitialLocalWorkout(account, initial.activeWorkout, initial.history, undefined, undefined, 1))
+            .toThrow('generazione di consenso non verificabile');
+        expect(() => persistPlainWorkoutSnapshot(workout('70'), account))
+            .toThrow('generazione di consenso non verificabile');
+        expect(() => persistPlainWorkoutSnapshot(null, account))
+            .toThrow('generazione di consenso non verificabile');
+        expect(() => saveWorkoutDeviceIntent(account, workout('60'), workout('70'), initial.activeWorkout ?? null))
+            .toThrow('generazione di consenso non verificabile');
+        // An unrelated explicit backup may retain the raw evidence, but the
+        // automatic workout state and the journal must never adopt it.
+        await expect(recoverWorkoutDeviceIntent(account, () => true)).resolves.toBeUndefined();
+        expect(readDeviceValueStrict('workout', account)).toBe(original);
+        expect(await readLocal(account)).toEqual(before);
+    });
+
+    it('does not create an account plain snapshot without a current consent marker', async () => {
+        const account = 'user:missing-plain-consent-' + crypto.randomUUID();
+        await prepareUnlockedTestArchive(account);
+        const initial = data(workout('50'));
+        await initializeLocal(account, initial);
+        const before = await readLocal(account);
+
+        expect(() => persistPlainWorkoutSnapshot(workout('65'), account))
+            .toThrow('Generazione consenso workout non verificabile');
+        // Clearing an already absent copy is a no-op, not a new device write.
+        expect(() => persistPlainWorkoutSnapshot(null, account)).not.toThrow();
+        expect(() => getInitialLocalWorkout(account, initial.activeWorkout))
+            .toThrow('Generazione consenso workout non verificabile');
+        expect(readDeviceValueStrict('workout', account)).toBeNull();
+        expect(await readLocal(account)).toEqual(before);
+    });
+
+    it('keeps guest plain workout snapshots without account consent metadata', async () => {
+        const guest = 'guest';
+        localStorage.setItem('logbook_is_guest', 'true');
+        localStorage.setItem(GUEST_SESSION_KEY, 'plain-workout-guest-session');
+        activateGuestSession('plain-workout-guest-session');
+        await prepareUnlockedTestArchive(guest);
+        persistPlainWorkoutSnapshot(workout('65'), guest);
+        const original = readDeviceValueStrict('workout', guest);
+        expect(original).toBe(JSON.stringify(workout('65')));
+        expect(getInitialLocalWorkout(guest)?.exercises[0].sets[0].kg).toBe('65');
+        // Guest hydration may normalize optional fields before rewriting its
+        // still-guest record; it must never acquire an account consent marker.
+        const refreshed = unwrapWorkoutDeviceSnapshot(JSON.parse(readDeviceValueStrict('workout', guest)!), guest);
+        expect(refreshed.consentRevision).toBeUndefined();
+        expect(refreshed.workout).toMatchObject(workout('65'));
+        revokeGuestSession();
+    });
+
     it('preserves source-epoch metadata on a plain workout and refuses an old stamped copy', async () => {
         const account = 'user:stamped-plain-' + crypto.randomUUID();
         const epochKey = `logbook:v2:${account}:health-consent-generation`;

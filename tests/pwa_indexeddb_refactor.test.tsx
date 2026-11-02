@@ -180,6 +180,7 @@ describe('PWA IndexedDB Cache & Sync Lock Refactor Suite', () => {
     });
 
     test('localWorkout is sealed in owner-scoped localStorage, not IDB or plaintext keys', async () => {
+      localStorage.setItem('logbook:v2:user:test-user-id:health-consent-generation', '1');
       await prepareUnlockedTestArchive('user:test-user-id');
       const mockWorkout: WorkoutSession = {
         id: 'session-123',
@@ -198,7 +199,10 @@ describe('PWA IndexedDB Cache & Sync Lock Refactor Suite', () => {
       expect(sealed).toMatch(/^tlb-sealed:v1:/);
       expect(sealed).not.toContain('session-123');
       expect(localStorage.getItem(deviceKey('workout'))).toBeNull();
-      expect(JSON.parse(readDeviceValueStrict('workout')!)).toMatchObject({ id: 'session-123' });
+      expect(JSON.parse(readDeviceValueStrict('workout')!)).toMatchObject({
+        __logbookWorkoutSnapshot: 1, owner: 'user:test-user-id', consentRevision: 1,
+        workout: { id: 'session-123' },
+      });
 
       await DB.purgeAllLocalUserData();
       useAppStore.getState().resetStore();
@@ -376,6 +380,7 @@ describe('PWA IndexedDB Cache & Sync Lock Refactor Suite', () => {
     });
 
     test('visibilitychange hidden flushes localWorkout as authenticated device ciphertext', async () => {
+      localStorage.setItem('logbook:v2:user:test-user-id:health-consent-generation', '1');
       await prepareUnlockedTestArchive('user:test-user-id');
       const mockWorkout: WorkoutSession = {
         id: 'session-vis-test',
@@ -397,7 +402,7 @@ describe('PWA IndexedDB Cache & Sync Lock Refactor Suite', () => {
         expect(sealed).toMatch(/^tlb-sealed:v1:/);
         expect(sealed).not.toContain('session-vis-test');
         expect(localStorage.getItem(deviceKey('workout'))).toBeNull();
-        expect(JSON.parse(readDeviceValueStrict('workout')!).id).toBe('session-vis-test');
+        expect(JSON.parse(readDeviceValueStrict('workout')!).workout.id).toBe('session-vis-test');
       } finally { draftRegistry.unregister(flush); }
     });
   });

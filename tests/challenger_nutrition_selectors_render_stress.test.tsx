@@ -69,6 +69,7 @@ describe('Challenger 2: Zustand Fine-Grained Selectors & Background Render Isola
     };
 
     beforeEach(async () => {
+        localStorage.setItem('logbook:v2:user:test-user-id:health-consent-generation', '1');
         await prepareUnlockedTestArchive('user:test-user-id');
         vi.clearAllMocks();
         useAppStore.setState({

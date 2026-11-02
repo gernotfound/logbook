@@ -5,9 +5,9 @@ import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 const sdk = vi.hoisted(() => ({ auth: { currentUser: { uid: 'A' } as { uid: string } | null }, save: vi.fn() }));
 vi.mock('../../src/lib/firebase', () => ({ auth: sdk.auth }));
 vi.mock('../../src/lib/db', () => ({ DB: { saveUserData: sdk.save } }));
-// This suite exercises legacy sync/reconciliation under an already-authorized
-// authenticated account (server revision 0). Consent revocation and epoch
-// enforcement are tested separately with the real policy and emulator Rules.
+// This suite exercises sync/reconciliation under an authenticated account
+// with a current consent epoch. Revocation and epoch boundaries have their
+// own suites with the real policy and emulator Rules.
 vi.mock('../../src/lib/healthConsent', async () => {
     const actual = await vi.importActual<typeof import('../../src/lib/healthConsent')>('../../src/lib/healthConsent');
     const writable = (owner: string) => owner === 'user:' + sdk.auth.currentUser?.uid;
@@ -18,7 +18,7 @@ vi.mock('../../src/lib/healthConsent', async () => {
         requireHealthConsentWritable: (owner: string) => {
             if (!writable(owner)) throw new Error('Utente non autorizzato dal consenso');
         },
-        getVerifiedHealthConsentRevision: () => 0,
+        getVerifiedHealthConsentRevision: () => 1,
     };
 });
 vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackError: vi.fn() } }));
@@ -66,6 +66,7 @@ beforeEach(async () => {
         return { ok: true, status: 'synced' };
     });
     store.setState({ userData: data(170), dataOwner: 'user:A' });
+    localStorage.setItem('logbook:v2:user:A:health-consent-generation', '1');
     await createAndMigrateVault('user:A');
     await initializeLocal('user:A', data(170));
     expect(await get('logbook:v2:user:A')).toMatch(/^tlb-sealed:v1:/);

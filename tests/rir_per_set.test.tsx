@@ -171,6 +171,9 @@ describe('RIR reale per singola serie', () => {
     it('persiste RIR nel draft locale cifrato e lo recupera senza convertire 0 in assenza', async () => {
         const owner = captureSession().owner;
         await prepareUnlockedTestArchive(owner);
+        if (owner.startsWith('user:')) {
+            localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '1');
+        }
         vi.useFakeTimers();
         useAppStore.getState().setLocalWorkout(session(0));
         await act(async () => { vi.runAllTimers(); });

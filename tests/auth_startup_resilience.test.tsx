@@ -46,6 +46,8 @@ describe('PWA & iPhone Startup Resilience Tests', () => {
       getIdToken: vi.fn().mockResolvedValue('test-token'),
     };
     vi.clearAllMocks();
+    // Authenticated hydration fixtures carry the current device consent proof.
+    localStorage.setItem('logbook:v2:user:test-user-id:health-consent-generation', '1');
     await createAndMigrateVault('user:test-user-id');
   });
 

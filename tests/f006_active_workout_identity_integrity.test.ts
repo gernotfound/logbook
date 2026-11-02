@@ -78,6 +78,9 @@ describe('F-006 active workout persisted business identity', () => {
     it('quarantines malformed active workouts from IndexedDB and device-local recovery without losing valid sessions', async () => {
         const base = UserDataSchema.parse({}) as unknown as UserData;
         const owner = captureSession().owner;
+        if (owner.startsWith('user:')) {
+            localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '1');
+        }
         await prepareUnlockedTestArchive(owner);
         await initializeLocal(owner, base);
 
@@ -102,7 +105,12 @@ describe('F-006 active workout persisted business identity', () => {
         expect((await readLocal(owner))?.data.activeWorkout).toMatchObject(validWorkout);
 
         const sealedKey = protectedDeviceKey('workout', owner);
-        writeDeviceValue('workout', JSON.stringify({ date: '2026-09-29', exercises: [] }), owner);
+        // Malformed current-format workout: the epoch is valid, but the
+        // business identity must still be quarantined independently.
+        writeDeviceValue('workout', JSON.stringify({
+            __logbookWorkoutSnapshot: 1, owner, consentRevision: 1,
+            workout: { date: '2026-09-29', exercises: [] },
+        }), owner);
         const invalidCiphertext = localStorage.getItem(sealedKey);
         expect(invalidCiphertext).toMatch(/^tlb-sealed:v1:/);
         expect(() => getInitialLocalWorkout(owner)).toThrow(DeviceWorkoutCorruptError);
@@ -116,6 +124,9 @@ describe('F-006 active workout persisted business identity', () => {
 
     it('does not adopt or persist a malformed remote active workout into runtime state', async () => {
         const owner = captureSession().owner;
+        if (owner.startsWith('user:')) {
+            localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '1');
+        }
         await prepareUnlockedTestArchive(owner);
         const base = UserDataSchema.parse({}) as unknown as UserData;
         useAppStore.getState().setUserData({

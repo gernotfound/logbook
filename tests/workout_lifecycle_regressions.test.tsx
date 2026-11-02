@@ -11,6 +11,7 @@ import { restoreSessionAfterHistoryEdit } from '../src/hooks/workout/historyEdit
 import { useWorkoutSetMutations } from '../src/hooks/workout/useWorkoutSetMutations';
 import { captureSession } from '../src/lib/sync/session';
 import { getInitialLocalWorkout } from '../src/store/slices/createWorkoutSlice';
+import { persistPlainWorkoutSnapshot } from '../src/lib/sync/workoutDeviceIntent';
 import { readWorkoutTimerSnapshot, writeWorkoutTimerSnapshot } from '../src/lib/utils/timer';
 import { readWorkoutRecoveryDraft, writeWorkoutRecoveryDraft } from '../src/lib/sync/workoutRecoveryDraft';
 import PreSessionCheckIn from '../src/components/Training/PreSessionCheckIn';
@@ -39,6 +40,16 @@ function workout(id: string, started = false): WorkoutSession & { id: string } {
 }
 function userData(data: Partial<UserData>): UserData {
     return UserDataSchema.parse(data) as unknown as UserData;
+}
+
+// These recovery cases simulate device copies written by the current account
+// writer, not unsupported account snapshots from the pre-launch PWA.
+function seedCurrentDeviceWorkout(owner: string, snapshot: WorkoutSession): void {
+    const marker = `logbook:v2:${owner}:health-consent-generation`;
+    if (owner.startsWith('user:') && localStorage.getItem(marker) === null) {
+        localStorage.setItem(marker, '1');
+    }
+    persistPlainWorkoutSnapshot(snapshot, owner);
 }
 
 describe('Workout lifecycle durable recovery regressions', () => {
@@ -266,7 +277,7 @@ describe('Workout lifecycle durable recovery regressions', () => {
         const old = workout('historical', true);
         const initialTimer = { version: 1, state: 'running', startTime: 1000, accumulated: 0 };
         writeDeviceValue('timer', JSON.stringify(initialTimer), owner);
-        writeDeviceValue('workout', JSON.stringify(active), owner);
+        seedCurrentDeviceWorkout(owner, active);
         useAppStore.setState({ userData: userData({ activeWorkout: active, history: [old] }), localWorkout: active });
         const { result } = renderHook(() => useWorkoutSession());
 
@@ -329,7 +340,7 @@ describe('Workout lifecycle durable recovery regressions', () => {
     it('does not resurrect a completed session from a stale device snapshot', async () => {
         await prepareUnlockedTestArchive(owner);
         const finished = workout('completed', true);
-        writeDeviceValue('workout', JSON.stringify(finished), owner);
+        seedCurrentDeviceWorkout(owner, finished);
         expect(getInitialLocalWorkout(owner, null, [finished])).toBeNull();
         expect(localStorage.getItem(protectedDeviceKey('workout', owner))).toBeNull();
     });
@@ -337,7 +348,7 @@ describe('Workout lifecycle durable recovery regressions', () => {
     it('does not discard an unfinished device-only workout while history is unrelated', async () => {
         await prepareUnlockedTestArchive(owner);
         const prepared = workout('prepared');
-        writeDeviceValue('workout', JSON.stringify(prepared), owner);
+        seedCurrentDeviceWorkout(owner, prepared);
         expect(getInitialLocalWorkout(owner, null, [workout('other', true)])?.id).toBe('prepared');
     });
 
@@ -401,7 +412,7 @@ describe('Workout lifecycle durable recovery regressions', () => {
         const initial = userData({ activeWorkout: deleted });
         await initializeLocal(owner, initial);
         const key = protectedDeviceKey('workout', owner);
-        writeDeviceValue('workout', JSON.stringify(deleted), owner);
+        seedCurrentDeviceWorkout(owner, deleted);
         useAppStore.setState({ userData: initial, localWorkout: deleted });
         vi.mocked(useDialogStore.getState().showConfirm).mockResolvedValueOnce(true);
         vi.mocked(useDialogStore.getState().showAlert).mockResolvedValue();
@@ -428,7 +439,7 @@ describe('Workout lifecycle durable recovery regressions', () => {
         const initial = userData({ activeWorkout: finished });
         await initializeLocal(owner, initial);
         const key = protectedDeviceKey('workout', owner);
-        writeDeviceValue('workout', JSON.stringify(finished), owner);
+        seedCurrentDeviceWorkout(owner, finished);
         useAppStore.setState({ userData: initial, localWorkout: finished });
         vi.mocked(useDialogStore.getState().showAlert).mockResolvedValue();
         localStorageMock.removeItem.mockImplementationOnce(() => { throw new DOMException('blocked', 'SecurityError'); });
@@ -470,7 +481,7 @@ describe('Workout lifecycle durable recovery regressions', () => {
 
         const key = protectedDeviceKey('workout', owner);
         // A concurrent tab can republish a stale device snapshot after B.
-        writeDeviceValue('workout', JSON.stringify(abandoned), owner);
+        seedCurrentDeviceWorkout(owner, abandoned);
         expect(getInitialLocalWorkout(owner, durable.data.activeWorkout,
             durable.data.history, durable.lastClosedWorkoutId, durable.closedWorkoutIds)).toBeNull();
         expect(localStorage.getItem(key)).toBeNull();
@@ -482,7 +493,7 @@ describe('Workout lifecycle durable recovery regressions', () => {
         const previous = workout('older-completed', true);
         const stale = workout('newer-completed', true);
         const key = protectedDeviceKey('workout', owner);
-        writeDeviceValue('workout', JSON.stringify(previous), owner);
+        seedCurrentDeviceWorkout(owner, previous);
         expect(getInitialLocalWorkout(owner, null, [], stale.id, [previous.id, stale.id])).toBeNull();
         expect(localStorage.getItem(key)).toBeNull();
 
