@@ -6,6 +6,8 @@ import { useLocalStorage } from '../src/hooks/useLocalStorage';
 import ErrorBoundary from '../src/components/UI/ErrorBoundary';
 import { DB } from '../src/lib/db';
 import { useDialogStore } from '../src/store/useDialogStore';
+import { captureSession } from '../src/lib/sync/session';
+import { prepareUnlockedTestArchive } from './secureVaultFixture';
 
 describe('Empirical Challenger M1-2: useLocalStorage, ErrorBoundary & PWA Architecture Suite', () => {
     
@@ -337,6 +339,7 @@ vi.spyOn(console, 'warn').mockImplementation(() => {});
         });
 
         it('reloads page safely when "Ricarica pagina" button is clicked', async () => {
+            await prepareUnlockedTestArchive(captureSession().owner);
             const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
             const reloadMock = vi.fn();
             Object.defineProperty(window, 'location', {
