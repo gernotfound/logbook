@@ -628,10 +628,10 @@ describe('Workout lifecycle durable recovery regressions', () => {
         const historical = workout('history-to-delete', true);
         const suspended = workout('still-live', true);
         const editor: WorkoutSession & { id: string } = { ...historical, isEditingHistory: true, originalHistoryId: historical.id };
-        await initializeLocal(owner, userData({ history: [historical], activeWorkout: suspended }));
         if (owner.startsWith('user:')) {
             localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '1');
         }
+        await initializeLocal(owner, userData({ history: [historical], activeWorkout: suspended }));
         writeDeviceValue('history-editor-context', JSON.stringify({
             version: 1, editorId: historical.id,
             ...(owner.startsWith('user:') ? { consentRevision: 1 } : {}), suspended,
@@ -734,10 +734,10 @@ describe('Workout lifecycle durable recovery regressions', () => {
         const previous = workout('closed-in-other-tab', true);
         const editor: WorkoutSession & { id: string } = { ...workout('history-being-edited', true), isEditingHistory: true };
         const initial = userData({ activeWorkout: previous });
-        await initializeLocal(owner, initial);
         if (owner.startsWith('user:')) {
             localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '1');
         }
+        await initializeLocal(owner, initial);
         writeDeviceValue('history-editor-context', JSON.stringify({
             version: 1, editorId: editor.id,
             ...(owner.startsWith('user:') ? { consentRevision: 1 } : {}), suspended: previous,
@@ -756,10 +756,10 @@ describe('Workout lifecycle durable recovery regressions', () => {
         const staleCloud = workout('old-cloud-snapshot', true);
         const suspended = workout('authoritative-device-session', true);
         const editor: WorkoutSession & { id: string } = { ...workout('edit-context', true), isEditingHistory: true };
-        await initializeLocal(owner, userData({ activeWorkout: staleCloud }));
         if (owner.startsWith('user:')) {
             localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '1');
         }
+        await initializeLocal(owner, userData({ activeWorkout: staleCloud }));
         writeDeviceValue('history-editor-context', JSON.stringify({
             version: 1, editorId: editor.id,
             ...(owner.startsWith('user:') ? { consentRevision: 1 } : {}), suspended,
