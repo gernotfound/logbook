@@ -132,7 +132,7 @@ export function buildRoutineWorkout(
                     }));
                     if (plan?.target) setObj.target = structuredClone(plan.target);
                 } else if (plannedTechnique === 'isometrics') {
-                    setObj.isometrics = [{ id: runtime.generateId('iso'), kg: '', time: '' }];
+                    setObj.segments = [{ id: runtime.generateId('seg'), kg: '', reps: '', time: '', technique: 'isometry' }];
                 }
                 sets.push(setObj);
             }

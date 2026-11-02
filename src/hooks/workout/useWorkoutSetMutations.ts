@@ -127,7 +127,7 @@ export function useWorkoutSetMutations({ setLocalWorkout, showConfirm }: UseWork
                     newSet.technique = ex.defaultTechnique;
                     newSet.segments = [{ id: Logic.generateId('seg'), kg: '', reps: '' }];
                 } else if (ex.defaultTechnique === 'isometrics') {
-                    newSet.isometrics = [{ id: Logic.generateId('iso'), kg: '', time: '' }];
+                    newSet.segments = [{ id: Logic.generateId('seg'), kg: '', reps: '', time: '', technique: 'isometry' }];
                 }
                 return { ...ex, sets: [...ex.sets, newSet] };
             });
