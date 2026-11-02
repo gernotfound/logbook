@@ -51,7 +51,7 @@ const parse = (value: unknown) => UserDataSchema.parse(value) as unknown as User
  */
 function hasCommittedWorkoutAncestor(
     owner: string,
-    candidate: { generation: string; sequence: number; parentIntentId?: string },
+    candidate: { generation: string; sequence: number; parentIntentId?: string; consentRevision?: number },
     applied: { generation: string; sequence: number; intentId?: string },
 ): boolean {
     if (!applied.intentId) return false;
@@ -69,6 +69,7 @@ function hasCommittedWorkoutAncestor(
         if (!parsed || parsed.__logbookWorkoutIntent !== 1 || parsed.owner !== owner
             || parsed.intentId !== parent || parsed.generation !== candidate.generation
             || parsed.sequence !== expectedSeq
+            || parsed.consentRevision !== candidate.consentRevision
             || (parsed.parentIntentId !== undefined
                 && (typeof parsed.parentIntentId !== 'string' || !/^[a-f0-9]{32}$/.test(parsed.parentIntentId)))) {
             throw new WorkoutIntentConflictError('Catena degli intenti workout non valida.');
@@ -98,11 +99,9 @@ export async function commitDomainOperations(owner: string, batch: DomainOperati
             // would make this unacknowledged device snapshot a new cloud journal.
             // A revocation/reacceptance in another tab cannot restamp it.
             const localRevision = current?.consentRevision ?? 0;
-            if (workoutIntent.consentRevision !== undefined
-                ? (!Number.isSafeInteger(workoutIntent.consentRevision)
-                    || workoutIntent.consentRevision < 1
-                    || workoutIntent.consentRevision !== localRevision)
-                : localRevision > 1) {
+            if (!Number.isSafeInteger(workoutIntent.consentRevision)
+                || (workoutIntent.consentRevision ?? 0) < 1
+                || workoutIntent.consentRevision !== localRevision) {
                 throw new WorkoutIntentConflictError('Workout di un consenso precedente: journal invariato e copia dispositivo preservata.');
             }
             if (domainOperations.length !== 1 || domainOperations[0].type !== 'active-workout.set'

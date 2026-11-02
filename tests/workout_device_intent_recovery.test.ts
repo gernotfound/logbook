@@ -189,22 +189,54 @@ describe('authenticated device-intent replay into semantic journal', () => {
             .toThrow('consenso precedente');
     });
 
-    it('fails closed on an unversioned legacy device intent after consent changes', async () => {
-        const account = 'user:legacy-device-epoch-' + crypto.randomUUID();
+    it('preserves an unmarked account intent in the first consent epoch without replay or overwrite', async () => {
+        const account = 'user:unmarked-device-epoch-' + crypto.randomUUID();
         const key = `logbook:v2:${account}:health-consent-generation`;
+        localStorage.setItem(key, '1');
         const original = data(workout('50'));
         await prepareUnlockedTestArchive(account);
         await initializeLocal(account, original);
-        const old = saveWorkoutDeviceIntent(account, (original.activeWorkout ?? null), workout('55'), (original.activeWorkout ?? null));
-        expect(old.consentRevision).toBeUndefined();
-        localStorage.setItem(key, '3');
-        expect(await advanceLocalConsentRevisionIfClean(account, 3)).toBe(true);
+        const stamped = saveWorkoutDeviceIntent(account, original.activeWorkout ?? null, workout('55'), original.activeWorkout ?? null);
+        const unmarked = { ...stamped, consentRevision: undefined };
+        const originalBytes = JSON.stringify(unmarked);
+        writeDeviceValue('workout', originalBytes, account);
+        writeDeviceValue('workout-intent:' + stamped.intentId, originalBytes, account);
         const before = await readLocal(account);
 
-        await expect(recoverWorkoutDeviceIntent(account, () => true))
-            .rejects.toThrow('generazione di consenso');
+        expect(() => readWorkoutDeviceIntent(account)).toThrow('senza provenienza');
+        expect(() => getInitialLocalWorkout(account, original.activeWorkout, original.history, undefined, undefined, 1))
+            .toThrow('senza provenienza');
+        expect(() => saveWorkoutDeviceIntent(account, workout('55'), workout('60'), original.activeWorkout ?? null))
+            .toThrow('senza provenienza');
+        await expect(recoverWorkoutDeviceIntent(account, () => true)).rejects.toThrow('senza provenienza');
+        await expect(commitDomainOperations(account, { type: 'active-workout.set', workout: unmarked.workout },
+            original, () => true, { generation: unmarked.generation, sequence: unmarked.sequence,
+                consentRevision: unmarked.consentRevision, intentId: unmarked.intentId, baseline: unmarked.baseline }))
+            .rejects.toThrow('consenso precedente');
         expect(await readLocal(account)).toEqual(before);
-        expect(readWorkoutDeviceIntent(account)?.intentId).toBe(old.intentId);
+        expect(readDeviceValueStrict('workout', account)).toBe(originalBytes);
+        expect(readDeviceValueStrict('workout-intent:' + stamped.intentId, account)).toBe(originalBytes);
+    });
+
+    it('refuses new unmarked account intents before writing either device copy', async () => {
+        const account = 'user:missing-consent-intent-' + crypto.randomUUID();
+        const initial = data(workout('50'));
+        await prepareUnlockedTestArchive(account);
+        await initializeLocal(account, initial);
+        const before = await readLocal(account);
+        expect(() => saveWorkoutDeviceIntent(account, initial.activeWorkout ?? null, workout('55'), initial.activeWorkout ?? null))
+            .toThrow('Generazione consenso workout non verificabile');
+        expect(readDeviceValueStrict('workout', account)).toBeNull();
+        expect(await readLocal(account)).toEqual(before);
+    });
+
+    it('retains guest device intent support without account consent metadata', async () => {
+        const guest = 'guest';
+        await prepareUnlockedTestArchive(guest);
+        const current = saveWorkoutDeviceIntent(guest, null, workout('50'), null);
+        expect(current.consentRevision).toBeUndefined();
+        expect(readWorkoutDeviceIntent(guest)?.intentId).toBe(current.intentId);
+        expect(readDeviceValueStrict('workout-intent:' + current.intentId, guest)).not.toBeNull();
     });
 
     it('allows a fresh synchronous workout intent created under the current reaccepted epoch', async () => {
