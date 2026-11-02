@@ -33,7 +33,7 @@ export const readDeviceConsentRevision = (owner: string): number | undefined => 
     return revision;
 };
 
-/** An old plain snapshot is not evidence of its source epoch after reacceptance. */
+/** An account snapshot without its source consent epoch is not safe to hydrate or rewrite. */
 export function assertWorkoutSnapshotEpoch(
     owner: string, sourceRevision?: number, envelopeRevision?: number,
 ): void {
@@ -43,10 +43,9 @@ export function assertWorkoutSnapshotEpoch(
         throw new Error('Generazione consenso locale incoerente: workout preservato.');
     }
     if (sourceRevision === undefined) {
-        if ((current ?? envelopeRevision ?? 0) > 1) {
-            throw new Error('Workout di una generazione di consenso non verificabile: copia preservata.');
-        }
-    } else if (sourceRevision !== current || (envelopeRevision !== undefined && sourceRevision !== envelopeRevision)) {
+        throw new Error('Workout di una generazione di consenso non verificabile: copia preservata.');
+    }
+    if (sourceRevision !== current || (envelopeRevision !== undefined && sourceRevision !== envelopeRevision)) {
         throw new Error('Workout appartenente a una generazione di consenso precedente: copia preservata.');
     }
 }
@@ -226,6 +225,9 @@ export function unwrapWorkoutDeviceSnapshot(value: unknown, owner: string): {
 export function persistPlainWorkoutSnapshot(workout: WorkoutSession | null, owner = storageOwner()): void {
     const current = readDeviceConsentRevision(owner);
     if (owner.startsWith('user:')) {
+        if (current === undefined) {
+            throw new Error('Generazione consenso workout non verificabile: nessuno snapshot creato.');
+        }
         const old = readDeviceValueStrict('workout', owner);
         if (old !== null) {
             let value: unknown;
