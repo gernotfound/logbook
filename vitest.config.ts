@@ -15,6 +15,8 @@ export default defineConfig({
     VitePWA({ registerType: 'prompt' }),
   ],
   test: {
+    // All network tests use a non-routable loopback backend; Production config is injected by Hosting.
+    env: { VITE_ACCOUNT_DELETION_API_ORIGIN: 'http://127.0.0.1:9' },
     globals: true,
     environment: 'jsdom',
     setupFiles: ['./tests/cssReadCompat.ts', './tests/setup.tsx'],
