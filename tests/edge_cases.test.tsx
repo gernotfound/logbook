@@ -1,7 +1,7 @@
 import React from 'react';
 import { describe, test, expect, beforeEach } from 'vitest';
 import { screen, act, fireEvent, waitFor } from '@testing-library/react';
-import { renderWithProviders, emptyUserData } from './setup';
+import { renderWithAuthenticatedTestOwner, renderWithProviders, emptyUserData } from './setup';
 import { prepareUnlockedTestArchive } from './secureVaultFixture';
 import { Logic } from '../src/lib/logic';
 
@@ -179,7 +179,7 @@ describe('Empirical Challenger Suite: Edge Cases & Stress Verification', () => {
       expect(() => renderWithProviders(<HomeView onNavigate={() => {}} />, { userData: emptyUserData })).not.toThrow();
       expect(() => renderWithProviders(<SettingsView />, { userData: emptyUserData })).not.toThrow();
       expect(() => renderWithProviders(<NutritionPlanning />, { userData: emptyUserData })).not.toThrow();
-      expect(() => renderWithProviders(<TrainingSession />, { userData: emptyUserData })).not.toThrow();
+      expect(() => renderWithAuthenticatedTestOwner(<TrainingSession />, { userData: emptyUserData })).not.toThrow();
       expect(() => renderWithProviders(<TrainingRoutines />, { userData: emptyUserData })).not.toThrow();
       expect(() => renderWithProviders(<TrainingHistory />, { userData: emptyUserData })).not.toThrow();
       expect(() => renderWithProviders(<TrainingExercises />, { userData: emptyUserData })).not.toThrow();
@@ -353,7 +353,7 @@ describe('Empirical Challenger Suite: Edge Cases & Stress Verification', () => {
         ]
       };
 
-      const { container } = renderWithProviders(<TrainingSession />, { 
+      const { container } = renderWithAuthenticatedTestOwner(<TrainingSession />, { 
         localWorkout: emptySetWorkout,
         userData: { ...emptyUserData, activeWorkout: emptySetWorkout } as any
       });
