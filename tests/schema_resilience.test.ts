@@ -111,6 +111,25 @@ describe('Zod Schema Resilience & Defensive Catches', () => {
             expect(res.neck).toBe('40');
             expect(res.manualBf).toBe('15.5');
             expect(res.extraField).toBe('kept_by_passthrough');
+            expect(res.hip).toBe('95');
+            expect(res).not.toHaveProperty('hips');
+        });
+
+        it('does not adopt or persist the unsupported pre-launch hips alias', () => {
+            const profile = UserProfileSchema.parse({ hips: '94', height: '180', extraField: 'retained' });
+            expect(profile.hip).toBeUndefined();
+            expect(profile).not.toHaveProperty('hips');
+            expect(profile.extraField).toBe('retained');
+
+            const baseDay = { date: '2026-10-04', kcal: 0, carbs: 0, pro: 0, fat: 0 };
+            const oldDay = NutritionDaySchema.parse({ ...baseDay, hips: 93, notes: 'retained' });
+            expect(oldDay.hip).toBeUndefined();
+            expect(oldDay).not.toHaveProperty('hips');
+            expect(oldDay.notes).toBe('retained');
+
+            const currentDay = NutritionDaySchema.parse({ ...baseDay, hip: 96, hips: 93 });
+            expect(currentDay.hip).toBe(96);
+            expect(currentDay).not.toHaveProperty('hips');
         });
 
         it('bounds modeled profile strings while preserving intentional passthrough fields', () => {

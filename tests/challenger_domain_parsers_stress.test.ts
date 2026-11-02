@@ -11,7 +11,6 @@ describe('Challenger 2: DomainParsers Adversarial Stress Testing', () => {
                 neck: '40',
                 waist: '82',
                 hip: '95',
-                hips: '95',
                 manualBf: '12',
                 chest: '105',
                 shoulders: '120',

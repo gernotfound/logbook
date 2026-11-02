@@ -18,6 +18,18 @@ const asUserExercises = (entries: ReturnType<typeof getSeedCatalog>['exercises']
     entries.map(item => ({ ...item, setsCount: item.setsCount ?? 3, sets: [] }));
 
 describe('Deterministic Guest Merge (R5) Suite', () => {
+    it('merges only canonical hip measurements without reviving the pre-launch alias', () => {
+        expect(mergeProfile({ hip: '88' }, { hips: '99' } as any)).toEqual({ hip: '88' });
+        expect(mergeProfile({}, { hips: '99' } as any)).toEqual({});
+
+        const day = { date: '2026-10-04', kcal: 0, carbs: 0, pro: 0, fat: 0 };
+        const cloud = { ...day, hip: 95 };
+        const guest = { ...day, hips: 99 } as any;
+        const merged = mergeNutrition({ [day.date]: cloud }, { [day.date]: guest });
+        expect(merged[day.date].hip).toBe(95);
+        expect(merged[day.date]).not.toHaveProperty('hips');
+    });
+
     describe('filterCustomExercises & filterCustomFoods helpers', () => {
         it('filters out standard seed catalog exercises and preserves user custom exercises', () => {
             const seed = getSeedCatalog();

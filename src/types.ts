@@ -5,7 +5,6 @@ export interface UserProfile {
     neck?: string;
     waist?: string;
     hip?: string;
-    hips?: string;
     manualBf?: string;
     chest?: string;
     shoulders?: string;
@@ -252,7 +251,6 @@ export interface NutritionDay {
     neck?: number | string;
     waist?: number | string;
     hip?: number | string;
-    hips?: number | string;
     chest?: number | string;
     shoulders?: number | string;
     biceps?: number | string;
