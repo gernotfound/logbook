@@ -9,7 +9,7 @@ import SessionSetRow from '../src/components/Training/session/SessionSetRow';
 import TrainingSession from '../src/components/Training/TrainingSession';
 import { useDialogStore } from '../src/store/useDialogStore';
 import { useAppStore } from '../src/store/useAppStore';
-import { renderWithProviders, emptyUserData } from './setup';
+import { renderWithAuthenticatedTestOwner, renderWithProviders, emptyUserData } from './setup';
 import type { WorkoutSession, Exercise } from '../src/types';
 
 describe('Training Session UI Improvements Suite (R1, R2, R3)', () => {
@@ -58,7 +58,7 @@ describe('Training Session UI Improvements Suite (R1, R2, R3)', () => {
                 ]
             };
 
-            renderWithProviders(<TrainingSession />, {
+            renderWithAuthenticatedTestOwner(<TrainingSession />, {
                 localWorkout: activeWorkout,
                 userData: {
                     ...emptyUserData,
@@ -623,7 +623,7 @@ describe('Training Session UI Improvements Suite (R1, R2, R3)', () => {
             };
             await prepareUnlockedTestArchive(owner);
             await initializeLocal(owner, initialData);
-            renderWithProviders(<TrainingSession />, {
+            renderWithAuthenticatedTestOwner(<TrainingSession />, {
                 localWorkout: activeWorkout,
                 userData: initialData,
             });
