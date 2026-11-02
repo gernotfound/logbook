@@ -516,6 +516,7 @@ describe('Milestone 2: PWA, offline workout and telemetry boundaries', () => {
       await seedCurrentTelemetryQueue('user_boot_test', [
           {
             id: 'item_boot_1',
+             queuedAt: Date.now(),
             timestamp: Date.now() - 10000,
             itemType: 'error',
             payload: {
@@ -550,6 +551,7 @@ describe('Milestone 2: PWA, offline workout and telemetry boundaries', () => {
       await seedCurrentTelemetryQueue('user_failing', [
           {
             id: 'item_failing_1',
+             queuedAt: Date.now(),
             timestamp: Date.now(),
             itemType: 'error',
             payload: {

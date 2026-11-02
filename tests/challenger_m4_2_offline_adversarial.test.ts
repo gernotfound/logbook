@@ -12,6 +12,7 @@ function errorQueueItem(id: string, type: string, owner: string, timestamp = Dat
   return {
     id,
     timestamp,
+    queuedAt: timestamp,
     itemType: 'error',
     payload: {
       id: 'err_' + id,

@@ -174,6 +174,7 @@ describe('Telemetry Hub Vitest integration suite — Tier 5', () => {
         await seedCurrentTelemetryQueue('user_t5_7', [
             {
               id: 'queued_item_1',
+              queuedAt: Date.now(),
               timestamp: Date.now(),
               itemType: 'error',
               payload: {
@@ -238,6 +239,7 @@ describe('Telemetry Hub Vitest integration suite — Tier 5', () => {
         await seedCurrentTelemetryQueue('user_t5_8b', [
             {
               id: 'poison_pill_1',
+              queuedAt: Date.now(),
               timestamp: Date.now(),
               itemType: 'error',
               payload: {
@@ -386,6 +388,7 @@ describe('Telemetry Hub Vitest integration suite — Tier 5', () => {
           { id: 'corrupt_2', payload: null },
           {
             id: 'valid_item',
+              queuedAt: Date.now(),
             timestamp: Date.now(),
             itemType: 'error',
             payload: {

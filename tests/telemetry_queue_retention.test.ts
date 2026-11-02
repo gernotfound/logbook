@@ -58,16 +58,26 @@ describe('Offline technical telemetry data minimization', () => {
     expect(storage.getQueuedEvents().every(item => item.itemType === 'error')).toBe(true);
   });
 
-  it('expires encrypted reports while retaining valid timestamps', () => {
+  it('rejects reports without a verified queue timestamp rather than inferring it from the event', () => {
     const storage = new TelemetryQueueStorage(() => 'owner-a');
     const now = Date.now();
     const old = queued('old', now - TELEMETRY_QUEUE_MAX_AGE_MS - 1);
-    const recent = queued('recent', now - TELEMETRY_QUEUE_MAX_AGE_MS + 1);
-    delete recent.queuedAt;
-    expect(storeEncryptedTelemetry('user:owner-a', JSON.stringify([old, recent]))).toBe(true);
+    const recentWithoutQueueTime = {
+      ...queued('recent', now - TELEMETRY_QUEUE_MAX_AGE_MS + 1),
+      queuedAt: undefined,
+    };
+    expect(storeEncryptedTelemetry('user:owner-a', JSON.stringify([old, recentWithoutQueueTime]))).toBe(true);
 
-    expect(storage.getQueuedEvents().map(item => item.id)).toEqual(['recent']);
-    expect(JSON.parse(readEncryptedTelemetry('user:owner-a') || '[]').map((item: QueuedTelemetryItem) => item.id)).toEqual(['recent']);
+    expect(storage.getQueuedEvents()).toEqual([]);
+    expect(JSON.parse(readEncryptedTelemetry('user:owner-a') || '[]')).toEqual([]);
+  });
+
+  it('retains a recently enqueued report even when its diagnostic event happened earlier', () => {
+    const now = Date.now();
+    const item = { ...queued('late', now - TELEMETRY_QUEUE_MAX_AGE_MS - 1), queuedAt: now };
+    expect(storeEncryptedTelemetry('user:owner-a', JSON.stringify([item]))).toBe(true);
+    const storage = new TelemetryQueueStorage(() => 'owner-a');
+    expect(storage.getQueuedEvents().map(x => x.id)).toEqual(['late']);
   });
 
   it('expires cached items and updates disk when time passes while the app is open', () => {
@@ -128,9 +138,7 @@ describe('Offline technical telemetry data minimization', () => {
     const invalid = queued('invalid', now);
     invalid.queuedAt = Number.NaN;
     const future = queued('future', now + 2 * 24 * 60 * 60 * 1000);
-    const noTime = queued('missing', now);
-    noTime.timestamp = Number.NaN;
-    delete noTime.queuedAt;
+    const noTime = { ...queued('missing', now), timestamp: Number.NaN, queuedAt: undefined };
     expect(storeEncryptedTelemetry('user:owner-a', JSON.stringify([invalid, future, noTime]))).toBe(true);
     expect(storage.getQueuedEvents()).toEqual([]);
   });

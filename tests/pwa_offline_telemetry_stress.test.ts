@@ -10,7 +10,7 @@ import {
 import { seedCurrentTelemetryQueue } from './telemetry/seedCurrentQueue';
 
 function errorItem(id: string, userId: string, timestamp = Date.now(), message = id): QueuedTelemetryItem {
-  return { id, timestamp, itemType: 'error', payload: {
+  return { id, timestamp, queuedAt: timestamp, itemType: 'error', payload: {
     id, timestamp, type: 'Error', message, source: 'custom',
     userId, sessionId: 's1', context: { appVersion: '1.183.0', platform: 'other', displayMode: 'browser', online: false },
     count: 1, firstSeen: timestamp, lastSeen: timestamp,
@@ -110,7 +110,7 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
         { id: 'item_number_payload', itemType: 'error', payload: 99999 },
         { id: 'item_unsupported_type', itemType: 'unsupported_type', payload: { id: 'custom_1', type: 'custom', context: {}, sessionId: 's1', userId: 'u1', timestamp: 1002 } },
         errorItem('valid_evt_1', 'u1', Date.now(), 'valid_event_error'),
-        { id: 'valid_err_1', timestamp: Date.now(), itemType: 'error', payload: { id: 'err_real_1', type: 'TypeError', message: 'real_error_1', source: 'custom', context: {}, sessionId: 's1', userId: 'u1', count: 1, firstSeen: Date.now(), lastSeen: Date.now() } },
+        { id: 'valid_err_1', timestamp: Date.now(), queuedAt: Date.now(), itemType: 'error', payload: { id: 'err_real_1', type: 'TypeError', message: 'real_error_1', source: 'custom', context: {}, sessionId: 's1', userId: 'u1', count: 1, firstSeen: Date.now(), lastSeen: Date.now() } },
       ];
 
       telemetryHub.setUserId('u1');

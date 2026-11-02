@@ -85,6 +85,7 @@ describe('Technical telemetry queue and dispatch — Tier 1', () => {
         await seedCurrentTelemetryQueue('user_clear_check', [{
           id: 'q_1',
           timestamp: Date.now(),
+          queuedAt: Date.now(),
           itemType: 'error',
           payload: {
             id: 'q_1', timestamp: Date.now(), type: 'Error',

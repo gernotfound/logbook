@@ -115,10 +115,9 @@ Il guest conserva la semplice persistenza locale preesistente.
 
 **MUST:** per la coda diagnostica, best-effort **non** significa storage in chiaro: errori/stack, session ID e UID possono essere presenti nel payload tecnico.
 I nuovi report persistono esclusivamente cifrati con chiave owner-scoped sbloccata e AEAD autenticata; prima dello sblocco restano in RAM.
-Quando il vault è disponibile, le code plaintext precedenti vengono cifrate e verificate prima del cleanup.
-Se il vault è bloccato, gli elementi validi sono trattenuti soltanto nella RAM della scheda e il vecchio plaintext diagnostico viene rimosso; la chiusura della scheda può perderli.
+Le code plaintext pre-lancio non vengono lette, adottate, convertite né cancellate automaticamente; la chiusura della scheda può perdere i report ancora soltanto in RAM.
 Un ciphertext illeggibile non autorizza la sua cancellazione o sovrascrittura.
-Le voci oltre sette giorni non vengono restituite né inviate e il replay non può reintrodurle; il pruning dello storage avviene al successivo accesso alla coda.
+**MUST:** il writer corrente registra un `queuedAt` numerico per ogni report. La retention di sette giorni usa solo tale timestamp: i record che ne sono privi, lo hanno malformato o implausibilmente futuro sono esclusi, senza usare `timestamp` dell'evento come fallback. Le voci scadute non vengono restituite né inviate e il replay non può reintrodurle; il pruning dello storage avviene al successivo accesso alla coda.
 Tale retention tecnica è distinta da quella Firestore legacy di 30 giorni e da Sentry Production.
 
 Non dedurre da questa regola che ogni singolo accesso `localStorage` debba necessariamente passare dallo stesso helper: timer/workout e code specializzate possono avere boundary propri. La semantica strict vs best-effort deve però essere esplicita.
