@@ -19,9 +19,10 @@ describe('Training Session UI Improvements Suite (R1, R2, R3)', () => {
         { id: 'ex_treadmill', name: 'Tapis Roulant', setsCount: 1, sets: [], trackingType: 'cardio' }
     ];
 
-    beforeEach(() => {
+    beforeEach(async () => {
         vi.clearAllMocks();
         localStorage.clear();
+        await prepareUnlockedTestArchive(captureSession().owner);
         useAppStore.setState({
             userData: {
                 ...emptyUserData,
