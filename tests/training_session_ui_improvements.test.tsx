@@ -9,7 +9,7 @@ import SessionSetRow from '../src/components/Training/session/SessionSetRow';
 import TrainingSession from '../src/components/Training/TrainingSession';
 import { useDialogStore } from '../src/store/useDialogStore';
 import { useAppStore } from '../src/store/useAppStore';
-import { renderWithAuthenticatedTestOwner, renderWithProviders, emptyUserData } from './setup';
+import { renderWithAuthenticatedTestOwner, emptyUserData } from './setup';
 import type { WorkoutSession, Exercise } from '../src/types';
 
 describe('Training Session UI Improvements Suite (R1, R2, R3)', () => {
