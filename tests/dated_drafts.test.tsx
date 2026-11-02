@@ -7,7 +7,7 @@ import { useSleepMeasurements } from '../src/hooks/useSleepMeasurements';
 import { useAppStore } from '../src/store/useAppStore';
 import { useDialogStore } from '../src/store/useDialogStore';
 import { activateGuestSession, GUEST_SESSION_KEY, GUEST_REVOCATION_KEY, invalidateSession, storageOwner } from '../src/lib/sync/session';
-import { deviceKey, protectedDeviceKey } from '../src/lib/sync/deviceStorage';
+import { deviceKey, protectedDeviceKey, writeDeviceValue } from '../src/lib/sync/deviceStorage';
 import { prepareUnlockedTestArchive } from './secureVaultFixture';
 import { DatedDraftConflictError, readFencedDatedDraft, readFencedDatedDraftImage, writeFencedDatedDraft, UnverifiedDatedDraftEpochError } from '../src/lib/sync/datedDraftEpoch';
 import {
@@ -63,7 +63,8 @@ it('fails closed instead of inferring an owner when userData is not owner-fenced
     expect(localStorage.getItem(deviceKey('draft:measurement:2026-09-11', owner))).toBeNull();
 });
 
-it('never bypasses the health-consent write gate when persisting a dated draft', () => {
+it('never bypasses the health-consent write gate when persisting a dated draft', async () => {
+    await prepareUnlockedTestArchive(storageOwner());
     vi.mocked(requireHealthConsentWritable).mockImplementationOnce(() => {
         throw new Error('Consent suspended');
     });
@@ -89,15 +90,15 @@ it('quarantines an old measurement draft after reacceptance instead of restaging
     expect(hook.result.current.weight).toBe('');
     expect(hook.result.current.waist).toBe('');
     expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
-    expect(useAppStore.getState().saveError).toContain('generazione di consenso');
+    expect(useAppStore.getState().saveError).toContain('cifrato');
     act(() => hook.result.current.setWeight('90'));
     expect(hook.result.current.weight).toBe('');
     expect(readDatedWriterEvidence(owner, 'draft:measurement:2026-09-11')).toHaveLength(0);
     expect(localStorage.getItem(key)).toBe(original);
     expect(() => writeFencedDatedDraft('draft:measurement:2026-09-11', owner, null))
-        .toThrow(UnverifiedDatedDraftEpochError);
+        .toThrow('Archivio locale cifrato non valido');
     expect(() => writeFencedDatedDraft('draft:measurement:2026-09-11', owner, { weight: '90' }))
-        .toThrow(UnverifiedDatedDraftEpochError);
+        .toThrow('Archivio locale cifrato non valido');
     expect(localStorage.getItem(key)).toBe(original);
 });
 
@@ -106,11 +107,12 @@ it('prevents a mounted old form from publishing stale health data after a cross-
     invalidateSession();
     const owner = 'user:' + mockFirebaseAuth.currentUser!.uid;
     const name = 'draft:measurement:2026-09-11';
-    const key = deviceKey(name, owner);
+    const key = protectedDeviceKey(name, owner);
     const marker = `logbook:v2:${owner}:health-consent-generation`;
     localStorage.setItem(marker, '1');
-    const original = JSON.stringify({ __logbookDatedDraft: 2, owner, revisionId: 'b'.repeat(32), consentRevision: 1, values: { weight: '75' } });
-    localStorage.setItem(key, original);
+    await prepareUnlockedTestArchive(owner);
+    writeFencedDatedDraft(name, owner, { weight: '75' });
+    const original = localStorage.getItem(key);
     useAppStore.setState({ userData: data(), dataOwner: owner, localPersistenceBlocked: false });
     const beforeData = useAppStore.getState().userData;
     const hook = renderHook(() => useNutritionMeasurements('2026-09-11'));
@@ -158,20 +160,23 @@ it('stamps a new measurement draft and fences it after the generation changes', 
     expect(localStorage.getItem(key)).toBeNull();
 });
 
-it('rejects altered owner and revision in a stamped draft without replacing it', () => {
+it('rejects altered owner and revision in a stamped draft without replacing it', async () => {
+    await prepareUnlockedTestArchive('user:' + mockFirebaseAuth.currentUser!.uid);
     const owner = 'user:' + mockFirebaseAuth.currentUser!.uid;
-    const key = deviceKey('draft:measurement:2026-09-11', owner);
+    const name = 'draft:measurement:2026-09-11';
+    const key = protectedDeviceKey(name, owner);
     localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '3');
     const original = JSON.stringify({
         __logbookDatedDraft: 2, owner: 'user:foreign', revisionId: 'c'.repeat(32), consentRevision: 3,
         values: { weight: '80' },
     });
-    localStorage.setItem(key, original);
+    writeDeviceValue(name, original, owner);
+    const originalCiphertext = localStorage.getItem(key);
     expect(() => readFencedDatedDraft('draft:measurement:2026-09-11', owner))
         .toThrow('Provenienza della bozza locale non valida');
     expect(() => writeFencedDatedDraft('draft:measurement:2026-09-11', owner, { weight: '81' }))
         .toThrow('Provenienza della bozza locale non valida');
-    expect(localStorage.getItem(key)).toBe(original);
+    expect(localStorage.getItem(key)).toBe(originalCiphertext);
 });
 
 it('preserves unsupported pre-launch V1 and unwrapped drafts without reading or replacing them', () => {
@@ -183,9 +188,9 @@ it('preserves unsupported pre-launch V1 and unwrapped drafts without reading or 
         JSON.stringify({ weight: '70' }),
     ]) {
         localStorage.setItem(key, original);
-        expect(() => readFencedDatedDraft(name, owner)).toThrow('Provenienza della bozza locale non valida');
+        expect(() => readFencedDatedDraft(name, owner)).toThrow('Archivio locale cifrato non valido');
         expect(() => writeFencedDatedDraft(name, owner, { weight: '71' }))
-            .toThrow('Provenienza della bozza locale non valida');
+            .toThrow('Archivio locale cifrato non valido');
         expect(localStorage.getItem(key)).toBe(original);
     }
 });
@@ -279,18 +284,20 @@ it('permits a new consent generation to replace a previous-generation deletion m
     expect(localStorage.getItem(deviceKey(name, owner))).toBeNull();
 });
 
-it('refuses malformed deletion-marker revisions without rewriting the original bytes', () => {
+it('refuses malformed deletion-marker revisions without rewriting the original bytes', async () => {
+    await prepareUnlockedTestArchive(storageOwner());
     const owner = storageOwner();
     const name = 'draft:sleep:2026-09-11';
-    const key = deviceKey(name, owner);
+    const key = protectedDeviceKey(name, owner);
     const tampered = JSON.stringify({
         __logbookDatedDraft: 2, owner, revisionId: 'not-random', values: null,
     });
-    localStorage.setItem(key, tampered);
+    writeDeviceValue(name, tampered, owner);
+    const originalCiphertext = localStorage.getItem(key);
     expect(() => readFencedDatedDraftImage(name, owner)).toThrow('Provenienza');
     expect(() => writeFencedDatedDraft(name, owner, { sleepHours: '08:00' }))
         .toThrow('Provenienza');
-    expect(localStorage.getItem(key)).toBe(tampered);
+    expect(localStorage.getItem(key)).toBe(originalCiphertext);
 });
 
 it('blocks a stale mounted measurement form before edit or business dispatch, preserving the newer device record', async () => {
@@ -1079,7 +1086,8 @@ it('stays in the measurement editor when draft cancellation fails and navigates 
     view.unmount();
 });
 
-it('keeps the in-memory draft and blocks strict reload when storage writes fail', () => {
+it('keeps the in-memory draft and blocks strict reload when storage writes fail', async () => {
+    await prepareUnlockedTestArchive(storageOwner());
     const hook = renderHook(() => useNutritionMeasurements('2026-09-11'));
     vi.spyOn(localStorage, 'setItem').mockImplementation(() => { throw new Error('quota'); });
     act(() => hook.result.current.setWeight('75'));
