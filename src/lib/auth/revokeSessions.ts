@@ -1,4 +1,4 @@
-import { BACKEND_API_ORIGIN as API } from '../backendApi';
+import { trustedBackendUrl } from '../backendApi';
 import type { User } from 'firebase/auth';
 import { auth, ensureAppCheck } from '../firebase';
 import { getLimitedUseAppCheckToken } from '../appCheck';
@@ -22,7 +22,7 @@ export async function revokeSessionsOnServer(user: User): Promise<void> {
         const appCheckToken = await getLimitedUseAppCheckToken();
         assertDeletionDeadlineActive(signal);
         if (auth.currentUser?.uid !== user.uid) throw new Error('Sessione cambiata.');
-        const response = await fetch(API + '/api/account-sessions', {
+        const response = await fetch(trustedBackendUrl('/api/account-sessions'), {
             method: 'POST',
             headers: {
                 authorization: 'Bearer ' + token,

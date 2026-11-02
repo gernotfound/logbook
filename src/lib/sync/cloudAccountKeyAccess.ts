@@ -1,4 +1,4 @@
-import { BACKEND_API_ORIGIN as API } from '../backendApi';
+import { trustedBackendUrl } from '../backendApi';
 import { auth, ensureAppCheck } from '../firebase';
 import { getLimitedUseAppCheckToken } from '../appCheck';
 import { getVerifiedHealthConsentRevision, isHealthConsentCloudWritable } from '../healthConsent';
@@ -67,7 +67,7 @@ async function acquireAccountDataKey(
 
     let response: Response;
     try {
-        response = await fetch(API + '/api/cloud-key' + (purpose === 'rights-export' ? '?purpose=rights-export' : ''), {
+        response = await fetch(trustedBackendUrl('/api/cloud-key') + (purpose === 'rights-export' ? '?purpose=rights-export' : ''), {
             method: 'POST',
             cache: 'no-store',
             signal: AbortSignal.timeout(12_000),
