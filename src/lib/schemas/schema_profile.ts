@@ -14,7 +14,7 @@ export const UserProfileSchema = z.object({
     gender: safeOptionalString(PROFILE_STRING_MAX_LENGTH),
     neck: safeOptionalString(PROFILE_STRING_MAX_LENGTH),
     waist: safeOptionalString(PROFILE_STRING_MAX_LENGTH),
-    hip: safeOptionalString(PROFILE_STRING_MAX_LENGTH).transform(value => value === '' ? undefined : value),
+    hip: safeOptionalString(PROFILE_STRING_MAX_LENGTH).transform(value => value === '' ? undefined : value).optional(),
     manualBf: safeOptionalString(PROFILE_STRING_MAX_LENGTH),
     chest: safeOptionalString(PROFILE_STRING_MAX_LENGTH),
     shoulders: safeOptionalString(PROFILE_STRING_MAX_LENGTH),
