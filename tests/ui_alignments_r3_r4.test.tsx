@@ -9,10 +9,12 @@ import { useAppStore } from '../src/store/useAppStore';
 import { useDialogStore } from '../src/store/useDialogStore';
 import { Logic } from '../src/lib/logic';
 import { storageOwner } from '../src/lib/sync/session';
+import { prepareUnlockedTestArchive } from './secureVaultFixture';
 
 describe('UI Alignments - R3 & R4', () => {
-    beforeEach(() => {
+    beforeEach(async () => {
         localStorage.clear();
+        await prepareUnlockedTestArchive(storageOwner());
         useAppStore.setState({
             dataOwner: storageOwner(),
             userData: {
