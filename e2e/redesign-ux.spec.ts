@@ -28,6 +28,42 @@ test('welcome heading stays above the login card on narrow screens in both theme
 });
 
 
+test('brand stays aligned across login and registration and guest guidance is inside its button', async ({ page }) => {
+  for (const theme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme: theme });
+    for (const viewport of [{ width: 390, height: 844 }, { width: 320, height: 568 }]) {
+      await page.setViewportSize(viewport);
+      await page.goto('/');
+      const overlay = page.locator('#auth-overlay.auth-entry-overlay');
+      const title = overlay.getByRole('heading', { name: 'TheLogBook' });
+      const card = page.locator('#auth-login-box');
+      const modes = page.getByRole('group', { name: 'Modalità di accesso' });
+      const beforeTitle = await title.boundingBox();
+      const beforeCard = await card.boundingBox();
+      expect(beforeTitle).not.toBeNull();
+      expect(beforeCard).not.toBeNull();
+      await modes.getByRole('button', { name: 'Registrati' }).click();
+      const registrationTitle = await title.boundingBox();
+      const registrationCard = await card.boundingBox();
+      expect(registrationTitle).not.toBeNull();
+      expect(registrationCard).not.toBeNull();
+      expect(Math.abs(registrationTitle!.y - beforeTitle!.y)).toBeLessThanOrEqual(1);
+      expect(Math.abs(registrationCard!.y - beforeCard!.y)).toBeLessThanOrEqual(1);
+      await modes.getByRole('button', { name: 'Accedi' }).click();
+      const backTitle = await title.boundingBox();
+      expect(backTitle).not.toBeNull();
+      expect(Math.abs(backTitle!.y - beforeTitle!.y)).toBeLessThanOrEqual(1);
+      const guestAction = page.getByRole('button', { name: 'Continua senza account' });
+      const guidance = guestAction.getByText('I dati saranno salvati solo sul dispositivo.');
+      await expect(guidance).toBeAttached();
+      await expect(guestAction).toHaveAttribute('aria-describedby', 'auth-guest-device-note');
+      await guestAction.scrollIntoViewIfNeeded();
+      await expect(guidance).toBeVisible();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
+    }
+  }
+});
+
 test('access layout retains one scroll area and clear action hierarchy on small screens', async ({ page }) => {
   for (const theme of ['light', 'dark'] as const) {
     await page.emulateMedia({ colorScheme: theme });
