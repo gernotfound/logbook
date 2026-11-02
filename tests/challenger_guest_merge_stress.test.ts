@@ -524,9 +524,8 @@ describe('Empirical Challenger: Deterministic Guest Merge (R5) Stress & Adversar
 
             const merged = mergeNutritionPlanning(cloudPlan, guestPlan);
             expect(merged?.weight).toBe(75);
-            expect(merged?.avgMacros?.carbsPerKg).toBe(3.5);
-            expect(merged?.avgMacros?.fatPerKg).toBe(0.9);
             expect(merged?.avgMacros?.carbsPerKg).toBe(3.5); // guest
+            expect(merged?.avgMacros?.fatPerKg).toBe(0.9); // guest
             expect(merged?.avgMacros?.proPerKg).toBe(2.2); // guest
             expect(merged?.onBoost?.carbsPercent).toBe(15); // guest
             expect(merged?.onMacros?.carbsPerKg).toBe(3.5); // cloud preserved
