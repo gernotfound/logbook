@@ -255,7 +255,8 @@ describe('AUDIT 01-04 remediation invariants', () => {
         }
     });
 
-    it('keeps setLocalWorkout strictly device-local and leaves cloud-facing UserData untouched', () => {
+    it('keeps setLocalWorkout strictly device-local and leaves cloud-facing UserData untouched', async () => {
+        await prepareUnlockedTestArchive(storageOwner());
         const live = workout('live');
         const historical = { ...workout('history'), isEditingHistory: true };
         useAppStore.setState({
