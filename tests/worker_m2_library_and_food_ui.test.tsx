@@ -42,6 +42,7 @@ describe('Worker M2: Exercise Library UI & Food Form Real-Time Calorie Calculati
         it('restores isBodyweight and equipmentWeight from an authenticated device draft', async () => {
             const owner = captureSession().owner;
             await prepareUnlockedTestArchive(owner);
+            localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '3');
             const draft = {
                 name: 'Trazioni zavorrate',
                 notes: 'Cintura da sovraccarico',

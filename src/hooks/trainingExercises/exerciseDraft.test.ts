@@ -26,6 +26,8 @@ describe('exercise draft owner isolation', () => {
     await prepareUnlockedTestArchive('user:a');
     await createAndMigrateVault('user:b');
     const otherDraft = { ...draft, name: 'Scheda account B' };
+    localStorage.setItem('logbook:v2:user:a:health-consent-generation', '3');
+    localStorage.setItem('logbook:v2:user:b:health-consent-generation', '3');
     persistExerciseDraft(draft, 'user:a');
     persistExerciseDraft(otherDraft, 'user:b');
     const keyA = protectedDeviceKey('draft_exercise', 'user:a');
@@ -56,6 +58,40 @@ describe('exercise draft owner isolation', () => {
     expect(() => persistExerciseDraft({ ...draft, notes: 'Changed' }, owner)).toThrow('Archivio locale cifrato non valido');
     expect(() => clearExerciseDraft(owner)).toThrow('Archivio locale cifrato non valido');
     expect(localStorage.getItem(key)).toBe(raw);
+  });
+
+  it('rejects sealed unversioned account drafts even at the first consent revision, preserving the bytes', async () => {
+    const owner = 'user:a';
+    const name = 'draft_exercise';
+    await prepareUnlockedTestArchive(owner);
+    localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '1');
+    writeDeviceValue(name, JSON.stringify(draft), owner);
+    const sealedKey = protectedDeviceKey(name, owner);
+    const ciphertext = localStorage.getItem(sealedKey);
+    expect(ciphertext).toMatch(/^tlb-sealed:v1:/);
+    expect(() => readExerciseDraft(owner)).toThrow('senza provenienza');
+    expect(() => persistExerciseDraft({ ...draft, name: 'Overwrite' }, owner)).toThrow('senza provenienza');
+    expect(() => clearExerciseDraft(owner)).toThrow('senza provenienza');
+    expect(localStorage.getItem(sealedKey)).toBe(ciphertext);
+    expect(JSON.parse(readDeviceValueStrict(name, owner)!)).toMatchObject(draft);
+  });
+
+  it('refuses unstamped new account drafts without a consent marker', async () => {
+    const owner = 'user:a';
+    await prepareUnlockedTestArchive(owner);
+    expect(() => persistExerciseDraft(draft, owner)).toThrow('Generazione consenso');
+    expect(readDeviceValueStrict('draft_exercise', owner)).toBeNull();
+    expect(localStorage.getItem(protectedDeviceKey('draft_exercise', owner))).toBeNull();
+  });
+
+  it('keeps the current guest draft format readable in its own sealed vault', async () => {
+    const owner = 'guest';
+    await prepareUnlockedTestArchive(owner);
+    persistExerciseDraft(draft, owner);
+    expect(readExerciseDraft(owner)).toMatchObject(draft);
+    expect(readDeviceValueStrict('draft_exercise', owner)).toBe(JSON.stringify(draft));
+    clearExerciseDraft(owner);
+    expect(readExerciseDraft(owner)).toBeNull();
   });
 
   it('stamps sealed exercise drafts and fences prior authenticated generations', async () => {

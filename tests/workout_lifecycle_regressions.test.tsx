@@ -117,7 +117,7 @@ describe('Workout lifecycle durable recovery regressions', () => {
         renderOwnedWorkoutSession();
         await waitFor(() => expect(useAppStore.getState().localPersistenceBlocked).toBe(true));
         expect(readDeviceValueStrict(name, owner)).toBe(original);
-        expect(() => writeWorkoutRecoveryDraft(name, owner, null)).toThrow('generazione di consenso');
+        expect(() => writeWorkoutRecoveryDraft(name, owner, null)).toThrow('senza provenienza');
         expect(readDeviceValueStrict(name, owner)).toBe(original);
     });
 
