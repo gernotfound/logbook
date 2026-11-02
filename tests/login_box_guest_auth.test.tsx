@@ -71,6 +71,17 @@ describe('LoginBox guest Google authentication', () => {
         vi.mocked(sendPasswordResetEmail).mockResolvedValue(undefined);
     });
 
+    it('keeps the local-data explanation inside the guest action and preserves its behavior', async () => {
+        authState.isGuest = false;
+        render(<LoginBox />);
+        const action = screen.getByRole('button', { name: 'Continua senza account' });
+        const explanation = screen.getByText('I dati saranno salvati solo sul dispositivo.');
+        expect(action.contains(explanation)).toBe(true);
+        expect(action.getAttribute('aria-describedby')).toBe(explanation.id);
+        fireEvent.click(action);
+        await waitFor(() => expect(authMocks.loginAsGuest).toHaveBeenCalledTimes(1));
+    });
+
     it('submits the normal email/password login through the production LoginBox form', async () => {
         authState.isGuest = false;
         render(<LoginBox />);

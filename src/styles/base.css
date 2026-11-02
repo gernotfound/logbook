@@ -248,6 +248,12 @@ textarea:focus {
     overscroll-behavior: contain;
 }
 
+/* Keep the brand anchored when switching between short and long authentication forms. */
+#auth-overlay.auth-entry-overlay {
+    justify-content: flex-start;
+    padding-top: calc(env(safe-area-inset-top, 0px) + 1.5rem);
+}
+
 @keyframes fadeSlideUp {
     from { opacity: 0; transform: translateY(0.25rem); }
     to { opacity: 1; transform: none; }

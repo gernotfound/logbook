@@ -447,7 +447,7 @@ function OwnerBoundApp({ startupTab }: { startupTab: string | null }) {
 
   if (!currentUser && !isGuest) {
     return (
-      <div id="auth-overlay">
+      <div id="auth-overlay" className="auth-entry-overlay">
         <GlobalDialog />
         <div className="auth-entry">
           <h1 className="auth-entry-title">TheLogBook</h1>
