@@ -20,7 +20,7 @@ I campi business root e le entità mensili sono contenuti dentro `_sealed`: le F
 
 `library` e `customFoods` sono campi legacy del modello applicativo; la projection corrente li normalizza rispetto al catalogo globale prima della write root.
 
-Le misurazioni corporee non sono un array root `bodyMeasurements`: peso, BF, provenienza BF, circonferenze e sonno sono campi di `NutritionDay`, quindi seguono la persistenza mensilizzata di `nutrition`.
+Le misurazioni corporee non sono un array root `bodyMeasurements`: peso, BF, provenienza BF, circonferenze e sonno sono campi di `NutritionDay`, quindi seguono la persistenza mensilizzata di `nutrition`. La circonferenza fianchi usa solo `hip` in `UserProfile` e `NutritionDay`; l'alias `hips` pre-lancio non viene più importato, promosso durante merge o conservato dalla normalizzazione Zod. I campi addizionali distinti restano governati da `.passthrough()`.
 
 ## Zod Gateway — difesa runtime
 

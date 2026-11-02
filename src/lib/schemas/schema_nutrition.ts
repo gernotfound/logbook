@@ -219,10 +219,8 @@ function sanitizeCardioSessions(value: unknown): unknown[] {
 
 export const NutritionDaySchema = z.preprocess((val: any) => {
     if (val && typeof val === 'object') {
-        const hip = (val.hip !== undefined && val.hip !== null && val.hip !== '') ? val.hip : val.hips;
         return {
             ...val,
-            hip: hip !== undefined ? hip : undefined,
             meals: sanitizeLoggedMeals(val.meals),
             supplementsIntake: sanitizeSupplementIntakes(val.supplementsIntake),
             cardioSessions: sanitizeCardioSessions(val.cardioSessions),
@@ -241,7 +239,6 @@ export const NutritionDaySchema = z.preprocess((val: any) => {
     neck: safeOptionalNumber(),
     waist: safeOptionalNumber(),
     hip: safeOptionalNumber(),
-    hips: safeOptionalNumber(),
     chest: safeOptionalNumber(),
     shoulders: safeOptionalNumber(),
     biceps: safeOptionalNumber(),
@@ -261,8 +258,9 @@ export const NutritionDaySchema = z.preprocess((val: any) => {
     stepsCapturedAt: z.number().finite().nonnegative().optional().catch(undefined),
     cardioSessions: z.array(CardioSessionSchema).optional().default([]),
 }).passthrough().transform((day) => {
-    if (day.steps !== undefined) return day;
-    const { stepsSource: _source, stepsCapturedAt: _capturedAt, ...withoutStepMetadata } = day;
+    const { hips: _unsupportedHips, ...canonicalDay } = day;
+    if (canonicalDay.steps !== undefined) return canonicalDay;
+    const { stepsSource: _source, stepsCapturedAt: _capturedAt, ...withoutStepMetadata } = canonicalDay;
     return withoutStepMetadata;
 })).catch((ctx) => {
     reportZodSchemaFallback({

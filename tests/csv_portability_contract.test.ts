@@ -35,7 +35,7 @@ describe('CSV portability contract', () => {
         expect(lines[1]).toContain('"chest"');
     });
 
-    it('exports normalized nutrition details and gives canonical hip precedence', async () => {
+    it('exports normalized nutrition details using the canonical hip field', async () => {
         let csv = '';
         vi.spyOn(Exporter, 'downloadFile').mockImplementation(async (filename, content) => {
             if (filename === 'misurazioni.csv') csv = content;
@@ -48,7 +48,6 @@ describe('CSV portability contract', () => {
             pro: 160,
             fat: 70,
             hip: 101,
-            hips: 99,
             measurementTime: '08:15',
             isDayOn: true,
             meals: [{ id: 'm1', name: 'Pasto', meal: 'pranzo', quantity: 100, kcal: 500, carbs: 50, pro: 40, fat: 15 }],
@@ -58,7 +57,6 @@ describe('CSV portability contract', () => {
 
         await Exporter.exportToCSV([], { [day.date]: day }, []);
         expect(csv).toContain(',101,');
-        expect(csv).not.toContain('"99"');
         expect(csv).toContain('"08:15"');
         expect(csv).toContain('"m1"');
         expect(csv).toContain('"supplementId"');

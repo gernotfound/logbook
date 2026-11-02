@@ -105,12 +105,8 @@ export function mergeProfile(
         }
     }
 
-    const hipVal = result.hip !== undefined && result.hip !== null && result.hip !== '' ? result.hip : result.hips;
-    if (hipVal !== undefined) {
-        result.hip = hipVal;
-    }
-
-    return result;
+    const { hips: _unsupportedHips, ...canonicalProfile } = result as UserProfile & { hips?: unknown };
+    return canonicalProfile;
 }
 
 export function isDefaultNutritionPlanning(plan: NutritionPlanning | null | undefined): boolean {
@@ -242,8 +238,9 @@ export function mergeNutrition(
     for (const date of allDates) {
         const sanitizeDayIdentities = (day: NutritionDay | undefined): NutritionDay | undefined => {
             if (!day) return undefined;
+            const { hips: _unsupportedHips, ...canonicalDay } = day as NutritionDay & { hips?: unknown };
             return {
-                ...day,
+                ...canonicalDay,
                 ...(day.meals !== undefined ? { meals: sanitizeIdentityCollection(day.meals) } : {}),
                 ...(day.supplementsIntake !== undefined ? {
                     supplementsIntake: sanitizeIdentityCollection(day.supplementsIntake, item => item.supplementId),
@@ -256,11 +253,9 @@ export function mergeNutrition(
         const guestDay = sanitizeDayIdentities(guest[date]);
 
         if (cloudDay && !guestDay) {
-            const cloudHip = cloudDay.hip !== undefined && cloudDay.hip !== null && cloudDay.hip !== '' ? cloudDay.hip : (cloudDay as any).hips;
-            result[date] = { ...cloudDay, hip: cloudHip !== undefined ? cloudHip : cloudDay.hip };
+            result[date] = cloudDay;
         } else if (!cloudDay && guestDay) {
-            const guestHip = guestDay.hip !== undefined && guestDay.hip !== null && guestDay.hip !== '' ? guestDay.hip : (guestDay as any).hips;
-            result[date] = { ...guestDay, hip: guestHip !== undefined ? guestHip : guestDay.hip };
+            result[date] = guestDay;
         } else if (cloudDay && guestDay) {
             const mergedMeals = mergeArrayById(cloudDay.meals, guestDay.meals);
             const mergedSupplementsIntake = mergeArrayById(cloudDay.supplementsIntake, guestDay.supplementsIntake);
@@ -281,9 +276,6 @@ export function mergeNutrition(
 
             const pickVal = (gVal: any, cVal: any) =>
                 (gVal !== undefined && gVal !== null && gVal !== '') ? gVal : cVal;
-
-            const guestHip = guestDay.hip !== undefined && guestDay.hip !== null && guestDay.hip !== '' ? guestDay.hip : (guestDay as any).hips;
-            const cloudHip = cloudDay.hip !== undefined && cloudDay.hip !== null && cloudDay.hip !== '' ? cloudDay.hip : (cloudDay as any).hips;
 
             const dayObj: any = {
                 date,
@@ -314,7 +306,7 @@ export function mergeNutrition(
                 weight: pickVal(guestDay.weight, cloudDay.weight),
                 neck: pickVal(guestDay.neck, cloudDay.neck),
                 waist: pickVal(guestDay.waist, cloudDay.waist),
-                hip: pickVal(guestHip, cloudHip),
+                hip: pickVal(guestDay.hip, cloudDay.hip),
                 chest: pickVal(guestDay.chest, cloudDay.chest),
                 shoulders: pickVal(guestDay.shoulders, cloudDay.shoulders),
                 biceps: pickVal(guestDay.biceps, cloudDay.biceps),
