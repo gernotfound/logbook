@@ -371,6 +371,7 @@ describe('Challenger 2: Adversarial State Management, Schemas, Guest Merge & UI 
         beforeEach(async () => {
             // An authenticated workout cannot persist before the device vault
             // has been provisioned, including visibilitychange crash recovery.
+            localStorage.setItem('logbook:v2:user:test-user-id:health-consent-generation', '1');
             await prepareUnlockedTestArchive('user:test-user-id');
         });
         it('4.1 saveUserData rejects Promise and sets saveError if DB.saveUserData throws', async () => {

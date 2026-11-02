@@ -23,7 +23,11 @@ const workout = { id: 'w-audit', date: '2026-09-10', routineName: 'Test', exerci
 
 beforeEach(async () => {
     localStorage.clear();
-    await prepareUnlockedTestArchive(captureSession().owner);
+    const owner = captureSession().owner;
+    if (owner.startsWith('user:')) {
+        localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '1');
+    }
+    await prepareUnlockedTestArchive(owner);
     vi.useFakeTimers();
     useAppStore.setState({
         userData: { ...emptyUserData, history: [], activeWorkout: workout },

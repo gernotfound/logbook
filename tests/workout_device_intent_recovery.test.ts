@@ -118,7 +118,11 @@ describe('authenticated device-intent replay into semantic journal', () => {
         const original = readDeviceValueStrict('workout', guest);
         expect(original).toBe(JSON.stringify(workout('65')));
         expect(getInitialLocalWorkout(guest)?.exercises[0].sets[0].kg).toBe('65');
-        expect(readDeviceValueStrict('workout', guest)).toBe(original);
+        // Guest hydration may normalize optional fields before rewriting its
+        // still-guest record; it must never acquire an account consent marker.
+        const refreshed = unwrapWorkoutDeviceSnapshot(JSON.parse(readDeviceValueStrict('workout', guest)!), guest);
+        expect(refreshed.consentRevision).toBeUndefined();
+        expect(refreshed.workout).toMatchObject(workout('65'));
         revokeGuestSession();
     });
 

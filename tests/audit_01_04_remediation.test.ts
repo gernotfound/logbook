@@ -159,6 +159,7 @@ describe('AUDIT 01-04 remediation invariants', () => {
 
     it('restores the device workout from a validated fallback into sealed storage when the device copy is missing', async () => {
         const owner = 'user:recovery';
+        localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '1');
         await prepareUnlockedTestArchive(owner);
         const durable = workout('w-recovered', [['se-1', 'bench']]);
         const sealedKey = protectedDeviceKey('workout', owner);
@@ -256,7 +257,11 @@ describe('AUDIT 01-04 remediation invariants', () => {
     });
 
     it('keeps setLocalWorkout strictly device-local and leaves cloud-facing UserData untouched', async () => {
-        await prepareUnlockedTestArchive(storageOwner());
+        const owner = storageOwner();
+        if (owner.startsWith('user:')) {
+            localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '1');
+        }
+        await prepareUnlockedTestArchive(owner);
         const live = workout('live');
         const historical = { ...workout('history'), isEditingHistory: true };
         useAppStore.setState({
