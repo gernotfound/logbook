@@ -563,6 +563,7 @@ describe('TheLogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => 
             });
 
             it('T1.4.7: typing into weight input invokes onUpdateSet with "kg" field and value', () => {
+                localStorage.setItem(`logbook:v2:${captureSession().owner}:health-consent-generation`, '3');
                 const mockUpdate = vi.fn();
                 render(
                     <SessionSetRow 

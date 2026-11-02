@@ -347,6 +347,7 @@ describe.each(['input', 'textarea'] as const)('owner-scoped buffered %s recovery
     it('keeps the original owner draft and never flushes it after session invalidation', async () => {
         const owner = captureSession().owner;
         await prepareUnlockedTestArchive(owner);
+        localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '3');
         const name = `draft:buffered:${kind}:stable-draft`;
         const key = protectedDeviceKey(name, owner);
         const onChange = vi.fn();

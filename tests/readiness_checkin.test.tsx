@@ -166,6 +166,7 @@ describe('pre-session readiness contract', () => {
 
     it('keeps post-session answers as a local draft until Salva e termina', async () => {
         await prepareUnlockedTestArchive(captureSession().owner);
+        localStorage.setItem(`logbook:v2:${captureSession().owner}:health-consent-generation`, '3');
         const originalDispatch = useAppStore.getState().dispatchDomainOperation;
         const dispatchDomainOperation = vi.fn(async (operation: unknown) => {
             void operation;
