@@ -1,7 +1,7 @@
 import React from 'react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
-import { renderWithProviders, emptyUserData } from './setup';
+import { renderWithAuthenticatedTestOwner, renderWithProviders, emptyUserData } from './setup';
 import { useAppStore } from '../src/store/useAppStore';
 import { captureSession } from '../src/lib/sync/session';
 import { prepareUnlockedTestArchive } from './secureVaultFixture';
@@ -72,7 +72,7 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
             expect(localWorkout?.exercises[1].exId).toBe('ex_bench');
 
             // 3. Render TrainingSession and verify dynamic sync
-            const { container } = renderWithProviders(<TrainingSession />, {
+            const { container } = renderWithAuthenticatedTestOwner(<TrainingSession />, {
                 userData: { ...emptyUserData, library } as any,
                 localWorkout
             });
