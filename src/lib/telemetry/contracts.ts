@@ -42,7 +42,7 @@ export interface QueuedTelemetryItem {
   timestamp: number;
   itemType: 'error';
   payload: TelemetryErrorPayload;
-  queuedAt?: number;
+  queuedAt: number;
   retryCount?: number;
 }
 

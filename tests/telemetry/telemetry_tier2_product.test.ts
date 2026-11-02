@@ -86,7 +86,7 @@ describe('Technical telemetry queue and dispatch — Tier 2', () => {
         telemetryHub.setUserId(uid);
         const now = Date.now();
         await seedCurrentTelemetryQueue(uid, ['1', '2'].map((id) => ({
-          id, timestamp: now, itemType: 'error',
+          id, timestamp: now, queuedAt: now, itemType: 'error',
           payload: {
             id, timestamp: now, type: 'Error', message: `report ${id}`,
             source: 'custom', context: getTelemetryContext(), userId: uid,

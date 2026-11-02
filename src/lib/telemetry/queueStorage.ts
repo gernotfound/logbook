@@ -26,11 +26,11 @@ function parseQueuedItems(raw: string | null): QueuedTelemetryItem[] {
     ) as QueuedTelemetryItem[];
 }
 
-// The timestamp is the fallback for queues saved by previous builds without queuedAt.
-// An absent, malformed or implausibly future timestamp must not extend retention.
+// Only the current queue writer's enqueue time proves the retention window.
+// A missing or invalid queuedAt must never be inferred from the event timestamp.
 function retainUnexpiredItems(items: QueuedTelemetryItem[], now = Date.now()): QueuedTelemetryItem[] {
   return items.filter((item) => {
-    const enqueuedAt = item.queuedAt === undefined ? item.timestamp : item.queuedAt;
+    const enqueuedAt = item.queuedAt;
     return typeof enqueuedAt === 'number'
       && Number.isFinite(enqueuedAt)
       && enqueuedAt > 0
