@@ -84,7 +84,7 @@ function sanitizeUndefined<T>(value: T, rejectCycles: boolean, seen?: WeakSet<ob
 
 import type { NutritionPlanning } from '../../types';
 
-const NUTRITION_CONFLICT_FINGERPRINT_VERSION = 2;
+const NUTRITION_CONFLICT_FINGERPRINT_VERSION = 3;
 
 /**
  * Generates a deterministic, versioned fingerprint for a NutritionPlanning object.
@@ -92,11 +92,9 @@ const NUTRITION_CONFLICT_FINGERPRINT_VERSION = 2;
  * Included fields:
  * - Scalars: weight, onDaysCount, notes, totalKcal
  * - Nested macro objects: avgMacros, onBoost, onMacros, offMacros, normocalorica
- * - Legacy fields: carbsPerKg, proPerKg, fatPerKg
  *
- * Excluded fields: Nessuno. Tutti i campi definiti dall'interfaccia NutritionPlanning sono
- * esplicitamente mappati. Questo assicura che qualsiasi modifica semantica al piano alteri
- * deterministicamente il fingerprint.
+ * Retired top-level macro aliases are excluded. Current nested targets
+ * are part of the compare-and-swap identity.
  */
 export function getNutritionConflictFingerprint(plan: NutritionPlanning | null | undefined): string {
     if (!plan) return '';
@@ -133,10 +131,6 @@ export function getNutritionConflictFingerprint(plan: NutritionPlanning | null |
             fatPerKg: plan.offMacros.fatPerKg ?? null,
         } : null,
 
-        // Legacy fields for backward compatibility
-        carbsPerKg: plan.carbsPerKg ?? null,
-        proPerKg: plan.proPerKg ?? null,
-        fatPerKg: plan.fatPerKg ?? null,
         normocalorica: plan.normocalorica ? {
             kcal: plan.normocalorica.kcal ?? null,
             carbs: plan.normocalorica.carbs ?? null,

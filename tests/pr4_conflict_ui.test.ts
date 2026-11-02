@@ -193,7 +193,7 @@ describe('PR 4: Nutrition Conflict Fingerprint', () => {
     it('generates a versioned fingerprint', () => {
         const plan = { totalKcal: 2500, weight: 80, onDaysCount: 4 };
         const fp = getNutritionConflictFingerprint(plan);
-        expect(fp.startsWith('v2:')).toBe(true);
+        expect(fp.startsWith('v3:')).toBe(true);
         expect(getNutritionConflictFingerprint({ ...plan, lockedMacro: 'carbs' } as any)).toBe(fp);
         expect(getNutritionConflictFingerprint({ ...plan, chartPeriod: 30 } as any)).toBe(fp);
     });
@@ -243,10 +243,12 @@ describe('PR 4: Nutrition Conflict Fingerprint', () => {
         expect(getNutritionConflictFingerprint(plan1)).not.toBe(getNutritionConflictFingerprint(plan2));
     });
 
-    it('generates different fingerprints for legacy macro fields', () => {
-        const plan1 = { carbsPerKg: 3, proPerKg: 2, fatPerKg: 1 };
-        const plan2 = { carbsPerKg: 3, proPerKg: 2.2, fatPerKg: 1 };
-        expect(getNutritionConflictFingerprint(plan1)).not.toBe(getNutritionConflictFingerprint(plan2));
+    it('ignores retired top-level ratios while still comparing nested targets', () => {
+        const plan = { avgMacros: { carbsPerKg: 3, proPerKg: 2, fatPerKg: 1 } };
+        const retired = { ...plan, carbsPerKg: 99, proPerKg: 99, fatPerKg: 99 };
+        expect(getNutritionConflictFingerprint(retired)).toBe(getNutritionConflictFingerprint(plan));
+        const edited = { avgMacros: { ...plan.avgMacros, proPerKg: 2.2 } };
+        expect(getNutritionConflictFingerprint(edited)).not.toBe(getNutritionConflictFingerprint(plan));
     });
 
     it('handles nested objects properly across reordering', () => {

@@ -95,11 +95,17 @@ describe('Zod Schema Resilience & Defensive Catches', () => {
                 avgMacros: { carbsPerKg: 3, proPerKg: 2, fatPerKg: 1 },
                 lockedMacro: 'carbs',
                 chartPeriod: 30,
+                carbsPerKg: 9,
+                proPerKg: 8,
+                fatPerKg: 7,
                 futureSetting: 'retain',
             };
             const parsed = NutritionPlanningSchema.parse(raw);
             expect(parsed).not.toHaveProperty('lockedMacro');
             expect(parsed).not.toHaveProperty('chartPeriod');
+            for (const field of ['carbsPerKg', 'proPerKg', 'fatPerKg']) {
+                expect(parsed).not.toHaveProperty(field);
+            }
             expect(parsed.weight).toBe(80);
             expect(parsed.avgMacros?.carbsPerKg).toBe(3);
             expect((parsed as Record<string, unknown>).futureSetting).toBe('retain');
@@ -110,6 +116,10 @@ describe('Zod Schema Resilience & Defensive Catches', () => {
             });
             expect(userData.nutritionPlanning).not.toHaveProperty('lockedMacro');
             expect(userData.nutritionPlanning).not.toHaveProperty('chartPeriod');
+            for (const field of ['carbsPerKg', 'proPerKg', 'fatPerKg']) {
+                expect(userData.nutritionPlanning).not.toHaveProperty(field);
+                expect(userData.pendingConflicts?.nutritionPlanning).not.toHaveProperty(field);
+            }
             expect(userData.pendingConflicts?.nutritionPlanning).not.toHaveProperty('lockedMacro');
             expect(userData.pendingConflicts?.nutritionPlanning).not.toHaveProperty('chartPeriod');
             expect(userData.pendingConflicts?.nutritionPlanning?.avgMacros?.proPerKg).toBe(2);

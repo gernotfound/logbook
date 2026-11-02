@@ -117,16 +117,9 @@ export function isDefaultNutritionPlanning(plan: NutritionPlanning | null | unde
     // fields are user data, not evidence that a legacy default can be discarded.
     const defaultKeys = new Set(Object.keys(def));
     if (Object.entries(plan).some(([key, value]) => value !== undefined && !defaultKeys.has(key))) return false;
-    return (
-        plan.weight === def.weight &&
-        plan.carbsPerKg === def.carbsPerKg &&
-        plan.proPerKg === def.proPerKg &&
-        plan.fatPerKg === def.fatPerKg &&
-        plan.normocalorica?.kcal === def.normocalorica?.kcal &&
-        plan.normocalorica?.carbs === def.normocalorica?.carbs &&
-        plan.normocalorica?.pro === def.normocalorica?.pro &&
-        plan.normocalorica?.fat === def.normocalorica?.fat
-    );
+    // Unspecified fields are absent; a changed nested target is never a generated default.
+    const defined = Object.fromEntries(Object.entries(plan).filter(([, value]) => value !== undefined));
+    return deepEqual(defined, def);
 }
 
 /**

@@ -152,14 +152,12 @@ describe('Deterministic Guest Merge (R5) Suite', () => {
         it('merges nutrition planning settings and preserves normocalorica targets', () => {
             const cloudPlan = {
                 weight: 75,
-                carbsPerKg: 3.0,
-                proPerKg: 2.0,
-                fatPerKg: 1.0,
+                avgMacros: { carbsPerKg: 3.0, proPerKg: 2.0, fatPerKg: 1.0 },
                 normocalorica: { kcal: 2400, carbs: 280, pro: 160, fat: 65 }
             };
             const guestPlan = {
                 weight: 80,
-                carbsPerKg: 3.5,
+                avgMacros: { carbsPerKg: 3.5, proPerKg: 2.0, fatPerKg: 1.0 },
                 normocalorica: { kcal: 2600, carbs: 320 }
             };
 
@@ -167,7 +165,7 @@ describe('Deterministic Guest Merge (R5) Suite', () => {
             const merged = mergedResult.activePlan;
             // Since it's user-edited + user-edited differing, cloud wins actively (Policy case 5)
             expect(merged?.weight).toBe(75);
-            expect(merged?.carbsPerKg).toBe(3.0);
+            expect(merged?.avgMacros?.carbsPerKg).toBe(3.0);
             expect(merged?.normocalorica?.kcal).toBe(2400);
             // Guest is saved in pendingConflict
             expect(mergedResult.pendingConflict?.weight).toBe(80);
@@ -175,7 +173,7 @@ describe('Deterministic Guest Merge (R5) Suite', () => {
 
         it('handles null/undefined nutrition planning inputs safely', () => {
             expect(mergeNutritionPlanning(null, null).activePlan).toBeUndefined();
-            const plan = { weight: 70, carbsPerKg: 3.0, proPerKg: 2.0, fatPerKg: 1.0 };
+            const plan = { weight: 70, avgMacros: { carbsPerKg: 3.0, proPerKg: 2.0, fatPerKg: 1.0 } };
             expect(mergeNutritionPlanning(plan, null, 'user-edited', 'generated-default').activePlan).toEqual(plan);
             expect(mergeNutritionPlanning(null, plan, 'generated-default', 'user-edited').activePlan).toEqual(plan);
         });

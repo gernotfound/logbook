@@ -10,9 +10,9 @@ export function normalizeOnDaysCount(value: unknown): number {
 export function createDefaultNutritionPlanning(): NutritionPlanning {
     return {
         weight: 80,
-        carbsPerKg: 3.5,
-        proPerKg: 2.0,
-        fatPerKg: 1.0,
+        onDaysCount: 4,
+        avgMacros: { carbsPerKg: 3.5, proPerKg: 2.0, fatPerKg: 1.0 },
+        onBoost: { carbsPercent: 20, proPercent: 0, fatPercent: 0 },
         normocalorica: { kcal: 2500, carbs: 300, pro: 160, fat: 70 }
     };
 }

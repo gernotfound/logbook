@@ -95,7 +95,7 @@ describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & D
             activeWorkout: null,
             trainingCycles: [{ id: 'c_1', name: 'Cycle 1', durationWeeks: 4, routines: [] }],
             activeCycleId: 'c_1',
-            nutritionPlanning: { weight: 80, carbsPerKg: 3.5, proPerKg: 2.0, fatPerKg: 1.0 },
+            nutritionPlanning: { weight: 80, avgMacros: { carbsPerKg: 3.5, proPerKg: 2.0, fatPerKg: 1.0 } },
             supplements: [{ id: 'sup_1', name: 'Creatina', unit: 'g' }]
         });
 
