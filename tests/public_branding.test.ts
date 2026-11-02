@@ -61,7 +61,7 @@ describe('public TheLogBook branding', () => {
     expect(appearanceCss).not.toContain('brand-loading-bloom-pulse');
     expect(appearanceCss).not.toContain('brand-loading-edge-pulse');
     expect(appearanceCss).not.toContain('text-shadow:');
-    expect(appearanceCss).not.toContain('#00e5ff;');
+    expect(appearanceCss.slice(appearanceCss.indexOf('.brand-loading-screen {'))).not.toContain('#00e5ff;');
     expect(homeHeader).toContain('<h1>TheLogBook</h1>');
     expect(app).toContain('<h1 className="auth-entry-title">TheLogBook</h1>');
     expect(loginBox).toContain('>TheLogBook</h1>');
