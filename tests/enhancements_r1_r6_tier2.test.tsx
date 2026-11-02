@@ -751,6 +751,9 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
                 const owner = captureSession().owner;
                 const initialData = { ...emptyUserData, history: originalHistory, activeWorkout: null };
                 await prepareUnlockedTestArchive(owner);
+                if (owner.startsWith('user:')) {
+                    localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '1');
+                }
                 await initializeLocal(owner, initialData);
                 const persistedHistoryBefore = (await readLocal(owner))?.data.history;
                 useAppStore.setState({ userData: initialData, dataOwner: owner, localWorkout: null });

@@ -219,6 +219,9 @@ describe('Workout Improvements & History Edit Suite', () => {
     });
 
     test('TrainingView full integration: edit from history switches sub-tab to session in edit mode', async () => {
+      const owner = captureSession().owner;
+      if (owner.startsWith('user:')) localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '1');
+      await prepareUnlockedTestArchive(owner);
       const mockHistory: WorkoutSession[] = [
         {
           id: 'w_hist_test',

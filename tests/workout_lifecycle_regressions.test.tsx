@@ -259,6 +259,7 @@ describe('Workout lifecycle durable recovery regressions', () => {
     });
 
     it('suspends and restores an active workout without clearing its timer or cloud shadow', async () => {
+        if (owner.startsWith('user:')) localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '1');
         await prepareUnlockedTestArchive(owner);
         const active = workout('active', true);
         const old = workout('historical', true);
@@ -289,6 +290,7 @@ describe('Workout lifecycle durable recovery regressions', () => {
     });
 
     it('restores a durable active shadow when the transient device state was absent', async () => {
+        if (owner.startsWith('user:')) localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '1');
         await prepareUnlockedTestArchive(owner);
         const active = workout('shadow', true);
         const old = workout('old-shadow', true);
@@ -300,6 +302,7 @@ describe('Workout lifecycle durable recovery regressions', () => {
     });
 
     it('does not stop an active timer if switching to the historical editor fails', async () => {
+        if (owner.startsWith('user:')) localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '1');
         await prepareUnlockedTestArchive(owner);
         const active = workout('original', true);
         const old = workout('old', true);
@@ -628,9 +631,13 @@ describe('Workout lifecycle durable recovery regressions', () => {
         const historical = workout('history-to-delete', true);
         const suspended = workout('still-live', true);
         const editor: WorkoutSession & { id: string } = { ...historical, isEditingHistory: true, originalHistoryId: historical.id };
+        if (owner.startsWith('user:')) {
+            localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '1');
+        }
         await initializeLocal(owner, userData({ history: [historical], activeWorkout: suspended }));
         writeDeviceValue('history-editor-context', JSON.stringify({
-            version: 1, editorId: historical.id, suspended,
+            version: 1, editorId: historical.id,
+            ...(owner.startsWith('user:') ? { consentRevision: 1 } : {}), suspended,
         }), owner);
         useAppStore.setState({ userData: userData({ history: [historical], activeWorkout: suspended }), localWorkout: editor });
         vi.mocked(useDialogStore.getState().showConfirm).mockResolvedValueOnce(true);
@@ -730,9 +737,13 @@ describe('Workout lifecycle durable recovery regressions', () => {
         const previous = workout('closed-in-other-tab', true);
         const editor: WorkoutSession & { id: string } = { ...workout('history-being-edited', true), isEditingHistory: true };
         const initial = userData({ activeWorkout: previous });
+        if (owner.startsWith('user:')) {
+            localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '1');
+        }
         await initializeLocal(owner, initial);
         writeDeviceValue('history-editor-context', JSON.stringify({
-            version: 1, editorId: editor.id, suspended: previous,
+            version: 1, editorId: editor.id,
+            ...(owner.startsWith('user:') ? { consentRevision: 1 } : {}), suspended: previous,
         }), owner);
         await commitDomainOperations(owner, {
             type: 'active-workout.set', workout: null, deletedWorkoutId: previous.id,
@@ -748,9 +759,13 @@ describe('Workout lifecycle durable recovery regressions', () => {
         const staleCloud = workout('old-cloud-snapshot', true);
         const suspended = workout('authoritative-device-session', true);
         const editor: WorkoutSession & { id: string } = { ...workout('edit-context', true), isEditingHistory: true };
+        if (owner.startsWith('user:')) {
+            localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '1');
+        }
         await initializeLocal(owner, userData({ activeWorkout: staleCloud }));
         writeDeviceValue('history-editor-context', JSON.stringify({
-            version: 1, editorId: editor.id, suspended,
+            version: 1, editorId: editor.id,
+            ...(owner.startsWith('user:') ? { consentRevision: 1 } : {}), suspended,
         }), owner);
         useAppStore.setState({ userData: userData({ activeWorkout: staleCloud }), localWorkout: editor });
         await act(async () => { await restoreSessionAfterHistoryEdit(editor.id); });
