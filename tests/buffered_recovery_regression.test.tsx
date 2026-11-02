@@ -294,7 +294,6 @@ describe.each(['input', 'textarea'] as const)('owner-scoped buffered %s recovery
         activateGuestSession('buffered-draft-guest-generation');
         await prepareUnlockedTestArchive('guest');
         expect(captureSession().owner).toBe('guest');
-        const guestKey = recoveryKey(kind);
         const onChange = vi.fn();
         const view = render(field(kind, onChange));
 
