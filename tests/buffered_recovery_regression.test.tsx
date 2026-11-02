@@ -285,6 +285,7 @@ describe.each(['input', 'textarea'] as const)('owner-scoped buffered %s recovery
 
     it('blocks persistence on a device write failure and refuses unsafe update recovery', async () => {
         const owner = captureSession().owner;
+        localStorage.setItem(deviceKey('health-consent-generation', owner), '1');
         await prepareUnlockedTestArchive(owner);
         const name = `draft:buffered:${kind}:stable-draft`;
         const key = protectedDeviceKey(name, owner);
