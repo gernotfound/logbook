@@ -31,8 +31,9 @@ import {
 } from './requirements_r1_r6_contracts';
 
 describe('TheLogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
-    beforeEach(() => {
+    beforeEach(async () => {
         window.localStorage.clear();
+        await prepareUnlockedTestArchive('user:test-user-id');
         useAppStore.getState().resetStore();
         useAppStore.setState({ dataOwner: captureSession().owner });
         vi.clearAllMocks();
