@@ -12,6 +12,7 @@ import { Logic } from '../src/lib/logic';
 import { DB } from '../src/lib/db';
 import type { UserData, WorkoutSession } from '../src/types';
 import { captureSession } from '../src/lib/sync/session';
+import { markTabSnapshotClean } from '../src/lib/sync/tabSnapshotCausality';
 import { initializeLocal, readLocal } from '../src/lib/sync/localRepository';
 import { UserDataSchema } from '../src/lib/schema';
 import { idbStore } from './setup';
@@ -429,6 +430,9 @@ describe('Empirical Challenger: React Hooks, Memoization & Re-render Loop Stress
             expect(initialCiphertext).toEqual(expect.stringMatching(/^tlb-sealed:v1:/));
             expect(initialCiphertext).not.toContain('Push Day');
             useAppStore.setState({ userData: initial, dataOwner: owner, localPersistenceBlocked: false });
+            // Auth hydration establishes the current consent generation's tab
+            // baseline before a workout edit; do not inherit a dirty test tab.
+            markTabSnapshotClean(captureSession(), initial);
             // Keep the real owner-scoped IndexedDB commit. Only the cloud
             // transport is offline; undefined is not a valid SyncResult.
             const cloudSave = vi.spyOn(DB, 'saveUserData').mockResolvedValue({

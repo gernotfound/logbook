@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { deviceKey, protectedDeviceKey, readDeviceValueStrict, writeDeviceValue } from '../../lib/sync/deviceStorage';
 import { createAndMigrateVault } from '../../lib/sync/secureArchiveMigration';
 import { prepareUnlockedTestArchive } from '../../../tests/secureVaultFixture';
+import { activateGuestSession, GUEST_SESSION_KEY } from '../../lib/sync/session';
 import {
   clearExerciseDraft,
   persistExerciseDraft,
@@ -86,6 +87,10 @@ describe('exercise draft owner isolation', () => {
 
   it('keeps the current guest draft format readable in its own sealed vault', async () => {
     const owner = 'guest';
+    const generation = 'test-guest-exercise-draft-session';
+    localStorage.setItem('logbook_is_guest', 'true');
+    localStorage.setItem(GUEST_SESSION_KEY, generation);
+    activateGuestSession(generation);
     await prepareUnlockedTestArchive(owner);
     persistExerciseDraft(draft, owner);
     expect(readExerciseDraft(owner)).toMatchObject(draft);
