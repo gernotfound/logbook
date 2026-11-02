@@ -505,7 +505,7 @@ describe('Empirical Challenger: Deterministic Guest Merge (R5) Stress & Adversar
             expect(merged3).toEqual(merged1);
         });
 
-        it('deeply merges nutritionPlanning partials (normocalorica, avgMacros, onBoost, offMacros)', () => {
+        it('keeps competing nutritionPlanning partials separately without unmarked-origin deep merge', () => {
             const cloudPlan = {
                 weight: 70,
                 avgMacros: { carbsPerKg: 3.0, proPerKg: 2.0, fatPerKg: 1.0 },
@@ -523,17 +523,12 @@ describe('Empirical Challenger: Deterministic Guest Merge (R5) Stress & Adversar
             };
 
             const merged = mergeNutritionPlanning(cloudPlan, guestPlan);
-            expect(merged?.weight).toBe(75);
-            expect(merged?.avgMacros?.carbsPerKg).toBe(3.5); // guest
-            expect(merged?.avgMacros?.fatPerKg).toBe(0.9); // guest
-            expect(merged?.avgMacros?.proPerKg).toBe(2.2); // guest
-            expect(merged?.onBoost?.carbsPercent).toBe(15); // guest
-            expect(merged?.onMacros?.carbsPerKg).toBe(3.5); // cloud preserved
-            expect(merged?.offMacros?.carbsPerKg).toBe(2.5); // cloud preserved
-            expect(merged?.normocalorica?.kcal).toBe(2500); // guest
-            expect(merged?.normocalorica?.carbs).toBe(300); // guest
-            expect(merged?.normocalorica?.pro).toBe(150); // cloud preserved
-            expect(merged?.normocalorica?.fat).toBe(60); // cloud preserved
+            expect(merged.activeOrigin).toBe('user-edited');
+            expect(merged.activePlan).toEqual(cloudPlan);
+            expect(merged.pendingConflict).toEqual(guestPlan);
+            expect(merged.activePlan?.normocalorica?.pro).toBe(150);
+            expect(merged.pendingConflict?.avgMacros?.proPerKg).toBe(2.2);
+            expect(merged.pendingConflict?.normocalorica?.carbs).toBe(300);
         });
     });
 

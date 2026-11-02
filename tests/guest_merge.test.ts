@@ -171,11 +171,13 @@ describe('Deterministic Guest Merge (R5) Suite', () => {
             expect(mergedResult.pendingConflict?.weight).toBe(80);
         });
 
-        it('handles null/undefined nutrition planning inputs safely', () => {
+        it('handles null plans and treats missing provenance conservatively', () => {
             expect(mergeNutritionPlanning(null, null).activePlan).toBeUndefined();
             const plan = { weight: 70, avgMacros: { carbsPerKg: 3.0, proPerKg: 2.0, fatPerKg: 1.0 } };
             expect(mergeNutritionPlanning(plan, null, 'user-edited', 'generated-default').activePlan).toEqual(plan);
             expect(mergeNutritionPlanning(null, plan, 'generated-default', 'user-edited').activePlan).toEqual(plan);
+            expect(mergeNutritionPlanning(null, plan).activeOrigin).toBe('user-edited');
+            expect(mergeNutritionPlanning(plan, null).activeOrigin).toBe('user-edited');
         });
     });
 

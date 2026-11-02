@@ -4,7 +4,6 @@ import { getInMemoryCatalog } from './catalog/catalogService';
 import {
     mergeCatalogOverrides
 } from './catalog/deltaResolver';
-import { createDefaultNutritionPlanning } from './nutritionDefaults';
 import { calculateLoggedMealTotals } from './nutrition/calculateLoggedMealTotals';
 import { normalizeBusinessId } from './businessIdentity';
 import type {
@@ -109,19 +108,6 @@ export function mergeProfile(
     return canonicalProfile;
 }
 
-export function isDefaultNutritionPlanning(plan: NutritionPlanning | null | undefined): boolean {
-    if (!plan) return false;
-    const def = createDefaultNutritionPlanning();
-    // A plan without explicit provenance is only a generated default when all
-    // persisted fields match. Modern macro fields and unknown forward-compatible
-    // fields are user data, not evidence that a legacy default can be discarded.
-    const defaultKeys = new Set(Object.keys(def));
-    if (Object.entries(plan).some(([key, value]) => value !== undefined && !defaultKeys.has(key))) return false;
-    // Unspecified fields are absent; a changed nested target is never a generated default.
-    const defined = Object.fromEntries(Object.entries(plan).filter(([, value]) => value !== undefined));
-    return deepEqual(defined, def);
-}
-
 /**
  * Deeply merges two nutrition planning objects.
  * Guest scalar and nested values take precedence when defined;
@@ -164,23 +150,12 @@ export function mergeNutritionPlanning(
     guestPlan?: NutritionPlanning | null,
     cloudOrigin?: 'generated-default' | 'user-edited',
     guestOrigin?: 'generated-default' | 'user-edited'
-): { activePlan: NutritionPlanning | undefined, pendingConflict: NutritionPlanning | undefined, activeOrigin: 'generated-default' | 'user-edited' } & Partial<NutritionPlanning> {
-
-    // When called directly without origin flags (e.g. helper / stress suite), perform deep merge with guest priority
-    if (cloudOrigin === undefined && guestOrigin === undefined) {
-        const deepMerged = deepMergeNutritionPlanning(cloudPlan, guestPlan);
-        const activeOrigin: 'generated-default' | 'user-edited' = isDefaultNutritionPlanning(deepMerged) ? 'generated-default' : 'user-edited';
-        const baseResult = {
-            activePlan: deepMerged,
-            pendingConflict: undefined,
-            activeOrigin
-        };
-        return deepMerged ? { ...deepMerged, ...baseResult } : baseResult;
-    }
-
-    // Fallbacks
-    const resolvedGuestOrigin = guestOrigin || (isDefaultNutritionPlanning(guestPlan) ? 'generated-default' : 'user-edited');
-    const resolvedCloudOrigin = cloudOrigin || (isDefaultNutritionPlanning(cloudPlan) ? 'generated-default' : 'user-edited');
+): { activePlan: NutritionPlanning | undefined, pendingConflict: NutritionPlanning | undefined, activeOrigin: 'generated-default' | 'user-edited' } {
+    // The current writer records provenance explicitly. Missing provenance is
+    // never evidence that a populated plan can be discarded as a generated default.
+    // Keep it as user data and preserve a competing guest plan as a conflict.
+    const resolvedGuestOrigin = guestOrigin ?? (guestPlan ? 'user-edited' : 'generated-default');
+    const resolvedCloudOrigin = cloudOrigin ?? (cloudPlan ? 'user-edited' : 'generated-default');
     let resultPayload: { activePlan: NutritionPlanning | undefined, pendingConflict: NutritionPlanning | undefined, activeOrigin: 'generated-default' | 'user-edited' };
 
     // 1. Guest default + cloud exist: Cloud wins
@@ -202,7 +177,7 @@ export function mergeNutritionPlanning(
         resultPayload = { activePlan: cloudPlan || guestPlan || undefined, pendingConflict: undefined, activeOrigin: resolvedCloudOrigin };
     }
 
-    return resultPayload.activePlan ? { ...resultPayload.activePlan, ...resultPayload } : resultPayload;
+    return resultPayload;
 }
 
 /**
@@ -353,13 +328,12 @@ export function hasUserData(data?: UserData | null): boolean {
         }
     }
 
-    if (data.nutritionPlanningOrigin === 'user-edited') {
+    if (data.nutritionPlanningOrigin === 'user-edited') return true;
+    // An omitted origin is not a licence to infer that a populated plan is a
+    // disposable default. A fresh generated plan always carries its origin.
+    if (data.nutritionPlanningOrigin === undefined && data.nutritionPlanning
+        && Object.values(data.nutritionPlanning).some(value => value !== undefined && value !== null && value !== '')) {
         return true;
-    } else if (!data.nutritionPlanningOrigin && data.nutritionPlanning && typeof data.nutritionPlanning === 'object') {
-        // Fallback for legacy data without origin flag
-        if (!isDefaultNutritionPlanning(data.nutritionPlanning) && Object.values(data.nutritionPlanning).some(v => v !== undefined && v !== null && v !== '')) {
-            return true;
-        }
     }
 
     if (typeof data.activeCycleId === 'string' && data.activeCycleId.trim() !== '') {
@@ -391,7 +365,7 @@ export function hasUserData(data?: UserData | null): boolean {
  *   deduplicated by `id`, guest priority on collision.
  *   `library` and `customFoods` are filtered to keep ONLY custom items, preventing static catalog duplication.
  * - `catalogOverrides`: merged using `mergeCatalogOverrides(cloud.catalogOverrides, guest.catalogOverrides)`
- *   plus any legacy delta migrations if full monolithic arrays were passed.
+ *   plus current catalog normalization when resolved lists include global items.
  * - Record collections (`nutrition`): merged per date key (`YYYY-MM-DD`), inner `meals` and `supplementsIntake` merged by `id`.
  * - Scalar/profile fields (`profile`, `nutritionPlanning`, `activeWorkout`, `activeCycleId`):
  *   guest prioritized if defined/non-empty, otherwise cloud.

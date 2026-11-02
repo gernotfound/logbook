@@ -9,7 +9,7 @@ vi.mock('../src/lib/catalog/catalogService', async importOriginal => ({
     syncGlobalCatalog: vi.fn(async () => ({ catalog: { exercises: [], foods: [] }, updated: false })),
     getCachedCatalog: vi.fn(async () => ({ exercises: [], foods: [] })),
 }));
-import { mergeUserData, isDefaultNutritionPlanning } from '../src/lib/merge';
+import { mergeUserData, hasUserData } from '../src/lib/merge';
 import { createDefaultNutritionPlanning } from '../src/lib/nutritionDefaults';
 import { UserData, NutritionPlanning } from '../src/types';
 import { defaultUserDataFallback } from '../src/lib/schema';
@@ -28,23 +28,19 @@ function buildUserData(
 }
 
 describe('Nutrition planning provenance and metadata integrity', () => {
-    it('classifies modern and additional fields as edited when origin is missing', () => {
+    it('preserves unmarked plans, even default-shaped ones, without guessing provenance', () => {
         const defaults = createDefaultNutritionPlanning();
-        expect(isDefaultNutritionPlanning(defaults)).toBe(true);
-        for (const field of ['carbsPerKg', 'proPerKg', 'fatPerKg', 'lockedMacro', 'chartPeriod']) {
-            expect(defaults).not.toHaveProperty(field);
-        }
-        const edited = { ...defaults, avgMacros: { carbsPerKg: 3.8, proPerKg: 2, fatPerKg: 1 } };
-        expect(isDefaultNutritionPlanning(edited)).toBe(false);
-        expect(isDefaultNutritionPlanning({ ...defaults, normocalorica: { ...defaults.normocalorica, carbs: 345 } })).toBe(false);
-        expect(isDefaultNutritionPlanning({ ...defaults, onDaysCount: 3 })).toBe(false);
-        expect(isDefaultNutritionPlanning({ ...defaults, onBoost: { carbsPercent: 21, proPercent: 0, fatPercent: 0 } })).toBe(false);
-        expect(isDefaultNutritionPlanning({ ...defaults, futureSetting: 'preserve' } as NutritionPlanning)).toBe(false);
+        const edited = { ...defaults, avgMacros: { ...defaults.avgMacros!, carbsPerKg: 3.8 } };
+        expect(hasUserData(buildUserData(defaults))).toBe(true);
+        expect(hasUserData(buildUserData(defaults, 'generated-default'))).toBe(false);
+        expect(hasUserData(buildUserData(edited))).toBe(true);
+        expect(hasUserData(buildUserData({}))).toBe(false);
 
         const cloud = buildUserData({ ...defaults, weight: 90 }, 'user-edited');
         const guest = buildUserData(edited);
         const merged = mergeUserData(cloud, guest);
         expect(merged.nutritionPlanning?.weight).toBe(90);
+        expect(merged.nutritionPlanningOrigin).toBe('user-edited');
         expect(merged.pendingConflicts?.nutritionPlanning?.avgMacros?.carbsPerKg).toBe(3.8);
     });
 
@@ -129,8 +125,8 @@ describe('PR 3: FNC-MERGE-01 Nutrition Planning Merge Policy', () => {
         expect(merged.nutritionPlanning?.weight).toBe(85);
     });
 
-    // 5. Flag legacy assente + piano non default
-    it('5. Legacy data without flag + non-default plan: falls back to user-edited', () => {
+    // 5. Provenance missing: preserve non-default guest plans
+    it('5. Plan without provenance is preserved as user-edited', () => {
         const guestPlan = { ...createDefaultNutritionPlanning(), weight: 88 };
         // Omit origin deliberately
         const guestData = { ...buildUserData(guestPlan, undefined), nutritionPlanningOrigin: undefined };
@@ -140,8 +136,8 @@ describe('PR 3: FNC-MERGE-01 Nutrition Planning Merge Policy', () => {
         expect(merged.nutritionPlanning?.weight).toBe(88);
     });
 
-    // 6. Flag legacy assente + piano default (bootstrap legacy)
-    it('6. Legacy data without flag + default plan: falls back to generated-default', () => {
+    // 6. Provenance missing: default-shaped values may have been user-edited
+    it('6. An unmarked default-shaped guest plan is kept as a conflict', () => {
         const guestPlan = createDefaultNutritionPlanning();
         const guestData = { ...buildUserData(guestPlan, undefined), nutritionPlanningOrigin: undefined };
 
@@ -151,7 +147,12 @@ describe('PR 3: FNC-MERGE-01 Nutrition Planning Merge Policy', () => {
         const merged = mergeUserData(cloudData, guestData);
         expect(merged.nutritionPlanningOrigin).toBe('user-edited');
         expect(merged.nutritionPlanning?.weight).toBe(92);
-        expect(merged.pendingConflicts?.nutritionPlanning).toBeUndefined();
+        expect(merged.pendingConflicts?.nutritionPlanning?.weight).toBe(guestPlan.weight);
+        expect(merged.pendingConflicts?.nutritionPlanning?.avgMacros).toEqual(guestPlan.avgMacros);
+        expect(merged.pendingConflicts?.nutritionPlanning?.onBoost).toEqual(guestPlan.onBoost);
+        expect(merged.pendingConflicts?.nutritionPlanning?.normocalorica).toEqual(guestPlan.normocalorica);
+        // The parser may add the current schema's normalized nested macro defaults.
+        expect(merged.pendingConflicts?.nutritionPlanning?.offMacros).toBeDefined();
     });
 
     // 7. Guest user-edited + cloud differente
