@@ -117,6 +117,7 @@ describe('Zod Schema Resilience & Defensive Catches', () => {
 
         it('does not adopt or persist the unsupported pre-launch hips alias', () => {
             const profile = UserProfileSchema.parse({ hips: '94', height: '180', extraField: 'retained' });
+            expect(UserProfileSchema.parse({ hip: '' }).hip).toBeUndefined();
             expect(profile.hip).toBeUndefined();
             expect(profile).not.toHaveProperty('hips');
             expect(profile.extraField).toBe('retained');
