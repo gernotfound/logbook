@@ -21,8 +21,9 @@ import SessionExerciseCard from '../src/components/Training/session/SessionExerc
 import type { WorkoutSession, WorkoutRoutine, Exercise } from '../src/types';
 
 describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', () => {
-    beforeEach(() => {
+    beforeEach(async () => {
         window.localStorage.clear();
+        await prepareUnlockedTestArchive('user:test-user-id');
         useAppStore.getState().resetStore();
         useAppStore.setState({ dataOwner: captureSession().owner });
         vi.clearAllMocks();
