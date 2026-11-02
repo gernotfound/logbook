@@ -163,7 +163,7 @@ describe('Service Worker Update Lifecycle (ReloadPrompt) Suite', () => {
     const name = 'draft:buffered:input:recoverable-draft';
     const ciphertext = localStorage.getItem(protectedDeviceKey(name, owner));
     expect(ciphertext).toMatch(/^tlb-sealed:v1:/);
-    expect(JSON.parse(readDeviceValueStrict(name, owner)!)).toMatchObject({ value: '82,5' });
+    expect(readDeviceValueStrict(name, owner)).toBe('82,5');
     invalidateSession();
     unmount();
     expect(localStorage.getItem(protectedDeviceKey(name, owner))).toBe(ciphertext);
