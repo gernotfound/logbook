@@ -22,6 +22,7 @@ import {
 } from '../src/lib/deletionDeviceRecovery';
 import { storageOwner } from '../src/lib/sync/session';
 import { localStorageMock } from './setup';
+import { prepareUnlockedTestArchive } from './secureVaultFixture';
 
 const OWNER = 'user:test-user';
 const storageFailure = () => { throw new DOMException('blocked', 'SecurityError'); };
@@ -237,7 +238,8 @@ describe('browser storage boundary', () => {
         expect(() => readDeviceValueStrict('workout')).toThrow(BrowserStorageError);
     });
 
-    it('wraps device-storage write and remove failures in BrowserStorageError', () => {
+    it('wraps encrypted device-storage write and remove failures in BrowserStorageError', async () => {
+        await prepareUnlockedTestArchive(OWNER);
         localStorageMock.setItem.mockImplementationOnce(() => {
             throw new DOMException('full', 'QuotaExceededError');
         });
