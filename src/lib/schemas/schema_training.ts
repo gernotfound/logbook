@@ -179,13 +179,13 @@ export const SessionExerciseSetSchema = z.object({
     executionMode: z.enum(['standard', 'stop_reps']).optional().catch(undefined),
     segments: z.preprocess(sanitizeSetSegments, z.array(SessionSetSegmentSchema)).optional().catch(undefined),
     target: SetTargetSchema.optional().catch(undefined),
-    dropsets: z.array(SessionExerciseDropsetSchema).optional().catch([]).default([]),
-    isometrics: z.array(SessionExerciseIsometricSchema).optional().catch([]).default([]),
+    dropsets: z.array(SessionExerciseDropsetSchema).optional().catch(undefined),
+    isometrics: z.array(SessionExerciseIsometricSchema).optional().catch(undefined),
 }).passthrough().transform((set) => {
     if (set.rir !== undefined) return set;
     const { rir: _rir, ...withoutRir } = set;
     return withoutRir;
-}).catch({ id: '', kg: '', reps: '', dropsets: [], isometrics: [] }).default({ id: '', kg: '', reps: '', dropsets: [], isometrics: [] });
+}).catch({ id: '', kg: '', reps: '' }).default({ id: '', kg: '', reps: '' });
 
 export const SessionExerciseSchema = z.object({
     id: safeOptionalString(),

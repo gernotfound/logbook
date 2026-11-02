@@ -31,6 +31,34 @@ describe('advanced set segments', () => {
         expect(set.rir).toBe(0);
     });
 
+    it('does not synthesize pre-segment arrays when parsing current workout sets', () => {
+        const parsed = UserDataSchema.parse({ history: [{
+            id: 'current-workout', exercises: [{
+                exId: 'hold', sessionNote: '', sets: [{
+                    id: 'current-set', kg: '40', reps: '',
+                    segments: [{ id: 'seg-1', kg: '40', reps: '', time: '20', technique: 'isometry' }],
+                }],
+            }],
+        }] }) as UserData;
+        const set = parsed.history![0].exercises[0].sets[0];
+        expect(set.segments?.[0]).toMatchObject({ id: 'seg-1', technique: 'isometry', time: '20' });
+        expect(set).not.toHaveProperty('dropsets');
+        expect(set).not.toHaveProperty('isometrics');
+
+        const old = UserDataSchema.parse({ history: [{
+            id: 'retained-workout', exercises: [{
+                exId: 'bench', sets: [{
+                    id: 'old-set', kg: '100', reps: '8',
+                    dropsets: [{ id: 'drop-1', kg: 80, reps: 5 }],
+                    isometrics: [{ id: 'iso-1', kg: 30, time: 10 }],
+                }],
+            }],
+        }] }) as UserData;
+        const retained = old.history![0].exercises[0].sets[0];
+        expect(retained.dropsets).toEqual([{ id: 'drop-1', kg: '80', reps: '5' }]);
+        expect(retained.isometrics).toEqual([{ id: 'iso-1', kg: '30', time: '10' }]);
+    });
+
     it('keeps segment persistence limited to the supported structure', () => {
         const parsed = UserDataSchema.parse({ history: [{ id: 'w-meta', exercises: [{ exId: 'bench', sessionNote: '', sets: [{
             id: 's-meta', kg: '100', reps: '8', technique: 'cluster',

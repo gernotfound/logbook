@@ -233,6 +233,29 @@ describe('workout session preparation', () => {
         expect(editing.exercises[0].sets[0].isometrics?.[0]).toMatchObject({ kg: '40', time: '20' });
     });
 
+    it('keeps current segment-only sets free of synthetic legacy arrays while editing and completing', () => {
+        const source: WorkoutSession = {
+            id: 'current-history',
+            globalStartTime: 1_000,
+            exercises: [{
+                id: 'exercise-1', exId: 'hold', sessionNote: '',
+                sets: [{
+                    id: 'set-1', kg: '40', reps: '',
+                    segments: [{ id: 'seg-1', kg: '40', reps: '', time: '20', technique: 'isometry' }],
+                }],
+            }],
+        };
+        const snapshot = JSON.stringify(source);
+        const editing = prepareHistoricalWorkoutForEditing(source, createRuntime());
+        const completed = prepareCompletedWorkout(source, 61_000, createRuntime()).finishedWorkout;
+        for (const set of [editing.exercises[0].sets[0], completed.exercises[0].sets[0]]) {
+            expect(set.segments?.[0]).toMatchObject({ id: 'seg-1', kg: '40', technique: 'isometry', time: '20' });
+            expect(set).not.toHaveProperty('dropsets');
+            expect(set).not.toHaveProperty('isometrics');
+        }
+        expect(JSON.stringify(source)).toBe(snapshot);
+    });
+
     it('prepares a historical save and strips edit-only markers', () => {
         const currentWorkout = {
             id: 'editing-copy',
