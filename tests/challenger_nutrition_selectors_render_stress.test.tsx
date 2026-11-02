@@ -1,4 +1,5 @@
 import React from 'react';
+import { prepareUnlockedTestArchive } from './secureVaultFixture';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act, render, screen } from '@testing-library/react';
 import { useAppStore } from '../src/store/useAppStore';
@@ -67,7 +68,8 @@ describe('Challenger 2: Zustand Fine-Grained Selectors & Background Render Isola
         supplements: []
     };
 
-    beforeEach(() => {
+    beforeEach(async () => {
+        await prepareUnlockedTestArchive('user:test-user-id');
         vi.clearAllMocks();
         useAppStore.setState({
             userData: JSON.parse(JSON.stringify(initialTestUserData)),
