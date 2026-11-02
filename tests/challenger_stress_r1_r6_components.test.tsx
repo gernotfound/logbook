@@ -397,6 +397,9 @@ describe('EMPIRICAL CHALLENGER: Adversarial Stress Test Suite (Requirements R1 -
 
         it('renders nested dropsets and isometrics rows with proper change callbacks', async () => {
             await prepareUnlockedTestArchive('user:test-user-id');
+            // Authenticated buffered drafts require the consent epoch already
+            // published by a verified session, not the pre-launch raw fallback.
+            window.localStorage.setItem('logbook:v2:user:test-user-id:health-consent-generation', '3');
             const mockUpdateSpecial = vi.fn();
             const mockRemoveSpecial = vi.fn();
 
