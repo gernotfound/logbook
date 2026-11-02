@@ -76,8 +76,9 @@ const mockLibrary: ExerciseLibraryItem[] = [
 ];
 
 describe('Intelligent Exercise Search & Dropdown Suite (M3: R4 & R6)', () => {
-    beforeEach(() => {
+    beforeEach(async () => {
         window.localStorage.clear();
+        await prepareUnlockedTestArchive('user:test-user-id');
         useAppStore.getState().resetStore();
         vi.clearAllMocks();
 
