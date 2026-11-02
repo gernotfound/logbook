@@ -240,6 +240,7 @@ describe('Milestone 2 Challenger Suite: PWA and Offline Workout Stress Tests', (
     });
 
     it('handles ending a workout with corrupted/missing exercises array (null/undefined)', async () => {
+      await prepareUnlockedTestArchive(captureSession().owner);
       telemetryHub.init();
       telemetryHub.setUserId('user_corrupted_ex');
 
@@ -277,6 +278,7 @@ describe('Milestone 2 Challenger Suite: PWA and Offline Workout Stress Tests', (
     });
 
     it('handles workout with invalid ratings and non-numeric water values safely', async () => {
+      await prepareUnlockedTestArchive(captureSession().owner);
       telemetryHub.init();
       telemetryHub.setUserId('user_bad_ratings');
 
