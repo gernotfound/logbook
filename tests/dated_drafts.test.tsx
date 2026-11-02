@@ -11,8 +11,8 @@ import { deviceKey, protectedDeviceKey, writeDeviceValue } from '../src/lib/sync
 import { prepareUnlockedTestArchive } from './secureVaultFixture';
 import { DatedDraftConflictError, readFencedDatedDraft, readFencedDatedDraftImage, writeFencedDatedDraft, UnverifiedDatedDraftEpochError } from '../src/lib/sync/datedDraftEpoch';
 import {
-    createDatedWriterIntentName, inspectDatedRecoveryEvidence, readDatedWriterEvidence,
-    writeDatedWriterIntent,
+    clearDatedWriterIntent, createDatedWriterIntentName, inspectDatedRecoveryEvidence,
+    readDatedWriterEvidence, writeDatedWriterIntent,
 } from '../src/lib/sync/datedDraftWriterIntent';
 import { writerParentReference } from '../src/lib/sync/writerLineage';
 import { mockFirebaseAuth } from './setup';
@@ -872,6 +872,75 @@ it('removes only committed editor evidence after durable business save', async (
     expect(localStorage.getItem(protectedDeviceKey(name, owner))).toMatch(/^tlb-sealed:v1:/);
     expect(localStorage.getItem(deviceKey(name, owner))).toBeNull();
     hook.unmount();
+});
+
+it('quarantines an unstamped account witness at epoch 1 but retains read-only recovery evidence', async () => {
+    localStorage.removeItem('logbook_is_guest');
+    invalidateSession();
+    const owner = 'user:' + mockFirebaseAuth.currentUser!.uid;
+    const name = 'draft:measurement:2026-09-11';
+    const unrelated = 'draft:sleep:2026-09-11';
+    localStorage.setItem(deviceKey('health-consent-generation', owner), '1');
+    await prepareUnlockedTestArchive(owner);
+    const witness = createDatedWriterIntentName();
+    const raw = JSON.stringify({
+        __logbookDatedWriterIntent: 1, owner, draftName: name,
+        values: { weight: '75' }, revisionId: 'a'.repeat(32),
+    });
+    writeDeviceValue(witness, raw, owner);
+    const sealedKey = protectedDeviceKey(witness, owner);
+    const ciphertext = localStorage.getItem(sealedKey);
+    expect(ciphertext).toMatch(/^tlb-sealed:v1:/);
+
+    expect(() => readDatedWriterEvidence(owner, name))
+        .toThrow('Copia datata account senza revisione consenso');
+    expect(() => writeDatedWriterIntent(witness, owner, name, { weight: '80' }, raw, '1'))
+        .toThrow('Copia datata account senza revisione consenso');
+    expect(() => clearDatedWriterIntent(witness, owner, raw, '1'))
+        .toThrow('Copia datata account senza revisione consenso');
+
+    // Invalid provenance for a different field must not suppress valid evidence.
+    const other = createDatedWriterIntentName();
+    const current = writeDatedWriterIntent(other, owner, unrelated, { sleepHours: '08:00' }, null, '1');
+    expect(JSON.parse(current).consentRevision).toBe(1);
+    expect(readDatedWriterEvidence(owner, unrelated)).toHaveLength(1);
+    const preview = inspectDatedRecoveryEvidence(owner);
+    expect(preview.find(entry => entry.name === witness)).toMatchObject({
+        consentRevision: null, provenance: 'unknown',
+    });
+    expect(preview.find(entry => entry.name === witness)?.value).toContain('"weight": "75"');
+    expect(preview.find(entry => entry.name === other)?.provenance).toBe('current');
+
+    const hook = renderHook(() => useNutritionMeasurements('2026-09-11'));
+    expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
+    act(() => hook.result.current.setWeight('90'));
+    expect(localStorage.getItem(sealedKey)).toBe(ciphertext);
+    expect(localStorage.getItem(deviceKey(witness, owner))).toBeNull();
+    hook.unmount();
+});
+
+it('refuses new unstamped account witnesses without consent marker and accepts the current stamped format', async () => {
+    localStorage.removeItem('logbook_is_guest');
+    invalidateSession();
+    const owner = 'user:' + mockFirebaseAuth.currentUser!.uid;
+    const name = 'draft:measurement:2026-09-11';
+    const witness = createDatedWriterIntentName();
+    const marker = deviceKey('health-consent-generation', owner);
+    localStorage.removeItem(marker);
+    await prepareUnlockedTestArchive(owner);
+    expect(() => writeDatedWriterIntent(witness, owner, name, { weight: '75' }, null))
+        .toThrow('Generazione consenso copia datata non verificabile');
+    expect(localStorage.getItem(protectedDeviceKey(witness, owner))).toBeNull();
+
+    localStorage.setItem(marker, '1');
+    const raw = writeDatedWriterIntent(witness, owner, name, { weight: '75' }, null, '1');
+    expect(JSON.parse(raw)).toMatchObject({
+        __logbookDatedWriterIntent: 1, owner, draftName: name,
+        consentRevision: 1, values: { weight: '75' },
+    });
+    expect(readDatedWriterEvidence(owner, name)).toHaveLength(1);
+    clearDatedWriterIntent(witness, owner, raw, '1');
+    expect(readDatedWriterEvidence(owner, name)).toEqual([]);
 });
 
 it('quarantines consent-revoked writer evidence while retaining its bytes for explicit export', async () => {

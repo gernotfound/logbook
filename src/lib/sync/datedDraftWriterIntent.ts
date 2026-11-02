@@ -78,6 +78,15 @@ function parse(name: string, owner: string, raw: string): DatedWriterEvidence & 
         revisionId: d.revisionId, parent: d.parent };
 }
 
+function assertCurrentAccountWitnessEpoch(owner: string, sourceRevision?: number): void {
+    // Sealed bytes alone cannot establish the originating consent epoch.
+    // Unstamped account witnesses remain inspectable, but never actionable.
+    if (owner.startsWith('user:') && sourceRevision === undefined) {
+        throw new Error('Copia datata account senza revisione consenso: originale conservato.');
+    }
+    assertWorkoutSnapshotEpoch(owner, sourceRevision);
+}
+
 function ownerNames(owner: string): Set<string> {
     const prefix = deviceKey('', owner);
     const names = new Set<string>();
@@ -107,7 +116,7 @@ export function readDatedWriterEvidence(owner: string, draftName: string): Dated
         const candidate = parse(name, owner, raw);
         scanned.push(candidate);
         if (candidate.draftName !== draftName) continue;
-        assertWorkoutSnapshotEpoch(owner, candidate.consentRevision);
+        assertCurrentAccountWitnessEpoch(owner, candidate.consentRevision);
         matches.push(candidate);
         if (matches.length > MAX_WRITERS_PER_FIELD) {
             throw new Error('Troppe copie concorrenti: recupero esplicito necessario.');
@@ -135,6 +144,9 @@ export function readDatedWriterEvidence(owner: string, draftName: string): Dated
 
 function assertRevision(owner: string, expected?: string | null): number | undefined {
     const revision = readDeviceConsentRevision(owner);
+    if (owner.startsWith('user:') && revision === undefined) {
+        throw new Error('Generazione consenso copia datata non verificabile: originale conservato.');
+    }
     if (owner.startsWith('user:') && expected !== undefined
         && expected !== (revision === undefined ? null : String(revision))) {
         throw new Error('Consenso modificato: copia datata conservata.');
@@ -164,7 +176,7 @@ export function writeDatedWriterIntent(
     let previousParent: WriterLineageReference | undefined;
     if (current !== null) {
         const previous = parse(name, owner, current);
-        assertWorkoutSnapshotEpoch(owner, previous.consentRevision);
+        assertCurrentAccountWitnessEpoch(owner, previous.consentRevision);
         if (previous.draftName !== draftName) throw new Error('Copia datata associata a un altro campo.');
         previousParent = previous.parent;
     }
@@ -190,7 +202,7 @@ export function clearDatedWriterIntent(
     const current = readDeviceValueStrict(name, owner);
     if (current !== expectedRaw) throw new Error('Copia datata differente: originale conservato.');
     const previous = parse(name, owner, current);
-    assertWorkoutSnapshotEpoch(owner, previous.consentRevision);
+    assertCurrentAccountWitnessEpoch(owner, previous.consentRevision);
     assertRevision(owner, expectedConsentGeneration);
     writeDeviceValue(name, null, owner);
 }

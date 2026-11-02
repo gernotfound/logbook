@@ -4,6 +4,7 @@ import { render, screen, fireEvent, renderHook, act } from '@testing-library/rea
 import { emptyUserData, idbStore } from './setup';
 import { prepareUnlockedTestArchive } from './secureVaultFixture';
 import { captureSession } from '../src/lib/sync/session';
+import { deviceKey } from '../src/lib/sync/deviceStorage';
 import { initializeLocal, readLocal } from '../src/lib/sync/localRepository';
 import { useNutritionMeasurements } from '../src/hooks/useNutritionMeasurements';
 import { useAppStore } from '../src/store/useAppStore';
@@ -164,6 +165,7 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
             it('T2.3.4: rejected measurement save leaves the previous meals and durable day unchanged', async () => {
                 const date = '2026-08-10';
                 const owner = captureSession().owner;
+                localStorage.setItem(deviceKey('health-consent-generation', owner), '1');
                 const initial = UserDataSchema.parse({
                     ...emptyUserData,
                     nutrition: {
