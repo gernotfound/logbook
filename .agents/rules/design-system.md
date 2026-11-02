@@ -16,9 +16,9 @@ La presentazione usa superfici, controlli e navigazione ispirati alle app iPhone
 - Grafici e mappa: `--chart-grid`, `--muscle-base`, `--muscle-outline`, `--muscle-active`, `--muscle-recent`, `--muscle-pain`.
 
 La scelta `system | light | dark` è una preferenza del dispositivo salvata best-effort nella sola chiave `logbook:appearance:v1`. `index.html` carica `public/appearance.js` e `public/appearance.css` prima del bundle React: lo script imposta il tema e il CSS colora la pagina già al primo disegno.
-La splash di caricamento segue il tema risolto mantenendo struttura e bloom ciano pulsante: in tema scuro usa sfondo nero, mascotte bianca e scritta bianca “Caricamento”; in tema chiaro l'intera superficie di caricamento è bianca, la mascotte viene invertita in nero su bianco e la scritta “Caricamento” diventa scura, senza riquadri cromatici attorno all'SVG.
+La splash di caricamento segue il tema risolto ed è esclusivamente in bianco e nero: in tema scuro usa sfondo nero, mascotte e scritta bianche; in tema chiaro usa sfondo bianco, mascotte e scritta nere, senza riquadri cromatici attorno all'SVG. Il titolo di caricamento è intenzionalmente “CARICAMENT” in maiuscolo grassetto, seguito da uno spinner circolare che rappresenta la O finale; lo spinner ruota senza pulsazioni o bagliori e diventa una O ferma con le preferenze di movimento ridotto.
 Il markup bootstrap di `index.html` e gli stati React bloccanti/lazy usano le stesse classi `brand-loading-screen*` definite in `public/appearance.css`; il componente React canonico è `src/components/UI/BrandLoadingScreen.tsx`.
-La variante `content` mantiene esattamente proporzioni, spaziatura, testo e bloom della variante fullscreen e riduce uniformemente l'intero gruppo, centrandolo nell'area utile sopra la bottom navigation; non ridimensionare separatamente mascotte o testo.
+La variante `content` mantiene esattamente proporzioni, spaziatura, testo e spinner della variante fullscreen e riduce uniformemente l'intero gruppo, centrandolo nell'area utile sopra la bottom navigation; non ridimensionare separatamente mascotte o testo.
 Entrambe le varianti sono overlay fissi e non scrollabili: durante la loro presenza il documento non deve poter scorrere, mentre la variante `content` lascia accessibile la bottom navigation. `useAppearanceStore` ascolta le variazioni del sistema e delle altre schede. **MUST:** non mettere questa scelta in `UserData`, Firestore o nei backup.
 Se lo storage non è scrivibile, il tema scelto resta applicato per la sessione e la UI comunica il limite.
 
@@ -44,7 +44,7 @@ Valori numerici in forte evidenza e timer possono usare soltanto i token display
 - **NOTE:** `@axe-core/playwright` protegge automaticamente stati rappresentativi e un progetto WebKit/Mobile Safari mirato, ma non sostituisce verifica manuale di tastiera, focus, screen reader e comportamento iOS reale.
 - **SHOULD:** usare classi e token per gli stili statici; lasciare inline solo valori realmente dinamici o codice legacy non ancora migrato. Preferire `rem` per le dimensioni che devono seguire le preferenze di carattere; il valore di 16 px degli input è un'eccezione intenzionale.
 - **SHOULD:** applicare `min-width: 0` ai figli di layout flex/grid soggetti a overflow e controllare le viewport da 320 px in su.
-- **MUST:** testo rivolto all'utente in sentence case italiano, salvo sigle, nomi propri e marchi. Icone UI `lucide-react` di norma da 20 o 24 px.
+- **MUST:** testo rivolto all'utente in sentence case italiano, salvo sigle, nomi propri, marchi e il wordmark maiuscolo della splash di caricamento. Icone UI `lucide-react` di norma da 20 o 24 px.
 
 ## Verifica
 

@@ -28,8 +28,8 @@ export default function BrandLoadingScreen({
           alt=""
           fetchPriority={variant === 'fullscreen' ? 'high' : 'auto'}
         />
-        <div className="brand-loading-screen__wordmark" data-text="Caricamento">
-          <h1>Caricamento</h1>
+        <div className="brand-loading-screen__wordmark">
+          <h1>CARICAMENT<span className="brand-loading-screen__spinner" aria-hidden="true" /></h1>
         </div>
       </div>
     </div>

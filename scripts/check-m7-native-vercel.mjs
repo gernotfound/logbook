@@ -273,7 +273,7 @@ if (existsSync('dist/index.html')) {
   for (const branding of requiredBranding) {
     if (!builtHtml.includes(branding)) failures.push(`built HTML missing canonical TheLogBook branding: ${branding}`);
   }
-  if (!builtHtml.includes('<h1>Caricamento</h1>')) failures.push('built HTML must render the approved loading label');
+  if (!builtHtml.includes('<h1>CARICAMENT<span class="brand-loading-screen__spinner" aria-hidden="true"></span></h1>')) failures.push('built HTML must render the approved monochrome loading wordmark');
   if (!builtHtml.includes('loading-wait.svg?v=20261007-waiting-mascot')) failures.push('built HTML must preload and render the approved waiting mascot');
   if (!builtHtml.includes('https://thelogbook.web.app/social-share.png?v=20261006-vector-master')) failures.push('built HTML must expose the revisioned social share card URL');
   if (!builtHtml.includes('property="og:image:type" content="image/png"')) failures.push('built HTML must declare the lossless PNG social card type');
