@@ -20,6 +20,14 @@ import { useWorkoutSession } from '../src/hooks/useWorkoutSession';
 import { commitDomainOperations, initializeLocal, readLocal } from '../src/lib/sync/localRepository';
 import { localStorageMock, renderWithProviders } from './setup';
 import { prepareUnlockedTestArchive } from './secureVaultFixture';
+import { AuthContext, defaultAuthContext } from '../src/contexts/AuthContextDef';
+import { auth } from '../src/lib/firebase';
+
+const renderOwnedWorkoutSession = () => render(
+    <AuthContext.Provider value={{ ...defaultAuthContext, currentUser: auth.currentUser, isGuest: false }}>
+        <TrainingSession />
+    </AuthContext.Provider>,
+);
 
 function workout(id: string, started = false): WorkoutSession & { id: string } {
     return {
@@ -106,7 +114,7 @@ describe('Workout lifecycle durable recovery regressions', () => {
         writeDeviceValue(name, original, owner);
         localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '3');
         useAppStore.setState({ userData: userData({ activeWorkout: current }), localWorkout: current });
-        render(<TrainingSession />);
+        renderOwnedWorkoutSession();
         await waitFor(() => expect(useAppStore.getState().localPersistenceBlocked).toBe(true));
         expect(readDeviceValueStrict(name, owner)).toBe(original);
         expect(() => writeWorkoutRecoveryDraft(name, owner, null)).toThrow('generazione di consenso');
@@ -120,7 +128,7 @@ describe('Workout lifecycle durable recovery regressions', () => {
         const marker = `logbook:v2:${owner}:health-consent-generation`;
         localStorage.setItem(marker, '3');
         useAppStore.setState({ userData: userData({ activeWorkout: current }), localWorkout: current });
-        render(<TrainingSession />);
+        renderOwnedWorkoutSession();
         fireEvent.click(screen.getByRole('button', { name: 'Termina allenamento' }));
         fireEvent.click(screen.getByRole('button', { name: 'Umore: 5 su 5' }));
         const raw = readDeviceValueStrict(name, owner);
@@ -483,7 +491,7 @@ describe('Workout lifecycle durable recovery regressions', () => {
         useAppStore.setState({ userData: userData({ activeWorkout: active }), localWorkout: active });
         const key = protectedDeviceKey('draft:post-session:post-reopen', owner);
 
-        const first = render(<TrainingSession />);
+        const first = renderOwnedWorkoutSession();
         fireEvent.click(screen.getByRole('button', { name: 'Termina allenamento' }));
         fireEvent.click(screen.getByRole('button', { name: 'Umore: 5 su 5' }));
         const saved = localStorage.getItem(key);
@@ -492,7 +500,7 @@ describe('Workout lifecycle durable recovery regressions', () => {
         expect(JSON.parse(readDeviceValueStrict('draft:post-session:post-reopen', owner)!).draft.mood).toBe('5');
 
         first.unmount();
-        render(<TrainingSession />);
+        renderOwnedWorkoutSession();
         expect(screen.getByRole('heading', { name: 'Com’è andato l’allenamento?' })).toBeDefined();
         expect(screen.getByRole('button', { name: 'Umore: 5 su 5' }).getAttribute('aria-pressed')).toBe('true');
         expect(localStorage.getItem(key)).toBe(saved);
@@ -506,7 +514,7 @@ describe('Workout lifecycle durable recovery regressions', () => {
         writeDeviceValue('draft:post-session:post-broken', '{broken', owner);
         const sealed = localStorage.getItem(key);
         useAppStore.setState({ userData: userData({ activeWorkout: active }), localWorkout: active });
-        render(<TrainingSession />);
+        renderOwnedWorkoutSession();
         expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
         expect(useAppStore.getState().syncHealth).toBe('failed');
         expect(readDeviceValueStrict('draft:post-session:post-broken', owner)).toBe('{broken');
@@ -517,7 +525,7 @@ describe('Workout lifecycle durable recovery regressions', () => {
         await prepareUnlockedTestArchive(owner);
         const active = workout('post-write', true);
         useAppStore.setState({ userData: userData({ activeWorkout: active }), localWorkout: active });
-        render(<TrainingSession />);
+        renderOwnedWorkoutSession();
         fireEvent.click(screen.getByRole('button', { name: 'Termina allenamento' }));
         const key = protectedDeviceKey('draft:post-session:post-write', owner);
         const previous = localStorage.getItem(key);
@@ -679,7 +687,7 @@ describe('Workout lifecycle durable recovery regressions', () => {
         const first = workout('post-first', true);
         const next = workout('post-next', true);
         useAppStore.setState({ userData: userData({ activeWorkout: first }), localWorkout: first });
-        render(<TrainingSession />);
+        renderOwnedWorkoutSession();
         fireEvent.click(screen.getByRole('button', { name: 'Termina allenamento' }));
         expect(screen.getByText('Com’è andato l’allenamento?')).toBeDefined();
         act(() => { useAppStore.setState({ localWorkout: next, userData: userData({ activeWorkout: next }) }); });
