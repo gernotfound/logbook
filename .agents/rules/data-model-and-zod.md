@@ -22,6 +22,8 @@ I campi business root e le entità mensili sono contenuti dentro `_sealed`: le F
 
 Le misurazioni corporee non sono un array root `bodyMeasurements`: peso, BF, provenienza BF, circonferenze e sonno sono campi di `NutritionDay`, quindi seguono la persistenza mensilizzata di `nutrition`. La circonferenza fianchi usa solo `hip` in `UserProfile` e `NutritionDay`; l'alias `hips` pre-lancio non viene più importato, promosso durante merge o conservato dalla normalizzazione Zod. I campi addizionali distinti restano governati da `.passthrough()`.
 
+La pianificazione nutrizionale usa `avgMacros`, `onBoost`, `onMacros`, `offMacros` e i target attualmente consumati da UI e calcoli. Le proprietà pre-lancio `lockedMacro` e `chartPeriod` non sono più campi di dominio: la normalizzazione Zod le rimuove sia dai piani attivi sia dai conflitti pendenti, senza scartare gli altri attributi riconosciuti o il passthrough intenzionale. Il fingerprint di confronto dei conflitti è `v2` e considera soltanto i campi correnti mappati. Conservare la verifica CAS in archivio cifrato e il controllo sessione prima di risolvere un conflitto.
+
 ## Zod Gateway — difesa runtime
 
 Tutti i dati in ingresso dai boundary persistiti **DEVONO** essere normalizzati secondo la versione applicabile e poi transitare attraverso `UserDataSchema.parse()` prima di diventare stato business corrente.

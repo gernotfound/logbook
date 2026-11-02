@@ -122,8 +122,6 @@ export function isDefaultNutritionPlanning(plan: NutritionPlanning | null | unde
         plan.carbsPerKg === def.carbsPerKg &&
         plan.proPerKg === def.proPerKg &&
         plan.fatPerKg === def.fatPerKg &&
-        plan.lockedMacro === def.lockedMacro &&
-        plan.chartPeriod === def.chartPeriod &&
         plan.normocalorica?.kcal === def.normocalorica?.kcal &&
         plan.normocalorica?.carbs === def.normocalorica?.carbs &&
         plan.normocalorica?.pro === def.normocalorica?.pro &&
