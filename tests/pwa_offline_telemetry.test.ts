@@ -1,5 +1,7 @@
 import { captureSession } from '../src/lib/sync/session';
 import { prepareUnlockedTestArchive } from './secureVaultFixture';
+import { initializeLocal, readLocal } from '../src/lib/sync/localRepository';
+import { idbStore } from './setup';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as sentryClient from '../src/lib/sentryClient';
 
@@ -378,7 +380,10 @@ describe('Milestone 2: PWA, offline workout and telemetry boundaries', () => {
     });
 
     it('saves an online workout without emitting workout usage telemetry', async () => {
-      await prepareUnlockedTestArchive(captureSession().owner);
+      const owner = captureSession().owner;
+      await prepareUnlockedTestArchive(owner);
+      await initializeLocal(owner, mockUserData);
+      expect(idbStore['logbook:v2:' + owner]).toMatch(/^tlb-sealed:v1:/);
       telemetryHub.init();
       telemetryHub.setUserId('user_athlete_online');
 
@@ -389,7 +394,7 @@ describe('Milestone 2: PWA, offline workout and telemetry boundaries', () => {
       });
 
       useAppStore.setState({
-        dataOwner: captureSession().owner,
+        dataOwner: owner,
         userData: mockUserData,
         localWorkout: {
           id: 'w_test_1',
@@ -411,6 +416,8 @@ describe('Milestone 2: PWA, offline workout and telemetry boundaries', () => {
       });
 
       expect(useAppStore.getState().localWorkout).toBeNull();
+      expect((await readLocal(owner))?.data.history?.some(workout => workout.id === 'w_test_1')).toBe(true);
+      expect(idbStore['logbook:v2:' + owner]).toMatch(/^tlb-sealed:v1:/);
 
       await new Promise(resolve => setTimeout(resolve, 0));
       expect(mockSentryTransport.mock.calls.some((c: any) => c[1].type === 'workout_saved')).toBe(false);
