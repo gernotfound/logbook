@@ -10,6 +10,7 @@ import { idbStore } from './setup';
 import { draftRegistry } from '../src/lib/utils/draftRegistry';
 import { UserDataSchema } from '../src/lib/schema';
 import { useUnverifiedLocalContinuation } from '../src/contexts/auth/useUnverifiedLocalContinuation';
+import { prepareUnlockedTestArchive } from './secureVaultFixture';
 const wrapper = ({ children }: { children: React.ReactNode }) => <AuthProvider>{children}</AuthProvider>;
 
 function account(verified: boolean, providerId = 'password') {
@@ -78,6 +79,7 @@ describe('email verification lifecycle', () => {
             expect(user.getIdToken).not.toHaveBeenCalled();
             expect(flush).not.toHaveBeenCalled();
 
+            await prepareUnlockedTestArchive('user:' + user.uid);
             vi.mocked(reload).mockImplementationOnce(async () => { user.emailVerified = true; });
             await act(async () => {
                 await result.current.refreshEmailVerification();
