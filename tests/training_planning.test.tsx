@@ -6,6 +6,7 @@ import TrainingPlanning from '../src/components/Training/planning/TrainingPlanni
 import { CycleCard } from '../src/components/Training/planning/CycleCard';
 import { RoutineCard } from '../src/components/Training/routines/RoutineCard';
 import TrainingSession from '../src/components/Training/TrainingSession';
+import { prepareUnlockedTestArchive } from './secureVaultFixture';
 import TrainingView from '../src/components/Training/TrainingView';
 import { useAppStore } from '../src/store/useAppStore';
 import type { TrainingCycle, WorkoutRoutine, Exercise, UserData } from '../src/types';
@@ -406,6 +407,7 @@ describe('Training Planning & Volume Calculations', () => {
         });
 
         it('renders the optional suggested routine in TrainingSession and starts it', async () => {
+            await prepareUnlockedTestArchive('user:test-user-id');
             render(<TrainingSession />);
 
             expect(screen.getByText(/Scheda suggerita · Rotazione flessibile/i)).toBeDefined();
@@ -424,6 +426,7 @@ describe('Training Planning & Volume Calculations', () => {
         });
 
         it('allows selecting another routine from the rotation dropdown and starting it', async () => {
+            await prepareUnlockedTestArchive('user:test-user-id');
             render(<TrainingSession />);
 
             const select = screen.getByRole('combobox', { name: /Seleziona scheda della rotazione/i });
