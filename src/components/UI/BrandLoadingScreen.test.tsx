@@ -19,8 +19,9 @@ describe('BrandLoadingScreen', () => {
     expect(mascot?.getAttribute('fetchpriority')).toBe('high');
 
     const wordmark = container.querySelector('.brand-loading-screen__wordmark');
-    expect(wordmark?.getAttribute('data-text')).toBe('Caricamento');
-    expect(wordmark?.querySelector('h1')?.textContent).toBe('Caricamento');
+    expect(wordmark?.querySelector('h1')?.textContent).toBe('CARICAMENT');
+    expect(wordmark?.querySelectorAll('.brand-loading-screen__spinner')).toHaveLength(1);
+    expect(wordmark?.querySelector('.brand-loading-screen__spinner')?.getAttribute('aria-hidden')).toBe('true');
   });
 
   it('uses the same loading contract for lazy content loading', () => {
@@ -32,7 +33,8 @@ describe('BrandLoadingScreen', () => {
     expect(status.className).toContain('brand-loading-screen--content');
     expect(status.getAttribute('aria-busy')).toBe('true');
     expect(status.getAttribute('aria-live')).toBe('polite');
-    expect(container.querySelector('.brand-loading-screen__wordmark h1')?.textContent).toBe('Caricamento');
+    expect(container.querySelector('.brand-loading-screen__wordmark h1')?.textContent).toBe('CARICAMENT');
+    expect(container.querySelectorAll('.brand-loading-screen__spinner')).toHaveLength(1);
     expect(container.querySelector('.brand-loading-screen__mascot')).not.toBeNull();
     expect(container.querySelector('.brand-loading-screen__wordmark')).not.toBeNull();
   });
