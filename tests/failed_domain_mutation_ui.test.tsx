@@ -19,6 +19,7 @@ describe('failed domain result preserves user edits', () => {
     let originalDispatch: ReturnType<typeof useAppStore.getState>['dispatchDomainOperation'];
     beforeEach(async () => {
         localStorage.clear();
+        localStorage.setItem(`logbook:v2:${storageOwner()}:health-consent-generation`, '1');
         await prepareUnlockedTestArchive(storageOwner());
         vi.clearAllMocks();
         originalDispatch = useAppStore.getState().dispatchDomainOperation;

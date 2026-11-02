@@ -31,10 +31,11 @@ function parseDraft(raw: string, owner: string): Record<string, string> | null {
         throw new Error('Bozza locale non valida: originale preservato.');
     }
     const record = parsed as Record<string, unknown>;
-    // Only the first supported pre-launch clean-cut format is readable. Unknown
-    // records stay untouched rather than being adopted as current health drafts.
+    // Account drafts written by the current baseline always carry an origin
+    // epoch. An unmarked draft cannot prove consent provenance, even at epoch 1.
     if (record[TAG] !== SNAPSHOT_VERSION
         || record.owner !== owner
+        || (owner.startsWith('user:') && record.consentRevision === undefined)
         || (record.consentRevision !== undefined
             && (!Number.isSafeInteger(record.consentRevision)
                 || (record.consentRevision as number) < 1))
@@ -95,6 +96,11 @@ export function writeFencedDatedDraft(
     const current = readFencedDatedDraftImage(name, owner);
     if (expectedRaw !== undefined && current.raw !== expectedRaw) throw new DatedDraftConflictError();
     const revision = readDeviceConsentRevision(owner);
+    if (owner.startsWith('user:') && revision === undefined) {
+        // Do not publish an unstamped value or deletion marker when consent
+        // provenance is unavailable. Leave the original device copy intact.
+        throw new UnverifiedDatedDraftEpochError();
+    }
     const payload: DatedDraftSnapshot = {
         __logbookDatedDraft: SNAPSHOT_VERSION, owner, revisionId: newRevisionId(),
         ...(owner.startsWith('user:') && revision !== undefined ? { consentRevision: revision } : {}),

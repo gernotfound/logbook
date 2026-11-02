@@ -299,6 +299,7 @@ describe('Empirical Challenger: Sleep Format HH:MM Adversarial Stress Test Suite
     describe('5. useSleepMeasurements Hook Adversarial Verification', () => {
         beforeEach(() => {
             localStorage.clear();
+            localStorage.setItem(`logbook:v2:${storageOwner()}:health-consent-generation`, '1');
             useAppStore.getState().resetStore();
             useAppStore.setState({ dataOwner: storageOwner() });
         });

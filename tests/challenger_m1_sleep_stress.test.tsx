@@ -56,6 +56,7 @@ describe('Empirical Challenger: Sleep Format in HH:MM & State Integration Stress
 
     beforeEach(() => {
         window.localStorage.clear();
+        localStorage.setItem(`logbook:v2:${storageOwner()}:health-consent-generation`, '1');
         useAppStore.getState().resetStore();
         useAppStore.setState({ dataOwner: storageOwner() });
         vi.clearAllMocks();
