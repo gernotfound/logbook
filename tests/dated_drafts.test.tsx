@@ -179,6 +179,60 @@ it('rejects altered owner and revision in a stamped draft without replacing it',
     expect(localStorage.getItem(key)).toBe(originalCiphertext);
 });
 
+it('quarantines unmarked account V2 drafts and tombstones even at consent epoch 1', async () => {
+    localStorage.removeItem('logbook_is_guest');
+    invalidateSession();
+    const owner = 'user:' + mockFirebaseAuth.currentUser!.uid;
+    const marker = `logbook:v2:${owner}:health-consent-generation`;
+    const name = 'draft:measurement:2026-09-11';
+    localStorage.setItem(marker, '1');
+    await prepareUnlockedTestArchive(owner);
+    const sealedKey = protectedDeviceKey(name, owner);
+
+    for (const values of [{ weight: '75' }, null]) {
+        // The underlying sealed storage accepts bytes; the domain boundary
+        // must reject an old record without attested provenance.
+        writeDeviceValue(name, JSON.stringify({
+            __logbookDatedDraft: 2, owner, revisionId: 'a'.repeat(32), values,
+        }), owner);
+        const original = localStorage.getItem(sealedKey);
+        expect(original).toMatch(/^tlb-sealed:v1:/);
+        expect(() => readFencedDatedDraftImage(name, owner))
+            .toThrow('Provenienza della bozza locale non valida');
+        expect(() => writeFencedDatedDraft(name, owner, { weight: '80' }))
+            .toThrow('Provenienza della bozza locale non valida');
+        expect(() => writeFencedDatedDraft(name, owner, null))
+            .toThrow('Provenienza della bozza locale non valida');
+        expect(localStorage.getItem(sealedKey)).toBe(original);
+        expect(localStorage.getItem(deviceKey(name, owner))).toBeNull();
+    }
+});
+
+it('refuses new account drafts or tombstones without a consent epoch, but allows the current stamped format', async () => {
+    localStorage.removeItem('logbook_is_guest');
+    invalidateSession();
+    const owner = 'user:' + mockFirebaseAuth.currentUser!.uid;
+    const marker = `logbook:v2:${owner}:health-consent-generation`;
+    const name = 'draft:sleep:2026-09-11';
+    localStorage.removeItem(marker);
+    await prepareUnlockedTestArchive(owner);
+    for (const values of [{ sleepHours: '08:00' }, null]) {
+        expect(() => writeFencedDatedDraft(name, owner, values))
+            .toThrow(UnverifiedDatedDraftEpochError);
+        expect(localStorage.getItem(protectedDeviceKey(name, owner))).toBeNull();
+    }
+    localStorage.setItem(marker, '1');
+    const stamped = writeFencedDatedDraft(name, owner, { sleepHours: '08:00' });
+    expect(JSON.parse(stamped)).toMatchObject({
+        __logbookDatedDraft: 2, owner, consentRevision: 1, values: { sleepHours: '08:00' },
+    });
+    const tombstone = writeFencedDatedDraft(name, owner, null, stamped);
+    expect(JSON.parse(tombstone)).toMatchObject({
+        __logbookDatedDraft: 2, owner, consentRevision: 1, values: null,
+    });
+    expect(readFencedDatedDraftImage(name, owner)).toEqual({ values: null, raw: tombstone });
+});
+
 it('preserves unsupported pre-launch V1 and unwrapped drafts without reading or replacing them', () => {
     const owner = storageOwner();
     const name = 'draft:measurement:2026-09-11';
