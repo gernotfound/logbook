@@ -7,6 +7,8 @@ import { CycleCard } from '../src/components/Training/planning/CycleCard';
 import { RoutineCard } from '../src/components/Training/routines/RoutineCard';
 import TrainingSession from '../src/components/Training/TrainingSession';
 import { prepareUnlockedTestArchive } from './secureVaultFixture';
+import { captureSession } from '../src/lib/sync/session';
+import { markTabSnapshotClean } from '../src/lib/sync/tabSnapshotCausality';
 import { initializeLocal } from '../src/lib/sync/localRepository';
 import TrainingView from '../src/components/Training/TrainingView';
 import { useAppStore } from '../src/store/useAppStore';
@@ -164,6 +166,7 @@ describe('Training Planning & Volume Calculations', () => {
 
     describe('TrainingPlanning UI Component', () => {
         beforeEach(() => {
+            localStorage.setItem('logbook:v2:user:test-user-id:health-consent-generation', '1');
             const initialUserData: UserData = {
                 library: mockLibrary,
                 routines: mockRoutines,
@@ -183,6 +186,7 @@ describe('Training Planning & Volume Calculations', () => {
                 activeCycleId: 'cycle_active'
             };
             useAppStore.setState({ userData: initialUserData, dataOwner: 'user:test-user-id', localWorkout: null });
+            markTabSnapshotClean(captureSession(), initialUserData);
         });
 
         it('renders active cycle, MuscleModel, and weekly volume list', () => {

@@ -3,6 +3,7 @@ import * as sentryClient from '../src/lib/sentryClient';
 import { renderHook, act, render, screen, fireEvent } from '@testing-library/react';
 import React from 'react';
 import { telemetryHub } from '../src/lib/telemetryHub';
+import { UserDataSchema } from '../src/lib/schema';
 import { usePWAInstall } from '../src/hooks/usePWAInstall';
 import { useWorkoutSession } from '../src/hooks/useWorkoutSession';
 import { useAppStore } from '../src/store/useAppStore';
@@ -293,10 +294,10 @@ describe('Milestone 2 Challenger Suite: PWA and Offline Workout Stress Tests', (
         globalStartTime: Date.now() - 900000,
         exercises: [{ id: 'se1', exId: 'ex1', sets: [] }],
       };
-      const baseUserData: UserData = {
+      const baseUserData = UserDataSchema.parse({
         ...emptyUserData, profile: { name: 'User' },
         routines: [], library: [], history: [], activeWorkout: currentSession,
-      } as UserData;
+      }) as unknown as UserData;
       await initializeLocal(ownerForConsent, baseUserData);
 
       useAppStore.setState({
