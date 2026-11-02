@@ -42,6 +42,7 @@ describe('Worker M2: Exercise Library UI & Food Form Real-Time Calorie Calculati
         it('restores isBodyweight and equipmentWeight from an authenticated device draft', async () => {
             const owner = captureSession().owner;
             await prepareUnlockedTestArchive(owner);
+            localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '3');
             const draft = {
                 name: 'Trazioni zavorrate',
                 notes: 'Cintura da sovraccarico',
@@ -123,6 +124,7 @@ describe('Worker M2: Exercise Library UI & Food Form Real-Time Calorie Calculati
 
         it('handleSaveExercise creates new exercise with isBodyweight and equipmentWeight', async () => {
             const owner = captureSession().owner;
+            localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '3');
             const initialData = {
                     ...emptyUserData,
                     library: []
@@ -197,6 +199,7 @@ describe('Worker M2: Exercise Library UI & Food Form Real-Time Calorie Calculati
 
         it('confirms a created exercise in the encrypted owner archive after the domain commit', async () => {
             const owner = captureSession().owner;
+            localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '3');
             const initialData = { ...emptyUserData, library: [] };
             await prepareUnlockedTestArchive(owner);
             await initializeLocal(owner, initialData);

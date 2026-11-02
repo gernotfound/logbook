@@ -117,7 +117,7 @@ describe('Workout lifecycle durable recovery regressions', () => {
         renderOwnedWorkoutSession();
         await waitFor(() => expect(useAppStore.getState().localPersistenceBlocked).toBe(true));
         expect(readDeviceValueStrict(name, owner)).toBe(original);
-        expect(() => writeWorkoutRecoveryDraft(name, owner, null)).toThrow('generazione di consenso');
+        expect(() => writeWorkoutRecoveryDraft(name, owner, null)).toThrow('senza provenienza');
         expect(readDeviceValueStrict(name, owner)).toBe(original);
     });
 
@@ -157,6 +157,7 @@ describe('Workout lifecycle durable recovery regressions', () => {
 
     it('keeps readiness UI and durable draft unchanged when a write fails', async () => {
         await prepareUnlockedTestArchive(owner);
+        localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '3');
         render(<PreSessionCheckIn workoutId="readiness-1" onStart={vi.fn(async () => true)}
             onCancel={vi.fn(async () => true)} />);
         fireEvent.click(screen.getByRole('button', { name: 'Energia: 4 su 5' }));
@@ -173,6 +174,7 @@ describe('Workout lifecycle durable recovery regressions', () => {
 
     it('preserves readiness draft if deletion is declined', async () => {
         await prepareUnlockedTestArchive(owner);
+        localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '3');
         const cancel = vi.fn(async () => false);
         render(<PreSessionCheckIn workoutId="readiness-2" onStart={vi.fn(async () => true)} onCancel={cancel} />);
         fireEvent.click(screen.getByRole('button', { name: 'Voglia di allenarti: 3 su 5' }));
@@ -487,6 +489,7 @@ describe('Workout lifecycle durable recovery regressions', () => {
 
     it('recovers the same pending post-session answers after the screen is destroyed and remounted', async () => {
         await prepareUnlockedTestArchive(owner);
+        localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '3');
         const active = workout('post-reopen', true);
         useAppStore.setState({ userData: userData({ activeWorkout: active }), localWorkout: active });
         const key = protectedDeviceKey('draft:post-session:post-reopen', owner);
@@ -497,7 +500,7 @@ describe('Workout lifecycle durable recovery regressions', () => {
         const saved = localStorage.getItem(key);
         expect(saved).not.toBeNull();
         expect(localStorage.getItem(deviceKey('draft:post-session:post-reopen', owner))).toBeNull();
-        expect(JSON.parse(readDeviceValueStrict('draft:post-session:post-reopen', owner)!).draft.mood).toBe('5');
+        expect(JSON.parse(readDeviceValueStrict('draft:post-session:post-reopen', owner)!).data.draft.mood).toBe('5');
 
         first.unmount();
         renderOwnedWorkoutSession();
@@ -523,6 +526,7 @@ describe('Workout lifecycle durable recovery regressions', () => {
 
     it('keeps post-session rating unchanged if its synchronous persistence fails', async () => {
         await prepareUnlockedTestArchive(owner);
+        localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '3');
         const active = workout('post-write', true);
         useAppStore.setState({ userData: userData({ activeWorkout: active }), localWorkout: active });
         renderOwnedWorkoutSession();
@@ -684,6 +688,7 @@ describe('Workout lifecycle durable recovery regressions', () => {
 
     it('drops an obsolete post-session draft when the displayed session identity changes', async () => {
         await prepareUnlockedTestArchive(owner);
+        localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '3');
         const first = workout('post-first', true);
         const next = workout('post-next', true);
         useAppStore.setState({ userData: userData({ activeWorkout: first }), localWorkout: first });
@@ -865,11 +870,12 @@ describe('Workout lifecycle durable recovery regressions', () => {
 
     it('cleans up the deleted workout final rating draft after confirming local deletion', async () => {
         await prepareUnlockedTestArchive(owner);
+        localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '3');
         const target = workout('delete-final-rating', true);
         const initial = userData({ activeWorkout: target });
         await initializeLocal(owner, initial);
         useAppStore.setState({ userData: initial, dataOwner: owner, localWorkout: target });
-        writeDeviceValue('draft:post-session:' + target.id, JSON.stringify({ draft: { workoutId: target.id } }), owner);
+        writeWorkoutRecoveryDraft('draft:post-session:' + target.id, owner, { draft: { workoutId: target.id } });
         vi.mocked(useDialogStore.getState().showConfirm).mockResolvedValueOnce(true);
         const { result } = renderHook(() => useWorkoutSession());
         await act(async () => { expect(await result.current.deleteWorkout()).toBe(true); });

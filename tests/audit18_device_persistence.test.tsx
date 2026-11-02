@@ -40,6 +40,7 @@ describe('Audit 18 device-critical persistence', () => {
         localStorage.clear();
         owner = captureSession().owner;
         await prepareUnlockedTestArchive(owner);
+        localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '3');
         vi.clearAllMocks();
         useAppStore.setState({
             userData: parseUserData({ activeWorkout: workout('w-current') }),
@@ -201,19 +202,25 @@ describe('Audit 18 device-critical persistence', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Energia: 4 su 5' }));
         expect(writes()).toHaveLength(1);
         expect(writes()[0]).toMatch(/^tlb-sealed:v1:/);
-        expect(JSON.parse(readDeviceValueStrict(name, owner)!)).toMatchObject({ energy: 4 });
+        expect(JSON.parse(readDeviceValueStrict(name, owner)!)).toMatchObject({
+            __logbookWorkoutRecoveryDraft: 1, owner, name, consentRevision: 3, data: { energy: 4 },
+        });
 
         fireEvent.click(screen.getByRole('button', { name: 'Stress: 3 su 5' }));
         expect(writes()).toHaveLength(2);
         expect(writes()[1]).toMatch(/^tlb-sealed:v1:/);
         expect(writes()[1]).not.toBe(writes()[0]);
-        expect(JSON.parse(readDeviceValueStrict(name, owner)!)).toMatchObject({ energy: 4, stress: 3 });
+        expect(JSON.parse(readDeviceValueStrict(name, owner)!)).toMatchObject({
+            consentRevision: 3, data: { energy: 4, stress: 3 },
+        });
 
         fireEvent.click(screen.getByRole('button', { name: 'Energia: 5 su 5' }));
         expect(writes()).toHaveLength(3);
         expect(writes()[2]).toMatch(/^tlb-sealed:v1:/);
         expect(writes()[2]).not.toBe(writes()[1]);
-        expect(JSON.parse(readDeviceValueStrict(name, owner)!)).toMatchObject({ energy: 5, stress: 3 });
+        expect(JSON.parse(readDeviceValueStrict(name, owner)!)).toMatchObject({
+            consentRevision: 3, data: { energy: 5, stress: 3 },
+        });
         expect(localStorage.getItem(key)).toBe(writes()[2]);
         expect(localStorage.getItem(deviceKey(name, owner))).toBeNull();
     });

@@ -14,6 +14,7 @@ describe('restored owner-scoped drafts', () => {
     beforeEach(async () => {
         localStorage.clear();
         await prepareUnlockedTestArchive(storageOwner());
+        localStorage.setItem(`logbook:v2:${storageOwner()}:health-consent-generation`, '3');
         useAppStore.setState({ localPersistenceBlocked: false, syncHealth: 'synced', saveError: null });
     });
     afterEach(() => vi.restoreAllMocks());
@@ -32,7 +33,10 @@ describe('restored owner-scoped drafts', () => {
             expect(result.current.exName).toBe('Draft exercise');
             expect(localStorage.getItem(key)).toBeNull();
             expect(localStorage.getItem(protectedDeviceKey('draft_exercise', storageOwner()))).toMatch(/^tlb-sealed:v1:/);
-            expect(readDeviceValueStrict('draft_exercise', storageOwner())).toBe(draft);
+            expect(JSON.parse(readDeviceValueStrict('draft_exercise', storageOwner())!)).toMatchObject({
+                __logbookWorkoutRecoveryDraft: 1, owner: storageOwner(), name: 'draft_exercise',
+                consentRevision: 3, data: JSON.parse(draft),
+            });
             expect(remove).not.toHaveBeenCalledWith(protectedDeviceKey('draft_exercise', storageOwner()));
             unmount();
         } finally {
@@ -50,7 +54,10 @@ describe('restored owner-scoped drafts', () => {
             expect(result.current.routineName).toBe('Draft routine');
             expect(localStorage.getItem(key)).toBeNull();
             expect(localStorage.getItem(protectedDeviceKey('draft_routine', storageOwner()))).toMatch(/^tlb-sealed:v1:/);
-            expect(readDeviceValueStrict('draft_routine', storageOwner())).toBe(draft);
+            expect(JSON.parse(readDeviceValueStrict('draft_routine', storageOwner())!)).toMatchObject({
+                __logbookWorkoutRecoveryDraft: 1, owner: storageOwner(), name: 'draft_routine',
+                consentRevision: 3, data: JSON.parse(draft),
+            });
             expect(remove).not.toHaveBeenCalledWith(protectedDeviceKey('draft_routine', storageOwner()));
             unmount();
         } finally {

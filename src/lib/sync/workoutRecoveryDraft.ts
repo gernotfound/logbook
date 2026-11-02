@@ -23,8 +23,14 @@ export function readWorkoutRecoveryDraft(name: string, owner: string): unknown |
         throw new Error('Bozza workout di recupero non valida: originale conservato.');
     }
     const record = parsed as Partial<RecoveryDraftWitness>;
+    const hasWitness = Object.hasOwn(record, '__logbookWorkoutRecoveryDraft');
+    // The current authenticated writer always stamps owner, key and consent
+    // generation. A pre-launch JSON payload cannot prove its origin at epoch 1.
+    if (owner.startsWith('user:') && !hasWitness) {
+        throw new Error('Bozza workout senza provenienza verificabile: originale conservato.');
+    }
     let revision: number | undefined;
-    if (Object.hasOwn(record, '__logbookWorkoutRecoveryDraft')) {
+    if (hasWitness) {
         if (record.__logbookWorkoutRecoveryDraft !== 1 || record.owner !== owner
             || record.name !== name || !Number.isSafeInteger(record.consentRevision)
             || (record.consentRevision ?? 0) < 1 || !Object.hasOwn(record, 'data')) {
@@ -59,6 +65,9 @@ export function writeWorkoutRecoveryDraft(
     }
     const origin = expectedConsentGeneration === undefined ? revision
         : expectedConsentGeneration === null ? undefined : Number(expectedConsentGeneration);
+    if (owner.startsWith('user:') && origin === undefined) {
+        throw new Error('Generazione consenso bozza workout non verificabile: originale conservato.');
+    }
     const value: unknown = owner.startsWith('user:') && origin !== undefined
         ? { __logbookWorkoutRecoveryDraft: 1, owner, name, consentRevision: origin, data } satisfies RecoveryDraftWitness
         : data;
