@@ -30,6 +30,10 @@ L'app utilizza quattro livelli di storage con ruoli distinti:
 
 **Stato verificato e limiti (31/10/2026):** la PR #621 risulta integrata su `main`; [CI post-merge #41214483494](https://github.com/gernotfound/logbook/actions/runs/41214483494), [riconciliazione Firestore #41214806525](https://github.com/gernotfound/logbook/actions/runs/41214806525) e [Firebase Hosting #41214848776](https://github.com/gernotfound/logbook/actions/runs/41214848776) sono riusciti sullo SHA `f8e96c9cb53bed368125add21831946b6681b8e0`, e il deployment Vercel Production `dpl_T1WzZL4g87YBNo3VMySEG1yFnsMX` risultava READY sullo stesso SHA. Sono prove distinte: non attestano collaudo autenticato multi-dispositivo, recupero indipendente della KEK o disponibilità illimitata entro le quote gratuite. Rivalidare lo stato live a ogni intervento pertinente.
 
+## Bozze bufferizzate del workout
+
+**MUST (CRITICAL, fresh start):** le bozze `draft:buffered:*` di un account autenticato si leggono esclusivamente come record owner-scoped con nome, formato `__logbookBufferedDraft: 1` e revisione positiva di consenso verificata. Un payload testuale pre-lancio, anche se custodito da ciphertext corrente e con consenso alla prima revisione, non prova l'origine: non importarlo, non sovrascriverlo e non cancellarlo durante una scrittura/cleanup. Le scritture account richiedono la generazione corrente del consenso; la mancanza del marker non autorizza un salvataggio senza revision. **La modalità ospite conserva intenzionalmente il formato testuale attuale** dentro l'archivio cifrato del guest. Rimangono immutati i witness indipendenti, i confronti della copia osservata, i Web Locks/lifecycle gate e l'esportazione esplicita delle prove di recupero.
+
 ## Archivio locale cifrato senza password aggiuntiva
 
 **MUST:** il vault `logbook:v2:${owner}:secure-vault-control` esiste in tre stati distinti: assente, `migrating`, `active`. Controlli corrotti/versioni future, una chiave IndexedDB persa o un record non autenticato **non sono** assenza dati. Nessun nuovo provisioning sopra ciphertext preesistente.

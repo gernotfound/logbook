@@ -157,13 +157,16 @@ describe('Service Worker Update Lifecycle (ReloadPrompt) Suite', () => {
   test('a dirty buffered field leaves a sealed owner-scoped recovery copy before session invalidation', async () => {
     const owner = 'user:test-user-id';
     await prepareUnlockedTestArchive(owner);
+    localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '3');
     const update = vi.fn();
     const { unmount } = render(<BufferedInput id="recoverable-draft" value="" onChange={update} aria-label="Recoverable" />);
     fireEvent.change(screen.getByLabelText('Recoverable'), { target: { value: '82,5' } });
     const name = 'draft:buffered:input:recoverable-draft';
     const ciphertext = localStorage.getItem(protectedDeviceKey(name, owner));
     expect(ciphertext).toMatch(/^tlb-sealed:v1:/);
-    expect(readDeviceValueStrict(name, owner)).toBe('82,5');
+    expect(JSON.parse(readDeviceValueStrict(name, owner)!)).toMatchObject({
+      __logbookBufferedDraft: 1, owner, name, consentRevision: 3, value: '82,5',
+    });
     invalidateSession();
     unmount();
     expect(localStorage.getItem(protectedDeviceKey(name, owner))).toBe(ciphertext);

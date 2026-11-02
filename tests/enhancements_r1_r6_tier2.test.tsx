@@ -694,6 +694,7 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
             });
 
             it('T2.6.4: Cardio input derives speed from stored distance and edited time', () => {
+                localStorage.setItem(`logbook:v2:${captureSession().owner}:health-consent-generation`, '3');
                 const libDef = { id: 'ex_bike', name: 'Cyclette', trackingType: 'cardio' as const };
                 const exItem = {
                     exId: 'ex_bike',
