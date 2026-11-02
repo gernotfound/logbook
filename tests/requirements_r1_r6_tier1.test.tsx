@@ -1,7 +1,8 @@
 import React from 'react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, renderHook, act } from '@testing-library/react';
-import { renderWithProviders, emptyUserData, defaultMockUserData } from './setup';
+import { renderWithProviders, emptyUserData, defaultMockUserData, idbStore } from './setup';
+import { prepareUnlockedTestArchive } from './secureVaultFixture';
 import { useAppStore } from '../src/store/useAppStore';
 import { captureSession } from '../src/lib/sync/session';
 import { initializeLocal, readLocal } from '../src/lib/sync/localRepository';
@@ -257,7 +258,10 @@ describe('TheLogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => 
                         }
                     }
                 });
+                await prepareUnlockedTestArchive(owner);
                 await initializeLocal(owner, initial);
+                const initialCiphertext = idbStore['logbook:v2:' + owner];
+                expect(initialCiphertext).toMatch(/^tlb-sealed:v1:/);
                 useAppStore.setState({ userData: initial, dataOwner: owner, localPersistenceBlocked: false });
                 const { result } = renderHook(() => useNutritionMeasurements(targetDate));
                 act(() => result.current.setWeight('75'));
@@ -265,6 +269,9 @@ describe('TheLogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => 
                     expect(await result.current.calculateAndSave()).toBe(true);
                 });
                 expect(useAppStore.getState().userData?.nutrition?.[targetDate]?.weight).toBe(75);
+                const updatedCiphertext = idbStore['logbook:v2:' + owner];
+                expect(updatedCiphertext).toMatch(/^tlb-sealed:v1:/);
+                expect(updatedCiphertext).not.toBe(initialCiphertext);
                 const persisted = await readLocal(owner);
                 expect(persisted?.data.nutrition?.[targetDate]?.weight).toBe(75);
                 expect(persisted?.data.nutrition?.[targetDate]?.meals?.[0]?.id).toBe('meal-1');
