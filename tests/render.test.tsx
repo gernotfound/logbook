@@ -1,4 +1,5 @@
 import React from 'react';
+import { useAppStore } from '../src/store/useAppStore';
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 import { screen } from '@testing-library/react';
 import { renderWithProviders, emptyUserData } from './setup';
@@ -21,7 +22,10 @@ import WorkoutTimer from '../src/components/Training/WorkoutTimer';
 import MuscleModel from '../src/components/Training/MuscleModel';
 
 describe('Render Test Suite - Zero Crash Verification', () => {
-  beforeEach(async () => { await prepareUnlockedTestArchive(); });
+  beforeEach(async () => {
+    await prepareUnlockedTestArchive();
+    useAppStore.setState({ localPersistenceBlocked: false, compatibilityStatus: 'ok', syncHealth: 'synced' });
+  });
 
   test('renders full App without crashing when authenticated', async () => {
     const { container } = renderWithProviders(<App />);
