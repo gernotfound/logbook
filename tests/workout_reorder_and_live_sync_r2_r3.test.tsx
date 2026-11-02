@@ -50,9 +50,10 @@ const mockLibrary: ExerciseLibraryItem[] = [
 ];
 
 describe('Workout Reorder (R2) and Live Sync & Badges (R3) Suite', () => {
-    beforeEach(() => {
+    beforeEach(async () => {
         localStorage.clear();
         useAppStore.getState().resetStore();
+        await prepareUnlockedTestArchive(captureSession().owner);
         useAppStore.setState({
             dataOwner: captureSession().owner,
             userData: {
