@@ -304,14 +304,15 @@ describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & D
             const { auth } = await import('../src/lib/firebase');
             const originalUser = auth.currentUser;
             (auth as any).currentUser = null;
-
-            const state = createBaseState();
-            await DB.saveUserData(state);
-            expect(mockBatch.set).not.toHaveBeenCalled();
-            expect(mockBatch.commit).not.toHaveBeenCalled();
-
-            // Restore auth
-            (auth as any).currentUser = originalUser;
+            try {
+                // No authenticated owner capability: saving must fail closed
+                // instead of creating the guest's plaintext archive.
+                await expect(DB.saveUserData(createBaseState())).rejects.toThrow('Archivio protetto non pronto');
+                expect(mockBatch.set).not.toHaveBeenCalled();
+                expect(mockBatch.commit).not.toHaveBeenCalled();
+            } finally {
+                (auth as any).currentUser = originalUser;
+            }
         });
     });
 
