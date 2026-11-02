@@ -27,6 +27,9 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
     const [migrationPolicy, setMigrationPolicy] = useState<'merge' | 'skip'>('merge');
     const { showAlert, isOpen: globalDialogOpen } = useDialogStore();
     const titleId = useId();
+    const emailId = useId();
+    const passwordId = useId();
+    const confirmPasswordId = useId();
     const requirementsId = useId();
     const confirmErrorId = useId();
     const passwordRequirements = getPasswordRequirements(password, configuredPasswordRules);
@@ -108,25 +111,25 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
     };
 
     return (
-        <div id="auth-login-box" ref={dialogRef} role={onCancel ? "dialog" : undefined} aria-modal={onCancel ? "true" : undefined} aria-labelledby={onCancel ? titleId : undefined} tabIndex={onCancel ? -1 : undefined} className="ui-login-box-1" style={{ textAlign: "center", width: "90%", maxWidth: "25rem", margin: "0 auto", padding: "1.875rem", overflowY: "auto", maxHeight: "100vh" }}>
+        <div id="auth-login-box" ref={dialogRef} role={onCancel ? "dialog" : undefined} aria-modal={onCancel ? "true" : undefined} aria-labelledby={onCancel ? titleId : undefined} tabIndex={onCancel ? -1 : undefined} className="ui-login-box-1 auth-login-card">
             {onCancel && <h1 id={titleId} className="ui-login-box-2 auth-entry-title" style={{ marginBottom: "0.625rem" }}>TheLogBook</h1>}
-            <p className="ui-login-box-3" style={{ marginBottom: "1.25rem" }}>
+            <p className="ui-login-box-3 auth-login-intro">
                 Accedi o registrati per sincronizzare i tuoi allenamenti sul cloud.
             </p>
 
-            <div style={{ display: "flex", gap: "0.625rem", marginBottom: "1.25rem" }}>
+            <div className="auth-mode-switch" role="group" aria-label="Modalità di accesso">
                 <button
                     type="button"
-                    className={`btn ${mode === 'login' || mode === 'forgot' ? 'btn-primary' : ''}`}
-                    style={{ flex: 1, margin: 0, padding: "0.625rem", background: (mode === "login" || mode === "forgot") ? "" : "var(--surface-light)", color: (mode === "login" || mode === "forgot") ? "" : "var(--text-muted)", border: (mode === "login" || mode === "forgot") ? "" : "1px solid var(--glass-border)" }}
+                    className={`auth-mode-option${mode !== 'register' ? ' auth-mode-option--active' : ''}`}
+                    aria-pressed={mode !== 'register'}
                     onClick={() => { setMode('login'); setPassword(''); setConfirmPassword(''); setFormError(null); }}
                 >
                     Accedi
                 </button>
                 <button
                     type="button"
-                    className={`btn ${mode === 'register' ? 'btn-primary' : ''}`}
-                    style={{ flex: 1, margin: 0, padding: "0.625rem", background: mode === "register" ? "" : "var(--surface-light)", color: mode === "register" ? "" : "var(--text-muted)", border: mode === "register" ? "" : "1px solid var(--glass-border)" }}
+                    className={`auth-mode-option${mode === 'register' ? ' auth-mode-option--active' : ''}`}
+                    aria-pressed={mode === 'register'}
                     onClick={() => { setMode('register'); setPassword(''); setConfirmPassword(''); setFormError(null); }}
                 >
                     Registrati
@@ -147,42 +150,50 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
                 </div>
             )}
 
-            <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "0.9375rem" }}>
-                <input
-                    ref={emailInputRef}
-                    type="email"
-                    aria-label="Email"
-                    placeholder="La tua email"
-                    value={email}
-                    onChange={e => { setEmail(e.target.value); setFormError(null); }}
-                    required
-                    autoComplete="username"
-                    name="username"
-                    className="ui-login-box-8" style={{ padding: "0.75rem" }}
-                />
+            <form onSubmit={handleSubmit} className="auth-login-form">
+                <div className="auth-form-field">
+                    <label className="auth-form-label" htmlFor={emailId}>Email</label>
+                    <input
+                        id={emailId}
+                        ref={emailInputRef}
+                        type="email"
+                        aria-label="Email"
+                        placeholder="La tua email"
+                        value={email}
+                        onChange={e => { setEmail(e.target.value); setFormError(null); }}
+                        required
+                        autoComplete="username"
+                        name="username"
+                        className="ui-login-box-8" style={{ padding: "0.75rem" }}
+                    />
+                </div>
 
                 {mode !== 'forgot' && (
-                    <div style={{ position: "relative" }}>
-                        <input
-                            type={showPassword ? "text" : "password"}
-                            aria-label="Password"
-                            placeholder={mode === 'register' ? 'Scegli una password sicura' : 'Password'}
-                            value={password}
-                            onChange={e => { setPassword(e.target.value); setFormError(null); }}
-                            aria-invalid={passwordMissing}
-                            aria-describedby={mode === 'register' ? requirementsId : undefined}
-                            required
-                            autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
-                            className="ui-login-box-9" style={{ padding: "0.75rem", paddingRight: "3.5rem", width: "100%", boxSizing: "border-box" }}
-                        />
-                        <button
-                            type="button"
-                            aria-label={showPassword ? 'Nascondi password' : 'Mostra password'}
-                            onClick={() => setShowPassword(!showPassword)}
-                            className="ui-login-box-10" style={{ position: "absolute", right: "0.625rem", top: "50%", transform: "translateY(-50%)", cursor: "pointer", display: "flex", alignItems: "center" }}
-                        >
-                            {showPassword ? <EyeOff size={18} aria-hidden="true" /> : <Eye size={18} aria-hidden="true" />}
-                        </button>
+                    <div className="auth-form-field">
+                        <label className="auth-form-label" htmlFor={passwordId}>Password</label>
+                        <div className="auth-password-control">
+                            <input
+                                id={passwordId}
+                                type={showPassword ? "text" : "password"}
+                                aria-label="Password"
+                                placeholder={mode === 'register' ? 'Scegli una password sicura' : 'Password'}
+                                value={password}
+                                onChange={e => { setPassword(e.target.value); setFormError(null); }}
+                                aria-invalid={passwordMissing}
+                                aria-describedby={mode === 'register' ? requirementsId : undefined}
+                                required
+                                autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
+                                className="ui-login-box-9" style={{ padding: "0.75rem", paddingRight: "3.5rem", width: "100%", boxSizing: "border-box" }}
+                            />
+                            <button
+                                type="button"
+                                aria-label={showPassword ? 'Nascondi password' : 'Mostra password'}
+                                onClick={() => setShowPassword(!showPassword)}
+                                className="ui-login-box-10" style={{ position: "absolute", right: "0.625rem", top: "50%", transform: "translateY(-50%)", cursor: "pointer", display: "flex", alignItems: "center" }}
+                            >
+                                {showPassword ? <EyeOff size={18} aria-hidden="true" /> : <Eye size={18} aria-hidden="true" />}
+                            </button>
+                        </div>
                     </div>
                 )}
 
@@ -197,8 +208,10 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
                 )}
 
                 {mode === 'register' && (
-                    <div>
+                    <div className="auth-form-field">
+                        <label className="auth-form-label" htmlFor={confirmPasswordId}>Conferma password</label>
                         <input
+                            id={confirmPasswordId}
                             type={showPassword ? "text" : "password"}
                             aria-label="Conferma password"
                             placeholder="Conferma Password"
@@ -220,32 +233,31 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
 
                 <button
                     type="submit"
-                    className="btn btn-primary ui-login-box-12"
-                    style={{ padding: "0.9375rem", marginTop: "0.3125rem" }}
+                    className="btn btn-primary ui-login-box-12 auth-login-submit"
                     disabled={loading || (mode === 'forgot' && resetSent)}
                 >
                     {loading ? 'Attendi...' : (mode === 'login' ? 'Accedi' : mode === 'register' ? 'Registrati' : 'Invia Link di Recupero')}
                 </button>
 
                 {mode === 'login' && (
-                    <button type="button" onClick={() => { setMode('forgot'); setFormError(null); }} className="ui-login-box-13" style={{ cursor: "pointer", textDecoration: "underline" }}>
+                    <button type="button" onClick={() => { setMode('forgot'); setFormError(null); }} className="ui-login-box-13 auth-recovery-link">
                         Hai dimenticato la password?
                     </button>
                 )}
                 {mode === 'forgot' && (
-                    <button type="button" onClick={() => { setMode('login'); setFormError(null); }} className="ui-login-box-14" style={{ cursor: "pointer" }}>
+                    <button type="button" onClick={() => { setMode('login'); setFormError(null); }} className="ui-login-box-14 auth-recovery-link">
                         Torna all'accesso
                     </button>
                 )}
             </form>
 
-            <div style={{ display: "flex", alignItems: "center", gap: "0.625rem", margin: "1.25rem 0" }}>
+            <div className="auth-login-divider">
                 <div className="ui-login-box-15" style={{ flex: 1, height: "1px" }} />
                 <span className="ui-login-box-16" style={{ whiteSpace: "nowrap" }}>oppure</span>
                 <div className="ui-login-box-17" style={{ flex: 1, height: "1px" }} />
             </div>
 
-            <button id="btn-login-google" type="button" className="btn ui-login-box-18" style={{ padding: "0.75rem", width: "100%", marginBottom: "0.9375rem" }} onClick={() => {
+            <button id="btn-login-google" type="button" className="btn ui-login-box-18 auth-google-action" onClick={() => {
                 setFormError(null);
                 void handleAuthAction(() => isGuest ? linkGoogleAccount(migrationPolicy) : login())
                     .then(() => { const error = useAppStore.getState().saveError; if (error) setFormError(error); })
@@ -263,8 +275,7 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
             {onCancel ? (
                 <button
                     type="button"
-                    className="btn ui-login-box-19"
-                    style={{ width: "100%", padding: "0.625rem", textDecoration: "underline" }}
+                    className="btn ui-login-box-19 auth-return-local"
                     onClick={onCancel}
                 >
                     Torna alla modalità locale
@@ -273,8 +284,7 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
                 <button
                     id="btn-login-anonymous"
                     type="button"
-                    className="btn ui-login-box-20"
-                    style={{ width: "100%", padding: "0.625rem", textDecoration: "underline" }}
+                    className="btn ui-login-box-20 auth-guest-action"
                     onClick={loginAsGuest}
                 >
                     Continua senza account
@@ -282,7 +292,7 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
             )}
 
             {!onCancel && (
-                <p className="ui-login-box-21" style={{ marginTop: "0.3125rem", lineHeight: 1.4 }}>
+                <p className="ui-login-box-21 auth-local-data-note">
                     I dati saranno salvati solo sul dispositivo.
                 </p>
             )}

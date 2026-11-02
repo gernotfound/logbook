@@ -242,6 +242,12 @@ textarea:focus {
     padding: max(1rem, env(safe-area-inset-top, 0px)) max(1rem, env(safe-area-inset-right, 0px)) max(1rem, env(safe-area-inset-bottom, 0px)) max(1rem, env(safe-area-inset-left, 0px));
 }
 
+/* Allow the access panel to scroll from its top when keyboard or zoom reduces the viewport. */
+#auth-overlay {
+    justify-content: safe center;
+    overscroll-behavior: contain;
+}
+
 @keyframes fadeSlideUp {
     from { opacity: 0; transform: translateY(0.25rem); }
     to { opacity: 1; transform: none; }

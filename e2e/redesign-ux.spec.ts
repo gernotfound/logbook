@@ -27,6 +27,48 @@ test('welcome heading stays above the login card on narrow screens in both theme
   }
 });
 
+
+test('access layout retains one scroll area and clear action hierarchy on small screens', async ({ page }) => {
+  for (const theme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme: theme });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/');
+    const card = page.locator('#auth-login-box');
+    const overlay = page.locator('#auth-overlay');
+    const switcher = page.getByRole('group', { name: 'Modalità di accesso' });
+    const loginMode = switcher.getByRole('button', { name: 'Accedi' });
+    const registerMode = switcher.getByRole('button', { name: 'Registrati' });
+    await expect(loginMode).toHaveAttribute('aria-pressed', 'true');
+    await expect(registerMode).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.getByText('Email', { exact: true })).toBeVisible();
+    await expect(page.getByText('Password', { exact: true }).first()).toBeVisible();
+    expect(await card.evaluate(el => getComputedStyle(el).overflowY)).toBe('visible');
+    expect(await overlay.evaluate(el => getComputedStyle(el).overflowY)).toBe('auto');
+    expect((await card.boundingBox())!.width).toBeGreaterThan(350);
+    const activeBg = await loginMode.evaluate(el => getComputedStyle(el).backgroundColor);
+    const submitBg = await card.getByRole('button', { name: 'Accedi' }).last().evaluate(el => getComputedStyle(el).backgroundColor);
+    expect(activeBg).not.toBe(submitBg);
+
+    await page.setViewportSize({ width: 320, height: 568 });
+    await registerMode.click();
+    await expect(registerMode).toHaveAttribute('aria-pressed', 'true');
+    await expect(loginMode).toHaveAttribute('aria-pressed', 'false');
+    const confirm = page.getByLabel('Conferma password');
+    await confirm.scrollIntoViewIfNeeded();
+    await expect(confirm).toBeVisible();
+    const title = page.getByRole('heading', { name: 'TheLogBook' });
+    await overlay.evaluate(el => { el.scrollTop = 0; });
+    expect((await title.boundingBox())!.y).toBeGreaterThanOrEqual(-1);
+    await page.getByLabel('Email').focus();
+    await expect(page.getByLabel('Email')).toBeFocused();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
+    await loginMode.click();
+    await page.getByRole('button', { name: 'Continua senza account' }).scrollIntoViewIfNeeded();
+    await expect(page.getByText('I dati saranno salvati solo sul dispositivo.')).toBeVisible();
+    await page.setViewportSize({ width: 320, height: 850 });
+  }
+});
+
 async function continueAsGuest(page: Page) {
   await page.goto('/');
   await page.getByRole('button', { name: 'Continua senza account' }).click();
