@@ -32,8 +32,6 @@ export interface NutritionPlanning {
     carbsPerKg?: number;
     proPerKg?: number;
     fatPerKg?: number;
-    lockedMacro?: 'carbs' | 'pro' | 'fat' | string | null;
-    chartPeriod?: number;
     normocalorica?: Partial<MacroTarget>;
     totalKcal?: number;
 }

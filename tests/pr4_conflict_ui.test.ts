@@ -193,7 +193,9 @@ describe('PR 4: Nutrition Conflict Fingerprint', () => {
     it('generates a versioned fingerprint', () => {
         const plan = { totalKcal: 2500, weight: 80, onDaysCount: 4 };
         const fp = getNutritionConflictFingerprint(plan);
-        expect(fp.startsWith('v1:')).toBe(true);
+        expect(fp.startsWith('v2:')).toBe(true);
+        expect(getNutritionConflictFingerprint({ ...plan, lockedMacro: 'carbs' } as any)).toBe(fp);
+        expect(getNutritionConflictFingerprint({ ...plan, chartPeriod: 30 } as any)).toBe(fp);
     });
 
     it('generates the same fingerprint regardless of key order', () => {

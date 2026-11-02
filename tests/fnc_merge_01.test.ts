@@ -31,6 +31,8 @@ describe('Nutrition planning provenance and metadata integrity', () => {
     it('classifies modern and additional fields as edited when origin is missing', () => {
         const legacy = createDefaultNutritionPlanning();
         expect(isDefaultNutritionPlanning(legacy)).toBe(true);
+        expect(legacy).not.toHaveProperty('lockedMacro');
+        expect(legacy).not.toHaveProperty('chartPeriod');
         const modern = { ...legacy, avgMacros: { carbsPerKg: 3.5, proPerKg: 2, fatPerKg: 1 } };
         expect(isDefaultNutritionPlanning(modern)).toBe(false);
         expect(isDefaultNutritionPlanning({ ...legacy, normocalorica: { ...legacy.normocalorica, carbs: 345 } })).toBe(false);
@@ -64,6 +66,17 @@ describe('Nutrition planning provenance and metadata integrity', () => {
 });
 
 describe('PR 3: FNC-MERGE-01 Nutrition Planning Merge Policy', () => {
+    it('does not carry retired pre-launch planning fields into cloud/guest merge or conflict recovery', () => {
+        const base = createDefaultNutritionPlanning();
+        const cloud = buildUserData({ ...base, weight: 90, lockedMacro: 'fat' } as NutritionPlanning, 'user-edited');
+        const guest = buildUserData({ ...base, weight: 75, chartPeriod: 14 } as NutritionPlanning, 'user-edited');
+        const merged = mergeUserData(cloud, guest);
+        expect(merged.nutritionPlanning?.weight).toBe(90);
+        expect(merged.pendingConflicts?.nutritionPlanning?.weight).toBe(75);
+        expect(merged.nutritionPlanning).not.toHaveProperty('lockedMacro');
+        expect(merged.pendingConflicts?.nutritionPlanning).not.toHaveProperty('chartPeriod');
+    });
+
 
     // 1. Guest default + cloud assente
     it('1. Guest default + cloud assente: keeps default locally but should not trigger hasUserData sync', () => {

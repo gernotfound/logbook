@@ -10,6 +10,7 @@ import { DB } from '../src/lib/db';
 import {
     UserDataSchema,
     UserProfileSchema,
+    NutritionPlanningSchema,
     MacroTargetSchema,
     MacroRatioSchema,
     MacroBoostSchema,
@@ -87,6 +88,33 @@ describe('Zod Schema Resilience & Defensive Catches', () => {
     });
 
     describe('Partial & Nested Malformed Fields', () => {
+        it('retires only unsupported planning fields across active plans and pending conflicts', () => {
+            const raw = {
+                weight: 80,
+                onDaysCount: 4,
+                avgMacros: { carbsPerKg: 3, proPerKg: 2, fatPerKg: 1 },
+                lockedMacro: 'carbs',
+                chartPeriod: 30,
+                futureSetting: 'retain',
+            };
+            const parsed = NutritionPlanningSchema.parse(raw);
+            expect(parsed).not.toHaveProperty('lockedMacro');
+            expect(parsed).not.toHaveProperty('chartPeriod');
+            expect(parsed.weight).toBe(80);
+            expect(parsed.avgMacros?.carbsPerKg).toBe(3);
+            expect((parsed as Record<string, unknown>).futureSetting).toBe('retain');
+
+            const userData = UserDataSchema.parse({
+                nutritionPlanning: raw,
+                pendingConflicts: { nutritionPlanning: raw },
+            });
+            expect(userData.nutritionPlanning).not.toHaveProperty('lockedMacro');
+            expect(userData.nutritionPlanning).not.toHaveProperty('chartPeriod');
+            expect(userData.pendingConflicts?.nutritionPlanning).not.toHaveProperty('lockedMacro');
+            expect(userData.pendingConflicts?.nutritionPlanning).not.toHaveProperty('chartPeriod');
+            expect(userData.pendingConflicts?.nutritionPlanning?.avgMacros?.proPerKg).toBe(2);
+        });
+
         it('defensively sanitizes corrupted UserProfile and coerces numeric measurements to strings', () => {
             const corruptedProfile = {
                 dob: 19900101, // number coerced to string

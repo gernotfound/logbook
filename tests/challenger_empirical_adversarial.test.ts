@@ -759,7 +759,7 @@ describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & D
             expect(parsed[1].progressionMode).toBeUndefined();
         });
 
-        it('3.8: parseSupplements & parseNutritionPlanning handle nested ratios, boosts and lockedMacro', () => {
+        it('3.8: parseSupplements & parseNutritionPlanning handle nested ratios, boosts and unsupported pre-launch fields', () => {
             const rawSupplements = [
                 { id: 's1', name: 'Vitamina D3', unit: 'UI', target: '2000', portion: '1000' }
             ];
@@ -783,7 +783,7 @@ describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & D
             expect(parsedPlanning.avgMacros?.carbsPerKg).toBe(4);
             expect(parsedPlanning.onBoost?.carbsPercent).toBe(20);
             expect(parsedPlanning.onBoost?.fatPercent).toBe(-10);
-            expect(parsedPlanning.lockedMacro).toBe('carbs');
+            expect(parsedPlanning).not.toHaveProperty('lockedMacro');
             expect(parsedPlanning.normocalorica?.kcal).toBe(2500);
         });
 
