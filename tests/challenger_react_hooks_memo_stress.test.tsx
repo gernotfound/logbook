@@ -421,6 +421,7 @@ describe('Empirical Challenger: React Hooks, Memoization & Re-render Loop Stress
             // owner-scoped IndexedDB repository that production uses.
             const owner = captureSession().owner;
             await prepareUnlockedTestArchive(owner);
+            localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '3');
             const initial = UserDataSchema.parse(baseUserData) as UserData;
             await initializeLocal(owner, initial);
             const archiveKey = 'logbook:v2:' + owner;

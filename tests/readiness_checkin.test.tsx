@@ -41,6 +41,7 @@ function session(readiness?: WorkoutSession['readiness']): WorkoutSession {
 describe('pre-session readiness contract', () => {
     beforeEach(() => {
         localStorage.clear();
+        localStorage.setItem(`logbook:v2:${captureSession().owner}:health-consent-generation`, '3');
         useAppStore.setState({
             dataOwner: captureSession().owner,
             userData: parseUserData({
@@ -86,7 +87,10 @@ describe('pre-session readiness contract', () => {
         const sealed = localStorage.getItem(protectedDeviceKey(name, owner));
         expect(sealed).toMatch(/^tlb-sealed:v1:/);
         expect(localStorage.getItem(deviceKey(name, owner))).toBeNull();
-        expect(JSON.parse(readDeviceValueStrict(name, owner)!)).toMatchObject({ energy: 4, stress: 2 });
+        expect(JSON.parse(readDeviceValueStrict(name, owner)!)).toMatchObject({
+            __logbookWorkoutRecoveryDraft: 1, owner, name,
+            consentRevision: 3, data: { energy: 4, stress: 2 },
+        });
         fireEvent.click(screen.getByRole('button', { name: 'Inizia allenamento' }));
         await waitFor(() => expect(onStart).toHaveBeenCalledWith({ energy: 4, stress: 2 }));
     });
