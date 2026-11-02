@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 afterEach(() => {
   vi.unstubAllEnvs();
+  vi.unstubAllGlobals();
   vi.resetModules();
 });
 
@@ -18,6 +19,38 @@ describe('trusted backend API origin', () => {
     const { BACKEND_API_ORIGIN, trustedBackendUrl } = await import('./backendApi');
     expect(BACKEND_API_ORIGIN).toBe('');
     expect(() => trustedBackendUrl('/api/cloud-key')).toThrow('Backend trusted non configurato.');
+  });
+
+  it('does not send health-erasure HTTP requests when backend configuration is missing', async () => {
+    vi.stubEnv('VITE_ACCOUNT_DELETION_API_ORIGIN', '');
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const { sendHealthDataErasure } = await import('./healthDataErasureTransport');
+    await expect(sendHealthDataErasure('POST', {
+      authorization: 'Bearer dummy-token',
+      'x-firebase-appcheck': 'dummy-app-check',
+    })).rejects.toThrow('Backend trusted non configurato.');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('sends health-erasure requests to the explicitly configured origin', async () => {
+    vi.stubEnv('VITE_ACCOUNT_DELETION_API_ORIGIN', 'https://backend.example.test/');
+    const body = { status: 'pending' };
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => body,
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const { sendHealthDataErasure } = await import('./healthDataErasureTransport');
+    await expect(sendHealthDataErasure('POST', {
+      authorization: 'Bearer dummy-token',
+      'x-firebase-appcheck': 'dummy-app-check',
+    })).resolves.toEqual(body);
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://backend.example.test/api/health-data-erasure',
+      expect.objectContaining({ method: 'POST', cache: 'no-store' }),
+    );
   });
 
   it('prefers the configured origin and strips one trailing slash', async () => {
