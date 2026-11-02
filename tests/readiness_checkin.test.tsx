@@ -14,6 +14,14 @@ import type { UserData, WorkoutSession } from '../src/types';
 import { initializeLocal, readLocal } from '../src/lib/sync/localRepository';
 import { deviceKey, protectedDeviceKey, readDeviceValueStrict } from '../src/lib/sync/deviceStorage';
 import { prepareUnlockedTestArchive } from './secureVaultFixture';
+import { AuthContext, defaultAuthContext } from '../src/contexts/AuthContextDef';
+import { auth } from '../src/lib/firebase';
+
+const renderOwnedWorkoutSession = () => render(
+    <AuthContext.Provider value={{ ...defaultAuthContext, currentUser: auth.currentUser, isGuest: false }}>
+        <TrainingSession />
+    </AuthContext.Provider>,
+);
 
 vi.mock('../src/lib/telemetryHub', () => ({ telemetryHub: { trackError: vi.fn() } }));
 
@@ -88,7 +96,7 @@ describe('pre-session readiness contract', () => {
         useAppStore.setState({
             localWorkout: { id: 'pending', date: '2026-09-24', routineName: 'Push', exercises: [] },
         });
-        render(<TrainingSession />);
+        renderOwnedWorkoutSession();
         expect(screen.getByRole('heading', { name: 'Come arrivi oggi?' })).toBeTruthy();
         expect(screen.queryByText('Durata Totale')).toBeNull();
     });
@@ -102,7 +110,7 @@ describe('pre-session readiness contract', () => {
         useAppStore.setState({ userData: data, dataOwner: captureSession().owner,
             localWorkout: prepared, localPersistenceBlocked: false });
 
-        render(<TrainingSession />);
+        renderOwnedWorkoutSession();
         fireEvent.click(screen.getByRole('button', { name: 'Energia: 4 su 5' }));
         fireEvent.click(screen.getByRole('button', { name: 'Inizia allenamento' }));
 
@@ -126,7 +134,7 @@ describe('pre-session readiness contract', () => {
         await initializeLocal(captureSession().owner, data);
         useAppStore.setState({ userData: data, dataOwner: captureSession().owner,
             localWorkout: prepared, localPersistenceBlocked: false });
-        render(<TrainingSession />);
+        renderOwnedWorkoutSession();
         // Isolate the clock-boundary check from archive initialization and
         // its asynchronous security bookkeeping.
         const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(startedAt);
@@ -181,7 +189,7 @@ describe('pre-session readiness contract', () => {
         });
 
         try {
-            render(<TrainingSession />);
+            renderOwnedWorkoutSession();
 
             fireEvent.click(screen.getByRole('button', { name: 'Termina allenamento' }));
             expect(screen.getByRole('heading', { name: 'Com’è andato l’allenamento?' })).toBeTruthy();
@@ -239,7 +247,7 @@ describe('pre-session readiness contract', () => {
             userData: data, dataOwner: owner, localWorkout: prepared,
             localPersistenceBlocked: false, syncHealth: 'synced', saveError: null,
         });
-        render(<TrainingSession />);
+        renderOwnedWorkoutSession();
 
         // Inject a real local commit failure, not a mock SyncResult pretending
         // persistence succeeded. The original prepared record must survive.
