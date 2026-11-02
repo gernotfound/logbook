@@ -10,6 +10,7 @@ import { useAppStore } from '../src/store/useAppStore';
 import { clearSyncTimers } from '../src/store/slices/createSyncSlice';
 import type { UserData, Exercise, Food } from '../src/types';
 import { idbStore } from './setup';
+import { prepareUnlockedTestArchive } from './secureVaultFixture';
 import { activateGuestSession, GUEST_SESSION_KEY } from '../src/lib/sync/session';
 
 vi.mock('../src/lib/firebase', () => ({
