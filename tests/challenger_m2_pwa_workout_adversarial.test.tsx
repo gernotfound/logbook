@@ -327,7 +327,9 @@ describe('Milestone 2 Challenger Suite: PWA and Offline Workout Stress Tests', (
   // =========================================================================
   describe('3. Historical Workout Editing & Pain Persistence Stress', () => {
     it('handles startEditHistoricalWorkout with missing sets/dropsets/isometrics safely', async () => {
-      await prepareUnlockedTestArchive(captureSession().owner);
+      const owner = captureSession().owner;
+      if (owner.startsWith('user:')) localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '1');
+      await prepareUnlockedTestArchive(owner);
       const { result } = renderHook(() => useWorkoutSession());
 
       const malformedHistorical: WorkoutSession = {

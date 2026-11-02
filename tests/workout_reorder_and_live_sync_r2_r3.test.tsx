@@ -164,6 +164,7 @@ describe('Workout Reorder (R2) and Live Sync & Badges (R3) Suite', () => {
 
         it('1.5: startEditHistoricalWorkout ensures all exercises have id', async () => {
             const owner = captureSession().owner;
+            if (owner.startsWith('user:')) localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '1');
             await prepareUnlockedTestArchive(owner);
             const historicalWorkout: WorkoutSession = {
                 id: 'w_hist_1',

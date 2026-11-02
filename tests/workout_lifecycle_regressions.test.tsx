@@ -259,6 +259,7 @@ describe('Workout lifecycle durable recovery regressions', () => {
     });
 
     it('suspends and restores an active workout without clearing its timer or cloud shadow', async () => {
+        if (owner.startsWith('user:')) localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '1');
         await prepareUnlockedTestArchive(owner);
         const active = workout('active', true);
         const old = workout('historical', true);
@@ -289,6 +290,7 @@ describe('Workout lifecycle durable recovery regressions', () => {
     });
 
     it('restores a durable active shadow when the transient device state was absent', async () => {
+        if (owner.startsWith('user:')) localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '1');
         await prepareUnlockedTestArchive(owner);
         const active = workout('shadow', true);
         const old = workout('old-shadow', true);
@@ -300,6 +302,7 @@ describe('Workout lifecycle durable recovery regressions', () => {
     });
 
     it('does not stop an active timer if switching to the historical editor fails', async () => {
+        if (owner.startsWith('user:')) localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '1');
         await prepareUnlockedTestArchive(owner);
         const active = workout('original', true);
         const old = workout('old', true);
