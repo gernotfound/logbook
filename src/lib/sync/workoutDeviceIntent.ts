@@ -225,10 +225,13 @@ export function unwrapWorkoutDeviceSnapshot(value: unknown, owner: string): {
 export function persistPlainWorkoutSnapshot(workout: WorkoutSession | null, owner = storageOwner()): void {
     const current = readDeviceConsentRevision(owner);
     if (owner.startsWith('user:')) {
+        const old = readDeviceValueStrict('workout', owner);
+        // No durable copy exists to modify: a no-op clear must not require
+        // account consent before an account's initial health-data acceptance.
         if (current === undefined) {
+            if (workout === null && old === null) return;
             throw new Error('Generazione consenso workout non verificabile: nessuno snapshot creato.');
         }
-        const old = readDeviceValueStrict('workout', owner);
         if (old !== null) {
             let value: unknown;
             try { value = JSON.parse(old); }

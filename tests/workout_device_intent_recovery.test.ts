@@ -100,8 +100,8 @@ describe('authenticated device-intent replay into semantic journal', () => {
 
         expect(() => persistPlainWorkoutSnapshot(workout('65'), account))
             .toThrow('Generazione consenso workout non verificabile');
-        expect(() => persistPlainWorkoutSnapshot(null, account))
-            .toThrow('Generazione consenso workout non verificabile');
+        // Clearing an already absent copy is a no-op, not a new device write.
+        expect(() => persistPlainWorkoutSnapshot(null, account)).not.toThrow();
         expect(() => getInitialLocalWorkout(account, initial.activeWorkout))
             .toThrow('Generazione consenso workout non verificabile');
         expect(readDeviceValueStrict('workout', account)).toBeNull();

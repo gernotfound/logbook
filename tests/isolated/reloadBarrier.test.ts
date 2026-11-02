@@ -7,7 +7,7 @@ vi.mock('../../src/store/useAppStore', () => ({ useAppStore: {
     setState: (patch: any) => { app.state = { ...app.state, ...(typeof patch === 'function' ? patch(app.state) : patch) }; },
 } }));
 vi.mock('../../src/lib/firebase', () => ({ auth: app.auth }));
-// Reload tests assume verified, still-active account consent at revision zero.
+// Reload tests provision the current consent epoch for an authenticated owner.
 // Consent epoch and revocation fences also have dedicated suites.
 vi.mock('../../src/lib/healthConsent', async () => {
     const actual = await vi.importActual<typeof import('../../src/lib/healthConsent')>('../../src/lib/healthConsent');
@@ -22,7 +22,7 @@ vi.mock('../../src/lib/healthConsent', async () => {
         requireHealthConsentWritable: (owner: string) => {
             if (!writable(owner)) throw new Error('Utente non autorizzato dal consenso');
         },
-        getVerifiedHealthConsentRevision: () => 0,
+        getVerifiedHealthConsentRevision: () => 1,
     };
 });
 vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackError: vi.fn() } }));
@@ -47,7 +47,8 @@ beforeEach(async () => {
     disk = new Map();
     vi.stubGlobal('localStorage', { get length() { return disk.size; }, key: (index: number) => Array.from(disk.keys())[index] ?? null, getItem: (key: string) => disk.get(key) ?? null, setItem: (key: string, value: string) => disk.set(key, value), removeItem: (key: string) => disk.delete(key) });
     vi.stubGlobal('navigator', { locks: { request: async (_name: string, _options: unknown, run: () => Promise<unknown>) => run() } });
-    // Authenticated hydration is permitted only after the owner vault is ready.
+    // Authenticated hydration requires both the real vault and the current consent epoch.
+    disk.set('logbook:v2:user:a:health-consent-generation', '1');
     await createAndMigrateVault('user:a');
     app.state = { userData: parse(170), localWorkout: { id: 'active', exercises: [] }, dataOwner: 'user:a' };
     await initializeLocal('user:a', app.state.userData);
@@ -57,7 +58,10 @@ afterEach(() => { lockAllVaults(); vi.unstubAllGlobals(); });
 it('allows offline update only with the durable copy and synchronous active workout snapshot', async () => {
     app.flush.mockRejectedValue(new Error('offline'));
     await prepareForReload();
-    expect(JSON.parse(readDeviceValueStrict('workout', 'user:a')!)).toEqual(app.state.localWorkout);
+    expect(JSON.parse(readDeviceValueStrict('workout', 'user:a')!)).toMatchObject({
+        __logbookWorkoutSnapshot: 1, owner: 'user:a', consentRevision: 1,
+        workout: app.state.localWorkout,
+    });
     expect(disk.has(deviceKey('workout', 'user:a'))).toBe(false);
     expect(disk.get(protectedDeviceKey('workout', 'user:a'))).toMatch(/^tlb-sealed:/);
     expect(await get('logbook:v2:user:a')).toMatch(/^tlb-sealed:/);
@@ -69,7 +73,10 @@ it('protects the active workout with authenticated ciphertext before a safe relo
     expect(disk.has(deviceKey('workout', 'user:a'))).toBe(false);
     const ciphertext = disk.get(protectedDeviceKey('workout', 'user:a'));
     expect(ciphertext).toMatch(/^tlb-sealed:/);
-    expect(JSON.parse(readDeviceValueStrict('workout', 'user:a')!)).toEqual(app.state.localWorkout);
+    expect(JSON.parse(readDeviceValueStrict('workout', 'user:a')!)).toMatchObject({
+        __logbookWorkoutSnapshot: 1, owner: 'user:a', consentRevision: 1,
+        workout: app.state.localWorkout,
+    });
 });
 it('fails closed on corrupted ciphertext and preserves the original bytes', async () => {
     writeDeviceValue('workout', JSON.stringify(app.state.localWorkout), 'user:a');
@@ -291,7 +298,10 @@ it('reloads an update-required app without parsing a future local envelope and p
     await requiredUpdateHardReload(reload);
 
     expect(reload).toHaveBeenCalledTimes(1);
-    expect(JSON.parse(readDeviceValueStrict('workout', 'user:a')!)).toEqual(app.state.localWorkout);
+    expect(JSON.parse(readDeviceValueStrict('workout', 'user:a')!)).toMatchObject({
+        __logbookWorkoutSnapshot: 1, owner: 'user:a', consentRevision: 1,
+        workout: app.state.localWorkout,
+    });
     expect(disk.has(deviceKey('workout', 'user:a'))).toBe(false);
     expect(disk.get(protectedDeviceKey('workout', 'user:a'))).toMatch(/^tlb-sealed:/);
 });
