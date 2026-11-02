@@ -335,7 +335,9 @@ describe('Milestone 2: PWA, offline workout and telemetry boundaries', () => {
     } as unknown as UserData;
 
     it('starts an online workout without emitting workout usage telemetry', async () => {
-      await prepareUnlockedTestArchive(captureSession().owner);
+      const owner = captureSession().owner;
+      if (owner.startsWith('user:')) localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '1');
+      await prepareUnlockedTestArchive(owner);
       telemetryHub.init();
       telemetryHub.setUserId('user_athlete_online');
 
@@ -383,6 +385,7 @@ describe('Milestone 2: PWA, offline workout and telemetry boundaries', () => {
     it('saves an online workout without emitting workout usage telemetry', async () => {
       useAppStore.getState().resetStore();
       const owner = captureSession().owner;
+      if (owner.startsWith('user:')) localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '1');
       const initialUserData: UserData = { ...emptyUserData, ...mockUserData };
       telemetryHub.init();
       telemetryHub.setUserId('user_athlete_online');

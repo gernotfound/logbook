@@ -3,6 +3,7 @@ import * as sentryClient from '../src/lib/sentryClient';
 import { renderHook, act, render, screen, fireEvent } from '@testing-library/react';
 import React from 'react';
 import { telemetryHub } from '../src/lib/telemetryHub';
+import { UserDataSchema } from '../src/lib/schema';
 import { usePWAInstall } from '../src/hooks/usePWAInstall';
 import { useWorkoutSession } from '../src/hooks/useWorkoutSession';
 import { useAppStore } from '../src/store/useAppStore';
@@ -187,6 +188,8 @@ describe('Milestone 2 Challenger Suite: PWA and Offline Workout Stress Tests', (
   // =========================================================================
   describe('2. Offline Workout Lifecycle with 0 Exercises & Corrupted Structures', () => {
     it('handles starting and saving a workout with 0 exercises without throwing or crashing', async () => {
+      const ownerForConsent = captureSession().owner;
+      if (ownerForConsent.startsWith('user:')) localStorage.setItem(`logbook:v2:${ownerForConsent}:health-consent-generation`, '1');
       telemetryHub.init();
       telemetryHub.setUserId('user_empty_workout');
 
@@ -278,16 +281,24 @@ describe('Milestone 2 Challenger Suite: PWA and Offline Workout Stress Tests', (
     });
 
     it('handles workout with invalid ratings and non-numeric water values safely', async () => {
+      const ownerForConsent = captureSession().owner;
+      if (ownerForConsent.startsWith('user:')) localStorage.setItem(`logbook:v2:${ownerForConsent}:health-consent-generation`, '1');
       await prepareUnlockedTestArchive(captureSession().owner);
       telemetryHub.init();
       telemetryHub.setUserId('user_bad_ratings');
 
-      const baseUserData: UserData = {
-        profile: { name: 'User' },
-        routines: [],
-        library: [],
-        history: [],
-      } as unknown as UserData;
+      const currentSession = {
+        id: 'w_bad_ratings',
+        routineId: 'r1',
+        date: '2026-08-24',
+        globalStartTime: Date.now() - 900000,
+        exercises: [{ id: 'se1', exId: 'ex1', sets: [] }],
+      };
+      const baseUserData = UserDataSchema.parse({
+        ...emptyUserData, profile: { name: 'User' },
+        routines: [], library: [], history: [], activeWorkout: currentSession,
+      }) as unknown as UserData;
+      await initializeLocal(ownerForConsent, baseUserData);
 
       useAppStore.setState({
         dataOwner: 'user:test-user-id',

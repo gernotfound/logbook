@@ -78,6 +78,7 @@ const mockLibrary: ExerciseLibraryItem[] = [
 describe('Intelligent Exercise Search & Dropdown Suite (M3: R4 & R6)', () => {
     beforeEach(async () => {
         window.localStorage.clear();
+        localStorage.setItem('logbook:v2:user:test-user-id:health-consent-generation', '1');
         await prepareUnlockedTestArchive('user:test-user-id');
         useAppStore.getState().resetStore();
         vi.clearAllMocks();

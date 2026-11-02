@@ -216,6 +216,7 @@ describe('Workout lifecycle durable recovery regressions', () => {
     });
 
     it('verifies the owner-scoped IndexedDB snapshot after starting a planned workout', async () => {
+        if (owner.startsWith('user:')) localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '1');
         await prepareUnlockedTestArchive(owner);
         const initial = userData({
             routines: [{ id: 'routine-durable', name: 'Durable routine', exercises: [] }],
@@ -794,6 +795,7 @@ describe('Workout lifecycle durable recovery regressions', () => {
 
 
     it('starts offline through the real workout setter and preserves the owner-scoped pending journal', async () => {
+        if (owner.startsWith('user:')) localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '1');
         await prepareUnlockedTestArchive(owner);
         const prepared = workout('offline-real-adapter');
         const initial = userData({ activeWorkout: prepared });
@@ -900,6 +902,7 @@ describe('Workout lifecycle durable recovery regressions', () => {
 
 
     it('serializes a rapid start after its preparation without requiring an explicit UI flush', async () => {
+        if (owner.startsWith('user:')) localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '1');
         await prepareUnlockedTestArchive(owner);
         const initial = userData({ activeWorkout: null });
         await initializeLocal(owner, initial);

@@ -22,7 +22,9 @@ describe('Training Session UI Improvements Suite (R1, R2, R3)', () => {
     beforeEach(async () => {
         vi.clearAllMocks();
         localStorage.clear();
-        await prepareUnlockedTestArchive(captureSession().owner);
+        const owner = captureSession().owner;
+        if (owner.startsWith('user:')) localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '1');
+        await prepareUnlockedTestArchive(owner);
         useAppStore.setState({
             userData: {
                 ...emptyUserData,
