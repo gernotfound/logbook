@@ -5,7 +5,7 @@ import { prepareUnlockedTestArchive } from './secureVaultFixture';
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, renderHook, act } from '@testing-library/react';
-import { renderWithAuthenticatedTestOwner, renderWithProviders } from './setup';
+import { renderWithAuthenticatedTestOwner } from './setup';
 import { useAppStore } from '../src/store/useAppStore';
 import { useWorkoutSetMutations } from '../src/hooks/workout/useWorkoutSetMutations';
 import { useWorkoutSession } from '../src/hooks/useWorkoutSession';
