@@ -106,7 +106,10 @@ describe('Empirical Challenger: React Hooks, Memoization & Re-render Loop Stress
             dataOwner: 'user:test-user-id',
             localWorkout: null,
             syncing: false,
-            saveError: null
+            saveError: null,
+            localPersistenceBlocked: false,
+            compatibilityStatus: 'ok',
+            syncHealth: 'synced'
         });
     });
 
