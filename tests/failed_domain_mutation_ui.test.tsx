@@ -58,7 +58,8 @@ describe('failed domain result preserves user edits', () => {
         await act(async () => { saved = await hook.result.current.calculateAndSave(); });
         expect(saved).toBe(false);
         expect(hook.result.current.weight).toBe('75');
-        expect(localStorage.getItem(key)).toContain('75');
+        expect(readDeviceValueStrict('draft:measurement:' + DAY, storageOwner())).toContain('75');
+        expect(localStorage.getItem(key)).toMatch(/^tlb-sealed:v1:/);
         expect(useDialogStore.getState().showAlert).toHaveBeenCalled();
     });
 
