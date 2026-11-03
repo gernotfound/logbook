@@ -135,12 +135,12 @@ describe('AUDIT 01-04 remediation invariants', () => {
         const cloud = parse({});
         const guest = parse({
             pendingConflicts: {
-                nutritionPlanning: { onDaysCount: 4, totalKcal: 2400 },
+                nutritionPlanning: { onDaysCount: 4, normocalorica: { kcal: 2400 } },
             },
         });
 
         const merged = mergeUserData(cloud, guest);
-        expect(merged.pendingConflicts?.nutritionPlanning).toMatchObject({ onDaysCount: 4, totalKcal: 2400 });
+        expect(merged.pendingConflicts?.nutritionPlanning).toMatchObject({ onDaysCount: 4, normocalorica: { kcal: 2400 } });
     });
 
     it('keeps App Check pending only when the provider failure is explicitly retryable', () => {

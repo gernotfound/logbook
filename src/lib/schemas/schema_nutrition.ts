@@ -57,8 +57,8 @@ export const NutritionPlanningSchema = z.object({
     offMacros: MacroRatioSchema.optional().catch(undefined),
     notes: safeOptionalString(),
     normocalorica: PartialMacroTargetSchema.optional().catch(undefined),
-    totalKcal: optionalNonNegativeNumber(),
 }).passthrough().transform(({
+    totalKcal: _retiredTotalKcal,
     lockedMacro: _retiredLockedMacro,
     chartPeriod: _retiredChartPeriod,
     carbsPerKg: _retiredCarbsPerKg,

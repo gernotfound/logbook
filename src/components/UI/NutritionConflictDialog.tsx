@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { calculateMacrosFromKg } from '../../lib/calc/nutrition';
 import type { NutritionPlanning } from '../../types';
 import { useScrollLock } from '../../hooks/useScrollLock';
 import { useAppStore } from '../../store/useAppStore';
@@ -130,11 +131,14 @@ export const NutritionConflictDialog: React.FC<Props> = ({
 
   const renderPlanPreview = (title: string, plan: NutritionPlanning | null, isCloud: boolean) => {
     if (!plan) return <div className="text-muted p-3 text-sm">Nessun piano</div>;
+    const totalKcal = plan.weight && plan.avgMacros
+      ? calculateMacrosFromKg(plan.weight, plan.avgMacros.carbsPerKg, plan.avgMacros.proPerKg, plan.avgMacros.fatPerKg).totalKcal
+      : null;
     return (
       <div className="card p-3 mb-2" style={{ borderLeft: isCloud ? '0.25rem solid var(--primary-color)' : '0.25rem solid var(--warning-color)' }}>
         <h4 className="text-sm font-bold mb-2">{title}</h4>
         <div className="text-xs mb-1">
-          <strong>Kcal medie totali:</strong> {plan.totalKcal || 'N/D'} kcal
+          <strong>Kcal medie totali:</strong> {totalKcal ?? 'N/D'} kcal
         </div>
         <div className="text-xs mb-1">
           <strong>Peso di riferimento:</strong> {plan.weight ? `${plan.weight} kg` : 'N/D'}

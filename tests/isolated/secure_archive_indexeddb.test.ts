@@ -302,7 +302,7 @@ describe('production encrypted localRepository gateway', () => {
 
     it('resolves a matching nutrition conflict in the encrypted owner archive without losing its pending journal', async () => {
         await createAndMigrateVault(owner);
-        const conflict = { totalKcal: 3000, onDaysCount: 4 };
+        const conflict = { normocalorica: { kcal: 3000 }, onDaysCount: 4 };
         const initial = UserDataSchema.parse({
             profile: { height: '170' },
             pendingConflicts: { nutritionPlanning: conflict },
@@ -331,7 +331,7 @@ describe('production encrypted localRepository gateway', () => {
     it('rejects a stale conflict fingerprint without changing encrypted data or journal bytes', async () => {
         await createAndMigrateVault(owner);
         const initial = UserDataSchema.parse({
-            pendingConflicts: { nutritionPlanning: { totalKcal: 3000, onDaysCount: 4 } },
+            pendingConflicts: { nutritionPlanning: { normocalorica: { kcal: 3000 }, onDaysCount: 4 } },
         }) as unknown as UserData;
         await initializeLocal(owner, initial);
         await commitLocal(owner, UserDataSchema.parse({

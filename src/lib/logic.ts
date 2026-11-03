@@ -22,10 +22,8 @@ import {
 } from './calc/bodyFat';
 import {
     calculateTDEE,
-    calculateDailyCalories,
     calculateMacrosFromKg,
     calculateMacroRatio,
-    calculateNormocaloricaDiff,
     calculateTDEEAndMacros,
     scaleFoodNutrients,
     searchFoods,
@@ -77,10 +75,8 @@ export {
     calculateBodyComposition,
     validateMeasurementData,
     calculateTDEE,
-    calculateDailyCalories,
     calculateMacrosFromKg,
     calculateMacroRatio,
-    calculateNormocaloricaDiff,
     calculateTDEEAndMacros,
     scaleFoodNutrients,
     searchFoods,
@@ -133,10 +129,8 @@ export const Logic = {
 
     // Nutrition & Foods
     calculateTDEE,
-    calculateDailyCalories,
     calculateMacrosFromKg,
     calculateMacroRatio,
-    calculateNormocaloricaDiff,
     calculateTDEEAndMacros,
     scaleFoodNutrients,
     searchFoods,

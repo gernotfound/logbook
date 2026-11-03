@@ -47,24 +47,15 @@ describe('Empirical Challenger Suite: Edge Cases & Stress Verification', () => {
       expect(nullFood.kcal).toBe(0);
     });
 
-    test('Logic.calculateDailyCalories handles zero and invalid macro inputs', () => {
-      expect(Logic.calculateDailyCalories(0, 0, 0)).toBe(0);
-      expect(Logic.calculateDailyCalories('0', '0', '0')).toBe(0);
-      expect(Logic.calculateDailyCalories(null as any, null as any, null as any)).toBe(0);
-      expect(Logic.calculateDailyCalories({ carbs: 0, pro: 0, fat: 0 })).toBe(0);
-      expect(Logic.calculateDailyCalories({ carbs: 'abc', pro: undefined, fat: null })).toBe(0);
-    });
 
     test('Logic.calculateMacrosFromKg handles zero weight or zero macro ratios', () => {
       const zeroWeight = Logic.calculateMacrosFromKg(0, 3.5, 2.0, 1.0);
       expect(zeroWeight.totalKcal).toBe(0);
       expect(zeroWeight.carbsGrams).toBe(0);
-      expect(zeroWeight.fatG).toBe(0);
-      expect(zeroWeight.fat).toBe(0);
+      expect(zeroWeight.fatGrams).toBe(0);
 
       const positive = Logic.calculateMacrosFromKg(80, 3.5, 2.0, 1.0);
-      expect(positive.fatG).toBe(positive.fatGrams);
-      expect(positive.fat).toBe(positive.fatGrams);
+      expect(positive.fatGrams).toBe(80);
 
       const zeroRatios = Logic.calculateMacrosFromKg(80, 0, 0, 0);
       expect(zeroRatios.totalKcal).toBe(0);
@@ -110,13 +101,6 @@ describe('Empirical Challenger Suite: Edge Cases & Stress Verification', () => {
       expect(Logic.calculateMealTotals(zeroMeal).kcal).toBe(0);
     });
 
-    test('Logic.calculateNormocaloricaDiff handles zero normocalorica target without crash', () => {
-      const current = { carbsGrams: 100, proGrams: 100, fatGrams: 50, totalKcal: 1250 };
-      const zeroNorm = { carbs: 0, pro: 0, fat: 0, kcal: 0 };
-      const diff = Logic.calculateNormocaloricaDiff(current, zeroNorm);
-      expect(diff?.kcalPct).toBe(0);
-      expect(diff?.formatted).toBe('0.0%');
-    });
   });
 
   describe('2. Missing User Profile Data & Null States', () => {

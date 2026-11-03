@@ -11,8 +11,8 @@ const renderDialog = (isOpen: boolean, isSyncing = false) => render(
         isOpen={isOpen}
         onResolve={mockOnResolve}
         onClose={mockOnClose}
-        cloudPlan={{ totalKcal: 2500 }}
-        localPlan={{ totalKcal: 3000 }}
+        cloudPlan={{ weight: 80, avgMacros: { carbsPerKg: 3.5, proPerKg: 2, fatPerKg: 1 } }}
+        localPlan={{ weight: 90, avgMacros: { carbsPerKg: 3.5, proPerKg: 2, fatPerKg: 1 } }}
         isSyncing={isSyncing}
     />
 );
@@ -27,6 +27,23 @@ afterEach(() => {
 });
 
 describe('NutritionConflictDialog A11y & Interactions', () => {
+    it('compares calories calculated from current ratios and ignores a stale stored total', () => {
+        const cloudPlan = { weight: 80, avgMacros: { carbsPerKg: 3.5, proPerKg: 2, fatPerKg: 1 }, totalKcal: 99999 };
+        const localPlan = { weight: 90, avgMacros: { carbsPerKg: 3.5, proPerKg: 2, fatPerKg: 1 } };
+        render(<NutritionConflictDialog isOpen onResolve={mockOnResolve} onClose={mockOnClose}
+            cloudPlan={cloudPlan} localPlan={localPlan} />);
+        expect(screen.getByText('2480 kcal')).toBeDefined();
+        expect(screen.getByText('2790 kcal')).toBeDefined();
+        expect(screen.queryByText('99999 kcal')).toBeNull();
+    });
+
+    it('distinguishes a zero macro target from a plan without reference inputs', () => {
+        render(<NutritionConflictDialog isOpen onResolve={mockOnResolve} onClose={mockOnClose}
+            cloudPlan={{}} localPlan={{ weight: 80, avgMacros: { carbsPerKg: 0, proPerKg: 0, fatPerKg: 0 } }} />);
+        expect(screen.getByText('N/D kcal')).toBeDefined();
+        expect(screen.getByText('0 kcal')).toBeDefined();
+    });
+
     it('uses an app-controlled overlay instead of native dialog', () => {
         renderDialog(true);
 
@@ -79,8 +96,8 @@ describe('NutritionConflictDialog A11y & Interactions', () => {
                 isOpen={false}
                 onResolve={mockOnResolve}
                 onClose={mockOnClose}
-                cloudPlan={{ totalKcal: 2500 }}
-                localPlan={{ totalKcal: 3000 }}
+                cloudPlan={{ weight: 80, avgMacros: { carbsPerKg: 3.5, proPerKg: 2, fatPerKg: 1 } }}
+                localPlan={{ weight: 90, avgMacros: { carbsPerKg: 3.5, proPerKg: 2, fatPerKg: 1 } }}
                 isSyncing={false}
             />
         );

@@ -48,34 +48,17 @@ export function calculateTDEE(nutritionHistoryList: { date?: string; weight?: st
     };
 }
 
-export function calculateDailyCalories(carbs: any, pro?: any, fat?: any) {
-    let c = 0, p = 0, f = 0;
-    if (typeof carbs === 'object' && carbs !== null) {
-        c = parseFloat(carbs.carbs || carbs.carbsGrams || carbs.carbsG) || 0;
-        p = parseFloat(carbs.pro || carbs.proGrams || carbs.proG) || 0;
-        f = parseFloat(carbs.fat || carbs.fatGrams || carbs.fatG) || 0;
-    } else {
-        c = parseFloat(carbs) || 0;
-        p = parseFloat(pro) || 0;
-        f = parseFloat(fat) || 0;
-    }
-    return Math.round((c * 4) + (p * 4) + (f * 9));
-}
-
-export function calculateMacrosFromKg(weight: any, carbsPerKg?: any, proPerKg?: any, fatPerKg?: any) {
-    let w: number, c: number, p: number, f: number;
-    if (typeof weight === 'object' && weight !== null) {
-        w = parseFloat(weight.weight) || 0;
-        c = parseFloat(weight.carbsPerKg) || 0;
-        p = parseFloat(weight.proPerKg) || 0;
-        f = parseFloat(weight.fatPerKg) || 0;
-    } else {
-        w = parseFloat(weight) || 0;
-        c = parseFloat(carbsPerKg) || 0;
-        p = parseFloat(proPerKg) || 0;
-        f = parseFloat(fatPerKg) || 0;
-    }
-    const zeroed = { carbsGrams: 0, proGrams: 0, fatGrams: 0, carbsG: 0, proG: 0, fatG: 0, fat: 0, carbsKcal: 0, proKcal: 0, fatKcal: 0, totalKcal: 0 };
+export function calculateMacrosFromKg(
+    weight: number | string | null | undefined,
+    carbsPerKg?: number | string | null,
+    proPerKg?: number | string | null,
+    fatPerKg?: number | string | null,
+) {
+    const w = parseFloat(String(weight)) || 0;
+    const c = parseFloat(String(carbsPerKg)) || 0;
+    const p = parseFloat(String(proPerKg)) || 0;
+    const f = parseFloat(String(fatPerKg)) || 0;
+    const zeroed = { carbsGrams: 0, proGrams: 0, fatGrams: 0, carbsKcal: 0, proKcal: 0, fatKcal: 0, totalKcal: 0 };
     if (![w, c, p, f].every(Number.isFinite) || w <= 0 || c < 0 || p < 0 || f < 0) {
         return zeroed;
     }
@@ -91,7 +74,6 @@ export function calculateMacrosFromKg(weight: any, carbsPerKg?: any, proPerKg?: 
     }
     return {
         carbsGrams, proGrams, fatGrams,
-        carbsG: carbsGrams, proG: proGrams, fatG: fatGrams, fat: fatGrams,
         carbsKcal, proKcal, fatKcal, totalKcal
     };
 }
@@ -105,40 +87,6 @@ export function calculateMacroRatio(carbsGrams: any, fatGrams: any) {
     const ratioKcal = Math.round((cKcal / fKcal) * 100) / 100;
     const ratioGrams = Math.round((cG / fG) * 100) / 100;
     return { ratioKcal, ratioGrams, ratioString: `${ratioKcal}:1` };
-}
-
-export function calculateNormocaloricaDiff(current: any, normocalorica: any) {
-    if (!current || !normocalorica) return null;
-    const getDiff = (curr: any, norm: any) => {
-        const c = parseFloat(curr) || 0;
-        const n = parseFloat(norm) || 0;
-        if (n <= 0) return { pct: 0, formatted: '0.0%' };
-        const diffPct = Math.round(((c - n) / n) * 1000) / 10;
-        const sign = diffPct > 0 ? '+' : '';
-        return {
-            pct: diffPct,
-            formatted: `${sign}${diffPct.toFixed(1)}%`
-        };
-    };
-    const currKcal = current.totalKcal !== undefined ? current.totalKcal : current.kcal;
-    const currCarbs = current.carbsGrams !== undefined ? current.carbsGrams : current.carbs;
-    const currPro = current.proGrams !== undefined ? current.proGrams : current.pro;
-    const currFat = current.fatGrams !== undefined ? current.fatGrams : current.fat;
-    const kcalDiff = getDiff(currKcal, normocalorica.kcal);
-    const carbsDiff = getDiff(currCarbs, normocalorica.carbs);
-    const proDiff = getDiff(currPro, normocalorica.pro);
-    const fatDiff = getDiff(currFat, normocalorica.fat);
-    return {
-        kcalPct: kcalDiff.pct,
-        carbsPct: carbsDiff.pct,
-        proPct: proDiff.pct,
-        fatPct: fatDiff.pct,
-        formatted: kcalDiff.formatted,
-        kcalDiff,
-        carbsDiff,
-        proDiff,
-        fatDiff
-    };
 }
 
 export function calculateTDEEAndMacros(state: Partial<UserData> | null) {

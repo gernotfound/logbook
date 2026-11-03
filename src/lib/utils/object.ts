@@ -84,16 +84,16 @@ function sanitizeUndefined<T>(value: T, rejectCycles: boolean, seen?: WeakSet<ob
 
 import type { NutritionPlanning } from '../../types';
 
-const NUTRITION_CONFLICT_FINGERPRINT_VERSION = 3;
+const NUTRITION_CONFLICT_FINGERPRINT_VERSION = 4;
 
 /**
  * Generates a deterministic, versioned fingerprint for a NutritionPlanning object.
  *
  * Included fields:
- * - Scalars: weight, onDaysCount, notes, totalKcal
+ * - Scalars: weight, onDaysCount, notes
  * - Nested macro objects: avgMacros, onBoost, onMacros, offMacros, normocalorica
  *
- * Retired top-level macro aliases are excluded. Current nested targets
+ * Retired derived totals and top-level macro aliases are excluded. Current nested targets
  * are part of the compare-and-swap identity.
  */
 export function getNutritionConflictFingerprint(plan: NutritionPlanning | null | undefined): string {
@@ -105,7 +105,6 @@ export function getNutritionConflictFingerprint(plan: NutritionPlanning | null |
         weight: plan.weight ?? null,
         onDaysCount: plan.onDaysCount ?? null,
         notes: plan.notes ?? null,
-        totalKcal: plan.totalKcal ?? null,
 
         avgMacros: plan.avgMacros ? {
             carbsPerKg: plan.avgMacros.carbsPerKg ?? null,

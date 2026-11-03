@@ -14,9 +14,9 @@ const parse = (value: unknown) => UserDataSchema.parse(value) as unknown as User
 
 const initialConflictData = () => parse({
     profile: { name: 'Test', height: '170', gender: 'M' },
-    nutritionPlanning: { totalKcal: 2500, onDaysCount: 3 },
+    nutritionPlanning: { normocalorica: { kcal: 2500 }, onDaysCount: 3 },
     pendingConflicts: {
-        nutritionPlanning: { totalKcal: 3000, onDaysCount: 4 }
+        nutritionPlanning: { normocalorica: { kcal: 3000 }, onDaysCount: 4 }
     }
 });
 
@@ -63,12 +63,12 @@ describe('PR 4: Nutrition Conflict Resolution (Store Unit Tests)', () => {
 
         const state = useAppStore.getState();
         expect(state.userData?.pendingConflicts).toBeUndefined();
-        expect(state.userData?.nutritionPlanning?.totalKcal).toBe(2500); // Cloud plan retained
+        expect(state.userData?.nutritionPlanning?.normocalorica?.kcal).toBe(2500); // Cloud plan retained
         expect(state.dispatchDomainOperation).not.toHaveBeenCalled();
 
         const stored = await repo.readLocal(OWNER);
         expect(stored?.data.pendingConflicts?.nutritionPlanning).toBeUndefined();
-        expect(stored?.data.nutritionPlanning?.totalKcal).toBe(2500);
+        expect(stored?.data.nutritionPlanning?.normocalorica?.kcal).toBe(2500);
     });
 
     it('Mantieni Dispositivo: should persist the local plan through a domain operation before clearing the conflict CAS', async () => {
@@ -87,7 +87,7 @@ describe('PR 4: Nutrition Conflict Resolution (Store Unit Tests)', () => {
 
         const state = useAppStore.getState();
         expect(state.userData?.pendingConflicts).toBeUndefined();
-        expect(state.userData?.nutritionPlanning?.totalKcal).toBe(3000); // Local plan applied
+        expect(state.userData?.nutritionPlanning?.normocalorica?.kcal).toBe(3000); // Local plan applied
         expect(state.dispatchDomainOperation).toHaveBeenCalledTimes(1);
         expect(state.dispatchDomainOperation).toHaveBeenCalledWith({
             type: 'nutrition-planning.replace',
@@ -97,12 +97,12 @@ describe('PR 4: Nutrition Conflict Resolution (Store Unit Tests)', () => {
 
         const stored = await repo.readLocal(OWNER);
         expect(stored?.data.pendingConflicts?.nutritionPlanning).toBeUndefined();
-        expect(stored?.data.nutritionPlanning?.totalKcal).toBe(3000);
+        expect(stored?.data.nutritionPlanning?.normocalorica?.kcal).toBe(3000);
     });
 
     it('Stale Conflict Prevention: should fail if fingerprint differs', async () => {
         const expectedUid = 'test-user-id';
-        const expectedConflictFingerprint = getNutritionConflictFingerprint({ totalKcal: 1111, onDaysCount: 1 });
+        const expectedConflictFingerprint = getNutritionConflictFingerprint({ normocalorica: { kcal: 1111 }, onDaysCount: 1 });
 
         const result = await useAppStore.getState().resolveNutritionConflict({
             resolution: 'local',
@@ -141,17 +141,17 @@ describe('PR 4: Nutrition Conflict Resolution (Store Unit Tests)', () => {
         if (!result.ok) expect(result.status).toBe('failed');
 
         const state = useAppStore.getState();
-        expect(state.userData?.pendingConflicts?.nutritionPlanning?.totalKcal).toBe(3000);
+        expect(state.userData?.pendingConflicts?.nutritionPlanning?.normocalorica?.kcal).toBe(3000);
 
         const stored = await repo.readLocal(OWNER);
-        expect(stored?.data.pendingConflicts?.nutritionPlanning?.totalKcal).toBe(3000);
+        expect(stored?.data.pendingConflicts?.nutritionPlanning?.normocalorica?.kcal).toBe(3000);
     });
 
     it('Resolved elsewhere: should return failed with conflict-resolved-elsewhere if pending is absent', async () => {
         useAppStore.setState({
             userData: parse({
                 profile: { name: 'Test', height: '170', gender: 'M' },
-                nutritionPlanning: { totalKcal: 2500 }
+                nutritionPlanning: { normocalorica: { kcal: 2500 } }
             })
         });
         const result = await useAppStore.getState().resolveNutritionConflict({
@@ -191,23 +191,24 @@ describe('PR 4: Nutrition Conflict Resolution (Store Unit Tests)', () => {
 
 describe('PR 4: Nutrition Conflict Fingerprint', () => {
     it('generates a versioned fingerprint', () => {
-        const plan = { totalKcal: 2500, weight: 80, onDaysCount: 4 };
+        const plan = { normocalorica: { kcal: 2500 }, weight: 80, onDaysCount: 4 };
         const fp = getNutritionConflictFingerprint(plan);
-        expect(fp.startsWith('v3:')).toBe(true);
+        expect(fp.startsWith('v4:')).toBe(true);
         expect(getNutritionConflictFingerprint({ ...plan, lockedMacro: 'carbs' } as any)).toBe(fp);
         expect(getNutritionConflictFingerprint({ ...plan, chartPeriod: 30 } as any)).toBe(fp);
+        expect(getNutritionConflictFingerprint({ ...plan, totalKcal: 9999 } as typeof plan)).toBe(fp);
     });
 
     it('generates the same fingerprint regardless of key order', () => {
-        const plan1 = { totalKcal: 2500, weight: 80, onDaysCount: 4 };
-        const plan2 = { weight: 80, onDaysCount: 4, totalKcal: 2500 }; // Different order
+        const plan1 = { normocalorica: { kcal: 2500 }, weight: 80, onDaysCount: 4 };
+        const plan2 = { weight: 80, onDaysCount: 4, normocalorica: { kcal: 2500 } }; // Different order
 
         expect(getNutritionConflictFingerprint(plan1)).toBe(getNutritionConflictFingerprint(plan2));
     });
 
     it('generates different fingerprints when scalar data changes (non-calorie)', () => {
-        const plan1 = { totalKcal: 2500, weight: 80, onDaysCount: 4 };
-        const plan2 = { totalKcal: 2500, weight: 80, onDaysCount: 5 }; // Days changed
+        const plan1 = { normocalorica: { kcal: 2500 }, weight: 80, onDaysCount: 4 };
+        const plan2 = { normocalorica: { kcal: 2500 }, weight: 80, onDaysCount: 5 }; // Days changed
 
         expect(getNutritionConflictFingerprint(plan1)).not.toBe(getNutritionConflictFingerprint(plan2));
     });
