@@ -6,6 +6,8 @@ const mock = vi.hoisted(() => ({
   users: new Map<string, Record<string, unknown>>(),
   months: new Map<string, Record<string, unknown>>(),
   erasure: null as null | { uid: string; status: string },
+  accountDeletion: false,
+  startAccountDeletionDuringPage: false,
   changeDuringPage: false,
   verify: vi.fn(async () => ({ uid: 'owner-1' })),
 }));
@@ -24,6 +26,9 @@ vi.mock('../server/healthConsent/withdrawal', () => ({
 }));
 vi.mock('../server/accountDeletion/firebaseAdmin', () => ({
   adminDb: () => ({ collection: (kind: string) => {
+    if (kind === 'account_deletions') return { doc: (_uid: string) => ({
+      get: async () => ({ exists: mock.accountDeletion }),
+    }) };
     if (kind === 'health_data_erasures') return { doc: (_uid: string) => ({
       get: async () => ({ exists: mock.erasure !== null, data: () => mock.erasure }),
     }) };
@@ -42,6 +47,10 @@ vi.mock('../server/accountDeletion/firebaseAdmin', () => ({
               .map(([key, raw]) => ({ id: key.split('/').at(-1)!, data: () => raw }))
               .filter(d => d.id > query.cursor).sort((a,b) => a.id.localeCompare(b.id))
               .slice(0, query.size);
+            if (mock.startAccountDeletionDuringPage) {
+              mock.startAccountDeletionDuringPage = false;
+              mock.accountDeletion = true;
+            }
             if (mock.changeDuringPage) {
               mock.changeDuringPage = false;
               mock.erasure = { uid, status: 'deleting' };
@@ -96,6 +105,7 @@ describe('server-mediated cloud export during consent withdrawal', () => {
   beforeEach(() => {
     mock.users.clear(); mock.months.clear(); mock.status = 'withdrawn'; mock.owner = 'owner-1';
     mock.erasure = null; mock.changeDuringPage = false;
+    mock.accountDeletion = false; mock.startAccountDeletionDuringPage = false;
     vi.clearAllMocks();
     mock.users.set('owner-1', { profile: { displayName: 'Owner' }, _schemaVersion: 1 });
     mock.users.set('other', { profile: { displayName: 'Other user' } });
@@ -139,6 +149,18 @@ describe('server-mediated cloud export during consent withdrawal', () => {
     const checkpoint = await GET(request('collection=checkpoint'));
     expect(checkpoint.status).toBe(503);
   });
+  it('blocks exports for any account deletion job, including a completed tombstone', async () => {
+    mock.accountDeletion = true;
+    expect((await GET(request('collection=root'))).status).toBe(503);
+    expect((await GET(request('collection=checkpoint'))).status).toBe(503);
+  });
+
+  it('rejects a page and final checkpoint when account deletion starts during pagination', async () => {
+    mock.startAccountDeletionDuringPage = true;
+    expect((await GET(request('collection=history_months'))).status).toBe(503);
+    expect((await GET(request('collection=checkpoint'))).status).toBe(503);
+  });
+
   it('offers a final generation checkpoint for paginated withdrawn export', async () => {
     const first = await GET(request('collection=history_months'));
     expect((await first.json()).consentRevision).toBe(1);

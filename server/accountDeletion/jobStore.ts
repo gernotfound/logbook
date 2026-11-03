@@ -269,7 +269,7 @@ export async function deleteUserRoot(uidValue: string, leaseOwner: string): Prom
     transaction.delete(adminDb().collection('session_revocations').doc(uid));
     // The account ADK envelope is a server-only TOP-LEVEL document, not a
     // private subcollection. The deletion lease must erase it explicitly.
-    transaction.delete(adminDb().collection('user_data_keys').doc(uid));
+    // Keep the wrapped ADK until all known and unexpected private data has been checked.
     // A data-only erasure keeps Auth, but when the entire account is deleted
     // its server-owned erasure receipt must be removed as well.
     transaction.delete(adminDb().collection('health_data_erasures').doc(uid));
@@ -291,7 +291,7 @@ export async function markVerifying(uidValue: string, leaseOwner: string): Promi
   });
 }
 
-export async function verifyNoAccountResidue(uidValue: string): Promise<void> {
+export async function verifyNoAccountResidue(uidValue: string, allowAccountKey = false): Promise<void> {
   const uid = validateUid(uidValue);
   const users = adminDb().collection('users');
   const root = users.doc(uid);
@@ -307,7 +307,7 @@ export async function verifyNoAccountResidue(uidValue: string): Promise<void> {
   if (erasureMarker.exists) throw new Error('Health-data erasure receipt remains after account deletion.');
 
   const keyMarker = await adminDb().collection('user_data_keys').doc(uid).get();
-  if (keyMarker.exists) throw new Error('Wrapped account data key remains after deletion.');
+  if (keyMarker.exists && !allowAccountKey) throw new Error('Wrapped account data key remains after deletion.');
 
   const consentMarker = await adminDb().collection('health_consent_withdrawals').doc(uid).get();
   if (consentMarker.exists) throw new Error('Health consent marker remains after account deletion.');
@@ -324,6 +324,18 @@ export async function verifyNoAccountResidue(uidValue: string): Promise<void> {
       throw new NonRetryableDeletionError(`Unexpected residual collection: ${collection.id}.`);
     }
   }
+}
+
+/** Retire the ADK only after a successful private-data scan, under the deletion lease. */
+export async function deleteAccountKeyAfterVerification(uidValue: string, leaseOwner: string): Promise<void> {
+  const uid = validateUid(uidValue);
+  const db = adminDb();
+  await db.runTransaction(async (transaction: Transaction) => {
+    const ref = jobRef(uid);
+    const snapshot = await transaction.get(ref);
+    requireLiveLease(snapshot.exists ? snapshot.data() as AccountDeletionJob : undefined, leaseOwner);
+    transaction.delete(db.collection('user_data_keys').doc(uid));
+  });
 }
 
 export async function deleteAuthUserLast(uidValue: string, leaseOwner: string): Promise<void> {

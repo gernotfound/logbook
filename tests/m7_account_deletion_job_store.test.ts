@@ -135,6 +135,7 @@ import {
   parkDeletion,
   markDeletionFailed,
   createOrRefreshDeletionJob,
+  deleteAccountKeyAfterVerification,
   deleteAuthUserLast,
   deletePrivateCollectionPage,
   deleteUserRoot,
@@ -201,12 +202,33 @@ describe('M7 native deletion job store', () => {
     await acquireDeletionLease('u', 'worker-root', Date.now() + 60_000);
     await deleteUserRoot('u', 'worker-root');
     expect(state.docs.has('session_revocations/u')).toBe(false);
+    expect(state.docs.has('user_data_keys/u')).toBe(true);
+    await expect(verifyNoAccountResidue('u', true)).resolves.toBeUndefined();
+    await deleteAccountKeyAfterVerification('u', 'worker-root');
     expect(state.docs.has('user_data_keys/u')).toBe(false);
     expect(state.docs.has('user_data_keys/another-owner')).toBe(true);
     expect(state.docs.has('health_consent_withdrawals/u')).toBe(false);
     expect(state.docs.has('health_consent_withdrawals/another-owner')).toBe(true);
     expect(state.docs.has('users/u')).toBe(false);
     await expect(verifyNoAccountResidue('u')).resolves.toBeUndefined();
+  });
+
+  it('preserves the account key if an unexpected private collection blocks deletion', async () => {
+    state.docs.add('account_deletions/u');
+    state.docs.add('user_data_keys/u');
+    state.docs.add('users/u/unknown_private/2026-11');
+    await acquireDeletionLease('u', 'worker-residue', Date.now() + 60_000);
+    await deleteUserRoot('u', 'worker-residue');
+    await expect(verifyNoAccountResidue('u', true)).rejects.toThrow('Unexpected residual collection');
+    expect(state.docs.has('user_data_keys/u')).toBe(true);
+  });
+
+  it('cannot retire a cloud key after losing the deletion lease', async () => {
+    state.docs.add('account_deletions/u');
+    state.docs.add('user_data_keys/u');
+    await acquireDeletionLease('u', 'worker-original', Date.now() + 60_000);
+    await expect(deleteAccountKeyAfterVerification('u', 'worker-other')).rejects.toBeInstanceOf(DeletionLeaseLostError);
+    expect(state.docs.has('user_data_keys/u')).toBe(true);
   });
 
   it('does not verify account deletion while a revocation marker remains', async () => {
