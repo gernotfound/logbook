@@ -38,6 +38,8 @@ Firestore applica il batch semantico tramite transazione.
 **MUST:** `replicateJournal()` classifica il risultato come `local-pending` dopo qualunque esito remoto ambiguo — inclusi perdita della risposta di `runTransaction`, `unavailable`/`deadline-exceeded` dopo la consegna e timeout del chiamante — solo dopo aver riletto IndexedDB e verificato che l'intero batch di operation consegnato sia ancora presente nel journal con payload semantico completo identico, inclusi value, clock e guard.
 Se l'envelope è assente, corrotto, incompatibile o conserva solo una parte del batch consegnato, l'esito è `failed`. Un timeout non cancella il writer in-flight e deve quindi usare la stessa prova durevole del batch prima di essere presentato come pending sicuro.
 
+**MUST:** quando un tentativo di replica è in coda dietro un writer di un epoch precedente, la classificazione del proprio timeout considera soltanto il batch consegnato da quel tentativo, non il batch ancora in-flight dell'altro writer. Un journal integro ribasato resta recuperabile.
+
 **MUST:** il replay della stessa operation non deve modificare nuovamente il business winner né produrre causal metadata differenti.
 
 **MUST:** un successivo ack riuscito deve poter rimuovere la pending già applicata senza perdita di dati.
