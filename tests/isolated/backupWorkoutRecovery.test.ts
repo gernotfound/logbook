@@ -57,3 +57,40 @@ describe('portable workout recovery as a new Domain Operation', () => {
         expect(sdk.timer).not.toHaveBeenCalled();
     });
 });
+
+describe('lossless optional workout recovery', () => {
+    const wrap = (value: unknown, format: 'raw' | 'snapshot' | 'intent') => JSON.stringify(
+        format === 'snapshot' ? { __logbookWorkoutSnapshot: 1, owner: 'user:a', consentRevision: 1, workout: value }
+            : format === 'intent' ? { __logbookWorkoutIntent: 1, owner: 'user:a', consentRevision: 1,
+                generation: 'a'.repeat(32), sequence: 1, intentId: 'b'.repeat(32), baseline: null, workout: value }
+                : value,
+    );
+
+    it.each(['raw', 'snapshot', 'intent'] as const)('rejects lossy %s recovery before any commit or timer write', async format => {
+        const raw = wrap({ ...workout, readiness: { capturedAt: 1, energy: 99 } }, format);
+        const data = empty();
+        const before = structuredClone(data);
+        const state = () => ({ dataOwner: 'user:a', userData: data, localWorkout: null, localPersistenceBlocked: false });
+        const commit = vi.fn();
+        await expect(restorePortableWorkout(raw, 'user:a', state, commit, () => {}))
+            .rejects.toThrow('allenamento non conservabile senza perdita');
+        expect(commit).not.toHaveBeenCalled();
+        expect(sdk.read).not.toHaveBeenCalled();
+        expect(sdk.timer).not.toHaveBeenCalled();
+        expect(data).toEqual(before);
+        expect(wrap({ ...workout, readiness: { capturedAt: 1, energy: 99 } }, format)).toBe(raw);
+    });
+
+    it('rejects a discarded nested segment attribute', () => {
+        const raw = wrap({ ...workout, exercises: [{ id: 'instance', exId: 'exercise', sets: [{
+            id: 'set', kg: '50', reps: '8', segments: [{ id: 'segment', kg: '40', reps: '6', extraBusiness: 'preserve' }],
+        }] }] }, 'snapshot');
+        expect(() => decodePortableWorkout(raw, 'user:a')).toThrow('allenamento non conservabile senza perdita');
+    });
+
+    it.each(['raw', 'snapshot', 'intent'] as const)('keeps valid %s recovery and reversible scalars', format => {
+        const raw = wrap({ ...workout, globalStartTime: '100', moodRating: 0 }, format);
+        const decoded = decodePortableWorkout(raw, 'user:a');
+        expect(decoded).toMatchObject({ ...workout, globalStartTime: 100, moodRating: 0 });
+    });
+});

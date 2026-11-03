@@ -112,3 +112,87 @@ describe('versioned backup and non-mutating restore', () => {
         expect(result.data.legalConsent).toEqual(current.legalConsent);
     });
 });
+
+describe('lossless current backup import boundary', () => {
+    it.each([
+        { extraBusiness: { value: 'preserve' } },
+        { nutrition: { '2026-09-01': { date: '2026-09-01', kcal: 'damaged' } } },
+        { nutrition: { '2026-09-01': { date: '2026-09-01', cardioSessions: [{ id: 'cardio', modality: 'invalid', durationMinutes: 20 }] } } },
+        { activeWorkout: { id: 'active', exercises: [], readiness: { capturedAt: 1, energy: 99 } } },
+    ])('rejects lossy input before preview without changing the source: %j', incoming => {
+        const payload = { ...createBackup(parse({}), 'guest'), userData: incoming };
+        const before = structuredClone(payload);
+        expect(() => decodeImport(payload, 'guest')).toThrow('dati non conservabili senza perdita');
+        expect(payload).toEqual(before);
+    });
+
+    it('checks the raw active workout before its parser can strip nested fields', () => {
+        const payload = { ...createBackup(parse({}), 'guest'), userData: {
+            activeWorkout: { id: 'active', exercises: [{
+                id: 'instance', exId: 'exercise', sets: [{ id: 'set', kg: '50', reps: '8',
+                    segments: [{ id: 'segment', kg: '40', reps: '6', extraBusiness: 'preserve' }],
+                }],
+            }] },
+        } };
+        const before = structuredClone(payload);
+        expect(() => decodeImport(payload, 'guest')).toThrow('dati non conservabili senza perdita');
+        expect(payload).toEqual(before);
+    });
+
+    it('rejects loss in a selected share collection while ignoring non-share business fields', () => {
+        const payload = { ...createBackup(parse({}), null), type: 'share', userData: {
+            routines: [{ id: 'routine', exercises: [{ exId: 'exercise',
+                progressionContract: { role: 'primary', extraBusiness: 'preserve' },
+            }] }],
+            profile: { height: 'not selected' },
+        } };
+        expect(() => decodeImport(payload, 'guest')).toThrow('dati non conservabili senza perdita');
+    });
+
+    it('validates incoming values even when a local collision would hide the fallback', () => {
+        const current = parse({ library: [{ id: 'same', name: 'local' }] });
+        const payload = { ...createBackup(current, 'guest'), userData: {
+            library: [{ id: 'same', name: { lost: 'incoming' } }],
+        } };
+        expect(() => decodeImport(payload, 'guest')).toThrow('dati non conservabili senza perdita');
+    });
+
+    it.each(['merge', 'restore'] as const)('checks the final %s result and preserves both inputs on rejection', mode => {
+        const current = parse({ profile: { height: '170' } });
+        const incoming = { extraBusiness: { value: 'preserve' } };
+        const beforeCurrent = structuredClone(current);
+        const beforeIncoming = structuredClone(incoming);
+        expect(() => prepareImport(current, incoming, mode)).toThrow('dati non conservabili senza perdita');
+        expect(current).toEqual(beforeCurrent);
+        expect(incoming).toEqual(beforeIncoming);
+    });
+
+    it('allows reversible conversions, defaults, null workout and deliberate legal-consent exclusion', () => {
+        const current = parse({ profile: { height: '170' } });
+        const payload = { ...createBackup(parse({}), 'guest'), userData: {
+            profile: { height: 180 },
+            nutrition: { '2026-09-01': { date: '2026-09-01', kcal: '123.5', weight: '80' } },
+            activeWorkout: null,
+            legalConsent: { invalid: 'never imported' },
+        } };
+        const before = structuredClone(payload);
+        const decoded = decodeImport(payload, 'guest');
+        const restored = prepareImport(current, decoded.data, 'restore').data;
+        expect(restored.profile?.height).toBe('180');
+        expect(restored.nutrition?.['2026-09-01']).toMatchObject({ kcal: 123.5, weight: 80 });
+        expect(restored.activeWorkout).toBeNull();
+        expect(restored.legalConsent).toEqual(current.legalConsent);
+        expect(payload).toEqual(before);
+    });
+
+    it('retains the current local-wins merge policy for valid incoming collisions', () => {
+        const current = parse({ library: [{ id: 'same', name: 'local' }] });
+        const payload = { ...createBackup(parse({}), 'guest'), userData: {
+            library: [{ id: 'same', name: 'incoming' }, { id: 'new', name: 'new' }],
+        } };
+        const decoded = decodeImport(payload, 'guest');
+        const result = prepareImport(current, decoded.data, 'merge');
+        expect(result.data.library?.map(item => item.name)).toEqual(['local', 'new']);
+        expect(result.collisions).toBe(1);
+    });
+});

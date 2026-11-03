@@ -6,6 +6,7 @@ import { normalizeBusinessId } from './businessIdentity';
 import { requireCanonicalWorkoutDate } from './sync/monthlyIntegrity';
 import { assertWorkoutSessionIdentities } from './sync/domainOperations/validation';
 import { selectBackupDeviceDrafts } from './backupDeviceRecovery';
+import { findLossyNormalization } from './sync/businessNormalizationIntegrity';
 import {
     CURRENT_BACKUP_SCHEMA,
     CURRENT_DATA_SCHEMA,
@@ -142,6 +143,14 @@ function validateImportData(value: unknown): asserts value is Record<string, unk
     }
 }
 
+function parsePreservingImportBusiness(value: Record<string, unknown>): UserData {
+    const parsed = UserDataSchema.parse(value) as unknown as UserData;
+    if (findLossyNormalization(value, parsed)) {
+        throw new Error('Il backup contiene dati non conservabili senza perdita: importazione annullata. Conserva il file originale.');
+    }
+    return parsed;
+}
+
 function backupMetadata(owner: string | null, coverage: BackupCoverage, recovery?: unknown) {
     return {
         format: 'logbook-backup' as const,
@@ -202,11 +211,17 @@ export function decodeImport(payload: unknown, owner: string) {
         } catch (error) {
             throw new Error('Il backup contiene un allenamento attivo con identificativi non validi: importazione annullata.', { cause: error });
         }
-        sanitizedData.activeWorkout = activeWorkout;
     }
     const selected = share
         ? Object.fromEntries(arrays.filter(key => ['library', 'routines', 'trainingCycles'].includes(key) && sanitizedData[key] !== undefined).map(key => [key, sanitizedData[key]]))
         : sanitizedData;
+    // Validate the original selected fields before merge collisions can hide
+    // loss and before active-workout parsing can discard nested attributes.
+    // Legal acceptance is deliberately never imported; share-only exclusions
+    // and optional raw recovery evidence are outside the business selection.
+    const business = { ...selected };
+    delete business.legalConsent;
+    parsePreservingImportBusiness(business);
 
     const device = !share && isRecord(normalized.recovery) && isRecord(normalized.recovery.device)
         ? normalized.recovery.device : null;
@@ -283,7 +298,7 @@ export function prepareImport(current: UserData, incoming: Record<string, unknow
         if (current.nutrition?.[date] && !equal(current.nutrition[date], day)) collisions++;
     }
     const raw = mode === 'restore' ? restoreWithCoverage(current, incoming, coverage) : mergeMissing(current, incoming);
-    const data = UserDataSchema.parse({ ...(raw as Record<string, unknown>), legalConsent: current.legalConsent }) as unknown as UserData;
+    const data = parsePreservingImportBusiness({ ...(raw as Record<string, unknown>), legalConsent: current.legalConsent });
     if (mode === 'merge') for (const [date, day] of Object.entries(data.nutrition ?? {})) {
         if (!isRecord(incoming.nutrition) || !incoming.nutrition[date] || equal(day.meals, current.nutrition?.[date]?.meals) || !day.meals?.length) continue;
         const totals = { kcal: 0, carbs: 0, pro: 0, fat: 0 };
