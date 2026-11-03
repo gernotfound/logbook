@@ -31,7 +31,7 @@ function pad(value: number): string {
 
 function workoutDateKey(workout: WorkoutSession): string | null {
     const explicitDate = workout.date ? Logic.parseDateInput(workout.date) : null;
-    if (explicitDate) return explicitDate;
+    if (explicitDate && explicitDate === workout.date) return explicitDate;
     if (typeof workout.globalStartTime === 'number' && Number.isFinite(workout.globalStartTime)) {
         return Logic.getLocalDateString(workout.globalStartTime);
     }

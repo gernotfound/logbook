@@ -109,6 +109,22 @@ describe('Data UI redesign', () => {
         expect(calculateAndSave).toHaveBeenCalledWith(expect.anything(), 'calculate');
     });
 
+    it('renders canonical measurement days while ignoring pre-launch date formats', () => {
+        const measurementsHistory = [
+            { date: '2026-10-05', weight: 81.4 },
+            { date: '30/12/2026', weight: 90 },
+            { date: '2026-12-1', weight: 99 },
+        ];
+        const before = structuredClone(measurementsHistory);
+        render(<DataHistory measurementsHistory={measurementsHistory}
+            editingDate={null} onSelectEdit={vi.fn()} />);
+        expect(screen.getByLabelText(/Calendario ottobre 2026/i)).toBeDefined();
+        expect(screen.getAllByText('81,4 kg').length).toBeGreaterThan(0);
+        expect(screen.getByText('1 giorno registrato')).toBeDefined();
+        expect(screen.queryByText('90 kg')).toBeNull();
+        expect(measurementsHistory).toEqual(before);
+    });
+
     it('keeps sparse sleep-only and zero-valued measurement days in history', () => {
         render(<DataHistory
             measurementsHistory={[

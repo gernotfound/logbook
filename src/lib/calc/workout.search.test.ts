@@ -55,15 +55,21 @@ describe('typed workout search contracts', () => {
         expect(getLatestUserWeight({ '2026-01-01': { weight: 0 } }, { weight: '82,5' })).toBe(82.5);
     });
 
-    it('orders imported unpadded and Italian dates chronologically, ignoring invalid day keys', () => {
+    it('ignores pre-launch date keys without rewriting them or replacing canonical measurements', () => {
         const nutrition = {
-            '2026-2-10': { weight: 81 },
+            '2026-12-1': { weight: 81 },
             '2026-10-01': { weight: 78.5 },
-            '15/09/2026': { weight: '79,5' },
+            '15/12/2026': { weight: '79,5' },
+            ' 2026-12-20 ': { weight: 150 },
+            '2026-12-25T12:00:00': { weight: 160 },
             '2026-02-30': { weight: 110 },
             'not-a-date': { weight: 200 },
         };
+        const before = structuredClone(nutrition);
         expect(getLatestUserWeight(nutrition)).toBe(78.5);
+        expect(nutrition).toEqual(before);
+        expect(getLatestUserWeight({ '15/12/2026': { weight: 90 }, '2026-12-1': { weight: 99 } }, { weight: 74 })).toBe(74);
+        expect(getLatestUserWeight({ '15/12/2026': { weight: 90 } })).toBe(80);
         expect(getLatestUserWeight({
             '2026-02-31': { weight: 999 },
             '2026-09-05': { weight: 'invalid' },

@@ -203,16 +203,14 @@ export function useHomeView(isActive = true): HomeViewState {
         return colors;
     }, [history, libraryMap, homeClockNow]);
 
-    // Apply the same canonical local-date ordering as getLatestUserWeight.
-    // Legacy unpadded and DD/MM/YYYY keys must not outrank newer valid measurements.
+    // Persisted nutrition keys use the same canonical local dates as monthly shards.
     const { recentWeight, recentNutritionWithBf } = useMemo(() => {
         const days = Object.entries(nutrition)
-            .map(([date, day], index) => ({ date: parseDateInput(date), day, index }))
-            .filter((item): item is typeof item & { date: string } => item.date !== null)
-            .sort((a, b) => b.date.localeCompare(a.date) || b.index - a.index);
+            .filter(([date]) => parseDateInput(date) === date)
+            .sort(([a], [b]) => b.localeCompare(a));
         let weight: number | undefined;
         let bfDay: (typeof nutrition)[string] | undefined;
-        for (const { day } of days) {
+        for (const [, day] of days) {
             if (weight === undefined && day?.weight !== undefined && day?.weight !== null && day?.weight !== '') {
                 const candidate = Number.parseFloat(String(day.weight).trim().replace(',', '.'));
                 if (Number.isFinite(candidate) && candidate > 0) weight = candidate;
