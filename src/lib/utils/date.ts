@@ -228,53 +228,19 @@ export function getCalendarMonthGrid(year: any, month: any): CalendarDayCell[] {
     }));
 }
 
-export function formatSleepTime(val: string | number | undefined | null): string {
-    if (val === undefined || val === null) return '';
-
-    let hours: number | null = null;
-
-    if (typeof val === 'number') {
-        if (!Number.isFinite(val) || val < 0 || val > 24) return '';
-        hours = val;
-    } else if (typeof val === 'string') {
-        const trimmed = val.trim();
-        if (!trimmed) return '';
-
-        // Match legacy decimal/integer strings with optional 'h'/'H' suffix (e.g. "7.5", "7,5", "8h", "7.5h", "7,5H", " 8.25 h ")
-        const decimalMatch = trimmed.match(/^(\d+(?:[.,]\d+)?)\s*[hH]?$/);
-        if (decimalMatch) {
-            const parsed = Number(decimalMatch[1].replace(',', '.'));
-            if (!Number.isFinite(parsed) || parsed < 0 || parsed > 24) return '';
-            hours = parsed;
-        } else {
-            // Match HH:MM or H:MM
-            const timeMatch = trimmed.match(/^(\d{1,2}):(\d{1,2})$/);
-            if (timeMatch) {
-                const h = parseInt(timeMatch[1], 10);
-                const m = parseInt(timeMatch[2], 10);
-                if (h >= 0 && h <= 23 && m >= 0 && m <= 59) {
-                    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
-                }
-            }
-            return '';
-        }
-    } else {
-        return '';
-    }
-
-    if (hours !== null) {
-        let minutes = Math.round(hours * 60);
-        if (minutes >= 1440) minutes = 1439;
-        return `${Math.floor(minutes / 60).toString().padStart(2, '0')}:${(minutes % 60).toString().padStart(2, '0')}`;
-    }
-
-    return '';
+export function formatSleepTime(val: unknown): string {
+    if (typeof val !== 'string') return '';
+    const match = /^(\d{1,2}):(\d{1,2})$/.exec(val.trim());
+    if (!match) return '';
+    const hours = Number(match[1]);
+    const minutes = Number(match[2]);
+    if (hours > 23 || minutes > 59) return '';
+    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
 }
 
-export function parseSleepInput(val: string | number | undefined | null): string | null {
-    if (val === undefined || val === null) return null;
+export function parseSleepInput(val: unknown): string | null {
     const formatted = formatSleepTime(val);
-    return formatted !== '' ? formatted : null;
+    return formatted || null;
 }
 
 export function isSleepTimeValid(val: string | undefined | null): boolean {

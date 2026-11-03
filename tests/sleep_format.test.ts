@@ -11,6 +11,17 @@ describe('Milestone 1: Sleep Format in HH:MM & Backward Compatibility Tests', ()
             expect(Logic.formatSleepTime('00:00')).toBe('00:00');
             expect(Logic.formatSleepTime('23:59')).toBe('23:59');
         });
+        it('rejects numeric and decimal pre-launch sleep aliases instead of converting them', () => {
+            for (const value of [0, 7.5, 24, '7', '7.5', '7,5', '8h', '7.5H']) {
+                expect(Logic.formatSleepTime(value)).toBe('');
+                expect(Logic.parseSleepInput(value)).toBeNull();
+                if (typeof value === 'string') expect(Logic.isSleepTimeValid(value)).toBe(false);
+            }
+            for (const field of ['sleepHours', 'sleepDeep', 'sleepLight', 'sleepRem', 'sleepAwake']) {
+                expect((NutritionDaySchema.parse({ date: '2026-11-03', [field]: 7.5 }) as Record<string, unknown>)[field]).toBeUndefined();
+                expect((NutritionDaySchema.parse({ date: '2026-11-03', [field]: '7.5h' }) as Record<string, unknown>)[field]).toBeUndefined();
+            }
+        });
         it('formatSleepTime handles edge cases and invalid inputs gracefully', () => {
             expect(Logic.formatSleepTime('')).toBe('');
             expect(Logic.formatSleepTime('   ')).toBe('');

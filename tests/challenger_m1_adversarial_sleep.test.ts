@@ -21,26 +21,10 @@ describe('Empirical Challenger: Sleep Format HH:MM Adversarial Stress Test Suite
 
 
     describe('1. Logic.formatSleepTime — Exhaustive Boundary & Attack Scenarios', () => {
-        it('handles boundary numbers [0, 24] and float precision', () => {
-            // Lower boundaries
-            expect(formatSleepTime(0)).toBe('00:00');
-            expect(formatSleepTime(0.0001)).toBe('00:00');
-            expect(formatSleepTime(0.01)).toBe('00:01'); // 0.01 * 60 = 0.6 -> rounds to 1 min
-            expect(formatSleepTime(0.5)).toBe('00:30');
-            expect(formatSleepTime(0.99)).toBe('00:59');
-
-            // Decimal float fractions
-            expect(formatSleepTime(1.25)).toBe('01:15');
-            expect(formatSleepTime(7.5)).toBe('07:30');
-            expect(formatSleepTime(7.75)).toBe('07:45');
-            expect(formatSleepTime(8.33333)).toBe('08:20');
-            expect(formatSleepTime(12.75)).toBe('12:45');
-
-            // Upper boundaries
-            expect(formatSleepTime(23)).toBe('23:00');
-            expect(formatSleepTime(23.5)).toBe('23:30');
-            expect(formatSleepTime(23.99)).toBe('23:59');
-            expect(formatSleepTime(24)).toBe('23:59'); // clamped to max HH:MM
+        it('rejects non-clock numeric inputs without converting pre-launch values', () => {
+            for (const input of [0, 0.01, 7.5, 24, NaN, Infinity, '0', '7,5', '8h']) {
+                expect(formatSleepTime(input)).toBe('');
+            }
         });
 
         it('rejects out-of-bounds numbers and special float values', () => {
@@ -63,19 +47,6 @@ describe('Empirical Challenger: Sleep Format HH:MM Adversarial Stress Test Suite
             expect(formatSleepTime('0:0')).toBe('00:00');
             expect(formatSleepTime('23:59')).toBe('23:59');
             expect(formatSleepTime('  08:15  ')).toBe('08:15');
-        });
-
-        it('handles legacy numeric strings with decimals, commas, and "h" suffix', () => {
-            expect(formatSleepTime('0')).toBe('00:00');
-            expect(formatSleepTime('7')).toBe('07:00');
-            expect(formatSleepTime('7.5')).toBe('07:30');
-            expect(formatSleepTime('7,5')).toBe('07:30');
-            expect(formatSleepTime('1.25')).toBe('01:15');
-            expect(formatSleepTime('12.75')).toBe('12:45');
-            expect(formatSleepTime('8h')).toBe('08:00');
-            expect(formatSleepTime('7.5h')).toBe('07:30');
-            expect(formatSleepTime('7,5H')).toBe('07:30');
-            expect(formatSleepTime(' 8.25 h ')).toBe('08:15');
         });
 
         it('rejects malformed string attack vectors', () => {
@@ -124,8 +95,8 @@ describe('Empirical Challenger: Sleep Format HH:MM Adversarial Stress Test Suite
         it('parseSleepInput returns canonical HH:MM or null', () => {
             expect(parseSleepInput('08:30')).toBe('08:30');
             expect(parseSleepInput('8:30')).toBe('08:30');
-            expect(parseSleepInput(7.5)).toBe('07:30');
-            expect(parseSleepInput('7.5')).toBe('07:30');
+            expect(parseSleepInput(7.5)).toBeNull();
+            expect(parseSleepInput('7.5')).toBeNull();
             expect(parseSleepInput('00:00')).toBe('00:00');
             expect(parseSleepInput('23:59')).toBe('23:59');
 
@@ -142,8 +113,8 @@ describe('Empirical Challenger: Sleep Format HH:MM Adversarial Stress Test Suite
             expect(isSleepTimeValid('08:30')).toBe(true);
             expect(isSleepTimeValid('00:00')).toBe(true);
             expect(isSleepTimeValid('23:59')).toBe(true);
-            expect(isSleepTimeValid('7.5')).toBe(true);
-            expect(isSleepTimeValid('8h')).toBe(true);
+            expect(isSleepTimeValid('7.5')).toBe(false);
+            expect(isSleepTimeValid('8h')).toBe(false);
 
             expect(isSleepTimeValid('')).toBe(false);
             expect(isSleepTimeValid('   ')).toBe(false);
@@ -156,7 +127,7 @@ describe('Empirical Challenger: Sleep Format HH:MM Adversarial Stress Test Suite
     });
 
     describe('3. Zod Gateway Sanitization (NutritionDaySchema & UserDataSchema)', () => {
-        it('sanitizes mixed valid, legacy, and malformed sleep fields without dropping valid data', () => {
+        it('preserves canonical sleep values while rejecting unsupported and malformed fields', () => {
             const rawDay = {
                 date: '2026-08-20',
                 kcal: 2500,
@@ -164,8 +135,8 @@ describe('Empirical Challenger: Sleep Format HH:MM Adversarial Stress Test Suite
                 pro: 160,
                 fat: 70,
                 sleepHours: '08:30',       // Valid HH:MM string
-                sleepDeep: 1.5,            // Legacy number -> "01:30"
-                sleepLight: '4.25',        // Legacy decimal string -> "04:15"
+                sleepDeep: 1.5,            // Pre-launch number is not imported
+                sleepLight: '04:15',       // Current HH:MM is retained
                 sleepRem: 'invalid_rem',   // Malformed -> undefined
                 sleepAwake: -10            // Negative number -> undefined
             };
@@ -174,7 +145,7 @@ describe('Empirical Challenger: Sleep Format HH:MM Adversarial Stress Test Suite
             expect(result.success).toBe(true);
             if (result.success) {
                 expect(result.data.sleepHours).toBe('08:30');
-                expect(result.data.sleepDeep).toBe('01:30');
+                expect(result.data.sleepDeep).toBeUndefined();
                 expect(result.data.sleepLight).toBe('04:15');
                 expect(result.data.sleepRem).toBeUndefined();
                 expect(result.data.sleepAwake).toBeUndefined();
@@ -198,8 +169,8 @@ describe('Empirical Challenger: Sleep Format HH:MM Adversarial Stress Test Suite
             const parsed = NutritionDaySchema.parse(boundaryDay);
             expect(parsed.sleepHours).toBe('00:00');
             expect(parsed.sleepDeep).toBe('23:59');
-            expect(parsed.sleepLight).toBe('00:00');
-            expect(parsed.sleepRem).toBe('23:59');
+            expect(parsed.sleepLight).toBeUndefined();
+            expect(parsed.sleepRem).toBeUndefined();
             expect(parsed.sleepAwake).toBe('00:01');
         });
 
@@ -268,16 +239,16 @@ describe('Empirical Challenger: Sleep Format HH:MM Adversarial Stress Test Suite
                     carbs: 280,
                     pro: 165,
                     fat: 68,
-                    sleepHours: 8, // legacy number
-                    sleepDeep: 1.75, // legacy number
-                    sleepLight: '3.5', // legacy string
+                    sleepHours: '08:00',
+                    sleepDeep: '01:45',
+                    sleepLight: '03:30',
                     sleepRem: null, // empty
                     sleepAwake: 'invalid' // invalid
                 }
             };
 
             try {
-                // Legacy values deliberately violate the current NutritionDay type: exercise runtime CSV compatibility.
+                // The CSV boundary formats current values and empties malformed optional fields.
                 await Exporter.exportToCSV([], sampleNutrition as unknown as Record<string, NutritionDay>, []);
 
                 expect(capturedFilename).toBe('misurazioni.csv');
@@ -288,7 +259,7 @@ describe('Empirical Challenger: Sleep Format HH:MM Adversarial Stress Test Suite
                 // Verify day 1 values
                 expect(capturedContent).toContain('"2026-08-19",78.2,2400,290,170,70,,"",,,,,,,,,"07:30","01:45","04:15","01:00","00:30",');
 
-                // Verify day 2 values with legacy conversion and sanitization
+                // Verify day 2 current-format values and sanitization
                 expect(capturedContent).toContain('"2026-08-20",78,2350,280,165,68,,"",,,,,,,,,"08:00","01:45","03:30","","",');
             } finally {
                 Exporter.downloadFile = origDownload;
@@ -304,7 +275,7 @@ describe('Empirical Challenger: Sleep Format HH:MM Adversarial Stress Test Suite
             useAppStore.setState({ dataOwner: storageOwner() });
         });
 
-        it('initializes from legacy number sleep data and formats to HH:MM in UI state', () => {
+        it('does not adopt pre-launch numeric sleep values into the editor', () => {
             const today = Logic.getLocalDateString();
             useAppStore.setState({
                 userData: {
@@ -323,11 +294,11 @@ describe('Empirical Challenger: Sleep Format HH:MM Adversarial Stress Test Suite
 
             const { result } = renderHook(() => useSleepMeasurements());
 
-            expect(result.current.sleepHours).toBe('07:30');
-            expect(result.current.sleepDeep).toBe('01:15');
-            expect(result.current.sleepLight).toBe('04:30');
-            expect(result.current.sleepRem).toBe('01:45');
-            expect(result.current.sleepAwake).toBe('00:30');
+            expect(result.current.sleepHours).toBe('');
+            expect(result.current.sleepDeep).toBe('');
+            expect(result.current.sleepLight).toBe('');
+            expect(result.current.sleepRem).toBe('');
+            expect(result.current.sleepAwake).toBe('');
         });
 
         it('blocks invalid inputs with alert without corrupting state', async () => {

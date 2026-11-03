@@ -254,11 +254,11 @@ export interface NutritionDay {
     isDayOn?: boolean;
     meals?: LoggedMealItem[];
     supplementsIntake?: SupplementIntake[];
-    sleepHours?: number | string;
-    sleepDeep?: number | string;
-    sleepLight?: number | string;
-    sleepRem?: number | string;
-    sleepAwake?: number | string;
+    sleepHours?: string;
+    sleepDeep?: string;
+    sleepLight?: string;
+    sleepRem?: string;
+    sleepAwake?: string;
     steps?: number;
     stepsSource?: ActivitySource;
     stepsCapturedAt?: number;

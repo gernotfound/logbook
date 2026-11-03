@@ -81,7 +81,7 @@ export function reportZodSchemaFallback(ctx: ZodFallbackContext): void {
 
 // Defensive conversion helpers for robust runtime sanitization
 export const safeOptionalSleepTime = () =>
-    z.union([z.string(), z.number()]).transform(v => {
+    z.string().transform(v => {
         const formatted = formatSleepTime(v);
         return formatted || undefined;
     }).optional().catch(undefined);
