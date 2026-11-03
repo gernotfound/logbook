@@ -12,6 +12,7 @@ const mocked = vi.hoisted(() => {
     acquireDeletionLease: vi.fn(),
     assertDeletionLease: vi.fn(),
     DeletionLeaseLostError: class DeletionLeaseLostError extends Error {},
+    deleteAccountKeyAfterVerification: vi.fn(),
     deleteAuthUserLast: vi.fn(),
     deletePrivateCollectionPage: vi.fn(),
     deleteUserRoot: vi.fn(),
@@ -40,6 +41,7 @@ describe('M7 native account deletion runner', () => {
     for (const fn of [
       mocked.acquireDeletionLease,
       mocked.assertDeletionLease,
+      mocked.deleteAccountKeyAfterVerification,
       mocked.deleteAuthUserLast,
       mocked.deleteUserRoot,
       mocked.markDeletionComplete,
@@ -65,7 +67,8 @@ describe('M7 native account deletion runner', () => {
     });
     mocked.deleteUserRoot.mockImplementation(async () => { order.push('root'); });
     mocked.markVerifying.mockImplementation(async () => { order.push('mark-verifying'); });
-    mocked.verifyNoAccountResidue.mockImplementation(async () => { order.push('verify'); });
+    mocked.verifyNoAccountResidue.mockImplementation(async (_uid, allowKey?: boolean) => { order.push(allowKey ? 'verify-before-key' : 'verify-after-key'); });
+    mocked.deleteAccountKeyAfterVerification.mockImplementation(async () => { order.push('retire-key'); });
     mocked.deleteAuthUserLast.mockImplementation(async () => { order.push('auth'); });
     mocked.markDeletionComplete.mockImplementation(async () => { order.push('complete'); });
 
@@ -76,7 +79,9 @@ describe('M7 native account deletion runner', () => {
       expect(pageCount.get(name)).toBe(2);
     }
     expect(order.indexOf('revoke')).toBeLessThan(order.indexOf('root'));
-    expect(order.indexOf('verify')).toBeLessThan(order.indexOf('auth'));
+    expect(order.indexOf('verify-before-key')).toBeLessThan(order.indexOf('retire-key'));
+    expect(order.indexOf('retire-key')).toBeLessThan(order.indexOf('verify-after-key'));
+    expect(order.indexOf('verify-after-key')).toBeLessThan(order.indexOf('auth'));
     expect(order.at(-1)).toBe('complete');
     expect(mocked.markDeletionFailed).not.toHaveBeenCalled();
   });
@@ -112,6 +117,7 @@ describe('M7 native account deletion runner', () => {
 
     await expect(processAccountDeletion('uid-b', Date.now() + 60_000, { leaseOwner: 'lease-b' })).resolves.toBe('failed');
 
+    expect(mocked.deleteAccountKeyAfterVerification).not.toHaveBeenCalled();
     expect(mocked.deleteAuthUserLast).not.toHaveBeenCalled();
     expect(mocked.markDeletionComplete).not.toHaveBeenCalled();
     expect(mocked.markDeletionFailed).toHaveBeenCalledWith(
