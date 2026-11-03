@@ -68,6 +68,8 @@ Questa distinzione è già applicata alle collezioni che hanno ricevuto hardenin
 
 **MUST:** un record scartato per identità invalida non deve riapparire come ghost object in projection, merge, UI o successiva sincronizzazione.
 
+**MUST (distinzione di boundary):** la quarantena Zod serve a produrre viste transitorie sicure da input non autorevoli, non è autorizzazione a risigillare un Local Envelope IndexedDB autenticato dopo avere perso dati. Nel vault corrente, se `data`, `baseline` o uno snapshot di recupero subiscono una normalizzazione con perdita, lettura e scrittura si fermano preservando il ciphertext originario; la riapertura di dati validi richiede recupero esplicito e non una cancellazione silenziosa. Il controllo non cambia il comportamento di `UserDataSchema` per ingressi transitori.
+
 ### Cache corrotta vs dati cloud invalidi
 
 - **Cache corrotta:** non reinterpretare bytes/versioni incompatibili come dati correnti; preservare il dato recuperabile quando previsto dal boundary.

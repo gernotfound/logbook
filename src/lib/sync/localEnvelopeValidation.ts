@@ -6,6 +6,7 @@ import {
     normalizeLocalEnvelopeRecord,
 } from '../schemaEvolution';
 import { normalizeStorageOwner } from './owner';
+import { findLossyNormalization } from './businessNormalizationIntegrity';
 import { parseReplicaIdentity, type ReplicaIdentity } from './replicaProtocol';
 import {
     coversVectorClock, parseSemanticOperation, parseSyncMeta, parseVectorClock,
@@ -51,6 +52,16 @@ interface LocalEnvelopeV5 {
 
 export type LocalEnvelope = LocalEnvelopeV5;
 const parse = (value: unknown) => UserDataSchema.parse(value) as unknown as UserData;
+
+function parsePreservingLocalBusiness(value: unknown, section: string): UserData {
+    const parsed = parse(value);
+    if (findLossyNormalization(value, parsed)) {
+        // A valid AEAD envelope is not proof that Zod can reserialize every
+        // business field. Never turn a lossy read into a destructive later write.
+        throw new Error(`Dati business dell’archivio locale non conservabili in ${section}: copia cifrata preservata.`);
+    }
+    return parsed;
+}
 
 export function validateLocalEnvelope(value: unknown, owner: string): LocalEnvelope | undefined {
     // Only a missing IndexedDB key means no archive. Invalid stored values
@@ -144,7 +155,8 @@ export function validateLocalEnvelope(value: unknown, owner: string): LocalEnvel
                 || !Number.isSafeInteger(entry.sourceConsentRevision) || entry.sourceConsentRevision < 0
                 || typeof entry.capturedAt !== 'string' || !Number.isFinite(Date.parse(entry.capturedAt))
                 || !Array.isArray(entry.pending)) throw new Error('Storico di recupero non valido');
-            parse(entry.data); parse(entry.baseline);
+            parsePreservingLocalBusiness(entry.data, 'archivedConsentJournals.data');
+            parsePreservingLocalBusiness(entry.baseline, 'archivedConsentJournals.baseline');
             entry.pending.forEach(parseSemanticOperation);
         }
     }
@@ -156,8 +168,8 @@ export function validateLocalEnvelope(value: unknown, owner: string): LocalEnvel
         actorId: record.actorId,
         actorSeq: record.actorSeq,
         clock,
-        data: parse(record.data),
-        baseline: parse(record.baseline),
+        data: parsePreservingLocalBusiness(record.data, 'data'),
+        baseline: parsePreservingLocalBusiness(record.baseline, 'baseline'),
         completeMonths: [...record.completeMonths] as string[],
         pending,
         syncMetaByDocument,
