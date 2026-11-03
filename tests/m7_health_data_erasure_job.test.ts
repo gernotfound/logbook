@@ -18,13 +18,18 @@ vi.mock('../server/accountDeletion/firebaseAdmin', () => {
     doc: (id: string) => document(path + '/' + id),
     ...query(path, []),
   });
-  function query(path: string, constraints: Array<[string, string, unknown]>, max = 1000, after = '') {
+  function query(path: string, constraints: Array<[string, string, unknown]>, max = 1000, after: { path: string; time: number } | null = null) {
     return {
       where: (field: string, op: string, value: unknown) => query(path, [...constraints, [field, op, value]], max, after),
       limit: (count: number) => query(path, constraints, count, after),
       select: () => query(path, constraints, max, after),
       orderBy: () => query(path, constraints, max, after),
-      startAfter: (snapshot: { ref: { path: string } }) => query(path, constraints, max, snapshot.ref.path),
+      startAfter: (snapshot: { ref: { path: string }; data: () => Entry | undefined }) => {
+        const timestamp = snapshot.data()?.purgeAfter;
+        return query(path, constraints, max, {
+          path: snapshot.ref.path, time: timestamp instanceof Timestamp ? timestamp.toMillis() : 0,
+        });
+      },
       get: async () => {
         if (fixture.pauseQuery?.path === path) {
           const pause = fixture.pauseQuery;
@@ -55,8 +60,12 @@ vi.mock('../server/accountDeletion/firebaseAdmin', () => {
           const timeB = b instanceof Timestamp ? b.toMillis() : 0;
           return timeA - timeB || left.localeCompare(right);
         });
-        const cursorIndex = after ? docs.findIndex(key => key === after) : -1;
-        const paged = docs.slice(after ? cursorIndex + 1 : 0, (after ? cursorIndex + 1 : 0) + max).map(key => getSnapshot(key));
+        const eligible = after ? docs.filter(key => {
+          const timestamp = fixture.records.get(key)?.purgeAfter;
+          const time = timestamp instanceof Timestamp ? timestamp.toMillis() : 0;
+          return time > after.time || (time === after.time && key > after.path);
+        }) : docs;
+        const paged = eligible.slice(0, max).map(key => getSnapshot(key));
         return { docs: paged, size: paged.length, empty: paged.length === 0 };
       },
     };
