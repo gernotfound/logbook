@@ -13,7 +13,7 @@ const viewports = [{ width: 320, height: 568 }, { width: 1280, height: 900 }];
 
 async function capture(page: Page, testInfo: TestInfo, surface: string) {
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await testInfo.attach(surface, { body: await page.screenshot({ fullPage: true, animations: 'disabled' }), contentType: 'image/png' });
+  await testInfo.attach(surface, { body: await page.screenshot({ fullPage: surface !== 'data-detail', animations: 'disabled' }), contentType: 'image/png' });
 }
 
 for (const viewport of viewports) {
@@ -102,6 +102,18 @@ for (const viewport of viewports) {
       expect(detailBounds!.y).toBeGreaterThanOrEqual(0);
       expect(detailBounds!.x + detailBounds!.width).toBeLessThanOrEqual(viewport.width);
       expect(detailBounds!.y + detailBounds!.height).toBeLessThanOrEqual(viewport.height + 1);
+      for (const action of await detail.getByRole('button').all()) {
+        expect(await action.evaluate(element => {
+          const rect = element.getBoundingClientRect();
+          const hit = document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2);
+          return hit !== null && element.contains(hit);
+        }), 'modal actions must be above navigation and status overlays').toBe(true);
+      }
+      expect(await page.locator('.bottom-nav').evaluate(nav => {
+        const rect = nav.getBoundingClientRect();
+        return document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2)
+          ?.closest('.data-detail-layer') !== null;
+      })).toBe(true);
       await capture(page, testInfo, 'data-detail');
       await page.keyboard.press('Escape');
       await expect(detail).toHaveCount(0);
