@@ -45,13 +45,9 @@ La build frontend **Firebase Hosting Production** usa:
 
 ## Firestore legacy
 
-Le collection `telemetry_errors`, `telemetry_events` e `telemetry_anomalies` non sono più la destinazione del client corrente. Restano temporaneamente:
+Le collection `telemetry_errors`, `telemetry_events` e `telemetry_anomalies` non sono più un boundary client supportato. Le Security Rules applicano il deny predefinito a lettura, query, creazione, aggiornamento e cancellazione, anche per l'owner verificato con consenso attivo; sono ritirati anche retry e upgrade della scadenza pre-lancio.
 
-- Security Rules storiche per percorsi non più supportati dalla PWA corrente;
-- retention di 30 giorni e maintenance cron per documenti esistenti/legacy;
-- account deletion, che continua a rimuovere le collection private note.
-
-La loro eventuale rimozione completa resta un intervento backend/Rules separato, soggetto a verifica del provider live e dell'effettivo contenuto: non è implicitamente autorizzato dal fresh start del client.
+Restano la retention nominale di 30 giorni e il maintenance cron per documenti residui, oltre ad account deletion e cancellazione dei dati sanitari tramite Admin SDK. Il ritiro dell'accesso client non cancella dati, non modifica i relativi indici e non dimostra che il dataset live sia vuoto. La rimozione completa di questi percorsi backend resta un intervento separato, soggetto a verifica del provider e dell'effettivo contenuto.
 
 ## Verifica
 

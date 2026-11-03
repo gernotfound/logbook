@@ -10,9 +10,6 @@ const privatePaths = [
   'users/a/history_months/2026-09',
   'users/a/nutrition_months/2026-09',
   'users/a/sync_control/state',
-  'users/a/telemetry_errors/event',
-  'users/a/telemetry_events/event',
-  'users/a/telemetry_anomalies/event',
 ];
 const reservedPaths = [
   'account_deletions/a',
@@ -30,7 +27,7 @@ beforeAll(async () => {
 beforeEach(async () => { await env.clearFirestore(); await seedTrustedConsent(env); });
 afterAll(async () => { await env?.cleanup(); });
 
-it('denies foreign owner access on every private root/shard/control/telemetry document and query', async () => {
+it('denies foreign owner access on every private root/shard/control document and query', async () => {
   await env.withSecurityRulesDisabled(async admin => {
     const db = asModularFirestore(admin.firestore());
     for (const path of privatePaths) await setDoc(doc(db, path), { seeded: true });
@@ -44,30 +41,18 @@ it('denies foreign owner access on every private root/shard/control/telemetry do
     await assertFails(getDoc(doc(anon, path)));
     await assertFails(deleteDoc(doc(bob, path)));
   }
-  for (const path of ['history_months', 'nutrition_months', 'sync_control',
-    'telemetry_errors', 'telemetry_events', 'telemetry_anomalies']) {
+  for (const path of ['history_months', 'nutrition_months', 'sync_control']) {
     await assertFails(getDocs(collection(bob, 'users', 'a', path)));
   }
   await assertFails(getDocs(collection(bob, 'users')));
 });
 
-it('denies cross-owner replica registration and otherwise valid owner telemetry', async () => {
+it('denies cross-owner replica registration while allowing the verified owner', async () => {
   const alice = asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore());
   const bob = asModularFirestore(env.authenticatedContext('b', { email_verified: true }).firestore());
   await assertFails(registerReplica(bob, 'a'));
   await assertSucceeds(registerReplica(alice, 'a'));
-  const event = {
-    consentRevision: 1,
-    timestamp: Date.now(),
-    type: 'workout_started',
-    context: { appVersion: '1.1.0', platform: 'other', displayMode: 'browser', online: true },
-    userId: 'a',
-    sessionId: 'owner-isolation',
-    expireAt: new Date(Date.now() + 86_400_000),
-  };
-  await assertSucceeds(setDoc(doc(alice, 'users/a/telemetry_events/new'), event));
-  await assertFails(setDoc(doc(bob, 'users/a/telemetry_events/foreign'), event));
-  await assertFails(deleteDoc(doc(bob, 'users/a/telemetry_events/new')));
+
 });
 
 it('never exposes administrative deletion, device recovery or consent records to clients', async () => {

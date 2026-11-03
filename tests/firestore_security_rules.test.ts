@@ -44,12 +44,11 @@ describe('Firestore Security Rules Whitelist & Parity Verification', () => {
     expect(usersBlock![1]).not.toMatch(/allow\s+delete:/);
   });
 
-  it('allows only an active owner to access private month and telemetry collections', () => {
+  it('allows only an active owner to access private month collections', () => {
     expect(rulesContent).toMatch(/match\s+\/history_months\/\{monthId\}/);
     expect(rulesContent).toMatch(/allow\s+read:\s*if\s+isWritableOwner\(userId\);/);
     expect(rulesContent.match(/allow\s+delete:\s*if\s+false;/g)?.length).toBeGreaterThanOrEqual(3);
     expect(rulesContent).toMatch(/match\s+\/nutrition_months\/\{monthId\}/);
-    expect(rulesContent).toMatch(/match\s+\/telemetry_anomalies\/\{eventId\}/);
   });
 
   it('keeps Firestore data/sync rules aligned with current version constants and forbids marker downgrade', () => {
@@ -123,42 +122,5 @@ describe('Firestore Security Rules Whitelist & Parity Verification', () => {
     expect([...payloadKeys, 'unauthorizedField'].every(k => allowedKeys.has(k))).toBe(false);
   });
 
-  it('telemetry_anomalies whitelist contains all privacy-minimized payload keys', () => {
-    const anomalyMatch = rulesContent.match(/match\s+\/telemetry_anomalies\/\{eventId\}[\s\S]*?isValidTelemetryAnomaly\(incomingData\(\)\)/);
-    expect(anomalyMatch).not.toBeNull();
-    expect(rulesContent).toContain("docData.type == 'storage_recovery_anomaly'");
-    expect(rulesContent).toContain("docData.platform == 'ios'");
-    expect(rulesContent).toContain('docData.standalone is bool');
-    expect(rulesContent).toContain('docData.persisted == null || docData.persisted is bool');
-  });
 
-  it('requires the current bounded telemetry error/event Rules blocks', () => {
-    expect(rulesContent).toMatch(/match\s+\/telemetry_errors\/\{errorId\}/);
-    expect(rulesContent).toContain('function isValidTelemetryError(docData, userId)');
-    expect(rulesContent).toContain('isValidTelemetryError(incomingData(), userId)');
-    expect(rulesContent).toContain('preservesTelemetryErrorIdentity()');
-
-    expect(rulesContent).toMatch(/match\s+\/telemetry_events\/\{eventId\}/);
-    expect(rulesContent).toContain('function isValidTelemetryEvent(docData, userId)');
-    expect(rulesContent).toContain('isValidTelemetryEvent(incomingData(), userId)');
-    expect(rulesContent).toContain('isIdenticalTelemetryRetryOrExpiryUpgrade()');
-  });
-
-  it('bounds telemetry types, context, details and mutable fields', () => {
-    expect(rulesContent).toContain('function isValidTelemetryContext(context)');
-    expect(rulesContent).toContain('function isValidTelemetryDetails(details)');
-    expect(rulesContent).toContain('function isValidTelemetryExpiry(docData)');
-    expect(rulesContent).toContain("'expireAt' in docData");
-    expect(rulesContent).toContain("docData.expireAt is timestamp");
-    expect(rulesContent).toContain("request.time + duration.value(31, 'd')");
-    expect(rulesContent).toContain('details.size() <= 12');
-    expect(rulesContent).toContain("details.keys().hasOnly([");
-    expect(rulesContent).toContain("isStringAtMost(docData.message, 4096)");
-    expect(rulesContent).toContain("isStringAtMost(docData.stack, 1000)");
-    expect(rulesContent).toContain('docData.count <= 1000000');
-    expect(rulesContent).toContain('incomingData().count >= resource.data.count');
-    expect(rulesContent).toContain('incomingData().lastSeen >= resource.data.lastSeen');
-    expect(rulesContent).toContain('preservesTelemetryExpiry()');
-    expect(rulesContent).toContain("affectedKeys().hasOnly(['expireAt'])");
-  });
 });

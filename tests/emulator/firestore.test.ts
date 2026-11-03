@@ -21,12 +21,9 @@ it('gates every private owner path on the Firebase verified-email token claim', 
         'users/a/history_months/2026-09',
         'users/a/nutrition_months/2026-09',
         'users/a/sync_control/state',
-        'users/a/telemetry_errors/one',
-        'users/a/telemetry_events/one',
-        'users/a/telemetry_anomalies/one',
     ];
     await env.withSecurityRulesDisabled(async context => {
-        for (const path of paths) {
+        for (const path of paths.filter(path => !path.endsWith('/sync_control/state'))) {
             await setDoc(doc(asModularFirestore(context.firestore()), path), { marker: true });
         }
     });
@@ -40,28 +37,11 @@ it('gates every private owner path on the Firebase verified-email token claim', 
         await assertFails(getDoc(doc(missingClaim, path)));
     }
 
-    const validEvent = {
-        consentRevision: 1,
-        timestamp: 1000,
-        type: 'workout_started',
-        context: { appVersion: '1.1.0', platform: 'other', displayMode: 'browser', online: true },
-        userId: 'a',
-        sessionId: 'verify-email',
-        expireAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
-    };
-    const eventPath = 'users/a/telemetry_events/new-event';
-    await assertFails(setDoc(doc(unverified, eventPath), validEvent));
-    await assertFails(setDoc(doc(missingClaim, eventPath), validEvent));
-    await assertSucceeds(setDoc(doc(verified, eventPath), validEvent));
+    await assertFails(registerReplica(unverified, 'a'));
+    await assertFails(registerReplica(missingClaim, 'a'));
+    await assertSucceeds(registerReplica(verified, 'a'));
     await assertSucceeds(getDoc(doc(asModularFirestore(env.unauthenticatedContext().firestore()), 'global_catalog/public')));
 });
-
-const telemetryContext = {
-    appVersion: '1.0.0',
-    platform: 'other',
-    displayMode: 'browser',
-    online: true,
-};
 
 function protocol3Registration() {
     const now = Date.now();
@@ -520,167 +500,6 @@ it('rejects plaintext root documents even with otherwise valid replica headers',
     await assertFails(setDoc(doc(db, 'users/a'), { ...saved, profile: 'injected-private-value' }));
     await assertFails(setDoc(doc(db, 'users/a'), { ...saved, _sealed: null }));
     expect(saved).not.toHaveProperty('profile');
-});
-
-it('accepts bounded owner telemetry and rejects malformed payloads', async () => {
-    const db = asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore());
-    const expireAt = new Date(Date.now() + (30 * 24 * 60 * 60 * 1000));
-    const eventRef = doc(db, 'users/a/telemetry_events/e1');
-    const errorRef = doc(db, 'users/a/telemetry_errors/err1');
-    const anomalyRef = doc(db, 'users/a/telemetry_anomalies/a1');
-
-    const event = {
-        consentRevision: 1,
-        timestamp: 1000,
-        type: 'workout_started',
-        context: telemetryContext,
-        userId: 'a',
-        sessionId: 'session-a',
-        details: { offline: false, routineId: 'routine-1' },
-        expireAt,
-    };
-    const error = {
-        consentRevision: 1,
-        timestamp: 1000,
-        type: 'TypeError',
-        message: 'safe message',
-        source: 'window_error',
-        context: telemetryContext,
-        userId: 'a',
-        sessionId: 'session-a',
-        count: 1,
-        firstSeen: 1000,
-        lastSeen: 1000,
-        expireAt,
-    };
-    const anomaly = {
-        consentRevision: 1,
-        type: 'storage_recovery_anomaly',
-        reason: 'indexeddb_cache_missing_with_valid_marker',
-        timestamp: 1000,
-        elapsedMs: 50,
-        platform: 'other',
-        standalone: false,
-        persisted: null,
-        expireAt,
-    };
-
-    await assertSucceeds(setDoc(eventRef, event));
-    await assertSucceeds(setDoc(errorRef, error));
-    await assertSucceeds(setDoc(anomalyRef, anomaly));
-
-    await assertFails(setDoc(doc(db, 'users/a/telemetry_events/bad-user'), { ...event, userId: 'b' }));
-    await assertFails(setDoc(doc(db, 'users/a/telemetry_events/bad-context'), { ...event, context: { ...telemetryContext, platform: 'android' } }));
-    await assertFails(setDoc(doc(db, 'users/a/telemetry_events/bad-details'), { ...event, details: { secret: 'not-allowed' } }));
-    await assertFails(setDoc(doc(db, 'users/a/telemetry_events/bad-type'), { ...event, type: 42 }));
-    await assertFails(setDoc(doc(db, 'users/a/telemetry_errors/bad-count'), { ...error, count: 0 }));
-    await assertFails(setDoc(doc(db, 'users/a/telemetry_errors/bad-stack'), { ...error, stack: 'x'.repeat(1001) }));
-    await assertFails(setDoc(doc(db, 'users/a/telemetry_anomalies/bad-anomaly'), { ...anomaly, platform: 'android' }));
-});
-
-it('allows bounded telemetry expiry, supports legacy expiry upgrade, and prevents expiry removal', async () => {
-    const db = asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore());
-    const validExpireAt = new Date(Date.now() + (30 * 24 * 60 * 60 * 1000));
-    const tooFarExpireAt = new Date(Date.now() + (32 * 24 * 60 * 60 * 1000));
-
-    const event = {
-        consentRevision: 1,
-        timestamp: 1000,
-        type: 'schema_fallback',
-        context: telemetryContext,
-        userId: 'a',
-        sessionId: 'session-a',
-    };
-    const eventRef = doc(db, 'users/a/telemetry_events/ttl-event');
-    await assertFails(setDoc(doc(db, 'users/a/telemetry_events/missing-expiry'), event));
-    await assertSucceeds(setDoc(eventRef, { ...event, expireAt: validExpireAt }));
-    await assertFails(setDoc(doc(db, 'users/a/telemetry_events/bad-expiry-type'), { ...event, expireAt: '2099-01-01' }));
-    await assertFails(setDoc(doc(db, 'users/a/telemetry_events/bad-expiry-window'), { ...event, expireAt: tooFarExpireAt }));
-
-    const legacyEventRef = doc(db, 'users/a/telemetry_events/legacy-event');
-    await env.withSecurityRulesDisabled(async context => {
-        await setDoc(doc(asModularFirestore(context.firestore()), 'users/a/telemetry_events/legacy-event'), event);
-    });
-    await assertSucceeds(setDoc(legacyEventRef, { ...event, expireAt: validExpireAt }));
-    await assertFails(setDoc(legacyEventRef, { ...event, type: 'tampered', expireAt: validExpireAt }));
-
-    const error = {
-        consentRevision: 1,
-        timestamp: 1000,
-        type: 'TypeError',
-        message: 'safe message',
-        source: 'window_error',
-        context: telemetryContext,
-        userId: 'a',
-        sessionId: 'session-a',
-        count: 1,
-        firstSeen: 1000,
-        lastSeen: 1000,
-        expireAt: validExpireAt,
-    };
-    const errorRef = doc(db, 'users/a/telemetry_errors/ttl-error');
-    await assertSucceeds(setDoc(errorRef, error));
-    await assertSucceeds(setDoc(errorRef, { count: 2, lastSeen: 1100 }, { merge: true }));
-    await assertFails(setDoc(errorRef, { ...error, count: 2, lastSeen: 1100, expireAt: tooFarExpireAt }));
-    const { expireAt: _removedExpiry, ...withoutExpiry } = error;
-    await assertFails(setDoc(errorRef, { ...withoutExpiry, count: 2, lastSeen: 1100 }));
-});
-
-it('makes telemetry events/anomalies immutable and error aggregation monotonic', async () => {
-    const db = asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore());
-    const expireAt = new Date(Date.now() + (30 * 24 * 60 * 60 * 1000));
-    const eventRef = doc(db, 'users/a/telemetry_events/e1');
-    const errorRef = doc(db, 'users/a/telemetry_errors/err1');
-    const anomalyRef = doc(db, 'users/a/telemetry_anomalies/a1');
-
-    const event = {
-        consentRevision: 1,
-        timestamp: 1000,
-        type: 'pwa_install_click',
-        context: telemetryContext,
-        userId: 'a',
-        sessionId: 'session-a',
-        details: { source: 'settings' },
-        expireAt,
-    };
-    const error = {
-        consentRevision: 1,
-        timestamp: 1000,
-        type: 'TypeError',
-        message: 'safe message',
-        source: 'window_error',
-        context: telemetryContext,
-        userId: 'a',
-        sessionId: 'session-a',
-        count: 1,
-        firstSeen: 1000,
-        lastSeen: 1000,
-        expireAt,
-    };
-    const anomaly = {
-        consentRevision: 1,
-        type: 'storage_recovery_anomaly',
-        reason: 'indexeddb_cache_missing_with_valid_marker',
-        timestamp: 1000,
-        elapsedMs: 50,
-        platform: 'other',
-        standalone: false,
-        persisted: false,
-        expireAt,
-    };
-
-    await assertSucceeds(setDoc(eventRef, event));
-    await assertSucceeds(setDoc(eventRef, event));
-    await assertFails(setDoc(eventRef, { ...event, type: 'pwa_appinstalled' }));
-
-    await assertSucceeds(setDoc(anomalyRef, anomaly));
-    await assertSucceeds(setDoc(anomalyRef, anomaly));
-    await assertFails(setDoc(anomalyRef, { ...anomaly, reason: 'tampered' }));
-
-    await assertSucceeds(setDoc(errorRef, error));
-    await assertSucceeds(setDoc(errorRef, { ...error, count: 2, lastSeen: 1100 }));
-    await assertFails(setDoc(errorRef, { ...error, count: 1, lastSeen: 900 }));
-    await assertFails(setDoc(errorRef, { ...error, count: 3, lastSeen: 1200, message: 'tampered' }));
 });
 
 it('stores monthly contents only in the sealed envelope regardless of business entry count', async () => {
