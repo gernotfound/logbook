@@ -1,20 +1,19 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from './fixtures';
 
-async function assertNoBlockingAccessibilityViolations(page: Page) {
+async function collectBlockingAccessibilityViolations(page: Page, surface: string) {
   const result = await new AxeBuilder({ page })
     .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
     .analyze();
 
-  const blocking = result.violations
+  return result.violations
     .filter(violation => violation.impact === 'critical' || violation.impact === 'serious')
     .map(violation => ({
+      surface,
       id: violation.id,
       impact: violation.impact,
       targets: violation.nodes.flatMap(node => node.target),
     }));
-
-  expect(blocking, 'axe found critical/serious WCAG violations').toEqual([]);
 }
 
 async function continueAsGuest(page: Page) {
@@ -33,15 +32,16 @@ async function continueAsGuest(page: Page) {
 test('representative guest surfaces have no serious automated accessibility violations', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'TheLogBook' })).toBeVisible();
-  await assertNoBlockingAccessibilityViolations(page);
+  const blocking = await collectBlockingAccessibilityViolations(page, 'login');
 
   await continueAsGuest(page);
-  await assertNoBlockingAccessibilityViolations(page);
+  blocking.push(...await collectBlockingAccessibilityViolations(page, 'guest-home'));
 
   await page.getByRole('button', { name: 'Dati e statistiche', exact: true }).click();
   await expect(page.locator('#view-data')).toBeVisible();
-  await assertNoBlockingAccessibilityViolations(page);
+  blocking.push(...await collectBlockingAccessibilityViolations(page, 'data'));
 
+  expect(blocking, 'axe found critical/serious WCAG violations').toEqual([]);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
 });
 

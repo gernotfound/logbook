@@ -38,9 +38,9 @@ export default function DataDateNavigator({
                 className="data-date-current"
                 onClick={onToday}
                 disabled={disabled}
-                aria-label="Torna a oggi"
+                aria-label={`Torna a oggi. Data selezionata: ${formattedDate}${isToday ? ' OGGI' : ''}`}
             >
-                <strong>{formattedDate}</strong>
+                <strong>{formattedDate}</strong>{' '}
                 {isToday && <span>OGGI</span>}
             </button>
             <button

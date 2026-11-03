@@ -155,7 +155,8 @@ describe('UI Alignments - R3 & R4', () => {
             expect(mockSetSelectedDate).toHaveBeenCalled();
 
             // Click today center text
-            const centerDateBlock = screen.getByRole('button', { name: 'Torna a oggi' });
+            const centerDateBlock = screen.getByRole('button', { name: /Torna a oggi/ });
+            expect(centerDateBlock.getAttribute('aria-label')).toContain(centerDateBlock.querySelector('strong')?.textContent);
             fireEvent.click(centerDateBlock);
             expect(mockSetSelectedDate).toHaveBeenCalledWith(Logic.getLocalDateString());
         });

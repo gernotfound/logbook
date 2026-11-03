@@ -30,7 +30,7 @@ const HomeWorkoutWidget: React.FC<HomeWorkoutWidgetProps> = ({
                 className={completed ? 'btn btn-secondary' : 'btn btn-primary'}
                 type="button"
                 onClick={() => onNavigate(completed ? 'training-history' : 'training')}
-                aria-label={inProgress ? 'Riprendi allenamento' : completed ? 'Apri lo storico degli allenamenti' : 'Inizia allenamento di oggi'}
+                aria-label={inProgress ? 'Riprendi allenamento' : completed ? 'Vai allo storico degli allenamenti' : 'Inizia allenamento di oggi'}
             >
                 <Play size={20} aria-hidden="true" />{inProgress ? 'Riprendi allenamento' : completed ? 'Vai allo storico' : 'Inizia allenamento'}
             </button>
