@@ -45,8 +45,6 @@ describe('advanced set segments', () => {
         expect(set.segments?.[0]).toMatchObject({ id: 'seg-1', technique: 'isometry', time: '20' });
         expect(set).not.toHaveProperty('dropsets');
         expect(set).not.toHaveProperty('isometrics');
-
-
     });
 
     it('excludes pre-launch arrays without adopting them as segments or mutating the input', () => {
@@ -77,12 +75,10 @@ describe('advanced set segments', () => {
     it('keeps segment persistence limited to the supported structure', () => {
         const parsed = UserDataSchema.parse({ history: [{ id: 'w-meta', exercises: [{ exId: 'bench', sessionNote: '', sets: [{
             id: 's-meta', kg: '100', reps: '8', technique: 'cluster',
-            segments: [
-                {
+            segments: [{
                 id: 'seg-meta', kg: '90', reps: '4', restBeforeSeconds: 20,
                 unsupportedMetadata: 'ignored',
-            }
-            ],
+            }],
         }]}]}] }) as UserData;
         const segment = parsed.history![0].exercises[0].sets[0].segments?.[0];
         expect(segment).toEqual({ id: 'seg-meta', kg: '90', reps: '4', restBeforeSeconds: 20 });

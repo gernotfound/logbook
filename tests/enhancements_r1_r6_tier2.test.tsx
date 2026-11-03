@@ -213,7 +213,6 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
                                         { technique: 'dropset' as const, id: 'ds1', kg: '70', reps: '6' },
                                         { technique: 'isometry' as const, reps: '', id: 'iso1', kg: '50', time: '15' }
                                     ],
-                                    
                                 }
                             ]
                         },

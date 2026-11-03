@@ -45,7 +45,7 @@ export function useWorkoutSetMutations({ setLocalWorkout, showConfirm }: UseWork
                             ? { type: 'reps', reps: previousReps, sourceSetId: previous.id }
                             : undefined;
 
-                        const existingSegments = s.segments ?? [];
+                        const existingSegments = Array.isArray(s.segments) ? s.segments : [];
                         const newSegment: any = {
                             id: Logic.generateId('seg'),
                             kg: '',

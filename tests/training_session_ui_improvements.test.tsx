@@ -751,7 +751,6 @@ describe('Training Session UI Improvements Suite (R1, R2, R3)', () => {
                             { technique: 'dropset' as const, id: 'ds_empty', kg: '', reps: '0' },
                             { technique: 'isometry' as const, reps: '', id: 'iso_empty', kg: '', time: '' }
                         ],
-                        
                     }
                 ],
                 sessionNote: ''

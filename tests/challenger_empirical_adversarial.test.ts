@@ -586,7 +586,7 @@ describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & D
             expect(transformed.dob).toBe('20000101');
         });
 
-        it('3.2: parseWorkoutSession recovers gracefully from corrupted exercises, nested sets, dropsets, and ratings', () => {
+        it('3.2: parseWorkoutSession recovers gracefully from corrupted exercises, nested sets, continuation segments, and ratings', () => {
             const corruptedSession = {
                 id: 12345, // string union transforms to '12345'
                 routineName: null,

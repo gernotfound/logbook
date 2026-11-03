@@ -252,7 +252,6 @@ describe('UI Alignments - R3 & R4', () => {
                     { technique: 'dropset' as const, id: 'ds_1', kg: '40', reps: '8' },
                     { technique: 'isometry' as const, reps: '', id: 'iso_1', kg: '30', time: '20' }
                 ],
-                
             };
 
             render(

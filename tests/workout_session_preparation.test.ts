@@ -219,7 +219,6 @@ describe('workout session preparation', () => {
                         { technique: 'dropset' as const, id: 'seg-fixture-1', kg: 60, reps: 6 },
                         { technique: 'isometry' as const, id: 'seg-fixture-2', reps: '', kg: 40, time: 20 }
                     ],
-                    
                 }],
             }],
         } as unknown as WorkoutSession;

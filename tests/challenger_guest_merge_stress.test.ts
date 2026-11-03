@@ -162,7 +162,6 @@ describe('Empirical Challenger: Deterministic Guest Merge (R5) Stress & Adversar
                                         { technique: 'dropset' as const, id: 'd1', kg: '80', reps: '8' },
                                         { technique: 'isometry' as const, reps: '', id: 'i1', kg: '60', time: '10' }
                                     ],
-                                    
                                 }
                             ]
                         }

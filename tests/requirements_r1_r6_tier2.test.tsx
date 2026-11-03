@@ -343,7 +343,6 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                         { technique: 'dropset' as const, id: 'ds1', kg: '60', reps: '6' },
                         { technique: 'isometry' as const, reps: '', id: 'iso1', kg: '40', time: '15' }
                     ],
-                    
                 };
                 render(
                     <SessionSetRow 

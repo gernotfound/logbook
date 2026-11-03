@@ -239,7 +239,7 @@ describe('Zod Schema Resilience & Defensive Catches', () => {
             expect(parsed.routines![0].exercises[1].defaultTechnique).toBeUndefined();
         });
 
-        it('defensively sanitizes corrupted WorkoutSession history with dropsets and isometrics', () => {
+        it('defensively sanitizes corrupted WorkoutSession history with continuation segments', () => {
             const corruptedHistory = [
                 {
                     id: 'session-1',
@@ -265,7 +265,6 @@ describe('Zod Schema Resilience & Defensive Catches', () => {
                                         { technique: 'isometry' as const, reps: '', id: 'iso-1', kg: 40, time: 10 },
                                         null
                                     ],
-                                    
                                 },
                                 'bad set'
                             ]

@@ -18,8 +18,6 @@ describe('pure CSV export builder', () => {
                         { technique: 'dropset' as const, id: 'drop-1', kg: '45', reps: '5' },
                         { technique: 'isometry' as const, reps: '', id: 'iso-1', kg: '30', time: '10' }
                     ],
-                    
-                    
                 }],
             }],
         };

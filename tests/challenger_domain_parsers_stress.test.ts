@@ -50,7 +50,7 @@ describe('Challenger 2: DomainParsers Adversarial Stress Testing', () => {
     });
 
     describe('2. parseWorkoutSession', () => {
-        it('handles valid workout session with nested sets, dropsets, and isometrics', () => {
+        it('handles valid workout session with nested sets and continuation segments', () => {
             const validSession = {
                 id: 'sess_123',
                 routineId: 'rout_1',
@@ -71,7 +71,6 @@ describe('Challenger 2: DomainParsers Adversarial Stress Testing', () => {
                                     { technique: 'dropset' as const, id: 'ds1', kg: '80', reps: '6' },
                                     { technique: 'isometry' as const, reps: '', id: 'iso1', kg: '60', time: '15' }
                                 ],
-                                
                             }
                         ]
                     }
@@ -116,7 +115,6 @@ describe('Challenger 2: DomainParsers Adversarial Stress Testing', () => {
                         { technique: 'dropset' as const, id: `ds_${exIdx}_${setIdx}`, kg: '40', reps: '5' },
                         { technique: 'isometry' as const, reps: '', id: `iso_${exIdx}_${setIdx}`, kg: '30', time: '10' }
                     ],
-                    
                 }))
             }));
 

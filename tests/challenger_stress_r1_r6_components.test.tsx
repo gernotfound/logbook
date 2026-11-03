@@ -161,7 +161,7 @@ describe('EMPIRICAL CHALLENGER: Adversarial Stress Test Suite (Requirements R1 -
                         { technique: 'dropset' as const, id: 'seg-fixture-4', kg: '10', reps: '5' }, // (10 + 80) * 5 = 450
                         { technique: 'dropset' as const, id: 'seg-fixture-5', kg: '0', reps: '5' }   // (0 + 80) * 5 = 400
                     ]
-                    };
+                };
                 expect(calculateSetVolume(bwDropsets, { isBodyweight: true }, 80)).toBe(1350);
             });
 
@@ -411,7 +411,6 @@ describe('EMPIRICAL CHALLENGER: Adversarial Stress Test Suite (Requirements R1 -
                     { technique: 'dropset' as const, id: 'ds_1', kg: '70', reps: '8' },
                     { technique: 'isometry' as const, reps: '', id: 'iso_1', kg: '50', time: '20' }
                 ],
-                
             };
 
             render(

@@ -265,7 +265,6 @@ describe('RIR reale per singola serie', () => {
                 { technique: 'dropset' as const, id: 'd1', kg: '70', reps: '6' },
                 { technique: 'isometry' as const, reps: '', id: 'i1', kg: '50', time: '15' }
             ],
-            
         });
         await Exporter.exportToCSV([workout], {}, [{ id: 'bench', name: 'Panca' }]);
 
