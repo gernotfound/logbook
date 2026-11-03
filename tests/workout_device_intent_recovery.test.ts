@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { update as idbUpdate } from 'idb-keyval';
+import { get as idbGet, update as idbUpdate } from 'idb-keyval';
 import { DomainParsers, UserDataSchema } from '../src/lib/schema';
 import { equivalentWorkoutSnapshot } from '../src/lib/sync/workoutSnapshotEquality';
 import { activateGuestSession, captureSession, captureSessionForOwner, GUEST_SESSION_KEY, revokeGuestSession } from '../src/lib/sync/session';
@@ -560,7 +560,7 @@ describe('authenticated device-intent replay into semantic journal', () => {
         await expect(recoverWorkoutDeviceIntent(account, () => {
             if (++calls === 4) writeDeviceValue('workout', rawLegacy, account);
             return true;
-        })).rejects.toThrow('Snapshot concorrente durante il recupero');
+        })).rejects.toThrow('identificativo verificabile');
         expect(calls).toBe(4);
         expect((await readLocal(account))?.data.activeWorkout?.exercises[0].sets[0].kg).toBe('60');
         expect(readDeviceValueStrict('workout', account)).toBe(rawLegacy);
@@ -568,25 +568,37 @@ describe('authenticated device-intent replay into semantic journal', () => {
             .toBe(JSON.stringify(first));
     });
 
-    it('repairs an actually missing shared key for a legacy ID-less intent', async () => {
-        const account = 'user:legacy-unbacked-missing-' + crypto.randomUUID();
+    it('rejects an ID-less shared intent without replay, overwrite or cleanup', async () => {
+        const account = 'user:idless-intent-' + crypto.randomUUID();
         const initial = data(workout('50'));
         await prepareAccountWorkoutArchive(account);
         await initializeLocal(account, initial);
         const modern = saveWorkoutDeviceIntent(account, initial.activeWorkout ?? null,
             workout('55'), initial.activeWorkout ?? null);
-        // Pre-private-slot PWA versions stored only an ID-less shared intent.
         writeDeviceValue('workout-intent:' + modern.intentId, null, account);
-        const legacy = { ...modern, intentId: undefined };
-        writeDeviceValue('workout', JSON.stringify(legacy), account);
-        let guardCalls = 0;
-        await recoverWorkoutDeviceIntent(account, () => {
-            if (++guardCalls === 4) writeDeviceValue('workout', null, account);
-            return true;
-        });
-        expect(guardCalls).toBe(4);
-        expect((await readLocal(account))?.data.activeWorkout?.exercises[0].sets[0].kg).toBe('55');
-        expect(readDeviceValueStrict('workout', account)).toBe(JSON.stringify(legacy));
+        const invalid = { ...modern, intentId: undefined };
+        const original = JSON.stringify(invalid);
+        writeDeviceValue('workout', original, account);
+        const sharedKey = protectedDeviceKey('workout', account);
+        const ciphertext = localStorage.getItem(sharedKey);
+        const envelopeKey = 'logbook:v2:' + account;
+        const envelope = await idbGet(envelopeKey);
+        expect(ciphertext).toMatch(/^tlb-sealed:v1:/);
+        expect(envelope).toMatch(/^tlb-sealed:v1:/);
+
+        expect(() => readWorkoutDeviceIntent(account)).toThrow('identificativo verificabile');
+        await expect(recoverWorkoutDeviceIntent(account, () => true)).rejects.toThrow('identificativo verificabile');
+        expect(() => saveWorkoutDeviceIntent(account, modern.workout, workout('60'), modern.baseline))
+            .toThrow('identificativo verificabile');
+        expect(() => persistPlainWorkoutSnapshot(null, account)).toThrow('identificativo verificabile');
+        await expect(commitDomainOperations(account, { type: 'active-workout.set', workout: modern.workout },
+            initial, undefined, invalid as unknown as NonNullable<Parameters<typeof commitDomainOperations>[4]>))
+            .rejects.toThrow('Intento workout non valido per il journal');
+
+        expect(await idbGet(envelopeKey)).toBe(envelope);
+        expect(readDeviceValueStrict('workout', account)).toBe(original);
+        expect(localStorage.getItem(sharedKey)).toBe(ciphertext);
+        expect(readDeviceValueStrict('workout-intent:' + modern.intentId, account)).toBeNull();
     });
 
     it('repairs an unchanged older shared snapshot only when its private ancestor is authentic', async () => {

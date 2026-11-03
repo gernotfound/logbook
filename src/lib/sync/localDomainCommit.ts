@@ -52,9 +52,8 @@ const parse = (value: unknown) => UserDataSchema.parse(value) as unknown as User
 function hasCommittedWorkoutAncestor(
     owner: string,
     candidate: { generation: string; sequence: number; parentIntentId?: string; consentRevision?: number },
-    applied: { generation: string; sequence: number; intentId?: string },
+    applied: { generation: string; sequence: number; intentId: string },
 ): boolean {
-    if (!applied.intentId) return false;
     let parent = candidate.parentIntentId;
     let expectedSeq = candidate.sequence - 1;
     const seen = new Set<string>();
@@ -83,7 +82,7 @@ function hasCommittedWorkoutAncestor(
 export interface DomainCommitResult { operations: SemanticOperation[]; data: UserData; }
 
 export async function commitDomainOperations(owner: string, batch: DomainOperationBatch, initialBase: UserData, guard?: LocalWriteGuard,
-    workoutIntent?: { generation: string; sequence: number; consentRevision?: number; intentId?: string; parentIntentId?: string; ancestorIds?: string[]; baseline: import('../../types').WorkoutSession | null },
+    workoutIntent?: { generation: string; sequence: number; consentRevision?: number; intentId: string; parentIntentId?: string; ancestorIds?: string[]; baseline: import('../../types').WorkoutSession | null },
 ): Promise<DomainCommitResult> {
     owner = normalizeStorageOwner(owner);
     const domainOperations = normalizeDomainOperationBatch(batch);
@@ -108,7 +107,7 @@ export async function commitDomainOperations(owner: string, batch: DomainOperati
                 || !domainOperations[0].workout || !owner.startsWith('user:')
                 || !/^[a-f0-9]{32}$/.test(workoutIntent.generation)
                 || !Number.isSafeInteger(workoutIntent.sequence) || workoutIntent.sequence < 1
-                || (workoutIntent.intentId !== undefined && !/^[a-f0-9]{32}$/.test(workoutIntent.intentId))
+                || typeof workoutIntent.intentId !== 'string' || !/^[a-f0-9]{32}$/.test(workoutIntent.intentId)
                 || (workoutIntent.parentIntentId !== undefined && !/^[a-f0-9]{32}$/.test(workoutIntent.parentIntentId))
                 || (workoutIntent.ancestorIds !== undefined && (!Array.isArray(workoutIntent.ancestorIds)
                     || workoutIntent.ancestorIds.length > 64
@@ -122,18 +121,15 @@ export async function commitDomainOperations(owner: string, batch: DomainOperati
                 throw new Error('Workout attivo cambiato: intento device non applicabile.');
             }
             if (applied?.generation === workoutIntent.generation && applied.sequence > workoutIntent.sequence
-                && applied.intentId && workoutIntent.intentId
                 && !applied.ancestorIds?.includes(workoutIntent.intentId)) {
                 throw new WorkoutIntentConflictError('Intento workout obsoleto ma non riconosciuto come antenato: dati preservati.');
             }
             if (applied?.generation === workoutIntent.generation && applied.sequence >= workoutIntent.sequence) {
                 // A repeated sequence is idempotent only if it represents the
-                // same workout. Different tabs can race on localStorage read/write
+                // same immutable edit. Different tabs can race on localStorage read/write
                 // and independently allocate the same next sequence.
                 if (applied.sequence === workoutIntent.sequence
-                    && (applied.intentId !== undefined && workoutIntent.intentId !== undefined
-                        ? applied.intentId !== workoutIntent.intentId
-                        : !equivalentWorkoutSnapshot(current?.data.activeWorkout, domainOperations[0].workout))) {
+                    && applied.intentId !== workoutIntent.intentId) {
                     throw new WorkoutIntentConflictError('Conflitto tra modifiche concorrenti del workout: journal preservato. Riapri TheLogBook per recuperare lo stato.');
                 }
                 savedData = current!.data;
@@ -141,9 +137,9 @@ export async function commitDomainOperations(owner: string, batch: DomainOperati
                 return current;
             }
             if (applied?.generation === workoutIntent.generation
-                && applied.sequence < workoutIntent.sequence && applied.intentId
-                && (!workoutIntent.intentId || !(workoutIntent.ancestorIds?.includes(applied.intentId)
-                    || hasCommittedWorkoutAncestor(owner, workoutIntent, applied)))) {
+                && applied.sequence < workoutIntent.sequence
+                && !(workoutIntent.ancestorIds?.includes(applied.intentId)
+                    || hasCommittedWorkoutAncestor(owner, workoutIntent, applied))) {
                 throw new WorkoutIntentConflictError('Modifica workout non discendente dallo stato già registrato. Copie preservate.');
             }
             if (applied?.generation !== workoutIntent.generation
@@ -153,7 +149,7 @@ export async function commitDomainOperations(owner: string, batch: DomainOperati
         }
         const intentPatch = workoutIntent
             ? { lastWorkoutDeviceIntent: { generation: workoutIntent.generation, sequence: workoutIntent.sequence,
-                ...(workoutIntent.intentId ? { intentId: workoutIntent.intentId } : {}),
+                intentId: workoutIntent.intentId,
                 ...(workoutIntent.parentIntentId ? { parentIntentId: workoutIntent.parentIntentId } : {}),
                 ...(workoutIntent.ancestorIds ? { ancestorIds: workoutIntent.ancestorIds } : {}) } }
             : {};

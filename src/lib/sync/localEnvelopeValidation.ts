@@ -46,7 +46,7 @@ interface LocalEnvelopeV5 {
     // Owner-local closure ledger fences snapshots from suspended old tabs.
     closedWorkoutIds?: string[];
     // Synchronous device-workout write-ahead intent, journaled atomically with its business edit.
-    lastWorkoutDeviceIntent?: { generation: string; sequence: number; intentId?: string; parentIntentId?: string; ancestorIds?: string[] };
+    lastWorkoutDeviceIntent?: { generation: string; sequence: number; intentId: string; parentIntentId?: string; ancestorIds?: string[] };
 }
 
 export type LocalEnvelope = LocalEnvelopeV5;
@@ -118,9 +118,8 @@ export function validateLocalEnvelope(value: unknown, owner: string): LocalEnvel
         || !/^[a-f0-9]{32}$/.test((record.lastWorkoutDeviceIntent as { generation: string }).generation)
         || !Number.isSafeInteger((record.lastWorkoutDeviceIntent as { sequence?: unknown }).sequence)
         || Number((record.lastWorkoutDeviceIntent as { sequence: number }).sequence) < 1
-        || ((record.lastWorkoutDeviceIntent as { intentId?: unknown }).intentId !== undefined
-            && (typeof (record.lastWorkoutDeviceIntent as { intentId: unknown }).intentId !== 'string'
-                || !/^[a-f0-9]{32}$/.test((record.lastWorkoutDeviceIntent as { intentId: string }).intentId)))
+        || typeof (record.lastWorkoutDeviceIntent as { intentId: unknown }).intentId !== 'string'
+        || !/^[a-f0-9]{32}$/.test((record.lastWorkoutDeviceIntent as { intentId: string }).intentId)
         || ((record.lastWorkoutDeviceIntent as { parentIntentId?: unknown }).parentIntentId !== undefined
             && (typeof (record.lastWorkoutDeviceIntent as { parentIntentId: unknown }).parentIntentId !== 'string'
                 || !/^[a-f0-9]{32}$/.test((record.lastWorkoutDeviceIntent as { parentIntentId: string }).parentIntentId)))

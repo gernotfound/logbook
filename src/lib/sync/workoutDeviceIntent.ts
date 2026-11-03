@@ -59,16 +59,15 @@ export type WorkoutDeviceIntent = {
     // A device-only edit must prove the originating account consent epoch.
     // Guest device state does not use an account consent revision.
     consentRevision?: number;
-    // Old device intents omit this; new writes identify individual edits even
-    // if two browser tabs allocate the same sequence concurrently.
-    intentId?: string;
+    // Identifies each edit even when concurrent tabs allocate the same sequence.
+    intentId: string;
     // Every snapshot names its predecessor, so committed descendants can prove
     // which unacknowledged versions they supersede without a shared write lock.
     parentIntentId?: string;
     // Bounded ancestry proves stale retries without retaining unbounded keys.
     ancestorIds?: string[];
     // Frozen when the first synchronous snapshot is written. Used to fence an
-    // untracked pre-upgrade or cross-tab envelope, not to replace the journal.
+    // untracked cross-tab envelope, not to replace the journal.
     baseline: WorkoutSession | null;
     workout: WorkoutSession;
 };
@@ -92,13 +91,15 @@ function parseIntent(value: unknown, owner: string): WorkoutDeviceIntent | null 
     if (owner.startsWith('user:') && raw.consentRevision === undefined) {
         throw new Error('Intento workout senza provenienza del consenso: copia preservata.');
     }
+    if (typeof raw.intentId !== 'string' || !tokenPattern.test(raw.intentId)) {
+        throw new Error('Intento workout senza identificativo verificabile: copia preservata.');
+    }
     if (raw.__logbookWorkoutIntent !== VERSION || raw.owner !== owner
         || typeof raw.generation !== 'string' || !tokenPattern.test(raw.generation)
         || typeof raw.sequence !== 'number' || !Number.isSafeInteger(raw.sequence)
         || raw.sequence < 1 || raw.sequence > MAX_SEQUENCE
         || (raw.consentRevision !== undefined && (!Number.isSafeInteger(raw.consentRevision)
             || raw.consentRevision < 1))
-        || (raw.intentId !== undefined && (typeof raw.intentId !== 'string' || !tokenPattern.test(raw.intentId)))
         || (raw.parentIntentId !== undefined && (typeof raw.parentIntentId !== 'string' || !tokenPattern.test(raw.parentIntentId)))
         || (raw.ancestorIds !== undefined && (!Array.isArray(raw.ancestorIds) || raw.ancestorIds.length > 64
             || raw.ancestorIds.some(id => typeof id !== 'string' || !tokenPattern.test(id))
@@ -111,7 +112,7 @@ function parseIntent(value: unknown, owner: string): WorkoutDeviceIntent | null 
     const baseline = raw.baseline === null ? null : validatedWorkout(raw.baseline, false);
     return { __logbookWorkoutIntent: 1, owner, generation: raw.generation, sequence: raw.sequence,
         ...(raw.consentRevision !== undefined ? { consentRevision: raw.consentRevision } : {}),
-        ...(raw.intentId ? { intentId: raw.intentId } : {}),
+        intentId: raw.intentId,
         ...(raw.parentIntentId ? { parentIntentId: raw.parentIntentId } : {}),
         ...(raw.ancestorIds ? { ancestorIds: raw.ancestorIds } : {}), baseline, workout };
 }
@@ -161,12 +162,11 @@ export async function releaseCommittedWorkoutSlot(
     owner: string,
     intent: Pick<WorkoutDeviceIntent, 'generation' | 'sequence' | 'intentId' | 'parentIntentId' | 'ancestorIds'>,
 ): Promise<void> {
-    if (!intent.intentId) return;
     const envelope = await readLocal(owner);
     const marker = envelope?.lastWorkoutDeviceIntent;
     if (marker?.generation !== intent.generation || marker.sequence !== intent.sequence
         || marker.intentId !== intent.intentId) return;
-    const slots = new Map(readRecoverySlots(owner).map(slot => [slot.intent.intentId!, slot]));
+    const slots = new Map(readRecoverySlots(owner).map(slot => [slot.intent.intentId, slot]));
     const visited = new Set<string>();
     let id: string | undefined = intent.intentId;
     let parent: string | undefined = intent.parentIntentId;
@@ -287,7 +287,7 @@ export function saveWorkoutDeviceIntent(
         sequence: (existing?.sequence ?? 0) + 1,
         ...(epoch !== undefined ? { consentRevision: epoch } : {}),
         intentId: token(),
-        ...(existing?.intentId ? {
+        ...(existing ? {
             parentIntentId: existing.intentId,
             ancestorIds: [existing.intentId, ...(existing.ancestorIds ?? [])].slice(0, 64),
         } : {}),
@@ -296,7 +296,7 @@ export function saveWorkoutDeviceIntent(
     };
     // Persist the private copy FIRST. If another tab races on the shared key
     // or this second write fails, the new workout still survives the crash.
-    writeDeviceValue(slotName(intent.intentId!), JSON.stringify(intent), owner);
+    writeDeviceValue(slotName(intent.intentId), JSON.stringify(intent), owner);
     writeDeviceValue('workout', JSON.stringify(intent), owner);
     return intent;
 }
@@ -323,9 +323,9 @@ export async function recoverWorkoutDeviceIntent(owner: string, guard: LocalWrit
         if (committed) await releaseCommittedWorkoutSlot(owner, committed.intent);
     }
     const unresolved = readRecoverySlots(owner);
-    const byId = new Map(unresolved.map(slot => [slot.intent.intentId!, slot.intent]));
+    const byId = new Map(unresolved.map(slot => [slot.intent.intentId, slot.intent]));
     const parents = new Set(unresolved.flatMap(slot => slot.intent.parentIntentId ? [slot.intent.parentIntentId] : []));
-    const heads = unresolved.filter(slot => !parents.has(slot.intent.intentId!));
+    const heads = unresolved.filter(slot => !parents.has(slot.intent.intentId));
     if (heads.length > 1 || (unresolved.length > 0 && heads.length !== 1)) {
         throw new WorkoutIntentConflictError('Più schede hanno modifiche workout non riconciliate. Le copie sono preservate.');
     }
@@ -344,12 +344,12 @@ export async function recoverWorkoutDeviceIntent(owner: string, guard: LocalWrit
     };
     if (shared && candidate !== shared && shared.intentId !== candidate.intentId) {
         if (shared.generation !== candidate.generation || shared.sequence >= candidate.sequence
-            || (shared.intentId && !descendsFrom(shared.intentId))) {
+            || !descendsFrom(shared.intentId)) {
             throw new WorkoutIntentConflictError('Snapshot workout di più schede divergenti. Copie preservate.');
         }
     }
     if (applied?.generation === candidate.generation && applied.sequence < candidate.sequence
-        && applied.intentId && !descendsFrom(applied.intentId)) {
+        && !descendsFrom(applied.intentId)) {
         throw new WorkoutIntentConflictError('Modifica workout senza ascendenza verificabile: copie preservate.');
     }
     const intent = candidate;
@@ -368,9 +368,7 @@ export async function recoverWorkoutDeviceIntent(owner: string, guard: LocalWrit
         if (applied.sequence === intent.sequence) {
             // A concurrent tab can publish different workout bytes with the same
             // generation/sequence. Sequence equality alone is not idempotence.
-            if (applied.intentId !== undefined && intent.intentId !== undefined
-                ? applied.intentId !== intent.intentId
-                : !equivalentWorkoutSnapshot(envelope.data.activeWorkout, intent.workout)) {
+            if (applied.intentId !== intent.intentId) {
                 throw new WorkoutIntentConflictError('Conflitto tra modifiche concorrenti del workout: snapshot device preservato.');
             }
             return;
@@ -427,10 +425,8 @@ export async function recoverWorkoutDeviceIntent(owner: string, guard: LocalWrit
     }
     if (!latestShared || latestShared.intentId !== intent.intentId) {
         if (latestShared) {
-            // Only supersede an older, independently backed ancestor. A legacy
-            // intent without a private copy may itself be the only surviving
-            // device edit, even if its sequence is lower than the journalled edit.
-            if (!latestShared.intentId || latestShared.generation !== intent.generation
+            // Supersede only an older ancestor with an authenticated private copy.
+            if (latestShared.generation !== intent.generation
                 || latestShared.sequence >= intent.sequence
                 || !intent.ancestorIds?.includes(latestShared.intentId)) {
                 throw new WorkoutIntentConflictError('Snapshot concorrente durante il recupero. Copia privata preservata.');
