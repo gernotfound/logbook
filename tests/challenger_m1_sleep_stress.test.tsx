@@ -471,7 +471,7 @@ describe('Empirical Challenger: Sleep Format in HH:MM & State Integration Stress
                         date: date2,
                         kcal: 2100, carbs: 240, pro: 155, fat: 58,
                         weight: 75.8,
-                        sleepHours: 7.25 // legacy decimal: 7h 15m -> 07:15
+                        sleepHours: '07:15'
                     }
                 }
             };
@@ -486,7 +486,7 @@ describe('Empirical Challenger: Sleep Format in HH:MM & State Integration Stress
                 fireEvent.click(date2Button);
             });
 
-            expect(container.textContent).toContain('07:15'); // Formatted from legacy 7.25
+            expect(container.textContent).toContain('07:15');
 
             const optionsTrigger = screen.getByRole('button', { name: 'Opzioni' });
             fireEvent.click(optionsTrigger);
