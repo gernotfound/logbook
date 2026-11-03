@@ -26,6 +26,15 @@ describe('Workout Improvements & History Edit Suite', () => {
   });
 
   describe('1. Optional Session Rating Validation', () => {
+    test('validateWorkoutRatings rejects the retired object-shaped rating aliases', () => {
+      const result = Logic.validateWorkoutRatings({ moodRating: 4, pumpRating: 5, fatigueRating: 3 });
+      expect(result.isValid).toBe(false);
+      expect(result.mood).toBeNull();
+      expect(result.pump).toBeNull();
+      expect(result.fatigue).toBeNull();
+      expect(result.errors.mood).not.toBeNull();
+    });
+
     test('validateWorkoutRatings allows completely empty ratings', () => {
       const res = Logic.validateWorkoutRatings('', '', '');
       expect(res.isValid).toBe(true);

@@ -229,14 +229,8 @@ export function filterItems<T extends object>(items: T[], query: string, searchF
     return result;
 }
 
-export function validateWorkoutRatings(mood: any, pump?: any, fatigue?: any) {
-    // Also support object param if passed as single object
-    if (typeof mood === 'object' && mood !== null && !Array.isArray(mood) && pump === undefined) {
-        fatigue = mood.fatigue || mood.fatigueRating;
-        pump = mood.pump || mood.pumpRating;
-        mood = mood.mood || mood.moodRating;
-    }
-    const checkRating = (val: any) => {
+export function validateWorkoutRatings(mood: unknown, pump?: unknown, fatigue?: unknown) {
+    const checkRating = (val: unknown) => {
         if (val === null || val === undefined || val === '') return { val: null, invalid: false };
         if (typeof val === 'number') {
             const ok = Number.isInteger(val) && val >= 1 && val <= 5;
@@ -269,28 +263,6 @@ export function validateWorkoutRatings(mood: any, pump?: any, fatigue?: any) {
             fatigue: f.invalid ? `Voto stanchezza deve essere un valore valido da 1 a 5` : null
         }
     };
-}
-
-export function getWorkoutDatesSet(history: any[]): Set<string> {
-    const datesSet = new Set<string>();
-    if (!Array.isArray(history)) return datesSet;
-    history.forEach(item => {
-        if (!item) return;
-        let dStr = item.date || item.dateStr;
-        if (dStr) {
-            if (typeof dStr === 'string') {
-                dStr = dStr.split('T')[0].trim();
-            } else if (dStr instanceof Date) {
-                const pad = (n: number) => String(n).padStart(2, '0');
-                dStr = `${dStr.getFullYear()}-${pad(dStr.getMonth() + 1)}-${pad(dStr.getDate())}`;
-            }
-            // Format alone cannot establish calendar validity (e.g. 2026-02-30).
-            if (/^\d{4}-\d{2}-\d{2}$/.test(dStr) && parseDateInput(dStr) === dStr) {
-                datesSet.add(dStr);
-            }
-        }
-    });
-    return datesSet;
 }
 
 export interface VolumeExerciseRef {
