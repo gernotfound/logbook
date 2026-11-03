@@ -128,3 +128,130 @@ it('allows an explicitly lossless scalar normalization while applying the semant
     expect((opened['2026-09-13'] as Record<string, unknown>).weight).toBe(80.5);
     expect((opened['2026-09-14'] as Record<string, unknown>).weight).toBe(81);
 });
+
+it.each([
+    {
+        label: 'unmapped root field',
+        path: '',
+        business: { profile: { name: 'Baseline' } },
+        field: ['unmappedBusiness'],
+        value: { note: 'must survive or reject' },
+    },
+    {
+        label: 'root scalar fallback',
+        path: '',
+        business: { profile: { name: 'Baseline' }, nutritionPlanning: { weight: 80 } },
+        field: ['nutritionPlanning', 'weight'],
+        value: 'not-a-number',
+    },
+    {
+        label: 'nutrition scalar fallback',
+        path: 'nutrition_months/2026-09',
+        business: { '2026-09-13': { date: '2026-09-13', weight: 80, meals: [], supplementsIntake: [] } },
+        field: ['2026-09-13', 'weight'],
+        value: 'not-a-number',
+    },
+    {
+        label: 'history scalar fallback',
+        path: 'history_months/2026-09',
+        business: { workout: { id: 'workout', date: '2026-09-13', globalEndTime: 123, exercises: [] } },
+        field: ['workout', 'globalEndTime'],
+        value: 'not-a-number',
+    },
+])('rejects a lossy post-merge $label without committing business or replica progress', async ({ path, business, field, value }) => {
+    const key = new Uint8Array(32).fill(18);
+    const original = sealCloudDocument(key, 'a', path, business, {
+        protocolVersion: 3, clock: {}, fields: {},
+        writer: { slot: 's01', replicaId: 'remote-seed', generation: 1, seq: 0 },
+    });
+    await env.withSecurityRulesDisabled(async context => {
+        await setDoc(doc(asModularFirestore(context.firestore()), 'users/a' + (path ? '/' + path : '')), original);
+    });
+    const db = asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore());
+    const replica = await registerReplica(db, 'a');
+    const controlRef = doc(db, 'users/a/sync_control/state');
+    const control = (await getDoc(controlRef)).data();
+    const operation: SemanticOperation = {
+        docPath: path, path: field, value, isDelete: false,
+        actorId: 's00', seq: 1, clock: { s00: 1 },
+    };
+    const source = structuredClone(operation);
+
+    await expect(applyDocumentChanges(db, 'a', [operation], () => true, replica, key))
+        .rejects.toBeInstanceOf(CloudDataIntegrityError);
+
+    expect(operation).toEqual(source);
+    expect((await getDoc(doc(db, 'users/a' + (path ? '/' + path : '')))).data()).toEqual(original);
+    expect((await getDoc(controlRef)).data()).toEqual(control);
+});
+
+it('does not create any business document or advance the replica when a later document in the batch is lossy', async () => {
+    const db = asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore());
+    const replica = await registerReplica(db, 'a');
+    const controlRef = doc(db, 'users/a/sync_control/state');
+    const control = (await getDoc(controlRef)).data();
+    const operations: SemanticOperation[] = [
+        profileHeightOp(),
+        {
+            docPath: 'nutrition_months/2026-09', path: ['2026-09-13'],
+            value: { date: '2026-09-13', weight: 'not-a-number', meals: [], supplementsIntake: [] },
+            isDelete: false, actorId: 's00', seq: 2, clock: { s00: 2 },
+        },
+    ];
+    const source = structuredClone(operations);
+    await expect(applyDocumentChanges(db, 'a', operations, () => true, replica, new Uint8Array(32).fill(18)))
+        .rejects.toBeInstanceOf(CloudDataIntegrityError);
+    expect(operations).toEqual(source);
+    expect((await getDoc(doc(db, 'users/a'))).exists()).toBe(false);
+    expect((await getDoc(doc(db, 'users/a/nutrition_months/2026-09'))).exists()).toBe(false);
+    expect((await getDoc(controlRef)).data()).toEqual(control);
+});
+
+it('returns the exact normalized business sealed in Firestore for acknowledgement and replay', async () => {
+    const key = new Uint8Array(32).fill(18);
+    const db = asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore());
+    const replica = await registerReplica(db, 'a');
+    const operations: SemanticOperation[] = [
+        profileHeightOp(),
+        {
+            docPath: 'nutrition_months/2026-09', path: ['2026-09-13'],
+            value: { date: '2026-09-13', weight: '80.5', meals: [], supplementsIntake: [] },
+            isDelete: false, actorId: 's00', seq: 2, clock: { s00: 2 },
+        },
+    ];
+    const source = structuredClone(operations);
+    const first = await applyDocumentChanges(db, 'a', operations, () => true, replica, key);
+    for (const [path, business] of first.documents) {
+        const saved = (await getDoc(doc(db, 'users/a' + (path ? '/' + path : '')))).data()!;
+        const opened = openCloudDocument(key, 'a', path, saved);
+        expect(business).toEqual(opened.business);
+        expect(first.syncMeta[path]).toEqual(opened.sync);
+    }
+    expect(first.documents.get('')?.nutritionPlanning).toBeNull();
+    expect(first.documents.get('nutrition_months/2026-09')).toMatchObject({ '2026-09-13': { weight: 80.5 } });
+    const replay = await applyDocumentChanges(db, 'a', operations, () => true, replica, key);
+    expect(replay.documents).toEqual(first.documents);
+    expect(replay.syncMeta).toEqual(first.syncMeta);
+    expect(operations).toEqual(source);
+});
+
+it('preserves explicit null planning through an unrelated root write and replay', async () => {
+    const key = new Uint8Array(32).fill(18);
+    const original = sealCloudDocument(key, 'a', '', {
+        profile: { height: '170' }, nutritionPlanning: null,
+    }, { protocolVersion: 3, clock: {}, fields: {},
+        writer: { slot: 's01', replicaId: 'remote-seed', generation: 1, seq: 0 } });
+    await env.withSecurityRulesDisabled(async context => {
+        await setDoc(doc(asModularFirestore(context.firestore()), 'users/a'), original);
+    });
+    const db = asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore());
+    const replica = await registerReplica(db, 'a');
+    const first = await applyDocumentChanges(db, 'a', [profileHeightOp()], () => true, replica, key);
+    const replay = await applyDocumentChanges(db, 'a', [profileHeightOp()], () => true, replica, key);
+    const saved = (await getDoc(doc(db, 'users/a'))).data()!;
+    const opened = openCloudDocument(key, 'a', '', saved);
+    expect(opened.business).toMatchObject({ profile: { height: '180' }, nutritionPlanning: null });
+    expect(first.documents.get('')).toEqual(opened.business);
+    expect(replay.documents).toEqual(first.documents);
+    expect(replay.syncMeta).toEqual(first.syncMeta);
+});

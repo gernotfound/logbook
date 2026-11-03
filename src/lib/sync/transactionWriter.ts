@@ -23,7 +23,13 @@ import { readAccountCloudDocument } from './cloudDocumentRead';
 export { CloudDataIntegrityError } from './cloudBusinessIntegrity';
 
 function normalizeRemote(path: string, raw: DocumentData): DocumentData {
-    if (path === '') return rootDocument(UserDataSchema.parse(raw) as unknown as UserData);
+    if (path === '') {
+        const root = rootDocument(UserDataSchema.parse(raw) as unknown as UserData);
+        // Missing/null planning denotes absence. Defaulting it to an empty
+        // plan would add nested defaults on subsequent reads and retries.
+        if (raw.nutritionPlanning === null || raw.nutritionPlanning === undefined) root.nutritionPlanning = null;
+        return root;
+    }
     if (path.startsWith('history_months/')) {
         const month = path.split('/')[1];
         assertHistoryMonthDocument(month, raw);
@@ -115,12 +121,16 @@ export async function applyDocumentChanges(
             Object.entries(compactedSyncMetas).map(([path, meta]) => [path, { ...meta, writer }]),
         );
 
+        const documents = new Map<string, DocumentData>();
         for (const [path, docData] of newDocs.entries()) {
-            let business = removeUndefinedValuesForFirestore(docData) as DocumentData;
+            const business = removeUndefinedValuesForFirestore(normalizeRemote(path, docData)) as DocumentData;
+            // Semantic merge can introduce values absent from the validated
+            // remote base. Reject lossy normalization before staging any write.
+            assertCloudBusinessPreserved(path, docData, business);
+            documents.set(path, business);
+        }
 
-            // Migration/normalization always happens before semantic merge; Zod validates the current business schema afterwards.
-            business = removeUndefinedValuesForFirestore(normalizeRemote(path, business)) as DocumentData;
-
+        for (const [path, business] of documents.entries()) {
             const meta = newSyncMetas[path];
             // No plaintext fallback: a missing ADK must fail before any write,
             // even if a ruleset is accidentally deployed out of order.
@@ -137,6 +147,6 @@ export async function applyDocumentChanges(
 
         transaction.set(controlRef, advanceReplicaControl(control, replica, deliveredSeq, batchId));
 
-        return { documents: newDocs, syncMeta: newSyncMetas };
+        return { documents, syncMeta: newSyncMetas };
     }, { maxAttempts: 5 });
 }
