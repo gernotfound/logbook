@@ -76,6 +76,8 @@ La memoria volatile (`running`, timeout, debounce) non è fonte di durabilità.
 
 **MUST:** un risultato tardivo appartenente a un epoch precedente non deve mutare lo stato della sessione corrente.
 
+**MUST (CRITICAL, transizioni cloud→IndexedDB):** hydration, adozione del checkpoint replica e sblocco della barriera di integrità verificano il guard Auth/consenso/scheda **dentro** la callback atomica IndexedDB, dopo qualsiasi attesa di catalogo o storage. Se l'epoch è cambiato, il commit rigetta anche quando avrebbe avuto risultato no-op: preservare byte cifrati, journal, replica e fence, senza riportare successo a un chiamante obsoleto. Il gate UI successivo non sostituisce questo rifiuto al boundary di persistenza.
+
 **MUST:** il gate M3 comprende anche una prova Playwright che distrugge il document/JS realm, riapre l'app offline e verifica che `UserData` persistito nell'envelope IndexedDB sia ancora disponibile. La semantic replay correctness del journal autenticato resta verificata deterministicamente dalla recovery suite isolata.
 
 ## Fault injection
