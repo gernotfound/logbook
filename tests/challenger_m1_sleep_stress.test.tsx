@@ -149,7 +149,7 @@ describe('Empirical Challenger: Sleep Format in HH:MM & State Integration Stress
 
             // Return to today through the center date control.
             act(() => {
-                fireEvent.click(screen.getByRole('button', { name: 'Torna a oggi' }));
+                fireEvent.click(screen.getByRole('button', { name: /Torna a oggi/ }));
             });
 
             expect(hoursInput.value).toBe('08:00');

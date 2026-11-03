@@ -287,7 +287,7 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
                     className="btn ui-login-box-20 auth-guest-action"
                     onClick={loginAsGuest}
                 >
-                    <span>Continua senza account</span>
+                    <span>Continua senza account</span>{' '}
                     <span className="auth-guest-action__detail">
                         I dati saranno salvati solo sul dispositivo.
                     </span>
