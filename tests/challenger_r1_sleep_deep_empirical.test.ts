@@ -10,17 +10,17 @@ describe('Empirical Challenger: Deep Adversarial Sleep Format Suite (R1)', () =>
         it('tests boundary values and extreme clock inputs', () => {
             expect(Logic.formatSleepTime('00:00')).toBe('00:00');
             expect(Logic.formatSleepTime('23:59')).toBe('23:59');
-            expect(Logic.formatSleepTime(0)).toBe('00:00');
-            expect(Logic.formatSleepTime(24)).toBe('23:59');
+            expect(Logic.formatSleepTime(0)).toBe('');
+            expect(Logic.formatSleepTime(24)).toBe('');
 
             expect(Logic.formatSleepTime('24:00')).toBe('');
             expect(Logic.parseSleepInput('24:00')).toBeNull();
             expect(Logic.isSleepTimeValid('24:00')).toBe(false);
 
-            expect(Logic.formatSleepTime('24')).toBe('23:59');
-            expect(Logic.formatSleepTime('24.0')).toBe('23:59');
-            expect(Logic.parseSleepInput('24')).toBe('23:59');
-            expect(Logic.isSleepTimeValid('24')).toBe(true);
+            expect(Logic.formatSleepTime('24')).toBe('');
+            expect(Logic.formatSleepTime('24.0')).toBe('');
+            expect(Logic.parseSleepInput('24')).toBeNull();
+            expect(Logic.isSleepTimeValid('24')).toBe(false);
 
             expect(Logic.formatSleepTime('0:0')).toBe('00:00');
             expect(Logic.formatSleepTime('7:5')).toBe('07:05');
@@ -68,23 +68,11 @@ describe('Empirical Challenger: Deep Adversarial Sleep Format Suite (R1)', () =>
             }
         });
 
-        it('tests legacy decimals with various fractional values and rounding', () => {
-            expect(Logic.formatSleepTime(7.5)).toBe('07:30');
-            expect(Logic.formatSleepTime(0.25)).toBe('00:15');
-            expect(Logic.formatSleepTime(8.0)).toBe('08:00');
-            expect(Logic.formatSleepTime(0)).toBe('00:00');
-            expect(Logic.formatSleepTime(23.99)).toBe('23:59');
-            expect(Logic.formatSleepTime(0.01)).toBe('00:01');
-            expect(Logic.formatSleepTime(0.001)).toBe('00:00');
-            expect(Logic.formatSleepTime(7.333333)).toBe('07:20');
-            expect(Logic.formatSleepTime(7.666667)).toBe('07:40');
-            expect(Logic.formatSleepTime(7.1)).toBe('07:06');
-            expect(Logic.formatSleepTime(7.05)).toBe('07:03');
-
-            expect(Logic.formatSleepTime('7,5')).toBe('07:30');
-            expect(Logic.formatSleepTime('7.5h')).toBe('07:30');
-            expect(Logic.formatSleepTime('7,5H')).toBe('07:30');
-            expect(Logic.formatSleepTime(' 8.25 h ')).toBe('08:15');
+        it('rejects numeric, decimal, and suffixed sleep aliases', () => {
+            for (const value of [0, 7.5, 23.99, '7,5', '7.5h', ' 8.25 h ']) {
+                expect(Logic.formatSleepTime(value)).toBe('');
+                expect(Logic.parseSleepInput(value)).toBeNull();
+            }
         });
 
         it('tests special IEEE-754 floats and non-primitive types safely', () => {
@@ -102,14 +90,14 @@ describe('Empirical Challenger: Deep Adversarial Sleep Format Suite (R1)', () =>
     });
 
     describe('2. NutritionDaySchema & safeOptionalSleepTime Stress Tests', () => {
-        it('normalizes legacy numbers, decimal strings, and modern HH:MM format', () => {
+        it('preserves current HH:MM while rejecting numeric and suffixed fields', () => {
             const raw = {
                 date: '2026-08-20',
                 kcal: 2000,
                 carbs: 200,
                 pro: 150,
                 fat: 50,
-                sleepHours: 8.5,
+                sleepHours: '08:30',
                 sleepDeep: '1.75',
                 sleepLight: '04:15',
                 sleepRem: '1,25h',
@@ -118,10 +106,10 @@ describe('Empirical Challenger: Deep Adversarial Sleep Format Suite (R1)', () =>
 
             const parsed = NutritionDaySchema.parse(raw);
             expect(parsed.sleepHours).toBe('08:30');
-            expect(parsed.sleepDeep).toBe('01:45');
+            expect(parsed.sleepDeep).toBeUndefined();
             expect(parsed.sleepLight).toBe('04:15');
-            expect(parsed.sleepRem).toBe('01:15');
-            expect(parsed.sleepAwake).toBe('00:30');
+            expect(parsed.sleepRem).toBeUndefined();
+            expect(parsed.sleepAwake).toBeUndefined();
         });
 
         it('converts malformed, empty, null, negative, or invalid sleep inputs to undefined', () => {
@@ -247,43 +235,6 @@ describe('Empirical Challenger: Deep Adversarial Sleep Format Suite (R1)', () =>
             const merged = mergeNutrition(cloud, guest);
             expect(merged['2026-08-20'].sleepHours).toBe('07:45');
             expect(merged['2026-08-20'].sleepDeep).toBe('02:00');
-        });
-
-        it('merges guest legacy numbers and cloud strings, and normalizes through UserDataSchema', () => {
-            const cloud = {
-                '2026-08-20': {
-                    date: '2026-08-20',
-                    kcal: 2000,
-                    carbs: 200,
-                    pro: 150,
-                    fat: 50,
-                    sleepHours: '08:00'
-                }
-            };
-            const guest = {
-                '2026-08-20': {
-                    date: '2026-08-20',
-                    kcal: 2000,
-                    carbs: 200,
-                    pro: 150,
-                    fat: 50,
-                    sleepHours: 7.5,
-                    sleepDeep: 1.5
-                }
-            };
-
-            const rawMerged = mergeNutrition(cloud, guest);
-            const userWithMerged = {
-                profile: {},
-                library: [],
-                routines: [],
-                history: [],
-                nutrition: rawMerged
-            };
-
-            const sanitized = UserDataSchema.parse(userWithMerged);
-            expect(sanitized.nutrition['2026-08-20'].sleepHours).toBe('07:30');
-            expect(sanitized.nutrition['2026-08-20'].sleepDeep).toBe('01:30');
         });
 
         it('handles null, undefined, and empty objects safely', () => {
