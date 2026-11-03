@@ -36,12 +36,12 @@ export function classifySyncFailure(error: unknown, options?: { retryable?: bool
     if (direct?.code === 'permission-denied' || (!provenPending && chain.some(item => item.code === 'permission-denied'))) {
         return { ok: false, status: 'rejected', error };
     }
-    if (direct?.code === 'app-check-unavailable') {
+    if (direct?.code === 'app-check-unavailable' || direct?.code === 'cloud-key-unavailable') {
         return { ok: false, status: direct.retryable ? 'local-pending' : 'failed', error };
     }
     // A wrapper may mean the remote result is unsafe even if its cause is transient.
     // Only a direct transport error or an independently proven journal can be pending.
-    if (!provenPending && chain.some(item => item.code === 'app-check-unavailable')) {
+    if (!provenPending && chain.some(item => item.code === 'app-check-unavailable' || item.code === 'cloud-key-unavailable')) {
         return { ok: false, status: 'failed', error };
     }
     if (

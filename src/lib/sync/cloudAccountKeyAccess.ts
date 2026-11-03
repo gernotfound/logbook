@@ -16,10 +16,15 @@ import { captureSessionForOwner, isCurrentSession, userOwner } from './session';
  */
 export class CloudKeyAccessUnavailableError extends Error {
     readonly code = 'cloud-key-unavailable';
-    constructor() {
+    constructor(readonly retryable = false) {
         super('Chiave cloud temporaneamente non disponibile. I dati locali sono conservati.');
         this.name = 'CloudKeyAccessUnavailableError';
     }
+}
+
+function isRetryableTransportFailure(error: unknown): boolean {
+    return error instanceof TypeError || (error instanceof DOMException
+        && (error.name === 'AbortError' || error.name === 'TimeoutError' || error.name === 'NetworkError'));
 }
 
 function decodeKey(value: unknown): Uint8Array {
@@ -65,19 +70,24 @@ async function acquireAccountDataKey(
     const idToken = await auth.currentUser!.getIdToken();
     checkCurrent();
 
+    // Configuration failures are not network outages and must stay fail-closed.
+    const url = trustedBackendUrl('/api/cloud-key') + (purpose === 'rights-export' ? '?purpose=rights-export' : '');
     let response: Response;
     try {
-        response = await fetch(trustedBackendUrl('/api/cloud-key') + (purpose === 'rights-export' ? '?purpose=rights-export' : ''), {
+        response = await fetch(url, {
             method: 'POST',
             cache: 'no-store',
             signal: AbortSignal.timeout(12_000),
             headers: { authorization: 'Bearer ' + idToken, 'x-firebase-appcheck': token },
         });
-    } catch {
-        throw new CloudKeyAccessUnavailableError();
+    } catch (error) {
+        checkCurrent();
+        throw new CloudKeyAccessUnavailableError(isRetryableTransportFailure(error));
     }
     checkCurrent();
-    if (!response.ok) throw new CloudKeyAccessUnavailableError();
+    if (!response.ok) {
+        throw new CloudKeyAccessUnavailableError([408, 429, 500, 502, 503, 504].includes(response.status));
+    }
 
     let payload: unknown;
     try { payload = await response.json(); } catch { throw new CloudKeyAccessUnavailableError(); }
