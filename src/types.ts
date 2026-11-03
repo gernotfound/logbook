@@ -29,7 +29,6 @@ export interface NutritionPlanning {
     offMacros?: { carbsPerKg: number; proPerKg: number; fatPerKg: number };
     notes?: string;
     normocalorica?: Partial<MacroTarget>;
-    totalKcal?: number;
 }
 
 interface ExerciseSet {
@@ -426,11 +425,11 @@ export interface LegalConsent {
 
 export interface UserData {
     profile?: UserProfile;
-    library?: Exercise[]; // Legacy, pre-migration
+    library?: Exercise[]; // Effective app list; root projection persists custom items.
     routines?: WorkoutRoutine[];
     history?: WorkoutSession[];
     nutrition?: Record<string, NutritionDay>;
-    customFoods?: Food[]; // Legacy, pre-migration
+    customFoods?: Food[]; // Effective app list; root projection persists custom items.
     activeWorkout?: WorkoutSession | null;
     nutritionPlanning?: NutritionPlanning;
     trainingCycles?: TrainingCycle[];

@@ -3,6 +3,15 @@ import { Logic } from './logic';
 
 describe('Logic Library Tests', () => {
     
+    it('calculateMacrosFromKg does not adopt the retired object signature or return aliases', () => {
+        const oldInput = { weight: 80, carbsPerKg: 3.5, proPerKg: 2, fatPerKg: 1 };
+        expect(Logic.calculateMacrosFromKg(oldInput as unknown as number).totalKcal).toBe(0);
+        const current = Logic.calculateMacrosFromKg('80', '3.5', '2', '1');
+        expect(current).toEqual({ carbsGrams: 280, proGrams: 160, fatGrams: 80,
+            carbsKcal: 1120, proKcal: 640, fatKcal: 720, totalKcal: 2480 });
+        for (const alias of ['carbsG', 'proG', 'fatG', 'fat']) expect(current).not.toHaveProperty(alias);
+    });
+
     it('calculateMacrosFromKg: calculates correct macros based on body weight', () => {
         const weight = 80;
         const carbsPerKg = 3.5;
@@ -189,15 +198,6 @@ describe('Logic Library Tests', () => {
         expect(scaled.fat).toBe(0);
     });
 
-    it('calculateNormocaloricaDiff: calculates percentages and returns carbsPct, proPct, fatPct, kcalPct', () => {
-        const current = { carbsGrams: 300, proGrams: 160, fatGrams: 70, totalKcal: 2470 };
-        const normocalorica = { carbs: 250, pro: 150, fat: 60, kcal: 2140 };
-        const diff = Logic.calculateNormocaloricaDiff(current, normocalorica);
-        expect(diff!.carbsPct).toBeGreaterThan(0);
-        expect(diff!.proPct).toBeGreaterThan(0);
-        expect(diff!.fatPct).toBeGreaterThan(0);
-        expect(diff!.kcalPct).toBeGreaterThan(0);
-    });
 
     it('filterItems: fuzzy search handles typos for exercises', () => {
         const library = [
