@@ -286,7 +286,8 @@ describe('durable owner-scoped journal', () => {
             baseline: structuredClone(original.baseline),
             pending: [],
         };
-        archive[section] = { ...archive[section], unrecognizedRecoveryField: { count: 1 } };
+        const malformedSnapshot = { ...archive[section], unrecognizedRecoveryField: { count: 1 } };
+        archive[section] = malformedSnapshot;
         await updateArchiveRecord<unknown>('user:a', () => ({
             ...original, archivedConsentJournals: [archive],
         }));
