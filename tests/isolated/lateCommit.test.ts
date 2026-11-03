@@ -109,6 +109,47 @@ it('retains one writer after timeout and acknowledges its late commit before ret
     expect(remote.apply).toHaveBeenCalledTimes(1);
 });
 
+it('keeps a queued epoch retry pending when the prior writer has a different delivered batch', async () => {
+    const stalled = deferred<any>();
+    remote.apply.mockReturnValueOnce(stalled.promise)
+        .mockRejectedValueOnce(Object.assign(new Error('Injected transient failure'), { code: 'unavailable' }));
+    const previousEpoch = replicateJournal();
+    await vi.waitFor(() => expect(remote.apply).toHaveBeenCalledTimes(1));
+
+    // A checkpoint can rebase the same owner journal onto a new replica while
+    // the old remote write is still in flight. The new attempt is queued.
+    invalidateSession();
+    const now = Date.now();
+    await adoptReplicaCheckpoint('user:a', {
+        identity: {
+            slot: 's01',
+            replicaId: 'replica-b',
+            generation: 1,
+            checkpointAtMs: now,
+            leaseUntilMs: now + 360 * 24 * 60 * 60 * 1000,
+        },
+        baseSeq: 0,
+    }, { clock: {}, syncMetaByDocument: {} });
+    const rebased = await readLocal('user:a');
+    expect(rebased?.pending.length).toBeGreaterThan(0);
+    expect(rebased?.pending.every(operation => operation.actorId === 's01')).toBe(true);
+    const ciphertext = await get('logbook:v2:user:a');
+
+    const queuedEpoch = replicateJournal();
+    await vi.advanceTimersByTimeAsync(7001);
+
+    expect((await previousEpoch).status).toBe('failed');
+    // The queued epoch has delivered nothing yet. Its valid s01 journal must
+    // not be tested against the old s00 delivery and classified as lost.
+    expect((await queuedEpoch).status).toBe('local-pending');
+    expect(await get('logbook:v2:user:a')).toEqual(ciphertext);
+
+    stalled.reject(new Error('Previous session expired'));
+    await waitForJournalIdle('user:a');
+    expect(remote.apply).toHaveBeenCalledTimes(2);
+    expect((await readLocal('user:a'))?.pending).toEqual(rebased?.pending);
+});
+
 it('hard-fails a timeout when the in-flight delivered batch is no longer durable', async () => {
     const completion = deferred<any>();
     remote.apply.mockReturnValue(completion.promise);

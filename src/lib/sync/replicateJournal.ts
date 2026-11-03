@@ -88,7 +88,6 @@ async function requireDurableDeliveredBatch(
 }
 
 const running = new Map<string, Promise<void>>();
-const deliveryStates = new Map<string, DeliveryState>();
 export async function waitForJournalIdle(owner: string): Promise<void> {
     const work = running.get(owner);
     if (work) { try { await work; } catch { /* Cancellation/rejection has settled; no writer remains active. */ } }
@@ -175,6 +174,7 @@ async function drain(session: ReturnType<typeof captureSession>, deliveryState: 
 async function classifyTimedOutWork(
     session: ReturnType<typeof captureSession>,
     error: SyncTimeoutError,
+    deliveryState: DeliveryState,
 ): Promise<SyncResult> {
     if (!isWritableSession(session)) return { ok: false, status: 'failed', error };
 
@@ -189,7 +189,7 @@ async function classifyTimedOutWork(
         return { ok: false, status: 'failed', error: new UnsafeDeliveredBatchError(error) };
     }
 
-    const delivered = deliveryStates.get(session.owner)?.delivered;
+    const delivered = deliveryState.delivered;
     if (delivered?.length) {
         if (!containsDeliveredBatch(retained.pending, delivered)) {
             return { ok: false, status: 'failed', error: new UnsafeDeliveredBatchError(error) };
@@ -217,8 +217,8 @@ export async function replicateJournal(expectedOwner?: string): Promise<SyncResu
         }
         if (typeof navigator !== 'undefined' && !navigator.onLine) return { ok: false, status: 'local-pending', error: new Error('Connessione assente') };
         const previous = running.get(session.owner);
-        const deliveryState = deliveryStates.get(session.owner) ?? { delivered: null };
-        deliveryStates.set(session.owner, deliveryState);
+        // A queued attempt must not inherit the prior writer's delivered batch.
+        const deliveryState: DeliveryState = { delivered: null };
         const work = (async () => {
             if (previous) { try { await previous; } catch { /* A new epoch retries its own remaining journal. */ } }
             await drain(session, deliveryState);
@@ -228,14 +228,13 @@ export async function replicateJournal(expectedOwner?: string): Promise<SyncResu
         void work.finally(() => {
             if (running.get(session.owner) === work) {
                 running.delete(session.owner);
-                deliveryStates.delete(session.owner);
             }
         }).catch(() => {});
         try {
             await withTimeout(work, 7000, 'Sincronizzazione in attesa; copia locale conservata');
             return { ok: true, status: 'synced' };
         } catch (error) {
-            if (error instanceof SyncTimeoutError) return classifyTimedOutWork(session, error);
+            if (error instanceof SyncTimeoutError) return classifyTimedOutWork(session, error, deliveryState);
             throw error;
         }
     } catch (error) {
