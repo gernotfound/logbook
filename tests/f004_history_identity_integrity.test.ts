@@ -73,7 +73,7 @@ describe('F-004 training history identity integrity', () => {
         expect(userData.history?.map(item => item.id)).toEqual(expectedIds);
     });
 
-    it('quarantines ghost workouts during encrypted owner envelope recovery', async () => {
+    it('preserves the authenticated ciphertext when malformed history would be discarded on recovery', async () => {
         const owner = 'user:test-user-id';
         await prepareUnlockedTestArchive(owner);
         const base = UserDataSchema.parse({}) as unknown as UserData;
@@ -89,9 +89,11 @@ describe('F-004 training history identity integrity', () => {
         await set(key, sealLocalJson(unlocked, owner, key, record));
         expect((await get<string>(key))?.startsWith(SEALED_LOCAL_PREFIX)).toBe(true);
 
-        const envelope = await readLocal(owner);
-        expect(envelope?.data.history?.map(item => item.id)).toEqual(expectedIds);
-        expect(envelope?.baseline.history?.map(item => item.id)).toEqual(expectedIds);
+        const encryptedOriginal = await get<string>(key);
+        await expect(readLocal(owner)).rejects.toThrow('non conservabili');
+        // Zod still quarantines untrusted ghost records in a transient view, but
+        // no durable owner journal may be rewritten after a lossy parse.
+        expect(await get<string>(key)).toBe(encryptedOriginal);
     });
 
     it('preserves a prototype-named workout identity as an own monthly record without changing the object prototype', () => {

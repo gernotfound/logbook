@@ -75,7 +75,7 @@ describe('F-006 active workout persisted business identity', () => {
         expect(DomainParsers.parseActiveWorkout(validWorkout)).toMatchObject(validWorkout);
     });
 
-    it('quarantines malformed active workouts from IndexedDB and device-local recovery without losing valid sessions', async () => {
+    it('preserves malformed encrypted active workouts and separately enforces device-local identity', async () => {
         const base = UserDataSchema.parse({}) as unknown as UserData;
         const owner = captureSession().owner;
         if (owner.startsWith('user:')) {
@@ -92,9 +92,9 @@ describe('F-006 active workout persisted business identity', () => {
         }));
         expect(await get<string>(key)).toMatch(/^tlb-sealed:v1:/);
 
-        const envelope = await readLocal(owner);
-        expect(envelope?.data.activeWorkout).toBeNull();
-        expect(envelope?.baseline.activeWorkout).toBeNull();
+        const encryptedOriginal = await get<string>(key);
+        await expect(readLocal(owner)).rejects.toThrow('non conservabili');
+        expect(await get<string>(key)).toBe(encryptedOriginal);
 
         // A new bootstrap cannot replace an existing durable envelope.
         // Reset the test fixture explicitly before seeding its next lifecycle.
