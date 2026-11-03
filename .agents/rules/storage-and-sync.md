@@ -154,6 +154,8 @@ RAW STORAGE
 
 **MUST:** migrazione/normalizzazione avviene PRIMA di `UserDataSchema`, `documentProjection` e semantic merge.
 
+**MUST (archivio IndexedDB corrente):** dopo la verifica delle versioni, il parsing Zod di `data`, `baseline` e delle copie `archivedConsentJournals` non può scartare o sostituire valori business originariamente autenticati dal vault. Il confronto lossless, condiviso col boundary cloud, ammette solo le conversioni scalari reversibili comprovate. In caso contrario la lettura e ogni commit successivo falliscono senza riscrivere il ciphertext originale; un fallback Zod non dimostra l’assenza di dati.
+
 **MUST:** i documenti mensili vengono normalizzati individualmente prima di essere composti nel `UserData`; mixed-version shards non possono essere fusi alla cieca.
 
 **MUST:** data business e `_sync` fanno parte dello stesso stato di migrazione logico. Una futura rinomina di campo deve poter rinominare anche la causal path corrispondente.

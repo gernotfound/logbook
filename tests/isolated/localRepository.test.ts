@@ -253,6 +253,69 @@ describe('durable owner-scoped journal', () => {
         expect(await get(key)).toBe(sealed);
     });
 
+    it.each([
+        ['unknown root business field', (record: any) => ({ ...record, data: { ...record.data, futureRootValue: { protected: 17 } } })],
+        ['nested Zod fallback', (record: any) => ({ ...record, data: { ...record.data, profile: { ...record.data.profile, height: { invalid: true } } } })],
+        ['unknown baseline business field', (record: any) => ({ ...record, baseline: { ...record.baseline, futureRootValue: { protected: 18 } } })],
+    ] as const)('rejects lossy local envelope normalization (%s) without changing encrypted bytes', async (_name, corrupt) => {
+        await prepareOwnerVault('user:a');
+        const initial = data(170);
+        await initializeLocal('user:a', initial);
+        const original = await readLocal('user:a');
+        await updateArchiveRecord<unknown>('user:a', () => corrupt(original));
+        const key = 'logbook:v2:user:a';
+        const ciphertext = await get<string>(key);
+        expect(ciphertext).toMatch(/^tlb-sealed:v1:/);
+
+        await expect(readLocal('user:a')).rejects.toThrow('non conservabili');
+        await expect(commitDomainOperations('user:a', { type: 'profile.patch', patch: { height: '180' } }, initial))
+            .rejects.toThrow('non conservabili');
+        await expect(hydrateLocal('user:a', data(175), [], undefined, 'window'))
+            .rejects.toThrow('non conservabili');
+        expect(await get(key)).toBe(ciphertext);
+    });
+
+    it.each(['data', 'baseline'] as const)('rejects a lossy archived consent %s snapshot while retaining recovery bytes', async section => {
+        await prepareOwnerVault('user:a');
+        await initializeLocal('user:a', data(170));
+        const original = (await readLocal('user:a'))!;
+        const archive = {
+            sourceConsentRevision: 1,
+            capturedAt: '2026-11-03T00:00:00.000Z',
+            data: structuredClone(original.data),
+            baseline: structuredClone(original.baseline),
+            pending: [],
+        };
+        archive[section] = { ...archive[section], unrecognizedRecoveryField: { count: 1 } };
+        await updateArchiveRecord<unknown>('user:a', () => ({
+            ...original, archivedConsentJournals: [archive],
+        }));
+        const key = 'logbook:v2:user:a';
+        const ciphertext = await get<string>(key);
+        await expect(readLocal('user:a')).rejects.toThrow('non conservabili');
+        await expect(commitLocal('user:a', data(171), original.data)).rejects.toThrow('non conservabili');
+        expect(await get(key)).toBe(ciphertext);
+    });
+
+    it('allows reversible local scalar normalization without blocking subsequent journal writes', async () => {
+        await prepareOwnerVault('user:a');
+        const initial = data(170);
+        await initializeLocal('user:a', initial);
+        const record = (await readLocal('user:a'))!;
+        await updateArchiveRecord<unknown>('user:a', () => ({
+            ...record,
+            data: { ...record.data, profile: { ...record.data.profile, height: 170 } },
+            baseline: { ...record.baseline, profile: { ...record.baseline.profile, height: 170 } },
+        }));
+        const normalized = (await readLocal('user:a'))!;
+        expect(normalized.data.profile?.height).toBe('170');
+        expect(normalized.baseline.profile?.height).toBe('170');
+        await commitDomainOperations('user:a', { type: 'profile.patch', patch: { height: '171' } }, normalized.data);
+        const changed = (await readLocal('user:a'))!;
+        expect(changed.data.profile?.height).toBe('171');
+        expect(changed.pending.length).toBeGreaterThan(0);
+    });
+
     it('writes independent current envelope/data/sync versions', async () => {
         await prepareOwnerVault('user:a');
         await initializeLocal('a', data(170));
