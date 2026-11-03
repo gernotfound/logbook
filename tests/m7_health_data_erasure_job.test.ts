@@ -18,12 +18,13 @@ vi.mock('../server/accountDeletion/firebaseAdmin', () => {
     doc: (id: string) => document(path + '/' + id),
     ...query(path, []),
   });
-  function query(path: string, constraints: Array<[string, string, unknown]>, max = 1000) {
+  function query(path: string, constraints: Array<[string, string, unknown]>, max = 1000, after = '') {
     return {
-      where: (field: string, op: string, value: unknown) => query(path, [...constraints, [field, op, value]], max),
-      limit: (count: number) => query(path, constraints, count),
-      select: () => query(path, constraints, max),
-      orderBy: () => query(path, constraints, max),
+      where: (field: string, op: string, value: unknown) => query(path, [...constraints, [field, op, value]], max, after),
+      limit: (count: number) => query(path, constraints, count, after),
+      select: () => query(path, constraints, max, after),
+      orderBy: () => query(path, constraints, max, after),
+      startAfter: (snapshot: { ref: { path: string } }) => query(path, constraints, max, snapshot.ref.path),
       get: async () => {
         if (fixture.pauseQuery?.path === path) {
           const pause = fixture.pauseQuery;
@@ -47,8 +48,16 @@ vi.mock('../server/accountDeletion/firebaseAdmin', () => {
             }
             return false;
           });
-        }).sort().slice(0, max).map(key => getSnapshot(key));
-        return { docs, size: docs.length, empty: docs.length === 0 };
+        }).sort((left, right) => {
+          const a = fixture.records.get(left)?.purgeAfter;
+          const b = fixture.records.get(right)?.purgeAfter;
+          const timeA = a instanceof Timestamp ? a.toMillis() : 0;
+          const timeB = b instanceof Timestamp ? b.toMillis() : 0;
+          return timeA - timeB || left.localeCompare(right);
+        });
+        const cursorIndex = after ? docs.findIndex(key => key === after) : -1;
+        const paged = docs.slice(after ? cursorIndex + 1 : 0, (after ? cursorIndex + 1 : 0) + max).map(key => getSnapshot(key));
+        return { docs: paged, size: paged.length, empty: paged.length === 0 };
       },
     };
   }
@@ -186,6 +195,23 @@ describe('trusted data-only erasure worker', () => {
     expect(await purgeExpiredCompletedHealthErasures(Date.now() + 30000)).toBe(1);
     expect(fixture.records.has(markerPath('a'))).toBe(false);
     expect(fixture.records.has(consentPath('a'))).toBe(true);
+  });
+
+  it('scans beyond a full page of ineligible expired receipts without starving later valid ones', async () => {
+    const expired = Timestamp.fromMillis(Date.now() - 60_000);
+    for (let i = 0; i < 100; i++) {
+      const uid = 'invalid-' + String(i).padStart(3, '0');
+      fixture.records.set(markerPath(uid), {
+        uid, status: 'complete', consentRevision: 3, purgeAfter: expired,
+      });
+    }
+    fixture.records.set(markerPath('valid'), {
+      uid: 'valid', status: 'complete', consentRevision: 3, purgeAfter: expired,
+    });
+    fixture.records.set(consentPath('valid'), { uid: 'valid', status: 'withdrawn', revision: 4, erasedBeforeRevision: 3 });
+    expect(await purgeExpiredCompletedHealthErasures(Date.now() + 30_000)).toBe(1);
+    expect(fixture.records.has(markerPath('valid'))).toBe(false);
+    expect(fixture.records.has(markerPath('invalid-000'))).toBe(true);
   });
 
   it('never authorizes local purge using a receipt from a prior reaccepted generation', async () => {
