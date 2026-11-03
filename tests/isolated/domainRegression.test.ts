@@ -23,11 +23,12 @@ describe('audit data regression cases', () => {
         expect(safeOptionalNumber().parse(value)).toBeUndefined();
         expect(safeOptionalNullableNumber().parse(value)).toBeNull();
     });
-    it('migrates legacy decimal sleep without discarding zero', () => {
-        expect(formatSleepTime(7.5)).toBe('07:30');
-        expect(formatSleepTime('7,5')).toBe('07:30');
-        expect(formatSleepTime(0)).toBe('00:00');
-        expect(NutritionDaySchema.parse({ sleepHours: 7.5 }).sleepHours).toBe('07:30');
+    it('keeps canonical sleep and rejects unsupported pre-launch decimals', () => {
+        expect(formatSleepTime('00:00')).toBe('00:00');
+        expect(formatSleepTime('07:30')).toBe('07:30');
+        expect(formatSleepTime(7.5)).toBe('');
+        expect(formatSleepTime('7,5')).toBe('');
+        expect(NutritionDaySchema.parse({ sleepHours: 7.5 }).sleepHours).toBeUndefined();
     });
     it('honors the explicit cycle end even if durationWeeks is stale', () => {
         const cycle = { id: 'c', name: 'Ciclo', startDate: '2026-09-01', endDate: '2026-09-10', durationWeeks: 1, routines: [] };
