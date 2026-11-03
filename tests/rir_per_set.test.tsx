@@ -160,7 +160,10 @@ describe('RIR reale per singola serie', () => {
         expect(workout.exercises[0].sets[0]).toMatchObject({ kg: '100', reps: '8' });
 
         render(<SessionSetRow
-            set={{ id: 'special', kg: '80', reps: '10', rir: 1, dropsets: [{ id: 'd1', kg: '60', reps: '8' }], isometrics: [{ id: 'i1', kg: '40', time: '20' }] }}
+            set={{ id: 'special', kg: '80', reps: '10', rir: 1, segments: [
+                { technique: 'dropset' as const, id: 'd1', kg: '60', reps: '8' },
+                { technique: 'isometry' as const, reps: '', id: 'i1', kg: '40', time: '20' }
+            ],  }}
             sIndex={1} exIndex={0} trackingType="weight_reps" isOpenMenu={true}
             onToggleMenu={vi.fn()} onRemoveSet={vi.fn()} onUpdateSet={vi.fn()}
             onAddSpecialSet={vi.fn()} onUpdateSpecialSet={vi.fn()} onRemoveSpecialSet={vi.fn()} onUpdateSetTarget={vi.fn()}
@@ -229,14 +232,22 @@ describe('RIR reale per singola serie', () => {
     });
 
     it('round-trip backup/import e merge preservano RIR senza inventarlo negli allenamenti vecchi', () => {
-        const data = parseUserData({ history: [session(0), { ...session(), id: 'legacy' }] });
+        const active = session(0);
+        active.exercises[0].sets[0].segments = [
+            { id: 'drop-backup', technique: 'dropset', kg: '80', reps: '5' },
+            { id: 'iso-backup', technique: 'isometry', kg: '40', reps: '', time: '20' },
+        ];
+        const data = parseUserData({ history: [active, { ...session(), id: 'legacy' }] });
         const backup = JSON.parse(JSON.stringify(createBackup(data, 'guest')));
         const restored = prepareImport(parseUserData({}), decodeImport(backup, 'guest').data, 'restore').data;
         expect(restored.history?.[0].exercises[0].sets[0].rir).toBe(0);
+        expect(restored.history?.[0].exercises[0].sets[0].segments).toEqual(active.exercises[0].sets[0].segments);
         expect(restored.history?.[1].exercises[0].sets[0]).not.toHaveProperty('rir');
 
         const merged = mergeUserData(parseUserData({ history: [] }), data);
         expect(merged.history?.find(w => w.id === 'w-rir')?.exercises[0].sets[0].rir).toBe(0);
+        expect(merged.history?.find(w => w.id === 'w-rir')?.exercises[0].sets[0].segments)
+            .toEqual(active.exercises[0].sets[0].segments);
     });
 
     it('esporta CSV con RIR subito dopo le ripetizioni, vuoto se assente e vuoto per dropset/isometrie', async () => {
@@ -250,8 +261,11 @@ describe('RIR reale per singola serie', () => {
         delete workout.globalStartTime;
         workout.exercises[0].sets.push({
             id: 's2', kg: '90', reps: '10',
-            dropsets: [{ id: 'd1', kg: '70', reps: '6' }],
-            isometrics: [{ id: 'i1', kg: '50', time: '15' }],
+            segments: [
+                { technique: 'dropset' as const, id: 'd1', kg: '70', reps: '6' },
+                { technique: 'isometry' as const, reps: '', id: 'i1', kg: '50', time: '15' }
+            ],
+            
         });
         await Exporter.exportToCSV([workout], {}, [{ id: 'bench', name: 'Panca' }]);
 

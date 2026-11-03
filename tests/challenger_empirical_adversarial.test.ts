@@ -605,15 +605,13 @@ describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & D
                                 kg: 100, // converted to '100'
                                 reps: 10, // converted to '10'
                                 done: 'true', // string boolean converted to true
-                                dropsets: [
-                                    { id: 'ds_1', kg: 80, reps: '6' },
-                                    'corrupted_dropset_string', // falls back to default
-                                    null
+                                segments: [
+                                    { technique: 'dropset' as const, id: 'ds_1', kg: 80, reps: '6' },
+                                    'corrupted_segment_string', // invalid segment quarantined
+                                    null,
+                                    { technique: 'isometry' as const, reps: '', id: 'iso_1', kg: 50, time: 20 },
+                                    12345 // invalid segment quarantined
                                 ],
-                                isometrics: [
-                                    { id: 'iso_1', kg: 50, time: 20 },
-                                    12345 // falls back to default
-                                ]
                             },
                             null, // corrupted set element falls back to default
                             { kg: 'NaN', reps: null }
@@ -633,8 +631,8 @@ describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & D
             expect(parsed.exercises[0].sets[0].kg).toBe('100');
             expect(parsed.exercises[0].sets[0].reps).toBe('10');
             expect(parsed.exercises[0].sets[0].done).toBe(true);
-            expect(parsed.exercises[0].sets[0].dropsets).toHaveLength(3);
-            expect(parsed.exercises[0].sets[0].isometrics).toHaveLength(2);
+            expect(parsed.exercises[0].sets[0].segments?.filter(segment => segment.technique === 'dropset')).toHaveLength(1);
+            expect(parsed.exercises[0].sets[0].segments?.filter(segment => segment.technique === 'isometry')).toHaveLength(1);
         });
 
         it('3.3: parseHistory sanitizes arrays containing corrupted items without crashing or dropping valid entries', () => {

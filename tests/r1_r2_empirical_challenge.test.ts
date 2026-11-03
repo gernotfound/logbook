@@ -335,9 +335,9 @@ describe('EMPIRICAL ADVERSARIAL SUITE — R1 (TDEE Calculation) & R2 (Workout Vo
                                 id: 's1',
                                 kg: '20',
                                 reps: '10',
-                                dropsets: [
-                                    { id: 'ds1', kg: '15', reps: '8' },
-                                    { id: 'ds2', kg: '10', reps: '8' }
+                                segments: [
+                                    { technique: 'dropset' as const, id: 'ds1', kg: '15', reps: '8' },
+                                    { technique: 'dropset' as const, id: 'ds2', kg: '10', reps: '8' }
                                 ]
                             }
                         ]
@@ -354,9 +354,9 @@ describe('EMPIRICAL ADVERSARIAL SUITE — R1 (TDEE Calculation) & R2 (Workout Vo
                                 id: 's2',
                                 kg: '20',
                                 reps: '5',
-                                dropsets: [
-                                    { id: 'ds3', kg: '10', reps: '5' },
-                                    { id: 'ds4', kg: '0', reps: '5' }
+                                segments: [
+                                    { technique: 'dropset' as const, id: 'ds3', kg: '10', reps: '5' },
+                                    { technique: 'dropset' as const, id: 'ds4', kg: '0', reps: '5' }
                                 ]
                             }
                         ]

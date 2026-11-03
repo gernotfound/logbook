@@ -339,9 +339,9 @@ describe('Workout Improvements & History Edit Suite', () => {
                 id: 's3', 
                 kg: '80', 
                 reps: '8', 
-                dropsets: [
-                  { id: 'ds1', kg: '60', reps: '6' },
-                  { id: 'ds2', kg: '40', reps: '6' }
+                segments: [
+                    { technique: 'dropset' as const, id: 'ds1', kg: '60', reps: '6' },
+                  { technique: 'dropset' as const, id: 'ds2', kg: '40', reps: '6' }
                 ] 
               }
             ]

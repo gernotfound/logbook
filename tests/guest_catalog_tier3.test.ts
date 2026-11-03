@@ -205,7 +205,7 @@ describe('Integration Suite: Guest Mode & Global Catalog Resolution', () => {
                             { id: 's1', kg: '90', reps: '8', done: true },
                             { id: 's2', kg: '90', reps: '8', done: true },
                             { id: 's3', kg: '90', reps: '7', done: true },
-                            { id: 's4', kg: '90', reps: '6', done: true, dropsets: [{ id: 'ds1', kg: '70', reps: '6' }] }
+                            { id: 's4', kg: '90', reps: '6', done: true, segments: [{ technique: 'dropset' as const, id: 'ds1', kg: '70', reps: '6' }] }
                         ]
                     },
                     {

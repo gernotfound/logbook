@@ -139,9 +139,7 @@ export function requireCompleteHistoryMonthDocument(month: string, data: Record<
                 const rawSet = sourceSets[j] as Record<string, unknown>;
                 const validSet = validSets[j] as Record<string, unknown>;
                 if (!rawSet || typeof rawSet !== 'object' || !validSet || typeof validSet !== 'object') continue;
-                for (const nested of ['segments', 'dropsets', 'isometrics']) {
-                    checkArray(rawSet, validSet, nested, id + '/sets/' + nested);
-                }
+                checkArray(rawSet, validSet, 'segments', id + '/sets/segments');
             }
         }
     }

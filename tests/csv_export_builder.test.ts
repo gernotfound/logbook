@@ -13,9 +13,13 @@ describe('pure CSV export builder', () => {
                 technicalStandard: 'ROM completo',
                 sets: [{
                     id: 'set-1', kg: '70', reps: '8', rir: 0, technique: 'dropset',
-                    segments: [{ id: 'seg-1', kg: '50', reps: '4', technique: 'dropset', restBeforeSeconds: 45 }],
-                    dropsets: [{ id: 'drop-1', kg: '45', reps: '5' }],
-                    isometrics: [{ id: 'iso-1', kg: '30', time: '10' }],
+                    segments: [
+                        { id: 'seg-1', kg: '50', reps: '4', technique: 'dropset', restBeforeSeconds: 45 },
+                        { technique: 'dropset' as const, id: 'drop-1', kg: '45', reps: '5' },
+                        { technique: 'isometry' as const, reps: '', id: 'iso-1', kg: '30', time: '10' }
+                    ],
+                    
+                    
                 }],
             }],
         };
@@ -38,7 +42,7 @@ describe('pure CSV export builder', () => {
         const byName = new Map(files);
         const workouts = byName.get('allenamenti.csv')!;
         const rows = workouts.trimEnd().split('\n');
-        expect(rows).toHaveLength(5); // header, primary set, continuation, dropset, isometry
+        expect(rows).toHaveLength(5); // header, primary set and three continuation segments
         expect(rows[1]).toContain('"\'=formula"');
         expect(rows[1]).toContain('"\'@Bench"');
         expect(rows[1]).toContain('"set-1"');

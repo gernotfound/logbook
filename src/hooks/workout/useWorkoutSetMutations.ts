@@ -45,11 +45,7 @@ export function useWorkoutSetMutations({ setLocalWorkout, showConfirm }: UseWork
                             ? { type: 'reps', reps: previousReps, sourceSetId: previous.id }
                             : undefined;
 
-                        const legacySegments = [
-                            ...(s.dropsets || []).map((ds: any) => ({ id: ds.id || Logic.generateId('seg'), kg: ds.kg ?? '', reps: ds.reps ?? '', technique: 'dropset' })),
-                            ...(s.isometrics || []).map((iso: any) => ({ id: iso.id || Logic.generateId('seg'), kg: iso.kg ?? '', reps: '', time: iso.time ?? '', technique: 'isometry' })),
-                        ];
-                        const existingSegments = Array.isArray(s.segments) && s.segments.length > 0 ? s.segments : legacySegments;
+                        const existingSegments = s.segments ?? [];
                         const newSegment: any = {
                             id: Logic.generateId('seg'),
                             kg: '',
@@ -62,7 +58,7 @@ export function useWorkoutSetMutations({ setLocalWorkout, showConfirm }: UseWork
                         const primaryTechnique = nextSegments
                             .map((segment: any) => segment.technique ?? s.technique)
                             .find((technique: string | undefined) => technique && technique !== 'straight' && technique !== 'isometry');
-                        const { dropsets: _legacyDropsets, isometrics: _legacyIsometrics, technique: _oldTechnique, ...base } = s;
+                        const { technique: _oldTechnique, ...base } = s;
                         return {
                             ...base,
                             ...(primaryTechnique ? { technique: primaryTechnique } : {}),
@@ -172,7 +168,7 @@ export function useWorkoutSetMutations({ setLocalWorkout, showConfirm }: UseWork
     // an unmounting child must never be retargeted to its successor's index.
     const matchesSpecialItem = (item: { id?: string }, index: number, selector: number | string) =>
         typeof selector === 'string' ? item.id === selector : index === selector;
-    const updateSpecialSet = useCallback((exIndex: number, setId: string, collection: string, specIndex: number | string, field: string, value: any) => {
+    const updateSpecialSet = useCallback((exIndex: number, setId: string, collection: 'segments', specIndex: number | string, field: string, value: any) => {
         setLocalWorkout((prev) => {
             if (!prev) return prev;
             let changed = false;
@@ -199,7 +195,7 @@ export function useWorkoutSetMutations({ setLocalWorkout, showConfirm }: UseWork
         });
     }, [setLocalWorkout]);
 
-    const removeSpecialSet = useCallback((exIndex: number, setId: string, collection: string, specIndex: number | string) => {
+    const removeSpecialSet = useCallback((exIndex: number, setId: string, collection: 'segments', specIndex: number | string) => {
         setLocalWorkout((prev) => {
             if (!prev) return prev;
             let changed = false;
@@ -210,21 +206,18 @@ export function useWorkoutSetMutations({ setLocalWorkout, showConfirm }: UseWork
                         || !s[collection].some((item: any, idx: number) => matchesSpecialItem(item, idx, specIndex))) return s;
                     changed = true;
                     const next = s[collection].filter((item: any, idx: number) => !matchesSpecialItem(item, idx, specIndex));
-                        if (collection === 'segments') {
-                            if (next.length === 0) {
-                                const { technique: _technique, segments: _segments, target: _target, ...straight } = s;
-                                return straight;
-                            }
-                            const effectiveTechniques = next.map((segment: any) => segment.technique ?? s.technique);
-                            const primaryTechnique = effectiveTechniques.find((technique: string | undefined) => technique && technique !== 'straight' && technique !== 'isometry');
-                            const keepsRootTarget = effectiveTechniques.some((technique: string | undefined) => technique === 'rep_match' || technique === 'diminishing');
-                            const updated = { ...s, segments: next };
-                            if (primaryTechnique) updated.technique = primaryTechnique;
-                            else delete updated.technique;
-                            if (!keepsRootTarget) delete updated.target;
-                            return updated;
-                        }
-                    return { ...s, [collection]: next };
+                    if (next.length === 0) {
+                        const { technique: _technique, segments: _segments, target: _target, ...straight } = s;
+                        return straight;
+                    }
+                    const effectiveTechniques = next.map((segment: any) => segment.technique ?? s.technique);
+                    const primaryTechnique = effectiveTechniques.find((technique: string | undefined) => technique && technique !== 'straight' && technique !== 'isometry');
+                    const keepsRootTarget = effectiveTechniques.some((technique: string | undefined) => technique === 'rep_match' || technique === 'diminishing');
+                    const updated = { ...s, segments: next };
+                    if (primaryTechnique) updated.technique = primaryTechnique;
+                    else delete updated.technique;
+                    if (!keepsRootTarget) delete updated.target;
+                    return updated;
                 })
             }));
             return changed ? { ...prev, exercises } : prev;

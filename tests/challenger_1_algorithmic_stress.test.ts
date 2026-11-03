@@ -37,9 +37,9 @@ describe('Challenger 1: Algorithmic & Mathematical Stress Test Suite', () => {
                             id: 's_' + i + '_' + e + '_' + s,
                             kg: String(60 + (s * 5)),
                             reps: String(8 + s),
-                            dropsets: [
-                                { id: 'ds_' + i + '_' + e + '_' + s + '_1', kg: '40', reps: '6' },
-                                { id: 'ds_' + i + '_' + e + '_' + s + '_2', kg: '30', reps: '6' }
+                            segments: [
+                                { technique: 'dropset' as const, id: 'ds_' + i + '_' + e + '_' + s + '_1', kg: '40', reps: '6' },
+                                { technique: 'dropset' as const, id: 'ds_' + i + '_' + e + '_' + s + '_2', kg: '30', reps: '6' }
                             ]
                         });
                     }
@@ -209,10 +209,10 @@ describe('Challenger 1: Algorithmic & Mathematical Stress Test Suite', () => {
             const set = {
                 kg: mainKg,
                 reps: mainReps,
-                dropsets: [
-                    { kg: drop1Kg, reps: drop1Reps },
-                    { kg: drop2Kg, reps: drop2Reps },
-                    { kg: drop3Kg, reps: drop3Reps }
+                segments: [
+                    { technique: 'dropset' as const, id: 'seg-fixture-1', kg: drop1Kg, reps: drop1Reps },
+                    { technique: 'dropset' as const, id: 'seg-fixture-2', kg: drop2Kg, reps: drop2Reps },
+                    { technique: 'dropset' as const, id: 'seg-fixture-3', kg: drop3Kg, reps: drop3Reps }
                 ]
             };
 
@@ -241,9 +241,9 @@ describe('Challenger 1: Algorithmic & Mathematical Stress Test Suite', () => {
             const set = {
                 kg: '20',
                 reps: '6',
-                dropsets: [
-                    { kg: '10', reps: '6' },
-                    { kg: '0', reps: '6' }
+                segments: [
+                    { technique: 'dropset' as const, id: 'seg-fixture-4', kg: '10', reps: '6' },
+                    { technique: 'dropset' as const, id: 'seg-fixture-5', kg: '0', reps: '6' }
                 ]
             };
 
@@ -264,9 +264,7 @@ describe('Challenger 1: Algorithmic & Mathematical Stress Test Suite', () => {
             const set = {
                 kg: '100',
                 reps: '5',
-                dropsets: [
-                    { kg: '60', reps: '8' }
-                ]
+                segments: [{ technique: 'dropset' as const, id: 'seg-fixture-6', kg: '60', reps: '8' }]
             };
 
             const total = calculateSetVolume(set, eqEx, 80);
@@ -288,9 +286,7 @@ describe('Challenger 1: Algorithmic & Mathematical Stress Test Suite', () => {
             const set = {
                 kg: '15',
                 reps: '10',
-                dropsets: [
-                    { kg: '0', reps: '10' }
-                ]
+                segments: [{ technique: 'dropset' as const, id: 'seg-fixture-7', kg: '0', reps: '10' }]
             };
 
             const total = calculateSetVolume(set, comboEx, userWeight);
@@ -301,10 +297,10 @@ describe('Challenger 1: Algorithmic & Mathematical Stress Test Suite', () => {
             const setWithFormats = {
                 kg: '100',
                 reps: '10',
-                dropsets: [
-                    { kg: '50,5', reps: '8' },
-                    { kg: 'invalid', reps: 'invalid' },
-                    { kg: '', reps: '' }
+                segments: [
+                    { technique: 'dropset' as const, id: 'seg-fixture-8', kg: '50,5', reps: '8' },
+                    { technique: 'dropset' as const, id: 'seg-fixture-9', kg: 'invalid', reps: 'invalid' },
+                    { technique: 'dropset' as const, id: 'seg-fixture-10', kg: '', reps: '' }
                 ]
             };
 

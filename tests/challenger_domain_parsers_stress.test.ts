@@ -67,8 +67,11 @@ describe('Challenger 2: DomainParsers Adversarial Stress Testing', () => {
                                 kg: '100',
                                 reps: '8',
                                 done: true,
-                                dropsets: [{ id: 'ds1', kg: '80', reps: '6' }],
-                                isometrics: [{ id: 'iso1', kg: '60', time: '15' }]
+                                segments: [
+                                    { technique: 'dropset' as const, id: 'ds1', kg: '80', reps: '6' },
+                                    { technique: 'isometry' as const, reps: '', id: 'iso1', kg: '60', time: '15' }
+                                ],
+                                
                             }
                         ]
                     }
@@ -77,8 +80,8 @@ describe('Challenger 2: DomainParsers Adversarial Stress Testing', () => {
             const result = DomainParsers.parseWorkoutSession(validSession);
             expect(result.id).toBe('sess_123');
             expect(result.exercises).toHaveLength(1);
-            expect(result.exercises[0].sets[0].dropsets).toHaveLength(1);
-            expect(result.exercises[0].sets[0].isometrics).toHaveLength(1);
+            expect(result.exercises[0].sets[0].segments?.filter(segment => segment.technique === 'dropset')).toHaveLength(1);
+            expect(result.exercises[0].sets[0].segments?.filter(segment => segment.technique === 'isometry')).toHaveLength(1);
         });
 
         it('recovers gracefully from heavily corrupted session objects without crashing', () => {
@@ -89,7 +92,7 @@ describe('Challenger 2: DomainParsers Adversarial Stress Testing', () => {
                 999,
                 { exercises: 'not-an-array' },
                 { exercises: [{ sets: 'garbage', sessionNote: 12345 }] },
-                { exercises: [{ sets: [{ kg: null, reps: undefined, dropsets: 'corrupt', isometrics: null }] }] }
+                { exercises: [{ sets: [{ kg: null, reps: undefined, segments: 'corrupt' }] }] }
             ];
 
             corruptedSessions.forEach(payload => {
@@ -109,8 +112,11 @@ describe('Challenger 2: DomainParsers Adversarial Stress Testing', () => {
                     kg: `${50 + setIdx * 5}`,
                     reps: `${10 - setIdx}`,
                     done: true,
-                    dropsets: [{ id: `ds_${exIdx}_${setIdx}`, kg: '40', reps: '5' }],
-                    isometrics: [{ id: `iso_${exIdx}_${setIdx}`, kg: '30', time: '10' }]
+                    segments: [
+                        { technique: 'dropset' as const, id: `ds_${exIdx}_${setIdx}`, kg: '40', reps: '5' },
+                        { technique: 'isometry' as const, reps: '', id: `iso_${exIdx}_${setIdx}`, kg: '30', time: '10' }
+                    ],
+                    
                 }))
             }));
 
@@ -125,7 +131,7 @@ describe('Challenger 2: DomainParsers Adversarial Stress Testing', () => {
             expect(parsed.exercises[0].sets).toHaveLength(10);
             expect(parsed.exercises.flatMap(exercise => exercise.sets)).toHaveLength(500);
             expect(parsed.exercises[49].sets[9].id).toBe('s_49_9');
-            expect(parsed.exercises[0].sets[0].dropsets).toHaveLength(1);
+            expect(parsed.exercises[0].sets[0].segments?.filter(segment => segment.technique === 'dropset')).toHaveLength(1);
         });
     });
 

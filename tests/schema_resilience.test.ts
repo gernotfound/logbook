@@ -20,8 +20,6 @@ import {
 
     RoutineExerciseSchema,
 
-    SessionExerciseDropsetSchema,
-    SessionExerciseIsometricSchema,
 
 
     WorkoutSessionSchema,
@@ -261,14 +259,13 @@ describe('Zod Schema Resilience & Defensive Catches', () => {
                                     time: '60',
                                     distance: 1000,
                                     done: 1,
-                                    dropsets: [
-                                        { id: 'ds-1', kg: 60, reps: 6 },
-                                        'bad dropset'
-                                    ],
-                                    isometrics: [
-                                        { id: 'iso-1', kg: 40, time: 10 },
+                                    segments: [
+                                        { technique: 'dropset' as const, id: 'ds-1', kg: 60, reps: 6 },
+                                        'bad dropset',
+                                        { technique: 'isometry' as const, reps: '', id: 'iso-1', kg: 40, time: 10 },
                                         null
-                                    ]
+                                    ],
+                                    
                                 },
                                 'bad set'
                             ]
@@ -288,10 +285,10 @@ describe('Zod Schema Resilience & Defensive Catches', () => {
             expect(parsed.history![0].exercises[0].sets[0].kg).toBe('80');
             expect(parsed.history![0].exercises[0].sets[0].distance).toBe('1000');
             expect(parsed.history![0].exercises[0].sets[0].done).toBe(true);
-            expect(parsed.history![0].exercises[0].sets[0].dropsets?.length).toBe(2);
-            expect(parsed.history![0].exercises[0].sets[0].dropsets?.[0].kg).toBe('60');
-            expect(parsed.history![0].exercises[0].sets[0].isometrics?.length).toBe(2);
-            expect(parsed.history![0].exercises[0].sets[0].isometrics?.[0].time).toBe('10');
+            expect(parsed.history![0].exercises[0].sets[0].segments?.filter(segment => segment.technique === 'dropset')?.length).toBe(1);
+            expect(parsed.history![0].exercises[0].sets[0].segments?.filter(segment => segment.technique === 'dropset')?.[0].kg).toBe('60');
+            expect(parsed.history![0].exercises[0].sets[0].segments?.filter(segment => segment.technique === 'isometry')?.length).toBe(1);
+            expect(parsed.history![0].exercises[0].sets[0].segments?.filter(segment => segment.technique === 'isometry')?.[0].time).toBe('10');
         });
 
         it('defensively sanitizes corrupted Nutrition dictionary and preserves numeric values in strings', () => {
@@ -501,7 +498,7 @@ describe('Zod Schema Resilience & Defensive Catches', () => {
             });
         });
 
-        it('validates ExerciseSetSchema, RoutineExerciseSchema, SessionExerciseDropsetSchema, SessionExerciseIsometricSchema', () => {
+        it('validates ExerciseSetSchema, RoutineExerciseSchema', () => {
             expect(ExerciseSetSchema.parse({ weight: 80, reps: 10, done: 1 })).toEqual({
                 weight: '80',
                 reps: '10',
@@ -513,16 +510,7 @@ describe('Zod Schema Resilience & Defensive Catches', () => {
                 minReps: 8,
                 maxReps: 12
             });
-            expect(SessionExerciseDropsetSchema.parse({ id: 'ds1', kg: 50, reps: 8 })).toEqual({
-                id: 'ds1',
-                kg: '50',
-                reps: '8'
-            });
-            expect(SessionExerciseIsometricSchema.parse({ id: 'iso1', kg: 30, time: 15 })).toEqual({
-                id: 'iso1',
-                kg: '30',
-                time: '15'
-            });
+
         });
 
         it('validates MealSchema, RoutineSchema, ExerciseLibraryItemSchema alias exports', () => {

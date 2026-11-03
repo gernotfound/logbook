@@ -1360,25 +1360,6 @@ describe('advanced workout segment identity across removal and draft recovery', 
         expect(workout.exercises[0].sets[0].segments?.[0]).toMatchObject({ id: 'seg-b', kg: '77' });
     });
 
-    it.each(['dropsets', 'isometrics'] as const)('prevents stale %s callbacks retargeting the next child', collection => {
-        const children = collection === 'dropsets'
-            ? [{ id: 'first', kg: '55', reps: '8' }, { id: 'second', kg: '45', reps: '6' }]
-            : [{ id: 'first', kg: '55', time: '15' }, { id: 'second', kg: '45', time: '10' }];
-        let workout = { id: workoutId, exercises: [{ id: 'exercise-a', exId: 'bench',
-            sets: [{ id: 'set-identity', kg: '100', reps: '8', [collection]: children }] }] } as unknown as WorkoutSession;
-        const setLocalWorkout = (updater: (prev: WorkoutSession | null) => WorkoutSession | null) => {
-            workout = updater(workout) ?? workout;
-        };
-        const { result } = renderHook(() => useWorkoutSetMutations({
-            setLocalWorkout, showConfirm: async () => true,
-        }));
-        act(() => result.current.removeSpecialSet(0, 'set-identity', collection, 'first'));
-        const after = workout;
-        act(() => result.current.updateSpecialSet(0, 'set-identity', collection, 'first', 'kg', '999'));
-        expect(workout).toBe(after);
-        act(() => result.current.updateSpecialSet(0, 'set-identity', collection, 'second', 'kg', '42'));
-        expect(workout.exercises[0].sets[0][collection]?.[0]).toMatchObject({ id: 'second', kg: '42' });
-    });
 });
 
 describe('F-001 — stable exercise instance recovery with shared catalog editor boundaries', () => {

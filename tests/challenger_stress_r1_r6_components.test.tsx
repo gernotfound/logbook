@@ -144,10 +144,10 @@ describe('EMPIRICAL CHALLENGER: Adversarial Stress Test Suite (Requirements R1 -
                 const setWithDropsets = {
                     kg: '100',
                     reps: '6',
-                    dropsets: [
-                        { kg: '80', reps: '6' },
-                        { kg: '60', reps: '8' },
-                        { kg: '40,5', reps: '10' }
+                    segments: [
+                        { technique: 'dropset' as const, id: 'seg-fixture-1', kg: '80', reps: '6' },
+                        { technique: 'dropset' as const, id: 'seg-fixture-2', kg: '60', reps: '8' },
+                        { technique: 'dropset' as const, id: 'seg-fixture-3', kg: '40,5', reps: '10' }
                     ]
                 };
                 // Standard ex: 100*6 (600) + 80*6 (480) + 60*8 (480) + 40.5*10 (405) = 1965
@@ -157,11 +157,11 @@ describe('EMPIRICAL CHALLENGER: Adversarial Stress Test Suite (Requirements R1 -
                 const bwDropsets = {
                     kg: '20',
                     reps: '5', // (20 + 80) * 5 = 500
-                    dropsets: [
-                        { kg: '10', reps: '5' }, // (10 + 80) * 5 = 450
-                        { kg: '0', reps: '5' }   // (0 + 80) * 5 = 400
+                    segments: [
+                        { technique: 'dropset' as const, id: 'seg-fixture-4', kg: '10', reps: '5' }, // (10 + 80) * 5 = 450
+                        { technique: 'dropset' as const, id: 'seg-fixture-5', kg: '0', reps: '5' }   // (0 + 80) * 5 = 400
                     ]
-                };
+                    };
                 expect(calculateSetVolume(bwDropsets, { isBodyweight: true }, 80)).toBe(1350);
             });
 
@@ -407,8 +407,11 @@ describe('EMPIRICAL CHALLENGER: Adversarial Stress Test Suite (Requirements R1 -
                 id: 'set_1',
                 kg: '90',
                 reps: '8',
-                dropsets: [{ id: 'ds_1', kg: '70', reps: '8' }],
-                isometrics: [{ id: 'iso_1', kg: '50', time: '20' }]
+                segments: [
+                    { technique: 'dropset' as const, id: 'ds_1', kg: '70', reps: '8' },
+                    { technique: 'isometry' as const, reps: '', id: 'iso_1', kg: '50', time: '20' }
+                ],
+                
             };
 
             render(
@@ -427,13 +430,13 @@ describe('EMPIRICAL CHALLENGER: Adversarial Stress Test Suite (Requirements R1 -
                 />
             );
 
-            expect(screen.getByText('↳ Dropset')).toBeDefined();
-            expect(screen.getByText('↳ Isometria')).toBeDefined();
+            expect(screen.getByText('↳ Dropset 1')).toBeDefined();
+            expect(screen.getByText('↳ Isometria 1')).toBeDefined();
 
             const dsKgInput = screen.getByDisplayValue('70');
             fireEvent.change(dsKgInput, { target: { value: '75' } });
             fireEvent.blur(dsKgInput);
-            expect(mockUpdateSpecial).toHaveBeenCalledWith(0, 'set_1', 'dropsets', 'ds_1', 'kg', '75');
+            expect(mockUpdateSpecial).toHaveBeenCalledWith(0, 'set_1', 'segments', 'ds_1', 'kg', '75');
         });
     });
 

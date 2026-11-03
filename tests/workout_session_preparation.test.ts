@@ -215,8 +215,11 @@ describe('workout session preparation', () => {
                     reps: 8,
                     rir: 0,
                     time: 12,
-                    dropsets: [{ kg: 60, reps: 6 }],
-                    isometrics: [{ kg: 40, time: 20 }],
+                    segments: [
+                        { technique: 'dropset' as const, id: 'seg-fixture-1', kg: 60, reps: 6 },
+                        { technique: 'isometry' as const, id: 'seg-fixture-2', reps: '', kg: 40, time: 20 }
+                    ],
+                    
                 }],
             }],
         } as unknown as WorkoutSession;
@@ -229,8 +232,8 @@ describe('workout session preparation', () => {
         expect(editing.manualDurationStr).toBe('01:00:00');
         expect(editing.exercises[0].id).toBeTruthy();
         expect(editing.exercises[0].sets[0]).toMatchObject({ kg: '80', reps: '8', rir: 0, time: '12' });
-        expect(editing.exercises[0].sets[0].dropsets?.[0]).toMatchObject({ kg: '60', reps: '6' });
-        expect(editing.exercises[0].sets[0].isometrics?.[0]).toMatchObject({ kg: '40', time: '20' });
+        expect(editing.exercises[0].sets[0].segments?.filter(segment => segment.technique === 'dropset')?.[0]).toMatchObject({ kg: '60', reps: '6' });
+        expect(editing.exercises[0].sets[0].segments?.filter(segment => segment.technique === 'isometry')?.[0]).toMatchObject({ kg: '40', time: '20' });
     });
 
     it('keeps current segment-only sets free of synthetic legacy arrays while editing and completing', () => {

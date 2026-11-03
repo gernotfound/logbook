@@ -664,11 +664,11 @@ describe('Logic Library Tests', () => {
                 const set = {
                     kg: '100',
                     reps: '8', // 800
-                    dropsets: [
-                        { kg: '70', reps: '6' },  // 420
-                        { kg: '50', reps: '8' }   // 400
+                    segments: [
+                        { technique: 'dropset' as const, id: 'seg-fixture-1', kg: '70', reps: '6' },  // 420
+                        { technique: 'dropset' as const, id: 'seg-fixture-2', kg: '50', reps: '8' }   // 400
                     ]
-                };
+                    };
                 expect(Logic.calculateSetVolume(set, null, 80)).toBe(800 + 420 + 400); // 1620
             });
 
@@ -676,10 +676,10 @@ describe('Logic Library Tests', () => {
                 const set = {
                     kg: '20', // +20 ballast on 80kg = 100kg
                     reps: '5', // 500
-                    dropsets: [
-                        { kg: '0', reps: '5' } // 0 ballast on 80kg = 80kg * 5 = 400
+                    segments: [
+                        { technique: 'dropset' as const, id: 'seg-fixture-3', kg: '0', reps: '5' } // 0 ballast on 80kg = 80kg * 5 = 400
                     ]
-                };
+                    };
                 const bwEx = { isBodyweight: true };
                 expect(Logic.calculateSetVolume(set, bwEx, 80)).toBe(500 + 400); // 900
             });

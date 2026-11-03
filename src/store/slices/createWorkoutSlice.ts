@@ -62,20 +62,12 @@ function normalizeDeviceWorkout(raw: WorkoutSession): WorkoutSession | null {
         const setIds = new Set<string>();
         const sets = (Array.isArray(exercise.sets) ? exercise.sets : []).map(set => {
             const segmentIds = new Set<string>();
-            const dropIds = new Set<string>();
-            const isometricIds = new Set<string>();
             return {
                 ...set,
                 id: uniqueRecoveredId(set?.id, 's', setIds),
                 segments: Array.isArray(set?.segments)
                     ? set.segments.map(segment => ({ ...segment, id: uniqueRecoveredId(segment?.id, 'seg', segmentIds) }))
                     : set?.segments,
-                dropsets: Array.isArray(set?.dropsets)
-                    ? set.dropsets.map(drop => ({ ...drop, id: uniqueRecoveredId(drop?.id, 'ds', dropIds) }))
-                    : set?.dropsets,
-                isometrics: Array.isArray(set?.isometrics)
-                    ? set.isometrics.map(item => ({ ...item, id: uniqueRecoveredId(item?.id, 'iso', isometricIds) }))
-                    : set?.isometrics,
             };
         });
         return [{

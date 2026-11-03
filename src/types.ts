@@ -120,8 +120,6 @@ export interface SessionExerciseSet {
     executionMode?: ExecutionMode;
     segments?: SetSegment[];
     target?: SetTarget;
-    dropsets?: { id: string; kg: string; reps: string }[];
-    isometrics?: { id: string; kg: string; time: string }[];
 }
 
 export interface SessionExercise {

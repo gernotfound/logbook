@@ -101,7 +101,7 @@ describe('Analytics Engine: src/lib/calc/analytics.ts', () => {
                                     kg: '80',
                                     reps: '8',
                                     done: true,
-                                    dropsets: [{ id: 'ds1', kg: '60', reps: '5' }] // (80+20)*8 + (60+20)*5 = 800 + 400 = 1200 kg
+                                    segments: [{ technique: 'dropset' as const, id: 'ds1', kg: '60', reps: '5' }] // (80+20)*8 + (60+20)*5 = 800 + 400 = 1200 kg
                                 }
                             ]
                         },

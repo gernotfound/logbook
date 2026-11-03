@@ -69,7 +69,7 @@ describe('EMPIRICAL CHALLENGER: Pure Math, State & Schema Adversarial Stress Sui
             const set = {
                 kg: '100',
                 reps: '5',
-                dropsets
+                segments: dropsets.map((drop, index) => ({ ...drop, id: `drop-${index}`, technique: 'dropset' as const }))
             };
 
             const vol = calculateSetVolume(set, null, 80);
