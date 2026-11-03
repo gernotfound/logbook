@@ -61,6 +61,7 @@ import {
     readLocal,
 } from '../../src/lib/sync/localRepository';
 import { replicateJournal, waitForJournalIdle } from '../../src/lib/sync/replicateJournal';
+import { CloudDataIntegrityError } from '../../src/lib/sync/cloudBusinessIntegrity';
 import { invalidateSession } from '../../src/lib/sync/session';
 import { createAndMigrateVault } from '../../src/lib/sync/secureArchiveMigration';
 import { lockAllVaults } from '../../src/lib/sync/secureArchiveSession';
@@ -433,6 +434,31 @@ describe('M3 journal crash consistency', () => {
         expect(retry).toMatchObject({ ok: true, status: 'synced' });
         expect((await readLocal(owner))?.pending).toEqual([]);
         expect(currentCloudData().nutrition?.['2026-09-24']).toMatchObject({ steps: 11000, cardioSessions: [{ id: 'cardio-a', durationMinutes: 40 }] });
+    });
+
+    it('does not acknowledge a writer integrity rejection and retains the encrypted journal for recovery', async () => {
+        await commitLocal(owner, data(171), data(170));
+        const before = await readLocal(owner);
+        const ciphertext = await get('logbook:v2:' + owner);
+        const initialCloud = cloudSnapshot();
+        const integrityError = new CloudDataIntegrityError('', ['profile', 'height']);
+        remote.apply.mockRejectedValueOnce(integrityError);
+
+        const result = await replicateJournal();
+        await waitForJournalIdle(owner);
+
+        expect(result).toMatchObject({ ok: false, status: 'failed', error: integrityError });
+        expect(remote.apply).toHaveBeenCalledTimes(1);
+        expect(await get('logbook:v2:' + owner)).toEqual(ciphertext);
+        expect(await readLocal(owner)).toEqual(before);
+        expect(before?.pending.length).toBeGreaterThan(0);
+        expect(cloudSnapshot()).toBe(initialCloud);
+
+        installReplaySafeRemote();
+        invalidateSession();
+        expect(await replicateJournal()).toMatchObject({ ok: true, status: 'synced' });
+        expect((await readLocal(owner))?.pending).toEqual([]);
+        expect(currentCloudData().profile?.height).toBe('171');
     });
 
     it('leaves cloud untouched and journal durable when the remote fails before commit, then converges on retry', async () => {
