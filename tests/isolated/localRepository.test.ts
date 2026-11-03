@@ -48,6 +48,25 @@ const prepareGuestVault = async () => {
 
 describe('durable owner-scoped journal', () => {
 
+    it.each([undefined, '', 'invalid-id'])('rejects an ID-less or malformed workout journal marker (%s) without rewriting ciphertext', async intentId => {
+        await prepareOwnerVault('user:a');
+        const initial = data(170);
+        await initializeLocal('user:a', initial);
+        const envelope = (await readLocal('user:a'))!;
+        await updateArchiveRecord<unknown>('user:a', () => ({
+            ...envelope, lastWorkoutDeviceIntent: {
+                generation: 'a'.repeat(32), sequence: 1, intentId,
+            },
+        }));
+        const key = 'logbook:v2:user:a';
+        const ciphertext = await get(key);
+        expect(ciphertext).toMatch(/^tlb-sealed:v1:/);
+        await expect(readLocal('user:a')).rejects.toThrow('Controllo journal workout locale non valido');
+        await expect(commitLocal('user:a', data(180), initial))
+            .rejects.toThrow('Controllo journal workout locale non valido');
+        expect(await get(key)).toBe(ciphertext);
+    });
+
     it('commits closure evidence even for a no-op cloud clear, and keeps it through hydration', async () => {
         await prepareOwnerVault('user:a');
         const initial = UserDataSchema.parse({ activeWorkout: null }) as unknown as UserData;
