@@ -35,7 +35,7 @@ export async function completeCloudIntegrityRecovery(
     owner = normalizeStorageOwner(owner);
     let saved: LocalEnvelope | undefined;
     await updateArchiveRecord<any>(owner, raw => {
-        if (guard && !guard()) return raw;
+        if (guard && !guard()) throw new Error('Recupero cloud invalidato dal cambio sessione; journal preservato.');
         const current = validateLocalEnvelope(raw, owner);
         if (!current) throw new Error('Archivio locale non disponibile durante il recupero cloud');
         if ((current.cloudIntegrityFence ?? null) !== expectedFence) {
