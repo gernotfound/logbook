@@ -124,7 +124,7 @@ async function drain(session: ReturnType<typeof captureSession>, deliveryState: 
             throw new ReplicaFencedError('Lease replica scaduta: checkpoint completo richiesto.');
         }
 
-        envelope = await ensureBoundedPendingSequences(session.owner, replica.slot);
+        envelope = await ensureBoundedPendingSequences(session.owner, replica.slot, current);
         if (!current()) throw new Error('Sessione cambiata');
         if (!envelope) throw new Error('Archivio locale non disponibile');
         if (envelope.cloudIntegrityFence) throw new ReplicaFencedError('Divergenza cloud rilevata durante il replay: journal preservato.');
@@ -238,10 +238,10 @@ export async function replicateJournal(expectedOwner?: string): Promise<SyncResu
             throw error;
         }
     } catch (error) {
-        if (error instanceof ReplicaFencedError && session.owner.startsWith('user:')) {
+        if (error instanceof ReplicaFencedError && session.owner.startsWith('user:') && isWritableSession(session)) {
             try {
                 const durable = await readLocal(session.owner);
-                await markReplicaCheckpointRequired(session.owner, durable?.replica ?? undefined);
+                await markReplicaCheckpointRequired(session.owner, durable?.replica ?? undefined, () => isWritableSession(session));
             } catch {
                 // The original fencing error remains authoritative. A local storage
                 // failure is handled by the caller's normal persistence safety path.

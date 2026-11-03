@@ -235,6 +235,8 @@ I boundary bulk — bootstrap/initialize, hydration, guest→account merge, impo
 
 ### Replica checkpoint, lease e stable frontier
 
+**MUST (CRITICAL, sessione durante manutenzione del vault):** il risequenziamento del journal per i batch Firestore e le scritture locali di barriera cloud o checkpoint replica devono ricontrollare la sessione/Auth/consenso corrente nella callback sincrona della transazione IndexedDB. Un'operazione di manutenzione iniziata da una sessione obsoleta non può alterare un journal, un ciphertext o una replica adottati dalla sessione subentrata. Il controllo prima/dopo un `await` nel chiamante non sostituisce questo fence atomico.
+
 Protocol 3 limita i nuovi actor a 16 slot `s00`…`s15` registrati in `users/{uid}/sync_control/state`. Ogni incarnazione di un device ha `replicaId` e `generation`; il riuso dello slot incrementa la generation e continua la sequence monotona.
 
 - **MUST:** una replica assente, con checkpoint oltre 30 giorni o prossima alla fine lease esegue `loadCloudPayload({ allMonths: true })` e hydration `all` prima di ottenere/rinnovare lo slot.

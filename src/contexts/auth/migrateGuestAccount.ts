@@ -225,10 +225,13 @@ export async function migrateGuestAccount({ user, guestData, policy, setUserData
             const { markCloudIntegrityBlocked, readLocal } = await import('../../lib/sync/localRepository');
             try {
                 if (await readLocal(user.uid)) {
-                    await markCloudIntegrityBlocked(user.uid);
+                    assertCurrent();
+                    await markCloudIntegrityBlocked(user.uid, isCurrent);
+                    assertCurrent();
                     useAppStore.setState({ syncHealth: 'failed', cloudIntegrityBlocked: true });
                 }
             } catch (fenceError) {
+                if (!isCurrent()) throw new StaleGuestMigrationError();
                 console.error('Barriera cloud dopo migrazione non registrabile:', fenceError);
                 useAppStore.setState({ localPersistenceBlocked: true, syncHealth: 'failed',
                     saveError: 'Archivio locale non verificabile dopo la migrazione; dati preservati.' });

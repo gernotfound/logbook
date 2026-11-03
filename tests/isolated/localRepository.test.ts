@@ -86,6 +86,41 @@ describe('durable owner-scoped journal', () => {
         expect(await readLocal(owner)).toEqual(durable);
     });
 
+    it('rejects stale cloud integrity fencing inside the encrypted IndexedDB update', async () => {
+        await prepareOwnerVault('user:a');
+        await initializeLocal('a', data(170));
+        await commitLocal('a', data(171), data(170));
+        const before = await get('logbook:v2:user:a');
+        const durable = await readLocal('a');
+
+        await expect(markCloudIntegrityBlocked('a', () => false))
+            .rejects.toThrow('Barriera cloud invalidata dal cambio sessione');
+        expect(await get('logbook:v2:user:a')).toBe(before);
+        expect(await readLocal('a')).toEqual(durable);
+
+        await markCloudIntegrityBlocked('a', () => true);
+        expect((await readLocal('a'))?.cloudIntegrityFence).toBeTruthy();
+    });
+
+    it('rejects stale replica checkpoint retirement inside the encrypted IndexedDB update', async () => {
+        await prepareOwnerVault('user:a');
+        await initializeLocal('a', data(170));
+        const now = Date.now();
+        const identity = { slot: 's00', replicaId: 'replica-a', generation: 1, checkpointAtMs: now, leaseUntilMs: now + 31_104_000_000 };
+        await adoptReplicaCheckpoint('a', { identity, baseSeq: 0 }, { clock: {}, syncMetaByDocument: {} });
+        await commitLocal('a', data(171), data(170));
+        const before = await get('logbook:v2:user:a');
+        const durable = await readLocal('a');
+
+        await expect(markReplicaCheckpointRequired('a', identity, () => false))
+            .rejects.toThrow('Checkpoint locale invalidato dal cambio sessione');
+        expect(await get('logbook:v2:user:a')).toBe(before);
+        expect(await readLocal('a')).toEqual(durable);
+
+        await markReplicaCheckpointRequired('a', identity, () => true);
+        expect((await readLocal('a'))?.replica?.leaseUntilMs).toBe(1);
+    });
+
     it('rejects a stale integrity recovery, preserving its durable fence and pending journal', async () => {
         const owner = 'user:a';
         await prepareOwnerVault(owner);

@@ -20,9 +20,10 @@ export function fenceCloudIntegrity(current: LocalEnvelope): LocalEnvelope {
     };
 }
 
-export async function markCloudIntegrityBlocked(owner: string): Promise<void> {
+export async function markCloudIntegrityBlocked(owner: string, guard?: () => boolean): Promise<void> {
     owner = normalizeStorageOwner(owner);
     await updateArchiveRecord<any>(owner, raw => {
+        if (guard && !guard()) throw new Error('Barriera cloud invalidata dal cambio sessione; dati locali preservati.');
         const current = validateLocalEnvelope(raw, owner);
         if (!current) throw new Error('Archivio locale non disponibile per la protezione cloud');
         return fenceCloudIntegrity(current);
@@ -54,9 +55,11 @@ export async function completeCloudIntegrityRecovery(
 export async function markReplicaCheckpointRequired(
     owner: string,
     expectedReplica?: ReplicaIdentity,
+    guard?: () => boolean,
 ): Promise<void> {
     owner = normalizeStorageOwner(owner);
     await updateArchiveRecord<any>(owner, raw => {
+        if (guard && !guard()) throw new Error('Checkpoint locale invalidato dal cambio sessione; journal preservato.');
         const current = validateLocalEnvelope(raw, owner);
         if (!current?.replica) return current;
         if (expectedReplica && (
