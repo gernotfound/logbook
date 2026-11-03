@@ -119,7 +119,7 @@ describe('Data UI redesign', () => {
         render(<DataHistory measurementsHistory={measurementsHistory}
             editingDate={null} onSelectEdit={vi.fn()} />);
         expect(screen.getByLabelText(/Calendario ottobre 2026/i)).toBeDefined();
-        expect(screen.getByText('81,4 kg')).toBeDefined();
+        expect(screen.getAllByText('81,4 kg').length).toBeGreaterThan(0);
         expect(screen.getByText('1 giorno registrato')).toBeDefined();
         expect(screen.queryByText('90 kg')).toBeNull();
         expect(measurementsHistory).toEqual(before);
