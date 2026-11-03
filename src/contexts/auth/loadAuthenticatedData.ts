@@ -149,7 +149,7 @@ export async function loadAuthenticatedData({
                 if (!cloudAllowed()) return 'blocked';
 
                 if (checkpointDue) {
-                    await retireExpiredReplicas(getDb(), user.uid);
+                    await retireExpiredReplicas(getDb(), user.uid, Date.now(), cloudAllowed);
                     if (!cloudAllowed()) return 'blocked';
                     const checkpoint = checkpointFromCloudDocuments(payload.cloudDocuments);
                     const claim = await claimReplicaCheckpoint(
@@ -159,6 +159,7 @@ export async function loadAuthenticatedData({
                         checkpoint.clock,
                         hydratedEnv.actorSeq,
                         hydratedEnv.replica ? undefined : hydratedEnv.actorId,
+                        cloudAllowed,
                     );
                     if (!cloudAllowed()) return 'blocked';
                     hydratedEnv = await adoptReplicaCheckpoint(expectedOwner, claim, checkpoint, isCurrent);
