@@ -5,8 +5,8 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 const catalogReader = vi.hoisted(() => ({ read: vi.fn() }));
 const remote = vi.hoisted(() => ({ apply: vi.fn(), auth: { currentUser: { uid: 'a' } } }));
 vi.mock('../../src/lib/firebase', () => ({ auth: remote.auth, getDb: () => ({}), ensureAppCheck: async () => {}, waitForPendingWrites: async () => {} }));
-// This legacy persistence suite assumes a verified, still-active server consent
-// at revision zero. Real revocation/fencing is tested in dedicated suites.
+// Isolate server consent transport with a verified active revision. The durable
+// generation and session fences remain real for delayed-ACK interleavings.
 vi.mock('../../src/lib/healthConsent', async () => {
     const actual = await vi.importActual<typeof import('../../src/lib/healthConsent')>('../../src/lib/healthConsent');
     const writable = (owner: string) => owner.startsWith('user:')
@@ -19,7 +19,7 @@ vi.mock('../../src/lib/healthConsent', async () => {
         requireHealthConsentWritable: (owner: string) => {
             if (!writable(owner)) throw new Error('Utente non autorizzato dal consenso');
         },
-        getVerifiedHealthConsentRevision: () => 0,
+        getVerifiedHealthConsentRevision: () => 1,
     };
 });
 vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackEvent: vi.fn(), trackError: vi.fn() } }));
@@ -54,6 +54,7 @@ beforeEach(async () => {
     catalogReader.read.mockReset().mockResolvedValue(catalog);
     lockAllVaults();
     localStorage.clear();
+    localStorage.setItem('logbook:v2:user:a:health-consent-generation', '1');
     vi.stubGlobal('navigator', { onLine: true, locks: {
         request: async (_name: string, _options: unknown, run: () => Promise<unknown>) => run(),
     } });
@@ -269,7 +270,7 @@ it.each([
     expect(await readLocal('user:a')).toEqual(before);
 
     clearAccountDeletion('user:a');
-    localStorage.removeItem('logbook:v2:user:a:health-consent-generation');
+    localStorage.setItem('logbook:v2:user:a:health-consent-generation', '1');
     invalidateSession();
     remote.apply.mockResolvedValueOnce(outcome);
     expect((await replicateJournal()).status).toBe('synced');
