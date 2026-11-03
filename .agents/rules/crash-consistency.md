@@ -29,7 +29,7 @@ Firestore applica il batch semantico tramite transazione.
 
 **MUST:** un remote commit completato non dipende dal completamento dell'ack locale per la propria correttezza.
 
-**MUST:** prima della consegna a Firestore, guasti di rete/timeout del trasporto ADK e risposte HTTP `408`, `429`, `500`, `502`, `503`, `504` mantengono il journal ritentabile dal controller foreground. Configurazione assente, identità/epoch/consenso non più correnti, rifiuti HTTP e payload chiave malformati restano fail-closed. Ricontrollare la sessione anche sul percorso di errore di rete; un wrapper non prova che il risultato complessivo sia sicuro.
+**MUST:** prima della consegna a Firestore, errori esplicitamente ritentabili del token App Check limited-use, errori Auth `auth/network-request-failed`, guasti di rete/timeout del trasporto ADK e risposte HTTP `408`, `429`, `500`, `502`, `503`, `504` mantengono il journal ritentabile dal controller foreground. Configurazione assente, identità/epoch/consenso non più correnti, rifiuti HTTP e payload chiave malformati restano fail-closed. Ricontrollare la sessione anche sul percorso di errore di rete; un wrapper non prova che il risultato complessivo sia sicuro.
 
 ### Lost acknowledgement
 

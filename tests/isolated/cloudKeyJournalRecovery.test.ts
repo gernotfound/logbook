@@ -3,14 +3,14 @@ import { clear, get } from 'idb-keyval';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 const remote = vi.hoisted(() => ({
-    apply: vi.fn(),
-    auth: { currentUser: { uid: 'a', getIdToken: async () => 'id-token' } },
+    apply: vi.fn(), check: vi.fn(),
+    auth: { currentUser: { uid: 'a', getIdToken: vi.fn(async () => 'id-token') } },
 }));
 vi.mock('../../src/lib/firebase', () => ({
     auth: remote.auth, getDb: () => ({}), ensureAppCheck: async () => {},
     waitForPendingWrites: async () => {},
 }));
-vi.mock('../../src/lib/appCheck', () => ({ getLimitedUseAppCheckToken: async () => 'one-use-token' }));
+vi.mock('../../src/lib/appCheck', () => ({ getLimitedUseAppCheckToken: remote.check }));
 vi.mock('../../src/lib/healthConsent', async () => {
     const actual = await vi.importActual<typeof import('../../src/lib/healthConsent')>('../../src/lib/healthConsent');
     const writable = (owner: string) => owner === 'user:' + remote.auth.currentUser.uid;
@@ -60,7 +60,9 @@ beforeEach(async () => {
     invalidateSession();
     await clear();
     remote.auth.currentUser.uid = 'a';
+    remote.auth.currentUser.getIdToken.mockReset().mockResolvedValue('id-token');
     remote.apply.mockReset();
+    remote.check.mockReset().mockResolvedValue('one-use-token');
     await createAndMigrateVault('user:a');
     await initializeLocal('user:a', data(170));
     const now = Date.now();
@@ -75,7 +77,7 @@ beforeEach(async () => {
 });
 afterEach(() => { vi.useRealTimers(); lockAllVaults(); vi.unstubAllGlobals(); });
 
-it.each(['network', 'timeout', 429, 503] as const)(
+it.each(['network', 'timeout', 'limited-use', 'auth-network', 429, 503] as const)(
     'preserves ciphertext after key-service %s and automatically retries to a real local ACK',
     async failure => {
         const before = await readLocal('user:a');
@@ -86,9 +88,19 @@ it.each(['network', 'timeout', 429, 503] as const)(
             .mockImplementationOnce(async () => {
                 if (failure === 'network') throw new TypeError('Injected network outage');
                 if (failure === 'timeout') throw new DOMException('Injected timeout', 'TimeoutError');
-                return new Response(null, { status: failure });
+                return new Response(null, { status: typeof failure === 'number' ? failure : 200 });
             })
             .mockResolvedValueOnce(Response.json(keyPayload));
+        const beforeFetchFailure = failure === 'limited-use' || failure === 'auth-network';
+        if (beforeFetchFailure) {
+            fetch.mockReset().mockResolvedValue(Response.json(keyPayload));
+            if (failure === 'limited-use') remote.check.mockRejectedValueOnce(Object.assign(
+                new Error('Token transport unavailable'), { code: 'app-check-limited-use-unavailable', retryable: true },
+            ));
+            else remote.auth.currentUser.getIdToken.mockRejectedValueOnce(Object.assign(
+                new Error('Auth transport unavailable'), { code: 'auth/network-request-failed' },
+            ));
+        }
         vi.stubGlobal('fetch', fetch);
         // Auth/consent, App Check and the cloud writer are collaborators.
         // The key client, replica, retry controller, AEAD, IndexedDB and ACK are real.
@@ -118,18 +130,18 @@ it.each(['network', 'timeout', 429, 503] as const)(
         );
         try {
             await vi.advanceTimersByTimeAsync(19_999);
-            expect(fetch).toHaveBeenCalledTimes(1);
+            expect(fetch).toHaveBeenCalledTimes(beforeFetchFailure ? 0 : 1);
             await vi.advanceTimersByTimeAsync(1);
             // Real IndexedDB completes outside the fake timer queue.
             await vi.waitFor(() => expect(state.syncHealth).toBe('synced'));
-            expect(fetch).toHaveBeenCalledTimes(2);
+            expect(fetch).toHaveBeenCalledTimes(beforeFetchFailure ? 1 : 2);
             expect(remote.apply).toHaveBeenCalledTimes(1);
             const recovered = await readLocal('user:a');
             expect(recovered?.pending).toHaveLength(0);
             expect(recovered?.data.profile?.height).toBe('171');
             expect(recovered?.baseline.profile?.height).toBe('171');
             await vi.advanceTimersByTimeAsync(300_000);
-            expect(fetch).toHaveBeenCalledTimes(2);
+            expect(fetch).toHaveBeenCalledTimes(beforeFetchFailure ? 1 : 2);
         } finally { retry.dispose(); }
     },
 );

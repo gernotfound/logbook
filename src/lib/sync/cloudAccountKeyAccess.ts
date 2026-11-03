@@ -65,9 +65,16 @@ async function acquireAccountDataKey(
     checkCurrent();
     await ensureAppCheck();
     checkCurrent();
-    const token = await getLimitedUseAppCheckToken();
-    checkCurrent();
-    const idToken = await auth.currentUser!.getIdToken();
+    let token: string;
+    let idToken: string;
+    try {
+        token = await getLimitedUseAppCheckToken();
+        checkCurrent();
+        idToken = await auth.currentUser!.getIdToken();
+    } catch (error) {
+        checkCurrent();
+        throw error;
+    }
     checkCurrent();
 
     // Configuration failures are not network outages and must stay fail-closed.
@@ -90,7 +97,10 @@ async function acquireAccountDataKey(
     }
 
     let payload: unknown;
-    try { payload = await response.json(); } catch { throw new CloudKeyAccessUnavailableError(); }
+    try { payload = await response.json(); } catch (error) {
+        checkCurrent();
+        throw new CloudKeyAccessUnavailableError(isRetryableTransportFailure(error));
+    }
     checkCurrent();
     if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
         throw new CloudKeyAccessUnavailableError();

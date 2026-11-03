@@ -185,4 +185,27 @@ describe('online account-key access without a second device-persisted key', () =
     expect(classifySyncFailure(error).status).toBe('failed');
   });
 
+  it('retries an interrupted response body but never malformed JSON', async () => {
+    const stream = new ReadableStream({
+      start(controller) { controller.error(new DOMException('Response timed out', 'TimeoutError')); },
+    });
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(stream)));
+    const error = await requireCloudAccountDataKey('owner-a', () => {}).catch(error => error);
+    expect(classifySyncFailure(error).status).toBe('local-pending');
+  });
+
+  it.each(['limited-use', 'auth-network'] as const)('fences stale sessions after a %s precondition fails', async phase => {
+    const failure = phase === 'limited-use'
+      ? { code: 'app-check-limited-use-unavailable', retryable: true }
+      : { code: 'auth/network-request-failed' };
+    const fail = async () => { h.epoch = 'epoch-2'; throw Object.assign(new Error('Transport failure'), failure); };
+    if (phase === 'limited-use') h.check.mockImplementationOnce(fail);
+    else h.user.getIdToken.mockImplementationOnce(fail);
+    const fetch = vi.fn();
+    vi.stubGlobal('fetch', fetch);
+    const error = await requireCloudAccountDataKey('owner-a', () => {}).catch(error => error);
+    expect(classifySyncFailure(error).status).toBe('failed');
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
 });
