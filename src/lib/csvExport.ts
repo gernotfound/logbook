@@ -130,7 +130,7 @@ export function buildCsvFiles(
                     continue;
                 }
                 exercise.sets.forEach((set, setIndex) => {
-                    const technique = set.technique || (set.dropsets?.length ? 'dropset' : 'straight');
+                    const technique = set.technique || 'straight';
                     appendWorkoutRow(
                         session, exercise, set, setIndex + 1, technique, 0, '',
                         set.reps ?? '', set.rir ?? '', set.time ?? '', set.kg ?? '', '',
@@ -144,24 +144,7 @@ export function buildCsvFiles(
                             segment.restBeforeSeconds ?? '', segment.target?.reps ?? set.target?.reps ?? '',
                         );
                     });
-                    set.dropsets?.forEach((drop, dropIndex) => {
-                        const label = set.dropsets && set.dropsets.length > 1
-                            ? `${setIndex + 1} (Dropset ${dropIndex + 1})`
-                            : `${setIndex + 1} (Dropset)`;
-                        appendWorkoutRow(
-                            session, exercise, set, label, 'dropset', dropIndex + 1, drop.id,
-                            drop.reps ?? '', '', '', drop.kg ?? '',
-                        );
-                    });
-                    set.isometrics?.forEach((iso, isoIndex) => {
-                        const label = set.isometrics && set.isometrics.length > 1
-                            ? `${setIndex + 1} (Isometria ${isoIndex + 1})`
-                            : `${setIndex + 1} (Isometria)`;
-                        appendWorkoutRow(
-                            session, exercise, set, label, 'isometry', isoIndex + 1, iso.id,
-                            '', '', iso.time ? `${iso.time}s` : '', iso.kg ?? '',
-                        );
-                    });
+
                 });
             }
         }

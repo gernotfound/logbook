@@ -41,9 +41,5 @@ export function sessionSetHasMeaningfulData(set: SessionSetLike): boolean {
         return true;
     }
 
-    if (set.dropsets?.some(drop => hasEnteredValue(drop.kg) || hasEnteredValue(drop.reps))) {
-        return true;
-    }
-
-    return Boolean(set.isometrics?.some(iso => hasEnteredValue(iso.kg) || hasEnteredValue(iso.time)));
+    return false;
 }

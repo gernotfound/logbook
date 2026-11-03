@@ -27,16 +27,11 @@ export function getSetTechnique(set: SessionExerciseSet): SetTechnique {
         }
     }
     if (firstAdvanced) return firstAdvanced;
-    if (set.dropsets?.length) return 'dropset';
     return 'straight';
 }
 
 export function getSetSegments(set: SessionExerciseSet): SetSegment[] {
-    if (set.segments?.length) return set.segments;
-    return [
-        ...(set.dropsets || []).map(ds => ({ id: ds.id, kg: ds.kg, reps: ds.reps, technique: 'dropset' as const })),
-        ...(set.isometrics || []).map(iso => ({ id: iso.id, kg: iso.kg, reps: '', time: iso.time, technique: 'isometry' as const })),
-    ];
+    return set.segments ?? [];
 }
 
 function targetsMatch(left?: SetTarget, right?: SetTarget): boolean {

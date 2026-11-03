@@ -120,18 +120,6 @@ export const WorkoutRoutineSchema = z.object({
 
 export const RoutineSchema = WorkoutRoutineSchema;
 
-export const SessionExerciseDropsetSchema = z.object({
-    id: safeString(''),
-    kg: safeString(''),
-    reps: safeString(''),
-}).passthrough().catch({ id: '', kg: '', reps: '' }).default({ id: '', kg: '', reps: '' });
-
-export const SessionExerciseIsometricSchema = z.object({
-    id: safeString(''),
-    kg: safeString(''),
-    time: safeString(''),
-}).passthrough().catch({ id: '', kg: '', time: '' }).default({ id: '', kg: '', time: '' });
-
 const SessionSetSegmentSchema = z.object({
     id: z.string().trim().min(1).max(160).refine(id => !id.includes('/'), 'Identificativo segmento non valido'),
     kg: safeString(''),
@@ -179,9 +167,7 @@ export const SessionExerciseSetSchema = z.object({
     executionMode: z.enum(['standard', 'stop_reps']).optional().catch(undefined),
     segments: z.preprocess(sanitizeSetSegments, z.array(SessionSetSegmentSchema)).optional().catch(undefined),
     target: SetTargetSchema.optional().catch(undefined),
-    dropsets: z.array(SessionExerciseDropsetSchema).optional().catch(undefined),
-    isometrics: z.array(SessionExerciseIsometricSchema).optional().catch(undefined),
-}).passthrough().transform((set) => {
+}).passthrough().transform(({ dropsets: _dropsets, isometrics: _isometrics, ...set }) => {
     if (set.rir !== undefined) return set;
     const { rir: _rir, ...withoutRir } = set;
     return withoutRir;

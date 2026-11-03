@@ -59,7 +59,7 @@ describe('Challenger 2: UI/UX Adversarial & Responsive Stress Test Suite', () =>
                     sessionNote: '',
                     sets: [
                         { id: 's1', kg: '100', reps: '10', done: true },
-                        { id: 's2', kg: '100', reps: '10', done: true, dropsets: [{ id: 'd1', kg: '70', reps: '8' }] }
+                        { id: 's2', kg: '100', reps: '10', done: true, segments: [{ technique: 'dropset' as const, id: 'd1', kg: '70', reps: '8' }] }
                     ]
                 }
             ]

@@ -209,8 +209,10 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
                                     id: 's1',
                                     kg: '100',
                                     reps: '6',
-                                    dropsets: [{ id: 'ds1', kg: '70', reps: '6' }],
-                                    isometrics: [{ id: 'iso1', kg: '50', time: '15' }]
+                                    segments: [
+                                        { technique: 'dropset' as const, id: 'ds1', kg: '70', reps: '6' },
+                                        { technique: 'isometry' as const, reps: '', id: 'iso1', kg: '50', time: '15' }
+                                    ],
                                 }
                             ]
                         },
@@ -232,8 +234,8 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
 
                 const complexEx = localWorkout?.exercises[1];
                 expect(complexEx?.exId).toBe('ex_complex');
-                expect(complexEx?.sets[0].dropsets?.[0].kg).toBe('70');
-                expect(complexEx?.sets[0].isometrics?.[0].time).toBe('15');
+                expect(complexEx?.sets[0].segments?.filter(segment => segment.technique === 'dropset')?.[0].kg).toBe('70');
+                expect(complexEx?.sets[0].segments?.filter(segment => segment.technique === 'isometry')?.[0].time).toBe('15');
             });
 
             it('T2.2.4: Reorder with cardio tracking exercise preserves distance, time, speed, incline', () => {

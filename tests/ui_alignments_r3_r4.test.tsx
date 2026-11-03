@@ -248,12 +248,10 @@ describe('UI Alignments - R3 & R4', () => {
                 id: 'set_1',
                 kg: '50',
                 reps: '10',
-                dropsets: [
-                    { id: 'ds_1', kg: '40', reps: '8' }
+                segments: [
+                    { technique: 'dropset' as const, id: 'ds_1', kg: '40', reps: '8' },
+                    { technique: 'isometry' as const, reps: '', id: 'iso_1', kg: '30', time: '20' }
                 ],
-                isometrics: [
-                    { id: 'iso_1', kg: '30', time: '20' }
-                ]
             };
 
             render(
@@ -286,17 +284,9 @@ describe('UI Alignments - R3 & R4', () => {
             expect(inputContainer?.style.alignItems).toBe('center');
             expect(inputContainer?.style.display).toBe('flex');
 
-            // Verify dropset row
-            const dropsetText = screen.getByText('↳ Dropset');
-            const dropsetContainer = dropsetText.parentElement;
-            expect(dropsetContainer).toBeDefined();
-            expect(dropsetContainer?.style.alignItems).toBe('center');
-
-            // Verify isometric row
-            const isoText = screen.getByText('↳ Isometria');
-            const isoContainer = isoText.parentElement;
-            expect(isoContainer).toBeDefined();
-            expect(isoContainer?.style.alignItems).toBe('center');
+            expect(screen.getByText('↳ Dropset 1')).toBeDefined();
+            expect(screen.getByText('↳ Isometria 1')).toBeDefined();
+            expect(document.querySelectorAll('.session-advanced-segment-grid.compact')).toHaveLength(2);
         });
     });
 });

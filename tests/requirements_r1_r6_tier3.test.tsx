@@ -38,9 +38,9 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
             const set = {
                 kg: '15',
                 reps: '8',
-                dropsets: [
-                    { kg: '5', reps: '6' },
-                    { kg: '0', reps: '5' }
+                segments: [
+                    { technique: 'dropset' as const, id: 'seg-fixture-1', kg: '5', reps: '6' },
+                    { technique: 'dropset' as const, id: 'seg-fixture-2', kg: '0', reps: '5' }
                 ]
             };
 
@@ -193,7 +193,7 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                             {
                                 kg: '20',
                                 reps: '6',
-                                dropsets: [{ kg: '0', reps: '6' }] // BW + equip = 75 + 3 = 78
+                                segments: [{ technique: 'dropset' as const, id: 'seg-fixture-3', kg: '0', reps: '6' }] // BW + equip = 75 + 3 = 78
                             }
                         ]
                     },

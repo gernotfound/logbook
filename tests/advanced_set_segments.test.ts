@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { UserDataSchema } from '../src/lib/schema';
 import { canRepresentSetAsRoutinePlan, formatAdvancedSetSummary, getRoutineSetPlan, getSetObservedTonnage, getSetTechnique, getSetTotalReps } from '../src/lib/advancedSets';
+import { assertCloudBusinessPreserved } from '../src/lib/sync/cloudBusinessIntegrity';
 import { calculateSetVolume } from '../src/lib/calc/workout';
 import { buildRoutineWorkout, prepareHistoricalWorkoutForEditing } from '../src/hooks/workout/workoutSessionPreparation';
 import type { UserData, WorkoutRoutine, WorkoutSession } from '../src/types';
@@ -11,8 +12,8 @@ const runtime = (() => {
 })();
 
 describe('advanced set segments', () => {
-    it('keeps legacy dropsets readable without rewriting them', () => {
-        const set = { id: 's1', kg: '100', reps: '8', rir: 0, dropsets: [{ id: 'd1', kg: '80', reps: '5' }] };
+    it('calculates dropset segments without changing the source set', () => {
+        const set = { id: 's1', kg: '100', reps: '8', rir: 0, segments: [{ technique: 'dropset' as const, id: 'd1', kg: '80', reps: '5' }] };
         expect(getSetTechnique(set)).toBe('dropset');
         expect(getSetTotalReps(set)).toBe(13);
         expect(getSetObservedTonnage(set)).toBe(1200);
@@ -44,19 +45,31 @@ describe('advanced set segments', () => {
         expect(set.segments?.[0]).toMatchObject({ id: 'seg-1', technique: 'isometry', time: '20' });
         expect(set).not.toHaveProperty('dropsets');
         expect(set).not.toHaveProperty('isometrics');
+    });
 
-        const old = UserDataSchema.parse({ history: [{
-            id: 'retained-workout', exercises: [{
-                exId: 'bench', sets: [{
-                    id: 'old-set', kg: '100', reps: '8',
-                    dropsets: [{ id: 'drop-1', kg: 80, reps: 5 }],
-                    isometrics: [{ id: 'iso-1', kg: 30, time: 10 }],
-                }],
-            }],
+    it('excludes pre-launch arrays without adopting them as segments or mutating the input', () => {
+        const source = { id: 'old-set', kg: '100', reps: '8',
+            dropsets: [{ id: 'drop-1', kg: '80', reps: '5' }],
+            isometrics: [{ id: 'iso-1', kg: '30', time: '10' }],
+            futureField: 'preserved',
+        };
+        const snapshot = structuredClone(source);
+        const parsed = UserDataSchema.parse({ history: [{ id: 'old-workout',
+            exercises: [{ exId: 'bench', sets: [source] }],
         }] }) as UserData;
-        const retained = old.history![0].exercises[0].sets[0];
-        expect(retained.dropsets).toEqual([{ id: 'drop-1', kg: '80', reps: '5' }]);
-        expect(retained.isometrics).toEqual([{ id: 'iso-1', kg: '30', time: '10' }]);
+        const set = parsed.history![0].exercises[0].sets[0];
+        expect(set).not.toHaveProperty('dropsets');
+        expect(set).not.toHaveProperty('isometrics');
+        expect(set.segments).toBeUndefined();
+        expect(set).toHaveProperty('futureField', 'preserved');
+        expect(getSetTechnique(set)).toBe('straight');
+        expect(getSetTotalReps(set)).toBe(8);
+        expect(getSetObservedTonnage(set)).toBe(800);
+        expect(source).toEqual(snapshot);
+        expect(() => assertCloudBusinessPreserved('history_months/2026-09',
+            { 'old-workout': { id: 'old-workout', exercises: [{ exId: 'bench', sets: [source] }] } },
+            { 'old-workout': parsed.history![0] },
+        )).toThrow('sincronizzazione bloccata');
     });
 
     it('keeps segment persistence limited to the supported structure', () => {

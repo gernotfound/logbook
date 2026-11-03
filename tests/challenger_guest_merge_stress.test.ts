@@ -158,8 +158,10 @@ describe('Empirical Challenger: Deterministic Guest Merge (R5) Stress & Adversar
                                     kg: '105',
                                     reps: '10',
                                     done: true,
-                                    dropsets: [{ id: 'd1', kg: '80', reps: '8' }],
-                                    isometrics: [{ id: 'i1', kg: '60', time: '10' }]
+                                    segments: [
+                                        { technique: 'dropset' as const, id: 'd1', kg: '80', reps: '8' },
+                                        { technique: 'isometry' as const, reps: '', id: 'i1', kg: '60', time: '10' }
+                                    ],
                                 }
                             ]
                         }
@@ -179,8 +181,8 @@ describe('Empirical Challenger: Deterministic Guest Merge (R5) Stress & Adversar
             expect(s1?.routineName).toBe('Push Day Guest Overwrite');
             expect(s1?.moodRating).toBe(5);
             expect(s1?.exercises[0].sets[0].kg).toBe('105');
-            expect(s1?.exercises[0].sets[0].dropsets).toHaveLength(1);
-            expect(s1?.exercises[0].sets[0].isometrics).toHaveLength(1);
+            expect(s1?.exercises[0].sets[0].segments?.filter(segment => segment.technique === 'dropset')).toHaveLength(1);
+            expect(s1?.exercises[0].sets[0].segments?.filter(segment => segment.technique === 'isometry')).toHaveLength(1);
         });
 
         it('handles collisions in supplements collection', () => {

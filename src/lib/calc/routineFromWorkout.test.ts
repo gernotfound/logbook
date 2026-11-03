@@ -22,9 +22,9 @@ describe('completed workout to reusable routine', () => {
         expect(workout).toEqual(snapshot);
     });
 
-    it('preserves a pure legacy isometry as the exercise default technique', () => {
+    it('preserves a pure isometry segment as the exercise default technique', () => {
         const workout: WorkoutSession = { exercises: [{ exId: 'hold', sessionNote: '', sets: [{
-            id: 'a', kg: '20', reps: '', isometrics: [{ id: 'iso', kg: '20', time: '30' }],
+            id: 'a', kg: '20', reps: '', segments: [{ technique: 'isometry' as const, reps: '', id: 'iso', kg: '20', time: '30' }],
         }] }] };
         expect(routineFromWorkout(workout, 'r-iso', 'Isometria').exercises).toEqual([
             { exId: 'hold', setsCount: 1, defaultTechnique: 'isometrics' },

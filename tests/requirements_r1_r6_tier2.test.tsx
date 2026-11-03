@@ -279,9 +279,9 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                     id: 's1',
                     kg: '100',
                     reps: '6',
-                    dropsets: [
-                        { id: 'ds1', kg: '80', reps: '6' },
-                        { id: 'ds2', kg: '60', reps: '8' }
+                    segments: [
+                        { technique: 'dropset' as const, id: 'ds1', kg: '80', reps: '6' },
+                        { technique: 'dropset' as const, id: 'ds2', kg: '60', reps: '8' }
                     ]
                 };
                 render(
@@ -309,9 +309,9 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                     id: 's1',
                     kg: '50',
                     reps: '10',
-                    isometrics: [
-                        { id: 'iso1', kg: '40', time: '20' },
-                        { id: 'iso2', kg: '30', time: '15' }
+                    segments: [
+                        { technique: 'isometry' as const, reps: '', id: 'iso1', kg: '40', time: '20' },
+                        { technique: 'isometry' as const, reps: '', id: 'iso2', kg: '30', time: '15' }
                     ]
                 };
                 render(
@@ -339,8 +339,10 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                     id: 's1',
                     kg: '80',
                     reps: '8',
-                    dropsets: [{ id: 'ds1', kg: '60', reps: '6' }],
-                    isometrics: [{ id: 'iso1', kg: '40', time: '15' }]
+                    segments: [
+                        { technique: 'dropset' as const, id: 'ds1', kg: '60', reps: '6' },
+                        { technique: 'isometry' as const, reps: '', id: 'iso1', kg: '40', time: '15' }
+                    ],
                 };
                 render(
                     <SessionSetRow 
@@ -358,8 +360,8 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                     />
                 );
 
-                expect(screen.getByText('↳ Dropset')).toBeDefined();
-                expect(screen.getByText('↳ Isometria')).toBeDefined();
+                expect(screen.getByText('↳ Dropset 1')).toBeDefined();
+                expect(screen.getByText('↳ Isometria 1')).toBeDefined();
             });
 
             it('T2.4.5: clicking remove button on dropset invokes onRemoveSpecialSet', () => {
@@ -368,7 +370,7 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                     id: 's1',
                     kg: '80',
                     reps: '8',
-                    dropsets: [{ id: 'ds1', kg: '60', reps: '6' }]
+                    segments: [{ technique: 'dropset' as const, id: 'ds1', kg: '60', reps: '6' }]
                 };
                 render(
                     <SessionSetRow 
@@ -386,9 +388,9 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                     />
                 );
 
-                const removeBtn = screen.getByRole('button', { name: 'Rimuovi dropset 1' });
+                const removeBtn = screen.getByRole('button', { name: 'Rimuovi Dropset 1' });
                 fireEvent.click(removeBtn);
-                expect(mockRemove).toHaveBeenCalledWith(0, 's1', 'dropsets', 'ds1');
+                expect(mockRemove).toHaveBeenCalledWith(0, 's1', 'segments', 'ds1');
             });
 
             it('T2.4.6: SessionSetRow handles empty string kg and reps without throwing', () => {

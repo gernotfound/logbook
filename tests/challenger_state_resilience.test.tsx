@@ -284,7 +284,7 @@ describe('Challenger 2: Adversarial State Management, Schemas, Guest Merge & UI 
                         exId: 'lib_bench', sessionNote: '',
                         sets: [
                             { id: 's1', kg: '100', reps: '10' }, // 100 * 10 = 1000
-                            { id: 's2', kg: '100', reps: '8', dropsets: [{ id: 's3', kg: '80', reps: '5' }] } // 100*8 + 80*5 = 800 + 400 = 1200
+                            { id: 's2', kg: '100', reps: '8', segments: [{ technique: 'dropset' as const, id: 's3', kg: '80', reps: '5' }] } // 100*8 + 80*5 = 800 + 400 = 1200
                         ]
                     },
                     {

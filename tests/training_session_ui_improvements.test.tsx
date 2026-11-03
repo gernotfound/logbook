@@ -494,7 +494,7 @@ describe('Training Session UI Improvements Suite (R1, R2, R3)', () => {
                         id: 's_ds',
                         kg: '',
                         reps: '',
-                        dropsets: [{ id: 'ds_1', kg: '50', reps: '6' }]
+                        segments: [{ technique: 'dropset' as const, id: 'ds_1', kg: '50', reps: '6' }]
                     }
                 ],
                 sessionNote: ''
@@ -544,7 +544,7 @@ describe('Training Session UI Improvements Suite (R1, R2, R3)', () => {
                 sessionNote: '',
                 sets: [{
                     id: 's_iso', kg: '', reps: '',
-                    isometrics: [{ id: 'iso_1', kg: '', time: '20' }]
+                    segments: [{ technique: 'isometry' as const, reps: '', id: 'iso_1', kg: '', time: '20' }]
                 }]
             };
             const props = {
@@ -694,7 +694,7 @@ describe('Training Session UI Improvements Suite (R1, R2, R3)', () => {
                         id: 's_iso',
                         kg: '',
                         reps: '',
-                        isometrics: [{ id: 'iso_1', kg: '', time: '45s' }]
+                        segments: [{ technique: 'isometry' as const, reps: '', id: 'iso_1', kg: '', time: '45s' }]
                     }
                 ],
                 sessionNote: ''
@@ -747,8 +747,10 @@ describe('Training Session UI Improvements Suite (R1, R2, R3)', () => {
                         id: 's_empty',
                         kg: '0',
                         reps: '',
-                        dropsets: [{ id: 'ds_empty', kg: '', reps: '0' }],
-                        isometrics: [{ id: 'iso_empty', kg: '', time: '' }]
+                        segments: [
+                            { technique: 'dropset' as const, id: 'ds_empty', kg: '', reps: '0' },
+                            { technique: 'isometry' as const, reps: '', id: 'iso_empty', kg: '', time: '' }
+                        ],
                     }
                 ],
                 sessionNote: ''

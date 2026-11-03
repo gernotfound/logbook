@@ -423,7 +423,7 @@ describe('Analytics Engine 4-Tier Test Suite (src/lib/calc/analytics.ts)', () =>
                             id: 's1',
                             kg: '100',
                             reps: '10',
-                            dropsets: [{ id: 'ds1', kg: '70', reps: '8' }]
+                            segments: [{ technique: 'dropset' as const, id: 'ds1', kg: '70', reps: '8' }]
                         }]
                     }]
                 }];
@@ -442,10 +442,10 @@ describe('Analytics Engine 4-Tier Test Suite (src/lib/calc/analytics.ts)', () =>
                             id: 's1',
                             kg: '100',
                             reps: '10',
-                            dropsets: [
-                                { id: 'ds1', kg: '80', reps: '8' },
-                                { id: 'ds2', kg: '60', reps: '8' },
-                                { id: 'ds3', kg: '40', reps: '10' }
+                            segments: [
+                                { technique: 'dropset' as const, id: 'ds1', kg: '80', reps: '8' },
+                                { technique: 'dropset' as const, id: 'ds2', kg: '60', reps: '8' },
+                                { technique: 'dropset' as const, id: 'ds3', kg: '40', reps: '10' }
                             ]
                         }]
                     }]
@@ -465,7 +465,7 @@ describe('Analytics Engine 4-Tier Test Suite (src/lib/calc/analytics.ts)', () =>
                             id: 's1',
                             kg: '20',
                             reps: '10',
-                            dropsets: [{ id: 'ds1', kg: '0', reps: '8' }]
+                            segments: [{ technique: 'dropset' as const, id: 'ds1', kg: '0', reps: '8' }]
                         }]
                     }]
                 }];

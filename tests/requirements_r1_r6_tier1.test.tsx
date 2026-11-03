@@ -491,7 +491,7 @@ describe('TheLogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => 
                     id: 's1',
                     kg: '100',
                     reps: '6',
-                    dropsets: [{ id: 'ds1', kg: '80', reps: '6' }]
+                    segments: [{ technique: 'dropset' as const, id: 'ds1', kg: '80', reps: '6' }]
                 };
                 render(
                     <SessionSetRow 
@@ -509,7 +509,7 @@ describe('TheLogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => 
                     />
                 );
 
-                expect(screen.getByText('↳ Dropset')).toBeDefined();
+                expect(screen.getByText('↳ Dropset 1')).toBeDefined();
                 expect(screen.getByDisplayValue('80')).toBeDefined();
             });
 
@@ -518,7 +518,7 @@ describe('TheLogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => 
                     id: 's1',
                     kg: '50',
                     reps: '10',
-                    isometrics: [{ id: 'iso1', kg: '40', time: '30' }]
+                    segments: [{ technique: 'isometry' as const, reps: '', id: 'iso1', kg: '40', time: '30' }]
                 };
                 render(
                     <SessionSetRow 
@@ -536,7 +536,7 @@ describe('TheLogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => 
                     />
                 );
 
-                expect(screen.getByText('↳ Isometria')).toBeDefined();
+                expect(screen.getByText('↳ Isometria 1')).toBeDefined();
                 expect(screen.getByDisplayValue('40')).toBeDefined();
                 expect(screen.getByDisplayValue('30')).toBeDefined();
             });
@@ -594,12 +594,14 @@ describe('TheLogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => 
                     kg: '100',
                     reps: '8',
                     technique: 'cluster' as const,
-                    segments: [{
+                    segments: [
+                        {
                         id: 'seg1',
                         kg: '73',
                         reps: '4',
                         restBeforeSeconds: 20
-                    }]
+                    }
+                    ]
                 };
 
                 const { container } = render(

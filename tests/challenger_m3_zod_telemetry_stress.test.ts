@@ -153,7 +153,7 @@ describe('Empirical Challenger: Milestone 3 (R1: Zod Integration) Adversarial St
             expect(() => UserDataSchema.parse(deeplyNested)).not.toThrow();
         });
 
-        it('handles deeply nested corrupted workout sessions with malformed sets, dropsets, and isometrics', () => {
+        it('handles deeply nested corrupted workout sessions with malformed sets and continuation segments', () => {
             const malformedSession = {
                 id: 'sess_deep',
                 exercises: Array.from({ length: 20 }, (_, exIdx) => ({
@@ -162,16 +162,18 @@ describe('Empirical Challenger: Milestone 3 (R1: Zod Integration) Adversarial St
                         id: `s_${setIdx}`,
                         kg: { complex: 'not_a_string' },
                         reps: [1, 2, 3],
-                        dropsets: Array.from({ length: 5 }, (_, dsIdx) => ({
-                            id: `ds_${dsIdx}`,
-                            kg: { nested: true },
-                            reps: null,
-                        })),
-                        isometrics: Array.from({ length: 5 }, (_, isoIdx) => ({
-                            id: `iso_${isoIdx}`,
-                            kg: undefined,
-                            time: { deep: { deeper: 'error' } },
-                        })),
+                        segments: [
+                            ...Array.from({ length: 5 }, (_, dsIdx) => ({
+                                id: `ds_${dsIdx}`, technique: 'dropset',
+                                kg: { nested: true },
+                                reps: null,
+                            })),
+                            ...Array.from({ length: 5 }, (_, isoIdx) => ({
+                                id: `iso_${isoIdx}`, technique: 'isometry', reps: '',
+                                kg: undefined,
+                                time: { deep: { deeper: 'error' } },
+                            })),
+                        ],
                     })),
                 })),
             };
@@ -179,11 +181,11 @@ describe('Empirical Challenger: Milestone 3 (R1: Zod Integration) Adversarial St
             const parsed = DomainParsers.parseWorkoutSession(malformedSession);
             expect(parsed.exercises).toHaveLength(20);
             expect(parsed.exercises[0].sets).toHaveLength(10);
-            expect(parsed.exercises[0].sets[0].dropsets).toHaveLength(5);
-            expect(parsed.exercises[0].sets[0].isometrics).toHaveLength(5);
+            expect(parsed.exercises[0].sets[0].segments?.filter(segment => segment.technique === 'dropset')).toHaveLength(5);
+            expect(parsed.exercises[0].sets[0].segments?.filter(segment => segment.technique === 'isometry')).toHaveLength(5);
             expect(typeof parsed.exercises[0].sets[0].kg).toBe('string');
-            expect(typeof parsed.exercises[0].sets[0].dropsets![0].kg).toBe('string');
-            expect(typeof parsed.exercises[0].sets[0].isometrics![0].time).toBe('string');
+            expect(typeof parsed.exercises[0].sets[0].segments?.filter(segment => segment.technique === 'dropset')![0].kg).toBe('string');
+            expect(parsed.exercises[0].sets[0].segments?.filter(segment => segment.technique === 'isometry')![0].time).toBeUndefined();
         });
 
         it('handles heavily nested nutrition day with corrupted meals, micronutrients, and supplements', () => {

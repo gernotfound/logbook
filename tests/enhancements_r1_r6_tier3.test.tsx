@@ -270,8 +270,8 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
                 'isometry',
             ]);
             expect(localWorkout?.exercises[1].sets[0].technique).toBe('dropset');
-            expect(localWorkout?.exercises[1].sets[0].dropsets).toBeUndefined();
-            expect(localWorkout?.exercises[1].sets[0].isometrics).toBeUndefined();
+            expect(localWorkout?.exercises[1].sets[0]).not.toHaveProperty('dropsets');
+            expect(localWorkout?.exercises[1].sets[0]).not.toHaveProperty('isometrics');
 
             // 2. Reorder exercises: ex_lateral becomes index 0, ex_press becomes index 1
             act(() => {
