@@ -94,3 +94,18 @@ it('handles FileReader errors and cancellation before save', async () => {
     await expect(Exporter.importFromJson(file, { uid: 'a' }, save)).rejects.toThrow('leggere');
     expect(save).not.toHaveBeenCalled();
 });
+
+it.each(['merge', 'restore'] as const)('rejects a lossy %s backup before confirmation, save or optional device recovery', async mode => {
+    const original = createBackup(UserDataSchema.parse({}) as any, 'user:a',
+        { scope: 'device', months: [] }, { device: { draft_routine: '{"name":"recover"}' } });
+    const malformed = { ...original, userData: { profile: { height: '180' }, extraBusiness: 'preserve' } };
+    const before = structuredClone(ui.state.userData);
+    const save = vi.fn();
+    const input = { content: JSON.stringify(malformed) } as unknown as File;
+    await expect(Exporter.importFromJson(input, { uid: 'a' }, save, mode)).rejects.toThrow('dati non conservabili senza perdita');
+    expect(ui.confirm).not.toHaveBeenCalled();
+    expect(save).not.toHaveBeenCalled();
+    expect(ui.alert).toHaveBeenCalledExactlyOnceWith(expect.stringContaining('Conserva il file originale'));
+    expect(ui.state.userData).toEqual(before);
+    expect(ui.durable.data).toEqual(before);
+});

@@ -39,13 +39,19 @@ import { UserDataSchema } from '../../src/lib/schema';
 import { invalidateSession } from '../../src/lib/sync/session';
 import { createAndMigrateVault } from '../../src/lib/sync/secureArchiveMigration';
 import { lockAllVaults } from '../../src/lib/sync/secureArchiveSession';
-import type { UserData } from '../../src/types';
+import type { CachedGlobalCatalog, UserData } from '../../src/types';
 
+const catalog: CachedGlobalCatalog = {
+    manifest: { version: 'ack-tests', updatedAt: '2026-11-03T00:00:00.000Z', schemaVersion: 1,
+        docRefs: { exercises: 'catalog/exercises', foods: 'catalog/foods' },
+        itemCounts: { exercises: 0, foods: 0 } },
+    exercises: [], foods: [], cachedAt: 0,
+};
 const data = (height: number) => UserDataSchema.parse({ profile: { height: String(height) }, legalConsent: { hasAcceptedTerms: true, hasAcceptedHealthData: true, acceptedAt: '2026-10-11T10:00:00.000Z', privacyVersion: '1.3.4', termsVersion: '1.2.1' } }) as unknown as UserData;
 const deferred = <T>() => { let resolve!: (value: T) => void; let reject!: (err: any) => void; const promise = new Promise<T>((res, rej) => { resolve = res; reject = rej; }); return { promise, resolve, reject }; };
 
 beforeEach(async () => {
-    catalogReader.read.mockReset().mockResolvedValue({ exercises: [], foods: [] });
+    catalogReader.read.mockReset().mockResolvedValue(catalog);
     lockAllVaults();
     localStorage.clear();
     vi.stubGlobal('navigator', { onLine: true, locks: {
@@ -208,7 +214,7 @@ it.each([
     const base = data(170);
     base.profile!.neck = '39';
     const { documents, syncMetas } = applySemanticOperations(
-        projectDocuments(base, { exercises: [], foods: [] }), before!.pending,
+        projectDocuments(base, catalog), before!.pending,
     );
     const outcome = { documents, syncMeta: syncMetas };
     let invalidated = false;
@@ -225,7 +231,7 @@ it.each([
     };
 
     if (boundary === 'catalog') {
-        const catalogWait = deferred<{ exercises: []; foods: [] }>();
+        const catalogWait = deferred<CachedGlobalCatalog>();
         const entered = deferred<void>();
         catalogReader.read.mockImplementationOnce(() => {
             entered.resolve();
@@ -234,7 +240,7 @@ it.each([
         completion.resolve(outcome);
         await entered.promise;
         invalidate();
-        catalogWait.resolve({ exercises: [], foods: [] });
+        catalogWait.resolve(catalog);
     } else {
         // Invalidate after updateArchiveRecord has dispatched its IDB read,
         // just before the synchronous update callback. An earlier check alone
@@ -251,7 +257,7 @@ it.each([
                 }
                 return request;
             });
-            return { exercises: [], foods: [] };
+            return catalog;
         });
         completion.resolve(outcome);
     }

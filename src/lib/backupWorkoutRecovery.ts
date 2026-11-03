@@ -1,4 +1,5 @@
 import { DomainParsers } from './schema';
+import { findLossyNormalization } from './sync/businessNormalizationIntegrity';
 import { assertWorkoutSessionIdentities } from './sync/domainOperations/validation';
 import { unwrapWorkoutDeviceSnapshot } from './sync/workoutDeviceIntent';
 import { readDeviceValueStrict } from './sync/deviceStorage';
@@ -23,6 +24,9 @@ export function decodePortableWorkout(raw: string, owner: string): WorkoutSessio
     const workout = DomainParsers.parseActiveWorkout(source.workout);
     if (!workout) throw new Error('Backup: allenamento di recupero non valido.');
     assertWorkoutSessionIdentities(workout, 'Backup workout');
+    if (findLossyNormalization(source.workout, workout)) {
+        throw new Error('Backup: allenamento non conservabile senza perdita. Conserva il file originale.');
+    }
     return workout;
 }
 
