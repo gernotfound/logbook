@@ -216,7 +216,7 @@ describe('Data history detail modal lifecycle', () => {
         const dialog = screen.getByRole('dialog');
         expect(dialog.querySelector('.btn-primary')).toBeNull();
         const close = dialog.querySelector<HTMLButtonElement>('.data-icon-button')!;
-        const footer = screen.getByRole('button', { name: 'Chiudi', exact: true });
+        const footer = screen.getByRole('button', { name: 'Chiudi' });
         footer.focus();
         fireEvent.keyDown(footer, { key: 'Tab' });
         expect(document.activeElement).toBe(close);
@@ -226,13 +226,13 @@ describe('Data history detail modal lifecycle', () => {
         expect(onSelectEdit).not.toHaveBeenCalled();
     });
 
-    it('releases the modal before editing the same measurement and on parent unmount', () => {
+    it('closes the detail when editing the same measurement and releases scroll on parent unmount', () => {
         const day = { date: '2026-10-05', weight: 81.4 };
         const onSelectEdit = vi.fn();
         const { unmount } = render(<DataHistory measurementsHistory={[day]}
             editingDate={null} onSelectEdit={onSelectEdit} />);
         fireEvent.click(screen.getByRole('button', { name: /Apri dettaglio/i }));
-        fireEvent.click(screen.getByRole('button', { name: 'Modifica', exact: true }));
+        fireEvent.click(screen.getByRole('button', { name: 'Modifica' }));
         expect(onSelectEdit).toHaveBeenCalledWith(day);
         expect(screen.queryByRole('dialog')).toBeNull();
         expect(document.body.style.overflow).toBe('');

@@ -1,6 +1,8 @@
 import { expect, test, type Page } from './fixtures';
 import type { TestInfo } from '@playwright/test';
 
+test.describe.configure({ retries: 0 });
+
 const appearances = [
   { preference: 'light', system: 'dark', resolved: 'light' },
   { preference: 'dark', system: 'light', resolved: 'dark' },
