@@ -19,7 +19,9 @@ describe('Home workout navigation', () => {
   it('sends a completed workout CTA to training history', () => {
     const onNavigate = vi.fn();
     render(<HomeWorkoutWidget isRestDay={false} todaysWorkout={completedWorkout} activeWorkout={null} onNavigate={onNavigate} />);
-    fireEvent.click(screen.getByRole('button', { name: /Apri lo storico degli allenamenti/i }));
+    const button = screen.getByRole('button', { name: /Vai allo storico degli allenamenti/i });
+    expect(button.textContent).toContain('Vai allo storico');
+    fireEvent.click(button);
     expect(onNavigate).toHaveBeenCalledWith('training-history');
   });
 

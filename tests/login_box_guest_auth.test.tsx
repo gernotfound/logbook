@@ -74,10 +74,11 @@ describe('LoginBox guest Google authentication', () => {
     it('keeps the local-data explanation inside the guest action and preserves its behavior', async () => {
         authState.isGuest = false;
         render(<LoginBox />);
-        const action = screen.getByRole('button', { name: 'Continua senza account' });
+        const action = screen.getByRole('button', { name: /Continua senza account\s+I dati saranno salvati solo sul dispositivo\./i });
         const explanation = screen.getByText('I dati saranno salvati solo sul dispositivo.');
         expect(action.contains(explanation)).toBe(true);
-        expect(action.getAttribute('aria-describedby')).toBe(explanation.id);
+        expect(action.hasAttribute('aria-label')).toBe(false);
+        expect(action.hasAttribute('aria-describedby')).toBe(false);
         fireEvent.click(action);
         await waitFor(() => expect(authMocks.loginAsGuest).toHaveBeenCalledTimes(1));
     });

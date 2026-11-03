@@ -56,7 +56,7 @@ test('brand stays aligned across login and registration and guest guidance is in
       const guestAction = page.getByRole('button', { name: 'Continua senza account' });
       const guidance = guestAction.getByText('I dati saranno salvati solo sul dispositivo.');
       await expect(guidance).toBeAttached();
-      await expect(guestAction).toHaveAttribute('aria-describedby', 'auth-guest-device-note');
+      await expect(guestAction).toHaveAccessibleName(/Continua senza account\s+I dati saranno salvati solo sul dispositivo\./i);
       await guestAction.scrollIntoViewIfNeeded();
       await expect(guidance).toBeVisible();
       expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
