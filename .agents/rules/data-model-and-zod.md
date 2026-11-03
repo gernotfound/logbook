@@ -28,6 +28,8 @@ La pianificazione nutrizionale usa `avgMacros`, `onBoost`, `onMacros`, `offMacro
 
 Il formato supportato delle continuazioni di serie workout è soltanto `SessionExerciseSet.segments`, con la tecnica sul segmento. I writer di sessione/routine, l'editor, il recupero, i calcoli, il CSV e il backup/import usano questa struttura. Gli array pre-lancio `dropsets` e `isometrics` non vengono più letti né convertiti: il gateway Zod li esclude dal modello senza mutare l'input, preservando gli altri campi addizionali. La tecnica routine `defaultTechnique: 'isometrics'` resta invece un'impostazione corrente: genera segmenti `technique: 'isometry'`, non un array storico. Restano obbligatori identificativi stabili dei segmenti, callback indirizzati per ID, protezione delle bozze e controllo di integrità cloud contro normalizzazioni lossy.
 
+Il termine temporale di una sessione usa soltanto `globalEndTime`; `globalStartTime`, data business e durate testuali restano i campi correnti per i rispettivi scopi. L'alias `endTime` pre-lancio non è letto da Home, analytics, suggerimenti, progressione, stima durata o CSV e viene escluso dal gateway Zod senza promozione al timestamp canonico.
+
 ## Zod Gateway — difesa runtime
 
 Tutti i dati in ingresso dai boundary persistiti **DEVONO** essere normalizzati secondo la versione applicabile e poi transitare attraverso `UserDataSchema.parse()` prima di diventare stato business corrente.

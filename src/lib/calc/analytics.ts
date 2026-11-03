@@ -119,9 +119,7 @@ export function getWorkoutDateString(w: WorkoutSession | any): string | null {
     }
     const ts = typeof w.globalStartTime === 'number' && !isNaN(w.globalStartTime)
         ? w.globalStartTime
-        : (typeof w.globalEndTime === 'number' && !isNaN(w.globalEndTime)
-            ? w.globalEndTime
-            : (typeof w.endTime === 'number' && !isNaN(w.endTime) ? w.endTime : null));
+        : (typeof w.globalEndTime === 'number' && !isNaN(w.globalEndTime) ? w.globalEndTime : null);
 
     if (ts !== null) {
         return Logic.getLocalDateString(ts);
@@ -512,7 +510,7 @@ export interface ReadinessTrendStats {
 
 /** Uses the recorded check-in time when an imported session lacks workout timestamps. */
 function readinessChronologyTimestamp(session: WorkoutSession): number {
-    const values = [session.globalStartTime, session.globalEndTime, session.endTime, session.readiness?.capturedAt];
+    const values = [session.globalStartTime, session.globalEndTime, session.readiness?.capturedAt];
     return values.find(value => typeof value === 'number' && Number.isFinite(value)) ?? 0;
 }
 

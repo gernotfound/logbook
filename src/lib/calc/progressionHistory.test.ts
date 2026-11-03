@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { WorkoutSession } from '../../types';
+import { getWorkoutDateString } from './analytics';
 import { orderedEarlierSessions } from './progressionHistory';
 
 const session = (id: string, date: string, start?: number, end?: number): WorkoutSession => ({
@@ -9,6 +10,17 @@ const session = (id: string, date: string, start?: number, end?: number): Workou
 });
 
 describe('historical session order for the progression report', () => {
+    it('ignores the retired endTime alias for chronology and date inference', () => {
+        const current = session('current', '2026-09-22', 3000);
+        const old = { ...session('old', '2026-09-22'), endTime: 1000 };
+        const canonical = { ...old, id: 'canonical', globalEndTime: 2000 };
+        expect(orderedEarlierSessions([old, canonical], current).map(workout => workout.id))
+            .toEqual(['canonical']);
+        expect(getWorkoutDateString({ id: 'old-clock', exercises: [], endTime: 1000 })).toBeNull();
+        expect(getWorkoutDateString({ id: 'current-clock', exercises: [],
+            globalStartTime: new Date(2026, 8, 22, 12).getTime() })).toBe('2026-09-22');
+    });
+
     it('preserves date ordering, input history, and same-day end-before-start fencing', () => {
         const current = session('current', '2026-09-22', 3000, 5000);
         const earlierSameDay = session('same-day', '2026-09-22', 1000, 2000);

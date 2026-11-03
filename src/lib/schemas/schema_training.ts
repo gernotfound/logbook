@@ -219,12 +219,11 @@ export const WorkoutSessionSchema = z.object({
     pumpRating: safeOptionalNullableNumber(),
     fatigueRating: safeOptionalNullableNumber(),
     waterLiters: safeOptionalNumber(),
-    endTime: safeOptionalNumber(),
     exercises: z.array(SessionExerciseSchema).catch([]).default([]),
     isEditingHistory: safeOptionalBoolean(),
     originalHistoryId: safeOptionalString(),
     pains: z.array(safeString('')).optional().catch([]).default([]),
-}).passthrough().catch((ctx) => {
+}).passthrough().transform(({ endTime: _retiredEndTime, ...session }) => session).catch((ctx) => {
     reportZodSchemaFallback({
         schema: 'WorkoutSessionSchema',
         fallbackUsed: 'default_empty_session',

@@ -32,7 +32,7 @@ export function getRoutineDurationEstimate(
         .filter(workout => workout.routineId === routineId)
         .map(workout => ({
             seconds: workoutDurationSeconds(workout),
-            timestamp: workout.globalEndTime ?? workout.endTime ?? workout.globalStartTime ?? 0,
+            timestamp: workout.globalEndTime ?? workout.globalStartTime ?? 0,
         }))
         .filter((sample): sample is { seconds: number; timestamp: number } => (
             sample.seconds !== null && sample.seconds > 0

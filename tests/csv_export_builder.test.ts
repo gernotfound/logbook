@@ -53,6 +53,20 @@ describe('pure CSV export builder', () => {
         expect(workouts.startsWith('\uFEFF')).toBe(false); // BOM added exactly once by downloadFile
     });
 
+    it('exports only the canonical workout end timestamp without mutating the source', () => {
+        const source = { id: 'w-clock', date: '2026-10-22', exercises: [],
+            globalStartTime: Date.parse('2026-10-22T10:00:00Z'),
+            endTime: Date.parse('2020-01-01T09:00:00Z'),
+        };
+        const before = structuredClone(source);
+        const withoutEnd = buildCsvFiles([source], {}, [])[0][1];
+        expect(withoutEnd).toContain('2026-10-22T10:00:00.000Z');
+        expect(withoutEnd).not.toContain('2020-01-01T09:00:00.000Z');
+        const withEnd = buildCsvFiles([{ ...source, globalEndTime: Date.parse('2026-10-22T11:00:00Z') }], {}, [])[0][1];
+        expect(withEnd).toContain('2026-10-22T11:00:00.000Z');
+        expect(source).toEqual(before);
+    });
+
     it('omits empty optional files and exports sessions with no exercises', () => {
         const history: WorkoutSession[] = [{ id: 'empty', date: '2026-10-22', exercises: [] }];
         const files = buildCsvFiles(history, {}, []);
