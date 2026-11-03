@@ -90,7 +90,7 @@ export async function migrateGuestAccount({ user, guestData, policy, setUserData
         const prepareReplica = async (hydrated: LocalEnvelope): Promise<LocalEnvelope> => {
             assertCurrent();
             const { adoptReplicaCheckpoint, completeCloudIntegrityRecovery } = await import('../../lib/sync/localRepository');
-            await retireExpiredReplicas(getDb(), user.uid);
+            await retireExpiredReplicas(getDb(), user.uid, Date.now(), isCurrent);
             assertCurrent();
             const checkpoint = checkpointFromCloudDocuments(cloudPayload?.cloudDocuments ?? new Map());
             const claim = await claimReplicaCheckpoint(
@@ -100,6 +100,7 @@ export async function migrateGuestAccount({ user, guestData, policy, setUserData
                 checkpoint.clock,
                 hydrated.actorSeq,
                 hydrated.replica ? undefined : hydrated.actorId,
+                isCurrent,
             );
             assertCurrent();
             await adoptReplicaCheckpoint(user.uid, claim, checkpoint, isCurrent);
