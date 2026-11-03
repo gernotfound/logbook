@@ -4,6 +4,7 @@ import {
   acquireDeletionLease,
   assertDeletionLease,
   DeletionLeaseLostError,
+  deleteAccountKeyAfterVerification,
   deleteAuthUserLast,
   deletePrivateCollectionPage,
   deleteUserRoot,
@@ -87,6 +88,14 @@ export async function processAccountDeletion(
       await parkDeletion(uid, 'verifying', { phase: 'verifying' }, leaseOwner);
       return 'pending';
     }
+    // Verify all private collections before retiring the key that could recover them.
+    await verifyNoAccountResidue(uid, true);
+    await assertDeletionLease(uid, leaseOwner);
+    if (outOfBudget(deadlineMs, safetyBufferMs)) {
+      await parkDeletion(uid, 'verifying', { phase: 'verifying' }, leaseOwner);
+      return 'pending';
+    }
+    await deleteAccountKeyAfterVerification(uid, leaseOwner);
     await verifyNoAccountResidue(uid);
     await assertDeletionLease(uid, leaseOwner);
 
