@@ -202,11 +202,11 @@ jobs:
           set -o pipefail
           npm run test:e2e 2>&1 | tee "verification-e2e.log"
 
-      - name: Upload failure artifacts
-        if: failure()
+      - name: Upload Playwright evidence
+        if: ${{ always() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
-          name: verification-failure-e2e-${{ github.run_id }}
+          name: verification-e2e-${{ env.EXPECTED_SHA }}
           if-no-files-found: ignore
           retention-days: 7
           path: |

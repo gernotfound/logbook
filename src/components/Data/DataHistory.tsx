@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useModalFocusTrap } from '../../hooks/useModalFocusTrap';
+import { useScrollLock } from '../../hooks/useScrollLock';
 import { useLocalToday } from '../../hooks/useLocalToday';
 import {
     CalendarRange,
@@ -79,6 +81,77 @@ function recordSummary(day: MeasurementHistoryDay): string {
     if (hasFiniteValue(day?.waist)) parts.push(`Vita ${formatDecimal(Number(day.waist))} cm`);
     if (day?.sleepHours) parts.push(`Sonno ${Logic.formatSleepTime(day.sleepHours)}`);
     return parts.join(' · ') || 'Dati registrati';
+}
+
+interface DataHistoryDetailProps {
+    day: MeasurementHistoryDay;
+    onClose: () => void;
+    onSelectEdit: (day: MeasurementHistoryDay) => void;
+}
+
+// Mount the modal lifecycle only while open so focus returns to its actual trigger.
+function DataHistoryDetail({ day, onClose, onSelectEdit }: DataHistoryDetailProps) {
+    const titleId = useId();
+    const dialogRef = useRef<HTMLElement>(null);
+    const closeButtonRef = useRef<HTMLButtonElement>(null);
+    useScrollLock();
+    useModalFocusTrap({ containerRef: dialogRef, initialFocusRef: closeButtonRef, onEscape: onClose });
+
+    return (
+        <div className="data-detail-layer">
+            <button
+                className="data-detail-backdrop"
+                tabIndex={-1}
+                type="button"
+                onClick={onClose}
+                aria-label="Chiudi dettaglio"
+            />
+            <section ref={dialogRef} className="data-detail-sheet" role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}>
+                <div className="data-detail-head">
+                    <div>
+                        <h2 id={titleId}>Dettaglio dati</h2>
+                        <p>
+                            {dayLabel(day.date)}
+                            {day.measurementTime ? ` · ${day.measurementTime}` : ''}
+                        </p>
+                    </div>
+                    <button ref={closeButtonRef} type="button" className="data-icon-button" onClick={onClose} aria-label="Chiudi dettaglio">
+                        <X size={20} aria-hidden="true" />
+                    </button>
+                </div>
+                <div className="data-detail-scroll">
+                    <div className="data-detail-grid">
+                    {hasFiniteValue(day.weight) && <div><strong>{formatDecimal(Number(day.weight))} kg</strong><span>Peso</span></div>}
+                    {hasFiniteValue(day.bf) && <div><strong>{formatDecimal(Number(day.bf))}%</strong><span>BF · {day.bfProvenance?.method === 'manual' ? 'manuale' : day.bfProvenance?.method === 'us_navy' ? 'US Navy' : 'origine n.d.'}</span></div>}
+                    {hasFiniteValue(day.waist) && <div><strong>{formatDecimal(Number(day.waist))} cm</strong><span>Vita</span></div>}
+                    {hasFiniteValue(day.neck) && <div><strong>{formatDecimal(Number(day.neck))} cm</strong><span>Collo</span></div>}
+                    {hasFiniteValue(day.hip) && <div><strong>{formatDecimal(Number(day.hip))} cm</strong><span>Fianchi</span></div>}
+                    {hasFiniteValue(day.chest) && <div><strong>{formatDecimal(Number(day.chest))} cm</strong><span>Torace</span></div>}
+                    {hasFiniteValue(day.shoulders) && <div><strong>{formatDecimal(Number(day.shoulders))} cm</strong><span>Spalle</span></div>}
+                    {hasFiniteValue(day.biceps) && <div><strong>{formatDecimal(Number(day.biceps))} cm</strong><span>Braccia</span></div>}
+                    {hasFiniteValue(day.thighs) && <div><strong>{formatDecimal(Number(day.thighs))} cm</strong><span>Cosce</span></div>}
+                    {hasFiniteValue(day.calves) && <div><strong>{formatDecimal(Number(day.calves))} cm</strong><span>Polpacci</span></div>}
+                    {day.sleepHours && <div><strong>{Logic.formatSleepTime(day.sleepHours)}</strong><span>Sonno</span></div>}
+                    </div>
+                </div>
+                <div className="data-action-row">
+                    <button type="button" className="btn" onClick={onClose}>Chiudi</button>
+                    {hasMeasurementData(day) && (
+                        <button
+                            type="button"
+                            className="btn btn-primary"
+                            onClick={() => {
+                                onClose();
+                                onSelectEdit(day);
+                            }}
+                        >
+                            <Pencil size={16} aria-hidden="true" /> Modifica
+                        </button>
+                    )}
+                </div>
+            </section>
+        </div>
+    );
 }
 
 const DataHistory: React.FC<DataHistoryProps> = ({
@@ -341,7 +414,13 @@ const DataHistory: React.FC<DataHistoryProps> = ({
                                                 {
                                                     label: 'Vedi dettaglio',
                                                     icon: <Ruler size={16} />,
-                                                    onClick: () => setDetailDay(day),
+                                                    onClick: event => {
+                                                        // The menu item unmounts; retain its surviving trigger for modal focus restoration.
+                                                        event.currentTarget.closest('.history-record-card')
+                                                            ?.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]')
+                                                            ?.focus({ preventScroll: true });
+                                                        setDetailDay(day);
+                                                    },
                                                 },
                                                 {
                                                     label: 'Modifica misurazione',
@@ -367,59 +446,7 @@ const DataHistory: React.FC<DataHistoryProps> = ({
             </section>
 
             {detailDay && (
-                <div className="data-detail-layer" role="dialog" aria-modal="true" aria-labelledby="data-detail-title">
-                    <button
-                        className="data-detail-backdrop"
-                        type="button"
-                        onClick={() => setDetailDay(null)}
-                        aria-label="Chiudi dettaglio"
-                    />
-                    <section className="data-detail-sheet">
-                        <div className="data-detail-head">
-                            <div>
-                                <h2 id="data-detail-title">Dettaglio dati</h2>
-                                <p>
-                                    {dayLabel(detailDay.date)}
-                                    {detailDay.measurementTime ? ` · ${detailDay.measurementTime}` : ''}
-                                </p>
-                            </div>
-                            <button type="button" className="data-icon-button" onClick={() => setDetailDay(null)} aria-label="Chiudi dettaglio">
-                                <X size={20} aria-hidden="true" />
-                            </button>
-                        </div>
-                        <div className="data-detail-scroll">
-                            <div className="data-detail-grid">
-                            {hasFiniteValue(detailDay.weight) && <div><strong>{formatDecimal(Number(detailDay.weight))} kg</strong><span>Peso</span></div>}
-                            {hasFiniteValue(detailDay.bf) && <div><strong>{formatDecimal(Number(detailDay.bf))}%</strong><span>BF · {detailDay.bfProvenance?.method === 'manual' ? 'manuale' : detailDay.bfProvenance?.method === 'us_navy' ? 'US Navy' : 'origine n.d.'}</span></div>}
-                            {hasFiniteValue(detailDay.waist) && <div><strong>{formatDecimal(Number(detailDay.waist))} cm</strong><span>Vita</span></div>}
-                            {hasFiniteValue(detailDay.neck) && <div><strong>{formatDecimal(Number(detailDay.neck))} cm</strong><span>Collo</span></div>}
-                            {hasFiniteValue(detailDay.hip) && <div><strong>{formatDecimal(Number(detailDay.hip))} cm</strong><span>Fianchi</span></div>}
-                            {hasFiniteValue(detailDay.chest) && <div><strong>{formatDecimal(Number(detailDay.chest))} cm</strong><span>Torace</span></div>}
-                            {hasFiniteValue(detailDay.shoulders) && <div><strong>{formatDecimal(Number(detailDay.shoulders))} cm</strong><span>Spalle</span></div>}
-                            {hasFiniteValue(detailDay.biceps) && <div><strong>{formatDecimal(Number(detailDay.biceps))} cm</strong><span>Braccia</span></div>}
-                            {hasFiniteValue(detailDay.thighs) && <div><strong>{formatDecimal(Number(detailDay.thighs))} cm</strong><span>Cosce</span></div>}
-                            {hasFiniteValue(detailDay.calves) && <div><strong>{formatDecimal(Number(detailDay.calves))} cm</strong><span>Polpacci</span></div>}
-                            {detailDay.sleepHours && <div><strong>{Logic.formatSleepTime(detailDay.sleepHours)}</strong><span>Sonno</span></div>}
-                            </div>
-                        </div>
-                        <div className="data-action-row">
-                            <button type="button" className="btn" onClick={() => setDetailDay(null)}>Chiudi</button>
-                            {hasMeasurementData(detailDay) && (
-                                <button
-                                    type="button"
-                                    className="btn btn-primary"
-                                    onClick={() => {
-                                        const day = detailDay;
-                                        setDetailDay(null);
-                                        onSelectEdit(day);
-                                    }}
-                                >
-                                    <Pencil size={16} aria-hidden="true" /> Modifica
-                                </button>
-                            )}
-                        </div>
-                    </section>
-                </div>
+                <DataHistoryDetail day={detailDay} onClose={() => setDetailDay(null)} onSelectEdit={onSelectEdit} />
             )}
         </div>
     );

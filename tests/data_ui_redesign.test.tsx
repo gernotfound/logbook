@@ -181,3 +181,79 @@ describe('Data UI redesign', () => {
         expect(onDeleteMeasurement).toHaveBeenCalledWith('2026-10-05');
     });
 });
+
+describe('Data history detail modal lifecycle', () => {
+    it('contains keyboard focus, closes with Escape and restores the current trigger on every opening', () => {
+        render(<DataHistory measurementsHistory={[{ date: '2026-10-05', weight: 81.4 }]}
+            editingDate={null} onSelectEdit={vi.fn()} />);
+        const trigger = screen.getByRole('button', { name: /Apri dettaglio/i });
+        for (let opening = 0; opening < 2; opening++) {
+            trigger.focus();
+            fireEvent.click(trigger);
+            const dialog = screen.getByRole('dialog', { name: 'Dettaglio dati' });
+            const close = dialog.querySelector<HTMLButtonElement>('.data-icon-button')!;
+            const edit = dialog.querySelector<HTMLButtonElement>('.btn-primary')!;
+            expect(document.activeElement).toBe(close);
+            expect(document.body.style.overflow).toBe('hidden');
+            fireEvent.keyDown(close, { key: 'Tab', shiftKey: true });
+            expect(document.activeElement).toBe(edit);
+            fireEvent.keyDown(edit, { key: 'Tab' });
+            expect(document.activeElement).toBe(close);
+            fireEvent.keyDown(document, { key: 'Escape' });
+            expect(screen.queryByRole('dialog')).toBeNull();
+            expect(document.activeElement).toBe(trigger);
+            expect(document.body.style.overflow).toBe('');
+        }
+    });
+
+    it('keeps sparse sleep detail focusable and dismisses the backdrop without editing data', () => {
+        const onSelectEdit = vi.fn();
+        render(<DataHistory measurementsHistory={[{ date: '2026-10-05', sleepHours: '07:30' }]}
+            editingDate={null} onSelectEdit={onSelectEdit} />);
+        const trigger = screen.getByRole('button', { name: /Apri dettaglio/i });
+        trigger.focus();
+        fireEvent.click(trigger);
+        const dialog = screen.getByRole('dialog');
+        expect(dialog.querySelector('.btn-primary')).toBeNull();
+        const close = dialog.querySelector<HTMLButtonElement>('.data-icon-button')!;
+        const footer = screen.getByRole('button', { name: 'Chiudi' });
+        footer.focus();
+        fireEvent.keyDown(footer, { key: 'Tab' });
+        expect(document.activeElement).toBe(close);
+        fireEvent.click(document.querySelector('.data-detail-backdrop')!);
+        expect(screen.queryByRole('dialog')).toBeNull();
+        expect(document.activeElement).toBe(trigger);
+        expect(onSelectEdit).not.toHaveBeenCalled();
+    });
+
+    it('closes the detail when editing the same measurement and releases scroll on parent unmount', () => {
+        const day = { date: '2026-10-05', weight: 81.4 };
+        const onSelectEdit = vi.fn();
+        const { unmount } = render(<DataHistory measurementsHistory={[day]}
+            editingDate={null} onSelectEdit={onSelectEdit} />);
+        fireEvent.click(screen.getByRole('button', { name: /Apri dettaglio/i }));
+        fireEvent.click(screen.getByRole('button', { name: 'Modifica' }));
+        expect(onSelectEdit).toHaveBeenCalledWith(day);
+        expect(screen.queryByRole('dialog')).toBeNull();
+        expect(document.body.style.overflow).toBe('');
+        fireEvent.click(screen.getByRole('button', { name: /Apri dettaglio/i }));
+        expect(document.body.style.overflow).toBe('hidden');
+        unmount();
+        expect(document.body.style.overflow).toBe('');
+    });
+});
+
+it('restores the surviving menu trigger after opening detail from a disappearing menu item', () => {
+    render(<DataHistory measurementsHistory={[{ date: '2026-10-05', weight: 81.4 }]}
+        editingDate={null} onSelectEdit={vi.fn()} />);
+    const options = screen.getByRole('button', { name: 'Opzioni' });
+    options.focus();
+    fireEvent.keyDown(options, { key: 'ArrowDown' });
+    const item = screen.getByRole('menuitem', { name: 'Vedi dettaglio' });
+    item.focus();
+    fireEvent.click(item);
+    const close = screen.getByRole('dialog').querySelector<HTMLButtonElement>('.data-icon-button')!;
+    expect(document.activeElement).toBe(close);
+    fireEvent.keyDown(close, { key: 'Escape' });
+    expect(document.activeElement).toBe(options);
+});
