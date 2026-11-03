@@ -68,7 +68,7 @@ export async function hydrateLocal(owner: string, cloudData: UserData, months: s
     let integrityFailure: IncompleteCloudSnapshotError | undefined;
     const catalog = await getCachedCatalog();
     await updateArchiveRecord<any>(owner, raw => {
-        if (guard && !guard()) return raw;
+        if (guard && !guard()) throw new Error('Hydration locale invalidata dal cambio sessione; journal preservato.');
         const current = validateLocalEnvelope(raw, owner);
         if (!current) {
             const syncMetaByDocument: Record<string, SyncMeta> = {};

@@ -30,7 +30,7 @@ export async function adoptReplicaCheckpoint(
     let saved: LocalEnvelope | undefined;
 
     await updateArchiveRecord<unknown>(owner, raw => {
-        if (guard && !guard()) return raw;
+        if (guard && !guard()) throw new Error('Checkpoint replica invalidato dal cambio sessione; journal preservato.');
         const current = validateLocalEnvelope(raw, owner);
         if (!current) throw new Error('Archivio locale non trovato durante il checkpoint replica');
 

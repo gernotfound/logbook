@@ -48,6 +48,60 @@ const prepareGuestVault = async () => {
 
 describe('durable owner-scoped journal', () => {
 
+    it('aborts stale cloud hydration after an IndexedDB wait without touching the authenticated ciphertext', async () => {
+        const owner = 'user:a';
+        await prepareOwnerVault(owner);
+        await initializeLocal(owner, data(170));
+        await commitLocal(owner, data(171), data(170));
+        const before = await get('logbook:v2:' + owner);
+        const durable = await readLocal(owner);
+        let guardCalls = 0;
+
+        await expect(hydrateLocal(owner, data(199), [], new Map(), 'all', () => {
+            guardCalls++;
+            return false;
+        })).rejects.toThrow('Hydration locale invalidata dal cambio sessione');
+        expect(guardCalls).toBe(1);
+        expect(await get('logbook:v2:' + owner)).toBe(before);
+        expect(await readLocal(owner)).toEqual(durable);
+    });
+
+    it('rejects a stale replica checkpoint without rebasing pending operations', async () => {
+        const owner = 'user:a';
+        await prepareOwnerVault(owner);
+        await initializeLocal(owner, data(170));
+        await commitLocal(owner, data(171), data(170));
+        const before = await get('logbook:v2:' + owner);
+        const durable = await readLocal(owner);
+        const now = Date.now();
+        const identity = {
+            slot: 's00', replicaId: 'stale-checkpoint', generation: 1,
+            checkpointAtMs: now, leaseUntilMs: now + 31_104_000_000,
+        };
+
+        await expect(adoptReplicaCheckpoint(owner, { identity, baseSeq: 0 },
+            { clock: {}, syncMetaByDocument: {} }, () => false))
+            .rejects.toThrow('Checkpoint replica invalidato dal cambio sessione');
+        expect(await get('logbook:v2:' + owner)).toBe(before);
+        expect(await readLocal(owner)).toEqual(durable);
+    });
+
+    it('rejects a stale integrity recovery, preserving its durable fence and pending journal', async () => {
+        const owner = 'user:a';
+        await prepareOwnerVault(owner);
+        await initializeLocal(owner, data(170));
+        await commitLocal(owner, data(171), data(170));
+        await markCloudIntegrityBlocked(owner);
+        const durable = (await readLocal(owner))!;
+        const before = await get('logbook:v2:' + owner);
+
+        await expect(completeCloudIntegrityRecovery(owner, durable.cloudIntegrityFence ?? null,
+            true, () => false)).rejects.toThrow('Recupero cloud invalidato dal cambio sessione');
+        expect(await get('logbook:v2:' + owner)).toBe(before);
+        expect(await readLocal(owner)).toEqual(durable);
+    });
+
+
     it.each([undefined, '', 'invalid-id'])('rejects an ID-less or malformed workout journal marker (%s) without rewriting ciphertext', async intentId => {
         await prepareOwnerVault('user:a');
         const initial = data(170);

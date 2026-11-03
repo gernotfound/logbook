@@ -30,7 +30,7 @@ describe('local hydration write fencing', () => {
         await initializeLocal(owner, newer, []);
 
         await expect(hydrateLocal(owner, stale, [], new Map(), 'all', () => false))
-            .rejects.toThrow('Hydration locale invalidata o non riuscita');
+            .rejects.toThrow('Hydration locale invalidata dal cambio sessione');
 
         const envelope = await readLocal(owner);
         expect(envelope?.data.profile?.height).toBe('182');
