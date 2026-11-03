@@ -5,7 +5,7 @@
 
 import { telemetryHub } from './telemetryHub';
 
-export type ErrorCategory =
+type ErrorCategory =
   | 'network'
   | 'auth'
   | 'quota'
@@ -16,7 +16,7 @@ export type ErrorCategory =
   | 'timeout'
   | 'unknown';
 
-export type NormalizedErrorCode =
+type NormalizedErrorCode =
   | 'ERR_AUTH_NETWORK'
   | 'ERR_AUTH_EXPIRED'
   | 'ERR_FIRESTORE_UNAVAILABLE'
@@ -38,17 +38,6 @@ export interface FormattedSyncError {
   message: string;
   isOfflineSafe: boolean;
   canRetry: boolean;
-}
-
-/**
- * Utility to ensure strict Italian Sentence case formatting.
- * Capitalizes only the first letter of the first word, preserving acronyms and lowercase for subsequent words.
- */
-export function toSentenceCase(str: string): string {
-  if (!str || str.length === 0) return '';
-  const trimmed = str.trim();
-  if (trimmed.length === 0) return '';
-  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
 }
 
 /**
