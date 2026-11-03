@@ -156,8 +156,8 @@ requirePattern('matrix command execution', workflow, /^          \$\{\{ matrix\.
 requirePattern('CodeQL job', workflow, /^  codeql:\s*$/m);
 requirePattern('CodeQL JavaScript-TypeScript language', workflow, /^          languages: javascript-typescript\s*$/m);
 requirePattern('CodeQL extended security queries', workflow, /^          queries: security-extended\s*$/m);
-requirePattern('CodeQL init action pin', workflow, /^        uses: github\/codeql-action\/init@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4\s*$/m);
-requirePattern('CodeQL analyze action pin', workflow, /^        uses: github\/codeql-action\/analyze@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4\s*$/m);
+requirePattern('CodeQL init action pin', workflow, /^        uses: github\/codeql-action\/init@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4\s*$/m);
+requirePattern('CodeQL analyze action pin', workflow, /^        uses: github\/codeql-action\/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4\s*$/m);
 
 const allowedIfLines = new Set([
   'if: matrix.java == true',
