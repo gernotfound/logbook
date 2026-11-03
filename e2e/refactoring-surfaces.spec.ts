@@ -111,8 +111,8 @@ for (const viewport of viewports) {
       }
       expect(await page.locator('.bottom-nav').evaluate(nav => {
         const rect = nav.getBoundingClientRect();
-        return document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2)
-          ?.closest('.data-detail-layer') !== null;
+        return Boolean(document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2)
+          ?.closest('.data-detail-layer'));
       })).toBe(true);
       await capture(page, testInfo, 'data-detail');
       await page.keyboard.press('Escape');
