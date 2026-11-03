@@ -34,7 +34,6 @@ import {
 } from './calc/nutrition';
 import {
     validateWorkoutRatings,
-    getWorkoutDatesSet,
     filterItems,
     searchExerciseLibrary,
     normalizeStem,
@@ -88,7 +87,6 @@ export {
     validateCustomFood,
     calculateMealTotals,
     validateWorkoutRatings,
-    getWorkoutDatesSet,
     filterItems,
     searchExerciseLibrary,
     normalizeStem,
@@ -106,7 +104,6 @@ export {
     mergeActivePains
 };
 
-// Aggregated Logic object for full backward compatibility
 export const Logic = {
     // Constants
     MUSCLES,
@@ -148,7 +145,6 @@ export const Logic = {
 
     // Workouts & Planning
     validateWorkoutRatings,
-    getWorkoutDatesSet,
     filterItems,
     searchExerciseLibrary,
     normalizeStem,
