@@ -14,7 +14,12 @@ export type HealthExportPage = { documents: HealthExportItem[]; nextCursor: stri
 async function exportCheckpoint(uid: string): Promise<number> {
   const state = await readHealthConsentState(uid);
   if (state.status !== 'withdrawn') throw new Error('Export endpoint available only during withdrawal');
-  const snap = await adminDb().collection('health_data_erasures').doc(uid).get();
+  const [snap, accountDeletion] = await Promise.all([
+    adminDb().collection('health_data_erasures').doc(uid).get(),
+    adminDb().collection('account_deletions').doc(uid).get(),
+  ]);
+  // Even a completed account-deletion tombstone fences an old authenticated export.
+  if (accountDeletion.exists) throw new Error('Export suspended by account deletion');
   const job = snap.data();
   if (snap.exists && (!job || job.uid !== uid || job.status !== 'complete')) {
     throw new Error('Export suspended by an in-progress data erasure');
