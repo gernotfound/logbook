@@ -11,7 +11,6 @@ function getWorkoutTimestamp(w: any): number | null {
     if (!w) return null;
     if (typeof w.globalStartTime === 'number' && !isNaN(w.globalStartTime)) return w.globalStartTime;
     if (typeof w.globalEndTime === 'number' && !isNaN(w.globalEndTime)) return w.globalEndTime;
-    if (typeof w.endTime === 'number' && !isNaN(w.endTime)) return w.endTime;
     if (w.date) {
         const parsed = new Date(w.date.includes('T') ? w.date : `${w.date}T12:00:00`).getTime();
         if (!isNaN(parsed)) return parsed;

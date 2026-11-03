@@ -160,7 +160,6 @@ export interface WorkoutSession {
     pumpRating?: number | null;
     fatigueRating?: number | null;
     waterLiters?: number;
-    endTime?: number;
     exercises: SessionExercise[];
     isEditingHistory?: boolean;
     originalHistoryId?: string;

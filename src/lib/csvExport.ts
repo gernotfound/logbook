@@ -102,7 +102,7 @@ export function buildCsvFiles(
                 readiness?.muscleRecovery ?? '',
                 session.id ?? '',
                 isoInstant(session.globalStartTime),
-                isoInstant(session.globalEndTime ?? session.endTime),
+                isoInstant(session.globalEndTime),
                 session.routineId ?? '',
                 session.cycleId ?? '',
                 session.cycleName ?? '',

@@ -2,6 +2,21 @@ import { describe, it, expect } from 'vitest';
 import { UserDataSchema, NutritionDaySchema, DomainParsers } from '../schema';
 
 describe('UserDataSchema', () => {
+    it('does not promote the pre-launch endTime alias in history or the active workout', () => {
+        const workout = { id: 'current-workout', exercises: [],
+            globalStartTime: 1000, globalEndTime: 2000, endTime: 500,
+            futureField: 'preserved',
+        };
+        const before = structuredClone(workout);
+        const parsed = UserDataSchema.parse({ history: [workout], activeWorkout: workout });
+        for (const result of [parsed.history[0], parsed.activeWorkout,
+            DomainParsers.parseWorkoutSession(workout)]) {
+            expect(result).not.toHaveProperty('endTime');
+            expect(result).toMatchObject({ globalStartTime: 1000, globalEndTime: 2000, futureField: 'preserved' });
+        }
+        expect(workout).toEqual(before);
+    });
+
     it('should fallback to defaults when completely empty or invalid', () => {
         const parsed = UserDataSchema.parse(null);
         expect(parsed).toBeDefined();

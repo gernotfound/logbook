@@ -2,8 +2,8 @@ import type { WorkoutSession } from '../../types';
 
 function sessionTimestamp(session: WorkoutSession, preferEnd = false): number | undefined {
     const candidates = preferEnd
-        ? [session.globalEndTime, session.endTime, session.globalStartTime]
-        : [session.globalStartTime, session.globalEndTime, session.endTime];
+        ? [session.globalEndTime, session.globalStartTime]
+        : [session.globalStartTime, session.globalEndTime];
     return candidates.find(value => typeof value === 'number' && Number.isFinite(value));
 }
 

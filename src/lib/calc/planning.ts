@@ -401,7 +401,7 @@ export function getNextScheduledRoutine(
     cycleHistory.forEach((workout, index) => {
         const routineIndex = routineIndexById.get(workout.routineId ?? '');
         if (routineIndex === undefined) return;
-        const recordedTime = [workout.globalEndTime, workout.endTime, workout.globalStartTime]
+        const recordedTime = [workout.globalEndTime, workout.globalStartTime]
             .find(time => typeof time === 'number' && Number.isFinite(time));
         const parsedDate = typeof workout.date === 'string' ? parseISO(workout.date) : null;
         const time = recordedTime ?? (parsedDate && isValid(parsedDate) ? parsedDate.getTime() : 0);
