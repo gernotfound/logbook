@@ -227,10 +227,31 @@ it('returns the exact normalized business sealed in Firestore for acknowledgemen
         expect(business).toEqual(opened.business);
         expect(first.syncMeta[path]).toEqual(opened.sync);
     }
-    expect(first.documents.get('')?.nutritionPlanning).toBeNull();
-    expect((first.documents.get('nutrition_months/2026-09')?.['2026-09-13'] as Record<string, unknown>).weight).toBe(80.5);
+    expect(first.documents.get('')?.nutritionPlanning).toEqual({});
+    expect(first.documents.get('nutrition_months/2026-09')).toMatchObject({ '2026-09-13': { weight: 80.5 } });
     const replay = await applyDocumentChanges(db, 'a', operations, () => true, replica, key);
     expect(replay.documents).toEqual(first.documents);
     expect(replay.syncMeta).toEqual(first.syncMeta);
     expect(operations).toEqual(source);
+});
+
+it('preserves explicit null planning through an unrelated root write and replay', async () => {
+    const key = new Uint8Array(32).fill(18);
+    const original = sealCloudDocument(key, 'a', '', {
+        profile: { height: '170' }, nutritionPlanning: null,
+    }, { protocolVersion: 3, clock: {}, fields: {},
+        writer: { slot: 's01', replicaId: 'remote-seed', generation: 1, seq: 0 } });
+    await env.withSecurityRulesDisabled(async context => {
+        await setDoc(doc(asModularFirestore(context.firestore()), 'users/a'), original);
+    });
+    const db = asModularFirestore(env.authenticatedContext('a', { email_verified: true }).firestore());
+    const replica = await registerReplica(db, 'a');
+    const first = await applyDocumentChanges(db, 'a', [profileHeightOp()], () => true, replica, key);
+    const replay = await applyDocumentChanges(db, 'a', [profileHeightOp()], () => true, replica, key);
+    const saved = (await getDoc(doc(db, 'users/a'))).data()!;
+    const opened = openCloudDocument(key, 'a', '', saved);
+    expect(opened.business).toMatchObject({ profile: { height: '180' }, nutritionPlanning: null });
+    expect(first.documents.get('')).toEqual(opened.business);
+    expect(replay.documents).toEqual(first.documents);
+    expect(replay.syncMeta).toEqual(first.syncMeta);
 });
