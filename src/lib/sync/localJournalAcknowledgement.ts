@@ -23,8 +23,10 @@ export async function acknowledgeThrough(
     months: string[] = [],
     syncMeta?: Record<string, SyncMeta>,
     delivery?: { operations: SemanticOperation[]; replica: ReplicaIdentity },
+    guard?: () => boolean,
 ): Promise<void> {
     owner = normalizeStorageOwner(owner);
+    if (guard && !guard()) throw new Error('Acknowledgement invalidato dal cambio sessione; journal preservato.');
     // The general UserData schema uses a catch-all default. Reject malformed
     // transport envelopes before it can turn an invalid ACK into empty data.
     if (remote === null || typeof remote !== 'object' || Array.isArray(remote)) {
@@ -33,6 +35,9 @@ export async function acknowledgeThrough(
     const parsed = parse(remote);
     const catalog = await getCachedCatalog();
     await updateArchiveRecord<unknown>(owner, raw => {
+        // Catalog and IndexedDB waits can outlive the Auth/consent epoch that
+        // delivered the batch. Vault identity alone does not fence that session.
+        if (guard && !guard()) throw new Error('Acknowledgement invalidato dal cambio sessione; journal preservato.');
         const current = validateLocalEnvelope(raw, owner);
         if (!current) throw new Error('Archivio locale non trovato');
         if (delivery) {
