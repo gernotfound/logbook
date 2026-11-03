@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { Timestamp, FieldValue, type Transaction } from 'firebase-admin/firestore';
+import { Timestamp, FieldValue, FieldPath, type QueryDocumentSnapshot, type Transaction } from 'firebase-admin/firestore';
 import { adminDb } from '../accountDeletion/firebaseAdmin.js';
 import { PRIVATE_ACCOUNT_COLLECTIONS } from '../accountDeletion/types.js';
 
@@ -294,25 +294,35 @@ export async function listRecoverableHealthErasures(limitCount = 12): Promise<st
 export async function purgeExpiredCompletedHealthErasures(deadlineMs: number, maxItems = 100): Promise<number> {
   const db = adminDb();
   const now = Timestamp.now();
-  const due = await db.collection(JOB_COLLECTION)
+  const boundedLimit = Math.min(100, Math.max(1, Math.floor(maxItems)));
+  const base = db.collection(JOB_COLLECTION)
     .where('status', '==', 'complete').where('purgeAfter', '<=', now)
-    .orderBy('purgeAfter').limit(Math.min(100, Math.max(1, maxItems))).get();
+    .orderBy('purgeAfter').orderBy(FieldPath.documentId());
+  let cursor: QueryDocumentSnapshot | undefined;
   let purged = 0;
-  for (const item of due.docs) {
-    if (Date.now() + SAFETY_BUFFER_MS >= deadlineMs) break;
-    const deleted = await db.runTransaction(async tx => {
-      const [jobSnap, consentSnap] = await Promise.all([tx.get(item.ref), tx.get(consentRef(item.id))]);
-      const job = jobSnap.data() as Job | undefined;
-      const consent = consentSnap.data();
-      if (!jobSnap.exists || !job || job.uid !== item.id || job.status !== 'complete'
-        || !(job.purgeAfter instanceof Timestamp) || job.purgeAfter.toMillis() > Date.now()
-        || !isPositiveRevision(job.consentRevision)
-        || !consent || !isPositiveRevision(consent.erasedBeforeRevision)
-        || consent.erasedBeforeRevision < job.consentRevision) return false;
-      tx.delete(item.ref);
-      return true;
-    });
-    if (deleted) purged++;
+  // Advance past receipts that cannot safely be retired. Re-reading the first
+  // page on every cron run would starve all later eligible receipts.
+  while (Date.now() + SAFETY_BUFFER_MS < deadlineMs && purged < boundedLimit) {
+    const page = await (cursor ? base.startAfter(cursor) : base).limit(boundedLimit).get();
+    if (page.empty) break;
+    for (const item of page.docs) {
+      if (Date.now() + SAFETY_BUFFER_MS >= deadlineMs || purged >= boundedLimit) break;
+      const deleted = await db.runTransaction(async tx => {
+        const [jobSnap, consentSnap] = await Promise.all([tx.get(item.ref), tx.get(consentRef(item.id))]);
+        const job = jobSnap.data() as Job | undefined;
+        const consent = consentSnap.data();
+        if (!jobSnap.exists || !job || job.uid !== item.id || job.status !== 'complete'
+          || !(job.purgeAfter instanceof Timestamp) || job.purgeAfter.toMillis() > Date.now()
+          || !isPositiveRevision(job.consentRevision)
+          || !consent || !isPositiveRevision(consent.erasedBeforeRevision)
+          || consent.erasedBeforeRevision < job.consentRevision) return false;
+        tx.delete(item.ref);
+        return true;
+      });
+      if (deleted) purged++;
+      cursor = item;
+    }
+    if (page.size < boundedLimit) break;
   }
   return purged;
 }
