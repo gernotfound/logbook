@@ -99,6 +99,8 @@ La `stableFrontier` è il minimo componente-per-componente dei `checkpointClock`
 
 Le Security Rules rendono autorevoli membership, generation e lease tramite `request.time`. Il contenuto del checkpoint è calcolato dal client soltanto dopo full scan ed è un'invariante del protocollo/test, non una read-proof crittografica verificabile dalle Rules.
 
+**MUST (CRITICAL, manutenzione replica remote):** `claimReplicaCheckpoint` e `retireExpiredReplicas` devono ricevere dal chiamante Auth/guest→account un guard di sessione che includa UID, epoch Auth e generazione del consenso. Ricontrollarlo all'avvio e **dopo la lettura Firestore nella callback transazionale**, prima di ogni `transaction.set`. Una vecchia sessione non può registrare/rinnovare checkpoint né ritirare repliche dopo che ha perso l'autorizzazione, anche durante un retry SDK; il solo controllo nel chiamante dopo `await` non annulla una write remota già riuscita. Le Rules continuano a essere il fence server-side indipendente su owner, consenso e lease, ma non conoscono l'epoch Auth della scheda.
+
 ### Empty shell dopo terminal GC
 
 Il client non esegue delete fisiche dei documenti di sync. Se business state e `fields` diventano vuoti dopo stable-frontier GC, `transactionWriter` persiste un empty shell con `_schemaVersion` e `_sync.writer`. Le Rules negano sempre la delete fisica mensile lato client; la cancellazione fisica resta esclusivamente nel boundary trusted di account deletion.
