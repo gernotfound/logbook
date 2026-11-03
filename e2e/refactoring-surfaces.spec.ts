@@ -36,6 +36,10 @@ for (const viewport of viewports) {
       await page.getByRole('tab', { name: 'Esercizi', exact: true }).click();
       await expect(page.getByRole('button', { name: 'Crea esercizio' })).toBeVisible();
       await capture(page, testInfo, 'training-exercises');
+      await page.getByRole('button', { name: 'Crea esercizio' }).click();
+      await expect(page.getByRole('heading', { name: 'Nuovo esercizio', exact: true })).toBeVisible();
+      await capture(page, testInfo, 'exercise-editor');
+      await page.locator('#exercise-creation-form').getByRole('button', { name: 'Chiudi', exact: true }).click();
       await page.getByRole('tab', { name: 'Schede', exact: true }).click();
       await page.getByRole('button', { name: 'Crea scheda' }).click();
       await page.getByPlaceholder('Nome scheda').fill('Scheda controllo layout');
@@ -71,7 +75,8 @@ for (const viewport of viewports) {
       await expect(report).toHaveCount(0);
       await page.getByRole('button', { name: 'Allenamento', exact: true }).click();
       await page.getByRole('tab', { name: 'Storico', exact: true }).click();
-      await expect(page.locator('#training-panel-history')).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Storico allenamenti', exact: true })).toBeVisible();
+      await expect(page.locator('#training-panel-history .history-calendar-grid')).toBeVisible();
       await capture(page, testInfo, 'training-history');
 
       await page.getByRole('button', { name: 'Dati e statistiche', exact: true }).click();
@@ -86,6 +91,8 @@ for (const viewport of viewports) {
         await capture(page, testInfo, `data-${name}`);
       }
       await page.getByRole('tab', { name: 'Storico', exact: true }).click();
+      await expect(page.getByRole('heading', { name: 'Storico Dati', exact: true })).toBeVisible();
+      await capture(page, testInfo, 'data-history');
       const detailTrigger = page.getByRole('button', { name: /Apri dettaglio/i });
       await detailTrigger.focus();
       await page.keyboard.press('Enter');
