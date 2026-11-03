@@ -2,6 +2,7 @@ import 'fake-indexeddb/auto';
 import { clear, del, get } from 'idb-keyval';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
+const catalogReader = vi.hoisted(() => ({ read: vi.fn() }));
 const remote = vi.hoisted(() => ({ apply: vi.fn(), auth: { currentUser: { uid: 'a' } } }));
 vi.mock('../../src/lib/firebase', () => ({ auth: remote.auth, getDb: () => ({}), ensureAppCheck: async () => {}, waitForPendingWrites: async () => {} }));
 // This legacy persistence suite assumes a verified, still-active server consent
@@ -22,13 +23,16 @@ vi.mock('../../src/lib/healthConsent', async () => {
     };
 });
 vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackEvent: vi.fn(), trackError: vi.fn() } }));
-vi.mock('../../src/lib/catalog/catalogService', () => ({ getCachedCatalog: async () => ({ exercises: [], foods: [] }) }));
+vi.mock('../../src/lib/catalog/catalogService', () => ({ getCachedCatalog: catalogReader.read }));
 vi.mock('../../src/lib/sync/transactionWriter', () => ({ applyDocumentChanges: remote.apply }));
 // Delayed-ACK tests use the real journal but isolate the independent online key transport.
 vi.mock('../../src/lib/sync/cloudAccountKeyAccess', () => ({
     requireCloudAccountDataKey: vi.fn(async () => new Uint8Array(32).fill(18)),
 }));
 
+import { projectDocuments } from '../../src/lib/sync/documentProjection';
+import { applySemanticOperations } from '../../src/lib/sync/semanticProjection';
+import { markAccountDeletion, clearAccountDeletion } from '../../src/lib/sync/accountGate';
 import { replicateJournal, waitForJournalIdle } from '../../src/lib/sync/replicateJournal';
 import { adoptReplicaCheckpoint, initializeLocal, commitLocal, readLocal } from '../../src/lib/sync/localRepository';
 import { UserDataSchema } from '../../src/lib/schema';
@@ -41,6 +45,7 @@ const data = (height: number) => UserDataSchema.parse({ profile: { height: Strin
 const deferred = <T>() => { let resolve!: (value: T) => void; let reject!: (err: any) => void; const promise = new Promise<T>((res, rej) => { resolve = res; reject = rej; }); return { promise, resolve, reject }; };
 
 beforeEach(async () => {
+    catalogReader.read.mockReset().mockResolvedValue({ exercises: [], foods: [] });
     lockAllVaults();
     localStorage.clear();
     vi.stubGlobal('navigator', { onLine: true, locks: {
@@ -180,4 +185,92 @@ it('does not acknowledge a late result after A to B to A even though the uid mat
     
     expect((await first).status).toBe('failed');
     expect((await readLocal('user:a'))?.pending).toHaveLength(1);
+});
+
+it.each([
+    ['catalog', 'owner-roundtrip'],
+    ['catalog', 'consent-generation'],
+    ['catalog', 'account-deletion'],
+    ['indexeddb', 'owner-roundtrip'],
+    ['indexeddb', 'consent-generation'],
+    ['indexeddb', 'account-deletion'],
+] as const)('preserves the exact journal when %s waits across %s before ACK, then recovers', async (boundary, change) => {
+    const completion = deferred<Awaited<ReturnType<typeof remote.apply>>>();
+    remote.apply.mockReturnValueOnce(completion.promise);
+    const first = replicateJournal();
+    await vi.waitFor(() => expect(remote.apply).toHaveBeenCalledTimes(1));
+
+    const before = await readLocal('user:a');
+    const ciphertext = await get('logbook:v2:user:a');
+    expect(before?.pending).toHaveLength(1);
+    // The cloud collaborator returns a coherent semantic outcome, including
+    // an independent remote change. IndexedDB, AEAD and the ACK path are real.
+    const base = data(170);
+    base.profile!.neck = '39';
+    const { documents, syncMetas } = applySemanticOperations(
+        projectDocuments(base, { exercises: [], foods: [] }), before!.pending,
+    );
+    const outcome = { documents, syncMeta: syncMetas };
+    let invalidated = false;
+    const invalidate = () => {
+        invalidated = true;
+        if (change === 'owner-roundtrip') {
+            remote.auth.currentUser = { uid: 'b' }; invalidateSession();
+            remote.auth.currentUser = { uid: 'a' }; invalidateSession();
+        } else if (change === 'consent-generation') {
+            localStorage.setItem('logbook:v2:user:a:health-consent-generation', '2');
+        } else {
+            markAccountDeletion('user:a');
+        }
+    };
+
+    if (boundary === 'catalog') {
+        const catalogWait = deferred<{ exercises: []; foods: [] }>();
+        const entered = deferred<void>();
+        catalogReader.read.mockImplementationOnce(() => {
+            entered.resolve();
+            return catalogWait.promise;
+        });
+        completion.resolve(outcome);
+        await entered.promise;
+        invalidate();
+        catalogWait.resolve({ exercises: [], foods: [] });
+    } else {
+        // Invalidate after updateArchiveRecord has dispatched its IDB read,
+        // just before the synchronous update callback. An earlier check alone
+        // cannot protect this interleaving.
+        catalogReader.read.mockImplementationOnce(async () => {
+            const originalGet = IDBObjectStore.prototype.get;
+            const spy = vi.spyOn(IDBObjectStore.prototype, 'get').mockImplementation(function (this: IDBObjectStore, key) {
+                const request = originalGet.call(this, key);
+                if (key === 'logbook:v2:user:a') {
+                    request.addEventListener('success', () => {
+                        spy.mockRestore();
+                        invalidate();
+                    }, { once: true });
+                }
+                return request;
+            });
+            return { exercises: [], foods: [] };
+        });
+        completion.resolve(outcome);
+    }
+
+    await waitForJournalIdle('user:a');
+    expect((await first).status).toBe('failed');
+    expect(invalidated).toBe(true);
+    expect(await get('logbook:v2:user:a')).toEqual(ciphertext);
+    expect(await readLocal('user:a')).toEqual(before);
+
+    clearAccountDeletion('user:a');
+    localStorage.removeItem('logbook:v2:user:a:health-consent-generation');
+    invalidateSession();
+    remote.apply.mockResolvedValueOnce(outcome);
+    expect((await replicateJournal()).status).toBe('synced');
+    expect(remote.apply).toHaveBeenCalledTimes(2);
+    const recovered = await readLocal('user:a');
+    expect(recovered?.pending).toEqual([]);
+    expect(recovered?.data.profile?.height).toBe('171');
+    expect(recovered?.data.profile?.neck).toBe('39');
+    expect(recovered?.baseline.profile).toEqual(recovered?.data.profile);
 });
