@@ -20,7 +20,7 @@ export const HomeNutritionWidget = ({
     const kcalPercent = kcalTarget > 0 ? Math.max(0, Math.min((kcalEaten / kcalTarget) * 100, 100)) : 0;
     return (
         <section className="home-nutrition">
-            <h2><button type="button" className="home-section-link" onClick={() => onNavigate('nutrition')} aria-label="Apri diario alimentare"><Utensils size={22} aria-hidden="true" /><span>Nutrizione</span><ChevronRight size={20} aria-hidden="true" /></button></h2>
+            <h2><button type="button" className="home-section-link" onClick={() => onNavigate('nutrition')} aria-label="Nutrizione: apri il diario alimentare"><Utensils size={22} aria-hidden="true" /><span>Nutrizione</span><ChevronRight size={20} aria-hidden="true" /></button></h2>
             <div className="home-nutrition-summary">
                 <div className="home-calorie-ring" role={kcalTarget > 0 ? 'progressbar' : undefined}
                     aria-valuenow={kcalTarget > 0 ? Math.round(kcalPercent) : undefined} aria-valuemin={kcalTarget > 0 ? 0 : undefined}

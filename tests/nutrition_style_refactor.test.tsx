@@ -341,5 +341,15 @@ renderWithProviders(
             expect(screen.getByText('Proteine').tagName).toBe('DT');
             expect(screen.getByText('Grassi').tagName).toBe('DT');
         });
+
+        it('preserves the visible section text in the accessible navigation name', () => {
+            const onNavigate = vi.fn();
+            render(<HomeNutritionWidget onNavigate={onNavigate} />);
+
+            const button = screen.getByRole('button', { name: /Nutrizione/i });
+            expect(button.textContent).toContain('Nutrizione');
+            fireEvent.click(button);
+            expect(onNavigate).toHaveBeenCalledWith('nutrition');
+        });
     });
 });
