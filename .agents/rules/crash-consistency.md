@@ -50,6 +50,8 @@ Un nuovo `commitLocal()` può completarsi mentre una generazione precedente è t
 
 **MUST:** l'ack della generazione precedente rimuove solo operation con `seq <= expectedSeq`.
 
+**MUST:** la replica trasmette all'ACK il guard della sessione catturata. Verificarlo anche dentro la callback atomica IndexedDB, dopo l'attesa catalogo e della transazione: cambio epoch Auth (incluso A→B→A), marker/generazione consenso o cancellazione account invalidano l'ACK prima di qualsiasi modifica. Conservare ciphertext e journal per il retry della sessione corrente; la sola disponibilità del vault dello stesso owner non autorizza un risultato obsoleto.
+
 **MUST:** la replica che riceve un esito remoto confermato passa ad `acknowledgeThrough()` il batch effettivamente consegnato e l'identità della replica. Nella stessa transazione IndexedDB, prima di rimuovere qualunque `pending`, l'ack deve verificare che l'esatto prefisso causale fino a `expectedSeq` sia ancora presente e immutato e che `slot`, `replicaId` e `generation` corrispondano. In caso contrario l'ack fallisce senza mutare l'envelope: un numero di sequenza da solo non è prova dell'identità del journal dopo un checkpoint concorrente.
 
 **MUST:** se `actorSeq` locale è già avanzato, `acknowledgeThrough()` non deve sostituire `data` con lo snapshot remoto più vecchio.
