@@ -206,18 +206,24 @@ export function advanceReplicaControl(control: ReplicaControl, identity: Replica
     };
 }
 
-export async function retireExpiredReplicas(db: Firestore, uid: string, now = Date.now()): Promise<void> {
+export async function retireExpiredReplicas(
+    db: Firestore, uid: string, now = Date.now(), isCurrent: () => boolean = () => true,
+): Promise<void> {
     if (!uid || uid.includes('/')) throw new Error('Identità non valida');
+    if (!isCurrent()) throw new Error('Sessione cambiata prima del retirement replica');
     const ref = doc(db, `users/${uid}/sync_control/state`);
 
     // Retire at most one slot per transaction because Security Rules deliberately
     // constrain every control mutation to one replica entry. Repeat until no locally
     // expired entry remains. Server request.time is still the authoritative proof.
     for (let attempt = 0; attempt < REPLICA_SLOT_COUNT; attempt += 1) {
+        if (!isCurrent()) throw new Error('Sessione cambiata durante il retirement replica');
         let retired = false;
         try {
             await runTransaction(db, async transaction => {
+                if (!isCurrent()) throw new Error('Sessione cambiata durante il retirement replica');
                 const snapshot = await transaction.get(ref);
+                if (!isCurrent()) throw new Error('Sessione cambiata durante il retirement replica');
                 if (!snapshot.exists()) return;
                 const current = parseReplicaControl(snapshot.data());
                 const candidate = Object.entries(current.replicas).find(([, entry]) =>
@@ -225,6 +231,7 @@ export async function retireExpiredReplicas(db: Firestore, uid: string, now = Da
                 );
                 if (!candidate) return;
 
+                if (!isCurrent()) throw new Error('Sessione cambiata durante il retirement replica');
                 const [slot, entry] = candidate;
                 transaction.set(ref, {
                     protocolVersion: 3,
@@ -254,8 +261,10 @@ export async function claimReplicaCheckpoint(
     checkpointClock: VectorClock,
     localActorSeq = 0,
     candidateReplicaId?: string,
+    isCurrent: () => boolean = () => true,
 ): Promise<ReplicaCheckpoint> {
     if (!uid || uid.includes('/')) throw new Error('Identità non valida');
+    if (!isCurrent()) throw new Error('Sessione cambiata prima del checkpoint replica');
     const normalizedCheckpoint = parseReplicaCheckpointClock(checkpointClock);
     const normalizedCandidate = candidateReplicaId?.trim();
     if (normalizedCandidate !== undefined && (!normalizedCandidate || normalizedCandidate.length > 128)) {
@@ -264,7 +273,9 @@ export async function claimReplicaCheckpoint(
     const ref = doc(db, `users/${uid}/sync_control/state`);
 
     return runTransaction(db, async transaction => {
+        if (!isCurrent()) throw new Error('Sessione cambiata durante il checkpoint replica');
         const snapshot = await transaction.get(ref);
+        if (!isCurrent()) throw new Error('Sessione cambiata durante il checkpoint replica');
         const control = snapshot.exists() ? parseReplicaControl(snapshot.data()) : emptyControl();
         const now = Date.now();
 
@@ -342,7 +353,9 @@ export async function claimReplicaCheckpoint(
             checkpointClock: normalizedCheckpoint,
         };
 
+        if (!isCurrent()) throw new Error('Sessione cambiata durante il checkpoint replica');
         const consentRevision = getVerifiedHealthConsentRevision(uid);
+        if (!isCurrent()) throw new Error('Sessione cambiata durante il checkpoint replica');
         transaction.set(ref, {
             protocolVersion: 3,
             ...(consentRevision > 0 ? { consentRevision } : {}),
