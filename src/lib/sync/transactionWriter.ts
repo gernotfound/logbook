@@ -25,8 +25,9 @@ export { CloudDataIntegrityError } from './cloudBusinessIntegrity';
 function normalizeRemote(path: string, raw: DocumentData): DocumentData {
     if (path === '') {
         const root = rootDocument(UserDataSchema.parse(raw) as unknown as UserData);
-        // Explicit cloud absence is valid; schema defaults must not invent a plan.
-        if (raw.nutritionPlanning === null) root.nutritionPlanning = null;
+        // Missing/null planning denotes absence. Defaulting it to an empty
+        // plan would add nested defaults on subsequent reads and retries.
+        if (raw.nutritionPlanning === null || raw.nutritionPlanning === undefined) root.nutritionPlanning = null;
         return root;
     }
     if (path.startsWith('history_months/')) {

@@ -227,7 +227,7 @@ it('returns the exact normalized business sealed in Firestore for acknowledgemen
         expect(business).toEqual(opened.business);
         expect(first.syncMeta[path]).toEqual(opened.sync);
     }
-    expect(first.documents.get('')?.nutritionPlanning).toEqual({});
+    expect(first.documents.get('')?.nutritionPlanning).toBeNull();
     expect(first.documents.get('nutrition_months/2026-09')).toMatchObject({ '2026-09-13': { weight: 80.5 } });
     const replay = await applyDocumentChanges(db, 'a', operations, () => true, replica, key);
     expect(replay.documents).toEqual(first.documents);
