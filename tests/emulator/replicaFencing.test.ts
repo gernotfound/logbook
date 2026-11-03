@@ -30,6 +30,74 @@ beforeAll(async () => {
 beforeEach(async () => { await env.clearFirestore(); await seedTrustedConsent(env); });
 afterAll(async () => { await env?.cleanup(); });
 
+
+it('rejects a checkpoint if the requesting session is stale after the control read', async () => {
+    const uid = 'a';
+    const db = asModularFirestore(env.authenticatedContext(uid, { email_verified: true }).firestore());
+    const controlRef = doc(db, 'users/' + uid + '/sync_control/state');
+    let guards = 0;
+    const guard = () => {
+        guards += 1;
+        // Simulate a session invalidation while the Firestore transaction read is in flight.
+        return guards < 3;
+    };
+
+    await expect(claimReplicaCheckpoint(db, uid, null, {}, 0, 'stale-first-claim', guard))
+        .rejects.toThrow('Sessione cambiata');
+    expect(guards).toBeGreaterThanOrEqual(3);
+    expect((await getDoc(controlRef)).exists()).toBe(false);
+});
+
+it('rejects a stale existing-replica checkpoint without changing its remote clock', async () => {
+    const uid = 'a';
+    const db = asModularFirestore(env.authenticatedContext(uid, { email_verified: true }).firestore());
+    const first = await claimReplicaCheckpoint(db, uid, null, { s00: 1 }, 0, 'current-device');
+    const controlRef = doc(db, 'users/' + uid + '/sync_control/state');
+    const before = (await getDoc(controlRef)).data()!;
+    let guards = 0;
+
+    await expect(claimReplicaCheckpoint(db, uid, first.identity, { s00: 100 }, 0, undefined,
+        () => ++guards < 3)).rejects.toThrow('Sessione cambiata');
+    expect(guards).toBeGreaterThanOrEqual(3);
+    expect((await getDoc(controlRef)).data()).toEqual(before);
+});
+
+it('rejects stale session during replica retirement without modifying the remote registry', async () => {
+    const uid = 'a';
+    const db = asModularFirestore(env.authenticatedContext(uid, { email_verified: true }).firestore());
+    const controlRef = doc(db, 'users/' + uid + '/sync_control/state');
+    const now = Date.now();
+    await env.withSecurityRulesDisabled(async context => {
+        await setDoc(doc(asModularFirestore(context.firestore()), 'users/' + uid + '/sync_control/state'), {
+            protocolVersion: 3, consentRevision: 1,
+            replicas: {
+                s00: {
+                    replicaId: 'retirement-candidate', generation: 1, status: 'active', lastSeq: 3,
+                    checkpointAtMs: now - 370 * 24 * 60 * 60 * 1000,
+                    leaseUntilMs: now - 2 * 24 * 60 * 60 * 1000, checkpointClock: { s00: 3 },
+                },
+            },
+            mutation: { slot: 's00', action: 'checkpoint' },
+        });
+    });
+    const before = (await getDoc(controlRef)).data()!;
+    let guards = 0;
+    await expect(retireExpiredReplicas(db, uid, now, () => ++guards < 4))
+        .rejects.toThrow('Sessione cambiata');
+    expect(guards).toBeGreaterThanOrEqual(4);
+    expect((await getDoc(controlRef)).data()).toEqual(before);
+});
+
+it('refuses stale session before starting either replica maintenance operation', async () => {
+    const uid = 'a';
+    const db = asModularFirestore(env.authenticatedContext(uid, { email_verified: true }).firestore());
+    await expect(claimReplicaCheckpoint(db, uid, null, {}, 0, 'blocked', () => false))
+        .rejects.toThrow('Sessione cambiata');
+    await expect(retireExpiredReplicas(db, uid, Date.now(), () => false))
+        .rejects.toThrow('Sessione cambiata');
+    expect((await getDoc(doc(db, 'users/' + uid + '/sync_control/state'))).exists()).toBe(false);
+});
+
 it('deduplicates concurrent first claims from tabs sharing one local actor identity', async () => {
     const uid = 'a';
     const db = asModularFirestore(env.authenticatedContext(uid, { email_verified: true }).firestore());
