@@ -663,7 +663,10 @@ export async function retainNewerHealthConsent(user: User): Promise<HealthConsen
   if (startingAuthUid !== null && startingAuthUid !== uid) throw new Error('Sessione cambiata.');
   if (currentHealthConsentStatus(uid) !== 'stale-request') throw new Error('Nessuna scelta recente da confermare.');
   const saved = readMarker(uid);
-  const sameAuth = () => (auth.currentUser?.uid ?? null) === startingAuthUid;
+  const startingSessionEpoch = captureSessionForOwner(userOwner(uid)).epoch;
+  // The same UID after A→B→A is not the session that began this decision.
+  const sameAuth = () => (auth.currentUser?.uid ?? null) === startingAuthUid
+    && captureSessionForOwner(userOwner(uid)).epoch === startingSessionEpoch;
   const originalRevision = parsePendingRevision(saved) ?? parseOfflineReaccept(saved)?.revision ?? null;
   if (originalRevision === null && saved !== 'withdrawn') throw new Error('Richiesta precedente non riconosciuta.');
   const live = await serverRequest(user, 'GET');
@@ -714,10 +717,14 @@ export async function reconfirmStaleHealthWithdrawal(user: User): Promise<void> 
   const originalGeneration = readBrowserValueStrict(generationMarker(uid));
   const startingUid = auth.currentUser?.uid ?? null;
   if (startingUid !== null && startingUid !== uid) throw new Error('Sessione cambiata.');
+  const startingSessionEpoch = captureSessionForOwner(userOwner(uid)).epoch;
   const live = await serverRequest(user, 'GET');
   // Never turn a newer decision made by another tab into an unsolicited
   // revocation merely because an older confirmation request arrived late.
-  if ((auth.currentUser?.uid ?? null) !== startingUid) throw new Error('Sessione cambiata.');
+  if ((auth.currentUser?.uid ?? null) !== startingUid
+    || captureSessionForOwner(userOwner(uid)).epoch !== startingSessionEpoch) {
+    throw new Error('Sessione cambiata.');
+  }
   if (readMarker(uid) !== originalMarker
     || readBrowserValueStrict(generationMarker(uid)) !== originalGeneration
     || currentHealthConsentStatus(uid) !== 'stale-request') {
@@ -747,10 +754,14 @@ export async function reacceptHealthConsent(user: User, acceptance: {
   let expectedRevision = previousAttempt;
   const startingUid = auth.currentUser?.uid ?? null;
   if (startingUid !== null && startingUid !== uid) throw new Error('Sessione cambiata.');
+  const startingSessionEpoch = captureSessionForOwner(userOwner(uid)).epoch;
   if (expectedRevision === null) {
     const live = await serverRequest(user, 'GET');
     if (live.status !== 'withdrawn') throw new Error('La revoca non risulta attiva sul server.');
-    if ((auth.currentUser?.uid ?? null) !== startingUid) throw new Error('Sessione cambiata.');
+    if ((auth.currentUser?.uid ?? null) !== startingUid
+      || captureSessionForOwner(userOwner(uid)).epoch !== startingSessionEpoch) {
+      throw new Error('Sessione cambiata.');
+    }
     if (readMarker(uid) !== saved) throw new Error('La scelta locale è cambiata durante la verifica.');
     expectedRevision = live.revision;
   }

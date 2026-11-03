@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { formatAppCheckTelemetryMessage, mapFirebaseErrorCode } from '../src/lib/errorHandler';
+import { AppCheckLimitedUseTokenError } from '../src/lib/appCheck';
 import { classifySyncFailure } from '../src/lib/sync/syncFailure';
 
 describe('Audit 21 App Check and rejected-sync semantics', () => {
@@ -17,6 +18,28 @@ describe('Audit 21 App Check and rejected-sync semantics', () => {
 
         expect(classifySyncFailure(permanent).status).toBe('failed');
         expect(classifySyncFailure(transient).status).toBe('local-pending');
+    });
+
+
+    it.each([
+        ['appCheck/fetch-network-error', undefined, 'local-pending'],
+        ['appCheck/throttled', 429, 'local-pending'],
+        ['appCheck/recaptcha-error', 403, 'failed'],
+        ['appcheck/provider-unavailable', undefined, 'failed'],
+    ] as const)('classifies the real limited-use token error %s without trusting wrappers', (code, status, expected) => {
+        const provider = Object.assign(new Error('Provider failure'), { code, status });
+        const error = new AppCheckLimitedUseTokenError(provider);
+        expect(classifySyncFailure(error).status).toBe(expected);
+        const wrapped = Object.assign(new Error('Unsafe bootstrap', { cause: error }), { code: 'unavailable' });
+        expect(classifySyncFailure(wrapped).status).toBe('failed');
+    });
+
+    it('retries direct Auth network failures while keeping credential denial terminal', () => {
+        expect(classifySyncFailure({ code: 'auth/network-request-failed' }).status).toBe('local-pending');
+        expect(classifySyncFailure({ code: 'auth/user-token-expired' }).status).toBe('failed');
+        expect(classifySyncFailure(new Error('Unsafe wrapper', {
+            cause: { code: 'auth/network-request-failed' },
+        })).status).toBe('failed');
     });
 
     it('preserves permission-denied through a wrapping Error cause', () => {

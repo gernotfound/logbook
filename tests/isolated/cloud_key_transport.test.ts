@@ -28,6 +28,8 @@ import {
   CloudKeyAccessUnavailableError,
 } from '../../src/lib/sync/cloudAccountKeyAccess';
 
+import { classifySyncFailure } from '../../src/lib/sync/syncFailure';
+
 const originalKey = Uint8Array.from({ length: 32 }, (_, index) => index + 1);
 const payload = (key = originalKey) => ({
   format: 'thelogbook-account-data-key', version: 1,
@@ -134,4 +136,76 @@ describe('online account-key access without a second device-persisted key', () =
       .rejects.toBeInstanceOf(CloudKeyAccessUnavailableError);
     expect(fetch).not.toHaveBeenCalled();
   });
+  it.each([408, 429, 500, 502, 503, 504])('keeps HTTP %s retryable without releasing key material', async status => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(null, { status })));
+    const error = await requireCloudAccountDataKey('owner-a', () => {}).catch(error => error);
+    expect(error).toBeInstanceOf(CloudKeyAccessUnavailableError);
+    expect(classifySyncFailure(error).status).toBe('local-pending');
+    expect(classifySyncFailure(new Error('Unsafe bootstrap', { cause: error })).status).toBe('failed');
+  });
+
+  it.each([400, 401, 403, 404, 409, 501])('keeps HTTP %s fail-closed without automatic retry', async status => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(null, { status })));
+    const error = await requireCloudAccountDataKey('owner-a', () => {}).catch(error => error);
+    expect(classifySyncFailure(error).status).toBe('failed');
+  });
+
+  it.each([
+    new TypeError('Network failure'),
+    new DOMException('Request timed out', 'TimeoutError'),
+    new DOMException('Connection aborted', 'AbortError'),
+  ])('retries transport failure $name without exposing the cause', async failure => {
+    vi.stubGlobal('fetch', vi.fn(async () => { throw failure; }));
+    const error = await requireCloudAccountDataKey('owner-a', () => {}).catch(error => error);
+    expect(classifySyncFailure(error).status).toBe('local-pending');
+    expect(error).not.toHaveProperty('cause');
+    expect(error.message).not.toContain(failure.message);
+  });
+
+  it('keeps invalid responses and unknown failures terminal', async () => {
+    const fetch = vi.fn()
+      .mockResolvedValueOnce(new Response('{invalid-json'))
+      .mockResolvedValueOnce(Response.json({ ...payload(), key: 'invalid' }))
+      .mockRejectedValueOnce(new Error('Unknown implementation failure'));
+    vi.stubGlobal('fetch', fetch);
+    for (let i = 0; i < 3; i++) {
+      const error = await requireCloudAccountDataKey('owner-a', () => {}).catch(error => error);
+      expect(classifySyncFailure(error).status).toBe('failed');
+    }
+  });
+
+  it.each(['epoch', 'consent', 'owner'] as const)('rejects stale %s before classifying a network failure as retryable', async change => {
+    vi.stubGlobal('fetch', vi.fn(async () => {
+      if (change === 'epoch') h.epoch = 'epoch-2';
+      if (change === 'consent') h.revision = 2;
+      if (change === 'owner') h.user.uid = 'owner-b';
+      throw new TypeError('Network failure');
+    }));
+    const error = await requireCloudAccountDataKey('owner-a', () => {}).catch(error => error);
+    expect(classifySyncFailure(error).status).toBe('failed');
+  });
+
+  it('retries an interrupted response body but never malformed JSON', async () => {
+    const stream = new ReadableStream({
+      start(controller) { controller.error(new DOMException('Response timed out', 'TimeoutError')); },
+    });
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(stream)));
+    const error = await requireCloudAccountDataKey('owner-a', () => {}).catch(error => error);
+    expect(classifySyncFailure(error).status).toBe('local-pending');
+  });
+
+  it.each(['limited-use', 'auth-network'] as const)('fences stale sessions after a %s precondition fails', async phase => {
+    const failure = phase === 'limited-use'
+      ? { code: 'app-check-limited-use-unavailable', retryable: true }
+      : { code: 'auth/network-request-failed' };
+    const fail = async () => { h.epoch = 'epoch-2'; throw Object.assign(new Error('Transport failure'), failure); };
+    if (phase === 'limited-use') h.check.mockImplementationOnce(fail);
+    else h.user.getIdToken.mockImplementationOnce(fail);
+    const fetch = vi.fn();
+    vi.stubGlobal('fetch', fetch);
+    const error = await requireCloudAccountDataKey('owner-a', () => {}).catch(error => error);
+    expect(classifySyncFailure(error).status).toBe('failed');
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
 });

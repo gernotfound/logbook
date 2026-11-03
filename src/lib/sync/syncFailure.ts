@@ -4,6 +4,7 @@ import { SyncTimeoutError } from '../db/db_core';
 export type SyncFailureResult = Exclude<SyncResult, { ok: true }>;
 
 type SyncErrorDetail = { code?: string; retryable: boolean };
+const capabilityCodes = new Set(['app-check-unavailable', 'app-check-limited-use-unavailable', 'cloud-key-unavailable']);
 
 function getSyncErrorChain(error: unknown): SyncErrorDetail[] {
     const chain: SyncErrorDetail[] = [];
@@ -36,12 +37,13 @@ export function classifySyncFailure(error: unknown, options?: { retryable?: bool
     if (direct?.code === 'permission-denied' || (!provenPending && chain.some(item => item.code === 'permission-denied'))) {
         return { ok: false, status: 'rejected', error };
     }
-    if (direct?.code === 'app-check-unavailable') {
+    if (direct?.code && capabilityCodes.has(direct.code)) {
         return { ok: false, status: direct.retryable ? 'local-pending' : 'failed', error };
     }
+    if (direct?.code === 'auth/network-request-failed') return { ok: false, status: 'local-pending', error };
     // A wrapper may mean the remote result is unsafe even if its cause is transient.
     // Only a direct transport error or an independently proven journal can be pending.
-    if (!provenPending && chain.some(item => item.code === 'app-check-unavailable')) {
+    if (!provenPending && chain.some(item => item.code !== undefined && (capabilityCodes.has(item.code) || item.code === 'auth/network-request-failed'))) {
         return { ok: false, status: 'failed', error };
     }
     if (

@@ -3,6 +3,7 @@ import { get } from 'idb-keyval';
 import { auth } from '../src/lib/firebase';
 import { getLimitedUseAppCheckToken } from '../src/lib/appCheck';
 import { UserDataSchema } from '../src/lib/schema';
+import * as localRepository from '../src/lib/sync/localRepository';
 import { initializeLocal, readLocal } from '../src/lib/sync/localRepository';
 import { invalidateSession } from '../src/lib/sync/session';
 import { createAndMigrateVault } from '../src/lib/sync/secureArchiveMigration';
@@ -1051,5 +1052,96 @@ describe('no trusted consent POST after an authenticated owner switch', () => {
     await expect(reconfirming).rejects.toThrow('Sessione cambiata');
     expect(localStorage.getItem(key(uid))).toBe('pending:1');
     expect(request).toHaveBeenCalledTimes(2);
+  });
+});
+
+
+describe('explicit KEEP choice across a same-owner session replacement', () => {
+  it('preserves the original consent journal when A signs out and back in during epoch adoption', async () => {
+    const uid = 'keep-epoch-' + crypto.randomUUID();
+    const owner = 'user:' + uid;
+    const actor = user(uid);
+    (auth as { currentUser: unknown }).currentUser = actor;
+    await createAndMigrateVault(owner);
+    await initializeLocal(owner, UserDataSchema.parse({ profile: { height: '175' } }) as any);
+    const before = await readLocal(owner);
+    const ciphertext = await get('logbook:v2:' + owner);
+    localStorage.setItem(key(uid), 'pending:1');
+    const network = vi.fn(async () => trustedConsentResponse({ status: 'active', revision: 2 }));
+    vi.stubGlobal('fetch', network);
+    expect(await refreshHealthConsent(actor)).toBe('stale-request');
+
+    const adopt = localRepository.advanceLocalConsentRevisionIfClean;
+    const injection = vi.spyOn(localRepository, 'advanceLocalConsentRevisionIfClean')
+      .mockImplementationOnce(async (...args) => {
+        // This wait represents IDB scheduling. The actual production adoption
+        // and its guard still execute; UID and consent marker remain identical.
+        (auth as { currentUser: unknown }).currentUser = user('another-account');
+        invalidateSession();
+        (auth as { currentUser: unknown }).currentUser = actor;
+        invalidateSession();
+        return adopt(...args);
+      });
+    try {
+      await expect(retainNewerHealthConsent(actor)).rejects.toThrow('Sessione');
+      expect(injection).toHaveBeenCalledOnce();
+      expect(await get('logbook:v2:' + owner)).toEqual(ciphertext);
+      expect(await readLocal(owner)).toEqual(before);
+      expect(localStorage.getItem(key(uid))).toBe('pending:1');
+      expect(isHealthConsentCloudWritable(owner)).toBe(false);
+      expect(currentHealthConsentStatus(uid)).toBe('stale-request');
+      expect(network).toHaveBeenCalledTimes(2);
+    } finally { injection.mockRestore(); }
+  });
+});
+
+describe('same-owner Auth epochs cannot complete stale-consent choices', () => {
+  it('does not POST an obsolete explicit WITHDRAW choice after A→B→A during GET', async () => {
+    const uid = 'reconfirm-epoch-' + crypto.randomUUID();
+    const actor = user(uid);
+    (auth as { currentUser: unknown }).currentUser = actor;
+    localStorage.setItem(key(uid), 'pending:1');
+    let finishRead!: (response: Response) => void;
+    const network = vi.fn()
+      .mockResolvedValueOnce(trustedConsentResponse({ status: 'active', revision: 2 }))
+      .mockImplementationOnce(() => new Promise<Response>(resolve => { finishRead = resolve; }));
+    vi.stubGlobal('fetch', network);
+    expect(await refreshHealthConsent(actor)).toBe('stale-request');
+
+    const reconfirming = reconfirmStaleHealthWithdrawal(actor);
+    await vi.waitFor(() => expect(network).toHaveBeenCalledTimes(2));
+    (auth as { currentUser: unknown }).currentUser = user('another-account');
+    invalidateSession();
+    (auth as { currentUser: unknown }).currentUser = actor;
+    invalidateSession();
+    finishRead(trustedConsentResponse({ status: 'active', revision: 2 }));
+
+    await expect(reconfirming).rejects.toThrow('Sessione cambiata');
+    expect(network).toHaveBeenCalledTimes(2);
+    expect(localStorage.getItem(key(uid))).toBe('pending:1');
+    expect(isHealthConsentCloudWritable('user:' + uid)).toBe(false);
+  });
+
+  it('does not POST obsolete REACCEPT after A→B→A during the trusted GET', async () => {
+    const uid = 'reaccept-epoch-' + crypto.randomUUID();
+    const actor = user(uid);
+    (auth as { currentUser: unknown }).currentUser = actor;
+    localStorage.setItem(key(uid), 'withdrawn');
+    let finishRead!: (response: Response) => void;
+    const network = vi.fn(() => new Promise<Response>(resolve => { finishRead = resolve; }));
+    vi.stubGlobal('fetch', network);
+
+    const reaccepting = reacceptHealthConsent(actor, accepted);
+    await vi.waitFor(() => expect(network).toHaveBeenCalledOnce());
+    (auth as { currentUser: unknown }).currentUser = user('another-account');
+    invalidateSession();
+    (auth as { currentUser: unknown }).currentUser = actor;
+    invalidateSession();
+    finishRead(trustedConsentResponse({ status: 'withdrawn', revision: 1 }));
+
+    await expect(reaccepting).rejects.toThrow('Sessione cambiata');
+    expect(network).toHaveBeenCalledOnce();
+    expect(localStorage.getItem(key(uid))).toBe('withdrawn');
+    expect(isHealthConsentCloudWritable('user:' + uid)).toBe(false);
   });
 });
