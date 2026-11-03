@@ -1094,3 +1094,54 @@ describe('explicit KEEP choice across a same-owner session replacement', () => {
     } finally { injection.mockRestore(); }
   });
 });
+
+describe('same-owner Auth epochs cannot complete stale-consent choices', () => {
+  it('does not POST an obsolete explicit WITHDRAW choice after A→B→A during GET', async () => {
+    const uid = 'reconfirm-epoch-' + crypto.randomUUID();
+    const actor = user(uid);
+    (auth as { currentUser: unknown }).currentUser = actor;
+    localStorage.setItem(key(uid), 'pending:1');
+    let finishRead!: (response: Response) => void;
+    const network = vi.fn()
+      .mockResolvedValueOnce(trustedConsentResponse({ status: 'active', revision: 2 }))
+      .mockImplementationOnce(() => new Promise<Response>(resolve => { finishRead = resolve; }));
+    vi.stubGlobal('fetch', network);
+    expect(await refreshHealthConsent(actor)).toBe('stale-request');
+
+    const reconfirming = reconfirmStaleHealthWithdrawal(actor);
+    await vi.waitFor(() => expect(network).toHaveBeenCalledTimes(2));
+    (auth as { currentUser: unknown }).currentUser = user('another-account');
+    invalidateSession();
+    (auth as { currentUser: unknown }).currentUser = actor;
+    invalidateSession();
+    finishRead(trustedConsentResponse({ status: 'active', revision: 2 }));
+
+    await expect(reconfirming).rejects.toThrow('Sessione cambiata');
+    expect(network).toHaveBeenCalledTimes(2);
+    expect(localStorage.getItem(key(uid))).toBe('pending:1');
+    expect(isHealthConsentCloudWritable('user:' + uid)).toBe(false);
+  });
+
+  it('does not POST obsolete REACCEPT after A→B→A during the trusted GET', async () => {
+    const uid = 'reaccept-epoch-' + crypto.randomUUID();
+    const actor = user(uid);
+    (auth as { currentUser: unknown }).currentUser = actor;
+    localStorage.setItem(key(uid), 'withdrawn');
+    let finishRead!: (response: Response) => void;
+    const network = vi.fn(() => new Promise<Response>(resolve => { finishRead = resolve; }));
+    vi.stubGlobal('fetch', network);
+
+    const reaccepting = reacceptHealthConsent(actor, accepted);
+    await vi.waitFor(() => expect(network).toHaveBeenCalledOnce());
+    (auth as { currentUser: unknown }).currentUser = user('another-account');
+    invalidateSession();
+    (auth as { currentUser: unknown }).currentUser = actor;
+    invalidateSession();
+    finishRead(trustedConsentResponse({ status: 'withdrawn', revision: 1 }));
+
+    await expect(reaccepting).rejects.toThrow('Sessione cambiata');
+    expect(network).toHaveBeenCalledOnce();
+    expect(localStorage.getItem(key(uid))).toBe('withdrawn');
+    expect(isHealthConsentCloudWritable('user:' + uid)).toBe(false);
+  });
+});
