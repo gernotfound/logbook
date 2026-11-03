@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { Logic } from '../src/lib/logic';
-import { NutritionDaySchema, UserDataSchema } from '../src/lib/schema';
+import { NutritionDaySchema } from '../src/lib/schema';
 import { mergeNutrition } from '../src/lib/merge';
 import { Exporter } from '../src/lib/export';
 
