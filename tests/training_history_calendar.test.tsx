@@ -54,6 +54,21 @@ afterEach(() => {
 });
 
 describe('TrainingHistory calendar', () => {
+  it('ignores pre-launch stored date aliases while retaining the current start timestamp fallback', () => {
+    const mixed: WorkoutSession[] = [
+      history[0],
+      { ...history[1], id: 'timestamp-current', date: '20/12/2026', routineName: 'Timestamp corrente' },
+      { id: 'alias-only', date: '2026-12-1', routineName: 'Solo alias pre-lancio', exercises: [] },
+    ];
+    const before = structuredClone(mixed);
+    renderWithProviders(<TrainingHistory />, { userData: createMockUserData({ history: mixed }) });
+    expect(screen.getByText('Settembre 2026')).toBeDefined();
+    expect(screen.getByRole('button', { name: /Lunedì 28 settembre 2026, 2 allenamenti/i })).toBeDefined();
+    expect(screen.getByText('Timestamp corrente')).toBeDefined();
+    expect(screen.queryByText('Solo alias pre-lancio')).toBeNull();
+    expect(mixed).toEqual(before);
+  });
+
   it('shows the monthly calendar, monthly summary and multiple sessions on one day', () => {
     const { container } = renderHistory();
 

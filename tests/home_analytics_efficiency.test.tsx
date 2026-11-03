@@ -34,11 +34,11 @@ describe('Home nutrition summary efficiency', () => {
         expect(screen.getByTestId('home-summary').textContent).toBe('83.1|18.1|Manuale|2500');
         expect(tdee).not.toHaveBeenCalled();
     });
-    it('orders legacy nutrition dates canonically, ignoring invalid days and weights', () => {
+    it('excludes pre-launch date keys from the latest weight and BF summary', () => {
         function HomeSummary() {
             const home = useHomeView();
             if (home.loading) return <output>Caricamento</output>;
-            return <output data-testid="home-legacy-summary">{[home.userWeight, home.bf, home.bfSource].join('|')}</output>;
+            return <output data-testid="home-stored-day-summary">{[home.userWeight, home.bf, home.bfSource].join('|')}</output>;
         }
         const day = (date: string, weight?: string, bf?: string, method?: 'manual' | 'us_navy'): NutritionDay => ({
             date, kcal: 0, carbs: 0, pro: 0, fat: 0, weight, bf,
@@ -55,10 +55,10 @@ describe('Home nutrition summary efficiency', () => {
         renderWithProviders(<HomeSummary />, {
             userData: { ...emptyUserData, history: [], nutrition },
         });
-        expect(screen.getByTestId('home-legacy-summary').textContent).toBe('81.5|17.2|US Navy');
+        expect(screen.getByTestId('home-stored-day-summary').textContent).toBe('82|18.0|Manuale');
     });
 
-    it('uses the last valid measurement for equal canonical dates and skips malformed entries', () => {
+    it('does not adopt an Italian date alias that collides with a canonical day', () => {
         function HomeSummary() {
             const home = useHomeView();
             if (home.loading) return <output>Caricamento</output>;
@@ -72,7 +72,7 @@ describe('Home nutrition summary efficiency', () => {
         renderWithProviders(<HomeSummary />, {
             userData: { ...emptyUserData, history: [], nutrition },
         });
-        expect(screen.getByTestId('home-equal-day').textContent).toBe('81|19.0|US Navy');
+        expect(screen.getByTestId('home-equal-day').textContent).toBe('80|20.0|Manuale');
     });
 
 });

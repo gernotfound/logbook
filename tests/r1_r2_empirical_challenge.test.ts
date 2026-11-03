@@ -12,6 +12,21 @@ describe('EMPIRICAL ADVERSARIAL SUITE — R1 (TDEE Calculation) & R2 (Workout Vo
     // =========================================================================
     describe('R1: TDEE Calculation Adversarial Stress Tests', () => {
 
+        it('excludes pre-launch stored dates from the seven-day TDEE window without mutating input', () => {
+            const current = Array.from({ length: 7 }, (_, i) => ({
+                date: `2026-10-${String(i + 1).padStart(2, '0')}`, weight: 80, kcal: 2500,
+            }));
+            const aliases = ['15/12/2026', '2026-12-1', ' 2026-12-20 ', '2026-12-25T12:00:00']
+                .map(date => ({ date, weight: 150, kcal: 9000 }));
+            const mixed = [...current, ...aliases];
+            const before = structuredClone(mixed);
+            expect(calculateTDEE(mixed)).toEqual(calculateTDEE(current));
+            expect(calculateTDEE([...current.slice(0, 6), ...aliases])).toEqual({
+                error: true, message: 'Raccolta dati in corso... (6/7 giorni richiesti)',
+            });
+            expect(mixed).toEqual(before);
+        });
+
         // 1.1 Permutation Invariance
         it('R1.1: Guaranteed permutation invariance across 50 pseudo-random shuffles', () => {
             const baseData = [

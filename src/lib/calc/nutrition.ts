@@ -12,7 +12,7 @@ export function calculateTDEE(nutritionHistoryList: { date?: string; weight?: st
         const date = parseDateInput(d.date);
         const w = parseFloat(String(d.weight).replace(',', '.'));
         const k = parseFloat(String(d.kcal).replace(',', '.'));
-        if (!date || !Number.isFinite(w) || w <= 0 || !Number.isFinite(k) || k <= 0) return [];
+        if (date !== d.date || !Number.isFinite(w) || w <= 0 || !Number.isFinite(k) || k <= 0) return [];
         return [{ date, weight: d.weight as string | number, kcal: d.kcal as string | number }];
     });
 

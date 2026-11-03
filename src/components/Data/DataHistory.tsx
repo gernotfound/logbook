@@ -90,7 +90,7 @@ const DataHistory: React.FC<DataHistoryProps> = ({
     const today = useLocalToday();
     const datedHistory = useMemo(
         () => measurementsHistory
-            .filter(day => typeof day?.date === 'string' && Logic.parseDateInput(day.date))
+            .filter(day => typeof day?.date === 'string' && Logic.parseDateInput(day.date) === day.date)
             .sort((a, b) => b.date.localeCompare(a.date)),
         [measurementsHistory],
     );

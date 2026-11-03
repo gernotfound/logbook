@@ -288,10 +288,9 @@ export function getLatestUserWeight(
     if (nutrition && typeof nutrition === 'object') {
         let latestDate: string | null = null;
         for (const [date, day] of Object.entries(nutrition)) {
-            // Stored day keys are not guaranteed to be zero-padded after legacy imports.
-            // Normalize dates before comparing; malformed keys cannot establish recency.
+            // Only canonical persisted day keys can establish measurement recency.
             const canonicalDate = parseDateInput(date);
-            if (!canonicalDate || !day || day.weight === undefined || day.weight === null || day.weight === '') continue;
+            if (canonicalDate !== date || !day || day.weight === undefined || day.weight === null || day.weight === '') continue;
             const weight = parsePositiveWeight(day.weight);
             if (weight !== null && (latestDate === null || canonicalDate >= latestDate)) {
                 latestDate = canonicalDate;
