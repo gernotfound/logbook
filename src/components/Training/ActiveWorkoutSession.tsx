@@ -3,6 +3,7 @@ import { CheckCircle2, Trash2, Save, Search } from 'lucide-react';
 import { useWorkoutSession } from '../../hooks/useWorkoutSession';
 import { useWakeLock } from '../../hooks/useWakeLock';
 import { Logic } from '../../lib/logic';
+import { parseManualDuration } from '../../lib/utils/date';
 import SessionHeader from './SessionHeader';
 import SessionExerciseAccordion from './session/SessionExerciseAccordion';
 import SessionRatings from './session/SessionRatings';
@@ -332,7 +333,10 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory, onRequestEnd }: Acti
                         type="text"
                         value={manualDuration}
                         onChange={event => setManualDuration(event.target.value)}
-                        onBlur={() => setManualDuration(Logic.normalizeDuration(manualDuration))}
+                        onBlur={() => {
+                            const normalized = parseManualDuration(manualDuration);
+                            if (normalized !== null) setManualDuration(normalized);
+                        }}
                         onFocus={event => event.target.select()}
                         placeholder="00:00:00"
                     />

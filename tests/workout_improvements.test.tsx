@@ -4,8 +4,9 @@ import { prepareUnlockedTestArchive } from './secureVaultFixture';
 import React from 'react';
 import { describe, test, expect, beforeEach } from 'vitest';
 import { screen, act, fireEvent } from '@testing-library/react';
-import { renderWithProviders, emptyUserData } from './setup';
+import { renderWithProviders, renderWithAuthenticatedTestOwner, emptyUserData } from './setup';
 import { Logic } from '../src/lib/logic';
+import { parseManualDuration } from '../src/lib/utils/date';
 import TrainingSession from '../src/components/Training/TrainingSession';
 import TrainingRoutines from '../src/components/Training/TrainingRoutines';
 import TrainingHistory from '../src/components/Training/TrainingHistory';
@@ -184,6 +185,41 @@ describe('Workout Improvements & History Edit Suite', () => {
 
       expect(editedWorkout).not.toBeNull();
       expect(editedWorkout).toMatchObject({ id: 'w_hist_1' });
+    });
+
+    test('strict manual-duration parsing rejects malformed timestamps without silently changing them', () => {
+      expect(parseManualDuration('01:23:45')).toBe('01:23:45');
+      expect(parseManualDuration('75 min')).toBe('01:15:00');
+      expect(parseManualDuration('75:15')).toBe('01:15:15');
+      expect(parseManualDuration('0')).toBe('00:00:00');
+      expect(parseManualDuration('')).toBe('00:00:00');
+      for (const value of ['00:90:00', '10:99', '1:2:3:4', '45 min junk', '1abc', '-1', 'Infinity', '999999999999999999999 min']) {
+        expect(parseManualDuration(value)).toBeNull();
+      }
+    });
+
+    test('history duration input preserves the draft while editing and on invalid blur', async () => {
+      const owner = captureSession().owner;
+      if (owner.startsWith('user:')) {
+        localStorage.setItem(`logbook:v2:${owner}:health-consent-generation`, '1');
+      }
+      await prepareUnlockedTestArchive(owner);
+      const editingSession = {
+        id: 'duration-draft', originalHistoryId: 'duration-draft', isEditingHistory: true,
+        date: '2026-08-01', routineName: 'Durata',
+        globalDurationStr: '00:45:00', manualDurationStr: '00:45:00', exercises: [],
+      } as WorkoutSession;
+      const { container } = renderWithAuthenticatedTestOwner(<TrainingSession />, {
+        localWorkout: editingSession, userData: { ...emptyUserData } as any, dataOwner: owner,
+      });
+      const input = container.querySelector('#workout-manual-duration') as HTMLInputElement;
+      act(() => { fireEvent.change(input, { target: { value: '00:90:00' } }); });
+      expect(input.value).toBe('00:90:00');
+      act(() => { fireEvent.blur(input); });
+      expect(input.value).toBe('00:90:00');
+      act(() => { fireEvent.change(input, { target: { value: '75 min' } }); });
+      act(() => { fireEvent.blur(input); });
+      expect(input.value).toBe('01:15:00');
     });
 
     test('TrainingSession in isEditingHistory mode renders banner, manual duration and "Salva Modifica"', () => {
