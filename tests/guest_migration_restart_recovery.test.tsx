@@ -44,7 +44,7 @@ const SYNC_RECOVERY_KEY = `logbook:v2:user:${user.uid}:guest-migration-sync-reco
 let onlineSpy: { mockRestore: () => void; mockReturnValue: (value: boolean) => unknown } | undefined;
 
 function fixtures() {
-    const cloud = parse({ profile: { gender: 'M' }, routines: [{ id: 'cloud-routine', name: 'Cloud', exercises: [] }], legalConsent: { hasAcceptedTerms: true, hasAcceptedHealthData: true, acceptedAt: '2026-10-11T10:00:00.000Z', privacyVersion: '1.3.4', termsVersion: '1.2.1' } });
+    const cloud = parse({ profile: { gender: 'M' }, routines: [{ id: 'cloud-routine', name: 'Cloud', exercises: [] }], legalConsent: { hasAcceptedTerms: true, hasAcceptedHealthData: true, acceptedAt: '2026-10-11T10:00:00.000Z', privacyVersion: '1.3.5', termsVersion: '1.2.1' } });
     const guest = parse({ profile: { height: '175' }, routines: [{ id: 'guest-routine', name: 'Guest', exercises: [] }] });
     return { cloud, guest };
 }
