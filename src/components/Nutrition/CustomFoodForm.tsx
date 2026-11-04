@@ -112,7 +112,7 @@ export default function CustomFoodForm({
                 </div>
                 {cfData.unit === 'pezzo' && (
                     <div style={{ flex: 1, minWidth: 0 }}>
-                        <label className="text-muted text-xs block mb-4" htmlFor="cf-piece-weight">Peso 1 pezzo (g)</label>
+                        <label className="text-muted text-xs block mb-4" htmlFor="cf-piece-weight">Peso 1 pezzo (g) (obbligatorio)</label>
                         <input 
                     disabled={saving}
                             id="cf-piece-weight" 

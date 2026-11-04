@@ -333,39 +333,55 @@ export function validateCustomFood(foodData: any) {
     }
     const name = String(foodData.name || '').trim();
     if (!name) errors.name = "Nome alimento obbligatorio";
-    const parseReq = (val: any, fieldName: string, label: string) => {
-        const num = parseFloat(val);
-        if (isNaN(num) || num < 0) {
+
+    // Input from editable fields must be entirely numeric: parseFloat accepts trailing garbage.
+    const parseNumeric = (value: unknown): number | null => {
+        if (typeof value !== 'number' && typeof value !== 'string') return null;
+        const normalized = String(value).trim().replace(',', '.');
+        if (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(normalized)) return null;
+        const numeric = Number(normalized);
+        return Number.isFinite(numeric) ? numeric : null;
+    };
+    const parseReq = (val: unknown, fieldName: string, label: string) => {
+        const num = parseNumeric(val);
+        const rounded = num === null ? null : Math.round(num * 10) / 10;
+        if (rounded === null || !Number.isFinite(rounded) || rounded < 0) {
             errors[fieldName] = `${label} obbligatorio e >= 0`;
             return 0;
         }
-        return Math.round(num * 10) / 10;
+        return rounded;
     };
-    const parseOpt = (val: any) => {
+    const parseOpt = (val: unknown) => {
         if (val === undefined || val === null || val === '') return null;
-        const num = parseFloat(val);
-        return isNaN(num) || num < 0 ? null : Math.round(num * 100) / 100;
+        const num = parseNumeric(val);
+        if (num === null || num < 0) return null;
+        const rounded = Math.round(num * 100) / 100;
+        return Number.isFinite(rounded) ? rounded : null;
     };
     const kcal = parseReq(foodData.kcal, 'kcal', 'Calorie');
     const carbs = parseReq(foodData.carbs, 'carbs', 'Carboidrati');
     const pro = parseReq(foodData.pro, 'pro', 'Proteine');
     const fat = parseReq(foodData.fat, 'fat', 'Grassi');
-    const baseQty = parseFloat(foodData.baseQty);
-    if (isNaN(baseQty) || baseQty <= 0) {
+    const baseQty = parseNumeric(foodData.baseQty);
+    if (baseQty === null || baseQty <= 0) {
         errors.baseQty = "Porzione base deve essere > 0";
     }
-    const isValid = Object.keys(errors).length === 0;
-    if (!isValid) {
+    const unit = String(foodData.unit || 'g').trim();
+    const servingWeight = parseOpt(foodData.servingWeight);
+    if ((unit === 'pezzo' || unit === 'pcs') && (servingWeight === null || servingWeight <= 0)) {
+        errors.servingWeight = "Il peso di un pezzo deve essere maggiore di 0 g";
+    }
+    if (Object.keys(errors).length > 0) {
         return { isValid: false, errors, cleanData: null };
     }
     const cleanData = {
         name,
         brand: String(foodData.brand || '').trim(),
         category: String(foodData.category || 'Altro').trim(),
-        baseQty: baseQty || 100,
-        unit: String(foodData.unit || 'g').trim(),
+        baseQty: baseQty ?? 100,
+        unit,
         servingUnit: String(foodData.servingUnit || '').trim(),
-        servingWeight: parseOpt(foodData.servingWeight),
+        servingWeight,
         kcal: Math.round(kcal),
         carbs,
         pro,
@@ -383,5 +399,3 @@ export function validateCustomFood(foodData: any) {
     };
     return { isValid: true, errors: {}, cleanData };
 }
-
-

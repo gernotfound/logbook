@@ -259,6 +259,37 @@ describe('M5 nutrition account flow through useNutritionMeals', () => {
         expect(result.current.isDayOn).toBeUndefined();
     });
 
+    it('blocks custom food by piece without its weight before dispatching a durable write', async () => {
+        const originalDispatch = useAppStore.getState().dispatchDomainOperation;
+        const dispatch = vi.fn().mockResolvedValue({ ok: true, status: 'synced' });
+        useAppStore.setState({ dispatchDomainOperation: dispatch });
+        try {
+            const { result } = renderHook(() => useNutritionMeals(DATE));
+            act(() => {
+                result.current.setShowCustomModal(true);
+                result.current.setCfData({
+                    name: 'Biscotto', brand: 'Test', unit: 'pezzo', pieceWeight: '',
+                    kcal: '120', carbs: '15', pro: '5', fat: '4',
+                });
+            });
+            let saved = false;
+            await act(async () => { saved = await result.current.saveCustomFood(); });
+            expect(saved).toBe(false);
+            expect(dispatch).not.toHaveBeenCalled();
+            expect(result.current.showCustomModal).toBe(true);
+            expect(result.current.cfData.name).toBe('Biscotto');
+
+            act(() => result.current.setCfData({ ...result.current.cfData, pieceWeight: '60' }));
+            await act(async () => { saved = await result.current.saveCustomFood(); });
+            expect(saved).toBe(true);
+            expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({
+                type: 'food.upsert', food: expect.objectContaining({ servingWeight: 60, unit: 'pezzo' }),
+            }));
+        } finally {
+            useAppStore.setState({ dispatchDomainOperation: originalDispatch });
+        }
+    });
+
     it('keeps the custom-food edit draft after both validation and durable dispatch failure', async () => {
         const originalDispatch = useAppStore.getState().dispatchDomainOperation;
         const dispatch = vi.fn().mockResolvedValueOnce({
