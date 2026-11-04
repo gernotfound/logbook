@@ -201,6 +201,16 @@ describe('EMPIRICAL ADVERSARIAL SUITE — R1 (TDEE Calculation) & R2 (Workout Vo
             expect(res20.tdee).toBe(3000);
         });
 
+        it('R1.6b: accepts seven distinct recordings over exactly 14 calendar days', () => {
+            const dates = ['2026-08-01', '2026-08-03', '2026-08-05', '2026-08-07', '2026-08-09', '2026-08-11', '2026-08-14'];
+            const records = dates.map(date => ({ date, weight: 80, kcal: 2400 }));
+            const result = calculateTDEE(records);
+            expect(result.error).toBe(false);
+            expect(result.tdee).toBe(2400);
+            expect(result.daysTracked).toBe(7);
+            expect(result.timeSpanDays).toBe(13);
+        });
+
         // 1.7 Identical dates scenario
         it('R1.7: Returns clear error when all valid measurements share the exact same date (diffDays = 0)', () => {
             const sameDayData = [
