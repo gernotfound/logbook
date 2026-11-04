@@ -48,7 +48,7 @@ function fixture() {
   };
 }
 
-test('attests a completed GitHub PR check and byte-identical squash tree', async () => {
+await test('attests a completed GitHub PR check and byte-identical squash tree', async () => {
   const f = fixture();
   const result = await f.run();
   assert.equal(result.sha, sha);
@@ -76,13 +76,13 @@ const rejects = [
   ['main advanced', f => { f.responses.get(root + '/branches/main').commit.sha = 'e'.repeat(40); }],
 ];
 for (const [name, mutate] of rejects) {
-  test('fail closed: ' + name, async () => {
+  await test('fail closed: ' + name, async () => {
     const f = fixture();
     mutate(f);
     await assert.rejects(f.run(), /Main release rejected:/);
   });
 }
-test('fails closed when GitHub API becomes unavailable', async () => {
+await test('fails closed when GitHub API becomes unavailable', async () => {
   const f = fixture();
   f.responses.delete(root + '/actions/runs/77');
   await assert.rejects(f.run(), /Unexpected GitHub API request:/);
