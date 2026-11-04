@@ -13,10 +13,11 @@
 | Google / reCAPTCHA Enterprise / App Check | Anti-abuse/attestazione | Dati tecnici dispositivo/rete secondo servizio | `[VERIFY]` | `[VERIFY]` | `[VERIFY]` | `[VERIFY]` | Aperto |
 | Google / Firebase Hosting | Hosting statico frontend/PWA | Request metadata e asset pubblici; nessun dato business utente intenzionale | `[VERIFY_DPA]` | `[VERIFY]` | `[VERIFY]` | `[VERIFY]` | Aperto |
 | Vercel Functions / Cron | API trusted per lifecycle, consenso/diritti, custodia chiave cloud e manutenzione | Request metadata; payload API minimi; ADK accessibile al server trusted tramite KEK protetta; log tecnici minimizzati, mai chiavi/token/dati salute liberi | `[VERIFY_DPA]` | `[VERIFY]` | `[VERIFY]` | `[VERIFY_PLAN]` | Aperto |
-| Sentry | Error Monitoring e source map | Classificazioni tecniche ammesse e messaggi fissi, session ID tecnico, release/build e contesto tecnico minimizzato; messaggi/stack originali esclusi anche se sanitizzati; nessun UID/email deliberatamente allegato dall'app | `[VERIFY_DPA]` | `[VERIFY_LIVE]` | `[VERIFY]` | `[VERIFY_PLAN_AND_CONFIGURATION]` | Errori tecnici |
 | GitHub | Repository e CI | Codice, metadati dev, log CI; nessun dato utente intenzionale | `[VERIFY]` | `[VERIFY]` | `[VERIFY]` | `[VERIFY]` | Dev-only |
 
-Google Analytics 4/Firebase Analytics è dismesso e non è un fornitore runtime corrente: integrazione client e collegamento Firebase rimossi, proprietà Analytics dismessa e variabile di build eliminata, secondo le operazioni confermate dal product owner. Anche Vercel Analytics e Speed Insights restano ritirati. Sentry Replay, tracing, logging e Application Metrics sono esclusi dalla configurazione corrente. Le configurazioni storiche restano rintracciabili nella cronologia Git.
+Google Analytics 4/Firebase Analytics è dismesso e non è un fornitore runtime corrente: integrazione client e collegamento Firebase rimossi, proprietà Analytics dismessa e variabile di build eliminata, secondo le operazioni confermate dal product owner. Anche Vercel Analytics e Speed Insights restano ritirati. Sentry non è più una dipendenza di runtime/build client; l'eventuale presenza di eventi e configurazioni storiche presso il fornitore non è stata verificata. Le configurazioni storiche restano rintracciabili nella cronologia Git.
+
+**Sentry ritirato dal codice:** la rimozione del trasporto client non cancella automaticamente eventi già inviati. Verificare la retention storica, l'eventuale eliminazione dei dati e la chiusura del progetto presso il provider prima di attestare la dismissione completa.
 
 ## Checklist per ogni fornitore
 

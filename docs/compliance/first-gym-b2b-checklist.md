@@ -18,7 +18,7 @@ I collaudi sono requisiti di evidenza, non autorizzazioni a creare un ambiente T
 - `[ ]` Account deletion E2E reale arriva a completion anche attraverso il recovery path.
 - `[ ]` Il cron di recovery/cancellazione è stato osservato in un'esecuzione reale recente.
 - `[ ]` Backup/PITR ha una decisione documentata; se abilitato, il restore è stato provato.
-- `[ ]` Retention della telemetria è automatizzata e verificata live.
+- `[ ]` La retention dei log Firebase/Vercel e la cancellazione degli eventi Sentry storici sono verificate nei provider.
 - `[ ]` Test installazione/uso su iPhone PWA, Android PWA e browser pertinenti sono completati.
 - `[ ]` Audit accessibilità automatico e manuale pertinente è completato.
 - `[ ]` Accessi amministrativi e MFA sono verificati per i sistemi critici.
@@ -32,11 +32,11 @@ I collaudi sono requisiti di evidenza, non autorizzazioni a creare un ambiente T
 - `[ ]` Valutazione sull'eventuale DPO è documentata.
 - `[ ]` Retention schedule è approvata e corrisponde al runtime reale.
 - `[ ]` Vendor/subprocessor/transfer register è completato.
-- `[ ]` LIA della telemetria tecnica è documentata se si mantiene il legittimo interesse come base.
+- `[ ]` Le basi e le eventuali LIA dei trattamenti esterni ancora attivi sono valutate; la telemetria automatica client è ritirata.
 - `[ ]` Incident/data-breach runbook è assegnato e provato.
 - `[ ]` Procedura per i diritti degli interessati è operativa.
 - `[ ]` Revoca del consenso dati salute è implementata e testata.
-- `[ ]` Nessuna integrazione Analytics di utilizzo reintrodotta: GA4/Firebase Analytics dismesso, con Sentry limitato a Error Monitoring tecnico.
+- `[ ]` Nessuna integrazione Analytics o Error Monitoring reintrodotta nel client.
 - `[ ]` Privacy Policy e Termini corrispondono al modello commerciale e ai fornitori effettivi.
 
 ## Gate contrattuale e commerciale
