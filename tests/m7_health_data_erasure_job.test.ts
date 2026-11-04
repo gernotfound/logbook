@@ -201,6 +201,8 @@ describe('trusted data-only erasure worker', () => {
     expect(await purgeExpiredCompletedHealthErasures(Date.now() + 30000)).toBe(0);
     expect(fixture.records.has(markerPath('a'))).toBe(true);
     fixture.records.get(consentPath('a'))!.erasedBeforeRevision = 3;
+    // The transactional update replaces the document; reload the committed receipt.
+    fixture.records.get(markerPath('a'))!.purgeAfter = Timestamp.fromMillis(Date.now() - 1);
     expect(await purgeExpiredCompletedHealthErasures(Date.now() + 30000)).toBe(1);
     expect(fixture.records.has(markerPath('a'))).toBe(false);
     expect(fixture.records.has(consentPath('a'))).toBe(true);
@@ -221,6 +223,69 @@ describe('trusted data-only erasure worker', () => {
     expect(await purgeExpiredCompletedHealthErasures(Date.now() + 30_000)).toBe(1);
     expect(fixture.records.has(markerPath('valid'))).toBe(false);
     expect(fixture.records.has(markerPath('invalid-000'))).toBe(true);
+  });
+
+  it('makes bounded progress across cron runs when expired receipts lack epoch proof', async () => {
+    const expired = Timestamp.fromMillis(Date.now() - 60_000);
+    for (let i = 0; i < 201; i++) {
+      const uid = 'invalid-' + String(i).padStart(3, '0');
+      fixture.records.set(markerPath(uid), {
+        uid, status: 'complete', consentRevision: 3, purgeAfter: expired,
+      });
+    }
+    fixture.records.set(markerPath('zz-valid'), {
+      uid: 'zz-valid', status: 'complete', consentRevision: 3, purgeAfter: expired,
+    });
+    fixture.records.set(consentPath('zz-valid'), {
+      uid: 'zz-valid', status: 'withdrawn', revision: 4, erasedBeforeRevision: 3,
+    });
+
+    // The first run cannot inspect all 201 invalid records within its scan cap.
+    expect(await purgeExpiredCompletedHealthErasures(Date.now() + 30_000)).toBe(0);
+    expect(fixture.records.has(markerPath('zz-valid'))).toBe(true);
+    expect(fixture.records.get(markerPath('invalid-000'))?.status).toBe('complete');
+    expect((fixture.records.get(markerPath('invalid-000'))!.purgeAfter as Timestamp).toMillis())
+      .toBeGreaterThan(Date.now() + 6 * 24 * 60 * 60 * 1000);
+    expect(fixture.records.get(markerPath('invalid-200'))?.purgeAfter).toEqual(expired);
+
+    // A fresh invocation must reach the valid owner instead of rescanning 200 blocked receipts.
+    expect(await purgeExpiredCompletedHealthErasures(Date.now() + 30_000)).toBe(1);
+    expect(fixture.records.has(markerPath('zz-valid'))).toBe(false);
+    expect(fixture.records.has(markerPath('invalid-000'))).toBe(true);
+    expect(fixture.records.has(markerPath('invalid-200'))).toBe(true);
+    expect(fixture.records.get(consentPath('zz-valid'))?.erasedBeforeRevision).toBe(3);
+  });
+
+  it('keeps a blocked receipt and deletes it only after epoch proof is repaired', async () => {
+    const expired = Timestamp.fromMillis(Date.now() - 60_000);
+    fixture.records.set(markerPath('blocked'), {
+      uid: 'blocked', status: 'complete', consentRevision: 3, purgeAfter: expired,
+    });
+    expect(await purgeExpiredCompletedHealthErasures(Date.now() + 30_000)).toBe(0);
+    const deferred = fixture.records.get(markerPath('blocked'))!;
+    expect(deferred.status).toBe('complete');
+    expect((deferred.purgeAfter as Timestamp).toMillis()).toBeGreaterThan(Date.now());
+
+    fixture.records.set(consentPath('blocked'), {
+      uid: 'blocked', status: 'withdrawn', revision: 4, erasedBeforeRevision: 3,
+    });
+    // Simulate the deferred retry window expiring; the proof now authorizes retirement.
+    deferred.purgeAfter = expired;
+    expect(await purgeExpiredCompletedHealthErasures(Date.now() + 30_000)).toBe(1);
+    expect(fixture.records.has(markerPath('blocked'))).toBe(false);
+  });
+
+  it('leaves receipts unchanged after a retention query failure, then safely retries', async () => {
+    const expired = Timestamp.fromMillis(Date.now() - 60_000);
+    fixture.records.set(markerPath('blocked'), {
+      uid: 'blocked', status: 'complete', consentRevision: 3, purgeAfter: expired,
+    });
+    fixture.failQueryOnce = 'health_data_erasures';
+    await expect(purgeExpiredCompletedHealthErasures(Date.now() + 30_000))
+      .rejects.toThrow('Injected Firestore outage');
+    expect(fixture.records.get(markerPath('blocked'))?.purgeAfter).toEqual(expired);
+    expect(await purgeExpiredCompletedHealthErasures(Date.now() + 30_000)).toBe(0);
+    expect(fixture.records.has(markerPath('blocked'))).toBe(true);
   });
 
   it('never authorizes local purge using a receipt from a prior reaccepted generation', async () => {

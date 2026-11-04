@@ -9,6 +9,7 @@ const PAGE_SIZE = 100;
 const SAFETY_BUFFER_MS = 1000;
 const LEASE_GRACE_MS = 10000;
 const COMPLETED_JOB_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+const INELIGIBLE_RECEIPT_RETRY_MS = 7 * 24 * 60 * 60 * 1000;
 
 type HealthDataErasureStatus = 'requested' | 'deleting' | 'verifying' | 'complete' | 'failed';
 type Job = {
@@ -295,34 +296,45 @@ export async function purgeExpiredCompletedHealthErasures(deadlineMs: number, ma
   const db = adminDb();
   const now = Timestamp.now();
   const boundedLimit = Math.min(100, Math.max(1, Math.floor(maxItems)));
+  // Limit inspected records as well as deletions; otherwise corrupt receipts can
+  // consume the entire cron window before the next maintenance phase runs.
+  const scanLimit = boundedLimit * 2;
   const base = db.collection(JOB_COLLECTION)
     .where('status', '==', 'complete').where('purgeAfter', '<=', now)
     .orderBy('purgeAfter').orderBy(FieldPath.documentId());
   let cursor: QueryDocumentSnapshot | undefined;
   let purged = 0;
-  // Advance past receipts that cannot safely be retired. Re-reading the first
-  // page on every cron run would starve all later eligible receipts.
-  while (Date.now() + SAFETY_BUFFER_MS < deadlineMs && purged < boundedLimit) {
-    const page = await (cursor ? base.startAfter(cursor) : base).limit(boundedLimit).get();
+  let scanned = 0;
+  while (Date.now() + SAFETY_BUFFER_MS < deadlineMs && purged < boundedLimit && scanned < scanLimit) {
+    const pageSize = Math.min(boundedLimit, scanLimit - scanned);
+    const page = await (cursor ? base.startAfter(cursor) : base).limit(pageSize).get();
     if (page.empty) break;
     for (const item of page.docs) {
-      if (Date.now() + SAFETY_BUFFER_MS >= deadlineMs || purged >= boundedLimit) break;
+      if (Date.now() + SAFETY_BUFFER_MS >= deadlineMs || purged >= boundedLimit || scanned >= scanLimit) break;
       const deleted = await db.runTransaction(async tx => {
         const [jobSnap, consentSnap] = await Promise.all([tx.get(item.ref), tx.get(consentRef(item.id))]);
         const job = jobSnap.data() as Job | undefined;
         const consent = consentSnap.data();
-        if (!jobSnap.exists || !job || job.uid !== item.id || job.status !== 'complete'
-          || !(job.purgeAfter instanceof Timestamp) || job.purgeAfter.toMillis() > Date.now()
-          || !isPositiveRevision(job.consentRevision)
-          || !consent || !isPositiveRevision(consent.erasedBeforeRevision)
-          || consent.erasedBeforeRevision < job.consentRevision) return false;
-        tx.delete(item.ref);
-        return true;
+        if (!jobSnap.exists || !job || job.status !== 'complete'
+          || !(job.purgeAfter instanceof Timestamp) || job.purgeAfter.toMillis() > Date.now()) return false;
+        if (job.uid === item.id
+          && isPositiveRevision(job.consentRevision)
+          && consent && isPositiveRevision(consent.erasedBeforeRevision)
+          && consent.erasedBeforeRevision >= job.consentRevision) {
+          tx.delete(item.ref);
+          return true;
+        }
+        // Preserve the unsafe receipt and retry it later. Moving it out of the
+        // expired query prevents repeated cron invocations from starving later owners
+        // without persisting a separate cursor or weakening the epoch proof.
+        tx.update(item.ref, { purgeAfter: Timestamp.fromMillis(Date.now() + INELIGIBLE_RECEIPT_RETRY_MS) });
+        return false;
       });
+      scanned++;
       if (deleted) purged++;
       cursor = item;
     }
-    if (page.size < boundedLimit) break;
+    if (page.size < pageSize) break;
   }
   return purged;
 }
