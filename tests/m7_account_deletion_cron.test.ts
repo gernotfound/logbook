@@ -72,6 +72,10 @@ describe('M7 daily account deletion recovery cron', () => {
       expect(await response.json()).toMatchObject({
         erasureScanned: 2,
         erasureProcessed: 1,
+        erasureCompleted: 1,
+        erasurePending: 0,
+        erasureBusy: 0,
+        erasureFailed: 0,
         erasureErrors: 1,
         erasureReceiptsPurged: 0,
         processed: 2,
@@ -114,6 +118,10 @@ describe('M7 daily account deletion recovery cron', () => {
       processed: 2,
       erasureScanned: 0,
       erasureProcessed: 0,
+      erasureCompleted: 0,
+      erasurePending: 0,
+      erasureBusy: 0,
+      erasureFailed: 0,
       erasureErrors: 0,
       erasureReceiptsPurged: 0,
       recoveryErrors: 0,
@@ -129,6 +137,10 @@ describe('M7 daily account deletion recovery cron', () => {
       processed: 2,
       erasureScanned: 0,
       erasureProcessed: 0,
+      erasureCompleted: 0,
+      erasurePending: 0,
+      erasureBusy: 0,
+      erasureFailed: 0,
       erasureErrors: 0,
       erasureReceiptsPurged: 0,
       recoveryErrors: 0,
@@ -157,12 +169,39 @@ describe('M7 daily account deletion recovery cron', () => {
     expect(body).toMatchObject({
       erasureScanned: 2,
       erasureProcessed: 2,
+      erasureCompleted: 0,
+      erasurePending: 1,
+      erasureBusy: 1,
+      erasureFailed: 0,
       erasureErrors: 0,
       erasureReceiptsPurged: 3,
       processed: 2,
     });
     expect(JSON.stringify(body)).not.toContain('health-1');
     expect(JSON.stringify(body)).not.toContain('health-2');
+  });
+
+  it('exposes returned failed erasure outcomes even when no exception is thrown', async () => {
+    process.env.CRON_SECRET = 'test-secret';
+    healthErasure.listRecoverableHealthErasures.mockResolvedValue(['failed-owner', 'completed-owner']);
+    healthErasure.processHealthDataErasure
+      .mockResolvedValueOnce('failed').mockResolvedValueOnce('complete');
+
+    const response = await GET(request('test-secret'));
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body).toMatchObject({
+      erasureScanned: 2,
+      erasureProcessed: 2,
+      erasureCompleted: 1,
+      erasurePending: 0,
+      erasureBusy: 0,
+      erasureFailed: 1,
+      erasureErrors: 0,
+    });
+    expect(JSON.stringify(body)).not.toContain('failed-owner');
+    expect(JSON.stringify(body)).not.toContain('completed-owner');
+    expect(runner.processAccountDeletion).toHaveBeenCalledTimes(2);
   });
 
   it('reports independent health query and receipt-retention failures without stopping account recovery', async () => {
@@ -176,6 +215,10 @@ describe('M7 daily account deletion recovery cron', () => {
       expect(await response.json()).toMatchObject({
         erasureScanned: 0,
         erasureProcessed: 0,
+        erasureCompleted: 0,
+        erasurePending: 0,
+        erasureBusy: 0,
+        erasureFailed: 0,
         erasureErrors: 2,
         erasureReceiptsPurged: 0,
         processed: 2,
