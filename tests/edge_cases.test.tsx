@@ -162,6 +162,31 @@ describe('Empirical Challenger Suite: Edge Cases & Stress Verification', () => {
       expect(emptyObj.errors).toHaveProperty('weight');
     });
 
+    test('custom-food numeric validation rejects partial, non-finite and empty required values', () => {
+      const food = { name: 'Test', baseQty: 100, unit: 'g', kcal: '120', carbs: '15', pro: '5', fat: '4' };
+      expect(Logic.validateCustomFood(food).isValid).toBe(true);
+      expect(Logic.validateCustomFood({ ...food, kcal: '1e309' }).isValid).toBe(false);
+      expect(Logic.validateCustomFood({ ...food, carbs: '15abc' }).isValid).toBe(false);
+      expect(Logic.validateCustomFood({ ...food, fat: '-0.01' }).isValid).toBe(false);
+      expect(Logic.validateCustomFood({ ...food, baseQty: 'Infinity' }).isValid).toBe(false);
+      expect(Logic.validateCustomFood({ ...food, baseQty: '' }).isValid).toBe(false);
+      expect(Logic.validateCustomFood({ ...food, pro: '1,5' }).cleanData?.pro).toBe(1.5);
+      expect(Logic.validateCustomFood({ ...food, fat: '.5' }).cleanData?.fat).toBe(0.5);
+    });
+
+    test('piece-based custom foods require their actual piece weight', () => {
+      const food = { name: 'Porzione', baseQty: 100, unit: 'pezzo', kcal: 120, carbs: 15, pro: 5, fat: 4 };
+      expect(Logic.validateCustomFood(food).errors).toHaveProperty('servingWeight');
+      expect(Logic.validateCustomFood({ ...food, servingWeight: 0 }).isValid).toBe(false);
+      expect(Logic.validateCustomFood({ ...food, servingWeight: -10 }).isValid).toBe(false);
+      expect(Logic.validateCustomFood({ ...food, servingWeight: '60g' }).isValid).toBe(false);
+      expect(Logic.validateCustomFood({ ...food, servingWeight: '1e309' }).isValid).toBe(false);
+      const valid = Logic.validateCustomFood({ ...food, servingWeight: '60,5' });
+      expect(valid.isValid).toBe(true);
+      expect(valid.cleanData?.servingWeight).toBe(60.5);
+      expect(Logic.scaleFoodNutrients(valid.cleanData, 2, 'pezzo').kcal).toBe(145);
+    });
+
     test('Components render gracefully when userData has minimal/empty structures', () => {
 
 
