@@ -2,22 +2,25 @@
 
 > Scheda TOM Art. 32 da allineare allo stato reale. "Presente nel codice" non equivale a "configurato live": le verifiche esterne sono esplicitamente separate.
 
+**Fonte tecnica:** [AGENTS](../../AGENTS.md) e i contratti specialistici collegati. Le righe su provider e smoke descrivono evidenze da acquisire o checkpoint datati, non nuove verifiche live.
+
 ## Misure tecniche osservabili nel repository
 
 | Area | Misura | Evidenza/stato |
 |---|---|---|
 | Separazione account | Dati Firestore owner-scoped; account deletion barrier | Security Rules + test emulator |
 | Persistenza locale | Envelope e snapshot device owner-scoped cifrati tramite vault locale; journal semantico e recovery fail-closed | Implementato e testato nel repository; limiti del modello crittografico in `docs/architecture/secure-local-archive-design.md` |
+| Cifratura cloud | ADK per account, documenti `_sealed`, custodia server-only mediante KEK versionata; vault device indipendente | Codice `cloudDocumentCipher.ts` e `server/cloudKeys/`; non è E2EE; custodia/ripristino indipendente KEK e runtime da verificare secondo [Cifratura](../../.agents/rules/secure-storage.md) |
 | Cache Firestore | Cache locale persistente Firebase non usata; runtime memory-only | Implementato |
 | Sync | Local durability prima della replica cloud; recovery lost-ack | Implementato/testato |
 | Validazione | Gateway Zod ai boundary persistiti | Implementato |
-| Telemetria | Sanitizzazione PII, allowlist dettagli, coda locale owner-scoped AEAD dopo sblocco del vault (solo RAM prima), massimo 50 report e scadenza logica a sette giorni | Implementato e testato nel repository; comportamento autenticato Production da verificare |
+| Telemetria | Sanitizzazione dei report locali; verso Sentry soltanto classificazioni ammesse e messaggi tecnici fissi, senza testi/stack originali; coda locale owner-scoped AEAD dopo sblocco del vault (solo RAM prima), massimo 50 report e scadenza logica a sette giorni | Implementato e testato nel repository; comportamento autenticato Production da verificare |
 | Analytics di utilizzo | Google Analytics 4/Firebase Analytics e Vercel Analytics/Speed Insights dismessi; Firebase scollegato da GA4 e variabile Measurement ID eliminata; Sentry resta error monitoring tecnico | Codice verificato su GitHub; dismissione esterna confermata dal product owner |
 | Account deletion | Workflow server-mediated, idempotente, Auth cancellata per ultima | Implementato/testato |
-| Segreti | Firebase Admin/cron server-only, esclusi dal bundle | Contratto repository |
+| Segreti | Firebase Admin, cron e `CLOUD_ACCOUNT_KEK_V1` server-only, esclusi dal bundle; KEK preservata e ruotata solo con processo versionato di rewrap | Contratto repository |
 | HTTP | CSP, frame denial, referrer/permissions policies e cache policy app-shell/SW | `firebase.json` + smoke Firebase Hosting |
 | CI | Exact-SHA Canonical Verification + M8 | GitHub Actions |
-| Deploy | Firebase Hosting solo dopo CI verde exact-SHA su `main`; Vercel backend main-only | Workflow GitHub + `vercel.json` |
+| Deploy | Riconciliazione Firestore dopo CI verde exact-SHA su `main`, poi Firebase Hosting sullo stesso SHA; Vercel backend main-only con deploy o skip verificato secondo il delta | Workflow GitHub + `vercel.json` |
 | PWA update | Reload barrier prima dell'update | Implementato/testato |
 
 ## Misure esterne da verificare

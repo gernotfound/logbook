@@ -3,7 +3,7 @@
 **Quando leggere:** vector clock, tombstone, stable frontier, compaction e replica retirement.
 **Non inferire:** vincere un tie-break non prova la copertura causale necessaria per eliminare metadata.
 
-> Stato: normativo da M4 | Baseline M3: `359e3bfdb45952ccce8a00478e2157f53f468dea`
+**Autorità:** [`AGENTS.md`](../../AGENTS.md). Questo contratto ne specializza gli invarianti; non amplia autorizzazioni o perimetro.
 
 ## Obiettivo
 
@@ -65,6 +65,15 @@ Per path gerarchici, gli stamp antenati sono il boundary canonico di riconciliaz
 
 Coordinate vector pari a zero possono essere eliminate perché il modello le interpreta esattamente come coordinate assenti.
 
+### Decisione di compaction (lettura rapida)
+
+| Stato causale | Decisione |
+|---|---|
+| Descendant coperto dalla barriera delete dell'ancestor, inclusi tutti i candidate clock | Compaction del descendant consentita, se preserva la semantica |
+| Descendant concorrente o candidate clock non coperto | Conservare metadata; un tie-break non costituisce prova causale |
+| Tombstone terminale o barriera dopo recreation senza stable frontier sufficiente | Conservare tombstone/barriera |
+| Stable frontier delle sole repliche `active` che copre winner, delete e candidate clock | Valutare il ritiro secondo Protocol 3, senza usare il wall clock come prova |
+
 ## Persistenza
 
 La compaction avviene dopo il semantic merge e prima della write Firestore. Il `TransactionOutcome.syncMeta` deve contenere lo stesso metadata compattato scritto nel documento, così `acknowledgeThrough()` conserva localmente il causal state effettivamente persistito.
@@ -103,9 +112,10 @@ Le Security Rules rendono autorevoli membership, generation e lease tramite `req
 
 ### Empty shell dopo terminal GC
 
-Il client non esegue delete fisiche dei documenti di sync. Se business state e `fields` diventano vuoti dopo stable-frontier GC, `transactionWriter` persiste un empty shell con `_schemaVersion` e `_sync.writer`. Le Rules negano sempre la delete fisica mensile lato client; la cancellazione fisica resta esclusivamente nel boundary trusted di account deletion.
+Il client non esegue delete fisiche dei documenti di sync. Se business state e `fields` diventano vuoti dopo stable-frontier GC, `transactionWriter` persiste un empty shell business nel formato cifrato `_sealed`, con `_schemaVersion` e `_sync.writer`. Le Rules negano sempre la delete fisica mensile lato client; la cancellazione fisica resta esclusivamente nel boundary trusted di account deletion.
 
 Questo impedisce che una vecchia generation trasformi una delete Firestore non attribuita in una transizione causale. La cancellazione account trusted/Admin resta separata e può rimuovere fisicamente i documenti.
+
 ## Gate
 
 Il gate canonico del repository è:

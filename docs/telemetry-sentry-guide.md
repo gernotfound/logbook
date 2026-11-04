@@ -4,6 +4,8 @@
 
 TheLogBook usa Sentry esclusivamente come **Error Monitoring** tecnico della Production. Google Analytics 4/Firebase Analytics è dismesso anche sul provider (scollegato dal progetto Firebase, proprietà ritirata); Vercel Analytics e Speed Insights sono ritirati. TheLogBook non invia eventi di utilizzo a servizi analytics.
 
+**Fonte normativa:** [AGENTS](../AGENTS.md) e [Telemetria e privacy](../.agents/rules/telemetry-and-privacy.md). La data sopra documenta una ricognizione storica, non lo stato live del provider; verificare il boundary corrente prima di cambiarlo.
+
 ## Perimetro
 
 Vengono inviati soltanto:

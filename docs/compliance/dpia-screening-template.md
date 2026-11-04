@@ -36,11 +36,13 @@
 7. Revoca del consenso salute senza reale cessazione del trattamento.
 8. Trasferimenti o subprocessori non documentati.
 9. Uso futuro da parte della palestra senza nuova analisi dei ruoli.
+10. Perdita o sostituzione della KEK cloud: ciphertext account irrecuperabile senza custodia e ripristino indipendenti; cifratura trusted diversa da E2EE.
 
 ## Misure già presenti da verificare
 
 - owner scoping Firestore e test Security Rules;
 - persistenza locale owner-scoped cifrata con vault e recovery fail-closed; la coda diagnostica usa AEAD solo dopo sblocco, altrimenti RAM best-effort;
+- chiave cloud per-account indipendente dal vault device, custodia server-only e verifica esterna del backup/ripristino KEK secondo [Cifratura](../../.agents/rules/secure-storage.md); questo documento non attesta tali prove;
 - cache Firestore runtime solo in memoria;
 - sanitizzazione/allowlist della telemetria, isolamento owner, limite locale di 50 report e sette giorni applicato al successivo accesso;
 - account deletion server-mediated e tombstone recovery;

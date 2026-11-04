@@ -1,7 +1,9 @@
-# Verification hardening — M5
+# Verification hardening — criteri dei test normativi
 
 **Quando leggere:** test normativi, boundary produzione, mock, oracle e assert osservabili.
 **Non inferire:** un test che reimplementa la funzione può passare senza verificare il runtime.
+
+**Autorità:** [`AGENTS.md`](../../AGENTS.md). Questo contratto ne specializza gli invarianti; non amplia autorizzazioni o perimetro.
 
 ## Scope normativo
 

@@ -3,21 +3,31 @@
 **Quando leggere:** gate canonico, check richiesti, exact-SHA, sicurezza workflow e deployment derivati da CI.
 **Non inferire:** subset verde o run precedente non certificano il candidato attuale né Production.
 
+**Autorità:** [`AGENTS.md`](../../AGENTS.md). Questo contratto ne specializza gli invarianti; non amplia autorizzazioni o perimetro.
+
 ## Scope
 
 Questa regola disciplina il gate canonico di verifica automatica corrente dopo M8. Le milestone M0–M8 restano composte transitivamente nel comando repository; GitHub Actions può distribuire i leaf command equivalenti su runner indipendenti senza ridurre la copertura.
 
 Gerarchia corrente:
 
-- **workflow GitHub Actions:** `Milestone Verification` (`.github/workflows/verification.yml`), con suite completa soltanto sulle PR e attestazione leggera post-merge su `main`;
-- **check aggregato stabile:** `Canonical Verification`;
+- **workflow GitHub Actions:** `Milestone Verification` (`.github/workflows/verification.yml`): suite completa sulle PR, attestazione dell'integrazione + CodeQL sui push a `main`;
+- **check aggregato stabile della PR:** `Canonical Verification`; dopo lo squash merge il check di rilascio è `Main Release Gate` sul nuovo SHA di `main`;
 - **analisi SAST richiesta:** job `Security / CodeQL` su JavaScript/TypeScript con query `security-extended`, aggregato dentro `Canonical Verification`;
 - **comando repository umbrella:** `npm run verify:m8`;
 - **orchestrazione CI:** matrice di shard exact-SHA per i leaf generalisti + job E2E exact-SHA isolato nel container Playwright ufficiale, verificati da `scripts/check-ci-contract.mjs`.
 
-La parallelizzazione riguarda l'orchestrazione, non la semantica del gate. Unit, integration, isolated, fuzz, recovery, GC, hardening, stress, Firestore Rules emulator, Playwright, build e controlli M7/M8 restano obbligatori.
+La parallelizzazione riguarda l'orchestrazione, non la semantica del gate **sulle PR**. Unit, integration, isolated, fuzz, recovery, GC, hardening, stress, Firestore Rules emulator, Playwright, build e controlli M7/M8 restano obbligatori sullo SHA candidato prima del merge. Il push di `main` riutilizza tali verifiche solo quando `scripts/verify-main-release.mjs` dimostra l'identità esatta del tree PR → squash commit, della base e della CI trusted già completata prima del merge; una prova incompleta fallisce chiusa. CodeQL viene eseguito anche sul branch predefinito.
 
 **MUST:** le suite Node di `tests/isolated/**/*.test.ts` girano con `vitest.isolated.config.ts`; le suite React `tests/isolated/**/*.test.tsx` girano con il runner Vitest standard in `jsdom`, inclusi i suoi setup Auth/storage. Escludere l'intera directory `tests/isolated/**` dal runner standard lascerebbe i test TSX presenti ma mai eseguiti, senza fallire la CI. Ogni nuova suite va verificata anche per discovery reale del runner.
+
+## Avvio locale diagnostico
+
+Solo quando il lavoro locale è disponibile e autorizzato: leggere `package.json`, `.node-version` e i workflow per Node/npm e Java richiesti dall'Emulator; eseguire `npm ci`, predisporre `.env` da `.env.example` con configurazione locale appropriata e avviare con `npm run dev`. Non copiare credenziali Production o secret server nel bundle client, né avviare le suite contro i provider reali. Il setup/dev server non costituisce validazione: il gate finale resta `verify:m8` o CI equivalente sullo SHA esatto.
+
+## Limiti del mandato
+
+Il gate verifica il candidato del branch; non autorizza merge o deploy. Se l'utente richiede soltanto aggiornamenti sul branch, mantenere la PR draft e auto-merge disabilitato dopo le verifiche, come prescritto da AGENTS. Il bump previsto per la CI non prova prenotazione della prossima versione: un futuro avanzamento di main richiede riallineamento e nuova validazione.
 
 ## Exact HEAD
 
@@ -56,10 +66,10 @@ La parallelizzazione riguarda l'orchestrazione, non la semantica del gate. Unit,
 - MUST: gli shard non invocano umbrella `verify:mN` seriali; eseguono leaf command per ottenere parallelismo reale.
 - MUST: `test:install-scripts` confronta i pacchetti con lifecycle script nel lockfile con un elenco di versioni esplicitamente approvate. La matrice CI e Hosting verificano anche il lockfile prima di `npm ci`; `allowScripts` in `package.json` non disabilita automaticamente gli script di npm.
 - MUST: `test:ci-contract` esegue regressioni che rifiutano il ritorno di `SENTRY_AUTH_TOKEN` nell'ambiente globale del job Hosting, la sua esposizione a installazione o deploy, e l'inversione delle identità WIF dedicate dei due workflow Production. Queste verifiche statiche non dimostrano i ruoli IAM live.
-- MUST: la CI e i workflow Firebase Production controllano la major npm 11.x effettiva. `packageManager: npm@11.21.0` è una dichiarazione, non prova che il runner usi quella versione esatta: non aggiungere installazioni globali non lockate. Il token Sentry di build è limitato agli step di validazione e build e non viene esposto a `npm ci`.
+- MUST: la CI e i workflow Firebase Production controllano la major npm 11.x effettiva. `packageManager` nel manifest è una dichiarazione di versione, non prova che il runner usi quella versione esatta: non aggiungere installazioni globali non lockate. Il token Sentry di build è limitato agli step di validazione e build e non viene esposto a `npm ci`.
 - NOTE: il job core genera e conserva per 30 giorni un SBOM CycloneDX dello SHA della PR, senza attribuire a questo inventario una firma o provenance del deployment.
 - MUST: `npm audit --audit-level=high` e `test:security-static` (Gitleaks + zizmor) restano bloccanti nella CI ma non appartengono alla semantica deterministica di `verify:m8`, perché dipendono da registry/release esterni.
-- MUST: `test:typecheck-coverage` confronta tutti i file `.ts`, `.tsx`, `.mts` e `.cts` tracciati da Git (incluse le dichiarazioni) con i file effettivamente inclusi dai progetti `tsconfig.m5-tests.json` e `tsconfig.m7-server.json`, usando `tsc --listFilesOnly` di TypeScript 7. Un nuovo file fuori da entrambi o una modifica alle configurazioni che riduce la copertura fa fallire `verify:m8` e il job canonico CI. La stessa verifica esegue regressioni su repository Git temporanei.
+- MUST: `test:typecheck-coverage` confronta tutti i file `.ts`, `.tsx`, `.mts` e `.cts` tracciati da Git (incluse le dichiarazioni) con i file effettivamente inclusi dai progetti `tsconfig.m5-tests.json` e `tsconfig.m7-server.json`, usando `tsc --listFilesOnly` della versione TypeScript risolta dal lockfile. Un nuovo file fuori da entrambi o una modifica alle configurazioni che riduce la copertura fa fallire `verify:m8` e il job canonico CI. La stessa verifica esegue regressioni su repository Git temporanei.
 - MUST: `test:dead-code` è un leaf deterministico e bloccante di `verify:m8`: Knip verifica `files,dependencies,unlisted,exports,types`, inclusi export e tipi inutilizzati. Solo eventuali analisi separate dal gate (per esempio `analyze:dead-exports`) restano advisory.
 - MUST: `lint:a11y` blocca sulle regole JSX accessibility ad alta confidenza e `lint:type-aware` applica `typescript/no-floating-promises`.
 - MUST: `lint:baseline` confronta l'identità dei warning correnti (suite, file, regola, messaggio e riga sorgente) con `config/lint-warning-baseline.json`; warning nuovi, sostituiti o rimossi fanno fallire il gate finché il delta non viene revisionato esplicitamente e la baseline non viene rigenerata. Un semplice limite numerico non è sufficiente perché può nascondere la sostituzione di warning benigni con warning critici.
@@ -96,15 +106,13 @@ La parallelizzazione riguarda l'orchestrazione, non la semantica del gate. Unit,
 ## Trigger
 
 - MUST: il workflow parte per PR verso `main`.
-- MUST: il workflow parte sui push a `main`, ma esegue soltanto `Main Release Gate` e CodeQL; shard, test Emulator, build e Playwright restano obbligatori sulla PR e non vengono duplicati dopo il merge.
-- MUST: `Main Release Gate` controlla il commit exact-main, l'unica PR associata allo squash, il genitore coincidente con la base della PR, l'identità del Git tree e una run `Canonical Verification` PR completata prima del merge, originata dal workflow canonico e dall'app GitHub Actions. Errore API, ambiguo o divergenza bloccano il deploy; nessun fallback permette di pubblicare senza prova.
-- MUST: il controllo `Canonical Verification` richiesto dal ruleset resta sulla PR; la conclusione positiva del workflow `Milestone Verification` su push a `main` attiva Firestore e poi Hosting, mentre CodeQL continua a pubblicare la scansione del branch predefinito. Non sostituire il gate di release con il solo nome di un check o con SHA non associati.
+- MUST: il workflow parte sui push a `main`, con `Main Release Gate` read-only e CodeQL, senza ripetere shard/E2E già attestati sulla PR. Il Release Gate deve verificare commit single-parent, una sola PR merge associata, target e base SHA, identità del tree candidato/`main`, check `Canonical Verification` del run trusted GitHub sullo SHA della PR e `main` ancora corrente. Se manca una prova, il deployment non procede.
 - MUST NOT: branch milestone ritirati, incluso `feat/m8-domain-operations-v4`, restano trigger push del workflow canonico.
 - SHOULD: run obsolete della stessa PR/ref vengono cancellate tramite `concurrency`.
 
 ## Domain Operations contract
 
-- MUST: le quattro versioni persistite correnti restano Data Schema 1, Sync Protocol 3, Local Envelope 5, Backup Schema 3 finché `schemaEvolution.ts` non viene modificato con una nuova migrazione approvata.
+- MUST: i valori e le baseline delle quattro versioni persistite hanno fonte in `src/lib/schemaEvolution.ts`; ogni cambiamento richiede evoluzione esplicita e verifiche dei boundary interessati, non il solo bump PWA.
 - MUST: `DomainOperation` è un layer di intento locale, non un nuovo protocollo persistito.
 - MUST: ordinary UI/hook mutations attraversano `dispatchDomainOperation()` salvo boundary bulk esplicitamente allowlisted da `.agents/rules/domain-operations.md`.
 - MUST: business state e `SemanticOperation` generate vengono rese durevoli nello stesso update IndexedDB.
@@ -130,7 +138,7 @@ set -o pipefail
 ${{ matrix.command }} 2>&1 | tee "verification-${{ matrix.id }}.log"
 ```
 
-`pipefail` preserva il codice di uscita non-zero del leaf chain; `2>&1` unisce stdout e stderr nel log. La matrice e il job E2E non usano `continue-on-error`. Il job `Canonical Verification` usa `needs: shards`, `needs: e2e` e `needs: codeql` e fallisce se uno qualunque dei tre risultati non è `success`.
+`pipefail` preserva il codice di uscita non-zero del leaf chain; `2>&1` unisce stdout e stderr nel log. La matrice e il job E2E non usano `continue-on-error`. Il job `Canonical Verification` **sulle PR** usa `needs: shards`, `needs: e2e` e `needs: codeql` e fallisce se uno qualunque dei tre risultati non è `success`. Sui push a `main`, la verifica distinta `Main Release Gate` attesta le prove della PR senza eseguire né dichiarare rieseguiti quei test; CodeQL controlla nuovamente il branch predefinito.
 
 - MUST: il check aggregato resta denominato esattamente `Canonical Verification` finché required checks/Vercel esterni dipendono da quel nome.
 - MUST: nessun documento può affermare che “qualsiasi stderr” è automaticamente bloccante finché tale controllo non viene implementato.
@@ -152,11 +160,11 @@ Il read-back delle exemption single-field MUST usare la lista esplicita database
 Il confronto MUST tollerare l'omissione JSON di `usesAncestorConfig: false` prevista dalla serializzazione protobuf, ma deve continuare a rifiutare `usesAncestorConfig: true` e qualunque override con indici residui.
 - MUST: il deploy Firestore usa `--only firestore:rules,firestore:indexes`, non usa `--force`, autentica una identità WIF dedicata distinta dall'Hosting deployer e verifica il provider dopo la mutazione.
 - MUST: le action privilegiate dei workflow Hosting e Firestore sono pin-nate a commit SHA immutabili; il commento di versione serve solo alla manutenzione/Dependabot.
-- VERIFY: Vercel Preview verifica build/routing ma non sostituisce il gate repository.
+- MUST: i branch di sviluppo non generano Vercel Preview (`vercel.json`); verifiche locali/CI non richiedono di abilitarle e non attestano Production.
 - VERIFY: ruoli IAM Google Cloud e variabili/secret provisionati non sono dimostrati dalla configurazione repository se non esiste IaC/evidenza diretta.
 
 ## Acceptance
 
-Localmente, un candidato è tecnicamente validato dal gate repository quando `npm run verify:m8` termina con exit code 0 sull'HEAD esatto. In GitHub Actions, per una PR l'evidenza equivalente è una run `Milestone Verification` sullo stesso SHA in cui matrice di shard, job dedicato `Verification / Playwright E2E` e `Security / CodeQL` sono verdi e il check aggregato `Canonical Verification` è `success`. Per `main` serve invece `Main Release Gate` verde e CodeQL verde nello stesso workflow push, più la verifica indipendente dei deployment Production.
+Localmente, un candidato è tecnicamente validato dal gate repository quando `npm run verify:m8` termina con exit code 0 sull'HEAD esatto. In GitHub Actions, l'evidenza equivalente è una run `Milestone Verification` sullo stesso SHA in cui matrice di shard, job dedicato `Verification / Playwright E2E` e `Security / CodeQL` sono verdi e il check aggregato `Canonical Verification` è `success`.
 
 Per revisioni indipendenti richieste dal livello di rischio del task, congelare lo SHA candidato e far revisionare/testare quello stesso SHA. Non sostituire evidenza eseguibile con il solo consenso tra agenti.

@@ -1,5 +1,8 @@
 ## Obiettivo e perimetro
-Descrivere il comportamento atteso, la root cause se pertinente, e ciò che non cambia.
+Descrivere problema, comportamento atteso e root cause se pertinente.
+
+- Mandato: solo branch / draft / integrazione e rilascio autorizzati. Se il merge è vietato, mantenere draft e auto-merge disabilitato.
+- Fonte operativa: [AGENTS.md](../AGENTS.md) e unione dei contratti pertinenti.
 
 ## Rischio e invarianti
 - Classe: STANDARD / SENSITIVE / CRITICAL (motivare).
@@ -16,7 +19,7 @@ Descrivere il comportamento atteso, la root cause se pertinente, e ciò che non 
 - `verify:m8` / `Canonical Verification`: indicare solo risultati osservati sullo SHA esatto, con link alla run.
 - Review e thread bloccanti risolti; nuovi commit invalidano i risultati precedenti.
 
-## Dopo il merge (non anticipare)
+## Dopo il merge (solo se autorizzato; non anticipare)
 - SHA remoto di `main` e CI post-merge realmente verificati.
 - Firebase Hosting, Firestore Rules/indici, Vercel Production e smoke runtime: segnare *verificato / non applicabile / mancante* con prova, secondo il diff.
 - Limiti, verifiche manuali pendenti e rischi residui.

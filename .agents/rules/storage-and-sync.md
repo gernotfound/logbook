@@ -1,9 +1,29 @@
-# Storage e Sincronizzazione - TheLogBook
+# Storage e sincronizzazione — TheLogBook
 
-**Quando leggere:** vault, IndexedDB, journal, hydration, replica, consenso offline, logout e PWA update.
-**Non inferire:** stato memoria, durabilità locale, ack cloud e recupero completo sono prove distinte.
+**Quando leggere:** IndexedDB, journal, versioni, hydration, replica, bootstrap e PWA update/reload.
+**Non inferire:** stato memoria, durabilità locale, ACK cloud e recupero completo sono prove distinte.
 
-> Stato: normativo | Ricognizione originaria: 2026-09-23; non attesta l'HEAD attuale | File allora verificati: `src/store/useAppStore.ts`, `src/lib/firebase.ts`, `src/lib/schemaEvolution.ts`, `src/lib/sync/transactionWriter.ts`, `src/lib/sync/replicateJournal.ts`, `src/lib/sync/semanticProjection.ts`, `src/lib/sync/documentProjection.ts`, `src/lib/sync/localRepository.ts`, `src/lib/sync/deviceStorage.ts`, `src/lib/sync/browserStorage.ts`, `src/lib/utils/timer.ts`, `src/hooks/useSettings.ts`, `src/contexts/AuthContext.tsx`, `src/main.tsx`
+**Autorità:** [`AGENTS.md`](../../AGENTS.md). Questo contratto ne specializza gli invarianti; non amplia autorizzazioni o perimetro.
+
+## Contratti collegati
+
+- [Archivio e cifratura](secure-storage.md): vault device, ADK cloud, ciphertext e provisioning.
+- [Bozze e stato device](device-drafts.md): workout, timer, testimoni, concorrenza editor e background.
+- [Ciclo account](account-lifecycle.md) e [Consenso salute](health-consent.md): identità, guest, revisioni, logout e cancellazioni.
+- [Portabilità](backup-and-portability.md): backup/import/export; [Telemetria](telemetry-and-privacy.md): coda diagnostica cifrata.
+- [Crash consistency](crash-consistency.md), [Causal GC](causal-gc.md), [Domain Operations](domain-operations.md): specifiche di commit/ACK e protocollo.
+
+## Stati di durabilità e relative prove
+
+| Stato | Prova disponibile | Cosa non dimostra |
+|---|---|---|
+| Valore soltanto in React/Zustand | Render o edit UI | Durabilità dopo crash/reload |
+| Envelope e journal in IndexedDB | Commit locale atomico autenticato | Firestore aggiornato o ACK cloud |
+| `local-pending` | Pending durevole e riproducibile secondo [Crash consistency](crash-consistency.md) | Che il cloud non abbia ricevuto una write: il timeout può seguire un commit |
+| Batch cloud confermato e ACK valido | Writer remoto e `acknowledgeThrough()` attestati per quel batch | Integrità di mesi non compresi nella scansione |
+| `replica-fenced` / `update-required` | Integrità o versione non provata | Permesso di reinizializzare o cancellare archivi |
+
+**MUST:** non avanzare fra questi stati sulla base di tempo trascorso, segnali UI o sola rete. La prova di commit/ACK e i failure path restano nel contratto specialistico [Crash consistency](crash-consistency.md).
 
 ## Architettura di storage
 
@@ -11,7 +31,7 @@ L'app utilizza quattro livelli di storage con ruoli distinti:
 
 | Livello | Tecnologia | Ruolo | Dati principali |
 |---|---|---|---|
-| **Stato operativo** | Zustand 5 (`useAppStore`) | Stato in memoria, single source of truth per i componenti React | Tutto `UserData`, `localWorkout`, `syncing`, `saveError`, `compatibilityStatus` |
+| **Stato operativo** | Zustand (`useAppStore`) | Stato in memoria, single source of truth per i componenti React | Tutto `UserData`, `localWorkout`, `syncing`, `saveError`, `compatibilityStatus` |
 | **Persistenza locale principale** | IndexedDB (`idb-keyval`) | Copia locale transazionale asincrona dell'envelope dati V5 | Chiave `logbook:v2:${owner}`; `v2` è namespace storage storico e NON è la versione dell'envelope |
 | **Persistenza sincrona** | `localStorage` | Dati che richiedono salvataggio sincrono, preferenze e code boundary-specific | Namespace owner-scoped `logbook:v2:${owner}:*`, flag auth/guest, workout/timer, bozze e telemetria queued |
 | **Replica remota** | Firestore | Sincronizzazione cloud e condivisione cross-device | Documento utente + subcollection mensilizzate |
@@ -19,85 +39,6 @@ L'app utilizza quattro livelli di storage con ruoli distinti:
 **MUST:** offline, l'app deve avviarsi e operare dai dati locali (IndexedDB + storage sincrono pertinente).
 
 **MUST:** la cache locale del client Firestore resta **memory-only**. La durabilità offline dei dati utente appartiene all'envelope IndexedDB owner-scoped di TheLogBook; non introdurre `persistentLocalCache()` come seconda copia persistente non gestita dal lifecycle di logout/cancellazione account.
-
-## Cifratura cloud 2.0.0 (PR #621 integrata; contratto corrente)
-
-**MUST:** il frontend acquista una ADK casuale per-account soltanto online, da un endpoint Vercel che richiede Firebase Auth, email verificata, App Check limited-use e consenso trusted attivo. L'ADK viene wrappata dal server con AES-256-GCM usando `CLOUD_ACCOUNT_KEK_V1` in env protetto, mai derivata dall'identità utente o dalla DEK locale. Il record `user_data_keys/{uid}` è server-only; la browser ADK non è persistita. Il vault IndexedDB e il journal offline restano cifrati con la DEK device indipendente, utilizzabili senza Vercel.
-
-**MUST:** i documenti `users/{uid}`, `history_months/{monthId}` e `nutrition_months/{monthId}` nel formato corrente contengono soltanto `_schemaVersion`, `_sync` pubblico (Protocol 3 / clock / writer, con `fields: {}`) e `_sealed` con nonce e payload XChaCha20-Poly1305. Sono cifrati **insieme** business e `_sync.fields` privato, autenticati anche UID, percorso, schema e coordinate causali esterne; qualunque versione ignota, ciphertext invalido, ADK sbagliata o tentativo di leggere plaintext è fail-closed senza alterare il journal. Firestore Rules **possono verificare struttura, controllo replica, owner/consenso ma non il contenuto cifrato**: Zod/integrità e merge semantico devono avvenire dopo la decifratura autentica sul client.
-
-**MUST:** ottenere ADK prima del primissimo `sync_control/state`; il backend rifiuta nuove chiavi sopra root/shard/control preesistenti. Replica cloud, backup normale e rights-only richiedono la ADK. Assenza rete, Vercel non disponibile, quota o secret perduto non autorizzano downgrade plaintext né ack: la PWA conserva l'ultima copia e operazioni pendenti nel vault locale. La cancellazione sanitaria può distruggere la ADK solo nella transazione terminale verificata, mai prima dei dati cifrati; il segreto globale v1 richiede copia di sicurezza esterna indipendente e ripristino testato; non presumere che queste prove esistano perché la variabile è configurata nel provider.
-
-**Stato verificato e limiti (31/10/2026):** la PR #621 risulta integrata su `main`; [CI post-merge #41214483494](https://github.com/gernotfound/logbook/actions/runs/41214483494), [riconciliazione Firestore #41214806525](https://github.com/gernotfound/logbook/actions/runs/41214806525) e [Firebase Hosting #41214848776](https://github.com/gernotfound/logbook/actions/runs/41214848776) sono riusciti sullo SHA `f8e96c9cb53bed368125add21831946b6681b8e0`, e il deployment Vercel Production `dpl_T1WzZL4g87YBNo3VMySEG1yFnsMX` risultava READY sullo stesso SHA. Sono prove distinte: non attestano collaudo autenticato multi-dispositivo, recupero indipendente della KEK o disponibilità illimitata entro le quote gratuite. Rivalidare lo stato live a ogni intervento pertinente.
-
-## Bozze bufferizzate del workout
-
-**MUST (CRITICAL, fresh start):** le bozze `draft:buffered:*` di un account autenticato si leggono esclusivamente come record owner-scoped con nome, formato `__logbookBufferedDraft: 1` e revisione positiva di consenso verificata. Un payload testuale pre-lancio, anche se custodito da ciphertext corrente e con consenso alla prima revisione, non prova l'origine: non importarlo, non sovrascriverlo e non cancellarlo durante una scrittura/cleanup. Le scritture account richiedono la generazione corrente del consenso; la mancanza del marker non autorizza un salvataggio senza revision. **La modalità ospite conserva intenzionalmente il formato testuale attuale** dentro l'archivio cifrato del guest. Rimangono immutati i witness indipendenti, i confronti della copia osservata, i Web Locks/lifecycle gate e l'esportazione esplicita delle prove di recupero.
-
-## Archivio locale cifrato senza password aggiuntiva
-
-**MUST:** il vault `logbook:v2:${owner}:secure-vault-control` esiste in tre stati distinti: assente, `migrating`, `active`. Controlli corrotti/versioni future, una chiave IndexedDB persa o un record non autenticato **non sono** assenza dati. Nessun nuovo provisioning sopra ciphertext preesistente.
-
-**MUST:** il controllo DEK wrappato in `localStorage` possiede un mirror owner-scoped in IndexedDB.
-Il bootstrap, sotto lo stesso Web Lock di provisioning/purge, verifica entrambe le copie e può recuperare un controllo solo realmente mancante previa decifratura autenticata con la KEK non esportabile.
-Corruzione, versione futura e divergenza di epoch/DEK sono fail-closed.
-Le fasi `migrating` → `active` vanno pubblicate nel mirror e poi nel controllo sincrono, con verifica e recovery a crash; durante il purge il mirror è eliminato solo dopo tutte le copie cifrate, prima della KEK.
-La seconda copia del wrapped control NON è backup indipendente da IndexedDB/KEK.
-
-**MUST:** una DEK per owner/device è wrappata con AES-GCM mediante `CryptoKey` non esportabile persistito in IndexedDB, dopo aver verificato proprietario Firebase o guest generation. Il contenitore cifrato locale non deve essere associato a password, token o UID usati come chiavi. Alla ripresa offline, il runtime riapre automaticamente il vault *dello stesso browser/profilo*.
-
-**MUST:** `localRepository` conserva la singola transazione `idb-keyval.update`, con cifratura e decifratura **sincrone**; `deviceStorage` conserva salvataggi sincroni e namespace `sealed:` separato dai vecchi writer. Ogni ciphertext usa AAD owner/key/version e nonce distinto.
-
-**MUST:** il fresh start non converte più le copie **device-critical plaintext pre-lancio** (`workout`, `timer`, `draft:*`, `workout-intent:*`, ecc.) durante il provisioning: una copia non cifrata sospende l'attivazione senza cancellarla o creare una nuova DEK. Le copie `sealed:` autentiche, il mirror della DEK e lo stato `migrating` rimangono protetti e riprendibili dopo crash. Il provisioning non converte più envelope IndexedDB plaintext pre-lancio: se trova un record senza vault, non lo adotta, non lo modifica e non crea una nuova chiave. Il gateway IndexedDB ordinario `secureArchiveRepository` richiede il controllo vault `active` e la DEK sbloccata per leggere o aggiornare un envelope: senza vault non restituisce plaintext né avvia scritture, preservando gli eventuali byte preesistenti. Il gateway sincrono `deviceStorage` richiede anch'esso un controllo vault `active` e la DEK sbloccata, sia per letture sia per scritture/cancellazioni; il controllo mancante non autorizza mai una scrittura o lettura plaintext. Una copia preesistente non autenticata o cifrata orfana resta invariata e blocca la lettura/scrittura ordinaria. Un controllo sconosciuto/versione futura, AEAD invalida, conflitto fra schede o Web Lock mancante blocca la transizione. Logout e account deletion rimuovono la chiave **dopo** la prova di pulizia dei ciphertext; server deletion richiede prova `complete`.
-
-**MUST (CRITICAL, inventario vault):** la scansione delle chiavi `localStorage` che autorizza un nuovo provisioning quando manca il controllo cifrato, o la conclusione della migrazione da record legacy, deve rilevare modifiche osservabili fra due inventari completi (anche chiavi non dell'owner) e indici mancanti/duplicati. In caso di instabilità bloccare la transizione, non generare una nuova KEK e mantenere i record originali per il retry/recupero. Il doppio inventario rileva corse osservabili ma non è uno snapshot atomico cross-tab; una chiave cifrata orfana senza controllo non autorizza il provisioning automatico.
-
-**VERIFY:** l'assenza di passphrase aggiuntiva limita la confidenzialità contro furto integrale del profilo browser o codice malevolo same-origin, che può raggiungere anche la wrapping key. Non è E2EE; dati solo offline possono andare persi se si perde il device/key. Non promettere recupero senza replica cloud.
-
-**MUST (CRITICAL):** le modifiche a un workout autenticato utilizzano un intento monotono nel record workout device-critical e una copia sincrona AEAD immutabile per ogni modifica (chiave casuale owner-scoped, non secondo journal).
-La copia è scritta PRIMA dello snapshot condiviso: due schede non possono sovrascrivere l'unica evidenza prima del commit.
-Ogni intento contiene il riferimento alla versione precedente; copie antenate vengono eliminate solo dopo prova che il discendente è stato registrato in IndexedDB insieme al journal.
-Rami divergenti falliscono chiusi preservando le copie, mentre le modifiche rapide della stessa linea vengono riconciliate senza duplicazione.
-Il commit IndexedDB del workout e del journal registra atomicamente generazione e sequenza dell'intento; al bootstrap autenticato, prima della hydration cloud, l'intento più recente viene riapplicato solo quando il legame col journal locale è dimostrabile. **MUST (CRITICAL):** ogni nuovo intento workout sincrono account conserva la revisione di consenso locale da cui proviene, se presente. Prima del replay dopo un crash, tale revisione deve corrispondere alla revisione dell'envelope, con riconvalida **nella transazione IndexedDB** che crea il journal. Un vecchio intento privo di revisione non può essere automaticamente recuperato dopo un passaggio ad epoch superiore a 1; la copia cifrata rimane conservata, senza replay né cancellazione.
-**MUST (CRITICAL, replay workout):** prima di pubblicare nel journal un intento ricavato da una scansione di recupero, ricontrollare dentro la callback di aggiornamento IndexedDB (dopo gli eventuali `await` intermedi) che snapshot condiviso, insieme delle testimonianze indipendenti e contenuto di ogni testimonianza coincidano con quelli usati per scegliere il candidato. Un nuovo ramo o una copia modificata bloccano il commit preservando IndexedDB e testimoni; la scansione non è uno snapshot atomico cross-tab e le scritture successive alla verifica restano un limite distinto.
-**MUST (CRITICAL, riparazione snapshot post-commit):** dopo che il journal ha confermato un intento, il recupero non deve interpretare un record `workout` presente ma non riconosciuto come intento come chiave assente: può essere l'unica copia device-only di una modifica concorrente. Non sovrascriverlo e conserva la testimonianza indipendente. Un intento condiviso differente può essere sostituito soltanto se è un antenato più vecchio dimostrato sia dalla catena del candidato sia da una sua copia indipendente autenticata equivalente; in caso contrario bloccare la riparazione. Una chiave veramente assente resta riparabile, senza attribuire atomicità cross-tab a `localStorage`.
-Commit ritardati e vecchie tab non possono regredire la sequenza.
-La stessa generazione e sequenza non provano l'idempotenza: i nuovi intenti portano un identificativo casuale per ogni modifica, salvato atomicamente nel journal; identità divergenti bloccano commit e recovery preservando journal e snapshot.
-Gli intenti device e i marker `lastWorkoutDeviceIntent` privi dell'identificativo casuale corrente non sono supportati: parser, commit e recovery li rifiutano senza replay, riscrittura o cleanup. Non usare più l'equivalenza dei payload come sostituto dell'identità della modifica; copie e ciphertext originali restano intatti.
-Disaccordi fra generazioni/ownership e record alterati bloccano il replay conservando la copia device, mai overwrite silenzioso.
-**MUST (CRITICAL):** gli snapshot workout *plain* owner-scoped, distinti dagli intenti AEAD con journal, devono registrare nella stessa copia sincrona cifrata la revisione di consenso di origine. Nel bootstrap, nella hydration dopo consenso, nel recupero editor, negli allineamenti bulk e prima di sostituire o rimuovere una copia esistente, la revisione deve coincidere con quella corrente e con l'envelope quando disponibile. Uno snapshot account senza `consentRevision` non è adottabile nemmeno nell'epoch iniziale (1): l'origine non è verificabile. Conservare l'originale senza hydration, journal, riscrittura o cancellazione automatica; una nuova copia account richiede il marker corrente. Gli snapshot guest mantengono il formato attuale senza revisione account. Il vecchio ciphertext deve rimanere preservato, senza promozione in Zustand o journal e senza sovrascrittura automatica. Il contesto separato dell'editor storico, che può contenere una sessione sospesa, conserva anch'esso la generazione di consenso; per un account la copia senza `consentRevision` non viene ripristinata né sovrascritta automaticamente, neppure alla prima generazione. In assenza del marker corrente il writer account non crea un nuovo contesto; il guest mantiene il contratto senza marker. I byte originali restano disponibili per il recupero esplicito. Il nuovo wrapper device-only non cambia il Local Envelope né il Sync Protocol. La decodifica di un backup JSON, distinta da qualsiasi replay automatico, resta una scelta esplicita dell'utente.
-
-**MUST (CRITICAL, provenienza intenti workout account):** ogni nuovo `workout-intent:<id>` e snapshot condiviso di intento per un account contiene `consentRevision` positiva della generazione corrente. L'assenza del marker impedisce di creare nuove copie; una copia account senza revisione non viene adottata, riprodotta nel journal, sovrascritta o ripulita automaticamente neppure nella prima generazione. Anche il commit atomico IndexedDB rifiuta un intento senza provenienza o con revisione diversa dall'envelope, e la catena di antenati deve avere lo stesso testimone. Copie originali conservate per export esplicito; l'intento device guest non richiede revisione di account. Non cambiare Web Locks, identificativi indipendenti, ordinamento recovery o deduplicazione del journal.
-
-**MUST (CRITICAL, provenienza testimonianze bufferizzate account):** una nuova testimonianza indipendente `draft:buffered-intent:*` di account autenticato contiene sempre una revisione di consenso positiva; l'assenza del marker corrente impedisce di creare un nuovo testimone. Una copia account senza `consentRevision` non può essere scelta per autorecovery, riscritta o cancellata automaticamente neppure nell'epoch 1: rimane preservata nel device e nel backup ed è leggibile solo tramite l'anteprima esplicita con provenienza `unknown`. Per il campo richiesto l'assenza del dato blocca l'autorecovery, senza impedire la lettura di un altro campo con testimonianze valide. Il guest non necessita della revisione account. I controlli di provenienza non alterano l'autenticazione degli altri testimoni né i fence di concorrenza.
-
-**MUST (CRITICAL, testimoni indipendenti delle battute tra schede):** l'aggiornamento sincronico di un input bufferizzato owner-scoped con ID stabile registra **prima** della scrittura condivisa un testimone device-local protetto, con identificatore casuale per editor `draft:buffered-intent:<id>`, contenente owner, chiave canonica con workoutId, revisione consenso e *ultimo* valore. Due editor/tab non usano la stessa chiave testimone anche quando si contendono la medesima chiave canonica; ogni editor aggiorna il proprio testimone solo dopo prova della copia precedente; dopo conferma parent e pulizia canonica riuscite può consumare soltanto la propria testimonianza o l'esatta testimonianza sorgente già verificata e confermata, mai una copia concorrente cambiata. Qualsiasi errore dopo il primo salvataggio indipendente lascia l'originale intatto; la copia canonica non può essere interpretata come unica prova. Al bootstrap del campo, leggere anche i testimoni nel namespace owner: se più testimonianze non compongono una sola catena causale verificata, oppure l'ultima copia non coincide con la bozza condivisa, **non** scegliere un vincitore arbitrario né ripubblicare dati; preservare tutte le copie e segnalare blocco/recupero esplicito. Una testimonianza unica, o una catena autentica e completa che termina con la copia condivisa, può essere recuperata; la pulizia delle copie esatte avviene solo dopo commit confermato. Se la copia sorgente viene così consumata mentre l'editor originario è ancora montato, il suo successivo *nuovo* input deve essere registrato prima sotto una nuova chiave casuale; solo il caso di chiave davvero assente autorizza questa rotazione, mai uno slot modificato/corrotto, un errore storage o una generazione di consenso diversa. La barriera sulla bozza canonica resta attiva e può rifiutare la pubblicazione dell'editor obsoleto, conservandone la nuova testimonianza per il recupero. Una vista di diagnostica esplicita in Impostazioni → Dati e backup può mostrare soltanto su richiesta e con consenso attivo le copie indipendenti dello stesso owner (massimo 1.024 testimonianze, 100.000 caratteri per copia e 1.000.000 aggregati), distinguendo revisione attuale, precedente o non verificabile. La vista è **in sola lettura** e non autorizza recupero, scelta automatica, rietichettatura, cancellazione, sync o sblocco di `localPersistenceBlocked`. Letture corrotti o concorrenti devono fallire chiuse, lasciando intatti gli originali; il Backup JSON resta l'esportazione di recupero esterna. **MUST:** la lettura dei testimoni bufferizzati e le anteprime esplicite dei testimoni bufferizzati/datati verificano nuovamente la revisione del consenso **dopo** l'ultima rilettura dei valori autenticati, prima di restituire dati o provenance `current`; un cambio osservabile blocca il risultato e conserva le copie originali. Non è una transazione cross-tab né protegge contro interleaving invisibili. Il limite di 64 testimoni riguarda la singola chiave canonica, non l'intero owner: una testimonianza ben formata riferita a un altro campo rimane esportabile anche quando appartiene a una revisione di consenso precedente e non può bloccare il campo corrente. Provenienza sconosciuta, metadati corrotti e storage unreadable restano fail-closed, perché non è dimostrabile che il testimone sia estraneo al campo. Il controllo di epoch resta obbligatorio per i testimoni del campo richiesto. In ambiente senza Web Locks, le chiavi distinte non creano mutual exclusion per la vista canonica né per il commit business concorrente; garantiscono invece che due valori arrivati allo storage possano essere esportati senza affidarsi all'ultimo writer. I testimoni sono dati device-local di recupero, non Domain Operations, non una seconda replica automatica. La loro eliminazione ordinaria non anticipa una conferma effettiva del valore. **MUST (recovery con successione causale):** quando un nuovo editor recupera una testimonianza coerente e modifica il valore, scrive una chiave indipendente con riferimento alla revisione esatta della precedente; non prende possesso dello slot di un altro editor che potrebbe essere ancora montato. Al mount la sola eccezione alla regola dei più testimoni è una catena lineare integralmente verificata, con tutti i predecessori presenti e immutati e la copia canonica uguale all'ultima testimonianza. Più radici, ramificazioni, revisioni mutate, antenati assenti o copia canonica differente impongono conflitto fail-closed. Dopo conferma, pulire solo copie esatte appartenenti alla catena.
-
-**MUST (CRITICAL, concorrenza bozze bufferizzate):** ogni editor con identificativo stabile conserva l'immagine *esatta* della copia device letta al proprio mount o restituita dalla sua ultima scrittura riuscita. Le successive write, required-update capture, callback di flush business e cleanup dopo conferma verificano che il record corrente corrisponda a tale immagine: un editor obsoleto non può ricavare una nuova baseline leggendo l'ultima bozza di un'altra scheda e poi sovrascriverla o cancellarla. Il conflitto blocca il commit della bozza e segnala il problema preservando la copia corrente e l'input visibile. Un edit successivo dello stesso editor aggiorna la baseline solo dopo una write realmente riuscita; i campi non persistibili senza identificativo continuano ad avere il contratto preesistente e la protezione required-update. **Limite reale:** localStorage non espone compare-and-swap transazionale, quindi questa verifica protegge interleaving osservabili e cleanup obsoleti ma non costituisce mutua esclusione di due write simultanee di JavaScript realm diversi; per una garanzia forte di concorrenza cross-tab serve serializzazione/Web Locks o record di intenti indipendenti, con ulteriori verifiche di recovery. Non dichiarare risolte quelle gare simultanee dalla sola CI.
-
-**MUST (CRITICAL, identità delle istanze di esercizio):** due occorrenze dello stesso `exId` sono istanze differenti del workout, identificate da `SessionExercise.id`. Ogni campo con destinazione business per-istanza montato nella scheda (standard tecnico, serie normali, continuazioni, dropset e isometrie) usa una chiave DOM/bozza distinta per istanza; per una serie include anche `SessionExerciseSet.id` e, ove presente, l'ID della continuazione. L'editor delle note di catalogo è l'eccezione intenzionale: solo il suo ID DOM è distinto, perché la chiave business e quella di recupero sono condivise. Lo scope del workout resta obbligatorio. Le note di preparazione continuano a modificare la voce **condivisa** di catalogo tramite `exId`: isolare l'editor e la sua bozza non crea una seconda nota business. Reorder di istanze con ID stabili non può riassociare il draft all'altra istanza. Gli ID derivati da sole posizioni non sono una garanzia per workout malformati privi di identità business e non autorizzano migrazioni di dati pre-lancio.
-
-**MUST (CRITICAL, identità delle continuazioni di serie):** i campi bufferizzati di segmenti avanzati, dropset e isometrie in un workout usano il rispettivo ID persistente del figlio, oltre all'ID della serie e allo scope workout; la posizione nell'array non è identità di recupero. Il callback di update/cleanup è indirizzato allo stesso ID figlio nel mutation boundary e deve essere un no-op se quell'ID è stato rimosso, anche se il suo indice è stato riutilizzato. Ordine, etichette e indici UI possono cambiare senza riassociare la bozza a un altro segmento. Nessun recupero automatico di chiavi basate sui vecchi indici: il perimetro fresh-start non le supporta.
-
-**MUST (CRITICAL, identità workout per input bufferizzati):** l'owner e la revisione del consenso non bastano a distinguere due sessioni nella stessa generazione. Nell'editor di un workout attivo, storico o nella valutazione finale, l'ID immutabile del workout deve appartenere anche alla chiave sincrona `draft:buffered:<kind>:<workoutId>:<fieldId>`. Il contesto proviene esplicitamente dal workout mostrato, non da un nome DOM riciclabile o da una deduzione globale; al cambio workout i campi sono rimontati e il cleanup della vecchia vista NON inoltra input sporchi al nuovo workout. Valori nello stesso scope tornano recuperabili dopo il riavvio; ogni cleanup cancella soltanto la chiave del workout originario. Le precedenti chiavi non qualificate `draft:buffered:<kind>:<fieldId>` non sono prova di appartenenza al workout corrente anche se hanno già un marker di consenso corretto: conservarne i bytes originali per recupero esplicito e NON migrarle automaticamente, sovrascriverle o trasformarle in una nuova bozza della sessione. Nessun cambio dei normali `id` HTML né obbligo per altri form non-workout di assumere un'identità sessione inesistente. Nei backup il segmento workoutId fa parte della chiave di recupero, che resta soggetta a limiti di capienza/nome e al ripristino esplicito senza replay cross-workout.
-
-**MUST (CRITICAL, input bufferizzati workout):** le chiavi sincrone `draft:buffered:input:<id>` e `draft:buffered:textarea:<id>` possono contenere serie, note o altre informazioni sanitarie ancora non confermate dal commit business. Nuove copie account devono associare owner, key e `consentRevision` ai valori in un unico record device cifrato; una copia account testuale priva di provenienza non può essere riapplicata automaticamente, nemmeno nell'epoch iniziale. La lettura al mount, la scrittura di ogni keystroke, il flush verso i callback di business, il tentativo di flush pre-reload e il cleanup dopo conferma devono verificare la revisione d'origine e la sessione catturata; nessuna tab montata può promuovere dati della vecchia generazione o cancellare una copia con provenienza incerta. Un errore di provenienza/storage deve preservare i bytes e bloccare il flush, non essere trattato come normale assenza di bozza. Lo storage guest mantiene il testo semplice nel proprio namespace. Un backup device-only non costituisce prova di una revisione diversa, né implica recupero automatico dopo l'importazione.
-
-**MUST (CRITICAL, bozze catalogo allenamento):** le bozze `draft_exercise` e `draft_routine` sono recupero device-local di dati destinati a Domain Operations e non possono essere considerate correnti sulla sola base dell'owner o della cifratura. Per owner autenticati ogni copia nuova deve conservare la revisione di consenso di origine nel medesimo record cifrato (con nome della chiave e owner); prima di hydration UI, edit/cleanup e commit business verificare il legame con il consenso e la sessione originali. Un form rimasto montato non può rietichettare i propri valori con un'epoch più recente. Le copie account prive di prova di owner/nome/revisione sono incompatibili anche nell'epoch iniziale: non adottarle, cancellarle né sovrascriverle automaticamente; il formato guest attuale resta supportato. Errori di persistenza dei draft devono essere visibili e bloccare i percorsi di salvataggio dipendenti, non trasformati in avvisi silenziosi. Guest invariato. Restore device-draft da backup esplicito non prova una nuova epoca né autorizza reimport automatico.
-
-**MUST (CRITICAL, recupero check-in/fine allenamento):** le copie sincrone `draft:pre-session:<workoutId>` e `draft:post-session:<workoutId>` devono registrare owner, nome della chiave e revisione del consenso all'interno dello stesso record cifrato dei valori (senza modifiche a IndexedDB o al journal). Il bootstrap dei componenti, ogni edit, il flush di update/reload, l'avvio della sessione, la finalizzazione e il cleanup verificano provenienza e sessione prima di usare o sostituire la copia. Le copie account senza revisione e identificazione owner/chiave non vengono rilette automaticamente, nemmeno nella prima generazione; non sovrascriverle né cancellarle e preservare i byte originali per il backup esplicito. Il guest mantiene il formato storico. Una mutazione di business già durabile e la successiva pulizia device sono risultati distinti.\n\n**MUST (CRITICAL, bozze datate):** le bozze sincrone di misurazioni, sonno e attività (`draft:<kind>:<date>`) sono dati sanitari locali modificabili, non semplici preferenze. Una bozza autenticata nuova conserva owner e revisione consenso nello stesso record device cifrato dei valori. Una bozza account V2 senza `consentRevision`, anche nella prima generazione e anche se è un tombstone, non prova l'origine e viene rifiutata senza riscrivere o eliminare i byte; la mancanza del marker impedisce inoltre di creare nuove copie o tombstone account. Disaccordi di owner/epoch bloccano rendering, overwrite, pulizia e salvataggi attraverso la barriera `localPersistenceBlocked`, conservando la copia per l'export esplicito. Una nuova bozza valida con revisione corrente continua a funzionare. Le scritture guest e account usano il wrapper device datato V2 con identificatore casuale per ogni revisione; il guest non richiede il marker di consenso account. V1 e copie non avvolte non sono importate nel formato corrente. Nessun reimport automatico di bozze da vecchie generazioni.
-
-Il guest conserva la semplice persistenza locale preesistente.
-
-**MUST (CRITICAL, concorrenza bozze datate):** i form di misurazioni, sonno e attività mantengono l'immagine esatta del record device vista all'apertura o restituita dall'ultima propria scrittura riuscita, senza reimpostare la baseline sui rerender. Modifica successiva, preflight prima del commit business, flush di update/reload e pulizia dopo conferma verificano quella stessa immagine; un form obsoleto non può sovrascrivere, pubblicare o eliminare la bozza aggiornata da un'altra scheda. Il conflitto preserva il record corrente, blocca la persistenza e presenta un errore, richiedendo la riapertura per leggere il valore più recente. Le chiamate di compatibilità prive di baseline non sono prova di concorrenza: i consumer ordinari del form devono trasmettere il valore osservato. Dopo un commit business confermato, la pulizia non rimuove la chiave: conserva un *tombstone* cifrato owner-scoped con `values:null` e nuovo ID di revisione casuale, distinguendo la vecchia assenza dalla nuova assenza (ABA). Le cancellazioni confermate di epoche precedenti sono leggibili come vuote, senza riprodurre dati sanitari revocati; una bozza non vuota di una vecchia epoca rimane quarantinata. I marker persistono finché non viene eseguita una pulizia sicura dell'owner, partecipano al normale backup di recupero e non costituiscono copie dei valori già confermati. **Limite:** `localStorage` non possiede compare-and-swap atomico; il marker risolve ABA nei percorsi osservabili, ma due scritture davvero simultanee tra realm distinti restano un rischio e richiedono testimoni indipendenti o serializzazione prima di dichiarare garanzia completa. I controlli di owner/consenso e la conservazione dei dati di una generazione precedente restano obbligatori.
-
-**MUST (CRITICAL, lettura testimonianze datate):** la scelta delle copie correnti per una bozza richiede la stabilità dell'intero inventario owner-scoped, non soltanto delle testimonianze del campo selezionato. Dopo aver autenticato ogni testimonianza, verificare nuovamente appartenenza, contenuto di tutte le copie lette e revisione del consenso dell'owner, prima di restituire un candidato. Una modifica osservabile o un cambio di consenso blocca l'autorecovery, senza selezionare un vincitore né eliminare prove. La doppia lettura non offre atomicità tra schede e non dimostra assenza di ABA invisibili.
-
-**MUST (CRITICAL, provenienza testimonianze datate account):** le nuove copie `draft:dated-intent:*` di un account richiedono sempre una revisione di consenso positiva; il writer rifiuta scritture in assenza del marker corrente. Una testimonianza account senza `consentRevision` non viene adottata, aggiornata o cancellata automaticamente, neppure in epoch 1: resta intatta e consultabile solo nell'anteprima esplicita di recupero con provenienza `unknown` e nel backup originale. Per il campo richiesto l'assenza della revisione blocca l'autorecovery; una copia non marcata appartenente a un campo diverso non rende inutilizzabili le testimonianze valide del campo richiesto. Le copie guest continuano a non richiedere il consenso account.
-
-**MUST (CRITICAL, copie indipendenti delle bozze datate):** ogni editor montato di misurazioni, sonno o attività conserva l'ultima bozza completa, con una chiave device distinta `draft:dated-intent:<id-casuale>` associata a owner, `draftName` e revisione di consenso. L'intento va scritto **sincronamente prima** della chiave condivisa, attraverso lo stesso confine device cifrato AEAD owner-scoped quando il vault è disponibile; quota, ciphertext alterato, errore di chiave o revoca non sono assenza dati. Durante edit, salvataggio business, update/reload e cleanup si verifica che non compaiano altre intenzioni di editor non riconosciuti. La sola copia condivisa non prova di aver preservato tutti i concorrenti: interleaving simultanei possono sovrascriverla, ma i valori dei singoli editor rimangono nelle chiavi indipendenti. All'apertura sono riutilizzabili come provenienza soltanto una copia unica oppure una catena causale lineare integralmente verificata, il cui ultimo valore sia identico alla bozza canonica; non vengono mai promosse autonomamente al business state. Ogni successore conserva in una chiave distinta il riferimento alla revisione esatta dell'antenato. Radici indipendenti, diramazioni, revisioni modificate e antenati assenti producono un conflitto fail-closed e preservano le copie. Solo un commit business durabile permette di eliminare la copia esatta dell'editor e, dalla più recente all'originaria, le copie esatte della catena di provenienza autenticata; altre copie non si cancellano né si rietichettano. Se la fonte è stata confermata da un secondo editor ancora mentre l'originale era montato, il suo nuovo edit non può riutilizzare la vecchia chiave ormai consumata: deve acquisire prima una nuova testimonianza con ID casuale, esclusivamente se il precedente slot risulta strettamente assente, senza scambiare modifiche altrui o ciphertext illeggibile per assenza. Il confronto sulla copia canonica rimane obbligatorio e può bloccare il commit obsoleto preservando la nuova testimonianza. Esame su azione esplicita e export Backup JSON sono letture di recupero, senza risoluzione automatica; l'eventuale import delle copie da Backup è separato, volontario e non equivale a conferma business o aggiornamento del consenso. Il limite di ispezione è 1.024 copie owner-scoped e 64 copie per campo per il preflight; superarlo blocca la promozione e richiede esportazione. Il guest conserva il proprio confine vault/legacy, senza dichiarare incondizionatamente cifratura dove il vault non è stato inizializzato. La persistenza indipendente protegge contro la perdita di una copia nella race condivisa, ma non determina quale delle due versioni sia corretta e non rende atomiche le write `localStorage`. **MUST:** la sola lettura di una bozza già durevole non la rende dirty; una chiamata di flush senza input umano non deve creare una seconda testimonianza o riscrivere la copia canonica. **MUST (annullamento in UI):** la vista Misurazioni può uscire dalla modifica e navigare allo Storico solo quando `draft.clear()` conferma la pulizia della copia device; un errore o un esito `false` conservano il form e la bozza persistente, senza segnalare falsamente l'annullamento.
-
-**MUST (UX):** nessun backup periodico manuale richiesto: lo storage cifrato e la replica cloud dei dati business autorizzati sono automatici. Backup JSON resta una funzione volontaria di portabilità. Non descriverlo come requisito ordinario di protezione, né promettere che sessioni guest, bozze device-only o modifiche mai sincronizzate sopravvivano alla perdita totale del profilo.
 
 ## Browser storage boundary
 
@@ -113,25 +54,13 @@ Il guest conserva la semplice persistenza locale preesistente.
 
 **MAY:** preferenze, hint e code telemetriche possono restare best-effort quando il loro contratto non influenza l'integrità dei dati business.
 
-**MUST:** per la coda diagnostica, best-effort **non** significa storage in chiaro: errori/stack, session ID e UID possono essere presenti nel payload tecnico.
-I nuovi report persistono esclusivamente cifrati con chiave owner-scoped sbloccata e AEAD autenticata; prima dello sblocco restano in RAM.
-Le code plaintext pre-lancio non vengono lette, adottate, convertite né cancellate automaticamente; la chiusura della scheda può perdere i report ancora soltanto in RAM.
-Un ciphertext illeggibile non autorizza la sua cancellazione o sovrascrittura.
-**MUST:** il writer corrente registra un `queuedAt` numerico per ogni report. La retention di sette giorni usa solo tale timestamp: i record che ne sono privi, lo hanno malformato o implausibilmente futuro sono esclusi, senza usare `timestamp` dell'evento come fallback. Le voci scadute non vengono restituite né inviate e il replay non può reintrodurle; il pruning dello storage avviene al successivo accesso alla coda.
-Tale retention tecnica è distinta da quella Firestore legacy di 30 giorni e da Sentry Production.
-
-Non dedurre da questa regola che ogni singolo accesso `localStorage` debba necessariamente passare dallo stesso helper: timer/workout e code specializzate possono avere boundary propri. La semantica strict vs best-effort deve però essere esplicita.
+La semantica best-effort delle code diagnostiche non autorizza plaintext: seguire il contratto [Telemetria e privacy](telemetry-and-privacy.md). Timer/workout e code specializzate possono avere gateway propri; distinguere sempre assenza ed errore secondo il boundary.
 
 ## Versioni indipendenti e Schema Evolution
 
 `src/lib/schemaEvolution.ts` è l'unica fonte eseguibile per le versioni persistite:
 
-```ts
-CURRENT_DATA_SCHEMA = 1
-CURRENT_SYNC_PROTOCOL = 3
-CURRENT_LOCAL_ENVELOPE = 5
-CURRENT_BACKUP_SCHEMA = 3
-```
+`CURRENT_DATA_SCHEMA`, `CURRENT_SYNC_PROTOCOL`, `CURRENT_LOCAL_ENVELOPE` e `CURRENT_BACKUP_SCHEMA` definiscono i valori e le baseline accettate. Leggerli dal file corrente prima di cambiare un formato; i namespace storage non ne rappresentano la versione.
 
 Le quattro dimensioni NON devono essere riutilizzate come una sola versione, né incrementate per il semplice bump della versione PWA in `package.json`:
 
@@ -145,7 +74,7 @@ Pipeline obbligatoria per dati persistiti/versionati:
 ```text
 RAW STORAGE
 → leggi versione
-→ migra/normalizza in memoria
+→ applica solo le evoluzioni supportate in memoria
 → valida versione corrente
 → valida business schema
 → proietta / semantic merge
@@ -166,30 +95,11 @@ RAW STORAGE
 
 **MUST:** `update-required` è uno stato applicativo persistente per la sessione corrente, non un semplice toast. Quando viene rilevato da un boundary cloud/local, nuove mutazioni e nuovi replay/sync vengono bloccati, i job ancora in debounce vengono chiusi senza partire e l'UI espone una barriera read-only/recoverable fino a reload/aggiornamento.
 
-### Nuovo perimetro — fresh start dichiarato
+### Formati supportati e future evoluzioni
 
-Il product owner dichiara nessun utente/account/browser/backup di sviluppo o testing da recuperare. Per la release di lancio non sono supportati i writer e i formati PWA pre-lancio, né sono richieste nuove migrazioni, fallback o una UI per dati ownerless ipotetici. **MUST:** tutti i writer nuovi usano namespace owner-scoped della baseline attuale; le chiavi pre-lancio ritirate non sono usate come sorgenti né oggetto di purge. **MUST:** restano intatti i contratti di formato corrente per offline-first, ciphertext, journaling atomico, consent epochs, backup Schema 3, guest→account, recovery dopo crash della release attuale, concorrenza fra schede correnti e blocco su versioni future/corruzione. Non aumentare automaticamente i numeri di schema/protocollo quando cambia la versione della PWA.
+Applicare il fresh start di AGENTS. Tutti i nuovi writer usano namespace owner-scoped e formati correnti; chiavi globali pre-lancio non sono sorgenti di recupero né target di purge. Non importare backup V1/V2 o migrare Protocol 1/2 ed Envelope 4: il rifiuto conserva gli originali. Recovery dopo crash, consenso e concorrenza della baseline corrente restano obbligatori.
 
-### Baseline clean-cut M1
-
-**Nota storica:** M1 descrive un precedente taglio compatibilità; il nuovo fresh start in `AGENTS.md` sostituisce l'esigenza di supportare i client pre-lancio. Non descrive i gate di sicurezza dei dati creati oggi. M1 stabilì:
-
-- la baseline M1 non introdusse una migrazione prodotto da local envelope V3 a V4;
-- nessuna importazione compatibile di backup V1/V2;
-- Sync Protocol 3 è la baseline del primo account reale: Protocol 1/2 vengono rifiutati fail-closed e non vengono migrati; l'antica migrazione Local Envelope 4→5 era destinata soltanto a dati di sviluppo ed è ritirata dal fresh start. La baseline corrente accetta Local Envelope 5;
-- vecchi formati locali/backup vengono rifiutati e non riscritti;
-- la vecchia cache locale non attribuita `logbook_cached_user_data` non viene letta, preservata né esportata dal prodotto corrente;
-- il timer legge esclusivamente lo snapshot owner-scoped `timer`; eventuali chiavi timer obsolete possono essere eliminate best-effort ma non vengono mai usate come fallback;
-- L'editor dello storico usa `history-editor-context` owner-scoped per conservare la sessione device-local sospesa: modifica e annullamento dello storico non eliminano `activeWorkout` né resettano il timer attivo. Il contesto è scritto prima di pubblicare l'editor; al termine la sessione sospesa viene ripristinata prima del cleanup della chiave. Le chiavi owner-scoped vengono eliminate dal purge tramite il prefisso completo `logbook:v2:${owner}:`.
-- Durante il salvataggio dello storico, l'editor resta operativo fino alla conferma locale; una modifica successiva non deve essere scartata al completamento di una write precedente. Il ripristino della sessione sospesa verifica la chiusura durevole (ledger in IndexedDB) per impedire la riapertura dopo cancellazione/completamento in un'altra scheda.
-- L'avvio workout verifica la scrivibilità del timer senza azzerarlo; il reset avviene soltanto dopo verifica dell'avvio durevole in IndexedDB.
-- **MUST:** il commit IndexedDB di completamento o cancellazione del workout conserva `lastClosedWorkoutId` nell'envelope locale owner-scoped insieme allo stato business; ogni nuova chiusura incorpora anche il precedente `lastClosedWorkoutId` nel registro additivo `closedWorkoutIds` per preservare la protezione dei vecchi envelope V5; il bootstrap usa queste evidenze, lo storico e il registro per non ripristinare uno snapshot `localStorage` obsoleto (anche quando una tab sospesa riscrive un vecchio workout dopo successive chiusure).
-Un cleanup device-critical fallito non può essere presentato come errore del commit già durevole.
-I commit locali e le Domain Operations rifiutano il ripristino di un'identità già chiusa, anche se una tab sospesa tenta una nuova scrittura; un retry di `workout.complete` già durevole ritenta il delivery del journal senza riscrivere lo storico.
-I metadati opzionali restano device-local e non vengono replicati in Firestore.
-- un documento Firestore senza `_schemaVersion` o `_sync` Protocol 3 viene rifiutato fail-closed: le Rules e il gateway cloud richiedono entrambi i marker, e non si inventa causalità per dati legacy;
-- ogni documento Firestore realmente toccato da una semantic write viene riscritto lazy con `_schemaVersion: CURRENT_DATA_SCHEMA`;
-- non esiste una scansione cloud solo per aggiornare i marker.
+Un documento Firestore presente senza marker data/sync correnti è incompatibile; non inventare causalità. Ogni documento effettivamente toccato da semantic write porta i marker correnti, senza una scansione dedicata al solo aggiornamento dei marker.
 
 `DATA_MIGRATIONS` deve contenere in futuro solo step sequenziali N→N+1, puri, deterministici e senza side effect. Saltare uno step è errore. Uno step data/sync deve gestire esplicitamente gli scope persistiti che contengono quella dimensione; non deve ottenere la compatibilità forzando un bump artificiale del container.
 
@@ -198,17 +108,22 @@ I metadati opzionali restano device-local e non vengono replicati in Firestore.
 La pipeline V4 mantiene debounce e protocollo causale delle milestone precedenti, ma M8 rende esplicito l'intento business:
 
 1. Le normali azioni UI/hook invocano `dispatchDomainOperation()` con una `DomainOperation` tipizzata.
+
 2. Il reducer puro calcola il nuovo `UserData`; `commitDomainOperations()` compila soltanto lo scope dichiarato in `SemanticOperation` e persiste business state + journal nello stesso update IndexedDB.
+
 3. `documentProjection.ts` proietta `UserData` in root + shard mensili; `semanticProjection.ts` è la fonte di merge policy, Vector Clock, tombstone, `$order` e active-workout guard.
+
 4. `transactionWriter.ts` legge i documenti Firestore toccati, normalizza data schema + sync protocol, valida `_sync`, confronta `FieldStamp` remoto e operation locale, quindi esegue al massimo una write per documento toccato.
+
 5. `replicateJournal.ts` drena lo stesso journal Envelope V5 verso Firestore in gruppi causali completi e bounded. In assenza di rete o dopo timeout sicuro, le operation restano durevoli nel journal.
+
 6. `hydrateLocal()` assorbe il causal context remoto senza modificare gli stamp delle pending già esistenti e riproduce il journal localmente.
 
 **MUST:** una singola transazione sync può toccare al massimo 8 documenti business oltre a `sync_control/state`. Il limite è intenzionalmente conservativo rispetto al tetto Firestore di 10 MiB e al guardrail per-documento da 950.000 byte.
 
 **MUST:** il limite non si applica facendo slice arbitrari delle operation. Tutte le operation dello stesso documento restano nello stesso gruppo; se una mutazione bulk tocca più di 8 documenti, `commitLocal` / `commitDomainOperations` assegnano sequence causali successive. `replicateJournal` può coalescere più sequence complete nella stessa transazione finché l’unione resta entro 8 documenti, poi acknowledge fino all’ultima sequence effettivamente consegnata.
 
-**MUST:** journal locali creati da build precedenti con una singola sequence troppo ampia vengono resequenziati atomicamente in IndexedDB prima della prima consegna. Una sequence non può essere consegnata parzialmente con lo stesso numero causale.
+**MUST:** un journal nel formato supportato con una singola sequence oltre il limite viene resequenziato atomicamente in IndexedDB prima della prima consegna; questo guard protegge il batching corrente, non importa un protocollo pre-lancio. Una sequence non può essere consegnata parzialmente con lo stesso numero causale.
 
 
 ### Sync Protocol 3 — causal core e replica fencing
@@ -227,7 +142,7 @@ I boundary bulk — bootstrap/initialize, hydration, guest→account merge, impo
 
 **MUST:** nuovi consumer business ordinari non possono introdurre bypass snapshot fuori dall'allowlist verificata dal gate M8.
 
-**MUST:** Data Schema resta 1 e Backup Schema resta 3. Sync Protocol 3 è la baseline account corrente e richiede Local Envelope 5 perché l'envelope persiste l'identità replica; Local Envelope 4 è fuori supporto e viene rifiutato senza conversione. I gate di crash recovery dell'Envelope 5 restano obbligatori.
+**MUST:** le quattro versioni e le baseline accettate restano quelle di `schemaEvolution.ts`; cambiarne una richiede l'evoluzione supportata e le verifiche pertinenti. Il journal persiste l'identità replica; un envelope fuori supporto viene rifiutato senza conversione.
 
 **MUST:** nessuna ottimizzazione del debounce cloud può posticipare la persistenza IndexedDB immediata.
 
@@ -248,6 +163,7 @@ Protocol 3 limita i nuovi actor a 16 slot `s00`…`s15` registrati in `users/{ui
 - **MUST:** dopo il cutover Protocol 3 i client non eliminano fisicamente i documenti sync root/mensili; un documento causalmente vuoto resta come empty shell fenced con `_schemaVersion` e `_sync.writer`.
 
 Le Rules rendono autorevoli membership, generation e scadenza lease tramite `request.time`. La completezza del checkpoint deriva invece dal full scan obbligatorio del client ed è un'invariante di protocollo coperta dai test, non una prova di lettura verificabile crittograficamente dalle Rules.
+
 ## Acknowledge causale e race remote commit → local edit → acknowledge
 
 `acknowledgeThrough(owner, expectedSeq, remote, ..., syncMeta)` è un boundary CRITICAL.
@@ -270,11 +186,7 @@ La regressione è coperta anche attraverso il reale path transazionale Firestore
 
 ## Lost acknowledgement
 
-Un timeout/rejection del chiamante non dimostra che il server non abbia applicato la write.
-
-**MUST:** prima di classificare un batch come `local-pending` dopo un esito ambiguo, `replicateJournal` deve rileggere l'envelope IndexedDB e verificare che **l'intero batch appena consegnato** sia ancora presente nel journal con payload semantico completo identico (`value`, `clock` e `guard` inclusi). Se envelope/journal è assente, corrotto o contiene solo una parte del batch, l'esito non è un pending sicuro e deve essere classificato come failure secondo il contratto corrente.
-
-Vedi anche `.agents/rules/crash-consistency.md`.
+**MUST:** timeout o rejection del chiamante non dimostrano l'assenza di commit remoto. Prima di classificare `local-pending`, rileggere l'envelope persistito e provare che l'intero batch consegnato è ancora presente e riproducibile con payload causale completo identico. Se la prova manca, restituire un failure senza dichiarare recupero sicuro. La specifica su identità del batch, `value`/`clock`/`guard`, epoch e race è in [Crash consistency](crash-consistency.md).
 
 ## Hydration cloud
 
@@ -303,27 +215,29 @@ Il sistema `replicateJournal` / `transactionWriter` gestisce l'esito:
 
 | Status | Significato |
 |---|---|
-| `synced` | Mutazioni applicate confermate su Firestore |
+| `synced` | Tentativo concluso senza pending da consegnare; per un batch account consegnato include conferma remota e ACK locale |
 | `rejected` | `permission-denied`: write rifiutata (App Check, Rules, dominio, auth); il client registra il rigetto |
 | `local-pending` | Offline o esito ambiguo per cui il batch completo è ancora provato durevole nel journal |
 | `failed` | Errore critico/non sicuro o stato locale incompatibile con un retry affidabile |
+
+`synced` viene restituito anche per il guest e per un journal già vuoto: da solo non prova una nuova write Firestore della specifica operazione.
 
 `update-required` è intenzionalmente separato da questi status di trasporto: rappresenta incompatibilità di versione e porta l'intera sessione in fail-closed.
 
 **MUST:** una write rifiutata (`rejected`) non deve mai essere esposta all'utente come confermata.
 
-**MUST:** un journal account con dati business non può replicarsi prima di un consenso account valido (`needsLegalUpdate` falso). La sospensione della replica è `local-pending` con motivo `legal-consent-required`, distinto dalla mancanza di rete; il journal resta durevole e la nuova accettazione esplicita può sbloccare la replica. Il consenso della sessione ospite non costituisce consenso dell'account. Le Rules e la revoca server-autorevole richiedono un gate separato e non si considerano risolte da questo controllo client.
+**MUST:** un journal account con dati business non può replicarsi prima di un consenso account valido (`needsLegalUpdate` falso). La sospensione della replica è `local-pending` con motivo `legal-consent-required`, distinto dalla mancanza di rete; il journal resta durevole; la riapertura segue la riconciliazione trusted e, per pending di una revisione precedente, il recupero separato esplicito previsto da [Consenso salute](health-consent.md). Il consenso della sessione ospite non costituisce consenso dell'account. Le Rules e la revoca server-autorevole richiedono un gate separato e non si considerano risolte da questo controllo client.
 
 **MUST:** le funzioni di salvataggio devono rigettare se l'accodamento della transazione locale fallisce in maniera critica. Vietato risolvere silenziosamente nel catch.
 
-## Pre-render bootstrap
+## Pre-render bootstrap e ownership
 
-All'avvio dell'app (`initApp` in `src/main.tsx`), **prima** di `createRoot().render()`:
+`initApp` in `src/main.tsx` inizializza aspetto, catalogo e stato storage prima del render, ma non carica un archivio account a partire dal solo hint UID.
 
-1. la cache utente viene recuperata da IndexedDB e assegnata a `window.__INITIAL_USER_DATA__`;
-2. lo store Zustand viene inizializzato tramite `getInitialUserData()`, validando la cache con `UserDataSchema.parse()`.
-
-Un envelope locale con versione legacy/futura non viene reinterpretato: `readLocal()` fallisce in modo conservativo e i bytes restano in IndexedDB per diagnosi/recupero. Se la versione è futura, il boundary locale segnala anche lo stato applicativo `update-required` prima che l'app diventi editabile.
+- Guest: verificare marker/generazione, preparare il vault owner-scoped e leggere l'envelope prima di pubblicare `window.__INITIAL_USER_DATA__`, workout e store.
+- Account: `bootstrapOwner` resta nullo nel pre-render; AuthProvider conferma l'identità Firebase e gestisce sblocco/lettura dell'archivio account. L'hint persistito è solo un'indicazione, non una prova Auth.
+- Cache, business e copie device attraversano gateway di versione, AEAD, Zod e integrità. Byte incompatibili o non leggibili restano preservati; una versione futura porta a `update-required` prima dell'editing.
+- Nessun default sintetico può diventare baseline cloud dopo un caricamento fallito.
 
 ## Concorrenza bootstrap e revoca guest cross-tab
 
@@ -337,16 +251,9 @@ Un envelope locale con versione legacy/futura non viene reinterpretato: `readLoc
 
 **MUST:** i salvataggi device-critical (workout, bozze e flush in background) rispettano la revoca guest anche quando non passano da IndexedDB. Storage non leggibile non conferisce autorizzazione alla scrittura.
 
-## Blindatura in background (Safari Suspend)
+## Background
 
-Quando `document.visibilityState === 'hidden'`:
-
-1. viene chiamato `draftRegistry.flushAll()` per salvare tutte le bozze;
-2. i dati device-critical vengono scritti sincronicamente come ciphertext nel namespace owner-scoped `protectedDeviceKey('workout')` tramite `deviceStorage.ts`, soltanto con vault attivo;
-3. l'operazione è protetta secondo il boundary applicabile.
-
-**MUST (CRITICAL, background e schede concorrenti):** il salvataggio automatico su `visibilitychange === 'hidden'` confronta lo snapshot device corrente con il workout osservato **prima** del flush dei draft. Se lo snapshot coincide già con il workout finale, non effettua una scrittura ridondante; se differisce dalla baseline precedente, rifiuta la sovrascrittura, preserva i dati e blocca la persistenza. Un nuovo workout pubblicato da un flush partendo da una baseline device coerente viene invece salvato sincronicamente. Dati device non leggibili o di una generazione di consenso precedente falliscono chiusi. Questo confronto non è CAS atomico fra schede: protegge soltanto i conflitti osservabili. I normali setter e i percorsi di editor/reload mantengono i contratti specialistici distinti.
-
+Il salvataggio sincrono e i confronti sul workout osservato prima del flush sono in [Bozze e stato device](device-drafts.md). Il journal IndexedDB resta la fonte di durabilità e il background non modifica i gate Auth/consenso.
 
 ## PWA Update Barrier
 
@@ -360,6 +267,10 @@ Il componente di ricarica della PWA (`src/lib/sync/reloadBarrier.ts`) regola gli
 
 **MUST:** i boundary snapshot bulk (`commitLocal`, import/restore e recovery compatibili) calcolano l'intento rispetto alla base osservata dal chiamante e lo applicano all'envelope corrente. Entità o campi creati concorrentemente e assenti dalla base del chiamante non possono essere interpretati come cancellazioni.
 
+Gli aggiornamenti PWA sono differibili. Prima del reload: flush delle bozze, attesa dei salvataggi, confronto fra store e copia IndexedDB e snapshot sincrono del workout. Errori locali bloccano il reload. Un errore di caricamento chunk apre lo stesso prompt; non scatena più un reload automatico che può ripetersi.
+
+**MUST (CRITICAL, controllo del reload PWA):** il callback `onNeedReload` di Workbox non deve avviare autonomamente una navigazione quando il nuovo service worker prende il controllo. Soltanto il percorso esplicito dell'utente può ricaricare, dopo attivazione verificata e seconda barriera di persistenza immediatamente prima della navigazione. Un'attivazione lenta non equivale a fallimento; chiudere l'avviso durante l'attesa deve annullare il reload differito, anche se il worker si attiva successivamente. La presa di controllo in altre schede non autorizza a ricaricarle senza i rispettivi controlli di durabilità.
+
 ## Merge deterministico (Guest → Cloud)
 
 Al collegamento di un account, se esistono dati guest locali:
@@ -372,23 +283,13 @@ Al collegamento di un account, se esistono dati guest locali:
 6. `replicateJournal()` tenta il flush;
 7. se l'esito è `local-pending`, il merged authenticated envelope resta la fonte locale.
 
+La policy business di `mergeUserData()` conserva l'unione deduplicata degli array con ID con priorità guest in collisione, il merge per data/ID dei record giornalieri e i valori scalari guest valorizzati. **Eccezione di sicurezza:** `legalConsent` resta quello dell'account; il guest non autorizza il trattamento account. “Guest wins” non dimostra maggiore recenza: verificare implementazione e test prima di cambiarlo. La pianificazione nutrizionale mantiene il proprio conflitto e le regole di origine in [Modello dati](data-model-and-zod.md).
+
 `pendingConflicts.nutritionPlanning` resta un conflitto di prodotto separato dal generic causal merge e non è cloud-root.
 
-## Backup / import
+## Offline e riconnessione
 
-Il formato importabile corrente è `logbook-backup` V3 e contiene anche `dataSchemaVersion` e `syncProtocolVersion`.
-
-**MUST:** backup/share/emergency export prodotti dalla factory corrente usano l'header V3 corrente.
-
-**MUST:** backup V1/V2 e versioni future non vengono importati nella baseline clean-cut M1.
-
-**MUST:** non esiste un export di recupero V1 per la vecchia cache locale non attribuita; il prodotto corrente non la legge né la converte.
-
-Il recovery raw di un backup cloud può conservare i documenti originali con `_schemaVersion`/`_sync`, ma il business snapshot deve usare solo dati già normalizzati e deve escludere entrambi i metadati dal `UserData`.
-
-## Offline resilience
-
-In assenza di connessione, l'app opera dall'envelope IndexedDB e dai dati device-local. Quando la connessione ritorna, il journal viene rigiocato verso Firestore e i Vector Clock riconciliano le divergenze deterministicamente.
+L'app opera localmente dall'envelope e dai record device della sessione autorizzata. Online/foreground, prima del cloud, riconciliare il consenso trusted e la revisione, acquisire ADK e base cloud/checkpoint validi, poi riprodurre il journal. Una rete disponibile non prova autorizzazione, freschezza o ACK.
 
 ## Gate di regressione
 

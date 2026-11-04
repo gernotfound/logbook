@@ -1,5 +1,7 @@
 # Organizzazione delle suite di test
 
+**Contesto:** [AGENTS.md](../AGENTS.md) governa processo e autorizzazioni; [Verifica CI](../.agents/rules/ci-verification.md) definisce il gate canonico corrente `npm run verify:m8` o CI equivalente exact-SHA. I comandi delle milestone sotto sono subset diagnostici, non il gate finale.
+
 - **Regola:** spostare test esistenti solo per area funzionale e in piccoli gruppi, quando import, fixture, script nominativi, include/exclude Vitest, typecheck e CI possono essere aggiornati e verificati sullo stesso SHA.
 - **Distribuzione corrente:** molti test restano direttamente in `tests/`; non sono obsoleti per questo motivo. Le suite specializzate `isolated/`, `emulator/`, `fuzz/`, `recovery/`, `gc/` e `hardening/` seguono i rispettivi gate dedicati.
 - **Telemetria:** `tests/telemetry/` ospita le suite di dominio, comprese le regressioni elementari su versionamento, sanitizzazione e retention spostate dalla root senza cambiarne asserzioni.

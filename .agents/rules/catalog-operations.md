@@ -3,17 +3,17 @@
 **Quando leggere:** cache catalogo, esercizi/alimenti, seeding, versioni manifest e rollback.
 **Non inferire:** seed bundled vuoto è intenzionale; dry-run non è pubblicazione e versione catalogo non coincide con release PWA.
 
-> Stato: normativo | Ricognizione originaria: 2026-09-20; non certifica lo stato live | File allora verificati: `src/lib/catalog/catalogService.ts`, seed JSON correnti, `scripts/seed-catalog.mjs`, Rules e test di seeding
+**Autorità:** [`AGENTS.md`](../../AGENTS.md). Questo contratto ne specializza gli invarianti; non amplia autorizzazioni o perimetro.
 
 ## Struttura Firestore — `global_catalog`
 
-Il manifest punta ai documenti dati della versione corrente. I path legacy sono:
+Il manifest indica i documenti dati della versione pubblicata; `exercises_v1` e `foods_v1` sono anche i riferimenti nominali del seed bundled, non un fallback da imporre a ogni pubblicazione. La forma è:
 
 | Documento | Contenuto |
 |---|---|
 | `manifest` | Versione, data aggiornamento, `schemaVersion`, `docRefs` (punta ai documenti dati), `itemCounts` |
-| `exercises_v1` | `{ items: [...] }` — tutti gli esercizi del catalogo |
-| `foods_v1` | `{ items: [...] }` — tutti gli alimenti del catalogo |
+| valore di `docRefs.exercises` | `{ items: [...] }` — esercizi della versione pubblicata |
+| valore di `docRefs.foods` | `{ items: [...] }` — alimenti della versione pubblicata |
 
 ### Regole Firestore
 

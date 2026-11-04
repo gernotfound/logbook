@@ -7,12 +7,14 @@
 ## Regole di lettura
 
 - `ACTIVE`: usato dal runtime o dal processo di delivery corrente.
-- `LEGACY`: mantenuto temporaneamente per compatibilità/cleanup.
+- `LEGACY`: contratto client ritirato; possono restare record o manutenzioni Admin da verificare. Non implica supporto ai client pre-lancio.
 - `OPTIONAL`: funzione non essenziale, tipicamente subordinata a consenso o quota.
 - `EXTERNAL-ONLY`: configurazione rilevante che vive nella console del provider.
 - `VERIFY-LIVE`: il repository non può dimostrarne lo stato attuale.
 
 Il repository è pubblico. Questo registro non contiene token, private key, email personali, ID di credenziali, dati di fatturazione o path locali del maintainer.
+
+I contratti correnti sono governati da [AGENTS](../../AGENTS.md): [Cifratura](../../.agents/rules/secure-storage.md), [Consenso](../../.agents/rules/health-consent.md), [Telemetria](../../.agents/rules/telemetry-and-privacy.md) e [Servizi esterni](../../.agents/rules/external-services.md). Le descrizioni del codice non attestano nomi/valori presenti oggi nel provider; gli inventari datati e le loro vecchie checklist non autorizzano operazioni live.
 
 ## Mappa sintetica
 
@@ -25,9 +27,9 @@ Il repository è pubblico. Questo registro non contiene token, private key, emai
 | Firebase Cloud Messaging | NON USATO DAL RUNTIME | modulo Messaging e relativa env client ritirati dal contratto | codice |
 | Firebase Hosting | ACTIVE | frontend/PWA Production su `thelogbook.web.app`, deploy exact-SHA da GitHub Actions | Firebase Hosting + workflow Production |
 | Firebase/Vercel Test separati | DISMESSI (2026-10-18) | Progetti `thelogbook-test` e `thelogbook-test-backend` eliminati; nessun cloud di test separato attivo | Firebase CLI, inventario Vercel, PR #431 |
-| Firebase Admin | ACTIVE | account deletion e manutenzione server trusted | Vercel env + Vercel Functions |
+| Firebase Admin | ACTIVE | lifecycle account, consenso/diritti, custodia ADK e manutenzione trusted | Vercel env + Vercel Functions |
 | Firebase App Check + reCAPTCHA Enterprise / Google Cloud Fraud Defense | ACTIVE | attestazione anti-abuse prima dell'accesso cloud | Firebase App Check + Google Cloud |
-| Vercel Functions / Cron | ACTIVE | backend trusted account-deletion/recovery, cron e redirect del vecchio root verso Firebase | Vercel + `vercel.json` |
+| Vercel Functions / Cron | ACTIVE | backend trusted lifecycle, consenso/diritti, chiave cloud, cron e redirect del vecchio root verso Firebase | Vercel + `vercel.json` |
 | Vercel Analytics / Speed Insights | RITIRATO | non fanno più parte del frontend Production | codice + cronologia cutover |
 | Google Analytics / GA4 | DISMESSO | Nessuna dipendenza runtime; integrazione e preferenza client rimosse, collegamento Firebase sciolto e proprietà dismessa | PR #320 + operazioni Google/Firebase/GitHub confermate dal product owner |
 | Sentry | ACTIVE | error monitoring tecnico Production e source map del frontend Firebase Hosting | Sentry + build Firebase Hosting |
@@ -47,7 +49,7 @@ Firebase Hosting è il provider del frontend/PWA Production di TheLogBook dal cu
 
 ### Ritiro del Service Worker Vercel legacy — 2026-10-03
 
-**Decisione successiva (30/10/2026, fresh start pre-lancio):** in assenza di installazioni utenti pre-lancio da supportare, la funzione `api/legacy-service-worker.ts`, la relativa rewrite Vercel e il test di ritiro vengono eliminati dalla configurazione proposta. Il vecchio root mantiene il redirect verso Firebase; la PWA e il suo Service Worker correnti restano su Firebase Hosting. I paragrafi seguenti documentano esclusivamente le verifiche storiche dell'origin ritirato, non lo stato runtime dopo questo cambiamento. Il deploy Vercel Production e l'eventuale comportamento del vecchio `/sw.js` devono essere verificati separatamente dopo il merge.
+**Decisione successiva (30/10/2026, fresh start pre-lancio):** in assenza di installazioni utenti pre-lancio da supportare, la funzione `api/legacy-service-worker.ts`, la relativa rewrite Vercel e il test di ritiro sono ritirati dal codice supportato. Il vecchio root mantiene il redirect verso Firebase; la PWA e il suo Service Worker correnti restano su Firebase Hosting. I paragrafi seguenti documentano esclusivamente le verifiche storiche dell'origin ritirato, non lo stato runtime dopo questo cambiamento. Il deploy Vercel Production e l'eventuale comportamento del vecchio `/sw.js` devono essere verificati separatamente dopo il merge.
 
 
 Durante lo smoke offline post-cutover è emerso un caso reale su un browser desktop già usato prima della migrazione: la pagina appariva ancora sotto `logbook-gnf.vercel.app` e Firebase Auth/App Check rifiutava correttamente il login perché il vecchio origin era stato rimosso dalle allowlist. La sequenza di errori browser-extension `runtime.lastError/background.js` osservata nello stesso momento è separata dal problema applicativo.
@@ -111,7 +113,7 @@ Il runtime non importa Firebase Realtime Database e `VITE_FIREBASE_DATABASE_URL`
 
 Analogamente, il runtime non importa Firebase Storage né Firebase Cloud Messaging e le vecchie env `VITE_FIREBASE_STORAGE_BUCKET` / `VITE_FIREBASE_MESSAGING_SENDER_ID` sono state ritirate dal contratto client.
 
-Le vecchie collection Firestore `telemetry_errors`, `telemetry_events` e `telemetry_anomalies` sono `LEGACY`: il client corrente invia errori/anomalie a Sentry, ma Rules, account deletion e retention cron restano finché i client vecchi e i documenti residui non sono definitivamente smaltiti.
+Le collection Firestore `telemetry_errors`, `telemetry_events` e `telemetry_anomalies` sono fuori dal contratto client: le Rules negano ogni lettura/write anche all'owner verificato. Il client invia soltanto diagnostica tecnica a Sentry. Account/health-data deletion e maintenance cron Admin restano per eventuali residui, senza supporto dei client pre-lancio né prova documentale che il dataset live sia vuoto.
 
 **Retention legacy e indici (verifica Production 2026-10-10):** le tre query collection-group per `expireAt` richiedono ciascuna un indice single-field `COLLECTION_GROUP/ASCENDING` (in `firestore.indexes.json`, oltre ai modi `COLLECTION` preesistenti). Gli indici compositi `expireAt + __name__` della PR #309 sono stati rifiutati da Firestore (HTTP 400); la PR #311 li ha sostituiti con i field override corretti. La PR #312 ha corretto il verificatore per leggere la struttura annidata degli indici restituita dalle API Firestore, senza alterare Rules o indici. **Entrambe le correzioni sono su `main`**.
 
@@ -127,16 +129,11 @@ Verifica live 2026-10-02 del database `(default)`: Firestore Native Standard in 
 
 Aggiornamento audit Firestore 2026-10-05/06: la configurazione desiderata versionata aggiunge exemption automatic-index wildcard (`fieldPath: '*'`, `indexes: []`) per i collection group `users`, `history_months`, `nutrition_months`, `sync_control` e `global_catalog`, che vengono letti per path/document ID e non richiedono indicizzazione ricorsiva dei payload grandi. Il primo deploy Firebase CLI ha accettato e applicato `firestore.rules`/`firestore.indexes.json`, ma il read-back custom usava erroneamente `ListFields` sul singolo collection group e non costituiva un oracolo valido per le wildcard collection-level. Il verifier corrente usa il boundary amministrativo database-wide `collectionGroups/-/fields` con filtro `indexConfig.usesAncestorConfig=false OR ttlConfig:*`, coerente con il client di deploy Firebase, e mantiene fail-closed la verifica di stato live. Il read-back finale è stato inoltre corretto per la semantica protobuf: `usesAncestorConfig: false` può essere omesso dalla risposta JSON, quindi il verifier usa la stessa sostanza del matching Firebase CLI (risorsa esatta + nessun indice residuo) e rifiuta esplicitamente soltanto l'ereditarietà `usesAncestorConfig: true`.
 
-## Firebase Admin e account deletion
+## Firebase Admin e backend trusted
 
-Le Vercel Functions di account deletion richiedono per contratto:
+L'inizializzazione Admin richiede `FIREBASE_ADMIN_PROJECT_ID`, `FIREBASE_ADMIN_CLIENT_EMAIL` e `FIREBASE_ADMIN_PRIVATE_KEY`. `CRON_SECRET` autentica il cron, mentre `CLOUD_ACCOUNT_KEK_V1` è necessaria al boundary delle chiavi cloud cifrate: non sono requisiti del client Vite o del vault locale offline. Tutti i segreti restano server-only, senza prefisso `VITE_`.
 
-- `FIREBASE_ADMIN_PROJECT_ID`;
-- `FIREBASE_ADMIN_CLIENT_EMAIL`;
-- `FIREBASE_ADMIN_PRIVATE_KEY`;
-- `CRON_SECRET`.
-
-Tutte sono server-only e nessuna deve avere prefisso `VITE_`.
+Il server usa la KEK versionata per wrappare le ADK casuali per UID in `user_data_keys/{uid}`, collection server-only. Non derivare chiavi da Firebase Auth; non ruotare/dismettere la KEK senza rewrap verificato e custodia indipendente come definito da [Cifratura](../../.agents/rules/secure-storage.md). La presenza dei nomi nel repository non prova il provisioning o il ripristino nel provider.
 
 Verifica live del 2026-09-30: in Vercel Production risultano presenti `FIREBASE_ADMIN_PROJECT_ID`, `FIREBASE_ADMIN_CLIENT_EMAIL`, `FIREBASE_ADMIN_PRIVATE_KEY` e `CRON_SECRET`. I valori non sono registrati qui. Una chiave Admin generata accidentalmente durante la verifica è stata eliminata subito senza essere usata o installata.
 
@@ -162,7 +159,7 @@ Il cutover Vercel alla variabile canonica `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY` �
 
 ## Vercel backend
 
-Vercel è il boundary **backend trusted Production** di TheLogBook. Il frontend/PWA Production è Firebase Hosting; Vercel mantiene soltanto le Functions native di account deletion/recovery, il cron giornaliero e il redirect del vecchio hostname verso `https://thelogbook.web.app/`.
+Vercel è il boundary **backend trusted Production** di TheLogBook. Il frontend/PWA Production è Firebase Hosting; Vercel ospita le Functions native per account deletion/recovery, revoca sessioni, consenso/esportazione diritti, cancellazione dei soli dati e acquisizione della chiave cloud, oltre al cron e al redirect del vecchio hostname verso `https://thelogbook.web.app/`. Non costituisce un gateway di validazione delle normali write business: il writer cifrato client e le Firestore Rules restano boundary separati.
 
 Il redirect del root legacy deve usare **HTTP 301** esplicito: `vercel.json` usa `statusCode: 301`, così il pre-check dello strumento Search Console **Cambio di indirizzo** vede il codice richiesto da Google. Un redirect temporaneo 307 o il generico `permanent: true` di Vercel, che produce 308, non soddisfano questo contratto operativo specifico. Gli endpoint `/api/*` restano esclusi da questo redirect e continuano a servire il backend trusted.
 
@@ -174,11 +171,14 @@ Le configurazioni server-only che appartengono al runtime Vercel sono:
 - `FIREBASE_ADMIN_CLIENT_EMAIL`;
 - `FIREBASE_ADMIN_PRIVATE_KEY`;
 - `CRON_SECRET`;
-- `PUBLIC_APP_ORIGIN=https://thelogbook.web.app`.
+- `CLOUD_ACCOUNT_KEK_V1` per la custodia delle ADK;
+- `PUBLIC_APP_ORIGIN` per la allowlist dell'origin canonico.
 
 `PUBLIC_APP_LEGACY_ORIGIN` è ritirata dal contratto applicativo post-cutover e non deve essere reintrodotta.
 
-### Inventario env del progetto Vercel — 2026-10-16 (G-21, sola lettura)
+### Inventario env Vercel — checkpoint storico 2026-10-16 (G-21)
+
+**STORICO:** conteggi e procedura sotto appartengono all'inventario del 16 ottobre, precedente al cloud cifrato e al ritiro del worker legacy. Non sono una allowlist corrente per eliminare env: la KEK e gli altri requisiti del backend attuale vanno verificati nel contratto sopra e nel provider prima di qualunque intervento.
 
 Ricognizione diretta dei **soli nomi, target e tipi** delle env del progetto Vercel `logbook` (18 voci); valori e segreti non consultati. Fonte applicativa: `api/`, `server/`, `server/accountDeletion/cors.ts`, `scripts/prepare-vercel-backend-static.mjs`, `vercel.json`, `vite.config.ts` e `.github/workflows/firebase-hosting-production.yml`. L'assenza di riferimenti nel backend è stata confrontata anche con la ricerca del repository. Questa sezione **non attesta rimozioni live**.
 
@@ -239,11 +239,11 @@ Configurazione deliberata:
 - Logging: **OFF**;
 - Application Metrics: **OFF**.
 
-Motivo: ottenere stack trace/release utili agli aggiornamenti frequenti senza consumare la quota Firestore e senza raccogliere telemetria comportamentale non necessaria.
+La motivazione iniziale era ottenere diagnostica e release utili senza consumare la quota Firestore o raccogliere eventi comportamentali. Il boundary corrente trasmette classificazioni allowlisted e messaggi fissi, non stack o messaggi originali anche se sanitizzati: distinguere report locali, artefatti source-map e payload Sentry.
 
 La scelta iniziale è stata fatta per restare sul piano gratuito: Spike Protection e deduplica client di 15 minuti per fingerprint riducono il rischio che un errore in loop consumi rapidamente il volume disponibile. **VERIFY-LIVE:** limiti, pricing e retention del piano Sentry sono configurazione commerciale esterna e possono cambiare; verificarli prima di aumentare volume, sampling o funzionalità.
 
-Il primo errore controllato è stato ricevuto correttamente da Sentry il 2026-09-30 con environment Production e release Git SHA. La verifica di simbolicazione source-map può avvenire sul primo errore naturale originato dal codice applicativo.
+Il primo errore controllato è stato ricevuto correttamente da Sentry il 2026-09-30 con environment Production e release Git SHA. Questa osservazione è storica: la verifica attuale deve distinguere upload source-map da payload diagnostico intenzionalmente privo di stack originale; non usare il vecchio criterio come motivo per riabilitare testi o frame sensibili.
 
 Verifica live 2026-10-03: in Project Settings → Client Security, `Allowed Domains` conteneva `https://thelogbook.web.app` e il legacy `https://logbook-gnf.vercel.app`. Il dominio Vercel è stato rimosso dalla allowlist; resta autorizzato soltanto il frontend Production Firebase `https://thelogbook.web.app`. Le altre opzioni della sezione non sono state modificate.
 
@@ -318,7 +318,7 @@ Pulizia esterna completata/verificata il 2026-09-30:
 
 ## Preparazione live cutover — 2026-10-02 (storico)
 
-Questa sezione conserva le operazioni e verifiche esterne eseguite **prima** della PR #191. Le frasi al presente descrivono esclusivamente quel checkpoint storico; lo stato corrente è quello delle sezioni Production e `Cutover Production verificato`.
+Questa sezione conserva le operazioni e verifiche esterne eseguite **prima** della PR #191. Le frasi al presente descrivono esclusivamente quel checkpoint storico; anche `Cutover Production verificato` è una prova del 2 ottobre. Lo stato odierno richiede lettura del repository e del provider competenti, non un rinvio a un altro checkpoint datato.
 
 ### Firebase / Google Cloud
 

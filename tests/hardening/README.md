@@ -1,5 +1,7 @@
 # M5 hardening suite
 
+**Contesto:** [AGENTS.md](../../AGENTS.md) governa processo e autorizzazioni; [Verifica CI](../../.agents/rules/ci-verification.md) definisce il gate canonico corrente `npm run verify:m8` o CI equivalente exact-SHA. I comandi delle milestone sotto sono subset diagnostici, non il gate finale.
+
 Questa directory e `vitest.hardening.config.ts` definiscono il gate normativo M5.
 
 ## Comandi

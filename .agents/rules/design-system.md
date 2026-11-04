@@ -3,7 +3,7 @@
 **Quando leggere:** tema, CSS/token, bootstrap iniziale, viewport, focus e accessibilità.
 **Non inferire:** un test WebKit non certifica una PWA installata su iPhone reale.
 
-> Stato: normativo | Ricognizione originaria: 2026-09-21; verificare i token CSS attuali | File allora verificati: `src/styles/global.css`, `src/styles/tokens.css`, `public/appearance.js`, `public/appearance.css`, `index.html`
+**Autorità:** [`AGENTS.md`](../../AGENTS.md). Questo contratto ne specializza gli invarianti; non amplia autorizzazioni o perimetro.
 
 ## Tema adattivo
 
@@ -26,13 +26,11 @@ Se lo storage non è scrivibile, il tema scelto resta applicato per la sessione 
 
 ## Tipografia
 
-La tipografia applicativa usa una scala semantica unica definita in `src/styles/tokens.css`. **MUST:** testo normale 15 px (`--font-size-body`), secondario 14 px (`--font-size-secondary`), metadati compatti 13 px (`--font-size-meta`), micro-label/badge 12 px (`--font-size-micro`), titoli di riga/controlli 16 px (`--font-size-control`), titoli sezione 18 px (`--font-size-section`) e titoli pagina 22 px (`--font-size-page`).
-Valori numerici in forte evidenza e timer possono usare soltanto i token display dedicati da 20/24/28/32/36 px. Il titolo del marchio nella schermata iniziale e nel dialogo di accesso dalla modalità ospite usa il distinto `--font-size-brand-title` da 36 px con peso 800; il dialogo adatta la dimensione alla larghezza del dispositivo per non spezzare il nome. Non riutilizzare per esso i token numerici display né estendere la dimensione a titoli di pagina ordinari.
+La scala tipografica è definita **unicamente** in `src/styles/tokens.css`. **MUST:** usare `--font-size-body` per testo normale, `--font-size-secondary` per testo secondario, `--font-size-meta`/`--font-size-micro` per metadati e badge, e `--font-size-control`, `--font-size-section`, `--font-size-page` per titoli nella corretta gerarchia. Dati numerici e timer usano soltanto i token display/timer dedicati. Il marchio nella schermata iniziale e nel dialogo guest usa `--font-size-brand-title`, peso 800, adattato alla larghezza senza spezzare il nome; non si applica a normali titoli di pagina.
 
-- **MUST:** evitare dimensioni tipografiche arbitrarie in CSS e `fontSize` numerici inline; usare i token canonici. L'unica eccezione intenzionale resta `16px` sugli input/select/textarea per la difesa dallo zoom iOS.
-- **MUST:** una stessa funzione visiva deve mantenere la stessa dimensione fra pagine: i nomi principali delle righe/card usano 16 px, il testo descrittivo 15 px e i metadati 13–14 px secondo densità.
-- **MUST:** nessun testo informativo ordinario scende sotto 12 px. Dimensioni display non vanno usate per testo discorsivo.
-- **SHOULD:** preferire classi/selector semantici e token; non introdurre nuovi valori solo per replicare una singola schermata.
+- **MUST:** una stessa funzione visiva mantiene lo stesso token fra pagine: titoli di riga/card = `--font-size-control`, descrizioni = `--font-size-body`, metadati = `--font-size-meta`/`--font-size-secondary`. Non introdurre `fontSize` numerici inline o dimensioni arbitrarie; la misura di 16 px per input/select/textarea iOS è un'eccezione intenzionale descritta nella sezione accessibilità.
+- **MUST:** nessun testo informativo ordinario scende sotto 12 px; i token display non sostituiscono il testo discorsivo.
+- **SHOULD:** preferire classi/selector semantici e token, senza creare nuove misure per replicare una singola schermata.
 
 ## Layout, controlli e accessibilità
 
@@ -47,6 +45,20 @@ Valori numerici in forte evidenza e timer possono usare soltanto i token display
 - **SHOULD:** usare classi e token per gli stili statici; lasciare inline solo valori realmente dinamici o codice legacy non ancora migrato. Preferire `rem` per le dimensioni che devono seguire le preferenze di carattere; il valore di 16 px degli input è un'eccezione intenzionale.
 - **SHOULD:** applicare `min-width: 0` ai figli di layout flex/grid soggetti a overflow e controllare le viewport da 320 px in su.
 - **MUST:** testo rivolto all'utente in sentence case italiano, salvo sigle, nomi propri, marchi e il wordmark maiuscolo della splash di caricamento. Icone UI `lucide-react` di norma da 20 o 24 px.
+
+## Stato React, dialoghi e schede mantenute vive
+
+- **MUST:** dialoghi tramite `GlobalDialog`/`useDialogStore`, senza `window.alert`/`window.confirm`; preferire superfici inline/full-screen per editor mobili complessi.
+- **MUST:** i selettori Zustand non creano nuove referenze a ogni render. Nelle schede mantenute vive sotto `Suspense`, preservare `style={{ display: ... }}`; l'attributo HTML `hidden` richiede una migrazione esplicitamente testata.
+- **MUST:** recovery e render React non mutano lo store globale. `useRef(initialValue)` non è lazy initialization: preservare owner/session fencing e commit React per bozze device-critical.
+
+## PWA, Service Worker e icone
+
+- `vite-plugin-pwa` usa manifest e service worker alla radice `/`.
+- La sorgente vettoriale approvata `assets/brand/thelogbook-icon-master.svg` è canonica; `scripts/resize_icons.mjs` pubblica la copia scalabile `public/icon.svg` e genera direttamente dal master favicon, Apple touch, PNG PWA, variante maskable e card social PNG lossless. Quando cambia l'artwork, i riferimenti HTML/manifest devono cambiare revisione per invalidare le cache degli icon consumer.
+- Il manifest deve mantenere gli asset PNG standard 192×192 e 512×512 richiesti per la compatibilità/installabilità, la copia SVG scalabile `icon.svg` con `sizes: any` e il dedicato `icon-maskable-512.png` per `purpose: maskable`; evitare duplicati semantici oltre queste varianti necessarie.
+- **MUST:** una modifica all'icon pipeline va verificata attraverso build/gate, non solo guardando il file sorgente.
+- **MUST:** il reload/update della PWA rispetta il reload barrier di persistenza prima di applicare una nuova versione.
 
 ## Verifica
 
