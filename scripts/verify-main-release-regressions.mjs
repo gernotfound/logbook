@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { verifyMainRelease } from './verify-main-release.mjs';
+import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const repository = 'gernotfound/logbook';
 const sha = 'a'.repeat(40);
@@ -48,6 +50,8 @@ function fixture() {
   };
 }
 
+export const regressionScriptPath = fileURLToPath(import.meta.url);
+if (process.argv[1] && resolve(process.argv[1]) === regressionScriptPath) {
 await test('attests a completed GitHub PR check and byte-identical squash tree', async () => {
   const f = fixture();
   const result = await f.run();
@@ -87,3 +91,4 @@ await test('fails closed when GitHub API becomes unavailable', async () => {
   f.responses.delete(root + '/actions/runs/77');
   await assert.rejects(f.run(), /Unexpected GitHub API request:/);
 });
+}

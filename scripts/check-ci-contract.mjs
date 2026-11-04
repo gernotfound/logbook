@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
+import { regressionScriptPath } from './verify-main-release-regressions.mjs';
 import { checkProductionBuildSecrets } from './check-production-build-secrets.mjs';
 
 const workflowPath = '.github/workflows/verification.yml';
@@ -287,7 +288,7 @@ for (const permission of ['contents', 'actions', 'checks', 'pull-requests']) {
 }
 if (!existsSync('scripts/verify-main-release.mjs')) failures.push('missing fail-closed main release attestation script');
 if (!existsSync('scripts/verify-main-release-regressions.mjs')) failures.push('missing main release gate regressions');
-const releaseGateTests = spawnSync(process.execPath, ['--test', 'scripts/verify-main-release-regressions.mjs'], { stdio: 'inherit' });
+const releaseGateTests = spawnSync(process.execPath, ['--test', regressionScriptPath], { stdio: 'inherit' });
 if (releaseGateTests.status !== 0) failures.push('main release gate regressions failed');
 
 for (const legacy of [
