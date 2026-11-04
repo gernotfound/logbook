@@ -7,7 +7,6 @@ const boundary = vi.hoisted(() => ({
     recoverByDevice: vi.fn(),
     resume: vi.fn(),
     finalize: vi.fn(),
-    reportError: vi.fn(),
     showAlert: vi.fn(),
     purge: vi.fn(),
     resetStore: vi.fn(),
@@ -44,10 +43,6 @@ vi.mock('../src/lib/deletionDeviceRecovery', () => {
         recoverDeletedAccountOnThisDevice: boundary.recoverByDevice,
     };
 });
-
-vi.mock('../src/lib/errorHandler', () => ({
-    reportError: boundary.reportError,
-}));
 
 vi.mock('../src/store/useDialogStore', () => ({
     useDialogStore: {
@@ -89,7 +84,12 @@ describe('account deletion recovery foreground lifecycle', () => {
         boundary.recoverByDevice.mockResolvedValue({ status: 'none' });
         boundary.resume.mockResolvedValue(undefined);
         boundary.showAlert.mockResolvedValue(undefined);
+        vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     });
+
+    const recoveryWarnings = (): string[] => vi.mocked(console.warn).mock.calls
+        .filter(call => call[0] === 'Diagnostica tecnica recupero account:')
+        .map(call => String(call[1]));
 
     afterEach(() => {
         vi.useRealTimers();
@@ -102,7 +102,7 @@ describe('account deletion recovery foreground lifecycle', () => {
         render(<AccountDeletionRecovery />);
         await settle();
 
-        expect(boundary.reportError).not.toHaveBeenCalled();
+        expect(recoveryWarnings()).toHaveLength(0);
         expect(boundary.showAlert).not.toHaveBeenCalled();
     });
 
@@ -113,10 +113,7 @@ describe('account deletion recovery foreground lifecycle', () => {
         render(<AccountDeletionRecovery />);
         await settle();
 
-        expect(boundary.reportError).toHaveBeenCalledWith(
-            expect.objectContaining({ name: 'AccountDeletionRecoveryDiagnostic', message: expect.stringContaining('operation=local-finalization') }),
-            { source: 'account_deletion_local_finalization' },
-        );
+        expect(recoveryWarnings().some(message => message.includes('operation=local-finalization'))).toBe(true);
         expect(boundary.showAlert).toHaveBeenCalledWith('Pulizia locale incompleta');
     });
 
@@ -149,10 +146,7 @@ describe('account deletion recovery foreground lifecycle', () => {
         render(<AccountDeletionRecovery />);
         await settle();
 
-        expect(boundary.reportError).toHaveBeenCalledWith(
-            expect.objectContaining({ name: 'AccountDeletionRecoveryDiagnostic', message: expect.stringContaining('operation=pending-deletion') }),
-            { source: 'account_deletion_pending_deletion' },
-        );
+        expect(recoveryWarnings().some(message => message.includes('operation=pending-deletion'))).toBe(true);
         expect(boundary.showAlert).toHaveBeenCalledWith('Cancellazione cloud incompleta');
     });
     it('checks device credentials despite another owner having a pending marker', async () => {
@@ -182,10 +176,7 @@ describe('account deletion recovery foreground lifecycle', () => {
         await settle();
 
         expect(boundary.recoverByDevice).toHaveBeenCalledTimes(1);
-        expect(boundary.reportError).toHaveBeenCalledWith(
-            expect.objectContaining({ message: expect.stringContaining('operation=pending-deletion') }),
-            { source: 'account_deletion_pending_deletion' },
-        );
+        expect(recoveryWarnings().some(message => message.includes('operation=pending-deletion'))).toBe(true);
     });
 
     it.each([
@@ -200,25 +191,22 @@ describe('account deletion recovery foreground lifecycle', () => {
 
         render(<AccountDeletionRecovery />);
         await settle();
-        expect(boundary.reportError).not.toHaveBeenCalled();
+        expect(recoveryWarnings()).toHaveLength(0);
 
         window.dispatchEvent(new Event('online'));
         await settle();
-        expect(boundary.reportError).not.toHaveBeenCalled();
+        expect(recoveryWarnings()).toHaveLength(0);
 
         window.dispatchEvent(new Event('online'));
         await settle();
-        expect(boundary.reportError).toHaveBeenCalledTimes(1);
-        expect(boundary.reportError).toHaveBeenLastCalledWith(
-            expect.objectContaining({ message: expect.stringContaining('consecutive=3') }),
-            { source: 'account_deletion_routine_check' },
-        );
+        expect(recoveryWarnings()).toHaveLength(1);
+        expect(recoveryWarnings().at(-1)).toContain('consecutive=3');
 
         window.dispatchEvent(new Event('online'));
         await settle();
         window.dispatchEvent(new Event('online'));
         await settle();
-        expect(boundary.reportError).toHaveBeenCalledTimes(1);
+        expect(recoveryWarnings()).toHaveLength(1);
         expect(boundary.showAlert).not.toHaveBeenCalled();
     });
 
@@ -233,11 +221,8 @@ describe('account deletion recovery foreground lifecycle', () => {
         render(<AccountDeletionRecovery />);
         await settle();
 
-        expect(boundary.reportError).toHaveBeenCalledTimes(2);
-        expect(boundary.reportError).toHaveBeenCalledWith(
-            expect.objectContaining({ message: expect.stringContaining('operation=local-finalization') }),
-            { source: 'account_deletion_local_finalization' },
-        );
+        expect(recoveryWarnings()).toHaveLength(2);
+        expect(recoveryWarnings().some(message => message.includes('operation=local-finalization'))).toBe(true);
         expect(boundary.showAlert).toHaveBeenNthCalledWith(1, 'Pulizia A incompleta');
         expect(boundary.showAlert).toHaveBeenNthCalledWith(2, 'B failed');
     });
@@ -250,10 +235,7 @@ describe('account deletion recovery foreground lifecycle', () => {
         render(<AccountDeletionRecovery />);
         await settle();
 
-        expect(boundary.reportError).toHaveBeenCalledWith(
-            expect.objectContaining({ message: expect.stringContaining('kind=remote-failed') }),
-            { source: 'account_deletion_routine_check' },
-        );
+        expect(recoveryWarnings().some(message => message.includes('kind=remote-failed'))).toBe(true);
         expect(boundary.showAlert).toHaveBeenCalledWith(
             expect.stringContaining('cancellazione cloud non è stata completata'),
         );
@@ -271,10 +253,7 @@ describe('account deletion recovery foreground lifecycle', () => {
         render(<AccountDeletionRecovery />);
         await settle();
 
-        expect(boundary.reportError).toHaveBeenCalledWith(
-            expect.objectContaining({ message: expect.stringContaining('operation=pending-deletion') }),
-            { source: 'account_deletion_pending_deletion' },
-        );
+        expect(recoveryWarnings().some(message => message.includes('operation=pending-deletion'))).toBe(true);
         expect(boundary.showAlert).toHaveBeenCalledWith('Ricevuta non riconosciuta');
     });
 
@@ -291,7 +270,7 @@ describe('account deletion recovery foreground lifecycle', () => {
         await settle();
 
         expect(boundary.showAlert).not.toHaveBeenCalled();
-        expect(boundary.reportError).not.toHaveBeenCalled();
+        expect(recoveryWarnings()).toHaveLength(0);
     });
 
     it('reports failed local cleanup via a pending marker as a critical finalization error', async () => {
@@ -307,10 +286,7 @@ describe('account deletion recovery foreground lifecycle', () => {
         render(<AccountDeletionRecovery />);
         await settle();
 
-        expect(boundary.reportError).toHaveBeenCalledWith(
-            expect.objectContaining({ message: expect.stringContaining('operation=local-finalization') }),
-            { source: 'account_deletion_local_finalization' },
-        );
+        expect(recoveryWarnings().some(message => message.includes('operation=local-finalization'))).toBe(true);
         expect(boundary.showAlert).toHaveBeenCalledWith('Pulizia locale incompleta');
     });
 

@@ -188,19 +188,17 @@ describe('RISK-02: ConsentOverlay UI Behavior', () => {
 
     it('descrive la rimozione di GA4 e la data dell’informativa aggiornata', () => {
         render(<PrivacyPolicy onClose={vi.fn()} />);
-        expect(screen.getByText('Aggiornata al 15 ottobre 2026')).toBeDefined();
+        expect(screen.getByText('Aggiornata al 4 novembre 2026')).toBeDefined();
         expect(screen.getByText(/non integra Google Analytics 4/i)).toBeDefined();
         expect(screen.queryByText(/cookie first-party tecnici\/analitici/i)).toBeNull();
     });
 
 
-    it('descrive cifratura, retention locale e limite del pruning dei report tecnici', () => {
+    it('comunica assenza di monitoraggio esterno e conserva le informazioni sulla cifratura', () => {
         render(<PrivacyPolicy onClose={vi.fn()} />);
-        expect(screen.getByText(/fino a 50 report temporanei/)).toBeDefined();
-        expect(screen.getByText(/salvati con cifratura autenticata/)).toBeDefined();
-        expect(screen.getByText(/può contenere l'identificativo Firebase dell'account/)).toBeDefined();
-        expect(screen.getByText(/esclude i report più vecchi di sette giorni/)).toBeDefined();
-        expect(screen.getByText(/se la PWA resta chiusa, i byte possono restare sul dispositivo oltre sette giorni/)).toBeDefined();
+        expect(screen.getByText(/non utilizza un servizio esterno di Error Monitoring/)).toBeDefined();
+        expect(screen.getByText(/non crea code di report diagnostici/)).toBeDefined();
+        expect(screen.queryByText(/Sentry/)).toBeNull();
         expect(screen.getByText(/Le chiavi sono conservate nello stesso profilo del browser/)).toBeDefined();
         expect(screen.getByText(/non costituisce cifratura end-to-end/)).toBeDefined();
     });
