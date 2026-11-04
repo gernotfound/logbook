@@ -110,7 +110,7 @@ Il gate repository corrente testa `firestore.rules` tramite Firebase Emulator (`
 
 **MUST:** una modifica a `firestore.rules` richiede test pertinenti e il gate canonico.
 
-Il deploy Production non è un comando manuale successivo ai test. Dopo `Milestone Verification` riuscita su push a `main`, il workflow `.github/workflows/firebase-firestore-production.yml` riconcilia Rules e indici desiderati con lo stato live: applica soltanto le differenze necessarie tramite `--only firestore:rules,firestore:indexes` (senza `--force`) e verifica la convergenza. Usa un'identità Workload Identity Federation dedicata, distinta dal deployer Hosting. Se lo stato live non è determinabile, fallisce chiuso.
+Il deploy Production non è un comando manuale successivo ai test. Dopo `Milestone Verification` riuscita su push a `main` (Release Gate di identità del merge e CodeQL; la suite completa è già richiesta sulla PR), il workflow `.github/workflows/firebase-firestore-production.yml` riconcilia Rules e indici desiderati con lo stato live: applica soltanto le differenze necessarie tramite `--only firestore:rules,firestore:indexes` (senza `--force`) e verifica la convergenza. Usa un'identità Workload Identity Federation dedicata, distinta dal deployer Hosting. Se lo stato live non è determinabile, fallisce chiuso.
 
 **MUST:** test emulator, modifiche documentali e PR non eseguono direttamente deploy Firestore. Il rilascio Production compete al workflow privilegiato, ammesso solo dopo il gate canonico riuscito sullo stesso SHA ancora corrente di `main`. `Firebase Hosting Production` attende il completamento verde della riconciliazione Firestore, per non pubblicare il client prima delle Rules e degli indici approvati.
 
