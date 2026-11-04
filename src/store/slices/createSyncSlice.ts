@@ -356,7 +356,7 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
             await get().flushPendingSyncs();
             const settled = await observed;
             if ('error' in settled) {
-                await revertRejectedConsent(session.owner, consent, previous);
+                await revertRejectedConsent(session.owner, consent, previous, () => isCurrentSession(session));
                 throw settled.error;
             }
             if (isCurrentSession(session)) set(state => ({ userData: state.userData ? { ...state.userData, legalConsent: consent } : null }));

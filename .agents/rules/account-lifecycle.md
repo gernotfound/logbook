@@ -190,6 +190,9 @@ Gli aggiornamenti PWA sono differibili. Prima del reload: flush delle bozze, att
 
 ## Riferimenti per consenso e accountability
 
+**MUST (CRITICAL, compensazione del consenso rifiutato):** il rollback locale di `submitLegalConsent` passa a `revertRejectedConsent` un guard obbligatorio della sessione catturata. Verificarlo prima dell'accesso e nella callback atomica IndexedDB, anche se il risultato sarebbe no-op. Un cambio epoch Auth (incluso ritorno allo stesso UID), marker di revoca o generazione consenso invalida la risposta tardiva: preservare ciphertext, dati e journal. La disponibilità del vault e l'uguaglianza del valore di consenso non dimostrano continuità della sessione; restano separati il controllo del consenso atteso e la protezione degli intenti già acknowledged.
+
+
 **MUST (owner e consenso asincroni):** risposte trusted e scelte esplicite del consenso non possono pubblicare revisioni o modificare IndexedDB dopo un cambio UID; ricontrollare identità/decisione dopo le attese e nel commit locale. Il drenaggio del journal deve verificare l'UID anche dopo la lettura IndexedDB prima del flush globale.
 
 - [Decisione e gate sul consenso salute](../../docs/compliance/health-consent-release-gate.md) e [protocollo tecnico della revoca](../../docs/compliance/health-consent-technical-protocol.md): distinguere comportamenti documentati, verifiche manuali pendenti e questioni legali aperte.
