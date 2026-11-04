@@ -103,9 +103,9 @@ Frontend React/Vite/TypeScript, stato Zustand, Zod, CSS nativo con token semanti
 - **MUST:** `localWorkout` device e `activeWorkout` cloud sono distinti; il fetch remoto non sovrascrive una sessione locale attiva. Timer basati su timestamp/delta; date business `YYYY-MM-DD` locali tramite helper canonico, istanti evento UTC/epoch.
 - **MUST:** tutti gli ingressi persistiti attraversano formato/versioni e gateway Zod applicabili. Nessun `undefined` Firestore, identità inventata o normalizzazione con perdita risigillata come autorevole.
 - **MUST:** reload/update passa dalla barriera di persistenza di ogni scheda. Stato RAM senza envelope leggibile blocca il reload; nessuna navigazione automatica dal solo cambio Service Worker.
-- **MUST:** Sentry riceve soltanto classificazioni tecniche ammesse; nessun testo/stack business originale, UID deliberato, token o evento comportamentale. Niente Replay, tracing, logging, metriche o Analytics.
+- **MUST:** il boundary di telemetria esterna invia soltanto categorie tecniche autorizzate, senza dati salute liberi, UID deliberato o credenziali. La policy completa (stack, Replay, tracing e coda) è in [Telemetria e privacy](.agents/rules/telemetry-and-privacy.md).
 - **MUST:** UI leggibile in system/light/dark, mobile e safe area; dialoghi tramite `GlobalDialog`/`useDialogStore`. Selettori Zustand stabili e nessuna mutazione dello store globale durante render/recovery React; `useRef(initialValue)` non è lazy initialization.
-- **MUST:** catalogo pubblico read-only per client; seeding reale con input esterni validi/non vuoti, progetto e conferma espliciti. Il bump PWA non pubblica il catalogo.
+- **MUST:** catalogo pubblico in sola lettura client; pubblicazioni reali richiedono input validi e conferma esplicita, senza automatismi legati alla release PWA. Fallback e rollback sono nel [Catalogo](.agents/rules/catalog-operations.md).
 
 ## Branch, versione e PR
 

@@ -11,6 +11,18 @@ Applicare il fresh start e la protezione dei dati correnti di AGENTS. Fonti: `sr
 
 **MUST (UX):** nessun backup periodico manuale richiesto: lo storage cifrato e la replica cloud dei dati business autorizzati sono automatici. Backup JSON resta una funzione volontaria di portabilità. Non descriverlo come requisito ordinario di protezione, né promettere che sessioni guest, bozze device-only o modifiche mai sincronizzate sopravvivano alla perdita totale del profilo.
 
+## Copertura e limiti dei percorsi
+
+| Percorso | Prova di completezza | Cosa non autorizza |
+|---|---|---|
+| Backup JSON ordinario | Scansione cloud `all`, envelope locale riletto, pending riapplicate e copertura dichiarata | Non è uno snapshot atomico fra dispositivi |
+| Esportazione d'emergenza device-only | Prove owner-scoped stabili; file marcato **parziale** | Non abilita hydration, upload o reimport automatico |
+| Export diritti dopo revoca | Gate trusted rights-only, checkpoint e ADK esistente | Non riattiva fitness o sincronizzazione |
+| Import/restore business | Validazione lossless e commit con esito `SyncResult` | `local-pending` non è ACK cloud; witness grezzi non sono bozze portabili |
+| CSV | Campi esplicitamente mappati e output salvati | Non equivale a un backup JSON recuperabile |
+
+La replica cloud automatica non costituisce un backup indipendente dalla custodia delle chiavi. Perdita del profilo con dati solo offline o della KEK cloud senza copia ripristinabile può rendere irrecuperabili i dati: vedere [Archivio e cifratura](secure-storage.md).
+
 ## Backup JSON e importazione
 
 **MUST (CRITICAL, backup di recupero con UI bloccata):** quando il consenso è attivo ma una copia device-local di workout non è attribuibile con certezza alla revisione corrente e impedisce la hydration, l'esportazione esplicita dei dati locali deve rimanere accessibile. Il backup è solo device-only, marcato parziale e deve richiedere conferma informata, senza tentare flush, reimport automatico o abilitazione della replica. Deve includere anche i witness immutabili `workout-intent:<id>` e `history-editor-context` validi per nome nello spazio owner-scoped, come prove originali grezze non automaticamente riproducibili. Nessun backup locale sintetico se mancano sia envelope sia record di recupero; se un record esiste ma scompare durante la lettura, rifiutare la copia vuota. La revoca del consenso conserva invece il percorso separato di esportazione diritti via backend trusted, quando applicabile. I file JSON di backup sono in chiaro: l'utente deve custodirli in modo riservato.

@@ -11,6 +11,19 @@
 
 Leggere [Consenso salute](health-consent.md) per primo consenso, offline, revoca/riaccettazione, export diritti e cancellazione dei soli dati; [Portabilità](backup-and-portability.md) per backup/import/CSV. Non assimilare questi percorsi alla cancellazione dell'account.
 
+## Mappa delle transizioni di identità
+
+| Transizione | Prova necessaria | Comportamento in caso di blocco |
+|---|---|---|
+| Registrazione → account verificato | Firebase Auth, email verificata e sessione corrente | Niente hydration account; dati guest e account separati |
+| Guest → account | Scelta esplicita, origine dell'esito Auth, generazione guest e journal | Non attribuire dati guest al nuovo UID sulla sola notifica Auth; conservare l'intento |
+| Logout ordinario | Owner e gate di persistenza/integrità | Non eliminare ciphertext o journal non verificati |
+| Revoca di tutte le sessioni | Recent Auth, token non revocato, App Check e prova server | Esito ambiguo non è successo; niente purge forzato |
+| Cancellazione account | Job trusted `complete`, lease e assenza dei residui | Conservare copie locali e ricevuta fino alla prova di completamento |
+| Cancellazione dei soli dati salute | Revoca trusted, job sanitario `complete`, revisione e chiave verificate | Firebase Auth resta; niente purge anticipato ([Consenso salute](health-consent.md)) |
+
+La tabella è un indice delle decisioni, non sostituisce i guard di transazione, i dettagli di recovery né i requisiti dei paragrafi seguenti.
+
 ## Verifica email e accesso account
 
 L'accesso account/cloud richiede che Firebase Auth riporti `emailVerified === true`. Una sessione non verificata non deve avviare idratazione Firestore, replica, registrazione del dispositivo né migrazione guest→account. Per gli account email/password, la registrazione richiede l'invio del link di verifica; alla conferma il client esegue `reload(user)`, aggiorna il token ID con `getIdToken(true)` e riprende il bootstrap tramite ricaricamento protetto.

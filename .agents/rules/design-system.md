@@ -26,13 +26,11 @@ Se lo storage non è scrivibile, il tema scelto resta applicato per la sessione 
 
 ## Tipografia
 
-La tipografia applicativa usa una scala semantica unica definita in `src/styles/tokens.css`. **MUST:** testo normale 15 px (`--font-size-body`), secondario 14 px (`--font-size-secondary`), metadati compatti 13 px (`--font-size-meta`), micro-label/badge 12 px (`--font-size-micro`), titoli di riga/controlli 16 px (`--font-size-control`), titoli sezione 18 px (`--font-size-section`) e titoli pagina 22 px (`--font-size-page`).
-Valori numerici in forte evidenza e timer possono usare soltanto i token display dedicati da 20/24/28/32/36 px. Il titolo del marchio nella schermata iniziale e nel dialogo di accesso dalla modalità ospite usa il distinto `--font-size-brand-title` da 36 px con peso 800; il dialogo adatta la dimensione alla larghezza del dispositivo per non spezzare il nome. Non riutilizzare per esso i token numerici display né estendere la dimensione a titoli di pagina ordinari.
+La scala tipografica è definita **unicamente** in `src/styles/tokens.css`. **MUST:** usare `--font-size-body` per testo normale, `--font-size-secondary` per testo secondario, `--font-size-meta`/`--font-size-micro` per metadati e badge, e `--font-size-control`, `--font-size-section`, `--font-size-page` per titoli nella corretta gerarchia. Dati numerici e timer usano soltanto i token display/timer dedicati. Il marchio nella schermata iniziale e nel dialogo guest usa `--font-size-brand-title`, peso 800, adattato alla larghezza senza spezzare il nome; non si applica a normali titoli di pagina.
 
-- **MUST:** evitare dimensioni tipografiche arbitrarie in CSS e `fontSize` numerici inline; usare i token canonici. L'unica eccezione intenzionale resta `16px` sugli input/select/textarea per la difesa dallo zoom iOS.
-- **MUST:** una stessa funzione visiva deve mantenere la stessa dimensione fra pagine: i nomi principali delle righe/card usano 16 px, il testo descrittivo 15 px e i metadati 13–14 px secondo densità.
-- **MUST:** nessun testo informativo ordinario scende sotto 12 px. Dimensioni display non vanno usate per testo discorsivo.
-- **SHOULD:** preferire classi/selector semantici e token; non introdurre nuovi valori solo per replicare una singola schermata.
+- **MUST:** una stessa funzione visiva mantiene lo stesso token fra pagine: titoli di riga/card = `--font-size-control`, descrizioni = `--font-size-body`, metadati = `--font-size-meta`/`--font-size-secondary`. Non introdurre `fontSize` numerici inline o dimensioni arbitrarie; la misura di 16 px per input/select/textarea iOS è un'eccezione intenzionale descritta nella sezione accessibilità.
+- **MUST:** nessun testo informativo ordinario scende sotto 12 px; i token display non sostituiscono il testo discorsivo.
+- **SHOULD:** preferire classi/selector semantici e token, senza creare nuove misure per replicare una singola schermata.
 
 ## Layout, controlli e accessibilità
 

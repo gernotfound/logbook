@@ -1,4 +1,4 @@
-# Domain Operations V4 — TheLogBook
+# Domain Operations — contratto delle mutazioni TheLogBook
 
 **Quando leggere:** mutazioni UI/hook, reducer, compiler, identità e commit di dominio.
 **Non inferire:** Domain Operations è un layer di intento locale, non un nuovo sync protocol persistito.

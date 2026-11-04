@@ -36,6 +36,10 @@ export async function GET(request: Request): Promise<Response> {
   let retentionErrors = 0;
   let erasureScanned = 0;
   let erasureProcessed = 0;
+  let erasureCompleted = 0;
+  let erasurePending = 0;
+  let erasureBusy = 0;
+  let erasureFailed = 0;
   let erasureErrors = 0;
   let erasureReceiptsPurged = 0;
 
@@ -47,8 +51,14 @@ export async function GET(request: Request): Promise<Response> {
     for (const uid of erasureUids) {
       if (Date.now() + SAFETY_BUFFER_MS >= deletionDeadlineMs) break;
       try {
-        await processHealthDataErasure(uid, Math.min(deletionDeadlineMs, Date.now() + 10_000));
+        const outcome = await processHealthDataErasure(uid, Math.min(deletionDeadlineMs, Date.now() + 10_000));
         erasureProcessed++;
+        switch (outcome) {
+          case 'complete': erasureCompleted++; break;
+          case 'pending': erasurePending++; break;
+          case 'busy': erasureBusy++; break;
+          case 'failed': erasureFailed++; break;
+        }
       } catch (error) {
         erasureErrors++;
         console.error('[account-deletion-cron] health data erasure recovery failed', {
@@ -140,6 +150,10 @@ export async function GET(request: Request): Promise<Response> {
     processed: results.length,
     erasureScanned,
     erasureProcessed,
+    erasureCompleted,
+    erasurePending,
+    erasureBusy,
+    erasureFailed,
     erasureErrors,
     erasureReceiptsPurged,
     recoveryErrors,
@@ -154,6 +168,17 @@ export async function GET(request: Request): Promise<Response> {
   return Response.json({
     scanned: jobs.length,
     processed: results.length,
+    // Aggregate counters only; no health-erasure owner IDs are returned.
+    // "Processed" counts non-throwing worker invocations, including failed;
+    // erasureErrors counts thrown exceptions, erasureFailed returned failures.
+    erasureScanned,
+    erasureProcessed,
+    erasureCompleted,
+    erasurePending,
+    erasureBusy,
+    erasureFailed,
+    erasureErrors,
+    erasureReceiptsPurged,
     recoveryErrors,
     retentionErrors,
     purged,

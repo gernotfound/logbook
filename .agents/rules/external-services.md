@@ -61,7 +61,7 @@ Firebase Hosting, Firebase Authentication, Firestore, Firebase Admin e App Check
 ### GitHub / CodeQL / Snyk
 
 - GitHub è la fonte di verità per repository, PR/ruleset e CI canonica.
-- CodeQL fa parte di `Canonical Verification`; Snyk è supplementare e non deve diventare l'unico controllo SAST bloccante.
+- CodeQL fa parte di `Canonical Verification`. Snyk **non è un job attivo nei workflow correnti del repository**; un suo eventuale riutilizzo richiede verifica nel provider e non può sostituire da solo i controlli di sicurezza bloccanti.
 - Ruleset e required check sono stato GitHub esterno: verificarli direttamente prima di cambiare nomi dei check o comportamento di merge.
 
 ### Analytics di utilizzo ritirati

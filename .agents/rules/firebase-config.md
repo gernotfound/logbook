@@ -167,6 +167,8 @@ La verifica finale legge nuovamente Rules, indici e operation dal provider; le R
 
 Root app shell, `index.html`, manifest, service worker e Workbox devono essere esplicitamente revalidati/no-store; soltanto gli asset fingerprinted sotto `/assets/` sono immutable.
 
+**VERIFY (configurazione backend effettiva):** distinguere il framework configurato nel progetto Vercel dall'output effettivo del deployment. Il `framework: null` dichiarato in `vercel.json` non prova da solo l'output Production, così come un'impostazione Vite nel dashboard non dimostra che il frontend sia stato pubblicato. Per modifiche al backend o al selettore deploy confrontare configurazione risolta, artefatti effettivamente serviti e comportamento HTTP autorizzato; non cambiare impostazioni sulla sola differenza nominale.
+
 ## Vercel branch deployment policy
 
 `vercel.json` contiene il contratto repository corrente per Git deployment, imposta `framework: null` per il preset **Other** (backend-only, senza dipendere dal preset Vite del progetto) e `fluid: true` per rendere esplicito Fluid Compute:

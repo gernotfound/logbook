@@ -16,6 +16,18 @@
 
 I moduli client della tabella sono in `src/lib/sync/`. Nessuna passphrase, PIN o recovery code aggiuntivo nella UX ordinaria; identità Firebase/guest e consenso restano gate, non materiale crittografico.
 
+## Recuperabilità per scenario
+
+| Scenario | Copia eventualmente disponibile | Comportamento richiesto |
+|---|---|---|
+| Rete/Vercel assenti, vault device già attivo | Envelope e journal cifrati dello stesso profilo | Lavoro locale senza ACK cloud o downgrade plaintext |
+| Profilo browser perso, cloud integro e ADK recuperabile dal backend trusted | Solo dati business già sincronizzati | Nuovo accesso con i gate account; bozze e pending esclusivamente locali non recuperabili |
+| KEK globale `CLOUD_ACCOUNT_KEK_V1` persa o cambiata | Ciphertext cloud presente, ADK non recuperabile | Fail-closed; soltanto una copia indipendente verificata della **stessa** KEK può ripristinare la decifratura |
+| Vault device illeggibile o ciphertext alterato | Byte locali esistenti, recuperabilità incerta | Preservare originali; bloccare provisioning, letture e purge non autorizzati |
+| Consenso revocato | Dati cifrati non ancora cancellati | Niente fitness cloud; soltanto rights-only autorizzato per ADK già esistente |
+
+La tabella non dimostra che esistano una copia indipendente della KEK o collaudi di ripristino realmente riusciti.
+
 ## Vault locale e provisioning
 
 **MUST:** il vault `logbook:v2:${owner}:secure-vault-control` esiste in tre stati distinti: assente, `migrating`, `active`. Controlli corrotti/versioni future, una chiave IndexedDB persa o un record non autenticato **non sono** assenza dati. Nessun nuovo provisioning sopra ciphertext preesistente.

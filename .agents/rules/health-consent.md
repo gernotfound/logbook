@@ -13,6 +13,19 @@ Guest: consenso e revoca sono locali alla generazione del dispositivo; nessun co
 
 Fonti: `src/lib/healthConsent.ts`, `healthConsentRecovery.ts`, `src/contexts/auth/consentLifecycle.ts`, `src/lib/sync/localConsentReconciliation.ts`, `localConsentJournalRecovery.ts`, `server/healthConsent/`, endpoint `api/health-consent*`/`api/health-data-erasure.ts` e `firestore.rules`.
 
+## Matrice sintetica delle autorizzazioni
+
+| Stato | Fitness locale | Cloud e diritti |
+|---|---|---|
+| Primo consenso account non confermato dal backend trusted | Bloccato | Nessuna replica; informativa e diritti applicabili disponibili |
+| Consenso attivo già attestato, vault e sessione coerenti | Disponibile anche offline per la generazione verificata | Replica solo con guard Auth/App Check/consenso correnti |
+| Revoca locale o trusted | Sospeso | Nessuna nuova scrittura fitness; export diritti e cancellazione sono percorsi separati |
+| Riaccettazione esplicita **solo offline** di generazione già attestata | Solo dispositivo già verificato | Cloud bloccato fino a riconciliazione trusted di revoca, riaccettazione e revisioni |
+| Cancellazione sanitaria in corso | Bloccato | Nessun export dichiarato completo e nessuna riaccettazione che bypassi il job |
+| Cancellazione sanitaria `complete` | Purge locale protetto prima di ripartire | Firebase Auth rimane; le vecchie generazioni non possono sincronizzare dati eliminati |
+
+La tabella non autorizza prime attivazioni offline né replay automatici di journal appartenenti a revisioni precedenti. Le condizioni della transazione e le prove server delle sezioni seguenti sono normative.
+
 ## Primo consenso e prove server
 
 **MUST:** le Rules negano l'accesso business finché manca `health_consent_withdrawals/{uid}`, `status: active`, `revision >= 1`, `uid` corrispondente al proprietario e la presenza dei campi `acceptedAt`, `privacyVersion`, `termsVersion`. Per rispettare il limite di 1.000 espressioni delle transazioni Protocol 3, la validazione semantica dei campi (timestamp ISO valido e versioni non vuote) è obbligatoria nel GET trusted e nel client, non attribuita alle Rules. Il record rimane server-only e la risposta invalida non può autorizzare la PWA. Il backend trusted registra il primo consenso esplicito tramite `POST /api/health-consent` (`accept-initial`, revision attesa zero, Firebase Auth + App Check limited-use). Il client verifica il contratto GET v2 e la sua epoch prima di qualsiasi lettura/scrittura cloud. L'assenza del record non è un consenso implicito; `legalConsent` sul root client non costituisce prova trusted. Registro repliche e `_sync.writer` richiedono `consentRevision` coerente; le collection telemetriche pre-lancio non accordano alcun accesso client.

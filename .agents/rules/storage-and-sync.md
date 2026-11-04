@@ -13,6 +13,18 @@
 - [Portabilità](backup-and-portability.md): backup/import/export; [Telemetria](telemetry-and-privacy.md): coda diagnostica cifrata.
 - [Crash consistency](crash-consistency.md), [Causal GC](causal-gc.md), [Domain Operations](domain-operations.md): specifiche di commit/ACK e protocollo.
 
+## Stati di durabilità e relative prove
+
+| Stato | Prova disponibile | Cosa non dimostra |
+|---|---|---|
+| Valore soltanto in React/Zustand | Render o edit UI | Durabilità dopo crash/reload |
+| Envelope e journal in IndexedDB | Commit locale atomico autenticato | Firestore aggiornato o ACK cloud |
+| `local-pending` | Pending durevole e riproducibile secondo [Crash consistency](crash-consistency.md) | Che il cloud non abbia ricevuto una write: il timeout può seguire un commit |
+| Batch cloud confermato e ACK valido | Writer remoto e `acknowledgeThrough()` attestati per quel batch | Integrità di mesi non compresi nella scansione |
+| `replica-fenced` / `update-required` | Integrità o versione non provata | Permesso di reinizializzare o cancellare archivi |
+
+**MUST:** non avanzare fra questi stati sulla base di tempo trascorso, segnali UI o sola rete. La prova di commit/ACK e i failure path restano nel contratto specialistico [Crash consistency](crash-consistency.md).
+
 ## Architettura di storage
 
 L'app utilizza quattro livelli di storage con ruoli distinti:
@@ -174,11 +186,7 @@ La regressione è coperta anche attraverso il reale path transazionale Firestore
 
 ## Lost acknowledgement
 
-Un timeout/rejection del chiamante non dimostra che il server non abbia applicato la write.
-
-**MUST:** prima di classificare un batch come `local-pending` dopo un esito ambiguo, `replicateJournal` deve rileggere l'envelope IndexedDB e verificare che **l'intero batch appena consegnato** sia ancora presente nel journal con payload semantico completo identico (`value`, `clock` e `guard` inclusi). Se envelope/journal è assente, corrotto o contiene solo una parte del batch, l'esito non è un pending sicuro e deve essere classificato come failure secondo il contratto corrente.
-
-Vedi anche `.agents/rules/crash-consistency.md`.
+**MUST:** timeout o rejection del chiamante non dimostrano l'assenza di commit remoto. Prima di classificare `local-pending`, rileggere l'envelope persistito e provare che l'intero batch consegnato è ancora presente e riproducibile con payload causale completo identico. Se la prova manca, restituire un failure senza dichiarare recupero sicuro. La specifica su identità del batch, `value`/`clock`/`guard`, epoch e race è in [Crash consistency](crash-consistency.md).
 
 ## Hydration cloud
 

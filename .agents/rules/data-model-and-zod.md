@@ -42,6 +42,15 @@ Il termine temporale di una sessione usa soltanto `globalEndTime`; `globalStartT
 
 L'helper di formattazione non valida input persistiti: i gateway devono rifiutare date non canoniche o incoerenti, senza convertirle implicitamente in oggi. Le regole dei calendari e del parsing UI sopra non autorizzano migrazioni dei dati pre-lancio.
 
+## Statistiche derivate: qualità del campione e numeri finiti
+
+**MUST:** i calcoli derivati non presentano campioni insufficienti o numeri non rappresentabili come statistiche affidabili. Un risultato rifiutato non autorizza a modificare misurazioni, workout, diario o target manuali.
+
+- `calculateTDEE()` richiede almeno **sette giornate valide in 14 giorni di calendario**, ancorati all'ultima data registrata: sette voci sparse in mesi diversi non costituiscono un campione recente. Una stima rifiutata non sostituisce un obiettivo calorico manuale. Regressioni: `src/lib/logic.test.ts` e `tests/r1_r2_empirical_challenge.test.ts`.
+- Statistiche e correlazioni del volume settimanale non pubblicano `NaN`, `Infinity`, somme o variazioni percentuali non finite, anche quando i singoli addendi erano finiti. Il conteggio delle sessioni e la parità del percorso cooperativo restano corretti; il calcolatore meccanico di base conserva il proprio contratto. Regressioni: `src/lib/calc/analytics.test.ts`.
+
+Le formule specifiche restano nel codice; qui si preserva la proprietà di non pubblicare risultati fuorvianti.
+
 ## Durata manuale del workout storico
 
 L'input manuale dello storico attraversa `parseManualDuration()` in `src/lib/utils/date.ts` prima della Domain Operation. Un input invalido resta visibile e non viene trasformato dal blur o dal salvataggio in una durata valida inventata; `null` dal parser interrompe il salvataggio prima del commit business durevole. La normalizzazione tollerante usata in altri contesti non sostituisce questo boundary UI strict. Conservare la bozza, la sessione sospesa e i guard del commit come definiti in [Bozze e stato device](device-drafts.md).

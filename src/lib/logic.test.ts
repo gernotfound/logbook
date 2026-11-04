@@ -97,6 +97,45 @@ describe('Logic Library Tests', () => {
         expect(summary.tdee).toBe(2400);
     });
 
+    it('calculateTDEE: does not estimate expenditure from seven isolated monthly records', () => {
+        const sparseRecords = Array.from({ length: 7 }, (_, index) => ({
+            date: `2026-${String(index + 1).padStart(2, '0')}-01`,
+            weight: 80 + index * 0.1,
+            kcal: 2500,
+        }));
+        const result = Logic.calculateTDEE(sparseRecords);
+        expect(result.error).toBe(true);
+        expect(result.message).toContain('giornate valide negli ultimi 14 giorni');
+        expect(result).not.toHaveProperty('tdee');
+
+        // A rejected estimate must not overwrite a user-entered normocaloric target.
+        const nutrition = Object.fromEntries(sparseRecords.map(({ date, weight, kcal }) => [
+            date, { date, weight, kcal, meals: [] },
+        ]));
+        const summary = Logic.calculateTDEEAndMacros({
+            nutrition,
+            nutritionPlanning: { weight: 80, normocalorica: { kcal: 2350 } },
+        } as any);
+        expect(summary.tdee).toBe(2350);
+    });
+
+    it('calculateTDEE: uses only recent calendar days, not older caloric records', () => {
+        const oldWeek = Array.from({ length: 7 }, (_, index) => ({
+            date: `2026-01-${String(index + 1).padStart(2, '0')}`,
+            weight: 80, kcal: 4000,
+        }));
+        const recentWeek = Array.from({ length: 7 }, (_, index) => ({
+            date: `2026-04-${String(index + 1).padStart(2, '0')}`,
+            weight: 80, kcal: 2100,
+        }));
+        const result = Logic.calculateTDEE([...recentWeek, ...oldWeek]);
+        expect(result.error).toBe(false);
+        expect(result.tdee).toBe(2100);
+        expect(result.avgKcal).toBe(2100);
+        expect(result.daysTracked).toBe(7);
+        expect(result.timeSpanDays).toBe(6);
+    });
+
     it('calculateTDEE: estimates TDEE correctly when gaining weight', () => {
         const chronoData = [];
         for (let i = 0; i < 14; i++) {

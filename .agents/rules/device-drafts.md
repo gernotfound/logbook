@@ -11,6 +11,18 @@ I salvataggi passano dal vault [cifrato](secure-storage.md) owner-scoped, anche 
 
 Fonti principali: `src/lib/sync/workoutDeviceIntent.ts`, `workoutRecoveryDraft.ts`, `bufferedDraftEpoch.ts`, `bufferedDraftWriterIntent.ts`, `datedDraftEpoch.ts`, `datedDraftWriterIntent.ts`; hook, componenti e test chiamanti vanno cercati per ogni intervento.
 
+## Mappa delle copie device e delle relative prove
+
+| Copia | Identità minima | Prova necessaria per uso o cleanup |
+|---|---|---|
+| Workout e `workout-intent:<id>` | Owner, workout, generazione, sequenza e ID casuale dell'intento | Revisione consenso, catena degli antenati, testimone immutabile e journal coerenti |
+| `draft:buffered:*` e testimoni | Owner, revisione, `workoutId`, `fieldId` e ID business di serie/segmento | Copia osservata, witness, sessione corrente; mai il solo indice DOM |
+| Bozze esercizi/routine e check-in | Owner, chiave completa, workout quando previsto, revisione | Origine Auth/consenso coerente fino al commit Domain Operations |
+| Bozze datate `draft:<kind>:<date>` | Owner, tipo, data e revisione | Immagine osservata e marker fra schede; nessuna adozione di una copia concorrente |
+| Editor storico, timer e recovery | Owner, contesto business e copie device pertinenti | Reload barrier, autenticità, confronto prima di sostituzione o rimozione |
+
+**MUST:** questa tabella orienta la ricerca, non sostituisce i guard di seguito. Owner e revisione non identificano da soli il workout; `localStorage` non offre CAS atomico cross-tab. In caso di ambiguità, conservare ciphertext e testimoni e bloccare replay o cleanup.
+
 ## Bozze bufferizzate del workout
 
 **MUST (CRITICAL, fresh start):** le bozze `draft:buffered:*` di un account autenticato si leggono esclusivamente come record owner-scoped con nome, formato `__logbookBufferedDraft: 1` e revisione positiva di consenso verificata. Un payload testuale pre-lancio, anche se custodito da ciphertext corrente e con consenso alla prima revisione, non prova l'origine: non importarlo, non sovrascriverlo e non cancellarlo durante una scrittura/cleanup. Le scritture account richiedono la generazione corrente del consenso; la mancanza del marker non autorizza un salvataggio senza revision. **La modalità ospite conserva intenzionalmente il formato testuale attuale** dentro l'archivio cifrato del guest. Rimangono immutati i witness indipendenti, i confronti della copia osservata, i Web Locks/lifecycle gate e l'esportazione esplicita delle prove di recupero.

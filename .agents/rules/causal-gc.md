@@ -65,6 +65,15 @@ Per path gerarchici, gli stamp antenati sono il boundary canonico di riconciliaz
 
 Coordinate vector pari a zero possono essere eliminate perché il modello le interpreta esattamente come coordinate assenti.
 
+### Decisione di compaction (lettura rapida)
+
+| Stato causale | Decisione |
+|---|---|
+| Descendant coperto dalla barriera delete dell'ancestor, inclusi tutti i candidate clock | Compaction del descendant consentita, se preserva la semantica |
+| Descendant concorrente o candidate clock non coperto | Conservare metadata; un tie-break non costituisce prova causale |
+| Tombstone terminale o barriera dopo recreation senza stable frontier sufficiente | Conservare tombstone/barriera |
+| Stable frontier delle sole repliche `active` che copre winner, delete e candidate clock | Valutare il ritiro secondo Protocol 3, senza usare il wall clock come prova |
+
 ## Persistenza
 
 La compaction avviene dopo il semantic merge e prima della write Firestore. Il `TransactionOutcome.syncMeta` deve contenere lo stesso metadata compattato scritto nel documento, così `acknowledgeThrough()` conserva localmente il causal state effettivamente persistito.

@@ -22,16 +22,12 @@ Le collection `users/{uid}/telemetry_errors`, `telemetry_events` e `telemetry_an
 
 ## Coda cifrata owner-scoped
 
-**MUST:** per la coda diagnostica, best-effort **non** significa storage in chiaro: errori/stack, session ID e UID possono essere presenti nel payload tecnico.
-I nuovi report persistono esclusivamente cifrati con chiave owner-scoped sbloccata e AEAD autenticata; prima dello sblocco restano in RAM.
-Le code plaintext pre-lancio non vengono lette, adottate, convertite né cancellate automaticamente; la chiusura della scheda può perdere i report ancora soltanto in RAM.
-Un ciphertext illeggibile non autorizza la sua cancellazione o sovrascrittura.
-**MUST:** il writer corrente registra un `queuedAt` numerico per ogni report. La retention di sette giorni usa solo tale timestamp: i record che ne sono privi, lo hanno malformato o implausibilmente futuro sono esclusi, senza usare `timestamp` dell'evento come fallback. Le voci scadute non vengono restituite né inviate e il replay non può reintrodurle; il pruning dello storage avviene al successivo accesso alla coda.
-Tale retention tecnica è distinta da quella Firestore legacy di 30 giorni e da Sentry Production.
+**MUST:** errori, stack, session ID e UID sono potenzialmente sensibili. I nuovi report vengono persistiti soltanto con AEAD owner-scoped e vault sbloccato; prima dello sblocco restano in RAM e possono andare persi alla chiusura della scheda. Nessun fallback plaintext. Le code plaintext pre-lancio non vengono lette, adottate, convertite o cancellate automaticamente; ciphertext illeggibili non vengono sovrascritti. Un guest senza UID autenticato non autorizza invio Sentry né trasferimento dei report al login successivo.
 
-**MUST:** mantenere i limiti di capacità della coda corrente, la separazione owner e il fallback RAM. Un guest privo di UID autenticato non autorizza invio Sentry né riassegnazione dei report dopo il login.
+**MUST (retention e capacità):** massimo 50 report e sette giorni da `queuedAt` numerico valido. Valori assenti, malformati o implausibilmente futuri sono esclusi senza usare il timestamp dell'errore come fallback. Voci scadute non sono restituite né inviate e il replay non le reintroduce; il pruning fisico avviene al successivo accesso alla coda. Questa durata è distinta dalla retention Firestore pre-lancio di 30 giorni e da Sentry Production.
 
-- **MUST:** code diagnostiche persistenti soltanto con AEAD owner-scoped e vault disponibile; in caso contrario usare il fallback in memoria previsto, senza creare nuove copie plaintext. Mantenere i limiti di capacità e la retention dei report correnti, senza importare o cancellare code globali pre-lancio. Una cache di telemetria già persistita non è prova della versione cifrata più recente: prima di riutilizzarla per lettura/nuovo enqueue, ricaricare la coda protetta per lo stesso owner quando il vault è disponibile; se esistono eventi RAM non ancora persistiti, preservarli e riconciliarli senza sovrascrivere ciphertext illeggibile. Gli aggiornamenti differiti dei conteggi d'errore sono patch applicate soltanto agli ID ancora presenti nella copia cifrata corrente: non devono reinserire report già consegnati né cancellare nuovi report di un'altra scheda. La ripresa non deve reintrodurre report che un'altra scheda ha già rimosso. Questo non rappresenta un CAS atomico fra schede.
+**MUST (concorrenza fra schede):** una cache in RAM o già persistita non attesta il ciphertext corrente. Con vault disponibile, ricaricare la coda protetta dello stesso owner prima di lettura/nuovo enqueue e riconciliare gli eventi RAM non persistiti. Gli aggiornamenti differiti dei conteggi d'errore modificano soltanto ID ancora presenti; non possono reintrodurre report consegnati/rimossi o cancellare nuovi report di un'altra scheda. La ripresa non deve reinserire report che un'altra scheda ha già rimosso. `localStorage` non offre CAS atomico cross-tab: un conflitto non autorizza sovrascritture di ciphertext illeggibile.
+
 
 ## Analytics ritirati
 
