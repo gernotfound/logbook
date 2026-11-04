@@ -437,7 +437,7 @@ describe('Workout Improvements & History Edit Suite', () => {
       expect(hookResult.bf).toBe('15.2');
     });
 
-    test('useHomeView generates proper chartData and periods (7d, 30d, 180d, 365d) with white points', () => {
+    test('useHomeView generates proper chartData and periods (7d, 30d, 180d, 365d) without coupling hook data to chart colors', () => {
       let hookResult: any = null;
       function TestHomeComponent() {
         const res = useHomeView();
@@ -457,7 +457,8 @@ describe('Workout Improvements & History Edit Suite', () => {
 
       expect(hookResult.loading).toBe(false);
       expect(hookResult.weightPeriod).toBe('7d');
-      expect(hookResult.chartData.datasets[0].pointBackgroundColor).toBe('#ffffff');
+      expect(hookResult.chartData.datasets[0].pointBackgroundColor).toBeUndefined();
+      expect(hookResult.chartData.datasets[0].fill).toBeUndefined();
       expect(hookResult.chartData.labels.length).toBe(7);
 
       // Change period to 30d

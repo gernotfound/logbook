@@ -87,6 +87,7 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
                     setSleepAwake: vi.fn(),
                     saveSleep: vi.fn(),
                     setEditingDate: vi.fn(),
+                    cancelEdit: vi.fn(() => true),
                 };
 
                 const { container } = renderWithProviders(<DataSleep sleepHook={mockSleepHook} />);
@@ -114,6 +115,7 @@ describe('LogBook PWA Enhancements Integration Suite (Requirements R1 - R6)', ()
                     setSleepAwake: vi.fn(),
                     saveSleep: vi.fn(),
                     setEditingDate: vi.fn(),
+                    cancelEdit: vi.fn(() => true),
                 };
 
                 const { container } = renderWithProviders(<DataSleep sleepHook={mockSleepHook} />);

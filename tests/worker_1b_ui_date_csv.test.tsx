@@ -219,6 +219,7 @@ describe('Worker 1B: UI/UX, Date Navigation, CSV Export & PWA Fixes', () => {
                 setSleepAwake: vi.fn(),
                 saveSleep: vi.fn(),
                 setEditingDate: vi.fn(),
+                    cancelEdit: vi.fn(() => true),
             };
 
             const { rerender } = render(

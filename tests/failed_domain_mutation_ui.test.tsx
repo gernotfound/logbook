@@ -136,20 +136,32 @@ describe('failed domain result preserves user edits', () => {
         expect(sleep.result.current.editingDate).toBeNull();
         expect(readDeviceValueStrict('draft:sleep:' + DAY, owner)).toContain('"values":null');
 
+    });
+
+    it('retains the cardio editor after a failed durable draft clear, and closes it after retry', () => {
+        const owner = storageOwner();
         const activity = renderHook(() => useActivityTracking());
+        act(() => activity.result.current.setSelectedDate(DAY));
         act(() => activity.result.current.startNewCardio());
         act(() => activity.result.current.setCardioField('modality', 'bike'));
-        const cardioKey = protectedDeviceKey('draft:activity-cardio-/new:' + activity.result.current.selectedDate, owner);
-        expect(localStorage.getItem(cardioKey)).toMatch(/^tlb-sealed:v1:/);
+        const name = 'draft:activity-cardio-/new:' + DAY;
+        const cardioKey = protectedDeviceKey(name, owner);
+        const before = localStorage.getItem(cardioKey);
+        expect(before).toMatch(/^tlb-sealed:v1:/);
+
+        const originalSetItem = vi.mocked(localStorage.setItem).getMockImplementation()!;
         vi.mocked(localStorage.setItem).mockImplementation((key, value) => {
             if (key === cardioKey) throw new Error('quota');
             originalSetItem(key, value);
         });
         act(() => { expect(activity.result.current.cancelCardio()).toBe(false); });
         expect(activity.result.current.editingCardioId).toBe('/new');
+        expect(localStorage.getItem(cardioKey)).toBe(before);
+
         vi.mocked(localStorage.setItem).mockImplementation(originalSetItem);
         act(() => { expect(activity.result.current.cancelCardio()).toBe(true); });
         expect(activity.result.current.editingCardioId).toBeNull();
+        expect(readDeviceValueStrict(name, owner)).toContain('"values":null');
     });
 
 });
