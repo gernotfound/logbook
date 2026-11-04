@@ -253,7 +253,7 @@ Per modifiche non banali:
 
 ## Test e CI
 
-Il gate canonico locale è `npm run verify:m8`. Su GitHub l'equivalente richiede `Milestone Verification` sullo SHA esatto: tutti gli shard, E2E, CodeQL e `Canonical Verification` verdi.
+Il gate canonico locale è `npm run verify:m8`. Sulle PR GitHub l'equivalente richiede `Milestone Verification` sullo SHA esatto: tutti gli shard, E2E, CodeQL e `Canonical Verification` verdi. Sui push a `main` la stessa workflow riutilizza la CI PR tramite `Main Release Gate` (identità del tree, PR, base e run GitHub), ed esegue CodeQL sul branch predefinito senza ripetere gli shard/E2E; il suo successo è il prerequisito dei workflow Firebase.
 
 - **MUST:** i subset `lint`, `test`, `build`, `test:e2e` sono diagnostici, non sostituti del gate finale.
 - **MUST:** ogni nuovo commit invalida le verifiche relative allo SHA precedente.

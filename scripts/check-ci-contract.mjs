@@ -1,4 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { checkProductionBuildSecrets } from './check-production-build-secrets.mjs';
 
 const workflowPath = '.github/workflows/verification.yml';
@@ -109,8 +110,8 @@ if (pushBlock) {
 }
 
 const permissionDeclarations = workflow.match(/^\s*permissions\s*:/gm) ?? [];
-if (permissionDeclarations.length !== 2) {
-  failures.push(`repository permissions: expected default + CodeQL declarations, found ${permissionDeclarations.length}`);
+if (permissionDeclarations.length !== 3) {
+  failures.push(`repository permissions: expected default + CodeQL + read-only release declarations, found ${permissionDeclarations.length}`);
 }
 requirePattern('default read-only permissions', workflow, /^permissions:\s*\n  contents: read\s*$/m);
 requirePattern('CodeQL scoped security-events permission', workflow, /^      security-events: write\s*$/m);
@@ -120,7 +121,7 @@ requirePattern('Ubuntu 24.04 shard runner', workflow, /^    runs-on: ubuntu-24\.
 requirePattern('checkout action pin', workflow, /^        uses: actions\/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7\s*$/m);
 requirePattern('full checkout history', workflow, /^          fetch-depth: 0\s*$/m);
 const checkoutCredentialGuards = workflow.match(/^          persist-credentials: false\s*$/gm) ?? [];
-if (checkoutCredentialGuards.length !== 3) failures.push(`checkout credential persistence: expected three disabled checkout credentials, found ${checkoutCredentialGuards.length}`);
+if (checkoutCredentialGuards.length !== 4) failures.push(`checkout credential persistence: expected four disabled checkout credentials, found ${checkoutCredentialGuards.length}`);
 requirePattern('Node setup action pin', workflow, /^        uses: actions\/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7\s*$/m);
 requirePattern('Node 24 runtime', workflow, /^          node-version: ['"]?24['"]?\s*$/m);
 requirePattern('npm cache', workflow, /^          cache: npm\s*$/m);
@@ -138,6 +139,7 @@ requirePattern('container runtime SHA read', workflow, /^          actual_sha="\
 requirePattern('runtime SHA comparison', workflow, /^          if \[ "\$\{actual_sha\}" != "\$\{EXPECTED_SHA\}" \]; then\s*$/m);
 const actualShaAssignments = workflow.match(/^\s*actual_sha=/gm) ?? [];
 if (actualShaAssignments.length !== 3) failures.push(`runtime SHA guard: expected matrix + E2E + CodeQL assignments, found ${actualShaAssignments.length}`);
+requirePattern('release exact checkout', workflow, /^          test "\$\(git rev-parse HEAD\)" = "\$EXPECTED_SHA"\s*$/m);
 requirePattern('conditional Java setup', workflow, /^        if: matrix\.java == true\s*$/m);
 requirePattern('Java setup action pin', workflow, /^        uses: actions\/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6\s*$/m);
 requirePattern('Temurin distribution', workflow, /^          distribution: temurin\s*$/m);
@@ -160,6 +162,9 @@ requirePattern('CodeQL init action pin', workflow, /^        uses: github\/codeq
 requirePattern('CodeQL analyze action pin', workflow, /^        uses: github\/codeql-action\/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4\s*$/m);
 
 const allowedIfLines = new Set([
+  "if: github.event_name == 'pull_request'",
+  "if: github.event_name == 'push'",
+  "if: ${{ always() && github.event_name == 'pull_request' }}",
   'if: matrix.java == true',
   "if: matrix.id == 'core'",
   'if: failure()',
@@ -263,13 +268,27 @@ if (canonicalNames.length !== 1) failures.push(`canonical aggregate: expected on
 requirePattern('canonical needs verification shards', workflow, /^      - shards\s*$/m);
 requirePattern('canonical needs Playwright E2E', workflow, /^      - e2e\s*$/m);
 requirePattern('canonical needs CodeQL', workflow, /^      - codeql\s*$/m);
-requirePattern('canonical always evaluates', workflow, /^    if: \$\{\{ always\(\) \}\}\s*$/m);
+requirePattern('canonical PR-only evaluation', workflow, /^    if: \$\{\{ always\(\) && github\.event_name == 'pull_request' \}\}\s*$/m);
 requirePattern('canonical shard result binding', workflow, /^          SHARD_RESULT: \$\{\{ needs\.shards\.result \}\}\s*$/m);
 requirePattern('canonical E2E result binding', workflow, /^          E2E_RESULT: \$\{\{ needs\.e2e\.result \}\}\s*$/m);
 requirePattern('canonical CodeQL result binding', workflow, /^          CODEQL_RESULT: \$\{\{ needs\.codeql\.result \}\}\s*$/m);
 requirePattern('canonical rejects failed shards', workflow, /^          if \[ "\$\{SHARD_RESULT\}" != "success" \]; then\s*$/m);
 requirePattern('canonical rejects failed E2E', workflow, /^          if \[ "\$\{E2E_RESULT\}" != "success" \]; then\s*$/m);
 requirePattern('canonical rejects failed CodeQL', workflow, /^          if \[ "\$\{CODEQL_RESULT\}" != "success" \]; then\s*$/m);
+
+
+requirePattern('PR-only verification shards', workflow, /^  shards:\n    if: github\.event_name == 'pull_request'\s*$/m);
+requirePattern('PR-only E2E', workflow, /^  e2e:\n    if: github\.event_name == 'pull_request'\s*$/m);
+requirePattern('main release gate job', workflow, /^  release:\n    name: "Main Release Gate"\n    if: github\.event_name == 'push'\s*$/m);
+requirePattern('main release gate script', workflow, /^        run: node scripts\/verify-main-release\.mjs\s*$/m);
+requirePattern('release token scope', workflow, /^          GH_TOKEN: \$\{\{ github\.token \}\}\s*$/m);
+for (const permission of ['contents', 'actions', 'checks', 'pull-requests']) {
+  requirePattern('release permission ' + permission, workflow, new RegExp('^      ' + permission + ': read\\s*$', 'm'));
+}
+if (!existsSync('scripts/verify-main-release.mjs')) failures.push('missing fail-closed main release attestation script');
+if (!existsSync('scripts/verify-main-release-regressions.mjs')) failures.push('missing main release gate regressions');
+const releaseGateTests = spawnSync(process.execPath, ['--test', 'scripts/verify-main-release-regressions.mjs'], { stdio: 'inherit' });
+if (releaseGateTests.status !== 0) failures.push('main release gate regressions failed');
 
 for (const legacy of [
   '.github/workflows/test.yml',

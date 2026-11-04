@@ -9,7 +9,7 @@ Questa regola disciplina il gate canonico di verifica automatica corrente dopo M
 
 Gerarchia corrente:
 
-- **workflow GitHub Actions:** `Milestone Verification` (`.github/workflows/verification.yml`);
+- **workflow GitHub Actions:** `Milestone Verification` (`.github/workflows/verification.yml`), con suite completa soltanto sulle PR e attestazione leggera post-merge su `main`;
 - **check aggregato stabile:** `Canonical Verification`;
 - **analisi SAST richiesta:** job `Security / CodeQL` su JavaScript/TypeScript con query `security-extended`, aggregato dentro `Canonical Verification`;
 - **comando repository umbrella:** `npm run verify:m8`;
@@ -96,7 +96,9 @@ La parallelizzazione riguarda l'orchestrazione, non la semantica del gate. Unit,
 ## Trigger
 
 - MUST: il workflow parte per PR verso `main`.
-- MUST: il workflow parte sui push a `main`.
+- MUST: il workflow parte sui push a `main`, ma esegue soltanto `Main Release Gate` e CodeQL; shard, test Emulator, build e Playwright restano obbligatori sulla PR e non vengono duplicati dopo il merge.
+- MUST: `Main Release Gate` controlla il commit exact-main, l'unica PR associata allo squash, il genitore coincidente con la base della PR, l'identità del Git tree e una run `Canonical Verification` PR completata prima del merge, originata dal workflow canonico e dall'app GitHub Actions. Errore API, ambiguo o divergenza bloccano il deploy; nessun fallback permette di pubblicare senza prova.
+- MUST: il controllo `Canonical Verification` richiesto dal ruleset resta sulla PR; la conclusione positiva del workflow `Milestone Verification` su push a `main` attiva Firestore e poi Hosting, mentre CodeQL continua a pubblicare la scansione del branch predefinito. Non sostituire il gate di release con il solo nome di un check o con SHA non associati.
 - MUST NOT: branch milestone ritirati, incluso `feat/m8-domain-operations-v4`, restano trigger push del workflow canonico.
 - SHOULD: run obsolete della stessa PR/ref vengono cancellate tramite `concurrency`.
 
@@ -155,6 +157,6 @@ Il confronto MUST tollerare l'omissione JSON di `usesAncestorConfig: false` prev
 
 ## Acceptance
 
-Localmente, un candidato è tecnicamente validato dal gate repository quando `npm run verify:m8` termina con exit code 0 sull'HEAD esatto. In GitHub Actions, l'evidenza equivalente è una run `Milestone Verification` sullo stesso SHA in cui matrice di shard, job dedicato `Verification / Playwright E2E` e `Security / CodeQL` sono verdi e il check aggregato `Canonical Verification` è `success`.
+Localmente, un candidato è tecnicamente validato dal gate repository quando `npm run verify:m8` termina con exit code 0 sull'HEAD esatto. In GitHub Actions, per una PR l'evidenza equivalente è una run `Milestone Verification` sullo stesso SHA in cui matrice di shard, job dedicato `Verification / Playwright E2E` e `Security / CodeQL` sono verdi e il check aggregato `Canonical Verification` è `success`. Per `main` serve invece `Main Release Gate` verde e CodeQL verde nello stesso workflow push, più la verifica indipendente dei deployment Production.
 
 Per revisioni indipendenti richieste dal livello di rischio del task, congelare lo SHA candidato e far revisionare/testare quello stesso SHA. Non sostituire evidenza eseguibile con il solo consenso tra agenti.
