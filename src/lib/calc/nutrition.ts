@@ -345,7 +345,7 @@ export function validateCustomFood(foodData: any) {
     const parseReq = (val: unknown, fieldName: string, label: string) => {
         const num = parseNumeric(val);
         const rounded = num === null ? null : Math.round(num * 10) / 10;
-        if (rounded === null || !Number.isFinite(rounded) || rounded < 0) {
+        if (num === null || num < 0 || rounded === null || !Number.isFinite(rounded)) {
             errors[fieldName] = `${label} obbligatorio e >= 0`;
             return 0;
         }

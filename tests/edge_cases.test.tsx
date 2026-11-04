@@ -167,6 +167,7 @@ describe('Empirical Challenger Suite: Edge Cases & Stress Verification', () => {
       expect(Logic.validateCustomFood(food).isValid).toBe(true);
       expect(Logic.validateCustomFood({ ...food, kcal: '1e309' }).isValid).toBe(false);
       expect(Logic.validateCustomFood({ ...food, carbs: '15abc' }).isValid).toBe(false);
+      expect(Logic.validateCustomFood({ ...food, fat: '-0.01' }).isValid).toBe(false);
       expect(Logic.validateCustomFood({ ...food, baseQty: 'Infinity' }).isValid).toBe(false);
       expect(Logic.validateCustomFood({ ...food, baseQty: '' }).isValid).toBe(false);
       expect(Logic.validateCustomFood({ ...food, pro: '1,5' }).cleanData?.pro).toBe(1.5);
