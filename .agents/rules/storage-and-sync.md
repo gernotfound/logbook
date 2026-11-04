@@ -219,7 +219,7 @@ La pipeline V4 mantiene debounce e protocollo causale delle milestone precedenti
 
 **MUST:** l'arbitraggio dei `FieldStamp` usa un ordine totale compatibile con happens-before (attualmente `compareStamps()` in `semanticProjection/metadata.ts`): causal dominance; peso monotono del vector clock (somma delle coordinate); delete bias solo a parità di peso; actor/seq; vector order canonico. Questa relazione deve restare transitiva.
 
-**MUST:** ancestor e descendant vengono riconciliati con lo stesso ordine totale. Una write ancestor preserva e riapplica soltanto i descendant stamp che la superano; i descendant shadowed vengono rimossi semanticamente. Guard fallite vengono escluse prima dell'arbitration del field.
+**MUST:** prima dell'arbitraggio del singolo field, un descendant deve coprire causalmente lo stamp ancestor e la sua eventuale barriera delete. Una write ancestor rivaluta i descendant visibili e i candidate nascosti: soltanto quelli che coprono tale contesto e soddisfano la guard possono essere riapplicati. L'ordine totale sceglie il winner fra i contender ammissibili dello stesso field; superare un ancestor nel tie-break non dimostra copertura causale. Un contender bloccato avanza solo il frontier documentale, senza riscrivere lo stamp ancestor.
 
 Il primo account reale nasce direttamente su Sync Protocol 3. Metadata cloud/local/backup con Protocol 1 o 2 sono fuori baseline e vengono rifiutati senza riscrittura; da questo punto in poi eventuali nuove migrazioni sync devono essere introdotte solo per versioni realmente persistite dopo il lancio. Client futuri restano fail-closed secondo le regole di schema evolution.
 
