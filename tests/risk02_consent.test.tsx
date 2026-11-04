@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { useAppStore } from '../src/store/useAppStore';
 import { DB } from '../src/lib/db';
+import { get } from 'idb-keyval';
+import { readLocal } from '../src/lib/sync/localRepository';
+import { invalidateSession } from '../src/lib/sync/session';
 import { LEGAL_VERSIONS, needsLegalUpdate } from '../src/lib/legalVersions';
 import { defaultUserDataFallback } from '../src/lib/schema';
 import type { SyncResult } from '../src/types';
@@ -70,6 +73,38 @@ describe('RISK-02: Legal Consent Lifecycle', () => {
         expect(state.userData?.legalConsent).toEqual(mockConsent);
         expect(state.syncHealth).toBe('local-pending');
     });
+
+
+    it.each(['auth epoch', 'consent generation', 'consent withdrawal'] as const)(
+        'preserves the encrypted journal when a late consent failure belongs to a stale %s',
+        async boundary => {
+            let complete!: (value: SyncResult) => void;
+            vi.spyOn(DB, 'saveUserData').mockReturnValue(new Promise<SyncResult>(resolve => { complete = resolve; }));
+            const operation = useAppStore.getState().submitLegalConsent(mockConsent)
+                .then(() => undefined, (error: unknown) => error);
+            await waitFor(() => expect(DB.saveUserData).toHaveBeenCalledTimes(1));
+            const key = 'logbook:v2:user:test-user-id';
+            const before = await readLocal('user:test-user-id');
+            const encrypted = await get(key);
+            expect(encrypted).toMatch(/^tlb-sealed:v1:/);
+            expect(before?.pending.some(op => op.path[0] === 'legalConsent')).toBe(true);
+
+            if (boundary === 'auth epoch') {
+                // The same UID and unlocked vault do not prove continuity after A→B→A.
+                invalidateSession();
+                invalidateSession();
+            } else {
+                const suffix = boundary === 'consent generation' ? 'generation' : 'withdrawal';
+                localStorage.setItem(key + ':health-consent-' + suffix, '2');
+            }
+            complete({ ok: false, status: 'rejected', error: { code: 'permission-denied' } });
+
+            expect(await operation).toBeInstanceOf(Error);
+            expect(await get(key)).toBe(encrypted);
+            expect(await readLocal('user:test-user-id')).toEqual(before);
+            expect(useAppStore.getState().userData?.legalConsent).toBeUndefined();
+        },
+    );
 
     it('Scenario 3: Errore Remoto (rejected) - Nessun dato sporcato', async () => {
         vi.spyOn(DB, 'saveUserData').mockResolvedValue({ ok: false, status: 'rejected', error: { code: 'permission-denied' } });

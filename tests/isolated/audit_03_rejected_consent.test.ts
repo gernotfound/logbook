@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { clear } from 'idb-keyval';
+import { clear, get } from 'idb-keyval';
 import { createAndMigrateVault } from '../../src/lib/sync/secureArchiveMigration';
 import { lockAllVaults } from '../../src/lib/sync/secureArchiveSession';
 import { UserDataSchema } from '../../src/lib/schema';
@@ -59,7 +59,7 @@ describe('rejected legal-consent durable compensation', () => {
         expect(before?.data.legalConsent).toEqual(rejected);
         expect(before?.pending.some(op => op.path[0] === 'legalConsent')).toBe(true);
 
-        await revertRejectedConsent('user:a', rejected, undefined);
+        await revertRejectedConsent('user:a', rejected, undefined, () => true);
         const after = await readLocal('user:a');
 
         expect(after?.data.legalConsent).toBeUndefined();
@@ -78,7 +78,7 @@ describe('rejected legal-consent durable compensation', () => {
         const first = await commitDomainOperations('user:a', { type: 'legal-consent.set', consent: rejected }, initial);
         await commitDomainOperations('user:a', { type: 'profile.patch', patch: { height: '180' } }, first.data);
 
-        await revertRejectedConsent('user:a', rejected, undefined);
+        await revertRejectedConsent('user:a', rejected, undefined, () => true);
         const after = await readLocal('user:a');
 
         expect(after?.data.legalConsent).toBeUndefined();
@@ -102,7 +102,7 @@ describe('rejected legal-consent durable compensation', () => {
         expect(confirmed?.data.legalConsent).toEqual(accepted);
         expect(confirmed?.pending.some(op => op.path[0] === 'legalConsent')).toBe(false);
 
-        await revertRejectedConsent('user:a', accepted, undefined);
+        await revertRejectedConsent('user:a', accepted, undefined, () => true);
         expect(await readLocal('user:a')).toEqual(confirmed);
     });
 
@@ -122,8 +122,59 @@ describe('rejected legal-consent durable compensation', () => {
         expect(before?.pending.some(op => op.path.join('/') === 'profile/height')).toBe(true);
         expect(before?.pending.some(op => op.path[0] === 'legalConsent')).toBe(false);
 
-        await revertRejectedConsent('user:a', accepted, undefined);
+        await revertRejectedConsent('user:a', accepted, undefined, () => true);
         expect(await readLocal('user:a')).toEqual(before);
+    });
+
+
+    it('rechecks the session in the real IndexedDB transaction and preserves the exact ciphertext on cancellation', async () => {
+        const { initializeLocal, commitDomainOperations, revertRejectedConsent, readLocal } =
+            await import('../../src/lib/sync/localRepository');
+        const initial = parse({});
+        const rejected = consent('2026-10-03T12:00:00.000Z');
+        await initializeLocal('user:a', initial);
+        const first = await commitDomainOperations('user:a', { type: 'legal-consent.set', consent: rejected }, initial);
+        await commitDomainOperations('user:a', { type: 'profile.patch', patch: { height: '180' } }, first.data);
+        const before = await readLocal('user:a');
+        const key = 'logbook:v2:user:a';
+        const encrypted = await get(key);
+        expect(encrypted).toMatch(/^tlb-sealed:v1:/);
+
+        let checks = 0;
+        await expect(revertRejectedConsent('user:a', rejected, undefined, () => ++checks === 1))
+            .rejects.toThrow('Ripristino consenso invalidato dal cambio sessione');
+        expect(checks).toBe(2);
+        expect(await get(key)).toBe(encrypted);
+        expect(await readLocal('user:a')).toEqual(before);
+
+        await revertRejectedConsent('user:a', rejected, undefined, () => true);
+        const recovered = await readLocal('user:a');
+        expect(recovered?.data.legalConsent).toBeUndefined();
+        expect(recovered?.pending.some(op => op.path[0] === 'legalConsent')).toBe(false);
+        expect(recovered?.data.profile?.height).toBe('180');
+        expect(recovered?.pending.filter(op => op.path[0] !== 'legalConsent'))
+            .toEqual(before?.pending.filter(op => op.path[0] !== 'legalConsent'));
+    });
+
+    it('rejects a stale rollback even when an acknowledged journal would be a no-op', async () => {
+        const { initializeLocal, commitDomainOperations, acknowledgeThrough, revertRejectedConsent, readLocal } =
+            await import('../../src/lib/sync/localRepository');
+        const initial = parse({});
+        const accepted = consent('2026-10-03T12:00:00.000Z');
+        await initializeLocal('user:a', initial);
+        await commitDomainOperations('user:a', { type: 'legal-consent.set', consent: accepted }, initial);
+        const sent = await readLocal('user:a');
+        await acknowledgeThrough('user:a', sent!.actorSeq, sent!.data);
+        const confirmed = await readLocal('user:a');
+        const key = 'logbook:v2:user:a';
+        const encrypted = await get(key);
+
+        let checks = 0;
+        await expect(revertRejectedConsent('user:a', accepted, undefined, () => ++checks === 1))
+            .rejects.toThrow('Ripristino consenso invalidato dal cambio sessione');
+        expect(checks).toBe(2);
+        expect(await get(key)).toBe(encrypted);
+        expect(await readLocal('user:a')).toEqual(confirmed);
     });
 
     it('does not roll back a newer consent that replaced the rejected value', async () => {
@@ -137,7 +188,7 @@ describe('rejected legal-consent durable compensation', () => {
         const first = await commitDomainOperations('user:a', { type: 'legal-consent.set', consent: rejected }, initial);
         await commitDomainOperations('user:a', { type: 'legal-consent.set', consent: newer }, first.data);
 
-        await revertRejectedConsent('user:a', rejected, undefined);
+        await revertRejectedConsent('user:a', rejected, undefined, () => true);
         const after = await readLocal('user:a');
 
         expect(after?.data.legalConsent).toEqual(newer);

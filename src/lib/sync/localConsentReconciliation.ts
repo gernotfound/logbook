@@ -51,9 +51,13 @@ export async function advanceLocalConsentRevisionIfClean(
     return ready;
 }
 
-export async function revertRejectedConsent(owner: string, expected: UserData['legalConsent'], previous: UserData['legalConsent']): Promise<void> {
+export async function revertRejectedConsent(owner: string, expected: UserData['legalConsent'], previous: UserData['legalConsent'], guard: () => boolean): Promise<void> {
     owner = normalizeStorageOwner(owner);
+    if (!guard()) throw new Error('Ripristino consenso invalidato dal cambio sessione');
     await updateArchiveRecord<any>(owner, raw => {
+        // The vault can stay unlocked across Auth epochs and consent changes.
+        // A late failure must not retire another session's durable intent.
+        if (!guard()) throw new Error('Ripristino consenso invalidato dal cambio sessione');
         const current = validateLocalEnvelope(raw, owner);
         if (!current || !equal(current.data.legalConsent, expected)) return raw!;
 
