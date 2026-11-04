@@ -2,6 +2,7 @@ import { RequestAuthError, verifyRecoveryRegistrationRequester, verifyStatusAppC
 import { readDeletionStatusForUid } from '../server/accountDeletion/jobStore.js';
 import {
   DeletionRecoveryInputError,
+  DeletionRecoveryConflictError,
   registerDeletionRecoveryDevice,
   verifyDeletionRecoveryDevice,
 } from '../server/accountDeletion/deviceRecovery.js';
@@ -17,6 +18,7 @@ function json(body: unknown, status: number, origin: string | null): Response {
 function errorResponse(error: unknown, origin: string | null): Response {
   if (error instanceof RequestAuthError) return json({ error: error.message }, error.status, origin);
   if (error instanceof DeletionRecoveryInputError) return json({ error: error.message }, 400, origin);
+  if (error instanceof DeletionRecoveryConflictError) return json({ error: error.message }, 409, origin);
   const kind = error instanceof Error ? error.name : 'UnknownError';
   console.error('[account-deletion-device] backend failure', { kind });
   return json({ error: 'Servizio recovery temporaneamente non disponibile.' }, 500, origin);

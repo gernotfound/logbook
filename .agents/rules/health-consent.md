@@ -58,7 +58,7 @@ Il recupero esplicito di un vecchio journal richiede una seconda verifica truste
 
 **LIMITAZIONE:** dispositivi offline possono conservare copie vecchie impossibili da eliminare da remoto. Il protocollo impedisce la replica delle generazioni vecchie nel cloud; un successivo recupero esplicito di archivi precedenti richiede attenzione per non reintrodurre dati eliminati. Non dichiarare cancellazione universale di copie offline, fornitori esterni o backup non verificati.
 
-**MUST (retention sanitaria):** la pulizia delle ricevute scadute `health_data_erasures` avanza con paginazione ordinata oltre i record che non superano la verifica dell'epoch; un primo gruppo di ricevute non eliminabili non deve bloccare indefinitamente le ricevute successive. La cancellazione di ogni ricevuta resta subordinata alla prova transazionale dell'epoch.
+**MUST (retention sanitaria):** il cron scansiona in ordine le ricevute `health_data_erasures` `complete` con `purgeAfter` scaduto. Ogni invocazione limita sia le cancellazioni sia i record ispezionati (al massimo il doppio del budget di cancellazioni). La cancellazione richiede una prova transazionale valida dell'UID, della revisione/epoch e di `erasedBeforeRevision`. Se la prova manca, il job non viene cancellato: la transazione rinvia `purgeAfter` di sette giorni e conserva la ricevuta per un nuovo tentativo. Il rinvio impedisce che gli stessi record non eliminabili blocchino indefinitamente quelli successivi tra cron consecutivi; non è prova di cancellazione né autorizzazione ad attenuare i controlli.
 
 ## Relazioni e limiti delle verifiche
 
