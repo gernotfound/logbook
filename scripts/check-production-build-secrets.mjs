@@ -1,7 +1,7 @@
 // Check privileged production deployment identities without contacting providers.
 export function checkProductionBuildSecrets(hosting, firestore) {
   const issues = [];
-  if (/\bSENTRY_/.test(hosting) || /@sentry\//.test(hosting)) {
+  if (/SENTRY_/.test(hosting) || /@sentry\//.test(hosting)) {
     issues.push('Hosting: external error monitoring must not be reintroduced');
   }
   if (!/^\s*service_account: \$\{\{ env\.GCP_FIREBASE_DEPLOY_SERVICE_ACCOUNT \}\}\s*$/m.test(hosting) ||

@@ -16,6 +16,13 @@ void test('rejects the reintroduction of an external error-monitoring credential
   assert.match(checkProductionBuildSecrets(altered, firestore).join('; '), /external error monitoring/);
 });
 
+
+void test('rejects the reintroduction of the browser Sentry DSN', () => {
+  const altered = hosting.replace('      FIREBASE_HOSTING_DEPLOY:', '      VITE_SENTRY_DSN: ${{ vars.VITE_SENTRY_DSN }}\n      FIREBASE_HOSTING_DEPLOY:');
+  assert.notEqual(altered, hosting);
+  assert.match(checkProductionBuildSecrets(altered, firestore).join('; '), /external error monitoring/);
+});
+
 void test('rejects an unexpected Firebase deploy identity in either workflow', () => {
   const altered = hosting.replace('service_account: ${{ env.GCP_FIREBASE_DEPLOY_SERVICE_ACCOUNT }}', 'service_account: ${{ env.GCP_FIRESTORE_DEPLOY_SERVICE_ACCOUNT }}');
   assert.notEqual(altered, hosting);
