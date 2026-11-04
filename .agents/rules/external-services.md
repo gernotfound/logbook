@@ -70,12 +70,11 @@ Firebase Hosting, Firebase Authentication, Firestore, Firebase Admin e App Check
 - **MUST:** non inviare page view, eventi di utilizzo o dati sanitari a servizi analytics; mantenere separata la telemetria tecnica Sentry.
 - **NOTE:** il product owner ha confermato lo scollegamento GA4 dal progetto Firebase, la dismissione della proprietà Google Analytics e la rimozione della variabile GitHub del Measurement ID. La PR #320 attesta separatamente la rimozione dal codice e dai workflow. La decisione di dismissione non certifica oggi lo stato delle console o la cancellazione di dati presso i provider.
 
-### Sentry
+### Monitoraggio errori esterno ritirato
 
-- Sentry resta Error Monitoring soltanto, salvo futura decisione esplicita di prodotto.
-- Non attivare accidentalmente Session Replay, tracing, logging o Application Metrics seguendo wizard/onboarding.
-- I token auth Sentry sono segreti build-only; il DSN browser è configurazione runtime pubblica ma non va duplicato inutilmente.
-- Seguire [Telemetria e privacy](telemetry-and-privacy.md) per il contratto di minimizzazione e coda, e `docs/telemetry-sentry-guide.md` per la guida operativa.
+- Sentry è ritirato dal codice e dalla build del frontend; non ripristinare SDK, variabili client o source-map upload senza una nuova decisione di prodotto.
+- La rimozione dei dati già acquisiti, dei secret e del progetto nel provider non deriva dal commit: richiede verifiche e operazioni separate documentate nel registro servizi esterni.
+- Seguire [Telemetria e privacy](telemetry-and-privacy.md) per il contratto senza raccolta automatica.
 
 ### Google Search Console
 
@@ -98,5 +97,4 @@ Prima di sostituire, rimuovere o riconfigurare materialmente un servizio esterno
 ## Documenti collegati
 
 - [Registro dei servizi esterni](../../docs/operations/external-services-register.md): decisioni e stato da rivalidare in console.
-- [Guida Sentry](../../docs/telemetry-sentry-guide.md): minimizzazione diagnostica, privacy e source map.
 - [Cutover Firebase Hosting](../../docs/operations/firebase-hosting-cutover.md): **storico**, non checklist di deployment attuale.
