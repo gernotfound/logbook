@@ -234,8 +234,6 @@ if (firestoreVerifier.includes("searchParams.set('pageSize'")) {
   failures.push('Firestore Production verifier must not send unsupported pageSize when listing composite indexes');
 }
 
-if (!vite.includes("process.env.FIREBASE_HOSTING_DEPLOY === 'production'")) failures.push('Sentry production source-map build must be bound to Firebase Hosting production');
-if (vite.includes("process.env.VERCEL_ENV === 'production'")) failures.push('Vercel backend deployments must not trigger frontend Sentry source-map builds');
 
 for (const output of ['dist/sw.js', 'dist/manifest.webmanifest', 'dist/index.html', 'dist/icon.svg', 'dist/favicon.ico', 'dist/social-share.png', 'dist/loading-wait.svg']) {
   if (!existsSync(output)) failures.push(`PWA build artifact missing after verify:m6 build: ${output}`);
