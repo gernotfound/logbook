@@ -1,4 +1,5 @@
 import { useAppStore } from '../store/useAppStore';
+import { dispatchDurableOperation } from '../lib/sync/dispatchDurableOperation';
 import { useDialogStore } from '../store/useDialogStore';
 import { Logic } from '../lib/logic';
 import { Supplement, SupplementIntake } from '../types';
@@ -15,20 +16,12 @@ export function useSupplements(dateStr?: string) {
 
     const dispatchDomainOperation = useAppStore(state => state.dispatchDomainOperation);
     const showAlert = useDialogStore(state => state.showAlert);
-    const persistSupplement = async (operation: Parameters<typeof dispatchDomainOperation>[0]) => {
-        const result = await dispatchDomainOperation(operation);
-        if (!result.ok && result.status !== 'local-pending') {
-            throw result.error instanceof Error ? result.error : new Error('Operazione integratore non completata');
-        }
-    };
+    const persistSupplement = (operation: Parameters<typeof dispatchDomainOperation>[0]) =>
+        dispatchDurableOperation(dispatchDomainOperation, operation);
 
     const saveSupplementToLibrary = async (supplement: Omit<Supplement, 'id'>, editId?: string) => {
-        try {
-            const value: Supplement = { ...supplement, id: editId || Logic.generateId('supp') };
-            await persistSupplement({ type: 'supplement.upsert', supplement: value });
-        } catch {
-            void showAlert("Errore durante il salvataggio dell'integratore.");
-        }
+        const value: Supplement = { ...supplement, id: editId || Logic.generateId('supp') };
+        await persistSupplement({ type: 'supplement.upsert', supplement: value });
     };
 
     const deleteSupplementFromLibrary = async (id: string) => {
@@ -40,17 +33,13 @@ export function useSupplements(dateStr?: string) {
     };
 
     const addIntake = async (supplementId: string, amount: number) => {
-        try {
-            const intake: SupplementIntake = {
-                id: Logic.generateId('intake'),
-                supplementId,
-                amount,
-                time: Date.now()
-            };
-            await persistSupplement({ type: 'supplement-intake.upsert', date: targetDateStr, intake });
-        } catch {
-            void showAlert("Errore durante l'aggiunta dell'assunzione.");
-        }
+        const intake: SupplementIntake = {
+            id: Logic.generateId('intake'),
+            supplementId,
+            amount,
+            time: Date.now()
+        };
+        await persistSupplement({ type: 'supplement-intake.upsert', date: targetDateStr, intake });
     };
 
     const removeIntake = async (intakeId: string) => {

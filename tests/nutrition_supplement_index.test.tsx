@@ -1,5 +1,7 @@
 import React from 'react';
-import { act, render, screen } from '@testing-library/react';
+import { act, render, renderHook, screen } from '@testing-library/react';
+import { applyDomainOperations } from '../src/lib/sync/domainOperations';
+import { UserDataSchema } from '../src/lib/schema';
 import { describe, expect, it, vi } from 'vitest';
 import { NutritionSupplementIntakes } from '../src/components/Nutrition/meals/NutritionSupplementIntakes';
 import { useSupplements } from '../src/hooks/useSupplements';
@@ -55,4 +57,39 @@ describe('supplement intake catalogue lookups', () => {
         expect(screen.getByText('Creatina B')).toBeDefined();
         expect(screen.getByText(/3 mg/)).toBeDefined();
     });
+    it('does not treat a resolved but rejected supplement commit as successful', async () => {
+        const previous = useAppStore.getState().dispatchDomainOperation;
+        const dispatch = vi.fn().mockResolvedValue({ ok: false, status: 'failed', error: new Error('IDB unavailable') });
+        useAppStore.setState({ dispatchDomainOperation: dispatch });
+        try {
+            const { result } = renderHook(() => useSupplements('2026-09-14'));
+            await act(async () => {
+                await expect(result.current.saveSupplementToLibrary({ name: 'Creatina', unit: 'g', target: 5 })).rejects.toThrow('IDB unavailable');
+            });
+            await act(async () => {
+                await expect(result.current.addIntake('one', 3)).rejects.toThrow('IDB unavailable');
+            });
+            expect(dispatch).toHaveBeenCalledTimes(2);
+        } finally {
+            useAppStore.setState({ dispatchDomainOperation: previous });
+        }
+    });
+
+    it('rejects invalid supplement doses and intake amounts at the domain boundary', () => {
+        const empty = UserDataSchema.parse({});
+        for (const target of [-2, 0, Infinity]) {
+            expect(() => applyDomainOperations(empty, {
+                type: 'supplement.upsert',
+                supplement: { id: 's', name: 'Creatina', unit: 'g', target },
+            })).toThrow(/dosi/i);
+        }
+        for (const amount of [0, -2, NaN, Infinity]) {
+            expect(() => applyDomainOperations(empty, {
+                type: 'supplement-intake.upsert',
+                date: '2026-09-14',
+                intake: { id: 'i', supplementId: 's', amount, time: 1 },
+            })).toThrow(/quantit/i);
+        }
+    });
+
 });

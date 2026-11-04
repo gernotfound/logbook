@@ -154,6 +154,9 @@ function applyOne(data: UserData, operation: DomainOperation): UserData {
             const date = requireDate(operation.date);
             const intakeId = requireId(operation.intake.id, 'Assunzione integratore');
             requireId(operation.intake.supplementId, 'Integratore');
+            if (!Number.isFinite(operation.intake.amount) || operation.intake.amount <= 0) {
+                throw new Error('La quantità assunta deve essere positiva.');
+            }
             const day = ensureNutritionDay(data, date);
             const supplementsIntake = upsertById(
                 day.supplementsIntake,
@@ -179,6 +182,10 @@ function applyOne(data: UserData, operation: DomainOperation): UserData {
         }
         case 'supplement.upsert': {
             const supplement = { ...operation.supplement, id: requireId(operation.supplement.id, 'Integratore') };
+            if (!supplement.name.trim() || !supplement.unit.trim()) throw new Error('Nome e unità integratore obbligatori.');
+            if ([supplement.target, supplement.portion].some(value => value !== undefined && (!Number.isFinite(value) || value <= 0))) {
+                throw new Error('Le dosi dell’integratore devono essere positive.');
+            }
             data.supplements = upsertById(data.supplements, supplement, item => requireId(item.id, 'Integratore'), 'Integratori');
             break;
         }
